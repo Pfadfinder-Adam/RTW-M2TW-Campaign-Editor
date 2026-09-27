@@ -89,6 +89,9 @@ def edit(mod, campaign, faction, opts):
     _texts(plan, now, campaign)
     _colours(plan)
     _strat(plan, campaign, now)
+    if opts.get("places"):
+        from .mapedit import apply_places
+        apply_places(plan, campaign, opts["places"])
     sp = mod.campaign_file(campaign, "descr_strat.txt")
     if sp in plan.files:
         from .strat import characters_after_tree
@@ -97,7 +100,8 @@ def edit(mod, campaign, faction, opts):
             raise ValueError("internal check failed - a character would follow the family tree of %s "
                              "(the game crashes on that); nothing written" % ", ".join(bad))
         s = Strat(plan.files[sp])
-        tiles = mod.city_tiles(campaign)
+        tiles = dict(mod.city_tiles(campaign))
+        tiles.update({p["region"]: tuple(p["to"]) for p in opts.get("places") or [] if p["what"] == "city"})
         fb = s.faction(faction)
         held = {c.xy for c in fb.characters if c.xy and _has_army(s.lines[c.start:c.end])}
         empty = [st.region for st in fb.settlements if tiles.get(st.region) not in held]

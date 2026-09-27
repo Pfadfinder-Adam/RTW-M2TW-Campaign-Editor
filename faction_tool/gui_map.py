@@ -32,7 +32,7 @@ class MapView(ttk.Frame):
         ttk.Button(bar, text="Fit", width=5, command=self.fit).pack(side="right")
         ttk.Button(bar, text="+", width=3, command=lambda: self.zoom_by(1)).pack(side="right", padx=2)
         ttk.Button(bar, text="-", width=3, command=lambda: self.zoom_by(-1)).pack(side="right")
-        ttk.Label(bar, text="wheel: zoom   drag: move the map, or your own characters   click a town: add / remove it",
+        ttk.Label(bar, text="wheel: zoom   drag: the map, your characters, towns and ports   click a town: add / remove it",
                   foreground="#666").pack(side="right", padx=12)
         self.canvas = tk.Canvas(self, background="#1d2b3a", highlightthickness=0, cursor="crosshair")
         self.canvas.pack(fill="both", expand=True)
@@ -43,6 +43,7 @@ class MapView(ttk.Frame):
         self._pending = None
         self._drag = None
         self._cdrag = None
+        self._pdrag = None               # a town or port being dragged
         self.chars, self.draggable, self.symbols = [], set(), {}
         self.on_char_move = self.check_tile = None
         self._symimg = {}
@@ -60,7 +61,8 @@ class MapView(ttk.Frame):
 
     # ---- data ----
     def load(self, cmap, owners, colours, faction=None, chosen=(), on_city=None, chars=(), draggable=(),
-             on_char_move=None, check_tile=None, symbols=None, on_place=None):
+             on_char_move=None, check_tile=None, symbols=None, on_place=None,
+             places=None, check_place=None, on_place_move=None):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
@@ -71,6 +73,10 @@ class MapView(ttk.Frame):
         self.on_char_move, self.check_tile = on_char_move, check_tile
         self.symbols = symbols or {}
         self.on_place = on_place            # on_place(xy) -> None, or why not: the next click places
+        # towns and ports dragged to new tiles: {(what, region): xy}; check_place(what, region, xy)
+        # -> None or why not; on_place_move(what, region, xy) after a good drop
+        self.places = dict(places or {})
+        self.check_place, self.on_place_move = check_place, on_place_move
         if first:
             self.fit()
         else:
@@ -149,6 +155,7 @@ class MapView(ttk.Frame):
         font = ("", 8 if self.z < 10 else 9)
         if self.v_ports.get() and self.z >= 3:
             for region, (x, y) in cm.ports.items():
+                x, y = self.places.get(("port", region), (x, y))
                 sx, sy = self.to_screen(x, y)
                 if -10 < sx < cw + 10 and -10 < sy < ch + 10:
                     r = size * 0.45
@@ -157,6 +164,7 @@ class MapView(ttk.Frame):
                     if r >= 5:
                         self._anchor(sx, sy, r, tags)
         for region, (x, y) in cm.cities.items():
+            x, y = self.places.get(("city", region), (x, y))
             sx, sy = self.to_screen(x, y)
             if not (-40 < sx < cw + 40 and -20 < sy < ch + 20):
                 continue
@@ -208,7 +216,8 @@ class MapView(ttk.Frame):
 
     def _characters(self, cw, ch, size):
         c, cm = self.canvas, self.cmap
-        busy = set(cm.cities.values()) | set(cm.ports.values())
+        busy = {self.places.get(("city", r), xy) for r, xy in cm.cities.items()} | \
+            {self.places.get(("port", r), xy) for r, xy in cm.ports.items()}
         tile = max(self.z * 0.9, 6)                    # a character fills its tile...
         seen = {}
         for ch_ in self.chars:
@@ -324,14 +333,45 @@ class MapView(ttk.Frame):
         d = direction if direction is not None else (1 if e.delta > 0 else -1)
         self.zoom_by(d, (e.x, e.y))
 
+    def _place_under(self, sx, sy):
+        """('city' | 'port', region) of the town or port under the mouse, or None."""
+        for item in reversed(self.canvas.find_overlapping(sx - 2, sy - 2, sx + 2, sy + 2)):
+            for tag in self.canvas.gettags(item):
+                if tag.startswith("char:"):
+                    return None
+                if tag.startswith(("city:", "port:")):
+                    return tag[:4], tag[5:]
+        return None
+
     def _press(self, e):
         cid = self._char_under(e.x, e.y) if self.cmap else None
         if cid is not None and cid in self.draggable:
             self._cdrag = (cid, e.x, e.y)
             return
+        pl = self._place_under(e.x, e.y) if self.cmap and self.on_place_move and not self.on_place else None
+        if pl:
+            self._pdrag = [pl[0], pl[1], e.x, e.y, False]      # a click unless the mouse moves
+            return
         self._drag = (e.x, e.y, self.ox, self.oy, False)
 
     def _move(self, e):
+        if getattr(self, "_pdrag", None):
+            what, region, lx, ly, started = self._pdrag
+            if not started and abs(e.x - lx) + abs(e.y - ly) <= 3:
+                return
+            self._grow(None)
+            self.canvas.move("%s:%s" % (what, region), e.x - lx, e.y - ly)
+            self._pdrag = [what, region, e.x, e.y, True]
+            x, y = self.to_tile(e.x, e.y)
+            why = self.check_place(what, region, (x, y)) if self.check_place else None
+            self.canvas.delete("target")
+            ax, ay = self.to_screen(x, y)
+            r = max(self.z / 2, 4)
+            self.canvas.create_rectangle(ax - r, ay - r, ax + r, ay + r, outline="#ff3030" if why else "#30ff60",
+                                         width=2, tags=("target",))
+            self.readout.configure(text=("%s of %s to tile %d, %d: " % ("town" if what == "city" else "port",
+                                   region, x, y)) + (why or "fine - drop it here"))
+            return
         if self._cdrag:
             cid, lx, ly = self._cdrag
             self.canvas.move("char:" + cid, e.x - lx, e.y - ly)
@@ -354,6 +394,21 @@ class MapView(ttk.Frame):
             self.render()
 
     def _release(self, e):
+        if getattr(self, "_pdrag", None):
+            what, region, _, _, started = self._pdrag
+            self._pdrag = None
+            if started:
+                xy = self.to_tile(e.x, e.y)
+                why = self.check_place(what, region, xy) if self.check_place else None
+                if why:
+                    self.readout.configure(text="not moved - " + why)
+                    self.render()
+                else:
+                    self.on_place_move(what, region, xy)
+                return
+            if what == "city" and self.on_city:              # a plain click on a town
+                self.on_city(region)
+            return
         if self._cdrag:
             cid = self._cdrag[0]
             self._cdrag = None

@@ -659,6 +659,27 @@ class ToolTest(unittest.TestCase):
                                                                             "leader": {"name": "Boris"}}})
         self.assertEqual(Strat(plan.files[path]).settlement_of("C_R").owner, "beta")
 
+    def test_town_moved_on_the_map(self):
+        from faction_tool.edit import edit
+        from faction_tool.tga import read_tga
+        rwm = os.path.join(self.root, "data", "world", "maps", "base", "map.rwm")
+        write(rwm, "compiled map")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        with self.assertRaises(ValueError):             # not A_R's land
+            edit(mod, "test", "alpha", {"places": [{"what": "city", "region": "A_R", "to": (2, 0)}]})
+        plan = edit(ModData(self.root), "test", "alpha", {"places": [{"what": "city", "region": "A_R", "to": (0, 2)}]})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        self.assertEqual(s.faction("alpha").characters[0].xy, (0, 2))       # Aaron moves with his town
+        bdir = plan.apply()
+        img = read_tga(mod.campaign_file("test", "map_regions.tga"))
+        self.assertEqual((img.get(1, 1), img.get(0, 2)), ((255, 0, 0), (0, 0, 0)))
+        self.assertFalse(os.path.exists(rwm))             # the game rebuilds it
+        self.assertEqual(ModData(self.root).city_tiles("test")["A_R"], (0, 2))
+        restore(ModData(self.root), bdir)
+        after = {k: v for k, v in tree_hash(self.root).items() if "faction_tool_backups" not in k}
+        self.assertEqual(after, before)
+
     def test_ships_owned_by_culture(self):
         # vanilla gives ships to cultures ("ownership roman, greek"), not factions
         with open(os.path.join(self.root, "data", "export_descr_unit.txt"), "a") as fh:

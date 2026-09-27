@@ -53,3 +53,37 @@ def read_tga(path):
         rows.reverse()
         pixels = [p for row in rows for p in row]
     return Image(width, height, pixels)
+
+
+def patched(path, changes):
+    """The TGA's bytes with pixels changed: changes = {(x, y): (r, g, b)} in the
+    bottom-up tile coordinates read_tga uses. The header, id field, bit depth
+    and row order stay; an RLE image comes back uncompressed (type 2), which
+    the game reads the same way."""
+    with open(path, "rb") as f:
+        data = f.read()
+    id_len, cmap_type, img_type = data[0], data[1], data[2]
+    width, height = struct.unpack_from("<HH", data, 12)
+    bpp, desc = data[16], data[17]
+    if img_type not in (2, 10) or bpp not in (24, 32) or cmap_type != 0:
+        raise ValueError("%s: unsupported TGA (type %d, %d bpp)" % (path, img_type, bpp))
+    step = bpp // 8
+    img = read_tga(path)
+    top_down = bool(desc & 0x20)
+    raw = bytearray(width * height * step)
+    for y in range(height):
+        row = (height - 1 - y) if top_down else y          # storage row of tile row y
+        for x in range(width):
+            r, g, b = changes.get((x, y), img.get(x, y))
+            o = (row * width + x) * step
+            raw[o:o + 3] = bytes((b, g, r))
+            if step == 4:
+                raw[o + 3] = 255
+    # keep the original alpha where there was one
+    if step == 4 and img_type == 2:
+        src = data[18 + id_len:18 + id_len + len(raw)]
+        for i in range(3, len(raw), 4):
+            raw[i] = src[i]
+    head = bytearray(data[:18 + id_len])
+    head[2] = 2
+    return bytes(head) + bytes(raw)

@@ -19,6 +19,8 @@ class Plan:
         self.new = new
         self.opts = opts or {}
         self.files = {}          # path -> edited TextFile
+        self.binaries = {}       # path -> new bytes (pictures such as map_regions.tga)
+        self.deletions = []      # paths removed (map.rwm, which the game rebuilds)
         self.originals = {}      # path -> original bytes
         self.copies = []         # (src, dst) files or folders to copy
         self.notes = []          # (rel path or "", message)
@@ -43,8 +45,19 @@ class Plan:
     def warn(self, f, msg):
         self.warnings.append((self.mod.rel(f.path) if f is not None else "", msg))
 
+    def binary(self, path, data):
+        """A whole new content for a (binary) file, backed up like any edit."""
+        self.binaries[path] = data
+
+    def delete(self, path, why):
+        if os.path.exists(path) and path not in self.deletions:
+            self.deletions.append(path)
+            self.notes.append((self.mod.rel(path), "removed - %s" % why))
+
     def changed_files(self):
-        return [p for p, f in self.files.items() if f.dump() != self.originals[p]]
+        return [p for p, f in self.files.items() if f.dump() != self.originals[p]] + \
+            [p for p, d in self.binaries.items() if not os.path.exists(p) or open(p, "rb").read() != d] + \
+            list(self.deletions)
 
     # ---- display names for the string tables ----
     def display_replacements(self):
@@ -92,8 +105,11 @@ class Plan:
             rel = os.path.relpath(path, root)
             dst = os.path.join(bdir, rel)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
-            with open(dst, "wb") as out:
-                out.write(self.originals[path])
+            if path in self.originals:
+                with open(dst, "wb") as out:
+                    out.write(self.originals[path])
+            else:                               # a picture or a removed file: back up what is on disk
+                shutil.copy2(path, dst)
             manifest["modified"].append(rel.replace("\\", "/"))
         created = []
         for src, dst in self.copies:
@@ -109,7 +125,15 @@ class Plan:
         with open(os.path.join(bdir, "manifest.json"), "w", encoding="utf-8") as out:
             json.dump(manifest, out, indent=2)
         for path in self.changed_files():
-            self.files[path].save(path)
+            if path in self.files:
+                self.files[path].save(path)
+            elif path in self.binaries:
+                tmp = path + ".faction_tool_tmp"
+                with open(tmp, "wb") as out:
+                    out.write(self.binaries[path])
+                os.replace(tmp, path)            # never write through a hard link
+            elif path in self.deletions:
+                os.remove(path)
         return bdir
 
 

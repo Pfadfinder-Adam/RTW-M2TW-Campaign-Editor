@@ -68,6 +68,9 @@ def build(mod, campaign, template, new, opts):
         clone.art_files(plan, campaign)
     clone.unit_cards(plan)
     build_start(plan, campaign, opts["start"])
+    if opts.get("places"):
+        from .mapedit import apply_places
+        apply_places(plan, campaign, opts["places"])
     validate(plan, campaign)
     return plan
 

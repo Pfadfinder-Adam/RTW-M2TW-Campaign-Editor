@@ -11,6 +11,7 @@ from .build import build, template_display
 from .buildings import BuildingPictures, read_buildings, settlement_info
 from .mapdata import CampaignMap, faction_colours
 from .moddata import ModData
+from .mapedit import orig as place_orig, place_problem
 from .newmod import create_mod, game_root_of
 from .edit import edit as edit_faction, read_faction
 from .gui_buildings import BuildingsEditor
@@ -55,6 +56,7 @@ class App(tk.Tk):
         self.garrisons = {}             # region -> [unit type] picked by hand
         self.field = []                 # [{kind, name, age, units, xy}] armies/agents/fleets to place
         self.removed_existing = []      # Edit: [{name, from}] characters taken off the map
+        self.place_moves = {}           # {('city' | 'port', region): (x, y)} towns and ports moved on the map
         self._units_for, self._units_cache = None, []
         self.buildings_picked = {}      # region -> [(chain, level)] set by hand
         self._edb_for, self._edb, self._bpics = None, [], None
@@ -481,6 +483,8 @@ class App(tk.Tk):
                 if r not in self.chosen:
                     owners[r] = self.v_give.get() or "slave"
         chars, armies_at = [], set()
+        tiles = self.mod.city_tiles(self.v_campaign.get())
+        town_moves = {tiles[r]: xy for (w, r), xy in self.place_moves.items() if w == "city" and r in tiles}
         for fb in self.strat.factions:
             for i, c in enumerate(fb.characters):
                 if not c.xy:
@@ -488,7 +492,7 @@ class App(tk.Tk):
                 lines = self.strat.lines[c.start:c.end]
                 army = any(tokens(l)[:1] == ["army"] for l in lines)
                 cid = "%s:%d" % (fb.name, i)
-                xy = self.char_moves.get(cid, c.xy)
+                xy = self.char_moves.get(cid, town_moves.get(c.xy, c.xy))
                 chars.append({"id": cid, "faction": fb.name, "name": c.name, "kind": c.kind, "xy": xy,
                               "army": army, "units": sum(1 for l in lines if tokens(l)[:1] == ["unit"]),
                               "from": c.xy})
@@ -548,9 +552,23 @@ class App(tk.Tk):
             self.status.set("%s %s placed at %d, %d - drag it to move it." % (fc["kind"], fc["name"], xy[0], xy[1]))
             self.show_map()
             return None
+        def check_place(what, region, xy):
+            return place_problem(self.mod, self.v_campaign.get(), what, region, xy,
+                                 {k: v for k, v in self.place_moves.items() if k != (what, region)})
+
+        def place_moved(what, region, xy):
+            if xy == place_orig(self.mod, self.v_campaign.get(), what, region):
+                self.place_moves.pop((what, region), None)
+            else:
+                self.place_moves[(what, region)] = xy
+            self.status.set("%s of %s to %d, %d - %d town(s)/port(s) moved; Preview, then %s." % (
+                "Town" if what == "city" else "Port", region, xy[0], xy[1], len(self.place_moves),
+                "Apply changes" if self.editing() else "Create faction"))
+            self.show_map()
         self.map_view.load(self._cmap, owners, colours, me, self.chosen, on_city=self.map_city, chars=chars,
                            draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols,
-                           on_place=place if placing is not None else None)
+                           on_place=place if placing is not None else None,
+                           places=self.place_moves, check_place=check_place, on_place_move=place_moved)
 
     def map_city(self, region):
         """A click on a town on the map: add it to Chosen, or take it out."""
@@ -691,6 +709,7 @@ class App(tk.Tk):
         self.buildings_picked = {}
         self.field, self._placing = [], None
         self.editing_now, self.char_moves = None, {}
+        self.place_moves = {}
         self.refresh_field()
         self.refresh_chosen()
         self.fill_towns()
@@ -1030,6 +1049,7 @@ class App(tk.Tk):
                       "characters": [dict(c) for c in self.field],
                       "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()
                                     if r in self.chosen}},
+            "places": self._places(),
         }
         return v["template"], v["name"].lower(), opts
 
@@ -1064,7 +1084,11 @@ class App(tk.Tk):
                            for c in self.field if c.get("existing") and c.get("changed")],
             "remove": list(self.removed_existing),
             "garrisons": dict(self.garrisons),
+            "places": self._places(),
             "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()}}
+
+    def _places(self):
+        return [{"what": w, "region": r, "to": xy} for (w, r), xy in self.place_moves.items()]
 
     def make_plan(self):
         if self.editing():
