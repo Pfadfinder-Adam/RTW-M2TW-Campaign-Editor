@@ -157,6 +157,7 @@ class CampaignMap:
                 o = (row + x) * 3
                 flat[o:o + 3] = bytes(px)
         rgb = Image.frombytes("RGB", (w, h), bytes(flat))
+        self._flat_rgb = rgb
         edge = ImageChops.add(ImageChops.difference(rgb, ImageChops.offset(rgb, -1, 0)),
                               ImageChops.difference(rgb, ImageChops.offset(rgb, 0, -1))).convert("L")
         mask = edge.point(lambda v: 255 if v else 0)
@@ -167,23 +168,37 @@ class CampaignMap:
                               for p, g in zip(planes, groups)], mask)
         return self._label_cache
 
-    def regions_layer(self, alpha=150):
+    def regions_layer(self, painted=None, colours=None, alpha=150):
         """RGBA, 1 px per tile: every region in its own map_regions colour, borders
-        dark - the Regions view, where the borders are what matters."""
-        if getattr(self, "_regions_layer", None) is not None:
-            return self._regions_layer
-        layers, mask = self._labels()
-        path = self.mod.campaign_file(self.campaign, "map_regions.tga")
-        rgb = Image.open(path).convert("RGB")
+        dark - the Regions view, where the borders are what matters. painted
+        {(x, y): region} with colours {region: rgb} shows tiles given to another
+        region, borders drawn again around them (borders are not stored anywhere:
+        they are where the colour changes)."""
+        key = frozenset((painted or {}).items())
+        cache = getattr(self, "_regions_layers", None)
+        if cache and cache[0] == key:
+            return cache[1]
+        layers, _ = self._labels()
+        rgb = self._flat_rgb.copy()
         land = None
         for _, here, _ in layers:
             land = here if land is None else ImageChops.lighter(land, here)
-        a = land.point(lambda v: alpha if v else 0)
+        if painted:
+            land = land.copy()
+            for (x, y), r in painted.items():
+                if r in (colours or {}) and 0 <= x < self.w and 0 <= y < self.h:
+                    rgb.putpixel((x, self.h - 1 - y), tuple(colours[r]))
+                    land.putpixel((x, self.h - 1 - y), 255)
+        edge = ImageChops.add(ImageChops.difference(rgb, ImageChops.offset(rgb, -1, 0)),
+                              ImageChops.difference(rgb, ImageChops.offset(rgb, 0, -1))).convert("L")
+        mask = edge.point(lambda v: 255 if v else 0)
+        mask.paste(0, (self.w - 1, 0, self.w, self.h))
+        mask.paste(0, (0, self.h - 1, self.w, self.h))
         im = rgb.copy()
-        im.putalpha(a)
+        im.putalpha(land.point(lambda v: alpha if v else 0))
         dark = Image.new("RGBA", im.size, (20, 20, 20, 150))
         im = Image.composite(dark, im, ImageChops.multiply(mask, land))
-        self._regions_layer = im
+        self._regions_layers = (key, im)
         return im
 
     def political(self, owners, colours, highlight=None, alpha=160):

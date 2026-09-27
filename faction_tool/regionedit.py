@@ -115,9 +115,6 @@ def region_problems(mod, campaign, painted, new_regions):
             cells.add(tuple(town))
         if cells and len(_part(cells, next(iter(cells)))) != len(cells):
             warns.append("%s would be in more than one piece (fine for islands)" % r)
-    total = len(regions) + len(new_regions)
-    if new_regions and len(regions) <= 200 < total:               # only when this run crosses the line
-        warns.append("%d regions: the classic game stops at 200; REX lifts the limit" % total)
     return errors, warns
 
 

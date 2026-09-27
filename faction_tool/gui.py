@@ -20,7 +20,7 @@ from .gui_buildings import BuildingsEditor
 from .gui_diplomacy import DiplomacyEditor, colour as dip_colour
 from .gui_garrison import GarrisonEditor, Pictures
 from .gui_map import MapView
-from .plan import backups, restore
+from .plan import Plan, backups, restore
 from .scan import IGNORE_HELP, ignore_path, make_manifest, scan as scan_mod
 from .start import balanced_army, unit_name
 from .strat import Strat
@@ -50,6 +50,10 @@ THE TABS (in the order that works best)
                right drag (or Ctrl + left drag) moves your characters, towns and ports;
                Political, Diplomacy and the other switches change what is shown.
   Diplomacy    how the faction and every other one feel about each other at the start.
+
+  Only the map (regions, towns, ports)? In New faction mode with no faction named the
+  buttons read "Preview map changes" / "Apply map changes" and write the map alone.
+  Check mod, Scan mod, Restore a backup, Game manifest and Log are under Tools.
 
   4. Preview changes (Ctrl+P) shows every file and line that would change. Nothing is written.
   5. Create faction / Apply changes (Ctrl+S) writes it, with a backup first.
@@ -312,20 +316,29 @@ class App(tk.Tk):
         # --- actions
         bar = ttk.Frame(self)
         bar.pack(fill="x", **pad)
-        ttk.Button(bar, text="Preview changes", command=self.preview).pack(side="left")
+        self.b_preview = ttk.Button(bar, text="Preview changes", command=self.preview)
+        self.b_preview.pack(side="left")
         self.b_create = ttk.Button(bar, text="Create faction", command=self.create)
         self.b_create.pack(side="left", padx=6)
         ttk.Button(bar, text="Undo", width=6, command=self.undo).pack(side="left", padx=(12, 0))
         ttk.Button(bar, text="Redo", width=6, command=self.redo).pack(side="left", padx=4)
-        ttk.Button(bar, text="Log", command=self.show_log).pack(side="right", padx=(6, 0))
         ttk.Button(bar, text="Help", command=self.show_help).pack(side="right", padx=(6, 0))
-        ttk.Button(bar, text="Restore a backup...", command=self.restore).pack(side="right")
-        ttk.Button(bar, text="Scan mod", command=self.scan).pack(side="right", padx=6)
-        ttk.Button(bar, text="Check mod", command=self.check).pack(side="right")
-        ttk.Button(bar, text="Game manifest...", command=self.game_manifest).pack(side="right")
+        tools = ttk.Menubutton(bar, text="Tools")
+        menu = tk.Menu(tools, tearoff=False)
+        menu.add_command(label="Check mod", command=self.check)
+        menu.add_command(label="Scan mod (every mention of the faction)", command=self.scan)
+        menu.add_command(label="Restore a backup...", command=self.restore)
+        menu.add_separator()
+        menu.add_command(label="Game manifest...", command=self.game_manifest)
+        menu.add_command(label="Log", command=self.show_log)
+        tools["menu"] = menu
+        tools.pack(side="right")
         self.status = tk.StringVar(value="Choose the mod's data folder (for example ...\\HLR\\data) and press Load.")
         ttk.Label(self, textvariable=self.status, anchor="w").pack(fill="x", padx=6, pady=(0, 6))
         self.status.trace_add("write", lambda *a: self.status.get() and log.write(self.status.get()))
+        for k in ("name", "template"):
+            self.v[k].trace_add("write", lambda *a: self.update_actions())
+        self.update_actions()
 
     def _build_units_tab(self):
         """Units & armies: the chosen towns on the left, their garrisons on the right."""
@@ -511,7 +524,7 @@ class App(tk.Tk):
                 w.configure(state="disabled" if edit else "normal")
             except tk.TclError:
                 pass
-        self.b_create.configure(text="Apply changes" if edit else "Create faction")
+        self.update_actions()
         self.garrison_editor.auto_text = ("unchanged - the town keeps its garrison" if edit else None)
         self.chosen, self.garrisons, self.buildings_picked, self.sizes = [], {}, {}, {}
         self.editing_now = None
@@ -768,7 +781,8 @@ class App(tk.Tk):
         if self._region_point:
             on_place = self.place_region_point
         return {"region_mode": True, "paint_overlay": overlay, "on_paint": paint, "on_pick": pick,
-                "brush": self.v_brush.get(), "region_points": points, "on_place": on_place}
+                "brush": self.v_brush.get(), "region_points": points, "on_place": on_place,
+                "region_painted": dict(self.region_paint), "region_colours": cols}
 
     def _new_region(self, name):
         return next((r for r in self.new_regions if r["name"] == name), None)
@@ -1580,7 +1594,35 @@ class App(tk.Tk):
     def _places(self):
         return [{"what": w, "region": r, "to": xy} for (w, r), xy in self.place_moves.items()]
 
+    def map_only(self):
+        """New faction mode with no faction named yet: the buttons write the map's changes alone."""
+        return not self.editing() and not (self.v["template"].get().strip() and self.v["name"].get().strip())
+
+    def update_actions(self):
+        if self.editing():
+            p, a = "Preview changes", "Apply changes"
+        elif self.map_only():
+            p, a = "Preview map changes", "Apply map changes"
+        else:
+            p, a = "Preview changes", "Create faction"
+        self.b_preview.configure(text=p)
+        self.b_create.configure(text=a)
+
     def make_plan(self):
+        if self.map_only():
+            places, regions = self._places(), self._regions_opts()
+            if not places and not regions:
+                raise ValueError("nothing to write: move a town or port, or paint regions on the Map "
+                                 "(or name a new faction on the Faction tab)")
+            mod = ModData(self.mod.data)
+            plan = Plan(mod, "map", "map", {})
+            from .mapedit import apply_places
+            from .regionedit import apply_regions
+            if places:
+                apply_places(plan, self.v_campaign.get(), places)
+            if regions:
+                apply_regions(plan, self.v_campaign.get(), regions["painted"], regions["new"])
+            return plan
         if self.editing():
             if not self.mod:
                 raise ValueError("load a mod first")
@@ -1763,7 +1805,7 @@ class App(tk.Tk):
             return
         log.write("Written (backup %s)\n%s" % (bdir, plan.report()))
         self.show_text("Done", plan.report() + "\n\nBackup: %s\nStart a NEW campaign to see the %s." % (
-            bdir, "changes" if self.editing() else "faction"))
+            bdir, "changes" if self.editing() or self.map_only() else "faction"))
         self.load()
 
     def check(self):
