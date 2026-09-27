@@ -8,6 +8,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from .build import build, template_display
 from .moddata import ModData
+from .newmod import create_mod, game_root_of
 from .plan import backups, restore
 from .scan import IGNORE_HELP, ignore_path, scan as scan_mod
 from .strat import Strat
@@ -38,6 +39,7 @@ class App(tk.Tk):
         ttk.Entry(top, textvariable=self.v_path).pack(side="left", fill="x", expand=True, padx=6)
         ttk.Button(top, text="Browse...", command=self.browse).pack(side="left")
         ttk.Button(top, text="Load", command=self.load).pack(side="left", padx=4)
+        ttk.Button(top, text="New mod folder...", command=self.new_mod).pack(side="left", padx=4)
         ttk.Label(top, text="Campaign").pack(side="left", padx=(12, 2))
         self.v_campaign = tk.StringVar()
         self.cb_campaign = ttk.Combobox(top, textvariable=self.v_campaign, state="readonly", width=24)
@@ -206,6 +208,73 @@ class App(tk.Tk):
         self.cb_template["values"] = names
         self.load_campaign()
         self.status.set("%d factions, %d campaign(s)." % (len(names) + 1, len(camps)))
+
+    def new_mod(self):
+        """Make <game>/<name> from the loaded mod (hard links + copied text), then load it."""
+        if not self.mod:
+            messagebox.showerror(APP, "load the mod (or the game's data folder) to build on first")
+            return
+        game, base = game_root_of(self.mod.data)
+        w = tk.Toplevel(self)
+        w.title("New mod folder")
+        w.transient(self)
+        frm = ttk.Frame(w, padding=10)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, text="Based on:  %s" % (base or "the game's own data"), font=("", 10, "bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(frm, text="Created in:  %s" % game).grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        ttk.Label(frm, text="New mod name").grid(row=2, column=0, sticky="w")
+        v_name = tk.StringVar(value=(base or "RTW") + "_" + (self.v["name"].get().strip().capitalize() or "New"))
+        ttk.Entry(frm, textvariable=v_name, width=30).grid(row=3, column=0, sticky="we", padx=(0, 6))
+        v_copy = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frm, text="Copy every file (no hard links; needs the disk space)", variable=v_copy).grid(
+            row=4, column=0, columnspan=2, sticky="w", pady=4)
+        ttk.Label(frm, justify="left", wraplength=520, text=(
+            "The base stays untouched. Text files are copied; models, textures and sounds are hard links - "
+            "the same file under a second name, no extra space. Do not edit a linked texture in place "
+            "(an editor that overwrites it changes the base too); tick 'Copy every file' to be fully apart. "
+            "A start script Start_<name>.bat is written into the new folder.")).grid(
+            row=5, column=0, columnspan=2, sticky="w", pady=(4, 8))
+
+        def go():
+            name = v_name.get().strip()
+            w.destroy()
+            self.status.set("Building %s ..." % name)
+            result = {}
+
+            def work():
+                try:
+                    result["data"], result["stats"] = create_mod(
+                        self.mod.data, name, v_copy.get(),
+                        progress=lambda n: result.__setitem__("n", n))
+                except Exception as e:
+                    result["error"] = str(e)
+            th = threading.Thread(target=work, daemon=True)
+            th.start()
+
+            def wait():
+                if th.is_alive():
+                    self.status.set("Building %s ... %d files" % (name, result.get("n", 0)))
+                    self.after(300, wait)
+                    return
+                if "error" in result:
+                    self.status.set("")
+                    messagebox.showerror(APP, result["error"])
+                    return
+                st = result["stats"]
+                self.v_path.set(result["data"])
+                self.load()
+                messagebox.showinfo(APP, (
+                    "Made %s\n\n%d file(s) linked, %d copied (%.0f MB)%s.\n\nIt is loaded now: the faction "
+                    "you create goes into it. Start the game with %s." % (
+                        st["target"], st["linked"], st["copied"], st["bytes_copied"] / 1048576.0,
+                        "" if st["hard_links"] else " - no hard links (another drive or 'copy every file')",
+                        "Start_%s.bat" % name)))
+            wait()
+        bar = ttk.Frame(frm)
+        bar.grid(row=6, column=0, columnspan=2, sticky="w")
+        ttk.Button(bar, text="Create", command=go).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
 
     def load_campaign(self):
         c = self.v_campaign.get()

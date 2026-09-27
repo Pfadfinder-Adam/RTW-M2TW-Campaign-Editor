@@ -22,6 +22,8 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 7. Press **Preview changes** to see every file and edit. Nothing is written yet.
 8. Press **Create faction**. Then start a **new** campaign; old saves don't know the faction.
 
+**A separate mod (recommended):** press **New mod folder...** after loading the mod you build on (for example `HLR\data`). The tool makes `<game>\HLR_Saba\` next to it and loads it; the faction goes there, and `Start_HLR_Saba.bat` (your base mod's start script with `-mod:HLR_Saba`) starts it. The base is never touched. The game reads one `-mod:` folder and falls back to the game's own `data`, so a mod built on HLR holds all of HLR: text files are copied, everything else is a hard link (the same file on disk under a second name - no extra space, same drive only). Don't overwrite a linked texture in place from an image editor, or tick **Copy every file**. A mod built on the plain game can be slimmed to the changed files afterwards (`slim` on the command line).
+
 **Undo:** press **Restore a backup...** Backups sit in `faction_tool_backups` next to `data`. Restore the newest one first.
 
 ## What it changes
@@ -69,6 +71,8 @@ python rtw_faction_tool.py new saba.json --data PATH    # preview
 python rtw_faction_tool.py new saba.json --data PATH --apply
 python rtw_faction_tool.py restore --data PATH
 python rtw_faction_tool.py scan gaetulii --data PATH    # every mention of a faction in the whole mod
+python rtw_faction_tool.py newmod HLR_Saba --data PATH  # a separate mod folder built on PATH's mod
+python rtw_faction_tool.py slim --data NEWMOD\data        # plain-game mods: keep only the changed files
 ```
 
 **Scan mod** (button or `scan`) reads every text file of the mod (not only `data`) and lists where the faction is named: places the tool does **not** handle (check these by hand), places it does, files and folders named after the faction, and files the faction's models, textures and unit cards point at that do not exist. It writes nothing. Folders and files you want it to skip go in `faction_tool_ignore.txt` next to `data` (button **Ignore list...** in the scan window; one rule per line: `folder/`, `name/` for that folder name anywhere, or a mask like `*.bak`). The list only affects the scan.

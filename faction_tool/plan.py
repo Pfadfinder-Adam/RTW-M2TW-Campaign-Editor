@@ -131,7 +131,10 @@ def restore(mod, bdir):
     with open(os.path.join(bdir, "manifest.json"), encoding="utf-8") as f:
         manifest = json.load(f)
     for rel in manifest["modified"]:
-        shutil.copy2(os.path.join(bdir, rel), os.path.join(root, rel))
+        dst = os.path.join(root, rel)
+        if os.path.exists(dst):
+            os.remove(dst)                  # never write through a hard link
+        shutil.copy2(os.path.join(bdir, rel), dst)
     for rel in manifest["created"]:
         p = os.path.join(root, rel)
         if os.path.isdir(p):

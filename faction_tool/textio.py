@@ -78,8 +78,12 @@ class TextFile:
     def save(self, path=None):
         path = path or self.path
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, "wb") as f:
+        # a new file replaces the old one, never written into it: in a mod made
+        # of hard links the old file may be shared with the base mod
+        tmp = path + ".faction_tool_tmp"
+        with open(tmp, "wb") as f:
             f.write(self.dump())
+        os.replace(tmp, path)
 
 
 def strip_comment(line):

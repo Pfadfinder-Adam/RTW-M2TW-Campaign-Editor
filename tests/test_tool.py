@@ -15,6 +15,7 @@ from faction_tool.build import build                     # noqa: E402
 from faction_tool.moddata import ModData                 # noqa: E402
 from faction_tool.plan import backups, restore           # noqa: E402
 from faction_tool.scan import scan                       # noqa: E402
+from faction_tool.newmod import create_mod, slim         # noqa: E402
 from faction_tool.strat import Strat                     # noqa: E402
 from faction_tool.textio import TextFile                 # noqa: E402
 
@@ -326,6 +327,61 @@ class ToolTest(unittest.TestCase):
             self.assertNotIn(gone, rep.hits)
         self.assertEqual(sorted(rep.user_dirs), ["data/deep/old_stuff/", "junk/"])
         self.assertIn("left out by faction_tool_ignore.txt: 2 folder(s)", rep.report())
+
+    def _game(self):
+        """A game folder with REX.exe, its own data, and self.root as the mod HLR."""
+        game = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, game)
+        write(os.path.join(game, "REX.exe"), "exe")
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "data"))
+        hlr = os.path.join(game, "HLR")
+        shutil.copytree(self.root, hlr)
+        write(os.path.join(hlr, "Start_mod.bat"), "cd ..\\.\nstart REX.exe -nm -show_err -mod:HLR -multirun\n")
+        write(os.path.join(hlr, "data", "sounds", "HLR.idx"), "sounds")
+        return game, hlr
+
+    def test_new_mod_on_a_mod_leaves_the_base_untouched(self):
+        game, hlr = self._game()
+        before = tree_hash(hlr)
+        data, st = create_mod(os.path.join(hlr, "data"), "HLR_Beta")
+        target = os.path.join(game, "HLR_Beta")
+        self.assertEqual(data, os.path.join(target, "data"))
+        self.assertEqual(st["base"], "HLR")
+        # text is copied, the rest linked; files named after the base also get the new name
+        edu = os.path.join("data", "export_descr_unit.txt")
+        self.assertFalse(os.path.samefile(os.path.join(hlr, edu), os.path.join(target, edu)))
+        card = os.path.join("data", "ui", "units", "alpha", "#alpha_general.tga")
+        self.assertTrue(os.path.samefile(os.path.join(hlr, card), os.path.join(target, card)))
+        self.assertTrue(os.path.exists(os.path.join(target, "data", "sounds", "HLR_Beta.idx")))
+        with open(os.path.join(target, "Start_HLR_Beta.bat"), "rb") as f:
+            self.assertIn(b"-mod:HLR_Beta -multirun", f.read())
+        self.assertFalse(os.path.exists(os.path.join(target, "Start_mod.bat")))
+        # a faction created in the new mod, then restored, never reaches HLR
+        mod = ModData(data)
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        plan.apply()
+        self.assertIn("beta", [n for n, _ in ModData(data).factions()])
+        self.assertEqual(before, tree_hash(hlr))
+        restore(mod, backups(mod)[0])
+        self.assertEqual(before, tree_hash(hlr))
+        with self.assertRaises(ValueError):
+            create_mod(os.path.join(hlr, "data"), "HLR_Beta")        # exists already
+
+    def test_new_mod_on_the_game_slims_to_the_changes(self):
+        game, _ = self._game()
+        data, st = create_mod(os.path.join(game, "data"), "Beta")
+        self.assertEqual(st["base"], "(game)")
+        with open(os.path.join(game, "Beta", "Start_Beta.bat"), "rb") as f:
+            self.assertIn(b"REX.exe -nm -show_err -mod:Beta", f.read())
+        plan = build(ModData(data), "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        plan.apply()
+        removed = slim(data)
+        left = sorted(os.path.relpath(os.path.join(d, n), data).replace(os.sep, "/")
+                      for d, _, fs in os.walk(data) for n in fs)
+        self.assertGreater(removed, 0)
+        self.assertIn("descr_sm_factions.txt", left)
+        self.assertIn("ui/units/beta/#alpha_general.tga", left)
+        self.assertNotIn("ui/units/alpha/#alpha_general.tga", left)     # unchanged: the game has it
 
     def test_descriptions(self):
         mod = ModData(self.root)

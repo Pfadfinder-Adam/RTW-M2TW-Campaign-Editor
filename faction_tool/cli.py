@@ -14,6 +14,7 @@ import sys
 from .build import build
 from .moddata import ModData
 from .plan import backups, restore
+from .newmod import create_mod, slim
 from .scan import scan
 from .strat import Strat
 
@@ -46,12 +47,13 @@ EXAMPLE = {
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="faction_tool", description="Add a new faction to a Rome: Total War mod.")
-    ap.add_argument("command", choices=["new", "list", "towns", "names", "restore", "example", "scan"])
+    ap.add_argument("command", choices=["new", "list", "towns", "names", "restore", "example", "scan", "newmod", "slim"])
     ap.add_argument("arg", nargs="?")
     ap.add_argument("--data", help="the mod's data folder (or the mod folder)")
     ap.add_argument("--campaign", default="imperial_campaign")
     ap.add_argument("--owner", help="towns: only this owner")
     ap.add_argument("--apply", action="store_true", help="new: write the changes (default: preview only)")
+    ap.add_argument("--copy-all", action="store_true", help="newmod: copy every file instead of hard links")
     a = ap.parse_intermixed_args(argv)
 
     if a.command == "example":
@@ -81,6 +83,16 @@ def main(argv=None):
         for k in ("characters", "surnames"):
             print("%s (%d):" % (k, len(pool.get(k, []))))
             print("   " + ", ".join(pool.get(k, [])))
+        return 0
+    if a.command == "newmod":
+        if not a.arg:
+            ap.error("newmod needs a name: newmod HLR_Saba --data PATH")
+        data, st = create_mod(mod.data, a.arg, a.copy_all)
+        print("made %s from %s: %d linked, %d copied" % (st["target"], st["base"], st["linked"], st["copied"]))
+        print("new data folder:", data)
+        return 0
+    if a.command == "slim":
+        print("removed %d file(s) identical to the game's own" % slim(mod.data))
         return 0
     if a.command == "scan":
         if not a.arg:
