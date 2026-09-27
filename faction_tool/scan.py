@@ -31,6 +31,7 @@ IGNORABLE = (
     (re.compile(r"(^|/)export_descr_sounds_prebattle\.txt$", re.I), "pre-battle speech lines (optional)"),
     (re.compile(r"(^|/)(campaign_script|be_script[^/]*|four_turns)\.txt$", re.I),
      "campaign scripts: events written for that faction - read them, copy by hand if wanted"),
+    (re.compile(r"(^|/)data/text/[^/]+/", re.I), "translations in data/text/<language>/ (the tool writes English only)"),
     (re.compile(r"(^|/)(![^/]*|[^/]*kopie[^/]*|[^/]*backup[^/]*|[^/]* - copy[^/]*)(/|$)", re.I), "copies and backups"),
 )
 
