@@ -24,6 +24,7 @@ EXAMPLE = {
     "short_name": "Saba",
     "adjective": "Sabaean",
     "description": "",
+    "long_description": "",
     "primary_colour": [150, 90, 23],
     "secondary_colour": [220, 194, 166],
     "copy_triggers": True,
@@ -35,7 +36,8 @@ EXAMPLE = {
         "heir": {"name": "Oxynta Arsacid", "age": 22},
         "denari": 6000,
         "playable": True,
-        "diplomacy": "neutral"
+        "diplomacy": "neutral",
+        "army_mode": "balanced"
     }
 }
 

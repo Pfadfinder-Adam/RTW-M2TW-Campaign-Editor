@@ -338,6 +338,7 @@ def text_strings(plan):
     t, new = plan.template.upper(), plan.new.upper()
     tparts = t.split("_")
     repl = plan.display_replacements()
+    long_keys = []
     for path in plan.mod.text_files():
         f = plan.edit(path)
         keys = set()
@@ -373,6 +374,10 @@ def text_strings(plan):
                 value = gap + plan.opts["display_name"]
             elif key.upper() == t + "_DESCR" and plan.opts.get("description"):
                 value = gap + plan.opts["description"].replace("\n", "\\n")
+            elif key.upper().endswith("_" + t + "_DESCR") and plan.opts.get("long_description"):
+                # the campaign screen's long text, e.g. {IMPERIAL_CAMPAIGN_<FACTION>_DESCR}
+                value = gap + plan.opts["long_description"].replace("\n", "\\n")
+                long_keys.append(new_key)
             else:
                 for old, nw in repl:
                     value = value.replace(old, nw)
@@ -383,6 +388,11 @@ def text_strings(plan):
             i += 2
         if n:
             plan.note(f, "%d string(s) added" % n)
+    if long_keys:
+        plan.note(None, "full description written to %s" % ", ".join(sorted(set(long_keys))))
+    elif plan.opts.get("long_description"):
+        plan.warn(None, "no campaign description string (<CAMPAIGN>_%s_DESCR) found - the full description "
+                        "was not written" % t)
 
 
 # ---------------------------------------------------------------------------

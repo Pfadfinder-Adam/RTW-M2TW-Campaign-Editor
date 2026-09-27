@@ -4,7 +4,7 @@ characters and diplomacy."""
 import re
 
 from .strat import Strat, RE_XY
-from .textio import tokens
+from .textio import strip_comment, tokens
 
 
 def _set_xy(text, xy):
@@ -28,6 +28,78 @@ def default_army(strat, template):
 
 
 MAX_UNITS = 20
+
+
+def unit_upkeep(edu):
+    """{unit type: upkeep} from stat_cost (turns, cost, upkeep, ...)."""
+    out, cur = {}, None
+    for l in edu.texts():
+        t = tokens(l)
+        if t[:1] == ["type"]:
+            cur = " ".join(strip_comment(l).split()[1:])
+        elif t[:1] == ["stat_cost"] and cur and len(t) >= 4:
+            try:
+                out[cur] = int(t[3])
+            except ValueError:
+                pass
+    return out
+
+
+def balanced_army(strat, template, new_towns, upkeep, garrison):
+    """A leader's army sized like the other factions' start, not a copy of the
+    template leader's (often among the strongest in the mod).
+
+    Target: the median size and upkeep of the leader armies of factions with
+    about as many towns (up to max(3, towns + 2)). The garrison that joins
+    with the capital counts toward it. The rest is the template leader's
+    bodyguard plus an escort from the units of the template's own starting
+    armies (bodyguards left out), cheapest first, one of each in turn.
+    Returns (unit lines, target units, target upkeep)."""
+    def army(c):
+        return _units(strat.lines[c.start:c.end])
+
+    def cost(lines):
+        return sum(upkeep.get(unit_name(l), 0) for l in lines)
+
+    limit = max(3, new_towns + 2)
+    leaders = [army(c) for fb in strat.factions if fb.name != "slave" and len(fb.settlements) <= limit
+               for c in fb.characters if c.role == "leader"]
+    leaders = [a for a in leaders if a] or [army(c) for fb in strat.factions for c in fb.characters
+                                            if c.role == "leader" and army(c)]
+    if not leaders:
+        return default_army(strat, template), 0, 0
+    sizes = sorted(len(a) for a in leaders)
+    costs = sorted(cost(a) for a in leaders)
+    size_t, cost_t = sizes[len(sizes) // 2], costs[len(costs) // 2]
+
+    lead = default_army(strat, template)
+    out = lead[:1]                                    # the bodyguard
+    have_n = len(out) + len(garrison)
+    have_c = cost(out) + cost(garrison)
+    pool = {}
+    fb = strat.faction(template)
+    for c in fb.characters if fb else []:
+        units = army(c)
+        if c.named and units:
+            units = units[1:]
+        for l in units:
+            name = unit_name(l)
+            pool.setdefault(name, [l, 0])
+            pool[name][1] += 1
+    order = sorted(pool.values(), key=lambda e: (upkeep.get(unit_name(e[0]), 0), unit_name(e[0])))
+    while have_n < size_t and any(e[1] for e in order):
+        for e in order:
+            if not e[1] or have_n >= size_t:
+                continue
+            c = upkeep.get(unit_name(e[0]), 0)
+            if have_c + c > cost_t * 1.1 and have_n > 1:
+                have_n = size_t                       # the budget is spent
+                break
+            out.append(e[0])
+            e[1] -= 1
+            have_n += 1
+            have_c += c
+    return out, size_t, cost_t
 
 
 def _has_army(lines):
@@ -157,8 +229,9 @@ def build_start(plan, campaign, start):
     cap_xy = tiles.get(capital)
     if not cap_xy:
         raise ValueError("no city pixel for the capital %s in map_regions.tga" % capital)
-    army = start.get("army") or default_army(s, t)
-    if not army:
+    mode = start.get("army_mode") or "balanced"
+    template_army = default_army(s, t)
+    if not template_army and not start.get("army"):
         plan.warn(f, "the template leader has no army to copy - the leader starts with no units")
     pool = plan.mod.name_pool(new) or plan.mod.name_pool(t)
 
@@ -203,7 +276,21 @@ def build_start(plan, campaign, start):
         if rest and pool and rest not in pool.get("surnames", []):
             raise ValueError("%s: surname '%s' is not in the %s surname list" % (role, rest, t))
         region, xy = spots[role]
-        units = list(army) if role == "leader" else army[:1]      # the heir: the bodyguard
+        if role == "heir":
+            units = template_army[:1]                               # the bodyguard
+        elif start.get("army"):
+            units = list(start["army"])
+        elif mode == "template":
+            units = list(template_army)
+        elif mode == "bodyguard":
+            units = template_army[:1]
+        else:
+            garrison = [u for _, _, c in joined.get(capital, []) if _has_army(c) for u in _units(c)]
+            edu = plan.files.get(mod.file("edu"))
+            upkeep = unit_upkeep(edu) if edu is not None else {}
+            units, size_t, cost_t = balanced_army(s, t, len(regions), upkeep, garrison)
+            plan.note(f, "leader's army: bodyguard + %d unit(s) (target like similar factions: %d units, "
+                         "upkeep %d, the town's garrison included)" % (len(units) - 1, size_t, cost_t))
         if region:
             units = merge(units, region, name)
         own.append(f.make(";;\t%s" % role))

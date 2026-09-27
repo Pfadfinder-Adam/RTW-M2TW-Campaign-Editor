@@ -173,7 +173,8 @@ class ToolTest(unittest.TestCase):
         write(os.path.join(d, "export_descr_unit.txt"), EDU)
         write(os.path.join(d, "export_descr_buildings.txt"), EDB)
         write(os.path.join(d, "text", "expanded_bi.txt"),
-              "{ALPHA}\t\tAlphan Kingdom\n{ALPHA_DESCR}\t\tAlphans ride\n{EMT_ALPHA_SPY}\t\tAlphan Spy\n", utf16=True)
+              "{ALPHA}\t\tAlphan Kingdom\n{ALPHA_DESCR}\t\tAlphans ride\n{EMT_ALPHA_SPY}\t\tAlphan Spy\n"
+              "{TEST_ALPHA_DESCR}\t\tThe long Alphan story\n", utf16=True)
         camp = os.path.join(d, "world", "maps", "campaign", "test")
         write(os.path.join(camp, "descr_strat.txt"), STRAT)
         write(os.path.join(camp, "descr_regions.txt"), REGIONS)
@@ -270,6 +271,16 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(mod.region_map("test").get(x, y), (0, 0, 255))
         armies = [c.xy for fb in s.factions for c in fb.characters if "army" in s.lines[c.start:c.end]]
         self.assertEqual(len(armies), len(set(armies)))
+
+    def test_descriptions(self):
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {
+            "description": "Short one", "long_description": "Line one\nLine two",
+            "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        text = "\n".join(plan.files[mod.text_files()[0]].texts())
+        self.assertIn("{BETA_DESCR}\t\tShort one", text)
+        self.assertIn("{TEST_BETA_DESCR}\t\tLine one\\nLine two", text)
+        self.assertIn("{TEST_ALPHA_DESCR}\t\tThe long Alphan story", text)
 
     def test_heir_avoids_rivers(self):
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")

@@ -92,9 +92,20 @@ class App(tk.Tk):
         ttk.Radiobutton(df, text="neutral to all", value="neutral", variable=self.v_dip).pack(side="left")
         ttk.Radiobutton(df, text="template's relations", value="template", variable=self.v_dip).pack(side="left")
         field("Diplomacy", df)
-        ttk.Label(lf, text="Description").grid(row=row, column=0, sticky="nw", padx=4)
-        self.t_descr = tk.Text(lf, width=34, height=4, wrap="word")
+        ttk.Label(lf, text="Tooltip\n(faction icon)").grid(row=row, column=0, sticky="nw", padx=4)
+        self.t_descr = tk.Text(lf, width=34, height=2, wrap="word")
         self.t_descr.grid(row=row, column=1, sticky="we", padx=4, pady=2)
+        row += 1
+        ttk.Label(lf, text="Full description\n(campaign screen)").grid(row=row, column=0, sticky="nw", padx=4)
+        self.t_long = tk.Text(lf, width=34, height=7, wrap="word")
+        self.t_long.grid(row=row, column=1, sticky="we", padx=4, pady=2)
+        row += 1
+        self.v_army = tk.StringVar(value="balanced")
+        af = ttk.Frame(lf)
+        ttk.Combobox(af, textvariable=self.v_army, state="readonly", width=12,
+                     values=("balanced", "template", "bodyguard")).pack(side="left")
+        ttk.Label(af, text="balanced = sized like similar factions").pack(side="left", padx=4)
+        field("Leader's army", af)
         lf.columnconfigure(1, weight=1)
 
         # --- leaders
@@ -279,11 +290,13 @@ class App(tk.Tk):
         opts = {
             "display_name": v["display_name"], "short_name": v["short_name"], "adjective": v["adjective"],
             "description": self.t_descr.get("1.0", "end").strip(),
+            "long_description": self.t_long.get("1.0", "end").strip(),
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "copy_triggers": self.v_triggers.get(), "copy_art": self.v_art.get(),
             "start": {"regions": list(self.chosen), "capital": v["capital"], "leader": leader,
                       "heir": who("heir"), "denari": int(v["denari"] or 0), "ai": v["ai"] or None,
-                      "playable": self.v_playable.get(), "diplomacy": self.v_dip.get()},
+                      "playable": self.v_playable.get(), "diplomacy": self.v_dip.get(),
+                      "army_mode": self.v_army.get()},
         }
         return v["template"], v["name"].lower(), opts
 
