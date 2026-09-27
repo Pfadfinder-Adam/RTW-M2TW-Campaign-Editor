@@ -13,8 +13,9 @@ ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels pe
 
 
 class MapView(ttk.Frame):
-    def __init__(self, master, status=None):
+    def __init__(self, master, status=None, on_layers=None):
         super().__init__(master)
+        self.on_layers = on_layers                      # the window redraws when a layer that needs it changes
         self.cmap = None
         self.owners, self.colours, self.faction, self.chosen = {}, {}, None, set()
         self.on_city = None
@@ -29,6 +30,9 @@ class MapView(ttk.Frame):
         ttk.Checkbutton(bar, text="Ports", variable=self.v_ports, command=self.render).pack(side="left")
         self.v_chars = tk.BooleanVar(value=True)
         ttk.Checkbutton(bar, text="Characters", variable=self.v_chars, command=self.render).pack(side="left", padx=8)
+        self.v_dip = tk.BooleanVar(value=False)
+        ttk.Checkbutton(bar, text="Diplomacy", variable=self.v_dip,
+                        command=lambda: self.on_layers() if self.on_layers else self.render()).pack(side="left")
         ttk.Button(bar, text="Fit", width=5, command=self.fit).pack(side="right")
         ttk.Button(bar, text="+", width=3, command=lambda: self.zoom_by(1)).pack(side="right", padx=2)
         ttk.Button(bar, text="-", width=3, command=lambda: self.zoom_by(-1)).pack(side="right")

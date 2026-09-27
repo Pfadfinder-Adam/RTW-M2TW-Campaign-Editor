@@ -42,6 +42,10 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **Regions without a settlement block:** some campaigns leave regions out of `descr_strat.txt` (vanilla: Galatia with Ancyra, Dalmatia, Arabia and others); the game makes each a rebel village with no buildings. They are listed as "village, not in descr_strat" and can be taken like any rebel town: the tool writes the village into the faction's block.
 
+**Diplomacy:** the **Diplomacy** tab lists every faction with four values: how they feel about the edited (or new) faction and how it feels about them (`core_attitudes`), and where they start with each other (`faction_relationships`). Lower is better: -10 own (the Roman houses), 90-100 friends, 310 wary, 410 dislike, 600 enemies (everyone towards the rebels); neutral = no line. Pick a value or type a number; changed cells get a blue frame. Only the lines naming the faction are rewritten. The **Diplomacy** switch on the **Map** colours every owner by how the faction feels about it (green friends, yellow wary, orange dislike, red enemies). These files have no lines for alliances or wars at the start.
+
+**Check mod:** reads every file the tool uses and reports what it found (factions, cultures, units, buildings, regions, towns, ports, characters, diplomacy) and anything it cannot make sense of - a settlement without a region, a unit an army names but the unit file lacks, a character after a family tree. The deep check also rehearses, in memory, an edit and a new faction for every faction and checks the result the way the game reads it (minutes on a big mod). Nothing is written.
+
 **Log:** the tool keeps `faction_tool.log` next to the exe (or in `%APPDATA%\RTW Faction Tool`): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
 
 **Undo:** press **Restore a backup...** Backups sit in `faction_tool_backups` next to `data`. Restore the newest one first.

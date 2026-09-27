@@ -170,7 +170,7 @@ class CampaignMap:
     def political(self, owners, colours, highlight=None, alpha=160):
         """RGBA, 1 px per tile: each region in its owner's primary colour, see-through,
         borders darker; the highlighted faction a little stronger."""
-        key = (tuple(sorted(owners.items())), highlight, alpha)
+        key = (tuple(sorted(owners.items())), tuple(sorted(colours.items())), highlight, alpha)
         if key in self._political:
             return self._political[key]
         layers, mask = self._labels()
@@ -203,7 +203,7 @@ class CampaignMap:
 
     def _political_slow(self, owners, colours, highlight=None, alpha=160):
         """The same, pixel by pixel (kept as the reference the fast one is tested against)."""
-        key = (tuple(sorted(owners.items())), highlight, alpha)
+        key = (tuple(sorted(owners.items())), tuple(sorted(colours.items())), highlight, alpha)
         img = self.regions_img
         fill = {}
         for region, owner in owners.items():

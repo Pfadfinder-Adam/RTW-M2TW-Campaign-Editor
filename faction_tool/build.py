@@ -71,6 +71,9 @@ def build(mod, campaign, template, new, opts):
     if opts.get("places"):
         from .mapedit import apply_places
         apply_places(plan, campaign, opts["places"])
+    if opts.get("relations"):
+        from .diplomacy import apply_opts
+        apply_opts(plan, campaign, new, opts["relations"])
     validate(plan, campaign)
     return plan
 

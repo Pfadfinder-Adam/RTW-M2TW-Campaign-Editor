@@ -92,6 +92,9 @@ def edit(mod, campaign, faction, opts):
     if opts.get("places"):
         from .mapedit import apply_places
         apply_places(plan, campaign, opts["places"])
+    if opts.get("relations"):
+        from .diplomacy import apply_opts
+        apply_opts(plan, campaign, faction, opts["relations"])
     sp = mod.campaign_file(campaign, "descr_strat.txt")
     if sp in plan.files:
         from .strat import characters_after_tree

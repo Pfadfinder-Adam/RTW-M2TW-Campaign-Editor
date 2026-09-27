@@ -691,6 +691,28 @@ class ToolTest(unittest.TestCase):
         after = {k: v for k, v in tree_hash(self.root).items() if "faction_tool_backups" not in k}
         self.assertEqual(after, before)
 
+    def test_diplomacy_both_ways(self):
+        from faction_tool.edit import edit
+        from faction_tool.diplomacy import read
+        mod = ModData(self.root)
+        path = mod.campaign_file("test", "descr_strat.txt")
+        with open(path, "a") as fh:
+            fh.write("core_attitudes\talpha,\t600\t\tslave\ncore_attitudes\tslave,\t600\t\talpha\n"
+                     "faction_relationships\talpha,\t600\t\tslave\n")
+        plan = edit(ModData(self.root), "test", "alpha", {"relations": [
+            {"kind": "core_attitudes", "from": "me", "to": "slave", "value": 90},
+            {"kind": "core_attitudes", "from": "slave", "to": "me", "value": None},
+            {"kind": "faction_relationships", "from": "slave", "to": "me", "value": 310}]})
+        rel = read(Strat(plan.files[path]))
+        self.assertEqual(rel["core_attitudes"], {("alpha", "slave"): 90})
+        self.assertEqual(rel["faction_relationships"], {("alpha", "slave"): 600, ("slave", "alpha"): 310})
+
+    def test_check_mod_reads_the_mini_mod(self):
+        from faction_tool.check import check_mod
+        text = check_mod(ModData(self.root), "test")
+        self.assertIn("FACTIONS: 2 in descr_sm_factions.txt, 2 blocks", text)
+        self.assertIn("No problems found", text)
+
     def test_ships_owned_by_culture(self):
         # vanilla gives ships to cultures ("ownership roman, greek"), not factions
         with open(os.path.join(self.root, "data", "export_descr_unit.txt"), "a") as fh:

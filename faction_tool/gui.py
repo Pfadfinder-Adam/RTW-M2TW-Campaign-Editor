@@ -16,6 +16,7 @@ from .mapedit import orig as place_orig, place_problem, port_fleets, sea_spot
 from .newmod import create_mod, game_root_of
 from .edit import edit as edit_faction, read_faction
 from .gui_buildings import BuildingsEditor
+from .gui_diplomacy import DiplomacyEditor, colour as dip_colour
 from .gui_garrison import GarrisonEditor, Pictures
 from .gui_map import MapView
 from .plan import backups, restore
@@ -58,6 +59,7 @@ class App(tk.Tk):
         self.field = []                 # [{kind, name, age, units, xy}] armies/agents/fleets to place
         self.removed_existing = []      # Edit: [{name, from}] characters taken off the map
         self.place_moves = {}           # {('city' | 'port', region): (x, y)} towns and ports moved on the map
+        self.dip_set = {}               # {(kind, from, to): value or None} picked on the Diplomacy tab ('me' = the faction)
         self.sizes = {}                 # {region: {'level', 'population'}} set by hand on the Buildings tab
         self._units_for, self._units_cache = None, []
         self.buildings_picked = {}      # region -> [(chain, level)] set by hand
@@ -236,9 +238,13 @@ class App(tk.Tk):
         self._build_buildings_tab()
         tab = ttk.Frame(self.nb, padding=4)
         self.nb.add(tab, text="  Map  ")
-        self.map_view = MapView(tab)
+        self.map_view = MapView(tab, on_layers=lambda: self.show_map())
         self.map_view.pack(fill="both", expand=True)
         self._cmap, self._cmap_for = None, None
+        tab = ttk.Frame(self.nb, padding=4)
+        self.nb.add(tab, text="  Diplomacy  ")
+        self.dip_editor = DiplomacyEditor(tab)
+        self.dip_editor.pack(fill="both", expand=True)
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self.tab_opened())
 
         # --- actions
@@ -250,6 +256,7 @@ class App(tk.Tk):
         ttk.Button(bar, text="Log", command=self.show_log).pack(side="right", padx=(6, 0))
         ttk.Button(bar, text="Restore a backup...", command=self.restore).pack(side="right")
         ttk.Button(bar, text="Scan mod", command=self.scan).pack(side="right", padx=6)
+        ttk.Button(bar, text="Check mod", command=self.check).pack(side="right")
         ttk.Button(bar, text="Game manifest...", command=self.game_manifest).pack(side="right")
         self.status = tk.StringVar(value="Choose the mod's data folder (for example ...\\HLR\\data) and press Load.")
         ttk.Label(self, textvariable=self.status, anchor="w").pack(fill="x", padx=6, pady=(0, 6))
@@ -402,6 +409,9 @@ class App(tk.Tk):
         if tab == 3:
             self.show_map()
             return
+        if tab == 4:
+            self.load_diplomacy()
+            return
         lb, load = {1: (self.lb_units, self.load_garrison), 2: (self.lb_build, self.load_buildings)}.get(tab, (None, None))
         if lb is not None and self.chosen and not lb.curselection():
             capital = self.v["capital"].get() or self.chosen[0]
@@ -482,6 +492,7 @@ class App(tk.Tk):
         self.garrisons, self.buildings_picked, self.sizes = {}, {}, {}
         self.char_moves = {}
         self.field, self.removed_existing, self._placing = self._existing_field(faction), [], None
+        self.dip_set.clear()
         self.refresh_field()
         if self.chosen:
             self.v["capital"].set(self.chosen[0])
@@ -512,6 +523,42 @@ class App(tk.Tk):
                         "named": c.named, "changed": False})
         return out
 
+    def diplomacy_base(self):
+        """(me, {(kind, from, to): value}) as the start stands without the picks:
+        the file for an edited faction; for a new one its template's relations
+        (or only the rebels' 600) as the build writes them."""
+        from .diplomacy import KINDS, read
+        rel = read(self.strat)
+        if self.editing():
+            me = self.v["template"].get().strip()
+            src = me
+        else:
+            me = self.v["name"].get().strip().lower() or "(new)"
+            src = self.v["template"].get().strip() if self.v_dip.get() == "template" else None
+        base = {}
+        for kind in KINDS:
+            for (a, b), v in rel[kind].items():
+                if src and a == src and b != me:
+                    base[(kind, "me", b)] = v
+                elif src and b == src and a != me:
+                    base[(kind, a, "me")] = v
+            if not src and rel[kind]:
+                base[(kind, "me", "slave")] = base[(kind, "slave", "me")] = 600
+        return me, base
+
+    def load_diplomacy(self):
+        if not self.mod or not self.strat or not self.v["template"].get().strip():
+            return
+        me, base = self.diplomacy_base()
+        others = [fb.name for fb in self.strat.factions if fb.name != me]
+        names = dict(self.mod.factions())
+        self.dip_editor.load(me, others, base, self.dip_set, names,
+                             lambda: self.status.set("%d diplomacy change(s) - Preview, then %s." % (
+                                 len(self.dip_set), "Apply changes" if self.editing() else "Create faction")))
+
+    def _relations(self):
+        return [{"kind": k, "from": a, "to": b, "value": v} for (k, a, b), v in self.dip_set.items()]
+
     def show_map(self):
         """The Map tab: the campaign map with the towns as they would stand after this run."""
         if not self.mod or not self.strat:
@@ -531,6 +578,13 @@ class App(tk.Tk):
         owners = self.town_owners()
         colours = dict(self._colours_all)
         me = self.v["template"].get().strip() if self.editing() else (self.v["name"].get().strip().lower() or "(new)")
+        dip_view = self.map_view.v_dip.get() and self.v["template"].get().strip()
+        if dip_view:                         # every owner in the colour of how the faction stands towards it
+            _, base = self.diplomacy_base()
+            for other in {fb.name for fb in self.strat.factions}:
+                key = ("core_attitudes", "me", other)
+                v = self.dip_set[key] if key in self.dip_set else base.get(key)
+                colours[other] = tuple(int(dip_colour(v)[i:i + 2], 16) for i in (1, 3, 5))
         if not self.editing():
             template = self.v["template"].get().strip()
             colours[me] = tuple(self.colours["primary"] or colours.get(template, (255, 215, 0)))
@@ -781,6 +835,7 @@ class App(tk.Tk):
         self.field, self._placing = [], None
         self.editing_now, self.char_moves = None, {}
         self.place_moves = {}
+        self.dip_set.clear()
         self.refresh_field()
         self.refresh_chosen()
         self.fill_towns()
@@ -1125,6 +1180,7 @@ class App(tk.Tk):
                                     if r in self.chosen},
                       "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen}},
             "places": self._places(),
+            "relations": self._relations(),
         }
         return v["template"], v["name"].lower(), opts
 
@@ -1160,6 +1216,7 @@ class App(tk.Tk):
             "remove": list(self.removed_existing),
             "garrisons": dict(self.garrisons),
             "places": self._places(),
+            "relations": self._relations(),
             "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen},
             "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()}}
 
@@ -1351,6 +1408,40 @@ class App(tk.Tk):
         self.show_text("Done", plan.report() + "\n\nBackup: %s\nStart a NEW campaign to see the %s." % (
             bdir, "changes" if self.editing() else "faction"))
         self.load()
+
+    def check(self):
+        """Read every file the tool uses and report; the deep check also rehearses the
+        tool's work for every faction in memory (minutes on a big mod). Nothing is written."""
+        if not self.mod:
+            messagebox.showerror(APP, "load a mod first")
+            return
+        deep = messagebox.askyesnocancel(APP, "Check the mod (nothing is written).\n\n"
+                                              "Also rehearse an edit and a new faction for every faction?\n"
+                                              "Yes = deep check (a few minutes, longer on a big mod)\n"
+                                              "No = quick check (seconds)")
+        if deep is None:
+            return
+        from .check import check_mod
+        result, data, campaign = {}, self.mod.data, self.v_campaign.get()
+
+        def work():
+            try:
+                result["text"] = check_mod(ModData(data), campaign, deep=deep,
+                                           progress=lambda m: result.__setitem__("step", m))
+            except Exception as e:
+                result["text"] = "The check stopped: %s\n\n%s" % (e, traceback.format_exc())
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+
+        def wait():
+            if th.is_alive():
+                self.status.set("Checking the mod... %s" % result.get("step", ""))
+                self.after(300, wait)
+                return
+            self.status.set("Check finished.")
+            log.write("Check mod\n" + result["text"])
+            self.show_text("Check mod", result["text"])
+        wait()
 
     def show_log(self):
         """The tool's log - send faction_tool.log along with the game's system.log.txt."""
