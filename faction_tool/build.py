@@ -11,11 +11,12 @@ from .textio import TextFile, strip_comment, tokens
 RE_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
-def template_display(mod, template):
-    """Guess the template's display strings from data/text: full name, short name, adjective."""
+def template_display(mod, template, campaign=None):
+    """Guess the template's display strings from data/text: full name, short name,
+    adjective - from the tables this campaign reads (not another campaign's)."""
     T = template.upper()
     found = {}
-    for path in mod.text_files():
+    for path in mod.campaign_text_files(campaign):
         f = mod.load(path)
         for line in f.texts():
             m = re.match(r"\s*\{([A-Za-z0-9_]+)\}\s*(.*)$", line)
@@ -40,9 +41,10 @@ def build(mod, campaign, template, new, opts):
     if template not in names or template == "slave":
         raise ValueError("pick an existing faction (not slave) as the template")
     opts = dict(opts)
-    for k, v in template_display(mod, template).items():
+    for k, v in template_display(mod, template, campaign).items():
         opts.setdefault("template_" + k, v)
     plan = Plan(mod, template, new, opts)
+    plan.campaign = campaign
     clone.sm_factions(plan)
     clone.sm_factions_json(plan)
     clone.faction_blocks(plan, "character", heads=("faction", "type"))
@@ -60,6 +62,7 @@ def build(mod, campaign, template, new, opts):
         clone.triggers(plan, "ancillaries")
     clone.win_conditions(plan, campaign)
     clone.text_strings(plan)
+    clone.campaign_description(plan, campaign)
     clone.lookup_keys(plan)
     if opts.get("copy_art", True):
         clone.art_files(plan, campaign)

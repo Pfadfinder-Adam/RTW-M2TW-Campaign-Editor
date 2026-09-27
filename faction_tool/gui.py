@@ -20,6 +20,11 @@ from .units import faction_units, read_units
 
 APP = "RTW Faction Tool"
 
+# descr_strat.txt: "faction <name>, <economy> <military>" - the words the game knows
+AI_ECONOMY = ("balanced", "bureaucrat", "comfortable", "craftsman", "fortified", "religious", "sailor", "trader")
+AI_MILITARY = ("caesar", "genghis", "henry", "mao", "napoleon", "smith", "stalin")
+AI_CHOICES = ["%s %s" % (e, m) for e in AI_ECONOMY for m in AI_MILITARY]
+
 
 class App(tk.Tk):
     def __init__(self):
@@ -87,7 +92,8 @@ class App(tk.Tk):
         field("Name (full)", ttk.Entry(lf, textvariable=self.v["display_name"]))
         field("Name (short)", ttk.Entry(lf, textvariable=self.v["short_name"]))
         field("Adjective", ttk.Entry(lf, textvariable=self.v["adjective"]))
-        field("AI personality", ttk.Entry(lf, textvariable=self.v["ai"]))
+        self.cb_ai = ttk.Combobox(lf, textvariable=self.v["ai"], state="readonly", values=AI_CHOICES)
+        field("AI personality", self.cb_ai)
         field("Starting denari", ttk.Entry(lf, textvariable=self.v["denari"]))
         cf = ttk.Frame(lf)
         self.b_primary = tk.Button(cf, text="primary", width=10, command=lambda: self.pick_colour("primary"))
@@ -147,34 +153,36 @@ class App(tk.Tk):
         self.cb_owner = ttk.Combobox(flt, textvariable=self.v_owner, state="readonly", width=18)
         self.cb_owner.pack(side="left")
         self.cb_owner.bind("<<ComboboxSelected>>", lambda e: self.fill_towns())
-        lists = ttk.Frame(tf)
+        # the town list and the chosen list share a pane: drag the divider to widen either
+        lists = ttk.Panedwindow(tf, orient="horizontal")
         lists.pack(fill="both", expand=True, padx=4)
-        # the chosen list and the buttons are packed first (right side) so they never get squeezed
+        left_pane = ttk.Frame(lists)
         cf2 = ttk.Frame(lists)
-        cf2.pack(side="right", fill="y")
+        lists.add(left_pane, weight=3)
+        lists.add(cf2, weight=1)
         ttk.Label(cf2, text="Chosen").pack(anchor="w")
         # Shift/Ctrl select several, like the list on the left; double-click or Delete removes
-        self.lb = tk.Listbox(cf2, width=20, height=14, selectmode="extended", exportselection=False)
+        self.lb = tk.Listbox(cf2, width=34, height=14, selectmode="extended", exportselection=False)
         self.lb.pack(fill="both", expand=True)
         self.lb.bind("<Double-1>", lambda e: self.remove_town())
         self.lb.bind("<Delete>", lambda e: self.remove_town())
         ttk.Label(cf2, text="Capital").pack(anchor="w", pady=(6, 0))
-        self.cb_capital = ttk.Combobox(cf2, textvariable=self.v["capital"], state="readonly", width=18)
+        self.cb_capital = ttk.Combobox(cf2, textvariable=self.v["capital"], state="readonly", width=24)
         self.cb_capital.pack(fill="x")
         self.cb_capital.bind("<<ComboboxSelected>>", lambda e: self.refresh_chosen())
-        mid = ttk.Frame(lists)
+        mid = ttk.Frame(left_pane)
         mid.pack(side="right", padx=6)
         ttk.Button(mid, text="Add >", command=self.add_town).pack(pady=2)
         ttk.Button(mid, text="< Remove", command=self.remove_town).pack(pady=2)
         ttk.Button(mid, text="Garrison...", command=lambda: self.show_units(self.selected_town())).pack(pady=(14, 2))
-        self.tv = ttk.Treeview(lists, columns=("town", "owner"), show="tree headings", height=18)
+        self.tv = ttk.Treeview(left_pane, columns=("town", "owner"), show="tree headings", height=18)
         self.tv.heading("#0", text="Region")
         self.tv.heading("town", text="Settlement")
         self.tv.heading("owner", text="Owner")
         self.tv.column("#0", width=150)
         self.tv.column("town", width=120)
         self.tv.column("owner", width=100)
-        sb = ttk.Scrollbar(lists, orient="vertical", command=self.tv.yview)
+        sb = ttk.Scrollbar(left_pane, orient="vertical", command=self.tv.yview)
         self.tv.configure(yscrollcommand=sb.set)
         self.tv.pack(side="left", fill="both", expand=True)
         sb.pack(side="left", fill="y")
@@ -416,13 +424,18 @@ class App(tk.Tk):
             return
         fb = self.strat.faction(t) if self.strat else None
         if fb:
-            parts = fb.header.split(",", 1)
-            self.v["ai"].set(parts[1].strip() if len(parts) > 1 else "")
+            parts = fb.header.split(";")[0].split(",", 1)
+            self.v["ai"].set(" ".join(parts[1].split()) if len(parts) > 1 else "")
+        # the list offers every economy x military pair, plus what this campaign already uses
+        # (variants like 'balanced smith random' or REX's 'opportunist')
+        seen = {" ".join(x.header.split(";")[0].split(",", 1)[1].split())
+                for x in (self.strat.factions if self.strat else []) if "," in x.header}
+        self.cb_ai["values"] = AI_CHOICES + sorted(v for v in seen if v and v not in AI_CHOICES)
         pool = self.mod.name_pool(t)
         for a, b in self.cb_names:
             a["values"] = pool.get("characters", [])
             b["values"] = [""] + pool.get("surnames", [])
-        disp = template_display(self.mod, t)
+        disp = template_display(self.mod, t, self.v_campaign.get())
         self.status.set("Template %s: %s. Its units, buildings, names, traits and art are copied." %
                         (t, disp.get("display_name", t)))
 

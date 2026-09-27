@@ -88,6 +88,25 @@ class ModData:
             return []
         return [os.path.join(folder, n) for n in sorted(os.listdir(folder)) if n.lower().endswith(".txt")]
 
+    def campaign_text_files(self, campaign=None):
+        """The string tables that speak for this campaign, the one the game reads
+        first leading: <campaign>_expanded_bi.txt, expanded_bi.txt, expanded.txt,
+        then the rest. Another campaign's own tables (<other>_expanded*.txt)
+        are left out."""
+        camp = (campaign or "").lower()
+        mine, main, rest = [], [], []
+        for p in self.text_files():
+            n = os.path.basename(p).lower()
+            m = re.match(r"^(.+)_expanded(_bi)?\.txt$", n)
+            if m:
+                (mine if m.group(1) == camp else []).append(p)
+            elif n in ("expanded_bi.txt", "expanded.txt"):
+                main.append(p)
+            else:
+                rest.append(p)
+        main.sort(key=lambda p: os.path.basename(p).lower() != "expanded_bi.txt")
+        return mine + main + rest
+
     def rel(self, path):
         return os.path.relpath(path, os.path.dirname(self.data)).replace("\\", "/")
 

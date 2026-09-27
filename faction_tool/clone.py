@@ -392,9 +392,6 @@ def text_strings(plan):
             plan.note(f, "%d string(s) added" % n)
     if long_keys:
         plan.note(None, "full description written to %s" % ", ".join(sorted(set(long_keys))))
-    elif plan.opts.get("long_description"):
-        plan.warn(None, "no campaign description string (<CAMPAIGN>_%s_DESCR) found - the full description "
-                        "was not written" % t)
 
 
 # ---------------------------------------------------------------------------
@@ -520,5 +517,71 @@ def lookup_keys(plan):
                 n += 1
                 i += 1
         i += 1
+    # the chosen campaign's keys, when the template's are under a front end name
+    camp = getattr(plan, "campaign", None)
+    if camp:
+        src = description_key(plan.template, camp, have)
+        for suffix in ("_TITLE", "_DESCR"):
+            key = "%s_%s%s" % (camp.upper(), new, suffix)
+            if key in have:
+                continue
+            at = next((i + 1 for i in range(len(f)) if tokens(f.text(i))[:1] == [src + suffix]), len(f))
+            f.insert(at, [key])
+            have.add(key)
+            n += 1
     if n:
         plan.note(f, "%d campaign description key(s) listed for %s" % (n, plan.new))
+
+
+# The front end names some vanilla factions its own way in the campaign
+# description keys ({IMPERIAL_CAMPAIGN_GAUL_DESCR} for gauls).
+FE_NAMES = {"romans_julii": "JULII", "romans_brutii": "BRUTII", "romans_scipii": "SCIPII",
+            "romans_senate": "SENATE", "gauls": "GAUL", "britons": "BRITANNIA", "germans": "GERMANIA"}
+
+
+def description_key(faction, campaign, keys=()):
+    """The campaign-screen key the game reads for a faction: <CAMPAIGN>_<NAME>,
+    with the front end's own name for the vanilla factions that have one."""
+    camp = campaign.upper()
+    own = "%s_%s" % (camp, faction.upper())
+    fe = FE_NAMES.get(faction)
+    if fe and own + "_DESCR" not in keys and "%s_%s_DESCR" % (camp, fe) in keys:
+        return "%s_%s" % (camp, fe)
+    return own
+
+
+def campaign_description(plan, campaign):
+    """Make sure campaign_descriptions.txt has the new faction's title and full
+    description for this campaign, even when the template's are under a front
+    end name that text_strings() could not match."""
+    path = next((p for p in plan.mod.text_files()
+                 if os.path.basename(p).lower() == "campaign_descriptions.txt"), None)
+    if not path:
+        return
+    f = plan.edit(path)
+    keys = {}
+    for i, l in enumerate(f.texts()):
+        m = RE_KEY.match(l)
+        if m:
+            keys[m.group(2).upper()] = i
+    new_key = "%s_%s" % (campaign.upper(), plan.new.upper())
+    src = description_key(plan.template, campaign, keys)
+    added = []
+    for suffix in ("_TITLE", "_DESCR"):
+        if new_key + suffix in keys:
+            continue
+        if suffix == "_TITLE":
+            value = plan.opts.get("display_name") or ""
+        else:
+            value = (plan.opts.get("long_description") or "").replace("\n", "\\n")
+        if not value and src + suffix in keys:
+            value = RE_KEY.match(f.text(keys[src + suffix])).group(3)[1:].strip()
+        if not value:
+            continue
+        at = keys.get(src + suffix, len(f) - 1) + 1
+        f.insert(at, ["{%s%s}\t%s" % (new_key, suffix, value)])
+        keys = {k: (v + 1 if v >= at else v) for k, v in keys.items()}
+        keys[new_key + suffix] = at
+        added.append(new_key + suffix)
+    if added:
+        plan.note(f, "campaign screen strings for %s: %s" % (campaign, ", ".join(added)))

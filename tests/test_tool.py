@@ -463,6 +463,48 @@ class ToolTest(unittest.TestCase):
             build(ModData(self.root), "test", "alpha", "beta", {"start": {
                 "regions": ["B_R"], "leader": {"name": "Boris"}, "buildings": {"B_R": [["core_building", "tower"]]}}})
 
+    def test_edit_an_existing_faction(self):
+        from faction_tool.edit import edit, read_faction
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        now = read_faction(mod, "test", "alpha")
+        self.assertEqual((now["display_name"], now["adjective"], now["ai"], now["denari"], now["playable"],
+                          now["primary_colour"], now["regions"]),
+                         ("Alphan Kingdom", "Alphan", "balanced smith", 1000, True, (1, 2, 3), ["A_R"]))
+        plan = edit(mod, "test", "alpha", {
+            "display_name": "Alphan Empire", "adjective": "Alphic", "long_description": "Rewritten",
+            "primary_colour": (9, 8, 7), "ai": "fortified mao", "denari": 4000, "playable": False,
+            "garrisons": {"A_R": ["rebel spear"]}})
+        plan.apply()
+        mod = ModData(self.root)
+        now = read_faction(mod, "test", "alpha")
+        self.assertEqual((now["display_name"], now["adjective"], now["ai"], now["denari"], now["playable"],
+                          now["primary_colour"], now["long_description"]),
+                         ("Alphan Empire", "Alphic", "fortified mao", 4000, False, (9, 8, 7), "Rewritten"))
+        s = Strat(mod.load(mod.campaign_file("test", "descr_strat.txt")))
+        aaron = s.faction("alpha").characters[0]
+        self.assertEqual([l.split("\t")[2] for l in s.lines[aaron.start:aaron.end] if l.startswith("unit")],
+                         ["alpha general", "rebel spear"])          # the bodyguard stays
+        self.assertIn("alpha", [n for _, n in s.nonplayable["items"]])
+        restore(mod, backups(mod)[0])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        self.assertEqual(before, after)
+
+    def test_campaign_screen_key_under_a_front_end_name(self):
+        # the template's description sits under a front end name (like GAUL for gauls)
+        from faction_tool import clone
+        clone.FE_NAMES["alpha"] = "ALPHALAND"
+        self.addCleanup(clone.FE_NAMES.pop, "alpha")
+        write(os.path.join(self.root, "data", "text", "campaign_descriptions.txt"),
+              "{TEST_ALPHALAND_TITLE}\t\tAlphaland\n{TEST_ALPHALAND_DESCR}\t\tOld story\n", utf16=True)
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"display_name": "Betan League", "long_description": "New story",
+                                                    "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        path = [p for p in mod.text_files() if p.endswith("campaign_descriptions.txt")][0]
+        text = "\n".join(plan.files[path].texts())
+        self.assertIn("{TEST_BETA_TITLE}\tBetan League", text)
+        self.assertIn("{TEST_BETA_DESCR}\tNew story", text)
+
     def test_descriptions(self):
         mod = ModData(self.root)
         plan = build(mod, "test", "alpha", "beta", {
