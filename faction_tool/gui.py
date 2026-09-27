@@ -10,12 +10,14 @@ from .build import build, template_display
 from .buildings import BuildingPictures, read_buildings, settlement_info
 from .moddata import ModData
 from .newmod import create_mod, game_root_of
+from .edit import edit as edit_faction, read_faction
 from .gui_buildings import BuildingsEditor
 from .gui_garrison import GarrisonEditor, Pictures
 from .plan import backups, restore
 from .scan import IGNORE_HELP, ignore_path, scan as scan_mod
 from .start import balanced_army, unit_name
 from .strat import Strat
+from .textio import tokens
 from .units import faction_units, read_units
 
 APP = "RTW Faction Tool"
@@ -60,6 +62,11 @@ class App(tk.Tk):
         self.cb_campaign = ttk.Combobox(top, textvariable=self.v_campaign, state="readonly", width=24)
         self.cb_campaign.pack(side="left")
         self.cb_campaign.bind("<<ComboboxSelected>>", lambda e: self.load_campaign())
+        self.v_mode = tk.StringVar(value="new")
+        ttk.Radiobutton(top, text="New faction", value="new", variable=self.v_mode,
+                        command=self.mode_changed).pack(side="left", padx=(12, 2))
+        ttk.Radiobutton(top, text="Edit faction", value="edit", variable=self.v_mode,
+                        command=self.mode_changed).pack(side="left")
 
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill="both", expand=True, **pad)
@@ -71,7 +78,7 @@ class App(tk.Tk):
         right.pack(side="left", fill="both", expand=True, padx=(10, 0))
 
         # --- faction
-        lf = ttk.LabelFrame(left, text="New faction")
+        lf = self.lf = ttk.LabelFrame(left, text="New faction")
         lf.pack(fill="x")
         self.v = {k: tk.StringVar() for k in ("template", "name", "display_name", "short_name", "adjective",
                                               "ai", "denari", "leader_first", "leader_last", "leader_age",
@@ -88,7 +95,9 @@ class App(tk.Tk):
         self.cb_template = ttk.Combobox(lf, textvariable=self.v["template"], state="readonly", width=28)
         self.cb_template.bind("<<ComboboxSelected>>", lambda e: self.template_changed())
         field("Template (copied)", self.cb_template)
-        field("Internal name", ttk.Entry(lf, textvariable=self.v["name"]))
+        self.lbl_template = lf.grid_slaves(row=row - 1, column=0)[0]
+        self.e_name = ttk.Entry(lf, textvariable=self.v["name"])
+        field("Internal name", self.e_name)
         field("Name (full)", ttk.Entry(lf, textvariable=self.v["display_name"]))
         field("Name (short)", ttk.Entry(lf, textvariable=self.v["short_name"]))
         field("Adjective", ttk.Entry(lf, textvariable=self.v["adjective"]))
@@ -106,13 +115,17 @@ class App(tk.Tk):
         self.v_art = tk.BooleanVar(value=True)
         self.v_dip = tk.StringVar(value="neutral")
         ttk.Checkbutton(lf, text="Playable", variable=self.v_playable).grid(row=row, column=0, sticky="w", padx=4)
-        ttk.Checkbutton(lf, text="Copy trait / ancillary triggers", variable=self.v_triggers).grid(row=row, column=1, sticky="w")
+        self.chk_triggers = ttk.Checkbutton(lf, text="Copy trait / ancillary triggers", variable=self.v_triggers)
+        self.chk_triggers.grid(row=row, column=1, sticky="w")
         row += 1
-        ttk.Checkbutton(lf, text="Copy art named after the template", variable=self.v_art).grid(row=row, column=1, sticky="w")
+        self.chk_art = ttk.Checkbutton(lf, text="Copy art named after the template", variable=self.v_art)
+        self.chk_art.grid(row=row, column=1, sticky="w")
         row += 1
         df = ttk.Frame(lf)
-        ttk.Radiobutton(df, text="neutral to all", value="neutral", variable=self.v_dip).pack(side="left")
-        ttk.Radiobutton(df, text="template's relations", value="template", variable=self.v_dip).pack(side="left")
+        self.dip_buttons = [ttk.Radiobutton(df, text="neutral to all", value="neutral", variable=self.v_dip),
+                            ttk.Radiobutton(df, text="template's relations", value="template", variable=self.v_dip)]
+        for b in self.dip_buttons:
+            b.pack(side="left")
         field("Diplomacy", df)
         ttk.Label(lf, text="Tooltip\n(faction icon)").grid(row=row, column=0, sticky="nw", padx=4)
         self.t_descr = tk.Text(lf, width=34, height=2, wrap="word")
@@ -125,7 +138,7 @@ class App(tk.Tk):
         lf.columnconfigure(1, weight=1)
 
         # --- leaders
-        lf2 = ttk.LabelFrame(left, text="Leader and heir (names must come from the template's name list)")
+        lf2 = self.lf2 = ttk.LabelFrame(left, text="Leader and heir (names must come from the template's name list)")
         lf2.pack(fill="x", pady=(8, 0))
         self.cb_names = []
         for r, who in enumerate(("leader", "heir")):
@@ -172,8 +185,10 @@ class App(tk.Tk):
         self.cb_capital.bind("<<ComboboxSelected>>", lambda e: self.refresh_chosen())
         mid = ttk.Frame(left_pane)
         mid.pack(side="right", padx=6)
-        ttk.Button(mid, text="Add >", command=self.add_town).pack(pady=2)
-        ttk.Button(mid, text="< Remove", command=self.remove_town).pack(pady=2)
+        self.b_add = ttk.Button(mid, text="Add >", command=self.add_town)
+        self.b_add.pack(pady=2)
+        self.b_remove = ttk.Button(mid, text="< Remove", command=self.remove_town)
+        self.b_remove.pack(pady=2)
         ttk.Button(mid, text="Garrison...", command=lambda: self.show_units(self.selected_town())).pack(pady=(14, 2))
         self.tv = ttk.Treeview(left_pane, columns=("town", "owner"), show="tree headings", height=18)
         self.tv.heading("#0", text="Region")
@@ -196,7 +211,8 @@ class App(tk.Tk):
         bar = ttk.Frame(self)
         bar.pack(fill="x", **pad)
         ttk.Button(bar, text="Preview changes", command=self.preview).pack(side="left")
-        ttk.Button(bar, text="Create faction", command=self.create).pack(side="left", padx=6)
+        self.b_create = ttk.Button(bar, text="Create faction", command=self.create)
+        self.b_create.pack(side="left", padx=6)
         ttk.Button(bar, text="Restore a backup...", command=self.restore).pack(side="right")
         ttk.Button(bar, text="Scan mod", command=self.scan).pack(side="right", padx=6)
         self.status = tk.StringVar(value="Choose the mod's data folder (for example ...\\HLR\\data) and press Load.")
@@ -213,7 +229,7 @@ class App(tk.Tk):
         self.lb_units.pack(fill="both", expand=True)
         self.lb_units.bind("<<ListboxSelect>>", lambda e: self.load_garrison())
         ttk.Label(side, text="add towns on the Faction tab", foreground="#666").pack(anchor="w")
-        opts = ttk.LabelFrame(side, text="Towns without a garrison of your own", padding=6)
+        opts = self.units_opts = ttk.LabelFrame(side, text="Towns without a garrison of your own", padding=6)
         opts.pack(fill="x", pady=(10, 0))
         ttk.Label(opts, text="Leader's army").grid(row=0, column=0, sticky="w")
         self.v_army = tk.StringVar(value="balanced")
@@ -278,6 +294,67 @@ class App(tk.Tk):
             capital = self.v["capital"].get() or self.chosen[0]
             lb.selection_set(self.chosen.index(capital) if capital in self.chosen else 0)
             load()
+
+    def editing(self):
+        return self.v_mode.get() == "edit"
+
+    def mode_changed(self):
+        """New faction (clone a template) or Edit faction (change one in place)."""
+        edit = self.editing()
+        self.lf.configure(text="Edit faction" if edit else "New faction")
+        self.lbl_template.configure(text="Faction (edited)" if edit else "Template (copied)")
+        state = "disabled" if edit else "normal"
+        for w in [self.e_name, self.chk_triggers, self.chk_art, self.b_add, self.b_remove] + self.dip_buttons:
+            w.configure(state=state)
+        for w in self.lf2.winfo_children():
+            try:
+                w.configure(state=state)
+            except tk.TclError:
+                pass
+        for w in self.units_opts.winfo_children():
+            try:
+                w.configure(state=state)
+            except tk.TclError:
+                pass
+        self.cb_capital.configure(state="disabled" if edit else "readonly")
+        self.b_create.configure(text="Apply changes" if edit else "Create faction")
+        self.garrison_editor.auto_text = ("unchanged - the town keeps its garrison" if edit else None)
+        self.chosen, self.garrisons, self.buildings_picked = [], {}, {}
+        self.refresh_chosen()
+        if edit and self.v["template"].get():
+            self.template_changed()
+        self.status.set("Edit: pick the faction to change; untouched fields stay as they are." if edit else
+                        "New: pick the template to copy.")
+
+    def load_existing(self):
+        """Fill the window with the edited faction as it is now."""
+        faction = self.v["template"].get().strip()
+        try:
+            now = read_faction(self.mod, self.v_campaign.get(), faction)
+        except Exception as e:
+            messagebox.showerror(APP, str(e))
+            return
+        self.editing_now = now
+        self.v["name"].set(faction)
+        for k in ("display_name", "short_name", "adjective", "ai"):
+            self.v[k].set(now.get(k) or "")
+        self.v["denari"].set(str(now.get("denari", "")))
+        self.v_playable.set(bool(now.get("playable")))
+        for t, k in ((self.t_descr, "description"), (self.t_long, "long_description")):
+            t.delete("1.0", "end")
+            t.insert("1.0", now.get(k) or "")
+        for key, b in (("primary", self.b_primary), ("secondary", self.b_secondary)):
+            rgb = now.get(key + "_colour")
+            self.colours[key] = rgb
+            if rgb:
+                b.configure(bg="#%02x%02x%02x" % tuple(rgb))
+        self.chosen = list(now.get("regions", []))
+        self.garrisons, self.buildings_picked = {}, {}
+        if self.chosen:
+            self.v["capital"].set(self.chosen[0])
+        self.refresh_chosen()
+        self.status.set("Editing %s: %d town(s). Change what you want, Preview, then Apply changes."
+                        % (faction, len(self.chosen)))
 
     def selected_town(self):
         sel = self.lb.curselection()
@@ -422,6 +499,8 @@ class App(tk.Tk):
         t = self.v["template"].get()
         if not t or not self.mod:
             return
+        if self.editing():
+            self.load_existing()
         fb = self.strat.faction(t) if self.strat else None
         if fb:
             parts = fb.header.split(";")[0].split(",", 1)
@@ -436,6 +515,8 @@ class App(tk.Tk):
             a["values"] = pool.get("characters", [])
             b["values"] = [""] + pool.get("surnames", [])
         disp = template_display(self.mod, t, self.v_campaign.get())
+        if self.editing():
+            return
         self.status.set("Template %s: %s. Its units, buildings, names, traits and art are copied." %
                         (t, disp.get("display_name", t)))
 
@@ -468,7 +549,7 @@ class App(tk.Tk):
             n = len(self.garrisons.get(r, []))
             self.lb_units.insert("end", "%s%s%s" % (r, "  (capital)" if r == (self.v["capital"].get() or
                                  (self.chosen[0] if self.chosen else "")) else "",
-                                 "  [%d units]" % n if n else "  [automatic]"))
+                                 "  [%d units]" % n if n else ("  [unchanged]" if self.editing() else "  [automatic]")))
         if keep_units_selection and sel and sel[0] < len(self.chosen):
             self.lb_units.selection_set(sel[0])
         bsel = self.lb_build.curselection()
@@ -506,6 +587,13 @@ class App(tk.Tk):
         order = [capital] + [r for r in self.chosen if r != capital]      # as the build orders them
         heir_town = order[1] if self.v["heir_first"].get().strip() and len(order) > 1 else None
         held = "leader" if region == capital else "heir" if region == heir_town else False
+        if self.editing():
+            # whoever of the faction stands in the town with an army: a named one keeps his bodyguard
+            xy = self.mod.city_tiles(self.v_campaign.get()).get(region)
+            fb = self.strat.faction(template) if self.strat else None
+            holder = next((c for c in (fb.characters if fb else []) if c.xy == xy and
+                           any(tokens(l)[:1] == ["army"] for l in self.strat.lines[c.start:c.end])), None)
+            held = (holder.role or "general") if holder is not None and holder.named else False
 
         def auto():
             try:
@@ -557,7 +645,26 @@ class App(tk.Tk):
         }
         return v["template"], v["name"].lower(), opts
 
+    def gather_edit(self):
+        v = {k: x.get().strip() for k, x in self.v.items()}
+        if not v["template"]:
+            raise ValueError("pick the faction to edit")
+        return v["template"], {
+            "display_name": v["display_name"], "short_name": v["short_name"], "adjective": v["adjective"],
+            "description": self.t_descr.get("1.0", "end").strip(),
+            "long_description": self.t_long.get("1.0", "end").strip(),
+            "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
+            "ai": v["ai"], "denari": int(v["denari"]) if v["denari"].isdigit() else None,
+            "playable": self.v_playable.get(),
+            "garrisons": dict(self.garrisons),
+            "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()}}
+
     def make_plan(self):
+        if self.editing():
+            if not self.mod:
+                raise ValueError("load a mod first")
+            faction, opts = self.gather_edit()
+            return edit_faction(ModData(self.mod.data), self.v_campaign.get(), faction, opts)
         template, name, opts = self.gather()
         # a fresh read, so a previous preview's edits never leak in
         mod = ModData(self.mod.data)
@@ -696,7 +803,8 @@ class App(tk.Tk):
         except Exception as e:
             messagebox.showerror(APP, "Writing failed: %s\n\n%s" % (e, traceback.format_exc()))
             return
-        self.show_text("Done", plan.report() + "\n\nBackup: %s\nStart a NEW campaign to see the faction." % bdir)
+        self.show_text("Done", plan.report() + "\n\nBackup: %s\nStart a NEW campaign to see the %s." % (
+            bdir, "changes" if self.editing() else "faction"))
         self.load()
 
     def restore(self):

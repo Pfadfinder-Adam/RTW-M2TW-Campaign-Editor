@@ -71,6 +71,15 @@ class BuildingsEditor(ttk.Frame):
         return out
 
     def redraw(self):
+        if getattr(self, "_drawing", False):
+            return                      # a resize while drawing: this draw already fits the new width
+        self._drawing = True
+        try:
+            self._redraw()
+        finally:
+            self._drawing = False
+
+    def _redraw(self):
         for w in self.inner.winfo_children():
             w.destroy()
         rows = [self._row(b, levels) for b, levels in self.chains()]

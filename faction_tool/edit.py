@@ -6,6 +6,7 @@ import re
 
 from .build import template_display, validate
 from .buildings import settlement_info
+from .clone import FE_NAMES, description_key
 from .plan import Plan
 from .start import MAX_UNITS, _has_army, _units, unit_name
 from .strat import Strat
@@ -24,7 +25,9 @@ def read_faction(mod, campaign, faction):
     long_description, primary_colour, secondary_colour, ai, denari, playable, regions}."""
     out = dict(template_display(mod, faction, campaign))
     F = faction.upper()
-    long_key = "%s_%s_DESCR" % (campaign.upper(), F)
+    keys = {m.group(2).upper() for p in mod.campaign_text_files(campaign) for l in mod.load(p).texts()
+            for m in [RE_KEY.match(l)] if m}
+    long_key = description_key(faction, campaign, keys) + "_DESCR"
     for path in mod.campaign_text_files(campaign):
         for line in mod.load(path).texts():
             m = RE_KEY.match(line)
@@ -98,10 +101,13 @@ def _texts(plan, now, campaign):
         set_to[F + "_DESCR"] = o["description"]
     long_new = o.get("long_description")
     if long_new is not None and long_new != now.get("long_description"):
-        set_to["%s_%s_DESCR" % (campaign.upper(), F)] = long_new
+        keys = {m.group(2).upper() for p in plan.mod.campaign_text_files(campaign)
+                for l in plan.mod.load(p).texts() for m in [RE_KEY.match(l)] if m}
+        set_to[description_key(plan.new, campaign, keys) + "_DESCR"] = long_new
     if not pairs and not set_to:
         return
-    word = re.compile(r"(?<![A-Z0-9])%s(?![A-Z0-9])" % re.escape(F))
+    fe = FE_NAMES.get(plan.new)
+    word = re.compile(r"(?<![A-Z0-9])(%s)(?![A-Z0-9])" % "|".join(re.escape(x) for x in (F, fe) if x))
     for path in plan.mod.campaign_text_files(campaign):
         if "regions_and_settlement_names" in path.lower():
             continue

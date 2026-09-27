@@ -166,7 +166,8 @@ class GarrisonEditor(ttk.Frame):
             self.total.configure(text="")
             return
         if not self.garrison:
-            self.total.configure(text="automatic - the tool picks (see 'Leader's army' / 'Old garrisons')")
+            self.total.configure(text=getattr(self, "auto_text", None) or
+                                 "automatic - the tool picks (see 'Leader's army' / 'Old garrisons')")
             return
         room = MAX_UNITS - (1 if self.held else 0)
         cost = sum(self.by_type[t].price for t in self.garrison)
