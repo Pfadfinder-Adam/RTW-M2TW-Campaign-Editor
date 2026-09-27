@@ -495,3 +495,28 @@ def unit_cards(plan):
     if missing:
         plan.warn(None, "no picture found anywhere under data/ui for %d unit file(s) - the game shows a "
                         "placeholder: %s" % (len(missing), ", ".join(missing[:12]) + (" ..." if len(missing) > 12 else "")))
+
+
+def lookup_keys(plan):
+    """lookup_campaign_descriptions.txt (vanilla RTW): one campaign-description
+    key per line. The new faction's keys go right after the template's."""
+    path = plan.mod.file("lookup_descr")
+    if not path:
+        return
+    t, new = plan.template.upper(), plan.new.upper()
+    f = plan.edit(path)
+    have = {tokens(l)[0].upper() for l in f.texts() if tokens(l)}
+    word = re.compile(r"(?<![A-Z0-9])%s(?![A-Z0-9])" % re.escape(t))
+    n, i = 0, 0
+    while i < len(f):
+        tk = tokens(f.text(i))
+        if len(tk) == 1 and word.search(tk[0].upper()):
+            key = word.sub(new, tk[0].upper())
+            if key not in have:
+                f.insert_raw(i + 1, [f.raw[i].replace(tk[0], key, 1)])
+                have.add(key)
+                n += 1
+                i += 1
+        i += 1
+    if n:
+        plan.note(f, "%d campaign description key(s) listed for %s" % (n, plan.new))

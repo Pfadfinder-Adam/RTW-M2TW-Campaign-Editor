@@ -60,6 +60,7 @@ def build(mod, campaign, template, new, opts):
         clone.triggers(plan, "ancillaries")
     clone.win_conditions(plan, campaign)
     clone.text_strings(plan)
+    clone.lookup_keys(plan)
     if opts.get("copy_art", True):
         clone.art_files(plan, campaign)
     clone.unit_cards(plan)

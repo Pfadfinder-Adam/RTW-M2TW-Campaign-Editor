@@ -298,6 +298,22 @@ class ToolTest(unittest.TestCase):
         # a missing texture is found, a case-different one is not reported
         self.assertEqual([m[2] for m in rep.missing], ["data/models_unit/textures/gone.tga"])
 
+    def test_lookup_keys_and_nested_mods(self):
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "lookup_campaign_descriptions.txt"), "TEST_ALPHA_TITLE\nTEST_ALPHA_DESCR\nOTHER_KEY\n")
+        # a mod folder inside the scanned one is left out; UTF-8 text reads as UTF-8
+        write(os.path.join(self.root, "somemod", "data", "descr_sm_factions.txt"), "faction alpha\n")
+        with open(os.path.join(self.root, "notes.txt"), "wb") as fh:
+            fh.write("alpha: Déjà vu\n".encode("utf-8"))
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        self.assertEqual(plan.files[mod.file("lookup_descr")].texts()[:5],
+                         ["TEST_ALPHA_TITLE", "TEST_BETA_TITLE", "TEST_ALPHA_DESCR", "TEST_BETA_DESCR", "OTHER_KEY"])
+        rep = scan(mod, "alpha", "test")
+        self.assertEqual(rep.other_mods, ["somemod"])
+        self.assertFalse(any(r.startswith("somemod/") for r in rep.hits))
+        self.assertEqual(rep.hits["notes.txt"], [(1, "alpha: Déjà vu")])
+
     def test_descriptions(self):
         mod = ModData(self.root)
         plan = build(mod, "test", "alpha", "beta", {

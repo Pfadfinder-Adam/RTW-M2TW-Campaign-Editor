@@ -22,6 +22,26 @@ HANDLED_CAMPAIGN = {"descr_strat.txt", "descr_win_conditions.txt"}
 READ_CAMPAIGN = {"descr_regions.txt", "descr_regions_and_settlement_name_lookup.txt", "descr_regions_safe.txt"}
 
 
+# mentions that are normal for any faction and need nothing from a new one
+IGNORABLE = (
+    (re.compile(r"(^|/)world/maps/(battle|custom)/|(^|/)descr_battle\.txt$", re.I), "battle maps and historical battles"),
+    (re.compile(r"(^|/)editor_log\.txt$", re.I), "battle editor logs"),
+    (re.compile(r"(^|/)[^/]*\.log(\.txt)?$|(^|/)system\.log", re.I), "game logs"),
+    (re.compile(r"(^|/)export_descr_advice\.txt$", re.I), "advisor triggers (optional)"),
+    (re.compile(r"(^|/)export_descr_sounds_prebattle\.txt$", re.I), "pre-battle speech lines (optional)"),
+    (re.compile(r"(^|/)(campaign_script|be_script[^/]*|four_turns)\.txt$", re.I),
+     "campaign scripts: events written for that faction - read them, copy by hand if wanted"),
+    (re.compile(r"(^|/)(![^/]*|[^/]*kopie[^/]*|[^/]*backup[^/]*|[^/]* - copy[^/]*)(/|$)", re.I), "copies and backups"),
+)
+
+
+def _ignorable(rel):
+    for rx, why in IGNORABLE:
+        if rx.search(rel):
+            return why
+    return None
+
+
 def _read_text(path):
     with open(path, "rb") as f:
         data = f.read(MAX_TEXT + 1)
@@ -34,7 +54,10 @@ def _read_text(path):
             return None
     if b"\0" in data[:4096]:
         return None                     # binary under a text extension
-    return data.decode("latin-1")
+    try:
+        return data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return data.decode("latin-1")
 
 
 def _word(name):
@@ -53,6 +76,7 @@ class Scan:
         self.named = []                  # rel paths of files / folders named after the faction
         self.missing = []                # (from rel, what, missing rel)
         self.skipped = []                # text files too big or unreadable
+        self.other_mods = []             # mod folders inside the scanned folder, left out
 
     def rel(self, path):
         return os.path.relpath(path, self.root).replace("\\", "/")
@@ -60,8 +84,19 @@ class Scan:
     # ---- the walk ----
     def run(self, progress=None):
         word = _word(self.faction)
+        data_abs = os.path.normcase(os.path.abspath(self.mod.data))
         for dirpath, dirnames, filenames in os.walk(self.root):
-            dirnames[:] = sorted(d for d in dirnames if d != BACKUP_DIR)
+            keep = []
+            for d in sorted(dirnames):
+                full = os.path.join(dirpath, d)
+                if d == BACKUP_DIR:
+                    continue
+                if os.path.normcase(os.path.abspath(full)) != data_abs and \
+                        os.path.isfile(os.path.join(full, "data", "descr_sm_factions.txt")):
+                    self.other_mods.append(self.rel(full))     # a mod inside the game folder
+                    continue
+                keep.append(d)
+            dirnames[:] = keep
             for d in dirnames:
                 if word.search(d):
                     self.named.append(self.rel(os.path.join(dirpath, d)) + "/")
@@ -100,7 +135,8 @@ class Scan:
         if low in {v.lower() for v in DATA_FILES.values()}:
             return True
         if low.startswith("text/"):
-            return True
+            mine = {self.rel(p).lower() for p in self.mod.text_files()}
+            return rel.lower() in mine
         if low.startswith(HANDLED_ART):
             return True
         if low.startswith("world/maps/campaign/") or low.startswith("world/maps/base/"):
@@ -110,6 +146,12 @@ class Scan:
                 return False                     # another campaign: the tool runs on one at a time
             return name in HANDLED_CAMPAIGN or name.startswith("map_")
         return False
+
+    def _other_campaign(self, rel):
+        m = re.search(r"world/maps/campaign/(.+)/[^/]+$", rel, re.I)
+        if m and self.campaign and m.group(1).lower().rstrip("/").split("/")[-1] != self.campaign.lower():
+            return "other campaigns: the tool adds the faction to one campaign per run"
+        return None
 
     def read_only(self, rel):
         return rel.lower().rsplit("/", 1)[-1] in READ_CAMPAIGN
@@ -189,9 +231,18 @@ class Scan:
         if self.skipped:
             out.append("    not read (binary or over 32 MB): %d text-type file(s)" % len(self.skipped))
 
-        groups = {"handled": [], "read": [], "other": []}
+        if self.other_mods:
+            out.append("    other mods inside this folder, not scanned: " + ", ".join(self.other_mods))
+        groups = {"handled": [], "read": [], "other": [], "ignore": []}
+        why = {}
         for rel in sorted(self.hits, key=str.lower):
-            g = "handled" if self.handled(rel) else "read" if self.read_only(rel) else "other"
+            if self.handled(rel):
+                g = "handled"
+            elif self.read_only(rel):
+                g = "read"
+            else:
+                why[rel] = _ignorable(rel) or self._other_campaign(rel)
+                g = "ignore" if why[rel] else "other"
             groups[g].append(rel)
 
         out.append("")
@@ -214,6 +265,14 @@ class Scan:
             out.append("READ ONLY - information the tool reads, nothing to copy (%d)" % len(groups["read"]))
             for rel in groups["read"]:
                 out.append("  %s  (%d line(s))" % (rel, len(self.hits[rel])))
+
+        if groups["ignore"]:
+            out.append("")
+            out.append("USUALLY SAFE TO IGNORE (%d)" % len(groups["ignore"]))
+            reasons = Counter(why[r] for r in groups["ignore"])
+            for reason, n in reasons.most_common():
+                files = [r for r in groups["ignore"] if why[r] == reason]
+                out.append("  %s: %d file(s), e.g. %s" % (reason, n, ", ".join(files[:3])))
 
         named_other = [r for r in self.named if not self.handled(r.rstrip("/"))]
         out.append("")
