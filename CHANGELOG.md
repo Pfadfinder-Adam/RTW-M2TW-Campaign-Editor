@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 - 2026-09-28
+
+- Renamed to **RTW Campaign Editor** (the exe is RTW-Campaign-Editor.exe): it edits
+  far more than factions now. Backups and the log keep their old names.
+- New faction mode no longer keeps a leader/heir name from another faction's list.
+
 ## 0.1.0 - 2026-09-28
 
 The first release: a campaign editor for Rome: Total War mods, built on

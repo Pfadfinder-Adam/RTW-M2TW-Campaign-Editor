@@ -28,10 +28,10 @@ from .strat import Strat
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.1.0"
-APP = "RTW Faction Tool"
+VERSION = "0.1.1"
+APP = "RTW Campaign Editor"
 
-HELP = """RTW Faction Tool 0.1.0 - how to use it
+HELP = """RTW Campaign Editor - how to use it
 
 START
   1. Close the game. Browse... to the mod's data folder (for example ...\\HLR\\data), press Load.
@@ -1290,6 +1290,11 @@ class App(tk.Tk):
         for a, b in self.cb_names:
             a["values"] = pool.get("characters", [])
             b["values"] = [""] + pool.get("surnames", [])
+        if not self.editing():                 # names left from another faction are not in this one's lists
+            for role in ("leader", "heir"):
+                if self.v[role + "_first"].get() and self.v[role + "_first"].get() not in pool.get("characters", []):
+                    self.v[role + "_first"].set("")
+                    self.v[role + "_last"].set("")
         disp = template_display(self.mod, t, self.v_campaign.get())
         if self.editing():
             return

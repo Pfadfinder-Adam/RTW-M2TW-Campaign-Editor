@@ -1,4 +1,6 @@
-# RTW Faction Tool
+# RTW Campaign Editor
+
+(formerly RTW Faction Tool)
 
 A campaign editor for **Rome: Total War** mods (and the plain game). It works on the mod's own data files, shows every change before writing it, keeps a backup and can undo it byte for byte.
 
@@ -7,13 +9,13 @@ A campaign editor for **Rome: Total War** mods (and the plain game). It works on
 - **Campaign map**: the map drawn from the ground types, political and diplomacy colours, towns, ports and characters you can drag, new armies, agents and fleets placed by clicking, towns and ports moved, **new regions painted** and borders moved.
 - **Safe**: a separate mod folder in one click, preview of every file and line, backups with Restore, Undo/Redo in the window, Check mod, and a log.
 
-Version **0.1.0** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
+Version **0.1.1** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
 
 Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
 
 ## Download
 
-- **Windows:** grab `RTW-Faction-Tool.exe` from the [Releases](../../releases) page. No install needed.
+- **Windows:** grab `RTW-Campaign-Editor.exe` from the [Releases](../../releases) page. No install needed.
 - **Any OS with Python 3.8+:** `python rtw_faction_tool.py` (standard library only).
 
 ## Using it

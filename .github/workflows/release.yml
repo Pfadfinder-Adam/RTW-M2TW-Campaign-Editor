@@ -22,11 +22,11 @@ jobs:
           python-version: "3.12"
       - run: python -m unittest discover -s tests
       - run: pip install pyinstaller pillow
-      - run: pyinstaller --onefile --windowed --name RTW-Faction-Tool rtw_faction_tool.py
+      - run: pyinstaller --onefile --windowed --name RTW-Campaign-Editor rtw_faction_tool.py
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ inputs.version }}
           target_commitish: ${{ github.sha }}
-          name: RTW Faction Tool ${{ inputs.version }}
+          name: RTW Campaign Editor ${{ inputs.version }}
           body_path: CHANGELOG.md
-          files: dist/RTW-Faction-Tool.exe
+          files: dist/RTW-Campaign-Editor.exe

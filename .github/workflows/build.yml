@@ -27,13 +27,13 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pyinstaller pillow
-      - run: pyinstaller --onefile --windowed --name RTW-Faction-Tool rtw_faction_tool.py
+      - run: pyinstaller --onefile --windowed --name RTW-Campaign-Editor rtw_faction_tool.py
       - uses: actions/upload-artifact@v4
         with:
-          name: RTW-Faction-Tool
-          path: dist/RTW-Faction-Tool.exe
+          name: RTW-Campaign-Editor
+          path: dist/RTW-Campaign-Editor.exe
       - if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/RTW-Faction-Tool.exe
+          files: dist/RTW-Campaign-Editor.exe
           body_path: CHANGELOG.md
