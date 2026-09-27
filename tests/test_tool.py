@@ -271,6 +271,20 @@ class ToolTest(unittest.TestCase):
         armies = [c.xy for fb in s.factions for c in fb.characters if "army" in s.lines[c.start:c.end]]
         self.assertEqual(len(armies), len(set(armies)))
 
+    def test_heir_avoids_rivers(self):
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        black, river = (0, 0, 0), (0, 0, 255)
+        feat = [[black] * 4 for _ in range(4)]
+        feat[2][3] = river                      # (3, 2): the first free tile of B_R
+        write_tga(os.path.join(camp, "map_features.tga"), 4, 4, feat)
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {
+            "start": {"regions": ["B_R"], "leader": {"name": "Boris"}, "heir": {"name": "Aaron"}}})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        aaron = next(c for c in s.faction("beta").characters if c.name == "Aaron")
+        self.assertNotEqual(aaron.xy, (3, 2))
+        self.assertEqual(mod.region_map("test").get(*aaron.xy), (0, 0, 255))
+
     def test_bad_leader_name_is_refused(self):
         mod = ModData(self.root)
         with self.assertRaises(ValueError):

@@ -49,6 +49,11 @@ DATA_FILES = {
 }
 
 
+# map_ground_types.tga colours a character cannot start on: the three seas,
+# impassable land and high mountains
+BLOCKED_GROUND = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (255, 255, 255), (196, 128, 128)}
+
+
 class ModData:
     def __init__(self, path):
         self.data = find_data_dir(path)
@@ -195,6 +200,7 @@ class ModData:
         if not info or not start:
             return None
         colour = info["colour"]
+        ok = self._standable(campaign)
         seen, queue = {start}, [start]
         while queue:
             nxt = []
@@ -206,8 +212,40 @@ class ModData:
                     seen.add(p)
                     if img.get(*p) != colour:
                         continue
-                    if p not in taken:
+                    if p not in taken and ok(p):
                         return p
                     nxt.append(p)
             queue = nxt
         return None
+
+    def _optional_map(self, campaign, name):
+        key = ("map", campaign, name)
+        if key not in self._cache:
+            path = self.campaign_file(campaign, name)
+            self._cache[key] = read_tga(path) if path else None
+        return self._cache[key]
+
+    def _standable(self, campaign):
+        """A test for tiles a character may start on: no river, ford or cliff in
+        map_features.tga, and no sea, impassable land or high mountain in
+        map_ground_types.tga (checked on all nine of the tile's vertices).
+        A map that is missing or of an unexpected size is not checked."""
+        regions = self.region_map(campaign)
+        feat = self._optional_map(campaign, "map_features.tga")
+        if feat and (feat.width, feat.height) != (regions.width, regions.height):
+            feat = None
+        ground = self._optional_map(campaign, "map_ground_types.tga")
+        if ground and (ground.width, ground.height) != (2 * regions.width + 1, 2 * regions.height + 1):
+            ground = None
+
+        def ok(p):
+            x, y = p
+            if feat and feat.get(x, y) != (0, 0, 0):
+                return False
+            if ground:
+                for dy in range(3):
+                    for dx in range(3):
+                        if ground.get(2 * x + dx, 2 * y + dy) in BLOCKED_GROUND:
+                            return False
+            return True
+        return ok
