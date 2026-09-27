@@ -150,8 +150,11 @@ class App(tk.Tk):
         cf2 = ttk.Frame(lists)
         cf2.pack(side="right", fill="y")
         ttk.Label(cf2, text="Chosen").pack(anchor="w")
-        self.lb = tk.Listbox(cf2, width=20, height=14)
+        # Shift/Ctrl select several, like the list on the left; double-click or Delete removes
+        self.lb = tk.Listbox(cf2, width=20, height=14, selectmode="extended", exportselection=False)
         self.lb.pack(fill="both", expand=True)
+        self.lb.bind("<Double-1>", lambda e: self.remove_town())
+        self.lb.bind("<Delete>", lambda e: self.remove_town())
         ttk.Label(cf2, text="Capital").pack(anchor="w", pady=(6, 0))
         self.cb_capital = ttk.Combobox(cf2, textvariable=self.v["capital"], state="readonly", width=18)
         self.cb_capital.pack(fill="x")
