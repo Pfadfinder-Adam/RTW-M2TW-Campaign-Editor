@@ -36,3 +36,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/RTW-Faction-Tool.exe
+          body_path: CHANGELOG.md

@@ -28,9 +28,10 @@ from .strat import Strat
 from .textio import tokens
 from .units import faction_units, read_units
 
+VERSION = "0.1.0"
 APP = "RTW Faction Tool"
 
-HELP = """RTW Faction Tool - how to use it
+HELP = """RTW Faction Tool 0.1.0 - how to use it
 
 START
   1. Close the game. Browse... to the mod's data folder (for example ...\\HLR\\data), press Load.
@@ -93,7 +94,7 @@ AI_CHOICES = ["%s %s" % (e, m) for e in AI_ECONOMY for m in AI_MILITARY]
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(APP)
+        self.title("%s %s" % (APP, VERSION))
         self.geometry("1200x800")
         self.minsize(900, 640)
         self.mod = None

@@ -1,6 +1,13 @@
 # RTW Faction Tool
 
-Add a new faction to a **Rome: Total War** mod in a few clicks: pick an existing faction as the template, name the new one, choose its starting towns and leader. The tool edits every data file that needs it, makes a backup first, and can undo the whole change.
+A campaign editor for **Rome: Total War** mods (and the plain game). It works on the mod's own data files, shows every change before writing it, keeps a backup and can undo it byte for byte.
+
+- **New factions** cloned from a template: names, texts, colours, units, buildings, cards, start towns, leader and heir, garrisons, buildings, diplomacy.
+- **Edit existing factions**: names and texts, colours, AI, money, playable, towns taken or given, capital, leader and heir, garrisons, buildings, settlement size, armies, fleets and agents, diplomacy.
+- **Campaign map**: the map drawn from the ground types, political and diplomacy colours, towns, ports and characters you can drag, new armies, agents and fleets placed by clicking, towns and ports moved, **new regions painted** and borders moved.
+- **Safe**: a separate mod folder in one click, preview of every file and line, backups with Restore, Undo/Redo in the window, Check mod, and a log.
+
+Version **0.1.0** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
 
 Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
 
