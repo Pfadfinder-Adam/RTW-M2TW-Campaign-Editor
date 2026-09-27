@@ -89,6 +89,21 @@ def edit(mod, campaign, faction, opts):
     _texts(plan, now, campaign)
     _colours(plan)
     _strat(plan, campaign, now)
+    sp = mod.campaign_file(campaign, "descr_strat.txt")
+    if sp in plan.files:
+        from .strat import characters_after_tree
+        bad = characters_after_tree(Strat(plan.files[sp]))
+        if bad:
+            raise ValueError("internal check failed - a character would follow the family tree of %s "
+                             "(the game crashes on that); nothing written" % ", ".join(bad))
+        s = Strat(plan.files[sp])
+        tiles = mod.city_tiles(campaign)
+        fb = s.faction(faction)
+        held = {c.xy for c in fb.characters if c.xy and _has_army(s.lines[c.start:c.end])}
+        empty = [st.region for st in fb.settlements if tiles.get(st.region) not in held]
+        if empty and plan.changed_files():
+            plan.warn(plan.files[sp], "no army in %s - the town(s) start without a garrison"
+                      % ", ".join(empty))
     if plan.opts.get("garrisons") or plan.opts.get("buildings"):
         plan.edit(mod.file("edu"))            # validate() reads these through the plan
         plan.edit(mod.file("sm_factions"))
@@ -215,6 +230,8 @@ def _strat(plan, campaign, now):
                 break
     if o.get("playable") is not None and bool(o["playable"]) != now.get("playable"):
         _move_list(plan, f, fac, bool(o["playable"]))
+    if o.get("army_units") or o.get("remove"):
+        _army_edits(plan, f)
     if o.get("moves"):
         _moves(plan, f, campaign)
     if o.get("take") or o.get("give"):
@@ -227,15 +244,19 @@ def _strat(plan, campaign, now):
         s = Strat(f)
         armies = {c.xy for x in s.factions for c in x.characters if c.xy and _has_army(s.lines[c.start:c.end])}
         lines = extra_characters(plan, f, campaign, o["characters"], plan.mod.name_pool(fac) or {}, armies)
-        fb = s.faction(fac)
-        # characters go before the family tree: a character line after
-        # character_record / relative lines crashes the game on load
-        at = next((i for i in range(fb.start, fb.end)
-                   if f.text(i).split(None, 1)[:1] in (["character_record"], ["relative"])), fb.end)
+        at = _chars_at(f, s.faction(fac))
         f.raw[at:at] = lines
     s = Strat(f)
     _garrisons(plan, f, s, campaign)
     _buildings(plan, f, Strat(f))
+
+
+def _chars_at(f, fb):
+    """Where new characters go in a faction block: before its family tree. A
+    character line after character_record / relative lines crashes the game
+    (on load, or when the diplomacy scroll lists the factions)."""
+    return next((i for i in range(fb.start, fb.end)
+                 if f.text(i).split(None, 1)[:1] in (["character_record"], ["relative"])), fb.end)
 
 
 def _towns(plan, f, campaign):
@@ -312,7 +333,8 @@ def _towns(plan, f, campaign):
         s = Strat(f)
         fb = s.faction(owner)
         if add["chars"]:
-            f.raw[fb.end:fb.end] = [l for ch in add["chars"] for l in ch + [f.make("")]]
+            at = _chars_at(f, fb)
+            f.raw[at:at] = [l for ch in add["chars"] for l in ch + [f.make("")]]
         if fb.settlements:
             at = fb.settlements[-1].end
         else:
@@ -321,6 +343,48 @@ def _towns(plan, f, campaign):
     left = [st.region for st in Strat(f).faction(fac).settlements]
     if not left:
         plan.warn(f, "%s is left with no town - it starts as a horde or dies on turn 1" % fac)
+
+
+def _army_edits(plan, f):
+    """Characters already on the map: opts['army_units'] = [{'name', 'from', 'units'}]
+    replaces an army's or fleet's units (a named character keeps his bodyguard);
+    opts['remove'] = [{'name', 'from'}] takes out agents, captains and admirals
+    (never a family member - the family tree names them)."""
+    s = Strat(f)
+    fb = s.faction(plan.new)
+    jobs = []
+    for m in plan.opts.get("army_units") or []:
+        jobs.append(("units", m))
+    for m in plan.opts.get("remove") or []:
+        jobs.append(("remove", m))
+    found = []
+    for what, m in jobs:
+        src = tuple(m["from"])
+        c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
+        if c is None:
+            raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], plan.new))
+        if what == "remove" and c.named:
+            raise ValueError("%s is a member of the family - the tool does not remove those" % c.name)
+        found.append((c, what, m))
+    for c, what, m in sorted(found, key=lambda x: -x[0].start):
+        chunk = f.texts()[c.start:c.end]
+        if what == "remove":
+            del f.raw[c.start:c.end]
+            plan.note(f, "%s (%s) at %d, %d removed" % (c.name, c.kind, c.xy[0], c.xy[1]))
+            continue
+        units = [i for i, l in enumerate(chunk) if tokens(l)[:1] == ["unit"]]
+        if not units:
+            raise ValueError("%s has no army to change" % c.name)
+        if not m.get("units"):
+            raise ValueError("%s: an army or fleet needs at least one unit (remove it instead)" % c.name)
+        keep = units[:1] if c.named else []
+        room = MAX_UNITS - len(keep)
+        lines = ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % t for t in m["units"]][:room]
+        new = [l for i, l in enumerate(chunk) if i not in units or i in keep]
+        at = units[0] + len(keep)
+        new[at:at] = lines
+        f.raw[c.start:c.end] = [f.make(l) for l in new]
+        plan.note(f, "%s (%s): %d unit(s)%s" % (c.name, c.kind, len(lines), " + his bodyguard" if keep else ""))
 
 
 def _moves(plan, f, campaign):
@@ -447,7 +511,7 @@ def _garrisons(plan, f, s, campaign):
                 raise ValueError("%s: no name in %s's name list for a captain" % (region, plan.new))
             name = captains.pop(0)
             block = ["character\t%s, general, age 30, , x %d, y %d" % (name, xy[0], xy[1]), "army"] + lines + [""]
-            f.insert(fb.end, block)
+            f.insert(_chars_at(f, fb), block)
             plan.note(f, "%s: captain %s holds the town with %d unit(s)" % (region, name, len(lines)))
 
 

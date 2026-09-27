@@ -83,7 +83,9 @@ class GarrisonEditor(ttk.Frame):
         ttk.Button(bar, text="Automatic", command=self.clear).pack(side="right", padx=4)
         ttk.Button(bar, text="Suggest", command=self.suggest).pack(side="right", padx=4)
 
-    def load(self, mod, faction, region, units, current, on_change, auto=None, held=False):
+    def load(self, mod, faction, region, units, current, on_change, auto=None, held=False, unchanged=False):
+        """unchanged: current is what stands in the town now, shown until the first click."""
+        self.unchanged = unchanged
         self.mod, self.faction, self.units = mod, faction, units
         self.by_type = {u.type: u for u in units}
         self.garrison = [t for t in current if t in self.by_type]
@@ -172,11 +174,13 @@ class GarrisonEditor(ttk.Frame):
         room = MAX_UNITS - (1 if self.held else 0)
         cost = sum(self.by_type[t].price for t in self.garrison)
         upkeep = sum(self.by_type[t].upkeep for t in self.garrison)
-        self.total.configure(text="%d / %d units%s   cost %d   upkeep %d" % (
+        self.total.configure(text="%s%d / %d units%s   cost %d   upkeep %d" % (
+            "as it stands now (unchanged): " if getattr(self, "unchanged", False) else "",
             len(self.garrison), room, " (+ the bodyguard)" if self.held else "", cost, upkeep))
 
     # ---- actions ----
     def changed(self):
+        self.unchanged = False
         self.fill_chosen()
         if self.on_change:
             self.on_change(list(self.garrison))

@@ -156,3 +156,19 @@ class Strat:
             if len(t) >= 4 and t[0] in ("core_attitudes", "faction_relationships"):
                 out.append((i, t[0], t[1], t[2], t[3:]))
         return out
+
+
+def characters_after_tree(s):
+    """Factions whose block has a character line after its character_record /
+    relative lines - the game crashes on that (a hard-won rule)."""
+    bad = []
+    for fb in s.factions:
+        tree = False
+        for l in s.lines[fb.start:fb.end]:
+            w = l.split(None, 1)[:1]
+            if w in (["character_record"], ["relative"]):
+                tree = True
+            elif tree and w == ["character"]:
+                bad.append(fb.name)
+                break
+    return bad

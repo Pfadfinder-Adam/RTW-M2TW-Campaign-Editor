@@ -613,6 +613,29 @@ class ToolTest(unittest.TestCase):
         fb = s.faction("alpha")
         lines = [l.split(None, 1)[0] for l in s.lines[fb.start:fb.end] if l.strip()]
         self.assertLess(max(i for i, w in enumerate(lines) if w == "character"), lines.index("character_record"))
+        # the same for a captain made for a taken town's garrison
+        p3 = edit(ModData(self.root), "test", "alpha", {"take": ["B_R"], "garrisons": {"B_R": ["alpha general"]}})
+        s = Strat(p3.files[path])
+        self.assertIn("captain", "\n".join(m for _, m in p3.notes))
+        fb = s.faction("alpha")
+        lines = [l.split(None, 1)[0] for l in s.lines[fb.start:fb.end] if l.strip()]
+        self.assertLess(max(i for i, w in enumerate(lines) if w == "character"), lines.index("character_record"))
+
+    def test_existing_armies_changed_and_removed(self):
+        from faction_tool.edit import edit
+        mod = ModData(self.root)
+        # Aaron (named) keeps his bodyguard; units after it are replaced
+        plan = edit(mod, "test", "alpha", {"army_units": [{"name": "Aaron Alphid", "from": (1, 1),
+                                                            "units": ["rebel spear", "rebel spear"]}]})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        c = s.faction("alpha").characters[0]
+        units = [l.split("\t")[2] for l in s.lines[c.start:c.end] if l.startswith("unit")]
+        self.assertEqual(units, ["alpha general", "rebel spear", "rebel spear"])
+        with self.assertRaises(ValueError):             # family members are never removed
+            edit(ModData(self.root), "test", "alpha", {"remove": [{"name": "Aaron Alphid", "from": (1, 1)}]})
+        # taking a town whose rebels leave warns that it starts empty
+        plan = edit(ModData(self.root), "test", "alpha", {"take": ["B_R"]})
+        self.assertTrue(any("no army in B_R" in m for _, m in plan.warnings))
 
     def test_ships_owned_by_culture(self):
         # vanilla gives ships to cultures ("ownership roman, greek"), not factions

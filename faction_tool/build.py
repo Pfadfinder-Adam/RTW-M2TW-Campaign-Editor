@@ -85,6 +85,10 @@ def validate(plan, campaign):
     if depth != 0:
         plan.warn(f, "braces do not balance (%+d)" % depth)
     s = Strat(f)
+    from .strat import characters_after_tree
+    for name in characters_after_tree(s):
+        raise ValueError("internal check failed - a character would follow the family tree of %s "
+                         "(the game crashes on that); nothing written" % name)
     seen = {}
     for fb in s.factions:
         for st in fb.settlements:
@@ -112,7 +116,7 @@ def validate(plan, campaign):
                 u = unit_name(l)
                 if u not in known:
                     bad.append(u)
-                elif new not in owners.get(u, set()) and "all" not in owners.get(u, set()):
+                elif not owners.get(u, set()) & {new, "all", mod.culture(new)}:
                     foreign.append(u)
     if bad:
         plan.warn(f, "unknown unit type(s) in %s's armies: %s" % (new, ", ".join(sorted(set(bad)))))

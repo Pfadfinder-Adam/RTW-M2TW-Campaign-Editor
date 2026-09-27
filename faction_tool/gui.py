@@ -54,6 +54,7 @@ class App(tk.Tk):
         self.chosen = []
         self.garrisons = {}             # region -> [unit type] picked by hand
         self.field = []                 # [{kind, name, age, units, xy}] armies/agents/fleets to place
+        self.removed_existing = []      # Edit: [{name, from}] characters taken off the map
         self._units_for, self._units_cache = None, []
         self.buildings_picked = {}      # region -> [(chain, level)] set by hand
         self._edb_for, self._edb, self._bpics = None, [], None
@@ -418,11 +419,36 @@ class App(tk.Tk):
         self.chosen = list(now.get("regions", []))
         self.garrisons, self.buildings_picked = {}, {}
         self.char_moves = {}
+        self.field, self.removed_existing, self._placing = self._existing_field(faction), [], None
+        self.refresh_field()
         if self.chosen:
             self.v["capital"].set(self.chosen[0])
         self.refresh_chosen()
         self.status.set("Editing %s: %d town(s). Change what you want, Preview, then Apply changes."
                         % (faction, len(self.chosen)))
+
+    def _existing_field(self, faction):
+        """The faction's armies, fleets and agents already on the map, for the
+        Armies, agents & fleets list (their units can change, the unnamed can go)."""
+        fb = self.strat.faction(faction) if self.strat else None
+        out = []
+        for i, c in enumerate(fb.characters if fb else []):
+            if not c.xy:
+                continue
+            lines = self.strat.lines[c.start:c.end]
+            units = [unit_name(l) for l in lines if tokens(l)[:1] == ["unit"]]
+            if c.kind == "admiral":
+                kind = "fleet"
+            elif c.kind in ("spy", "assassin", "diplomat", "merchant"):
+                kind = c.kind
+            elif units:
+                kind = "army"
+            else:
+                continue                               # a family member without an army
+            out.append({"kind": kind, "name": c.name, "units": units[1:] if c.named and units else units,
+                        "xy": c.xy, "from": c.xy, "existing": True, "cid": "%s:%d" % (faction, i),
+                        "named": c.named, "changed": False})
+        return out
 
     def show_map(self):
         """The Map tab: the campaign map with the towns as they would stand after this run."""
@@ -470,7 +496,7 @@ class App(tk.Tk):
                     armies_at.add(xy)
         from .start import KINDS
         for i, fc in enumerate(self.field):
-            if fc.get("xy"):
+            if fc.get("xy") and not fc.get("existing"):         # those are drawn from descr_strat
                 rtw_kind, army = KINDS[fc["kind"]]
                 chars.append({"id": "new:%d" % i, "faction": me, "name": fc["name"], "kind": rtw_kind,
                               "xy": tuple(fc["xy"]), "army": army, "units": len(fc["units"]), "from": None})
@@ -495,6 +521,7 @@ class App(tk.Tk):
                 self.char_moves.pop(cid, None)
             else:
                 self.char_moves[cid] = xy
+            self.refresh_field()
             self.status.set("%s: %d character(s) moved on the map - Preview, then Apply changes."
                             % (ch["name"], len(self.char_moves)))
             self.show_map()
@@ -772,9 +799,12 @@ class App(tk.Tk):
     def refresh_field(self, keep=None):
         self.lb_field.delete(0, "end")
         for c in self.field:
-            where = "at %d, %d" % tuple(c["xy"]) if c.get("xy") else "not placed"
-            units = "  [%d units]" % len(c["units"]) if c["kind"] in ("army", "fleet") else ""
-            self.lb_field.insert("end", "%s %s%s  (%s)" % (c["kind"], c["name"], units, where))
+            xy = self.char_moves.get(c["cid"], c["xy"]) if c.get("existing") else c.get("xy")
+            where = "at %d, %d" % tuple(xy) if xy else "not placed"
+            units = "  [%d units%s]" % (len(c["units"]), " + bodyguard" if c.get("named") else "") \
+                if c["kind"] in ("army", "fleet") else ""
+            tag = ("  - changed" if c.get("changed") else "  - on the map") if c.get("existing") else "  - new"
+            self.lb_field.insert("end", "%s %s%s  (%s)%s" % (c["kind"], c["name"], units, where, tag))
         if keep is not None and keep < len(self.field):
             self.lb_field.selection_set(keep)
 
@@ -844,20 +874,35 @@ class App(tk.Tk):
         units = faction_units(self.mod, self.field_faction(), ships=c["kind"] == "fleet")
         if c["kind"] == "fleet" and units and all(u.mercenary for u in units):
             self.garrison_editor.v_merc.set(True)     # many mods mark every ship a mercenary
+        units = self._with_types(units, c["units"])
 
         def changed(types, i=i):
             self.field[i]["units"] = types
+            if self.field[i].get("existing"):
+                self.field[i]["changed"] = True
             self.refresh_field(keep=i)
         self.garrison_editor.load(self.mod, self.field_faction(), "%s %s" % (c["kind"], c["name"]), units,
-                                  c["units"], changed)
+                                  c["units"], changed, held=bool(c.get("named")),
+                                  unchanged=bool(c.get("existing")) and not c.get("changed"))
         if not c.get("xy"):
             self.status.set("Pick the units, then 'Place on map'.")
 
     def remove_field(self):
         i = self.selected_field()
-        if i is not None:
-            del self.field[i]
-            self.refresh_field()
+        if i is None:
+            return
+        c = self.field[i]
+        if c.get("existing"):
+            if c.get("named"):
+                messagebox.showerror(APP, "%s is a member of the family - the tool does not remove those "
+                                          "(the family tree names them)." % c["name"])
+                return
+            if not messagebox.askyesno(APP, "Remove %s %s from the map?" % (c["kind"], c["name"])):
+                return
+            self.removed_existing.append({"name": c["name"], "from": c["from"]})
+            self.char_moves.pop(c["cid"], None)
+        del self.field[i]
+        self.refresh_field()
 
     def place_field(self):
         """Go to the Map; the next click on a good tile places the selected one."""
@@ -866,6 +911,9 @@ class App(tk.Tk):
             messagebox.showerror(APP, "select an army, agent or fleet in the list first")
             return
         c = self.field[i]
+        if c.get("existing"):
+            messagebox.showinfo(APP, "%s is on the map already: drag it on the Map tab to move it." % c["name"])
+            return
         self._placing = i
         if self.nb.index("current") == 3:
             self.show_map()                 # already there: no tab event, so refresh by hand
@@ -899,6 +947,11 @@ class App(tk.Tk):
             holder = next((c for c in (fb.characters if fb else []) if c.xy == xy and
                            any(tokens(l)[:1] == ["army"] for l in self.strat.lines[c.start:c.end])), None)
             held = (holder.role or "general") if holder is not None and holder.named else False
+            now = []
+            if holder is not None:
+                now = [unit_name(l) for l in self.strat.lines[holder.start:holder.end] if tokens(l)[:1] == ["unit"]]
+                now = now[1:] if holder.named else now                 # without the bodyguard
+            units = self._with_types(units, now)
 
         def auto():
             try:
@@ -914,9 +967,26 @@ class App(tk.Tk):
                 self.garrisons[region] = types
             else:
                 self.garrisons.pop(region, None)
+                if self.editing():                     # back to the town as it stands
+                    self.after_idle(self.load_garrison)
             self.refresh_chosen(keep_units_selection=True)
+        if self.editing() and region not in self.garrisons:
+            self.garrison_editor.load(self.mod, template, region, units, now, changed, auto=auto, held=held,
+                                      unchanged=True)
+            return
         self.garrison_editor.load(self.mod, template, region, units, self.garrisons.get(region, []),
                                   changed, auto=auto, held=held)
+
+    def _with_types(self, units, types):
+        """The roster plus any unit these types name that it lacks (another faction's,
+        a mercenary): a garrison as it stands must show whole."""
+        have = {u.type for u in units}
+        missing = set(types) - have
+        if not missing:
+            return units
+        edu = self.mod.file("edu")
+        extra = [u for u in read_units(self.mod.load(edu)) if u.type in missing] if edu else []
+        return list(units) + extra
 
     # ------------------------------------------------------------------ actions
     def gather(self):
@@ -977,7 +1047,10 @@ class App(tk.Tk):
             "leader": person("leader"), "heir": person("heir"),
             "moves": [{"name": self._map_chars[cid]["name"], "from": self._map_chars[cid]["from"], "to": xy}
                       for cid, xy in self.char_moves.items() if cid in getattr(self, "_map_chars", {})],
-            "characters": [dict(c) for c in self.field],
+            "characters": [dict(c) for c in self.field if not c.get("existing")],
+            "army_units": [{"name": c["name"], "from": c["from"], "units": list(c["units"])}
+                           for c in self.field if c.get("existing") and c.get("changed")],
+            "remove": list(self.removed_existing),
             "garrisons": dict(self.garrisons),
             "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()}}
 
