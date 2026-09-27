@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2 - 2026-09-28
+
+- Edit: taking every unit out of a town's garrison now leaves it empty (a family
+  member keeps only his bodyguard, a captain leaves). Before, the town's own
+  garrison came back; that is what **Automatic** is for.
+
 ## 0.1.1 - 2026-09-28
 
 - Renamed to **RTW Campaign Editor** (the exe is RTW-Campaign-Editor.exe): it edits

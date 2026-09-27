@@ -737,6 +737,20 @@ class ToolTest(unittest.TestCase):
         restore(m2, bdir)
         self.assertNotIn("N_R", ModData(self.root).regions("test"))
 
+    def test_garrison_emptied_by_hand(self):
+        from faction_tool.edit import edit
+        mod = ModData(self.root)
+        path = mod.campaign_file("test", "descr_strat.txt")
+        with open(path) as fh:
+            text = fh.read()
+        with open(path, "w") as fh:                       # Aaron has a unit besides his bodyguard
+            fh.write(text.replace("weapon_lvl 0\n;#####<", "weapon_lvl 0\nunit\t\trebel spear\t\texp 0 armour 0 weapon_lvl 0\n;#####<", 1))
+        plan = edit(ModData(self.root), "test", "alpha", {"garrisons": {"A_R": []}})
+        s = Strat(plan.files[path])
+        c = s.faction("alpha").characters[0]
+        units = [l.split("\t")[2] for l in s.lines[c.start:c.end] if l.startswith("unit")]
+        self.assertEqual(units, ["alpha general"])        # the named man keeps only his bodyguard
+
     def test_ships_owned_by_culture(self):
         # vanilla gives ships to cultures ("ownership roman, greek"), not factions
         with open(os.path.join(self.root, "data", "export_descr_unit.txt"), "a") as fh:

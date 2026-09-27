@@ -513,6 +513,13 @@ def _garrisons(plan, f, s, campaign):
         lines = ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % t for t in types][:room]
         jobs.append((region, holder, lines, xy))
     for region, holder, lines, xy in sorted(jobs, key=lambda j: -(j[1].start if j[1] else fb.end)):
+        if not lines:                                   # emptied by hand
+            if holder is None:
+                continue
+            if not holder.named:                        # a captain with nothing to lead goes
+                del f.raw[holder.start:holder.end]
+                plan.note(f, "%s: captain %s and his garrison leave - the town is empty" % (region, holder.name))
+                continue
         if holder is not None:
             chunk = f.texts()[holder.start:holder.end]
             units = [i for i, l in enumerate(chunk) if tokens(l)[:1] == ["unit"]]

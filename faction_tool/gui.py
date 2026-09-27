@@ -28,7 +28,7 @@ from .strat import Strat
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 APP = "RTW Campaign Editor"
 
 HELP = """RTW Campaign Editor - how to use it
@@ -1332,7 +1332,8 @@ class App(tk.Tk):
             n = len(self.garrisons.get(r, []))
             self.lb_units.insert("end", "%s%s%s" % (r, "  (capital)" if r == (self.v["capital"].get() or
                                  (self.chosen[0] if self.chosen else "")) else "",
-                                 "  [%d units]" % n if n else ("  [unchanged]" if self.editing() else "  [automatic]")))
+                                 "  [%d units]" % n if r in self.garrisons else
+                                 ("  [unchanged]" if self.editing() else "  [automatic]")))
         if keep_units_selection and sel and sel[0] < len(self.chosen):
             self.lb_units.selection_set(sel[0])
         bsel = self.lb_build.curselection()
@@ -1532,9 +1533,11 @@ class App(tk.Tk):
             self.remember()
             if types:
                 self.garrisons[region] = types
+            elif self.editing() and not getattr(self.garrison_editor, "cleared", False):
+                self.garrisons[region] = []            # every unit taken out: the town is left empty
             else:
                 self.garrisons.pop(region, None)
-                if self.editing():                     # back to the town as it stands
+                if self.editing():                     # 'Automatic': back to the town as it stands
                     self.after_idle(self.load_garrison)
             self.refresh_chosen(keep_units_selection=True)
         if self.editing() and region not in self.garrisons:

@@ -202,8 +202,10 @@ class GarrisonEditor(ttk.Frame):
         self.changed()
 
     def clear(self):
+        self.cleared = True                        # 'Automatic': back to the town as it stands
         self.garrison = []
         self.changed()
+        self.cleared = False
 
     def suggest(self):
         if self.auto:
