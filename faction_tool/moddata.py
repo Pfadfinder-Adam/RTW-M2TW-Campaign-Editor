@@ -49,9 +49,10 @@ DATA_FILES = {
 }
 
 
-# map_ground_types.tga colours a character cannot start on: the three seas,
-# impassable land and high mountains
-BLOCKED_GROUND = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (255, 255, 255), (196, 128, 128)}
+# map_ground_types.tga colours a character does not start on: the three seas
+# and both mountain colours (no character in HLR's descr_strat.txt stands on one)
+BLOCKED_GROUND = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (98, 65, 65), (196, 128, 128)}
+MAX_SLOPE = 25
 
 
 class ModData:
@@ -189,34 +190,31 @@ class ModData:
             self._cache[key] = read_tga(self.campaign_file(campaign, "map_regions.tga"))
         return self._cache[key]
 
-    def free_tile(self, campaign, region, taken):
-        """The land tile of `region` nearest to its city that no one stands on, or None.
+    def free_tile(self, campaign, region, taken, reach=4):
+        """The best tile of `region` near its city that no one stands on, or None.
 
-        Land means the region's own colour in map_regions.tga, so never sea, a
-        neighbour's land or another city."""
+        Candidates are tiles of the region's own colour in map_regions.tga (so
+        never sea, a neighbour's land or another city) within `reach` tiles of
+        the city that pass _standable(); the flattest wins, then the nearest."""
         img = self.region_map(campaign)
         info = self.regions(campaign).get(region)
         start = self.city_tiles(campaign).get(region)
         if not info or not start:
             return None
         colour = info["colour"]
-        ok = self._standable(campaign)
-        seen, queue = {start}, [start]
-        while queue:
-            nxt = []
-            for x, y in queue:
-                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
-                    p = (x + dx, y + dy)
-                    if p in seen or not (0 <= p[0] < img.width and 0 <= p[1] < img.height):
-                        continue
-                    seen.add(p)
-                    if img.get(*p) != colour:
-                        continue
-                    if p not in taken and ok(p):
-                        return p
-                    nxt.append(p)
-            queue = nxt
-        return None
+        ok, slope = self._standable(campaign)
+        best = None
+        for y in range(start[1] - reach, start[1] + reach + 1):
+            for x in range(start[0] - reach, start[0] + reach + 1):
+                p = (x, y)
+                if p == start or p in taken or not (0 <= x < img.width and 0 <= y < img.height):
+                    continue
+                if img.get(x, y) != colour or not ok(p):
+                    continue
+                key = (slope(p), max(abs(x - start[0]), abs(y - start[1])), abs(x - start[0]) + abs(y - start[1]))
+                if best is None or key < best[0]:
+                    best = (key, p)
+        return best[1] if best else None
 
     def _optional_map(self, campaign, name):
         key = ("map", campaign, name)
@@ -226,26 +224,38 @@ class ModData:
         return self._cache[key]
 
     def _standable(self, campaign):
-        """A test for tiles a character may start on: no river, ford or cliff in
-        map_features.tga, and no sea, impassable land or high mountain in
-        map_ground_types.tga (checked on all nine of the tile's vertices).
+        """(ok, slope) for tiles a character may start on.
+
+        ok: no river, ford or cliff in map_features.tga; no sea, impassable land
+        or mountain in the middle of the tile in map_ground_types.tga; and a
+        height difference inside the tile (its nine vertices in map_heights.tga)
+        of at most MAX_SLOPE - the game refuses steep tiles, and the characters
+        it accepts in HLR's own descr_strat.txt almost all stand below 25.
+        slope: that height difference, 0 without a heights map.
         A map that is missing or of an unexpected size is not checked."""
         regions = self.region_map(campaign)
+        size = (2 * regions.width + 1, 2 * regions.height + 1)
         feat = self._optional_map(campaign, "map_features.tga")
         if feat and (feat.width, feat.height) != (regions.width, regions.height):
             feat = None
         ground = self._optional_map(campaign, "map_ground_types.tga")
-        if ground and (ground.width, ground.height) != (2 * regions.width + 1, 2 * regions.height + 1):
+        if ground and (ground.width, ground.height) != size:
             ground = None
+        heights = self._optional_map(campaign, "map_heights.tga")
+        if heights and (heights.width, heights.height) != size:
+            heights = None
+
+        def slope(p):
+            if not heights:
+                return 0
+            v = [heights.get(2 * p[0] + dx, 2 * p[1] + dy)[0] for dy in range(3) for dx in range(3)]
+            return max(v) - min(v)
 
         def ok(p):
             x, y = p
             if feat and feat.get(x, y) != (0, 0, 0):
                 return False
-            if ground:
-                for dy in range(3):
-                    for dx in range(3):
-                        if ground.get(2 * x + dx, 2 * y + dy) in BLOCKED_GROUND:
-                            return False
-            return True
-        return ok
+            if ground and ground.get(2 * x + 1, 2 * y + 1) in BLOCKED_GROUND:
+                return False
+            return slope(p) <= MAX_SLOPE
+        return ok, slope
