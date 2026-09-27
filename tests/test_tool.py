@@ -174,6 +174,7 @@ class ToolTest(unittest.TestCase):
         write(os.path.join(d, "descr_names.txt"), NAMES)
         write(os.path.join(d, "export_descr_unit.txt"), EDU)
         write(os.path.join(d, "export_descr_buildings.txt"), EDB)
+        write(os.path.join(d, "text", "test_regions_and_settlement_names.txt"), "{Alpha}\t\tAlpha region\n", utf16=True)
         write(os.path.join(d, "text", "expanded_bi.txt"),
               "{ALPHA}\t\tAlphan Kingdom\n{ALPHA_DESCR}\t\tAlphans ride\n{EMT_ALPHA_SPY}\t\tAlphan Spy\n"
               "{TEST_ALPHA_DESCR}\t\tThe long Alphan story\n", utf16=True)
@@ -392,6 +393,8 @@ class ToolTest(unittest.TestCase):
         self.assertIn("{BETA_DESCR}\t\tShort one", text)
         self.assertIn("{TEST_BETA_DESCR}\t\tLine one\\nLine two", text)
         self.assertIn("{TEST_ALPHA_DESCR}\t\tThe long Alphan story", text)
+        # region labels named like the template are left alone
+        self.assertFalse(any("regions_and_settlement_names" in p for p in plan.changed_files()))
 
     def test_heir_avoids_rivers(self):
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")

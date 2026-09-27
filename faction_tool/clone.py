@@ -340,6 +340,8 @@ def text_strings(plan):
     repl = plan.display_replacements()
     long_keys = []
     for path in plan.mod.text_files():
+        if "regions_and_settlement_names" in os.path.basename(path).lower():
+            continue        # region and town labels ({Baktria} the region), not the faction's strings
         f = plan.edit(path)
         keys = set()
         for i in range(len(f)):
