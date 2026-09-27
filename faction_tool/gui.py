@@ -9,7 +9,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 from .build import build, template_display
 from .moddata import ModData
 from .newmod import create_mod, game_root_of
-from .gui_garrison import GarrisonWindow, Pictures
+from .gui_garrison import GarrisonEditor, Pictures
 from .plan import backups, restore
 from .scan import IGNORE_HELP, ignore_path, scan as scan_mod
 from .start import balanced_army, unit_name
@@ -30,6 +30,7 @@ class App(tk.Tk):
         self.regions = {}
         self.chosen = []
         self.garrisons = {}             # region -> [unit type] picked by hand
+        self._units_for, self._units_cache = None, []
         self.pictures = Pictures()
         self.colours = {"primary": None, "secondary": None}
         self._build()
@@ -51,8 +52,10 @@ class App(tk.Tk):
         self.cb_campaign.pack(side="left")
         self.cb_campaign.bind("<<ComboboxSelected>>", lambda e: self.load_campaign())
 
-        body = ttk.Frame(self)
-        body.pack(fill="both", expand=True, **pad)
+        self.nb = ttk.Notebook(self)
+        self.nb.pack(fill="both", expand=True, **pad)
+        body = ttk.Frame(self.nb, padding=4)
+        self.nb.add(body, text="  Faction  ")
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
         right = ttk.Frame(body)
@@ -109,17 +112,6 @@ class App(tk.Tk):
         self.t_long = tk.Text(lf, width=34, height=7, wrap="word")
         self.t_long.grid(row=row, column=1, sticky="we", padx=4, pady=2)
         row += 1
-        self.v_army = tk.StringVar(value="balanced")
-        af = ttk.Frame(lf)
-        ttk.Combobox(af, textvariable=self.v_army, state="readonly", width=12,
-                     values=("balanced", "template", "bodyguard")).pack(side="left")
-        ttk.Label(af, text="balanced = sized like similar factions").pack(side="left", padx=4)
-        field("Leader's army", af)
-        self.v_garrison = tk.StringVar(value="replace")
-        gf = ttk.Frame(lf)
-        ttk.Radiobutton(gf, text="replace with own units", value="replace", variable=self.v_garrison).pack(side="left")
-        ttk.Radiobutton(gf, text="keep", value="keep", variable=self.v_garrison).pack(side="left")
-        field("Old garrisons", gf)
         lf.columnconfigure(1, weight=1)
 
         # --- leaders
@@ -165,11 +157,12 @@ class App(tk.Tk):
         ttk.Label(cf2, text="Capital").pack(anchor="w", pady=(6, 0))
         self.cb_capital = ttk.Combobox(cf2, textvariable=self.v["capital"], state="readonly", width=18)
         self.cb_capital.pack(fill="x")
+        self.cb_capital.bind("<<ComboboxSelected>>", lambda e: self.refresh_chosen())
         mid = ttk.Frame(lists)
         mid.pack(side="right", padx=6)
         ttk.Button(mid, text="Add >", command=self.add_town).pack(pady=2)
         ttk.Button(mid, text="< Remove", command=self.remove_town).pack(pady=2)
-        ttk.Button(mid, text="Garrison...", command=self.edit_garrison).pack(pady=(14, 2))
+        ttk.Button(mid, text="Garrison...", command=lambda: self.show_units(self.selected_town())).pack(pady=(14, 2))
         self.tv = ttk.Treeview(lists, columns=("town", "owner"), show="tree headings", height=18)
         self.tv.heading("#0", text="Region")
         self.tv.heading("town", text="Settlement")
@@ -183,6 +176,8 @@ class App(tk.Tk):
         sb.pack(side="left", fill="y")
         self.tv.bind("<Double-1>", lambda e: self.add_town())
 
+        self._build_units_tab()
+
         # --- actions
         bar = ttk.Frame(self)
         bar.pack(fill="x", **pad)
@@ -192,6 +187,50 @@ class App(tk.Tk):
         ttk.Button(bar, text="Scan mod", command=self.scan).pack(side="right", padx=6)
         self.status = tk.StringVar(value="Choose the mod's data folder (for example ...\\HLR\\data) and press Load.")
         ttk.Label(self, textvariable=self.status, anchor="w").pack(fill="x", padx=6, pady=(0, 6))
+
+    def _build_units_tab(self):
+        """Units & armies: the chosen towns on the left, their garrisons on the right."""
+        tab = ttk.Frame(self.nb, padding=4)
+        self.nb.add(tab, text="  Units & armies  ")
+        side = ttk.Frame(tab)
+        side.pack(side="left", fill="y", padx=(0, 8))
+        ttk.Label(side, text="Your towns", font=("", 10, "bold")).pack(anchor="w")
+        self.lb_units = tk.Listbox(side, width=30, height=12, exportselection=False)
+        self.lb_units.pack(fill="both", expand=True)
+        self.lb_units.bind("<<ListboxSelect>>", lambda e: self.load_garrison())
+        ttk.Label(side, text="add towns on the Faction tab", foreground="#666").pack(anchor="w")
+        opts = ttk.LabelFrame(side, text="Towns without a garrison of your own", padding=6)
+        opts.pack(fill="x", pady=(10, 0))
+        ttk.Label(opts, text="Leader's army").grid(row=0, column=0, sticky="w")
+        self.v_army = tk.StringVar(value="balanced")
+        ttk.Combobox(opts, textvariable=self.v_army, state="readonly", width=12,
+                     values=("balanced", "template", "bodyguard")).grid(row=0, column=1, sticky="w", padx=4)
+        ttk.Label(opts, text="balanced = sized like similar factions", foreground="#666").grid(
+            row=1, column=0, columnspan=2, sticky="w")
+        ttk.Label(opts, text="Old garrisons").grid(row=2, column=0, sticky="w", pady=(6, 0))
+        self.v_garrison = tk.StringVar(value="replace")
+        gf = ttk.Frame(opts)
+        gf.grid(row=3, column=0, columnspan=2, sticky="w")
+        ttk.Radiobutton(gf, text="replace with own units", value="replace", variable=self.v_garrison).pack(side="left")
+        ttk.Radiobutton(gf, text="keep", value="keep", variable=self.v_garrison).pack(side="left")
+        self.garrison_editor = GarrisonEditor(tab, pictures=self.pictures)
+        self.garrison_editor.pack(side="left", fill="both", expand=True)
+
+    def selected_town(self):
+        sel = self.lb.curselection()
+        return self.chosen[sel[0]] if sel else None
+
+    def show_units(self, region=None):
+        """Switch to the Units & armies tab, with this town (or the capital) open."""
+        if not self.chosen:
+            messagebox.showerror(APP, "add a town to Chosen first")
+            return
+        region = region or self.v["capital"].get() or self.chosen[0]
+        self.nb.select(1)
+        i = self.chosen.index(region) if region in self.chosen else 0
+        self.lb_units.selection_clear(0, "end")
+        self.lb_units.selection_set(i)
+        self.load_garrison()
 
     # ------------------------------------------------------------------ loading
     def browse(self):
@@ -203,6 +242,7 @@ class App(tk.Tk):
     def load(self):
         try:
             self.mod = ModData(self.v_path.get())
+            self._units_for = None
         except Exception as e:
             messagebox.showerror(APP, str(e))
             return
@@ -351,7 +391,16 @@ class App(tk.Tk):
             self.garrisons.pop(r, None)
         self.refresh_chosen()
 
-    def refresh_chosen(self):
+    def refresh_chosen(self, keep_units_selection=False):
+        sel = self.lb_units.curselection()
+        self.lb_units.delete(0, "end")
+        for r in self.chosen:
+            n = len(self.garrisons.get(r, []))
+            self.lb_units.insert("end", "%s%s%s" % (r, "  (capital)" if r == (self.v["capital"].get() or
+                                 (self.chosen[0] if self.chosen else "")) else "",
+                                 "  [%d units]" % n if n else "  [automatic]"))
+        if keep_units_selection and sel and sel[0] < len(self.chosen):
+            self.lb_units.selection_set(sel[0])
         self.lb.delete(0, "end")
         for r in self.chosen:
             owner = self.strat.owners().get(r, "?") if self.strat else "?"
@@ -361,25 +410,24 @@ class App(tk.Tk):
         if self.v["capital"].get() not in self.chosen:
             self.v["capital"].set(self.chosen[0] if self.chosen else "")
 
-    def edit_garrison(self):
-        """Pick the selected chosen town's garrison from the template's unit cards."""
-        if not self.mod or not self.chosen:
-            messagebox.showerror(APP, "add a town to Chosen first")
+    def load_garrison(self):
+        """Open the selected town of the Units tab in the garrison editor."""
+        sel = self.lb_units.curselection()
+        if not sel or not self.mod or sel[0] >= len(self.chosen):
             return
-        sel = self.lb.curselection()
-        region = self.chosen[sel[0]] if sel else (self.v["capital"].get() or self.chosen[0])
+        region = self.chosen[sel[0]]
         template = self.v["template"].get().strip()
         if not template:
-            messagebox.showerror(APP, "pick the template faction first")
+            messagebox.showerror(APP, "pick the template faction first (Faction tab)")
             return
-        units = faction_units(self.mod, template)
-        if not units:
-            messagebox.showerror(APP, "no units list %s in export_descr_unit.txt" % template)
-            return
+        if self._units_for != template:
+            self._units_cache = faction_units(self.mod, template)
+            self._units_for = template
+        units = self._units_cache
         capital = self.v["capital"].get() or self.chosen[0]
         order = [capital] + [r for r in self.chosen if r != capital]      # as the build orders them
         heir_town = order[1] if self.v["heir_first"].get().strip() and len(order) > 1 else None
-        held = region in (capital, heir_town)
+        held = "leader" if region == capital else "heir" if region == heir_town else False
 
         def auto():
             try:
@@ -390,14 +438,14 @@ class App(tk.Tk):
             except Exception:
                 return []
 
-        def done(types):
+        def changed(types):
             if types:
                 self.garrisons[region] = types
             else:
                 self.garrisons.pop(region, None)
-            self.refresh_chosen()
-        GarrisonWindow(self, self.mod, template, region, units, self.garrisons.get(region, []), done,
-                       auto=auto, held=held, pictures=self.pictures)
+            self.refresh_chosen(keep_units_selection=True)
+        self.garrison_editor.load(self.mod, template, region, units, self.garrisons.get(region, []),
+                                  changed, auto=auto, held=held)
 
     # ------------------------------------------------------------------ actions
     def gather(self):
