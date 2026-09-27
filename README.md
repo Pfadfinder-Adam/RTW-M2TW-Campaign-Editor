@@ -34,6 +34,8 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **New armies, agents and fleets:** on **Units & armies**, **+ Army**, **+ Agent** (spy, assassin or diplomat) and **+ Fleet** add a new character with a name from the faction's name list. Select it: an army gets its units from the land cards, a fleet from the ships (in mods that mark every ship a mercenary the mercenaries filter turns on by itself). **Place on map** opens the **Map**; click a tile: an army needs land it may stand on or a town no other army holds, a fleet needs sea, an agent any land or a town. Placed ones can be dragged there. Works for a new faction and in **Edit**; written with **Create faction** / **Apply changes**.
 
+**Log:** the tool keeps `faction_tool.log` next to the exe (or in `%APPDATA%\RTW Faction Tool`): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
+
 **Undo:** press **Restore a backup...** Backups sit in `faction_tool_backups` next to `data`. Restore the newest one first.
 
 ## What it changes

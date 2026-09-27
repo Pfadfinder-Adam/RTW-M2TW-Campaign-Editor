@@ -154,11 +154,12 @@ class MapView(ttk.Frame):
             sx, sy = self.to_screen(x, y)
             if not (-40 < sx < cw + 40 and -20 < sy < ch + 20):
                 continue
-            owner = self.owners.get(region, "slave")
-            rgb = REBELS if owner == "slave" else self.colours.get(owner, REBELS)
+            owner = self.owners.get(region)
+            rgb = REBELS if owner in (None, "slave") else self.colours.get(owner, REBELS)
             mine = region in self.chosen
             r = size / 2 + (2 if mine else 0)
-            c.create_rectangle(sx - r, sy - r, sx + r, sy + r, fill="#%02x%02x%02x" % rgb,
+            c.create_rectangle(sx - r, sy - r, sx + r, sy + r,
+                               fill="" if owner is None else "#%02x%02x%02x" % rgb,    # hollow: no town at the start
                                outline="#ffd400" if mine else "black", width=3 if mine else 1,
                                tags=("city", "city:" + region))
             if self.v_names.get() and (self.z >= 4 or mine):

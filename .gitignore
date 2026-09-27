@@ -4,3 +4,4 @@ build/
 dist/
 *.spec
 faction_tool_backups/
+faction_tool.log*

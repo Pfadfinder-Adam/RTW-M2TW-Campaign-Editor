@@ -84,7 +84,8 @@ def read_units(edu):
 
 def faction_units(mod, faction, ships=False):
     """Units the faction may own (its name, its culture or 'all' in ownership - vanilla
-    gives ships by culture): land units, or with ships=True only its ships."""
+    gives ships by culture): land units, or with ships=True only its ships;
+    never the non_combatant townsfolk."""
     edu = mod.file("edu")
     if not edu:
         return []
@@ -94,7 +95,8 @@ def faction_units(mod, faction, ships=False):
     except Exception:
         pass
     return [u for u in read_units(mod.load(edu))
-            if owners & set(u.ownership) and (u.category == "ship") == ships]
+            if owners & set(u.ownership) and (u.category == "ship") == ships
+            and u.category != "non_combatant"]            # townsfolk for battles in towns, not troops
 
 
 def card_path(mod, faction, dictionary, info=False):

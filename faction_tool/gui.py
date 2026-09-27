@@ -6,6 +6,7 @@ import traceback
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
+from . import log
 from .build import build, template_display
 from .buildings import BuildingPictures, read_buildings, settlement_info
 from .mapdata import CampaignMap, faction_colours
@@ -23,6 +24,17 @@ from .textio import tokens
 from .units import faction_units, read_units
 
 APP = "RTW Faction Tool"
+
+_showerror = messagebox.showerror
+
+
+def _logged_error(title=None, message=None, **kw):
+    """Every error box also goes to faction_tool.log."""
+    log.error(message)
+    return _showerror(title, message, **kw)
+
+
+messagebox.showerror = _logged_error
 
 # descr_strat.txt: "faction <name>, <economy> <military>" - the words the game knows
 AI_ECONOMY = ("balanced", "bureaucrat", "comfortable", "craftsman", "fortified", "religious", "sailor", "trader")
@@ -230,11 +242,13 @@ class App(tk.Tk):
         ttk.Button(bar, text="Preview changes", command=self.preview).pack(side="left")
         self.b_create = ttk.Button(bar, text="Create faction", command=self.create)
         self.b_create.pack(side="left", padx=6)
+        ttk.Button(bar, text="Log", command=self.show_log).pack(side="right", padx=(6, 0))
         ttk.Button(bar, text="Restore a backup...", command=self.restore).pack(side="right")
         ttk.Button(bar, text="Scan mod", command=self.scan).pack(side="right", padx=6)
         ttk.Button(bar, text="Game manifest...", command=self.game_manifest).pack(side="right")
         self.status = tk.StringVar(value="Choose the mod's data folder (for example ...\\HLR\\data) and press Load.")
         ttk.Label(self, textvariable=self.status, anchor="w").pack(fill="x", padx=6, pady=(0, 6))
+        self.status.trace_add("write", lambda *a: self.status.get() and log.write(self.status.get()))
 
     def _build_units_tab(self):
         """Units & armies: the chosen towns on the left, their garrisons on the right."""
@@ -513,6 +527,11 @@ class App(tk.Tk):
 
     def map_city(self, region):
         """A click on a town on the map: add it to Chosen, or take it out."""
+        if region not in self.chosen and self.strat and region not in self.strat.owners():
+            messagebox.showinfo(APP, "%s has no town at the start of this campaign: descr_strat.txt has no "
+                                "settlement for it, so there is nothing to hand over.\n\n"
+                                "Founding a new town there is not supported yet." % region)
+            return
         if region in self.chosen:
             self.chosen.remove(region)
             self.garrisons.pop(region, None)
@@ -556,6 +575,7 @@ class App(tk.Tk):
             messagebox.showerror(APP, str(e))
             return
         self.v_path.set(self.mod.data)
+        log.write("Load %s" % self.mod.data)
         camps = self.mod.campaigns()
         self.cb_campaign["values"] = camps
         self.v_campaign.set("imperial_campaign" if "imperial_campaign" in camps else (camps[0] if camps else ""))
@@ -648,9 +668,15 @@ class App(tk.Tk):
         self.garrisons = {}
         self.buildings_picked = {}
         self.field, self._placing = [], None
+        self.editing_now, self.char_moves = None, {}
         self.refresh_field()
         self.refresh_chosen()
         self.fill_towns()
+        # after Apply (which reloads) or a campaign change, the edited faction is read
+        # afresh: its towns as they are now, never a stale list from before
+        t = self.v["template"].get().strip()
+        if self.editing() and t and self.strat.faction(t):
+            self.load_existing()
 
     def fill_towns(self):
         if not self.strat:
@@ -930,6 +956,8 @@ class App(tk.Tk):
         if not v["template"]:
             raise ValueError("pick the faction to edit")
         had = list((self.editing_now or {}).get("regions", []))
+        if had and not self.chosen:
+            raise ValueError("the faction would be left without towns - keep or add at least one (Faction tab)")
 
         def person(role):
             if not v[role + "_first"]:
@@ -1115,6 +1143,7 @@ class App(tk.Tk):
         except Exception as e:
             messagebox.showerror(APP, str(e))
             return
+        log.write("Preview\n" + plan.report())
         self.show_text("Preview - nothing written yet", plan.report())
 
     def create(self):
@@ -1133,9 +1162,20 @@ class App(tk.Tk):
         except Exception as e:
             messagebox.showerror(APP, "Writing failed: %s\n\n%s" % (e, traceback.format_exc()))
             return
+        log.write("Written (backup %s)\n%s" % (bdir, plan.report()))
         self.show_text("Done", plan.report() + "\n\nBackup: %s\nStart a NEW campaign to see the %s." % (
             bdir, "changes" if self.editing() else "faction"))
         self.load()
+
+    def show_log(self):
+        """The tool's log - send faction_tool.log along with the game's system.log.txt."""
+        self.show_text("Log - %s" % (log.path() or "no log file"), log.tail() or "(empty)")
+
+    def report_callback_exception(self, exc, val, tb):
+        """A crash inside the window: logged with its traceback and shown, never silent."""
+        text = "".join(traceback.format_exception(exc, val, tb))
+        log.write("ERROR (unexpected)\n" + text)
+        _showerror(APP, "Something went wrong: %s\n\nThe details are in the log (Log button)." % val)
 
     def restore(self):
         if not self.mod:
@@ -1161,6 +1201,8 @@ class App(tk.Tk):
             if not messagebox.askyesno(APP, "Undo %s?\nFiles are put back as they were before it." % os.path.basename(b)):
                 return
             m = restore(self.mod, b)
+            log.write("Restored %s: %d file(s) back, %d copied item(s) removed"
+                      % (b, len(m["modified"]), len(m["created"])))
             messagebox.showinfo(APP, "Restored %d file(s), removed %d copied item(s)." % (len(m["modified"]), len(m["created"])))
             w.destroy()
             self.load()
@@ -1168,4 +1210,5 @@ class App(tk.Tk):
 
 
 def main():
+    log.write("Start %s" % APP)
     App().mainloop()
