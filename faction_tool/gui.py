@@ -12,7 +12,7 @@ from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need,
                         read_buildings, settlement_info)
 from .mapdata import CampaignMap, faction_colours
 from .moddata import ModData
-from .mapedit import orig as place_orig, place_problem
+from .mapedit import orig as place_orig, place_problem, port_fleets, sea_spot
 from .newmod import create_mod, game_root_of
 from .edit import edit as edit_faction, read_faction
 from .gui_buildings import BuildingsEditor
@@ -545,6 +545,16 @@ class App(tk.Tk):
         chars, armies_at = [], set()
         tiles = self.mod.city_tiles(self.v_campaign.get())
         town_moves = {tiles[r]: xy for (w, r), xy in self.place_moves.items() if w == "city" and r in tiles}
+        fleet_moves = {}                      # fleets by a moved port sail with it (as apply_places does)
+        taken = {c.xy for fb in self.strat.factions for c in fb.characters if c.xy}
+        for (w, r), to in self.place_moves.items():
+            if w == "port":
+                for c in port_fleets(self.strat, place_orig(self.mod, self.v_campaign.get(), w, r)):
+                    dest = sea_spot(self.mod, self.v_campaign.get(), to, taken)
+                    if dest:
+                        taken.discard(c.xy)
+                        taken.add(dest)
+                        fleet_moves[c.start] = dest
         for fb in self.strat.factions:
             for i, c in enumerate(fb.characters):
                 if not c.xy:
@@ -552,7 +562,7 @@ class App(tk.Tk):
                 lines = self.strat.lines[c.start:c.end]
                 army = any(tokens(l)[:1] == ["army"] for l in lines)
                 cid = "%s:%d" % (fb.name, i)
-                xy = self.char_moves.get(cid, town_moves.get(c.xy, c.xy))
+                xy = self.char_moves.get(cid, town_moves.get(c.xy) or fleet_moves.get(c.start) or c.xy)
                 chars.append({"id": cid, "faction": fb.name, "name": c.name, "kind": c.kind, "xy": xy,
                               "army": army, "units": sum(1 for l in lines if tokens(l)[:1] == ["unit"]),
                               "from": c.xy})

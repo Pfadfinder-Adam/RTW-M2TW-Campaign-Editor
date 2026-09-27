@@ -6,7 +6,8 @@ to it, as all 75 vanilla and 315 HLR ports do). Moving one repaints two pixels:
 the old spot gets the region's colour back, the new one turns black or white.
 The game keeps a compiled copy of the map in map.rwm and rebuilds it when the
 file is missing, so the plan removes it (backed up like every change).
-Characters standing on a moved town's tile move with the town."""
+Characters standing on a moved town's tile move with the town; fleets lying
+next to a moved port sail to the sea next to its new spot."""
 
 import os
 
@@ -93,6 +94,27 @@ def ports(mod, campaign):
     return out
 
 
+def port_fleets(s, port):
+    """The fleets (admirals) lying at most two tiles off a port (vanilla puts
+    them one or two tiles out)."""
+    if not port:
+        return []
+    return [c for fb in s.factions for c in fb.characters
+            if c.kind == "admiral" and c.xy and max(abs(c.xy[0] - port[0]), abs(c.xy[1] - port[1])) <= 2]
+
+
+def sea_spot(mod, campaign, port, taken):
+    """The nearest free sea tile next to a port (the four sides first), or None."""
+    x, y = port
+    ring = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)]
+    ring += [(dx, dy) for dx in range(-2, 3) for dy in range(-2, 3) if max(abs(dx), abs(dy)) == 2]
+    for dx, dy in ring:
+        p = (x + dx, y + dy)
+        if p not in taken and mod.is_sea(campaign, p):
+            return p
+    return None
+
+
 def apply_places(plan, campaign, places):
     """places = [{'what': 'city'|'port', 'region', 'to': (x, y)}]: repaint
     map_regions.tga, remove map.rwm, move the characters on a moved town."""
@@ -126,6 +148,19 @@ def apply_places(plan, campaign, places):
     sp = mod.campaign_file(campaign, "descr_strat.txt")
     f = plan.edit(sp)
     s = Strat(f)
+    taken = {c.xy for fb in s.factions for c in fb.characters if c.xy}
+    for (what, region), to in moved.items():
+        if what != "port":
+            continue
+        for c in port_fleets(s, orig(mod, campaign, what, region)):
+            dest = sea_spot(mod, campaign, to, taken)
+            if dest is None:
+                plan.warn(f, "%s: no free sea next to the new port for %s's fleet - it stays" % (region, c.name))
+                continue
+            taken.discard(c.xy)
+            taken.add(dest)
+            f.set(c.start, RE_XY.sub("x %d, y %d" % dest, f.text(c.start), 1))
+            plan.note(f, "%s's fleet follows the port of %s to %d, %d" % (c.name, region, dest[0], dest[1]))
     for (what, region), to in moved.items():
         if what != "city":
             continue
