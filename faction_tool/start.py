@@ -300,6 +300,8 @@ def build_start(plan, campaign, start):
         edu = plan.files.get(mod.file("edu"))
         upkeep_all = unit_upkeep(edu) if edu is not None else {}
         for r in regions:
+            if r in (start.get("garrisons") or {}):
+                continue                    # a garrison picked by hand replaces it below
             kept = []
             for name, kind, chunk in joined.get(r, []):
                 units = _units(chunk)
