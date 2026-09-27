@@ -117,6 +117,8 @@ class DiplomacyEditor(ttk.Frame):
             return
         if v == self.value(key) and key not in self.set:
             return
+        if getattr(self, "before", None):
+            self.before()                           # the window remembers the state for Undo
         if v == self.base.get(key):
             self.set.pop(key, None)
         else:
@@ -126,6 +128,8 @@ class DiplomacyEditor(ttk.Frame):
         self.after_idle(self.redraw)
 
     def reset(self):
+        if getattr(self, "before", None):
+            self.before()
         self.set.clear()
         if self.on_change:
             self.on_change()

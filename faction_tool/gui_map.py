@@ -192,7 +192,7 @@ class MapView(ttk.Frame):
         c, cm = self.canvas, self.cmap
         size = max(3, min(self.z * 0.9, 60))           # a town fills its tile
         font = ("", 8 if self.z < 10 else 9)
-        if self.v_ports.get() and self.z >= 3:
+        if self.v_ports.get() and self.z >= 4:        # far out: towns only - less to draw, less clutter
             for region, (x, y) in cm.ports.items():
                 x, y = self.places.get(("port", region), (x, y))
                 sx, sy = self.to_screen(x, y)
@@ -221,7 +221,7 @@ class MapView(ttk.Frame):
                 name = cm.info.get(region, {}).get("settlement", region)
                 c.create_text(sx + r + 3, sy + 1, text=name, anchor="w", fill="black", font=font)   # shadow
                 c.create_text(sx + r + 2, sy, text=name, anchor="w", fill="white", font=font)
-        if self.v_chars.get() and self.z >= 2:
+        if self.v_chars.get() and self.z >= 4:
             self._characters(cw, ch, size)
 
     def _anchor(self, sx, sy, r, tags):

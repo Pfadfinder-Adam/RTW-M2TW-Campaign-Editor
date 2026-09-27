@@ -1,5 +1,6 @@
 """The window: pick the mod, fill in the faction, preview, create, restore."""
 
+import copy
 import os
 import threading
 import traceback
@@ -27,6 +28,44 @@ from .textio import tokens
 from .units import faction_units, read_units
 
 APP = "RTW Faction Tool"
+
+HELP = """RTW Faction Tool - how to use it
+
+START
+  1. Close the game. Browse... to the mod's data folder (for example ...\\HLR\\data), press Load.
+     Better: New mod folder... makes a copy of the mod to work on; the base stays untouched.
+  2. Pick the campaign (usually imperial_campaign).
+  3. New faction: pick a template to copy.   Edit faction: pick the faction to change.
+
+THE TABS (in the order that works best)
+  Faction      names, texts, colours, AI, money, playable; the towns it starts with
+               (double-click in the list, or click towns on the Map); capital, leader, heir.
+  Units & armies
+               the garrison of each town (click cards to add, click the garrison to take out);
+               new armies, agents and fleets (+ Army / + Agent / + Fleet, then Place on map);
+               in Edit also the faction's armies, fleets and agents already on the map.
+  Buildings    what stands in each town; settlement level and population. A bigger
+               governor's building grows the settlement by itself.
+  Map          click a town to take it / give it back; drag your characters, towns and
+               ports; Political, Diplomacy and the other switches change what is shown.
+  Diplomacy    how the faction and every other one feel about each other at the start.
+
+  4. Preview changes (Ctrl+P) shows every file and line that would change. Nothing is written.
+  5. Create faction / Apply changes (Ctrl+S) writes it, with a backup first.
+  6. Start a NEW campaign in the game - old saves do not see the changes.
+  Something wrong? Restore a backup... puts the files back exactly (newest first).
+
+KEYS
+  Ctrl+Z undo, Ctrl+Y (or Ctrl+Shift+Z) redo - towns, garrisons, buildings, map moves,
+  armies, diplomacy (in a text box Ctrl+Z undoes the typing instead)
+  Ctrl+P preview    Ctrl+S apply / create    F5 load the mod again    F1 this help
+  Ctrl+1 .. Ctrl+5 the tabs    Map: mouse wheel zooms, drag moves
+
+WHEN SOMETHING GOES WRONG
+  Log shows what the tool did and every error (faction_tool.log next to the exe).
+  Check mod reads the whole mod and reports anything it cannot make sense of.
+  Send faction_tool.log and the game's system.log.txt.
+"""
 
 _showerror = messagebox.showerror
 
@@ -60,6 +99,7 @@ class App(tk.Tk):
         self.removed_existing = []      # Edit: [{name, from}] characters taken off the map
         self.place_moves = {}           # {('city' | 'port', region): (x, y)} towns and ports moved on the map
         self.dip_set = {}               # {(kind, from, to): value or None} picked on the Diplomacy tab ('me' = the faction)
+        self.undo_stack, self.redo_stack = [], []   # snapshots of what the window keeps (Ctrl+Z / Ctrl+Y)
         self.sizes = {}                 # {region: {'level', 'population'}} set by hand on the Buildings tab
         self._units_for, self._units_cache = None, []
         self.buildings_picked = {}      # region -> [(chain, level)] set by hand
@@ -246,6 +286,7 @@ class App(tk.Tk):
         self.dip_editor = DiplomacyEditor(tab)
         self.dip_editor.pack(fill="both", expand=True)
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self.tab_opened())
+        self._keys()
 
         # --- actions
         bar = ttk.Frame(self)
@@ -253,7 +294,10 @@ class App(tk.Tk):
         ttk.Button(bar, text="Preview changes", command=self.preview).pack(side="left")
         self.b_create = ttk.Button(bar, text="Create faction", command=self.create)
         self.b_create.pack(side="left", padx=6)
+        ttk.Button(bar, text="Undo", width=6, command=self.undo).pack(side="left", padx=(12, 0))
+        ttk.Button(bar, text="Redo", width=6, command=self.redo).pack(side="left", padx=4)
         ttk.Button(bar, text="Log", command=self.show_log).pack(side="right", padx=(6, 0))
+        ttk.Button(bar, text="Help", command=self.show_help).pack(side="right", padx=(6, 0))
         ttk.Button(bar, text="Restore a backup...", command=self.restore).pack(side="right")
         ttk.Button(bar, text="Scan mod", command=self.scan).pack(side="right", padx=6)
         ttk.Button(bar, text="Check mod", command=self.check).pack(side="right")
@@ -359,6 +403,7 @@ class App(tk.Tk):
         self._size_hint()
 
         def changed(picked):
+            self.remember()
             if picked is None:
                 self.buildings_picked.pop(region, None)
             else:
@@ -380,6 +425,7 @@ class App(tk.Tk):
 
     def size_changed(self):
         """Level / population typed for the selected town; the same as now means unchanged."""
+        self.remember()
         region = getattr(self, "_size_region", None)
         if not region:
             return
@@ -523,6 +569,91 @@ class App(tk.Tk):
                         "named": c.named, "changed": False})
         return out
 
+    # ------------------------------------------------------------------ undo / redo
+    UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "place_moves", "char_moves", "field",
+                 "removed_existing", "dip_set")
+
+    def snapshot(self):
+        st = {k: copy.deepcopy(getattr(self, k)) for k in self.UNDO_KEYS}
+        st["capital"] = self.v["capital"].get()
+        return st
+
+    def remember(self):
+        """Called before every change the window keeps (towns, garrisons, buildings,
+        sizes, map moves, armies, diplomacy): Undo puts the state back."""
+        st = self.snapshot()
+        if not self.undo_stack or self.undo_stack[-1] != st:
+            self.undo_stack.append(st)
+            del self.undo_stack[:-300]
+            self.redo_stack.clear()
+
+    def _restore(self, st):
+        for k in self.UNDO_KEYS:
+            if k == "dip_set":                    # the diplomacy tab holds this very dict
+                self.dip_set.clear()
+                self.dip_set.update(st[k])
+            else:
+                setattr(self, k, copy.deepcopy(st[k]))
+        self.v["capital"].set(st["capital"])
+        self.refresh_chosen()
+        self.refresh_field()
+        tab = self.nb.index("current")
+        if tab == 1 and self.lb_units.curselection():
+            self.load_garrison()
+        elif tab == 1 and self.lb_field.curselection():
+            self.load_field()
+        elif tab == 2 and self.lb_build.curselection():
+            self.load_buildings()
+        elif tab == 3:
+            self.show_map()
+        elif tab == 4:
+            self.load_diplomacy()
+
+    def undo(self, e=None):
+        if self._typing():
+            return None
+        while self.undo_stack:
+            st = self.undo_stack.pop()
+            now = self.snapshot()
+            if st == now:
+                continue
+            self.redo_stack.append(now)
+            self._restore(st)
+            self.status.set("Undone (%d more step(s) back)." % len(self.undo_stack))
+            return "break"
+        self.status.set("Nothing to undo.")
+        return "break"
+
+    def redo(self, e=None):
+        if self._typing():
+            return None
+        if not self.redo_stack:
+            self.status.set("Nothing to redo.")
+            return "break"
+        self.undo_stack.append(self.snapshot())
+        self._restore(self.redo_stack.pop())
+        self.status.set("Redone.")
+        return "break"
+
+    def _typing(self):
+        """In a text box Ctrl+Z belongs to the box."""
+        w = self.focus_get()
+        return w is not None and w.winfo_class() in ("Text",)
+
+    def _keys(self):
+        self.bind_all("<Control-z>", self.undo)
+        self.bind_all("<Control-Z>", self.redo)                  # Ctrl+Shift+Z
+        self.bind_all("<Control-y>", self.redo)
+        self.bind_all("<Control-p>", lambda e: self.preview())
+        self.bind_all("<Control-s>", lambda e: self.create())
+        self.bind_all("<F1>", lambda e: self.show_help())
+        self.bind_all("<F5>", lambda e: self.load())
+        for i in range(5):
+            self.bind_all("<Control-Key-%d>" % (i + 1), lambda e, i=i: self.nb.select(i))
+
+    def show_help(self):
+        self.show_text("Help", HELP)
+
     def diplomacy_base(self):
         """(me, {(kind, from, to): value}) as the start stands without the picks:
         the file for an edited faction; for a new one its template's relations
@@ -552,6 +683,7 @@ class App(tk.Tk):
         me, base = self.diplomacy_base()
         others = [fb.name for fb in self.strat.factions if fb.name != me]
         names = dict(self.mod.factions())
+        self.dip_editor.before = self.remember
         self.dip_editor.load(me, others, base, self.dip_set, names,
                              lambda: self.status.set("%d diplomacy change(s) - Preview, then %s." % (
                                  len(self.dip_set), "Apply changes" if self.editing() else "Create faction")))
@@ -639,6 +771,7 @@ class App(tk.Tk):
                                          armies_at - {ch["xy"]})
 
         def moved(cid, xy):
+            self.remember()
             ch = self._map_chars[cid]
             if cid.startswith("new:"):
                 self.field[int(cid[4:])]["xy"] = xy
@@ -664,6 +797,7 @@ class App(tk.Tk):
         placing = getattr(self, "_placing", None)
 
         def place(xy):
+            self.remember()
             i = self._placing
             fc = self.field[i]
             rtw_kind, army = KINDS[fc["kind"]]
@@ -681,6 +815,7 @@ class App(tk.Tk):
                                  {k: v for k, v in self.place_moves.items() if k != (what, region)})
 
         def place_moved(what, region, xy):
+            self.remember()
             if xy == place_orig(self.mod, self.v_campaign.get(), what, region):
                 self.place_moves.pop((what, region), None)
             else:
@@ -696,6 +831,7 @@ class App(tk.Tk):
 
     def map_city(self, region):
         """A click on a town on the map: add it to Chosen, or take it out."""
+        self.remember()
         if region in self.chosen:
             self.chosen.remove(region)
             self.garrisons.pop(region, None)
@@ -836,6 +972,8 @@ class App(tk.Tk):
         self.editing_now, self.char_moves = None, {}
         self.place_moves = {}
         self.dip_set.clear()
+        self._cmap_for = None                  # the map is read again: after Apply towns may stand elsewhere
+        self.undo_stack, self.redo_stack = [], []
         self.refresh_field()
         self.refresh_chosen()
         self.fill_towns()
@@ -909,12 +1047,14 @@ class App(tk.Tk):
             btn.configure(bg="#%02x%02x%02x" % rgb)
 
     def add_town(self):
+        self.remember()
         for iid in self.tv.selection():
             if iid not in self.chosen:
                 self.chosen.append(iid)
         self.refresh_chosen()
 
     def remove_town(self):
+        self.remember()
         sel = [self.lb.get(i).split(" ")[0] for i in self.lb.curselection()]
         self.chosen = [r for r in self.chosen if r not in sel]
         for r in sel:
@@ -1005,6 +1145,7 @@ class App(tk.Tk):
             if not first:
                 messagebox.showerror(APP, "pick a first name", parent=w)
                 return
+            self.remember()
             self.field.append({"kind": v_kind.get(), "name": (first + " " + v_last.get().strip()).strip(),
                                "age": int(v_age.get()) if v_age.get().isdigit() else 30, "units": [], "xy": None})
             w.destroy()
@@ -1037,6 +1178,7 @@ class App(tk.Tk):
         units = self._with_types(units, c["units"])
 
         def changed(types, i=i):
+            self.remember()
             self.field[i]["units"] = types
             if self.field[i].get("existing"):
                 self.field[i]["changed"] = True
@@ -1048,6 +1190,7 @@ class App(tk.Tk):
             self.status.set("Pick the units, then 'Place on map'.")
 
     def remove_field(self):
+        self.remember()
         i = self.selected_field()
         if i is None:
             return
@@ -1123,6 +1266,7 @@ class App(tk.Tk):
                 return []
 
         def changed(types):
+            self.remember()
             if types:
                 self.garrisons[region] = types
             else:
