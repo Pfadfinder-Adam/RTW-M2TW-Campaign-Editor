@@ -51,6 +51,8 @@ def template_pool(strat, template, upkeep):
     pool = {}
     fb = strat.faction(template)
     for c in fb.characters if fb else []:
+        if c.kind not in ("named character", "general"):
+            continue                        # admirals' fleets and agents are not an army's pool
         units = _units(strat.lines[c.start:c.end])
         if c.named and units:
             units = units[1:]
