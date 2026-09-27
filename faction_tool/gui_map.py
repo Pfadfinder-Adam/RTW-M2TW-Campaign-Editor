@@ -55,6 +55,8 @@ class MapView(ttk.Frame):
         c.bind("<B1-Motion>", self._move)
         c.bind("<ButtonRelease-1>", self._release)
         c.bind("<Motion>", self._hover)
+        c.bind("<Leave>", lambda e: self._grow(None))
+        self._hot = None                                # the marker under the mouse, drawn bigger
 
     # ---- data ----
     def load(self, cmap, owners, colours, faction=None, chosen=(), on_city=None, chars=(), draggable=(),
@@ -123,6 +125,7 @@ class MapView(ttk.Frame):
         self._pending = None
         c = self.canvas
         c.delete("all")
+        self._hot = None
         if not self.cmap:
             c.create_text(20, 20, anchor="nw", fill="#ccc", text="Load a mod: the campaign map shows here.")
             return
@@ -244,6 +247,34 @@ class MapView(ttk.Frame):
                     return tag[5:]
         return None
 
+    def _marker_under(self, sx, sy):
+        """The tag of the town or character under the mouse: 'char:<id>' or 'city:<region>'."""
+        for item in reversed(self.canvas.find_overlapping(sx - 3, sy - 3, sx + 3, sy + 3)):
+            for tag in self.canvas.gettags(item):
+                if tag.startswith(("char:", "city:")):
+                    return tag
+        return None
+
+    GROW = 1.6
+
+    def _grow(self, tag):
+        """Draw the marker under the mouse bigger (and on top); put the last one back."""
+        if tag == self._hot:
+            return
+        c = self.canvas
+        if self._hot:
+            box = c.bbox(self._hot)
+            if box:
+                cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+                c.scale(self._hot, cx, cy, 1 / self.GROW, 1 / self.GROW)
+        self._hot = tag
+        if tag:
+            box = c.bbox(tag)
+            if box:
+                cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+                c.scale(tag, cx, cy, self.GROW, self.GROW)
+                c.tag_raise(tag)
+
     # ---- mouse ----
     def _wheel(self, e, direction=None):
         d = direction if direction is not None else (1 if e.delta > 0 else -1)
@@ -314,6 +345,7 @@ class MapView(ttk.Frame):
             return
         self.canvas.config(cursor="crosshair")
         if self.cmap and not self._cdrag:
+            self._grow(self._marker_under(e.x, e.y))
             cid = self._char_under(e.x, e.y)
             ch_ = next((c for c in self.chars if c["id"] == cid), None) if cid else None
             if ch_:
