@@ -301,6 +301,46 @@ def build_start(plan, campaign, start):
             spots["heir"] = (regions[1], tiles[regions[1]])
         else:
             spots["heir"] = (None, place(capital, "the heir"))
+    held = {spots[r][0] for r in spots if spots[r][0]}          # towns one of our characters holds
+
+    # Garrisons picked by hand: start['garrisons'] = {region: [unit type, ...]}.
+    # In a town our leader or heir holds, they follow the bodyguard; elsewhere
+    # they replace the old garrison, or a new captain leads them.
+    custom = {}
+    for r, types in (start.get("garrisons") or {}).items():
+        if r not in regions:
+            continue
+        room = MAX_UNITS - (1 if r in held else 0)
+        custom[r] = ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % tp for tp in types][:room]
+        if len(types) > room:
+            plan.warn(f, "%s: %d unit(s) over the %d an army holds were left out" % (r, len(types) - room, MAX_UNITS))
+    captains = [n for n in (pool or {}).get("characters", [])]
+    used = {c.name.split()[0] for fb in s.factions for c in fb.characters if c.name}
+    used |= {start[r]["name"].split()[0] for r in ("leader", "heir") if start.get(r) and start[r].get("name")}
+    for r, lines in custom.items():
+        agents = [j for j in joined.get(r, []) if not _has_army(j[2])]
+        armies = [j for j in joined.get(r, []) if _has_army(j[2])]
+        for name, kind, chunk in (armies if r in held else armies[1:]):
+            plan.note(f, "%s: %s (%s) and his old garrison leave - your garrison holds the town" % (r, name, kind))
+        if r in held:
+            joined[r] = agents
+            continue
+        if armies:
+            name, kind, chunk = armies[0]
+            head = [l for l in chunk if tokens(l)[:1] != ["unit"]]
+            at = next(i for i, l in enumerate(head) if tokens(l)[:1] == ["army"]) + 1
+            chunk = head[:at] + [f.make(l) for l in lines] + head[at:]
+            plan.note(f, "%s: %s leads your garrison of %d unit(s)" % (r, name, len(lines)))
+        else:
+            name = next((n for n in captains if n not in used), captains[0] if captains else None)
+            if not name:
+                raise ValueError("%s: no name in the %s name list for a captain to lead the garrison" % (r, t))
+            used.add(name)
+            kind = "general"
+            chunk = [f.make("character\t%s, general, age 30, , x %d, y %d" % (name, tiles[r][0], tiles[r][1])),
+                     f.make("army")] + [f.make(l) for l in lines]
+            plan.note(f, "%s: captain %s leads your garrison of %d unit(s)" % (r, name, len(lines)))
+        joined[r] = agents + [(name, kind, chunk)]
 
     own = []
     for role in ("leader", "heir"):
@@ -316,7 +356,10 @@ def build_start(plan, campaign, start):
         if rest and pool and rest not in pool.get("surnames", []):
             raise ValueError("%s: surname '%s' is not in the %s surname list" % (role, rest, t))
         region, xy = spots[role]
-        if role == "heir":
+        if region in custom:
+            units = template_army[:1] + custom[region]                # bodyguard + your garrison
+            plan.note(f, "%s's army: bodyguard + your garrison of %d unit(s)" % (role, len(custom[region])))
+        elif role == "heir":
             units = template_army[:1]                               # the bodyguard
         elif start.get("army"):
             units = list(start["army"])

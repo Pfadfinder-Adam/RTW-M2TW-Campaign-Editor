@@ -9,9 +9,12 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 from .build import build, template_display
 from .moddata import ModData
 from .newmod import create_mod, game_root_of
+from .gui_garrison import GarrisonWindow, Pictures
 from .plan import backups, restore
 from .scan import IGNORE_HELP, ignore_path, scan as scan_mod
+from .start import balanced_army, unit_name
 from .strat import Strat
+from .units import faction_units, read_units
 
 APP = "RTW Faction Tool"
 
@@ -26,6 +29,8 @@ class App(tk.Tk):
         self.strat = None
         self.regions = {}
         self.chosen = []
+        self.garrisons = {}             # region -> [unit type] picked by hand
+        self.pictures = Pictures()
         self.colours = {"primary": None, "secondary": None}
         self._build()
 
@@ -164,6 +169,7 @@ class App(tk.Tk):
         mid.pack(side="right", padx=6)
         ttk.Button(mid, text="Add >", command=self.add_town).pack(pady=2)
         ttk.Button(mid, text="< Remove", command=self.remove_town).pack(pady=2)
+        ttk.Button(mid, text="Garrison...", command=self.edit_garrison).pack(pady=(14, 2))
         self.tv = ttk.Treeview(lists, columns=("town", "owner"), show="tree headings", height=18)
         self.tv.heading("#0", text="Region")
         self.tv.heading("town", text="Settlement")
@@ -290,6 +296,7 @@ class App(tk.Tk):
         owners = sorted(set(self.strat.owners().values()))
         self.cb_owner["values"] = ["(all)"] + owners
         self.chosen = []
+        self.garrisons = {}
         self.refresh_chosen()
         self.fill_towns()
 
@@ -340,16 +347,57 @@ class App(tk.Tk):
     def remove_town(self):
         sel = [self.lb.get(i).split(" ")[0] for i in self.lb.curselection()]
         self.chosen = [r for r in self.chosen if r not in sel]
+        for r in sel:
+            self.garrisons.pop(r, None)
         self.refresh_chosen()
 
     def refresh_chosen(self):
         self.lb.delete(0, "end")
         for r in self.chosen:
             owner = self.strat.owners().get(r, "?") if self.strat else "?"
-            self.lb.insert("end", "%s  (%s)" % (r, owner))
+            mark = "  [%d units]" % len(self.garrisons[r]) if r in self.garrisons else ""
+            self.lb.insert("end", "%s  (%s)%s" % (r, owner, mark))
         self.cb_capital["values"] = self.chosen
         if self.v["capital"].get() not in self.chosen:
             self.v["capital"].set(self.chosen[0] if self.chosen else "")
+
+    def edit_garrison(self):
+        """Pick the selected chosen town's garrison from the template's unit cards."""
+        if not self.mod or not self.chosen:
+            messagebox.showerror(APP, "add a town to Chosen first")
+            return
+        sel = self.lb.curselection()
+        region = self.chosen[sel[0]] if sel else (self.v["capital"].get() or self.chosen[0])
+        template = self.v["template"].get().strip()
+        if not template:
+            messagebox.showerror(APP, "pick the template faction first")
+            return
+        units = faction_units(self.mod, template)
+        if not units:
+            messagebox.showerror(APP, "no units list %s in export_descr_unit.txt" % template)
+            return
+        capital = self.v["capital"].get() or self.chosen[0]
+        order = [capital] + [r for r in self.chosen if r != capital]      # as the build orders them
+        heir_town = order[1] if self.v["heir_first"].get().strip() and len(order) > 1 else None
+        held = region in (capital, heir_town)
+
+        def auto():
+            try:
+                strat = Strat(self.mod.load(self.mod.campaign_file(self.v_campaign.get(), "descr_strat.txt")))
+                upkeep = {u.type: u.upkeep for u in read_units(self.mod.load(self.mod.file("edu")))}
+                lines, _, _ = balanced_army(strat, template, len(self.chosen), upkeep, [])
+                return [unit_name(l) for l in lines[1:]]           # without the bodyguard
+            except Exception:
+                return []
+
+        def done(types):
+            if types:
+                self.garrisons[region] = types
+            else:
+                self.garrisons.pop(region, None)
+            self.refresh_chosen()
+        GarrisonWindow(self, self.mod, template, region, units, self.garrisons.get(region, []), done,
+                       auto=auto, held=held, pictures=self.pictures)
 
     # ------------------------------------------------------------------ actions
     def gather(self):
@@ -376,7 +424,8 @@ class App(tk.Tk):
             "start": {"regions": list(self.chosen), "capital": v["capital"], "leader": leader,
                       "heir": who("heir"), "denari": int(v["denari"] or 0), "ai": v["ai"] or None,
                       "playable": self.v_playable.get(), "diplomacy": self.v_dip.get(),
-                      "army_mode": self.v_army.get(), "garrison": self.v_garrison.get()},
+                      "army_mode": self.v_army.get(), "garrison": self.v_garrison.get(),
+                      "garrisons": {r: g for r, g in self.garrisons.items() if r in self.chosen}},
         }
         return v["template"], v["name"].lower(), opts
 

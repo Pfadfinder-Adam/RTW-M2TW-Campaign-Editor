@@ -384,6 +384,33 @@ class ToolTest(unittest.TestCase):
         self.assertIn("ui/units/beta/#alpha_general.tga", left)
         self.assertNotIn("ui/units/alpha/#alpha_general.tga", left)     # unchanged: the game has it
 
+    def test_garrisons_by_hand(self):
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        # a third, empty rebel town C_R (green) to the right of the map
+        red, blue, green, black = (255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 0, 0)
+        px = [[red, red, blue, blue, green, green],
+              [red, black, blue, blue, green, black],
+              [red, red, black, blue, green, green],
+              [red, red, blue, blue, green, green]]
+        write_tga(os.path.join(camp, "map_regions.tga"), 6, 4, px)
+        write(os.path.join(camp, "descr_regions.txt"),
+              REGIONS + "C_R\n\tCtown\n\tslave\n\tRebels\n\t0 255 0\n\tnone\n\t5\n\t1\n")
+        write(os.path.join(camp, "descr_strat.txt"), STRAT.replace(
+            ";;\tBtown", "settlement\n{\n\tlevel village\n\tregion C_R\n\tpopulation 400\n}\n\n;;\tBtown"))
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"start": {
+            "regions": ["B_R", "C_R"], "leader": {"name": "Boris"},
+            "garrisons": {"B_R": ["alpha general", "rebel spear"], "C_R": ["alpha general"]}}})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        chars = {c.name: c for c in s.faction("beta").characters}
+        self.assertEqual(sorted(chars), ["Aaron", "Boris"])     # Grog left; Aaron captains C_R
+        def units(c):
+            return [l.split("\t")[2] for l in s.lines[c.start:c.end] if l.startswith("unit")]
+        self.assertEqual(units(chars["Boris"]), ["alpha general", "alpha general", "rebel spear"])
+        self.assertEqual(chars["Aaron"].xy, (5, 1))
+        self.assertEqual(chars["Aaron"].kind, "general")
+        self.assertEqual(units(chars["Aaron"]), ["alpha general"])
+
     def test_descriptions(self):
         mod = ModData(self.root)
         plan = build(mod, "test", "alpha", "beta", {
