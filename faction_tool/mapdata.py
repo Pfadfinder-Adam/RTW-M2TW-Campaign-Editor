@@ -3,7 +3,7 @@ ground types, tile by tile), the political layer, cities and
 ports. Tile (x, y) is descr_strat's tile: x to the right, y up from the bottom.
 Needs Pillow."""
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 from .textio import tokens
 
@@ -124,12 +124,86 @@ class CampaignMap:
                     for y in range(g.height) for x in range(g.width)])
         return im
 
+    def _labels(self):
+        """([(label image, [region per label])], border mask), made once: each
+        pixel holds its region's number within a group of 254 regions (0 = not
+        in the group: sea, unknown or another group), top-down; towns and ports
+        count as their region. A political layer is then a palette on these
+        images - Pillow's work, not a Python loop over every pixel."""
+        if hasattr(self, "_label_cache"):
+            return self._label_cache
+        names = sorted(self.info)
+        groups = [names[i:i + 254] for i in range(0, len(names), 254)] or [[]]
+        where = {}
+        for g, chunk in enumerate(groups):
+            for i, r in enumerate(chunk):
+                where[self.info[r]["colour"]] = (g, i + 1)
+        spot = {}
+        for r, xy in list(self.cities.items()) + list(self.ports.items()):
+            if r in self.info:
+                spot[xy] = where[self.info[r]["colour"]]
+        img, w, h = self.regions_img, self.w, self.h
+        planes = [bytearray(w * h) for _ in groups]
+        flat = bytearray(w * h * 3)                   # the map with towns/ports as their region, for borders
+        for y in range(h):
+            row = (h - 1 - y) * w
+            for x in range(w):
+                px = img.get(x, y)
+                gi = spot.get((x, y)) or where.get(px)
+                if gi:
+                    planes[gi[0]][row + x] = gi[1]
+                    if (x, y) in spot:
+                        px = self.info[groups[gi[0]][gi[1] - 1]]["colour"]
+                o = (row + x) * 3
+                flat[o:o + 3] = bytes(px)
+        rgb = Image.frombytes("RGB", (w, h), bytes(flat))
+        edge = ImageChops.add(ImageChops.difference(rgb, ImageChops.offset(rgb, -1, 0)),
+                              ImageChops.difference(rgb, ImageChops.offset(rgb, 0, -1))).convert("L")
+        mask = edge.point(lambda v: 255 if v else 0)
+        mask.paste(0, (w - 1, 0, w, h))              # offset() wraps round: no border on the far edges
+        mask.paste(0, (0, h - 1, w, h))
+        self._label_cache = ([(Image.frombytes("P", (w, h), bytes(p)),
+                               Image.frombytes("L", (w, h), bytes(p)).point(lambda v: 255 if v else 0), g)
+                              for p, g in zip(planes, groups)], mask)
+        return self._label_cache
+
     def political(self, owners, colours, highlight=None, alpha=160):
         """RGBA, 1 px per tile: each region in its owner's primary colour, see-through,
         borders darker; the highlighted faction a little stronger."""
         key = (tuple(sorted(owners.items())), highlight, alpha)
         if key in self._political:
             return self._political[key]
+        layers, mask = self._labels()
+        fill = dark = None
+        for pimg, here, names in layers:
+            flat, shade = [0, 0, 0, 0], [0, 0, 0, 0]
+            for r in names:
+                owner = owners.get(r)
+                if owner is None:
+                    flat += [0, 0, 0, 0]
+                    shade += [0, 0, 0, 0]
+                    continue
+                rgb = REBELS if owner == "slave" else colours.get(owner, REBELS)
+                a = min(255, alpha + 60) if owner == highlight else alpha
+                if owner == "slave":
+                    a = alpha // 4                   # rebel land barely tinted: the factions stand out
+                flat += list(rgb) + [a]
+                shade += [rgb[0] // 3, rgb[1] // 3, rgb[2] // 3, 200]
+            pad = [0, 0, 0, 0] * (256 - len(names) - 1)
+            a_img, b_img = pimg.copy(), pimg.copy()
+            a_img.putpalette(flat + pad, "RGBA")
+            b_img.putpalette(shade + pad, "RGBA")
+            a_img, b_img = a_img.convert("RGBA"), b_img.convert("RGBA")
+            # this group's pixels only: its label image is 0 elsewhere
+            fill = a_img if fill is None else Image.composite(a_img, fill, here)
+            dark = b_img if dark is None else Image.composite(b_img, dark, here)
+        im = Image.composite(dark, fill, mask)
+        self._political = {key: im}
+        return im
+
+    def _political_slow(self, owners, colours, highlight=None, alpha=160):
+        """The same, pixel by pixel (kept as the reference the fast one is tested against)."""
+        key = (tuple(sorted(owners.items())), highlight, alpha)
         img = self.regions_img
         fill = {}
         for region, owner in owners.items():

@@ -139,15 +139,50 @@ class MapView(ttk.Frame):
         cw, ch = c.winfo_width(), c.winfo_height()
         vw, vh = cw / self.z, ch / self.z
         box = (self.ox, self.oy, self.ox + vw, self.oy + vh)
-        bg = self.cmap.background()                                   # 2 px per tile
-        pic = bg.crop(tuple(int(round(v * 2)) for v in box)).resize((cw, ch), Image.BILINEAR if self.z < 12 else Image.NEAREST)  # sharp tiles up close
-        if self.v_pol.get():
-            pol = self.cmap.political(self.owners, self.colours, self.faction)
-            ov = pol.crop(tuple(int(round(v)) for v in box)).resize((cw, ch), Image.NEAREST)
-            pic = Image.alpha_composite(pic.convert("RGBA"), ov)
+        base = self._base()                                           # 2 px per tile, colours laid on once
+        # while the map is dragged the quick resize, the smooth one when it stops; sharp tiles up close
+        quick = self._drag is not None and self._drag[4]
+        pic = base.crop(tuple(int(round(v * 2)) for v in box)).resize(
+            (cw, ch), Image.NEAREST if quick or self.z >= 12 else Image.BILINEAR)
         self._photo = ImageTk.PhotoImage(pic)
-        c.create_image(0, 0, anchor="nw", image=self._photo)
+        c.create_image(0, 0, anchor="nw", image=self._photo, tags=("bg",))
+        self._drawn_at = (self.ox, self.oy)
         self._markers(cw, ch)
+
+    def _pan(self):
+        """While the map is dragged: a new background, the markers only shifted (drawing
+        a couple of thousand of them again is the slow part); all is redrawn on release."""
+        self._pending = None
+        c = self.canvas
+        if not self.cmap or not c.find_withtag("bg"):
+            return self._render()
+        self._clamp()
+        cw, ch = c.winfo_width(), c.winfo_height()
+        box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
+        pic = self._base().crop(tuple(int(round(v * 2)) for v in box)).resize((cw, ch), Image.NEAREST)
+        self._photo = ImageTk.PhotoImage(pic)
+        c.itemconfigure("bg", image=self._photo)
+        ox, oy = self._drawn_at
+        dx, dy = (ox - self.ox) * self.z, (oy - self.oy) * self.z
+        c.move("all", dx, dy)
+        c.move("bg", -dx, -dy)
+        self._drawn_at = (self.ox, self.oy)
+
+    def _base(self):
+        """The background with the political colours laid on, at 2 px per tile,
+        made again only when the colours change - moving the map only crops it."""
+        bg = self.cmap.background()
+        if not self.v_pol.get():
+            return bg
+        pol = self.cmap.political(self.owners, self.colours, self.faction)
+        key = (id(bg), id(pol))
+        if getattr(self, "_base_key", None) != key:
+            over = pol.resize((pol.width * 2, pol.height * 2), Image.NEAREST)
+            if over.size != bg.size:
+                over = over.resize(bg.size, Image.NEAREST)
+            self._base_img = Image.alpha_composite(bg.convert("RGBA"), over).convert("RGB")
+            self._base_key = key
+        return self._base_img
 
     def _markers(self, cw, ch):
         c, cm = self.canvas, self.cmap
@@ -392,7 +427,8 @@ class MapView(ttk.Frame):
         if abs(e.x - x0) + abs(e.y - y0) > 3:
             self._drag = (x0, y0, ox, oy, True)
             self.ox, self.oy = ox - (e.x - x0) / self.z, oy - (e.y - y0) / self.z
-            self.render()
+            if self._pending is None:
+                self._pending = self.after(15, self._pan)
 
     def _release(self, e):
         if getattr(self, "_pdrag", None):
@@ -423,6 +459,8 @@ class MapView(ttk.Frame):
             return
         moved = self._drag and self._drag[4]
         self._drag = None
+        if moved:
+            self.render()                                # the smooth picture once the map stops
         if moved or not self.cmap:
             return
         if self.on_place:
