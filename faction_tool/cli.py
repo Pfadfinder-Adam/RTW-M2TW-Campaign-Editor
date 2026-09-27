@@ -37,7 +37,8 @@ EXAMPLE = {
         "denari": 6000,
         "playable": True,
         "diplomacy": "neutral",
-        "army_mode": "balanced"
+        "army_mode": "balanced",
+        "garrison": "replace"
     }
 }
 

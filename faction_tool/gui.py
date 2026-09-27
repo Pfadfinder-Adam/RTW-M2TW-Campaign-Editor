@@ -106,6 +106,11 @@ class App(tk.Tk):
                      values=("balanced", "template", "bodyguard")).pack(side="left")
         ttk.Label(af, text="balanced = sized like similar factions").pack(side="left", padx=4)
         field("Leader's army", af)
+        self.v_garrison = tk.StringVar(value="replace")
+        gf = ttk.Frame(lf)
+        ttk.Radiobutton(gf, text="replace with own units", value="replace", variable=self.v_garrison).pack(side="left")
+        ttk.Radiobutton(gf, text="keep", value="keep", variable=self.v_garrison).pack(side="left")
+        field("Old garrisons", gf)
         lf.columnconfigure(1, weight=1)
 
         # --- leaders
@@ -296,7 +301,7 @@ class App(tk.Tk):
             "start": {"regions": list(self.chosen), "capital": v["capital"], "leader": leader,
                       "heir": who("heir"), "denari": int(v["denari"] or 0), "ai": v["ai"] or None,
                       "playable": self.v_playable.get(), "diplomacy": self.v_dip.get(),
-                      "army_mode": self.v_army.get()},
+                      "army_mode": self.v_army.get(), "garrison": self.v_garrison.get()},
         }
         return v["template"], v["name"].lower(), opts
 

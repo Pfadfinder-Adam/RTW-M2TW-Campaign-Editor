@@ -207,9 +207,8 @@ class ToolTest(unittest.TestCase):
         plan = build(mod, "test", "alpha", "beta", {
             "display_name": "Betan League", "short_name": "Beta", "adjective": "Betan",
             "start": {"regions": ["B_R"], "leader": {"name": "Boris Alphid", "age": 35}, "denari": 500}})
-        # the only warning: the rebel garrison's units are not beta's own
-        self.assertEqual(len(plan.warnings), 1, plan.report())
-        self.assertIn("rebel spear", plan.warnings[0][1])
+        # the rebel garrison leaves, so no foreign units are left behind
+        self.assertEqual(plan.warnings, [], plan.report())
         plan.apply()
 
         mod = ModData(self.root)
@@ -217,12 +216,12 @@ class ToolTest(unittest.TestCase):
         s = Strat(mod.load(mod.campaign_file("test", "descr_strat.txt")))
         self.assertEqual(s.owners(), {"A_R": "alpha", "B_R": "beta"})
         beta = s.faction("beta")
-        # one army per town: the rebel garrison folds into the leader's army
+        # one army per town: the old garrison leaves, the leader holds the town
         self.assertEqual([c.name for c in beta.characters], ["Boris Alphid"])
         boris = beta.characters[0]
         self.assertEqual(boris.xy, (2, 2))
         units = [l.split("\t")[2] for l in s.lines[boris.start:boris.end] if l.startswith("unit")]
-        self.assertEqual(units, ["alpha general", "rebel spear"])
+        self.assertEqual(units, ["alpha general"])
         self.assertTrue(all("sub_faction" not in s.lines[c.start] for c in beta.characters))
         self.assertIn("beta", [n for _, n in s.playable["items"]])
         edu = open(mod.file("edu"), encoding="latin-1").read()
@@ -271,6 +270,17 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(mod.region_map("test").get(x, y), (0, 0, 255))
         armies = [c.xy for fb in s.factions for c in fb.characters if "army" in s.lines[c.start:c.end]]
         self.assertEqual(len(armies), len(set(armies)))
+
+    def test_kept_garrison_folds_into_the_leader(self):
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {
+            "start": {"regions": ["B_R"], "leader": {"name": "Boris"}, "garrison": "keep"}})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        chars = s.faction("beta").characters
+        self.assertEqual([c.name for c in chars], ["Boris"])
+        units = [l.split("\t")[2] for l in s.lines[chars[0].start:chars[0].end] if l.startswith("unit")]
+        self.assertEqual(units, ["alpha general", "rebel spear"])
+        self.assertTrue(any("rebel spear" in m for _, m in plan.warnings))
 
     def test_descriptions(self):
         mod = ModData(self.root)

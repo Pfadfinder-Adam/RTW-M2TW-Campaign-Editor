@@ -45,6 +45,28 @@ def unit_upkeep(edu):
     return out
 
 
+def template_pool(strat, template, upkeep):
+    """[[unit line, count]] of the template's own starting armies, bodyguards
+    of named characters left out, cheapest upkeep first."""
+    pool = {}
+    fb = strat.faction(template)
+    for c in fb.characters if fb else []:
+        units = _units(strat.lines[c.start:c.end])
+        if c.named and units:
+            units = units[1:]
+        for l in units:
+            name = unit_name(l)
+            pool.setdefault(name, [l, 0])
+            pool[name][1] += 1
+    return sorted(pool.values(), key=lambda e: (upkeep.get(unit_name(e[0]), 0), unit_name(e[0])))
+
+
+def cheap_garrison(strat, template, upkeep, n):
+    """n unit lines from the template pool: the cheapest few, one of each in turn."""
+    order = [e[0] for e in template_pool(strat, template, upkeep)][:3]
+    return [order[i % len(order)] for i in range(n)] if order else []
+
+
 def balanced_army(strat, template, new_towns, upkeep, garrison):
     """A leader's army sized like the other factions' start, not a copy of the
     template leader's (often among the strongest in the mod).
@@ -76,17 +98,7 @@ def balanced_army(strat, template, new_towns, upkeep, garrison):
     out = lead[:1]                                    # the bodyguard
     have_n = len(out) + len(garrison)
     have_c = cost(out) + cost(garrison)
-    pool = {}
-    fb = strat.faction(template)
-    for c in fb.characters if fb else []:
-        units = army(c)
-        if c.named and units:
-            units = units[1:]
-        for l in units:
-            name = unit_name(l)
-            pool.setdefault(name, [l, 0])
-            pool[name][1] += 1
-    order = sorted(pool.values(), key=lambda e: (upkeep.get(unit_name(e[0]), 0), unit_name(e[0])))
+    order = template_pool(strat, template, upkeep)
     while have_n < size_t and any(e[1] for e in order):
         for e in order:
             if not e[1] or have_n >= size_t:
@@ -253,6 +265,34 @@ def build_start(plan, campaign, start):
         joined[region] = [j for j in joined.get(region, []) if not _has_army(j[2])]
         return units
 
+    # The towns' old garrisons (rebel levies, often costly mercenaries) give
+    # way to the new faction's own units unless start['garrison'] == 'keep'.
+    replace = start.get("garrison", "replace") != "keep"
+    if replace:
+        edu = plan.files.get(mod.file("edu"))
+        upkeep_all = unit_upkeep(edu) if edu is not None else {}
+        for r in regions:
+            kept = []
+            for name, kind, chunk in joined.get(r, []):
+                units = _units(chunk)
+                if not _has_army(chunk) or not units:
+                    kept.append((name, kind, chunk))
+                    continue
+                if r == capital:
+                    plan.note(f, "%s: %s (%s) and his %d unit(s) leave - the leader's army holds the town"
+                              % (r, name, kind, len(units)))
+                    continue
+                fresh = cheap_garrison(s, t, upkeep_all, len(units))
+                if not fresh:
+                    kept.append((name, kind, chunk))
+                    continue
+                it = iter(fresh)
+                chunk = [next(it) if tokens(l)[:1] == ["unit"] else l for l in chunk]
+                plan.note(f, "%s: %s keeps the town with %d unit(s) of %s's own instead of the old garrison"
+                          % (r, name, len(fresh), t))
+                kept.append((name, kind, chunk))
+            joined[r] = kept
+
     # who stands where: the leader garrisons the capital, the heir the next
     # chosen town, or a free tile by the capital when there is only one town
     spots = {"leader": (capital, cap_xy)}
@@ -290,7 +330,8 @@ def build_start(plan, campaign, start):
             upkeep = unit_upkeep(edu) if edu is not None else {}
             units, size_t, cost_t = balanced_army(s, t, len(regions), upkeep, garrison)
             plan.note(f, "leader's army: bodyguard + %d unit(s) (target like similar factions: %d units, "
-                         "upkeep %d, the town's garrison included)" % (len(units) - 1, size_t, cost_t))
+                         "upkeep %d%s)" % (len(units) - 1, size_t, cost_t,
+                                           ", the town's garrison included" if garrison else ""))
         if region:
             units = merge(units, region, name)
         own.append(f.make(";;\t%s" % role))
