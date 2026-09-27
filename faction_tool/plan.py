@@ -56,7 +56,7 @@ class Plan:
 
     def changed_files(self):
         return [p for p, f in self.files.items() if f.dump() != self.originals[p]] + \
-            [p for p, d in self.binaries.items() if not os.path.exists(p) or open(p, "rb").read() != d] + \
+            [p for p, d in self.binaries.items() if not os.path.exists(p) or _read(p) != d] + \
             list(self.deletions)
 
     # ---- display names for the string tables ----
@@ -135,6 +135,11 @@ class Plan:
             elif path in self.deletions:
                 os.remove(path)
         return bdir
+
+
+def _read(path):
+    with open(path, "rb") as f:
+        return f.read()
 
 
 def backups(mod):

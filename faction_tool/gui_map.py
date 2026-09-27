@@ -192,8 +192,8 @@ class MapView(ttk.Frame):
         c.create_oval(sx - k, sy - r * 0.72 - k, sx + k, sy - r * 0.72 + k, outline="white", width=w, tags=tags)
         c.create_line(sx, sy - r * 0.58, sx, sy + r * 0.62, fill="white", width=w, tags=tags)
         c.create_line(sx - r * 0.35, sy - r * 0.35, sx + r * 0.35, sy - r * 0.35, fill="white", width=w, tags=tags)
-        a = r * 0.55
-        c.create_arc(sx - a, sy + r * 0.62 - a, sx + a, sy + r * 0.62 + a, start=200, extent=140,
+        a = r * 0.5                                   # the flukes: an arc that stays inside the circle
+        c.create_arc(sx - a, sy + r * 0.12 - a, sx + a, sy + r * 0.12 + a, start=200, extent=140,
                      style="arc", outline="white", width=w, tags=tags)
 
     def _hall(self, sx, sy, r, rgb, tags):

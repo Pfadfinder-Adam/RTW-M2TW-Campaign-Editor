@@ -455,10 +455,21 @@ class ToolTest(unittest.TestCase):
             "regions": ["B_R"], "leader": {"name": "Boris"}, "buildings": {"B_R": [["core_building", "hall"]]}}})
         s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
         st = s.faction("beta").settlements[0]
-        self.assertEqual(settlement_info(s.lines[st.start:st.end]), ("town", [("core_building", "hall")]))
+        # the governor's building needs a city: the town grows to one, population to the threshold
+        self.assertEqual(settlement_info(s.lines[st.start:st.end]), ("city", [("core_building", "hall")]))
+        self.assertIn("\tpopulation 6000", s.lines[st.start:st.end])
         warnings = " ".join(m for _, m in plan.warnings)
         self.assertIn("hall is not for alpha's faction list", warnings)
-        self.assertIn("hall needs a city, the settlement is a town", warnings)
+        self.assertNotIn("needs a city", warnings)
+        # a level set by hand wins, with a warning; population by hand too
+        plan = build(ModData(self.root), "test", "alpha", "beta", {"start": {
+            "regions": ["B_R"], "leader": {"name": "Boris"}, "buildings": {"B_R": [["core_building", "hall"]]},
+            "sizes": {"B_R": {"level": "large_town", "population": 3000}}}})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        st = s.faction("beta").settlements[0]
+        self.assertEqual(settlement_info(s.lines[st.start:st.end])[0], "large_town")
+        self.assertIn("\tpopulation 3000", s.lines[st.start:st.end])
+        self.assertIn("needs a city, the level is set to large_town", " ".join(m for _, m in plan.warnings))
         with self.assertRaises(ValueError):
             build(ModData(self.root), "test", "alpha", "beta", {"start": {
                 "regions": ["B_R"], "leader": {"name": "Boris"}, "buildings": {"B_R": [["core_building", "tower"]]}}})

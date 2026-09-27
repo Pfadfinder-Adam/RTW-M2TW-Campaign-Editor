@@ -93,7 +93,9 @@ class BuildingsEditor(ttk.Frame):
     def _row(self, b, levels):
         f = ttk.Frame(self.inner, relief="groove", padding=3)
         now = self.current.get(b.name)
-        shown = [l for l in levels if self.v_all.get() or ranks_ok(l, self.town_level) or l.name == now]
+        # the governor's chain shows every level: picking a bigger one grows the settlement
+        core = b.name.lower().startswith("core")
+        shown = [l for l in levels if core or self.v_all.get() or ranks_ok(l, self.town_level) or l.name == now]
         names = [NONE] + [l.name for l in shown]
         if now and now not in names:
             names.append(now)

@@ -132,14 +132,16 @@ def unit_name(line):
     return m[0].strip()
 
 
-def _with_buildings(plan, f, region, raw, picked):
+def _with_buildings(plan, f, region, raw, picked, size=None):
     """The settlement block with the buildings picked by hand, checked against
     export_descr_buildings: the level exists, the faction may build it, and the
     settlement is big enough."""
-    from .buildings import available, ranks_ok, read_buildings, set_buildings, settlement_info
+    from .buildings import available, ranks_ok, read_buildings, set_buildings, sized
     edb = plan.files.get(plan.mod.file("edb")) or (plan.mod.load(plan.mod.file("edb")) if plan.mod.file("edb") else None)
     known = {b.name: b for b in read_buildings(edb)} if edb is not None else {}
-    town_level, _ = settlement_info([l.rstrip("\r") for l in raw])
+    raw, town_level = sized(plan, f, region, raw, picked or [], size, known)
+    if picked is None:
+        return raw
     culture = plan.mod.culture(plan.template)
     for chain, level in picked:
         b = known.get(chain)
@@ -187,6 +189,7 @@ def build_start(plan, campaign, start):
         regions.insert(0, capital)
 
     picked_buildings = {r: [tuple(x) for x in v] for r, v in (start.get("buildings") or {}).items()}
+    sizes = start.get("sizes") or {}
     moved_blocks = []          # raw lines of settlement blocks
     joined = {}                # region -> raw character chunks that join with the town
     removals = []              # (start, end) ranges to delete
@@ -206,8 +209,8 @@ def build_start(plan, campaign, start):
             if st.owner == new:
                 continue
             block_raw = list(f.raw[st.start:st.end])
-        if r in picked_buildings:
-            block_raw = _with_buildings(plan, f, r, block_raw, picked_buildings[r])
+        if r in picked_buildings or r in sizes:
+            block_raw = _with_buildings(plan, f, r, block_raw, picked_buildings.get(r), sizes.get(r))
         moved_blocks.append(block_raw)
         if st.start is not None:
             removals.append((st.start, st.end))

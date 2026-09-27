@@ -8,7 +8,8 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from . import log
 from .build import build, template_display
-from .buildings import BuildingPictures, read_buildings, settlement_info
+from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need, population_of, rank,
+                        read_buildings, settlement_info)
 from .mapdata import CampaignMap, faction_colours
 from .moddata import ModData
 from .mapedit import orig as place_orig, place_problem
@@ -57,6 +58,7 @@ class App(tk.Tk):
         self.field = []                 # [{kind, name, age, units, xy}] armies/agents/fleets to place
         self.removed_existing = []      # Edit: [{name, from}] characters taken off the map
         self.place_moves = {}           # {('city' | 'port', region): (x, y)} towns and ports moved on the map
+        self.sizes = {}                 # {region: {'level', 'population'}} set by hand on the Buildings tab
         self._units_for, self._units_cache = None, []
         self.buildings_picked = {}      # region -> [(chain, level)] set by hand
         self._edb_for, self._edb, self._bpics = None, [], None
@@ -307,8 +309,25 @@ class App(tk.Tk):
         self.lb_build.pack(fill="both", expand=True)
         self.lb_build.bind("<<ListboxSelect>>", lambda e: self.load_buildings())
         ttk.Label(side, text="add towns on the Faction tab", foreground="#666").pack(anchor="w")
-        self.buildings_editor = BuildingsEditor(tab, self.pictures)
-        self.buildings_editor.pack(side="left", fill="both", expand=True)
+        right = ttk.Frame(tab)
+        right.pack(side="left", fill="both", expand=True)
+        bar = ttk.Frame(right, padding=(0, 0, 0, 6))
+        bar.pack(fill="x")
+        ttk.Label(bar, text="Settlement level").pack(side="left")
+        self.v_level = tk.StringVar()
+        self.cb_level = ttk.Combobox(bar, textvariable=self.v_level, values=SETTLEMENT_LEVELS, state="readonly",
+                                     width=12)
+        self.cb_level.pack(side="left", padx=(4, 12))
+        self.cb_level.bind("<<ComboboxSelected>>", lambda e: self.size_changed())
+        ttk.Label(bar, text="Population").pack(side="left")
+        self.v_pop = tk.StringVar()
+        e = ttk.Entry(bar, textvariable=self.v_pop, width=8)
+        e.pack(side="left", padx=(4, 12))
+        e.bind("<KeyRelease>", lambda ev: self.size_changed())
+        self.lbl_size = ttk.Label(bar, text="", foreground="#666")
+        self.lbl_size.pack(side="left")
+        self.buildings_editor = BuildingsEditor(right, self.pictures)
+        self.buildings_editor.pack(fill="both", expand=True)
 
     def load_buildings(self):
         sel = self.lb_build.curselection()
@@ -324,17 +343,58 @@ class App(tk.Tk):
             self._bpics = BuildingPictures(self.mod)
             self._edb_for = self.mod.data
         st = self.strat.settlement_of(region)
-        town_level, own = settlement_info(self.strat.lines[st.start:st.end]) if st else ("town", [])
+        town_level, own = settlement_info(self.strat.lines[st.start:st.end]) if st else ("village", [])
+        pop = population_of(self.strat.lines[st.start:st.end]) if st else 400
+        self._size_region, self._size_now = region, (town_level, pop)
+        size = self.sizes.get(region, {})
+        self.v_level.set(size.get("level") or town_level)
+        self.v_pop.set(str(size.get("population") if size.get("population") is not None else (pop or "")))
+        self._size_hint()
 
         def changed(picked):
             if picked is None:
                 self.buildings_picked.pop(region, None)
             else:
                 self.buildings_picked[region] = picked
+            # show what a bigger governor's building does to the settlement (unless set by hand)
+            if "level" not in self.sizes.get(region, {}):
+                need = core_need(picked or [], {b.name: b for b in self._edb})
+                level = need if need and rank(need) > rank(town_level) else town_level
+                self.v_level.set(level)
+                if level != town_level and pop is not None and pop < POP_MIN.get(level, 0) and \
+                        "population" not in self.sizes.get(region, {}):
+                    self.v_pop.set(str(POP_MIN[level]))
+                elif "population" not in self.sizes.get(region, {}):
+                    self.v_pop.set(str(pop or ""))
             self.refresh_chosen(keep_units_selection=True)
         self.buildings_editor.load(region, town_level, self._edb, own, self.buildings_picked.get(region),
                                    self.mod.culture(template), self.v["name"].get().strip().lower() or template,
                                    template, self._bpics, changed)
+
+    def size_changed(self):
+        """Level / population typed for the selected town; the same as now means unchanged."""
+        region = getattr(self, "_size_region", None)
+        if not region:
+            return
+        level_now, pop_now = self._size_now
+        level = self.v_level.get()
+        pop = self.v_pop.get().strip()
+        size = {}
+        if level and level != level_now:
+            size["level"] = level
+        if pop.isdigit() and int(pop) != pop_now:
+            size["population"] = int(pop)
+        if size:
+            self.sizes[region] = size
+        else:
+            self.sizes.pop(region, None)
+        self._size_hint()
+        self.refresh_chosen(keep_units_selection=True)
+
+    def _size_hint(self):
+        level_now, pop_now = self._size_now
+        self.lbl_size.configure(text="now: %s, %s people (a bigger governor's building grows it)"
+                                     % (level_now, pop_now))
 
     def tab_opened(self):
         """A town tab with nothing selected opens the capital."""
@@ -376,7 +436,7 @@ class App(tk.Tk):
                 pass
         self.b_create.configure(text="Apply changes" if edit else "Create faction")
         self.garrison_editor.auto_text = ("unchanged - the town keeps its garrison" if edit else None)
-        self.chosen, self.garrisons, self.buildings_picked = [], {}, {}
+        self.chosen, self.garrisons, self.buildings_picked, self.sizes = [], {}, {}, {}
         self.editing_now = None
         self.char_moves = {}
         self.field, self._placing = [], None
@@ -419,7 +479,7 @@ class App(tk.Tk):
         self.cb_give["values"] = [n for n, _ in self.mod.factions() if n != faction]
         self.v_give.set("slave")
         self.chosen = list(now.get("regions", []))
-        self.garrisons, self.buildings_picked = {}, {}
+        self.garrisons, self.buildings_picked, self.sizes = {}, {}, {}
         self.char_moves = {}
         self.field, self.removed_existing, self._placing = self._existing_field(faction), [], None
         self.refresh_field()
@@ -707,6 +767,7 @@ class App(tk.Tk):
         self.chosen = []
         self.garrisons = {}
         self.buildings_picked = {}
+        self.sizes = {}
         self.field, self._placing = [], None
         self.editing_now, self.char_moves = None, {}
         self.place_moves = {}
@@ -810,8 +871,11 @@ class App(tk.Tk):
         self.lb_build.delete(0, "end")
         for r in self.chosen:
             n = len(self.buildings_picked.get(r, []))
-            self.lb_build.insert("end", "%s%s" % (r, "  [%d buildings]" % n if r in self.buildings_picked
-                                                    else "  [its own]"))
+            size = self.sizes.get(r, {})
+            self.lb_build.insert("end", "%s%s%s" % (r, "  [%d buildings]" % n if r in self.buildings_picked
+                                                    else "  [its own]",
+                                                    "  " + " ".join(str(v) for v in (size.get("level"),
+                                                    size.get("population")) if v is not None) if size else ""))
         if keep_units_selection and bsel and bsel[0] < len(self.chosen):
             self.lb_build.selection_set(bsel[0])
         self.lb.delete(0, "end")
@@ -1048,7 +1112,8 @@ class App(tk.Tk):
                       "garrisons": {r: g for r, g in self.garrisons.items() if r in self.chosen},
                       "characters": [dict(c) for c in self.field],
                       "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()
-                                    if r in self.chosen}},
+                                    if r in self.chosen},
+                      "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen}},
             "places": self._places(),
         }
         return v["template"], v["name"].lower(), opts
@@ -1085,6 +1150,7 @@ class App(tk.Tk):
             "remove": list(self.removed_existing),
             "garrisons": dict(self.garrisons),
             "places": self._places(),
+            "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen},
             "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()}}
 
     def _places(self):

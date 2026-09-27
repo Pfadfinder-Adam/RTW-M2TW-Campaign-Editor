@@ -528,20 +528,24 @@ def _garrisons(plan, f, s, campaign):
 
 
 def _buildings(plan, f, s):
-    from .buildings import available, ranks_ok, read_buildings, set_buildings
+    from .buildings import available, ranks_ok, read_buildings, set_buildings, sized
     picked = plan.opts.get("buildings") or {}
-    if not picked:
+    sizes = plan.opts.get("sizes") or {}
+    if not picked and not sizes:
         return
     fb = s.faction(plan.new)
     known = {b.name: b for b in read_buildings(plan.mod.load(plan.mod.file("edb")))} if plan.mod.file("edb") else {}
     culture = plan.mod.culture(plan.new)
     by_region = {st.region: st for st in fb.settlements}
-    for region in sorted(picked, key=lambda r: -by_region[r].start if r in by_region else 0):
+    for region in sorted(set(picked) | set(sizes), key=lambda r: -by_region[r].start if r in by_region else 0):
         st = by_region.get(region)
         if st is None:
             raise ValueError("%s is not a town of %s" % (region, plan.new))
-        items = [tuple(x) for x in picked[region]]
-        level, _ = settlement_info(f.texts()[st.start:st.end])
+        items = [tuple(x) for x in picked.get(region, [])]
+        raw, level = sized(plan, f, region, f.raw[st.start:st.end], items, sizes.get(region), known)
+        f.raw[st.start:st.end] = raw
+        if region not in picked:
+            continue
         for chain, lv_name in items:
             b = known.get(chain)
             lv = b.level(lv_name) if b else None

@@ -106,6 +106,79 @@ def settlement_info(lines):
     return level, found
 
 
+# the population at which the game grows a settlement to each level (vanilla)
+POP_MIN = {"village": 0, "town": 400, "large_town": 2000, "city": 6000, "large_city": 12000, "huge_city": 24000}
+
+
+def population_of(lines):
+    for l in lines:
+        t = tokens(l)
+        if t[:1] == ["population"] and len(t) > 1:
+            try:
+                return int(t[1])
+            except ValueError:
+                return None
+    return None
+
+
+def core_need(picked, known):
+    """The settlement level the picked governor's building needs (the core
+    building chain's settlement_min), or None."""
+    for chain, name in picked:
+        b = known.get(chain)
+        lv = b.level(name) if b else None
+        if lv and chain.lower().startswith("core"):
+            return lv.settlement_min
+    return None
+
+
+def rank(level):
+    return SETTLEMENT_LEVELS.index(level) if level in SETTLEMENT_LEVELS else -1
+
+
+def resize(raw, make, level=None, population=None):
+    """The settlement block's raw lines with its own 'level' / 'population' lines
+    set (not those inside building entries)."""
+    out, depth = list(raw), 0
+    for i, l in enumerate(out):
+        code = strip_comment(l)
+        t = tokens(l)
+        if depth == 1 and t[:1] == ["level"] and level:
+            out[i] = make(re.sub(r"(level\s+)\S+", r"\g<1>" + level, l.rstrip("\r\n"), 1))
+        elif depth == 1 and t[:1] == ["population"] and population is not None:
+            out[i] = make(re.sub(r"(population\s+)\S+", r"\g<1>%d" % population, l.rstrip("\r\n"), 1))
+        depth += code.count("{") - code.count("}")
+    return out
+
+
+def sized(plan, f, region, raw, picked, size, known):
+    """raw with the settlement level and population from size = {'level',
+    'population'} (either may be missing); without a level set by hand, a
+    governor's building that needs a bigger settlement raises the level, and
+    the population rises to that level's threshold."""
+    texts = [l.rstrip("\r") for l in raw]
+    level, _ = settlement_info(texts)
+    pop = population_of(texts)
+    want, want_pop = (size or {}).get("level"), (size or {}).get("population")
+    need = core_need(picked or [], known)
+    new = want or level
+    if need and rank(need) > rank(new):
+        if want:
+            plan.warn(f, "%s: the governor's building needs a %s, the level is set to %s" % (region, need, want))
+        else:
+            new = need
+            plan.note(f, "%s: %s -> %s for its governor's building" % (region, level, new))
+    if want and want != level:
+        plan.note(f, "%s: level %s -> %s" % (region, level, want))
+    if want_pop is None and new != level and pop is not None and pop < POP_MIN.get(new, 0):
+        want_pop = POP_MIN[new]
+    if want_pop is not None and want_pop != pop:
+        plan.note(f, "%s: population %s -> %d" % (region, pop, want_pop))
+    if new == level and want_pop in (None, pop):
+        return raw, level
+    return resize(raw, f.make, new if new != level else None, want_pop), new
+
+
 def set_buildings(raw, buildings, make):
     """The settlement block's raw lines with its building { } entries replaced."""
     out, i = [], 0
