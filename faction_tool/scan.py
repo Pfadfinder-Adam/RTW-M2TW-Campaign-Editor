@@ -352,3 +352,52 @@ class Scan:
 
 def scan(mod, faction, campaign=None, progress=None):
     return Scan(mod, faction, campaign).run(progress)
+
+
+# ---------------------------------------------------------------------------
+# The game's own files: a manifest of a clean install, to tell game files
+# (untouched or changed) from files a mod or the user added
+# ---------------------------------------------------------------------------
+MANIFEST_NAME = "rtw_manifest.json.gz"
+
+
+def make_manifest(game_root, out_path=None, progress=None):
+    """Walk the game folder - not the mod folders in it (a folder holding
+    data/descr_sm_factions.txt of its own) and not our backups - and write
+    {path: [size, md5]} gzipped. Returns (out_path, file count, mods skipped)."""
+    import gzip
+    import hashlib
+    import json
+    game_root = os.path.abspath(game_root)
+    files, skipped = {}, []
+    for dirpath, dirnames, filenames in os.walk(game_root):
+        keep = []
+        for d in sorted(dirnames):
+            full = os.path.join(dirpath, d)
+            if d == BACKUP_DIR:
+                continue
+            if dirpath == game_root and os.path.isfile(os.path.join(full, "data", "descr_sm_factions.txt")):
+                skipped.append(d)
+                continue
+            keep.append(d)
+        dirnames[:] = keep
+        for n in sorted(filenames):
+            p = os.path.join(dirpath, n)
+            rel = os.path.relpath(p, game_root).replace("\\", "/")
+            if rel == MANIFEST_NAME:
+                continue
+            h = hashlib.md5()
+            try:
+                with open(p, "rb") as f:
+                    for chunk in iter(lambda: f.read(1 << 20), b""):
+                        h.update(chunk)
+                files[rel] = [os.path.getsize(p), h.hexdigest()]
+            except OSError:
+                continue
+            if progress and len(files) % 200 == 0:
+                progress(len(files))
+    out_path = out_path or os.path.join(game_root, MANIFEST_NAME)
+    with gzip.open(out_path, "wt", encoding="utf-8") as f:
+        json.dump({"format": 1, "root": os.path.basename(game_root), "mods_skipped": skipped,
+                   "files": files}, f)
+    return out_path, len(files), skipped

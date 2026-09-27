@@ -16,7 +16,7 @@ from .gui_buildings import BuildingsEditor
 from .gui_garrison import GarrisonEditor, Pictures
 from .gui_map import MapView
 from .plan import backups, restore
-from .scan import IGNORE_HELP, ignore_path, scan as scan_mod
+from .scan import IGNORE_HELP, ignore_path, make_manifest, scan as scan_mod
 from .start import balanced_army, unit_name
 from .strat import Strat
 from .textio import tokens
@@ -231,6 +231,7 @@ class App(tk.Tk):
         self.b_create.pack(side="left", padx=6)
         ttk.Button(bar, text="Restore a backup...", command=self.restore).pack(side="right")
         ttk.Button(bar, text="Scan mod", command=self.scan).pack(side="right", padx=6)
+        ttk.Button(bar, text="Game manifest...", command=self.game_manifest).pack(side="right")
         self.status = tk.StringVar(value="Choose the mod's data folder (for example ...\\HLR\\data) and press Load.")
         ttk.Label(self, textvariable=self.status, anchor="w").pack(fill="x", padx=6, pady=(0, 6))
 
@@ -885,6 +886,42 @@ class App(tk.Tk):
             self.status.set("Scan done.")
             self.show_text("Scan: %s - nothing written" % faction, result["text"],
                            extra=[("Ignore list...", self.edit_ignore), ("Scan again", self.scan)])
+        wait()
+
+    def game_manifest(self):
+        """Fingerprint every file of the game (not of its mods) into rtw_manifest.json.gz."""
+        start = game_root_of(self.mod.data)[0] if self.mod else None
+        root = filedialog.askdirectory(title="The game folder (the one with RomeTW.exe / REX.exe)",
+                                       initialdir=start or "")
+        if not root:
+            return
+        if not messagebox.askyesno(APP, "Fingerprint every game file under\n%s\n\nMod folders in it are left out. "
+                                        "For a clean list, let Steam 'Verify integrity of game files' first.\n"
+                                        "This reads every file once and can take a minute or two." % root):
+            return
+        result = {}
+
+        def work():
+            try:
+                result["out"] = make_manifest(root, progress=lambda n: result.__setitem__("n", n))
+            except Exception as e:
+                result["error"] = str(e)
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+
+        def wait():
+            if th.is_alive():
+                self.status.set("Fingerprinting the game... %d files" % result.get("n", 0))
+                self.after(300, wait)
+                return
+            if "error" in result:
+                self.status.set("")
+                messagebox.showerror(APP, result["error"])
+                return
+            out, n, skipped = result["out"]
+            self.status.set("Wrote %s" % out)
+            messagebox.showinfo(APP, "Wrote %s\n\n%d game file(s). Mod folders left out: %s" % (
+                out, n, ", ".join(skipped) or "none"))
         wait()
 
     def edit_ignore(self):

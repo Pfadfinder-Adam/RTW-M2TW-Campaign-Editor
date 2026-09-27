@@ -47,7 +47,7 @@ EXAMPLE = {
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="faction_tool", description="Add a new faction to a Rome: Total War mod.")
-    ap.add_argument("command", choices=["new", "list", "towns", "names", "restore", "example", "scan", "newmod", "slim"])
+    ap.add_argument("command", choices=["new", "list", "towns", "names", "restore", "example", "scan", "newmod", "slim", "manifest"])
     ap.add_argument("arg", nargs="?")
     ap.add_argument("--data", help="the mod's data folder (or the mod folder)")
     ap.add_argument("--campaign", default="imperial_campaign")
@@ -58,6 +58,11 @@ def main(argv=None):
 
     if a.command == "example":
         print(json.dumps(EXAMPLE, indent=2))
+        return 0
+    if a.command == "manifest":
+        from .scan import make_manifest
+        out, n, skipped = make_manifest(a.arg or ".", progress=lambda k: print("  %d files..." % k, end="\r"))
+        print("\nwrote %s: %d game file(s); mod folders left out: %s" % (out, n, ", ".join(skipped) or "none"))
         return 0
     if not a.data:
         ap.error("--data is required")
