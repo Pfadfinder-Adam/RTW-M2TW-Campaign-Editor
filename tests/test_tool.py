@@ -559,6 +559,21 @@ class ToolTest(unittest.TestCase):
         cd = [p for p in mod.text_files() if p.endswith("campaign_descriptions.txt")][0]
         self.assertEqual(p2.files[cd].texts()[:2], ["{TEST_ALPHA_DESCR}\t\tFresh", "{TEST_ALPHA_TITLE}\t\tA"])
 
+    def test_edit_moves_characters(self):
+        from faction_tool.edit import edit
+        mod = ModData(self.root)
+        # Aaron (alpha's army) from his town A_R (1, 1) to the land tile (0, 0)
+        self.assertIsNone(mod.tile_problem("test", (0, 0), "named character", True))
+        self.assertEqual(mod.tile_problem("test", (2, 2), "named character", True, {(2, 2)}),
+                         "another army stands there (a town holds one army)")
+        self.assertEqual(mod.tile_problem("test", (0, 0), "admiral", True), "a fleet needs sea")
+        plan = edit(mod, "test", "alpha", {"moves": [{"name": "Aaron Alphid", "from": (1, 1), "to": (0, 0)}]})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        self.assertEqual(s.faction("alpha").characters[0].xy, (0, 0))
+        with self.assertRaises(ValueError):             # Grog's army holds Btown
+            edit(ModData(self.root), "test", "alpha",
+                 {"moves": [{"name": "Aaron Alphid", "from": (1, 1), "to": (2, 2)}]})
+
     def test_campaign_screen_key_under_a_front_end_name(self):
         # the template's description sits under a front end name (like GAUL for gauls)
         from faction_tool import clone

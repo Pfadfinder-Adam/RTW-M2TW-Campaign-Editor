@@ -27,10 +27,12 @@ class MapView(ttk.Frame):
         ttk.Checkbutton(bar, text="Town names", variable=self.v_names, command=self.render).pack(side="left", padx=8)
         self.v_ports = tk.BooleanVar(value=True)
         ttk.Checkbutton(bar, text="Ports", variable=self.v_ports, command=self.render).pack(side="left")
+        self.v_chars = tk.BooleanVar(value=True)
+        ttk.Checkbutton(bar, text="Characters", variable=self.v_chars, command=self.render).pack(side="left", padx=8)
         ttk.Button(bar, text="Fit", width=5, command=self.fit).pack(side="right")
         ttk.Button(bar, text="+", width=3, command=lambda: self.zoom_by(1)).pack(side="right", padx=2)
         ttk.Button(bar, text="-", width=3, command=lambda: self.zoom_by(-1)).pack(side="right")
-        ttk.Label(bar, text="wheel: zoom   drag: move   click a town: add / remove it",
+        ttk.Label(bar, text="wheel: zoom   drag: move the map, or your own characters   click a town: add / remove it",
                   foreground="#666").pack(side="right", padx=12)
         self.canvas = tk.Canvas(self, background="#1d2b3a", highlightthickness=0, cursor="crosshair")
         self.canvas.pack(fill="both", expand=True)
@@ -40,6 +42,10 @@ class MapView(ttk.Frame):
         self._photo = None
         self._pending = None
         self._drag = None
+        self._cdrag = None
+        self.chars, self.draggable, self.symbols = [], set(), {}
+        self.on_char_move = self.check_tile = None
+        self._symimg = {}
         c = self.canvas
         c.bind("<Configure>", lambda e: self.render())
         c.bind("<MouseWheel>", self._wheel)
@@ -51,10 +57,17 @@ class MapView(ttk.Frame):
         c.bind("<Motion>", self._hover)
 
     # ---- data ----
-    def load(self, cmap, owners, colours, faction=None, chosen=(), on_city=None):
+    def load(self, cmap, owners, colours, faction=None, chosen=(), on_city=None, chars=(), draggable=(),
+             on_char_move=None, check_tile=None, symbols=None):
+        """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
+        check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
+        symbols: {faction: path of its small symbol picture}."""
         first = self.cmap is None or self.cmap is not cmap
         self.cmap, self.owners, self.colours = cmap, dict(owners), colours
         self.faction, self.chosen, self.on_city = faction, set(chosen), on_city
+        self.chars, self.draggable = list(chars), set(draggable)
+        self.on_char_move, self.check_tile = on_char_move, check_tile
+        self.symbols = symbols or {}
         if first:
             self.fit()
         else:
@@ -151,6 +164,83 @@ class MapView(ttk.Frame):
                 name = cm.info.get(region, {}).get("settlement", region)
                 c.create_text(sx + r + 3, sy + 1, text=name, anchor="w", fill="black", font=font)   # shadow
                 c.create_text(sx + r + 2, sy, text=name, anchor="w", fill="white", font=font)
+        if self.v_chars.get() and self.z >= 2:
+            self._characters(cw, ch, size)
+
+    # ---- characters ----
+    AGENT_LETTER = {"spy": "S", "diplomat": "D", "assassin": "A", "merchant": "M", "priest": "P"}
+
+    def _characters(self, cw, ch, size):
+        c, cm = self.canvas, self.cmap
+        city_tiles = set(cm.cities.values())
+        seen = {}
+        for ch_ in self.chars:
+            x, y = ch_["xy"]
+            sx, sy = self.to_screen(x, y)
+            if not (-30 < sx < cw + 30 and -30 < sy < ch + 30):
+                continue
+            n = seen.get((x, y), 0)
+            seen[(x, y)] = n + 1
+            if (x, y) in city_tiles:                   # beside the town, not on it
+                sx, sy = sx + size * 0.7, sy - size * 0.7
+            sx += n * size * 0.5
+            self._draw_char(ch_, sx, sy, max(size, 6))
+
+    def _draw_char(self, ch_, sx, sy, size):
+        c = self.canvas
+        rgb = REBELS if ch_["faction"] == "slave" else self.colours.get(ch_["faction"], REBELS)
+        fill = "#%02x%02x%02x" % rgb
+        mine = ch_["id"] in self.draggable
+        edge = "#ffd400" if mine else "black"
+        tags = ("char", "char:%s" % ch_["id"])
+        k = ch_["kind"]
+        if k in self.AGENT_LETTER:
+            r = size * 0.45
+            c.create_oval(sx - r, sy - r, sx + r, sy + r, fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
+            if size >= 8:
+                c.create_text(sx, sy, text=self.AGENT_LETTER[k], fill="white", font=("", max(6, int(size * 0.5)), "bold"),
+                              tags=tags)
+        elif k == "admiral":
+            w = size * 0.7
+            c.create_polygon(sx - w, sy - w * 0.1, sx + w, sy - w * 0.1, sx + w * 0.6, sy + w * 0.5,
+                             sx - w * 0.6, sy + w * 0.5, fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
+            c.create_line(sx, sy - w * 0.1, sx, sy - w, fill=edge, width=2, tags=tags)
+        elif ch_["army"]:
+            h = max(size * 1.1, min(self.z * 1.6, 30))        # a readable flag when zoomed in
+            c.create_line(sx, sy + h * 0.5, sx, sy - h * 0.6, fill="black", width=2, tags=tags)
+            img = self._symbol(ch_["faction"], int(h)) if self.z >= 6 else None
+            if img:
+                c.create_image(sx + 1, sy - h * 0.6, anchor="nw", image=img, tags=tags)
+            else:
+                c.create_polygon(sx, sy - h * 0.6, sx + h * 0.8, sy - h * 0.35, sx, sy - h * 0.1,
+                                 fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
+            if mine:
+                c.create_rectangle(sx - 2, sy + h * 0.5 - 2, sx + 2, sy + h * 0.5 + 2, fill="#ffd400", outline="",
+                                   tags=tags)
+        else:                                          # a named character without an army
+            r = size * 0.4
+            c.create_polygon(sx, sy - r, sx + r, sy, sx, sy + r, sx - r, sy, fill=fill, outline=edge, tags=tags)
+
+    def _symbol(self, faction, px):
+        path = self.symbols.get(faction)
+        if not path:
+            return None
+        key = (faction, px)
+        if key not in self._symimg:
+            try:
+                im = Image.open(path).convert("RGBA")
+                im.thumbnail((px, px))
+                self._symimg[key] = ImageTk.PhotoImage(im)
+            except Exception:
+                self._symimg[key] = None
+        return self._symimg[key]
+
+    def _char_under(self, sx, sy):
+        for item in reversed(self.canvas.find_overlapping(sx - 3, sy - 3, sx + 3, sy + 3)):
+            for tag in self.canvas.gettags(item):
+                if tag.startswith("char:"):
+                    return tag[5:]
+        return None
 
     # ---- mouse ----
     def _wheel(self, e, direction=None):
@@ -158,9 +248,26 @@ class MapView(ttk.Frame):
         self.zoom_by(d, (e.x, e.y))
 
     def _press(self, e):
+        cid = self._char_under(e.x, e.y) if self.cmap else None
+        if cid is not None and cid in self.draggable:
+            self._cdrag = (cid, e.x, e.y)
+            return
         self._drag = (e.x, e.y, self.ox, self.oy, False)
 
     def _move(self, e):
+        if self._cdrag:
+            cid, lx, ly = self._cdrag
+            self.canvas.move("char:" + cid, e.x - lx, e.y - ly)
+            self._cdrag = (cid, e.x, e.y)
+            x, y = self.to_tile(e.x, e.y)
+            why = self.check_tile(cid, (x, y)) if self.check_tile else None
+            self.canvas.delete("target")
+            ax, ay = self.to_screen(x, y)
+            r = max(self.z / 2, 4)
+            self.canvas.create_rectangle(ax - r, ay - r, ax + r, ay + r, outline="#ff3030" if why else "#30ff60",
+                                         width=2, tags=("target",))
+            self.readout.configure(text=("tile %d, %d: " % (x, y)) + (why or "fine - drop it here"))
+            return
         if not self._drag or not self.cmap:
             return
         x0, y0, ox, oy, _ = self._drag
@@ -170,6 +277,17 @@ class MapView(ttk.Frame):
             self.render()
 
     def _release(self, e):
+        if self._cdrag:
+            cid = self._cdrag[0]
+            self._cdrag = None
+            xy = self.to_tile(e.x, e.y)
+            why = self.check_tile(cid, xy) if self.check_tile else None
+            if why:
+                self.readout.configure(text="not moved - " + why)
+            elif self.on_char_move:
+                self.on_char_move(cid, xy)
+            self.render()
+            return
         moved = self._drag and self._drag[4]
         self._drag = None
         if moved or not self.cmap:
@@ -182,6 +300,14 @@ class MapView(ttk.Frame):
                     return
 
     def _hover(self, e):
-        if self.cmap:
+        if self.cmap and not self._cdrag:
+            cid = self._char_under(e.x, e.y)
+            ch_ = next((c for c in self.chars if c["id"] == cid), None) if cid else None
+            if ch_:
+                self.readout.configure(text="%s - %s of %s%s%s" % (
+                    ch_["name"], ch_["kind"], ch_["faction"],
+                    ", %d unit(s)" % ch_["units"] if ch_["army"] else "",
+                    "   (drag to move)" if cid in self.draggable else ""))
+                return
             x, y = self.to_tile(e.x, e.y)
             self.readout.configure(text=self.cmap.describe(x, y, self.owners))

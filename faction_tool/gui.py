@@ -47,6 +47,7 @@ class App(tk.Tk):
         self.pictures = Pictures()
         self.colours = {"primary": None, "secondary": None}
         self.editing_now = None
+        self.char_moves = {}            # "faction:index" -> (x, y) dragged on the map (Edit)
         self._build()
 
     # ------------------------------------------------------------------ layout
@@ -343,6 +344,7 @@ class App(tk.Tk):
         self.garrison_editor.auto_text = ("unchanged - the town keeps its garrison" if edit else None)
         self.chosen, self.garrisons, self.buildings_picked = [], {}, {}
         self.editing_now = None
+        self.char_moves = {}
         self.refresh_chosen()
         if edit and self.v["template"].get():
             self.template_changed()
@@ -382,6 +384,7 @@ class App(tk.Tk):
         self.v_give.set("slave")
         self.chosen = list(now.get("regions", []))
         self.garrisons, self.buildings_picked = {}, {}
+        self.char_moves = {}
         if self.chosen:
             self.v["capital"].set(self.chosen[0])
         self.refresh_chosen()
@@ -418,7 +421,47 @@ class App(tk.Tk):
             for r in self.editing_now.get("regions", []):
                 if r not in self.chosen:
                     owners[r] = self.v_give.get() or "slave"
-        self.map_view.load(self._cmap, owners, colours, me, self.chosen, on_city=self.map_city)
+        chars, armies_at = [], set()
+        for fb in self.strat.factions:
+            for i, c in enumerate(fb.characters):
+                if not c.xy:
+                    continue
+                lines = self.strat.lines[c.start:c.end]
+                army = any(tokens(l)[:1] == ["army"] for l in lines)
+                cid = "%s:%d" % (fb.name, i)
+                xy = self.char_moves.get(cid, c.xy)
+                chars.append({"id": cid, "faction": fb.name, "name": c.name, "kind": c.kind, "xy": xy,
+                              "army": army, "units": sum(1 for l in lines if tokens(l)[:1] == ["unit"]),
+                              "from": c.xy})
+                if army:
+                    armies_at.add(xy)
+        mine = [ch["id"] for ch in chars if self.editing() and ch["faction"] == me]
+        self._map_chars = {ch["id"]: ch for ch in chars}
+
+        def check(cid, xy):
+            ch = self._map_chars[cid]
+            return self.mod.tile_problem(self.v_campaign.get(), xy, ch["kind"], ch["army"],
+                                         armies_at - {ch["xy"]})
+
+        def moved(cid, xy):
+            ch = self._map_chars[cid]
+            if xy == ch["from"]:
+                self.char_moves.pop(cid, None)
+            else:
+                self.char_moves[cid] = xy
+            self.status.set("%s: %d character(s) moved on the map - Preview, then Apply changes."
+                            % (ch["name"], len(self.char_moves)))
+            self.show_map()
+        symbols = {}
+        folder = os.path.join(self.mod.data, "menu", "symbols", "FE_buttons_24")
+        if os.path.isdir(folder):
+            for n in os.listdir(folder):
+                low = n.lower()
+                if low.startswith("symbol24_") and low.endswith(".tga") and "_grey" not in low and \
+                        "_roll" not in low and "_select" not in low:
+                    symbols[low[9:-4]] = os.path.join(folder, n)
+        self.map_view.load(self._cmap, owners, colours, me, self.chosen, on_city=self.map_city, chars=chars,
+                           draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols)
 
     def map_city(self, region):
         """A click on a town on the map: add it to Chosen, or take it out."""
@@ -745,6 +788,8 @@ class App(tk.Tk):
             "give": {r: self.v_give.get() or "slave" for r in had if r not in self.chosen},
             "capital": v["capital"] if self.chosen and v["capital"] in self.chosen else None,
             "leader": person("leader"), "heir": person("heir"),
+            "moves": [{"name": self._map_chars[cid]["name"], "from": self._map_chars[cid]["from"], "to": xy}
+                      for cid, xy in self.char_moves.items() if cid in getattr(self, "_map_chars", {})],
             "garrisons": dict(self.garrisons),
             "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()}}
 

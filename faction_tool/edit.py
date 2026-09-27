@@ -215,6 +215,8 @@ def _strat(plan, campaign, now):
                 break
     if o.get("playable") is not None and bool(o["playable"]) != now.get("playable"):
         _move_list(plan, f, fac, bool(o["playable"]))
+    if o.get("moves"):
+        _moves(plan, f, campaign)
     if o.get("take") or o.get("give"):
         _towns(plan, f, campaign)
     _people(plan, f, now)
@@ -308,6 +310,28 @@ def _towns(plan, f, campaign):
     left = [st.region for st in Strat(f).faction(fac).settlements]
     if not left:
         plan.warn(f, "%s is left with no town - it starts as a horde or dies on turn 1" % fac)
+
+
+def _moves(plan, f, campaign):
+    """opts['moves'] = [{'name', 'from': (x, y), 'to': (x, y)}]: characters of
+    the faction moved on the map, checked like the window checks them."""
+    s = Strat(f)
+    fb = s.faction(plan.new)
+    armies_at = {c.xy for x in s.factions for c in x.characters if c.xy and _has_army(s.lines[c.start:c.end])}
+    for m in plan.opts["moves"]:
+        src, dst = tuple(m["from"]), tuple(m["to"])
+        c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
+        if c is None:
+            raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], plan.new))
+        army = _has_army(s.lines[c.start:c.end])
+        why = plan.mod.tile_problem(campaign, dst, c.kind, army, armies_at - {src})
+        if why:
+            raise ValueError("%s cannot go to %d, %d: %s" % (c.name, dst[0], dst[1], why))
+        if army:
+            armies_at.discard(src)
+            armies_at.add(dst)
+        f.set(c.start, RE_XY.sub("x %d, y %d" % dst, f.text(c.start), 1))
+        plan.note(f, "%s moved from %d, %d to %d, %d" % (c.name, src[0], src[1], dst[0], dst[1]))
 
 
 def _people(plan, f, now):

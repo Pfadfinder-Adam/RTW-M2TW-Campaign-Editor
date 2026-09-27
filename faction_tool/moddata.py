@@ -290,3 +290,36 @@ class ModData:
                 return False
             return slope(p) <= MAX_SLOPE
         return ok, slope
+
+    def is_sea(self, campaign, xy):
+        """Sea: a map_regions pixel that is no region, city or port."""
+        img = self.region_map(campaign)
+        x, y = xy
+        if not (0 <= x < img.width and 0 <= y < img.height):
+            return False
+        px = img.get(x, y)
+        if px in ((0, 0, 0), (255, 255, 255)):
+            return False
+        return px not in {v["colour"] for v in self.regions(campaign).values()}
+
+    def tile_problem(self, campaign, xy, kind, army, armies_at=()):
+        """Why a character of this kind may not start on tile xy, or None.
+        Admirals need sea; everyone else land. An army needs a tile it may
+        stand on (or a town) that no other army holds."""
+        img = self.region_map(campaign)
+        x, y = xy
+        if not (0 <= x < img.width and 0 <= y < img.height):
+            return "off the map"
+        sea = self.is_sea(campaign, xy)
+        if kind == "admiral":
+            return None if sea else "a fleet needs sea"
+        if sea:
+            return "that is sea"
+        town = xy in set(self.city_tiles(campaign).values())
+        if army and xy in armies_at:
+            return "another army stands there" + (" (a town holds one army)" if town else "")
+        if army and not town:
+            ok, _ = self._standable(campaign)
+            if not ok(xy):
+                return "an army cannot stand here (river, ford, steep slope or mountain)"
+        return None
