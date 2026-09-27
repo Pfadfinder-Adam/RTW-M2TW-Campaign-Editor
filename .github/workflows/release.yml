@@ -1,0 +1,32 @@
+name: release
+
+# Started by hand (Actions -> release -> Run workflow, or the API): tests, builds the
+# Windows exe and publishes a GitHub release v<version> with it, the notes from
+# CHANGELOG.md. The tag is made by GitHub on the commit the run is for.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the v, like 0.1.0"
+        required: true
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest discover -s tests
+      - run: pip install pyinstaller pillow
+      - run: pyinstaller --onefile --windowed --name RTW-Faction-Tool rtw_faction_tool.py
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: RTW Faction Tool ${{ inputs.version }}
+          body_path: CHANGELOG.md
+          files: dist/RTW-Faction-Tool.exe
