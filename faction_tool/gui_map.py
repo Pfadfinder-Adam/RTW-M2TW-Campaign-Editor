@@ -220,7 +220,7 @@ class MapView(ttk.Frame):
             {self.places.get(("port", r), xy) for r, xy in cm.ports.items()}
         tile = max(self.z * 0.9, 6)                    # a character fills its tile...
         seen = {}
-        for ch_ in self.chars:
+        for ch_ in sorted(self.chars, key=lambda c: not c["army"]):     # the garrison first
             x, y = ch_["xy"]
             sx, sy = self.to_screen(x, y)
             if not (-30 < sx < cw + 30 and -30 < sy < ch + 30):
@@ -228,10 +228,11 @@ class MapView(ttk.Frame):
             n = seen.get((x, y), 0)
             seen[(x, y)] = n + 1
             one = tile
-            if (x, y) in busy:                         # ...or sits small on the town's / port's corner
-                one = max(tile * 0.6, 6)
-                sx, sy = sx + tile * 0.5, sy - tile * 0.5
-            sx += n * one * 0.5
+            if (x, y) in busy:                         # ...or stands small beside the town / port, to its
+                one = max(tile * 0.6, 6)               # left (the name is on the right), in a row
+                sx = sx - tile * 0.5 - one * 0.45 - n * one * 0.75
+            else:
+                sx += n * one * 0.5
             self._draw_char(ch_, sx, sy, one)
 
     def _draw_char(self, ch_, sx, sy, size):
@@ -456,4 +457,10 @@ class MapView(ttk.Frame):
                     "   (drag to move)" if cid in self.draggable else ""))
                 return
             x, y = self.to_tile(e.x, e.y)
-            self.readout.configure(text=self.cmap.describe(x, y, self.owners))
+            text = self.cmap.describe(x, y, self.owners)
+            here = [c for c in self.chars if tuple(c["xy"]) == (x, y)]
+            if here:                                   # who is in the town: army first, then agents
+                here.sort(key=lambda c: not c["army"])
+                text += "   in it: " + ", ".join("%s (%s%s)" % (c["name"], c["kind"], ", %d units" % c["units"]
+                                                             if c["army"] else "") for c in here)
+            self.readout.configure(text=text)
