@@ -1,5 +1,5 @@
-"""The Map tab: the campaign map as a full-window minimap - the game's own
-radar picture, the political colours over it on demand, cities and ports.
+"""The Map tab: the campaign map as a full-window minimap - a
+terrain picture, the political colours over it on demand, cities and ports.
 Wheel zooms at the mouse, dragging pans, clicking a city picks it."""
 
 import tkinter as tk
@@ -9,7 +9,7 @@ from PIL import Image, ImageTk
 
 from .mapdata import REBELS
 
-ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24)       # screen pixels per tile
+ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels per tile
 
 
 class MapView(ttk.Frame):
@@ -131,7 +131,7 @@ class MapView(ttk.Frame):
         vw, vh = cw / self.z, ch / self.z
         box = (self.ox, self.oy, self.ox + vw, self.oy + vh)
         bg = self.cmap.background()                                   # 2 px per tile
-        pic = bg.crop(tuple(int(round(v * 2)) for v in box)).resize((cw, ch), Image.BILINEAR)
+        pic = bg.crop(tuple(int(round(v * 2)) for v in box)).resize((cw, ch), Image.BILINEAR if self.z < 12 else Image.NEAREST)  # sharp tiles up close
         if self.v_pol.get():
             pol = self.cmap.political(self.owners, self.colours, self.faction)
             ov = pol.crop(tuple(int(round(v)) for v in box)).resize((cw, ch), Image.NEAREST)

@@ -1,5 +1,5 @@
-"""The campaign map as pictures: the background (the game's own radar map, or
-one drawn from the ground types and heights), the political layer, cities and
+"""The campaign map as pictures: the background (drawn from the
+ground types, tile by tile), the political layer, cities and
 ports. Tile (x, y) is descr_strat's tile: x to the right, y up from the bottom.
 Needs Pillow."""
 
@@ -19,7 +19,7 @@ GROUND = {
     (128, 0, 0): "deep sea", (196, 0, 0): "shallow sea",
 }
 SEA = {(64, 0, 0), (128, 0, 0), (196, 0, 0)}
-# a drawn background when the campaign has no radar map
+# the background: a colour per ground type of map_ground_types.tga
 GROUND_LOOK = {
     (101, 124, 0): (170, 160, 95), (96, 160, 64): (120, 150, 80), (0, 128, 0): (80, 130, 60),
     (0, 0, 0): (200, 180, 130), (0, 64, 0): (45, 90, 45), (0, 128, 128): (70, 115, 70),
@@ -105,19 +105,11 @@ class CampaignMap:
 
     # ---- pictures (top-down, as Pillow draws them) ----
     def background(self):
-        """The game's radar map when the campaign has one (2 px per tile), else a
-        picture drawn from map_ground_types.tga. Returned at 2 px per tile."""
+        """The map drawn from map_ground_types.tga - each tile's terrain type, the
+        information that matters here (the game's painted radar map is left alone
+        by choice). Returned at 2 px per tile."""
         if self._background is None:
-            path = self.mod.campaign_file(self.campaign, "radar_map1.tga")
-            im = None
-            if path:
-                try:
-                    im = Image.open(path).convert("RGB")
-                except Exception:
-                    im = None
-            if im is None or abs(im.width - 2 * self.w) > 2:
-                im = self._drawn()
-            self._background = im.resize((2 * self.w, 2 * self.h), Image.BILINEAR)
+            self._background = self._drawn().resize((2 * self.w, 2 * self.h), Image.BILINEAR)
         return self._background
 
     def _drawn(self):
