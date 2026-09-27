@@ -212,7 +212,12 @@ class ToolTest(unittest.TestCase):
         s = Strat(mod.load(mod.campaign_file("test", "descr_strat.txt")))
         self.assertEqual(s.owners(), {"A_R": "alpha", "B_R": "beta"})
         beta = s.faction("beta")
-        self.assertEqual(sorted(c.name for c in beta.characters), ["Boris Alphid", "Grog"])
+        # one army per town: the rebel garrison folds into the leader's army
+        self.assertEqual([c.name for c in beta.characters], ["Boris Alphid"])
+        boris = beta.characters[0]
+        self.assertEqual(boris.xy, (2, 2))
+        units = [l.split("\t")[2] for l in s.lines[boris.start:boris.end] if l.startswith("unit")]
+        self.assertEqual(units, ["alpha general", "rebel spear"])
         self.assertTrue(all("sub_faction" not in s.lines[c.start] for c in beta.characters))
         self.assertIn("beta", [n for _, n in s.playable["items"]])
         edu = open(mod.file("edu"), encoding="latin-1").read()
@@ -229,6 +234,22 @@ class ToolTest(unittest.TestCase):
         after = tree_hash(self.root)
         after = {k: v for k, v in after.items() if not k.startswith("faction_tool_backups")}
         self.assertEqual(before, after)
+
+    def test_heir_with_one_town_stands_next_to_it(self):
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {
+            "start": {"regions": ["B_R"], "leader": {"name": "Boris"}, "heir": {"name": "Aaron", "age": 20}}})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        chars = {c.name: c for c in s.faction("beta").characters}
+        self.assertEqual(sorted(chars), ["Aaron", "Boris"])
+        self.assertEqual(chars["Boris"].xy, (2, 2))
+        # a free tile of B_R's own colour, not the city and not A_R's land
+        x, y = chars["Aaron"].xy
+        self.assertNotEqual((x, y), (2, 2))
+        self.assertLessEqual(max(abs(x - 2), abs(y - 2)), 1)
+        self.assertEqual(mod.region_map("test").get(x, y), (0, 0, 255))
+        armies = [c.xy for fb in s.factions for c in fb.characters if "army" in s.lines[c.start:c.end]]
+        self.assertEqual(len(armies), len(set(armies)))
 
     def test_bad_leader_name_is_refused(self):
         mod = ModData(self.root)

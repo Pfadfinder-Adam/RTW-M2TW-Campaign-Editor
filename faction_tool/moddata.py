@@ -160,7 +160,7 @@ class ModData:
             return self._cache[key]
         regions = self.regions(campaign)
         by_colour = {v["colour"]: k for k, v in regions.items()}
-        img = read_tga(self.campaign_file(campaign, "map_regions.tga"))
+        img = self.region_map(campaign)
         tiles = {}
         for y in range(img.height):
             for x in range(img.width):
@@ -177,3 +177,37 @@ class ModData:
                     tiles[max(votes, key=votes.get)] = (x, y)
         self._cache[key] = tiles
         return tiles
+
+    def region_map(self, campaign):
+        key = ("map", campaign)
+        if key not in self._cache:
+            self._cache[key] = read_tga(self.campaign_file(campaign, "map_regions.tga"))
+        return self._cache[key]
+
+    def free_tile(self, campaign, region, taken):
+        """The land tile of `region` nearest to its city that no one stands on, or None.
+
+        Land means the region's own colour in map_regions.tga, so never sea, a
+        neighbour's land or another city."""
+        img = self.region_map(campaign)
+        info = self.regions(campaign).get(region)
+        start = self.city_tiles(campaign).get(region)
+        if not info or not start:
+            return None
+        colour = info["colour"]
+        seen, queue = {start}, [start]
+        while queue:
+            nxt = []
+            for x, y in queue:
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
+                    p = (x + dx, y + dy)
+                    if p in seen or not (0 <= p[0] < img.width and 0 <= p[1] < img.height):
+                        continue
+                    seen.add(p)
+                    if img.get(*p) != colour:
+                        continue
+                    if p not in taken:
+                        return p
+                    nxt.append(p)
+            queue = nxt
+        return None

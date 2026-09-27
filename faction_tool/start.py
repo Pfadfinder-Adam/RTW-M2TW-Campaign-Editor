@@ -27,6 +27,17 @@ def default_army(strat, template):
     return [l for l in strat.lines[c.start:c.end] if tokens(l)[:1] == ["unit"]]
 
 
+MAX_UNITS = 20
+
+
+def _has_army(lines):
+    return any(tokens(l)[:1] == ["army"] for l in lines)
+
+
+def _units(lines):
+    return [l for l in lines if tokens(l)[:1] == ["unit"]]
+
+
 def unit_name(line):
     """'unit   east horse archer   exp 0 armour 0 weapon_lvl 0' -> 'east horse archer'."""
     body = line.strip()[len("unit"):].strip()
@@ -63,9 +74,10 @@ def build_start(plan, campaign, start):
         regions.insert(0, capital)
 
     moved_blocks = []          # raw lines of settlement blocks
-    moved_chars = []           # raw lines of character chunks
+    joined = {}                # region -> raw character chunks that join with the town
     removals = []              # (start, end) ranges to delete
     edits = {}                 # line index -> new text (relocated characters)
+    relocate = []              # (region, character) the old owner keeps
     losers = {}
     for r in regions:
         st = s.settlement_of(r)
@@ -85,24 +97,59 @@ def build_start(plan, campaign, start):
             if c.owner == st.owner and (not c.named or st.owner == "slave") and c.role is None:
                 chunk = list(f.raw[c.start:c.end])
                 chunk[0] = _strip_sub_faction(chunk[0])
-                moved_chars.append(chunk)
+                joined.setdefault(r, []).append((c.name, c.kind, chunk))
                 removals.append((c.start, c.end))
-                plan.note(f, "%s: %s (%s) joins %s with the town" % (r, c.name, c.kind, new))
             else:
-                # the owner keeps this character: move him to one of its remaining towns
-                keep = [x.region for x in owner.settlements if x.region not in regions and tiles.get(x.region)]
-                if not keep:
-                    raise ValueError("%s: %s of %s stands in the town and %s has no other settlement to "
-                                     "move him to - pick another town or edit descr_strat.txt by hand"
-                                     % (r, c.name, c.owner, c.owner))
-                edits[c.start] = _set_xy(f.text(c.start), tiles[keep[0]])
-                plan.note(f, "%s: %s of %s moved to %s" % (r, c.name, c.owner, keep[0]))
+                relocate.append((r, c))
     for owner, rs in losers.items():
         fb = s.faction(owner)
         left = [x for x in fb.settlements if x.region not in regions]
         plan.note(f, "%s gives up %s" % (owner, ", ".join(rs)))
         if owner != "slave" and not left:
             plan.warn(f, "%s is left with no settlement - it starts as a horde or dies on turn 1" % owner)
+
+    # A settlement takes one army at the start: a second army placed on a
+    # garrisoned city tile is refused by the game and stays stuck on the tile.
+    # Characters with an army that do not garrison a town stand on a free
+    # tile of its region instead.
+    removed = set()
+    for a, b in removals:
+        removed.update(range(a, b))
+    armies_at = set()          # tiles with an army that stays where it is
+    taken = set(tiles.values())
+    for fb in s.factions:
+        for c in fb.characters:
+            if c.start in removed or not c.xy:
+                continue
+            taken.add(c.xy)
+            if _has_army(s.lines[c.start:c.end]) and not any(c is x for _, x in relocate):
+                armies_at.add(c.xy)
+
+    def place(region, what):
+        xy = mod.free_tile(campaign, region, taken)
+        if not xy:
+            raise ValueError("%s: no free land tile next to %s for %s - pick another town or edit "
+                             "descr_strat.txt by hand" % (region, region, what))
+        taken.add(xy)
+        return xy
+
+    for r, c in relocate:
+        owner = s.faction(c.owner)
+        keep = [x.region for x in owner.settlements if x.region not in regions and tiles.get(x.region)]
+        if not keep:
+            raise ValueError("%s: %s of %s stands in the town and %s has no other settlement to "
+                             "move him to - pick another town or edit descr_strat.txt by hand"
+                             % (r, c.name, c.owner, c.owner))
+        xy = tiles[keep[0]]
+        where = keep[0]
+        if _has_army(s.lines[c.start:c.end]):
+            if xy in armies_at:
+                xy = place(keep[0], c.name)
+                where = "next to " + keep[0]
+            else:
+                armies_at.add(xy)
+        edits[c.start] = _set_xy(f.text(c.start), xy)
+        plan.note(f, "%s: %s of %s moved to %s" % (r, c.name, c.owner, where))
 
     # ---- the new faction's own characters ----
     cap_xy = tiles.get(capital)
@@ -112,6 +159,34 @@ def build_start(plan, campaign, start):
     if not army:
         plan.warn(f, "the template leader has no army to copy - the leader starts with no units")
     pool = plan.mod.name_pool(new) or plan.mod.name_pool(t)
+
+    def merge(role_units, region, into):
+        """Fold the armies that join with `region` into `into`'s units; the
+        characters that led them are dropped. Agents without an army stay."""
+        units = list(role_units)
+        for name, kind, chunk in joined.get(region, []):
+            if not _has_army(chunk):
+                continue
+            extra = _units(chunk)
+            room = MAX_UNITS - len(units)
+            units.extend(extra[:max(room, 0)])
+            plan.note(f, "%s: %s (%s) hands his %d unit(s) to %s"
+                      % (region, name, kind, min(len(extra), max(room, 0)), into))
+            if len(extra) > room:
+                plan.warn(f, "%s: %d unit(s) of %s's garrison dropped - an army holds %d"
+                          % (region, len(extra) - max(room, 0), name, MAX_UNITS))
+        joined[region] = [j for j in joined.get(region, []) if not _has_army(j[2])]
+        return units
+
+    # who stands where: the leader garrisons the capital, the heir the next
+    # chosen town, or a free tile by the capital when there is only one town
+    spots = {"leader": (capital, cap_xy)}
+    if start.get("heir"):
+        if len(regions) > 1 and tiles.get(regions[1]):
+            spots["heir"] = (regions[1], tiles[regions[1]])
+        else:
+            spots["heir"] = (None, place(capital, "the heir"))
+
     own = []
     for role in ("leader", "heir"):
         who = start.get(role)
@@ -125,16 +200,19 @@ def build_start(plan, campaign, start):
         rest = name[len(first):].strip()
         if rest and pool and rest not in pool.get("surnames", []):
             raise ValueError("%s: surname '%s' is not in the %s surname list" % (role, rest, t))
+        region, xy = spots[role]
+        units = list(army) if role == "leader" else army[:1]      # the heir: the bodyguard
+        if region:
+            units = merge(units, region, name)
         own.append(f.make(";;\t%s" % role))
         own.append(f.make("character\t%s, named character, %s, age %d, , x %d, y %d"
-                          % (name, role, int(who.get("age", 30)), cap_xy[0], cap_xy[1])))
-        if role == "leader" and army:
+                          % (name, role, int(who.get("age", 30)), xy[0], xy[1])))
+        if units:
             own.append(f.make("army"))
-            own.extend(f.make(u.rstrip("\r")) for u in army)
-        elif role == "heir" and army:
-            own.append(f.make("army"))
-            own.append(f.make(army[0].rstrip("\r")))       # the bodyguard
+            own.extend(f.make(u.rstrip("\r")) for u in units)
         own.append(f.make(""))
+        if role == "heir" and not region:
+            plan.note(f, "heir %s stands next to %s (a town holds one army)" % (name, capital))
     if not own:
         raise ValueError("the new faction needs a leader")
 
@@ -148,9 +226,24 @@ def build_start(plan, campaign, start):
         block.extend(b)
         block.append(f.make(""))
     block.extend(own)
-    for ch in moved_chars:
-        block.extend(ch)
-        block.append(f.make(""))
+    for r in regions:
+        # a town without one of our own characters keeps its first joined army
+        # as the garrison; any further armies there fold into that one
+        group = joined.get(r, [])
+        lead = next((j for j in group if _has_army(j[2])), None)
+        for name, kind, chunk in group:
+            if lead and _has_army(chunk) and chunk is not lead[2]:
+                continue
+            if lead and chunk is lead[2]:
+                extra = [u for _, _, c in group if c is not chunk and _has_army(c) for u in _units(c)]
+                room = max(MAX_UNITS - len(_units(chunk)), 0)
+                chunk = chunk + extra[:room]
+                if len(extra) > room:
+                    plan.warn(f, "%s: %d garrison unit(s) dropped - an army holds %d"
+                              % (r, len(extra) - room, MAX_UNITS))
+            block.extend(chunk)
+            block.append(f.make(""))
+            plan.note(f, "%s: %s (%s) joins %s with the town" % (r, name, kind, new))
     block.append(f.make(";#######################################################################################<"))
     block.append(f.make(""))
 
