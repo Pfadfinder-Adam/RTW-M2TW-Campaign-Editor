@@ -41,6 +41,7 @@ class App(tk.Tk):
         self.regions = {}
         self.chosen = []
         self.garrisons = {}             # region -> [unit type] picked by hand
+        self.field = []                 # [{kind, name, age, units, xy}] armies/agents/fleets to place
         self._units_for, self._units_cache = None, []
         self.buildings_picked = {}      # region -> [(chain, level)] set by hand
         self._edb_for, self._edb, self._bpics = None, [], None
@@ -244,8 +245,23 @@ class App(tk.Tk):
         ttk.Label(side, text="Your towns", font=("", 10, "bold")).pack(anchor="w")
         self.lb_units = tk.Listbox(side, width=30, height=12, exportselection=False)
         self.lb_units.pack(fill="both", expand=True)
-        self.lb_units.bind("<<ListboxSelect>>", lambda e: self.load_garrison())
+        self.lb_units.bind("<<ListboxSelect>>", lambda e: (self.lb_field.selection_clear(0, "end"),
+                                                           self.load_garrison()))
         ttk.Label(side, text="add towns on the Faction tab", foreground="#666").pack(anchor="w")
+        # field armies, agents and fleets, placed on the Map
+        ff = ttk.LabelFrame(side, text="Armies, agents & fleets", padding=4)
+        ff.pack(fill="x", pady=(8, 0))
+        self.lb_field = tk.Listbox(ff, width=30, height=6, exportselection=False)
+        self.lb_field.pack(fill="x")
+        self.lb_field.bind("<<ListboxSelect>>", lambda e: self.load_field())
+        fb = ttk.Frame(ff)
+        fb.pack(fill="x", pady=(4, 0))
+        for text, kind in (("+ Army", "army"), ("+ Agent", "spy"), ("+ Fleet", "fleet")):
+            ttk.Button(fb, text=text, width=8, command=lambda k=kind: self.add_field(k)).pack(side="left", padx=1)
+        fb2 = ttk.Frame(ff)
+        fb2.pack(fill="x", pady=(2, 0))
+        ttk.Button(fb2, text="Place on map", command=self.place_field).pack(side="left", padx=1)
+        ttk.Button(fb2, text="Remove", command=self.remove_field).pack(side="left", padx=1)
         opts = self.units_opts = ttk.LabelFrame(side, text="Towns without a garrison of your own", padding=6)
         opts.pack(fill="x", pady=(10, 0))
         ttk.Label(opts, text="Leader's army").grid(row=0, column=0, sticky="w")
@@ -346,6 +362,8 @@ class App(tk.Tk):
         self.chosen, self.garrisons, self.buildings_picked = [], {}, {}
         self.editing_now = None
         self.char_moves = {}
+        self.field, self._placing = [], None
+        self.refresh_field()
         self.refresh_chosen()
         if edit and self.v["template"].get():
             self.template_changed()
@@ -436,7 +454,15 @@ class App(tk.Tk):
                               "from": c.xy})
                 if army:
                     armies_at.add(xy)
-        mine = [ch["id"] for ch in chars if self.editing() and ch["faction"] == me]
+        from .start import KINDS
+        for i, fc in enumerate(self.field):
+            if fc.get("xy"):
+                rtw_kind, army = KINDS[fc["kind"]]
+                chars.append({"id": "new:%d" % i, "faction": me, "name": fc["name"], "kind": rtw_kind,
+                              "xy": tuple(fc["xy"]), "army": army, "units": len(fc["units"]), "from": None})
+                if army:
+                    armies_at.add(tuple(fc["xy"]))
+        mine = [ch["id"] for ch in chars if (self.editing() and ch["faction"] == me) or ch["id"].startswith("new:")]
         self._map_chars = {ch["id"]: ch for ch in chars}
 
         def check(cid, xy):
@@ -446,6 +472,11 @@ class App(tk.Tk):
 
         def moved(cid, xy):
             ch = self._map_chars[cid]
+            if cid.startswith("new:"):
+                self.field[int(cid[4:])]["xy"] = xy
+                self.refresh_field()
+                self.show_map()
+                return
             if xy == ch["from"]:
                 self.char_moves.pop(cid, None)
             else:
@@ -461,8 +492,24 @@ class App(tk.Tk):
                 if low.startswith("symbol24_") and low.endswith(".tga") and "_grey" not in low and \
                         "_roll" not in low and "_select" not in low:
                     symbols[low[9:-4]] = os.path.join(folder, n)
+        placing = getattr(self, "_placing", None)
+
+        def place(xy):
+            i = self._placing
+            fc = self.field[i]
+            rtw_kind, army = KINDS[fc["kind"]]
+            why = self.mod.tile_problem(self.v_campaign.get(), xy, rtw_kind, army, armies_at)
+            if why:
+                return why
+            fc["xy"] = xy
+            self._placing = None
+            self.refresh_field(keep=i)
+            self.status.set("%s %s placed at %d, %d - drag it to move it." % (fc["kind"], fc["name"], xy[0], xy[1]))
+            self.show_map()
+            return None
         self.map_view.load(self._cmap, owners, colours, me, self.chosen, on_city=self.map_city, chars=chars,
-                           draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols)
+                           draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols,
+                           on_place=place if placing is not None else None)
 
     def map_city(self, region):
         """A click on a town on the map: add it to Chosen, or take it out."""
@@ -600,6 +647,8 @@ class App(tk.Tk):
         self.chosen = []
         self.garrisons = {}
         self.buildings_picked = {}
+        self.field, self._placing = [], None
+        self.refresh_field()
         self.refresh_chosen()
         self.fill_towns()
 
@@ -691,6 +740,114 @@ class App(tk.Tk):
         if self.v["capital"].get() not in self.chosen:
             self.v["capital"].set(self.chosen[0] if self.chosen else "")
 
+    # ---- field armies, agents, fleets ----
+    AGENTS = ("spy", "assassin", "diplomat")
+
+    def refresh_field(self, keep=None):
+        self.lb_field.delete(0, "end")
+        for c in self.field:
+            where = "at %d, %d" % tuple(c["xy"]) if c.get("xy") else "not placed"
+            units = "  [%d units]" % len(c["units"]) if c["kind"] in ("army", "fleet") else ""
+            self.lb_field.insert("end", "%s %s%s  (%s)" % (c["kind"], c["name"], units, where))
+        if keep is not None and keep < len(self.field):
+            self.lb_field.selection_set(keep)
+
+    def field_faction(self):
+        return self.v["template"].get().strip()
+
+    def add_field(self, kind):
+        """A small form: kind (agents), name from the faction's name list, age."""
+        if not self.mod or not self.field_faction():
+            messagebox.showerror(APP, "load a mod and pick the %s first" % ("faction" if self.editing() else "template"))
+            return
+        pool = self.mod.name_pool(self.field_faction()) or {}
+        w = tk.Toplevel(self)
+        w.title({"army": "New army", "spy": "New agent", "fleet": "New fleet"}[kind])
+        w.transient(self)
+        frm = ttk.Frame(w, padding=10)
+        frm.pack()
+        v_kind = tk.StringVar(value=kind)
+        row = 0
+        if kind in self.AGENTS:
+            ttk.Label(frm, text="Agent").grid(row=row, column=0, sticky="w")
+            ttk.Combobox(frm, textvariable=v_kind, values=self.AGENTS, state="readonly", width=14).grid(
+                row=row, column=1, sticky="w")
+            row += 1
+        ttk.Label(frm, text="Name" if kind in self.AGENTS else ("Admiral" if kind == "fleet" else "General")).grid(
+            row=row, column=0, sticky="w")
+        v_first, v_last, v_age = tk.StringVar(), tk.StringVar(), tk.StringVar(value="30")
+        ttk.Combobox(frm, textvariable=v_first, values=pool.get("characters", []), width=16).grid(row=row, column=1)
+        ttk.Combobox(frm, textvariable=v_last, values=[""] + pool.get("surnames", []), width=16).grid(row=row, column=2)
+        row += 1
+        ttk.Label(frm, text="Age").grid(row=row, column=0, sticky="w")
+        ttk.Entry(frm, textvariable=v_age, width=5).grid(row=row, column=1, sticky="w")
+        row += 1
+        ttk.Label(frm, text="names come from the faction's name list", foreground="#666").grid(
+            row=row, column=0, columnspan=3, sticky="w", pady=(4, 0))
+
+        def ok():
+            first = v_first.get().strip()
+            if not first:
+                messagebox.showerror(APP, "pick a first name", parent=w)
+                return
+            self.field.append({"kind": v_kind.get(), "name": (first + " " + v_last.get().strip()).strip(),
+                               "age": int(v_age.get()) if v_age.get().isdigit() else 30, "units": [], "xy": None})
+            w.destroy()
+            self.refresh_field(keep=len(self.field) - 1)
+            self.load_field()
+        bar = ttk.Frame(frm)
+        bar.grid(row=row + 1, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        ttk.Button(bar, text="Add", command=ok).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+
+    def selected_field(self):
+        sel = self.lb_field.curselection()
+        return sel[0] if sel and sel[0] < len(self.field) else None
+
+    def load_field(self):
+        """An army or fleet opens in the card picker; an agent has no units."""
+        i = self.selected_field()
+        if i is None:
+            return
+        self.lb_units.selection_clear(0, "end")
+        c = self.field[i]
+        if c["kind"] in self.AGENTS:
+            self.garrison_editor.load(self.mod, self.field_faction(), "%s %s - an agent, no units" % (c["kind"], c["name"]),
+                                      [], [], lambda t: None)
+            return
+        units = faction_units(self.mod, self.field_faction(), ships=c["kind"] == "fleet")
+        if c["kind"] == "fleet" and units and all(u.mercenary for u in units):
+            self.garrison_editor.v_merc.set(True)     # many mods mark every ship a mercenary
+
+        def changed(types, i=i):
+            self.field[i]["units"] = types
+            self.refresh_field(keep=i)
+        self.garrison_editor.load(self.mod, self.field_faction(), "%s %s" % (c["kind"], c["name"]), units,
+                                  c["units"], changed)
+        if not c.get("xy"):
+            self.status.set("Pick the units, then 'Place on map'.")
+
+    def remove_field(self):
+        i = self.selected_field()
+        if i is not None:
+            del self.field[i]
+            self.refresh_field()
+
+    def place_field(self):
+        """Go to the Map; the next click on a good tile places the selected one."""
+        i = self.selected_field()
+        if i is None:
+            messagebox.showerror(APP, "select an army, agent or fleet in the list first")
+            return
+        c = self.field[i]
+        self._placing = i
+        if self.nb.index("current") == 3:
+            self.show_map()                 # already there: no tab event, so refresh by hand
+        else:
+            self.nb.select(3)
+        self.status.set("Click the tile for %s %s (%s)." % (c["kind"], c["name"],
+                        "sea" if c["kind"] == "fleet" else "land, or a town for an agent"))
+
     def load_garrison(self):
         """Open the selected town of the Units tab in the garrison editor."""
         sel = self.lb_units.curselection()
@@ -762,6 +919,7 @@ class App(tk.Tk):
                       "playable": self.v_playable.get(), "diplomacy": self.v_dip.get(),
                       "army_mode": self.v_army.get(), "garrison": self.v_garrison.get(),
                       "garrisons": {r: g for r, g in self.garrisons.items() if r in self.chosen},
+                      "characters": [dict(c) for c in self.field],
                       "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()
                                     if r in self.chosen}},
         }
@@ -791,6 +949,7 @@ class App(tk.Tk):
             "leader": person("leader"), "heir": person("heir"),
             "moves": [{"name": self._map_chars[cid]["name"], "from": self._map_chars[cid]["from"], "to": xy}
                       for cid, xy in self.char_moves.items() if cid in getattr(self, "_map_chars", {})],
+            "characters": [dict(c) for c in self.field],
             "garrisons": dict(self.garrisons),
             "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()}}
 

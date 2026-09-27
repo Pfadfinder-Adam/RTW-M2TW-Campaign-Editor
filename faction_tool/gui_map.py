@@ -58,7 +58,7 @@ class MapView(ttk.Frame):
 
     # ---- data ----
     def load(self, cmap, owners, colours, faction=None, chosen=(), on_city=None, chars=(), draggable=(),
-             on_char_move=None, check_tile=None, symbols=None):
+             on_char_move=None, check_tile=None, symbols=None, on_place=None):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
@@ -68,6 +68,7 @@ class MapView(ttk.Frame):
         self.chars, self.draggable = list(chars), set(draggable)
         self.on_char_move, self.check_tile = on_char_move, check_tile
         self.symbols = symbols or {}
+        self.on_place = on_place            # on_place(xy) -> None, or why not: the next click places
         if first:
             self.fit()
         else:
@@ -288,6 +289,11 @@ class MapView(ttk.Frame):
         self._drag = None
         if moved or not self.cmap:
             return
+        if self.on_place:
+            why = self.on_place(self.to_tile(e.x, e.y))
+            if why:
+                self.readout.configure(text="cannot place here - " + why)
+            return
         hit = self.canvas.find_overlapping(e.x - 2, e.y - 2, e.x + 2, e.y + 2)
         for item in reversed(hit):
             for tag in self.canvas.gettags(item):
@@ -296,6 +302,12 @@ class MapView(ttk.Frame):
                     return
 
     def _hover(self, e):
+        if self.cmap and self.on_place and not self._cdrag:
+            x, y = self.to_tile(e.x, e.y)
+            self.canvas.config(cursor="hand2")
+            self.readout.configure(text="click to place   " + self.cmap.describe(x, y, self.owners))
+            return
+        self.canvas.config(cursor="crosshair")
         if self.cmap and not self._cdrag:
             cid = self._char_under(e.x, e.y)
             ch_ = next((c for c in self.chars if c["id"] == cid), None) if cid else None

@@ -431,6 +431,11 @@ def build_start(plan, campaign, start):
         block.extend(b)
         block.append(f.make(""))
     block.extend(own)
+    if start.get("characters"):
+        armies_now = {c.xy for x in s.factions for c in x.characters
+                      if c.xy and _has_army(s.lines[c.start:c.end]) and c.start not in removed}
+        armies_now |= {spots[r][1] for r in spots}
+        block.extend(extra_characters(plan, f, campaign, start["characters"], pool, armies_now))
     for r in regions:
         # a town without one of our own characters keeps its first joined army
         # as the garrison; any further armies there fold into that one
@@ -506,3 +511,55 @@ def build_start(plan, campaign, start):
         last = max((i for i, k, _, _, _ in s.diplomacy_lines() if k == kind), default=len(f) - 1)
         f.insert(last + 1, add[kind])
         plan.note(f, "%d %s line(s) for %s" % (len(add[kind]), kind, new))
+
+
+# ---------------------------------------------------------------------------
+# Field armies, agents and fleets placed by hand
+# ---------------------------------------------------------------------------
+KINDS = {"army": ("general", True), "spy": ("spy", False), "assassin": ("assassin", False),
+         "diplomat": ("diplomat", False), "fleet": ("admiral", True)}
+
+
+def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
+    """Lines for descr_strat for start['characters'] / opts['characters']:
+    [{'kind': army|spy|assassin|diplomat|fleet, 'name', 'age', 'units', 'xy'}].
+    Names must be in the name pool, tiles must pass tile_problem, an army or
+    fleet needs units. armies_at is updated."""
+    out = []
+    owner = owner or plan.new
+    for n, c in enumerate(chars, 1):
+        kind = c.get("kind")
+        if kind not in KINDS:
+            raise ValueError("character %d: unknown kind %r" % (n, kind))
+        rtw_kind, army = KINDS[kind]
+        name = (c.get("name") or "").strip()
+        if not name:
+            raise ValueError("%s %d needs a name" % (kind, n))
+        first = name.split(" ")[0]
+        if pool and first not in pool.get("characters", []):
+            raise ValueError("%s: '%s' is not in the name list - the game crashes on names it has no string for"
+                             % (kind, first))
+        rest = name[len(first):].strip()
+        if rest and pool and rest not in pool.get("surnames", []):
+            raise ValueError("%s: surname '%s' is not in the surname list" % (kind, rest))
+        xy = c.get("xy")
+        if not xy:
+            raise ValueError("%s %s is not placed on the map yet" % (kind, name))
+        xy = tuple(xy)
+        why = plan.mod.tile_problem(campaign, xy, rtw_kind, army, armies_at)
+        if why:
+            raise ValueError("%s %s at %d, %d: %s" % (kind, name, xy[0], xy[1], why))
+        units = list(c.get("units") or [])
+        if army and not units:
+            raise ValueError("%s %s has no units" % (kind, name))
+        if army:
+            armies_at.add(xy)
+        out.append(";;\t%s placed with the faction tool" % kind)
+        out.append("character\t%s, %s, age %d, , x %d, y %d" % (name, rtw_kind, int(c.get("age") or 30), xy[0], xy[1]))
+        if army:
+            out.append("army")
+            out += ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % u for u in units[:MAX_UNITS]]
+        out.append("")
+        plan.note(f, "%s %s at %d, %d%s" % (kind, name, xy[0], xy[1],
+                                              " with %d unit(s)" % min(len(units), MAX_UNITS) if army else ""))
+    return [f.make(l) for l in out]

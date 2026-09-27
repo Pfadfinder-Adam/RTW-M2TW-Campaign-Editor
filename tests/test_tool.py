@@ -574,6 +574,35 @@ class ToolTest(unittest.TestCase):
             edit(ModData(self.root), "test", "alpha",
                  {"moves": [{"name": "Aaron Alphid", "from": (1, 1), "to": (2, 2)}]})
 
+    def test_armies_agents_fleets_placed_by_hand(self):
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        red, blue, black, sea = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233)
+        px = [[red, red, blue, sea],
+              [red, black, blue, blue],
+              [red, red, black, blue],
+              [red, red, blue, blue]]
+        write_tga(os.path.join(camp, "map_regions.tga"), 4, 4, px)
+        chars = [{"kind": "army", "name": "Aaron", "age": 33, "units": ["alpha general"], "xy": (3, 1)},
+                 {"kind": "spy", "name": "Boris Alphid", "xy": (2, 2)},          # agents may stand in a town
+                 {"kind": "fleet", "name": "Aaron", "units": ["alpha general"], "xy": (3, 0)}]
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"start": {
+            "regions": ["B_R"], "leader": {"name": "Boris"}, "characters": chars}})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        got = [(c.name, c.kind, c.xy) for c in s.faction("beta").characters]
+        self.assertIn(("Aaron", "general", (3, 1)), got)
+        self.assertIn(("Boris Alphid", "spy", (2, 2)), got)
+        self.assertIn(("Aaron", "admiral", (3, 0)), got)
+        bad = [dict(chars[0], name="Zed"), dict(chars[2], xy=(3, 2)), dict(chars[0], xy=(2, 2))]
+        for c in bad:                                   # unknown name, fleet on land, army into a held town
+            with self.assertRaises(ValueError):
+                build(ModData(self.root), "test", "alpha", "beta", {"start": {
+                    "regions": ["B_R"], "leader": {"name": "Boris"}, "characters": [c]}})
+        from faction_tool.edit import edit
+        p2 = edit(ModData(self.root), "test", "alpha", {"characters": [chars[1]]})
+        s = Strat(p2.files[mod.campaign_file("test", "descr_strat.txt")])
+        self.assertIn(("Boris Alphid", "spy", (2, 2)), [(c.name, c.kind, c.xy) for c in s.faction("alpha").characters])
+
     def test_campaign_screen_key_under_a_front_end_name(self):
         # the template's description sits under a front end name (like GAUL for gauls)
         from faction_tool import clone

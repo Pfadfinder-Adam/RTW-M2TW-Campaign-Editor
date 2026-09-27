@@ -222,6 +222,13 @@ def _strat(plan, campaign, now):
     _people(plan, f, now)
     if o.get("capital"):
         _capital(plan, f, o["capital"])
+    if o.get("characters"):
+        from .start import extra_characters
+        s = Strat(f)
+        armies = {c.xy for x in s.factions for c in x.characters if c.xy and _has_army(s.lines[c.start:c.end])}
+        lines = extra_characters(plan, f, campaign, o["characters"], plan.mod.name_pool(fac) or {}, armies)
+        fb = s.faction(fac)
+        f.raw[fb.end:fb.end] = lines
     s = Strat(f)
     _garrisons(plan, f, s, campaign)
     _buildings(plan, f, Strat(f))
