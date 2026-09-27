@@ -46,8 +46,9 @@ THE TABS (in the order that works best)
                in Edit also the faction's armies, fleets and agents already on the map.
   Buildings    what stands in each town; settlement level and population. A bigger
                governor's building grows the settlement by itself.
-  Map          click a town to take it / give it back; drag your characters, towns and
-               ports; Political, Diplomacy and the other switches change what is shown.
+  Map          left drag moves the map, a click on a town takes it / gives it back;
+               right drag (or Ctrl + left drag) moves your characters, towns and ports;
+               Political, Diplomacy and the other switches change what is shown.
   Diplomacy    how the faction and every other one feel about each other at the start.
 
   4. Preview changes (Ctrl+P) shows every file and line that would change. Nothing is written.
@@ -59,7 +60,7 @@ KEYS
   Ctrl+Z undo, Ctrl+Y (or Ctrl+Shift+Z) redo - towns, garrisons, buildings, map moves,
   armies, diplomacy (in a text box Ctrl+Z undoes the typing instead)
   Ctrl+P preview    Ctrl+S apply / create    F5 load the mod again    F1 this help
-  Ctrl+1 .. Ctrl+5 the tabs    Map: mouse wheel zooms, drag moves
+  Ctrl+1 .. Ctrl+5 the tabs    Map: wheel zooms, left drag moves the map, right drag moves a marker
 
 WHEN SOMETHING GOES WRONG
   Log shows what the tool did and every error (faction_tool.log next to the exe).

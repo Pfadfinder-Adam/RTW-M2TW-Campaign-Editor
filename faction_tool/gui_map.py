@@ -36,7 +36,7 @@ class MapView(ttk.Frame):
         ttk.Button(bar, text="Fit", width=5, command=self.fit).pack(side="right")
         ttk.Button(bar, text="+", width=3, command=lambda: self.zoom_by(1)).pack(side="right", padx=2)
         ttk.Button(bar, text="-", width=3, command=lambda: self.zoom_by(-1)).pack(side="right")
-        ttk.Label(bar, text="wheel: zoom   drag: the map, your characters, towns and ports   click a town: add / remove it",
+        ttk.Label(bar, text="wheel: zoom   left drag: the map   right drag (or Ctrl + left): characters, towns, ports   click a town: add / remove it",
                   foreground="#666").pack(side="right", padx=12)
         self.canvas = tk.Canvas(self, background="#1d2b3a", highlightthickness=0, cursor="crosshair")
         self.canvas.pack(fill="both", expand=True)
@@ -56,9 +56,15 @@ class MapView(ttk.Frame):
         c.bind("<MouseWheel>", self._wheel)
         c.bind("<Button-4>", lambda e: self._wheel(e, 1))
         c.bind("<Button-5>", lambda e: self._wheel(e, -1))
-        c.bind("<ButtonPress-1>", self._press)
+        # left button: the map moves (a click picks a town); right button - or Ctrl + left
+        # on a touchpad - moves characters, towns and ports, so nothing moves by accident
+        c.bind("<ButtonPress-1>", lambda e: self._press(e, icons=False))
+        c.bind("<Control-ButtonPress-1>", lambda e: self._press(e, icons=True))
         c.bind("<B1-Motion>", self._move)
         c.bind("<ButtonRelease-1>", self._release)
+        c.bind("<ButtonPress-3>", lambda e: self._press(e, icons=True))
+        c.bind("<B3-Motion>", self._move)
+        c.bind("<ButtonRelease-3>", self._release)
         c.bind("<Motion>", self._hover)
         c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
         self._hot = None                                # the marker under the mouse, drawn bigger
@@ -383,14 +389,15 @@ class MapView(ttk.Frame):
                     return tag[:4], tag[5:]
         return None
 
-    def _press(self, e):
-        cid = self._char_under(e.x, e.y) if self.cmap else None
-        if cid is not None and cid in self.draggable:
-            self._cdrag = (cid, e.x, e.y)
-            return
-        pl = self._place_under(e.x, e.y) if self.cmap and self.on_place_move and not self.on_place else None
-        if pl:
-            self._pdrag = [pl[0], pl[1], e.x, e.y, False]      # a click unless the mouse moves
+    def _press(self, e, icons=False):
+        if icons:
+            cid = self._char_under(e.x, e.y) if self.cmap else None
+            if cid is not None and cid in self.draggable:
+                self._cdrag = (cid, e.x, e.y)
+                return
+            pl = self._place_under(e.x, e.y) if self.cmap and self.on_place_move and not self.on_place else None
+            if pl:
+                self._pdrag = [pl[0], pl[1], e.x, e.y, False]      # nothing happens unless the mouse moves
             return
         self._drag = (e.x, e.y, self.ox, self.oy, False)
 
@@ -447,8 +454,6 @@ class MapView(ttk.Frame):
                 else:
                     self.on_place_move(what, region, xy)
                 return
-            if what == "city" and self.on_city:              # a plain click on a town
-                self.on_city(region)
             return
         if self._cdrag:
             cid = self._cdrag[0]
