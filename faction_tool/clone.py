@@ -1,0 +1,426 @@
+"""Cloning a faction: every data file that keys something by faction name.
+
+Each step reads a file through the Plan, edits the in-memory copy and records a
+note. Nothing touches the disk until Plan.apply().
+"""
+
+import os
+import re
+
+from .textio import strip_comment, tokens
+
+
+def _is_blank(text):
+    return strip_comment(text).strip() == ""
+
+
+def _block_end(f, start, stop_heads, stop_on_blank=True, limit=None):
+    """First line after `start` that ends a simple block: a blank line, or a line
+    whose first word is in stop_heads."""
+    limit = len(f) if limit is None else limit
+    j = start + 1
+    while j < limit:
+        t = f.text(j)
+        if stop_on_blank and t.strip() == "":
+            break
+        tk = tokens(t)
+        if tk and tk[0] in stop_heads:
+            break
+        j += 1
+    return j
+
+
+def _replace_word(text, old, new):
+    return re.sub(r"(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])" % re.escape(old), new, text)
+
+
+# ---------------------------------------------------------------------------
+# descr_sm_factions.txt / .json
+# ---------------------------------------------------------------------------
+def sm_factions(plan):
+    t, new = plan.template, plan.new
+    f = plan.edit(plan.mod.file("sm_factions"))
+    starts = [i for i in range(len(f)) if tokens(f.text(i))[:1] == ["faction"]]
+    names = [tokens(f.text(i))[1] for i in starts]
+    if new in names:
+        raise ValueError("faction '%s' already exists in descr_sm_factions.txt" % new)
+    if t not in names:
+        raise ValueError("template faction '%s' not found" % t)
+    k = names.index(t)
+    s = starts[k]
+    e = starts[k + 1] if k + 1 < len(starts) else len(f)
+    block = f.raw[s:e]
+    # keep the separator comments that trail the block with it
+    out = []
+    for raw in block:
+        text = raw.rstrip("\r")
+        tk = tokens(text)
+        if tk[:1] == ["faction"]:
+            text = text.replace(t, new, 1)
+        elif tk[:1] == ["primary_colour"] and plan.opts.get("primary_colour"):
+            r, g, b = plan.opts["primary_colour"]
+            text = re.sub(r"red\s*\d+\s*,\s*green\s*\d+\s*,\s*blue\s*\d+", "red %d, green %d, blue %d" % (r, g, b), text)
+        elif tk[:1] == ["secondary_colour"] and plan.opts.get("secondary_colour"):
+            r, g, b = plan.opts["secondary_colour"]
+            text = re.sub(r"red\s*\d+\s*,\s*green\s*\d+\s*,\s*blue\s*\d+", "red %d, green %d, blue %d" % (r, g, b), text)
+        out.append(text + ("\r" if raw.endswith("\r") else ""))
+    if out[-1].strip():
+        out.append(f.make(""))
+    at = starts[names.index("slave")] if "slave" in names else len(f)
+    f.insert_raw(at, out)
+    plan.note(f, "faction block copied from %s (before slave)" % t)
+    plan.faction_count = len(names) + 1
+
+
+def sm_factions_json(plan):
+    path = plan.mod.file("sm_factions_json")
+    if not path:
+        return
+    t, new = plan.template, plan.new
+    f = plan.edit(path)
+    lines = f.texts()
+    def entry(name):
+        for i, l in enumerate(lines):
+            if re.match(r'\s*"%s"\s*:' % re.escape(name), l):
+                depth, seen = 0, False
+                for j in range(i, len(lines)):
+                    depth += lines[j].count("{") - lines[j].count("}")
+                    seen = seen or "{" in lines[j]
+                    if seen and depth == 0:
+                        return i, j + 1
+        return None
+    if entry(new):
+        raise ValueError("faction '%s' already exists in descr_sm_factions.json" % new)
+    span = entry(t)
+    if not span:
+        plan.warn(f, "template not found in the JSON file - left unchanged")
+        return
+    block = lines[span[0]:span[1]]
+    T, N = t.upper(), new.upper()
+    block[0] = block[0].replace('"%s"' % t, '"%s"' % new, 1)
+    for n, l in enumerate(block):
+        block[n] = l.replace('"%s"' % T, '"%s"' % N).replace('"%s_DESCR"' % T, '"%s_DESCR"' % N)
+    for key in ("primary", "secondary"):
+        rgb = plan.opts.get(key + "_colour")
+        if rgb:
+            for n, l in enumerate(block):
+                if re.match(r'\s*"%s"\s*:\s*\[' % key, l):
+                    block[n] = re.sub(r"\[[^\]]*\]", "[ %d, %d, %d ]" % tuple(rgb), l, 1)
+    if not block[-1].rstrip().endswith(","):
+        block[-1] = block[-1].rstrip() + ","
+    target = entry("slave")
+    at = target[0] if target else span[1]
+    if not target:
+        # appending after the template: the template needs a comma, the copy must not end with one
+        if not lines[span[1] - 1].rstrip().endswith(","):
+            f.set(span[1] - 1, lines[span[1] - 1].rstrip() + ",")
+        block[-1] = block[-1].rstrip().rstrip(",")
+    f.insert(at, block)
+    plan.note(f, "faction entry copied from %s" % t)
+
+
+# ---------------------------------------------------------------------------
+# Files with "faction <name>" blocks
+# ---------------------------------------------------------------------------
+def faction_blocks(plan, key, braced=False, heads=("faction", "type")):
+    path = plan.mod.file(key)
+    if not path:
+        return
+    t, new = plan.template, plan.new
+    f = plan.edit(path)
+    i = 0
+    count = 0
+    while i < len(f):
+        tk = tokens(f.text(i))
+        if tk[:1] == ["faction"] and t in tk[1:]:
+            if len(tk) > 2:
+                # "faction a, b, c": add the new name to the list
+                f.set(i, _replace_word(f.text(i), t, "%s, %s" % (t, new)))
+                count += 1
+                i += 1
+                continue
+            if braced:
+                depth, seen, j = 0, False, i
+                while j < len(f):
+                    s = strip_comment(f.text(j))
+                    depth += s.count("{") - s.count("}")
+                    seen = seen or "{" in s
+                    j += 1
+                    if seen and depth == 0:
+                        break
+            else:
+                j = _block_end(f, i, heads)
+            copy = list(f.raw[i:j])
+            copy[0] = _replace_word(copy[0], t, new)
+            lead_blank = [] if f.text(j - 1).strip() == "" else [f.make("")]
+            f.insert_raw(j, lead_blank + copy)
+            i = j + len(copy) + len(lead_blank)
+            count += 1
+            continue
+        i += 1
+    if count:
+        plan.note(f, "%d faction block(s) copied" % count)
+    else:
+        plan.warn(f, "no block for %s - nothing copied" % t)
+
+
+def names(plan):
+    path = plan.mod.file("names")
+    t, new = plan.template, plan.new
+    f = plan.edit(path)
+    heads = [(i, re.match(r"\s*faction\s*:\s*(\S+)", f.text(i))) for i in range(len(f))]
+    heads = [(i, m.group(1)) for i, m in heads if m]
+    names_ = [n for _, n in heads]
+    if new in names_:
+        raise ValueError("faction '%s' already has names in descr_names.txt" % new)
+    if t not in names_:
+        raise ValueError("template '%s' has no names in descr_names.txt" % t)
+    k = names_.index(t)
+    s = heads[k][0]
+    e = heads[k + 1][0] if k + 1 < len(heads) else len(f)
+    copy = list(f.raw[s:e])
+    copy[0] = _replace_word(copy[0], t, new)
+    at = heads[names_.index("slave")][0] if "slave" in names_ else len(f)
+    f.insert_raw(at, copy)
+    plan.note(f, "name lists copied from %s (the same names, so every one already has a string)" % t)
+
+
+# ---------------------------------------------------------------------------
+# Lists of factions inside lines
+# ---------------------------------------------------------------------------
+def edu_ownership(plan):
+    path = plan.mod.file("edu")
+    t, new = plan.template, plan.new
+    f = plan.edit(path)
+    n = 0
+    for i in range(len(f)):
+        text = f.text(i)
+        tk = tokens(text)
+        if tk[:1] in (["ownership"], ["era"]) and t in tk[1:] and new not in tk:
+            code = strip_comment(text)
+            rest = text[len(code):]
+            f.set(i, code.rstrip() + ", " + new + (" " + rest if rest else ""))
+            n += 1
+    plan.note(f, "%d unit(s) now also owned by %s" % (n, new))
+    if n == 0:
+        plan.warn(f, "no unit lists %s in ownership" % t)
+
+
+RE_FACTIONS = re.compile(r"factions\s*\{([^}]*)\}")
+
+
+def edb_factions(plan):
+    path = plan.mod.file("edb")
+    t, new = plan.template, plan.new
+    f = plan.edit(path)
+    n = 0
+    for i in range(len(f)):
+        text = f.text(i)
+        if "factions" not in text or t not in text:
+            continue
+        def fix(m):
+            inner = m.group(1)
+            items = [x.strip() for x in inner.split(",")]
+            if t not in items or new in items:
+                return m.group(0)
+            body = inner.rstrip()
+            if body.endswith(","):
+                return "factions {" + body + " " + new + ", }"
+            return "factions {" + body + ", " + new + " }"
+        out = RE_FACTIONS.sub(fix, text)
+        if out != text:
+            f.set(i, out)
+            n += 1
+    plan.note(f, "%d requirement(s) extended to %s" % (n, new))
+
+
+def texture_lines(plan, key):
+    """descr_model_battle / descr_model_strat: 'texture <faction>, path' lines."""
+    path = plan.mod.file(key)
+    if not path:
+        return
+    t, new = plan.template, plan.new
+    f = plan.edit(path)
+    n = 0
+    i = 0
+    while i < len(f):
+        tk = tokens(f.text(i))
+        if len(tk) >= 3 and tk[0] in ("texture", "model_flexi_m", "model_flexi") and tk[1] == t:
+            f.insert_raw(i + 1, [_replace_word(f.raw[i], t, new)])
+            n += 1
+            i += 2
+            continue
+        i += 1
+    if n:
+        plan.note(f, "%d texture line(s) copied" % n)
+
+
+def building_battle(plan):
+    path = plan.mod.file("building_battle")
+    if not path:
+        return
+    t, new = plan.template, plan.new
+    f = plan.edit(path)
+    n = 0
+    i = 0
+    while i < len(f):
+        tk = tokens(f.text(i))
+        if len(tk) >= 2 and tk[0] == t and "##" in f.text(i):
+            f.insert_raw(i + 1, [_replace_word(f.raw[i], t, new)])
+            n += 1
+            i += 2
+            continue
+        i += 1
+    if n:
+        plan.note(f, "%d standard line(s) copied" % n)
+
+
+def triggers(plan, key):
+    """Copy every Trigger that tests 'FactionType <template>' (ethnic traits etc.)."""
+    path = plan.mod.file(key)
+    if not path:
+        return
+    t, new = plan.template, plan.new
+    f = plan.edit(path)
+    starts = [i for i in range(len(f)) if tokens(f.text(i))[:1] == ["Trigger"]]
+    pat = re.compile(r"\bFactionType\s+%s\b" % re.escape(t))
+    n = 0
+    for k in reversed(range(len(starts))):
+        s = starts[k]
+        e = starts[k + 1] if k + 1 < len(starts) else len(f)
+        while e > s + 1 and (f.text(e - 1).strip() == "" or f.text(e - 1).lstrip().startswith(";")):
+            e -= 1
+        if not any(pat.search(strip_comment(f.text(j))) for j in range(s, e)):
+            continue
+        copy = []
+        for raw in f.raw[s:e]:
+            text = raw.rstrip("\r")
+            cr = "\r" if raw.endswith("\r") else ""
+            if tokens(text)[:1] == ["Trigger"]:
+                text = re.sub(r"(Trigger\s+)(\S+)", lambda m: m.group(1) + m.group(2) + "_" + new, text, 1)
+            else:
+                text = re.sub(r"(\bFactionType\s+)%s\b" % re.escape(t), r"\g<1>" + new, text)
+            copy.append(text + cr)
+        f.insert_raw(e, [f.make("")] + copy)
+        n += 1
+    if n:
+        plan.note(f, "%d trigger(s) copied for %s" % (n, new))
+
+
+def win_conditions(plan, campaign):
+    path = plan.mod.campaign_file(campaign, "descr_win_conditions.txt")
+    if not path:
+        return
+    t, new = plan.template, plan.new
+    f = plan.edit(path)
+    for i in range(len(f)):
+        text = strip_comment(f.text(i))
+        if text.strip() == t and not text[:1].isspace():
+            j = i + 1
+            while j < len(f) and f.text(j).strip() != "":
+                j += 1
+            copy = list(f.raw[i:j])
+            copy[0] = _replace_word(copy[0], t, new)
+            f.insert_raw(j, [f.make("")] + copy)
+            plan.note(f, "win conditions copied from %s" % t)
+            return
+    plan.warn(f, "no win conditions for %s - add them by hand" % t)
+
+
+# ---------------------------------------------------------------------------
+# data/text string tables
+# ---------------------------------------------------------------------------
+RE_KEY = re.compile(r"^(\s*\{)([A-Za-z0-9_]+)(\}.*)$")
+
+
+def text_strings(plan):
+    t, new = plan.template.upper(), plan.new.upper()
+    tparts = t.split("_")
+    repl = plan.display_replacements()
+    for path in plan.mod.text_files():
+        f = plan.edit(path)
+        keys = set()
+        for i in range(len(f)):
+            m = RE_KEY.match(f.text(i))
+            if m:
+                keys.add(m.group(2).upper())
+        n = 0
+        i = 0
+        while i < len(f):
+            m = RE_KEY.match(f.text(i))
+            if not m:
+                i += 1
+                continue
+            key = m.group(2)
+            parts = key.upper().split("_")
+            hit = None
+            for p in range(len(parts) - len(tparts) + 1):
+                if parts[p:p + len(tparts)] == tparts:
+                    hit = p
+                    break
+            if hit is None:
+                i += 1
+                continue
+            nparts = key.split("_")
+            new_key = "_".join(nparts[:hit] + [new] + nparts[hit + len(tparts):])
+            if new_key.upper() in keys:
+                i += 1
+                continue
+            value = m.group(3)[1:]
+            gap = value[:len(value) - len(value.lstrip())]
+            if key.upper() == t and plan.opts.get("display_name"):
+                value = gap + plan.opts["display_name"]
+            elif key.upper() == t + "_DESCR" and plan.opts.get("description"):
+                value = gap + plan.opts["description"].replace("\n", "\\n")
+            else:
+                for old, nw in repl:
+                    value = value.replace(old, nw)
+            line = m.group(1) + new_key + "}" + value
+            f.insert(i + 1, [line])
+            keys.add(new_key.upper())
+            n += 1
+            i += 2
+        if n:
+            plan.note(f, "%d string(s) added" % n)
+
+
+# ---------------------------------------------------------------------------
+# Art files the game finds by faction name
+# ---------------------------------------------------------------------------
+ART_ROOTS = ("ui", "menu", "loading_screen")
+
+
+def _token_hit(name, t):
+    stem = os.path.splitext(name)[0].lower()
+    return t in re.split(r"[^a-z0-9]+", stem) or stem == t or stem.endswith("_" + t) or stem.startswith(t + "_")
+
+
+def art_files(plan, campaign):
+    t, new = plan.template, plan.new
+    found = []
+    roots = [os.path.join(plan.mod.data, r) for r in ART_ROOTS] + [plan.mod.campaign_dir(campaign)]
+    for root in roots:
+        if not os.path.isdir(root):
+            continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            for d in list(dirnames):
+                if d.lower() == t:
+                    src = os.path.join(dirpath, d)
+                    dst = os.path.join(dirpath, new)
+                    if not os.path.exists(dst):
+                        found.append((src, dst))
+                    dirnames.remove(d)
+            for n in filenames:
+                if not n.lower().endswith((".tga", ".dds", ".png", ".bmp")) or not _token_hit(n, t):
+                    continue
+                stem, ext = os.path.splitext(n)
+                parts = re.split(r"([^A-Za-z0-9]+)", stem)
+                parts = [new if p.lower() == t else p for p in parts]
+                dst = os.path.join(dirpath, "".join(parts) + ext)
+                if dst != os.path.join(dirpath, n) and not os.path.exists(dst):
+                    found.append((os.path.join(dirpath, n), dst))
+    for src, dst in found:
+        plan.copy(src, dst)
+    if not found:
+        plan.warn(None, "no art found under data/ui, data/menu, data/loading_screen or the campaign folder "
+                        "named after %s (unit cards may be packed) - check them by hand" % t)

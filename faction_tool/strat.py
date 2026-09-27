@@ -1,0 +1,158 @@
+"""descr_strat.txt: faction blocks, settlements, characters, diplomacy."""
+
+import re
+
+from .textio import strip_comment, tokens
+
+RE_XY = re.compile(r"\bx\s+(-?\d+)\s*,\s*y\s+(-?\d+)")
+
+
+def _head(line):
+    t = tokens(line)
+    return t[0] if t else ""
+
+
+class Settlement:
+    def __init__(self, start, end, region, owner):
+        self.start, self.end = start, end          # line range [start, end)
+        self.region = region
+        self.owner = owner
+
+
+class Character:
+    def __init__(self, start, end, line, owner):
+        self.start, self.end = start, end
+        self.line = line
+        self.owner = owner
+        m = RE_XY.search(line)
+        self.xy = (int(m.group(1)), int(m.group(2))) if m else None
+        body = strip_comment(line).strip()
+        body = body[len("character"):].lstrip(", \t")
+        parts = [p.strip() for p in body.split(",")]
+        self.sub_faction = None
+        if parts and parts[0].startswith("sub_faction"):
+            self.sub_faction = parts[0].split()[1] if len(parts[0].split()) > 1 else None
+            parts = parts[1:]
+        self.name = parts[0] if parts else ""
+        self.kind = parts[1] if len(parts) > 1 else ""
+        self.role = next((p for p in parts[2:4] if p in ("leader", "heir")), None)
+
+    @property
+    def named(self):
+        return self.kind == "named character"
+
+
+class FactionBlock:
+    def __init__(self, name, start, end, header):
+        self.name, self.start, self.end, self.header = name, start, end, header
+        self.settlements = []
+        self.characters = []
+
+
+class Strat:
+    """An index over a loaded descr_strat.txt TextFile. Rebuild it after editing."""
+
+    def __init__(self, f):
+        self.f = f
+        lines = f.texts()
+        self.lines = lines
+        self.playable = self._list("playable")
+        self.unlockable = self._list("unlockable")
+        self.nonplayable = self._list("nonplayable")
+        self.diplomacy_start = next((i for i, l in enumerate(lines)
+                                     if _head(l) in ("core_attitudes", "faction_relationships")), len(lines))
+        # the block of the last faction stops at the comment banner before the diplomacy section
+        stop = self.diplomacy_start
+        while stop > 0 and (lines[stop - 1].strip() == "" or lines[stop - 1].lstrip().startswith(";")):
+            stop -= 1
+        starts = [(i, tokens(l)) for i, l in enumerate(lines[:self.diplomacy_start])
+                  if _head(l) == "faction"]
+        self.factions = []
+        for n, (i, t) in enumerate(starts):
+            end = starts[n + 1][0] if n + 1 < len(starts) else stop
+            # a faction's banner comments belong to the next block
+            e = end
+            while e > i + 1 and (lines[e - 1].strip() == "" or lines[e - 1].lstrip().startswith(";")):
+                e -= 1
+            fb = FactionBlock(t[1], i, e, lines[i])
+            self._scan_block(fb)
+            self.factions.append(fb)
+
+    def _list(self, key):
+        for i, l in enumerate(self.lines):
+            if _head(l) == key:
+                out = []
+                j = i + 1
+                while j < len(self.lines) and _head(self.lines[j]) != "end":
+                    t = tokens(self.lines[j])
+                    if t:
+                        out.append((j, t[0]))
+                    j += 1
+                return {"start": i, "end": j, "items": out}
+        return None
+
+    def _scan_block(self, fb):
+        lines = self.lines
+        i = fb.start + 1
+        marks = []
+        while i < fb.end:
+            h = _head(lines[i])
+            if h == "settlement":
+                depth, j, seen = 0, i, False
+                while j < fb.end:
+                    s = strip_comment(lines[j])
+                    depth += s.count("{") - s.count("}")
+                    seen = seen or "{" in s
+                    j += 1
+                    if seen and depth == 0:
+                        break
+                region = None
+                for k in range(i, j):
+                    t = tokens(lines[k])
+                    if len(t) >= 2 and t[0] == "region":
+                        region = t[1]
+                        break
+                fb.settlements.append(Settlement(i, j, region, fb.name))
+                i = j
+                continue
+            if h in ("character", "character_record", "relative"):
+                marks.append((i, h))
+            i += 1
+        for n, (i, h) in enumerate(marks):
+            if h != "character":
+                continue
+            end = marks[n + 1][0] if n + 1 < len(marks) else fb.end
+            # stop before settlements that follow, and leave trailing comments to the next one
+            for s in fb.settlements:
+                if i < s.start < end:
+                    end = s.start
+            while end > i + 1 and (lines[end - 1].strip() == "" or lines[end - 1].lstrip().startswith(";")):
+                end -= 1
+            fb.characters.append(Character(i, end, lines[i], fb.name))
+
+    # ---- queries ----
+    def faction(self, name):
+        return next((fb for fb in self.factions if fb.name == name), None)
+
+    def settlement_of(self, region):
+        for fb in self.factions:
+            for s in fb.settlements:
+                if s.region == region:
+                    return s
+        return None
+
+    def owners(self):
+        """{region: owner} for every settlement in the file."""
+        return {s.region: fb.name for fb in self.factions for s in fb.settlements}
+
+    def characters_at(self, xy):
+        return [c for fb in self.factions for c in fb.characters if c.xy == xy]
+
+    def diplomacy_lines(self):
+        """[(index, kind, a, value, b)] for core_attitudes / faction_relationships lines."""
+        out = []
+        for i in range(self.diplomacy_start, len(self.lines)):
+            t = tokens(self.lines[i])
+            if len(t) >= 4 and t[0] in ("core_attitudes", "faction_relationships"):
+                out.append((i, t[0], t[1], t[2], t[3:]))
+        return out
