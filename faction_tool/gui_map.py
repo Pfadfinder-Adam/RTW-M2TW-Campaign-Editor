@@ -55,7 +55,7 @@ class MapView(ttk.Frame):
         c.bind("<B1-Motion>", self._move)
         c.bind("<ButtonRelease-1>", self._release)
         c.bind("<Motion>", self._hover)
-        c.bind("<Leave>", lambda e: self._grow(None))
+        c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
         self._hot = None                                # the marker under the mouse, drawn bigger
 
     # ---- data ----
@@ -257,6 +257,19 @@ class MapView(ttk.Frame):
 
     GROW = 1.6
 
+    def _outline(self, sx, sy):
+        """The edges of the tile under the mouse, like a block outline in Minecraft."""
+        c = self.canvas
+        c.delete("tile_outline")
+        if not self.cmap or self.z < 3:
+            return
+        x, y = self.to_tile(sx, sy)
+        cx, cy = self.to_screen(x, y)
+        h = self.z / 2
+        c.create_rectangle(cx - h, cy - h, cx + h, cy + h, outline="white", width=2 if self.z >= 12 else 1,
+                           tags="tile_outline")
+        c.tag_lower("tile_outline", "city") if c.find_withtag("city") else None
+
     def _grow(self, tag):
         """Draw the marker under the mouse bigger (and on top); put the last one back."""
         if tag == self._hot:
@@ -339,11 +352,13 @@ class MapView(ttk.Frame):
 
     def _hover(self, e):
         if self.cmap and self.on_place and not self._cdrag:
+            self._outline(e.x, e.y)
             x, y = self.to_tile(e.x, e.y)
             self.canvas.config(cursor="hand2")
             self.readout.configure(text="click to place   " + self.cmap.describe(x, y, self.owners))
             return
         self.canvas.config(cursor="crosshair")
+        self._outline(e.x, e.y)
         if self.cmap and not self._cdrag:
             self._grow(self._marker_under(e.x, e.y))
             cid = self._char_under(e.x, e.y)

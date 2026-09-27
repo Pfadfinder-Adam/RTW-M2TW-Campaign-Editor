@@ -97,7 +97,7 @@ def validate(plan, campaign):
             seen[st.region] = fb.name
     # units in the new block exist in export_descr_unit
     edu = plan.files.get(mod.file("edu"))
-    known = set()
+    known, mercs = set(), set()        # mercenaries are hired, never recruited: no warning
     owners = {}
     cur = None
     for l in edu.texts():
@@ -107,6 +107,8 @@ def validate(plan, campaign):
             known.add(cur)
         elif t[:1] == ["ownership"] and cur:
             owners[cur] = set(t[1:])
+        elif t[:1] == ["attributes"] and cur and "mercenary_unit" in l:
+            mercs.add(cur)
     fb = s.faction(new)
     bad, foreign = [], []
     for c in fb.characters:
@@ -116,7 +118,7 @@ def validate(plan, campaign):
                 u = unit_name(l)
                 if u not in known:
                     bad.append(u)
-                elif not owners.get(u, set()) & {new, "all", mod.culture(new)}:
+                elif u not in mercs and not owners.get(u, set()) & {new, "all", mod.culture(new)}:
                     foreign.append(u)
     if bad:
         plan.warn(f, "unknown unit type(s) in %s's armies: %s" % (new, ", ".join(sorted(set(bad)))))

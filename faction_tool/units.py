@@ -82,7 +82,7 @@ def read_units(edu):
     return units
 
 
-def faction_units(mod, faction, ships=False):
+def faction_units(mod, faction, ships=False, mercs=False):
     """Units the faction may own (its name, its culture or 'all' in ownership - vanilla
     gives ships by culture): land units, or with ships=True only its ships;
     never the non_combatant townsfolk."""
@@ -94,8 +94,10 @@ def faction_units(mod, faction, ships=False):
         owners.add(mod.culture(faction))
     except Exception:
         pass
+    # mercs=True adds every mercenary (vanilla gives them to the rebels, 'slave', and
+    # hires them out by region through descr_mercenaries.txt)
     return [u for u in read_units(mod.load(edu))
-            if owners & set(u.ownership) and (u.category == "ship") == ships
+            if (owners & set(u.ownership) or (mercs and u.mercenary)) and (u.category == "ship") == ships
             and u.category != "non_combatant"]            # townsfolk for battles in towns, not troops
 
 

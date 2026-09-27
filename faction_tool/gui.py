@@ -882,8 +882,9 @@ class App(tk.Tk):
             self.garrison_editor.load(self.mod, self.field_faction(), "%s %s - an agent, no units" % (c["kind"], c["name"]),
                                       [], [], lambda t: None)
             return
-        units = faction_units(self.mod, self.field_faction(), ships=c["kind"] == "fleet")
-        if c["kind"] == "fleet" and units and all(u.mercenary for u in units):
+        units = faction_units(self.mod, self.field_faction(), ships=c["kind"] == "fleet", mercs=True)
+        own = [u for u in units if not set(u.ownership) <= {"slave"}]
+        if c["kind"] == "fleet" and own and all(u.mercenary for u in own):
             self.garrison_editor.v_merc.set(True)     # many mods mark every ship a mercenary
         units = self._with_types(units, c["units"])
 
@@ -944,7 +945,7 @@ class App(tk.Tk):
             messagebox.showerror(APP, "pick the template faction first (Faction tab)")
             return
         if self._units_for != template:
-            self._units_cache = faction_units(self.mod, template)
+            self._units_cache = faction_units(self.mod, template, mercs=True)
             self._units_for = template
         units = self._units_cache
         capital = self.v["capital"].get() or self.chosen[0]

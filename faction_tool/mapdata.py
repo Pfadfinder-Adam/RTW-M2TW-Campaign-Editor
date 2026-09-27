@@ -124,7 +124,7 @@ class CampaignMap:
                     for y in range(g.height) for x in range(g.width)])
         return im
 
-    def political(self, owners, colours, highlight=None, alpha=110):
+    def political(self, owners, colours, highlight=None, alpha=160):
         """RGBA, 1 px per tile: each region in its owner's primary colour, see-through,
         borders darker; the highlighted faction a little stronger."""
         key = (tuple(sorted(owners.items())), highlight, alpha)

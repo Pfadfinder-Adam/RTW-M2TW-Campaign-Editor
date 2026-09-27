@@ -100,7 +100,11 @@ class GarrisonEditor(ttk.Frame):
         canvas = tk.Canvas(parent, highlightthickness=0)
         sb = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
         inner = ttk.Frame(canvas)
-        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        def region(e=None):
+            # never smaller than the pane, anchored at the top: short lists sit at the top, not adrift
+            box = canvas.bbox("all") or (0, 0, 0, 0)
+            canvas.configure(scrollregion=(0, 0, box[2], max(box[3], canvas.winfo_height())))
+        inner.bind("<Configure>", region)
         canvas.create_window((0, 0), window=inner, anchor="nw")
         canvas.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
@@ -156,6 +160,7 @@ class GarrisonEditor(ttk.Frame):
             self._card(self.roster, u, lambda u=u: self.add(u))
         self.roster.cols = 0
         self._reflow(self.roster)
+        self.roster.canvas.yview_moveto(0)
 
     def fill_chosen(self):
         for w in self.chosen.winfo_children():
