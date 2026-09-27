@@ -63,6 +63,8 @@ def build_start(plan, campaign, start):
     if not tb:
         raise ValueError("template %s has no block in this campaign's descr_strat.txt" % t)
     tiles = mod.city_tiles(campaign)
+    img = mod.region_map(campaign)
+    plan.note(f, "map: %s (%dx%d)" % (mod.rel(mod.campaign_file(campaign, "map_regions.tga")), img.width, img.height))
     regions = list(start.get("regions") or [])
     if not regions:
         raise ValueError("pick at least one starting settlement")
