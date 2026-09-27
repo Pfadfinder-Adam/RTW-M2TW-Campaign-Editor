@@ -8,11 +8,13 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from .build import build, template_display
 from .buildings import BuildingPictures, read_buildings, settlement_info
+from .mapdata import CampaignMap, faction_colours
 from .moddata import ModData
 from .newmod import create_mod, game_root_of
 from .edit import edit as edit_faction, read_faction
 from .gui_buildings import BuildingsEditor
 from .gui_garrison import GarrisonEditor, Pictures
+from .gui_map import MapView
 from .plan import backups, restore
 from .scan import IGNORE_HELP, ignore_path, scan as scan_mod
 from .start import balanced_army, unit_name
@@ -213,6 +215,11 @@ class App(tk.Tk):
 
         self._build_units_tab()
         self._build_buildings_tab()
+        tab = ttk.Frame(self.nb, padding=4)
+        self.nb.add(tab, text="  Map  ")
+        self.map_view = MapView(tab)
+        self.map_view.pack(fill="both", expand=True)
+        self._cmap, self._cmap_for = None, None
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self.tab_opened())
 
         # --- actions
@@ -297,6 +304,9 @@ class App(tk.Tk):
     def tab_opened(self):
         """A town tab with nothing selected opens the capital."""
         tab = self.nb.index("current")
+        if tab == 3:
+            self.show_map()
+            return
         lb, load = {1: (self.lb_units, self.load_garrison), 2: (self.lb_build, self.load_buildings)}.get(tab, (None, None))
         if lb is not None and self.chosen and not lb.curselection():
             capital = self.v["capital"].get() or self.chosen[0]
@@ -377,6 +387,52 @@ class App(tk.Tk):
         self.refresh_chosen()
         self.status.set("Editing %s: %d town(s). Change what you want, Preview, then Apply changes."
                         % (faction, len(self.chosen)))
+
+    def show_map(self):
+        """The Map tab: the campaign map with the towns as they would stand after this run."""
+        if not self.mod or not self.strat:
+            return
+        key = (self.mod.data, self.v_campaign.get())
+        if self._cmap_for != key:
+            self.status.set("Reading the campaign map...")
+            self.update_idletasks()
+            try:
+                self._cmap = CampaignMap(self.mod, self.v_campaign.get())
+            except Exception as e:
+                messagebox.showerror(APP, "Cannot draw the map: %s" % e)
+                return
+            self._cmap_for = key
+            self._colours_all = faction_colours(self.mod)
+            self.status.set("")
+        owners = self.strat.owners()
+        colours = dict(self._colours_all)
+        me = self.v["template"].get().strip() if self.editing() else (self.v["name"].get().strip().lower() or "(new)")
+        if not self.editing():
+            template = self.v["template"].get().strip()
+            colours[me] = tuple(self.colours["primary"] or colours.get(template, (255, 215, 0)))
+        elif self.colours["primary"]:
+            colours[me] = tuple(self.colours["primary"])
+        for r in self.chosen:
+            owners[r] = me
+        if self.editing() and self.editing_now:
+            for r in self.editing_now.get("regions", []):
+                if r not in self.chosen:
+                    owners[r] = self.v_give.get() or "slave"
+        self.map_view.load(self._cmap, owners, colours, me, self.chosen, on_city=self.map_city)
+
+    def map_city(self, region):
+        """A click on a town on the map: add it to Chosen, or take it out."""
+        if region in self.chosen:
+            self.chosen.remove(region)
+            self.garrisons.pop(region, None)
+            self.buildings_picked.pop(region, None)
+        else:
+            self.chosen.append(region)
+        self.refresh_chosen()
+        self.show_map()
+        town = self._cmap.info.get(region, {}).get("settlement", region) if self._cmap else region
+        self.status.set("%s %s. %d town(s) chosen." % (town, "added" if region in self.chosen else "taken out",
+                                                       len(self.chosen)))
 
     def selected_town(self):
         sel = self.lb.curselection()
