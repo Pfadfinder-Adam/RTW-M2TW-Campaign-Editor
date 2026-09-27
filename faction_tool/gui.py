@@ -832,7 +832,7 @@ class App(tk.Tk):
                   ("Settlement name", "settlement", ""), ("Its label in the game", "settlement_label", ""),
                   ("Creator faction", "creator", me or (facs[0] if facs else "")),
                   ("Rebels (culture of the region's rebels)", "rebels", rebels[0] if rebels else ""),
-                  ("Resources (comma list)", "resources", ""), ("Triumph value", "triumph", "5"),
+                  ("Resources (comma list; empty = those of the land it is cut from)", "resources", ""), ("Triumph value", "triumph", "5"),
                   ("Farming level", "farming", "3"),
                   ("Owner at the start", "owner", "(rebel village - no settlement written)"),
                   ("Settlement level", "level", "village")]
@@ -860,10 +860,16 @@ class App(tk.Tk):
             if not _ok_name(d["name"]) or not _ok_name(d["settlement"]):
                 messagebox.showerror(APP, "names: letters, digits and _ only (like Tribus_Novus)", parent=w)
                 return
+            if d["name"] == d["settlement"]:
+                messagebox.showerror(APP, "the region and its settlement need different names "
+                                          "(like Tribus_Novus and Novus_Oppidum); their labels may be the same",
+                                     parent=w)
+                return
             taken = set(self._region_colours()) | {v.get("settlement") for v in self.regions.values()} | \
                 {r["settlement"] for r in self.new_regions}
-            if d["name"] in taken or d["settlement"] in taken or d["name"] == d["settlement"]:
-                messagebox.showerror(APP, "that name is taken already", parent=w)
+            clash = [n for n in (d["name"], d["settlement"]) if n in taken]
+            if clash:
+                messagebox.showerror(APP, "%s is taken already by a region or settlement" % clash[0], parent=w)
                 return
             self.remember()
             colour = free_colour(self.mod, self.v_campaign.get(), self._region_colours().values())

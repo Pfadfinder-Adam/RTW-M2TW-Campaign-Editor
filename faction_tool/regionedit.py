@@ -116,7 +116,7 @@ def region_problems(mod, campaign, painted, new_regions):
         if cells and len(_part(cells, next(iter(cells)))) != len(cells):
             warns.append("%s would be in more than one piece (fine for islands)" % r)
     total = len(regions) + len(new_regions)
-    if new_regions and total > 200:
+    if new_regions and len(regions) <= 200 < total:               # only when this run crosses the line
         warns.append("%d regions: the classic game stops at 200; REX lifts the limit" % total)
     return errors, warns
 
@@ -167,10 +167,27 @@ def apply_regions(plan, campaign, painted, new_regions):
     dr = plan.edit(mod.campaign_file(campaign, "descr_regions.txt"))
     while dr.raw and not dr.text(len(dr.raw) - 1).strip():
         del dr.raw[-1]
+    img = mod.region_map(campaign)
+    by_colour = {v["colour"]: k for k, v in regions.items()}
     for r in new_regions:
         c = colours[r["name"]]
+        res = ", ".join(r.get("resources") or [])
+        if not res:
+            # no resources given: those of the region most of its land came from (no region in
+            # the game files has none; in HLR they are the hidden resources that open local units)
+            src = {}
+            for xy, to in painted.items():
+                was = by_colour.get(img.get(*xy))
+                if to == r["name"] and was:
+                    src[was] = src.get(was, 0) + 1
+            donor = max(src, key=src.get) if src else None
+            res = (regions.get(donor) or {}).get("resources") or ""
+            if res:
+                plan.note(dr, "%s: resources of %s (%s)" % (r["name"], donor, res))
+        if not res:
+            raise ValueError("%s: give it at least one resource (the game files have no region without)" % r["name"])
         lines = [r["name"], "\t" + r["settlement"], "\t" + r["creator"], "\t" + r["rebels"],
-                 "\t%d %d %d" % c, "\t" + (", ".join(r.get("resources") or []) or "none"),
+                 "\t%d %d %d" % c, "\t" + res,
                  "\t%d" % int(r.get("triumph", 5)), "\t%d" % int(r.get("farming", 3))]
         dr.raw.extend(dr.make(l) for l in lines)
         plan.note(dr, "region %s (%s), colour %d %d %d" % (r["name"], r["settlement"], c[0], c[1], c[2]))
