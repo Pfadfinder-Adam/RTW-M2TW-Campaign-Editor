@@ -7,8 +7,10 @@ import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from .build import build, template_display
+from .buildings import BuildingPictures, read_buildings, settlement_info
 from .moddata import ModData
 from .newmod import create_mod, game_root_of
+from .gui_buildings import BuildingsEditor
 from .gui_garrison import GarrisonEditor, Pictures
 from .plan import backups, restore
 from .scan import IGNORE_HELP, ignore_path, scan as scan_mod
@@ -31,6 +33,8 @@ class App(tk.Tk):
         self.chosen = []
         self.garrisons = {}             # region -> [unit type] picked by hand
         self._units_for, self._units_cache = None, []
+        self.buildings_picked = {}      # region -> [(chain, level)] set by hand
+        self._edb_for, self._edb, self._bpics = None, [], None
         self.pictures = Pictures()
         self.colours = {"primary": None, "secondary": None}
         self._build()
@@ -177,6 +181,8 @@ class App(tk.Tk):
         self.tv.bind("<Double-1>", lambda e: self.add_town())
 
         self._build_units_tab()
+        self._build_buildings_tab()
+        self.nb.bind("<<NotebookTabChanged>>", lambda e: self.tab_opened())
 
         # --- actions
         bar = ttk.Frame(self)
@@ -216,6 +222,55 @@ class App(tk.Tk):
         self.garrison_editor = GarrisonEditor(tab, pictures=self.pictures)
         self.garrison_editor.pack(side="left", fill="both", expand=True)
 
+    def _build_buildings_tab(self):
+        """Buildings: the chosen towns on the left, what stands in the selected one on the right."""
+        tab = ttk.Frame(self.nb, padding=4)
+        self.nb.add(tab, text="  Buildings  ")
+        side = ttk.Frame(tab)
+        side.pack(side="left", fill="y", padx=(0, 8))
+        ttk.Label(side, text="Your towns", font=("", 10, "bold")).pack(anchor="w")
+        self.lb_build = tk.Listbox(side, width=30, height=12, exportselection=False)
+        self.lb_build.pack(fill="both", expand=True)
+        self.lb_build.bind("<<ListboxSelect>>", lambda e: self.load_buildings())
+        ttk.Label(side, text="add towns on the Faction tab", foreground="#666").pack(anchor="w")
+        self.buildings_editor = BuildingsEditor(tab, self.pictures)
+        self.buildings_editor.pack(side="left", fill="both", expand=True)
+
+    def load_buildings(self):
+        sel = self.lb_build.curselection()
+        if not sel or not self.mod or not self.strat or sel[0] >= len(self.chosen):
+            return
+        region = self.chosen[sel[0]]
+        template = self.v["template"].get().strip()
+        if not template:
+            messagebox.showerror(APP, "pick the template faction first (Faction tab)")
+            return
+        if self._edb_for != self.mod.data:
+            self._edb = read_buildings(self.mod.load(self.mod.file("edb"))) if self.mod.file("edb") else []
+            self._bpics = BuildingPictures(self.mod)
+            self._edb_for = self.mod.data
+        st = self.strat.settlement_of(region)
+        town_level, own = settlement_info(self.strat.lines[st.start:st.end]) if st else ("town", [])
+
+        def changed(picked):
+            if picked is None:
+                self.buildings_picked.pop(region, None)
+            else:
+                self.buildings_picked[region] = picked
+            self.refresh_chosen(keep_units_selection=True)
+        self.buildings_editor.load(region, town_level, self._edb, own, self.buildings_picked.get(region),
+                                   self.mod.culture(template), self.v["name"].get().strip().lower() or template,
+                                   template, self._bpics, changed)
+
+    def tab_opened(self):
+        """A town tab with nothing selected opens the capital."""
+        tab = self.nb.index("current")
+        lb, load = {1: (self.lb_units, self.load_garrison), 2: (self.lb_build, self.load_buildings)}.get(tab, (None, None))
+        if lb is not None and self.chosen and not lb.curselection():
+            capital = self.v["capital"].get() or self.chosen[0]
+            lb.selection_set(self.chosen.index(capital) if capital in self.chosen else 0)
+            load()
+
     def selected_town(self):
         sel = self.lb.curselection()
         return self.chosen[sel[0]] if sel else None
@@ -242,7 +297,7 @@ class App(tk.Tk):
     def load(self):
         try:
             self.mod = ModData(self.v_path.get())
-            self._units_for = None
+            self._units_for = self._edb_for = None
         except Exception as e:
             messagebox.showerror(APP, str(e))
             return
@@ -337,6 +392,7 @@ class App(tk.Tk):
         self.cb_owner["values"] = ["(all)"] + owners
         self.chosen = []
         self.garrisons = {}
+        self.buildings_picked = {}
         self.refresh_chosen()
         self.fill_towns()
 
@@ -389,6 +445,7 @@ class App(tk.Tk):
         self.chosen = [r for r in self.chosen if r not in sel]
         for r in sel:
             self.garrisons.pop(r, None)
+            self.buildings_picked.pop(r, None)
         self.refresh_chosen()
 
     def refresh_chosen(self, keep_units_selection=False):
@@ -401,6 +458,14 @@ class App(tk.Tk):
                                  "  [%d units]" % n if n else "  [automatic]"))
         if keep_units_selection and sel and sel[0] < len(self.chosen):
             self.lb_units.selection_set(sel[0])
+        bsel = self.lb_build.curselection()
+        self.lb_build.delete(0, "end")
+        for r in self.chosen:
+            n = len(self.buildings_picked.get(r, []))
+            self.lb_build.insert("end", "%s%s" % (r, "  [%d buildings]" % n if r in self.buildings_picked
+                                                    else "  [its own]"))
+        if keep_units_selection and bsel and bsel[0] < len(self.chosen):
+            self.lb_build.selection_set(bsel[0])
         self.lb.delete(0, "end")
         for r in self.chosen:
             owner = self.strat.owners().get(r, "?") if self.strat else "?"
@@ -473,7 +538,9 @@ class App(tk.Tk):
                       "heir": who("heir"), "denari": int(v["denari"] or 0), "ai": v["ai"] or None,
                       "playable": self.v_playable.get(), "diplomacy": self.v_dip.get(),
                       "army_mode": self.v_army.get(), "garrison": self.v_garrison.get(),
-                      "garrisons": {r: g for r, g in self.garrisons.items() if r in self.chosen}},
+                      "garrisons": {r: g for r, g in self.garrisons.items() if r in self.chosen},
+                      "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()
+                                    if r in self.chosen}},
         }
         return v["template"], v["name"].lower(), opts
 

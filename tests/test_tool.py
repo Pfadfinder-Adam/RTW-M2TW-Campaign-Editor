@@ -411,6 +411,58 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(chars["Aaron"].kind, "general")
         self.assertEqual(units(chars["Aaron"]), ["alpha general"])
 
+    def test_buildings_by_hand(self):
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"), """building core_building
+{
+    levels hut hall
+    {
+        hut requires factions { alpha, }
+        {
+            construction 1
+            cost 100
+            settlement_min village
+            upgrades
+            {
+                hall
+            }
+        }
+        hall requires factions { roman, }
+        {
+            capability
+            {
+                recruit "alpha general" 0 requires factions { alpha, }
+            }
+            construction 2
+            cost 900
+            settlement_min city
+            upgrades
+            {
+            }
+        }
+    }
+    plugins
+    {
+    }
+}
+""")
+        mod = ModData(self.root)
+        from faction_tool.buildings import read_buildings, settlement_info
+        bs = read_buildings(mod.load(mod.file("edb")))
+        self.assertEqual([(l.name, l.settlement_min, l.cost) for l in bs[0].levels],
+                         [("hut", "village", 100), ("hall", "city", 900)])
+        plan = build(mod, "test", "alpha", "beta", {"start": {
+            "regions": ["B_R"], "leader": {"name": "Boris"}, "buildings": {"B_R": [["core_building", "hall"]]}}})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        st = s.faction("beta").settlements[0]
+        self.assertEqual(settlement_info(s.lines[st.start:st.end]), ("town", [("core_building", "hall")]))
+        warnings = " ".join(m for _, m in plan.warnings)
+        self.assertIn("hall is not for alpha's faction list", warnings)
+        self.assertIn("hall needs a city, the settlement is a town", warnings)
+        with self.assertRaises(ValueError):
+            build(ModData(self.root), "test", "alpha", "beta", {"start": {
+                "regions": ["B_R"], "leader": {"name": "Boris"}, "buildings": {"B_R": [["core_building", "tower"]]}}})
+
     def test_descriptions(self):
         mod = ModData(self.root)
         plan = build(mod, "test", "alpha", "beta", {

@@ -111,6 +111,17 @@ class ModData:
                 cur[1] = t[1]
         return [tuple(x) for x in out]
 
+    def culture(self, faction):
+        """The faction's culture from descr_sm_factions.txt, or None."""
+        cur = None
+        for l in self.load(self.file("sm_factions")).texts():
+            t = tokens(l)
+            if t[:1] == ["faction"] and len(t) > 1:
+                cur = t[1]
+            elif t[:1] == ["culture"] and len(t) > 1 and cur == faction:
+                return t[1]
+        return None
+
     def name_pool(self, faction):
         """descr_names.txt pools: {'characters': [...], 'surnames': [...], 'women': [...]}."""
         f = self.load(self.file("names"))

@@ -129,6 +129,30 @@ def unit_name(line):
     return m[0].strip()
 
 
+def _with_buildings(plan, f, region, raw, picked):
+    """The settlement block with the buildings picked by hand, checked against
+    export_descr_buildings: the level exists, the faction may build it, and the
+    settlement is big enough."""
+    from .buildings import available, ranks_ok, read_buildings, set_buildings, settlement_info
+    edb = plan.files.get(plan.mod.file("edb")) or (plan.mod.load(plan.mod.file("edb")) if plan.mod.file("edb") else None)
+    known = {b.name: b for b in read_buildings(edb)} if edb is not None else {}
+    town_level, _ = settlement_info([l.rstrip("\r") for l in raw])
+    culture = plan.mod.culture(plan.template)
+    for chain, level in picked:
+        b = known.get(chain)
+        lv = b.level(level) if b else None
+        if known and not lv:
+            raise ValueError("%s: %s %s is not in export_descr_buildings.txt" % (region, chain, level))
+        if lv and not available(lv, plan.new, culture, plan.template):
+            plan.warn(f, "%s: %s is not for %s's faction list (%s)" % (region, level, plan.template, lv.requires))
+        if lv and not ranks_ok(lv, town_level):
+            plan.warn(f, "%s: %s needs a %s, the settlement is a %s" % (region, level, lv.settlement_min, town_level))
+    if len({c for c, _ in picked}) != len(picked):
+        raise ValueError("%s: one level per building chain" % region)
+    plan.note(f, "%s: %d building(s) set by hand (%s)" % (region, len(picked), town_level))
+    return set_buildings(raw, picked, f.make)
+
+
 def build_start(plan, campaign, start):
     """start = {
         'regions': [...], 'capital': region,
@@ -159,6 +183,7 @@ def build_start(plan, campaign, start):
         regions.remove(capital)
         regions.insert(0, capital)
 
+    picked_buildings = {r: [tuple(x) for x in v] for r, v in (start.get("buildings") or {}).items()}
     moved_blocks = []          # raw lines of settlement blocks
     joined = {}                # region -> raw character chunks that join with the town
     removals = []              # (start, end) ranges to delete
@@ -172,7 +197,10 @@ def build_start(plan, campaign, start):
         if st.owner == new:
             continue
         owner = s.faction(st.owner)
-        moved_blocks.append(f.raw[st.start:st.end])
+        block_raw = list(f.raw[st.start:st.end])
+        if r in picked_buildings:
+            block_raw = _with_buildings(plan, f, r, block_raw, picked_buildings[r])
+        moved_blocks.append(block_raw)
         removals.append((st.start, st.end))
         losers.setdefault(st.owner, []).append(r)
         tile = tiles.get(r)
