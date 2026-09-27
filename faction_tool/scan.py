@@ -3,6 +3,7 @@ mentioned, whether the tool handles that place, and references to files that
 do not exist. Read-only - nothing is written."""
 
 import codecs
+import fnmatch
 import os
 import re
 from collections import Counter
@@ -34,6 +35,49 @@ IGNORABLE = (
     (re.compile(r"(^|/)data/text/[^/]+/", re.I), "translations in data/text/<language>/ (the tool writes English only)"),
     (re.compile(r"(^|/)(![^/]*|[^/]*kopie[^/]*|[^/]*backup[^/]*|[^/]* - copy[^/]*)(/|$)", re.I), "copies and backups"),
 )
+
+
+IGNORE_FILE = "faction_tool_ignore.txt"
+IGNORE_HELP = """# Folders and files the scan leaves out - one rule per line, paths from the
+# mod folder, '/' as separator, case does not matter. Only the scan reads this.
+#
+#   data/world/maps/campaign/custom/     a folder (ends with /)
+#   old_stuff/                           any folder with this name, anywhere
+#   *.bak                                files matching a mask, anywhere
+#   data/text/test_*.txt                 files matching a mask in one folder
+"""
+
+
+def ignore_path(root):
+    return os.path.join(root, IGNORE_FILE)
+
+
+def load_ignore(root):
+    try:
+        with open(ignore_path(root), encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return []
+    return [l.strip().replace("\\", "/").lower() for l in lines if l.strip() and not l.strip().startswith("#")]
+
+
+def _ignored(rel, is_dir, rules):
+    rel = rel.lower()
+    name = rel.rsplit("/", 1)[-1]
+    for r in rules:
+        if r.endswith("/"):
+            if not is_dir:
+                continue
+            r = r[:-1]
+            if "/" in r:
+                if fnmatch.fnmatch(rel, r):
+                    return True
+            elif fnmatch.fnmatch(name, r):
+                return True
+        elif not is_dir:
+            if fnmatch.fnmatch(rel, r) if "/" in r else fnmatch.fnmatch(name, r):
+                return True
+    return False
 
 
 def _ignorable(rel):
@@ -78,6 +122,8 @@ class Scan:
         self.missing = []                # (from rel, what, missing rel)
         self.skipped = []                # text files too big or unreadable
         self.other_mods = []             # mod folders inside the scanned folder, left out
+        self.rules = load_ignore(self.root)
+        self.user_dirs, self.user_files = [], 0     # left out by the ignore list
 
     def rel(self, path):
         return os.path.relpath(path, self.root).replace("\\", "/")
@@ -91,6 +137,9 @@ class Scan:
             for d in sorted(dirnames):
                 full = os.path.join(dirpath, d)
                 if d == BACKUP_DIR:
+                    continue
+                if self.rules and _ignored(self.rel(full), True, self.rules):
+                    self.user_dirs.append(self.rel(full) + "/")
                     continue
                 if os.path.normcase(os.path.abspath(full)) != data_abs and \
                         os.path.isfile(os.path.join(full, "data", "descr_sm_factions.txt")):
@@ -108,6 +157,9 @@ class Scan:
                 except OSError:
                     continue
                 rel = self.rel(p)
+                if self.rules and _ignored(rel, False, self.rules):
+                    self.user_files += 1
+                    continue
                 self.files.append((rel, size))
                 if word.search(os.path.splitext(n)[0]):
                     self.named.append(rel)
@@ -234,6 +286,11 @@ class Scan:
 
         if self.other_mods:
             out.append("    other mods inside this folder, not scanned: " + ", ".join(self.other_mods))
+        if self.rules:
+            out.append("    left out by %s: %d folder(s)%s, %d file(s) by mask"
+                       % (IGNORE_FILE, len(self.user_dirs),
+                          (" (" + ", ".join(self.user_dirs[:5]) + (" ..." if len(self.user_dirs) > 5 else "") + ")")
+                          if self.user_dirs else "", self.user_files))
         groups = {"handled": [], "read": [], "other": [], "ignore": []}
         why = {}
         for rel in sorted(self.hits, key=str.lower):

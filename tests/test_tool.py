@@ -314,6 +314,19 @@ class ToolTest(unittest.TestCase):
         self.assertFalse(any(r.startswith("somemod/") for r in rep.hits))
         self.assertEqual(rep.hits["notes.txt"], [(1, "alpha: Déjà vu")])
 
+    def test_scan_ignore_list(self):
+        write(os.path.join(self.root, "junk", "a.txt"), "alpha\n")
+        write(os.path.join(self.root, "data", "deep", "old_stuff", "b.txt"), "alpha\n")
+        write(os.path.join(self.root, "data", "c.bak.txt"), "alpha\n")
+        write(os.path.join(self.root, "data", "keep.txt"), "alpha\n")
+        write(os.path.join(self.root, "faction_tool_ignore.txt"), "# comment\njunk/\nold_stuff/\n*.bak.txt\n")
+        rep = scan(ModData(self.root), "alpha", "test")
+        self.assertIn("data/keep.txt", rep.hits)
+        for gone in ("junk/a.txt", "data/deep/old_stuff/b.txt", "data/c.bak.txt"):
+            self.assertNotIn(gone, rep.hits)
+        self.assertEqual(sorted(rep.user_dirs), ["data/deep/old_stuff/", "junk/"])
+        self.assertIn("left out by faction_tool_ignore.txt: 2 folder(s)", rep.report())
+
     def test_descriptions(self):
         mod = ModData(self.root)
         plan = build(mod, "test", "alpha", "beta", {

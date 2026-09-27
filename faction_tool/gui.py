@@ -9,7 +9,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 from .build import build, template_display
 from .moddata import ModData
 from .plan import backups, restore
-from .scan import scan as scan_mod
+from .scan import IGNORE_HELP, ignore_path, scan as scan_mod
 from .strat import Strat
 
 APP = "RTW Faction Tool"
@@ -317,7 +317,7 @@ class App(tk.Tk):
         mod = ModData(self.mod.data)
         return build(mod, self.v_campaign.get(), template, name, opts)
 
-    def show_text(self, title, text):
+    def show_text(self, title, text, extra=()):
         w = tk.Toplevel(self)
         w.title(title)
         w.geometry("900x600")
@@ -340,6 +340,8 @@ class App(tk.Tk):
         bar.pack(side="bottom", fill="x")
         ttk.Button(bar, text="Copy all", command=copy_all).pack(side="left")
         ttk.Button(bar, text="Save as...", command=save_as).pack(side="left", padx=4)
+        for label, cmd in extra:
+            ttk.Button(bar, text=label, command=cmd).pack(side="left", padx=4)
         status = ttk.Label(bar, text="")
         status.pack(side="left", padx=8)
 
@@ -394,8 +396,35 @@ class App(tk.Tk):
                 self.after(200, wait)
                 return
             self.status.set("Scan done.")
-            self.show_text("Scan: %s - nothing written" % faction, result["text"])
+            self.show_text("Scan: %s - nothing written" % faction, result["text"],
+                           extra=[("Ignore list...", self.edit_ignore), ("Scan again", self.scan)])
         wait()
+
+    def edit_ignore(self):
+        """A small editor for the mod's faction_tool_ignore.txt."""
+        path = ignore_path(os.path.dirname(self.mod.data))
+        try:
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+        except OSError:
+            text = IGNORE_HELP
+        w = tk.Toplevel(self)
+        w.title("Scan ignore list - " + path)
+        w.geometry("700x420")
+        bar = ttk.Frame(w, padding=4)
+        bar.pack(side="bottom", fill="x")
+        t = tk.Text(w, wrap="none", font=("Consolas", 10), undo=True)
+        t.pack(fill="both", expand=True)
+        t.insert("1.0", text)
+
+        def save():
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(t.get("1.0", "end-1c").rstrip("\n") + "\n")
+            w.destroy()
+            self.status.set("Saved %s - press Scan mod again." % path)
+        ttk.Button(bar, text="Save", command=save).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+        t.focus_set()
 
     def preview(self):
         try:
