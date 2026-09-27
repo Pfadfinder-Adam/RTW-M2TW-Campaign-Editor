@@ -297,13 +297,51 @@ class App(tk.Tk):
         w = tk.Toplevel(self)
         w.title(title)
         w.geometry("900x600")
+
+        def copy_all():
+            w.clipboard_clear()
+            w.clipboard_append(text)
+            status.configure(text="Copied to the clipboard")
+
+        def save_as():
+            path = filedialog.asksaveasfilename(parent=w, defaultextension=".txt",
+                                                initialfile="faction_tool_report.txt",
+                                                filetypes=[("Text", "*.txt"), ("All files", "*.*")])
+            if path:
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+                status.configure(text="Saved to " + path)
+
+        bar = ttk.Frame(w, padding=4)
+        bar.pack(side="bottom", fill="x")
+        ttk.Button(bar, text="Copy all", command=copy_all).pack(side="left")
+        ttk.Button(bar, text="Save as...", command=save_as).pack(side="left", padx=4)
+        status = ttk.Label(bar, text="")
+        status.pack(side="left", padx=8)
+
         t = tk.Text(w, wrap="none", font=("Consolas", 10))
         sb = ttk.Scrollbar(w, orient="vertical", command=t.yview)
-        t.configure(yscrollcommand=sb.set)
+        hb = ttk.Scrollbar(w, orient="horizontal", command=t.xview)
+        t.configure(yscrollcommand=sb.set, xscrollcommand=hb.set)
         sb.pack(side="right", fill="y")
+        hb.pack(side="bottom", fill="x")
         t.pack(fill="both", expand=True)
         t.insert("1.0", text)
-        t.configure(state="disabled")
+        # Read-only but still selectable. Ctrl+A / Ctrl+C go by Windows keycode so they
+        # also work with a non-Latin keyboard layout.
+        def on_key(e):
+            if e.state & 0x4 and (e.keycode == 65 or e.keysym.lower() == "a"):
+                t.tag_add("sel", "1.0", "end-1c")
+            elif e.state & 0x4 and (e.keycode == 67 or e.keysym.lower() == "c"):
+                t.event_generate("<<Copy>>")
+            elif e.keysym in ("Up", "Down", "Left", "Right", "Prior", "Next", "Home", "End"):
+                return None
+            return "break"
+
+        t.bind("<Key>", on_key)
+        t.bind("<<Paste>>", lambda e: "break")
+        t.bind("<<Cut>>", lambda e: "break")
+        t.focus_set()
 
     def preview(self):
         try:
