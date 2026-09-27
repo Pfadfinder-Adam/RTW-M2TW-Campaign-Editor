@@ -359,6 +359,8 @@ def scan(mod, faction, campaign=None, progress=None):
 # (untouched or changed) from files a mod or the user added
 # ---------------------------------------------------------------------------
 MANIFEST_NAME = "rtw_manifest.json.gz"
+# the official expansions keep their own data folders but are part of the game
+EXPANSIONS = {"bi", "alexander"}
 
 
 def make_manifest(game_root, out_path=None, progress=None):
@@ -376,7 +378,8 @@ def make_manifest(game_root, out_path=None, progress=None):
             full = os.path.join(dirpath, d)
             if d == BACKUP_DIR:
                 continue
-            if dirpath == game_root and os.path.isfile(os.path.join(full, "data", "descr_sm_factions.txt")):
+            if dirpath == game_root and d.lower() not in EXPANSIONS and \
+                    os.path.isfile(os.path.join(full, "data", "descr_sm_factions.txt")):
                 skipped.append(d)
                 continue
             keep.append(d)
