@@ -172,3 +172,12 @@ def characters_after_tree(s):
                 bad.append(fb.name)
                 break
     return bad
+
+
+def village_block(region, faction):
+    """A settlement block for a region descr_strat leaves out. The game makes
+    such a region a rebel village with no buildings; taking it means writing
+    that village into the new owner's block."""
+    return ["settlement", "{", "\tlevel village", "\tregion %s" % region, "",
+            "\tyear_founded 0", "\tpopulation 400", "\tplan_set default_set",
+            "\tfaction_creator %s" % faction, "}"]

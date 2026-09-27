@@ -637,6 +637,28 @@ class ToolTest(unittest.TestCase):
         plan = edit(ModData(self.root), "test", "alpha", {"take": ["B_R"]})
         self.assertTrue(any("no army in B_R" in m for _, m in plan.warnings))
 
+    def test_region_without_settlement_is_a_rebel_village(self):
+        # the game makes a region descr_strat leaves out a rebel village; taking it writes that village
+        from faction_tool.edit import edit
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        red, blue, green, black = (255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 0, 0)
+        px = [[red, red, blue, blue, green, green],
+              [red, black, blue, blue, green, black],
+              [red, red, black, blue, green, green],
+              [red, red, blue, blue, green, green]]
+        write_tga(os.path.join(camp, "map_regions.tga"), 6, 4, px)
+        write(os.path.join(camp, "descr_regions.txt"),
+              REGIONS + "C_R\n\tCtown\n\tslave\n\tRebels\n\t0 255 0\n\tnone\n\t5\n\t1\n")
+        mod = ModData(self.root)
+        path = mod.campaign_file("test", "descr_strat.txt")
+        plan = edit(mod, "test", "alpha", {"take": ["C_R"]})
+        st = Strat(plan.files[path]).settlement_of("C_R")
+        self.assertEqual(st.owner, "alpha")
+        self.assertIn("\tlevel village", Strat(plan.files[path]).lines[st.start:st.end])
+        plan = build(ModData(self.root), "test", "alpha", "beta", {"start": {"regions": ["C_R"],
+                                                                            "leader": {"name": "Boris"}}})
+        self.assertEqual(Strat(plan.files[path]).settlement_of("C_R").owner, "beta")
+
     def test_ships_owned_by_culture(self):
         # vanilla gives ships to cultures ("ownership roman, greek"), not factions
         with open(os.path.join(self.root, "data", "export_descr_unit.txt"), "a") as fh:

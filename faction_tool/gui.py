@@ -466,7 +466,7 @@ class App(tk.Tk):
             self._cmap_for = key
             self._colours_all = faction_colours(self.mod)
             self.status.set("")
-        owners = self.strat.owners()
+        owners = self.town_owners()
         colours = dict(self._colours_all)
         me = self.v["template"].get().strip() if self.editing() else (self.v["name"].get().strip().lower() or "(new)")
         if not self.editing():
@@ -554,11 +554,6 @@ class App(tk.Tk):
 
     def map_city(self, region):
         """A click on a town on the map: add it to Chosen, or take it out."""
-        if region not in self.chosen and self.strat and region not in self.strat.owners():
-            messagebox.showinfo(APP, "%s has no town at the start of this campaign: descr_strat.txt has no "
-                                "settlement for it, so there is nothing to hand over.\n\n"
-                                "Founding a new town there is not supported yet." % region)
-            return
         if region in self.chosen:
             self.chosen.remove(region)
             self.garrisons.pop(region, None)
@@ -705,19 +700,35 @@ class App(tk.Tk):
         if self.editing() and t and self.strat.faction(t):
             self.load_existing()
 
+    def villages(self):
+        """Regions descr_strat.txt leaves out: the game makes each a rebel village."""
+        if not self.strat or not self.mod:
+            return set()
+        owners = self.strat.owners()
+        tiles = self.mod.city_tiles(self.v_campaign.get())
+        return {r for r in self.regions if r not in owners and tiles.get(r)}
+
+    def town_owners(self):
+        """{region: owner} with those villages as the rebels'."""
+        owners = self.strat.owners() if self.strat else {}
+        owners.update({r: "slave" for r in self.villages()})
+        return owners
+
     def fill_towns(self):
         if not self.strat:
             return
         self.tv.delete(*self.tv.get_children())
         q = self.v_search.get().lower().strip()
         want = self.v_owner.get()
-        for region, owner in sorted(self.strat.owners().items(), key=lambda x: (x[1] != "slave", x[1], x[0])):
+        villages = self.villages()
+        for region, owner in sorted(self.town_owners().items(), key=lambda x: (x[1] != "slave", x[1], x[0])):
             town = self.regions.get(region, {}).get("settlement", "")
             if want not in ("", "(all)") and owner != want:
                 continue
             if q and q not in region.lower() and q not in town.lower():
                 continue
-            self.tv.insert("", "end", iid=region, text=region, values=(town, owner))
+            self.tv.insert("", "end", iid=region, text=region,
+                           values=(town + (" (village, not in descr_strat)" if region in villages else ""), owner))
 
     def template_changed(self):
         t = self.v["template"].get()
@@ -786,7 +797,7 @@ class App(tk.Tk):
             self.lb_build.selection_set(bsel[0])
         self.lb.delete(0, "end")
         for r in self.chosen:
-            owner = self.strat.owners().get(r, "?") if self.strat else "?"
+            owner = self.town_owners().get(r, "?") if self.strat else "?"
             mark = "  [%d units]" % len(self.garrisons[r]) if r in self.garrisons else ""
             self.lb.insert("end", "%s  (%s)%s" % (r, owner, mark))
         self.cb_capital["values"] = self.chosen

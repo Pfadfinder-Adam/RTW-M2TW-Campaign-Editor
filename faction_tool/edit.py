@@ -9,7 +9,7 @@ from .buildings import settlement_info
 from .clone import FE_NAMES, description_key, entry_end
 from .plan import Plan
 from .start import MAX_UNITS, _has_army, _units, unit_name
-from .strat import RE_XY, Strat
+from .strat import RE_XY, Strat, village_block
 from .textio import tokens
 
 RE_RGB = re.compile(r"red\s*(\d+)\s*,\s*green\s*(\d+)\s*,\s*blue\s*(\d+)")
@@ -270,6 +270,9 @@ def _towns(plan, f, campaign):
     s = Strat(f)
     tiles = mod.city_tiles(campaign)
     owners = s.owners()
+    # a region with no settlement block is a rebel village in the game
+    villages = {r for r in mod.regions(campaign) if r not in owners and tiles.get(r)}
+    owners.update({r: "slave" for r in villages})
     moves = [(r, owners.get(r), fac) for r in plan.opts.get("take") or []]
     moves += [(r, fac, to or "slave") for r, to in (plan.opts.get("give") or {}).items()]
     for r, old, new in moves:
@@ -286,8 +289,13 @@ def _towns(plan, f, campaign):
     sets, cuts, to_add = {}, [], {}        # line -> text; (start, end); owner -> {"towns": [], "chars": []}
     for r, old, new in moves:
         st = s.settlement_of(r)
-        cuts.append((st.start, st.end))
-        to_add.setdefault(new, {"towns": [], "chars": []})["towns"].append(list(f.raw[st.start:st.end]))
+        if st is None:                          # the game's rebel village, written out
+            block = [f.make(l) for l in village_block(r, new)]
+            plan.note(f, "%s: the rebel village (no settlement in descr_strat.txt) is written as a village" % r)
+        else:
+            cuts.append((st.start, st.end))
+            block = list(f.raw[st.start:st.end])
+        to_add.setdefault(new, {"towns": [], "chars": []})["towns"].append(block)
         xy = tiles.get(r)
         ob = s.faction(old)
         for c in [c for c in ob.characters if xy and c.xy == xy]:

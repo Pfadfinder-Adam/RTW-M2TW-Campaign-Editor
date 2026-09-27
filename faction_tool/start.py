@@ -2,8 +2,9 @@
 characters and diplomacy."""
 
 import re
+from types import SimpleNamespace
 
-from .strat import Strat, RE_XY
+from .strat import Strat, RE_XY, village_block
 from .textio import strip_comment, tokens
 
 
@@ -195,15 +196,21 @@ def build_start(plan, campaign, start):
     for r in regions:
         st = s.settlement_of(r)
         if st is None:
-            raise ValueError("%s has no settlement in descr_strat.txt" % r)
-        if st.owner == new:
-            continue
-        owner = s.faction(st.owner)
-        block_raw = list(f.raw[st.start:st.end])
+            if r not in plan.mod.regions(campaign) or not tiles.get(r):
+                raise ValueError("%s is not a region of this campaign's map" % r)
+            # the game makes such a region a rebel village: write that village out
+            st = SimpleNamespace(owner="slave", start=None, end=None)
+            block_raw = [f.make(l) for l in village_block(r, new)]
+            plan.note(f, "%s: the rebel village (no settlement in descr_strat.txt) is written as a village" % r)
+        else:
+            if st.owner == new:
+                continue
+            block_raw = list(f.raw[st.start:st.end])
         if r in picked_buildings:
             block_raw = _with_buildings(plan, f, r, block_raw, picked_buildings[r])
         moved_blocks.append(block_raw)
-        removals.append((st.start, st.end))
+        if st.start is not None:
+            removals.append((st.start, st.end))
         losers.setdefault(st.owner, []).append(r)
         tile = tiles.get(r)
         if not tile:
