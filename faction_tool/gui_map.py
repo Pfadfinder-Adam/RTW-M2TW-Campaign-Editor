@@ -152,7 +152,10 @@ class MapView(ttk.Frame):
                 sx, sy = self.to_screen(x, y)
                 if -10 < sx < cw + 10 and -10 < sy < ch + 10:
                     r = size * 0.45
-                    c.create_oval(sx - r, sy - r, sx + r, sy + r, fill="#2a6fdb", outline="white", width=1)
+                    tags = ("port", "port:" + region)
+                    c.create_oval(sx - r, sy - r, sx + r, sy + r, fill="#2a6fdb", outline="white", width=1, tags=tags)
+                    if r >= 5:
+                        self._anchor(sx, sy, r, tags)
         for region, (x, y) in cm.cities.items():
             sx, sy = self.to_screen(x, y)
             if not (-40 < sx < cw + 40 and -20 < sy < ch + 20):
@@ -165,12 +168,40 @@ class MapView(ttk.Frame):
                                fill="" if owner is None else "#%02x%02x%02x" % rgb,    # hollow: no town at the start
                                outline="#ffd400" if mine else "black", width=3 if mine else 1,
                                tags=("city", "city:" + region))
+            if r >= 6:
+                self._hall(sx, sy, size / 2, rgb, ("city", "city:" + region))
             if self.v_names.get() and (self.z >= 4 or mine):
                 name = cm.info.get(region, {}).get("settlement", region)
                 c.create_text(sx + r + 3, sy + 1, text=name, anchor="w", fill="black", font=font)   # shadow
                 c.create_text(sx + r + 2, sy, text=name, anchor="w", fill="white", font=font)
         if self.v_chars.get() and self.z >= 2:
             self._characters(cw, ch, size)
+
+    def _anchor(self, sx, sy, r, tags):
+        """An anchor inside the port's circle: ring, shank, stock and flukes."""
+        c, w = self.canvas, max(1, int(r / 6))
+        k = r * 0.14
+        c.create_oval(sx - k, sy - r * 0.72 - k, sx + k, sy - r * 0.72 + k, outline="white", width=w, tags=tags)
+        c.create_line(sx, sy - r * 0.58, sx, sy + r * 0.62, fill="white", width=w, tags=tags)
+        c.create_line(sx - r * 0.35, sy - r * 0.35, sx + r * 0.35, sy - r * 0.35, fill="white", width=w, tags=tags)
+        a = r * 0.55
+        c.create_arc(sx - a, sy + r * 0.62 - a, sx + a, sy + r * 0.62 + a, start=200, extent=140,
+                     style="arc", outline="white", width=w, tags=tags)
+
+    def _hall(self, sx, sy, r, rgb, tags):
+        """A town hall inside the town's square: roof, three columns, steps -
+        light on a dark owner colour, dark on a light one."""
+        c = self.canvas
+        ink = "#202020" if sum(rgb) > 420 else "#f4f0e0"
+        # roof (pediment) and the beam under it
+        c.create_polygon(sx - r * 0.8, sy - r * 0.38, sx, sy - r * 0.82, sx + r * 0.8, sy - r * 0.38,
+                         fill=ink, outline="", tags=tags)
+        c.create_rectangle(sx - r * 0.72, sy - r * 0.34, sx + r * 0.72, sy - r * 0.24, fill=ink, outline="", tags=tags)
+        for cx in (-0.48, 0, 0.48):                   # three columns
+            c.create_rectangle(sx + r * (cx - 0.1), sy - r * 0.2, sx + r * (cx + 0.1), sy + r * 0.42,
+                               fill=ink, outline="", tags=tags)
+        c.create_rectangle(sx - r * 0.72, sy + r * 0.46, sx + r * 0.72, sy + r * 0.58, fill=ink, outline="", tags=tags)
+        c.create_rectangle(sx - r * 0.84, sy + r * 0.62, sx + r * 0.84, sy + r * 0.76, fill=ink, outline="", tags=tags)
 
     # ---- characters ----
     AGENT_LETTER = {"spy": "S", "diplomat": "D", "assassin": "A", "merchant": "M", "priest": "P"}
