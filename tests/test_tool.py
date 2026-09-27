@@ -490,6 +490,75 @@ class ToolTest(unittest.TestCase):
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
         self.assertEqual(before, after)
 
+    def _three_towns(self):
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        red, blue, green, black = (255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 0, 0)
+        px = [[red, red, blue, blue, green, green],
+              [red, black, blue, blue, green, black],
+              [red, red, black, blue, green, green],
+              [red, red, blue, blue, green, green]]
+        write_tga(os.path.join(camp, "map_regions.tga"), 6, 4, px)
+        write(os.path.join(camp, "descr_regions.txt"),
+              REGIONS + "C_R\n\tCtown\n\tslave\n\tRebels\n\t0 255 0\n\tnone\n\t5\n\t1\n")
+        write(os.path.join(camp, "descr_strat.txt"), STRAT.replace(
+            ";;\tBtown", "settlement\n{\n\tlevel village\n\tregion C_R\n\tpopulation 400\n}\n\n;;\tBtown"))
+
+    def test_edit_takes_and_gives_towns(self):
+        from faction_tool.edit import edit, read_faction
+        self._three_towns()
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        plan = edit(mod, "test", "alpha", {"take": ["B_R", "C_R"], "give": {"A_R": "slave"}, "capital": "C_R",
+                                           "leader": {"name": "Boris Alphid", "age": 50}})
+        plan.apply()
+        mod = ModData(self.root)
+        now = read_faction(mod, "test", "alpha")
+        self.assertEqual(now["regions"], ["C_R", "B_R"])                 # the capital first
+        self.assertEqual(now["leader"], {"name": "Boris Alphid", "age": 50})
+        s = Strat(mod.load(mod.campaign_file("test", "descr_strat.txt")))
+        self.assertEqual(s.owners(), {"A_R": "slave", "B_R": "alpha", "C_R": "alpha"})
+        self.assertEqual([c.name for c in s.faction("slave").characters], [])     # Grog's rebels left
+        boris = s.faction("alpha").characters[0]
+        self.assertIn(boris.xy, [(2, 2), (5, 1)])                        # moved into one of its new towns
+        restore(mod, backups(mod)[0])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        self.assertEqual(before, after)
+        with self.assertRaises(ValueError):                               # a name with no string
+            edit(ModData(self.root), "test", "alpha", {"leader": {"name": "Zed"}})
+
+    def test_long_texts_are_copied_whole(self):
+        # a value runs over several lines until the next {KEY}; the copy must not split it
+        body = ("{hut_alpha}\t\tAlphan Hut\n"
+                "{hut_alpha_desc}\t\tFirst line of the Alphans.\\n\\n\n"
+                "Second paragraph.\n"
+                "Third paragraph.\n\n"
+                "{hut_other}\t\tSomeone else\n")
+        write(os.path.join(self.root, "data", "text", "export_buildings.txt"), body, utf16=True)
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"display_name": "Betan League", "adjective": "Betan",
+                                                    "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        path = [p for p in mod.text_files() if p.endswith("export_buildings.txt")][0]
+        text = "\n".join(plan.files[path].texts())
+        self.assertIn("{hut_alpha_desc}\t\tFirst line of the Alphans.\\n\\n\nSecond paragraph.\nThird paragraph.\n"
+                      "{hut_beta_desc}", text)                              # the template's text is whole
+        self.assertIn("{hut_beta_desc}\t\tFirst line of the Betans.\\n\\n\nSecond paragraph.\nThird paragraph.",
+                      text)
+        # and editing replaces the whole value, not just its first line
+        from faction_tool.edit import edit, read_faction
+        plan.apply()
+        mod = ModData(self.root)
+        write(os.path.join(self.root, "data", "text", "campaign_descriptions.txt"),
+              "{TEST_ALPHA_DESCR}\t\tOne.\\n\nTwo.\n{TEST_ALPHA_TITLE}\t\tA\n", utf16=True)
+        eb = os.path.join(self.root, "data", "text", "expanded_bi.txt")
+        with open(eb, "rb") as fh:
+            kept = fh.read().decode("utf-16").replace("{TEST_ALPHA_DESCR}\t\tThe long Alphan story\r\n", "")
+        write(eb, kept.replace("\r\n", "\n"), utf16=True)
+        mod = ModData(self.root)
+        self.assertEqual(read_faction(mod, "test", "alpha")["long_description"], "One.\n Two.")
+        p2 = edit(mod, "test", "alpha", {"long_description": "Fresh"})
+        cd = [p for p in mod.text_files() if p.endswith("campaign_descriptions.txt")][0]
+        self.assertEqual(p2.files[cd].texts()[:2], ["{TEST_ALPHA_DESCR}\t\tFresh", "{TEST_ALPHA_TITLE}\t\tA"])
+
     def test_campaign_screen_key_under_a_front_end_name(self):
         # the template's description sits under a front end name (like GAUL for gauls)
         from faction_tool import clone

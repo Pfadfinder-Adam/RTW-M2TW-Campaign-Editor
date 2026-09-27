@@ -44,6 +44,7 @@ class App(tk.Tk):
         self._edb_for, self._edb, self._bpics = None, [], None
         self.pictures = Pictures()
         self.colours = {"primary": None, "secondary": None}
+        self.editing_now = None
         self._build()
 
     # ------------------------------------------------------------------ layout
@@ -127,6 +128,7 @@ class App(tk.Tk):
         for b in self.dip_buttons:
             b.pack(side="left")
         field("Diplomacy", df)
+        self.dip_row = [df, lf.grid_slaves(row=row - 1, column=0)[0]]
         ttk.Label(lf, text="Tooltip\n(faction icon)").grid(row=row, column=0, sticky="nw", padx=4)
         self.t_descr = tk.Text(lf, width=34, height=2, wrap="word")
         self.t_descr.grid(row=row, column=1, sticky="we", padx=4, pady=2)
@@ -183,6 +185,12 @@ class App(tk.Tk):
         self.cb_capital = ttk.Combobox(cf2, textvariable=self.v["capital"], state="readonly", width=24)
         self.cb_capital.pack(fill="x")
         self.cb_capital.bind("<<ComboboxSelected>>", lambda e: self.refresh_chosen())
+        # Edit: where the towns taken out of Chosen go
+        self.give_frame = ttk.Frame(cf2)
+        ttk.Label(self.give_frame, text="Removed towns go to").pack(anchor="w", pady=(6, 0))
+        self.v_give = tk.StringVar(value="slave")
+        self.cb_give = ttk.Combobox(self.give_frame, textvariable=self.v_give, state="readonly", width=24)
+        self.cb_give.pack(fill="x")
         mid = ttk.Frame(left_pane)
         mid.pack(side="right", padx=6)
         self.b_add = ttk.Button(mid, text="Add >", command=self.add_town)
@@ -303,23 +311,28 @@ class App(tk.Tk):
         edit = self.editing()
         self.lf.configure(text="Edit faction" if edit else "New faction")
         self.lbl_template.configure(text="Faction (edited)" if edit else "Template (copied)")
-        state = "disabled" if edit else "normal"
-        for w in [self.e_name, self.chk_triggers, self.chk_art, self.b_add, self.b_remove] + self.dip_buttons:
-            w.configure(state=state)
-        for w in self.lf2.winfo_children():
-            try:
-                w.configure(state=state)
-            except tk.TclError:
-                pass
+        self.lf2.configure(text="Leader and heir (names from the faction's name list)" if edit else
+                           "Leader and heir (names must come from the template's name list)")
+        self.e_name.configure(state="readonly" if edit else "normal")
+        # cloning-only options are hidden in Edit (diplomacy gets its own editor later)
+        for w in [self.chk_triggers, self.chk_art] + self.dip_row:
+            if edit:
+                w.grid_remove()
+            else:
+                w.grid()
+        if edit:
+            self.give_frame.pack(fill="x")
+        else:
+            self.give_frame.pack_forget()
         for w in self.units_opts.winfo_children():
             try:
-                w.configure(state=state)
+                w.configure(state="disabled" if edit else "normal")
             except tk.TclError:
                 pass
-        self.cb_capital.configure(state="disabled" if edit else "readonly")
         self.b_create.configure(text="Apply changes" if edit else "Create faction")
         self.garrison_editor.auto_text = ("unchanged - the town keeps its garrison" if edit else None)
         self.chosen, self.garrisons, self.buildings_picked = [], {}, {}
+        self.editing_now = None
         self.refresh_chosen()
         if edit and self.v["template"].get():
             self.template_changed()
@@ -348,6 +361,15 @@ class App(tk.Tk):
             self.colours[key] = rgb
             if rgb:
                 b.configure(bg="#%02x%02x%02x" % tuple(rgb))
+        for role in ("leader", "heir"):
+            who = now.get(role) or {}
+            name = who.get("name", "")
+            first = name.split(" ")[0] if name else ""
+            self.v[role + "_first"].set(first)
+            self.v[role + "_last"].set(name[len(first):].strip())
+            self.v[role + "_age"].set(str(who.get("age") or ""))
+        self.cb_give["values"] = [n for n, _ in self.mod.factions() if n != faction]
+        self.v_give.set("slave")
         self.chosen = list(now.get("regions", []))
         self.garrisons, self.buildings_picked = {}, {}
         if self.chosen:
@@ -649,6 +671,13 @@ class App(tk.Tk):
         v = {k: x.get().strip() for k, x in self.v.items()}
         if not v["template"]:
             raise ValueError("pick the faction to edit")
+        had = list((self.editing_now or {}).get("regions", []))
+
+        def person(role):
+            if not v[role + "_first"]:
+                return None
+            return {"name": (v[role + "_first"] + " " + v[role + "_last"]).strip(),
+                    "age": int(v[role + "_age"]) if v[role + "_age"].isdigit() else None}
         return v["template"], {
             "display_name": v["display_name"], "short_name": v["short_name"], "adjective": v["adjective"],
             "description": self.t_descr.get("1.0", "end").strip(),
@@ -656,6 +685,10 @@ class App(tk.Tk):
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "ai": v["ai"], "denari": int(v["denari"]) if v["denari"].isdigit() else None,
             "playable": self.v_playable.get(),
+            "take": [r for r in self.chosen if r not in had],
+            "give": {r: self.v_give.get() or "slave" for r in had if r not in self.chosen},
+            "capital": v["capital"] if self.chosen and v["capital"] in self.chosen else None,
+            "leader": person("leader"), "heir": person("heir"),
             "garrisons": dict(self.garrisons),
             "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()}}
 

@@ -6,10 +6,10 @@ import re
 
 from .build import template_display, validate
 from .buildings import settlement_info
-from .clone import FE_NAMES, description_key
+from .clone import FE_NAMES, description_key, entry_end
 from .plan import Plan
 from .start import MAX_UNITS, _has_army, _units, unit_name
-from .strat import Strat
+from .strat import RE_XY, Strat
 from .textio import tokens
 
 RE_RGB = re.compile(r"red\s*(\d+)\s*,\s*green\s*(\d+)\s*,\s*blue\s*(\d+)")
@@ -17,7 +17,16 @@ RE_KEY = re.compile(r"^(\s*\{)([A-Za-z0-9_]+)(\}.*)$")
 
 
 def _unescape(v):
-    return v.strip().replace("\\n", "\n")
+    """A string value as text: '\\n' is a line break; the file's own line breaks
+    inside a long value are only wrapping."""
+    return " ".join(x.strip() for x in v.splitlines()).replace("\\n", "\n").strip()
+
+
+def _value(texts, i):
+    """The whole value of the entry at line i (a long text spans lines)."""
+    end = entry_end(texts, i)
+    first = RE_KEY.match(texts[i]).group(3)[1:]
+    return "\n".join([first] + texts[i + 1:end])
 
 
 def read_faction(mod, campaign, faction):
@@ -29,11 +38,12 @@ def read_faction(mod, campaign, faction):
             for m in [RE_KEY.match(l)] if m}
     long_key = description_key(faction, campaign, keys) + "_DESCR"
     for path in mod.campaign_text_files(campaign):
-        for line in mod.load(path).texts():
+        texts = mod.load(path).texts()
+        for i, line in enumerate(texts):
             m = RE_KEY.match(line)
-            if not m:
+            if not m or not m.group(2).upper().endswith("DESCR"):
                 continue
-            key, val = m.group(2).upper(), m.group(3)[1:]
+            key, val = m.group(2).upper(), _value(texts, i)
             if key == F + "_DESCR" and "description" not in out:
                 out["description"] = _unescape(val)
             elif key == long_key and "long_description" not in out:
@@ -59,6 +69,10 @@ def read_faction(mod, campaign, faction):
             break
     out["playable"] = bool(s.playable and faction in [n for _, n in s.playable["items"]])
     out["regions"] = [st.region for st in fb.settlements]
+    for c in fb.characters:
+        if c.role in ("leader", "heir") and c.role not in out:
+            m = re.search(r"\bage\s+(\d+)", s.lines[c.start])
+            out[c.role] = {"name": c.name, "age": int(m.group(1)) if m else None}
     return out
 
 
@@ -114,25 +128,33 @@ def _texts(plan, now, campaign):
         f = None
         n = 0
         texts = plan.mod.load(path).texts()
-        for i, line in enumerate(texts):
-            m = RE_KEY.match(line)
-            if not m or not word.search(m.group(2).upper()):
+        edits = []                                  # (start, end, new lines)
+        i = 0
+        while i < len(texts):
+            m = RE_KEY.match(texts[i])
+            if not m:
+                i += 1
                 continue
-            key = m.group(2).upper()
-            value = m.group(3)[1:]
-            gap = value[:len(value) - len(value.lstrip())]
-            if key in set_to:
-                new = gap + set_to[key].replace("\n", "\\n")
-            else:
-                new = value
-                for a, b in pairs:
-                    new = re.sub(r"(?<![A-Za-z])%s(?![a-z])" % re.escape(a), b, new)
-            if new != value:
-                f = f or plan.edit(path)
-                f.set(i, m.group(1) + m.group(2) + "}" + new)
-                n += 1
-        if n:
-            plan.note(f, "%d string(s) changed" % n)
+            end = entry_end(texts, i)
+            if word.search(m.group(2).upper()):
+                key = m.group(2).upper()
+                value = m.group(3)[1:]
+                gap = value[:len(value) - len(value.lstrip())]
+                old = [value] + texts[i + 1:end]
+                if key in set_to:
+                    new = [gap + set_to[key].replace("\n", "\\n")]
+                else:
+                    new = list(old)
+                    for a, b in pairs:
+                        new = [re.sub(r"(?<![A-Za-z])%s(?![a-z])" % re.escape(a), b, x) for x in new]
+                if new != old:
+                    edits.append((i, end, [m.group(1) + m.group(2) + "}" + new[0]] + new[1:]))
+            i = end
+        if edits:
+            f = plan.edit(path)
+            for a, b, lines in reversed(edits):
+                f.raw[a:b] = [f.make(x) for x in lines]
+            plan.note(f, "%d string(s) changed" % len(edits))
 
 
 def _colours(plan):
@@ -193,9 +215,144 @@ def _strat(plan, campaign, now):
                 break
     if o.get("playable") is not None and bool(o["playable"]) != now.get("playable"):
         _move_list(plan, f, fac, bool(o["playable"]))
+    if o.get("take") or o.get("give"):
+        _towns(plan, f, campaign)
+    _people(plan, f, now)
+    if o.get("capital"):
+        _capital(plan, f, o["capital"])
     s = Strat(f)
     _garrisons(plan, f, s, campaign)
     _buildings(plan, f, Strat(f))
+
+
+def _towns(plan, f, campaign):
+    """Take towns from other owners (opts['take'] = [region]) and give towns away
+    (opts['give'] = {region: new owner}). The whole settlement block moves.
+    In a town that changes hands: the old owner's named characters and agents
+    go to one of its other towns (next to it if that town has an army already);
+    a captain with a garrison (not named) goes with the town to its new owner,
+    except rebels leaving a town, who simply go."""
+    mod, fac = plan.mod, plan.new
+    s = Strat(f)
+    tiles = mod.city_tiles(campaign)
+    owners = s.owners()
+    moves = [(r, owners.get(r), fac) for r in plan.opts.get("take") or []]
+    moves += [(r, fac, to or "slave") for r, to in (plan.opts.get("give") or {}).items()]
+    for r, old, new in moves:
+        if old is None:
+            raise ValueError("%s has no settlement in descr_strat.txt" % r)
+        if old == new:
+            raise ValueError("%s already belongs to %s" % (r, new))
+        if not s.faction(new):
+            raise ValueError("%s has no faction block in descr_strat.txt" % new)
+    moving = {r for r, _, _ in moves}
+    taken = set(tiles.values()) | {c.xy for fb in s.factions for c in fb.characters if c.xy}
+    armies_at = {c.xy for fb in s.factions for c in fb.characters
+                 if c.xy and _has_army(s.lines[c.start:c.end])}
+    sets, cuts, to_add = {}, [], {}        # line -> text; (start, end); owner -> {"towns": [], "chars": []}
+    for r, old, new in moves:
+        st = s.settlement_of(r)
+        cuts.append((st.start, st.end))
+        to_add.setdefault(new, {"towns": [], "chars": []})["towns"].append(list(f.raw[st.start:st.end]))
+        xy = tiles.get(r)
+        ob = s.faction(old)
+        for c in [c for c in ob.characters if xy and c.xy == xy]:
+            army = _has_army(s.lines[c.start:c.end])
+            if old == "slave":                  # rebels do not move anywhere: they leave with the town
+                cuts.append((c.start, c.end))
+                armies_at.discard(c.xy)
+                plan.note(f, "%s: the rebel %s leaves" % (r, c.name))
+                continue
+            if army and not c.named:
+                cuts.append((c.start, c.end))
+                armies_at.discard(c.xy)
+                if old == "slave":
+                    plan.note(f, "%s: the rebel garrison of %s leaves" % (r, c.name))
+                else:
+                    chunk = list(f.raw[c.start:c.end])
+                    chunk[0] = re.sub(r"(character\s*,?\s*)sub_faction\s+\S+\s*,\s*", r"\1", chunk[0], 1)
+                    to_add[new]["chars"].append(chunk)
+                    plan.note(f, "%s: captain %s and his garrison go over to %s" % (r, c.name, new))
+                continue
+            keep = [x.region for x in ob.settlements if x.region not in moving and tiles.get(x.region)]
+            if old == fac:                  # the towns this faction takes are its own too
+                keep += [t for t in plan.opts.get("take") or [] if tiles.get(t)]
+            if not keep:
+                raise ValueError("%s: %s of %s stands in the town and %s has no other town to go to"
+                                 % (r, c.name, old, old))
+            dest = tiles[keep[0]]
+            if army and dest in armies_at:
+                dest = mod.free_tile(campaign, keep[0], taken)
+                if not dest:
+                    raise ValueError("%s: no free tile next to %s for %s" % (r, keep[0], c.name))
+            taken.add(dest)
+            if army:
+                armies_at.add(dest)
+            sets[c.start] = RE_XY.sub("x %d, y %d" % dest, f.text(c.start), 1)
+            plan.note(f, "%s: %s of %s moves to %s" % (r, c.name, old, keep[0]))
+        plan.note(f, "%s: %s -> %s" % (r, old, new))
+    for i, text in sets.items():
+        f.set(i, text)
+    for a, b in sorted(cuts, reverse=True):
+        del f.raw[a:b]
+    for owner, add in to_add.items():
+        s = Strat(f)
+        fb = s.faction(owner)
+        if add["chars"]:
+            f.raw[fb.end:fb.end] = [l for ch in add["chars"] for l in ch + [f.make("")]]
+        if fb.settlements:
+            at = fb.settlements[-1].end
+        else:
+            at = next((i + 1 for i in range(fb.start, fb.end) if tokens(f.text(i))[:1] == ["denari"]), fb.start + 1)
+        f.raw[at:at] = [l for t in add["towns"] for l in t]
+    left = [st.region for st in Strat(f).faction(fac).settlements]
+    if not left:
+        plan.warn(f, "%s is left with no town - it starts as a horde or dies on turn 1" % fac)
+
+
+def _people(plan, f, now):
+    """New names (from the faction's own name list) and ages for leader and heir."""
+    pool = plan.mod.name_pool(plan.new) or {}
+    fb = Strat(f).faction(plan.new)
+    for role in ("leader", "heir"):
+        want, have = plan.opts.get(role), now.get(role)
+        if not want or not have:
+            continue
+        c = next((c for c in fb.characters if c.role == role), None)
+        if c is None:
+            continue
+        name = (want.get("name") or have["name"]).strip()
+        age = want.get("age") or have["age"]
+        if name == have["name"] and age == have["age"]:
+            continue
+        first = name.split(" ")[0]
+        if pool and first not in pool.get("characters", []):
+            raise ValueError("%s: '%s' is not in %s's name list - the game crashes on names it has no string for"
+                             % (role, first, plan.new))
+        rest = name[len(first):].strip()
+        if rest and pool and rest not in pool.get("surnames", []):
+            raise ValueError("%s: surname '%s' is not in %s's surname list" % (role, rest, plan.new))
+        line = f.text(c.start)
+        line = line.replace(have["name"], name, 1)
+        if age:
+            line = re.sub(r"\bage\s+\d+", "age %d" % int(age), line, 1)
+        f.set(c.start, line)
+        plan.note(f, "%s: %s, age %s" % (role, name, age))
+
+
+def _capital(plan, f, capital):
+    """The capital is the faction's first settlement block: move it to the front."""
+    fb = Strat(f).faction(plan.new)
+    sts = fb.settlements
+    st = next((x for x in sts if x.region == capital), None)
+    if st is None:
+        raise ValueError("%s is not a town of %s" % (capital, plan.new))
+    if st is sts[0]:
+        return
+    block = f.raw[st.start:st.end]
+    del f.raw[st.start:st.end]
+    f.raw[sts[0].start:sts[0].start] = block
+    plan.note(f, "capital: %s (now the first settlement of %s)" % (capital, plan.new))
 
 
 def _move_list(plan, f, fac, playable):

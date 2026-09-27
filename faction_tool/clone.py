@@ -334,6 +334,18 @@ def win_conditions(plan, campaign):
 RE_KEY = re.compile(r"^(\s*\{)([A-Za-z0-9_]+)(\}.*)$")
 
 
+def entry_end(texts, i):
+    """A string's value runs from its {KEY} line up to the next {KEY} or '¬'
+    comment line: a long text spans several lines of the file. Trailing blank
+    lines belong to the gap, not the value."""
+    j = i + 1
+    while j < len(texts) and not texts[j].lstrip().startswith(("{", "\u00ac")):
+        j += 1
+    while j > i + 1 and not texts[j - 1].strip():
+        j -= 1
+    return j
+
+
 def text_strings(plan):
     t, new = plan.template.upper(), plan.new.upper()
     tparts = t.split("_")
@@ -356,6 +368,7 @@ def text_strings(plan):
                 i += 1
                 continue
             key = m.group(2)
+            end = entry_end(f.texts(), i)
             parts = key.upper().split("_")
             hit = None
             for p in range(len(parts) - len(tparts) + 1):
@@ -363,31 +376,35 @@ def text_strings(plan):
                     hit = p
                     break
             if hit is None:
-                i += 1
+                i = end
                 continue
             nparts = key.split("_")
-            new_key = "_".join(nparts[:hit] + [new] + nparts[hit + len(tparts):])
+            was = "_".join(nparts[hit:hit + len(tparts)])
+            part = new.lower() if was.islower() else new          # keep the key's own case
+            new_key = "_".join(nparts[:hit] + [part] + nparts[hit + len(tparts):])
             if new_key.upper() in keys:
-                i += 1
+                i = end
                 continue
             value = m.group(3)[1:]
             gap = value[:len(value) - len(value.lstrip())]
+            more = [f.text(k) for k in range(i + 1, end)]           # the rest of a long text
             if key.upper() == t and plan.opts.get("display_name"):
-                value = gap + plan.opts["display_name"]
+                value, more = gap + plan.opts["display_name"], []
             elif key.upper() == t + "_DESCR" and plan.opts.get("description"):
-                value = gap + plan.opts["description"].replace("\n", "\\n")
+                value, more = gap + plan.opts["description"].replace("\n", "\\n"), []
             elif key.upper().endswith("_" + t + "_DESCR") and plan.opts.get("long_description"):
                 # the campaign screen's long text, e.g. {IMPERIAL_CAMPAIGN_<FACTION>_DESCR}
-                value = gap + plan.opts["long_description"].replace("\n", "\\n")
+                value, more = gap + plan.opts["long_description"].replace("\n", "\\n"), []
                 long_keys.append(new_key)
             else:
                 for old, nw in repl:
                     value = value.replace(old, nw)
-            line = m.group(1) + new_key + "}" + value
-            f.insert(i + 1, [line])
+                    more = [l.replace(old, nw) for l in more]
+            # the copy goes after the template's whole entry, never inside it
+            f.insert(end, [m.group(1) + new_key + "}" + value] + more)
             keys.add(new_key.upper())
             n += 1
-            i += 2
+            i = end + 1 + len(more)
         if n:
             plan.note(f, "%d string(s) added" % n)
     if long_keys:
@@ -574,13 +591,17 @@ def campaign_description(plan, campaign):
             value = plan.opts.get("display_name") or ""
         else:
             value = (plan.opts.get("long_description") or "").replace("\n", "\\n")
+        more = []
         if not value and src + suffix in keys:
-            value = RE_KEY.match(f.text(keys[src + suffix])).group(3)[1:].strip()
+            k = keys[src + suffix]
+            value = RE_KEY.match(f.text(k)).group(3)[1:].strip()
+            more = [f.text(x) for x in range(k + 1, entry_end(f.texts(), k))]
         if not value:
             continue
-        at = keys.get(src + suffix, len(f) - 1) + 1
-        f.insert(at, ["{%s%s}\t%s" % (new_key, suffix, value)])
-        keys = {k: (v + 1 if v >= at else v) for k, v in keys.items()}
+        at = entry_end(f.texts(), keys[src + suffix]) if src + suffix in keys else len(f)
+        lines = ["{%s%s}\t%s" % (new_key, suffix, value)] + more
+        f.insert(at, lines)
+        keys = {k: (v + len(lines) if v >= at else v) for k, v in keys.items()}
         keys[new_key + suffix] = at
         added.append(new_key + suffix)
     if added:
