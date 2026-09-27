@@ -208,12 +208,8 @@ class MapView(ttk.Frame):
         elif ch_["army"]:
             h = max(size * 1.1, min(self.z * 1.6, 30))        # a readable flag when zoomed in
             c.create_line(sx, sy + h * 0.5, sx, sy - h * 0.6, fill="black", width=2, tags=tags)
-            img = self._symbol(ch_["faction"], int(h)) if self.z >= 6 else None
-            if img:
-                c.create_image(sx + 1, sy - h * 0.6, anchor="nw", image=img, tags=tags)
-            else:
-                c.create_polygon(sx, sy - h * 0.6, sx + h * 0.8, sy - h * 0.35, sx, sy - h * 0.1,
-                                 fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
+            c.create_polygon(sx, sy - h * 0.6, sx + h * 0.8, sy - h * 0.35, sx, sy - h * 0.1,
+                             fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
             if mine:
                 c.create_rectangle(sx - 2, sy + h * 0.5 - 2, sx + 2, sy + h * 0.5 + 2, fill="#ffd400", outline="",
                                    tags=tags)
