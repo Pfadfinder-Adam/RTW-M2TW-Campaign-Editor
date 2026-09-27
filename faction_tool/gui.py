@@ -2,6 +2,7 @@
 
 import copy
 import os
+import re
 import threading
 import traceback
 import tkinter as tk
@@ -297,9 +298,11 @@ class App(tk.Tk):
         ttk.Spinbox(rb, from_=1, to=6, width=3, textvariable=self.v_brush,
                     command=lambda: setattr(self.map_view, "brush", self.v_brush.get())).pack(side="left")
         ttk.Button(rb, text="New region...", command=self.new_region_dialog).pack(side="left", padx=(12, 2))
-        ttk.Button(rb, text="Its town", command=lambda: self.region_point("city")).pack(side="left", padx=2)
-        ttk.Button(rb, text="Its port", command=lambda: self.region_point("port")).pack(side="left", padx=2)
-        ttk.Button(rb, text="Drop new region", command=self.drop_region).pack(side="left", padx=2)
+        ttk.Button(rb, text="Place its town", command=lambda: self.region_point("city")).pack(side="left", padx=2)
+        ttk.Button(rb, text="Place its port", command=lambda: self.region_point("port")).pack(side="left", padx=2)
+        ttk.Button(rb, text="Delete this new region", command=self.drop_region).pack(side="left", padx=2)
+        self.v_borders = tk.BooleanVar(value=True)
+        ttk.Checkbutton(rb, text="Borders", variable=self.v_borders, command=self.show_map).pack(side="left", padx=8)
         ttk.Label(rb, text="left drag paints, right click picks a region, right drag moves the map",
                   foreground="#666").pack(side="left", padx=10)
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
@@ -335,7 +338,7 @@ class App(tk.Tk):
         tools.pack(side="right")
         self.status = tk.StringVar(value="Choose the mod's data folder (for example ...\\HLR\\data) and press Load.")
         ttk.Label(self, textvariable=self.status, anchor="w").pack(fill="x", padx=6, pady=(0, 6))
-        self.status.trace_add("write", lambda *a: self.status.get() and log.write(self.status.get()))
+        self.status.trace_add("write", lambda *a: self._log_status())
         for k in ("name", "template"):
             self.v[k].trace_add("write", lambda *a: self.update_actions())
         self.update_actions()
@@ -778,11 +781,14 @@ class App(tk.Tk):
                 self.status.set("Painting with %s." % r)
         overlay = {t: cols[r] for t, r in self.region_paint.items() if r in cols}
         on_place = place if self._placing is not None else None
+        ghost = None
         if self._region_point:
             on_place = self.place_region_point
+            ghost = {"kind": self._region_point[0], "check": self.region_point_problem}
         return {"region_mode": True, "paint_overlay": overlay, "on_paint": paint, "on_pick": pick,
                 "brush": self.v_brush.get(), "region_points": points, "on_place": on_place,
-                "region_painted": dict(self.region_paint), "region_colours": cols}
+                "region_painted": self.region_paint, "region_colours": cols,
+                "borders": self.v_borders.get(), "ghost": ghost}
 
     def _new_region(self, name):
         return next((r for r in self.new_regions if r["name"] == name), None)
@@ -798,18 +804,30 @@ class App(tk.Tk):
             "town" if what == "city" else "port", name, ", by the sea" if what == "port" else ""))
         self.show_map()
 
-    def place_region_point(self, xy):
+    def region_point_problem(self, xy):
         what, name = self._region_point
         cm = self._cmap
+        if not (0 <= xy[0] < cm.w and 0 <= xy[1] < cm.h):
+            return "off the map"
         own = self.region_paint.get(tuple(xy)) or cm.region_at(*xy)
         if own != name:
-            return "that tile is not %s's land - paint it first" % name
+            return "not %s's land - paint it first" % name
+        if cm.regions_img.get(*xy) in ((0, 0, 0), (255, 255, 255)):
+            return "another town or port stands there"
         if what == "port" and not any(cm.is_sea(xy[0] + dx, xy[1] + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             return "a port needs the sea next to it"
         r = self._new_region(name)
         other = "port" if what == "city" else "city"
         if tuple(r.get(other) or ()) == tuple(xy):
             return "the town and the port need different tiles"
+        return None
+
+    def place_region_point(self, xy):
+        why = self.region_point_problem(xy)
+        if why:
+            return why
+        what, name = self._region_point
+        r = self._new_region(name)
         self.remember()
         r[what] = tuple(xy)
         self._region_point = None
@@ -842,16 +860,24 @@ class App(tk.Tk):
         res = sorted({x.strip() for v in self.regions.values() for x in (v.get("resources") or "").split(",")
                       if x.strip() and x.strip() != "none"})
         me = self.v["template"].get().strip()
-        fields = [("Region name (Tribus_Novus)", "name", ""), ("Its label in the game", "label", ""),
-                  ("Settlement name", "settlement", ""), ("Its label in the game", "settlement_label", ""),
-                  ("Creator faction", "creator", me or (facs[0] if facs else "")),
-                  ("Rebels (culture of the region's rebels)", "rebels", rebels[0] if rebels else ""),
-                  ("Resources (comma list; empty = those of the land it is cut from)", "resources", ""), ("Triumph value", "triumph", "5"),
-                  ("Farming level", "farming", "3"),
-                  ("Owner at the start", "owner", "(rebel village - no settlement written)"),
-                  ("Settlement level", "level", "village")]
+        fields = [("Region - name in the files", "name", "", "letters, digits, _ ; no spaces (Tribus_Novus)"),
+                  ("Region - name shown in the game", "label", "", "empty = the file name without _"),
+                  ("Town - name in the files", "settlement", "", "must differ from the region's (Novus_Oppidum)"),
+                  ("Town - name shown in the game", "settlement_label", "", "may be the same as the region's"),
+                  ("Built by (culture of its buildings)", "creator", me or (facs[0] if facs else ""),
+                   "the faction whose style the town's buildings have"),
+                  ("Rebels there", "rebels", rebels[0] if rebels else "",
+                   "who rises up / holds it as rebels (a rebel type of this mod)"),
+                  ("Resources", "resources", "", "comma list; empty = those of the land it is cut from. "
+                   "In HLR these tags also open local units"),
+                  ("Triumph value", "triumph", "5", "how much taking it counts for a triumph; most use 5"),
+                  ("Farming level", "farming", "3", "food from the land: 1 poor ... 5 rich; most use 2-4"),
+                  ("Owner at the start", "owner", "(rebel village - no settlement written)",
+                   "a faction gets a settlement; none = the game makes a rebel village"),
+                  ("Town size at the start", "level", "village", "for an owner only")]
         vs = {}
-        for i, (label, key, default) in enumerate(fields):
+        for i, (label, key, default, hint) in enumerate(fields):
+            ttk.Label(frm, text=hint, foreground="#666").grid(row=i, column=2, sticky="w")
             ttk.Label(frm, text=label).grid(row=i, column=0, sticky="w", pady=1)
             v = tk.StringVar(value=default)
             vs[key] = v
@@ -897,7 +923,7 @@ class App(tk.Tk):
                 "colour": colour, "city": None, "port": None, "owner": owner, "level": d["level"] or "village"})
             w.destroy()
             self.v_paint.set(d["name"] + "  (new)")
-            self.status.set("Paint %s's land (left drag), then 'Its town' (and 'Its port')." % d["name"])
+            self.status.set("Paint %s's land (left drag), then 'Place its town' (and 'Place its port')." % d["name"])
             self.show_map()
         bar = ttk.Frame(frm)
         bar.grid(row=len(fields) + 1, column=0, columnspan=2, sticky="e", pady=(8, 0))
@@ -1047,6 +1073,12 @@ class App(tk.Tk):
             self.show_map()
         region_kw = self._region_view(place)
         on_place = region_kw.pop("on_place", place if placing is not None else None)
+        if placing is not None and not region_kw.get("ghost") and placing < len(self.field):
+            fc = self.field[placing]
+            rtw_kind, army = KINDS[fc["kind"]]
+            region_kw["ghost"] = {"kind": fc["kind"] if fc["kind"] in ("army", "fleet") else "agent",
+                                  "check": lambda xy: self.mod.tile_problem(self.v_campaign.get(), xy, rtw_kind, army,
+                                                                            armies_at)}
         self.map_view.load(self._cmap, owners, colours, me, self.chosen, on_city=self.map_city, chars=chars,
                            draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols,
                            on_place=on_place,
@@ -1841,6 +1873,14 @@ class App(tk.Tk):
             log.write("Check mod\n" + result["text"])
             self.show_text("Check mod", result["text"])
         wait()
+
+    def _log_status(self):
+        """Status lines go to the log, but one of a kind in a row (painting sends many)."""
+        text = self.status.get()
+        shape = re.sub(r"\d+", "#", text)
+        if text and shape != getattr(self, "_last_status_shape", None):
+            log.write(text)
+        self._last_status_shape = shape
 
     def show_log(self):
         """The tool's log - send faction_tool.log along with the game's system.log.txt."""

@@ -82,7 +82,7 @@ class MapView(ttk.Frame):
              on_char_move=None, check_tile=None, symbols=None, on_place=None,
              places=None, check_place=None, on_place_move=None,
              region_mode=False, paint_overlay=None, on_paint=None, on_pick=None, brush=1, region_points=(),
-             region_painted=None, region_colours=None):
+             region_painted=None, region_colours=None, borders=True, ghost=None):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
@@ -102,7 +102,12 @@ class MapView(ttk.Frame):
         self.region_mode, self.paint_overlay = region_mode, dict(paint_overlay or {})
         self.on_paint, self.on_pick, self.brush = on_paint, on_pick, brush
         self.region_points = list(region_points)
-        self.region_painted, self.region_colours = dict(region_painted or {}), dict(region_colours or {})
+        # the window's own dict: a stroke shows as soon as it ends
+        self.region_painted = region_painted if region_painted is not None else {}
+        self.region_colours, self.borders = dict(region_colours or {}), borders
+        # ghost = {'kind': 'city'|'port'|'army'|'agent'|'fleet', 'check': fn(xy) -> None or why}:
+        # a see-through marker under the mouse while placing
+        self.ghost = ghost
         if first:
             self.fit()
         else:
@@ -199,7 +204,7 @@ class MapView(ttk.Frame):
         made again only when the colours change - moving the map only crops it."""
         bg = self.cmap.background()
         if self.region_mode:
-            pol = self.cmap.regions_layer(self.region_painted, self.region_colours)
+            pol = self.cmap.regions_layer(self.region_painted, self.region_colours, borders=self.borders)
         elif not self.v_pol.get():
             return bg
         else:
@@ -394,6 +399,42 @@ class MapView(ttk.Frame):
 
     GROW = 1.6
 
+    def _ghost(self, sx, sy):
+        """What is being placed, under the mouse: green frame where it may go, red where not."""
+        c = self.canvas
+        c.delete("ghost")
+        g = self.ghost
+        if not g or not self.cmap:
+            return
+        xy = self.to_tile(sx, sy)
+        why = g["check"](xy) if g.get("check") else None
+        cx, cy = self.to_screen(*xy)
+        size = max(8, min(self.z * 0.9, 60))
+        r = size / 2
+        edge = "#ff3030" if why else "#30ff60"
+        tags = ("ghost",)
+        kind = g.get("kind")
+        if kind == "city":
+            c.create_rectangle(cx - r, cy - r, cx + r, cy + r, fill="#d8c080", stipple="gray50", outline=edge,
+                               width=2, tags=tags)
+            if r >= 6:
+                self._hall(cx, cy, r, (216, 192, 128), tags)
+        elif kind == "port":
+            c.create_oval(cx - r, cy - r, cx + r, cy + r, fill="#2a6fdb", stipple="gray50", outline=edge, width=2,
+                          tags=tags)
+            if r >= 5:
+                self._anchor(cx, cy, r, tags)
+        elif kind in ("army", "fleet"):
+            h = size
+            c.create_line(cx - h * 0.3, cy + h * 0.5, cx - h * 0.3, cy - h * 0.5, fill=edge, width=2, tags=tags)
+            c.create_polygon(cx - h * 0.3, cy - h * 0.5, cx + h * 0.4, cy - h * 0.25, cx - h * 0.3, cy,
+                             fill=edge, stipple="gray50", outline=edge, tags=tags)
+        else:
+            c.create_oval(cx - r * 0.6, cy - r * 0.6, cx + r * 0.6, cy + r * 0.6, fill=edge, stipple="gray50",
+                          outline=edge, width=2, tags=tags)
+        if why:
+            c.create_text(cx + r + 4, cy, text=why, anchor="w", fill="#ff5050", font=("", 9, "bold"), tags=tags)
+
     def _outline(self, sx, sy):
         """The edges of the tile under the mouse, like a block outline in Minecraft."""
         c = self.canvas
@@ -565,11 +606,13 @@ class MapView(ttk.Frame):
     def _hover(self, e):
         if self.cmap and self.on_place and not self._cdrag:
             self._outline(e.x, e.y)
+            self._ghost(e.x, e.y)
             x, y = self.to_tile(e.x, e.y)
             self.canvas.config(cursor="hand2")
             self.readout.configure(text="click to place   " + self.cmap.describe(x, y, self.owners))
             return
         self.canvas.config(cursor="crosshair")
+        self.canvas.delete("ghost")
         self._outline(e.x, e.y)
         if self.cmap and not self._cdrag:
             self._grow(self._marker_under(e.x, e.y))
