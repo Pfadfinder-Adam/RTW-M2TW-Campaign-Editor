@@ -62,6 +62,7 @@ def build(mod, campaign, template, new, opts):
     clone.text_strings(plan)
     if opts.get("copy_art", True):
         clone.art_files(plan, campaign)
+    clone.unit_cards(plan)
     build_start(plan, campaign, opts["start"])
     validate(plan, campaign)
     return plan

@@ -7,6 +7,7 @@ note. Nothing touches the disk until Plan.apply().
 import os
 import re
 
+from .moddata import _ci
 from .textio import strip_comment, tokens
 
 
@@ -406,9 +407,17 @@ def art_files(plan, campaign):
             for d in list(dirnames):
                 if d.lower() == t:
                     src = os.path.join(dirpath, d)
-                    dst = os.path.join(dirpath, new)
+                    dst = _ci(dirpath, new) or os.path.join(dirpath, new)
                     if not os.path.exists(dst):
                         found.append((src, dst))
+                    else:
+                        # a folder left from an earlier attempt: fill in what it lacks
+                        for sp, _, fs in os.walk(src):
+                            for n in fs:
+                                sf = os.path.join(sp, n)
+                                df = os.path.join(dst, os.path.relpath(sf, src))
+                                if not os.path.exists(df):
+                                    found.append((sf, df))
                     dirnames.remove(d)
             for n in filenames:
                 if not n.lower().endswith((".tga", ".dds", ".png", ".bmp")) or not _token_hit(n, t):
@@ -424,3 +433,55 @@ def art_files(plan, campaign):
     if not found:
         plan.warn(None, "no art found under data/ui, data/menu, data/loading_screen or the campaign folder "
                         "named after %s (unit cards may be packed) - check them by hand" % t)
+
+
+# ---------------------------------------------------------------------------
+# Unit cards: followed from export_descr_unit, not guessed from folder names
+# ---------------------------------------------------------------------------
+CARD_KINDS = (("units", "#%s.tga", "unit card"), ("unit_info", "%s_info.tga", "unit info picture"))
+
+
+def unit_cards(plan):
+    """Every unit the new faction owns needs ui/units/<faction>/#<dictionary>.tga
+    and ui/unit_info/<faction>/<dictionary>_info.tga, or the game shows a
+    placeholder. Copy each missing one from the template's folder (or, failing
+    that, from any other faction's folder that has it)."""
+    t, new = plan.template, plan.new
+    edu = plan.files.get(plan.mod.file("edu"))
+    if edu is None:
+        return
+    dicts = []
+    cur = None
+    for l in edu.texts():
+        tk = tokens(l)
+        if tk[:1] == ["dictionary"] and len(tk) > 1:
+            cur = tk[1]
+        elif tk[:1] == ["ownership"] and cur and new in tk[1:]:
+            dicts.append(cur)
+            cur = None
+    planned = {os.path.normcase(d) for _, d in plan.copies}
+    missing = []
+    for folder, pattern, label in CARD_KINDS:
+        root = os.path.join(plan.mod.data, "ui", folder)
+        if not os.path.isdir(root):
+            continue
+        others = sorted(d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))
+                        and d.lower() not in (t, new))
+        dst_dir = _ci(root, new) or os.path.join(root, new)
+        for d in dicts:
+            name = pattern % d
+            dst = _ci(dst_dir, name) or os.path.join(dst_dir, name)
+            nd = os.path.normcase(dst)
+            if os.path.exists(dst) or any(nd == p or nd.startswith(p + os.sep) for p in planned):
+                continue
+            src = _ci(os.path.join(root, t), name) if _ci(root, t) else None
+            if not src:
+                src = next((p for p in (_ci(os.path.join(root, o), name) for o in others) if p), None)
+            if src:
+                plan.copy(src, dst)
+                planned.add(os.path.normcase(dst))
+            else:
+                missing.append("%s/%s" % (folder, name))
+    if missing:
+        plan.warn(None, "no picture found anywhere under data/ui for %d unit file(s) - the game shows a "
+                        "placeholder: %s" % (len(missing), ", ".join(missing[:12]) + (" ..." if len(missing) > 12 else "")))

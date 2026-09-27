@@ -185,6 +185,10 @@ class ToolTest(unittest.TestCase):
               [red, red, blue, blue]]
         write_tga(os.path.join(camp, "map_regions.tga"), 4, 4, px)
         write(os.path.join(camp, "map_alpha.tga"), "x")
+        ui = os.path.join(d, "ui")
+        write(os.path.join(ui, "units", "alpha", "#alpha_general.tga"), "card")
+        write(os.path.join(ui, "unit_info", "alpha", "alpha_general_info.tga"), "info")
+        write(os.path.join(ui, "unit_info", "alpha", "spy_info.tga"), "spy")
 
     def tearDown(self):
         shutil.rmtree(self.root)
@@ -233,6 +237,22 @@ class ToolTest(unittest.TestCase):
         restore(mod, backups(mod)[0])
         after = tree_hash(self.root)
         after = {k: v for k, v in after.items() if not k.startswith("faction_tool_backups")}
+        self.assertEqual(before, after)
+
+    def test_unit_cards_fill_a_folder_left_from_an_earlier_attempt(self):
+        # ui/units/beta exists already (an old manual attempt) but lacks alpha's cards
+        write(os.path.join(self.root, "data", "ui", "units", "beta", "#old_unit.tga"), "old")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        plan.apply()
+        ui = os.path.join(mod.data, "ui")
+        for rel in (("units", "beta", "#alpha_general.tga"), ("unit_info", "beta", "alpha_general_info.tga"),
+                    ("unit_info", "beta", "spy_info.tga"), ("units", "beta", "#old_unit.tga")):
+            self.assertTrue(os.path.exists(os.path.join(ui, *rel)), rel)
+        self.assertEqual(sum("#alpha_general.tga" in m for _, m in plan.notes), 1, plan.report())
+        restore(mod, backups(mod)[0])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
         self.assertEqual(before, after)
 
     def test_heir_with_one_town_stands_next_to_it(self):
