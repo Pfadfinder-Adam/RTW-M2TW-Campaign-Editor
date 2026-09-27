@@ -71,6 +71,9 @@ def build(mod, campaign, template, new, opts):
     if opts.get("places"):
         from .mapedit import apply_places
         apply_places(plan, campaign, opts["places"])
+    if opts.get("regions"):
+        from .regionedit import apply_regions
+        apply_regions(plan, campaign, opts["regions"].get("painted") or {}, opts["regions"].get("new") or [])
     if opts.get("relations"):
         from .diplomacy import apply_opts
         apply_opts(plan, campaign, new, opts["relations"])

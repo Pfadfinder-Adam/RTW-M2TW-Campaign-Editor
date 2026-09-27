@@ -167,6 +167,25 @@ class CampaignMap:
                               for p, g in zip(planes, groups)], mask)
         return self._label_cache
 
+    def regions_layer(self, alpha=150):
+        """RGBA, 1 px per tile: every region in its own map_regions colour, borders
+        dark - the Regions view, where the borders are what matters."""
+        if getattr(self, "_regions_layer", None) is not None:
+            return self._regions_layer
+        layers, mask = self._labels()
+        path = self.mod.campaign_file(self.campaign, "map_regions.tga")
+        rgb = Image.open(path).convert("RGB")
+        land = None
+        for _, here, _ in layers:
+            land = here if land is None else ImageChops.lighter(land, here)
+        a = land.point(lambda v: alpha if v else 0)
+        im = rgb.copy()
+        im.putalpha(a)
+        dark = Image.new("RGBA", im.size, (20, 20, 20, 150))
+        im = Image.composite(dark, im, ImageChops.multiply(mask, land))
+        self._regions_layer = im
+        return im
+
     def political(self, owners, colours, highlight=None, alpha=160):
         """RGBA, 1 px per tile: each region in its owner's primary colour, see-through,
         borders darker; the highlighted faction a little stronger."""

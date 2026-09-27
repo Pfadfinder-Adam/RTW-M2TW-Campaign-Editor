@@ -100,6 +100,9 @@ class App(tk.Tk):
         self.removed_existing = []      # Edit: [{name, from}] characters taken off the map
         self.place_moves = {}           # {('city' | 'port', region): (x, y)} towns and ports moved on the map
         self.dip_set = {}               # {(kind, from, to): value or None} picked on the Diplomacy tab ('me' = the faction)
+        self.region_paint = {}          # {(x, y): region} tiles painted to another region (Regions mode)
+        self.new_regions = []           # [{name, settlement, creator, rebels, resources, colour, city, port, owner, level}]
+        self._region_point = None       # ('city' | 'port', region) waiting for a click
         self.undo_stack, self.redo_stack = [], []   # snapshots of what the window keeps (Ctrl+Z / Ctrl+Y)
         self.sizes = {}                 # {region: {'level', 'population'}} set by hand on the Buildings tab
         self._units_for, self._units_cache = None, []
@@ -279,8 +282,25 @@ class App(tk.Tk):
         self._build_buildings_tab()
         tab = ttk.Frame(self.nb, padding=4)
         self.nb.add(tab, text="  Map  ")
+        self.region_bar = ttk.Frame(tab, padding=(0, 0, 0, 4))
+        rb = self.region_bar
+        ttk.Label(rb, text="Paint with", font=("", 9, "bold")).pack(side="left")
+        self.v_paint = tk.StringVar()
+        self.cb_paint = ttk.Combobox(rb, textvariable=self.v_paint, width=24)
+        self.cb_paint.pack(side="left", padx=4)
+        ttk.Label(rb, text="brush").pack(side="left", padx=(8, 2))
+        self.v_brush = tk.IntVar(value=1)
+        ttk.Spinbox(rb, from_=1, to=6, width=3, textvariable=self.v_brush,
+                    command=lambda: setattr(self.map_view, "brush", self.v_brush.get())).pack(side="left")
+        ttk.Button(rb, text="New region...", command=self.new_region_dialog).pack(side="left", padx=(12, 2))
+        ttk.Button(rb, text="Its town", command=lambda: self.region_point("city")).pack(side="left", padx=2)
+        ttk.Button(rb, text="Its port", command=lambda: self.region_point("port")).pack(side="left", padx=2)
+        ttk.Button(rb, text="Drop new region", command=self.drop_region).pack(side="left", padx=2)
+        ttk.Label(rb, text="left drag paints, right click picks a region, right drag moves the map",
+                  foreground="#666").pack(side="left", padx=10)
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
         self.map_view.pack(fill="both", expand=True)
+        self.map_view.on_stroke = self.remember
         self._cmap, self._cmap_for = None, None
         tab = ttk.Frame(self.nb, padding=4)
         self.nb.add(tab, text="  Diplomacy  ")
@@ -572,7 +592,7 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------------ undo / redo
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "place_moves", "char_moves", "field",
-                 "removed_existing", "dip_set")
+                 "removed_existing", "dip_set", "region_paint", "new_regions")
 
     def snapshot(self):
         st = {k: copy.deepcopy(getattr(self, k)) for k in self.UNDO_KEYS}
@@ -688,6 +708,186 @@ class App(tk.Tk):
         self.dip_editor.load(me, others, base, self.dip_set, names,
                              lambda: self.status.set("%d diplomacy change(s) - Preview, then %s." % (
                                  len(self.dip_set), "Apply changes" if self.editing() else "Create faction")))
+
+    # ------------------------------------------------------------------ regions
+    def _region_colours(self):
+        cols = {r: v["colour"] for r, v in self.regions.items()}
+        cols.update({r["name"]: tuple(r["colour"]) for r in self.new_regions})
+        return cols
+
+    def _region_view(self, place):
+        """The Map's Regions mode: paint overlay, callbacks, new towns and ports."""
+        on = self.map_view.v_regions.get()
+        if on:
+            self.region_bar.pack(fill="x", before=self.map_view)
+        else:
+            self.region_bar.pack_forget()
+            return {"region_mode": False}
+        cols = self._region_colours()
+        names = sorted(cols)
+        self.cb_paint["values"] = [r["name"] + "  (new)" for r in self.new_regions] + names
+        points = []
+        for r in self.new_regions:
+            for what in ("city", "port"):
+                if r.get(what):
+                    points.append((tuple(r[what]), what, tuple(r["colour"])))
+        cm = self._cmap
+
+        def paint(tiles):
+            target = self.v_paint.get().replace("  (new)", "").strip()
+            if target not in cols:
+                self.status.set("Pick the region to paint with (right click on it, or the list), or make a New region.")
+                return []
+            took = []
+            for t in tiles:
+                x, y = t
+                if not (0 <= x < cm.w and 0 <= y < cm.h):
+                    continue
+                px = cm.regions_img.get(x, y)
+                was = cm.region_at(x, y)
+                if was is None or px in ((0, 0, 0), (255, 255, 255)):
+                    continue                              # sea, towns and ports keep their region
+                if any(tuple(r.get(k) or ()) == t for r in self.new_regions for k in ("city", "port")):
+                    continue
+                if was == target:
+                    self.region_paint.pop(t, None)
+                elif self.region_paint.get(t) != target:
+                    self.region_paint[t] = target
+                    took.append((t, cols[target]))
+            self.status.set("%d tile(s) painted to other regions." % len(self.region_paint))
+            return took
+
+        def pick(xy):
+            r = self.region_paint.get(tuple(xy)) or cm.region_at(*xy)
+            if r:
+                new = any(n["name"] == r for n in self.new_regions)
+                self.v_paint.set(r + ("  (new)" if new else ""))
+                self.status.set("Painting with %s." % r)
+        overlay = {t: cols[r] for t, r in self.region_paint.items() if r in cols}
+        on_place = place if self._placing is not None else None
+        if self._region_point:
+            on_place = self.place_region_point
+        return {"region_mode": True, "paint_overlay": overlay, "on_paint": paint, "on_pick": pick,
+                "brush": self.v_brush.get(), "region_points": points, "on_place": on_place}
+
+    def _new_region(self, name):
+        return next((r for r in self.new_regions if r["name"] == name), None)
+
+    def region_point(self, what):
+        """The next click on the map puts the town (or port) of the new region being painted."""
+        name = self.v_paint.get().replace("  (new)", "").strip()
+        if not self._new_region(name):
+            messagebox.showerror(APP, "pick a new region in 'Paint with' first (New region... makes one)")
+            return
+        self._region_point = (what, name)
+        self.status.set("Click the tile for the %s of %s (on its own land%s)." % (
+            "town" if what == "city" else "port", name, ", by the sea" if what == "port" else ""))
+        self.show_map()
+
+    def place_region_point(self, xy):
+        what, name = self._region_point
+        cm = self._cmap
+        own = self.region_paint.get(tuple(xy)) or cm.region_at(*xy)
+        if own != name:
+            return "that tile is not %s's land - paint it first" % name
+        if what == "port" and not any(cm.is_sea(xy[0] + dx, xy[1] + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+            return "a port needs the sea next to it"
+        r = self._new_region(name)
+        other = "port" if what == "city" else "city"
+        if tuple(r.get(other) or ()) == tuple(xy):
+            return "the town and the port need different tiles"
+        self.remember()
+        r[what] = tuple(xy)
+        self._region_point = None
+        self.status.set("%s of %s at %d, %d." % ("Town" if what == "city" else "Port", name, xy[0], xy[1]))
+        self.show_map()
+        return None
+
+    def drop_region(self):
+        name = self.v_paint.get().replace("  (new)", "").strip()
+        if not self._new_region(name):
+            messagebox.showerror(APP, "pick a new region in 'Paint with' first")
+            return
+        self.remember()
+        self.new_regions = [r for r in self.new_regions if r["name"] != name]
+        self.region_paint = {t: r for t, r in self.region_paint.items() if r != name}
+        self.v_paint.set("")
+        self.show_map()
+
+    def new_region_dialog(self):
+        if not self.mod or not self.strat:
+            return
+        from .regionedit import free_colour
+        w = tk.Toplevel(self)
+        w.title("New region")
+        w.transient(self)
+        frm = ttk.Frame(w, padding=10)
+        frm.pack(fill="both", expand=True)
+        facs = [fb.name for fb in self.strat.factions]
+        rebels = sorted({v.get("rebels") for v in self.regions.values() if v.get("rebels")})
+        res = sorted({x.strip() for v in self.regions.values() for x in (v.get("resources") or "").split(",")
+                      if x.strip() and x.strip() != "none"})
+        me = self.v["template"].get().strip()
+        fields = [("Region name (Tribus_Novus)", "name", ""), ("Its label in the game", "label", ""),
+                  ("Settlement name", "settlement", ""), ("Its label in the game", "settlement_label", ""),
+                  ("Creator faction", "creator", me or (facs[0] if facs else "")),
+                  ("Rebels (culture of the region's rebels)", "rebels", rebels[0] if rebels else ""),
+                  ("Resources (comma list)", "resources", ""), ("Triumph value", "triumph", "5"),
+                  ("Farming level", "farming", "3"),
+                  ("Owner at the start", "owner", "(rebel village - no settlement written)"),
+                  ("Settlement level", "level", "village")]
+        vs = {}
+        for i, (label, key, default) in enumerate(fields):
+            ttk.Label(frm, text=label).grid(row=i, column=0, sticky="w", pady=1)
+            v = tk.StringVar(value=default)
+            vs[key] = v
+            if key in ("creator", "owner"):
+                vals = facs if key == "creator" else ["(rebel village - no settlement written)"] + facs
+                ttk.Combobox(frm, textvariable=v, values=vals, width=34).grid(row=i, column=1, sticky="we", padx=6)
+            elif key == "rebels":
+                ttk.Combobox(frm, textvariable=v, values=rebels, width=34).grid(row=i, column=1, sticky="we", padx=6)
+            elif key == "level":
+                ttk.Combobox(frm, textvariable=v, values=SETTLEMENT_LEVELS, state="readonly",
+                             width=34).grid(row=i, column=1, sticky="we", padx=6)
+            else:
+                ttk.Entry(frm, textvariable=v, width=36).grid(row=i, column=1, sticky="we", padx=6)
+        ttk.Label(frm, text="resources in this mod: " + ", ".join(res), foreground="#666", wraplength=420,
+                  justify="left").grid(row=len(fields), column=0, columnspan=2, sticky="w", pady=(4, 0))
+
+        def ok():
+            from .regionedit import _ok_name
+            d = {k: v.get().strip() for k, v in vs.items()}
+            if not _ok_name(d["name"]) or not _ok_name(d["settlement"]):
+                messagebox.showerror(APP, "names: letters, digits and _ only (like Tribus_Novus)", parent=w)
+                return
+            taken = set(self._region_colours()) | {v.get("settlement") for v in self.regions.values()} | \
+                {r["settlement"] for r in self.new_regions}
+            if d["name"] in taken or d["settlement"] in taken or d["name"] == d["settlement"]:
+                messagebox.showerror(APP, "that name is taken already", parent=w)
+                return
+            self.remember()
+            colour = free_colour(self.mod, self.v_campaign.get(), self._region_colours().values())
+            owner = d["owner"] if d["owner"] in facs else None
+            self.new_regions.append({
+                "name": d["name"], "settlement": d["settlement"], "label": d["label"] or None,
+                "settlement_label": d["settlement_label"] or None, "creator": d["creator"] or me,
+                "rebels": d["rebels"], "resources": [x.strip() for x in d["resources"].split(",") if x.strip()],
+                "triumph": int(d["triumph"]) if d["triumph"].isdigit() else 5,
+                "farming": int(d["farming"]) if d["farming"].isdigit() else 3,
+                "colour": colour, "city": None, "port": None, "owner": owner, "level": d["level"] or "village"})
+            w.destroy()
+            self.v_paint.set(d["name"] + "  (new)")
+            self.status.set("Paint %s's land (left drag), then 'Its town' (and 'Its port')." % d["name"])
+            self.show_map()
+        bar = ttk.Frame(frm)
+        bar.grid(row=len(fields) + 1, column=0, columnspan=2, sticky="e", pady=(8, 0))
+        ttk.Button(bar, text="Add", command=ok).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+
+    def _regions_opts(self):
+        if not self.region_paint and not self.new_regions:
+            return None
+        return {"painted": dict(self.region_paint), "new": [dict(r) for r in self.new_regions]}
 
     def _relations(self):
         return [{"kind": k, "from": a, "to": b, "value": v} for (k, a, b), v in self.dip_set.items()]
@@ -825,10 +1025,13 @@ class App(tk.Tk):
                 "Town" if what == "city" else "Port", region, xy[0], xy[1], len(self.place_moves),
                 "Apply changes" if self.editing() else "Create faction"))
             self.show_map()
+        region_kw = self._region_view(place)
+        on_place = region_kw.pop("on_place", place if placing is not None else None)
         self.map_view.load(self._cmap, owners, colours, me, self.chosen, on_city=self.map_city, chars=chars,
                            draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols,
-                           on_place=place if placing is not None else None,
-                           places=self.place_moves, check_place=check_place, on_place_move=place_moved)
+                           on_place=on_place,
+                           places=self.place_moves, check_place=check_place, on_place_move=place_moved,
+                           **region_kw)
 
     def map_city(self, region):
         """A click on a town on the map: add it to Chosen, or take it out."""
@@ -973,6 +1176,7 @@ class App(tk.Tk):
         self.editing_now, self.char_moves = None, {}
         self.place_moves = {}
         self.dip_set.clear()
+        self.region_paint, self.new_regions, self._region_point = {}, [], None
         self._cmap_for = None                  # the map is read again: after Apply towns may stand elsewhere
         self.undo_stack, self.redo_stack = [], []
         self.refresh_field()
@@ -1326,6 +1530,7 @@ class App(tk.Tk):
                       "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen}},
             "places": self._places(),
             "relations": self._relations(),
+            "regions": self._regions_opts(),
         }
         return v["template"], v["name"].lower(), opts
 
@@ -1362,6 +1567,7 @@ class App(tk.Tk):
             "garrisons": dict(self.garrisons),
             "places": self._places(),
             "relations": self._relations(),
+            "regions": self._regions_opts(),
             "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen},
             "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()}}
 

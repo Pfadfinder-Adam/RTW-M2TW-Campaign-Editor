@@ -30,6 +30,9 @@ class MapView(ttk.Frame):
         ttk.Checkbutton(bar, text="Ports", variable=self.v_ports, command=self.render).pack(side="left")
         self.v_chars = tk.BooleanVar(value=True)
         ttk.Checkbutton(bar, text="Characters", variable=self.v_chars, command=self.render).pack(side="left", padx=8)
+        self.v_regions = tk.BooleanVar(value=False)
+        ttk.Checkbutton(bar, text="Regions", variable=self.v_regions,
+                        command=lambda: self.on_layers() if self.on_layers else self.render()).pack(side="left", padx=8)
         self.v_dip = tk.BooleanVar(value=False)
         ttk.Checkbutton(bar, text="Diplomacy", variable=self.v_dip,
                         command=lambda: self.on_layers() if self.on_layers else self.render()).pack(side="left")
@@ -48,6 +51,10 @@ class MapView(ttk.Frame):
         self._drag = None
         self._cdrag = None
         self._pdrag = None               # a town or port being dragged
+        # the Regions mode: left drag paints tiles to a region, right click picks one
+        self.region_mode, self.paint_overlay, self.region_points = False, {}, []
+        self.on_paint = self.on_pick = None
+        self.brush, self._painting, self._rclick = 1, False, False
         self.chars, self.draggable, self.symbols = [], set(), {}
         self.on_char_move = self.check_tile = None
         self._symimg = {}
@@ -72,7 +79,8 @@ class MapView(ttk.Frame):
     # ---- data ----
     def load(self, cmap, owners, colours, faction=None, chosen=(), on_city=None, chars=(), draggable=(),
              on_char_move=None, check_tile=None, symbols=None, on_place=None,
-             places=None, check_place=None, on_place_move=None):
+             places=None, check_place=None, on_place_move=None,
+             region_mode=False, paint_overlay=None, on_paint=None, on_pick=None, brush=1, region_points=()):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
@@ -87,6 +95,11 @@ class MapView(ttk.Frame):
         # -> None or why not; on_place_move(what, region, xy) after a good drop
         self.places = dict(places or {})
         self.check_place, self.on_place_move = check_place, on_place_move
+        # Regions mode: paint_overlay {(x, y): (r, g, b)} tiles given to another region;
+        # on_paint([tiles]) -> the tiles it took; on_pick(xy); region_points [(xy, 'city'|'port', rgb)]
+        self.region_mode, self.paint_overlay = region_mode, dict(paint_overlay or {})
+        self.on_paint, self.on_pick, self.brush = on_paint, on_pick, brush
+        self.region_points = list(region_points)
         if first:
             self.fit()
         else:
@@ -182,9 +195,12 @@ class MapView(ttk.Frame):
         """The background with the political colours laid on, at 2 px per tile,
         made again only when the colours change - moving the map only crops it."""
         bg = self.cmap.background()
-        if not self.v_pol.get():
+        if self.region_mode:
+            pol = self.cmap.regions_layer()
+        elif not self.v_pol.get():
             return bg
-        pol = self.cmap.political(self.owners, self.colours, self.faction)
+        else:
+            pol = self.cmap.political(self.owners, self.colours, self.faction)
         key = (id(bg), id(pol))
         if getattr(self, "_base_key", None) != key:
             over = pol.resize((pol.width * 2, pol.height * 2), Image.NEAREST)
@@ -194,8 +210,45 @@ class MapView(ttk.Frame):
             self._base_key = key
         return self._base_img
 
+    def _painted(self, cw, ch):
+        """Tiles given to another region, in that region's colour, and the new towns and ports."""
+        c, z = self.canvas, self.z
+        for (x, y), rgb in self.paint_overlay.items():
+            sx, sy = self.to_screen(x, y)
+            if -z < sx < cw + z and -z < sy < ch + z:
+                c.create_rectangle(sx - z / 2, sy - z / 2, sx + z / 2, sy + z / 2, fill="#%02x%02x%02x" % rgb,
+                                   outline="", tags=("paint",))
+        size = max(4, min(z * 0.9, 60))
+        for (x, y), what, rgb in self.region_points:
+            sx, sy = self.to_screen(x, y)
+            r = size / 2
+            if what == "city":
+                c.create_rectangle(sx - r, sy - r, sx + r, sy + r, fill="#%02x%02x%02x" % rgb, outline="#ffd400",
+                                   width=3)
+                if r >= 6:
+                    self._hall(sx, sy, r, rgb, ("newtown",))
+            else:
+                c.create_oval(sx - r * 0.9, sy - r * 0.9, sx + r * 0.9, sy + r * 0.9, fill="#2a6fdb", outline="#ffd400",
+                              width=3)
+                if r >= 5:
+                    self._anchor(sx, sy, r * 0.9, ("newport",))
+
+    def _paint_at(self, e):
+        x, y = self.to_tile(e.x, e.y)
+        b = self.brush - 1
+        tiles = [(x + dx, y + dy) for dx in range(-b, b + 1) for dy in range(-b, b + 1)]
+        took = self.on_paint(tiles) if self.on_paint else []
+        z, c = self.z, self.canvas
+        for (tx, ty), rgb in took:
+            self.paint_overlay[(tx, ty)] = rgb
+            sx, sy = self.to_screen(tx, ty)
+            c.create_rectangle(sx - z / 2, sy - z / 2, sx + z / 2, sy + z / 2, fill="#%02x%02x%02x" % rgb,
+                               outline="", tags=("paint",))
+
     def _markers(self, cw, ch):
         c, cm = self.canvas, self.cmap
+        if self.region_mode:
+            self._painted(cw, ch)
         size = max(3, min(self.z * 0.9, 60))           # a town fills its tile
         font = ("", 8 if self.z < 10 else 9)
         if self.v_ports.get() and self.z >= 4:        # far out: towns only - less to draw, less clutter
@@ -227,7 +280,7 @@ class MapView(ttk.Frame):
                 name = cm.info.get(region, {}).get("settlement", region)
                 c.create_text(sx + r + 3, sy + 1, text=name, anchor="w", fill="black", font=font)   # shadow
                 c.create_text(sx + r + 2, sy, text=name, anchor="w", fill="white", font=font)
-        if self.v_chars.get() and self.z >= 4:
+        if self.v_chars.get() and self.z >= 4 and not self.region_mode:
             self._characters(cw, ch, size)
 
     def _anchor(self, sx, sy, r, tags):
@@ -390,6 +443,17 @@ class MapView(ttk.Frame):
         return None
 
     def _press(self, e, icons=False):
+        if self.region_mode and self.cmap:
+            if not icons and not self.on_place:           # left: paint
+                if getattr(self, "on_stroke", None):
+                    self.on_stroke()                      # one Undo step per stroke
+                self._painting = True
+                self._paint_at(e)
+                return
+            if icons:                                     # right: drag the map, or a click picks the region
+                self._rclick = True
+                self._drag = (e.x, e.y, self.ox, self.oy, False)
+                return
         if icons:
             cid = self._char_under(e.x, e.y) if self.cmap else None
             if cid is not None and cid in self.draggable:
@@ -402,6 +466,9 @@ class MapView(ttk.Frame):
         self._drag = (e.x, e.y, self.ox, self.oy, False)
 
     def _move(self, e):
+        if self._painting:
+            self._paint_at(e)
+            return
         if getattr(self, "_pdrag", None):
             what, region, lx, ly, started = self._pdrag
             if not started and abs(e.x - lx) + abs(e.y - ly) <= 3:
@@ -442,6 +509,19 @@ class MapView(ttk.Frame):
                 self._pending = self.after(15, self._pan)
 
     def _release(self, e):
+        if self._painting:
+            self._painting = False
+            self.render()
+            return
+        if self._rclick:
+            self._rclick = False
+            moved = self._drag and self._drag[4]
+            self._drag = None
+            if moved:
+                self.render()
+            elif self.on_pick:
+                self.on_pick(self.to_tile(e.x, e.y))
+            return
         if getattr(self, "_pdrag", None):
             what, region, _, _, started = self._pdrag
             self._pdrag = None

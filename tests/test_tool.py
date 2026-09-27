@@ -713,6 +713,30 @@ class ToolTest(unittest.TestCase):
         self.assertIn("FACTIONS: 2 in descr_sm_factions.txt, 2 blocks", text)
         self.assertIn("No problems found", text)
 
+    def test_new_region_carved_out(self):
+        from faction_tool.edit import edit
+        from faction_tool.tga import read_tga
+        mod = ModData(self.root)
+        new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
+               "city": (0, 3), "owner": "alpha", "level": "village"}
+        painted = {(0, 3): "N_R", (1, 3): "N_R", (0, 2): "N_R"}
+        for bad in ({(1, 1): "N_R"}, {(0, 3): "Nowhere"}):          # a town pixel; an unknown region
+            with self.assertRaises(ValueError):
+                edit(ModData(self.root), "test", "alpha", {"regions": {"painted": bad, "new": [new]}})
+        plan = edit(mod, "test", "alpha", {"regions": {"painted": painted, "new": [new]}})
+        bdir = plan.apply()
+        m2 = ModData(self.root)
+        self.assertEqual(m2.regions("test")["N_R"]["settlement"], "Ntown")
+        self.assertEqual(m2.city_tiles("test")["N_R"], (0, 3))
+        img = read_tga(m2.campaign_file("test", "map_regions.tga"))
+        self.assertEqual(img.get(1, 3), m2.regions("test")["N_R"]["colour"])
+        self.assertEqual(Strat(m2.load(m2.campaign_file("test", "descr_strat.txt"))).owners()["N_R"], "alpha")
+        labels = open(m2.region_labels_file("test"), "rb").read().decode("utf-16")
+        self.assertIn("{N_R}", labels)
+        self.assertIn("{Ntown}", labels)
+        restore(m2, bdir)
+        self.assertNotIn("N_R", ModData(self.root).regions("test"))
+
     def test_ships_owned_by_culture(self):
         # vanilla gives ships to cultures ("ownership roman, greek"), not factions
         with open(os.path.join(self.root, "data", "export_descr_unit.txt"), "a") as fh:

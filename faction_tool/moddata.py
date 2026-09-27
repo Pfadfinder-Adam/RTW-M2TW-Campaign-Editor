@@ -107,6 +107,10 @@ class ModData:
         main.sort(key=lambda p: os.path.basename(p).lower() != "expanded_bi.txt")
         return mine + main + rest
 
+    def region_labels_file(self, campaign):
+        """data/text/<campaign>_regions_and_settlement_names.txt, or None."""
+        return _ci(os.path.join(self.data, "text"), "%s_regions_and_settlement_names.txt" % campaign)
+
     def rel(self, path):
         return os.path.relpath(path, os.path.dirname(self.data)).replace("\\", "/")
 
@@ -167,7 +171,7 @@ class ModData:
 
     # ---- map ----
     def regions(self, campaign):
-        """{region: {'settlement', 'creator', 'rebels', 'colour'}} from descr_regions.txt."""
+        """{region: {'settlement', 'creator', 'rebels', 'colour', 'resources'}} from descr_regions.txt."""
         path = self.campaign_file(campaign, "descr_regions.txt")
         f = self.load(path)
         out = {}
@@ -176,7 +180,8 @@ class ModData:
         def flush():
             if cur and len(vals) >= 4:
                 colour = tuple(int(v) for v in vals[3].split()[:3])
-                out[cur] = {"settlement": vals[0], "creator": vals[1], "rebels": vals[2], "colour": colour}
+                out[cur] = {"settlement": vals[0], "creator": vals[1], "rebels": vals[2], "colour": colour,
+                            "resources": vals[4] if len(vals) > 4 else ""}
         for line in f.texts():
             s = strip_comment(line)
             if not s.strip():
