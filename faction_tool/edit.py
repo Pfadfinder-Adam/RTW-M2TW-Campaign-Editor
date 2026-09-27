@@ -228,7 +228,11 @@ def _strat(plan, campaign, now):
         armies = {c.xy for x in s.factions for c in x.characters if c.xy and _has_army(s.lines[c.start:c.end])}
         lines = extra_characters(plan, f, campaign, o["characters"], plan.mod.name_pool(fac) or {}, armies)
         fb = s.faction(fac)
-        f.raw[fb.end:fb.end] = lines
+        # characters go before the family tree: a character line after
+        # character_record / relative lines crashes the game on load
+        at = next((i for i in range(fb.start, fb.end)
+                   if f.text(i).split(None, 1)[:1] in (["character_record"], ["relative"])), fb.end)
+        f.raw[at:at] = lines
     s = Strat(f)
     _garrisons(plan, f, s, campaign)
     _buildings(plan, f, Strat(f))

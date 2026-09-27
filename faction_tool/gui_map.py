@@ -142,7 +142,7 @@ class MapView(ttk.Frame):
 
     def _markers(self, cw, ch):
         c, cm = self.canvas, self.cmap
-        size = max(3, min(self.z * 0.9, 14))
+        size = max(3, min(self.z * 0.9, 60))           # a town fills its tile
         font = ("", 8 if self.z < 10 else 9)
         if self.v_ports.get() and self.z >= 3:
             for region, (x, y) in cm.ports.items():
@@ -173,7 +173,8 @@ class MapView(ttk.Frame):
 
     def _characters(self, cw, ch, size):
         c, cm = self.canvas, self.cmap
-        city_tiles = set(cm.cities.values())
+        busy = set(cm.cities.values()) | set(cm.ports.values())
+        tile = max(self.z * 0.9, 6)                    # a character fills its tile...
         seen = {}
         for ch_ in self.chars:
             x, y = ch_["xy"]
@@ -182,10 +183,12 @@ class MapView(ttk.Frame):
                 continue
             n = seen.get((x, y), 0)
             seen[(x, y)] = n + 1
-            if (x, y) in city_tiles:                   # beside the town, not on it
-                sx, sy = sx + size * 0.7, sy - size * 0.7
-            sx += n * size * 0.5
-            self._draw_char(ch_, sx, sy, max(size, 6))
+            one = tile
+            if (x, y) in busy:                         # ...or sits small on the town's / port's corner
+                one = max(tile * 0.6, 6)
+                sx, sy = sx + tile * 0.5, sy - tile * 0.5
+            sx += n * one * 0.5
+            self._draw_char(ch_, sx, sy, one)
 
     def _draw_char(self, ch_, sx, sy, size):
         c = self.canvas
@@ -202,14 +205,15 @@ class MapView(ttk.Frame):
                 c.create_text(sx, sy, text=self.AGENT_LETTER[k], fill="white", font=("", max(6, int(size * 0.5)), "bold"),
                               tags=tags)
         elif k == "admiral":
-            w = size * 0.7
+            w = size * 0.5
             c.create_polygon(sx - w, sy - w * 0.1, sx + w, sy - w * 0.1, sx + w * 0.6, sy + w * 0.5,
                              sx - w * 0.6, sy + w * 0.5, fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
             c.create_line(sx, sy - w * 0.1, sx, sy - w, fill=edge, width=2, tags=tags)
         elif ch_["army"]:
-            h = max(size * 1.1, min(self.z * 1.6, 30))        # a readable flag when zoomed in
-            c.create_line(sx, sy + h * 0.5, sx, sy - h * 0.6, fill="black", width=2, tags=tags)
-            c.create_polygon(sx, sy - h * 0.6, sx + h * 0.8, sy - h * 0.35, sx, sy - h * 0.1,
+            h = size
+            sx -= h * 0.3                                  # the flag, not its pole, sits on the tile
+            c.create_line(sx, sy + h * 0.5, sx, sy - h * 0.5, fill="black", width=2, tags=tags)
+            c.create_polygon(sx, sy - h * 0.5, sx + h * 0.7, sy - h * 0.25, sx, sy,
                              fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
             if mine:
                 c.create_rectangle(sx - 2, sy + h * 0.5 - 2, sx + 2, sy + h * 0.5 + 2, fill="#ffd400", outline="",

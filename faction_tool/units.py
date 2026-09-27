@@ -83,13 +83,18 @@ def read_units(edu):
 
 
 def faction_units(mod, faction, ships=False):
-    """Units the faction may own (its name or 'all' in ownership): land units,
-    or with ships=True only its ships."""
+    """Units the faction may own (its name, its culture or 'all' in ownership - vanilla
+    gives ships by culture): land units, or with ships=True only its ships."""
     edu = mod.file("edu")
     if not edu:
         return []
+    owners = {faction, "all"}
+    try:
+        owners.add(mod.culture(faction))
+    except Exception:
+        pass
     return [u for u in read_units(mod.load(edu))
-            if (faction in u.ownership or "all" in u.ownership) and (u.category == "ship") == ships]
+            if owners & set(u.ownership) and (u.category == "ship") == ships]
 
 
 def card_path(mod, faction, dictionary, info=False):

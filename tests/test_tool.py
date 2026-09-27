@@ -599,9 +599,29 @@ class ToolTest(unittest.TestCase):
                 build(ModData(self.root), "test", "alpha", "beta", {"start": {
                     "regions": ["B_R"], "leader": {"name": "Boris"}, "characters": [c]}})
         from faction_tool.edit import edit
+        path = mod.campaign_file("test", "descr_strat.txt")
+        with open(path) as fh:
+            text = fh.read()
+        tree = "character_record\t\tAnna, \tfemale, age 30, alive, never_a_leader\n" \
+               "relative \tAaron Alphid, \tAnna, \tend\n"
+        with open(path, "w") as fh:
+            fh.write(text.replace("weapon_lvl 0\n;#####<", "weapon_lvl 0\n\n" + tree + ";#####<", 1))
         p2 = edit(ModData(self.root), "test", "alpha", {"characters": [chars[1]]})
-        s = Strat(p2.files[mod.campaign_file("test", "descr_strat.txt")])
+        s = Strat(p2.files[path])
         self.assertIn(("Boris Alphid", "spy", (2, 2)), [(c.name, c.kind, c.xy) for c in s.faction("alpha").characters])
+        # new characters go before the family tree: a character after it crashes the game
+        fb = s.faction("alpha")
+        lines = [l.split(None, 1)[0] for l in s.lines[fb.start:fb.end] if l.strip()]
+        self.assertLess(max(i for i, w in enumerate(lines) if w == "character"), lines.index("character_record"))
+
+    def test_ships_owned_by_culture(self):
+        # vanilla gives ships to cultures ("ownership roman, greek"), not factions
+        with open(os.path.join(self.root, "data", "export_descr_unit.txt"), "a") as fh:
+            fh.write("\ntype\t\teastern bireme\ndictionary\teastern_bireme\ncategory\tship\nownership\teastern\n")
+        from faction_tool.units import faction_units
+        mod = ModData(self.root)
+        self.assertEqual([u.type for u in faction_units(mod, "alpha", ships=True)], ["eastern bireme"])
+        self.assertNotIn("eastern bireme", [u.type for u in faction_units(mod, "alpha")])
 
     def test_campaign_screen_key_under_a_front_end_name(self):
         # the template's description sits under a front end name (like GAUL for gauls)
