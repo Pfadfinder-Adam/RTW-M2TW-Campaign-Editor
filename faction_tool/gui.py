@@ -1,6 +1,7 @@
 """The window: pick the mod, fill in the faction, preview, create, restore."""
 
 import os
+import threading
 import traceback
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
@@ -8,6 +9,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 from .build import build, template_display
 from .moddata import ModData
 from .plan import backups, restore
+from .scan import scan as scan_mod
 from .strat import Strat
 
 APP = "RTW Faction Tool"
@@ -176,6 +178,7 @@ class App(tk.Tk):
         ttk.Button(bar, text="Preview changes", command=self.preview).pack(side="left")
         ttk.Button(bar, text="Create faction", command=self.create).pack(side="left", padx=6)
         ttk.Button(bar, text="Restore a backup...", command=self.restore).pack(side="right")
+        ttk.Button(bar, text="Scan mod", command=self.scan).pack(side="right", padx=6)
         self.status = tk.StringVar(value="Choose the mod's data folder (for example ...\\HLR\\data) and press Load.")
         ttk.Label(self, textvariable=self.status, anchor="w").pack(fill="x", padx=6, pady=(0, 6))
 
@@ -360,6 +363,36 @@ class App(tk.Tk):
         t.bind("<<Paste>>", lambda e: "break")
         t.bind("<<Cut>>", lambda e: "break")
         t.focus_set()
+
+    def scan(self):
+        """Every mention of the template in the whole mod, in a background thread."""
+        if not self.mod:
+            messagebox.showerror(APP, "load a mod first")
+            return
+        faction = self.v["template"].get().strip()
+        if not faction:
+            messagebox.showerror(APP, "pick the template faction to scan for")
+            return
+        campaign = self.v_campaign.get()
+        self.status.set("Scanning the mod for '%s'..." % faction)
+        result = {}
+
+        def work():
+            try:
+                result["text"] = scan_mod(ModData(self.mod.data), faction, campaign).report()
+            except Exception:
+                result["text"] = "Scan failed:\n\n" + traceback.format_exc()
+
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+
+        def wait():
+            if th.is_alive():
+                self.after(200, wait)
+                return
+            self.status.set("Scan done.")
+            self.show_text("Scan: %s - nothing written" % faction, result["text"])
+        wait()
 
     def preview(self):
         try:

@@ -36,16 +36,20 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 | `descr_model_battle.txt`, `descr_model_strat.txt` | Copies the template's `texture` lines |
 | `descr_banners.txt`, `descr_lbc_db.txt`, `descr_offmap_models.txt`, `descr_building_battle.txt` | Copies the template's entries |
 | `export_descr_character_traits.txt`, `export_descr_ancillaries.txt` | Copies every trigger that tests `FactionType <template>` (optional) |
-| `data/text/*.txt` | Copies every string whose key names the template (`{PARTHIA}`, `{EMT_PARTHIA_SPY}`, ...) and rewrites the name |
+| `data/text/*.txt` | Copies every string whose key names the template (`{PARTHIA}`, `{EMT_PARTHIA_SPY}`, ...) and rewrites the name. The **tooltip** goes to `{<FACTION>_DESCR}` (over the faction icon), the **full description** to `{<CAMPAIGN>_<FACTION>_DESCR}` in `campaign_descriptions.txt` (the campaign screen) |
 | `descr_strat.txt` | Adds the playable/nonplayable entry, a new faction block, the diplomacy lines and the leader and heir, and moves the chosen towns (details below) |
 | `descr_win_conditions.txt` | Copies the template's conditions; edit them by hand afterwards |
-| Art | Copies files and folders named after the template under `data/ui`, `data/menu`, `data/loading_screen` and the campaign folder (`map_parthia.tga` becomes `map_saba.tga`, `ui/units/parthia/` becomes `ui/units/saba/`) (optional) |
+| Art | Copies files and folders named after the template under `data/ui`, `data/menu`, `data/loading_screen` and the campaign folder (`map_parthia.tga` becomes `map_saba.tga`, `ui/units/parthia/` becomes `ui/units/saba/`); a folder left from an earlier attempt is filled in file by file (optional) |
+| Unit cards | For every unit the faction owns, checks `ui/units/<faction>/#<dictionary>.tga` and `ui/unit_info/<faction>/<dictionary>_info.tga` and copies a missing one from the template (or any faction that has it) |
 
 How the chosen towns are moved in `descr_strat.txt`:
 
 - The whole `settlement { }` block moves, so no region ends up with two settlements.
-- A rebel garrison standing in the town joins the new faction, and its `sub_faction` is removed.
-- A general or agent of the previous owner is moved to one of that owner's other towns (towns are located through `map_regions.tga`).
+- A settlement holds **one army** at the start. The leader holds the capital; the heir holds the second chosen town, or stands next to the capital when there is only one.
+- **Leader's army** `balanced` (default): sized like the leader armies of factions with about as many towns (median size and upkeep), from the template's bodyguard and the cheapest units of its own starting armies. `template` copies the template leader's army, `bodyguard` gives the bodyguard alone.
+- **Old garrisons** `replace` (default): the capital's old garrison leaves; in other towns its captain stays with the template's cheapest units. `keep` folds the old units into the new armies instead.
+- A general or agent of the previous owner is moved to one of that owner's other towns, or next to it when that town already has an army.
+- "Next to" is the flattest free tile of the town's region within 4 tiles: no river, ford or cliff (`map_features.tga`), no sea or mountain (`map_ground_types.tga`), a height range inside the tile of at most 25 (`map_heights.tga`).
 
 After building, the tool checks:
 
@@ -64,7 +68,10 @@ python rtw_faction_tool.py example > saba.json          # a config to edit
 python rtw_faction_tool.py new saba.json --data PATH    # preview
 python rtw_faction_tool.py new saba.json --data PATH --apply
 python rtw_faction_tool.py restore --data PATH
+python rtw_faction_tool.py scan gaetulii --data PATH    # every mention of a faction in the whole mod
 ```
+
+**Scan mod** (button or `scan`) reads every text file of the mod (not only `data`) and lists where the faction is named: places the tool does **not** handle (check these by hand), places it does, files and folders named after the faction, and files the faction's models, textures and unit cards point at that do not exist. It writes nothing.
 
 The Windows `.exe` is the window only. Use Python for the command line.
 

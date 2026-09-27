@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from faction_tool.build import build                     # noqa: E402
 from faction_tool.moddata import ModData                 # noqa: E402
 from faction_tool.plan import backups, restore           # noqa: E402
+from faction_tool.scan import scan                       # noqa: E402
 from faction_tool.strat import Strat                     # noqa: E402
 from faction_tool.textio import TextFile                 # noqa: E402
 
@@ -281,6 +282,21 @@ class ToolTest(unittest.TestCase):
         units = [l.split("\t")[2] for l in s.lines[chars[0].start:chars[0].end] if l.startswith("unit")]
         self.assertEqual(units, ["alpha general", "rebel spear"])
         self.assertTrue(any("rebel spear" in m for _, m in plan.warnings))
+
+    def test_scan_sorts_mentions(self):
+        write(os.path.join(self.root, "script", "war.nut"), "local f = \"alpha\";\nlocal alphabet = 1;\n")
+        write(os.path.join(self.root, "data", "descr_model_strat.txt"),
+              "type\tgeneral\ntexture\talpha, data/models_strat/textures/alpha_general.tga\n")
+        write(os.path.join(self.root, "data", "models_strat", "textures", "ALPHA_GENERAL.tga"), "x")
+        write(os.path.join(self.root, "data", "descr_model_battle.txt"),
+              "type\tspear\ntexture\talpha, data/models_unit/textures/gone.tga\n")
+        rep = scan(ModData(self.root), "alpha", "test")
+        report = rep.report()
+        self.assertEqual(list(rep.hits["script/war.nut"]), [(1, 'local f = "alpha";')])  # not 'alphabet'
+        self.assertIn("NOT HANDLED - mentions of 'alpha' the tool does not copy (1 file(s))", report)
+        self.assertIn("script/war.nut", report.split("HANDLED - files")[0])
+        # a missing texture is found, a case-different one is not reported
+        self.assertEqual([m[2] for m in rep.missing], ["data/models_unit/textures/gone.tga"])
 
     def test_descriptions(self):
         mod = ModData(self.root)

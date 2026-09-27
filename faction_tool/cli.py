@@ -14,6 +14,7 @@ import sys
 from .build import build
 from .moddata import ModData
 from .plan import backups, restore
+from .scan import scan
 from .strat import Strat
 
 EXAMPLE = {
@@ -45,7 +46,7 @@ EXAMPLE = {
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="faction_tool", description="Add a new faction to a Rome: Total War mod.")
-    ap.add_argument("command", choices=["new", "list", "towns", "names", "restore", "example"])
+    ap.add_argument("command", choices=["new", "list", "towns", "names", "restore", "example", "scan"])
     ap.add_argument("arg", nargs="?")
     ap.add_argument("--data", help="the mod's data folder (or the mod folder)")
     ap.add_argument("--campaign", default="imperial_campaign")
@@ -80,6 +81,11 @@ def main(argv=None):
         for k in ("characters", "surnames"):
             print("%s (%d):" % (k, len(pool.get(k, []))))
             print("   " + ", ".join(pool.get(k, [])))
+        return 0
+    if a.command == "scan":
+        if not a.arg:
+            ap.error("scan needs a faction: scan gaetulii --data PATH")
+        print(scan(mod, a.arg, a.campaign).report())
         return 0
     if a.command == "restore":
         target = a.arg or (backups(mod) or [None])[0]
