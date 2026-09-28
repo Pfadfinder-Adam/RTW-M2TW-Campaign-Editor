@@ -102,11 +102,34 @@ class ModData:
         """A campaign file, falling back to world/maps/base like the game does."""
         return _ci(self.campaign_dir(campaign), name) or _ci(self.base, name)
 
-    def text_files(self):
-        folder = os.path.join(self.data, "text")
-        if not os.path.isdir(folder):
+    def text_dirs(self):
+        """The string-table folders in the order the game reads them: data/text/english
+        first (Medieval II keeps its tables only there; RTW Gold reads a table there before
+        data/text when both have it), then data/text."""
+        text = _ci(self.data, "text")
+        if not text or not os.path.isdir(text):
             return []
-        return [os.path.join(folder, n) for n in sorted(os.listdir(folder)) if n.lower().endswith(".txt")]
+        eng = _ci(text, "english")
+        return [d for d in (eng, text) if d and os.path.isdir(d)]
+
+    def text_files(self):
+        """Every string table the game reads, one per name: the copy in text/english wins
+        over the one in data/text (the game never sees the other)."""
+        seen, out = set(), []
+        for folder in self.text_dirs():
+            for n in sorted(os.listdir(folder)):
+                if n.lower().endswith(".txt") and n.lower() not in seen:
+                    seen.add(n.lower())
+                    out.append(os.path.join(folder, n))
+        return out
+
+    def text_file(self, name):
+        """The copy of this string table the game reads, or None."""
+        for folder in self.text_dirs():
+            p = _ci(folder, name)
+            if p:
+                return p
+        return None
 
     def campaign_text_files(self, campaign=None):
         """The string tables that speak for this campaign, the one the game reads
@@ -129,7 +152,7 @@ class ModData:
 
     def region_labels_file(self, campaign):
         """data/text/<campaign>_regions_and_settlement_names.txt, or None."""
-        return _ci(os.path.join(self.data, "text"), "%s_regions_and_settlement_names.txt" % campaign)
+        return self.text_file("%s_regions_and_settlement_names.txt" % campaign)
 
     def rel(self, path):
         return os.path.relpath(path, os.path.dirname(self.data)).replace("\\", "/")

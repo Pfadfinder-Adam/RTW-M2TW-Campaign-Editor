@@ -455,21 +455,22 @@ class ToolTest(unittest.TestCase):
             "regions": ["B_R"], "leader": {"name": "Boris"}, "buildings": {"B_R": [["core_building", "hall"]]}}})
         s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
         st = s.faction("beta").settlements[0]
-        # the governor's building needs a city: the town grows to one, population to the threshold
-        self.assertEqual(settlement_info(s.lines[st.start:st.end]), ("city", [("core_building", "hall")]))
-        self.assertIn("\tpopulation 6000", s.lines[st.start:st.end])
+        # the game wants the core level one below the settlement level: hall (the chain's
+        # second level) belongs to a large town, whatever its settlement_min says
+        self.assertEqual(settlement_info(s.lines[st.start:st.end]), ("large_town", [("core_building", "hall")]))
+        self.assertIn("\tpopulation 2000", s.lines[st.start:st.end])
         warnings = " ".join(m for _, m in plan.warnings)
         self.assertIn("hall is not for alpha's faction list", warnings)
         self.assertNotIn("needs a city", warnings)
         # a level set by hand wins, with a warning; population by hand too
         plan = build(ModData(self.root), "test", "alpha", "beta", {"start": {
             "regions": ["B_R"], "leader": {"name": "Boris"}, "buildings": {"B_R": [["core_building", "hall"]]},
-            "sizes": {"B_R": {"level": "large_town", "population": 3000}}}})
+            "sizes": {"B_R": {"level": "city", "population": 7000}}}})
         s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
         st = s.faction("beta").settlements[0]
-        self.assertEqual(settlement_info(s.lines[st.start:st.end])[0], "large_town")
-        self.assertIn("\tpopulation 3000", s.lines[st.start:st.end])
-        self.assertIn("needs a city, the level is set to large_town", " ".join(m for _, m in plan.warnings))
+        self.assertEqual(settlement_info(s.lines[st.start:st.end])[0], "city")
+        self.assertIn("\tpopulation 7000", s.lines[st.start:st.end])
+        self.assertIn("belongs to a large_town, the level is set to city", " ".join(m for _, m in plan.warnings))
         with self.assertRaises(ValueError):
             build(ModData(self.root), "test", "alpha", "beta", {"start": {
                 "regions": ["B_R"], "leader": {"name": "Boris"}, "buildings": {"B_R": [["core_building", "tower"]]}}})
@@ -736,6 +737,33 @@ class ToolTest(unittest.TestCase):
         self.assertIn("{Ntown}", labels)
         restore(m2, bdir)
         self.assertNotIn("N_R", ModData(self.root).regions("test"))
+
+    def test_english_text_wins(self):
+        # the game reads data/text/english first (Medieval II keeps its tables only there):
+        # the tool reads and writes that copy, and a new town gets the core level of its size
+        from faction_tool.edit import edit
+        d = os.path.join(self.root, "data", "text")
+        write(os.path.join(d, "english", "test_regions_and_settlement_names.txt"), "{Alpha}\t\tA\n", utf16=True)
+        write(os.path.join(d, "english", "extra.txt"), "{X}\t\tx\n", utf16=True)
+        mod = ModData(self.root)
+        self.assertIn(os.path.join("english", "test_regions"), mod.region_labels_file("test"))
+        names = [os.path.relpath(p, d) for p in mod.text_files()]
+        self.assertIn(os.path.join("english", "extra.txt"), names)
+        self.assertNotIn("test_regions_and_settlement_names.txt", names)     # hidden by the english copy
+        write(os.path.join(self.root, "data", "export_descr_buildings.txt"),
+              "building core_building\n{\n    levels hut hall\n    {\n        hut requires factions { alpha, }\n"
+              "        {\n            settlement_min village\n        }\n        hall requires factions { alpha, }\n"
+              "        {\n            settlement_min town\n        }\n    }\n}\n")
+        new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
+               "city": (0, 3), "owner": "alpha", "level": "town"}
+        plan = edit(ModData(self.root), "test", "alpha", {"regions": {"painted": {(0, 3): "N_R"}, "new": [new]}})
+        plan.apply()
+        m2 = ModData(self.root)
+        self.assertIn("{N_R}", open(m2.region_labels_file("test"), "rb").read().decode("utf-16"))
+        s = Strat(m2.load(m2.campaign_file("test", "descr_strat.txt")))
+        st = next(x for x in s.faction("alpha").settlements if x.region == "N_R")
+        from faction_tool.buildings import settlement_info
+        self.assertEqual(settlement_info(s.lines[st.start:st.end]), ("town", [("core_building", "hut")]))
 
     def test_medieval_religions(self):
         # Medieval II: a ninth line per region, the religions

@@ -236,10 +236,29 @@ def apply_regions(plan, campaign, painted, new_regions):
         block = village_block(r["name"], r.get("creator") or own)
         level = r.get("level") or "village"
         block = [l.replace("level village", "level " + level) for l in block]
+        block = _grown_block(plan, block, level, r["name"], sf)
         at = fb.settlements[-1].end if fb.settlements else \
             next((i + 1 for i in range(fb.start, fb.end) if sf.text(i).split()[:1] == ["denari"]), fb.start + 1)
         sf.raw[at:at] = [sf.make(l) for l in block]
         plan.note(sf, "%s: a %s of %s" % (r["name"], level, own))
+
+
+def _grown_block(plan, block, level, region, sf):
+    """A new town bigger than a village: its population at the level's threshold and the
+    governor's building the game wants for that level (one below it), else it refuses."""
+    from .buildings import POP_MIN, core_level_for, read_buildings
+    if level == "village":
+        return block
+    block = [("\tpopulation %d" % POP_MIN[level]) if l.strip().startswith("population") and
+             POP_MIN.get(level, 0) > 400 else l for l in block]
+    path = plan.mod.file("edb")
+    edb = plan.files.get(path) or (plan.mod.load(path) if path else None)
+    core = next((b for b in read_buildings(edb) if b.name == "core_building"), None) if edb is not None else None
+    lv = core_level_for(core, level) if core else None
+    if lv is None:
+        plan.warn(sf, "%s: a %s with no governor's building (none found for that level)" % (region, level))
+        return block
+    return block[:-1] + ["\tbuilding", "\t{", "\t\ttype core_building %s" % lv.name, "\t}", "}"]
 
 
 def set_religions(plan, campaign, religions):

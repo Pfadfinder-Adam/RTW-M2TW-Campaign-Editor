@@ -238,8 +238,7 @@ def import_picture(plan, src, targets, size=None):
 # New units and buildings, copied from one there is
 # ---------------------------------------------------------------------------
 def _text_file(mod, name):
-    from .moddata import _ci
-    return _ci(os.path.join(mod.data, "text"), name)
+    return mod.text_file(name)
 
 
 def copy_text_entries(plan, path, renames):

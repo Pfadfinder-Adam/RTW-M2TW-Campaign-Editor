@@ -121,14 +121,30 @@ def population_of(lines):
     return None
 
 
+def core_settlement(b, name):
+    """The settlement level a governor's building (a level of a core chain) stands in.
+    The game wants the core level exactly one below the settlement level ("The core
+    building level should be one less than the settlement level!" - a fatal error on
+    load): the chain's first level is a town's, the second a large town's...; a village
+    has none. settlement_min is only where the level may be built (it grows the town)."""
+    names = [l.name for l in b.levels]
+    if name not in names:
+        return None
+    return SETTLEMENT_LEVELS[min(names.index(name) + 1, len(SETTLEMENT_LEVELS) - 1)]
+
+
+def core_level_for(b, settlement_level):
+    """The level of core chain b a settlement of this level has; None for a village."""
+    r = rank(settlement_level)
+    return b.levels[r - 1] if 1 <= r <= len(b.levels) else None
+
+
 def core_need(picked, known):
-    """The settlement level the picked governor's building needs (the core
-    building chain's settlement_min), or None."""
+    """The settlement level the picked governor's building belongs to, or None."""
     for chain, name in picked:
         b = known.get(chain)
-        lv = b.level(name) if b else None
-        if lv and chain.lower().startswith("core"):
-            return lv.settlement_min
+        if b and chain.lower().startswith("core") and b.level(name):
+            return core_settlement(b, name)
     return None
 
 
@@ -162,12 +178,15 @@ def sized(plan, f, region, raw, picked, size, known):
     want, want_pop = (size or {}).get("level"), (size or {}).get("population")
     need = core_need(picked or [], known)
     new = want or level
-    if need and rank(need) > rank(new):
+    if need and need != new:
         if want:
-            plan.warn(f, "%s: the governor's building needs a %s, the level is set to %s" % (region, need, want))
+            plan.warn(f, "%s: the governor's building belongs to a %s, the level is set to %s - the game "
+                         "refuses to load that" % (region, need, want))
         else:
             new = need
             plan.note(f, "%s: %s -> %s for its governor's building" % (region, level, new))
+    elif picked and not need and rank(new) > 0 and any(c.lower().startswith("core") for c in known):
+        plan.warn(f, "%s: a %s with no governor's building" % (region, new))
     if want and want != level:
         plan.note(f, "%s: level %s -> %s" % (region, level, want))
     if want_pop is None and new != level and pop is not None and pop < POP_MIN.get(new, 0):

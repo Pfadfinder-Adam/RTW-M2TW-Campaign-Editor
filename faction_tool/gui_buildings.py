@@ -4,7 +4,7 @@ game's picture of the chosen level, for one settlement at a time."""
 import tkinter as tk
 from tkinter import ttk
 
-from .buildings import SETTLEMENT_LEVELS, available, ranks_ok
+from .buildings import SETTLEMENT_LEVELS, available, core_level_for, core_settlement, ranks_ok
 
 PICTURE = (78, 62)                    # half the game's 156 x 124 building pictures
 NONE = "-"
@@ -75,8 +75,8 @@ class BuildingsEditor(ttk.Frame):
         if not cores:
             return None
         b, levels = next(((b, lv) for b, lv in cores if b.name in self.current), cores[0])
-        fit = [l for l in levels if ranks_ok(l, level)]
-        return (b.name, fit[-1].name) if fit else None
+        lv = core_level_for(b, level)          # the game wants exactly this one (none in a village)
+        return (b.name, lv.name if lv else None)
 
     def chains(self):
         """(building, [levels this faction may build]) for every chain it may build,
@@ -133,7 +133,9 @@ class BuildingsEditor(ttk.Frame):
         cb.grid(row=1, column=1, sticky="w", padx=4)
         cb.bind("<<ComboboxSelected>>", lambda e: self.pick(b.name, v.get()))
         lv = b.level(now) if now else None
-        tip = ("%s: %s, cost %d, %d turn(s), needs a %s%s" % (b.name, lv.name, lv.cost, lv.turns, lv.settlement_min,
+        need = ("the governor's building of a %s" % core_settlement(b, lv.name)) if lv and core else \
+            ("needs a %s" % lv.settlement_min if lv else "")
+        tip = ("%s: %s, cost %d, %d turn(s), %s%s" % (b.name, lv.name, lv.cost, lv.turns, need,
                ("; also " + lv.conditional()) if lv.conditional() else "")) if lv else b.name
         for w in (f, pic, cb):
             w.bind("<Enter>", lambda e, t=tip: self.info.configure(text=t))

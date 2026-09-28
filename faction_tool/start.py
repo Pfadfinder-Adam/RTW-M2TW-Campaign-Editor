@@ -150,7 +150,7 @@ def _with_buildings(plan, f, region, raw, picked, size=None):
             raise ValueError("%s: %s %s is not in export_descr_buildings.txt" % (region, chain, level))
         if lv and not available(lv, plan.new, culture, plan.template):
             plan.warn(f, "%s: %s is not for %s's faction list (%s)" % (region, level, plan.template, lv.requires))
-        if lv and not ranks_ok(lv, town_level):
+        if lv and not chain.lower().startswith("core") and not ranks_ok(lv, town_level):
             plan.warn(f, "%s: %s needs a %s, the settlement is a %s" % (region, level, lv.settlement_min, town_level))
     if len({c for c, _ in picked}) != len(picked):
         raise ValueError("%s: one level per building chain" % region)

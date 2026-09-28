@@ -11,14 +11,14 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from . import log, settings
 from .build import build, template_display
-from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need, population_of, rank,
+from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need, core_settlement, population_of, rank,
                         read_buildings, settlement_info)
 from .mapdata import CampaignMap, faction_colours
 from .moddata import ModData
 from .mapedit import orig as place_orig, place_problem, port_fleets, sea_spot
 from .newmod import create_mod, game_of, game_root_of, is_game, list_mods
 from .edit import edit as edit_faction, read_faction
-from .gui_buildings import BuildingsEditor
+from .gui_buildings import NONE, BuildingsEditor
 from .gui_diplomacy import DiplomacyEditor, colour as dip_colour
 from .gui_garrison import GarrisonEditor, Pictures
 from .gui_map import MapView
@@ -622,9 +622,9 @@ class App(tk.Tk):
                 lv = b.level(last[1]) if b else None
                 now = self.v_level.get() or town_level
                 fit = ed.core_for(now)
-                fit_lv = b.level(fit[1]) if b and fit and fit[0] == last[0] else None
-                if lv and fit_lv and rank(lv.settlement_min) < rank(fit_lv.settlement_min):
-                    self.after_idle(lambda: self._level_to(lv.settlement_min, sync_core=False))
+                fit_lv = b.level(fit[1]) if b and fit and fit[0] == last[0] and fit[1] else None
+                if lv and fit_lv and rank(core_settlement(b, lv.name)) < rank(core_settlement(b, fit_lv.name)):
+                    self.after_idle(lambda: self._level_to(core_settlement(b, lv.name), sync_core=False))
         # the chains offer the levels of the settlement as it will be: set by hand, grown
         # by a picked governor's building, or as the file has it
         shown = size.get("level") or self._grown_level(self.buildings_picked.get(region), town_level)
@@ -660,10 +660,14 @@ class App(tk.Tk):
         ed.town_level = level
         ed.title.configure(text="%s - a %s" % (region, level))
         said = []
-        if core and ed.current.get(core[0]) != core[1]:
+        if core and core[1] and ed.current.get(core[0]) != core[1]:
             ed.pick(core[0], core[1])                 # remembers for Undo and redraws
             ed.last_pick = None
             said.append("governor's building %s" % core[1])
+        elif core and not core[1] and core[0] in ed.current:
+            ed.pick(core[0], NONE)                    # a village has no governor's building
+            ed.last_pick = None
+            said.append("no governor's building")
         down = ed.fit_down(level)
         said += ["%s %s -> %s" % (c, o, n or "none") for c, o, n in down]
         ed.set_level(level)

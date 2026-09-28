@@ -588,7 +588,7 @@ def _buildings(plan, f, s):
             given = (plan.opts.get("roster") or {}).get("building:%s:%s" % (chain, lv_name))
             if lv and not (given if given is not None else available(lv, plan.new, culture)):
                 plan.warn(f, "%s: %s is not in %s's faction list (%s)" % (region, lv_name, plan.new, lv.requires))
-            if lv and not ranks_ok(lv, level):
+            if lv and not chain.lower().startswith("core") and not ranks_ok(lv, level):
                 plan.warn(f, "%s: %s needs a %s, the settlement is a %s" % (region, lv_name, lv.settlement_min, level))
         f.raw[st.start:st.end] = set_buildings(f.raw[st.start:st.end], items, f.make)
         plan.note(f, "%s: %d building(s) set" % (region, len(items)))
