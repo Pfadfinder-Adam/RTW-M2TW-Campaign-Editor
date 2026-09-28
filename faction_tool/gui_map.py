@@ -531,24 +531,33 @@ class MapView(ttk.Frame):
             for dy in (0.35, 0.0, -0.35):
                 c.create_oval(sx - r * 0.55, sy + r * (dy - 0.18), sx + r * 0.55, sy + r * (dy + 0.18),
                               fill=ink, outline="black", tags=tags)
-        elif k == "priest":                             # a cross
-            c.create_line(sx, sy - r * 0.7, sx, sy + r * 0.7, fill=ink, width=w + 1, tags=tags)
-            c.create_line(sx - r * 0.45, sy - r * 0.25, sx + r * 0.45, sy - r * 0.25, fill=ink, width=w + 1, tags=tags)
+        elif k == "priest":                             # an open book (no faith's own sign: imams are priests too)
+            c.create_polygon(sx - r * 0.7, sy - r * 0.4, sx, sy - r * 0.25, sx, sy + r * 0.55, sx - r * 0.7,
+                             sy + r * 0.4, fill=ink, outline="", tags=tags)
+            c.create_polygon(sx + r * 0.7, sy - r * 0.4, sx, sy - r * 0.25, sx, sy + r * 0.55, sx + r * 0.7,
+                             sy + r * 0.4, fill=ink, outline="", tags=tags)
+            c.create_line(sx, sy - r * 0.25, sx, sy + r * 0.55, fill=self._fill_of_disc, width=max(1, w - 1),
+                          tags=tags)
         elif k == "princess":                           # a crown
             c.create_polygon(sx - r * 0.6, sy + r * 0.4, sx - r * 0.6, sy - r * 0.35, sx - r * 0.3, sy,
                              sx, sy - r * 0.5, sx + r * 0.3, sy, sx + r * 0.6, sy - r * 0.35, sx + r * 0.6, sy + r * 0.4,
                              fill=ink, outline="", tags=tags)
-        elif k == "inquisitor":                         # a flame
-            c.create_polygon(sx, sy - r * 0.75, sx + r * 0.45, sy + r * 0.1, sx + r * 0.25, sy + r * 0.6,
-                             sx - r * 0.25, sy + r * 0.6, sx - r * 0.45, sy + r * 0.1, fill=ink, outline="", tags=tags)
-        elif k == "witch":                              # a crescent moon
-            c.create_oval(sx - r * 0.6, sy - r * 0.6, sx + r * 0.6, sy + r * 0.6, fill=ink, outline="", tags=tags)
-            c.create_oval(sx - r * 0.25, sy - r * 0.7, sx + r * 0.75, sy + r * 0.45,
-                          fill=self._fill_of_disc, outline="", tags=tags)
-        elif k == "heretic":                            # a broken cross
-            c.create_line(sx, sy - r * 0.7, sx, sy - r * 0.1, fill=ink, width=w + 1, tags=tags)
-            c.create_line(sx + r * 0.15, sy + r * 0.1, sx + r * 0.15, sy + r * 0.7, fill=ink, width=w + 1, tags=tags)
-            c.create_line(sx - r * 0.45, sy - r * 0.3, sx + r * 0.45, sy - r * 0.3, fill=ink, width=w + 1, tags=tags)
+        elif k == "inquisitor":                         # scales: judgement
+            c.create_line(sx, sy - r * 0.6, sx, sy + r * 0.5, fill=ink, width=w, tags=tags)
+            c.create_line(sx - r * 0.6, sy - r * 0.35, sx + r * 0.6, sy - r * 0.35, fill=ink, width=w, tags=tags)
+            for dx in (-0.45, 0.45):
+                c.create_polygon(sx + r * (dx - 0.25), sy + r * 0.05, sx + r * (dx + 0.25), sy + r * 0.05,
+                                 sx + r * dx, sy + r * 0.3, fill=ink, outline="", tags=tags)
+            c.create_line(sx - r * 0.3, sy + r * 0.55, sx + r * 0.3, sy + r * 0.55, fill=ink, width=w, tags=tags)
+        elif k == "witch":                              # a pointed hat
+            c.create_polygon(sx - r * 0.2, sy + r * 0.25, sx + r * 0.1, sy - r * 0.75, sx + r * 0.25, sy + r * 0.25,
+                             fill=ink, outline="", tags=tags)
+            c.create_oval(sx - r * 0.7, sy + r * 0.15, sx + r * 0.7, sy + r * 0.45, fill=ink, outline="", tags=tags)
+        elif k == "heretic":                            # a book torn in two
+            c.create_polygon(sx - r * 0.75, sy - r * 0.35, sx - r * 0.1, sy - r * 0.2, sx - r * 0.2, sy + r * 0.55,
+                             sx - r * 0.75, sy + r * 0.4, fill=ink, outline="", tags=tags)
+            c.create_polygon(sx + r * 0.75, sy - r * 0.45, sx + r * 0.15, sy - r * 0.3, sx + r * 0.05, sy + r * 0.45,
+                             sx + r * 0.75, sy + r * 0.3, fill=ink, outline="", tags=tags)
         else:
             c.create_text(sx, sy, text=self.AGENT_LETTER.get(k, k[:1].upper()), fill=ink,
                           font=("", max(6, int(r)), "bold"), tags=tags)
