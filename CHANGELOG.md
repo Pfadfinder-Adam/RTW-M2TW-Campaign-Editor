@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.4 - 2026-09-28
+
+### Fixed
+- **Art tab: the picture list was squeezed to a strip** by the campaign-select map blown up to 2x;
+  the map now takes at most about 40 % of the tab's height (and half its width), smaller on small
+  windows, so the pictures below keep their room.
+
 ## 0.7.3 - 2026-09-28
 
 ### Changed

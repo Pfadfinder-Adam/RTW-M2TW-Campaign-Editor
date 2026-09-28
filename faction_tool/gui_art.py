@@ -31,6 +31,7 @@ class ArtEditor(ttk.Frame):
         top.columnconfigure(1, weight=1)
         self._map_im, self._map_scale = None, 0
         top.bind("<Configure>", lambda e: self._fit_map(), add="+")
+        self.bind("<Configure>", lambda e: self._fit_map(), add="+")        # the tab's height counts too
         ttk.Label(self, text="Every picture of the faction. Replace... takes a PNG, JPG or TGA and makes it the "
                              "size and depth the game's own has; Preview, then Apply writes it (with a backup).",
                   foreground="#555").pack(anchor="w", pady=(8, 2))
@@ -234,17 +235,22 @@ class ArtEditor(ttk.Frame):
             "Not drawn: the file stays as it is (for a new faction: the template's copy)."))
 
     def _fit_map(self):
-        """The select map shown as big as half the tab's width allows (1x to 2x)."""
+        """The select map shown as big as the tab allows: half its width, 40 % of its height (0.5x to 2x)."""
         im = self._map_im
         if im is None:
             return
         room = max(1, self.top.winfo_width() - 460)
-        scale = max(1.0, min(2.0, room / float(im.width)))
+        # and no taller than about 40 % of the tab: the picture list below keeps its room (the map
+        # blown up to 2x once squeezed the list to a strip)
+        tall = self.winfo_height()
+        high = (tall * 0.40 / float(im.height)) if tall > 50 else 1.0
+        scale = max(0.5, min(2.0, room / float(im.width), high))
         scale = round(scale * 4) / 4.0                 # steps of a quarter: no redraw per pixel of resize
         if scale == self._map_scale:
             return
         self._map_scale = scale
         from PIL import Image, ImageTk
-        big = im if scale == 1 else im.resize((int(im.width * scale), int(im.height * scale)), Image.LANCZOS)
+        big = im if scale == 1 else im.resize((max(1, int(im.width * scale)), max(1, int(im.height * scale))),
+                                              Image.LANCZOS)
         self._map_photo = ImageTk.PhotoImage(big)
         self.map_pic.configure(image=self._map_photo, text="", width=big.width, height=big.height)
