@@ -177,14 +177,9 @@ def select_background(mod, campaign):
     return mod._cache[key]
 
 
-def draw_select_map(mod, campaign, regions, colour):
-    """Pillow RGB image: the background with the land of these regions lit in colour;
-    None when the campaign has no background to start from (or Pillow is missing)."""
-    got = select_background(mod, campaign)
-    if not got:
-        return None
-    from PIL import Image, ImageFilter
-    bg, _ = got
+def _region_mask(mod, campaign, regions, size):
+    """An L image of `size`: 255 on these regions' land (map_regions.tga scaled)."""
+    from PIL import Image
     img = mod.region_map(campaign)
     info = mod.regions(campaign)
     cols = {info[r]["colour"] for r in regions if r in info}
@@ -194,7 +189,18 @@ def draw_select_map(mod, campaign, regions, colour):
         for x in range(img.width):
             if img.get(x, y) in cols:
                 px[x, img.height - 1 - y] = 255             # map_regions rows run bottom-up
-    mask = mask.resize(bg.size, Image.NEAREST).filter(ImageFilter.GaussianBlur(1))
+    return mask.resize(size, Image.NEAREST)
+
+
+def draw_select_map(mod, campaign, regions, colour):
+    """Pillow RGB image: the background with the land of these regions lit in colour;
+    None when the campaign has no background to start from (or Pillow is missing)."""
+    got = select_background(mod, campaign)
+    if not got:
+        return None
+    from PIL import Image, ImageFilter
+    bg, _ = got
+    mask = _region_mask(mod, campaign, regions, bg.size).filter(ImageFilter.GaussianBlur(1))
     lum = bg.convert("L")
     m, l = _pixels(mask), _pixels(lum)
     inside = [l[i] for i in range(len(m)) if m[i] > 128]
@@ -257,6 +263,55 @@ def replace_picture(plan, src, target, like=None):
         os.path.basename(src), " (%d x %d, %d-bit)" % info if info else "")))
 
 
+def colour_on_map(mod, campaign, faction, regions):
+    """The colour a faction's land has on its own campaign-select map now (the mean
+    of the lit pixels), or None."""
+    got = select_background(mod, campaign)
+    path = _ci(mod.campaign_dir(campaign), "map_%s.tga" % faction)
+    if not got or not path:
+        return None
+    from PIL import Image
+    bg, _ = got
+    try:
+        im = Image.open(path).convert("RGB")
+    except Exception:
+        return None
+    if im.size != bg.size:
+        return None
+    a, b = _pixels(im), _pixels(bg)
+    mask = _pixels(_region_mask(mod, campaign, regions, bg.size)) if regions else None
+    if mask:                                 # inside its land (the edges and texture average out as drawn)
+        lit = [p for p, k in zip(a, mask) if k > 128]
+    else:
+        lit = [p for p, q in zip(a, b) if abs(p[0] - q[0]) + abs(p[1] - q[1]) + abs(p[2] - q[2]) > 60]
+    if not lit:
+        return None
+    n = len(lit)
+    return tuple(int(sum(p[i] for p in lit) / n) for i in range(3))
+
+
+def redraw_others(plan, campaign, changed_factions):
+    """The campaign-select maps of the other factions whose towns changed (taken
+    from them, given to them), in the colour their own map has."""
+    from .strat import Strat
+    mod = plan.mod
+    sp = mod.campaign_file(campaign, "descr_strat.txt")
+    if sp not in plan.files or not select_background(mod, campaign):
+        return
+    before = Strat(mod.load(sp)).owners()
+    after = Strat(plan.files[sp]).owners()
+    for fac in sorted(changed_factions):
+        if fac == "slave" or not _ci(mod.campaign_dir(campaign), "map_%s.tga" % fac):
+            continue
+        old = [r for r, o in before.items() if o == fac]
+        new = [r for r, o in after.items() if o == fac]
+        if sorted(old) == sorted(new):
+            continue
+        colour = colour_on_map(mod, campaign, fac, old)
+        if colour:
+            write_select_map(plan, campaign, fac, new, colour)
+
+
 def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
     """opts['art'] = {path under data: picture to put there}; opts['select_map'] =
     {'colour': [r, g, b]} or {'off': True}: the campaign-select map is drawn for a new
@@ -268,6 +323,16 @@ def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
             (s for s, d in plan.copies if os.path.normcase(d) == os.path.normcase(target)), None)
         replace_picture(plan, src, target, like)
     sel = plan.opts.get("select_map") or {}
+    if towns_changed:
+        # the factions that lost (or got) towns: their maps too, in their own colour
+        from .strat import Strat
+        sp = mod.campaign_file(campaign, "descr_strat.txt")
+        if sp in plan.files:
+            before = Strat(mod.load(sp)).owners()
+            after = Strat(plan.files[sp]).owners()
+            others = {o for r, o in before.items() if after.get(r) != o} | \
+                {o for r, o in after.items() if before.get(r) != o}
+            redraw_others(plan, campaign, others - {faction})
     if sel.get("off"):
         return
     if not (towns_changed or sel.get("colour")):
@@ -276,7 +341,15 @@ def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
     rel = os.path.relpath(target, mod.data).replace("\\", "/")
     if rel in (plan.opts.get("art") or {}):
         return                                              # a picture of its own was given
-    colour = tuple(sel.get("colour") or default_map_colour(primary))
+    colour = sel.get("colour")
+    if not colour and not plan.opts.get("_primary_changed", bool(plan.opts.get("primary_colour"))):
+        # no colour of its own picked: the light the template's (or its own) map already has
+        from .strat import Strat
+        src = plan.template
+        owned = [st.region for st in (Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))).faction(src)
+                                      or type("x", (), {"settlements": []})).settlements]
+        colour = colour_on_map(mod, campaign, src, owned)
+    colour = tuple(colour or default_map_colour(primary))
     if not write_select_map(plan, campaign, faction, regions, colour) and sel.get("colour"):
         plan.warn(None, "fewer than three campaign-select maps (map_<faction>.tga) in the campaign folder: "
                         "%s's cannot be drawn - replace it by hand" % faction)

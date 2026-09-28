@@ -142,6 +142,12 @@ class ArtEditor(ttk.Frame):
         c = a.sel_map.get("colour")
         if c:
             return tuple(c)
+        if not a.colours.get("primary"):             # as its (template's) own map has it
+            t = a.v["template"].get().strip()
+            fb = a.strat.faction(t) if a.strat and t else None
+            got = FA.colour_on_map(a.mod, a.v_campaign.get(), t, [st.region for st in fb.settlements]) if fb else None
+            if got:
+                return got
         return FA.default_map_colour(a.colours.get("primary") or self._template_primary())
 
     def _template_primary(self):

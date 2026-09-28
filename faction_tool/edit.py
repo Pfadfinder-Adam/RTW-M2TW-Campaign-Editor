@@ -104,6 +104,8 @@ def edit(mod, campaign, faction, opts):
         from .diplomacy import apply_opts
         apply_opts(plan, campaign, faction, opts["relations"])
     from .factionart import apply_opts as apply_art
+    plan.opts["_primary_changed"] = bool(opts.get("primary_colour")) and \
+        tuple(opts["primary_colour"]) != tuple(now.get("primary_colour") or ())
     given = set(opts.get("give") or {})
     towns = [r for r in now["regions"] if r not in given] + [r for r in opts.get("take") or [] if r not in now["regions"]]
     apply_art(plan, campaign, faction, towns, opts.get("primary_colour") or now.get("primary_colour"),
