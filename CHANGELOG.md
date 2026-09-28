@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.1 - 2026-09-28
+
+Fixes from a run through every part of the tool as a user (vanilla and HLR).
+
+- **Edit no longer renames the rebels**: it wrote the faction's name into every
+  string keyed like it even when the name was not changed - also a rebel type of
+  the same name ({Belgae} "Belgae Rebels" became "Belgae Confederacy").
+- **Campaign-select maps**: the factions that lose or get towns are drawn again
+  too, in the colour their own map has; the colour is read inside the land; a new
+  faction starts with its template's map colour. Only real map_<faction>.tga files
+  make the background (HLR's map_heights etc. gave a garbled picture; HLR has no
+  campaign-select maps to draw from, and the tool says so).
+- **Much faster on big mods**: a new faction on HLR 65 s -> 1.5 s; Check mod
+  (deep) on vanilla 4 min -> 26 s, on HLR about 2 minutes.
+- Neutral agent signs: priest an open book, inquisitor scales, heretic a torn book,
+  witch a pointed hat.
+- Undo / Redo in the unit and building editors no longer undo the faction tabs
+  unseen; switching New / Edit faction asks before dropping unwritten changes.
+- Without Pillow a new faction no longer fails on the campaign-select map.
+
 ## 0.4.0 - 2026-09-28
 
 ### New
