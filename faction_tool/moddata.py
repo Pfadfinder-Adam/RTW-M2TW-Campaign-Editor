@@ -224,7 +224,8 @@ class ModData:
             if cur and len(vals) >= 4:
                 colour = tuple(int(v) for v in vals[3].split()[:3])
                 out[cur] = {"settlement": vals[0], "creator": vals[1], "rebels": vals[2], "colour": colour,
-                            "resources": vals[4] if len(vals) > 4 else ""}
+                            "resources": vals[4] if len(vals) > 4 else "",
+                            "triumph": vals[5] if len(vals) > 5 else "", "farming": vals[6] if len(vals) > 6 else ""}
                 rel = next((v for v in vals[5:] if v.startswith("religions")), None)
                 if rel:                                      # Medieval II: religions { catholic 90 pagan 10 }
                     out[cur]["religions"] = parse_religions(rel)
@@ -272,18 +273,20 @@ class ModData:
             self._cache[key] = read_tga(self.campaign_file(campaign, "map_regions.tga"))
         return self._cache[key]
 
-    def free_tile(self, campaign, region, taken, reach=4):
+    def free_tile(self, campaign, region, taken, reach=4, start=None, own=None):
         """The best tile of `region` near its city that no one stands on, or None.
 
         Candidates are tiles of the region's own colour in map_regions.tga (so
         never sea, a neighbour's land or another city) within `reach` tiles of
-        the city that pass _standable(); the flattest wins, then the nearest."""
+        the city that pass _standable(); the flattest wins, then the nearest.
+        A plan that changes the map (new regions, painted borders) gives its own
+        town tile (start) and own(tile) -> bool for 'this region's land'."""
         img = self.region_map(campaign)
         info = self.regions(campaign).get(region)
-        start = self.city_tiles(campaign).get(region)
-        if not info or not start:
+        start = start or self.city_tiles(campaign).get(region)
+        if (not info and own is None) or not start:
             return None
-        colour = info["colour"]
+        colour = info["colour"] if info else None
         ok, slope = self._standable(campaign)
         best = None
         for y in range(start[1] - reach, start[1] + reach + 1):
@@ -291,7 +294,8 @@ class ModData:
                 p = (x, y)
                 if p == start or p in taken or not (0 <= x < img.width and 0 <= y < img.height):
                     continue
-                if img.get(x, y) != colour or not ok(p):
+                mine = own(p) if own is not None else img.get(x, y) == colour
+                if not mine or not ok(p):
                     continue
                 key = (slope(p), max(abs(x - start[0]), abs(y - start[1])), abs(x - start[0]) + abs(y - start[1]))
                 if best is None or key < best[0]:

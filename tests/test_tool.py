@@ -917,6 +917,30 @@ class ToolTest(unittest.TestCase):
         restore(m2, bdir)
         self.assertNotIn("N_R", ModData(self.root).regions("test"))
 
+    def test_new_faction_starts_in_a_new_region_one_apply(self):
+        """A region made on the Map and picked as the new faction's start town: map, region and
+        faction written by one Apply (the region first, as a rebel village the faction takes);
+        an existing region's descr_regions lines changed by the same run."""
+        new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
+               "city": (0, 3), "owner": None, "level": "village"}
+        painted = {(0, 3): "N_R", (1, 3): "N_R", (0, 2): "N_R"}
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {
+            "start": {"regions": ["N_R"], "leader": {"name": "Boris Alphid", "age": 35}},
+            "regions": {"painted": painted, "new": [new], "edits": {"A_R": {"triumph": "9", "farming": "4"}}}})
+        plan.apply()
+        m2 = ModData(self.root)
+        self.assertEqual(Strat(m2.load(m2.campaign_file("test", "descr_strat.txt"))).owners()["N_R"], "beta")
+        self.assertEqual(m2.city_tiles("test")["N_R"], (0, 3))
+        with open(m2.campaign_file("test", "descr_regions.txt")) as fh:
+            lines = [l.strip() for l in fh.read().splitlines()]
+        a = lines.index("A_R")
+        self.assertEqual(lines[a + 6:a + 8], ["9", "4"])
+        with self.assertRaises(ValueError):
+            build(ModData(self.root), "test", "alpha", "gamma", {
+                "start": {"regions": ["B_R"], "leader": {"name": "Boris Alphid"}},
+                "regions": {"edits": {"A_R": {"creator": "nobody"}}}})
+
     def test_setup_fix_vegetation(self):
         from faction_tool import gamefix
         d = os.path.join(self.root, "data")

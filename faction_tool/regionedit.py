@@ -352,3 +352,90 @@ def _mercenary_pools(plan, campaign, new_regions, painted, by_colour, img):
                 f.set(i, body[:end] + " " + r["name"] + body[end:] + sep + comment)
                 plan.note(f, "%s joins %s's mercenary pool" % (r["name"], donor))
                 break
+
+
+# the value lines of a region in descr_regions.txt after its name (Medieval II adds religions)
+REGION_FIELDS = ("settlement", "creator", "rebels", "colour", "resources", "triumph", "farming")
+EDITABLE = ("creator", "rebels", "resources", "triumph", "farming")
+
+
+def edit_regions(plan, campaign, edits):
+    """edits = {region: {'creator', 'rebels', 'resources' (list or text), 'triumph', 'farming'}}:
+    those lines of existing regions in descr_regions.txt set (the given keys only); every other
+    line keeps its bytes."""
+    if not edits:
+        return
+    mod = plan.mod
+    known = mod.regions(campaign)
+    facs = {n for n, _ in mod.factions()}
+    f = plan.edit(mod.campaign_file(campaign, "descr_regions.txt"))
+    cur, n, done = None, 0, set()
+    for i in range(len(f.raw)):
+        line = f.text(i)
+        code = line.split(";", 1)[0]
+        if not code.strip():
+            continue
+        if not code[0].isspace():
+            cur, n = code.strip(), 0
+            continue
+        field = REGION_FIELDS[n] if n < len(REGION_FIELDS) else None
+        n += 1
+        want = (edits.get(cur) or {}).get(field) if field in EDITABLE else None
+        if want is None:
+            continue
+        if field == "resources":
+            want = ", ".join(x.strip() for x in (want if isinstance(want, list) else str(want).split(","))
+                             if x.strip()) or "none"
+        elif field in ("triumph", "farming"):
+            if not str(want).strip().isdigit():
+                raise ValueError("%s: %s must be a whole number" % (cur, field))
+            want = str(int(want))
+        elif field == "creator" and want not in facs:
+            raise ValueError("%s: %s is no faction of this mod" % (cur, want))
+        else:
+            want = str(want).strip()
+        if not want:
+            continue
+        indent = line[:len(line) - len(line.lstrip())]
+        comment = line[len(code.rstrip("\r\n")):] if ";" in line else ""
+        new = indent + want + comment.rstrip("\r\n")
+        if new != line.rstrip("\r\n"):
+            f.set(i, new)
+            plan.note(f, "%s: %s %s" % (cur, field, want))
+        done.add(cur)
+    for r in edits:
+        if r not in known:
+            raise ValueError("%s is no region of descr_regions.txt" % r)
+
+
+def apply_opts(plan, campaign, regions):
+    """Everything the window's region work holds ({'painted', 'new', 'religions', 'edits'}), in
+    one place for every kind of run (map only, new faction, edited faction)."""
+    if not regions:
+        return
+    apply_regions(plan, campaign, regions.get("painted") or {}, regions.get("new") or [])
+    set_religions(plan, campaign, regions.get("religions") or {})
+    edit_regions(plan, campaign, regions.get("edits") or {})
+
+
+def plan_land(plan, campaign):
+    """(tiles, own): the town tiles as the plan leaves the map (towns moved, new regions' towns)
+    and own(region) -> a test 'is this tile that region's land' with the painted tiles and the
+    new towns and ports on top of map_regions.tga - for placing characters in one Apply with
+    the map's changes."""
+    from .edit import plan_tiles
+    mod = plan.mod
+    tiles = plan_tiles(plan, campaign)
+    regions = (plan.opts.get("regions") or {})
+    painted = {tuple(k): v for k, v in (regions.get("painted") or {}).items()}
+    points = {tuple(r[w]) for r in regions.get("new") or [] for w in ("city", "port") if r.get(w)}
+    img = mod.region_map(campaign)
+    by_colour = {v["colour"]: k for k, v in mod.regions(campaign).items()}
+
+    def own(region):
+        def test(p):
+            if p in points:
+                return False
+            return painted.get(p, by_colour.get(img.get(*p))) == region
+        return test
+    return tiles, own

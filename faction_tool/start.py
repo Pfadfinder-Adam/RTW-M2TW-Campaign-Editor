@@ -175,7 +175,9 @@ def build_start(plan, campaign, start):
     tb = s.faction(t)
     if not tb:
         raise ValueError("template %s has no block in this campaign's descr_strat.txt" % t)
-    tiles = mod.city_tiles(campaign)
+    from .regionedit import plan_land
+    tiles, own = plan_land(plan, campaign)          # new regions of the same Apply count as regions
+    new_regions = {r["name"] for r in (plan.opts.get("regions") or {}).get("new") or []}
     img = mod.region_map(campaign)
     plan.note(f, "map: %s (%dx%d)" % (mod.rel(mod.campaign_file(campaign, "map_regions.tga")), img.width, img.height))
     regions = list(start.get("regions") or [])
@@ -199,7 +201,7 @@ def build_start(plan, campaign, start):
     for r in regions:
         st = s.settlement_of(r)
         if st is None:
-            if r not in plan.mod.regions(campaign) or not tiles.get(r):
+            if (r not in plan.mod.regions(campaign) and r not in new_regions) or not tiles.get(r):
                 raise ValueError("%s is not a region of this campaign's map" % r)
             # the game makes such a region a rebel village: write that village out
             st = SimpleNamespace(owner="slave", start=None, end=None)
@@ -252,7 +254,7 @@ def build_start(plan, campaign, start):
                 armies_at.add(c.xy)
 
     def place(region, what):
-        xy = mod.free_tile(campaign, region, taken)
+        xy = mod.free_tile(campaign, region, taken, start=tiles.get(region), own=own(region))
         if not xy:
             raise ValueError("%s: no free land tile next to %s for %s - pick another town or edit "
                              "descr_strat.txt by hand" % (region, region, what))

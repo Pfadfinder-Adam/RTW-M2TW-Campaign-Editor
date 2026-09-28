@@ -98,10 +98,8 @@ def edit(mod, campaign, faction, opts):
     # new regions first: a new town given to this faction is then one of its towns for the
     # garrisons, buildings and capital below (one Apply, one backup)
     if opts.get("regions"):
-        from .regionedit import apply_regions
-        from .regionedit import set_religions
-        apply_regions(plan, campaign, opts["regions"].get("painted") or {}, opts["regions"].get("new") or [])
-        set_religions(plan, campaign, opts["regions"].get("religions") or {})
+        from .regionedit import apply_opts as apply_region_opts
+        apply_region_opts(plan, campaign, opts["regions"])
     _strat(plan, campaign, now)
     if opts.get("places"):
         from .mapedit import apply_places
@@ -369,7 +367,9 @@ def _towns(plan, f, campaign):
                                  % (r, c.name, old, old))
             dest = tiles[keep[0]]
             if army and dest in armies_at:
-                dest = mod.free_tile(campaign, keep[0], taken)
+                from .regionedit import plan_land
+                ptiles, own = plan_land(plan, campaign)
+                dest = mod.free_tile(campaign, keep[0], taken, start=ptiles.get(keep[0]), own=own(keep[0]))
                 if not dest:
                     raise ValueError("%s: no free tile next to %s for %s" % (r, keep[0], c.name))
             taken.add(dest)

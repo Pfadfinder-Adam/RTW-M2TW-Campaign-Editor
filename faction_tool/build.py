@@ -67,6 +67,11 @@ def build(mod, campaign, template, new, opts):
     if opts.get("copy_art", True):
         clone.art_files(plan, campaign)
     clone.unit_cards(plan)
+    # new regions first: a new region picked as a start town is then a region of the map
+    # (a rebel village the new faction takes) - one Apply writes the map and the faction
+    if opts.get("regions"):
+        from .regionedit import apply_opts as apply_region_opts
+        apply_region_opts(plan, campaign, opts["regions"])
     build_start(plan, campaign, opts["start"])
     if opts.get("places"):
         from .mapedit import apply_places
@@ -74,11 +79,6 @@ def build(mod, campaign, template, new, opts):
     if opts.get("resources"):
         from .resources import apply as apply_resources
         apply_resources(plan, campaign, opts["resources"])
-    if opts.get("regions"):
-        from .regionedit import apply_regions
-        from .regionedit import set_religions
-        apply_regions(plan, campaign, opts["regions"].get("painted") or {}, opts["regions"].get("new") or [])
-        set_religions(plan, campaign, opts["regions"].get("religions") or {})
     if opts.get("relations"):
         from .diplomacy import apply_opts
         apply_opts(plan, campaign, new, opts["relations"])

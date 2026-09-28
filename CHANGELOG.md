@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.1 - 2026-09-29
+
+### Added
+- **Edit region...** (Map region bar and under the towns list): a new region's data again (names, builder,
+  rebels, tags, triumph, farming, owner, size; a rename follows on the map, the towns and garrisons), and the
+  `descr_regions.txt` lines of a region of the map (builder, rebels, region tags, triumph, farming).
+
+### Fixed
+- A new region shows in the towns list on the Faction tab at once (it only came after Apply).
+- A **new faction** can start in a region made in the same session: the map, the region and the faction are
+  written by one Apply (the region first; the faction takes it as a rebel village). Characters placed next to
+  a new town stand on the new region's land as painted.
+
 ## 0.9.0 - 2026-09-29
 
 ### Added
