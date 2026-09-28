@@ -237,21 +237,23 @@ def _map_mask(mod, campaign, keep):
 
 
 def _place(mask, frame, size):
-    """The map-sized mask scaled and set where the map lies in the picture."""
+    """The map-sized mask scaled and set where the map lies in the picture.
+    frame = (sx, sy, dx, dy) (or the older (s, dx, dy))."""
     from PIL import Image
-    s, dx, dy = frame
-    big = mask.resize((max(1, round(mask.width * s)), max(1, round(mask.height * s))), Image.NEAREST)
+    sx, sy, dx, dy = frame if len(frame) == 4 else (frame[0], frame[0], frame[1], frame[2])
+    big = mask.resize((max(1, round(mask.width * sx)), max(1, round(mask.height * sy))), Image.NEAREST)
     out = Image.new("L", size)
     out.paste(big, (dx, dy))
     return out
 
 
 def select_frame(mod, campaign, size=None):
-    """(scale, dx, dy): where the map lies in the campaign's select pictures - a map pixel
-    x, y (top row first) is picture pixel x * scale + dx, y * scale + dy. Rome's pictures are
-    the whole map stretched; Medieval II's are the map scaled 1.32 and shifted inside a
-    decorated frame, the Americas cut off. Learnt from the pictures themselves: the land of
-    map_regions laid over the background where land and sea differ the most."""
+    """(sx, sy, dx, dy): where the map lies in the campaign's select pictures - a map pixel
+    x, y (top row first) is picture pixel x * sx + dx, y * sy + dy. Rome's pictures are the
+    whole map stretched (the same shape as map_regions). Medieval II's are the map scaled
+    about 1.39 and shifted inside a decorated frame, the Americas cut off: learnt from the
+    pictures themselves - first land against sea, then (the fit that counts) where the game
+    lights each faction's own start regions on its own map_<faction>.tga."""
     key = ("select_frame", campaign)
     if key in mod._cache:
         return mod._cache[key]
@@ -262,26 +264,92 @@ def select_frame(mod, campaign, size=None):
     bg, _ = got
     pw, ph = size or bg.size
     W, H = img.width, img.height
-    stretch = (pw / W, 0, 0)
+    stretch = (pw / W, ph / H, 0, 0)
     if abs((pw / W) / (ph / H) - 1) < 0.03:
         mod._cache[key] = stretch                  # the same shape as the map: the whole map stretched (Rome)
         return stretch
-    info = mod.regions(campaign)
-    cols = {r["colour"] for r in info.values()} | {(0, 0, 0), (255, 255, 255)}
-    land = _map_mask(mod, campaign, lambda c: c in cols)
     # the fit takes seconds: kept in the settings, per mod, campaign and sizes
     from . import settings
     skey = "%s|%s|%dx%d|%dx%d" % (os.path.normcase(os.path.abspath(mod.data)), campaign, pw, ph, W, H)
-    known = settings.get("select_frames", {}) or {}
-    if isinstance(known.get(skey), list) and len(known[skey]) == 3:
+    known = settings.get("select_frames2", {}) or {}
+    if isinstance(known.get(skey), list) and len(known[skey]) == 4:
         frame = tuple(known[skey])
     else:
-        frame = _fit(bg.convert("L"), land, stretch)
+        info = mod.regions(campaign)
+        cols = {r["colour"] for r in info.values()} | {(0, 0, 0), (255, 255, 255)}
+        land = _map_mask(mod, campaign, lambda c: c in cols)
+        s, dx, dy = _fit(bg.convert("L"), land, (pw / W, 0, 0))
+        frame = _fit_lit(mod, campaign, bg, (s, s, dx, dy))
         known = dict(known)
         known[skey] = list(frame)
-        settings.put("select_frames", known)
+        settings.put("select_frames2", known)
     mod._cache[key] = frame
     return frame
+
+
+def _fit_lit(mod, campaign, bg, frame):
+    """The frame moved to where the vanilla pictures really light each faction: for up to
+    six factions with a map_<faction>.tga, the pixels that differ from the background
+    against the faction's start regions laid on the picture; the best mean overlap wins."""
+    from PIL import Image, ImageChops, ImageStat
+    from .strat import Strat
+    try:
+        owners = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))).owners()
+    except Exception:
+        return frame
+    regions = {}
+    for r, f in owners.items():
+        regions.setdefault(f, []).append(r)
+    info = mod.regions(campaign)
+    folder = mod.campaign_dir(campaign)
+    pairs = []
+    for f, regs in regions.items():
+        path = _ci(folder, "map_%s.tga" % f)
+        if not path or f == "slave":
+            continue
+        try:
+            im = Image.open(path).convert("RGB")
+        except Exception:
+            continue
+        if im.size != bg.size:
+            continue
+        lit = ImageChops.difference(im, bg).convert("L").point(lambda v: 255 if v > 20 else 0)
+        area = ImageStat.Stat(lit).sum[0] / 255
+        cols = {info[r]["colour"] for r in regs if r in info}
+        if area > 40 and cols:
+            pairs.append((area, lit, _map_mask(mod, campaign, lambda c, cols=cols: c in cols)))
+    pairs = [(lit, mask) for _, lit, mask in sorted(pairs, key=lambda p: -p[0])[:6]]
+    if len(pairs) < 3:
+        return frame
+
+    def score(fr):
+        t = 0.0
+        for lit, mask in pairs:
+            a = _place(mask, fr, bg.size)
+            both = ImageStat.Stat(ImageChops.darker(a, lit)).sum[0]
+            either = ImageStat.Stat(ImageChops.lighter(a, lit)).sum[0]
+            t += both / either if either else 0.0
+        return t / len(pairs)
+    sx, sy, dx, dy = frame
+    best = (score(frame), frame)
+    for i in range(-6, 7):                                   # the scale within 6 %, the place within 12 px
+        s = sx * (1 + 0.01 * i)
+        for ddx in range(-12, 13, 3):
+            for ddy in range(-12, 13, 3):
+                fr = (s, s, dx + ddx, dy + ddy)
+                v = score(fr)
+                if v > best[0]:
+                    best = (v, fr)
+    sx0, _, dx0, dy0 = best[1]
+    for i in range(-2, 3):                                   # then each axis on its own, pixel by pixel
+        for j in range(-2, 3):
+            for ddx in range(-2, 3):
+                for ddy in range(-2, 3):
+                    fr = (sx0 * (1 + 0.005 * i), sx0 * (1 + 0.005 * j), dx0 + ddx, dy0 + ddy)
+                    v = score(fr)
+                    if v > best[0]:
+                        best = (v, fr)
+    return best[1]
 
 
 def _fit(pic, land, stretch):
@@ -353,39 +421,37 @@ def _region_mask(mod, campaign, regions, size):
         for xy in (towns.get(r), harbours.get(r)):
             if xy:
                 px[xy[0], img.height - 1 - xy[1]] = 255
-    frame = select_frame(mod, campaign, size) or (size[0] / img.width, 0, 0)
-    if frame[1:] == (0, 0) and abs(frame[0] - size[0] / img.width) < 1e-9:
-        from PIL import Image
-        return mask.resize(size, Image.NEAREST)          # the whole map stretched (Rome)
+    frame = select_frame(mod, campaign, size) or (size[0] / img.width, size[1] / img.height, 0, 0)
     return _place(mask, frame, size)
 
 
 def draw_select_map(mod, campaign, regions, colour):
-    """Pillow RGB image: the background with the land of these regions lit in colour;
-    None when the campaign has no background to start from (or Pillow is missing)."""
+    """Pillow RGB image: the background with the land of these regions filled with the colour -
+    a solid fill (the user: see-through looked poor), the dark border lines between regions kept
+    and a thin dark outline round the land; None when the campaign has no background to start
+    from (or Pillow is missing)."""
     got = select_background(mod, campaign)
     if not got:
         return None
-    from PIL import Image, ImageFilter
+    from PIL import Image, ImageChops, ImageFilter
     bg, _ = got
-    # a crisp edge (half a pixel of softening) and a dense light: the ground's texture shows
-    # only faintly through (the user's choice, a little stronger than vanilla's)
-    mask = _region_mask(mod, campaign, regions, bg.size).filter(ImageFilter.GaussianBlur(0.5))
-    lum = bg.convert("L")
-    m, l = _pixels(mask), _pixels(lum)
-    inside = [l[i] for i in range(len(m)) if m[i] > 128]
-    mean = (sum(inside) / len(inside)) if inside else 128.0
+    mask = _region_mask(mod, campaign, regions, bg.size)
+    edge = ImageChops.subtract(mask.filter(ImageFilter.MaxFilter(3)), mask)      # just outside the land
+    soft = mask.filter(ImageFilter.GaussianBlur(0.4))                             # no jagged steps
+    m, e, lum = _pixels(soft), _pixels(edge), _pixels(bg.convert("L"))
     out = _pixels(bg)
-    grey = sum(colour) / 3.0
-    cr, cg, cb = (min(255.0, max(0.0, grey + (c - grey) * 1.2)) for c in colour)     # a touch more saturated
-    for i, a in enumerate(m):
-        if not a:
-            continue
-        t = (l[i] / mean) ** 0.3 if mean else 1.0
-        lit = (min(255, cr * t), min(255, cg * t), min(255, cb * t))
-        k = a / 255.0
-        o = out[i]
-        out[i] = tuple(int(round(o[j] * (1 - k) + lit[j] * k)) for j in range(3))
+    fill = tuple(max(0, min(255, int(c))) for c in colour)
+    dark = tuple(int(c * 0.35) for c in fill)
+    for i in range(len(out)):
+        a = m[i]
+        if a:
+            want = dark if lum[i] < 70 else fill          # the picture's own border lines stay
+            k = a / 255.0
+            o = out[i]
+            out[i] = tuple(int(round(o[j] * (1 - k) + want[j] * k)) for j in range(3))
+        elif e[i]:
+            o = out[i]
+            out[i] = tuple(int(round(o[j] * 0.45 + dark[j] * 0.55)) for j in range(3))
     res = Image.new("RGB", bg.size)
     res.putdata(out)
     return res

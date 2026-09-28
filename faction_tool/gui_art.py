@@ -209,6 +209,10 @@ class ArtEditor(ttk.Frame):
         self.b_colour.configure(bg="#%02x%02x%02x" % col, fg="white" if sum(col) < 380 else "black")
         if not a.mod:
             return
+        if ("select_frame", a.v_campaign.get()) not in a.mod._cache:
+            # the first time for a mod (Medieval II): learning where the map lies takes a few seconds
+            a.status.set("Finding where the map lies in the campaign-select pictures (once per mod)...")
+            self.update_idletasks()
         try:
             im = FA.draw_select_map(a.mod, a.v_campaign.get(), list(a.chosen), col)
         except Exception as e:
