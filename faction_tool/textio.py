@@ -2,7 +2,8 @@
 
 Rome: Total War data files come in two flavours:
   * descr_*/export_* files: single-byte text (ASCII / Windows-1252), CRLF or LF;
-  * data/text/*.txt string tables: UTF-16 LE with a BOM, usually CRLF.
+  * data/text/*.txt string tables: UTF-16 LE with a BOM, usually CRLF;
+  * REX's data/text/english/*.txt: UTF-8 without a BOM.
 
 A TextFile splits on "\\n" only, so every line keeps its own "\\r" (some files
 mix CRLF and LF). Writing joins with "\\n" again: an untouched line, and the
@@ -14,6 +15,18 @@ Lines handed out by .text(i) have the "\\r" removed; lines added through
 
 import codecs
 import os
+
+
+def _utf8(data):
+    """UTF-8 with no BOM: non-ASCII bytes that decode as UTF-8 (a Windows-1252 file
+    almost never does - an accented letter alone is not a valid UTF-8 sequence)."""
+    if max(data, default=0) < 0x80:
+        return False
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
 
 
 class TextFile:
@@ -38,6 +51,8 @@ class TextFile:
             encoding, bom, data = "utf-8", codecs.BOM_UTF8, data[3:]
         elif len(data) > 1 and data[1:2] == b"\x00" and data[0:1] != b"\x00":
             encoding = "utf-16-le"
+        elif _utf8(data):
+            encoding = "utf-8"          # REX's data/text/english tables: UTF-8 without a BOM
         else:
             encoding = "latin-1"        # single-byte: a byte-exact round trip for any file
         return cls(path, data.decode(encoding).split("\n"), encoding, bom)
