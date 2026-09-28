@@ -976,7 +976,7 @@ class ToolTest(unittest.TestCase):
         new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
                "city": (3, 0), "owner": "alpha", "level": "village"}
         mod = ModData(self.root)
-        plan = edit(mod, "test", "alpha", {"regions": {"painted": {(3, 0): "N_R", (2, 0): "N_R"}, "new": [new]}})
+        plan = edit(mod, "test", "alpha", {"regions": {"painted": {(3, 0): "N_R", (2, 0): "N_R", (2, 1): "N_R", (3, 1): "N_R"}, "new": [new]}})
         plan.apply()
         am = Image.open(os.path.join(camp, "map_alpha.tga")).convert("RGB")
         self.assertNotEqual(am.getpixel((7, 7)), (100, 100, 100))            # (3, 0) is the bottom right corner

@@ -199,6 +199,13 @@ def _region_mask(mod, campaign, regions, size):
         for x in range(img.width):
             if img.get(x, y) in cols:
                 px[x, img.height - 1 - y] = 255             # map_regions rows run bottom-up
+    # the town (black) and port (white) pixels are the region's land too - else a hole at each town
+    from .mapedit import ports
+    towns, harbours = mod.city_tiles(campaign), ports(mod, campaign)
+    for r in regions:
+        for xy in (towns.get(r), harbours.get(r)):
+            if xy:
+                px[xy[0], img.height - 1 - xy[1]] = 255
     return mask.resize(size, Image.NEAREST)
 
 
