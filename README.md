@@ -11,10 +11,11 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 - **New factions** cloned from a template: names, texts, colours, units, buildings, cards, start towns, leader and heir, garrisons, buildings, diplomacy.
 - **Edit existing factions**: names and texts, colours, AI, money, playable, towns taken or given, capital, leader and heir, garrisons, buildings, settlement size, armies, fleets and agents, diplomacy.
 - **Campaign map**: the map drawn from the ground types, political and diplomacy colours, towns, ports and characters you can drag, new armies, agents and fleets placed by clicking, towns and ports moved, **new regions painted** and borders moved, **resources** placed, moved and removed, religions (Medieval II).
-- **Unit and building editors** (first steps): every line of a unit or building chain as a field, and pictures imported in the right size and format into the right place.
+- **Unit and building editors**: every line of a unit or building chain as a field, pictures imported in the right size and format into the right place, new units and buildings copied from existing ones.
+- **Faction art**: every picture of a faction listed and replaceable; the campaign-select map drawn from its start towns.
 - **Safe**: a separate mod folder in one click, preview of every file and line, backups with Restore, Undo/Redo in the window, Check mod, and a log.
 
-Version **0.3.0** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
+Version **0.4.0** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
 
 Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
 

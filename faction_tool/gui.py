@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW Campaign Editor"
 
@@ -53,7 +53,7 @@ THE TABS (in the order that works best)
   Buildings    what stands in each town; settlement level and population. The level and the
                governor's building follow each other; the chains offer that level's buildings.
   Map          left drag moves the map, a click on a town takes it / gives it back;
-               Layers: which colours and markers are shown;
+               Layers: which colours and markers are shown; Legend: what every sign means;
                right drag (or Ctrl + left drag) moves your characters, towns and ports;
                Political, Diplomacy and the other switches change what is shown.
                Regions: paint borders, new regions, Religions... (Medieval II).
@@ -62,13 +62,18 @@ THE TABS (in the order that works best)
                mountains, dense forest and rivers; dropped on a bad tile, they go to the
                nearest good one.
   Diplomacy    how the faction and every other one feel about each other at the start.
+  Art          every picture of the faction (buttons, logos, captain cards, leader picture...)
+               with what it needs and Replace...; the campaign-select map drawn from its
+               towns in a colour you pick.
 
 UNIT EDITOR / BUILDING EDITOR
   Pick a unit (a building chain) on the left; every line of its block is a field - change
   any, it turns yellow. Pictures: Import... takes a PNG, JPG or TGA, converts it to the
   mod's own size and format and puts it where the game reads it (unit cards and
   description pictures for every faction that owns the unit; building pictures per
-  culture and level). Preview, then Apply writes it all with a backup; Restore undoes it.
+  culture and level). Copy as new... makes a new unit (building chain) from the one on
+  show: its lines, texts, pictures and recruit lines under the new names.
+  Preview, then Apply writes it all with a backup; Restore undoes it.
 
   Only the map (regions, towns, ports, resources)? In New faction mode with no faction named the
   buttons read "Preview map changes" / "Apply map changes" and write the map alone.

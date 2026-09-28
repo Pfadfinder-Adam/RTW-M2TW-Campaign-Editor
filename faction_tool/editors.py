@@ -193,3 +193,177 @@ def import_picture(plan, src, targets, size=None):
         plan.binary(t, data)
         plan.notes.append((plan.mod.rel(t), "picture from %s%s" % (
             os.path.basename(src), " (%d x %d)" % tuple(size) if size else "")))
+
+
+# ---------------------------------------------------------------------------
+# New units and buildings, copied from one there is
+# ---------------------------------------------------------------------------
+def _text_file(mod, name):
+    from .moddata import _ci
+    return _ci(os.path.join(mod.data, "text"), name)
+
+
+def copy_text_entries(plan, path, renames):
+    """In a string table: every entry whose key is one of renames (old -> new, keys
+    without braces, any case) copied under the new key right after the old one's
+    whole entry. Returns the number of entries copied."""
+    from .clone import entry_end
+    if not path:
+        return 0
+    f = plan.edit(path)
+    low = {k.lower(): v for k, v in renames.items()}
+    n, i = 0, 0
+    while i < len(f.raw):
+        text = f.text(i)
+        s = text.lstrip()
+        if s.startswith("{") and "}" in s:
+            key = s[1:s.index("}")]
+            new = low.get(key.lower())
+            if new:
+                texts = f.texts()
+                end = entry_end(texts, i)
+                lines = [text.replace("{" + key + "}", "{" + new + "}", 1)] + texts[i + 1:end]
+                f.insert(end, lines)
+                n += 1
+                i = end + len(lines)
+                continue
+        i += 1
+    if n:
+        plan.note(f, "%d string(s) copied" % n)
+    return n
+
+
+def copy_unit(plan, src_type, new_type, new_dict, recruit=True):
+    """A new unit: the block of src_type copied after it under new_type and new_dict,
+    its names and descriptions (export_units.txt) and cards copied to the new
+    dictionary name, and - with recruit - a recruit line next to each of the old
+    unit's in export_descr_buildings.txt."""
+    import shutil  # noqa: F401  (copies go through the plan)
+    mod = plan.mod
+    new_type, new_dict = " ".join(new_type.split()), new_dict.strip()
+    if not new_type or not new_dict or " " in new_dict:
+        raise ValueError("a new unit needs a type and a dictionary name without spaces")
+    edu = mod.file("edu")
+    f = plan.edit(edu)
+    blocks = unit_blocks(f)
+    if any(b[0].lower() == new_type.lower() for b in blocks):
+        raise ValueError("a unit '%s' exists already" % new_type)
+    src = next((b for b in blocks if b[0] == src_type), None)
+    if src is None:
+        raise ValueError("no unit '%s' in export_descr_unit.txt" % src_type)
+    old_dict = None
+    lines = []
+    for i in range(src[1], src[2]):
+        t = tokens(f.text(i))
+        if t[:1] == ["dictionary"] and len(t) > 1:
+            old_dict = t[1]
+            lines.append(set_value(f.text(i), new_dict))
+        elif t[:1] == ["type"]:
+            lines.append(set_value(f.text(i), new_type))
+        else:
+            lines.append(f.text(i))
+    for b in blocks:
+        if old_dict and any(tokens(f.text(i))[:2] == ["dictionary", new_dict] for i in range(b[1], b[2])):
+            raise ValueError("the dictionary name '%s' is taken by %s" % (new_dict, b[0]))
+    while lines and not lines[-1].strip():
+        lines.pop()
+    at = src[2]
+    f.insert(at, lines + [""])
+    plan.note(f, "unit %s copied from %s (dictionary %s)" % (new_type, src_type, new_dict))
+    if old_dict:
+        copy_text_entries(plan, _text_file(mod, "export_units.txt"), {
+            old_dict: new_dict, old_dict + "_descr": new_dict + "_descr",
+            old_dict + "_descr_short": new_dict + "_descr_short"})
+        for sub, pattern in (("units", "#%s.tga"), ("unit_info", "%s_info.tga")):
+            folder = os.path.join(mod.data, "ui", sub)
+            if not os.path.isdir(folder):
+                continue
+            for fac in sorted(os.listdir(folder)):
+                from .moddata import _ci
+                srcp = _ci(os.path.join(folder, fac), pattern % old_dict) if os.path.isdir(
+                    os.path.join(folder, fac)) else None
+                if srcp:
+                    plan.copy(srcp, os.path.join(folder, fac, pattern % new_dict))
+    if recruit and mod.file("edb"):
+        e = plan.edit(mod.file("edb"))
+        n, i = 0, 0
+        q = '"%s"' % src_type
+        while i < len(e.raw):
+            text = e.text(i)
+            if tokens(text)[:1] == ["recruit"] and q in text:
+                e.insert(i + 1, [text.replace(q, '"%s"' % new_type, 1)])
+                n += 1
+                i += 2
+                continue
+            i += 1
+        if n:
+            plan.note(e, "%s recruited where %s is (%d line(s))" % (new_type, src_type, n))
+
+
+def copy_building(plan, src_chain, new_chain, level_names):
+    """A new building chain: src_chain's block copied under new_chain with its levels
+    renamed by level_names {old: new} (in 'levels', their own blocks and 'upgrades'),
+    their names and descriptions (export_buildings.txt, every key made of a level name)
+    and pictures (ui/<culture>/buildings/#<culture>_<level>[_constructed].tga)."""
+    import re
+    mod = plan.mod
+    edb = mod.file("edb")
+    f = plan.edit(edb)
+    blocks = building_blocks(f)
+    if any(b[0] == new_chain for b in blocks):
+        raise ValueError("a building chain '%s' exists already" % new_chain)
+    src = next((b for b in blocks if b[0] == src_chain), None)
+    if src is None:
+        raise ValueError("no building chain '%s'" % src_chain)
+    taken = set()
+    for b in blocks:
+        for fd in fields(f, b[1], b[2]):
+            if fd.key == "levels":
+                taken.update(fd.value.split())
+    for old, new in level_names.items():
+        if not re.match(r"^[A-Za-z0-9_]+$", new or ""):
+            raise ValueError("level name '%s': letters, digits and _ only" % new)
+        if new in taken:
+            raise ValueError("a level '%s' exists already" % new)
+    words = dict(level_names)
+    words[src_chain] = new_chain
+
+    def swap(text):
+        return re.sub(r"\b[A-Za-z0-9_]+\b", lambda m: words.get(m.group(0), m.group(0)), text)
+    lines = []
+    for i in range(src[1], src[2]):
+        text = f.text(i)
+        code = strip_comment(text).strip()
+        head = code.split()[:1]
+        if head in (["building"], ["levels"], ["upgrades"]) or (head and head[0] in level_names) or \
+                (lines and strip_comment(lines[-1]).strip().split()[:1] == ["upgrades"]) or \
+                (head and all(w in level_names for w in code.split())):
+            lines.append(swap(text))
+        else:
+            lines.append(text)
+    f.insert(src[2], [""] + lines)
+    plan.note(f, "building %s copied from %s: levels %s" % (
+        new_chain, src_chain, ", ".join("%s -> %s" % kv for kv in level_names.items())))
+    path = _text_file(mod, "export_buildings.txt")
+    if path:
+        keys = {}
+        for s in mod.load(path).texts():
+            s = s.lstrip()
+            if s.startswith("{") and "}" in s:
+                k = s[1:s.index("}")]
+                for old, new in level_names.items():
+                    if k.lower() == old.lower() or k.lower().startswith(old.lower() + "_"):
+                        keys[k] = new + k[len(old):]
+        copy_text_entries(plan, path, keys)
+    ui = os.path.join(mod.data, "ui")
+    if os.path.isdir(ui):
+        for cult in sorted(os.listdir(ui)):
+            folder = os.path.join(ui, cult, "buildings")
+            if not os.path.isdir(folder):
+                continue
+            names = {n.lower(): n for n in os.listdir(folder)}
+            for old, new in level_names.items():
+                for tail in (".tga", "_constructed.tga"):
+                    n = names.get(("#%s_%s%s" % (cult, old, tail)).lower())
+                    if n:
+                        plan.copy(os.path.join(folder, n), os.path.join(folder, "#%s_%s%s" % (cult, new, tail)))

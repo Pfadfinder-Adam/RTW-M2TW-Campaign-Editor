@@ -970,6 +970,44 @@ class ToolTest(unittest.TestCase):
         self.assertGreater(sel.getpixel((7, 4))[1], 150)
         self.assertEqual(sel.getpixel((0, 4)), (100, 100, 100))
 
+    def test_copy_unit_and_building(self):
+        from faction_tool import editors as E
+        from faction_tool.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels hut house\n    {\n        hut requires factions { alpha, }\n"
+              "        {\n            capability\n            {\n                recruit \"alpha general\"  0\n"
+              "            }\n            upgrades\n            {\n                house\n            }\n        }\n"
+              "        house requires factions { alpha, }\n        {\n        }\n    }\n}\n")
+        write(os.path.join(d, "text", "export_units.txt"), "{alpha_general}\tAlpha General\n"
+              "{alpha_general_descr}\nA long\ntext\n{alpha_general_descr_short}\tShort\n", utf16=True)
+        write(os.path.join(d, "text", "export_buildings.txt"), "{hut}\tHut\n{hut_desc}\tA hut\n{house}\tHouse\n",
+              utf16=True)
+        mod = ModData(self.root)
+        plan = Plan(mod, "u", "u", {})
+        E.copy_unit(plan, "alpha general", "alpha guard", "alpha_guard")
+        with self.assertRaises(ValueError):
+            E.copy_unit(plan, "alpha general", "rebel spear", "x")               # the type is taken
+        E.copy_building(plan, "barracks", "camp", {"hut": "tent", "house": "hall"})
+        plan.apply()
+        m2 = ModData(self.root)
+        from faction_tool.units import read_units
+        u = {x.type: x for x in read_units(m2.load(m2.file("edu")))}
+        self.assertEqual(u["alpha guard"].dictionary, "alpha_guard")
+        self.assertEqual(u["alpha guard"].ownership, ["alpha"])
+        edb = open(m2.file("edb")).read()
+        self.assertIn('recruit "alpha guard"  0', edb)
+        self.assertIn("building camp", edb)
+        self.assertIn("levels tent hall", edb)
+        self.assertIn("tent requires factions { alpha, }", edb)
+        self.assertIn("                hall\n", edb)                       # upgrades follow the new names
+        units_text = open(os.path.join(d, "text", "export_units.txt"), "rb").read().decode("utf-16").replace("\r", "")
+        self.assertIn("{alpha_guard_descr}\nA long\ntext\n", units_text)
+        self.assertIn("{alpha_guard}\tAlpha General", units_text)
+        bt = open(os.path.join(d, "text", "export_buildings.txt"), "rb").read().decode("utf-16").replace("\r", "")
+        self.assertIn("{tent_desc}\tA hut", bt)
+        self.assertIn("{hall}\tHouse", bt)
+
     def test_logs_zip(self):
         import zipfile
         from faction_tool import log

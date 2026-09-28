@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.0 - 2026-09-28
+
+### New
+- **Map legend** on the right of the Map tab: every sign and what it means; hide it
+  or show it, the choice is kept between starts.
+- **Art tab**: every picture of the faction (campaign-menu buttons with their
+  mouse-over/selected/grey states, captain cards and portraits, leader picture,
+  the campaign-select map, banner textures...) with what each needs and
+  **Replace...** - a PNG/JPG/TGA made the size and depth of the game's own.
+- **Campaign-select map drawn**: map_<faction>.tga lights the faction's start land
+  in a colour you pick, on the campaign's own background with the ground's texture
+  showing through (within a point or two of the vanilla maps). Drawn for a new
+  faction and again when an edited one takes or gives towns.
+- **Copy as new unit / building**: a new unit from one there is (its block, names
+  and descriptions, cards, recruit lines) or a new building chain (levels renamed,
+  texts, pictures).
+
+### Fixed
+- A new faction now also gets the template's mouse-over, selected and grey
+  campaign buttons (file names with the faction name in the middle were missed).
+
 ## 0.3.0 - 2026-09-28
 
 ### New
