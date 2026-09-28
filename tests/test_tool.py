@@ -944,7 +944,9 @@ class ToolTest(unittest.TestCase):
         from faction_tool import factionart as FA
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         os.remove(os.path.join(camp, "map_alpha.tga"))
-        for n in ("alpha", "gamma", "delta"):                # three maps of one background
+        with open(os.path.join(self.root, "data", "descr_sm_factions.txt"), "a") as fh:
+            fh.write("\nfaction\t\tgamma\nculture\t\teastern\n;;;;;;;;\n")
+        for n in ("alpha", "gamma", "slave", "heights"):      # three maps of one background; map_heights is no faction's
             Image.new("RGB", (8, 8), (100, 100, 100)).save(os.path.join(camp, "map_%s.tga" % n))
         menu = os.path.join(self.root, "data", "menu", "symbols", "FE_buttons_24")
         os.makedirs(menu)

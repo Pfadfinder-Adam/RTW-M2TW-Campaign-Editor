@@ -692,6 +692,11 @@ class App(tk.Tk):
         if w in ("new", "edit"):
             for ed in self.editors.values():
                 ed.pack_forget()
+            if self.v_mode.get() != w and self.undo_stack and not messagebox.askyesno(
+                    APP, "Switch to %s? The changes not written yet (towns, garrisons, map, diplomacy...) "
+                         "are dropped." % ("Edit faction" if w == "edit" else "New faction")):
+                self.v_work.set(self.v_mode.get())         # stay where the work is
+                return
             self.nb.pack(fill="both", expand=True, padx=6, pady=3, before=self.bottom_bar)
             if self.v_mode.get() != w:
                 self.v_mode.set(w)
@@ -865,9 +870,20 @@ class App(tk.Tk):
         elif tab == 4:
             self.load_diplomacy()
 
+    def _in_editor(self):
+        """The unit / building editors keep their own changes: Undo there would undo the
+        faction tabs' work unseen, so it says what to use instead."""
+        if self.editor() is not None:
+            self.status.set("In the %s editor: 'Undo all changes here' drops its changes; a field goes back "
+                            "when you type its old value." % ("unit" if self.v_work.get() == "units" else "building"))
+            return True
+        return False
+
     def undo(self, e=None):
         if self._typing():
             return None
+        if self._in_editor():
+            return "break"
         while self.undo_stack:
             st = self.undo_stack.pop()
             now = self.snapshot()
@@ -883,6 +899,8 @@ class App(tk.Tk):
     def redo(self, e=None):
         if self._typing():
             return None
+        if self._in_editor():
+            return "break"
         if not self.redo_stack:
             self.status.set("Nothing to redo.")
             return "break"

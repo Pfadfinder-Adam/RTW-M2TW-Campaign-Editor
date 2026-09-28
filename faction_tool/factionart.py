@@ -149,9 +149,19 @@ def select_background(mod, campaign):
         return None
     folder = mod.campaign_dir(campaign)
     maps = []
+    # only map_<faction>.tga of real factions (their front-end names too): the campaign folder
+    # may also hold map_regions, map_heights, map_ground_types... (HLR keeps them there)
+    from .clone import FE_NAMES
+    names = set()
+    for n, _ in mod.factions():
+        names.add(n.lower())
+        if FE_NAMES.get(n):
+            names.add(FE_NAMES[n].lower())
+    names |= {n.split("_", 1)[-1] for n in names if n.startswith("romans_")}      # map_julii
     if os.path.isdir(folder):
         for n in sorted(os.listdir(folder)):
-            if re.match(r"map_.+\.tga$", n, re.I) and "radar" not in n.lower():
+            m = re.match(r"map_(.+)\.tga$", n, re.I)
+            if m and m.group(1).lower() in names:
                 try:
                     im = Image.open(os.path.join(folder, n)).convert("RGB")
                 except Exception:

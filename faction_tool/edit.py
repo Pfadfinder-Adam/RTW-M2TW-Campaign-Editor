@@ -146,7 +146,7 @@ def _texts(plan, now, campaign):
             pairs += [(old, new)] + ([(old.upper(), new.upper())] if old.upper() != old else [])
     pairs.sort(key=lambda p: -len(p[0]))
     set_to = {}
-    if o.get("display_name"):
+    if o.get("display_name") and o["display_name"] != now.get("display_name"):
         set_to[F] = o["display_name"]
     if o.get("description") is not None and o.get("description") != now.get("description"):
         set_to[F + "_DESCR"] = o["description"]
@@ -160,7 +160,8 @@ def _texts(plan, now, campaign):
     fe = FE_NAMES.get(plan.new)
     word = re.compile(r"(?<![A-Z0-9])(%s)(?![A-Z0-9])" % "|".join(re.escape(x) for x in (F, fe) if x))
     for path in plan.mod.campaign_text_files(campaign):
-        if "regions_and_settlement_names" in path.lower():
+        # region labels, and the rebels' names: {Gauls} there is a rebel type, not the faction
+        if "regions_and_settlement_names" in path.lower() or "rebel_faction_descr" in path.lower():
             continue
         f = None
         n = 0
