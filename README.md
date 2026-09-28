@@ -2,7 +2,9 @@
 
 (formerly RTW Faction Tool)
 
-A campaign editor for **Rome: Total War** mods (and the plain game). It works on the mod's own data files, shows every change before writing it, keeps a backup and can undo it byte for byte.
+A campaign editor for games on the **Rome: Total War engine**: Rome: Total War (with Barbarian Invasion and Alexander, plain or modded, on REX or the original exe) and, in early support, **Medieval II: Total War** (with Kingdoms, on M2EX or the original exe). It works on the game's or mod's own data files, shows every change before writing it, keeps a backup and can undo it byte for byte.
+
+Medieval II: the tool already loads and edits it (factions, towns, map), but it is new there - agents such as merchants and priests, religions and other Medieval II differences are being added. Medieval II keeps most data in `packs`; run the game's `tools\unpacker\unpack_all.bat` first.
 
 - **New factions** cloned from a template: names, texts, colours, units, buildings, cards, start towns, leader and heir, garrisons, buildings, diplomacy.
 - **Edit existing factions**: names and texts, colours, AI, money, playable, towns taken or given, capital, leader and heir, garrisons, buildings, settlement size, armies, fleets and agents, diplomacy.
