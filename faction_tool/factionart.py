@@ -7,8 +7,8 @@ The campaign-select maps of a campaign (map_<faction>.tga in its folder, vanilla
 384 x 237, 24-bit) share one background; each lights its faction's land in a
 colour of its own, the ground's texture showing through. The background is what
 most of them have at each pixel; the land is map_regions.tga scaled to the
-picture; the light is the colour times the ground's brightness (square root),
-edges softened by a pixel - within a point or two of the vanilla maps."""
+picture; the light is the colour times the ground's brightness (to the power 0.3), a crisp
+edge softened by half a pixel - denser than vanilla's, by the user's choice."""
 
 import colorsys
 import os
@@ -210,17 +210,20 @@ def draw_select_map(mod, campaign, regions, colour):
         return None
     from PIL import Image, ImageFilter
     bg, _ = got
-    mask = _region_mask(mod, campaign, regions, bg.size).filter(ImageFilter.GaussianBlur(1))
+    # a crisp edge (half a pixel of softening) and a dense light: the ground's texture shows
+    # only faintly through (the user's choice, a little stronger than vanilla's)
+    mask = _region_mask(mod, campaign, regions, bg.size).filter(ImageFilter.GaussianBlur(0.5))
     lum = bg.convert("L")
     m, l = _pixels(mask), _pixels(lum)
     inside = [l[i] for i in range(len(m)) if m[i] > 128]
     mean = (sum(inside) / len(inside)) if inside else 128.0
     out = _pixels(bg)
-    cr, cg, cb = colour
+    grey = sum(colour) / 3.0
+    cr, cg, cb = (min(255.0, max(0.0, grey + (c - grey) * 1.2)) for c in colour)     # a touch more saturated
     for i, a in enumerate(m):
         if not a:
             continue
-        t = (l[i] / mean) ** 0.5 if mean else 1.0
+        t = (l[i] / mean) ** 0.3 if mean else 1.0
         lit = (min(255, cr * t), min(255, cg * t), min(255, cb * t))
         k = a / 255.0
         o = out[i]
