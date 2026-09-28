@@ -10,6 +10,10 @@ on:
         description: "Version without the v, like 0.1.0"
         required: true
 
+# the token may only read, unless a job asks for more (the release upload asks for contents: write)
+permissions:
+  contents: read
+
 jobs:
   release:
     runs-on: windows-latest
