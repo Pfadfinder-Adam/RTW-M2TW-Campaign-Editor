@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW Campaign Editor"
 
@@ -2219,6 +2219,10 @@ class App(tk.Tk):
             if regions:
                 apply_regions(plan, self.v_campaign.get(), regions["painted"], regions["new"])
                 set_religions(plan, self.v_campaign.get(), regions.get("religions") or {})
+                # the campaign-select maps of the factions whose land changed follow the new borders
+                from .factionart import redraw_map_changes
+                plan.opts["regions"] = regions
+                redraw_map_changes(plan, self.v_campaign.get())
             return plan
         if self.editing():
             if not self.mod:

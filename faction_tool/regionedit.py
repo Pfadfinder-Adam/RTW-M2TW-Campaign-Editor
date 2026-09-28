@@ -196,6 +196,8 @@ def apply_regions(plan, campaign, painted, new_regions):
         dr.raw.extend(dr.make(l) for l in lines)
         plan.note(dr, "region %s (%s), colour %d %d %d" % (r["name"], r["settlement"], c[0], c[1], c[2]))
     dr.raw.append(dr.make(""))
+    # mercenaries: a new region joins the pool of the region most of its land came from
+    _mercenary_pools(plan, campaign, new_regions, painted, by_colour, img)
     # the name lookup: appended, so the names already there keep their places
     lk = mod.campaign_file(campaign, "descr_regions_and_settlement_name_lookup.txt")
     if lk:
@@ -269,3 +271,32 @@ def set_religions(plan, campaign, religions):
         if r not in done:
             raise ValueError("%s: no religions line in descr_regions.txt%s" % (
                 r, "" if r in known else " (no such region)"))
+
+
+def _mercenary_pools(plan, campaign, new_regions, painted, by_colour, img):
+    """descr_mercenaries.txt: each new region added to the 'regions' line of the pool
+    that holds the region most of its land came from (else no mercenaries there)."""
+    mod = plan.mod
+    path = mod.campaign_file(campaign, "descr_mercenaries.txt")
+    if not path:
+        return
+    f = None
+    for r in new_regions:
+        src = {}
+        for xy, to in painted.items():
+            was = by_colour.get(img.get(*xy))
+            if to == r["name"] and was:
+                src[was] = src.get(was, 0) + 1
+        donor = max(src, key=src.get) if src else None
+        if not donor:
+            continue
+        f = f or plan.edit(path)
+        for i in range(len(f.raw)):
+            text = f.text(i)
+            body, sep, comment = text.partition(";")
+            words = body.split()
+            if words[:1] == ["regions"] and donor in [w.rstrip(",") for w in words[1:]]:
+                end = len(body.rstrip())
+                f.set(i, body[:end] + " " + r["name"] + body[end:] + sep + comment)
+                plan.note(f, "%s joins %s's mercenary pool" % (r["name"], donor))
+                break

@@ -193,6 +193,7 @@ class ArtEditor(ttk.Frame):
         from PIL import ImageTk
         self._map_photo = ImageTk.PhotoImage(im)
         self.map_pic.configure(image=self._map_photo, text="", width=im.width, height=im.height)
-        self.lbl_map.configure(text="%d town(s) lit - the towns chosen on the Faction tab.\n%s" % (
+        self.lbl_map.configure(text="%d town(s) lit - the towns chosen on the Faction tab (written with the "
+                                    "borders as painted on the Map tab).\n%s" % (
             len(a.chosen), "Written on Apply / Create." if self.v_draw.get() else
             "Not drawn: the file stays as it is (for a new faction: the template's copy)."))

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.2 - 2026-09-28
+
+- **New regions and painted borders reach everything tied to them**: the
+  campaign-select maps of every faction whose land changed are drawn on the map as
+  it will be (a new region lights up on its owner's map, a cut region shrinks on
+  its owner's), also when only the map is written; a new region joins the
+  mercenary pool of the region its land came from (descr_mercenaries.txt).
+- A faction whose own select map shows no light gets one from its colours.
+
 ## 0.4.1 - 2026-09-28
 
 Fixes from a run through every part of the tool as a user (vanilla and HLR).

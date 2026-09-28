@@ -21,6 +21,11 @@ class Image:
 def read_tga(path):
     with open(path, "rb") as f:
         data = f.read()
+    return read_tga_bytes(data, path)
+
+
+def read_tga_bytes(data, path="(picture)"):
+    """read_tga from bytes already in memory (a picture a plan is about to write)."""
     id_len, cmap_type, img_type = data[0], data[1], data[2]
     width, height = struct.unpack_from("<HH", data, 12)
     bpp, desc = data[16], data[17]

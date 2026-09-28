@@ -241,11 +241,29 @@ def image_tga(im, like=None):
     return buf.getvalue()
 
 
-def write_select_map(plan, campaign, faction, regions, colour):
-    """map_<faction>.tga drawn from its regions (a note says so); False when the
-    campaign has no maps to learn the background from."""
+def future(plan, campaign):
+    """The mod as it will be once the plan is written, for drawing: map_regions.tga and
+    descr_regions.txt as the plan leaves them (new regions, painted borders); the
+    background learnt from the files on disk."""
+    from .moddata import ModData
+    from .tga import read_tga_bytes
     mod = plan.mod
-    im = draw_select_map(mod, campaign, regions, tuple(colour))
+    fut = ModData(mod.data)
+    rp = mod.campaign_file(campaign, "map_regions.tga")
+    if rp in plan.binaries:
+        fut._cache[("map", campaign)] = read_tga_bytes(plan.binaries[rp], rp)
+    dr = mod.campaign_file(campaign, "descr_regions.txt")
+    if dr in plan.files:
+        fut._cache[dr] = plan.files[dr]
+    fut._cache[("select_bg", campaign)] = select_background(mod, campaign)
+    return fut
+
+
+def write_select_map(plan, campaign, faction, regions, colour):
+    """map_<faction>.tga drawn from its regions (a note says so), on the map as the plan
+    leaves it; False when the campaign has no maps to learn the background from."""
+    mod = plan.mod
+    im = draw_select_map(future(plan, campaign), campaign, regions, tuple(colour))
     if im is None:
         return False
     target = map_name(mod.campaign_dir(campaign), faction)
@@ -291,7 +309,11 @@ def colour_on_map(mod, campaign, faction, regions):
     a, b = _pixels(im), _pixels(bg)
     mask = _pixels(_region_mask(mod, campaign, regions, bg.size)) if regions else None
     if mask:                                 # inside its land (the edges and texture average out as drawn)
-        lit = [p for p, k in zip(a, mask) if k > 128]
+        pairs = [(p, q) for p, q, k in zip(a, b, mask) if k > 128]
+        # land that is not lit at all (the map shows no light there): no colour to learn
+        if pairs and sum(abs(p[i] - q[i]) for p, q in pairs for i in range(3)) / len(pairs) < 30:
+            return None
+        lit = [p for p, _ in pairs]
     else:
         lit = [p for p, q in zip(a, b) if abs(p[0] - q[0]) + abs(p[1] - q[1]) + abs(p[2] - q[2]) > 60]
     if not lit:
@@ -300,26 +322,61 @@ def colour_on_map(mod, campaign, faction, regions):
     return tuple(int(sum(p[i] for p in lit) / n) for i in range(3))
 
 
-def redraw_others(plan, campaign, changed_factions):
+def region_factions(plan, campaign):
+    """The factions (owners after the plan) of every region whose land the plan changes:
+    painted tiles (the region they go to and the one they come from) and new regions."""
+    from .strat import Strat
+    regions = plan.opts.get("regions") or {}
+    painted = {tuple(k) if not isinstance(k, str) else tuple(int(v) for v in k.split(",")): r
+               for k, r in (regions.get("painted") or {}).items()}
+    new = regions.get("new") or []
+    if not painted and not new:
+        return set()
+    mod = plan.mod
+    img = mod.region_map(campaign)
+    by_colour = {v["colour"]: k for k, v in mod.regions(campaign).items()}
+    touched = set(painted.values()) | {r["name"] for r in new}
+    for xy in painted:
+        was = by_colour.get(img.get(*xy)) if 0 <= xy[0] < img.width and 0 <= xy[1] < img.height else None
+        if was:
+            touched.add(was)
+    sp = mod.campaign_file(campaign, "descr_strat.txt")
+    owners = Strat(plan.files[sp] if sp in plan.files else mod.load(sp)).owners()
+    return {owners[r] for r in touched if owners.get(r) and owners[r] != "slave"}
+
+
+def redraw_map_changes(plan, campaign):
+    """For a run that only changes the map: the select maps of the factions whose land
+    changed, in their own colours."""
+    if select_background(plan.mod, campaign):
+        redraw_others(plan, campaign, region_factions(plan, campaign), force=True)
+
+
+def redraw_others(plan, campaign, changed_factions, force=False):
     """The campaign-select maps of the other factions whose towns changed (taken
     from them, given to them), in the colour their own map has."""
     from .strat import Strat
     mod = plan.mod
     sp = mod.campaign_file(campaign, "descr_strat.txt")
-    if sp not in plan.files or not select_background(mod, campaign):
+    if not select_background(mod, campaign):
         return
     before = Strat(mod.load(sp)).owners()
-    after = Strat(plan.files[sp]).owners()
+    after = Strat(plan.files[sp]).owners() if sp in plan.files else before
     for fac in sorted(changed_factions):
         if fac == "slave" or not _ci(mod.campaign_dir(campaign), "map_%s.tga" % fac):
             continue
         old = [r for r, o in before.items() if o == fac]
         new = [r for r, o in after.items() if o == fac]
-        if sorted(old) == sorted(new):
+        if sorted(old) == sorted(new) and not force:
             continue
         colour = colour_on_map(mod, campaign, fac, old)
-        if colour:
-            write_select_map(plan, campaign, fac, new, colour)
+        if not colour:                              # its map shows no light: one from its colours
+            from .edit import read_faction
+            try:
+                colour = default_map_colour(read_faction(mod, campaign, fac).get("primary_colour"))
+            except Exception:
+                colour = default_map_colour(None)
+        write_select_map(plan, campaign, fac, new, colour)
 
 
 def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
@@ -333,6 +390,15 @@ def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
             (s for s, d in plan.copies if os.path.normcase(d) == os.path.normcase(target)), None)
         replace_picture(plan, src, target, like)
     sel = plan.opts.get("select_map") or {}
+    from .strat import Strat
+    sp = mod.campaign_file(campaign, "descr_strat.txt")
+    if sp in plan.files:                            # its land as the plan leaves it (new regions too)
+        regions = [r for r, o in Strat(plan.files[sp]).owners().items() if o == faction] or regions
+    shaped = region_factions(plan, campaign)        # owners of land that changed hands on the map
+    if faction in shaped:
+        towns_changed = True
+    if shaped - {faction}:
+        redraw_others(plan, campaign, shaped - {faction}, force=True)
     if towns_changed:
         # the factions that lost (or got) towns: their maps too, in their own colour
         from .strat import Strat

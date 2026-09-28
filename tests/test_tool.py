@@ -971,6 +971,15 @@ class ToolTest(unittest.TestCase):
         # B_R (blue) is the right half of the 4 x 4 region map: lit green there, grey on the left
         self.assertGreater(sel.getpixel((7, 4))[1], 150)
         self.assertEqual(sel.getpixel((0, 4)), (100, 100, 100))
+        # a new region carved out of the rebels' B_R for alpha: alpha's map lights it at once
+        from faction_tool.edit import edit
+        new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
+               "city": (3, 0), "owner": "alpha", "level": "village"}
+        mod = ModData(self.root)
+        plan = edit(mod, "test", "alpha", {"regions": {"painted": {(3, 0): "N_R", (2, 0): "N_R"}, "new": [new]}})
+        plan.apply()
+        am = Image.open(os.path.join(camp, "map_alpha.tga")).convert("RGB")
+        self.assertNotEqual(am.getpixel((7, 7)), (100, 100, 100))            # (3, 0) is the bottom right corner
 
     def test_copy_unit_and_building(self):
         from faction_tool import editors as E
