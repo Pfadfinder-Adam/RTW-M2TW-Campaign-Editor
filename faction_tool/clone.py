@@ -346,6 +346,18 @@ def entry_end(texts, i):
     return j
 
 
+def entry_end_in(f, i):
+    """entry_end for a TextFile, reading only the lines it needs (texts() copies the
+    whole file: once per entry that made HLR's big tables take minutes)."""
+    n = len(f.raw)
+    j = i + 1
+    while j < n and not f.text(j).lstrip().startswith(("{", "\u00ac")):
+        j += 1
+    while j > i + 1 and not f.text(j - 1).strip():
+        j -= 1
+    return j
+
+
 def text_strings(plan):
     t, new = plan.template.upper(), plan.new.upper()
     tparts = t.split("_")
@@ -368,7 +380,7 @@ def text_strings(plan):
                 i += 1
                 continue
             key = m.group(2)
-            end = entry_end(f.texts(), i)
+            end = entry_end_in(f, i)
             parts = key.upper().split("_")
             hit = None
             for p in range(len(parts) - len(tparts) + 1):

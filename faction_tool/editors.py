@@ -207,7 +207,7 @@ def copy_text_entries(plan, path, renames):
     """In a string table: every entry whose key is one of renames (old -> new, keys
     without braces, any case) copied under the new key right after the old one's
     whole entry. Returns the number of entries copied."""
-    from .clone import entry_end
+    from .clone import entry_end_in
     if not path:
         return 0
     f = plan.edit(path)
@@ -220,9 +220,8 @@ def copy_text_entries(plan, path, renames):
             key = s[1:s.index("}")]
             new = low.get(key.lower())
             if new:
-                texts = f.texts()
-                end = entry_end(texts, i)
-                lines = [text.replace("{" + key + "}", "{" + new + "}", 1)] + texts[i + 1:end]
+                end = entry_end_in(f, i)
+                lines = [text.replace("{" + key + "}", "{" + new + "}", 1)] + [f.text(k) for k in range(i + 1, end)]
                 f.insert(end, lines)
                 n += 1
                 i = end + len(lines)
