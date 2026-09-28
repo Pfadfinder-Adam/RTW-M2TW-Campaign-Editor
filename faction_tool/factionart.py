@@ -187,18 +187,134 @@ def select_background(mod, campaign):
     return mod._cache[key]
 
 
-def _region_mask(mod, campaign, regions, size):
-    """An L image of `size`: 255 on these regions' land (map_regions.tga scaled)."""
+def _map_mask(mod, campaign, keep):
+    """An L image the size of map_regions.tga, top row first: 255 where keep(rgb)."""
     from PIL import Image
+    img = mod.region_map(campaign)
+    w, h = img.width, img.height
+    hit = {}
+    data = bytearray(w * h)
+    for y in range(h):                                      # map_regions rows run bottom-up
+        row = (h - 1 - y) * w
+        for x in range(w):
+            c = img.pixels[y * w + x]
+            v = hit.get(c)
+            if v is None:
+                v = hit[c] = 255 if keep(c) else 0
+            data[row + x] = v
+    return Image.frombytes("L", (w, h), bytes(data))
+
+
+def _place(mask, frame, size):
+    """The map-sized mask scaled and set where the map lies in the picture."""
+    from PIL import Image
+    s, dx, dy = frame
+    big = mask.resize((max(1, round(mask.width * s)), max(1, round(mask.height * s))), Image.NEAREST)
+    out = Image.new("L", size)
+    out.paste(big, (dx, dy))
+    return out
+
+
+def select_frame(mod, campaign, size=None):
+    """(scale, dx, dy): where the map lies in the campaign's select pictures - a map pixel
+    x, y (top row first) is picture pixel x * scale + dx, y * scale + dy. Rome's pictures are
+    the whole map stretched; Medieval II's are the map scaled 1.32 and shifted inside a
+    decorated frame, the Americas cut off. Learnt from the pictures themselves: the land of
+    map_regions laid over the background where land and sea differ the most."""
+    key = ("select_frame", campaign)
+    if key in mod._cache:
+        return mod._cache[key]
+    got = select_background(mod, campaign)
+    img = mod.region_map(campaign)
+    if not got:
+        return None
+    bg, _ = got
+    pw, ph = size or bg.size
+    W, H = img.width, img.height
+    stretch = (pw / W, 0, 0)
+    if abs((pw / W) / (ph / H) - 1) < 0.03:
+        mod._cache[key] = stretch                  # the same shape as the map: the whole map stretched (Rome)
+        return stretch
+    info = mod.regions(campaign)
+    cols = {r["colour"] for r in info.values()} | {(0, 0, 0), (255, 255, 255)}
+    land = _map_mask(mod, campaign, lambda c: c in cols)
+    # the fit takes seconds: kept in the settings, per mod, campaign and sizes
+    from . import settings
+    skey = "%s|%s|%dx%d|%dx%d" % (os.path.normcase(os.path.abspath(mod.data)), campaign, pw, ph, W, H)
+    known = settings.get("select_frames", {}) or {}
+    if isinstance(known.get(skey), list) and len(known[skey]) == 3:
+        frame = tuple(known[skey])
+    else:
+        frame = _fit(bg.convert("L"), land, stretch)
+        known = dict(known)
+        known[skey] = list(frame)
+        settings.put("select_frames", known)
+    mod._cache[key] = frame
+    return frame
+
+
+def _fit(pic, land, stretch):
+    from PIL import Image, ImageChops, ImageOps, ImageStat
+    sea = ImageOps.invert(land)
+
+    def score(p, lm, sm, frame):
+        # how much lighter the picture is on the map's land than on its sea, summed over the
+        # map's place and set against its size (a cross-correlation of the land mask)
+        a, b = _place(lm, frame, p.size), _place(sm, frame, p.size)
+        na, nb = ImageStat.Stat(a).sum[0] / 255, ImageStat.Stat(b).sum[0] / 255
+        if na < 50 or nb < 50:
+            return -1e18
+        la = ImageStat.Stat(ImageChops.multiply(p, a)).sum[0]
+        lb = ImageStat.Stat(ImageChops.multiply(p, b)).sum[0]
+        n = na + nb
+        if n < 0.6 * p.width * p.height:
+            return -1e18                                   # the map covers most of the picture
+        q = squares[p.size]
+        sq = (ImageStat.Stat(ImageChops.multiply(q, a)).sum[0] + ImageStat.Stat(ImageChops.multiply(q, b)).sum[0])
+        m = (la + lb) / n
+        var = sq * 255.0 / n - m * m
+        if var <= 0:
+            return -1e18
+        # Pearson's r of the picture's brightness and the land mask over the part the map covers
+        return abs(la / na - lb / nb) * (na * nb) ** 0.5 / n / var ** 0.5
+    # coarse: a quarter of the size, every scale and place
+    k = 4
+    small = pic.resize((max(1, pic.width // k), max(1, pic.height // k)), Image.BILINEAR)
+    squares = {p.size: ImageChops.multiply(p, p) for p in (pic, small)}
+    W, H = land.size
+    base = min(pic.width / W, pic.height / H)
+    best = (score(pic, land, sea, stretch), stretch)
+    scales = [base * (0.9 + 0.03 * i) for i in range(24)]
+    coarse = (-1, None)
+    for sc in scales:
+        w, h = W * sc / k, H * sc / k
+        xs = range(int(min(0, small.width - w)) - 3, int(max(0, small.width - w)) + 4)
+        ys = range(int(min(0, small.height - h)) - 3, int(max(0, small.height - h)) + 4)
+        for dx in xs:
+            for dy in ys:
+                v = score(small, land, sea, (sc / k, dx, dy))
+                if v > coarse[0]:
+                    coarse = (v, (sc, dx * k, dy * k))
+    if coarse[1]:
+        sc0, dx0, dy0 = coarse[1]
+        for i in range(-4, 5):
+            sc = sc0 * (1 + 0.005 * i)
+            for dx in range(dx0 - 5, dx0 + 6):
+                for dy in range(dy0 - 5, dy0 + 6):
+                    v = score(pic, land, sea, (sc, dx, dy))
+                    if v > best[0] * 1.02:                  # the plain stretch unless clearly worse
+                        best = (v, (sc, dx, dy))
+    return best[1]
+
+
+def _region_mask(mod, campaign, regions, size):
+    """An L image of `size`: 255 on these regions' land, map_regions.tga laid where the
+    map lies in the select pictures (select_frame)."""
     img = mod.region_map(campaign)
     info = mod.regions(campaign)
     cols = {info[r]["colour"] for r in regions if r in info}
-    mask = Image.new("L", (img.width, img.height))
+    mask = _map_mask(mod, campaign, lambda c: c in cols)
     px = mask.load()
-    for y in range(img.height):
-        for x in range(img.width):
-            if img.get(x, y) in cols:
-                px[x, img.height - 1 - y] = 255             # map_regions rows run bottom-up
     # the town (black) and port (white) pixels are the region's land too - else a hole at each town
     from .mapedit import ports
     towns, harbours = mod.city_tiles(campaign), ports(mod, campaign)
@@ -206,7 +322,11 @@ def _region_mask(mod, campaign, regions, size):
         for xy in (towns.get(r), harbours.get(r)):
             if xy:
                 px[xy[0], img.height - 1 - xy[1]] = 255
-    return mask.resize(size, Image.NEAREST)
+    frame = select_frame(mod, campaign, size) or (size[0] / img.width, 0, 0)
+    if frame[1:] == (0, 0) and abs(frame[0] - size[0] / img.width) < 1e-9:
+        from PIL import Image
+        return mask.resize(size, Image.NEAREST)          # the whole map stretched (Rome)
+    return _place(mask, frame, size)
 
 
 def draw_select_map(mod, campaign, regions, colour):
@@ -266,6 +386,7 @@ def future(plan, campaign):
     if dr in plan.files:
         fut._cache[dr] = plan.files[dr]
     fut._cache[("select_bg", campaign)] = select_background(mod, campaign)
+    fut._cache[("select_frame", campaign)] = select_frame(mod, campaign)     # where the map lies: from disk too
     return fut
 
 
