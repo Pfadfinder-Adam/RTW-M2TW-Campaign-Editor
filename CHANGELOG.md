@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.3 - 2026-09-29
+
+### Added / changed
+- **Portrait library** (Character editor): every portrait of a culture - young, old, dead; generals, civilians,
+  rogues - as the game hands them out; **Add portraits...** puts new ones in the culture's size and depth with
+  their cards under the next free number in every folder of the group (the dead one greyed unless given);
+  Medieval II: **Use for <character>** makes a picked one his own.
+- **Art tab: the campaign-select map is an optional part** that opens and closes (a line at the top). It is
+  closed and **off by default: every `map_<faction>.tga` stays the original** - nothing is drawn over it, for a
+  new faction, taken towns or painted regions alike. Ticked, the faction's map is drawn from its towns and the
+  maps of the factions whose land changes follow, as before. Closed, the pictures take the whole tab.
+
 ## 0.9.2 - 2026-09-29
 
 ### Changed

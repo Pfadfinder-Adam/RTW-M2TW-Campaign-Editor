@@ -48,6 +48,9 @@ class FamilyEditor(ttk.Frame):
         e.pack(side="left", padx=4)
         e.bind("<KeyRelease>", lambda ev: self.fill_list())
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
+        if standalone:
+            ttk.Button(top, text="Portrait library...", command=self.open_library).pack(side="right", padx=6)
+        self.lib_adds = []                     # Character editor: [{'culture', 'group', 'pics': {age: src}}]
         ttk.Label(self, foreground="#555", justify="left", wraplength=1100, text=(
             "Everyone of the faction: characters on the map (name, age, traits, ancillaries) and family members "
             "off the map (name, sex, age). The tree is drawn like the game's: a couple side by side, their "
@@ -223,10 +226,10 @@ class FamilyEditor(ttk.Frame):
             return None
 
     def dirty(self):
-        return any(v for st in self.states.values() for v in st.values())
+        return bool(self.lib_adds) or any(v for st in self.states.values() for v in st.values())
 
     def pending(self):
-        n = 0
+        n = len(self.lib_adds)
         for st in self.states.values():
             n += len(st.get("people") or {}) + len(st.get("new") or []) + len(st.get("remove") or []) + \
                 len(st.get("portraits") or {}) + (1 if st.get("tree") is not None else 0)
@@ -239,9 +242,9 @@ class FamilyEditor(ttk.Frame):
             self.mod = mod
             if self._signature() != self._sig:
                 lost = self.pending()
-                self.states = {}
+                self.states, self.lib_adds = {}, []
         else:
-            self.states = {}
+            self.states, self.lib_adds = {}, []
         self.mod, self._for = mod, None
         self._sig = self._signature()
         self.load(mod)
@@ -260,7 +263,15 @@ class FamilyEditor(ttk.Frame):
         for faction, st in self.states.items():
             if any(st.values()):
                 FM.apply(plan, f, faction, st)
+        from . import portraits as PL
+        for a in self.lib_adds:
+            PL.add(plan, a["culture"], a["group"], [a["pics"]])
         return plan
+
+    def open_library(self):
+        if not self.mod:
+            return
+        PortraitLibrary(self)
 
     def forget(self):
         self._for, self.fam, self.sel = None, None, None
@@ -834,3 +845,135 @@ class _PersonDialog(simpledialog.Dialog):
 
     def apply(self):
         self.result = ((self.v1.get().strip() + " " + self.v2.get().strip()).strip(), int(self.va.get()))
+
+
+class PortraitLibrary(tk.Toplevel):
+    """The game's portraits of a culture, as the game gives them to characters, and new ones added
+    (Add portraits...: any PNG / JPG / TGA, made the size and depth of the culture's own, with its card,
+    under the next free number in every folder of the group). Medieval II: 'Use for ...' gives the
+    picked portrait to the picked character as a portrait of his own."""
+
+    def __init__(self, ed):
+        super().__init__(ed)
+        from . import portraits as PL
+        self.ed, self.PL = ed, PL
+        self.title("Portrait library")
+        self.geometry("980x720")
+        self.transient(ed.winfo_toplevel())
+        mod = ed.mod
+        top = ttk.Frame(self, padding=6)
+        top.pack(fill="x")
+        ttk.Label(top, text="Culture").pack(side="left")
+        cults = PL.cultures(mod)
+        own = FM.portrait_culture(mod, ed.faction) if ed.faction else None
+        self.v_c = tk.StringVar(value=own if own in cults else (cults[0] if cults else ""))
+        cb = ttk.Combobox(top, textvariable=self.v_c, values=cults, state="readonly", width=16)
+        cb.pack(side="left", padx=4)
+        cb.bind("<<ComboboxSelected>>", lambda e: self.load())
+        ttk.Label(top, text="Group").pack(side="left", padx=(10, 0))
+        self.v_g = tk.StringVar()
+        self.cb_g = ttk.Combobox(top, textvariable=self.v_g, state="readonly", width=14)
+        self.cb_g.pack(side="left", padx=4)
+        self.cb_g.bind("<<ComboboxSelected>>", lambda e: self.show())
+        self.v_age = tk.StringVar(value="young")
+        for a in ("young", "old", "dead"):
+            ttk.Radiobutton(top, text=a, value=a, variable=self.v_age, command=self.show).pack(side="left")
+        ttk.Button(top, text="Add portraits...", command=self.add).pack(side="right")
+        self.b_use = ttk.Button(top, text="Use for the picked character", command=self.use)
+        self.b_use.pack(side="right", padx=6)
+        self.info = ttk.Label(self, foreground="#555", justify="left", wraplength=940, padding=(6, 0))
+        self.info.pack(fill="x")
+        box = ttk.Frame(self)
+        box.pack(fill="both", expand=True, padx=6, pady=6)
+        self.cv = tk.Canvas(box, highlightthickness=0)
+        sb = ttk.Scrollbar(box, orient="vertical", command=self.cv.yview)
+        self.cv.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        self.cv.pack(side="left", fill="both", expand=True)
+        self.cv.bind("<Enter>", lambda e: self.cv.bind_all("<MouseWheel>", lambda x: self.cv.yview_scroll(
+            int(-x.delta / 120), "units")))
+        self.cv.bind("<Leave>", lambda e: self.cv.unbind_all("<MouseWheel>"))
+        self.sel = None
+        self._imgs = {}
+        self.load()
+
+    def load(self):
+        self.lib = self.PL.library(self.ed.mod, self.v_c.get()) if self.v_c.get() else {}
+        groups = sorted(self.lib)
+        self.cb_g["values"] = groups
+        if self.v_g.get() not in groups:
+            self.v_g.set("generals" if "generals" in groups else (groups[0] if groups else ""))
+        self.show()
+
+    def pending(self):
+        return [a for a in self.ed.lib_adds if a["culture"] == self.v_c.get() and a["group"] == self.v_g.get()]
+
+    def show(self):
+        cv = self.cv
+        cv.delete("all")
+        e = self.lib.get(self.v_g.get())
+        age = self.v_age.get()
+        if not e:
+            self.info.configure(text="No portraits of %s in this mod or the game's data." % self.v_c.get())
+            return
+        pics = e.get(age) or {}
+        (pw, ph), (cw, chh) = self.PL.sizes(self.ed.mod, self.v_c.get())
+        new = self.pending()
+        self.info.configure(text=(
+            "%d portraits of %s / %s (%s shown). The game gives each character one of them at random when the campaign "
+            "starts; the same number is the same man young, old and dead. New ones: any picture - made %d x %d with a "
+            "%d x %d card, under the next free number in every folder of the group%s. %s") % (
+            e["count"], self.v_c.get(), self.v_g.get(), age, pw, ph, cw, chh,
+            " (the dead one greyed unless you give one)" if e.get("dead") else "",
+            ("%d new waiting for Apply (green)." % len(new)) if new else ""))
+        W, H, cols = 50, 70, max(1, (cv.winfo_width() or 900) // 56)
+        items = sorted(pics.items()) + [("new", a["pics"].get(age) or a["pics"].get("young")) for a in new]
+        for i, (n, path) in enumerate(items):
+            x, y = 6 + (i % cols) * 56, 6 + (i // cols) * 88
+            img = self.ed.image(path, W, H)
+            tag = "p%s" % i
+            if img:
+                cv.create_image(x, y, anchor="nw", image=img, tags=(tag,))
+            fill = "#2a9d3a" if n == "new" else ("#1c5bd6" if self.sel == (n, path) else "#555")
+            cv.create_rectangle(x - 1, y - 1, x + W + 1, y + H + 1, outline=fill, width=2 if fill != "#555" else 1,
+                                tags=(tag,))
+            cv.create_text(x + W / 2, y + H + 8, text="new" if n == "new" else "%03d" % n, font=("", 8), tags=(tag,))
+            cv.tag_bind(tag, "<Button-1>", lambda ev, n=n, p=path: self.pick(n, p))
+        cv.configure(scrollregion=cv.bbox("all") or (0, 0, 10, 10))
+        m2 = getattr(self.ed, "m2", False)
+        p = self.ed.person(self.ed.sel) if self.ed.sel else None
+        self.b_use.configure(state="normal" if m2 and p and p["source"] == "map" else "disabled",
+                             text="Use for %s" % p["name"] if p else "Use for the picked character")
+
+    def pick(self, n, path):
+        self.sel = (n, path)
+        self.show()
+
+    def add(self):
+        from tkinter import filedialog
+        files = filedialog.askopenfilenames(parent=self, title="New portraits for %s / %s" % (
+            self.v_c.get(), self.v_g.get()), filetypes=[("Pictures", "*.png *.jpg *.jpeg *.tga *.bmp"),
+                                                      ("All files", "*.*")])
+        for f in files:
+            self.ed.lib_adds.append({"culture": self.v_c.get(), "group": self.v_g.get(), "pics": {"young": f}})
+        if files:
+            self.ed.app.status.set("Portrait library: %d new portrait(s) - Preview, then Apply changes." % len(
+                self.ed.lib_adds))
+            self.ed.app._mark_work()
+            self.show()
+
+    def use(self):
+        """Medieval II: the picked portrait (young, old and dead of its number) as the picked
+        character's own (ui/custom_portraits + his portrait line, on Apply)."""
+        p = self.ed.person(self.ed.sel) if self.ed.sel else None
+        if not self.sel or not p:
+            return
+        n, path = self.sel
+        e = self.lib.get(self.v_g.get()) or {}
+        if n == "new":
+            pics = {"young": path}
+        else:
+            pics = {a: (e.get(a) or {}).get(n) for a in ("young", "old", "dead") if (e.get(a) or {}).get(n)}
+        self.ed.st.setdefault("portraits", {})[p["key"]] = pics
+        self.ed.changed()
+        self.show()

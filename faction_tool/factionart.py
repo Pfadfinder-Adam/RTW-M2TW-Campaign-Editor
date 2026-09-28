@@ -609,8 +609,10 @@ def redraw_others(plan, campaign, changed_factions, force=False):
 
 def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
     """opts['art'] = {path under data: picture to put there}; opts['select_map'] =
-    {'colour': [r, g, b]} or {'off': True}: the campaign-select map is drawn for a new
-    faction and when an edited one's towns change (or its colour is set)."""
+    {'on': True, 'colour': [r, g, b]}: only when asked (the Art tab's optional part), the
+    campaign-select map is drawn from the faction's towns, and the maps of the factions whose
+    land changed follow. Without it every map_<faction>.tga stays as it is (0.9.3: the user wants
+    the originals kept unless he asks; a new faction keeps the template's copy)."""
     mod = plan.mod
     for rel, src in sorted((plan.opts.get("art") or {}).items()):
         target = os.path.join(mod.data, *rel.replace("\\", "/").split("/"))
@@ -618,6 +620,8 @@ def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
             (s for s, d in plan.copies if os.path.normcase(d) == os.path.normcase(target)), None)
         replace_picture(plan, src, target, like)
     sel = plan.opts.get("select_map") or {}
+    if not sel.get("on"):
+        return
     from .strat import Strat
     sp = mod.campaign_file(campaign, "descr_strat.txt")
     if sp in plan.files:                            # its land as the plan leaves it (new regions too)
@@ -637,10 +641,6 @@ def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
             others = {o for r, o in before.items() if after.get(r) != o} | \
                 {o for r, o in after.items() if before.get(r) != o}
             redraw_others(plan, campaign, others - {faction})
-    if sel.get("off"):
-        return
-    if not (towns_changed or sel.get("colour")):
-        return
     target = map_name(mod.campaign_dir(campaign), faction)
     rel = os.path.relpath(target, mod.data).replace("\\", "/")
     if rel in (plan.opts.get("art") or {}):

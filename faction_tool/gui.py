@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.9.2"
+VERSION = "0.9.3"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
 
@@ -65,8 +65,9 @@ THE TABS (in the order that works best)
                nearest good one.
   Diplomacy    how the faction and every other one feel about each other at the start.
   Art          every picture of the faction (buttons, logos, captain cards, leader picture...)
-               with what it needs and Replace...; the campaign-select map drawn from its
-               towns in a colour you pick.
+               with what it needs and Replace...; the campaign-select map is an optional part
+               (the line at the top opens it): off by default, every map stays the original;
+               ticked, the faction's is drawn from its towns in a colour you pick.
   Roster       (Edit) every unit and building level of the mod and whether the faction has it;
                Give / Take away (or double click). Apply keeps everything tied to it in step:
                a unit's ownership, the recruit lines that let the faction train it and its
@@ -84,6 +85,10 @@ CHARACTER EDITOR
   pool at random (the tree shows one of them); Medieval II takes a character's own picture from
   ui/custom_portraits/<folder> - Replace... writes it in the right size and adds the portrait
   line. The same editor is the Family tab of Edit faction (written together with the faction).
+  Portrait library...: every portrait a culture has (young / old / dead, generals, civilians,
+  rogues), as the game gives them out at random; Add portraits... puts new ones in (any picture,
+  made the culture's size with its card, under the next free number in every folder of the
+  group); Medieval II: Use for <character> makes the picked one his own.
 
 UNIT EDITOR / BUILDING EDITOR
   Pick a unit (a building chain) on the left; every line of its block is a field - change
@@ -269,7 +274,7 @@ class App(tk.Tk):
         # resources on the map: moved {index: (x, y)}, removed [index], added [{type, xy}], region tags {region: text}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         self._res_placing, self._res_sel = None, None
-        self.art_replace, self.sel_map = {}, {}      # Art tab: {path under data: picture}, {colour, off}
+        self.art_replace, self.sel_map = {}, {}      # Art tab: {path under data: picture}, {on, colour}
         self.family_set = {}            # Family tab: {'people': {key: changes}, 'new': [...], 'remove': [...], 'tree'}
         self.roster_set = {}            # Roster tab: {'unit:<type>' | 'building:<chain>:<level>': give?}
         self._region_point = None       # ('city' | 'port', region) waiting for a click
@@ -2785,9 +2790,10 @@ class App(tk.Tk):
             if regions:
                 apply_region_opts(plan, self.v_campaign.get(), regions)
                 # the campaign-select maps of the factions whose land changed follow the new borders
-                from .factionart import redraw_map_changes
-                plan.opts["regions"] = regions
-                redraw_map_changes(plan, self.v_campaign.get())
+                if self.sel_map.get("on"):          # only when asked on the Art tab: the originals stay
+                    from .factionart import redraw_map_changes
+                    plan.opts["regions"] = regions
+                    redraw_map_changes(plan, self.v_campaign.get())
             return plan
         if self.editing():
             if not self.mod:

@@ -1,6 +1,7 @@
 """The Art tab: every picture of the faction (for a new one: the template's, under
-the names they get), each with what it needs and Replace...; and the
-campaign-select map, drawn from the faction's towns in a colour you pick."""
+the names they get), each with what it needs and Replace...; and, as an optional part
+that opens and closes (closed and off by default: the original stays), a new
+campaign-select map drawn from the faction's towns in a colour you pick."""
 
 import os
 import tkinter as tk
@@ -14,27 +15,38 @@ class ArtEditor(ttk.Frame):
         super().__init__(master, padding=4)
         self.app = app
         self._photos = []
+        from . import settings
+        head = ttk.Frame(self)
+        head.pack(fill="x")
+        self.v_open = tk.BooleanVar(value=bool(settings.get("art_map_open")))
+        self.b_open = ttk.Checkbutton(head, variable=self.v_open, command=self.toggle, style="Toolbutton")
+        self.b_open.pack(side="left")
+        self.lbl_state = ttk.Label(head, text="", foreground="#555")
+        self.lbl_state.pack(side="left", padx=8)
         top = ttk.LabelFrame(self, text="Campaign-select map (the faction's land lit, as on the start screen)",
                              padding=6)
-        top.pack(fill="x")
         self.top = top
         # the map as big as half the window allows (1x to 2x), its controls to the right
         self.map_pic = tk.Label(top, relief="sunken", width=48, height=15)
         self.map_pic.grid(row=0, column=0, rowspan=4, sticky="nw")
-        self.v_draw = tk.BooleanVar(value=True)
-        ttk.Checkbutton(top, text="Draw it from the faction's towns (else the file stays as it is)",
+        self.v_draw = tk.BooleanVar(value=False)
+        ttk.Checkbutton(top, text="Draw a new one from the faction's towns",
                         variable=self.v_draw, command=self.changed).grid(row=0, column=1, sticky="w", padx=10)
+        ttk.Label(top, foreground="#555", justify="left", wraplength=420, text=(
+            "It replaces the faction's map_<faction>.tga, and the maps of the factions whose land changes "
+            "follow. Off (the default): every map stays the original.")).grid(row=1, column=1, sticky="w", padx=10)
         self.b_colour = tk.Button(top, text="Colour of its land...", command=self.pick_colour, width=22)
-        self.b_colour.grid(row=1, column=1, sticky="w", padx=10, pady=4)
+        self.b_colour.grid(row=2, column=1, sticky="w", padx=10, pady=4)
         self.lbl_map = ttk.Label(top, text="", foreground="#555", justify="left", wraplength=420)
-        self.lbl_map.grid(row=2, column=1, sticky="nw", padx=10)
+        self.lbl_map.grid(row=3, column=1, sticky="nw", padx=10)
         top.columnconfigure(1, weight=1)
         self._map_im, self._map_scale = None, 0
         top.bind("<Configure>", lambda e: self._fit_map(), add="+")
         self.bind("<Configure>", lambda e: self._fit_map(), add="+")        # the tab's height counts too
-        ttk.Label(self, text="Every picture of the faction. Replace... takes a PNG, JPG or TGA and makes it the "
+        self.pics_note = ttk.Label(self, text="Every picture of the faction. Replace... takes a PNG, JPG or TGA and makes it the "
                              "size and depth the game's own has; Preview, then Apply writes it (with a backup).",
-                  foreground="#555").pack(anchor="w", pady=(8, 2))
+                  foreground="#555")
+        self.pics_note.pack(anchor="w", pady=(8, 2))
         box = ttk.Frame(self)
         box.pack(fill="both", expand=True)
         canvas = self.canvas = tk.Canvas(box, highlightthickness=0)
@@ -51,6 +63,26 @@ class ArtEditor(ttk.Frame):
         # the picture cards flow into as many columns as the width takes
         self.cells, self._cols = [], 0
         canvas.bind("<Configure>", lambda e: self._reflow(), add="+")
+        self.toggle(save=False)
+
+    def toggle(self, save=True):
+        """Open or close the campaign-select map part; closed, the pictures take the whole tab."""
+        from . import settings
+        on = self.v_open.get()
+        self.b_open.configure(text=("\u25be" if on else "\u25b8") + "  Campaign-select map - optional: draw a new one")
+        if on:
+            self.top.pack(fill="x", before=self.pics_note)
+            self.draw_map()
+        else:
+            self.top.pack_forget()
+        self._state_text()
+        if save:
+            settings.put("art_map_open", on)
+
+    def _state_text(self):
+        on = bool(self.app.sel_map.get("on"))
+        self.lbl_state.configure(text="a new one is drawn on Apply" if on else "off - the original map stays",
+                                 foreground="#1c6b1c" if on else "#555")
 
     CELL = 400                  # a picture card's width in the grid
 
@@ -193,19 +225,24 @@ class ArtEditor(ttk.Frame):
         if c and c[0]:
             self.app.remember()
             self.app.sel_map["colour"] = [int(v) for v in c[0]]
-            self.changed()
+            self.draw_map()
 
     def changed(self):
         a = self.app
+        a.remember()
         if self.v_draw.get():
-            a.sel_map.pop("off", None)
+            a.sel_map["on"] = True
         else:
-            a.sel_map["off"] = True
+            a.sel_map.pop("on", None)
+        self._state_text()
         self.draw_map()
 
     def draw_map(self):
         a = self.app
-        self.v_draw.set(not a.sel_map.get("off"))
+        self.v_draw.set(bool(a.sel_map.get("on")))
+        self._state_text()
+        if not self.v_open.get():
+            return                                  # closed: nothing drawn (on Medieval II the first draw takes a while)
         col = self.colour()
         self.b_colour.configure(bg="#%02x%02x%02x" % col, fg="white" if sum(col) < 380 else "black")
         if not a.mod:
@@ -232,7 +269,7 @@ class ArtEditor(ttk.Frame):
         self.lbl_map.configure(text="%d town(s) lit - the towns chosen on the Faction tab (written with the "
                                     "borders as painted on the Map tab).\n%s" % (
             len(a.chosen), "Written on Apply / Create." if self.v_draw.get() else
-            "Not drawn: the file stays as it is (for a new faction: the template's copy)."))
+            "Only a preview: the file stays the original (for a new faction: the template's copy)."))
 
     def _fit_map(self):
         """The select map shown as big as the tab allows: half its width, 40 % of its height (0.5x to 2x)."""

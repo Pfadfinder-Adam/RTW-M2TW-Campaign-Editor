@@ -802,6 +802,46 @@ class ToolTest(unittest.TestCase):
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
 
+    def test_portrait_library_add(self):
+        """A new portrait goes under the next free number into every folder of its group (young, old,
+        dead, the cards), in the culture's own sizes and folder case; Restore takes it all away."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from faction_tool import portraits as PL
+        from faction_tool.plan import Plan
+        base = os.path.join(self.root, "data", "ui", "eastern", "portraits")
+        for folder, size in ((("portraits", "Young", "generals"), (69, 96)), (("portraits", "old", "generals"), (69, 96)),
+                             (("portraits", "dead"), (69, 96)), (("cards", "Young", "generals"), (44, 63)),
+                             (("cards", "old", "generals"), (44, 63)), (("cards", "dead"), (44, 63)),
+                             (("portraits", "Young", "civilians"), (69, 96))):
+            d = os.path.join(base, *folder)
+            os.makedirs(d)
+            for n in (0, 1):
+                Image.new("RGBA", size, (9, 9, 9, 255)).save(os.path.join(d, "%03d.tga" % n))
+        src = os.path.join(self.root, "face.png")
+        Image.new("RGB", (200, 300), (250, 0, 0)).save(src)
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertEqual(PL.cultures(mod)[:1], ["eastern"])
+        lib = PL.library(mod, "eastern")
+        self.assertEqual((lib["generals"]["count"], len(lib["generals"]["dead"])), (2, 2))
+        plan = Plan(mod, "characters", "characters")
+        self.assertEqual(PL.add(plan, "eastern", "generals", [{"young": src}]), [2])
+        plan.apply()
+        for folder, size in ((("portraits", "Young", "generals"), (69, 96)), (("portraits", "dead"), (69, 96)),
+                             (("cards", "old", "generals"), (44, 63)), (("cards", "dead"), (44, 63))):
+            with Image.open(os.path.join(base, *(folder + ("002.tga",)))) as im:
+                self.assertEqual(im.size, size)
+        with Image.open(os.path.join(base, "portraits", "dead", "002.tga")) as im:
+            r, g, b = im.convert("RGB").getpixel((30, 40))
+            self.assertEqual(r, g)                               # the dead one greyed
+        mod = ModData(self.root)
+        restore(mod, backups(mod)[0])
+        after = tree_hash(self.root)
+        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
+
     def test_family_tree_checks(self):
         from faction_tool.family import ordered, tree_problems
         people = [{"name": n, "sex": s} for n, s in (("A", "male"), ("B", "female"), ("C", "male"), ("D", "female"),
@@ -1315,7 +1355,7 @@ class ToolTest(unittest.TestCase):
         plan = build(mod, "test", "alpha", "beta", {
             "start": {"regions": ["B_R"], "leader": {"name": "Boris"}},
             "art": {"menu/symbols/FE_buttons_24/symbol24_beta_roll.tga": png},
-            "select_map": {"colour": [0, 200, 0]}})
+            "select_map": {"on": True, "colour": [0, 200, 0]}})
         plan.apply()
         roll = os.path.join(menu, "symbol24_beta_roll.tga")
         self.assertEqual(FA.tga_info(roll), (30, 30, 32))                # the template's size and depth
@@ -1330,7 +1370,12 @@ class ToolTest(unittest.TestCase):
         new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
                "city": (3, 0), "owner": "alpha", "level": "village"}
         mod = ModData(self.root)
-        plan = edit(mod, "test", "alpha", {"regions": {"painted": {(3, 0): "N_R", (2, 0): "N_R", (2, 1): "N_R", (3, 1): "N_R"}, "new": [new]}})
+        painted = {(3, 0): "N_R", (2, 0): "N_R", (2, 1): "N_R", (3, 1): "N_R"}
+        # not asked for: every select map stays the original
+        plan = edit(mod, "test", "alpha", {"regions": {"painted": painted, "new": [new]}})
+        self.assertFalse([p for p in plan.binaries if os.path.basename(p).startswith("map_")
+                          and "regions" not in p])
+        plan = edit(mod, "test", "alpha", {"regions": {"painted": painted, "new": [new]}, "select_map": {"on": True}})
         plan.apply()
         am = Image.open(os.path.join(camp, "map_alpha.tga")).convert("RGB")
         self.assertNotEqual(am.getpixel((7, 7)), (100, 100, 100))            # (3, 0) is the bottom right corner
