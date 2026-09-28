@@ -1,5 +1,6 @@
 """A separate mod folder for the new faction, so the base game and the base mod
-are never touched.
+are never touched. Rome: <game>/<name>, started with -mod:<name>; Medieval II:
+<game>/mods/<name>, started with mods/<name>/<name>.cfg ([features] mod = ...).
 
 The game takes one -mod:<folder> and falls back to the game's own data for
 every file that folder lacks - there is no chain "my mod -> HLR -> game". So a
@@ -76,6 +77,43 @@ def marker(mod_dir):
         return None
 
 
+M2_EXES = ("M2EX.exe", "medieval2.exe", "kingdoms.exe")
+
+
+def is_medieval2(game):
+    """A Medieval II game folder: its mods live in mods/<name> and start with a .cfg."""
+    return bool(game) and any(os.path.isfile(os.path.join(game, e)) for e in M2_EXES)
+
+
+def mod_target(data_dir, name):
+    """Where a new mod folder goes: <game>/<name> for Rome (started with -mod:<name>),
+    <game>/mods/<name> for Medieval II (started with mods/<name>/<name>.cfg)."""
+    game = game_of(data_dir)
+    return os.path.join(game, "mods", name) if is_medieval2(game) else os.path.join(game, name)
+
+
+def _cfg(base_dir, base_name, name):
+    """Medieval II's <name>.cfg: the base mod's own with its folder renamed, else a plain one."""
+    if base_name and os.path.isdir(base_dir):
+        rx = re.compile(r"mods[/\\]%s\b" % re.escape(base_name), re.I)
+        for n in sorted(os.listdir(base_dir)):
+            if n.lower().endswith(".cfg"):
+                with open(os.path.join(base_dir, n), "rb") as f:
+                    text = f.read().decode("latin-1")
+                if rx.search(text):
+                    return rx.sub("mods/" + name, text)
+    return ("[features]\r\nmod = mods/%s\r\n\r\n[log]\r\nto = mods/%s/system.log.txt\r\nlevel = * error\r\n"
+            % (name, name))
+
+
+def _m2_start(game, base_dir, base_name, name):
+    """{file name: text} of a Medieval II mod's start files: the .cfg and a .bat that
+    starts the game with it (the game's exe from the game folder, two levels up)."""
+    exe = next((e for e in M2_EXES if os.path.isfile(os.path.join(game, e))), "medieval2.exe")
+    return {"%s.cfg" % name: _cfg(base_dir, base_name, name),
+            "Start_%s.bat" % name: 'cd /d "%%~dp0..\\.."\r\nstart "" %s @mods\\%s\\%s.cfg\r\n' % (exe, name, name)}
+
+
 def _game_exe(game):
     return next((e for e in GAME_EXES if os.path.isfile(os.path.join(game, e))), "RomeTW.exe")
 
@@ -103,13 +141,15 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
     Returns (new data folder, summary dict)."""
     if not RE_NAME.match(name or ""):
         raise ValueError("the mod name may use letters, digits, _ and - (like HLR_Saba)")
-    game, base_name = game_root_of(data_dir)
-    target = os.path.join(game, name)
+    _, base_name = game_root_of(data_dir)
+    game = game_of(data_dir)
+    m2 = is_medieval2(game)
+    target = mod_target(data_dir, name)
     if os.path.exists(target):
         raise ValueError("%s already exists - pick another name, or load its data folder to add to it" % target)
     if base_name and base_name.lower() == name.lower():
         raise ValueError("the new mod needs a name other than its base")
-    base_dir = os.path.join(game, base_name) if base_name else game
+    base_dir = os.path.dirname(os.path.abspath(data_dir)) if base_name else game
     # the plain game: only its data folder; a mod: the whole mod folder
     sources = [(os.path.join(game, "data"), os.path.join(target, "data"))] if not base_name \
         else [(base_dir, target)]
@@ -117,6 +157,7 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
     link_ok = [not copy_all]
     os.makedirs(target)
     try:
+        starts = _m2_start(game, base_dir, base_name, name) if m2 else _bats(base_dir, base_name, name, game)
         for src_root, dst_root in sources:
             for dirpath, dirnames, filenames in os.walk(src_root):
                 dirnames[:] = [d for d in dirnames if d != BACKUP_DIR]
@@ -124,8 +165,9 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
                 out_dir = os.path.normpath(os.path.join(dst_root, rel))
                 os.makedirs(out_dir, exist_ok=True)
                 for n in filenames:
-                    if n == MARKER or n.lower().endswith((".bat", ".cmd")) and dirpath == base_dir:
-                        continue
+                    if n == MARKER or n.lower().endswith((".bat", ".cmd") + ((".cfg",) if m2 else ())) \
+                            and dirpath == base_dir:
+                        continue                  # the start files are written for the new name below
                     src = os.path.join(dirpath, n)
                     names = [n]
                     # files named after the base mod (HLR.idx, HLR.dat): also under the new name
@@ -138,7 +180,7 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
                     total = stats["linked"] + stats["copied"]
                     if progress and total % 500 == 0:
                         progress(total)
-        for n, text in _bats(base_dir, base_name, name, game).items():
+        for n, text in starts.items():
             with open(os.path.join(target, n), "wb") as f:
                 f.write(text.encode("latin-1"))
         with open(os.path.join(target, MARKER), "w", encoding="utf-8") as f:
@@ -173,6 +215,8 @@ def slim(data_dir):
     if not m or m.get("base") != "(game)":
         return 0
     game = os.path.dirname(target)
+    if os.path.basename(game).lower() == "mods" and is_game(os.path.dirname(game)):
+        game = os.path.dirname(game)                  # Medieval II: <game>/mods/<name>
     removed = 0
     for dirpath, dirnames, filenames in os.walk(data_dir, topdown=False):
         for n in filenames:

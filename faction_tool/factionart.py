@@ -24,34 +24,60 @@ PICTURE_EXT = (".tga", ".dds", ".png", ".bmp")
 # ---------------------------------------------------------------------------
 # Every picture of a faction
 # ---------------------------------------------------------------------------
-def label_of(rel):
-    """A plain name for what a picture is, from where it lies."""
+# (test on the path, what it is, where the game shows it) - the first that fits wins
+PICTURE_KINDS = (
+    (lambda low, name: "fe_buttons_24" in low, "small campaign-menu button",
+     "the small faction button of the campaign menus"),
+    (lambda low, name: "fe_buttons_48" in low, "big campaign-menu button",
+     "the big faction button of the campaign-select screen"),
+    (lambda low, name: "battlefield_pics" in low, "battle-select picture",
+     "the custom / historical battle screen, behind the faction's name"),
+    (lambda low, name: "fe_faction_units" in low, "units picture on the faction screen",
+     "the faction-select screen, the soldiers standing under the faction's name"),
+    (lambda low, name: "fe_symbols_80" in low, "symbol on the faction screen",
+     "the faction-select screen, the faction's symbol (80 px)"),
+    (lambda low, name: "faction_symbols" in low, "faction symbol (in-game panels)",
+     "the campaign's panels: settlement, character and diplomacy scrolls"),
+    (lambda low, name: "/fe_flags" in low or "flag" in name, "flag",
+     "the front-end menus, next to the faction's name"),
+    (lambda low, name: low.startswith("loading_screen"), "loading-screen logo",
+     "the loading screen while the campaign loads"),
+    (lambda low, name: name.startswith("map_"), "campaign-select map (its land lit)",
+     "the campaign-select screen: the map with the faction's land lit"),
+    (lambda low, name: name.startswith("vcs_"), "victory conditions map (short campaign)",
+     "the campaign-select screen, the regions to take in the short campaign"),
+    (lambda low, name: name.startswith("vc_"), "victory conditions map",
+     "the campaign-select screen, the regions to take to win"),
+    (lambda low, name: name.startswith("leader_pic"), "leader picture (campaign select)",
+     "the campaign-select screen, the faction leader's face"),
+    (lambda low, name: "faction_icons" in low, "faction icon",
+     "the campaign map's top bar and the faction lists"),
+    (lambda low, name: "captain" in name and "portrait" in name, "captain's portrait",
+     "the army panel of an army led by a captain (no named general)"),
+    (lambda low, name: "captain" in name, "captain's card",
+     "the unit card of a captain's bodyguard in the army panel"),
+    (lambda low, name: "standard" in name or "banner" in low, "banner / standard texture",
+     "the banners carried over the faction's units in battle"),
+    (lambda low, name: "/units/" in low or "/unit_info/" in low, "unit picture",
+     "the unit cards and the unit information scroll"),
+    (lambda low, name: "symbol" in name, "symbol",
+     "the faction's symbol in the menus"),
+)
+
+
+def _picture_kind(rel):
     low = rel.replace("\\", "/").lower()
     name = os.path.basename(low)
-    if "fe_buttons_24" in low:
-        kind = "small campaign-menu button"
-    elif "fe_buttons_48" in low:
-        kind = "big campaign-menu button"
-    elif "/fe_flags" in low or "flag" in name:
-        kind = "flag"
-    elif low.startswith("loading_screen"):
-        kind = "loading-screen logo"
-    elif name.startswith("map_"):
-        kind = "campaign-select map (its land lit)"
-    elif name.startswith("leader_pic"):
-        kind = "leader picture (campaign select)"
-    elif "faction_icons" in low:
-        kind = "faction icon"
-    elif "captain" in name:
-        kind = "captain's %s" % ("portrait" if "portrait" in name else "card")
-    elif "standard" in name or "banner" in low:
-        kind = "banner / standard texture"
-    elif "/units/" in low or "/unit_info/" in low:
-        kind = "unit picture"
-    elif "symbol" in name:
-        kind = "symbol"
-    else:
-        kind = "picture"
+    for test, kind, where in PICTURE_KINDS:
+        if test(low, name):
+            return low, name, kind, where
+    folder = os.path.dirname(low)
+    return low, name, "picture in %s" % (folder or "data"), None
+
+
+def label_of(rel):
+    """A plain name for what a picture is, from where it lies."""
+    low, name, kind, _ = _picture_kind(rel)
     for part, word in (("_roll", " (mouse over)"), ("_select", " (selected)"), ("_grey", " (greyed out)"),
                        ("_rebel", " (rebel)")):
         if part in name:
@@ -60,6 +86,11 @@ def label_of(rel):
     if "/dead/" in low:
         kind += " (dead)"
     return kind
+
+
+def where_shown(rel):
+    """Where the game shows the picture, or None when the tool does not know."""
+    return _picture_kind(rel)[3]
 
 
 def faction_pictures(mod, campaign, faction):
@@ -75,7 +106,7 @@ def faction_pictures(mod, campaign, faction):
             return
         seen.add(n)
         rel = os.path.relpath(p, mod.data).replace("\\", "/")
-        out.append({"path": p, "rel": rel, "label": label_of(rel),
+        out.append({"path": p, "rel": rel, "label": label_of(rel), "where": where_shown(rel),
                     "size": tga_info(p) if p.lower().endswith(".tga") else None})
     roots = [os.path.join(mod.data, r) for r in ART_ROOTS] + [mod.campaign_dir(campaign)]
     for root in roots:

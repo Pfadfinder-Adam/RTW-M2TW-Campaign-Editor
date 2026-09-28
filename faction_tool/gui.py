@@ -16,7 +16,7 @@ from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need,
 from .mapdata import CampaignMap, faction_colours
 from .moddata import ModData
 from .mapedit import orig as place_orig, place_problem, port_fleets, sea_spot
-from .newmod import create_mod, game_of, game_root_of, is_game, list_mods
+from .newmod import create_mod, game_of, game_root_of, is_game, is_medieval2, list_mods, mod_target
 from .edit import edit as edit_faction, read_faction
 from .gui_buildings import NONE, BuildingsEditor
 from .gui_diplomacy import DiplomacyEditor, colour as dip_colour
@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW Campaign Editor"
 
@@ -140,18 +140,37 @@ AI_MILITARY = ("caesar", "genghis", "henry", "mao", "napoleon", "smith", "stalin
 AI_CHOICES = ["%s %s" % (e, m) for e in AI_ECONOMY for m in AI_MILITARY]
 
 
+def colour_look(rgb):
+    """A colour button's background and a text colour that reads on it."""
+    rgb = tuple(int(v) for v in rgb)
+    light = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] > 140
+    return {"bg": "#%02x%02x%02x" % rgb, "fg": "#000000" if light else "#ffffff",
+            "activebackground": "#%02x%02x%02x" % rgb, "activeforeground": "#000000" if light else "#ffffff"}
+
+
 class FieldTable(ttk.Frame):
     """The armies, agents and fleets as a table (kind, name, units, tile, state),
-    with the few Listbox calls the window uses."""
+    with the few Listbox calls the window uses. A row keeps its place in the
+    window's list (its iid), so the Show filter and sorting by a column (click
+    its heading) never mix them up."""
     COLS = (("kind", "Kind", 70), ("name", "Name", 130), ("units", "Units", 80), ("tile", "Tile", 70),
             ("state", "", 60))
+    SHOW = ("all", "armies", "fleets", "agents")
 
     def __init__(self, master):
         super().__init__(master)
+        bar = ttk.Frame(self)
+        bar.pack(side="top", fill="x", pady=(0, 2))
+        ttk.Label(bar, text="Show").pack(side="left")
+        self.v_show = tk.StringVar(value="all")
+        cb = ttk.Combobox(bar, textvariable=self.v_show, values=self.SHOW, state="readonly", width=10)
+        cb.pack(side="left", padx=4)
+        cb.bind("<<ComboboxSelected>>", lambda e: self._draw())
+        ttk.Label(bar, text="click a heading to sort", foreground="#666").pack(side="left", padx=6)
         self.tv = ttk.Treeview(self, columns=[c[0] for c in self.COLS], show="headings", height=10,
                                selectmode="browse")
-        for key, head, width in self.COLS:
-            self.tv.heading(key, text=head)
+        for n, (key, head, width) in enumerate(self.COLS):
+            self.tv.heading(key, text=head, command=lambda n=n: self._sort_by(n))
             self.tv.column(key, width=width, stretch=key == "name")
         sb = ttk.Scrollbar(self, orient="vertical", command=self.tv.yview)
         self.tv.configure(yscrollcommand=sb.set)
@@ -159,22 +178,50 @@ class FieldTable(ttk.Frame):
         sb.pack(side="left", fill="y")
         self.tv.tag_configure("new", foreground="#0050c0")
         self.tv.tag_configure("changed", foreground="#a05000")
+        self.rows, self.sort = [], None          # [values], (column, reverse)
+
+    def _shown(self, values):
+        want = self.v_show.get()
+        kind = values[0]
+        return (want == "all" or want == "armies" and kind == "army" or want == "fleets" and kind == "fleet"
+                or want == "agents" and kind not in ("army", "fleet"))
+
+    def _draw(self):
+        sel = self.curselection()
+        self.tv.delete(*self.tv.get_children())
+        order = list(range(len(self.rows)))
+        if self.sort:
+            col, rev = self.sort
+            order.sort(key=lambda i: str(self.rows[i][col]).lower(), reverse=rev)
+        for i in order:
+            if self._shown(self.rows[i]):
+                self.tv.insert("", "end", iid=str(i), values=self.rows[i], tags=(self.rows[i][-1],))
+        if sel:
+            self.selection_set(sel[0])
+
+    def _sort_by(self, col):
+        self.sort = (col, not self.sort[1]) if self.sort and self.sort[0] == col else (col, False)
+        self._draw()
 
     def delete(self, *a):
+        self.rows = []
         self.tv.delete(*self.tv.get_children())
 
     def insert(self, _where, values):
-        self.tv.insert("", "end", values=values, tags=(values[-1],))
+        self.rows.append(values)
+        if self._shown(values):
+            if self.sort:
+                self._draw()
+            else:
+                self.tv.insert("", "end", iid=str(len(self.rows) - 1), values=values, tags=(values[-1],))
 
     def curselection(self):
-        items = self.tv.get_children()
-        return tuple(items.index(i) for i in self.tv.selection() if i in items)
+        return tuple(int(i) for i in self.tv.selection())
 
     def selection_set(self, i):
-        items = self.tv.get_children()
-        if 0 <= i < len(items):
-            self.tv.selection_set(items[i])
-            self.tv.see(items[i])
+        if self.tv.exists(str(i)):
+            self.tv.selection_set(str(i))
+            self.tv.see(str(i))
 
     def selection_clear(self, *a):
         if self.tv.selection():
@@ -221,6 +268,8 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------------ layout
     def _build(self):
+        from . import theme
+        theme.apply(self)                          # light or dark, as last chosen
         pad = {"padx": 6, "pady": 3}
         top = ttk.Frame(self)
         top.pack(fill="x", **pad)
@@ -247,13 +296,18 @@ class App(tk.Tk):
         work = ttk.Frame(self)
         work.pack(fill="x", padx=6, pady=(4, 0))
         self.v_work = tk.StringVar(value="new")
-        for text, val in (("New faction", "new"), ("Edit faction", "edit"),
-                          ("Unit editor", "units"), ("Building editor", "buildings")):
-            tk.Radiobutton(work, text=text, value=val, variable=self.v_work, indicatoron=0, command=self.work_changed,
-                           padx=16, pady=5, font=("", 10, "bold"), selectcolor="#cfe3ff", relief="raised",
-                           offrelief="groove", cursor="hand2").pack(side="left", padx=(0, 4))
+        self.work_buttons = {}
+        for val, text in self.WORK_TITLES.items():
+            b = tk.Radiobutton(work, text=text, value=val, variable=self.v_work, indicatoron=0,
+                               command=self.work_changed, padx=16, pady=5, font=("", 10, "bold"),
+                               selectcolor="#cfe3ff", relief="raised", offrelief="groove", cursor="hand2")
+            b.pack(side="left", padx=(0, 4))
+            self.work_buttons[val] = b
         self.lbl_work = ttk.Label(work, text="", foreground="#555")
         self.lbl_work.pack(side="left", padx=10)
+        self.b_theme = ttk.Button(work, text="", command=self.toggle_theme)
+        self.b_theme.pack(side="right")
+        self._theme_label()
         self.editors = {}
 
         self.nb = ttk.Notebook(self)
@@ -436,7 +490,7 @@ class App(tk.Tk):
         self.cb_res_type.pack(side="left", padx=4)
         ttk.Button(xb, text="Place new", command=self.res_place_new).pack(side="left", padx=2)
         ttk.Button(xb, text="Delete picked", command=self.res_delete).pack(side="left", padx=2)
-        ttk.Button(xb, text="Region's resource tags...", command=self.region_tags_dialog).pack(side="left", padx=(12, 2))
+        ttk.Button(xb, text="Region tags (hidden resources)...", command=self.region_tags_dialog).pack(side="left", padx=(12, 2))
         ttk.Label(xb, text="click a resource: pick it   right drag: move it   a region has the resources on its land",
                   foreground="#666").pack(side="left", padx=10)
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
@@ -730,6 +784,8 @@ class App(tk.Tk):
             lb.selection_set(self.chosen.index(capital) if capital in self.chosen else 0)
             load()
 
+    WORK_TITLES = {"new": "New faction", "edit": "Edit faction", "units": "Unit editor",
+                   "buildings": "Building editor"}
     WORK_HINTS = {"new": "make a new faction from a template", "edit": "change a faction that is in the game",
                   "units": "every line of a unit in export_descr_unit.txt, its card and picture",
                   "buildings": "every line of a building chain in export_descr_buildings.txt, its pictures"}
@@ -760,8 +816,9 @@ class App(tk.Tk):
         ed = self.editor()
         ed.pack(fill="both", expand=True, padx=6, pady=3, before=self.bottom_bar)
         if self.mod and ed.mod is not self.mod:
-            ed.load(self.mod)
+            self._rebind(ed)
         self.update_actions()
+        self._mark_work()
 
     def editor(self):
         """The unit or building editor on show, made the first time; None for the faction work."""
@@ -775,6 +832,20 @@ class App(tk.Tk):
 
     def editing(self):
         return self.v_mode.get() == "edit"
+
+    def _theme_label(self):
+        from . import theme
+        self.b_theme.configure(text="\u2600  Light" if theme.dark() else "\u263e  Dark")
+
+    def toggle_theme(self):
+        """Light / Dark look, kept for the next start."""
+        from . import theme
+        theme.toggle(self)
+        self._theme_label()
+        try:
+            self.map_view._draw_legend()
+        except Exception:
+            pass
 
     def mode_changed(self):
         """New faction (clone a template) or Edit faction (change one in place)."""
@@ -842,7 +913,7 @@ class App(tk.Tk):
             rgb = now.get(key + "_colour")
             self.colours[key] = rgb
             if rgb:
-                b.configure(bg="#%02x%02x%02x" % tuple(rgb))
+                b.configure(**colour_look(rgb))
         for role in ("leader", "heir"):
             who = now.get(role) or {}
             name = who.get("name", "")
@@ -862,6 +933,8 @@ class App(tk.Tk):
         if self.chosen:
             self.v["capital"].set(self.chosen[0])
         self.refresh_chosen()
+        self.undo_stack, self.redo_stack = [], []      # Undo never reaches back into another faction
+        now["_faction"] = faction
         self.status.set("Editing %s: %d town(s). Change what you want, Preview, then Apply changes."
                         % (faction, len(self.chosen)))
 
@@ -1061,20 +1134,24 @@ class App(tk.Tk):
     def _region_view(self, place):
         """The Map's Regions mode: paint overlay, callbacks, new towns and ports."""
         on = self.map_view.v_regions.get()
-        if on:
-            self.region_bar.pack(fill="x", before=self.map_view)
-        else:
-            self.region_bar.pack_forget()
-            # the political colours show the painted land too (the map as it will be)
-            return {"region_mode": False, "region_painted": self.region_paint}
-        cols = self._region_colours()
-        names = sorted(cols)
-        self.cb_paint["values"] = [r["name"] + "  (new)" for r in self.new_regions] + names
         points = []
         for r in self.new_regions:
             for what in ("city", "port"):
                 if r.get(what):
                     points.append((tuple(r[what]), what, tuple(r["colour"])))
+        if on:
+            self.region_bar.pack(fill="x", before=self.map_view)
+        else:
+            self.region_bar.pack_forget()
+            # the political colours show the painted land too (the map as it will be); a new
+            # region's land, town and port show in its own colour until Apply
+            new = {r["name"]: tuple(r["colour"]) for r in self.new_regions}
+            land = {t: new[r] for t, r in self.region_paint.items() if r in new}
+            return {"region_mode": False, "region_painted": self.region_paint, "region_points": points,
+                    "new_land": land}
+        cols = self._region_colours()
+        names = sorted(cols)
+        self.cb_paint["values"] = [r["name"] + "  (new)" for r in self.new_regions] + names
         cm = self._cmap
 
         def paint(tiles):
@@ -1185,8 +1262,7 @@ class App(tk.Tk):
         frm.pack(fill="both", expand=True)
         facs = [fb.name for fb in self.strat.factions]
         rebels = sorted({v.get("rebels") for v in self.regions.values() if v.get("rebels")})
-        res = sorted({x.strip() for v in self.regions.values() for x in (v.get("resources") or "").split(",")
-                      if x.strip() and x.strip() != "none"})
+        res = self._region_tag_names()
         me = self.v["template"].get().strip()
         fields = [("Region - name in the files", "name", "", "letters, digits, _ ; no spaces (Tribus_Novus)"),
                   ("Region - name shown in the game", "label", "", "empty = the file name without _"),
@@ -1196,8 +1272,10 @@ class App(tk.Tk):
                    "the faction whose style the town's buildings have"),
                   ("Rebels there", "rebels", rebels[0] if rebels else "",
                    "who rises up / holds it as rebels (a rebel type of this mod)"),
-                  ("Resources", "resources", "", "comma list; empty = those of the land it is cut from. "
-                   "In HLR these tags also open local units"),
+                  ("Region tags (hidden resources)", "resources", "",
+                   "comma list; empty = those of the land it is cut from. Not the goods drawn on the map: "
+                   "tags buildings ask for ('resource' / 'hidden_resource' in export_descr_buildings), "
+                   "which open buildings and local units"),
                   ("Triumph value", "triumph", "5", "how much taking it counts for a triumph; most use 5"),
                   ("Farming level", "farming", "3", "food from the land: 1 poor ... 5 rich; most use 2-4"),
                   ("Owner at the start", "owner", "(rebel village - no settlement written)",
@@ -1205,7 +1283,7 @@ class App(tk.Tk):
                   ("Town size at the start", "level", "village", "for an owner only")]
         vs = {}
         for i, (label, key, default, hint) in enumerate(fields):
-            ttk.Label(frm, text=hint, foreground="#666").grid(row=i, column=2, sticky="w")
+            ttk.Label(frm, text=hint, foreground="#666", wraplength=420, justify="left").grid(row=i, column=2, sticky="w")
             ttk.Label(frm, text=label).grid(row=i, column=0, sticky="w", pady=1)
             v = tk.StringVar(value=default)
             vs[key] = v
@@ -1219,8 +1297,9 @@ class App(tk.Tk):
                              width=34).grid(row=i, column=1, sticky="we", padx=6)
             else:
                 ttk.Entry(frm, textvariable=v, width=36).grid(row=i, column=1, sticky="we", padx=6)
-        ttk.Label(frm, text="resources in this mod: " + ", ".join(res), foreground="#666", wraplength=420,
-                  justify="left").grid(row=len(fields), column=0, columnspan=2, sticky="w", pady=(4, 0))
+        ttk.Label(frm, text="region tags in this mod (descr_regions line 6 and the buildings' requirements): " +
+                  ", ".join(res), foreground="#666", wraplength=620,
+                  justify="left").grid(row=len(fields), column=0, columnspan=3, sticky="w", pady=(4, 0))
 
         def ok():
             from .regionedit import _ok_name
@@ -1458,15 +1537,16 @@ class App(tk.Tk):
                                       "in Regions mode (right click)")
             return
         now = self.region_tags.get(name, self.regions[name].get("resources", ""))
-        from .resources import types
-        known = sorted({x.strip() for v in self.regions.values() for x in (v.get("resources") or "").split(",")
-                        if x.strip()} | set(types(self.mod)))
+        known = self._region_tag_names()
         w = tk.Toplevel(self)
-        w.title("Resource tags of %s" % name)
+        w.title("Region tags of %s" % name)
         w.transient(self)
         frm = ttk.Frame(w, padding=10)
         frm.pack(fill="both", expand=True)
-        ttk.Label(frm, text="%s - tags, comma separated (line 6 of its entry in descr_regions.txt)" % name).pack(anchor="w")
+        ttk.Label(frm, text="%s - region tags (hidden resources), comma separated: line 6 of its entry in "
+                            "descr_regions.txt.\nBuildings ask for them ('resource' / 'hidden_resource' "
+                            "requirements) - they open buildings and local units. The goods drawn on the map are "
+                            "the resources above it, not these." % name, justify="left").pack(anchor="w")
         v = tk.StringVar(value=now)
         ttk.Entry(frm, textvariable=v, width=70).pack(fill="x", pady=4)
         ttk.Label(frm, text="in this mod: " + ", ".join(known), foreground="#666", wraplength=520,
@@ -1488,6 +1568,20 @@ class App(tk.Tk):
         bar.pack(anchor="e", pady=(8, 0))
         ttk.Button(bar, text="OK", command=ok).pack(side="left")
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+
+    def _region_tag_names(self):
+        """The region tags this mod uses: descr_regions' line 6 and the names the
+        buildings' 'resource' / 'hidden_resource' requirements ask for."""
+        import re
+        out = {x.strip() for v in self.regions.values() for x in (v.get("resources") or "").split(",")
+               if x.strip() and x.strip() != "none"}
+        edb = self.mod.file("edb") if self.mod else None
+        if edb:
+            rx = re.compile(r"\b(?:hidden_)?resource\s+([A-Za-z0-9_]+)")
+            for line in self.mod.load(edb).texts():
+                if "resource" in line:
+                    out.update(rx.findall(line.split(";")[0]))
+        return sorted(out)
 
     def _relations(self):
         return [{"kind": k, "from": a, "to": b, "value": v} for (k, a, b), v in self.dip_set.items()]
@@ -1755,9 +1849,18 @@ class App(tk.Tk):
         if not getattr(self, "_fix_queued", False):
             self._fix_queued = True
             self.after_idle(self.offer_fixes)
+        # after Apply the editors read the files again; changes waiting in one whose file
+        # was not written stay
         ed = self.editor()
-        if ed is not None:                    # after Apply the editor reads the files again
-            ed.load(self.mod)
+        if ed is not None:
+            self._rebind(ed)
+        self._mark_work()
+
+    def _rebind(self, ed):
+        lost = ed.rebind(self.mod)
+        if lost:
+            messagebox.showwarning(APP, "The %s editor had %d change(s) not written; its file was written since "
+                                        "(by another Apply), so they are dropped - make them again." % (ed.kind, lost))
 
     def offer_fixes(self):
         """Set-up problems that stop the game from starting (gamefix): put right on a yes,
@@ -1791,7 +1894,9 @@ class App(tk.Tk):
         if not self.mod:
             messagebox.showerror(APP, "load the mod (or the game's data folder) to build on first")
             return
-        game, base = game_root_of(self.mod.data)
+        _, base = game_root_of(self.mod.data)
+        game = game_of(self.mod.data)
+        m2 = is_medieval2(game)
         w = tk.Toplevel(self)
         w.title("New mod folder")
         w.transient(self)
@@ -1799,18 +1904,25 @@ class App(tk.Tk):
         frm.pack(fill="both", expand=True)
         ttk.Label(frm, text="Based on:  %s" % (base or "the game's own data"), font=("", 10, "bold")).grid(
             row=0, column=0, columnspan=2, sticky="w")
-        ttk.Label(frm, text="Created in:  %s" % game).grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        ttk.Label(frm, text="Created in:  %s" % os.path.dirname(mod_target(self.mod.data, "x"))).grid(
+            row=1, column=0, columnspan=2, sticky="w", pady=(0, 8))
         ttk.Label(frm, text="New mod name").grid(row=2, column=0, sticky="w")
-        v_name = tk.StringVar(value=(base or "RTW") + "_" + (self.v["name"].get().strip().capitalize() or "New"))
+        v_name = tk.StringVar(value=(base or ("M2" if m2 else "RTW")) + "_" + (self.v["name"].get().strip().capitalize() or "New"))
         ttk.Entry(frm, textvariable=v_name, width=30).grid(row=3, column=0, sticky="we", padx=(0, 6))
         v_copy = tk.BooleanVar(value=False)
         ttk.Checkbutton(frm, text="Copy every file (no hard links; needs the disk space)", variable=v_copy).grid(
             row=4, column=0, columnspan=2, sticky="w", pady=4)
-        ttk.Label(frm, justify="left", wraplength=520, text=(
-            "The base stays untouched. Text files are copied; models, textures and sounds are hard links - "
-            "the same file under a second name, no extra space. Do not edit a linked texture in place "
-            "(an editor that overwrites it changes the base too); tick 'Copy every file' to be fully apart. "
-            "A start script Start_<name>.bat is written into the new folder.")).grid(
+        ttk.Label(frm, justify="left", wraplength=560, text=(
+            "The base stays untouched. Text files are copied. Models, textures and sounds are 'hard links': "
+            "the new folder shows every file (tens of thousands of them) at its full size in Explorer, but "
+            "they are the same files on the disk as the base's - they take no extra space (only the copied "
+            "text does, some tens of MB).\n"
+            "Deleting the new mod folder never touches the game or the base mod. Only a program that "
+            "overwrites a linked file in place (a texture editor saving over a .dds, say) changes the "
+            "base's file too - the tool itself never does; tick 'Copy every file' to be fully apart.\n" +
+            ("It goes into the game's mods folder with %s.cfg and Start_%s.bat (Medieval II starts a mod "
+             "from its .cfg)." % ("<name>", "<name>") if m2 else
+             "A start script Start_<name>.bat is written into the new folder."))).grid(
             row=5, column=0, columnspan=2, sticky="w", pady=(4, 8))
 
         def go():
@@ -1842,10 +1954,13 @@ class App(tk.Tk):
                 self.v_path.set(result["data"])
                 self.load()
                 messagebox.showinfo(APP, (
-                    "Made %s\n\n%d file(s) linked, %d copied (%.0f MB)%s.\n\nIt is loaded now: the faction "
-                    "you create goes into it. Start the game with %s." % (
+                    "Made %s\n\n%d file(s) linked, %d copied (%.0f MB really written)%s.\n\n%s"
+                    "It is loaded now: the faction you create goes into it. Start the game with %s." % (
                         st["target"], st["linked"], st["copied"], st["bytes_copied"] / 1048576.0,
                         "" if st["hard_links"] else " - no hard links (another drive or 'copy every file')",
+                        ("The linked files show full size in Explorer but take no disk space: they are the "
+                         "base's own files under a second name. Deleting this folder never touches the "
+                         "game.\n\n") if st["hard_links"] and st["linked"] else "",
                         "Start_%s.bat" % name)))
             wait()
         bar = ttk.Frame(frm)
@@ -1890,6 +2005,7 @@ class App(tk.Tk):
         t = self.v["template"].get().strip()
         if self.editing() and t and self.strat.faction(t):
             self.load_existing()
+            self._baseline = self._faction_state()
         # an open Map (or Diplomacy) tab shows the files as they are now - after Apply,
         # Restore or a campaign change - not the picture read before
         if self.nb.index("current") in (3, 4):
@@ -1930,6 +2046,21 @@ class App(tk.Tk):
         if not t or not self.mod:
             return
         if self.editing():
+            was = self.editing_now.get("_faction") if self.editing_now else None
+            if was and was != t and self.faction_pending():
+                # the changes belong to the faction picked before: write them, drop them, or stay
+                ans = messagebox.askyesnocancel(APP, "%s has changes not written yet.\n\nYes: apply them now "
+                                                     "(with a backup), then open %s.\nNo: drop them.\n"
+                                                     "Cancel: stay with %s." % (was, t, was))
+                if ans is None:
+                    self.v["template"].set(was)
+                    return
+                if ans:
+                    self.v["template"].set(was)
+                    self.create()
+                    if self.faction_pending():
+                        return                        # not written (refused or failed): stay
+                    self.v["template"].set(t)
             self.load_existing()
         fb = self.strat.faction(t) if self.strat else None
         if fb:
@@ -1951,6 +2082,8 @@ class App(tk.Tk):
                     self.v[role + "_last"].set("")
         disp = template_display(self.mod, t, self.v_campaign.get())
         if self.editing():
+            self._baseline = self._faction_state()      # what 'not changed yet' looks like
+            self._mark_work()
             return
         # empty fields start from the template: its money and colours (shown; the new
         # faction keeps them unless you pick others)
@@ -1965,7 +2098,7 @@ class App(tk.Tk):
         for key, b in (("primary", self.b_primary), ("secondary", self.b_secondary)):
             rgb = self.colours.get(key) or now.get(key + "_colour")
             if rgb:
-                b.configure(bg="#%02x%02x%02x" % tuple(rgb))
+                b.configure(**colour_look(rgb))
         self.status.set("Template %s: %s. Its units, buildings, names, traits and art are copied." %
                         (t, disp.get("display_name", t)))
 
@@ -1975,7 +2108,7 @@ class App(tk.Tk):
             rgb = tuple(int(x) for x in c[0])
             self.colours[which] = rgb
             btn = self.b_primary if which == "primary" else self.b_secondary
-            btn.configure(bg="#%02x%02x%02x" % rgb)
+            btn.configure(**colour_look(rgb))
 
     def add_town(self):
         self.remember()
@@ -2139,7 +2272,7 @@ class App(tk.Tk):
         units = faction_units(self.mod, self.field_faction(), ships=c["kind"] == "fleet", mercs=True)
         own = [u for u in units if not set(u.ownership) <= {"slave"}]
         if c["kind"] == "fleet" and own and all(u.mercenary for u in own):
-            self.garrison_editor.v_merc.set(True)     # many mods mark every ship a mercenary
+            self.garrison_editor.v_whose.set("own + mercenaries")     # many mods mark every ship a mercenary
         units = self._with_types(units, c["units"])
 
         def changed(types, i=i):
@@ -2362,6 +2495,61 @@ class App(tk.Tk):
         ed = self.editor()
         if ed is not None:
             return ed.make_plan()
+        return self._faction_plan()
+
+    # ---- what waits for Apply, across the faction tabs and both editors ----
+    def faction_pending(self):
+        """The faction tabs (New / Edit faction, the map) hold changes not written yet."""
+        if not self.mod:
+            return False
+        if self.editing():
+            return bool(self.editing_now) and self._faction_state() != getattr(self, "_baseline", None)
+        if self.map_only():
+            return bool(self._places() or self._regions_opts() or self._resources_opts())
+        return True
+
+    def _faction_label(self):
+        if self.editing():
+            return "Edit faction %s" % self.v["template"].get().strip()
+        if self.map_only():
+            return "Map changes"
+        return "New faction %s (from %s)" % (self.v["name"].get().strip(), self.v["template"].get().strip())
+
+    def _faction_state(self):
+        """What the Edit faction work has now: the kept state and every field of the Faction tab."""
+        st = self.snapshot()
+        st["fields"] = {k: v.get() for k, v in self.v.items()}
+        st["texts"] = (self.t_descr.get("1.0", "end").strip(), self.t_long.get("1.0", "end").strip())
+        st["colours"] = dict(self.colours)
+        st["playable"] = self.v_playable.get()
+        st["give"] = self.v_give.get()
+        return st
+
+    def pending_parts(self):
+        """[(key, label)] of the work waiting for Apply, in the order it is written: the
+        editors first (their changes sit on the file's lines as read), then the faction
+        tabs (built from the files as the editors leave them)."""
+        out = []
+        for key, name in (("units", "Unit editor"), ("buildings", "Building editor")):
+            ed = self.editors.get(key)
+            if ed is not None and ed.mod is not None and ed.dirty():
+                out.append((key, "%s: %d change(s)" % (name, ed.pending())))
+        if self.faction_pending():
+            out.append(("faction", self._faction_label()))
+        return out
+
+    def _part_plan(self, key):
+        return self.editors[key].make_plan() if key in self.editors else self._faction_plan()
+
+    def _mark_work(self):
+        """A * on the work buttons that hold changes not written yet."""
+        keys = {k for k, _ in self.pending_parts()} if self.mod else set()
+        for val, b in getattr(self, "work_buttons", {}).items():
+            base = self.WORK_TITLES[val]
+            mine = val in keys or val == self.v_mode.get() and "faction" in keys
+            b.configure(text=base + ("  *" if mine else ""))
+
+    def _faction_plan(self):
         if self.map_only():
             places, regions, res = self._places(), self._regions_opts(), self._resources_opts()
             if not places and not regions and not res:
@@ -2540,34 +2728,112 @@ class App(tk.Tk):
         t.focus_set()
 
     def preview(self):
-        try:
-            plan = self.make_plan()
-        except Exception as e:
-            messagebox.showerror(APP, str(e))
+        parts = self.pending_parts()
+        if len(parts) <= 1:
+            try:
+                plan = self._part_plan(parts[0][0]) if parts else self.make_plan()
+            except Exception as e:
+                messagebox.showerror(APP, str(e))
+                return
+            log.write("Preview\n" + plan.report())
+            self.show_text("Preview - nothing written yet", plan.report())
             return
-        log.write("Preview\n" + plan.report())
-        self.show_text("Preview - nothing written yet", plan.report())
+        out = []
+        for key, label in parts:
+            try:
+                rep = self._part_plan(key).report()
+            except Exception as e:
+                rep = "cannot be written: %s" % e
+            out.append("=" * 70 + "\n%s\n" % label + "=" * 70 + "\n" + rep)
+        text = ("%d pieces of work wait for Apply; Apply writes them one after another, each with its own "
+                "backup (the later ones are built on the files as the earlier leave them).\n\n" % len(parts)
+                + "\n\n".join(out))
+        log.write("Preview\n" + text)
+        self.show_text("Preview - nothing written yet", text)
 
     def create(self):
-        try:
-            plan = self.make_plan()
-        except Exception as e:
-            messagebox.showerror(APP, str(e))
+        parts = self.pending_parts()
+        if len(parts) <= 1:
+            key = parts[0][0] if parts else None
+            try:
+                plan = self._part_plan(key) if key else self.make_plan()
+            except Exception as e:
+                messagebox.showerror(APP, str(e))
+                return
+            warn = "\n".join("- " + m for _, m in plan.warnings)
+            msg = "Write %d file(s) and copy %d art item(s)?\nA backup is made first.%s" % (
+                len(plan.changed_files()), len(plan.copies), ("\n\nWarnings:\n" + warn) if warn else "")
+            if not messagebox.askyesno(APP, msg):
+                return
+            self._write([(key or "current", parts[0][1] if parts else "", plan)])
             return
-        warn = "\n".join("- " + m for _, m in plan.warnings)
-        msg = "Write %d file(s) and copy %d art item(s)?\nA backup is made first.%s" % (
-            len(plan.changed_files()), len(plan.copies), ("\n\nWarnings:\n" + warn) if warn else "")
-        if not messagebox.askyesno(APP, msg):
-            return
-        try:
-            bdir = plan.apply()
-        except Exception as e:
-            messagebox.showerror(APP, "Writing failed: %s\n\n%s" % (e, traceback.format_exc()))
-            return
-        log.write("Written (backup %s)\n%s" % (bdir, plan.report()))
-        self.show_text("Done", plan.report() + "\n\nBackup: %s\nStart a NEW campaign to see the %s." % (
-            bdir, "changes" if self.editing() or self.map_only() else "faction"))
-        self.load()
+        self._apply_dialog(parts)
+
+    def _apply_dialog(self, parts):
+        """Several pieces of work wait: tick which to write (all by default)."""
+        w = tk.Toplevel(self)
+        w.title("Apply changes")
+        w.transient(self)
+        frm = ttk.Frame(w, padding=12)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, text="Changes not written yet - Apply writes the ticked ones, one after another, each with "
+                            "its own backup (Restore undoes each):", wraplength=560, justify="left").pack(anchor="w")
+        picks = []
+        for key, label in parts:
+            v = tk.BooleanVar(value=True)
+            try:
+                plan = self._part_plan(key)
+                note = "%d file(s)" % len(plan.changed_files()) + (
+                    "; warnings: " + "; ".join(m for _, m in plan.warnings) if plan.warnings else "")
+            except Exception as e:
+                note = "cannot be written: %s" % e
+                v.set(False)
+            ttk.Checkbutton(frm, text=label, variable=v).pack(anchor="w", pady=(6, 0))
+            ttk.Label(frm, text=note, foreground="#666", wraplength=540, justify="left").pack(anchor="w", padx=(24, 0))
+            picks.append((key, label, v))
+
+        def go():
+            chosen = [(k, l) for k, l, v in picks if v.get()]
+            w.destroy()
+            if chosen:
+                self._write([(k, l, None) for k, l in chosen])
+        bar = ttk.Frame(frm)
+        bar.pack(anchor="e", pady=(12, 0))
+        ttk.Button(bar, text="Apply", command=go).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+
+    def _write(self, parts):
+        """Write [(key, label, plan or None)] in order; a plan left None is built just
+        before it is written, on the files as the pieces before it left them."""
+        done, failed, applied = [], None, set()
+        for key, label, plan in parts:
+            try:
+                ed = self.editors.get(key)
+                if ed is not None and ed.dirty() and ed._signature() != getattr(ed, "_sig", None):
+                    raise ValueError("%s changed on the disk since the editor read it - its changes cannot be "
+                                     "placed; they stay for you to redo" % os.path.basename(ed.path()))
+                if plan is None:
+                    plan = self._part_plan(key)
+                bdir = plan.apply()
+            except Exception as e:
+                failed = "%s: %s" % (label or key, e)
+                log.write("Writing failed: %s\n%s" % (failed, traceback.format_exc()))
+                break
+            applied.add(key)
+            log.write("Written (backup %s)\n%s" % (bdir, plan.report()))
+            done.append("%s%s\n\nBackup: %s" % (("=" * 70 + "\n%s\n" % label + "=" * 70 + "\n") if label and
+                                                 len(parts) > 1 else "", plan.report(), bdir))
+        for key in applied:                            # written: the editor starts clean on the new files
+            if key in self.editors:
+                self.editors[key].mod = None
+        text = "\n\n".join(done)
+        if failed:
+            text = "Writing stopped - %s\n\n%s" % (failed, text or "nothing was written.")
+            messagebox.showerror(APP, "Writing failed: %s" % failed)
+        if done:
+            text += "\n\nStart a NEW campaign to see the changes."
+            self.show_text("Done" if not failed else "Written in part", text)
+            self.load()
 
     def check(self):
         """Read every file the tool uses and report; the deep check also rehearses the
@@ -2604,7 +2870,18 @@ class App(tk.Tk):
         wait()
 
     def _log_status(self):
-        """Status lines go to the log, but one of a kind in a row (painting sends many)."""
+        """Status lines go to the log, but one of a kind in a row (painting sends many).
+        The work buttons' * (changes waiting) is brought up to date soon after."""
+        if not getattr(self, "_mark_queued", False):
+            self._mark_queued = True
+
+            def mark():
+                self._mark_queued = False
+                try:
+                    self._mark_work()
+                except Exception:
+                    pass
+            self.after(300, mark)
         text = self.status.get()
         shape = re.sub(r"\d+", "#", text)
         if text and shape != getattr(self, "_last_status_shape", None):

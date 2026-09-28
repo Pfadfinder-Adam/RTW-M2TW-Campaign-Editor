@@ -384,6 +384,74 @@ class ToolTest(unittest.TestCase):
         self.assertIn("ui/units/beta/#alpha_general.tga", left)
         self.assertNotIn("ui/units/alpha/#alpha_general.tga", left)     # unchanged: the game has it
 
+    def test_new_mod_on_medieval2_goes_into_mods_with_a_cfg(self):
+        game = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, game)
+        write(os.path.join(game, "medieval2.exe"), "exe")
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "data"))
+        data, st = create_mod(os.path.join(game, "data"), "Beta")
+        target = os.path.join(game, "mods", "Beta")
+        self.assertEqual(data, os.path.join(target, "data"))
+        with open(os.path.join(target, "Beta.cfg"), "rb") as f:
+            self.assertIn(b"mod = mods/Beta", f.read())
+        with open(os.path.join(target, "Start_Beta.bat"), "rb") as f:
+            self.assertIn(b"medieval2.exe @mods\\Beta\\Beta.cfg", f.read())
+        # a mod made from that one: its own folder name in the .cfg it copies
+        with open(os.path.join(target, "Beta.cfg"), "ab") as f:
+            f.write(b"[game]\r\nunit_size = huge\r\n")
+        data2, _ = create_mod(data, "Gamma")
+        with open(os.path.join(game, "mods", "Gamma", "Gamma.cfg"), "rb") as f:
+            text = f.read()
+        self.assertIn(b"mod = mods/Gamma", text)
+        self.assertIn(b"unit_size = huge", text)
+        self.assertFalse(os.path.exists(os.path.join(game, "mods", "Gamma", "Beta.cfg")))
+        self.assertEqual(data2, os.path.join(game, "mods", "Gamma", "data"))
+
+    def test_editor_lists_sort_and_filter_by_what_a_record_is(self):
+        from faction_tool import editors as E
+        from faction_tool.factionart import label_of, where_shown
+        edu = ("type\t\tmerc spear\ndictionary\tmerc_spear\ncategory\tinfantry\nclass\t\tspearmen\n"
+               "attributes\tsea_faring, mercenary_unit\nownership\tslave, alpha\n"
+               "type\t\tbeta horse\ndictionary\tbeta_horse\ncategory\tcavalry\nclass\t\theavy\n"
+               "attributes\tgeneral_unit\nownership\tbeta\n")
+        edb = ("building temple_of_war\n{\n    levels shrine\n    {\n        shrine requires factions { beta, }\n"
+               "        {\n            capability\n            {\n                recruit \"beta horse\"  0\n"
+               "            }\n        }\n    }\n}\nbuilding market\n{\n    levels stall\n    {\n"
+               "        stall requires factions { alpha, beta, }\n        {\n        }\n    }\n}\n")
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), edu)
+        write(os.path.join(d, "export_descr_buildings.txt"), edb)
+        mod = ModData(d)
+        f = mod.load(mod.file("edu"))
+        a, b = E.unit_blocks(f)
+        self.assertEqual(E.block_facets(f, "unit", a), {"owners": ["slave", "alpha"], "category": "infantry",
+                                                        "class": "spearmen", "mercenary": True, "general": False})
+        self.assertTrue(E.block_facets(f, "unit", b)["general"])
+        g = mod.load(mod.file("edb"))
+        temple, market = E.building_blocks(g)
+        self.assertEqual(E.block_facets(g, "building", temple), {"factions": ["beta"], "recruits": True,
+                                                                 "group": "temple"})
+        self.assertEqual(E.block_facets(g, "building", market)["group"], "economy")
+        # the Art tab names every picture and says where the game shows it
+        self.assertEqual(label_of("menu/battlefield_pics/france.tga"), "battle-select picture")
+        self.assertEqual(label_of("world/maps/campaign/imperial_campaign/vc_france.tga"), "victory conditions map")
+        self.assertIn("faction-select screen", where_shown("menu/fe_faction_units/france.tga"))
+        self.assertEqual(label_of("ui/faction_symbols/france_roll.tga"), "faction symbol (in-game panels) (mouse over)")
+
+    def test_map_drawn_tile_by_tile(self):
+        from faction_tool.mapdata import CampaignMap, GROUND_LOOK
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        hills, sea = (128, 128, 64), (64, 0, 0)
+        # map_ground_types at 2x+1: the middle of tile (1, 2) is hills, the rest sea
+        px = [[hills if (x, y) == (3, 5) else sea for x in range(9)] for y in range(9)]     # bottom-up
+        write_tga(os.path.join(camp, "map_ground_types.tga"), 9, 9, px)
+        cm = CampaignMap(ModData(os.path.join(self.root, "data")), "test")
+        im = cm.background(tiles=True)
+        self.assertEqual(im.size, (8, 8))
+        # tile (1, 2) is the 2x2 block at column 2, row (4 - 1 - 2) * 2 top-down
+        self.assertEqual({im.getpixel((2 + dx, 2 + dy)) for dx in (0, 1) for dy in (0, 1)}, {GROUND_LOOK[hills]})
+        self.assertEqual(im.getpixel((0, 0)), GROUND_LOOK[sea])
+
     def test_garrisons_by_hand(self):
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         # a third, empty rebel town C_R (green) to the right of the map

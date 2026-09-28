@@ -66,8 +66,8 @@ class RosterEditor(ttk.Frame):
         tv.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         tv.pack(fill="both", expand=True)
-        tv.tag_configure("give", background="#d9f2d0")
-        tv.tag_configure("take", background="#f4c7c3")
+        tv.tag_configure("give", background="#d9f2d0", foreground="#000000")
+        tv.tag_configure("take", background="#f4c7c3", foreground="#000000")
         tv.tag_configure("no", foreground="#888")
         tv.bind("<Double-1>", lambda e, tv=tv: self.toggle(tv))
         return tv

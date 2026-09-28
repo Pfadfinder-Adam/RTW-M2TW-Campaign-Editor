@@ -60,8 +60,12 @@ class GarrisonEditor(ttk.Frame):
         self.cb_cat = ttk.Combobox(top, textvariable=self.v_cat, values=["all"], state="readonly", width=12)
         self.cb_cat.pack(side="left", padx=4)
         self.cb_cat.bind("<<ComboboxSelected>>", lambda e: self.fill_roster())
-        self.v_merc = tk.BooleanVar(value=False)
-        ttk.Checkbutton(top, text="mercenaries", variable=self.v_merc, command=self.fill_roster).pack(side="left", padx=8)
+        # whose units: the faction's own, the mercenaries it may hire, or both
+        self.v_whose = tk.StringVar(value="own units")
+        cb = ttk.Combobox(top, textvariable=self.v_whose, values=["own units", "mercenaries", "own + mercenaries"],
+                          state="readonly", width=16)
+        cb.pack(side="left", padx=8)
+        cb.bind("<<ComboboxSelected>>", lambda e: self.fill_roster())
         self.v_gen = tk.BooleanVar(value=False)
         ttk.Checkbutton(top, text="general's units", variable=self.v_gen, command=self.fill_roster).pack(side="left")
 
@@ -143,15 +147,23 @@ class GarrisonEditor(ttk.Frame):
     def visible(self):
         cat = self.v_cat.get()
         out = []
+        owners = self._owners()
         for u in self.units:
             if cat != "all" and u.category != cat:
                 continue
-            if u.mercenary and not self.v_merc.get():
+            whose = self.v_whose.get()
+            own = not u.mercenary or bool(owners & set(u.ownership))
+            if not own and whose == "own units" or not u.mercenary and whose == "mercenaries":
                 continue
             if u.general and not self.v_gen.get():
                 continue
             out.append(u)
         return sorted(out, key=lambda u: (u.category, u.upkeep, u.type))
+
+    def _owners(self):
+        """The names an ownership line lets this faction in by: its own, its culture, all."""
+        culture = dict(self.mod.factions()).get(self.faction) if self.mod and self.faction else None
+        return {x for x in (self.faction, culture, "all") if x}
 
     def fill_roster(self):
         for w in self.roster.winfo_children():

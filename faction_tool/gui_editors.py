@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from . import editors as E
+from . import theme
 from .moddata import ModData
 from .plan import Plan
 
@@ -35,6 +36,22 @@ class RecordEditor(ttk.Frame):
         e = ttk.Entry(side, textvariable=self.v_find, width=32)
         e.pack(fill="x", pady=(2, 4))
         e.bind("<KeyRelease>", lambda ev: self.fill_list())
+        fl = ttk.Frame(side)
+        fl.pack(fill="x", pady=(0, 4))
+        ttk.Label(fl, text="Show", width=5).grid(row=0, column=0, sticky="w")
+        self.v_show = tk.StringVar(value="all")
+        self.cb_show = ttk.Combobox(fl, textvariable=self.v_show, values=["all"], state="readonly", width=26)
+        self.cb_show.grid(row=0, column=1, sticky="we")
+        self.cb_show.bind("<<ComboboxSelected>>", lambda ev: self.fill_list())
+        ttk.Label(fl, text="Sort", width=5).grid(row=1, column=0, sticky="w", pady=(2, 0))
+        self.v_sort = tk.StringVar(value="file order")
+        sorts = ["file order", "name", "owner", "category", "class"] if kind == "unit" else \
+            ["file order", "name", "who may build", "type"]
+        ttk.Combobox(fl, textvariable=self.v_sort, values=sorts, state="readonly", width=26).grid(
+            row=1, column=1, sticky="we", pady=(2, 0))
+        fl.winfo_children()[-1].bind("<<ComboboxSelected>>", lambda ev: self.fill_list())
+        fl.columnconfigure(1, weight=1)
+        self.facets = {}
         self.lb = tk.Listbox(side, width=34, exportselection=False)
         self.lb.pack(fill="both", expand=True)
         self.lb.bind("<<ListboxSelect>>", lambda ev: self.show())
@@ -86,11 +103,13 @@ class RecordEditor(ttk.Frame):
         self.adds, self.removes = [], set()
         self._recruits = self._required = self._limits = None      # read from the file when first asked
         p = self.path()
+        self._sig = self._signature()
         if not p:
             self.blocks = []
         else:
             f = mod.load(p)
             self.blocks = E.unit_blocks(f) if self.kind == "unit" else E.building_blocks(f)
+        self._fill_filters()
         self.fill_list()
         for w in self.form.winfo_children():
             w.destroy()
@@ -99,14 +118,100 @@ class RecordEditor(ttk.Frame):
         self.title.configure(text="Pick one on the left" if self.blocks else "No %s in this mod" % (
             "export_descr_unit.txt" if self.kind == "unit" else "export_descr_buildings.txt"))
 
+    def _fill_filters(self):
+        """The Show list: by owner (faction or culture), by kind, mercenaries apart."""
+        self.facets = {}
+        if not self.blocks:
+            self.cb_show["values"] = ["all"]
+            self.v_show.set("all")
+            return
+        f = self.mod.load(self.path())
+        for blk in self.blocks:
+            try:
+                self.facets[blk[1]] = E.block_facets(f, self.kind, blk)
+            except Exception:                     # a broken block is still listed, only not sorted
+                self.facets[blk[1]] = {}
+        facs = self.mod.factions()
+        cultures = sorted({c for _, c in facs if c})
+        if self.kind == "unit":
+            vals = ["all", "mercenaries only", "no mercenaries", "general's units"]
+            vals += ["faction: %s" % n for n, _ in facs]
+            vals += ["culture: %s" % c for c in cultures]
+            vals += ["category: %s" % c for c in sorted({x.get("category") for x in self.facets.values()} - {"", None})]
+            vals += ["class: %s" % c for c in sorted({x.get("class") for x in self.facets.values()} - {"", None})]
+        else:
+            vals = ["all", "recruit units", "no recruiting"]
+            vals += ["type: %s" % g for g, _ in E.CHAIN_GROUPS + (("other", ()),)]
+            vals += ["faction: %s" % n for n, _ in facs]
+            vals += ["culture: %s" % c for c in cultures]
+        self.cb_show["values"] = vals
+        if self.v_show.get() not in vals:
+            self.v_show.set("all")
+        self._cultures = dict(facs)
+
+    def _passes(self, blk):
+        want = self.v_show.get()
+        if want == "all":
+            return True
+        fc = self.facets.get(blk[1]) or {}
+        kind, _, what = want.partition(": ")
+        if self.kind == "unit":
+            if want == "mercenaries only":
+                return fc.get("mercenary", False)
+            if want == "no mercenaries":
+                return not fc.get("mercenary", False)
+            if want == "general's units":
+                return fc.get("general", False)
+            owners = fc.get("owners", [])
+            if kind == "faction":
+                c = self._cultures.get(what)
+                return what in owners or (c and c in owners) or "all" in owners
+            if kind == "culture":
+                return what in owners or "all" in owners
+            return fc.get(kind) == what
+        if want == "recruit units":
+            return fc.get("recruits", False)
+        if want == "no recruiting":
+            return not fc.get("recruits", True)
+        if kind == "type":
+            return fc.get("group") == what
+        facs = fc.get("factions")
+        if facs is None:
+            return True                               # every faction may build it
+        if kind == "faction":
+            c = self._cultures.get(what)
+            return what in facs or (c and c in facs) or "all" in facs
+        return what in facs or "all" in facs
+
+    def _sort_key(self, blk):
+        how = self.v_sort.get()
+        fc = self.facets.get(blk[1]) or {}
+        name = blk[0].lower()
+        if how == "name":
+            return (name,)
+        if how == "owner":
+            return (", ".join(fc.get("owners", [])), name)
+        if how in ("category", "class"):
+            return (fc.get(how, ""), name)
+        if how == "who may build":
+            facs = fc.get("factions")
+            return ("everyone" if facs is None else ", ".join(facs), name)
+        if how == "type":
+            return (fc.get("group", ""), name)
+        return (blk[1],)
+
     def fill_list(self):
         q = self.v_find.get().strip().lower()
-        self.shown = [b for b in self.blocks if not q or q in b[0].lower()]
+        self.shown = [b for b in self.blocks if (not q or q in b[0].lower()) and self._passes(b)]
+        if self.v_sort.get() != "file order":
+            self.shown.sort(key=self._sort_key)
         self.lb.delete(0, "end")
         for name, a, b in self.shown:
             mark = " *" if any(a <= ln < b for ln in list(self.changes) + list(self.removes)) or \
                 any(op["at"] == a for op in self.adds) else ""
-            self.lb.insert("end", name + mark)
+            key = self._sort_key((name, a, b))
+            note = "   [%s]" % (key[0] or "-") if self.v_sort.get() not in ("file order", "name") else ""
+            self.lb.insert("end", name + mark + note)
         for src, new, _ in self.copy_ops:
             self.lb.insert("end", "%s  (new, from %s - on Apply)" % (new, src))
         self.lbl_count.configure(text="%d of %d" % (len(self.shown), len(self.blocks)))
@@ -141,7 +246,7 @@ class RecordEditor(ttk.Frame):
                 for text in lines:
                     ttk.Label(self.form, text="+ new", foreground="#2a7a1f", font=("", 9, "bold")).grid(
                         row=row, column=1, sticky="w", padx=(0, 8))
-                    tk.Label(self.form, text=text.expandtabs(4).strip(), anchor="w", background=ADDED,
+                    tk.Label(self.form, text=text.expandtabs(4).strip(), anchor="w", background=ADDED, foreground="#000000",
                              font=("", 9)).grid(row=row, column=2, sticky="we", pady=1)
                     if text.strip() == self.adds[n]["text"].strip():
                         tk.Button(self.form, text="x", command=lambda n=n: self.drop_add(n), **SMALL).grid(
@@ -155,7 +260,8 @@ class RecordEditor(ttk.Frame):
                       ("", 9, "bold")).grid(row=row, column=1, sticky="w", padx=(0, 8))
             v = tk.StringVar(value=self.changes.get(fd.line, fd.value))
             e = tk.Entry(self.form, textvariable=v, width=90,
-                         background=REMOVED if gone else CHANGED if fd.line in self.changes else "white")
+                         background=REMOVED if gone else CHANGED if fd.line in self.changes else theme.field(),
+                         foreground="#000000" if gone or fd.line in self.changes else theme.palette()["fg"])
             e.grid(row=row, column=2, sticky="we", pady=1)
             v.trace_add("write", lambda *x, fd=fd, v=v, e=e: self.edited(fd, v.get(), e))
             why = E.removable(self.kind, fd, self.tree, self.required())
@@ -205,10 +311,10 @@ class RecordEditor(ttk.Frame):
     def edited(self, fd, value, entry):
         if value.strip() == fd.value:
             self.changes.pop(fd.line, None)
-            entry.configure(background="white")
+            entry.configure(background=theme.field(), foreground=theme.palette()["fg"])
         else:
             self.changes[fd.line] = value
-            entry.configure(background=CHANGED)
+            entry.configure(background=CHANGED, foreground="#000000")
         self.app.status.set("%d field(s) changed in %s - Preview, then Apply." % (
             len(self.changes), os.path.basename(self.path())))
 
@@ -589,6 +695,36 @@ class RecordEditor(ttk.Frame):
     # ---- writing ----
     def dirty(self):
         return bool(self.changes or self.imports or self.copy_ops or self.adds or self.removes)
+
+    def pending(self):
+        """How many changes wait for Apply here."""
+        return len(self.changes) + len(self.imports) + len(self.copy_ops) + len(self.adds) + len(self.removes)
+
+    def _signature(self):
+        """What the file is now (its bytes' md5): the changes wait on the lines as they were read."""
+        import hashlib
+        p = self.path()
+        try:
+            with open(p, "rb") as fh:
+                return hashlib.md5(fh.read()).hexdigest()
+        except (OSError, TypeError):
+            return None
+
+    def rebind(self, mod):
+        """The window loaded the mod again (after an Apply, say). Changes waiting here are
+        kept while the file they sit on is unchanged; else the editor reads it again and
+        they go (their line numbers would be wrong). Returns how many were dropped."""
+        if self.mod is not None and self.dirty() and mod.data == self.mod.data:
+            old = self.mod
+            self.mod = mod
+            if self._signature() == getattr(self, "_sig", None):
+                return 0
+            self.mod = old
+            n = self.pending()
+            self.load(mod)
+            return n
+        self.load(mod)
+        return 0
 
     def _check(self, mod, f, changes):
         """Nothing is written while a changed or added line names what the mod has not

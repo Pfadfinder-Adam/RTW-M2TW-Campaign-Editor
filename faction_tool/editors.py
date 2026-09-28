@@ -61,6 +61,62 @@ def building_blocks(f):
     return out
 
 
+# what a chain is for, by the words in its name (vanilla and HLR names; the rest is 'other')
+CHAIN_GROUPS = (("guild", ("guild", "chapter_house")),
+                ("temple", ("temple", "shrine", "church", "mosque", "cathedral", "abbey", "religi")),
+                ("economy", ("market", "farm", "road", "mine", "caravan", "trade", "smith", "hinterland",
+                             "tavern", "merchant", "bank", "sewer", "health", "bath", "paved")),
+                ("military", ("barracks", "equestrian", "missiles", "siege", "stables", "range", "military",
+                              "cannon", "gun", "tower", "port", "shipwright", "dock", "academy", "tourney")),
+                ("walls and core", ("core", "defenses", "wall", "castle", "citadel")),
+                ("culture and law", ("academic", "amphitheat", "theatre", "law", "university", "school",
+                                     "brothel", "arena", "palace", "library", "hall", "music")))
+
+
+def chain_group(name):
+    n = name.lower()
+    for group, words in CHAIN_GROUPS:
+        if any(w in n for w in words):
+            return group
+    return "other"
+
+
+def block_facets(f, kind, block):
+    """What the editors' lists sort and filter by. A unit: {'owners', 'category',
+    'class', 'mercenary', 'general'}; a building chain: {'factions' (None = everyone),
+    'recruits', 'group'}."""
+    name, a, b = block
+    if kind == "unit":
+        out = {"owners": [], "category": "", "class": "", "mercenary": False, "general": False}
+        for i in range(a, b):
+            t = strip_comment(f.text(i)).split(None, 1)
+            if not t:
+                continue
+            rest = t[1].strip() if len(t) > 1 else ""
+            if t[0] == "ownership":
+                out["owners"] = [x for x in rest.replace(",", " ").split() if x]
+            elif t[0] in ("category", "class"):
+                out[t[0]] = rest
+            elif t[0] == "attributes":
+                attrs = [x.strip() for x in rest.split(",")]
+                out["mercenary"] = "mercenary_unit" in attrs
+                out["general"] = any(x.startswith("general_unit") for x in attrs)
+        return out
+    from .roster import factions_in
+    facs, everyone, recruits = set(), False, False
+    for lv in chain_tree(f, a, b)["levels"]:
+        names = factions_in(f.text(lv["head"]))
+        if names is None:
+            everyone = True
+        else:
+            facs.update(names)
+    for i in range(a, b):
+        if tokens(f.text(i))[:1] == ["recruit"] or tokens(f.text(i))[:1] == ["recruit_pool"]:
+            recruits = True
+            break
+    return {"factions": None if everyone else sorted(facs), "recruits": recruits, "group": chain_group(name)}
+
+
 def chain_tree(f, start, end):
     """The shape of a building chain's block [start, end):
     {'levels_line': i, 'levels': [{'name', 'head', 'open', 'close',

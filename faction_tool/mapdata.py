@@ -108,13 +108,68 @@ class CampaignMap:
         return out
 
     # ---- pictures (top-down, as Pillow draws them) ----
-    def background(self):
+    def background(self, tiles=False, relief=False, rivers=False):
         """The map drawn from map_ground_types.tga - each tile's terrain type, the
         information that matters here (the game's painted radar map is left alone
-        by choice). Returned at 2 px per tile."""
-        if self._background is None:
-            self._background = self._drawn().resize((2 * self.w, 2 * self.h), Image.BILINEAR)
-        return self._background
+        by choice). Returned at 2 px per tile. tiles: every tile one square in the
+        colour of the ground at its middle (what the tool checks); relief: shaded
+        from map_heights.tga; rivers: map_features.tga's rivers, fords and cliffs."""
+        key = (bool(tiles), bool(relief), bool(rivers))
+        cache = self.__dict__.setdefault("_backgrounds", {})
+        if key not in cache:
+            size = (2 * self.w, 2 * self.h)
+            im = self._tiles() if tiles else self._drawn()
+            im = im.resize(size, Image.NEAREST if tiles else Image.BILINEAR)
+            if relief:
+                im = self._relief(im)
+            if rivers:
+                im = self._rivers(im, tiles)
+            cache[key] = im
+        return cache[key]
+
+    def _tiles(self):
+        """One pixel per tile, top-down, in its ground's colour (the tile's middle)."""
+        im = Image.new("RGB", (self.w, self.h))
+        data = []
+        for y in range(self.h - 1, -1, -1):
+            for x in range(self.w):
+                g = self.ground_at(x, y)
+                if g is None:
+                    data.append((60, 95, 140) if self.region_at(x, y) is None else (170, 160, 110))
+                else:
+                    data.append(GROUND_LOOK.get(g, (150, 150, 150)))
+        im.putdata(data)
+        return im
+
+    def _pil(self, name):
+        """A campaign map file as a top-down Pillow picture, or None."""
+        t = self.mod._optional_map(self.campaign, name)
+        if t is None:
+            return None
+        im = Image.new("RGB", (t.width, t.height))
+        im.putdata(t.pixels)
+        return im.transpose(Image.FLIP_TOP_BOTTOM)
+
+    def _relief(self, im):
+        """Hills lit from the north-west, the valleys in shade (map_heights.tga)."""
+        from PIL import ImageFilter
+        h = self._pil("map_heights.tga")
+        if h is None:
+            return im
+        h = h.convert("L").resize(im.size, Image.BILINEAR)
+        shade = h.filter(ImageFilter.EMBOSS).convert("RGB")      # 128 = flat
+        lit = ImageChops.overlay(im, shade) if hasattr(ImageChops, "overlay") else ImageChops.multiply(im, shade)
+        return Image.blend(im, lit, 0.55)
+
+    def _rivers(self, im, tiles):
+        """map_features.tga's non-black tiles (rivers, fords, cliffs) drawn in blue."""
+        f = self._pil("map_features.tga")
+        if f is None or f.size != (self.w, self.h):
+            return im
+        mask = f.convert("L").point(lambda v: 255 if v else 0).resize(im.size, Image.NEAREST)
+        if not tiles:
+            mask = mask.point(lambda v: 190 if v else 0)          # the terrain shows a little through
+        return Image.composite(Image.new("RGB", im.size, (50, 105, 200)), im, mask)
 
     def _drawn(self):
         g = self.ground
@@ -206,7 +261,7 @@ class CampaignMap:
         self._regions_layers = (key, im)
         return im
 
-    def political(self, owners, colours, highlight=None, alpha=160, borders=True, painted=None):
+    def political(self, owners, colours, highlight=None, alpha=205, borders=True, painted=None):
         """RGBA, 1 px per tile: each region in its owner's primary colour, see-through,
         borders darker (unless borders is False); the highlighted faction a little
         stronger. painted {(x, y): region}: tiles given to another region, in its
@@ -226,7 +281,7 @@ class CampaignMap:
                     shade += [0, 0, 0, 0]
                     continue
                 rgb = REBELS if owner == "slave" else colours.get(owner, REBELS)
-                a = min(255, alpha + 60) if owner == highlight else alpha
+                a = min(255, alpha + 40) if owner == highlight else alpha
                 if owner == "slave":
                     a = alpha // 4                   # rebel land barely tinted: the factions stand out
                 flat += list(rgb) + [a]
@@ -250,12 +305,12 @@ class CampaignMap:
                         px[x, self.h - 1 - y] = (0, 0, 0, 0)
                         continue
                     rgb = REBELS if owner == "slave" else colours.get(owner, REBELS)
-                    a = min(255, alpha + 60) if owner == highlight else (alpha // 4 if owner == "slave" else alpha)
+                    a = min(255, alpha + 40) if owner == highlight else (alpha // 4 if owner == "slave" else alpha)
                     px[x, self.h - 1 - y] = tuple(rgb) + (a,)
         self._political = {key: im}
         return im
 
-    def _political_slow(self, owners, colours, highlight=None, alpha=160):
+    def _political_slow(self, owners, colours, highlight=None, alpha=205):
         """The same, pixel by pixel (kept as the reference the fast one is tested against)."""
         key = (tuple(sorted(owners.items())), tuple(sorted(colours.items())), highlight, alpha)
         img = self.regions_img
@@ -265,7 +320,7 @@ class CampaignMap:
             if col is None:
                 continue
             rgb = REBELS if owner == "slave" else colours.get(owner, REBELS)
-            a = min(255, alpha + 60) if owner == highlight else alpha
+            a = min(255, alpha + 40) if owner == highlight else alpha
             if owner == "slave":
                 a = alpha // 4                   # rebel land barely tinted: the factions stand out
             fill[col] = rgb + (a,)

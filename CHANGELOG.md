@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.6.0 - 2026-09-28
+
+### New
+- **One Apply for all the work waiting**: a `*` on the work buttons marks changes not written
+  yet (Edit faction, Unit editor, Building editor). When several hold changes, Apply lists them
+  with ticks and writes them one after another - the editors first, then the faction and the
+  map - each with its own backup; Preview shows them all. Changes in an editor now survive an
+  Apply elsewhere (they are dropped, with a message, only when their own file was written).
+  Picking another faction in Edit with changes not written asks: apply, drop, or stay.
+- **Dark theme** (Dark / Light at the right of the work bar, kept for the next start).
+- **Tabs stand out**: bigger, bold, the open one coloured like the work bar's button.
+- **Map**: the ground tile by tile (one square = one tile), relief from map_heights, rivers,
+  fords and cliffs from map_features, a tile grid when zoomed in (Layers menu, kept); denser
+  political colours; a new region's land, town and port show on the normal map until Apply.
+- **Unit / Building editor lists**: Show (a faction, a culture, a category, a class,
+  mercenaries only / none, general's units; building chains by who may build them, their kind,
+  recruiting or not) and Sort (name, owner, category, class; who may build, kind).
+- **Units & armies**: own units / mercenaries / own + mercenaries next to the category;
+  the armies, agents & fleets list filters by kind and sorts by a click on a heading.
+- **Art tab**: the campaign-select map shown up to twice as big, the pictures in as many
+  columns as fit; every picture named (battle-select picture, units picture on the faction
+  screen, symbol on the faction screen, faction symbol, victory conditions map...) with where
+  the game shows it.
+- **Medieval II mods**: New mod folder makes `<game>/mods/<name>` with `<name>.cfg`
+  (`[features] mod = mods/<name>`, the base mod's own .cfg when it has one) and a
+  `Start_<name>.bat` that starts the game with it.
+
+### Changed
+- New region: "Resources" is now **Region tags (hidden resources)**, explained (descr_regions
+  line 6: what buildings' `resource` / `hidden_resource` requirements ask for, not the goods
+  on the map), with the tags the mod uses listed.
+- New mod folder says plainly what the linked files are: full size in Explorer, no disk space,
+  deleting the folder never touches the game.
+- Undo no longer reaches back into the faction edited before.
+
 ## 0.5.0 - 2026-09-28
 
 ### New

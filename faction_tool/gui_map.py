@@ -7,6 +7,7 @@ from tkinter import ttk
 
 from PIL import Image, ImageTk
 
+from . import theme
 from .mapdata import REBELS
 
 ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels per tile
@@ -31,6 +32,18 @@ class MapView(ttk.Frame):
         self.v_res = tk.BooleanVar(value=False)
         self.v_dip = tk.BooleanVar(value=False)
         self.v_regions = tk.BooleanVar(value=False)
+        # how the ground is drawn (kept between starts): tile by tile, relief, rivers, the tile grid up close
+        from . import settings
+        look = settings.get("map_look") or {}
+        self.v_tiles = tk.BooleanVar(value=bool(look.get("tiles", False)))
+        self.v_relief = tk.BooleanVar(value=bool(look.get("relief", True)))
+        self.v_rivers = tk.BooleanVar(value=bool(look.get("rivers", True)))
+        self.v_grid = tk.BooleanVar(value=bool(look.get("grid", True)))
+
+        def look_changed():
+            settings.put("map_look", {"tiles": self.v_tiles.get(), "relief": self.v_relief.get(),
+                                      "rivers": self.v_rivers.get(), "grid": self.v_grid.get()})
+            self.render()
         relayer = lambda: self.on_layers() if self.on_layers else self.render()
         lb = ttk.Menubutton(bar, text="Layers")
         lm = tk.Menu(lb, tearoff=False)
@@ -39,6 +52,12 @@ class MapView(ttk.Frame):
                                 ("Characters", self.v_chars, self.render), ("Resources", self.v_res, relayer),
                                 ("Diplomacy colours", self.v_dip, relayer)):
             lm.add_checkbutton(label=label, variable=var, command=cmd)
+        lm.add_separator()
+        for label, var in (("Ground tile by tile (one square = one tile)", self.v_tiles),
+                           ("Relief (map_heights)", self.v_relief),
+                           ("Rivers, fords, cliffs (map_features)", self.v_rivers),
+                           ("Tile grid when zoomed in", self.v_grid)):
+            lm.add_checkbutton(label=label, variable=var, command=look_changed)
         lb["menu"] = lm
         lb.pack(side="left")
         # the two modes that change what a click does, as switches of their own
@@ -162,12 +181,12 @@ class MapView(ttk.Frame):
 
             def head(text):
                 y[0] += 6
-                lc.create_text(8, y[0], text=text, anchor="w", font=("", 9, "bold"), fill="#333")
+                lc.create_text(8, y[0], text=text, anchor="w", font=("", 9, "bold"), fill=theme.palette()["fg"])
                 y[0] += 20
 
             def row(text, draw):
                 draw(22, y[0])
-                lc.create_text(44, y[0], text=text, anchor="w", font=("", 9), fill="#222")
+                lc.create_text(44, y[0], text=text, anchor="w", font=("", 9), fill=theme.palette()["fg"])
                 y[0] += 24
 
             def town(fill, outline, width, hollow=False):
@@ -227,7 +246,8 @@ class MapView(ttk.Frame):
                         lc.create_text(x, yy, text=k[:2].capitalize(), font=("", 8, "bold"))
                     row(k, d)
                 if not kinds:
-                    lc.create_text(8, y[0], text="(tick Edit resources to see them)", anchor="w", fill="#666")
+                    lc.create_text(8, y[0], text="(tick Edit resources to see them)", anchor="w",
+                                   fill=theme.palette()["muted"])
                     y[0] += 20
             lc.configure(scrollregion=(0, 0, 250, y[0] + 10))
         finally:
@@ -239,7 +259,7 @@ class MapView(ttk.Frame):
              places=None, check_place=None, on_place_move=None,
              region_mode=False, paint_overlay=None, on_paint=None, on_pick=None, brush=1, region_points=(),
              region_painted=None, region_colours=None, borders=True, ghost=None, locked=None,
-             resources=None, check_res=None, on_res_move=None, on_res_click=None, res_sel=None):
+             resources=None, check_res=None, on_res_move=None, on_res_click=None, res_sel=None, new_land=None):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
@@ -259,6 +279,8 @@ class MapView(ttk.Frame):
         self.region_mode, self.paint_overlay = region_mode, dict(paint_overlay or {})
         self.on_paint, self.on_pick, self.brush = on_paint, on_pick, brush
         self.region_points = list(region_points)
+        # outside the Regions mode: the land of new regions {(x, y): rgb}, drawn until Apply
+        self.new_land = dict(new_land or {})
         # the window's own dict: a stroke shows as soon as it ends
         self.region_painted = region_painted if region_painted is not None else {}
         self.region_colours, self.borders = dict(region_colours or {}), borders
@@ -362,6 +384,8 @@ class MapView(ttk.Frame):
         self._photo = ImageTk.PhotoImage(pic)
         c.create_image(0, 0, anchor="nw", image=self._photo, tags=("bg",))
         self._drawn_at = (self.ox, self.oy)
+        if self.v_grid.get() and self.z >= 10:
+            self._grid(cw, ch)
         self._markers(cw, ch)
         key = (tuple(sorted({r["kind"] for r in self.resources})), self.v_res.get())
         if key != getattr(self, "_legend_key", None):
@@ -390,11 +414,14 @@ class MapView(ttk.Frame):
     def _base(self):
         """The background with the political colours laid on, at 2 px per tile,
         made again only when the colours change - moving the map only crops it."""
-        bg = self.cmap.background()
+        bg = self.cmap.background(self.v_tiles.get(), self.v_relief.get(), self.v_rivers.get())
+        land = () if self.region_mode else tuple(sorted(self.new_land.items()))
         if self.region_mode:
             pol = self.cmap.regions_layer(self.region_painted, self.region_colours, borders=self.v_borders.get())
-        elif not self.v_pol.get() and not self.v_borders.get():
+        elif not self.v_pol.get() and not self.v_borders.get() and not land:
             return bg
+        elif not self.v_pol.get() and not self.v_borders.get():
+            pol = Image.new("RGBA", (self.cmap.w, self.cmap.h), (0, 0, 0, 0))
         else:
             if self.v_pol.get():
                 pol = self.cmap.political(self.owners, self.colours, self.faction, borders=self.v_borders.get(),
@@ -402,14 +429,37 @@ class MapView(ttk.Frame):
             else:                                   # the borders alone
                 pol = self.cmap.political(self.owners, self.colours, None, alpha=0, borders=True,
                                           painted=self.region_painted)
-        key = (id(bg), id(pol))
+        key = (id(bg), id(pol), land)
         if getattr(self, "_base_key", None) != key:
+            if land:                                    # a new region's land, in its colour, until Apply
+                pol = pol.copy()
+                px = pol.load()
+                for (x, y), rgb in land:
+                    if 0 <= x < pol.width and 0 <= y < pol.height:
+                        px[x, pol.height - 1 - y] = tuple(rgb) + (215,)
             over = pol.resize((pol.width * 2, pol.height * 2), Image.NEAREST)
             if over.size != bg.size:
                 over = over.resize(bg.size, Image.NEAREST)
             self._base_img = Image.alpha_composite(bg.convert("RGBA"), over).convert("RGB")
             self._base_key = key
         return self._base_img
+
+    def _grid(self, cw, ch):
+        """Thin lines between the tiles up close: what is placed or painted is one square."""
+        c, z = self.canvas, self.z
+        col = "#000000"
+        x0 = int(self.ox) - 1
+        while (x0 - self.ox) * z < cw:
+            sx = (x0 - self.ox) * z
+            if sx >= 0:
+                c.create_line(sx, 0, sx, ch, fill=col, stipple="gray50", tags=("grid",))
+            x0 += 1
+        y0 = int(self.oy) - 1
+        while (y0 - self.oy) * z < ch:
+            sy = (y0 - self.oy) * z
+            if sy >= 0:
+                c.create_line(0, sy, cw, sy, fill=col, stipple="gray50", tags=("grid",))
+            y0 += 1
 
     def _painted(self, cw, ch):
         """Tiles given to another region, in that region's colour, and the new towns and ports."""
@@ -443,7 +493,7 @@ class MapView(ttk.Frame):
 
     def _markers(self, cw, ch):
         c, cm = self.canvas, self.cmap
-        if self.region_mode:
+        if self.region_mode or self.region_points:       # new towns and ports show until Apply
             self._painted(cw, ch)
         size = max(3, min(self.z * 0.9, 60))           # a town fills its tile
         font = ("", 8 if self.z < 10 else 9)
