@@ -143,7 +143,10 @@ def select_background(mod, campaign):
     key = ("select_bg", campaign)
     if key in mod._cache:
         return mod._cache[key]
-    from PIL import Image
+    try:
+        from PIL import Image
+    except ImportError:                     # without Pillow (python + the standard library only): no drawing
+        return None
     folder = mod.campaign_dir(campaign)
     maps = []
     if os.path.isdir(folder):
@@ -176,11 +179,11 @@ def select_background(mod, campaign):
 
 def draw_select_map(mod, campaign, regions, colour):
     """Pillow RGB image: the background with the land of these regions lit in colour;
-    None when the campaign has no background to start from."""
-    from PIL import Image, ImageFilter
+    None when the campaign has no background to start from (or Pillow is missing)."""
     got = select_background(mod, campaign)
     if not got:
         return None
+    from PIL import Image, ImageFilter
     bg, _ = got
     img = mod.region_map(campaign)
     info = mod.regions(campaign)
