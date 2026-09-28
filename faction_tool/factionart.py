@@ -52,10 +52,13 @@ def label_of(rel):
         kind = "symbol"
     else:
         kind = "picture"
-    for part, word in (("_roll", " (mouse over)"), ("_select", " (selected)"), ("_grey", " (greyed out)")):
+    for part, word in (("_roll", " (mouse over)"), ("_select", " (selected)"), ("_grey", " (greyed out)"),
+                       ("_rebel", " (rebel)")):
         if part in name:
             kind += word
             break
+    if "/dead/" in low:
+        kind += " (dead)"
     return kind
 
 

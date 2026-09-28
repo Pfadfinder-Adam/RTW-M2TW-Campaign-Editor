@@ -182,6 +182,7 @@ class App(tk.Tk):
         # resources on the map: moved {index: (x, y)}, removed [index], added [{type, xy}], region tags {region: text}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         self._res_placing, self._res_sel = None, None
+        self.art_replace, self.sel_map = {}, {}      # Art tab: {path under data: picture}, {colour, off}
         self._region_point = None       # ('city' | 'port', region) waiting for a click
         self.undo_stack, self.redo_stack = [], []   # snapshots of what the window keeps (Ctrl+Z / Ctrl+Y)
         self.sizes = {}                 # {region: {'level', 'population'}} set by hand on the Buildings tab
@@ -407,6 +408,11 @@ class App(tk.Tk):
         self.nb.add(tab, text="  Diplomacy  ")
         self.dip_editor = DiplomacyEditor(tab)
         self.dip_editor.pack(fill="both", expand=True)
+        from .gui_art import ArtEditor
+        tab = ttk.Frame(self.nb)
+        self.nb.add(tab, text="  Art  ")
+        self.art_editor = ArtEditor(tab, self)
+        self.art_editor.pack(fill="both", expand=True)
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self.tab_opened())
         self._keys()
 
@@ -660,6 +666,9 @@ class App(tk.Tk):
         if tab == 4:
             self.load_diplomacy()
             return
+        if tab == 5:
+            self.art_editor.load()
+            return
         lb, load = {1: (self.lb_units, self.load_garrison), 2: (self.lb_build, self.load_buildings)}.get(tab, (None, None))
         if lb is not None and self.chosen and not lb.curselection():
             capital = self.v["capital"].get() or self.chosen[0]
@@ -733,6 +742,7 @@ class App(tk.Tk):
         self.update_actions()
         self.garrison_editor.auto_text = ("unchanged - the town keeps its garrison" if edit else None)
         self.chosen, self.garrisons, self.buildings_picked, self.sizes = [], {}, {}, {}
+        self.art_replace, self.sel_map = {}, {}
         self.editing_now = None
         self.char_moves = {}
         self.field, self._placing = [], None
@@ -812,7 +822,7 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ undo / redo
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "place_moves", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions",
-                 "res_moves", "res_removed", "res_added", "region_tags")
+                 "res_moves", "res_removed", "res_added", "region_tags", "art_replace", "sel_map")
 
     def snapshot(self):
         st = {k: copy.deepcopy(getattr(self, k)) for k in self.UNDO_KEYS}
@@ -1688,6 +1698,7 @@ class App(tk.Tk):
         self.region_religions = {}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         self._res_placing, self._res_sel, self._res_cache = None, None, None
+        self.art_replace, self.sel_map = {}, {}
         self._cmap_for = None                  # the map is read again: after Apply towns may stand elsewhere
         self.undo_stack, self.redo_stack = [], []
         self.refresh_field()
@@ -2100,6 +2111,7 @@ class App(tk.Tk):
                       "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen}},
             "places": self._places(),
             "relations": self._relations(),
+            "art": dict(self.art_replace), "select_map": dict(self.sel_map),
             "regions": self._regions_opts(),
             "resources": self._resources_opts(),
         }
@@ -2138,6 +2150,7 @@ class App(tk.Tk):
             "garrisons": dict(self.garrisons),
             "places": self._places(),
             "relations": self._relations(),
+            "art": dict(self.art_replace), "select_map": dict(self.sel_map),
             "regions": self._regions_opts(),
             "resources": self._resources_opts(),
             "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen},
