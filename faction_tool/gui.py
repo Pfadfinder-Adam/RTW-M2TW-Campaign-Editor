@@ -92,6 +92,50 @@ AI_MILITARY = ("caesar", "genghis", "henry", "mao", "napoleon", "smith", "stalin
 AI_CHOICES = ["%s %s" % (e, m) for e in AI_ECONOMY for m in AI_MILITARY]
 
 
+class FieldTable(ttk.Frame):
+    """The armies, agents and fleets as a table (kind, name, units, tile, state),
+    with the few Listbox calls the window uses."""
+    COLS = (("kind", "Kind", 70), ("name", "Name", 130), ("units", "Units", 80), ("tile", "Tile", 70),
+            ("state", "", 60))
+
+    def __init__(self, master):
+        super().__init__(master)
+        self.tv = ttk.Treeview(self, columns=[c[0] for c in self.COLS], show="headings", height=10,
+                               selectmode="browse")
+        for key, head, width in self.COLS:
+            self.tv.heading(key, text=head)
+            self.tv.column(key, width=width, stretch=key == "name")
+        sb = ttk.Scrollbar(self, orient="vertical", command=self.tv.yview)
+        self.tv.configure(yscrollcommand=sb.set)
+        self.tv.pack(side="left", fill="both", expand=True)
+        sb.pack(side="left", fill="y")
+        self.tv.tag_configure("new", foreground="#0050c0")
+        self.tv.tag_configure("changed", foreground="#a05000")
+
+    def delete(self, *a):
+        self.tv.delete(*self.tv.get_children())
+
+    def insert(self, _where, values):
+        self.tv.insert("", "end", values=values, tags=(values[-1],))
+
+    def curselection(self):
+        items = self.tv.get_children()
+        return tuple(items.index(i) for i in self.tv.selection() if i in items)
+
+    def selection_set(self, i):
+        items = self.tv.get_children()
+        if 0 <= i < len(items):
+            self.tv.selection_set(items[i])
+            self.tv.see(items[i])
+
+    def selection_clear(self, *a):
+        if self.tv.selection():
+            self.tv.selection_remove(*self.tv.selection())
+
+    def bind(self, seq, fn, add=None):
+        self.tv.bind("<<TreeviewSelect>>" if seq == "<<ListboxSelect>>" else seq, fn, add)
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -354,26 +398,32 @@ class App(tk.Tk):
         self.nb.add(tab, text="  Units & armies  ")
         side = ttk.Frame(tab)
         side.pack(side="left", fill="y", padx=(0, 8))
-        ttk.Label(side, text="Your towns", font=("", 10, "bold")).pack(anchor="w")
-        self.lb_units = tk.Listbox(side, width=30, height=12, exportselection=False)
+        # towns above, armies/agents/fleets below; the sash between them can be dragged
+        split = ttk.PanedWindow(side, orient="vertical")
+        split.pack(fill="both", expand=True)
+        top = ttk.Frame(split)
+        split.add(top, weight=1)
+        ttk.Label(top, text="Your towns", font=("", 10, "bold")).pack(anchor="w")
+        self.lb_units = tk.Listbox(top, width=30, height=8, exportselection=False)
         self.lb_units.pack(fill="both", expand=True)
         self.lb_units.bind("<<ListboxSelect>>", lambda e: (self.lb_field.selection_clear(0, "end"),
                                                            self.load_garrison()))
-        ttk.Label(side, text="add towns on the Faction tab", foreground="#666").pack(anchor="w")
+        ttk.Label(top, text="add towns on the Faction tab", foreground="#666").pack(anchor="w")
         # field armies, agents and fleets, placed on the Map
-        ff = ttk.LabelFrame(side, text="Armies, agents & fleets", padding=4)
-        ff.pack(fill="x", pady=(8, 0))
-        self.lb_field = tk.Listbox(ff, width=30, height=6, exportselection=False)
-        self.lb_field.pack(fill="x")
-        self.lb_field.bind("<<ListboxSelect>>", lambda e: self.load_field())
+        ff = ttk.LabelFrame(split, text="Armies, agents & fleets  (drag the line above to resize)", padding=4)
+        split.add(ff, weight=2)
+        self.lb_field = FieldTable(ff)
+        self.lb_field.pack(fill="both", expand=True)
+        self.lb_field.bind("<<ListboxSelect>>", lambda e: self.lb_field.curselection() and (
+            self.lb_units.selection_clear(0, "end"), self.load_field()))
+        self.lb_field.bind("<Double-1>", lambda e: self.field_on_map())
         fb = ttk.Frame(ff)
         fb.pack(fill="x", pady=(4, 0))
         for text, kind in (("+ Army", "army"), ("+ Agent", "agent"), ("+ Fleet", "fleet")):
             ttk.Button(fb, text=text, width=8, command=lambda k=kind: self.add_field(k)).pack(side="left", padx=1)
-        fb2 = ttk.Frame(ff)
-        fb2.pack(fill="x", pady=(2, 0))
-        ttk.Button(fb2, text="Place on map", command=self.place_field).pack(side="left", padx=1)
-        ttk.Button(fb2, text="Remove", command=self.remove_field).pack(side="left", padx=1)
+        ttk.Button(fb, text="Place on map", command=self.place_field).pack(side="left", padx=(8, 1))
+        ttk.Button(fb, text="Remove", command=self.remove_field).pack(side="left", padx=1)
+        ttk.Label(ff, text="double click: show it on the map", foreground="#666").pack(anchor="w")
         opts = self.units_opts = ttk.LabelFrame(side, text="Towns without a garrison of your own", padding=6)
         opts.pack(fill="x", pady=(10, 0))
         ttk.Label(opts, text="Leader's army").grid(row=0, column=0, sticky="w")
@@ -1490,13 +1540,29 @@ class App(tk.Tk):
         self.lb_field.delete(0, "end")
         for c in self.field:
             xy = self.char_moves.get(c["cid"], c["xy"]) if c.get("existing") else c.get("xy")
-            where = "at %d, %d" % tuple(xy) if xy else "not placed"
-            units = "  [%d units%s]" % (len(c["units"]), " + bodyguard" if c.get("named") else "") \
+            where = "%d, %d" % tuple(xy) if xy else "not placed"
+            units = ("%d%s" % (len(c["units"]), " + guard" if c.get("named") else "")) \
                 if c["kind"] in ("army", "fleet") else ""
-            tag = ("  - changed" if c.get("changed") else "  - on the map") if c.get("existing") else "  - new"
-            self.lb_field.insert("end", "%s %s%s  (%s)%s" % (c["kind"], c["name"], units, where, tag))
+            moved = c.get("existing") and c.get("cid") in self.char_moves
+            tag = ("changed" if c.get("changed") or moved else "as it is") if c.get("existing") else "new"
+            self.lb_field.insert("end", (c["kind"], c["name"], units, where, tag))
         if keep is not None and keep < len(self.field):
             self.lb_field.selection_set(keep)
+
+    def field_on_map(self):
+        """Double click in the list: the Map tab, centred on that army, agent or fleet."""
+        i = self.selected_field()
+        if i is None:
+            return
+        c = self.field[i]
+        xy = self.char_moves.get(c["cid"], c["xy"]) if c.get("existing") else c.get("xy")
+        if not xy:
+            self.place_field()
+            return
+        self.nb.select(3)
+        self.show_map()
+        self.update()
+        self.map_view.centre_on(tuple(xy))
 
     def field_faction(self):
         return self.v["template"].get().strip()

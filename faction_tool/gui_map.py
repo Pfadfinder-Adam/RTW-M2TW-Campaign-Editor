@@ -133,6 +133,28 @@ class MapView(ttk.Frame):
         self.ox = self.oy = 0.0
         self.render()
 
+    def centre_on(self, xy, zoom=16):
+        """Put tile xy in the middle, zoomed in to at least `zoom` pixels a tile, and mark it."""
+        if not self.cmap:
+            return
+        cw, ch = max(self.canvas.winfo_width(), 200), max(self.canvas.winfo_height(), 200)
+        self.z = max(self.z, zoom)
+        self.ox = xy[0] + 0.5 - cw / 2 / self.z
+        self.oy = (self.cmap.h - 1 - xy[1]) + 0.5 - ch / 2 / self.z
+        self.render()
+        self._flash = xy
+        self.after(60, self._mark_flash)
+
+    def _mark_flash(self):
+        xy = getattr(self, "_flash", None)
+        if not xy or not self.cmap:
+            return
+        self.canvas.delete("flash")
+        sx, sy = self.to_screen(*xy)
+        r = max(self.z, 8)
+        self.canvas.create_oval(sx - r, sy - r, sx + r, sy + r, outline="#ffd400", width=3, tags=("flash",))
+        self.after(1500, lambda: self.canvas.delete("flash"))
+
     def zoom_by(self, step, at=None):
         if not self.cmap:
             return
