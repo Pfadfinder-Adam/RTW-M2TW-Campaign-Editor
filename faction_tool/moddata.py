@@ -47,6 +47,7 @@ DATA_FILES = {
     "traits": "export_descr_character_traits.txt",
     "ancillaries": "export_descr_ancillaries.txt",
     "lookup_descr": "lookup_campaign_descriptions.txt",
+    "resources": "descr_sm_resources.txt",
 }
 
 

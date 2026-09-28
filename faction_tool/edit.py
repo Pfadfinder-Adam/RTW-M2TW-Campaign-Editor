@@ -92,6 +92,9 @@ def edit(mod, campaign, faction, opts):
     if opts.get("places"):
         from .mapedit import apply_places
         apply_places(plan, campaign, opts["places"])
+    if opts.get("resources"):
+        from .resources import apply as apply_resources
+        apply_resources(plan, campaign, opts["resources"])
     if opts.get("regions"):
         from .regionedit import apply_regions
         from .regionedit import set_religions

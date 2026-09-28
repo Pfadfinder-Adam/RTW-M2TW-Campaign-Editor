@@ -33,6 +33,9 @@ class MapView(ttk.Frame):
         self.v_regions = tk.BooleanVar(value=False)
         ttk.Checkbutton(bar, text="Regions", variable=self.v_regions,
                         command=lambda: self.on_layers() if self.on_layers else self.render()).pack(side="left", padx=8)
+        self.v_res = tk.BooleanVar(value=False)
+        ttk.Checkbutton(bar, text="Resources", variable=self.v_res,
+                        command=lambda: self.on_layers() if self.on_layers else self.render()).pack(side="left")
         self.v_dip = tk.BooleanVar(value=False)
         ttk.Checkbutton(bar, text="Diplomacy", variable=self.v_dip,
                         command=lambda: self.on_layers() if self.on_layers else self.render()).pack(side="left")
@@ -58,6 +61,9 @@ class MapView(ttk.Frame):
         self.brush, self._painting, self._rclick = 1, False, False
         self.chars, self.draggable, self.symbols = [], set(), {}
         self.on_char_move = self.check_tile = None
+        # resources: [{id, kind, xy}]; check_res(id, xy) -> None or why; on_res_move(id, xy); on_res_click(id)
+        self.resources, self.check_res, self.on_res_move, self.on_res_click = [], None, None, None
+        self.res_sel, self._rdrag, self._rpress = None, None, None
         self._symimg = {}
         c = self.canvas
         c.bind("<Configure>", lambda e: self.render())
@@ -82,7 +88,8 @@ class MapView(ttk.Frame):
              on_char_move=None, check_tile=None, symbols=None, on_place=None,
              places=None, check_place=None, on_place_move=None,
              region_mode=False, paint_overlay=None, on_paint=None, on_pick=None, brush=1, region_points=(),
-             region_painted=None, region_colours=None, borders=True, ghost=None, locked=None):
+             region_painted=None, region_colours=None, borders=True, ghost=None, locked=None,
+             resources=None, check_res=None, on_res_move=None, on_res_click=None, res_sel=None):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
@@ -110,6 +117,9 @@ class MapView(ttk.Frame):
         self.ghost = ghost
         # locked(char) -> why this character cannot be dragged here (shown when one tries)
         self.locked = locked
+        self.resources = list(resources or [])
+        self.check_res, self.on_res_move, self.on_res_click = check_res, on_res_move, on_res_click
+        self.res_sel = res_sel
         if first:
             self.fit()
         else:
@@ -288,6 +298,8 @@ class MapView(ttk.Frame):
                     c.create_oval(sx - r, sy - r, sx + r, sy + r, fill="#2a6fdb", outline="white", width=1, tags=tags)
                     if r >= 5:
                         self._anchor(sx, sy, r, tags)
+        if self.v_res.get():
+            self._resources(cw, ch)
         for region, (x, y) in cm.cities.items():
             x, y = self.places.get(("city", region), (x, y))
             sx, sy = self.to_screen(x, y)
@@ -449,6 +461,66 @@ class MapView(ttk.Frame):
                 self._symimg[key] = None
         return self._symimg[key]
 
+    # ---- resources ----
+    RES_COLOURS = {"gold": "#f2c200", "silver": "#c8ccd4", "iron": "#5a5f66", "copper": "#c8743a", "tin": "#9aa3a8",
+                   "lead": "#6f7488", "marble": "#f4f1ea", "wine": "#8a1f5a", "olive_oil": "#9aa832",
+                   "grain": "#e6c56a", "timber": "#7a4b21", "furs": "#9b6a44", "hides": "#b3875a",
+                   "slaves": "#7a1010", "pottery": "#d0612e", "glass": "#7fd6e0", "purple_dye": "#7a2ea0",
+                   "dogs": "#6b5337", "elephants": "#8f8f8f", "camels": "#d9b47a", "incense": "#e8a0c0",
+                   "silk": "#e04a86", "spices": "#e0621c", "textiles": "#4a78d0", "amber": "#ffa31a",
+                   "wild_animals": "#4e8a3a", "fish": "#3a8fd0", "salt": "#ffffff", "coal": "#222222",
+                   "sugar": "#f5f5dc", "sulfur": "#e8e04a", "tobacco": "#6b8e23", "chocolate": "#5c3317"}
+
+    @staticmethod
+    def res_colour(kind):
+        """A steady colour per resource type: a fitting one for the common types,
+        else one made from the name (the same type, the same colour)."""
+        if kind in MapView.RES_COLOURS:
+            return MapView.RES_COLOURS[kind]
+        import colorsys
+        h = (sum(ord(ch) * (i + 7) for i, ch in enumerate(kind)) % 360) / 360.0
+        r, g, b = colorsys.hsv_to_rgb(h, 0.65, 0.85)
+        return "#%02x%02x%02x" % (int(r * 255), int(g * 255), int(b * 255))
+
+    def _resources(self, cw, ch):
+        """A small square in the type's colour with its first two letters; on a town's
+        tile it sits in the tile's corner. Far out only a dot."""
+        c = self.canvas
+        towns = {self.places.get(("city", r), xy) for r, xy in self.cmap.cities.items()}
+        for res in self.resources:
+            x, y = res["xy"]
+            sx, sy = self.to_screen(x, y)
+            if not (-20 < sx < cw + 20 and -20 < sy < ch + 20):
+                continue
+            tags = ("res", "res:%s" % res["id"])
+            fill = self.res_colour(res["kind"])
+            sel = res["id"] == self.res_sel
+            if self.z < 6:
+                r = max(2, self.z * 0.35)
+                c.create_rectangle(sx - r, sy - r, sx + r, sy + r, fill=fill, outline="#ffd400" if sel else "",
+                                   tags=tags)
+                continue
+            r = min(self.z * 0.42, 14)
+            if (x, y) in towns:                        # beside the town, at the tile's corner
+                sx, sy = sx + self.z * 0.35, sy - self.z * 0.35
+                r *= 0.6
+            c.create_rectangle(sx - r, sy - r, sx + r, sy + r, fill=fill,
+                               outline="#ffd400" if sel else "black", width=3 if sel else 1, tags=tags)
+            if r >= 5:
+                dark = self.res_colour(res["kind"]) in ("#5a5f66", "#6f7488", "#7a1010", "#7a4b21", "#222222",
+                                                        "#8a1f5a", "#7a2ea0", "#6b5337", "#5c3317")
+                c.create_text(sx, sy, text=res["kind"][:2].capitalize(), fill="white" if dark else "black",
+                              font=("", max(6, int(r * 0.8)), "bold"), tags=tags)
+
+    def _res_under(self, sx, sy):
+        if not self.v_res.get():
+            return None
+        for item in reversed(self.canvas.find_overlapping(sx - 2, sy - 2, sx + 2, sy + 2)):
+            for tag in self.canvas.gettags(item):
+                if tag.startswith("res:"):
+                    return tag[4:]
+        return None
+
     def _char_under(self, sx, sy):
         for item in reversed(self.canvas.find_overlapping(sx - 3, sy - 3, sx + 3, sy + 3)):
             for tag in self.canvas.gettags(item):
@@ -560,6 +632,13 @@ class MapView(ttk.Frame):
                 self._rclick = True
                 self._drag = (e.x, e.y, self.ox, self.oy, False)
                 return
+        if icons and self.cmap and self.on_res_move:
+            rid = self._res_under(e.x, e.y)
+            if rid is not None:
+                self._rdrag = [rid, e.x, e.y, False]
+                return
+        if not icons and self.cmap:
+            self._rpress = self._res_under(e.x, e.y)      # a click (no drag) on a resource picks it
         if icons:
             cid = self._char_under(e.x, e.y) if self.cmap else None
             if cid is not None and cid in self.draggable:
@@ -579,6 +658,21 @@ class MapView(ttk.Frame):
     def _move(self, e):
         if self._painting:
             self._paint_at(e)
+            return
+        if self._rdrag:
+            rid, lx, ly, started = self._rdrag
+            if not started and abs(e.x - lx) + abs(e.y - ly) <= 3:
+                return
+            self.canvas.move("res:" + rid, e.x - lx, e.y - ly)
+            self._rdrag = [rid, e.x, e.y, True]
+            x, y = self.to_tile(e.x, e.y)
+            why = self.check_res(rid, (x, y)) if self.check_res else None
+            self.canvas.delete("target")
+            ax, ay = self.to_screen(x, y)
+            r = max(self.z / 2, 4)
+            self.canvas.create_rectangle(ax - r, ay - r, ax + r, ay + r, outline="#ff3030" if why else "#30ff60",
+                                         width=2, tags=("target",))
+            self.readout.configure(text="resource to tile %d, %d: %s" % (x, y, why or "fine - drop it here"))
             return
         if getattr(self, "_pdrag", None):
             what, region, lx, ly, started = self._pdrag
@@ -634,6 +728,21 @@ class MapView(ttk.Frame):
             elif self.on_pick:
                 self.on_pick(self.to_tile(e.x, e.y))
             return
+        if self._rdrag:
+            rid, _, _, started = self._rdrag
+            self._rdrag = None
+            if started:
+                xy = self.to_tile(e.x, e.y)
+                why = self.check_res(rid, xy) if self.check_res else None
+                if why:
+                    self.readout.configure(text="not moved - " + why)
+                    self.render()
+                else:
+                    self.on_res_move(rid, xy)
+            elif self.on_res_click:
+                self.on_res_click(rid)
+            return
+        rpress, self._rpress = self._rpress, None
         if getattr(self, "_pdrag", None):
             what, region, _, _, started = self._pdrag
             self._pdrag = None
@@ -672,6 +781,9 @@ class MapView(ttk.Frame):
         if moved:
             self.render()                                # the smooth picture once the map stops
         if moved or not self.cmap:
+            return
+        if rpress is not None and self.on_res_click and not self.on_place:
+            self.on_res_click(rpress)
             return
         if self.on_place:
             xy = self.to_tile(e.x, e.y)
@@ -718,6 +830,14 @@ class MapView(ttk.Frame):
         self._outline(e.x, e.y)
         if self.cmap and not self._cdrag:
             self._grow(self._marker_under(e.x, e.y))
+            rid = self._res_under(e.x, e.y)
+            res = next((r for r in self.resources if r["id"] == rid), None) if rid else None
+            if res:
+                x, y = res["xy"]
+                self.readout.configure(text="%s at %d, %d - %s   (click: pick it; right drag: move it)" % (
+                    res["kind"], x, y, self.cmap.region_at(x, y) or next(
+                        (r for r, t in self.cmap.cities.items() if t == (x, y)), "no region")))
+                return
             cid = self._char_under(e.x, e.y)
             ch_ = next((c for c in self.chars if c["id"] == cid), None) if cid else None
             if ch_:

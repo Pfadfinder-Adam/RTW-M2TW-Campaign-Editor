@@ -769,6 +769,38 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(character_line(rome, "Louis", "named character", 21, (1, 2), role="heir"),
                          "character\tLouis, named character, heir, age 21, , x 1, y 2")
 
+    def test_resources(self):
+        from faction_tool import resources as R
+        from faction_tool.edit import edit
+        path = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        with open(path) as fh:
+            text = fh.read()
+        with open(path, "w") as fh:
+            fh.write(text.replace(";#####>", "resource\tiron,\t0,\t0\n\tresource\tgold, 1, 7, 3;\tAtown\n\n;#####>", 1))
+        write(os.path.join(self.root, "data", "descr_sm_resources.txt"), "type\tiron\n\ntype\tgold\n\ntype\twine\n")
+        mod = ModData(self.root)
+        rs = R.read(mod.load(path))
+        self.assertEqual([(r.kind, r.xy, r.quantity) for r in rs], [("iron", (0, 0), None), ("gold", (7, 3), 1)])
+        self.assertEqual(list(R.types(mod)), ["iron", "gold", "wine"])
+        with self.assertRaises(ValueError):                      # two on one tile
+            edit(ModData(self.root), "test", "alpha", {"resources": {"moved": {"0": [3, 3]}, "added": [{"type": "wine", "xy": [3, 3]}]}})
+        with self.assertRaises(ValueError):                      # an unknown type
+            edit(ModData(self.root), "test", "alpha", {"resources": {"added": [{"type": "spice", "xy": [3, 3]}]}})
+        plan = edit(mod, "test", "alpha", {"resources": {
+            "moved": {"1": [2, 3]}, "removed": [0], "added": [{"type": "wine", "xy": [0, 3]}],
+            "region_tags": {"A_R": "wine, iron"}}})
+        bdir = plan.apply()
+        m2 = ModData(self.root)
+        with open(path) as fh:
+            new = fh.read()
+        self.assertIn("\tresource\tgold, 1, 2, 3;\tAtown\n", new)            # layout, quantity, comment kept
+        self.assertIn("\nresource\twine,\t0,\t3\n", new)                    # the layout of a line without quantity
+        self.assertNotIn("iron,", new)
+        self.assertEqual(m2.regions("test")["A_R"]["resources"], "wine, iron")
+        restore(m2, bdir)
+        with open(path) as fh:
+            self.assertIn("resource\tiron,\t0,\t0", fh.read())
+
     def test_garrison_emptied_by_hand(self):
         from faction_tool.edit import edit
         mod = ModData(self.root)

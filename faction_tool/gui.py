@@ -154,6 +154,9 @@ class App(tk.Tk):
         self.region_paint = {}          # {(x, y): region} tiles painted to another region (Regions mode)
         self.new_regions = []           # [{name, settlement, creator, rebels, resources, colour, city, port, owner, level}]
         self.region_religions = {}      # {region: {religion: percent}} set by hand (Medieval II)
+        # resources on the map: moved {index: (x, y)}, removed [index], added [{type, xy}], region tags {region: text}
+        self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
+        self._res_placing, self._res_sel = None, None
         self._region_point = None       # ('city' | 'port', region) waiting for a click
         self.undo_stack, self.redo_stack = [], []   # snapshots of what the window keeps (Ctrl+Z / Ctrl+Y)
         self.sizes = {}                 # {region: {'level', 'population'}} set by hand on the Buildings tab
@@ -352,6 +355,17 @@ class App(tk.Tk):
         self.v_borders = tk.BooleanVar(value=True)
         ttk.Checkbutton(rb, text="Borders", variable=self.v_borders, command=self.show_map).pack(side="left", padx=8)
         ttk.Label(rb, text="left drag paints, right click picks a region, right drag moves the map",
+                  foreground="#666").pack(side="left", padx=10)
+        self.res_bar = ttk.Frame(tab, padding=(0, 0, 0, 4))
+        xb = self.res_bar
+        ttk.Label(xb, text="Resource", font=("", 9, "bold")).pack(side="left")
+        self.v_res_type = tk.StringVar()
+        self.cb_res_type = ttk.Combobox(xb, textvariable=self.v_res_type, width=16, state="readonly")
+        self.cb_res_type.pack(side="left", padx=4)
+        ttk.Button(xb, text="Place new", command=self.res_place_new).pack(side="left", padx=2)
+        ttk.Button(xb, text="Delete picked", command=self.res_delete).pack(side="left", padx=2)
+        ttk.Button(xb, text="Region's resource tags...", command=self.region_tags_dialog).pack(side="left", padx=(12, 2))
+        ttk.Label(xb, text="click a resource: pick it   right drag: move it   a region has the resources on its land",
                   foreground="#666").pack(side="left", padx=10)
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
         self.map_view.pack(fill="both", expand=True)
@@ -703,7 +717,8 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------------ undo / redo
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "place_moves", "char_moves", "field",
-                 "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions")
+                 "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions",
+                 "res_moves", "res_removed", "res_added", "region_tags")
 
     def snapshot(self):
         st = {k: copy.deepcopy(getattr(self, k)) for k in self.UNDO_KEYS}
@@ -1096,6 +1111,166 @@ class App(tk.Tk):
         ttk.Button(bar, text="OK", command=ok).pack(side="left")
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
 
+    # ---- resources on the map ----
+    def _resources_opts(self):
+        if not (self.res_moves or self.res_removed or self.res_added or self.region_tags):
+            return None
+        return {"moved": {str(k): list(v) for k, v in self.res_moves.items()}, "removed": list(self.res_removed),
+                "added": [dict(a) for a in self.res_added], "region_tags": dict(self.region_tags)}
+
+    def _file_resources(self):
+        """The resources of the campaign's descr_strat.txt (read once per load)."""
+        from .resources import read
+        key = (self.mod.data, self.v_campaign.get())
+        if getattr(self, "_res_cache", None) is None or self._res_cache[0] != key:
+            f = self.mod.load(self.mod.campaign_file(self.v_campaign.get(), "descr_strat.txt"))
+            self._res_cache = (key, read(f))
+        return self._res_cache[1]
+
+    def _resource_view(self):
+        """The Map's resources: shown with their layer, moved, added and removed here."""
+        from .resources import problem, types
+        mv = self.map_view
+        if not mv.v_res.get():
+            self.res_bar.pack_forget()
+            return {}
+        self.res_bar.pack(fill="x", before=mv)
+        kinds = list(types(self.mod))
+        self.cb_res_type["values"] = kinds
+        if not self.v_res_type.get() and kinds:
+            self.v_res_type.set(kinds[0])
+        shown = [{"id": "r%d" % r.index, "kind": r.kind, "xy": tuple(self.res_moves.get(r.index, r.xy))}
+                 for r in self._file_resources() if r.index not in self.res_removed]
+        shown += [{"id": "n%d" % i, "kind": a["type"], "xy": tuple(a["xy"])} for i, a in enumerate(self.res_added)]
+        camp = self.v_campaign.get()
+
+        def taken(but=None):
+            return [r["xy"] for r in shown if r["id"] != but]
+
+        def check(rid, xy):
+            return problem(self.mod, camp, xy, taken(rid))
+
+        def moved(rid, xy):
+            self.remember()
+            if rid.startswith("n"):
+                self.res_added[int(rid[1:])]["xy"] = tuple(xy)
+            else:
+                i = int(rid[1:])
+                orig = next(r.xy for r in self._file_resources() if r.index == i)
+                if tuple(xy) == tuple(orig):
+                    self.res_moves.pop(i, None)
+                else:
+                    self.res_moves[i] = tuple(xy)
+            self._res_sel = rid
+            self.status.set("Resource moved to %d, %d - Preview, then Apply." % tuple(xy))
+            self.show_map()
+
+        def clicked(rid):
+            self._res_sel = rid
+            kind = next((r["kind"] for r in shown if r["id"] == rid), None)
+            if kind:
+                self.v_res_type.set(kind)
+            self.show_map()
+
+        kw = {"resources": shown, "check_res": check, "on_res_move": moved, "on_res_click": clicked,
+              "res_sel": self._res_sel}
+        if self._res_placing:
+            kind = self._res_placing
+
+            def place(xy):
+                why = problem(self.mod, camp, xy, taken())
+                if why:
+                    return why
+                self.remember()
+                self.res_added.append({"type": kind, "xy": tuple(xy)})
+                self._res_placing = None
+                self._res_sel = "n%d" % (len(self.res_added) - 1)
+                self.status.set("%s placed at %d, %d - right drag moves it; Preview, then Apply." % (kind, xy[0], xy[1]))
+                self.show_map()
+                return None
+            kw["on_place"] = place
+        return kw
+
+    def res_place_new(self):
+        kind = self.v_res_type.get()
+        if not kind:
+            messagebox.showerror(APP, "pick a resource type first")
+            return
+        self._res_placing = kind
+        self.status.set("Click the map where the new %s goes." % kind)
+        self.show_map()
+
+    def res_delete(self):
+        rid = self._res_sel
+        if not rid:
+            messagebox.showerror(APP, "click a resource on the map first")
+            return
+        self.remember()
+        if rid.startswith("n"):
+            i = int(rid[1:])
+            if i < len(self.res_added):
+                del self.res_added[i]
+        else:
+            i = int(rid[1:])
+            if i not in self.res_removed:
+                self.res_removed.append(i)
+            self.res_moves.pop(i, None)
+        self._res_sel = None
+        self.status.set("Resource removed - Preview, then Apply (Undo brings it back).")
+        self.show_map()
+
+    def region_tags_dialog(self):
+        """Line 6 of a region's entry in descr_regions.txt: its resource tags (in HLR
+        also the hidden resources that open local units)."""
+        if not self.mod or not self.strat:
+            return
+        name = self.v_paint.get().replace("  (new)", "").strip()
+        if name not in self.regions:
+            # the region under the picked resource, else ask for Regions mode's pick
+            rid = self._res_sel
+            xy = None
+            if rid:
+                xy = next((a["xy"] for i, a in enumerate(self.res_added) if "n%d" % i == rid), None) or \
+                    next((self.res_moves.get(r.index, r.xy) for r in self._file_resources() if "r%d" % r.index == rid), None)
+            cm = self._cmap
+            name = (cm.region_at(*xy) or next((r for r, t in cm.cities.items() if t == tuple(xy)), None)) \
+                if xy and cm else None
+        if not name or name not in self.regions:
+            messagebox.showerror(APP, "click a resource on the map (its region is taken), or pick a region "
+                                      "in Regions mode (right click)")
+            return
+        now = self.region_tags.get(name, self.regions[name].get("resources", ""))
+        from .resources import types
+        known = sorted({x.strip() for v in self.regions.values() for x in (v.get("resources") or "").split(",")
+                        if x.strip()} | set(types(self.mod)))
+        w = tk.Toplevel(self)
+        w.title("Resource tags of %s" % name)
+        w.transient(self)
+        frm = ttk.Frame(w, padding=10)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, text="%s - tags, comma separated (line 6 of its entry in descr_regions.txt)" % name).pack(anchor="w")
+        v = tk.StringVar(value=now)
+        ttk.Entry(frm, textvariable=v, width=70).pack(fill="x", pady=4)
+        ttk.Label(frm, text="in this mod: " + ", ".join(known), foreground="#666", wraplength=520,
+                  justify="left").pack(anchor="w")
+
+        def ok():
+            text = ", ".join(x.strip() for x in v.get().split(",") if x.strip())
+            if not text:
+                messagebox.showerror(APP, "a region needs at least one tag", parent=w)
+                return
+            self.remember()
+            if text == self.regions[name].get("resources", ""):
+                self.region_tags.pop(name, None)
+            else:
+                self.region_tags[name] = text
+            w.destroy()
+            self.status.set("%s: %s - Preview, then Apply." % (name, text))
+        bar = ttk.Frame(frm)
+        bar.pack(anchor="e", pady=(8, 0))
+        ttk.Button(bar, text="OK", command=ok).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+
     def _relations(self):
         return [{"kind": k, "from": a, "to": b, "value": v} for (k, a, b), v in self.dip_set.items()]
 
@@ -1233,7 +1408,12 @@ class App(tk.Tk):
                 "Apply changes" if self.editing() else "Create faction"))
             self.show_map()
         region_kw = self._region_view(place)
+        res_kw = self._resource_view()
         on_place = region_kw.pop("on_place", place if placing is not None else None)
+        if res_kw.get("on_place"):
+            on_place = res_kw.pop("on_place")
+            region_kw.pop("ghost", None)
+        region_kw.update(res_kw)
         if placing is not None and not region_kw.get("ghost") and placing < len(self.field):
             fc = self.field[placing]
             rtw_kind, army = KINDS[fc["kind"]]
@@ -1400,6 +1580,8 @@ class App(tk.Tk):
         self.dip_set.clear()
         self.region_paint, self.new_regions, self._region_point = {}, [], None
         self.region_religions = {}
+        self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
+        self._res_placing, self._res_sel, self._res_cache = None, None, None
         self._cmap_for = None                  # the map is read again: after Apply towns may stand elsewhere
         self.undo_stack, self.redo_stack = [], []
         self.refresh_field()
@@ -1786,6 +1968,7 @@ class App(tk.Tk):
             "places": self._places(),
             "relations": self._relations(),
             "regions": self._regions_opts(),
+            "resources": self._resources_opts(),
         }
         return v["template"], v["name"].lower(), opts
 
@@ -1823,6 +2006,7 @@ class App(tk.Tk):
             "places": self._places(),
             "relations": self._relations(),
             "regions": self._regions_opts(),
+            "resources": self._resources_opts(),
             "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen},
             "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()}}
 
@@ -1845,18 +2029,22 @@ class App(tk.Tk):
 
     def make_plan(self):
         if self.map_only():
-            places, regions = self._places(), self._regions_opts()
-            if not places and not regions:
-                raise ValueError("nothing to write: move a town or port, or paint regions on the Map "
-                                 "(or name a new faction on the Faction tab)")
+            places, regions, res = self._places(), self._regions_opts(), self._resources_opts()
+            if not places and not regions and not res:
+                raise ValueError("nothing to write: move a town or port, paint regions or change resources "
+                                 "on the Map (or name a new faction on the Faction tab)")
             mod = ModData(self.mod.data)
             plan = Plan(mod, "map", "map", {})
             from .mapedit import apply_places
-            from .regionedit import apply_regions
+            from .regionedit import apply_regions, set_religions
+            from .resources import apply as apply_resources
             if places:
                 apply_places(plan, self.v_campaign.get(), places)
+            if res:
+                apply_resources(plan, self.v_campaign.get(), res)
             if regions:
                 apply_regions(plan, self.v_campaign.get(), regions["painted"], regions["new"])
+                set_religions(plan, self.v_campaign.get(), regions.get("religions") or {})
             return plan
         if self.editing():
             if not self.mod:
