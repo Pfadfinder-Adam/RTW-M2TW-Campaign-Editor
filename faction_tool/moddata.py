@@ -50,10 +50,12 @@ DATA_FILES = {
 }
 
 
-# map_ground_types.tga colours a character does not start on: the three seas
-# and both mountain colours (no character in HLR's descr_strat.txt stands on one)
-BLOCKED_GROUND = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (98, 65, 65), (196, 128, 128)}
-MAX_SLOPE = 25
+# map_ground_types.tga colours no land character (army or agent) may start on: the
+# three seas, both mountain colours and dense forest. The user checked in the game:
+# on land only these refuse a character - hills, woodland, swamp and steep tiles are
+# fine. Rivers, fords and cliffs (map_features.tga) refuse one too ("invalid tile").
+BLOCKED_GROUND = {(64, 0, 0): "sea", (128, 0, 0): "sea", (196, 0, 0): "sea",
+                  (98, 65, 65): "mountains", (196, 128, 128): "high mountains", (0, 64, 0): "dense forest"}
 
 
 class ModData:
@@ -260,23 +262,11 @@ class ModData:
         return self._cache[key]
 
     def _standable(self, campaign):
-        """(ok, slope) for tiles a character may start on.
-
-        ok: no river, ford or cliff in map_features.tga; no sea, impassable land
-        or mountain in the middle of the tile in map_ground_types.tga; and a
-        height difference inside the tile (its nine vertices in map_heights.tga)
-        of at most MAX_SLOPE - the game refuses steep tiles, and the characters
-        it accepts in HLR's own descr_strat.txt almost all stand below 25.
-        slope: that height difference, 0 without a heights map.
-        A map that is missing or of an unexpected size is not checked."""
+        """(ok, slope) for tiles a character may start on: ok(p) is land_problem() == None;
+        slope(p) is the height difference inside the tile (0 without a heights map), used
+        only to prefer flat tiles when the tool picks one."""
         regions = self.region_map(campaign)
         size = (2 * regions.width + 1, 2 * regions.height + 1)
-        feat = self._optional_map(campaign, "map_features.tga")
-        if feat and (feat.width, feat.height) != (regions.width, regions.height):
-            feat = None
-        ground = self._optional_map(campaign, "map_ground_types.tga")
-        if ground and (ground.width, ground.height) != size:
-            ground = None
         heights = self._optional_map(campaign, "map_heights.tga")
         if heights and (heights.width, heights.height) != size:
             heights = None
@@ -288,13 +278,24 @@ class ModData:
             return max(v) - min(v)
 
         def ok(p):
-            x, y = p
-            if feat and feat.get(x, y) != (0, 0, 0):
-                return False
-            if ground and ground.get(2 * x + 1, 2 * y + 1) in BLOCKED_GROUND:
-                return False
-            return slope(p) <= MAX_SLOPE
+            return self.land_problem(campaign, p) is None
         return ok, slope
+
+    def land_problem(self, campaign, xy):
+        """Why no character may stand on land tile xy, or None: a river, ford or cliff
+        in map_features.tga, or sea, mountains or dense forest in the middle of the tile
+        in map_ground_types.tga. A map missing or of an unexpected size is not checked."""
+        regions = self.region_map(campaign)
+        x, y = xy
+        feat = self._optional_map(campaign, "map_features.tga")
+        if feat and (feat.width, feat.height) == (regions.width, regions.height) and feat.get(x, y) != (0, 0, 0):
+            return "a river, ford or cliff runs there"
+        ground = self._optional_map(campaign, "map_ground_types.tga")
+        if ground and (ground.width, ground.height) == (2 * regions.width + 1, 2 * regions.height + 1):
+            what = BLOCKED_GROUND.get(ground.get(2 * x + 1, 2 * y + 1))
+            if what:
+                return what
+        return None
 
     def is_sea(self, campaign, xy):
         """Sea: a map_regions pixel that is no region, city or port."""
@@ -309,8 +310,8 @@ class ModData:
 
     def tile_problem(self, campaign, xy, kind, army, armies_at=()):
         """Why a character of this kind may not start on tile xy, or None.
-        Admirals need sea; everyone else land. An army needs a tile it may
-        stand on (or a town) that no other army holds."""
+        Admirals need sea; everyone else land without river, mountains or dense
+        forest (or a town); an army also a tile no other army holds."""
         img = self.region_map(campaign)
         x, y = xy
         if not (0 <= x < img.width and 0 <= y < img.height):
@@ -323,8 +324,8 @@ class ModData:
         town = xy in set(self.city_tiles(campaign).values())
         if army and xy in armies_at:
             return "another army stands there" + (" (a town holds one army)" if town else "")
-        if army and not town:
-            ok, _ = self._standable(campaign)
-            if not ok(xy):
-                return "an army cannot stand here (river, ford, steep slope or mountain)"
+        if not town:
+            why = self.land_problem(campaign, xy)
+            if why:
+                return "no one can stand here: " + why
         return None

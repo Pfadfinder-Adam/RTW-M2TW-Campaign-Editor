@@ -84,7 +84,8 @@ class CampaignMap:
         if g is not None:
             parts.append(GROUND.get(g, "ground %s" % (g,)))
         if region and px not in (CITY, PORT) and not self.is_sea(x, y):
-            parts.append("an army may stand here" if self.ok((x, y)) else "no army here (river/ford/slope/mountain)")
+            why = self.mod.land_problem(self.campaign, (x, y))
+            parts.append("armies and agents may stand here" if not why else "no one can stand here: " + why)
         return "   ".join(parts)
 
     def _ports(self):

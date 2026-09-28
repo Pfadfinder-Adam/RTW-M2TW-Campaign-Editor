@@ -82,7 +82,7 @@ class MapView(ttk.Frame):
              on_char_move=None, check_tile=None, symbols=None, on_place=None,
              places=None, check_place=None, on_place_move=None,
              region_mode=False, paint_overlay=None, on_paint=None, on_pick=None, brush=1, region_points=(),
-             region_painted=None, region_colours=None, borders=True, ghost=None):
+             region_painted=None, region_colours=None, borders=True, ghost=None, locked=None):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
@@ -108,6 +108,8 @@ class MapView(ttk.Frame):
         # ghost = {'kind': 'city'|'port'|'army'|'agent'|'fleet', 'check': fn(xy) -> None or why}:
         # a see-through marker under the mouse while placing
         self.ghost = ghost
+        # locked(char) -> why this character cannot be dragged here (shown when one tries)
+        self.locked = locked
         if first:
             self.fit()
         else:
@@ -498,6 +500,11 @@ class MapView(ttk.Frame):
             if cid is not None and cid in self.draggable:
                 self._cdrag = (cid, e.x, e.y)
                 return
+            if cid is not None and self.locked:
+                ch_ = next((c for c in self.chars if c["id"] == cid), None)
+                if ch_:
+                    self.readout.configure(text=self.locked(ch_))
+                return
             pl = self._place_under(e.x, e.y) if self.cmap and self.on_place_move and not self.on_place else None
             if pl:
                 self._pdrag = [pl[0], pl[1], e.x, e.y, False]      # nothing happens unless the mouse moves
@@ -536,7 +543,8 @@ class MapView(ttk.Frame):
             r = max(self.z / 2, 4)
             self.canvas.create_rectangle(ax - r, ay - r, ax + r, ay + r, outline="#ff3030" if why else "#30ff60",
                                          width=2, tags=("target",))
-            self.readout.configure(text=("tile %d, %d: " % (x, y)) + (why or "fine - drop it here"))
+            self.readout.configure(text=("tile %d, %d: " % (x, y)) + (
+                why + " - dropped here it goes to the nearest good tile" if why else "fine - drop it here"))
             return
         if not self._drag or not self.cmap:
             return
@@ -579,11 +587,20 @@ class MapView(ttk.Frame):
             self._cdrag = None
             xy = self.to_tile(e.x, e.y)
             why = self.check_tile(cid, xy) if self.check_tile else None
+            note = None
             if why:
-                self.readout.configure(text="not moved - " + why)
-            elif self.on_char_move:
+                alt = self.nearest(lambda p: self.check_tile(cid, p), xy)
+                if alt is None:
+                    self.readout.configure(text="not moved - " + why)
+                    self.render()
+                    return
+                note = "tile %d, %d: %s - put on the nearest good tile %d, %d" % (xy[0], xy[1], why, alt[0], alt[1])
+                xy = alt
+            if self.on_char_move:
                 self.on_char_move(cid, xy)
             self.render()
+            if note:
+                self.readout.configure(text=note)
             return
         moved = self._drag and self._drag[4]
         self._drag = None
@@ -592,7 +609,14 @@ class MapView(ttk.Frame):
         if moved or not self.cmap:
             return
         if self.on_place:
-            why = self.on_place(self.to_tile(e.x, e.y))
+            xy = self.to_tile(e.x, e.y)
+            why = self.on_place(xy)
+            if why and self.ghost and self.ghost.get("kind") in ("army", "agent", "fleet") and self.ghost.get("check"):
+                alt = self.nearest(self.ghost["check"], xy)       # a character: the nearest good tile
+                if alt is not None and not self.on_place(alt):
+                    self.readout.configure(text="tile %d, %d: %s - placed on the nearest good tile %d, %d" % (
+                        xy[0], xy[1], why, alt[0], alt[1]))
+                    return
             if why:
                 self.readout.configure(text="cannot place here - " + why)
             return
@@ -602,6 +626,19 @@ class MapView(ttk.Frame):
                 if tag.startswith("city:") and self.on_city:
                     self.on_city(tag[5:])
                     return
+
+    @staticmethod
+    def nearest(check, xy, reach=3):
+        """The nearest tile to xy (ring by ring, the four sides first) that check() accepts, or None."""
+        x, y = xy
+        for d in range(1, reach + 1):
+            ring = [(dx, dy) for dx in range(-d, d + 1) for dy in range(-d, d + 1) if max(abs(dx), abs(dy)) == d]
+            ring.sort(key=lambda t: abs(t[0]) + abs(t[1]))
+            for dx, dy in ring:
+                p = (x + dx, y + dy)
+                if not check(p):
+                    return p
+        return None
 
     def _hover(self, e):
         if self.cmap and self.on_place and not self._cdrag:

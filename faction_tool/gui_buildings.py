@@ -57,8 +57,25 @@ class BuildingsEditor(ttk.Frame):
         self.on_change = on_change
         self.current = dict(picked if picked is not None else own)
         self.edited = picked is not None
-        self.title.configure(text="%s - a %s" % (region, town_level))
+        self.set_level(town_level)
+
+    def set_level(self, level):
+        """The settlement level the chains offer their levels for: the one picked or
+        grown in the window, not only the one in the file."""
+        self.town_level = level
+        self.title.configure(text="%s - a %s" % (self.region, level))
         self.redraw()
+
+    def core_for(self, level):
+        """(chain, level) of the governor's building that fits a settlement level:
+        the biggest level of the core chain (the one the town has, else the first
+        the faction may build) that the settlement allows; or None."""
+        cores = [(b, lv) for b, lv in self.chains() if b.name.lower().startswith("core") and lv]
+        if not cores:
+            return None
+        b, levels = next(((b, lv) for b, lv in cores if b.name in self.current), cores[0])
+        fit = [l for l in levels if ranks_ok(l, level)]
+        return (b.name, fit[-1].name) if fit else None
 
     def chains(self):
         """(building, [levels this faction may build]) for every chain it may build,

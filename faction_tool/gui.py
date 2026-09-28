@@ -407,7 +407,7 @@ class App(tk.Tk):
         self.cb_level = ttk.Combobox(bar, textvariable=self.v_level, values=SETTLEMENT_LEVELS, state="readonly",
                                      width=12)
         self.cb_level.pack(side="left", padx=(4, 12))
-        self.cb_level.bind("<<ComboboxSelected>>", lambda e: self.size_changed())
+        self.cb_level.bind("<<ComboboxSelected>>", lambda e: self.level_picked())
         ttk.Label(bar, text="Population").pack(side="left")
         self.v_pop = tk.StringVar()
         e = ttk.Entry(bar, textvariable=self.v_pop, width=8)
@@ -446,20 +446,60 @@ class App(tk.Tk):
                 self.buildings_picked.pop(region, None)
             else:
                 self.buildings_picked[region] = picked
+            # a governor's building bigger than a level set by hand wins: the level grows to it
+            hand = self.sizes.get(region, {}).get("level")
+            if hand and rank(self._grown_level(picked, hand)) > rank(hand):
+                self.sizes[region].pop("level")
+                if self.sizes[region].get("population", 0) < POP_MIN.get(self._grown_level(picked, hand), 0):
+                    self.sizes[region].pop("population", None)     # too small for the grown level
+                if not self.sizes[region]:
+                    self.sizes.pop(region)
             # show what a bigger governor's building does to the settlement (unless set by hand)
             if "level" not in self.sizes.get(region, {}):
-                need = core_need(picked or [], {b.name: b for b in self._edb})
-                level = need if need and rank(need) > rank(town_level) else town_level
+                level = self._grown_level(picked, town_level)
                 self.v_level.set(level)
                 if level != town_level and pop is not None and pop < POP_MIN.get(level, 0) and \
                         "population" not in self.sizes.get(region, {}):
                     self.v_pop.set(str(POP_MIN[level]))
                 elif "population" not in self.sizes.get(region, {}):
                     self.v_pop.set(str(pop or ""))
+                if self.buildings_editor.town_level != level:
+                    self.buildings_editor.after_idle(lambda: self.buildings_editor.set_level(level))
             self.refresh_chosen(keep_units_selection=True)
-        self.buildings_editor.load(region, town_level, self._edb, own, self.buildings_picked.get(region),
+        # the chains offer the levels of the settlement as it will be: set by hand, grown
+        # by a picked governor's building, or as the file has it
+        shown = size.get("level") or self._grown_level(self.buildings_picked.get(region), town_level)
+        self.buildings_editor.load(region, shown, self._edb, own, self.buildings_picked.get(region),
                                    self.mod.culture(template), self.v["name"].get().strip().lower() or template,
                                    template, self._bpics, changed)
+
+    def _grown_level(self, picked, town_level):
+        """The level a settlement gets from its picked governor's building (never smaller)."""
+        need = core_need(picked or [], {b.name: b for b in self._edb})
+        return need if need and rank(need) > rank(town_level) else town_level
+
+    def level_picked(self):
+        """A settlement level picked by hand: the governor's building follows it (the
+        biggest that level allows), the chains offer that level's buildings, and the
+        population rises to the level's threshold if it is below."""
+        region = getattr(self, "_size_region", None)
+        if not region:
+            return
+        level = self.v_level.get()
+        ed = self.buildings_editor
+        pop = self.v_pop.get().strip()
+        bigger = SETTLEMENT_LEVELS[rank(level) + 1] if 0 <= rank(level) < len(SETTLEMENT_LEVELS) - 1 else None
+        if pop.isdigit() and (int(pop) < POP_MIN.get(level, 0) or bigger and int(pop) >= POP_MIN[bigger]):
+            self.v_pop.set(str(POP_MIN[level]))       # into the level's range, else it grows or shrinks at once
+        self.size_changed()
+        core = ed.core_for(level)
+        if core and ed.current.get(core[0]) != core[1]:
+            ed.town_level = level
+            ed.title.configure(text="%s - a %s" % (region, level))
+            ed.pick(core[0], core[1])                 # remembers for Undo and redraws
+            self.status.set("%s: %s -> governor's building %s" % (region, level, core[1]))
+        else:
+            ed.set_level(level)
 
     def size_changed(self):
         """Level / population typed for the selected town; the same as now means unchanged."""
@@ -484,7 +524,7 @@ class App(tk.Tk):
 
     def _size_hint(self):
         level_now, pop_now = self._size_now
-        self.lbl_size.configure(text="now: %s, %s people (a bigger governor's building grows it)"
+        self.lbl_size.configure(text="now: %s, %s people (the level and the governor's building follow each other)"
                                      % (level_now, pop_now))
 
     def tab_opened(self):
@@ -1045,13 +1085,13 @@ class App(tk.Tk):
         placing = getattr(self, "_placing", None)
 
         def place(xy):
-            self.remember()
             i = self._placing
             fc = self.field[i]
             rtw_kind, army = KINDS[fc["kind"]]
             why = self.mod.tile_problem(self.v_campaign.get(), xy, rtw_kind, army, armies_at)
             if why:
                 return why
+            self.remember()
             fc["xy"] = xy
             self._placing = None
             self.refresh_field(keep=i)
@@ -1084,7 +1124,16 @@ class App(tk.Tk):
                            draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols,
                            on_place=on_place,
                            places=self.place_moves, check_place=check_place, on_place_move=place_moved,
-                           **region_kw)
+                           locked=self._locked_hint, **region_kw)
+
+    def _locked_hint(self, ch):
+        """Why a character on the map cannot be dragged, and what to do instead."""
+        if ch["faction"] == "slave":
+            return "%s is a rebel - rebels leave with their town (add it to Chosen)" % ch["name"]
+        if self.editing():
+            return "%s belongs to %s - pick %s in Edit faction to move it" % (ch["name"], ch["faction"], ch["faction"])
+        return "%s belongs to %s - in New faction only the new faction's characters move; switch to " \
+               "Edit faction and pick %s to move it" % (ch["name"], ch["faction"], ch["faction"])
 
     def map_city(self, region):
         """A click on a town on the map: add it to Chosen, or take it out."""
@@ -1240,6 +1289,10 @@ class App(tk.Tk):
         t = self.v["template"].get().strip()
         if self.editing() and t and self.strat.faction(t):
             self.load_existing()
+        # an open Map (or Diplomacy) tab shows the files as they are now - after Apply,
+        # Restore or a campaign change - not the picture read before
+        if self.nb.index("current") in (3, 4):
+            self.tab_opened()
 
     def villages(self):
         """Regions descr_strat.txt leaves out: the game makes each a rebel village."""

@@ -11,7 +11,6 @@ next to a moved port sail to the sea next to its new spot."""
 
 import os
 
-from .moddata import BLOCKED_GROUND
 from .strat import RE_XY, Strat
 from .tga import patched
 
@@ -44,14 +43,10 @@ def place_problem(mod, campaign, what, region, xy, moved=None):
         return "another town or port stands there"
     if px != info["colour"] and freed.get((x, y)) != region and (x, y) != tuple(orig(mod, campaign, what, region)):
         return "not %s's land" % region
-    feat = mod._optional_map(campaign, "map_features.tga")
-    ground = mod._optional_map(campaign, "map_ground_types.tga")
     if what == "city":
-        if feat and (feat.width, feat.height) == (img.width, img.height) and feat.get(x, y) != (0, 0, 0):
-            return "a river, ford or cliff runs there"
-        if ground and (ground.width, ground.height) == (2 * img.width + 1, 2 * img.height + 1) \
-                and ground.get(2 * x + 1, 2 * y + 1) in BLOCKED_GROUND:
-            return "sea, mountain or impassable ground"
+        why = mod.land_problem(campaign, (x, y))
+        if why:
+            return why
     else:
         if not any(mod.is_sea(campaign, (x + dx, y + dy)) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             return "a port needs the sea next to it"
