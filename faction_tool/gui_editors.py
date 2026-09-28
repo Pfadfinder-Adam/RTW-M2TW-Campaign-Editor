@@ -84,7 +84,7 @@ class RecordEditor(ttk.Frame):
         self.mod = mod
         self.changes, self.imports, self.current, self.copy_ops = {}, [], None, []
         self.adds, self.removes = [], set()
-        self._recruits = self._required = None      # read from the file when first asked
+        self._recruits = self._required = self._limits = None      # read from the file when first asked
         p = self.path()
         if not p:
             self.blocks = []
@@ -166,6 +166,11 @@ class RecordEditor(ttk.Frame):
         added_rows(b + 1)
         self.show_pictures()
         self.show_links()
+
+    def limits(self):
+        if getattr(self, "_limits", None) is None:
+            self._limits = E.line_limits(self.mod.load(self.path()), self.kind)
+        return self._limits
 
     def required(self):
         if getattr(self, "_required", None) is None:
@@ -275,7 +280,12 @@ class RecordEditor(ttk.Frame):
         if self.app.strat is not None:
             from .textio import tokens
             towns = sum(1 for l in self.app.strat.lines if tokens(l)[:2] == ["type", name])
-        return ("who may build: %s\nrequired by (building_present...): %s;   in towns at the start of %s: %d\n"
+        lv = getattr(self, "v_level", None)
+        lv = lv.get() if lv is not None and lv.get() else (self.tree["levels"][0]["name"] if self.tree["levels"] else "")
+        names = E.level_names(self.mod, lv) if lv else []
+        named = ("names of %s (per culture or faction; pictures per culture above): %s\n" % (
+            lv, self._short(["%s: %s" % x for x in names], 8))) if names else ""
+        return (named + "who may build: %s\nrequired by (building_present...): %s;   in towns at the start of %s: %d\n"
                 "follows a change: new chain name -> towns of every campaign and the requirements naming it; "
                 "a recruit line added -> its factions own the unit and get its cards" % (
                     ";  ".join(lv_txt), self._short(need), self.app.v_campaign.get() or "the campaign", towns))
@@ -374,12 +384,17 @@ class RecordEditor(ttk.Frame):
                 row("Upgrades to", ttk.Combobox(body, textvariable=v["value"], values=levels, state="readonly"))
             else:
                 ks = keys("capability" if place == "capability" else "level" if place == "level" else None)
+                # only keys the place has room for: never more lines of a key than the mod has somewhere
+                ks = {k: x for k, x in ks.items() if not E.room_for(
+                    f, self.kind, self.current, place if self.kind == "building" else None,
+                    v["level"].get() or None, k, self.limits())}
                 cb = ttk.Combobox(body, textvariable=v["key"], values=sorted(ks), width=40)
 
                 def key_picked(*_):
                     v["value"].set(ks.get(v["key"].get(), ""))
                 cb.bind("<<ComboboxSelected>>", key_picked)
-                row("Key", cb, "the keys this mod already uses here; the value is filled with an example")
+                row("Key", cb, "the keys this mod already uses here, as many lines as the mod has at most; "
+                               "the value is filled with an example")
                 row("Value", ttk.Entry(body, textvariable=v["value"], width=50))
             refresh()
         top = ttk.Frame(frm)
@@ -415,10 +430,20 @@ class RecordEditor(ttk.Frame):
                 return
             op = {"at": a, "block": name, "place": "capability" if place == "recruit" else place,
                   "level": v["level"].get() or None, "key": v["key"].get().strip() or None, "text": t}
-            if place == "recruit" and v_own.get():
-                op["own"] = [x for x in v["factions"].get().replace(",", " ").split() if x]
             if self.kind == "unit":
                 op["place"], op["level"] = None, None
+            key = E.tokens(t)[0] if E.tokens(t) else ""
+            same = sum(1 for x in self.adds if x["at"] == a and x.get("place") == op["place"]
+                       and x.get("level") == op["level"] and (E.tokens(x["text"]) or [""])[0] == key)
+            full = E.room_for(f, self.kind, self.current, op["place"], op["level"], key, self.limits(),
+                              same if op["place"] != "upgrades" else sum(
+                                  1 for x in self.adds if x["at"] == a and x.get("place") == "upgrades"
+                                  and x.get("level") == op["level"]))
+            if full:
+                messagebox.showerror("Add line", full + " - the tool keeps to what the mod already uses", parent=w)
+                return
+            if place == "recruit" and v_own.get():
+                op["own"] = [x for x in v["factions"].get().replace(",", " ").split() if x]
             self.adds.append(op)
             w.destroy()
             self._changed()
@@ -506,7 +531,7 @@ class RecordEditor(ttk.Frame):
             self.v_level.set(levels[0])
         cb = ttk.Combobox(bar, textvariable=self.v_level, values=levels, state="readonly", width=24)
         cb.pack(side="left", padx=4)
-        cb.bind("<<ComboboxSelected>>", lambda ev: self.show_pictures())
+        cb.bind("<<ComboboxSelected>>", lambda ev: (self.show_pictures(), self.show_links()))
         ttk.Label(bar, text="Culture").pack(side="left", padx=(12, 0))
         self.v_cult = getattr(self, "v_cult", tk.StringVar())
         if self.v_cult.get() not in cultures:

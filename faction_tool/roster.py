@@ -331,6 +331,12 @@ def set_level(plan, faction, chain, level, give=True, campaign=None):
             return False
         e.set(i, with_factions(text, names + [faction]))
         plan.note(e, "%s/%s: %s may build it" % (chain, level, faction))
+        # its picture comes from the faction's culture folder (ui/<culture>/buildings)
+        from .buildings import BuildingPictures
+        if culture and os.path.isdir(os.path.join(mod.data, "ui")) and \
+                not BuildingPictures(mod).find(culture, level):
+            plan.warn(e, "%s/%s: no picture for the %s culture (ui/%s/buildings/#%s_%s.tga) - import one in "
+                         "the Building editor" % (chain, level, culture, culture, culture, level))
         return True
     if not now:
         return False

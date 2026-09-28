@@ -719,3 +719,90 @@ def rename_chain(plan, old, new):
                 k += 1
         if k:
             plan.note(f, "%d town building(s) follow the chain's new name %s" % (k, new))
+
+
+# ---- how many lines of a key a place may hold ----
+def _place_lines(f, kind, block, place=None, level=None):
+    """The line numbers of one place: a unit block, or a building level's capability,
+    upgrades or own lines."""
+    name, a, b = block
+    if kind == "unit":
+        return range(a, b)
+    lv = next((x for x in chain_tree(f, a, b)["levels"] if x["name"] == level), None)
+    if lv is None:
+        return []
+    if place in ("capability", "upgrades"):
+        return range(lv[place][0] + 1, lv[place][1]) if lv[place] else []
+    inner = set()
+    for p in ("capability", "upgrades"):
+        if lv[p]:
+            inner.update(range(lv[p][0] - 1, lv[p][1] + 1))
+    return [i for i in range(lv["open"] + 1, lv["close"]) if i not in inner]
+
+
+def _count(f, lines, upgrades=False):
+    n = {}
+    for i in lines:
+        t = tokens(f.text(i))
+        if t and t[0] not in ("{", "}"):
+            k = "(level)" if upgrades else t[0]
+            n[k] = n.get(k, 0) + 1
+    return n
+
+
+def line_limits(f, kind):
+    """{place: {key: the most lines of that key one unit (one building level's place)
+    of the mod has}} - a new line may not go beyond what the mod already does.
+    Places: None for units; 'capability', 'upgrades' (key '(level)'), 'level'."""
+    out = {}
+
+    def keep(place, counts):
+        d = out.setdefault(place, {})
+        for k, v in counts.items():
+            d[k] = max(d.get(k, 0), v)
+    if kind == "unit":
+        for blk in unit_blocks(f):
+            keep(None, _count(f, _place_lines(f, kind, blk)))
+        return out
+    for blk in building_blocks(f):
+        for lv in chain_tree(f, blk[1], blk[2])["levels"]:
+            for place in ("capability", "upgrades", "level"):
+                keep(place, _count(f, _place_lines(f, kind, blk, place, lv["name"]), place == "upgrades"))
+    return out
+
+
+def room_for(f, kind, block, place, level, key, limits, pending=0):
+    """None when one more line of key fits in that place, else why not."""
+    place_key = None if kind == "unit" else place
+    k = "(level)" if place == "upgrades" else key
+    most = (limits.get(place_key) or {}).get(k, 0)
+    have = _count(f, _place_lines(f, kind, block, place, level), place == "upgrades").get(k, 0) + pending
+    if have >= most:
+        return "no %s in this mod has more than %d '%s' line(s) %s" % (
+            "unit" if kind == "unit" else "building level", most, k,
+            "" if kind == "unit" else "in its %s" % place)
+    return None
+
+
+def level_names(mod, level):
+    """[(suffix, name)] of a building level in export_buildings.txt: its own name and
+    the names for a culture or a faction ({<level>_<culture or faction>}, e.g. Shrine to
+    Ares for greek) - the game shows the one for the faction, else its culture, else
+    the plain one."""
+    path = _text_file(mod, "export_buildings.txt")
+    if not path:
+        return []
+    out = []
+    low = level.lower()
+    for t in mod.load(path).texts():
+        s = t.lstrip()
+        if not (s.startswith("{") and "}" in s):
+            continue
+        key = s[1:s.index("}")]
+        k = key.lower()
+        if k == low or (k.startswith(low + "_") and not k.endswith("_desc") and not k.endswith("_desc_short")):
+            suffix = key[len(level) + 1:] or "(plain)"
+            name = s[s.index("}") + 1:].strip()
+            if name and "_" not in suffix.strip("()"):
+                out.append((suffix, name))
+    return out

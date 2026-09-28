@@ -24,6 +24,12 @@
   a building chain's new name reaches the towns of every campaign and the requirements
   naming it. A line naming a unit, a building chain or level the mod has not is refused;
   a `levels` line must name the chain's level blocks.
+- A line is added only while its place has fewer lines of that key than the most any
+  unit (building level) of the mod has - the tool keeps to what the mod already does.
+- **Building names per culture and faction**: the Building editor shows a level's names
+  (`{<level>_<culture>}` / `{<level>_<faction>}` - Shrine to Ares for the Greeks, to
+  Taranis for the Gauls...); a level given to a faction whose culture has no picture
+  for it is warned about.
 - **Tied to it**: above the lines, who owns and recruits the unit (or may build each
   level), what requires the chain, and how many armies / towns hold it at the start.
 - **The mod is remembered**: the last mod and each mod's campaign load at the next
