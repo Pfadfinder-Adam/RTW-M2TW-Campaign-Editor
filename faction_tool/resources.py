@@ -140,6 +140,8 @@ def apply(plan, campaign, changes):
         img = mod.region_map(campaign)
 
         def town_of(xy):
+            if not (0 <= xy[0] < img.width and 0 <= xy[1] < img.height):
+                return None
             r = by_colour.get(img.get(*xy))
             return (mod.regions(campaign).get(r) or {}).get("settlement") if r else None
 
