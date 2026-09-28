@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.2.0 - 2026-09-28
+
+The big patch: resources, Medieval II, tiles as the game has them.
+
+### Map
+- **Resources**: a Resources layer with a simple sign per type; click to pick,
+  right drag to move, Place new, Delete picked; a region's resource tags
+  (descr_regions.txt). Lines keep their layout (vanilla, HLR, REX quantities).
+- **Tiles**: armies and agents are refused only by sea, mountains, dense forest
+  and rivers/fords/cliffs - checked in the game; hills, woodland and steep tiles
+  are fine now. The reason shows on hover and drag, and a character dropped or
+  placed on a bad tile goes to the nearest good one.
+- Trying to drag a character that cannot move here says why and what to do.
+- Every agent kind has its own sign.
+- An open Map or Diplomacy tab is drawn again after Apply, Restore or reload.
+
+### Towns
+- Buildings follow the settlement level both ways: a level picked by hand sets
+  the governor's building and the population range, a bigger governor's building
+  raises the level, and every chain offers the levels of the settlement as it
+  will be (no more ticking 'show levels too big').
+
+### Armies, agents & fleets
+- A table (kind, name, units, tile) under a split you can drag; double click shows
+  it on the map.
+
+### Medieval II (early)
+- Character lines with the sex, as Medieval II writes them (the tool wrote Rome's
+  form before - the likely cause of a crash after taking rebel towns).
+- Agents from the mod's descr_character.txt: merchant, priest, princess, inquisitor...
+- Religions: read, shown on the map, edited per region (Regions mode), written
+  for new regions.
+
+### Logs
+- Tools > Save logs (zip): the tool's log with the game's system.log.txt and the
+  newest crash report (the player's nick taken out of its name).
+
 ## 0.1.2 - 2026-09-28
 
 - Edit: taking every unit out of a town's garrison now leaves it empty (a family

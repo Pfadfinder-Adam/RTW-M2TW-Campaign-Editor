@@ -29,7 +29,7 @@ from .strat import Strat
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.1.2"
+VERSION = "0.2.0"
 APP = "RTW Campaign Editor"
 
 HELP = """RTW Campaign Editor - how to use it
@@ -46,17 +46,23 @@ THE TABS (in the order that works best)
   Units & armies
                the garrison of each town (click cards to add, click the garrison to take out);
                new armies, agents and fleets (+ Army / + Agent / + Fleet, then Place on map);
-               in Edit also the faction's armies, fleets and agents already on the map.
-  Buildings    what stands in each town; settlement level and population. A bigger
-               governor's building grows the settlement by itself.
+               in Edit also the faction's armies, fleets and agents already on the map
+               (a table below the towns; drag the line between them; double click: on the map).
+  Buildings    what stands in each town; settlement level and population. The level and the
+               governor's building follow each other; the chains offer that level's buildings.
   Map          left drag moves the map, a click on a town takes it / gives it back;
                right drag (or Ctrl + left drag) moves your characters, towns and ports;
                Political, Diplomacy and the other switches change what is shown.
+               Regions: paint borders, new regions, Religions... (Medieval II).
+               Resources: click one to pick it, right drag moves it, Place new, Delete picked,
+               a region's resource tags. Armies and agents stand on any land but sea,
+               mountains, dense forest and rivers; dropped on a bad tile, they go to the
+               nearest good one.
   Diplomacy    how the faction and every other one feel about each other at the start.
 
-  Only the map (regions, towns, ports)? In New faction mode with no faction named the
+  Only the map (regions, towns, ports, resources)? In New faction mode with no faction named the
   buttons read "Preview map changes" / "Apply map changes" and write the map alone.
-  Check mod, Scan mod, Restore a backup, Game manifest and Log are under Tools.
+  Check mod, Scan mod, Restore a backup, Game manifest, Log and Save logs are under Tools.
 
   4. Preview changes (Ctrl+P) shows every file and line that would change. Nothing is written.
   5. Create faction / Apply changes (Ctrl+S) writes it, with a backup first.
@@ -72,7 +78,12 @@ KEYS
 WHEN SOMETHING GOES WRONG
   Log shows what the tool did and every error (faction_tool.log next to the exe).
   Check mod reads the whole mod and reports anything it cannot make sense of.
-  Send faction_tool.log and the game's system.log.txt.
+  Tools > Save logs (zip) packs faction_tool.log with the game's system.log.txt and its
+  newest crash report - send that file.
+
+MEDIEVAL II
+  Works on Medieval II too (run the game's tools\unpacker\unpack_all.bat first):
+  its agents (merchant, priest, princess...), character lines with the sex, religions.
 """
 
 _showerror = messagebox.showerror
