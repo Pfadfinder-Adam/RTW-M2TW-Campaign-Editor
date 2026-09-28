@@ -25,7 +25,7 @@ from .gui_map import MapView
 from .plan import Plan, backups, restore
 from .scan import IGNORE_HELP, ignore_path, make_manifest, scan as scan_mod
 from .start import balanced_army, unit_name
-from .strat import Strat
+from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
@@ -1796,7 +1796,15 @@ class App(tk.Tk):
         ttk.Label(frm, text="Name" if agent else ("Admiral" if kind == "fleet" else "General")).grid(
             row=row, column=0, sticky="w")
         v_first, v_last, v_age = tk.StringVar(), tk.StringVar(), tk.StringVar(value="30")
-        ttk.Combobox(frm, textvariable=v_first, values=pool.get("characters", []), width=16).grid(row=row, column=1)
+        cb_first = ttk.Combobox(frm, textvariable=v_first, values=first_names(pool, v_kind.get()), width=16)
+        cb_first.grid(row=row, column=1)
+
+        def kind_changed(*a):                 # a princess takes a woman's name, the others a man's
+            names = first_names(pool, v_kind.get())
+            cb_first["values"] = names
+            if v_first.get() and v_first.get() not in names:
+                v_first.set("")
+        v_kind.trace_add("write", kind_changed)
         ttk.Combobox(frm, textvariable=v_last, values=[""] + pool.get("surnames", []), width=16).grid(row=row, column=2)
         row += 1
         ttk.Label(frm, text="Age").grid(row=row, column=0, sticky="w")
@@ -1809,6 +1817,11 @@ class App(tk.Tk):
             first = v_first.get().strip()
             if not first:
                 messagebox.showerror(APP, "pick a first name", parent=w)
+                return
+            if pool and first not in first_names(pool, v_kind.get()):
+                messagebox.showerror(APP, "'%s' is not in the faction's %s names - the game crashes on a name "
+                                          "it has no string for" % (first, "women's" if v_kind.get() in FEMALE_KINDS
+                                                                     else "men's"), parent=w)
                 return
             self.remember()
             self.field.append({"kind": v_kind.get(), "name": (first + " " + v_last.get().strip()).strip(),

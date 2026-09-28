@@ -758,6 +758,12 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(regs["B_R"]["religions"], {"catholic": 20, "pagan": 80})
         self.assertEqual(regs["N_R"]["religions"], {"catholic": 90, "pagan": 10})     # A_R, where its land was
 
+    def test_princess_takes_a_womans_name(self):
+        from faction_tool.strat import first_names
+        pool = {"characters": ["Adam"], "women": ["Constance"]}
+        self.assertEqual(first_names(pool, "princess"), ["Constance"])
+        self.assertEqual(first_names(pool, "spy"), ["Adam"])
+
     def test_medieval_character_lines(self):
         from faction_tool.strat import character_line
         m2 = ["character\tPhilip, named character, male, leader, age 40, x 113, y 131"]

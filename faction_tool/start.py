@@ -4,7 +4,7 @@ characters and diplomacy."""
 import re
 from types import SimpleNamespace
 
-from .strat import Strat, RE_XY, character_line, village_block
+from .strat import FEMALE_KINDS, Strat, RE_XY, character_line, first_names, village_block
 from .textio import strip_comment, tokens
 
 
@@ -562,9 +562,10 @@ def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
         if not name:
             raise ValueError("%s %d needs a name" % (kind, n))
         first = name.split(" ")[0]
-        if pool and first not in pool.get("characters", []):
-            raise ValueError("%s: '%s' is not in the name list - the game crashes on names it has no string for"
-                             % (kind, first))
+        names = first_names(pool, rtw_kind)
+        if pool and first not in names:
+            raise ValueError("%s: '%s' is not in the %s name list - the game crashes on names it has no string for"
+                             % (kind, first, "women's" if rtw_kind in FEMALE_KINDS else "men's"))
         rest = name[len(first):].strip()
         if rest and pool and rest not in pool.get("surnames", []):
             raise ValueError("%s: surname '%s' is not in the surname list" % (kind, rest))

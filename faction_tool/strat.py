@@ -189,12 +189,21 @@ def medieval(lines):
     return False
 
 
+FEMALE_KINDS = ("princess", "witch")
+
+
+def first_names(pool, kind):
+    """The descr_names list a character of this kind takes its first name from:
+    'women' for a princess or witch, 'characters' (the men's) for everyone else."""
+    return (pool or {}).get("women" if kind in FEMALE_KINDS else "characters", [])
+
+
 def character_line(lines, name, kind, age, xy, role=None, female=None):
     """A character line in the file's own dialect (see medieval). kind: general,
     named character, spy, princess...; role: leader / heir or None."""
     extra = ", %s" % role if role else ""
     if medieval(lines):
-        sex = "female" if (female if female is not None else kind in ("princess", "witch")) else "male"
+        sex = "female" if (female if female is not None else kind in FEMALE_KINDS) else "male"
         return "character\t%s, %s, %s%s, age %d, x %d, y %d" % (name, kind, sex, extra, int(age), xy[0], xy[1])
     return "character\t%s, %s%s, age %d, , x %d, y %d" % (name, kind, extra, int(age), xy[0], xy[1])
 
