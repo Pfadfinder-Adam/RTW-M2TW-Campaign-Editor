@@ -705,6 +705,76 @@ class ToolTest(unittest.TestCase):
         lines = [l.split(None, 1)[0] for l in s.lines[fb.start:fb.end] if l.strip()]
         self.assertLess(max(i for i, w in enumerate(lines) if w == "character"), lines.index("character_record"))
 
+    def test_family_edit_and_restore(self):
+        """Family tab: traits, ages, a renamed leader followed on the tree, a new wife and child
+        (records in the file's own form, the tree after them), then Restore byte for byte."""
+        from faction_tool import family
+        from faction_tool.edit import edit
+        mod = ModData(self.root)
+        path = mod.campaign_file("test", "descr_strat.txt")
+        with open(path) as fh:
+            text = fh.read()
+        text = text.replace("age 40, , x 1, y 1\n", "age 40, , x 1, y 1\ntraits Brave 1 \n", 1)
+        text = text.replace("weapon_lvl 0\n;#####<", "weapon_lvl 0\n\ncharacter_record\t\tAnna, \tfemale, command 0, "
+                            "influence 0, management 0, subterfuge 0, age 30, alive, never_a_leader\n"
+                            "relative \tAaron Alphid, \tAnna,\t\tend\n;#####<", 1)
+        with open(path, "w") as fh:
+            fh.write(text)
+        write(os.path.join(self.root, "data", "export_descr_character_traits.txt"),
+              "Trait Brave\n    Characters family\n    AntiTraits Coward\n\n    Level Bold\n    Level Fearless\n\n"
+              "Trait Coward\n    Characters family\n\n    Level Timid\n")
+        write(os.path.join(self.root, "data", "export_descr_ancillaries.txt"), "Ancillary scribe\n    Image x.tga\n")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        fam = family.read(mod.load(path), "alpha")
+        self.assertEqual(fam["tree"], [["Aaron Alphid", "Anna", []]])
+        lead = fam["people"][0]
+        self.assertEqual((lead.name, lead.role, lead.traits), ("Aaron Alphid", "leader", [["Brave", 1]]))
+        anna = next(p for p in fam["people"] if p.name == "Anna")
+        opts = {"people": {lead.key: {"name": "Boris Alphid", "traits": [["Brave", 2]], "ancillaries": ["scribe"]},
+                           anna.key: {"age": 33}},
+                "new": [{"name": "Aaron Alphid", "sex": "male", "age": 5}]}
+        opts["tree"] = [["Boris Alphid", "Anna", ["Aaron Alphid"]]]
+        for bad in ({"people": {lead.key: {"traits": [["Brave", 3]]}}},          # Brave has 2 levels
+                    {"people": {lead.key: {"traits": [["Nosuch", 1]]}}},
+                    {"people": {lead.key: {"name": "Zed"}}},                      # no such name: the game crashes
+                    {"tree": [["Aaron Alphid", "Anna", ["Aaron Alphid"]]]}):     # his own child
+            with self.assertRaises(ValueError):
+                edit(ModData(self.root), "test", "alpha", {"family": bad})
+        # the leader renamed on the Faction tab: the tree follows (a stale name there is nobody)
+        p0 = edit(ModData(self.root), "test", "alpha", {"leader": {"name": "Boris Alphid", "age": 40}})
+        self.assertIn("relative \tBoris Alphid, \tAnna,\t\tend", Strat(p0.files[path]).lines)
+        plan = edit(mod, "test", "alpha", {"family": opts})
+        plan.apply()
+        with open(path) as fh:
+            lines = fh.read().splitlines()
+        self.assertIn("character\tBoris Alphid, named character, leader, age 40, , x 1, y 1", lines)
+        self.assertIn("traits Brave 2 ", lines)
+        self.assertIn("ancillaries scribe", lines)
+        self.assertIn("character_record\t\tAnna, \tfemale, command 0, influence 0, management 0, subterfuge 0, "
+                      "age 33, alive, never_a_leader", lines)
+        self.assertIn("character_record\t\tAaron Alphid, \tmale, command 0, influence 0, management 0, "
+                      "subterfuge 0, age 5, alive, never_a_leader", lines)
+        rel = [i for i, l in enumerate(lines) if l.startswith("relative")]
+        self.assertEqual([lines[i] for i in rel], ["relative \tBoris Alphid, \tAnna,\t\tAaron Alphid,\tend"])
+        self.assertLess(max(i for i, l in enumerate(lines) if l.startswith("character_record")), rel[0])
+        fam = family.read(ModData(self.root).load(path), "alpha")
+        self.assertEqual(fam["tree"], [["Boris Alphid", "Anna", ["Aaron Alphid"]]])
+        mod = ModData(self.root)
+        restore(mod, backups(mod)[0])
+        after = tree_hash(self.root)
+        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
+
+    def test_family_tree_checks(self):
+        from faction_tool.family import ordered, tree_problems
+        people = [{"name": n, "sex": s} for n, s in (("A", "male"), ("B", "female"), ("C", "male"), ("D", "female"),
+                                                     ("E", "male"))]
+        self.assertEqual(tree_problems([["A", "B", ["C"]], ["C", "D", ["E"]]], people), [])
+        self.assertTrue(tree_problems([["B", "A", []]], people))                     # a woman heads a couple
+        self.assertTrue(tree_problems([["A", "B", ["C"]], ["E", "D", ["C"]]], people))  # two sets of parents
+        self.assertTrue(tree_problems([["A", "B", ["X"]]], people))                  # nobody of the faction
+        self.assertEqual(ordered([["C", "D", ["E"]], ["A", "B", ["C"]]])[0][0], "A")  # parents first
+
     def test_existing_armies_changed_and_removed(self):
         from faction_tool.edit import edit
         mod = ModData(self.root)

@@ -278,6 +278,9 @@ def _strat(plan, campaign, now):
         _moves(plan, f, campaign)
     if o.get("take") or o.get("give"):
         _towns(plan, f, campaign)
+    if o.get("family"):
+        from .family import apply as apply_family
+        apply_family(plan, f, fac, o["family"])
     _people(plan, f, now)
     if o.get("capital"):
         _capital(plan, f, o["capital"])
@@ -482,6 +485,9 @@ def _people(plan, f, now):
         if rest and pool and rest not in pool.get("surnames", []):
             raise ValueError("%s: surname '%s' is not in %s's surname list" % (role, rest, plan.new))
         line = f.text(c.start)
+        if name != have["name"]:
+            from .family import rename_in_tree
+            rename_in_tree(f, plan.new, have["name"], name)     # the tree names him too
         line = line.replace(have["name"], name, 1)
         if age:
             line = re.sub(r"\bage\s+\d+", "age %d" % int(age), line, 1)

@@ -1,0 +1,651 @@
+"""The Family tab (Edit faction): every character of the faction - on the map with
+their traits and ancillaries, and the family members off the map (character_record) -
+and the family tree drawn the way the game shows it: couples side by side, their
+children in the row below. The picks are kept by the window (App.family_set, with
+Undo) and written on Apply by family.apply."""
+
+import copy
+import tkinter as tk
+from tkinter import messagebox, simpledialog, ttk
+
+from . import family as FM
+
+CARD_W, CARD_H, GAP, ROW = 128, 58, 16, 100
+COUPLE_GAP = 10
+
+
+class FamilyEditor(ttk.Frame):
+    def __init__(self, master, app):
+        super().__init__(master, padding=4)
+        self.app = app
+        self.fam, self.faction, self._for = None, None, None
+        self.traits, self.ancs, self.pool = {}, {}, {}
+        self.sel = None                        # key of the picked person
+        top = ttk.Frame(self)
+        top.pack(fill="x")
+        self.title = ttk.Label(top, text="Edit faction: pick the faction on the Faction tab", font=("", 10, "bold"))
+        self.title.pack(side="left")
+        ttk.Label(top, text="   Find").pack(side="left")
+        self.v_find = tk.StringVar()
+        e = ttk.Entry(top, textvariable=self.v_find, width=18)
+        e.pack(side="left", padx=4)
+        e.bind("<KeyRelease>", lambda ev: self.fill_list())
+        ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
+        ttk.Label(self, foreground="#555", justify="left", wraplength=1100, text=(
+            "Everyone of the faction: characters on the map (name, age, traits, ancillaries) and family members "
+            "off the map (name, sex, age). The tree is drawn like the game's: a couple side by side, their "
+            "children below. Click a card or a row to edit that person. Names come from the faction's name lists "
+            "(the game crashes on a name it has no string for); a renamed person is renamed on the tree too.")
+                  ).pack(fill="x", pady=(2, 6))
+        panes = ttk.Panedwindow(self, orient="horizontal")
+        panes.pack(fill="both", expand=True)
+        left = ttk.Frame(panes)
+        panes.add(left, weight=2)
+        right = ttk.LabelFrame(panes, text="Family tree", padding=2)
+        panes.add(right, weight=5)
+
+        # the people
+        cols = (("name", "name", 140), ("kind", "who", 140), ("age", "age", 40), ("where", "where", 80))
+        self.tv = ttk.Treeview(left, columns=[c[0] for c in cols], show="headings", height=9, selectmode="browse")
+        for cid, text, w in cols:
+            self.tv.heading(cid, text=text)
+            self.tv.column(cid, width=w, stretch=cid == "name")
+        self.tv.tag_configure("changed", background="#d9e6ff", foreground="#000000")
+        self.tv.tag_configure("new", background="#d9f2d0", foreground="#000000")
+        self.tv.pack(fill="x")
+        self.tv.bind("<<TreeviewSelect>>", lambda e: self._picked_row())
+
+        # the person's form
+        form = ttk.LabelFrame(left, text="Person", padding=4)
+        form.pack(fill="both", expand=True, pady=(6, 0))
+        self.form = form
+        r = ttk.Frame(form)
+        r.pack(fill="x")
+        ttk.Label(r, text="Name").grid(row=0, column=0, sticky="w")
+        self.v_first, self.v_last, self.v_age, self.v_sex = tk.StringVar(), tk.StringVar(), tk.StringVar(), tk.StringVar()
+        self.cb_first = ttk.Combobox(r, textvariable=self.v_first, width=16)
+        self.cb_first.grid(row=0, column=1, padx=2)
+        self.cb_last = ttk.Combobox(r, textvariable=self.v_last, width=16)
+        self.cb_last.grid(row=0, column=2, padx=2)
+        ttk.Label(r, text="Age").grid(row=0, column=3, padx=(8, 2))
+        ttk.Spinbox(r, from_=0, to=120, textvariable=self.v_age, width=5).grid(row=0, column=4)
+        self.sex_box = ttk.Frame(r)
+        self.sex_box.grid(row=1, column=1, columnspan=3, sticky="w", pady=2)
+        for s in ("male", "female"):
+            ttk.Radiobutton(self.sex_box, text=s, value=s, variable=self.v_sex).pack(side="left")
+        ttk.Button(r, text="Set name / age", command=self.set_basic).grid(row=1, column=4, pady=2)
+        self.lbl_who = ttk.Label(form, text="", foreground="#555", wraplength=420, justify="left")
+        self.lbl_who.pack(fill="x", pady=(2, 4))
+
+        tr = ttk.LabelFrame(form, text="Traits (level)", padding=2)
+        tr.pack(fill="both", expand=True)
+        self.tv_tr = ttk.Treeview(tr, columns=("trait", "level", "lname"), show="headings", height=5)
+        for cid, text, w in (("trait", "trait", 150), ("level", "level", 45), ("lname", "level name", 170)):
+            self.tv_tr.heading(cid, text=text)
+            self.tv_tr.column(cid, width=w, stretch=cid == "lname")
+        self.tv_tr.pack(fill="both", expand=True)
+        tb = ttk.Frame(tr)
+        tb.pack(fill="x", pady=2)
+        self.v_trait, self.v_level = tk.StringVar(), tk.StringVar(value="1")
+        self.cb_trait = ttk.Combobox(tb, textvariable=self.v_trait, width=22)
+        self.cb_trait.pack(side="left")
+        ttk.Spinbox(tb, from_=1, to=10, textvariable=self.v_level, width=4).pack(side="left", padx=2)
+        ttk.Button(tb, text="Add / set", command=self.add_trait).pack(side="left", padx=2)
+        ttk.Button(tb, text="Remove", command=self.remove_trait).pack(side="left")
+        self.tv_tr.bind("<<TreeviewSelect>>", lambda e: self._trait_row())
+
+        an = ttk.LabelFrame(form, text="Ancillaries (retinue)", padding=2)
+        an.pack(fill="x", pady=(4, 0))
+        self.lb_an = tk.Listbox(an, height=3, exportselection=False)
+        self.lb_an.pack(fill="x")
+        ab = ttk.Frame(an)
+        ab.pack(fill="x", pady=2)
+        self.v_anc = tk.StringVar()
+        self.cb_anc = ttk.Combobox(ab, textvariable=self.v_anc, width=24)
+        self.cb_anc.pack(side="left")
+        ttk.Button(ab, text="Add", command=self.add_anc).pack(side="left", padx=2)
+        ttk.Button(ab, text="Remove", command=self.remove_anc).pack(side="left")
+        self.char_parts = [tr, an]
+
+        fb = ttk.Frame(form)
+        fb.pack(fill="x", pady=(6, 0))
+        ttk.Button(fb, text="Give a wife...", command=self.add_wife).pack(side="left")
+        ttk.Button(fb, text="Add a child...", command=self.add_child).pack(side="left", padx=4)
+        ttk.Button(fb, text="Take off the tree", command=self.off_tree).pack(side="left")
+        ttk.Button(fb, text="Leave out", command=self.leave_out).pack(side="left", padx=4)
+
+        # the tree
+        self.cv = tk.Canvas(right, bg="#efe6d2", highlightthickness=0)
+        xs = ttk.Scrollbar(right, orient="horizontal", command=self.cv.xview)
+        ys = ttk.Scrollbar(right, orient="vertical", command=self.cv.yview)
+        self.cv.configure(xscrollcommand=xs.set, yscrollcommand=ys.set)
+        ys.pack(side="right", fill="y")
+        xs.pack(side="bottom", fill="x")
+        self.cv.pack(fill="both", expand=True)
+        self.cv.bind("<ButtonPress-3>", lambda e: self.cv.scan_mark(e.x, e.y))
+        self.cv.bind("<B3-Motion>", lambda e: self.cv.scan_dragto(e.x, e.y, gain=1))
+        self.cv.bind("<Enter>", lambda e: self.cv.bind_all("<MouseWheel>", lambda x: self.cv.yview_scroll(
+            int(-x.delta / 120), "units")))
+        self.cv.bind("<Leave>", lambda e: self.cv.unbind_all("<MouseWheel>"))
+
+    # ---------------------------------------------------------------- data
+    @property
+    def st(self):
+        return self.app.family_set
+
+    def load(self):
+        app = self.app
+        faction = app.v["template"].get().strip() if app.editing() else ""
+        if not app.mod or not faction or not app.strat or not app.strat.faction(faction):
+            self.fam, self.faction = None, None
+            self.title.configure(text="Edit faction: pick the faction on the Faction tab")
+            self.redraw()
+            return
+        path = app.mod.campaign_file(app.v_campaign.get(), "descr_strat.txt")
+        key = (app.mod.data, path, faction)
+        if self._for != key:
+            try:
+                self.fam = FM.read(app.mod.load(path), faction)
+                self.traits, self.ancs = FM.trait_list(app.mod), FM.ancillary_list(app.mod)
+                self.pool = app.mod.name_pool(faction) or {}
+            except Exception as e:
+                messagebox.showerror("Family", str(e))
+                self.fam = None
+                return
+            self.faction, self._for, self.sel = faction, key, None
+        self.title.configure(text="People and family of %s" % faction)
+        self.redraw()
+
+    def forget(self):
+        self._for, self.fam, self.sel = None, None, None
+
+    def people(self):
+        """Everyone as they will be: [dict] with 'changed' / 'new' marks."""
+        if not self.fam:
+            return []
+        ch, gone = self.st.get("people") or {}, set(self.st.get("remove") or [])
+        out = []
+        for p in self.fam["people"]:
+            if p.key in gone:
+                continue
+            d = p.as_dict()
+            c = ch.get(p.key) or {}
+            d.update({k: copy.deepcopy(v) for k, v in c.items() if v is not None})
+            d["changed"], d["new"] = bool(c), False
+            out.append(d)
+        for i, n in enumerate(self.st.get("new") or []):
+            out.append({"key": "new:%d" % i, "name": n["name"], "source": "record", "kind": "record",
+                        "sex": n.get("sex", "male"), "age": n.get("age"), "role": None, "status": "alive",
+                        "xy": None, "traits": [], "ancillaries": [], "changed": False, "new": True})
+        return out
+
+    def tree(self):
+        if self.st.get("tree") is not None:
+            return self.st["tree"]
+        if not self.fam:
+            return []
+        ren = {}
+        for k, c in (self.st.get("people") or {}).items():
+            p = next((p for p in self.fam["people"] if p.key == k), None)
+            if p and c.get("name") and c["name"] != p.name:
+                ren[p.name] = c["name"]
+        return [[ren.get(a, a), ren.get(b, b), [ren.get(k, k) for k in ks]] for a, b, ks in self.fam["tree"]]
+
+    def person(self, key):
+        return next((p for p in self.people() if p["key"] == key), None)
+
+    def changed(self):
+        self.app.status.set("Family: changes waiting - Preview, then Apply changes.")
+        self.redraw()
+
+    def _before(self):
+        self.app.remember()
+
+    def _own_tree(self):
+        """The tree as the window's own list (made from the file on the first change)."""
+        if self.st.get("tree") is None:
+            self.st["tree"] = copy.deepcopy(self.tree())
+        return self.st["tree"]
+
+    # ---------------------------------------------------------------- showing
+    def redraw(self):
+        self.fill_list()
+        self.fill_form()
+        self.draw_tree()
+
+    def fill_list(self):
+        self.tv.delete(*self.tv.get_children())
+        q = self.v_find.get().strip().lower()
+        for p in self.people():
+            if q and q not in p["name"].lower():
+                continue
+            kind = p["kind"] if p["source"] == "map" else ("woman" if p["sex"] == "female" else "man")
+            if p.get("role"):
+                kind += ", " + p["role"]
+            tag = "new" if p["new"] else ("changed" if p["changed"] else "")
+            self.tv.insert("", "end", iid=p["key"], values=(p["name"], kind, p["age"] if p["age"] is not None else "",
+                                                           "on the map" if p["source"] == "map" else "off the map"),
+                           tags=(tag,))
+        if self.sel and self.tv.exists(self.sel):
+            self.tv.selection_set(self.sel)
+            self.tv.see(self.sel)
+
+    def _picked_row(self):
+        s = self.tv.selection()
+        if s and s[0] != self.sel:
+            self.sel = s[0]
+            self.fill_form()
+            self.draw_tree()
+
+    def fill_form(self):
+        p = self.person(self.sel) if self.sel else None
+        if not p:
+            self.form.configure(text="Person - pick one in the list or on the tree")
+            for v in (self.v_first, self.v_last, self.v_age):
+                v.set("")
+            self.tv_tr.delete(*self.tv_tr.get_children())
+            self.lb_an.delete(0, "end")
+            self.lbl_who.configure(text="")
+            return
+        self.form.configure(text="Person: %s" % p["name"])
+        first = p["name"].split(" ")[0]
+        self.v_first.set(first)
+        self.v_last.set(p["name"][len(first):].strip())
+        self.v_age.set(str(p["age"] or ""))
+        self.v_sex.set(p["sex"])
+        self.cb_first["values"] = self.pool.get("women" if p["sex"] == "female" else "characters", [])
+        self.cb_last["values"] = [""] + self.pool.get("surnames", [])
+        rec = p["source"] != "map"
+        for w in self.sex_box.winfo_children():
+            w.configure(state="normal" if rec else "disabled")
+        if rec:
+            who = "Off the map (character_record): the game keeps only the name, sex and age of such a person."
+        else:
+            who = "On the map at %d, %d: %s%s." % (p["xy"][0], p["xy"][1], p["kind"],
+                                                   ", " + p["role"] if p.get("role") else "") if p.get("xy") else p["kind"]
+        self.lbl_who.configure(text=who)
+        self.tv_tr.delete(*self.tv_tr.get_children())
+        for i, (t, n) in enumerate(p["traits"]):
+            levels = (self.traits.get(t) or {}).get("levels") or []
+            self.tv_tr.insert("", "end", iid=str(i), values=(t, n, levels[n - 1] if 0 < n <= len(levels) else ""))
+        self.lb_an.delete(0, "end")
+        for a in p["ancillaries"]:
+            self.lb_an.insert("end", a)
+        kind = FM.trait_kind(p["kind"])
+        self.cb_trait["values"] = sorted(t for t, info in self.traits.items()
+                                         if not info["characters"] or kind in info["characters"])
+        self.cb_anc["values"] = sorted(self.ancs)
+        for part in self.char_parts:
+            for w in part.winfo_children():
+                for x in [w] + list(w.winfo_children()):
+                    try:
+                        x.configure(state="disabled" if rec else "normal")
+                    except tk.TclError:
+                        pass
+
+    def _trait_row(self):
+        s = self.tv_tr.selection()
+        p = self.person(self.sel)
+        if s and p:
+            t, n = p["traits"][int(s[0])]
+            self.v_trait.set(t)
+            self.v_level.set(str(n))
+
+    # ---------------------------------------------------------------- the tree
+    def draw_tree(self):
+        cv = self.cv
+        cv.delete("all")
+        if not self.fam:
+            cv.create_text(20, 20, anchor="nw", text="Pick the faction on the Faction tab (Edit faction).",
+                           fill="#555")
+            return
+        people = {p["name"]: p for p in self.people() if p["source"] == "record" or
+                  p["kind"] in ("named character", "princess")}
+        tree = self.tree()
+        couples = {a: (a, b, ks) for a, b, ks in tree}
+        wives = {b for _, b, _ in tree if b}
+        kids = {k for _, _, ks in tree for k in ks}
+        roots = [a for a, b, _ in tree if a not in kids and b not in kids]
+        placed = {}
+
+        def width(name, seen=()):
+            if name in seen:
+                return CARD_W
+            c = couples.get(name)
+            own = 2 * CARD_W + COUPLE_GAP if c and c[1] else CARD_W
+            if not c or not c[2]:
+                return own
+            return max(own, sum(width(k, seen + (name,)) for k in c[2]) + GAP * (len(c[2]) - 1))
+
+        def place(name, x, y, seen=()):
+            """Lays out name (and wife, and children below) in [x, x + width); returns the
+            x of the card's middle, where the line from the parents ends."""
+            w = width(name, seen)
+            c = couples.get(name)
+            own = 2 * CARD_W + COUPLE_GAP if c and c[1] else CARD_W
+            cx = x + (w - own) / 2
+            placed[name] = (cx, y)
+            if c and c[1]:
+                placed[c[1]] = (cx + CARD_W + COUPLE_GAP, y)
+            if c and c[2] and name not in seen:
+                kx = x + (w - (sum(width(k, seen + (name,)) for k in c[2]) + GAP * (len(c[2]) - 1))) / 2
+                mid = cx + own / 2
+                bar = y + CARD_H + (ROW - CARD_H) / 2
+                cv.create_line(mid, y + CARD_H / 2, mid, bar, fill="#6b5a3a", width=2)
+                ends = []
+                for k in c[2]:
+                    kw = width(k, seen + (name,))
+                    kxm = place(k, kx, y + ROW, seen + (name,))
+                    ends.append(kxm)
+                    cv.create_line(kxm, bar, kxm, y + ROW, fill="#6b5a3a", width=2)
+                    kx += kw + GAP
+                cv.create_line(min(ends + [mid]), bar, max(ends + [mid]), bar, fill="#6b5a3a", width=2)
+            return cx + CARD_W / 2
+
+        x = 20
+        for r in roots:
+            place(r, x, 20)
+            x += width(r) + 3 * GAP
+        bottom = max([y for _, y in placed.values()] + [20]) + ROW + 10
+        loose = [n for n, p in people.items() if n not in placed]
+        if loose:
+            cv.create_text(20, bottom, anchor="nw", text="Not on the tree:", fill="#5a4a2a", font=("", 9, "bold"))
+            lx, ly = 20, bottom + 20
+            for n in loose:
+                placed[n] = (lx, ly)
+                lx += CARD_W + GAP
+                if lx > 20 + 6 * (CARD_W + GAP):
+                    lx, ly = 20, ly + CARD_H + GAP
+        for a, b, _ in tree:
+            if a in placed and b in placed and b:
+                (x1, y1), (x2, y2) = placed[a], placed[b]
+                if y1 == y2 and abs(x2 - x1 - CARD_W - COUPLE_GAP) < 1:
+                    cv.create_line(x1 + CARD_W, y1 + CARD_H / 2, x2, y2 + CARD_H / 2, fill="#a0364b", width=3)
+        for n, (x, y) in placed.items():
+            self._card(n, people.get(n), x, y)
+        cv.configure(scrollregion=cv.bbox("all") or (0, 0, 100, 100))
+
+    def _card(self, name, p, x, y):
+        cv = self.cv
+        female = p and p["sex"] == "female"
+        fill = "#f6dfe3" if female else "#dfe7f3"
+        if p is None:
+            fill = "#e0e0e0"
+        sel = p is not None and p["key"] == self.sel
+        tag = "card:%s" % (p["key"] if p else name)
+        cv.create_rectangle(x, y, x + CARD_W, y + CARD_H, fill=fill, outline="#1c5bd6" if sel else "#6b5a3a",
+                            width=3 if sel else 1, tags=(tag,))
+        crown = ""
+        if p and p.get("role") == "leader":
+            crown = "♛ "
+        elif p and p.get("role") == "heir":
+            crown = "♘ "
+        cv.create_text(x + 6, y + 5, anchor="nw", text=crown + name, width=CARD_W - 10,
+                       font=("", 9, "bold"), fill="#222", tags=(tag,))
+        if p is None:
+            sub = "nobody of the faction!"
+        else:
+            where = "on the map" if p["source"] == "map" else "off the map"
+            sub = "age %s, %s" % (p["age"] if p["age"] is not None else "?", where)
+            if p.get("role"):
+                sub = "%s, %s" % (p["role"], sub)
+        cv.create_text(x + 6, y + CARD_H - 6, anchor="sw", text=sub, width=CARD_W - 10, font=("", 8),
+                       fill="#444", tags=(tag,))
+        if p and (p["changed"] or p["new"]):
+            cv.create_oval(x + CARD_W - 12, y + 4, x + CARD_W - 4, y + 12, fill="#2a9d3a" if p["new"] else "#1c5bd6",
+                           outline="", tags=(tag,))
+        if p:
+            cv.tag_bind(tag, "<Button-1>", lambda e, k=p["key"]: self.pick(k))
+
+    def pick(self, key):
+        self.sel = key
+        self.fill_list()
+        self.fill_form()
+        self.draw_tree()
+
+    # ---------------------------------------------------------------- changes
+    def _change(self, p, **kw):
+        """Store a change of person p (a file person or a new one)."""
+        if p["new"]:
+            n = self.st["new"][int(p["key"].split(":")[1])]
+            n.update({k: v for k, v in kw.items() if k in ("name", "sex", "age")})
+            return
+        ch = self.st.setdefault("people", {}).setdefault(p["key"], {})
+        ch.update(kw)
+        orig = next(x for x in self.fam["people"] if x.key == p["key"])
+        for k in list(ch):
+            if ch[k] == getattr(orig, k, None):
+                del ch[k]
+        if not ch:
+            del self.st["people"][p["key"]]
+
+    def set_basic(self):
+        p = self.person(self.sel)
+        if not p:
+            return
+        name = (self.v_first.get().strip() + " " + self.v_last.get().strip()).strip()
+        sex = self.v_sex.get() if p["source"] != "map" else p["sex"]
+        if not name:
+            return
+        if name != p["name"]:
+            why = FM.check_name(self.pool, name, sex, self.faction)
+            if why:
+                messagebox.showerror("Family", why)
+                return
+            if any(x["name"] == name for x in self.people()):
+                messagebox.showerror("Family", "%s is already the name of someone of the faction - "
+                                               "the family tree could not tell them apart" % name)
+                return
+        age = self.v_age.get().strip()
+        if age and not age.isdigit():
+            messagebox.showerror("Family", "The age is a whole number")
+            return
+        self._before()
+        if name != p["name"] and self.st.get("tree") is not None:   # a tree of its own names people itself
+            for c in self.st["tree"]:
+                c[0] = name if c[0] == p["name"] else c[0]
+                c[1] = name if c[1] == p["name"] else c[1]
+                c[2] = [name if k == p["name"] else k for k in c[2]]
+        self._change(p, name=name, age=int(age) if age else p["age"], sex=sex)
+        self.changed()
+
+    def add_trait(self):
+        p = self.person(self.sel)
+        t = self.v_trait.get().strip()
+        if not p or p["source"] != "map" or not t:
+            return
+        info = self.traits.get(t)
+        if self.traits and info is None:
+            messagebox.showerror("Family", "%s is not a trait of this mod" % t)
+            return
+        try:
+            n = int(self.v_level.get())
+        except ValueError:
+            return
+        top = len(info["levels"]) if info and info["levels"] else n
+        if not 1 <= n <= top:
+            messagebox.showerror("Family", "%s has levels 1-%d" % (t, top))
+            return
+        traits = [list(x) for x in p["traits"]]
+        anti = set(info["anti"]) if info else set()
+        clash = [x for x, _ in traits if x in anti]
+        if clash:
+            messagebox.showerror("Family", "%s is the opposite of %s - take that one off first" % (t, clash[0]))
+            return
+        hit = next((x for x in traits if x[0] == t), None)
+        if hit:
+            hit[1] = n
+        else:
+            traits.append([t, n])
+        self._before()
+        self._change(p, traits=traits)
+        self.changed()
+
+    def remove_trait(self):
+        p = self.person(self.sel)
+        s = self.tv_tr.selection()
+        if not p or not s:
+            return
+        traits = [list(x) for i, x in enumerate(p["traits"]) if str(i) != s[0]]
+        self._before()
+        self._change(p, traits=traits)
+        self.changed()
+
+    def add_anc(self):
+        p = self.person(self.sel)
+        a = self.v_anc.get().strip()
+        if not p or p["source"] != "map" or not a or a in p["ancillaries"]:
+            return
+        if self.ancs and a not in self.ancs:
+            messagebox.showerror("Family", "%s is not an ancillary of this mod" % a)
+            return
+        self._before()
+        self._change(p, ancillaries=list(p["ancillaries"]) + [a])
+        self.changed()
+
+    def remove_anc(self):
+        p = self.person(self.sel)
+        s = self.lb_an.curselection()
+        if not p or not s:
+            return
+        self._before()
+        self._change(p, ancillaries=[a for i, a in enumerate(p["ancillaries"]) if i != s[0]])
+        self.changed()
+
+    def _ask_person(self, title, sex, age, surname=""):
+        """(name, age) for a new person from the name lists, or None."""
+        names = self.pool.get("women" if sex == "female" else "characters", [])
+        taken = {p["name"] for p in self.people()}
+        free = next((n for n in names if (n + (" " + surname if surname else "")) not in taken), names[0] if names else "")
+        d = _PersonDialog(self, title, names, [""] + self.pool.get("surnames", []), free, surname, age)
+        if not d.result:
+            return None
+        name, a = d.result
+        why = FM.check_name(self.pool, name, sex, self.faction)
+        if why:
+            messagebox.showerror("Family", why)
+            return None
+        if name in taken:
+            messagebox.showerror("Family", "%s is already the name of someone of the faction" % name)
+            return None
+        return name, a
+
+    def add_wife(self):
+        p = self.person(self.sel)
+        if not p:
+            return
+        if p["sex"] != "male":
+            messagebox.showinfo("Family", "Pick the husband: a couple on the tree is written under the man.")
+            return
+        tree = self.tree()
+        if any(a == p["name"] and b for a, b, _ in tree):
+            messagebox.showinfo("Family", "%s has a wife already." % p["name"])
+            return
+        got = self._ask_person("Wife of %s" % p["name"], "female", max(16, (p["age"] or 30) - 3))
+        if not got:
+            return
+        self._before()
+        t = self._own_tree()
+        self.st.setdefault("new", []).append({"name": got[0], "sex": "female", "age": got[1]})
+        hit = next((c for c in t if c[0] == p["name"]), None)
+        if hit:
+            hit[1] = got[0]
+        else:
+            t.append([p["name"], got[0], []])
+        self.changed()
+
+    def add_child(self):
+        p = self.person(self.sel)
+        if not p:
+            return
+        tree = self.tree()
+        couple = next((c for c in tree if p["name"] in (c[0], c[1])), None)
+        if not couple or not couple[1]:
+            messagebox.showinfo("Family", "Give %s a wife first: a child is written under a couple." % p["name"]
+                                if p["sex"] == "male" else "Pick a married man or woman.")
+            return
+        sex = "female" if messagebox.askyesno("Family", "A daughter? (No = a son)") else "male"
+        father = couple[0]
+        first = father.split(" ")[0]
+        surname = father[len(first):].strip() if sex == "male" else ""
+        by = {x["name"]: x for x in self.people()}
+        young = min([(by.get(n) or {}).get("age") or 40 for n in couple[:2]])
+        got = self._ask_person("Child of %s and %s" % (couple[0], couple[1]), sex, max(1, young - 20), surname)
+        if not got:
+            return
+        self._before()
+        t = self._own_tree()
+        self.st.setdefault("new", []).append({"name": got[0], "sex": sex, "age": got[1]})
+        c = next(c for c in t if c[0] == father)
+        c[2].append(got[0])
+        self.changed()
+
+    def off_tree(self):
+        p = self.person(self.sel)
+        if not p:
+            return
+        t = self.tree()
+        if any(a == p["name"] and ks for a, b, ks in t) or any(b == p["name"] and ks for a, b, ks in t):
+            messagebox.showerror("Family", "%s has children on the tree - take them off first." % p["name"])
+            return
+        self._before()
+        t = self._own_tree()
+        t[:] = [c for c in t if c[0] != p["name"]]
+        for c in t:
+            if c[1] == p["name"]:
+                c[1] = ""
+            c[2] = [k for k in c[2] if k != p["name"]]
+        bad = [c for c in t if not c[1]]
+        if bad:
+            messagebox.showinfo("Family", "%s is off the tree; %s has no wife now - give him one or take the "
+                                          "couple off." % (p["name"], bad[0][0]))
+        self.changed()
+
+    def leave_out(self):
+        p = self.person(self.sel)
+        if not p:
+            return
+        if p["source"] == "map":
+            messagebox.showinfo("Family", "%s is on the map: remove characters on the map in Units & armies "
+                                          "(family members are never removed there)." % p["name"])
+            return
+        if any(p["name"] in (a, b) for a, b, _ in self.tree()) or any(p["name"] in ks for _, _, ks in self.tree()):
+            messagebox.showerror("Family", "Take %s off the tree first." % p["name"])
+            return
+        self._before()
+        if p["new"]:
+            del self.st["new"][int(p["key"].split(":")[1])]
+        else:
+            self.st.setdefault("remove", []).append(p["key"])
+            (self.st.get("people") or {}).pop(p["key"], None)
+        self.sel = None
+        self.changed()
+
+    def reset(self):
+        self._before()
+        self.st.clear()
+        self.changed()
+
+
+class _PersonDialog(simpledialog.Dialog):
+    def __init__(self, master, title, firsts, surnames, first, surname, age):
+        self.firsts, self.surnames, self.first, self.surname, self.age = firsts, surnames, first, surname, age
+        self.result = None
+        super().__init__(master, title)
+
+    def body(self, m):
+        ttk.Label(m, text="Name (from the faction's name lists)").grid(row=0, column=0, columnspan=3, sticky="w")
+        self.v1, self.v2, self.va = tk.StringVar(value=self.first), tk.StringVar(value=self.surname), \
+            tk.StringVar(value=str(self.age))
+        c = ttk.Combobox(m, textvariable=self.v1, values=self.firsts, width=18)
+        c.grid(row=1, column=0, padx=2)
+        ttk.Combobox(m, textvariable=self.v2, values=self.surnames, width=18).grid(row=1, column=1, padx=2)
+        ttk.Label(m, text="Age").grid(row=2, column=0, sticky="w", pady=(6, 0))
+        ttk.Spinbox(m, from_=0, to=100, textvariable=self.va, width=6).grid(row=2, column=1, sticky="w", pady=(6, 0))
+        return c
+
+    def validate(self):
+        return bool(self.v1.get().strip()) and self.va.get().strip().isdigit()
+
+    def apply(self):
+        self.result = ((self.v1.get().strip() + " " + self.v2.get().strip()).strip(), int(self.va.get()))

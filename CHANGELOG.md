@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.0 - 2026-09-29
+
+### Added
+- **Family tab (Edit faction)**: every character of the faction and the family tree, drawn the way the
+  game shows it (couples side by side, children below, leader and heir marked). Edit a person's name
+  (from the faction's name lists), age, sex (off the map), traits with levels and ancillaries; give a
+  wife, add a child, take someone off the tree, leave a family member out. The tree is checked before
+  writing (everyone on it is of the faction, husband a man, wife a woman, one set of parents, nobody
+  their own ancestor). New family members are written as `character_record` lines in the file's own
+  form (Rome with the four skills, Medieval II without), the tree as `relative` lines after them.
+  Checked on the vanilla files of both games (julii, england): preview, write, Restore byte for byte.
+
+### Fixed
+- Renaming the leader or heir on the Faction tab now renames him on the family tree (`relative`
+  lines) too; before, the tree kept the old name.
+
 ## 0.7.5 - 2026-09-29
 
 ### Fixed

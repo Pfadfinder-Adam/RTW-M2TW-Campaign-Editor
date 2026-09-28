@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.7.5"
+VERSION = "0.8.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW Campaign Editor"
 
@@ -72,6 +72,10 @@ THE TABS (in the order that works best)
                a unit's ownership, the recruit lines that let the faction train it and its
                cards; a level's 'requires factions' list. The Units and Buildings tabs offer
                what the faction will have.
+  Family       (Edit) everyone of the faction: characters on the map (name, age, traits,
+               ancillaries) and family members off the map (name, sex, age), and the family
+               tree drawn like the game's. Give a wife, Add a child, Take off the tree, Leave
+               out; a renamed person is renamed on the tree too.
 
 UNIT EDITOR / BUILDING EDITOR
   Pick a unit (a building chain) on the left; every line of its block is a field - change
@@ -257,6 +261,7 @@ class App(tk.Tk):
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         self._res_placing, self._res_sel = None, None
         self.art_replace, self.sel_map = {}, {}      # Art tab: {path under data: picture}, {colour, off}
+        self.family_set = {}            # Family tab: {'people': {key: changes}, 'new': [...], 'remove': [...], 'tree'}
         self.roster_set = {}            # Roster tab: {'unit:<type>' | 'building:<chain>:<level>': give?}
         self._region_point = None       # ('city' | 'port', region) waiting for a click
         self.undo_stack, self.redo_stack = [], []   # snapshots of what the window keeps (Ctrl+Z / Ctrl+Y)
@@ -516,6 +521,11 @@ class App(tk.Tk):
         self.nb.add(tab, text="  Roster  ")
         self.roster_editor = RosterEditor(tab, self)
         self.roster_editor.pack(fill="both", expand=True)
+        from .gui_family import FamilyEditor
+        tab = ttk.Frame(self.nb)
+        self.nb.add(tab, text="  Family  ")
+        self.family_editor = FamilyEditor(tab, self)
+        self.family_editor.pack(fill="both", expand=True)
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self.tab_opened())
         self._keys()
 
@@ -789,6 +799,9 @@ class App(tk.Tk):
         if tab == 6:
             self.roster_editor.load()
             return
+        if tab == 7:
+            self.family_editor.load()
+            return
         lb, load = {1: (self.lb_units, self.load_garrison), 2: (self.lb_build, self.load_buildings)}.get(tab, (None, None))
         if lb is not None and self.chosen and not lb.curselection():
             capital = self.v["capital"].get() or self.chosen[0]
@@ -889,6 +902,7 @@ class App(tk.Tk):
         self.chosen, self.garrisons, self.buildings_picked, self.sizes = [], {}, {}, {}
         self.art_replace, self.sel_map = {}, {}
         self.roster_set = {}
+        self.family_set = {}
         self.editing_now = None
         self.char_moves = {}
         self.field, self._placing = [], None
@@ -937,7 +951,9 @@ class App(tk.Tk):
         self.chosen = list(now.get("regions", []))
         self.garrisons, self.buildings_picked, self.sizes = {}, {}, {}
         self.char_moves, self.roster_set = {}, {}
+        self.family_set = {}
         self.roster_editor.forget()
+        self.family_editor.forget()
         self.field, self.removed_existing, self._placing = self._existing_field(faction), [], None
         self.dip_set.clear()
         self.refresh_field()
@@ -975,7 +991,8 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ undo / redo
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "place_moves", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions",
-                 "res_moves", "res_removed", "res_added", "region_tags", "art_replace", "sel_map", "roster_set")
+                 "res_moves", "res_removed", "res_added", "region_tags", "art_replace", "sel_map", "roster_set",
+                 "family_set")
 
     def snapshot(self):
         st = {k: copy.deepcopy(getattr(self, k)) for k in self.UNDO_KEYS}
@@ -1014,6 +1031,8 @@ class App(tk.Tk):
             self.load_diplomacy()
         elif tab == 6:
             self.roster_editor.redraw()
+        elif tab == 7:
+            self.family_editor.redraw()
 
     def roster_changed(self):
         """A unit or building level given or taken on the Roster tab: the garrison and
@@ -1869,6 +1888,7 @@ class App(tk.Tk):
         self.v_path.set(self.mod.data)
         log.write("Load %s" % self.mod.data)
         self.roster_editor.forget()
+        self.family_editor.forget()
         # remembered for the next start: this mod, its game folder, the campaign picked in it
         game = game_of(self.mod.data)
         settings.put("mod_data", self.mod.data)
@@ -2073,6 +2093,7 @@ class App(tk.Tk):
         self._res_placing, self._res_sel, self._res_cache = None, None, None
         self.art_replace, self.sel_map = {}, {}
         self.roster_set = {}
+        self.family_set = {}
         self._cmap_for = None                  # the map is read again: after Apply towns may stand elsewhere
         self.undo_stack, self.redo_stack = [], []
         self.refresh_field()
@@ -2549,7 +2570,8 @@ class App(tk.Tk):
             "resources": self._resources_opts(),
             "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen},
             "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()},
-            "roster": dict(self.roster_set)}
+            "roster": dict(self.roster_set),
+            "family": copy.deepcopy(self.family_set) if self.family_set else None}
 
     def _places(self):
         return [{"what": w, "region": r, "to": xy} for (w, r), xy in self.place_moves.items()]
