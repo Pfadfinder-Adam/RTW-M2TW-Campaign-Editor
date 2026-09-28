@@ -439,6 +439,10 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(label_of("ui/faction_symbols/france_roll.tga"), "faction symbol (in-game panels) (mouse over)")
 
     def test_map_drawn_tile_by_tile(self):
+        try:
+            import PIL  # noqa: F401 - the map is drawn with Pillow (the exe has it)
+        except ImportError:
+            self.skipTest("Pillow is not installed")
         from faction_tool.mapdata import CampaignMap, GROUND_LOOK
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         hills, sea = (128, 128, 64), (64, 0, 0)
