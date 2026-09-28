@@ -807,5 +807,24 @@ class ToolTest(unittest.TestCase):
             build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Zed"}}})
 
 
+    def test_logs_zip(self):
+        import zipfile
+        from faction_tool import log
+        game = os.path.join(self.root, "game")
+        os.makedirs(os.path.join(game, "reports"))
+        with open(os.path.join(game, "system.log.txt"), "w") as fh:
+            fh.write("log")
+        for n, t in (("report-Some Nick-7-26_09_27.txt", 2000000000), ("report-x-1-26_09_01.txt", 1000000000)):
+            with open(os.path.join(game, "reports", n), "w") as fh:
+                fh.write("r")
+            os.utime(os.path.join(game, "reports", n), (t, t))
+        out = os.path.join(self.root, "logs.zip")
+        log.pack(out, game)
+        names = zipfile.ZipFile(out).namelist()
+        self.assertIn("system.log.txt", names)
+        self.assertIn("reports/report-7-26_09_27.txt", names)        # the newest, without the nick
+        self.assertEqual(len([n for n in names if n.startswith("reports/")]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

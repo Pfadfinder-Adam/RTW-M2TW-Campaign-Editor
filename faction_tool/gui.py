@@ -1,6 +1,7 @@
 """The window: pick the mod, fill in the faction, preview, create, restore."""
 
 import copy
+import datetime
 import os
 import re
 import threading
@@ -335,6 +336,7 @@ class App(tk.Tk):
         menu.add_separator()
         menu.add_command(label="Game manifest...", command=self.game_manifest)
         menu.add_command(label="Log", command=self.show_log)
+        menu.add_command(label="Save logs (zip)...", command=self.save_logs)
         tools["menu"] = menu
         tools.pack(side="right")
         self.status = tk.StringVar(value="Choose the mod's data folder (for example ...\\HLR\\data) and press Load.")
@@ -1946,7 +1948,39 @@ class App(tk.Tk):
 
     def show_log(self):
         """The tool's log - send faction_tool.log along with the game's system.log.txt."""
-        self.show_text("Log - %s" % (log.path() or "no log file"), log.tail() or "(empty)")
+        self.show_text("Log - %s" % (log.path() or "no log file"), log.tail() or "(empty)",
+                       extra=[("Save logs (zip)...", self.save_logs)])
+
+    def save_logs(self):
+        """One zip for a report: the tool's log and the game's (system.log.txt, the
+        newest REX crash report), found from the loaded mod's game folder."""
+        game = mod_dir = None
+        if self.mod:
+            game = game_root_of(self.mod.data)[0]
+            if os.path.basename(game).lower() == "mods":     # Medieval II: <game>/mods/<mod>/data
+                game = os.path.dirname(game)
+            mod_dir = os.path.dirname(os.path.abspath(self.mod.data))
+        stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        base = os.path.basename(mod_dir) if mod_dir else "tool"
+        out = filedialog.asksaveasfilename(title="Save the logs", defaultextension=".zip",
+                                           initialdir=mod_dir or "", initialfile="%s_logs_%s.zip" % (base, stamp),
+                                           filetypes=[("Zip", "*.zip")])
+        if not out:
+            return
+        try:
+            names = log.pack(out, game, mod_dir)
+        except OSError as e:
+            messagebox.showerror(APP, "Could not write %s: %s" % (out, e))
+            return
+        missing = []
+        if not any(n.endswith("system.log.txt") for n in names):
+            missing.append("no system.log.txt (the game writes it in its folder%s)" % (
+                ": %s" % game if game else "; load the mod first"))
+        if not any(n.startswith("reports/") for n in names):
+            missing.append("no crash report in reports (fine if the game did not crash, or runs without REX)")
+        log.write("Logs saved to %s: %s" % (out, ", ".join(names)))
+        messagebox.showinfo(APP, "Saved %s\n\n%s%s\n\nSend this file." % (
+            out, "\n".join(names) or "(nothing found)", ("\n\n" + "\n".join(missing)) if missing else ""))
 
     def report_callback_exception(self, exc, val, tb):
         """A crash inside the window: logged with its traceback and shown, never silent."""

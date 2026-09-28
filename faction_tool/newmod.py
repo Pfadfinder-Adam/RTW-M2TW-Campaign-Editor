@@ -22,7 +22,7 @@ from .plan import BACKUP_DIR
 MARKER = "faction_tool_mod.json"
 # written by the tool, so real copies; the rest is linked
 COPY_EXT = {".txt", ".json", ".xml", ".nut", ".lua", ".ini", ".cfg", ".csv", ".yml", ".yaml", ".bat", ".cmd"}
-GAME_EXES = ("REX.exe", "RomeTW-ALX.exe", "RomeTW-BI.exe", "RomeTW.exe")
+GAME_EXES = ("REX.exe", "RomeTW-ALX.exe", "RomeTW-BI.exe", "RomeTW.exe", "M2EX.exe", "medieval2.exe", "kingdoms.exe")
 RE_NAME = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 
