@@ -153,6 +153,16 @@ The Windows `.exe` is the window only. Use Python for the command line.
 - **Character names.** Names must come from the template's lists. Adding new names means editing `descr_names.txt` and the names string table by hand.
 - **Other campaigns.** One campaign is edited per run. Run again for another campaign; the faction files see the faction already exists and refuse, so add those campaigns by hand for now.
 
+## Code signing policy
+
+Windows release builds are to be signed through the SignPath Foundation (application pending; until then the exe is unsigned):
+free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+
+- Only builds made by this repository's GitHub Actions release workflow from its own source are signed.
+- Committers and reviewers: [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew). Approver (every signing request): [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew).
+
+Privacy: this program will not transfer any information to other networked systems. It reads and writes only the game or mod folder you load and its own `RTW-Campaign-Editor-files` folder (see [SECURITY.md](SECURITY.md)).
+
 ## License
 
 MIT
