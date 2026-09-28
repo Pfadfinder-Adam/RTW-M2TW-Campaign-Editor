@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.0 - 2026-09-28
+
+### New
+- **Unit editor** and **Building editor** (first steps): every line of a unit's block
+  in export_descr_unit.txt or a building chain in export_descr_buildings.txt as a
+  field; **picture import** - a PNG/JPG/TGA converted to the mod's own size and
+  format and put where the game reads it (unit cards and description pictures for
+  every owning faction, building pictures per culture and level), requirements
+  shown next to each picture. Preview / Apply with a backup like everything else.
+- The work is picked at the top: **New faction**, **Edit faction**, **Unit editor**,
+  **Building editor** (instead of the two switches top right).
+- Map: the layers in one **Layers** menu; **Edit regions** switches the political
+  colours and borders off and back; painted land shows in its new owner's colour.
+- A template fills the new faction's empty fields (money, colours).
+
+### Fixed
+- A princess (witch) takes a woman's name from descr_names.
+- A lower settlement level or a smaller governor's building pulls every other
+  building down to what fits.
+- Restore removes pictures a run created.
+
 ## 0.2.0 - 2026-09-28
 
 The big patch: resources, Medieval II, tiles as the game has them.

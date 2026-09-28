@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW Campaign Editor"
 
@@ -39,7 +39,8 @@ START
   1. Close the game. Browse... to the mod's data folder (for example ...\\HLR\\data), press Load.
      Better: New mod folder... makes a copy of the mod to work on; the base stays untouched.
   2. Pick the campaign (usually imperial_campaign).
-  3. New faction: pick a template to copy.   Edit faction: pick the faction to change.
+  3. Pick the work at the top: New faction (pick a template to copy), Edit faction (pick
+     the faction to change), Unit editor or Building editor.
 
 THE TABS (in the order that works best)
   Faction      names, texts, colours, AI, money, playable; the towns it starts with
@@ -52,6 +53,7 @@ THE TABS (in the order that works best)
   Buildings    what stands in each town; settlement level and population. The level and the
                governor's building follow each other; the chains offer that level's buildings.
   Map          left drag moves the map, a click on a town takes it / gives it back;
+               Layers: which colours and markers are shown;
                right drag (or Ctrl + left drag) moves your characters, towns and ports;
                Political, Diplomacy and the other switches change what is shown.
                Regions: paint borders, new regions, Religions... (Medieval II).
@@ -60,6 +62,13 @@ THE TABS (in the order that works best)
                mountains, dense forest and rivers; dropped on a bad tile, they go to the
                nearest good one.
   Diplomacy    how the faction and every other one feel about each other at the start.
+
+UNIT EDITOR / BUILDING EDITOR
+  Pick a unit (a building chain) on the left; every line of its block is a field - change
+  any, it turns yellow. Pictures: Import... takes a PNG, JPG or TGA, converts it to the
+  mod's own size and format and puts it where the game reads it (unit cards and
+  description pictures for every faction that owns the unit; building pictures per
+  culture and level). Preview, then Apply writes it all with a backup; Restore undoes it.
 
   Only the map (regions, towns, ports, resources)? In New faction mode with no faction named the
   buttons read "Preview map changes" / "Apply map changes" and write the map alone.
@@ -202,10 +211,18 @@ class App(tk.Tk):
         self.cb_campaign.pack(side="left")
         self.cb_campaign.bind("<<ComboboxSelected>>", lambda e: self.load_campaign())
         self.v_mode = tk.StringVar(value="new")
-        ttk.Radiobutton(top, text="New faction", value="new", variable=self.v_mode,
-                        command=self.mode_changed).pack(side="left", padx=(12, 2))
-        ttk.Radiobutton(top, text="Edit faction", value="edit", variable=self.v_mode,
-                        command=self.mode_changed).pack(side="left")
+        # what the window works on: a new faction, an existing one, the units, the buildings
+        work = ttk.Frame(self)
+        work.pack(fill="x", padx=6, pady=(4, 0))
+        self.v_work = tk.StringVar(value="new")
+        for text, val in (("New faction", "new"), ("Edit faction", "edit"),
+                          ("Unit editor", "units"), ("Building editor", "buildings")):
+            tk.Radiobutton(work, text=text, value=val, variable=self.v_work, indicatoron=0, command=self.work_changed,
+                           padx=16, pady=5, font=("", 10, "bold"), selectcolor="#cfe3ff", relief="raised",
+                           offrelief="groove", cursor="hand2").pack(side="left", padx=(0, 4))
+        self.lbl_work = ttk.Label(work, text="", foreground="#555")
+        self.lbl_work.pack(side="left", padx=10)
+        self.editors = {}
 
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill="both", expand=True, **pad)
@@ -394,7 +411,7 @@ class App(tk.Tk):
         self._keys()
 
         # --- actions
-        bar = ttk.Frame(self)
+        bar = self.bottom_bar = ttk.Frame(self)
         bar.pack(fill="x", **pad)
         self.b_preview = ttk.Button(bar, text="Preview changes", command=self.preview)
         self.b_preview.pack(side="left")
@@ -648,6 +665,44 @@ class App(tk.Tk):
             capital = self.v["capital"].get() or self.chosen[0]
             lb.selection_set(self.chosen.index(capital) if capital in self.chosen else 0)
             load()
+
+    WORK_HINTS = {"new": "make a new faction from a template", "edit": "change a faction that is in the game",
+                  "units": "every line of a unit in export_descr_unit.txt, its card and picture",
+                  "buildings": "every line of a building chain in export_descr_buildings.txt, its pictures"}
+
+    def work_changed(self):
+        """New / Edit faction share the campaign tabs; the unit and building editors
+        take the window's middle instead."""
+        w = self.v_work.get()
+        self.lbl_work.configure(text=self.WORK_HINTS.get(w, ""))
+        if w in ("new", "edit"):
+            for ed in self.editors.values():
+                ed.pack_forget()
+            self.nb.pack(fill="both", expand=True, padx=6, pady=3, before=self.bottom_bar)
+            if self.v_mode.get() != w:
+                self.v_mode.set(w)
+                self.mode_changed()
+            self.update_actions()
+            return
+        self.nb.pack_forget()
+        for k, ed in self.editors.items():
+            if k != w:
+                ed.pack_forget()
+        ed = self.editor()
+        ed.pack(fill="both", expand=True, padx=6, pady=3, before=self.bottom_bar)
+        if self.mod and ed.mod is not self.mod:
+            ed.load(self.mod)
+        self.update_actions()
+
+    def editor(self):
+        """The unit or building editor on show, made the first time; None for the faction work."""
+        w = self.v_work.get()
+        if w not in ("units", "buildings"):
+            return None
+        if w not in self.editors:
+            from .gui_editors import RecordEditor
+            self.editors[w] = RecordEditor(self, self, "unit" if w == "units" else "building")
+        return self.editors[w]
 
     def editing(self):
         return self.v_mode.get() == "edit"
@@ -1537,6 +1592,9 @@ class App(tk.Tk):
         self.cb_template["values"] = names
         self.load_campaign()
         self.status.set("%d factions, %d campaign(s)." % (len(names) + 1, len(camps)))
+        ed = self.editor()
+        if ed is not None:                    # after Apply the editor reads the files again
+            ed.load(self.mod)
 
     def new_mod(self):
         """Make <game>/<name> from the loaded mod (hard links + copied text), then load it."""
@@ -1702,6 +1760,20 @@ class App(tk.Tk):
         disp = template_display(self.mod, t, self.v_campaign.get())
         if self.editing():
             return
+        # empty fields start from the template: its money and colours (shown; the new
+        # faction keeps them unless you pick others)
+        try:
+            now = read_faction(self.mod, self.v_campaign.get(), t)
+        except Exception:
+            now = {}
+        d = self.v["denari"].get().strip()
+        if now.get("denari") is not None and (not d or d == getattr(self, "_auto_denari", None)):
+            self._auto_denari = str(now["denari"])             # the last template's, replaced by the next
+            self.v["denari"].set(self._auto_denari)
+        for key, b in (("primary", self.b_primary), ("secondary", self.b_secondary)):
+            rgb = self.colours.get(key) or now.get(key + "_colour")
+            if rgb:
+                b.configure(bg="#%02x%02x%02x" % tuple(rgb))
         self.status.set("Template %s: %s. Its units, buildings, names, traits and art are copied." %
                         (t, disp.get("display_name", t)))
 
@@ -2079,7 +2151,9 @@ class App(tk.Tk):
         return not self.editing() and not (self.v["template"].get().strip() and self.v["name"].get().strip())
 
     def update_actions(self):
-        if self.editing():
+        if getattr(self, "v_work", None) is not None and self.v_work.get() in ("units", "buildings"):
+            p, a = "Preview changes", "Apply changes"
+        elif self.editing():
             p, a = "Preview changes", "Apply changes"
         elif self.map_only():
             p, a = "Preview map changes", "Apply map changes"
@@ -2089,6 +2163,9 @@ class App(tk.Tk):
         self.b_create.configure(text=a)
 
     def make_plan(self):
+        ed = self.editor()
+        if ed is not None:
+            return ed.make_plan()
         if self.map_only():
             places, regions, res = self._places(), self._regions_opts(), self._resources_opts()
             if not places and not regions and not res:
