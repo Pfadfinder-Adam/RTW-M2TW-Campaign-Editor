@@ -121,22 +121,28 @@ def population_of(lines):
     return None
 
 
+def core_offset(b):
+    """How far below the settlement level core chain b's level stands. Towns and cities: one
+    ("The core building level should be one less than the settlement level!" - fatal on load;
+    the chain's first level is a town's, a village has none). Medieval II castles
+    (core_castle_building): none ("The castle core building level should be EQUAL the
+    settlement level!": motte_and_bailey = village, wooden_castle = town, castle = large_town...)."""
+    return 0 if "castle" in b.name.lower() else 1
+
+
 def core_settlement(b, name):
     """The settlement level a governor's building (a level of a core chain) stands in.
-    The game wants the core level exactly one below the settlement level ("The core
-    building level should be one less than the settlement level!" - a fatal error on
-    load): the chain's first level is a town's, the second a large town's...; a village
-    has none. settlement_min is only where the level may be built (it grows the town)."""
+    settlement_min is only where the level may be built (it grows the town)."""
     names = [l.name for l in b.levels]
     if name not in names:
         return None
-    return SETTLEMENT_LEVELS[min(names.index(name) + 1, len(SETTLEMENT_LEVELS) - 1)]
+    return SETTLEMENT_LEVELS[min(names.index(name) + core_offset(b), len(SETTLEMENT_LEVELS) - 1)]
 
 
 def core_level_for(b, settlement_level):
-    """The level of core chain b a settlement of this level has; None for a village."""
-    r = rank(settlement_level)
-    return b.levels[r - 1] if 1 <= r <= len(b.levels) else None
+    """The level of core chain b a settlement of this level has; None when it has none."""
+    i = rank(settlement_level) - core_offset(b)
+    return b.levels[i] if 0 <= i < len(b.levels) and rank(settlement_level) >= 0 else None
 
 
 def core_need(picked, known):

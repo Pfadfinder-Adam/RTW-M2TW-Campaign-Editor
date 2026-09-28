@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.5 - 2026-09-29
+
+### Fixed
+- **Medieval II: crash on load after taking a castle** ("The castle core building level should be
+  EQUAL the settlement level!"): a castle's governor's building (`core_castle_building`) stands at
+  the settlement's own level (motte_and_bailey = village, wooden_castle = town, castle = large
+  town...), not one below as in towns and cities. The tool raised a village castle to a town; now it
+  keeps castles at the right level. Towns and cities (and Rome) are unchanged.
+
+### Changed
+- README: how to report a problem (Save logs zip + a video or screenshot).
+
 ## 0.7.4 - 2026-09-28
 
 ### Fixed

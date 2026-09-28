@@ -18,7 +18,17 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 - **Faction art**: every picture of a faction listed and replaceable; the campaign-select map drawn from its start towns.
 - **Safe**: a separate mod folder in one click, preview of every file and line, backups with Restore, Undo/Redo in the window, Check mod, and a log.
 
-Version **0.7.4** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
+> [!IMPORTANT]
+> ### ⚠️ Something went wrong? Send the logs - and a video or screenshot ⚠️
+> When the game crashes, the tool shows an error, or something looks wrong, please send:
+> 1. **The logs:** in the tool, **Tools -> Save logs (zip)** - one `.zip` with the tool's log and the
+>    game's `system.log.txt` (it is saved in `RTW-Campaign-Editor-files/logs` next to the exe).
+> 2. **A video or a screenshot** of what you did and what went wrong.
+>
+> With these the cause is usually found and fixed **the same day** (the logs name the file, line and
+> the game's own error); without them it is guesswork and takes much longer.
+
+Version **0.7.5** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
 
 Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
 

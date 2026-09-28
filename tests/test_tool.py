@@ -1428,5 +1428,21 @@ building shrine
         self.assertEqual(o.classify("data/new.txt", p, size), "own")
 
 
+class CoreLevelTest(unittest.TestCase):
+    def test_castle_core_equals_settlement_level(self):
+        """M2: 'The castle core building level should be EQUAL the settlement level!' - a castle
+        village has motte_and_bailey; a town's core stays one below (the user's crash, 0.7.4)."""
+        from faction_tool.buildings import Building, Level, core_level_for, core_settlement
+        castle, town = Building("core_castle_building"), Building("core_building")
+        castle.levels = [Level(n, "") for n in ("motte_and_bailey", "wooden_castle", "castle", "fortress", "citadel")]
+        town.levels = [Level(n, "") for n in ("wooden_pallisade", "wooden_wall", "stone_wall")]
+        self.assertEqual(core_settlement(castle, "motte_and_bailey"), "village")
+        self.assertEqual(core_settlement(castle, "castle"), "large_town")
+        self.assertEqual(core_level_for(castle, "village").name, "motte_and_bailey")
+        self.assertEqual(core_level_for(castle, "town").name, "wooden_castle")
+        self.assertEqual(core_settlement(town, "wooden_pallisade"), "town")
+        self.assertIsNone(core_level_for(town, "village"))
+        self.assertEqual(core_level_for(town, "large_town").name, "wooden_wall")
+
 if __name__ == "__main__":
     unittest.main()
