@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.7.1"
+VERSION = "0.7.2"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW Campaign Editor"
 
@@ -107,7 +107,8 @@ KEYS
   Ctrl+1 .. Ctrl+5 the tabs    Map: wheel zooms, left drag moves the map, right drag moves a marker
 
 WHEN SOMETHING GOES WRONG
-  Log shows what the tool did and every error (faction_tool.log next to the exe).
+  Log shows what the tool did and every error (faction_tool.log in RTW-Campaign-Editor-files
+  next to the exe).
   Check mod reads the whole mod and reports anything it cannot make sense of.
   Scan mod lists every mention of the faction and tells each file apart: the game's own
   (unchanged), changed by the mod, REX's, or the mod's own (manifests inside the tool).

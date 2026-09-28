@@ -1,5 +1,6 @@
 """The tool's own log, faction_tool.log: what was loaded, previewed and written,
-every error with its traceback. Next to the exe (or rtw_faction_tool.py), else in
+every error with its traceback. In the folder RTW-Campaign-Editor-files next to the exe
+(with faction_tool_settings.json), next to rtw_faction_tool.py when run from the source, else in
 the user's profile. Kept small: over 1 MB it moves to faction_tool.log.old."""
 
 import datetime
@@ -11,13 +12,32 @@ LIMIT = 1 << 20
 _path = None
 
 
+FOLDER = "RTW-Campaign-Editor-files"      # next to the exe: the log and the settings, apart from it
+
+
 def _candidates():
     if getattr(sys, "frozen", False):
-        yield os.path.dirname(os.path.abspath(sys.executable))
+        home = os.path.dirname(os.path.abspath(sys.executable))
+        own = os.path.join(home, FOLDER)
+        _move_old(home, own)
+        yield own
     else:
         yield os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     base = os.environ.get("APPDATA") or os.path.expanduser("~")
     yield os.path.join(base, "RTW Faction Tool")
+
+
+def _move_old(home, own):
+    """0.7.1 and before kept faction_tool.log and faction_tool_settings.json right next to the exe
+    (in Downloads they mixed with everything else): moved into the tool's own folder once."""
+    try:
+        for n in ("faction_tool.log", "faction_tool.log.old", "faction_tool_settings.json"):
+            old = os.path.join(home, n)
+            if os.path.isfile(old) and not os.path.exists(os.path.join(own, n)):
+                os.makedirs(own, exist_ok=True)
+                os.replace(old, os.path.join(own, n))
+    except OSError:
+        pass
 
 
 def path():

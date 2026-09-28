@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.2 - 2026-09-28
+
+### Changed
+- The tool's own files (faction_tool.log, faction_tool_settings.json) go into the folder
+  **RTW-Campaign-Editor-files** next to the exe instead of lying loose beside it (in Downloads they
+  mixed with everything else); files an older version left beside the exe are moved in once.
+
 ## 0.7.1 - 2026-09-28
 
 ### Fixed

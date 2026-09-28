@@ -18,7 +18,7 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 - **Faction art**: every picture of a faction listed and replaceable; the campaign-select map drawn from its start towns.
 - **Safe**: a separate mod folder in one click, preview of every file and line, backups with Restore, Undo/Redo in the window, Check mod, and a log.
 
-Version **0.7.1** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
+Version **0.7.2** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
 
 Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
 
@@ -76,7 +76,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **Undo, keys, help:** **Undo** / **Redo** (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z) step back through towns picked, garrisons, buildings, settlement sizes, map moves, armies and diplomacy. Ctrl+P preview, Ctrl+S apply, F5 load again, Ctrl+1..5 the tabs, F1 or **Help** for a short guide. Far out on the map only towns are drawn; ports and characters show from zoom 4.
 
-**Log:** the tool keeps `faction_tool.log` next to the exe (or in `%APPDATA%\RTW Faction Tool`): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
+**Log:** the tool keeps `faction_tool.log` in the folder `RTW-Campaign-Editor-files` next to the exe (or in `%APPDATA%\RTW Faction Tool`): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
 
 **Undo:** press **Restore a backup...** Backups sit in `faction_tool_backups` next to `data`. Restore the newest one first.
 
