@@ -4,7 +4,7 @@ characters and diplomacy."""
 import re
 from types import SimpleNamespace
 
-from .strat import Strat, RE_XY, village_block
+from .strat import Strat, RE_XY, character_line, village_block
 from .textio import strip_comment, tokens
 
 
@@ -379,7 +379,7 @@ def build_start(plan, campaign, start):
                 raise ValueError("%s: no name in the %s name list for a captain to lead the garrison" % (r, t))
             used.add(name)
             kind = "general"
-            chunk = [f.make("character\t%s, general, age 30, , x %d, y %d" % (name, tiles[r][0], tiles[r][1])),
+            chunk = [f.make(character_line(f, name, "general", 30, tiles[r])),
                      f.make("army")] + [f.make(l) for l in lines]
             plan.note(f, "%s: captain %s leads your garrison of %d unit(s)" % (r, name, len(lines)))
         joined[r] = agents + [(name, kind, chunk)]
@@ -420,8 +420,7 @@ def build_start(plan, campaign, start):
         if region:
             units = merge(units, region, name)
         own.append(f.make(";;\t%s" % role))
-        own.append(f.make("character\t%s, named character, %s, age %d, , x %d, y %d"
-                          % (name, role, int(who.get("age", 30)), xy[0], xy[1])))
+        own.append(f.make(character_line(f, name, "named character", who.get("age", 30), xy, role=role)))
         if units:
             own.append(f.make("army"))
             own.extend(f.make(u.rstrip("\r")) for u in units)
@@ -526,8 +525,25 @@ def build_start(plan, campaign, start):
 # ---------------------------------------------------------------------------
 # Field armies, agents and fleets placed by hand
 # ---------------------------------------------------------------------------
-KINDS = {"army": ("general", True), "spy": ("spy", False), "assassin": ("assassin", False),
-         "diplomat": ("diplomat", False), "fleet": ("admiral", True)}
+class _Kinds(dict):
+    """kind in the window -> (descr_strat character type, has an army): army and
+    fleet, and any agent type the mod's descr_character.txt has (spy, assassin,
+    diplomat; in Medieval II also merchant, priest, princess, inquisitor...)."""
+
+    def __missing__(self, kind):
+        if isinstance(kind, str) and kind.replace("_", "").isalpha() and kind not in ("general", "admiral"):
+            return (kind, False)
+        raise KeyError(kind)
+
+    def __contains__(self, kind):
+        try:
+            self[kind]
+            return True
+        except KeyError:
+            return False
+
+
+KINDS = _Kinds({"army": ("general", True), "fleet": ("admiral", True)})
 
 
 def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
@@ -565,7 +581,7 @@ def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
         if army:
             armies_at.add(xy)
         out.append(";;\t%s placed with the faction tool" % kind)
-        out.append("character\t%s, %s, age %d, , x %d, y %d" % (name, rtw_kind, int(c.get("age") or 30), xy[0], xy[1]))
+        out.append(character_line(f, name, rtw_kind, c.get("age") or 30, xy))
         if army:
             out.append("army")
             out += ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % u for u in units[:MAX_UNITS]]

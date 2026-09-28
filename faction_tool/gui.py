@@ -109,6 +109,7 @@ class App(tk.Tk):
         self.dip_set = {}               # {(kind, from, to): value or None} picked on the Diplomacy tab ('me' = the faction)
         self.region_paint = {}          # {(x, y): region} tiles painted to another region (Regions mode)
         self.new_regions = []           # [{name, settlement, creator, rebels, resources, colour, city, port, owner, level}]
+        self.region_religions = {}      # {region: {religion: percent}} set by hand (Medieval II)
         self._region_point = None       # ('city' | 'port', region) waiting for a click
         self.undo_stack, self.redo_stack = [], []   # snapshots of what the window keeps (Ctrl+Z / Ctrl+Y)
         self.sizes = {}                 # {region: {'level', 'population'}} set by hand on the Buildings tab
@@ -303,6 +304,7 @@ class App(tk.Tk):
         ttk.Button(rb, text="Place its town", command=lambda: self.region_point("city")).pack(side="left", padx=2)
         ttk.Button(rb, text="Place its port", command=lambda: self.region_point("port")).pack(side="left", padx=2)
         ttk.Button(rb, text="Delete this new region", command=self.drop_region).pack(side="left", padx=2)
+        ttk.Button(rb, text="Religions...", command=self.religions_dialog).pack(side="left", padx=2)
         self.v_borders = tk.BooleanVar(value=True)
         ttk.Checkbutton(rb, text="Borders", variable=self.v_borders, command=self.show_map).pack(side="left", padx=8)
         ttk.Label(rb, text="left drag paints, right click picks a region, right drag moves the map",
@@ -366,7 +368,7 @@ class App(tk.Tk):
         self.lb_field.bind("<<ListboxSelect>>", lambda e: self.load_field())
         fb = ttk.Frame(ff)
         fb.pack(fill="x", pady=(4, 0))
-        for text, kind in (("+ Army", "army"), ("+ Agent", "spy"), ("+ Fleet", "fleet")):
+        for text, kind in (("+ Army", "army"), ("+ Agent", "agent"), ("+ Fleet", "fleet")):
             ttk.Button(fb, text=text, width=8, command=lambda k=kind: self.add_field(k)).pack(side="left", padx=1)
         fb2 = ttk.Frame(ff)
         fb2.pack(fill="x", pady=(2, 0))
@@ -638,8 +640,8 @@ class App(tk.Tk):
             units = [unit_name(l) for l in lines if tokens(l)[:1] == ["unit"]]
             if c.kind == "admiral":
                 kind = "fleet"
-            elif c.kind in ("spy", "assassin", "diplomat", "merchant"):
-                kind = c.kind
+            elif c.kind not in ("general", "named character"):
+                kind = c.kind                           # an agent: spy, merchant, priest, princess...
             elif units:
                 kind = "army"
             else:
@@ -651,7 +653,7 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------------ undo / redo
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "place_moves", "char_moves", "field",
-                 "removed_existing", "dip_set", "region_paint", "new_regions")
+                 "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions")
 
     def snapshot(self):
         st = {k: copy.deepcopy(getattr(self, k)) for k in self.UNDO_KEYS}
@@ -974,9 +976,75 @@ class App(tk.Tk):
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
 
     def _regions_opts(self):
-        if not self.region_paint and not self.new_regions:
+        if not self.region_paint and not self.new_regions and not self.region_religions:
             return None
-        return {"painted": dict(self.region_paint), "new": [dict(r) for r in self.new_regions]}
+        return {"painted": dict(self.region_paint), "new": [dict(r) for r in self.new_regions],
+                "religions": {k: dict(v) for k, v in self.region_religions.items()}}
+
+    def religions_dialog(self):
+        """Medieval II: the religions of the region in 'Paint with' (percent, 100 in all)."""
+        if not self.mod or not self.strat:
+            return
+        known = {k: v["religions"] for k, v in self.regions.items() if "religions" in v}
+        if not known:
+            messagebox.showinfo(APP, "This game's regions have no religions line (Rome has none; "
+                                     "Medieval II has one per region).")
+            return
+        name = self.v_paint.get().replace("  (new)", "").strip()
+        new = self._new_region(name)
+        if not new and name not in self.regions:
+            messagebox.showerror(APP, "pick a region in 'Paint with' first (or right click it on the map)")
+            return
+        names = list(next(iter(known.values())).keys())
+        for v in known.values():
+            names += [k for k in v if k not in names]
+        now = (new or {}).get("religions") or self.region_religions.get(name) or known.get(name) or \
+            {k: 0 for k in names}
+        w = tk.Toplevel(self)
+        w.title("Religions of %s" % name)
+        w.transient(self)
+        frm = ttk.Frame(w, padding=10)
+        frm.pack(fill="both", expand=True)
+        vs = {}
+        total = ttk.Label(frm, text="")
+        for i, k in enumerate(names):
+            ttk.Label(frm, text=k).grid(row=i, column=0, sticky="w")
+            v = tk.StringVar(value=str(now.get(k, 0)))
+            vs[k] = v
+            e = ttk.Spinbox(frm, from_=0, to=100, increment=5, textvariable=v, width=6,
+                            command=lambda: sums())
+            e.grid(row=i, column=1, sticky="w", padx=6, pady=1)
+            e.bind("<KeyRelease>", lambda ev: sums())
+        total.grid(row=len(names), column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        def values():
+            return {k: int(v.get()) if v.get().strip().isdigit() else 0 for k, v in vs.items()}
+
+        def sums():
+            t = sum(values().values())
+            total.configure(text="in all %d%%%s" % (t, "" if t == 100 else " - must be 100"),
+                            foreground="#000" if t == 100 else "#c00000")
+        sums()
+
+        def ok():
+            rel = values()
+            if sum(rel.values()) != 100:
+                messagebox.showerror(APP, "the religions must add up to 100", parent=w)
+                return
+            self.remember()
+            if new:
+                new["religions"] = rel
+            elif rel == known.get(name):
+                self.region_religions.pop(name, None)
+            else:
+                self.region_religions[name] = rel
+            w.destroy()
+            self.status.set("%s: %s - Preview, then Apply changes." % (
+                name, ", ".join("%s %d%%" % (k, v) for k, v in rel.items() if v)))
+        bar = ttk.Frame(frm)
+        bar.grid(row=len(names) + 1, column=0, columnspan=2, sticky="e", pady=(8, 0))
+        ttk.Button(bar, text="OK", command=ok).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
 
     def _relations(self):
         return [{"kind": k, "from": a, "to": b, "value": v} for (k, a, b), v in self.dip_set.items()]
@@ -1281,6 +1349,7 @@ class App(tk.Tk):
         self.place_moves = {}
         self.dip_set.clear()
         self.region_paint, self.new_regions, self._region_point = {}, [], None
+        self.region_religions = {}
         self._cmap_for = None                  # the map is read again: after Apply towns may stand elsewhere
         self.undo_stack, self.redo_stack = [], []
         self.refresh_field()
@@ -1412,7 +1481,10 @@ class App(tk.Tk):
             self.v["capital"].set(self.chosen[0] if self.chosen else "")
 
     # ---- field armies, agents, fleets ----
-    AGENTS = ("spy", "assassin", "diplomat")
+    @property
+    def AGENTS(self):
+        """The mod's agent types (from descr_character.txt)."""
+        return tuple(self.mod.agent_kinds()) if self.mod else ("spy", "assassin", "diplomat")
 
     def refresh_field(self, keep=None):
         self.lb_field.delete(0, "end")
@@ -1436,18 +1508,19 @@ class App(tk.Tk):
             return
         pool = self.mod.name_pool(self.field_faction()) or {}
         w = tk.Toplevel(self)
-        w.title({"army": "New army", "spy": "New agent", "fleet": "New fleet"}[kind])
+        w.title({"army": "New army", "fleet": "New fleet"}.get(kind, "New agent"))
         w.transient(self)
         frm = ttk.Frame(w, padding=10)
         frm.pack()
-        v_kind = tk.StringVar(value=kind)
+        agent = kind not in ("army", "fleet")
+        v_kind = tk.StringVar(value=self.AGENTS[0] if agent else kind)
         row = 0
-        if kind in self.AGENTS:
+        if agent:
             ttk.Label(frm, text="Agent").grid(row=row, column=0, sticky="w")
             ttk.Combobox(frm, textvariable=v_kind, values=self.AGENTS, state="readonly", width=14).grid(
                 row=row, column=1, sticky="w")
             row += 1
-        ttk.Label(frm, text="Name" if kind in self.AGENTS else ("Admiral" if kind == "fleet" else "General")).grid(
+        ttk.Label(frm, text="Name" if agent else ("Admiral" if kind == "fleet" else "General")).grid(
             row=row, column=0, sticky="w")
         v_first, v_last, v_age = tk.StringVar(), tk.StringVar(), tk.StringVar(value="30")
         ttk.Combobox(frm, textvariable=v_first, values=pool.get("characters", []), width=16).grid(row=row, column=1)
@@ -1486,7 +1559,7 @@ class App(tk.Tk):
             return
         self.lb_units.selection_clear(0, "end")
         c = self.field[i]
-        if c["kind"] in self.AGENTS:
+        if c["kind"] not in ("army", "fleet"):
             self.garrison_editor.load(self.mod, self.field_faction(), "%s %s - an agent, no units" % (c["kind"], c["name"]),
                                       [], [], lambda t: None)
             return

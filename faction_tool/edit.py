@@ -9,7 +9,7 @@ from .buildings import settlement_info
 from .clone import FE_NAMES, description_key, entry_end
 from .plan import Plan
 from .start import MAX_UNITS, _has_army, _units, unit_name
-from .strat import RE_XY, Strat, village_block
+from .strat import RE_XY, Strat, character_line, village_block
 from .textio import tokens
 
 RE_RGB = re.compile(r"red\s*(\d+)\s*,\s*green\s*(\d+)\s*,\s*blue\s*(\d+)")
@@ -94,7 +94,9 @@ def edit(mod, campaign, faction, opts):
         apply_places(plan, campaign, opts["places"])
     if opts.get("regions"):
         from .regionedit import apply_regions
+        from .regionedit import set_religions
         apply_regions(plan, campaign, opts["regions"].get("painted") or {}, opts["regions"].get("new") or [])
+        set_religions(plan, campaign, opts["regions"].get("religions") or {})
     if opts.get("relations"):
         from .diplomacy import apply_opts
         apply_opts(plan, campaign, faction, opts["relations"])
@@ -535,7 +537,7 @@ def _garrisons(plan, f, s, campaign):
             if not captains:
                 raise ValueError("%s: no name in %s's name list for a captain" % (region, plan.new))
             name = captains.pop(0)
-            block = ["character\t%s, general, age 30, , x %d, y %d" % (name, xy[0], xy[1]), "army"] + lines + [""]
+            block = [character_line(f, name, "general", 30, xy), "army"] + lines + [""]
             f.insert(_chars_at(f, fb), block)
             plan.note(f, "%s: captain %s holds the town with %d unit(s)" % (region, name, len(lines)))
 

@@ -76,6 +76,9 @@ class CampaignMap:
             parts.append("%s (%s)" % (region, town))
             if owners:
                 parts.append("owner " + owners.get(region, "?"))
+            rel = self.info.get(region, {}).get("religions")
+            if rel:
+                parts.append(" ".join("%s %d%%" % (k, v) for k, v in rel.items() if v))
         if px == CITY:
             parts.append("CITY")
         elif px == PORT:

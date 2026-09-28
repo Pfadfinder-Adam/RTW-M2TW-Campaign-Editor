@@ -315,7 +315,50 @@ class MapView(ttk.Frame):
         c.create_rectangle(sx - r * 0.84, sy + r * 0.62, sx + r * 0.84, sy + r * 0.76, fill=ink, outline="", tags=tags)
 
     # ---- characters ----
-    AGENT_LETTER = {"spy": "S", "diplomat": "D", "assassin": "A", "merchant": "M", "priest": "P"}
+    AGENT_LETTER = {"spy": "S", "diplomat": "D", "assassin": "A", "merchant": "M", "priest": "P",
+                    "princess": "Q", "inquisitor": "I", "heretic": "H", "witch": "W"}
+
+    def _glyph(self, k, sx, sy, r, tags):
+        """A white sign for an agent kind inside its disc (r = the disc's radius)."""
+        c, ink = self.canvas, "white"
+        w = max(1, int(r / 4))
+        if k == "spy":                                  # an eye
+            c.create_oval(sx - r * 0.7, sy - r * 0.38, sx + r * 0.7, sy + r * 0.38, outline=ink, width=w, tags=tags)
+            c.create_oval(sx - r * 0.2, sy - r * 0.2, sx + r * 0.2, sy + r * 0.2, fill=ink, outline="", tags=tags)
+        elif k == "assassin":                           # a slanted dagger: blade, guard, grip
+            c.create_polygon(sx + r * 0.7, sy - r * 0.7, sx + r * 0.05, sy + r * 0.2, sx - r * 0.2, sy - r * 0.05,
+                             fill=ink, outline="", tags=tags)
+            c.create_line(sx - r * 0.35, sy - r * 0.05, sx + r * 0.1, sy + r * 0.4, fill=ink, width=w, tags=tags)
+            c.create_line(sx - r * 0.1, sy + r * 0.15, sx - r * 0.55, sy + r * 0.6, fill=ink, width=w + 1, tags=tags)
+        elif k == "diplomat":                           # a scroll
+            c.create_rectangle(sx - r * 0.5, sy - r * 0.6, sx + r * 0.5, sy + r * 0.6, outline=ink, width=w, tags=tags)
+            for dy in (-0.25, 0.05, 0.35):
+                c.create_line(sx - r * 0.3, sy + r * dy, sx + r * 0.3, sy + r * dy, fill=ink, tags=tags)
+        elif k == "merchant":                           # a stack of coins
+            for dy in (0.35, 0.0, -0.35):
+                c.create_oval(sx - r * 0.55, sy + r * (dy - 0.18), sx + r * 0.55, sy + r * (dy + 0.18),
+                              fill=ink, outline="black", tags=tags)
+        elif k == "priest":                             # a cross
+            c.create_line(sx, sy - r * 0.7, sx, sy + r * 0.7, fill=ink, width=w + 1, tags=tags)
+            c.create_line(sx - r * 0.45, sy - r * 0.25, sx + r * 0.45, sy - r * 0.25, fill=ink, width=w + 1, tags=tags)
+        elif k == "princess":                           # a crown
+            c.create_polygon(sx - r * 0.6, sy + r * 0.4, sx - r * 0.6, sy - r * 0.35, sx - r * 0.3, sy,
+                             sx, sy - r * 0.5, sx + r * 0.3, sy, sx + r * 0.6, sy - r * 0.35, sx + r * 0.6, sy + r * 0.4,
+                             fill=ink, outline="", tags=tags)
+        elif k == "inquisitor":                         # a flame
+            c.create_polygon(sx, sy - r * 0.75, sx + r * 0.45, sy + r * 0.1, sx + r * 0.25, sy + r * 0.6,
+                             sx - r * 0.25, sy + r * 0.6, sx - r * 0.45, sy + r * 0.1, fill=ink, outline="", tags=tags)
+        elif k == "witch":                              # a crescent moon
+            c.create_oval(sx - r * 0.6, sy - r * 0.6, sx + r * 0.6, sy + r * 0.6, fill=ink, outline="", tags=tags)
+            c.create_oval(sx - r * 0.25, sy - r * 0.7, sx + r * 0.75, sy + r * 0.45,
+                          fill=self._fill_of_disc, outline="", tags=tags)
+        elif k == "heretic":                            # a broken cross
+            c.create_line(sx, sy - r * 0.7, sx, sy - r * 0.1, fill=ink, width=w + 1, tags=tags)
+            c.create_line(sx + r * 0.15, sy + r * 0.1, sx + r * 0.15, sy + r * 0.7, fill=ink, width=w + 1, tags=tags)
+            c.create_line(sx - r * 0.45, sy - r * 0.3, sx + r * 0.45, sy - r * 0.3, fill=ink, width=w + 1, tags=tags)
+        else:
+            c.create_text(sx, sy, text=self.AGENT_LETTER.get(k, k[:1].upper()), fill=ink,
+                          font=("", max(6, int(r)), "bold"), tags=tags)
 
     def _characters(self, cw, ch, size):
         c, cm = self.canvas, self.cmap
@@ -346,12 +389,12 @@ class MapView(ttk.Frame):
         edge = "#ffd400" if mine else "black"
         tags = ("char", "char:%s" % ch_["id"])
         k = ch_["kind"]
-        if k in self.AGENT_LETTER:
-            r = size * 0.45
+        if k not in ("admiral", "general", "named character"):          # an agent: a disc with its sign
+            r = max(size * 0.5, 5)
             c.create_oval(sx - r, sy - r, sx + r, sy + r, fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
             if size >= 8:
-                c.create_text(sx, sy, text=self.AGENT_LETTER[k], fill="white", font=("", max(6, int(size * 0.5)), "bold"),
-                              tags=tags)
+                self._fill_of_disc = fill
+                self._glyph(k, sx, sy, r, tags)
         elif k == "admiral":
             w = size * 0.5
             c.create_polygon(sx - w, sy - w * 0.1, sx + w, sy - w * 0.1, sx + w * 0.6, sy + w * 0.5,

@@ -58,6 +58,23 @@ BLOCKED_GROUND = {(64, 0, 0): "sea", (128, 0, 0): "sea", (196, 0, 0): "sea",
                   (98, 65, 65): "mountains", (196, 128, 128): "high mountains", (0, 64, 0): "dense forest"}
 
 
+def parse_religions(text):
+    """'religions { catholic 90 orthodox 0 pagan 10 }' -> {'catholic': 90, ...} in order."""
+    inside = text[text.find("{") + 1:text.rfind("}")] if "{" in text else ""
+    t = inside.split()
+    out = {}
+    for i in range(0, len(t) - 1, 2):
+        try:
+            out[t[i]] = int(t[i + 1])
+        except ValueError:
+            pass
+    return out
+
+
+def religions_line(rel):
+    return "religions { %s }" % " ".join("%s %d" % (k, v) for k, v in rel.items())
+
+
 class ModData:
     def __init__(self, path):
         self.data = find_data_dir(path)
@@ -184,6 +201,9 @@ class ModData:
                 colour = tuple(int(v) for v in vals[3].split()[:3])
                 out[cur] = {"settlement": vals[0], "creator": vals[1], "rebels": vals[2], "colour": colour,
                             "resources": vals[4] if len(vals) > 4 else ""}
+                rel = next((v for v in vals[5:] if v.startswith("religions")), None)
+                if rel:                                      # Medieval II: religions { catholic 90 pagan 10 }
+                    out[cur]["religions"] = parse_religions(rel)
         for line in f.texts():
             s = strip_comment(line)
             if not s.strip():
@@ -253,6 +273,23 @@ class ModData:
                 if best is None or key < best[0]:
                     best = (key, p)
         return best[1] if best else None
+
+    def agent_kinds(self):
+        """The agent types of descr_character.txt (every 'type' but general, named
+        character and admiral), in the file's order; spy, assassin, diplomat without it."""
+        key = ("agents",)
+        if key not in self._cache:
+            found = []
+            p = self.file("character")
+            if p:
+                for l in self.load(p).texts():
+                    t = strip_comment(l).split(None, 1)
+                    if len(t) == 2 and t[0] == "type":
+                        k = t[1].strip()
+                        if k not in ("general", "named character", "admiral") and k not in found:
+                            found.append(k)
+            self._cache[key] = found or ["spy", "assassin", "diplomat"]
+        return self._cache[key]
 
     def _optional_map(self, campaign, name):
         key = ("map", campaign, name)

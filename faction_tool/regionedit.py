@@ -18,6 +18,7 @@ tiles can change hands, never a town or port pixel."""
 import os
 
 from .mapedit import CITY, PORT, ports
+from .moddata import religions_line
 from .strat import Strat, village_block
 from .tga import patched
 
@@ -169,15 +170,15 @@ def apply_regions(plan, campaign, painted, new_regions):
     for r in new_regions:
         c = colours[r["name"]]
         res = ", ".join(r.get("resources") or [])
+        src = {}                                   # the region most of its land came from
+        for xy, to in painted.items():
+            was = by_colour.get(img.get(*xy))
+            if to == r["name"] and was:
+                src[was] = src.get(was, 0) + 1
+        donor = max(src, key=src.get) if src else None
         if not res:
-            # no resources given: those of the region most of its land came from (no region in
-            # the game files has none; in HLR they are the hidden resources that open local units)
-            src = {}
-            for xy, to in painted.items():
-                was = by_colour.get(img.get(*xy))
-                if to == r["name"] and was:
-                    src[was] = src.get(was, 0) + 1
-            donor = max(src, key=src.get) if src else None
+            # no resources given: the donor's (no region in the game files has none; in HLR
+            # they are the hidden resources that open local units)
             res = (regions.get(donor) or {}).get("resources") or ""
             if res:
                 plan.note(dr, "%s: resources of %s (%s)" % (r["name"], donor, res))
@@ -186,6 +187,12 @@ def apply_regions(plan, campaign, painted, new_regions):
         lines = [r["name"], "\t" + r["settlement"], "\t" + r["creator"], "\t" + r["rebels"],
                  "\t%d %d %d" % c, "\t" + res,
                  "\t%d" % int(r.get("triumph", 5)), "\t%d" % int(r.get("farming", 3))]
+        if any("religions" in v for v in regions.values()):
+            # Medieval II: a ninth line, the religions; given, else the region most land came from
+            rel = r.get("religions") or (regions.get(donor) or {}).get("religions") or \
+                next(v["religions"] for v in regions.values() if "religions" in v)
+            lines.append("\t" + religions_line(rel))
+            plan.note(dr, "%s: %s" % (r["name"], religions_line(rel)))
         dr.raw.extend(dr.make(l) for l in lines)
         plan.note(dr, "region %s (%s), colour %d %d %d" % (r["name"], r["settlement"], c[0], c[1], c[2]))
     dr.raw.append(dr.make(""))
@@ -231,3 +238,34 @@ def apply_regions(plan, campaign, painted, new_regions):
             next((i + 1 for i in range(fb.start, fb.end) if sf.text(i).split()[:1] == ["denari"]), fb.start + 1)
         sf.raw[at:at] = [sf.make(l) for l in block]
         plan.note(sf, "%s: a %s of %s" % (r["name"], level, own))
+
+
+def set_religions(plan, campaign, religions):
+    """religions = {region: {religion: percent}}: the regions' religions lines in
+    descr_regions.txt (Medieval II) set; other lines keep their bytes."""
+    if not religions:
+        return
+    mod = plan.mod
+    known = mod.regions(campaign)
+    f = plan.edit(mod.campaign_file(campaign, "descr_regions.txt"))
+    cur = None
+    done = set()
+    for i in range(len(f.raw)):
+        line = f.text(i)
+        code = line.split(";", 1)[0]
+        if code.strip() and not code[0].isspace():
+            cur = code.strip()
+        elif cur in religions and code.strip().startswith("religions"):
+            rel = {k: int(v) for k, v in religions[cur].items()}
+            if sum(rel.values()) != 100:
+                raise ValueError("%s: the religions add up to %d, not 100" % (cur, sum(rel.values())))
+            indent = line[:len(line) - len(line.lstrip())]
+            new = indent + religions_line(rel)
+            if new != line.rstrip("\r\n"):
+                f.set(i, new)
+                plan.note(f, "%s: %s" % (cur, religions_line(rel)))
+            done.add(cur)
+    for r in religions:
+        if r not in done:
+            raise ValueError("%s: no religions line in descr_regions.txt%s" % (
+                r, "" if r in known else " (no such region)"))

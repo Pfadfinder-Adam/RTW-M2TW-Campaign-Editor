@@ -174,6 +174,31 @@ def characters_after_tree(s):
     return bad
 
 
+def medieval(lines):
+    """Whether a descr_strat's character lines name the sex (Medieval II:
+    'character Name, general, male, age 30, x 1, y 2'); Rome's do not
+    ('character Name, general, age 30, , x 1, y 2')."""
+    if hasattr(lines, "raw"):                       # a TextFile: read up to the first character only
+        tf = lines
+        lines = (tf.text(i) for i in range(len(tf.raw)))
+    for l in lines:
+        t = strip_comment(l)
+        if t.lstrip().startswith("character") and not t.lstrip().startswith("character_record"):
+            parts = [p.strip() for p in t.split(",")]
+            return "male" in parts or "female" in parts
+    return False
+
+
+def character_line(lines, name, kind, age, xy, role=None, female=None):
+    """A character line in the file's own dialect (see medieval). kind: general,
+    named character, spy, princess...; role: leader / heir or None."""
+    extra = ", %s" % role if role else ""
+    if medieval(lines):
+        sex = "female" if (female if female is not None else kind in ("princess", "witch")) else "male"
+        return "character\t%s, %s, %s%s, age %d, x %d, y %d" % (name, kind, sex, extra, int(age), xy[0], xy[1])
+    return "character\t%s, %s%s, age %d, , x %d, y %d" % (name, kind, extra, int(age), xy[0], xy[1])
+
+
 def village_block(region, faction):
     """A settlement block for a region descr_strat leaves out. The game makes
     such a region a rebel village with no buildings; taking it means writing

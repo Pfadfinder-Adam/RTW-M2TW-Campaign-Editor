@@ -737,6 +737,38 @@ class ToolTest(unittest.TestCase):
         restore(m2, bdir)
         self.assertNotIn("N_R", ModData(self.root).regions("test"))
 
+    def test_medieval_religions(self):
+        # Medieval II: a ninth line per region, the religions
+        from faction_tool.edit import edit
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        text = REGIONS.replace("\t1\nB_R", "\t1\n\treligions { catholic 90 pagan 10 }\nB_R")
+        write(os.path.join(camp, "descr_regions.txt"), text + "\treligions { catholic 20 pagan 80 }\n")
+        mod = ModData(self.root)
+        self.assertEqual(mod.regions("test")["A_R"]["religions"], {"catholic": 90, "pagan": 10})
+        with self.assertRaises(ValueError):                             # not 100 in all
+            edit(ModData(self.root), "test", "alpha", {"regions": {"religions": {"A_R": {"catholic": 50}}}})
+        new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
+               "city": (0, 3), "owner": None}
+        plan = edit(mod, "test", "alpha", {"regions": {
+            "painted": {(0, 3): "N_R", (1, 3): "N_R"}, "new": [new],
+            "religions": {"A_R": {"catholic": 60, "pagan": 40}}}})
+        plan.apply()
+        regs = ModData(self.root).regions("test")
+        self.assertEqual(regs["A_R"]["religions"], {"catholic": 60, "pagan": 40})
+        self.assertEqual(regs["B_R"]["religions"], {"catholic": 20, "pagan": 80})
+        self.assertEqual(regs["N_R"]["religions"], {"catholic": 90, "pagan": 10})     # A_R, where its land was
+
+    def test_medieval_character_lines(self):
+        from faction_tool.strat import character_line
+        m2 = ["character\tPhilip, named character, male, leader, age 40, x 113, y 131"]
+        self.assertEqual(character_line(m2, "Adam", "general", 30, (1, 2)),
+                         "character\tAdam, general, male, age 30, x 1, y 2")
+        self.assertEqual(character_line(m2, "Constance", "princess", 19, (1, 2)),
+                         "character\tConstance, princess, female, age 19, x 1, y 2")
+        rome = ["character\tFlavius, named character, leader, age 47, , x 87, y 80"]
+        self.assertEqual(character_line(rome, "Louis", "named character", 21, (1, 2), role="heir"),
+                         "character\tLouis, named character, heir, age 21, , x 1, y 2")
+
     def test_garrison_emptied_by_hand(self):
         from faction_tool.edit import edit
         mod = ModData(self.root)
