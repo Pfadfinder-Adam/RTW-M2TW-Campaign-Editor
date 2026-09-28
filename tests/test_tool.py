@@ -875,6 +875,32 @@ class ToolTest(unittest.TestCase):
         from faction_tool.buildings import settlement_info
         self.assertEqual(settlement_info(s.lines[st.start:st.end]), ("town", [("core_building", "hut")]))
 
+    def test_new_region_takes_after_its_land(self):
+        # 'built by' and the rebels left empty: those of the region its land is cut from; the
+        # owner's new town takes a garrison in the same Apply (one backup, not two)
+        from faction_tool.edit import edit
+        new = {"name": "N_R", "settlement": "Ntown", "creator": "", "rebels": "", "resources": [],
+               "city": (0, 3), "owner": "alpha", "level": "village"}
+        plan = edit(ModData(self.root), "test", "alpha", {
+            "regions": {"painted": {(0, 3): "N_R", (1, 3): "N_R"}, "new": [new]},
+            "garrisons": {"N_R": ["alpha general"]}})
+        plan.apply()
+        m2 = ModData(self.root)
+        info = m2.regions("test")["N_R"]
+        donor = m2.regions("test")["A_R"]
+        self.assertEqual((info["creator"], info["rebels"]), (donor["creator"], donor["rebels"]))
+        s = Strat(m2.load(m2.campaign_file("test", "descr_strat.txt")))
+        self.assertIn("N_R", [st.region for st in s.faction("alpha").settlements])
+        self.assertTrue(any(c.xy == (0, 3) for c in s.faction("alpha").characters))     # its garrison
+
+    def test_new_region_religions_never_broken(self):
+        from faction_tool.regionedit import religions_for
+        regions = {"A": {"religions": {"catholic": 90, "pagan": 10}}, "B": {"religions": {"catholic": 90, "pagan": 10}},
+                   "C": {"religions": {"islam": 100}}}
+        self.assertEqual(religions_for(regions, {"catholic": 0, "pagan": 0}, "C"), {"islam": 100})   # zeros: the donor's
+        self.assertEqual(religions_for(regions, None, None), {"catholic": 90, "pagan": 10})         # most common
+        self.assertEqual(religions_for(regions, {"pagan": 100}, "C"), {"pagan": 100})             # given, sums to 100
+
     def test_medieval_religions(self):
         # Medieval II: a ninth line per region, the religions
         from faction_tool.edit import edit

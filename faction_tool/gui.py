@@ -91,8 +91,8 @@ UNIT EDITOR / BUILDING EDITOR
   "Tied to it" above the lines shows who owns / recruits / builds it and where it stands.
   Preview, then Apply writes it all with a backup; Restore undoes it.
 
-  Only the map (regions, towns, ports, resources)? In New faction mode with no faction named the
-  buttons read "Preview map changes" / "Apply map changes" and write the map alone.
+  Only the map (regions, towns, ports, resources)? In New faction mode with no faction named,
+  Apply writes the map alone (the line beside the work bar says so).
   Check mod, Scan mod, Restore a backup, Game manifest, Log and Save logs are under Tools.
 
   4. Preview changes (Ctrl+P) shows every file and line that would change. Nothing is written.
@@ -229,6 +229,9 @@ class FieldTable(ttk.Frame):
 
     def bind(self, seq, fn, add=None):
         self.tv.bind("<<TreeviewSelect>>" if seq == "<<ListboxSelect>>" else seq, fn, add)
+
+
+AS_LAND = "(as the land it is cut from)"
 
 
 class App(tk.Tk):
@@ -644,6 +647,9 @@ class App(tk.Tk):
         st = self.strat.settlement_of(region)
         town_level, own = settlement_info(self.strat.lines[st.start:st.end]) if st else ("village", [])
         pop = population_of(self.strat.lines[st.start:st.end]) if st else 400
+        new = self._new_region(region)
+        if new and not st:                          # a new region: the size picked in its dialog
+            town_level, pop = new.get("level") or "village", POP_MIN.get(new.get("level") or "village", 400) or 400
         self._size_region, self._size_now = region, (town_level, pop)
         size = self.sizes.get(region, {})
         self.v_level.set(size.get("level") or town_level)
@@ -1268,10 +1274,12 @@ class App(tk.Tk):
                   ("Region - name shown in the game", "label", "", "empty = the file name without _"),
                   ("Town - name in the files", "settlement", "", "must differ from the region's (Novus_Oppidum)"),
                   ("Town - name shown in the game", "settlement_label", "", "may be the same as the region's"),
-                  ("Built by (culture of its buildings)", "creator", me or (facs[0] if facs else ""),
-                   "the faction whose style the town's buildings have"),
-                  ("Rebels there", "rebels", rebels[0] if rebels else "",
-                   "who rises up / holds it as rebels (a rebel type of this mod)"),
+                  ("Built by (culture of its buildings)", "creator", AS_LAND,
+                   "the faction whose style the town's buildings have; by default that of the region "
+                   "its land is cut from"),
+                  ("Rebels there", "rebels", AS_LAND,
+                   "who rises up / holds it as rebels (a rebel type of this mod); by default those of "
+                   "the region its land is cut from"),
                   ("Region tags (hidden resources)", "resources", "",
                    "comma list; empty = those of the land it is cut from. Not the goods drawn on the map: "
                    "tags buildings ask for ('resource' / 'hidden_resource' in export_descr_buildings), "
@@ -1288,10 +1296,11 @@ class App(tk.Tk):
             v = tk.StringVar(value=default)
             vs[key] = v
             if key in ("creator", "owner"):
-                vals = facs if key == "creator" else ["(rebel village - no settlement written)"] + facs
+                vals = [AS_LAND] + facs if key == "creator" else ["(rebel village - no settlement written)"] + facs
                 ttk.Combobox(frm, textvariable=v, values=vals, width=34).grid(row=i, column=1, sticky="we", padx=6)
             elif key == "rebels":
-                ttk.Combobox(frm, textvariable=v, values=rebels, width=34).grid(row=i, column=1, sticky="we", padx=6)
+                ttk.Combobox(frm, textvariable=v, values=[AS_LAND] + rebels,
+                             width=34).grid(row=i, column=1, sticky="we", padx=6)
             elif key == "level":
                 ttk.Combobox(frm, textvariable=v, values=SETTLEMENT_LEVELS, state="readonly",
                              width=34).grid(row=i, column=1, sticky="we", padx=6)
@@ -1323,11 +1332,18 @@ class App(tk.Tk):
             owner = d["owner"] if d["owner"] in facs else None
             self.new_regions.append({
                 "name": d["name"], "settlement": d["settlement"], "label": d["label"] or None,
-                "settlement_label": d["settlement_label"] or None, "creator": d["creator"] or me,
-                "rebels": d["rebels"], "resources": [x.strip() for x in d["resources"].split(",") if x.strip()],
+                "settlement_label": d["settlement_label"] or None,
+                # empty = as the region its land is cut from (regionedit.donor_of, on Apply)
+                "creator": "" if d["creator"] == AS_LAND else d["creator"],
+                "rebels": "" if d["rebels"] == AS_LAND else d["rebels"], "resources": [x.strip() for x in d["resources"].split(",") if x.strip()],
                 "triumph": int(d["triumph"]) if d["triumph"].isdigit() else 5,
                 "farming": int(d["farming"]) if d["farming"].isdigit() else 3,
                 "colour": colour, "city": None, "port": None, "owner": owner, "level": d["level"] or "village"})
+            if owner and self.editing() and owner == me and d["name"] not in self.chosen:
+                # the edited faction's own new town: in its lists at once (garrison, buildings,
+                # capital), written with the region by the same Apply
+                self.chosen.append(d["name"])
+                self.refresh_chosen()
             w.destroy()
             self.v_paint.set(d["name"] + "  (new)")
             self.status.set("Paint %s's land (left drag), then 'Place its town' (and 'Place its port')." % d["name"])
@@ -1340,7 +1356,14 @@ class App(tk.Tk):
     def _regions_opts(self):
         if not self.region_paint and not self.new_regions and not self.region_religions:
             return None
-        return {"painted": dict(self.region_paint), "new": [dict(r) for r in self.new_regions],
+        me = self.v["template"].get().strip()
+        new = []
+        for r in self.new_regions:
+            r = dict(r)
+            if self.editing() and r.get("owner") == me and r["name"] not in self.chosen:
+                r["owner"] = None                  # taken out of the faction's towns again: a rebel village
+            new.append(r)
+        return {"painted": dict(self.region_paint), "new": new,
                 "religions": {k: dict(v) for k, v in self.region_religions.items()}}
 
     def religions_dialog(self):
@@ -1360,8 +1383,13 @@ class App(tk.Tk):
         names = list(next(iter(known.values())).keys())
         for v in known.values():
             names += [k for k in v if k not in names]
-        now = (new or {}).get("religions") or self.region_religions.get(name) or known.get(name) or \
-            {k: 0 for k in names}
+        now = (new or {}).get("religions") or self.region_religions.get(name) or known.get(name)
+        if not now:
+            # a new region: those of the region its land is cut from (what Apply writes when
+            # the dialog is skipped), else the campaign's most common
+            from .regionedit import donor_of, religions_for
+            donor = donor_of(self.mod, self.v_campaign.get(), self.region_paint, new) if new else None
+            now = religions_for(self.regions, None, donor) or {k: 0 for k in names}
         w = tk.Toplevel(self)
         w.title("Religions of %s" % name)
         w.transient(self)
@@ -2068,6 +2096,7 @@ class App(tk.Tk):
         """{region: owner} with those villages as the rebels'."""
         owners = self.strat.owners() if self.strat else {}
         owners.update({r: "slave" for r in self.villages()})
+        owners.update({r["name"]: r.get("owner") or "slave" for r in getattr(self, "new_regions", [])})
         return owners
 
     def fill_towns(self):
@@ -2497,7 +2526,7 @@ class App(tk.Tk):
             "ai": v["ai"], "denari": int(v["denari"]) if v["denari"].isdigit() else None,
             "playable": self.v_playable.get(),
             **{k: v[k] for k in self.extra_rows if k in (self.editing_now or {})},
-            "take": [r for r in self.chosen if r not in had],
+            "take": [r for r in self.chosen if r not in had and not self._new_region(r)],
             "give": {r: self.v_give.get() or "slave" for r in had if r not in self.chosen},
             "capital": v["capital"] if self.chosen and v["capital"] in self.chosen else None,
             "leader": person("leader"), "heir": person("heir"),
@@ -2530,11 +2559,18 @@ class App(tk.Tk):
         elif self.editing():
             p, a = "Preview changes", "Apply changes"
         elif self.map_only():
-            p, a = "Preview map changes", "Apply map changes"
+            # no faction chosen yet: only the map's changes can be written - said beside the work
+            # bar, the buttons keep their usual names (the user found "map changes" puzzling)
+            p, a = "Preview changes", "Apply changes"
         else:
             p, a = "Preview changes", "Create faction"
         self.b_preview.configure(text=p)
         self.b_create.configure(text=a)
+        if getattr(self, "lbl_work", None) is not None and getattr(self, "v_work", None) is not None:
+            hint = self.WORK_HINTS.get(self.v_work.get(), "")
+            if self.v_work.get() == "new" and self.map_only():
+                hint += "  -  no template / name yet: Apply writes the map's changes only"
+            self.lbl_work.configure(text=hint)
 
     def make_plan(self):
         ed = self.editor()

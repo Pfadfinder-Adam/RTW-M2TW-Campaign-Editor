@@ -95,6 +95,13 @@ def edit(mod, campaign, faction, opts):
     plan = Plan(mod, faction, faction, dict(opts))
     _texts(plan, now, campaign)
     _colours(plan)
+    # new regions first: a new town given to this faction is then one of its towns for the
+    # garrisons, buildings and capital below (one Apply, one backup)
+    if opts.get("regions"):
+        from .regionedit import apply_regions
+        from .regionedit import set_religions
+        apply_regions(plan, campaign, opts["regions"].get("painted") or {}, opts["regions"].get("new") or [])
+        set_religions(plan, campaign, opts["regions"].get("religions") or {})
     _strat(plan, campaign, now)
     if opts.get("places"):
         from .mapedit import apply_places
@@ -102,11 +109,6 @@ def edit(mod, campaign, faction, opts):
     if opts.get("resources"):
         from .resources import apply as apply_resources
         apply_resources(plan, campaign, opts["resources"])
-    if opts.get("regions"):
-        from .regionedit import apply_regions
-        from .regionedit import set_religions
-        apply_regions(plan, campaign, opts["regions"].get("painted") or {}, opts["regions"].get("new") or [])
-        set_religions(plan, campaign, opts["regions"].get("religions") or {})
     if opts.get("relations"):
         from .diplomacy import apply_opts
         apply_opts(plan, campaign, faction, opts["relations"])
@@ -133,8 +135,7 @@ def edit(mod, campaign, faction, opts):
             raise ValueError("internal check failed - a character would follow the family tree of %s "
                              "(the game crashes on that); nothing written" % ", ".join(bad))
         s = Strat(plan.files[sp])
-        tiles = dict(mod.city_tiles(campaign))
-        tiles.update({p["region"]: tuple(p["to"]) for p in opts.get("places") or [] if p["what"] == "city"})
+        tiles = plan_tiles(plan, campaign)
         fb = s.faction(faction)
         held = {c.xy for c in fb.characters if c.xy and _has_army(s.lines[c.start:c.end])}
         empty = [st.region for st in fb.settlements if tiles.get(st.region) not in held]
@@ -523,6 +524,16 @@ def _move_list(plan, f, fac, playable):
     plan.note(f, "%s moved to the %s list" % (fac, "playable" if playable else "nonplayable"))
 
 
+def plan_tiles(plan, campaign):
+    """{region: town tile} as the plan leaves the map: towns moved (opts places) and the towns
+    of new regions (opts regions/new) on top of map_regions.tga as it is."""
+    tiles = dict(plan.mod.city_tiles(campaign))
+    tiles.update({p["region"]: tuple(p["to"]) for p in plan.opts.get("places") or [] if p["what"] == "city"})
+    tiles.update({r["name"]: tuple(r["city"]) for r in (plan.opts.get("regions") or {}).get("new") or []
+                  if r.get("city")})
+    return tiles
+
+
 def _garrisons(plan, f, s, campaign):
     """Each picked garrison replaces the units of the army that holds the town
     (a named character keeps his bodyguard); a town nobody holds gets a captain."""
@@ -530,7 +541,7 @@ def _garrisons(plan, f, s, campaign):
     if not picked:
         return
     fb = s.faction(plan.new)
-    tiles = plan.mod.city_tiles(campaign)
+    tiles = plan_tiles(plan, campaign)
     pool = plan.mod.name_pool(plan.new) or {}
     used = {c.name.split()[0] for x in s.factions for c in x.characters if c.name}
     captains = [n for n in pool.get("characters", []) if n not in used] or pool.get("characters", [])

@@ -131,6 +131,36 @@ def _part(cells, start):
     return seen
 
 
+def donor_of(mod, campaign, painted, new):
+    """The region a new region is cut out of: the one most of its painted land came from,
+    else the one under its town; None when neither is known. painted = {xy: region}."""
+    regions = mod.regions(campaign)
+    by_colour = {v["colour"]: k for k, v in regions.items()}
+    img = mod.region_map(campaign)
+    src = {}
+    for xy, to in painted.items():
+        was = by_colour.get(img.get(*tuple(xy)))
+        if to == new["name"] and was:
+            src[was] = src.get(was, 0) + 1
+    if src:
+        return max(src, key=src.get)
+    if new.get("city"):
+        return by_colour.get(img.get(*tuple(new["city"])))
+    return None
+
+
+def religions_for(regions, given, donor):
+    """The religions a new region is written with (Medieval II): those given when they add up
+    to 100, else the donor's, else the campaign's most common line - never a broken or empty
+    one (the game may not start with it)."""
+    if given and sum(int(v) for v in given.values()) == 100:
+        return {k: int(v) for k, v in given.items()}
+    if (regions.get(donor) or {}).get("religions"):
+        return dict(regions[donor]["religions"])
+    lines = [tuple(sorted(v["religions"].items())) for v in regions.values() if v.get("religions")]
+    return dict(max(set(lines), key=lines.count)) if lines else {}
+
+
 def apply_regions(plan, campaign, painted, new_regions):
     """Write the changes (see the module text). painted keys may be lists (from JSON)."""
     mod = plan.mod
@@ -165,17 +195,11 @@ def apply_regions(plan, campaign, painted, new_regions):
     dr = plan.edit(mod.campaign_file(campaign, "descr_regions.txt"))
     while dr.raw and not dr.text(len(dr.raw) - 1).strip():
         del dr.raw[-1]
-    img = mod.region_map(campaign)
-    by_colour = {v["colour"]: k for k, v in regions.items()}
+    built_by = {}
     for r in new_regions:
         c = colours[r["name"]]
         res = ", ".join(r.get("resources") or [])
-        src = {}                                   # the region most of its land came from
-        for xy, to in painted.items():
-            was = by_colour.get(img.get(*xy))
-            if to == r["name"] and was:
-                src[was] = src.get(was, 0) + 1
-        donor = max(src, key=src.get) if src else None
+        donor = donor_of(mod, campaign, painted, r)
         if not res:
             # no resources given: the donor's (no region in the game files has none; in HLR
             # they are the hidden resources that open local units)
@@ -184,19 +208,28 @@ def apply_regions(plan, campaign, painted, new_regions):
                 plan.note(dr, "%s: resources of %s (%s)" % (r["name"], donor, res))
         if not res:
             raise ValueError("%s: give it at least one resource (the game files have no region without)" % r["name"])
-        lines = [r["name"], "\t" + r["settlement"], "\t" + r["creator"], "\t" + r["rebels"],
+        d = regions.get(donor) or {}
+        creator = r.get("creator") or d.get("creator") or r.get("owner")
+        rebels = r.get("rebels") or d.get("rebels")
+        if not creator or not rebels:
+            raise ValueError("%s: pick who built it and its rebels (no land to take them from)" % r["name"])
+        built_by[r["name"]] = creator
+        if not r.get("creator") or not r.get("rebels"):
+            plan.note(dr, "%s: built by %s, rebels %s (as %s)" % (r["name"], creator, rebels, donor))
+        lines = [r["name"], "\t" + r["settlement"], "\t" + creator, "\t" + rebels,
                  "\t%d %d %d" % c, "\t" + res,
                  "\t%d" % int(r.get("triumph", 5)), "\t%d" % int(r.get("farming", 3))]
         if any("religions" in v for v in regions.values()):
             # Medieval II: a ninth line, the religions; given, else the region most land came from
-            rel = r.get("religions") or (regions.get(donor) or {}).get("religions") or \
-                next(v["religions"] for v in regions.values() if "religions" in v)
+            rel = religions_for(regions, r.get("religions"), donor)
             lines.append("\t" + religions_line(rel))
             plan.note(dr, "%s: %s" % (r["name"], religions_line(rel)))
         dr.raw.extend(dr.make(l) for l in lines)
         plan.note(dr, "region %s (%s), colour %d %d %d" % (r["name"], r["settlement"], c[0], c[1], c[2]))
     dr.raw.append(dr.make(""))
     # mercenaries: a new region joins the pool of the region most of its land came from
+    img = mod.region_map(campaign)
+    by_colour = {v["colour"]: k for k, v in regions.items()}
     _mercenary_pools(plan, campaign, new_regions, painted, by_colour, img)
     # the name lookup: appended, so the names already there keep their places
     lk = mod.campaign_file(campaign, "descr_regions_and_settlement_name_lookup.txt")
@@ -233,7 +266,7 @@ def apply_regions(plan, campaign, painted, new_regions):
         fb = s.faction(own)
         if fb is None:
             raise ValueError("%s: no faction block for %s in descr_strat.txt" % (r["name"], own))
-        block = village_block(r["name"], r.get("creator") or own)
+        block = village_block(r["name"], built_by.get(r["name"]) or own)
         level = r.get("level") or "village"
         block = [l.replace("level village", "level " + level) for l in block]
         block = _grown_block(plan, block, level, r["name"], sf)
