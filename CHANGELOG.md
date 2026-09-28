@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.2 - 2026-09-29
+
+### Changed
+- **New name: RTW & M2TW Campaign Editor** (it edits Rome: Total War and Medieval II: Total War alike). The exe
+  is now `RTW-M2TW-Campaign-Editor.exe`; its folder `RTW-Campaign-Editor-files` is renamed to
+  `RTW-M2TW-Campaign-Editor-files` on the first start, so the log and settings stay.
+
 ## 0.9.1 - 2026-09-29
 
 ### Added

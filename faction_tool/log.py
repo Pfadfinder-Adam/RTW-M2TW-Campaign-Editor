@@ -1,5 +1,5 @@
 """The tool's own log, faction_tool.log: what was loaded, previewed and written,
-every error with its traceback. In the folder RTW-Campaign-Editor-files next to the exe
+every error with its traceback. In the folder RTW-M2TW-Campaign-Editor-files next to the exe
 (with faction_tool_settings.json), next to rtw_faction_tool.py when run from the source, else in
 the user's profile. Kept small: over 1 MB it moves to faction_tool.log.old."""
 
@@ -12,7 +12,8 @@ LIMIT = 1 << 20
 _path = None
 
 
-FOLDER = "RTW-Campaign-Editor-files"      # next to the exe: the log and the settings, apart from it
+FOLDER = "RTW-M2TW-Campaign-Editor-files"      # next to the exe: the log and the settings, apart from it
+OLD_FOLDERS = ("RTW-Campaign-Editor-files",)     # its name before 0.9.2 (renamed in place, nothing lost)
 
 
 def _candidates():
@@ -29,8 +30,13 @@ def _candidates():
 
 def _move_old(home, own):
     """0.7.1 and before kept faction_tool.log and faction_tool_settings.json right next to the exe
-    (in Downloads they mixed with everything else): moved into the tool's own folder once."""
+    (in Downloads they mixed with everything else), 0.7.2-0.9.1 in RTW-Campaign-Editor-files:
+    moved into the tool's own folder once."""
     try:
+        for name in OLD_FOLDERS:
+            was = os.path.join(home, name)
+            if os.path.isdir(was) and not os.path.exists(own):
+                os.replace(was, own)
         for n in ("faction_tool.log", "faction_tool.log.old", "faction_tool_settings.json"):
             old = os.path.join(home, n)
             if os.path.isfile(old) and not os.path.exists(os.path.join(own, n)):

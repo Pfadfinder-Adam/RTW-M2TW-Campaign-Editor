@@ -12,8 +12,8 @@ Only the latest release gets fixes. Please update to it before reporting a probl
 
 ## What the tool does on your PC
 
-RTW Campaign Editor only reads and writes the game or mod folder you load, plus its own folder
-`RTW-Campaign-Editor-files` next to the exe (log and settings). Every write is shown first and
+RTW & M2TW Campaign Editor only reads and writes the game or mod folder you load, plus its own folder
+`RTW-M2TW-Campaign-Editor-files` next to the exe (log and settings). Every write is shown first and
 backed up (`faction_tool_backups`), and Restore undoes it. It needs no internet connection and sends
 nothing anywhere. The Windows exe is built from this repository's source by GitHub Actions
 (`.github/workflows/release.yml`); anyone can check the build log of every release.

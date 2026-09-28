@@ -1,12 +1,12 @@
-# RTW Campaign Editor
+# RTW & M2TW Campaign Editor
 
-(formerly RTW Faction Tool)
+(formerly RTW Campaign Editor / RTW Faction Tool)
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/pfadfinder)
 
 I'm building a tool that finally lets us improve the games of our childhood ourselves - without digging through files every time, without the fear of breaking something, and without everything falling apart because we forgot one step.
 
-[![RTW Campaign Editor - video overview](https://img.youtube.com/vi/m1sCPg-Lzsw/hqdefault.jpg)](https://www.youtube.com/watch?v=m1sCPg-Lzsw)
+[![RTW & M2TW Campaign Editor - video overview](https://img.youtube.com/vi/m1sCPg-Lzsw/hqdefault.jpg)](https://www.youtube.com/watch?v=m1sCPg-Lzsw)
 
 **Video:** [what the editor does, in a few minutes](https://www.youtube.com/watch?v=m1sCPg-Lzsw).
 
@@ -30,21 +30,21 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 > ### ⚠️ Something went wrong? Send the logs - and a video or screenshot ⚠️
 > When the game crashes, the tool shows an error, or something looks wrong, please send:
 > 1. **The logs:** in the tool, **Tools -> Save logs (zip)** - one `.zip` with the tool's log and the
->    game's `system.log.txt` (it is saved in `RTW-Campaign-Editor-files/logs` next to the exe).
+>    game's `system.log.txt` (it is saved in `RTW-M2TW-Campaign-Editor-files/logs` next to the exe).
 > 2. **A video or a screenshot** of what you did and what went wrong.
 >
 > With these the cause is usually found and fixed **the same day** (the logs name the file, line and
 > the game's own error); without them it is guesswork and takes much longer.
 
-Version **0.9.1** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
+Version **0.9.2** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
 
 Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
 
 ## Download
 
-- **Windows:** grab `RTW-Campaign-Editor.exe` from the [Releases](../../releases) page. No install needed.
+- **Windows:** grab `RTW-M2TW-Campaign-Editor.exe` from the [Releases](../../releases) page. No install needed.
 
-**Installing:** make a new, empty folder for the editor wherever suits you (for example `Documents\RTW Campaign Editor` - not the game folder, not straight into Downloads or the desktop) and put the `.exe` in it. Start it from there. Next to the exe it makes the folder `RTW-Campaign-Editor-files` with its log, settings and the logs zips you send with a bug report; an update is simply the new exe in the same folder (the settings stay).
+**Installing:** make a new, empty folder for the editor wherever suits you (for example `Documents\RTW & M2TW Campaign Editor` - not the game folder, not straight into Downloads or the desktop) and put the `.exe` in it. Start it from there. Next to the exe it makes the folder `RTW-M2TW-Campaign-Editor-files` with its log, settings and the logs zips you send with a bug report; an update is simply the new exe in the same folder (the settings stay).
 - **Any OS with Python 3.8+:** `python rtw_faction_tool.py` (standard library; Pillow for the pictures).
 
 **Unit packs:** in the **Unit editor**, pick a unit (or narrow the list with Show / Find) and press **Export pack...**: the unit - or every unit the list shows - goes into one `.zip` with its models, textures, sprites, mount, engine or animal, cards, texts and recruit places. **Import pack...** in another mod of the same game shows the units with their names in that mod (taken names get a free one you can change), asks which factions or cultures own them, and **Preview** / **Write it in** puts them in with a backup. A model that exists with other lines is added under a new name; a file that exists is kept, never overwritten; recruit lines go into the same building and level where the mod has them (else the preview says to add them in the Building editor).
@@ -102,7 +102,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **Undo, keys, help:** **Undo** / **Redo** (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z) step back through towns picked, garrisons, buildings, settlement sizes, map moves, armies and diplomacy. Ctrl+P preview, Ctrl+S apply, F5 load again, Ctrl+1..5 the tabs, F1 or **Help** for a short guide. Far out on the map only towns are drawn; ports and characters show from zoom 4.
 
-**Log:** the tool keeps `faction_tool.log` in the folder `RTW-Campaign-Editor-files` next to the exe (or in `%APPDATA%\RTW Faction Tool`): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
+**Log:** the tool keeps `faction_tool.log` in the folder `RTW-M2TW-Campaign-Editor-files` next to the exe (or in `%APPDATA%\RTW Faction Tool`): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
 
 **Undo:** press **Restore a backup...** Backups sit in `faction_tool_backups` next to `data`. Restore the newest one first.
 
@@ -175,7 +175,7 @@ free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 - Only builds made by this repository's GitHub Actions release workflow from its own source are signed.
 - Committers and reviewers: [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew). Approver (every signing request): [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew).
 
-Privacy: this program will not transfer any information to other networked systems. It reads and writes only the game or mod folder you load and its own `RTW-Campaign-Editor-files` folder (see [SECURITY.md](SECURITY.md)).
+Privacy: this program will not transfer any information to other networked systems. It reads and writes only the game or mod folder you load and its own `RTW-M2TW-Campaign-Editor-files` folder (see [SECURITY.md](SECURITY.md)).
 
 ## License
 

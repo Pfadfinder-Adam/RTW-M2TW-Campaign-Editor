@@ -29,11 +29,11 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.9.1"
+VERSION = "0.9.2"
 KOFI = "https://ko-fi.com/pfadfinder"
-APP = "RTW Campaign Editor"
+APP = "RTW & M2TW Campaign Editor"
 
-HELP = """RTW Campaign Editor - how to use it
+HELP = """RTW & M2TW Campaign Editor - how to use it
 
 START
   1. Close the game. Browse... to the mod's data folder (for example ...\\HLR\\data), press Load.
@@ -119,7 +119,7 @@ KEYS
   Ctrl+1 .. Ctrl+5 the tabs    Map: wheel zooms, left drag moves the map, right drag moves a marker
 
 WHEN SOMETHING GOES WRONG
-  Log shows what the tool did and every error (faction_tool.log in RTW-Campaign-Editor-files
+  Log shows what the tool did and every error (faction_tool.log in RTW-M2TW-Campaign-Editor-files
   next to the exe).
   Check mod reads the whole mod and reports anything it cannot make sense of.
   Scan mod lists every mention of the faction and tells each file apart: the game's own
@@ -3119,7 +3119,7 @@ class App(tk.Tk):
             mod_dir = os.path.dirname(os.path.abspath(self.mod.data))
         stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         base = os.path.basename(mod_dir) if mod_dir else "tool"
-        # into the tool's own folder (RTW-Campaign-Editor-files/logs next to the exe), not the game's
+        # into the tool's own folder (RTW-M2TW-Campaign-Editor-files/logs next to the exe), not the game's
         where = os.path.join(os.path.dirname(log.path()), "logs") if log.path() else (mod_dir or "")
         try:
             os.makedirs(where, exist_ok=True)
