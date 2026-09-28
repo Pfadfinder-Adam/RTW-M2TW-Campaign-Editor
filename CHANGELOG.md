@@ -3,6 +3,11 @@
 ## 0.6.0 - 2026-09-28
 
 ### New
+- **Medieval II straight from Steam gets unpacked by the tool**: Load on a game whose files are
+  still in packs/ offers (with a yes) to copy msvcp71.dll and msvcr71.dll from the game folder next
+  to tools/unpacker and run the game's own unpacker; then it loads the unpacked data.
+- **Set-up problems fixed on Load with a yes**: M2EX's `vegetation_source text` without the raw
+  vegetation maps (the game closed at start) is set to `binary`, with a backup.
 - **One Apply for all the work waiting**: a `*` on the work buttons marks changes not written
   yet (Edit faction, Unit editor, Building editor). When several hold changes, Apply lists them
   with ticks and writes them one after another - the editors first, then the faction and the

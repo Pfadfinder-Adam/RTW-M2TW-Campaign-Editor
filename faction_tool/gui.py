@@ -1826,7 +1826,12 @@ class App(tk.Tk):
             self.mod = ModData(self.v_path.get())
             self._units_for = self._edb_for = None
         except Exception as e:
-            messagebox.showerror(APP, str(e))
+            from . import gamefix
+            need = gamefix.unpack_needed(self.v_path.get()) if isinstance(e, FileNotFoundError) else None
+            if need:
+                self.offer_unpack(need)
+            else:
+                messagebox.showerror(APP, str(e))
             return
         self.v_path.set(self.mod.data)
         log.write("Load %s" % self.mod.data)
@@ -1861,6 +1866,46 @@ class App(tk.Tk):
         if lost:
             messagebox.showwarning(APP, "The %s editor had %d change(s) not written; its file was written since "
                                         "(by another Apply), so they are dropped - make them again." % (ed.kind, lost))
+
+    def offer_unpack(self, need):
+        """Medieval II straight from Steam: its files are still in packs/. On a yes, the two
+        DLLs the unpacker needs go next to it (from the game folder) and the game's own
+        unpacker runs; then the game loads."""
+        from . import gamefix
+        dlls = (" First %s %s copied from the game folder next to the unpacker (it needs them)." % (
+            " and ".join(need["dlls"]), "is" if len(need["dlls"]) == 1 else "are")) if need["dlls"] else ""
+        if not messagebox.askyesno(APP, (
+                "This Medieval II is not unpacked yet: its files are still in %d .pack file(s), so there is "
+                "nothing to edit.\n\nUnpack it now with the game's own unpacker (tools\\unpacker)?%s\n\n"
+                "It takes a few minutes and several GB of disk; the packs stay as they are.") % (
+                need["packs"], dlls)):
+            return
+        result = {}
+
+        def work():
+            try:
+                result["out"] = gamefix.unpack(need, log=lambda m: result.__setitem__("step", m))
+            except Exception as e:
+                result["error"] = str(e)
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+        started = datetime.datetime.now()
+
+        def wait():
+            if th.is_alive():
+                self.status.set("Unpacking Medieval II ... %d s (%s)" % (
+                    (datetime.datetime.now() - started).seconds, result.get("step", "the unpacker runs")))
+                self.after(1000, wait)
+                return
+            log.write("Unpack %s\n%s" % (need["game"], result.get("out") or result.get("error", "")))
+            if "error" in result:
+                self.status.set("")
+                messagebox.showerror(APP, "Unpacking failed: %s" % result["error"])
+                return
+            self.v_path.set(os.path.join(need["game"], "data"))
+            self.load()
+            self.status.set("Medieval II unpacked and loaded.")
+        wait()
 
     def offer_fixes(self):
         """Set-up problems that stop the game from starting (gamefix): put right on a yes,

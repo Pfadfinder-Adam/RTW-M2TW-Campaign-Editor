@@ -819,6 +819,31 @@ class ToolTest(unittest.TestCase):
         restore(ModData(self.root), bdir)
         self.assertIn("vegetation_source  text", open(os.path.join(d, "descr_caps_ex.txt")).read())
 
+    def test_medieval_unpack(self):
+        # a Medieval II straight from Steam: packs only; the unpacker needs two DLLs next to it
+        import stat, sys, tempfile
+        from faction_tool import gamefix
+        game = tempfile.mkdtemp()
+        os.makedirs(os.path.join(game, "packs"))
+        os.makedirs(os.path.join(game, "data"))
+        open(os.path.join(game, "packs", "data_0.pack"), "wb").close()
+        self.assertIsNone(gamefix.unpack_needed(game))              # no unpacker: nothing to offer
+        tools = os.path.join(game, "tools", "unpacker")
+        os.makedirs(tools)
+        exe = os.path.join(tools, "unpacker.exe")
+        with open(exe, "w") as fh:                                  # a stand-in that 'unpacks'
+            fh.write("#!%s\nimport os\nopen(os.path.join('..', '..', 'data', 'descr_sm_factions.txt'), 'w')"
+                     ".write('faction x')\n" % sys.executable)
+        os.chmod(exe, os.stat(exe).st_mode | stat.S_IEXEC)
+        for d in gamefix.UNPACK_DLLS:
+            open(os.path.join(game, d), "wb").write(b"dll")
+        need = gamefix.unpack_needed(os.path.join(game, "data"))
+        self.assertEqual(need["dlls"], list(gamefix.UNPACK_DLLS))
+        if os.name != "nt":
+            gamefix.unpack(need)
+            self.assertTrue(all(os.path.exists(os.path.join(tools, d)) for d in gamefix.UNPACK_DLLS))
+            self.assertIsNone(gamefix.unpack_needed(game))          # unpacked now
+
     def test_english_text_wins(self):
         # the game reads data/text/english first (Medieval II keeps its tables only there):
         # the tool reads and writes that copy, and a new town gets the core level of its size
