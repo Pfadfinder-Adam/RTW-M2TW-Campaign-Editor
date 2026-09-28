@@ -289,6 +289,15 @@ class App(tk.Tk):
         field("Name (full)", ttk.Entry(lf, textvariable=self.v["display_name"]))
         field("Name (short)", ttk.Entry(lf, textvariable=self.v["short_name"]))
         field("Adjective", ttk.Entry(lf, textvariable=self.v["adjective"]))
+        # Medieval II's faction screen texts, shown only when the faction has them
+        self.extra_rows = {}
+        for k, label in (("strength", "Strengths\n(faction screen)"), ("weakness", "Weaknesses\n(faction screen)"),
+                         ("unit_text", "Famous unit\n(faction screen)")):
+            self.v[k] = tk.StringVar()
+            field(label, ttk.Entry(lf, textvariable=self.v[k]))
+            self.extra_rows[k] = [lf.grid_slaves(row=row - 1, column=c)[0] for c in (0, 1)]
+            for w in self.extra_rows[k]:
+                w.grid_remove()
         self.cb_ai = ttk.Combobox(lf, textvariable=self.v["ai"], state="readonly", values=AI_CHOICES)
         field("AI personality", self.cb_ai)
         field("Starting denari", ttk.Entry(lf, textvariable=self.v["denari"]))
@@ -775,6 +784,9 @@ class App(tk.Tk):
         self.lf2.configure(text="Leader and heir (names from the faction's name list)" if edit else
                            "Leader and heir (names must come from the template's name list)")
         self.e_name.configure(state="readonly" if edit else "normal")
+        for ws in self.extra_rows.values():             # shown again by load_existing when the faction has them
+            for w in ws:
+                w.grid_remove()
         # cloning-only options are hidden in Edit (diplomacy gets its own editor later)
         for w in [self.chk_triggers, self.chk_art] + self.dip_row:
             if edit:
@@ -817,6 +829,10 @@ class App(tk.Tk):
         self.v["name"].set(faction)
         for k in ("display_name", "short_name", "adjective", "ai"):
             self.v[k].set(now.get(k) or "")
+        for k, ws in self.extra_rows.items():
+            self.v[k].set(now.get(k) or "")
+            for w in ws:
+                (w.grid if k in now else w.grid_remove)()
         self.v["denari"].set(str(now.get("denari", "")))
         self.v_playable.set(bool(now.get("playable")))
         for t, k in ((self.t_descr, "description"), (self.t_long, "long_description")):
@@ -1736,9 +1752,39 @@ class App(tk.Tk):
         self.cb_template["values"] = names
         self.load_campaign()
         self.status.set("%d factions, %d campaign(s)." % (len(names) + 1, len(camps)))
+        if not getattr(self, "_fix_queued", False):
+            self._fix_queued = True
+            self.after_idle(self.offer_fixes)
         ed = self.editor()
         if ed is not None:                    # after Apply the editor reads the files again
             ed.load(self.mod)
+
+    def offer_fixes(self):
+        """Set-up problems that stop the game from starting (gamefix): put right on a yes,
+        with a backup; a no is remembered for this mod."""
+        from . import gamefix
+        self._fix_queued = False
+        try:
+            found = gamefix.problems(ModData(self.mod.data))          # the files as they are now
+        except Exception as e:
+            log.write("setup check failed: %s" % e)
+            return
+        declined = settings.get("fixes_declined") or {}
+        found = [p for p in found if p["id"] not in declined.get(self.mod.data, [])]
+        if not found:
+            return
+        text = "\n\n".join(p["why"] for p in found)
+        if not messagebox.askyesno(APP, "This game / mod will not start as it is:\n\n%s\n\nPut it right now? "
+                                        "A backup is made first (Restore undoes it)." % text):
+            declined = dict(declined)
+            declined[self.mod.data] = declined.get(self.mod.data, []) + [p["id"] for p in found]
+            settings.put("fixes_declined", declined)
+            return
+        plan = gamefix.fix_plan(ModData(self.mod.data), found)
+        bdir = plan.apply()
+        log.write("Set-up fixed (backup %s)\n%s" % (bdir, plan.report()))
+        self.load()
+        self.status.set("Set-up fixed: %s (backup made)." % ", ".join(p["id"] for p in found))
 
     def new_mod(self):
         """Make <game>/<name> from the loaded mod (hard links + copied text), then load it."""
@@ -2272,6 +2318,7 @@ class App(tk.Tk):
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "ai": v["ai"], "denari": int(v["denari"]) if v["denari"].isdigit() else None,
             "playable": self.v_playable.get(),
+            **{k: v[k] for k in self.extra_rows if k in (self.editing_now or {})},
             "take": [r for r in self.chosen if r not in had],
             "give": {r: self.v_give.get() or "slave" for r in had if r not in self.chosen},
             "capital": v["capital"] if self.chosen and v["capital"] in self.chosen else None,

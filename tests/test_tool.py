@@ -738,6 +738,19 @@ class ToolTest(unittest.TestCase):
         restore(m2, bdir)
         self.assertNotIn("N_R", ModData(self.root).regions("test"))
 
+    def test_setup_fix_vegetation(self):
+        from faction_tool import gamefix
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_caps_ex.txt"), "; caps\nsprite_format  xml\nvegetation_source  text\n")
+        mod = ModData(self.root)
+        found = gamefix.problems(mod)
+        self.assertEqual([p["id"] for p in found], ["vegetation_source"])
+        bdir = gamefix.fix_plan(mod, found).apply()
+        self.assertIn("vegetation_source  binary", open(os.path.join(d, "descr_caps_ex.txt")).read())
+        self.assertEqual(gamefix.problems(ModData(self.root)), [])
+        restore(ModData(self.root), bdir)
+        self.assertIn("vegetation_source  text", open(os.path.join(d, "descr_caps_ex.txt")).read())
+
     def test_english_text_wins(self):
         # the game reads data/text/english first (Medieval II keeps its tables only there):
         # the tool reads and writes that copy, and a new town gets the core level of its size

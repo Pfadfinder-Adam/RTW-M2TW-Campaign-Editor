@@ -29,6 +29,10 @@ def _value(texts, i):
     return "\n".join([first] + texts[i + 1:end])
 
 
+# Medieval II's faction-select screen: {FRANCE_STRENGTH}, {FRANCE_WEAKNESS}, {FRANCE_UNIT}
+EXTRA_TEXTS = {"_STRENGTH": "strength", "_WEAKNESS": "weakness", "_UNIT": "unit_text"}
+
+
 def read_faction(mod, campaign, faction):
     """What the faction is now: {display_name, short_name, adjective, description,
     long_description, primary_colour, secondary_colour, ai, denari, playable, regions}."""
@@ -41,10 +45,13 @@ def read_faction(mod, campaign, faction):
         texts = mod.load(path).texts()
         for i, line in enumerate(texts):
             m = RE_KEY.match(line)
-            if not m or not m.group(2).upper().endswith("DESCR"):
+            if not m or not m.group(2).upper().endswith(("DESCR", "_STRENGTH", "_WEAKNESS", "_UNIT")):
                 continue
             key, val = m.group(2).upper(), _value(texts, i)
-            if key == F + "_DESCR" and "description" not in out:
+            extra = EXTRA_TEXTS.get(key[len(F):]) if key.startswith(F + "_") else None
+            if extra and extra not in out:
+                out[extra] = _unescape(val)         # Medieval II's faction screen: strengths, weaknesses, unit
+            elif key == F + "_DESCR" and "description" not in out:
                 out["description"] = _unescape(val)
             elif key == long_key and "long_description" not in out:
                 out["long_description"] = _unescape(val)
@@ -158,6 +165,9 @@ def _texts(plan, now, campaign):
         set_to[F] = o["display_name"]
     if o.get("description") is not None and o.get("description") != now.get("description"):
         set_to[F + "_DESCR"] = o["description"]
+    for suffix, k in EXTRA_TEXTS.items():
+        if k in now and o.get(k) is not None and o[k] != now[k]:
+            set_to[F + suffix] = o[k]
     long_new = o.get("long_description")
     if long_new is not None and long_new != now.get("long_description"):
         keys = {m.group(2).upper() for p in plan.mod.campaign_text_files(campaign)
