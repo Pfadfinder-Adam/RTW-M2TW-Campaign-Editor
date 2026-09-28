@@ -141,7 +141,33 @@ class BuildingsEditor(ttk.Frame):
             self.info.configure(text="the town keeps its own buildings (%d) - change any to set them by hand"
                                 % len(self.own))
 
+    def fit_down(self, level):
+        """Every picked building too big for a settlement of this level drops to the
+        biggest level of its chain that fits (or goes). [(chain, old, new or None)]."""
+        done = []
+        levels = dict((b.name, lv) for b, lv in self.chains())
+        for chain, name in list(self.current.items()):
+            if chain.lower().startswith("core"):
+                continue
+            b = next((x for x in self.buildings if x.name == chain), None)
+            lv = b.level(name) if b else None
+            if lv is None or ranks_ok(lv, level):
+                continue
+            fit = [l for l in levels.get(chain, []) if ranks_ok(l, level)]
+            if fit:
+                self.current[chain] = fit[-1].name
+                done.append((chain, name, fit[-1].name))
+            else:
+                del self.current[chain]
+                done.append((chain, name, None))
+        if done:
+            self.edited = True
+            self.last_pick = None
+            self.on_change(sorted(self.current.items(), key=lambda x: self._order(x[0])))
+        return done
+
     def pick(self, chain, level):
+        self.last_pick = (chain, level)
         if level == NONE:
             self.current.pop(chain, None)
         else:

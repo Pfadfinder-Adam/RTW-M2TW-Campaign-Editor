@@ -553,6 +553,18 @@ class App(tk.Tk):
                 if self.buildings_editor.town_level != level:
                     self.buildings_editor.after_idle(lambda: self.buildings_editor.set_level(level))
             self.refresh_chosen(keep_units_selection=True)
+            # a smaller governor's building picked by hand: the settlement shrinks to it and
+            # the other buildings with it
+            ed = self.buildings_editor
+            last, ed.last_pick = getattr(ed, "last_pick", None), None
+            if last and last[0].lower().startswith("core") and last[1] != "-":
+                b = next((x for x in self._edb if x.name == last[0]), None)
+                lv = b.level(last[1]) if b else None
+                now = self.v_level.get() or town_level
+                fit = ed.core_for(now)
+                fit_lv = b.level(fit[1]) if b and fit and fit[0] == last[0] else None
+                if lv and fit_lv and rank(lv.settlement_min) < rank(fit_lv.settlement_min):
+                    self.after_idle(lambda: self._level_to(lv.settlement_min, sync_core=False))
         # the chains offer the levels of the settlement as it will be: set by hand, grown
         # by a picked governor's building, or as the file has it
         shown = size.get("level") or self._grown_level(self.buildings_picked.get(region), town_level)
@@ -566,27 +578,36 @@ class App(tk.Tk):
         return need if need and rank(need) > rank(town_level) else town_level
 
     def level_picked(self):
-        """A settlement level picked by hand: the governor's building follows it (the
-        biggest that level allows), the chains offer that level's buildings, and the
-        population rises to the level's threshold if it is below."""
+        self._level_to(self.v_level.get())
+
+    def _level_to(self, level, sync_core=True):
+        """A settlement level picked by hand (or a smaller governor's building): the
+        governor's building follows it (the biggest that level allows), buildings too
+        big for it drop to the biggest level that fits, the chains offer that level's
+        buildings, and the population moves into the level's range."""
         region = getattr(self, "_size_region", None)
         if not region:
             return
-        level = self.v_level.get()
+        self.v_level.set(level)
         ed = self.buildings_editor
         pop = self.v_pop.get().strip()
         bigger = SETTLEMENT_LEVELS[rank(level) + 1] if 0 <= rank(level) < len(SETTLEMENT_LEVELS) - 1 else None
         if pop.isdigit() and (int(pop) < POP_MIN.get(level, 0) or bigger and int(pop) >= POP_MIN[bigger]):
             self.v_pop.set(str(POP_MIN[level]))       # into the level's range, else it grows or shrinks at once
         self.size_changed()
-        core = ed.core_for(level)
+        core = ed.core_for(level) if sync_core else None
+        ed.town_level = level
+        ed.title.configure(text="%s - a %s" % (region, level))
+        said = []
         if core and ed.current.get(core[0]) != core[1]:
-            ed.town_level = level
-            ed.title.configure(text="%s - a %s" % (region, level))
             ed.pick(core[0], core[1])                 # remembers for Undo and redraws
-            self.status.set("%s: %s -> governor's building %s" % (region, level, core[1]))
-        else:
-            ed.set_level(level)
+            ed.last_pick = None
+            said.append("governor's building %s" % core[1])
+        down = ed.fit_down(level)
+        said += ["%s %s -> %s" % (c, o, n or "none") for c, o, n in down]
+        ed.set_level(level)
+        if said:
+            self.status.set("%s: %s - %s" % (region, level, "; ".join(said)))
 
     def size_changed(self):
         """Level / population typed for the selected town; the same as now means unchanged."""
