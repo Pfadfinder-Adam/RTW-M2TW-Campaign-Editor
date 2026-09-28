@@ -54,10 +54,29 @@ class MapView(ttk.Frame):
         ttk.Button(bar, text="Fit", width=5, command=self.fit).pack(side="right")
         ttk.Button(bar, text="+", width=3, command=lambda: self.zoom_by(1)).pack(side="right", padx=2)
         ttk.Button(bar, text="-", width=3, command=lambda: self.zoom_by(-1)).pack(side="right")
-        ttk.Label(bar, text="wheel: zoom   left drag: the map   right drag (or Ctrl + left): characters, towns, ports   click a town: add / remove it",
+        ttk.Label(bar, text="wheel: zoom   left drag: map   right drag: markers   click a town: take / give",
                   foreground="#666").pack(side="right", padx=12)
-        self.canvas = tk.Canvas(self, background="#1d2b3a", highlightthickness=0, cursor="crosshair")
-        self.canvas.pack(fill="both", expand=True)
+        from . import settings
+        self.v_legend = tk.BooleanVar(value=bool(settings.get("map_legend", True)))
+        ttk.Checkbutton(bar, text="Legend", variable=self.v_legend, command=self._legend_toggled).pack(
+            side="left", padx=(4, 0), before=self.lbl_layers)
+        body = ttk.Frame(self)
+        body.pack(fill="both", expand=True)
+        self.canvas = tk.Canvas(body, background="#1d2b3a", highlightthickness=0, cursor="crosshair")
+        self.canvas.pack(side="left", fill="both", expand=True)
+        # the legend: what every sign means, on the right; shown or hidden as last time
+        self.legend = ttk.Frame(body, padding=(6, 0, 0, 0))
+        self.legend_canvas = tk.Canvas(self.legend, width=250, background="#f4f1ea", highlightthickness=1,
+                                       highlightbackground="#bbb")
+        lsb = ttk.Scrollbar(self.legend, orient="vertical", command=self.legend_canvas.yview)
+        self.legend_canvas.configure(yscrollcommand=lsb.set)
+        lsb.pack(side="right", fill="y")
+        self.legend_canvas.pack(side="left", fill="y", expand=True)
+        for seq, step in (("<MouseWheel>", None), ("<Button-4>", -1), ("<Button-5>", 1)):
+            self.legend_canvas.bind(seq, lambda e, st=step: self.legend_canvas.yview_scroll(
+                st if st is not None else int(-e.delta / 120), "units"))
+        if self.v_legend.get():
+            self.legend.pack(side="right", fill="y")
         self.readout = ttk.Label(self, text="", anchor="w")
         self.readout.pack(fill="x")
         self.z, self.ox, self.oy = 2, 0.0, 0.0           # zoom; top-left corner in top-down tile units
@@ -116,6 +135,103 @@ class MapView(ttk.Frame):
             self.on_layers()
         else:
             self.render()
+
+    # ---- the legend ----
+    def _legend_toggled(self):
+        from . import settings
+        settings.put("map_legend", bool(self.v_legend.get()))
+        if self.v_legend.get():
+            self.legend.pack(side="right", fill="y")
+            self._draw_legend()
+        else:
+            self.legend.pack_forget()
+
+    LEGEND_RED = (190, 40, 40)
+
+    def _draw_legend(self):
+        """Every sign the map draws, with what it means (drawn by the map's own code)."""
+        if not self.v_legend.get():
+            return
+        lc = self.legend_canvas
+        lc.delete("all")
+        main, self.canvas = self.canvas, lc            # the drawing helpers draw on self.canvas
+        colours = self.colours
+        self.colours = dict(colours, __legend__=self.LEGEND_RED)
+        try:
+            y = [14]
+
+            def head(text):
+                y[0] += 6
+                lc.create_text(8, y[0], text=text, anchor="w", font=("", 9, "bold"), fill="#333")
+                y[0] += 20
+
+            def row(text, draw):
+                draw(22, y[0])
+                lc.create_text(44, y[0], text=text, anchor="w", font=("", 9), fill="#222")
+                y[0] += 24
+
+            def town(fill, outline, width, hollow=False):
+                def d(x, yy):
+                    r = 9
+                    lc.create_rectangle(x - r, yy - r, x + r, yy + r, fill="" if hollow else fill, outline=outline,
+                                        width=width)
+                    if not hollow:
+                        self._hall(x, yy, r, self.LEGEND_RED, ())
+                return d
+
+            def port(x, yy):
+                r = 8
+                lc.create_oval(x - r, yy - r, x + r, yy + r, fill="#2a6fdb", outline="white")
+                self._anchor(x, yy, r, ())
+
+            def char(kind, army=False, mine=False):
+                def d(x, yy):
+                    self._draw_char({"id": "legend" if not mine else "legend_mine", "faction": "__legend__",
+                                     "kind": kind, "army": army, "name": ""}, x, yy, 20)
+                return d
+            head("Towns and ports")
+            red = "#%02x%02x%02x" % self.LEGEND_RED
+            row("a town (its owner's colour)", town(red, "black", 1))
+            row("one of your towns", town(red, "#ffd400", 3))
+            row("rebel village (no town yet)", town("", "black", 1, hollow=True))
+            row("a port", port)
+            head("Characters")
+            keep = self.draggable
+            self.draggable = set(keep) | {"legend_mine"}
+            row("an army (general)", char("general", army=True))
+            row("yours: drag it (right button)", char("general", army=True, mine=True))
+            row("a fleet (admiral)", char("admiral", army=True))
+            row("family member, no army", char("named character"))
+            for k, label in (("spy", "spy"), ("assassin", "assassin"), ("diplomat", "diplomat"),
+                             ("merchant", "merchant"), ("priest", "priest"), ("princess", "princess"),
+                             ("inquisitor", "inquisitor"), ("heretic", "heretic"), ("witch", "witch")):
+                row(label, char(k))
+            self.draggable = keep
+            head("Map")
+            row("political: land in its owner's colour", lambda x, yy: lc.create_rectangle(
+                x - 9, yy - 7, x + 9, yy + 7, fill=red, outline="#401010", width=2))
+            row("rebel land: barely tinted", lambda x, yy: lc.create_rectangle(
+                x - 9, yy - 7, x + 9, yy + 7, fill="#9a9a9a", outline=""))
+            row("the tile under the mouse", lambda x, yy: lc.create_rectangle(
+                x - 8, yy - 8, x + 8, yy + 8, outline="white", width=2))
+            row("drop here: fine", lambda x, yy: lc.create_rectangle(
+                x - 8, yy - 8, x + 8, yy + 8, outline="#30ff60", width=2))
+            row("drop here: refused (why below)", lambda x, yy: lc.create_rectangle(
+                x - 8, yy - 8, x + 8, yy + 8, outline="#ff3030", width=2))
+            kinds = sorted({r["kind"] for r in self.resources})
+            if kinds or self.v_res.get():
+                head("Resources (first letters)")
+                for k in kinds:
+                    def d(x, yy, k=k):
+                        lc.create_rectangle(x - 9, yy - 9, x + 9, yy + 9, fill=self.res_colour(k), outline="black")
+                        lc.create_text(x, yy, text=k[:2].capitalize(), font=("", 8, "bold"))
+                    row(k, d)
+                if not kinds:
+                    lc.create_text(8, y[0], text="(tick Edit resources to see them)", anchor="w", fill="#666")
+                    y[0] += 20
+            lc.configure(scrollregion=(0, 0, 250, y[0] + 10))
+        finally:
+            self.canvas, self.colours = main, colours
 
     # ---- data ----
     def load(self, cmap, owners, colours, faction=None, chosen=(), on_city=None, chars=(), draggable=(),
@@ -247,6 +363,10 @@ class MapView(ttk.Frame):
         c.create_image(0, 0, anchor="nw", image=self._photo, tags=("bg",))
         self._drawn_at = (self.ox, self.oy)
         self._markers(cw, ch)
+        key = (tuple(sorted({r["kind"] for r in self.resources})), self.v_res.get())
+        if key != getattr(self, "_legend_key", None):
+            self._legend_key = key
+            self._draw_legend()
 
     def _pan(self):
         """While the map is dragged: a new background, the markers only shifted (drawing
