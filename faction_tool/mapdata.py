@@ -118,12 +118,21 @@ class CampaignMap:
         cache = self.__dict__.setdefault("_backgrounds", {})
         if key not in cache:
             size = (2 * self.w, 2 * self.h)
-            im = self._tiles() if tiles else self._drawn()
-            im = im.resize(size, Image.NEAREST if tiles else Image.BILINEAR)
-            if relief:
-                im = self._relief(im)
-            if rivers:
-                im = self._rivers(im, tiles)
+            if tiles:
+                # everything worked out per tile, then blown up: each square one colour, nothing
+                # bleeds into the next tile (the grid and the picture agree)
+                im = self._tiles()
+                if relief:
+                    im = self._relief(im)
+                if rivers:
+                    im = self._rivers(im, True)
+                im = im.resize(size, Image.NEAREST)
+            else:
+                im = self._drawn().resize(size, Image.BILINEAR)
+                if relief:
+                    im = self._relief(im)
+                if rivers:
+                    im = self._rivers(im, False)
             cache[key] = im
         return cache[key]
 

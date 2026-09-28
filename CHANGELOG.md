@@ -3,6 +3,9 @@
 ## 0.6.0 - 2026-09-28
 
 ### New
+- **Map by tiles**: the ground is drawn one colour per tile (mountain, land, water - the type the
+  tool checks), relief and rivers per tile too, so the picture and the tile grid agree; the detailed
+  picture is still in Layers.
 - **Medieval II straight from Steam gets unpacked by the tool**: Load on a game whose files are
   still in packs/ offers (with a yes) to copy msvcp71.dll and msvcr71.dll from the game folder next
   to tools/unpacker and run the game's own unpacker; then it loads the unpacked data.
