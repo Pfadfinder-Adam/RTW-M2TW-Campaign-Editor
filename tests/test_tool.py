@@ -871,6 +871,15 @@ class ToolTest(unittest.TestCase):
             build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Zed"}}})
 
 
+    def test_every_module_compiles(self):
+        # the window is not imported by the other tests: a syntax error there (a stray
+        # backslash in a text) once built an exe with none of the tool in it
+        import glob
+        import py_compile
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        for p in glob.glob(os.path.join(here, "faction_tool", "*.py")) + [os.path.join(here, "rtw_faction_tool.py")]:
+            py_compile.compile(p, cfile=os.path.join(self.root, "x.pyc"), doraise=True)
+
     def test_logs_zip(self):
         import zipfile
         from faction_tool import log

@@ -82,7 +82,7 @@ WHEN SOMETHING GOES WRONG
   newest crash report - send that file.
 
 MEDIEVAL II
-  Works on Medieval II too (run the game's tools\unpacker\unpack_all.bat first):
+  Works on Medieval II too (run the game's tools\\unpacker\\unpack_all.bat first):
   its agents (merchant, priest, princess...), character lines with the sex, religions.
 """
 
