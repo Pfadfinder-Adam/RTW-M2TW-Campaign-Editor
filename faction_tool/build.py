@@ -82,6 +82,14 @@ def build(mod, campaign, template, new, opts):
     if opts.get("relations"):
         from .diplomacy import apply_opts
         apply_opts(plan, campaign, new, opts["relations"])
+    from .factionart import apply_opts as apply_art
+    try:
+        primary = opts.get("primary_colour") or tuple(
+            __import__("faction_tool.edit", fromlist=["x"]).read_faction(mod, campaign, template).get("primary_colour") or ())
+    except Exception:
+        primary = None
+    apply_art(plan, campaign, new, list(opts["start"].get("regions") or []), primary,
+              towns_changed=opts.get("copy_art", True))
     validate(plan, campaign)
     return plan
 

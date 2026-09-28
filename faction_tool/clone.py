@@ -418,8 +418,11 @@ ART_ROOTS = ("ui", "menu", "loading_screen")
 
 
 def _token_hit(name, t):
+    """Whether a file name names the faction t as a whole word: map_gauls, symbol24_gauls_roll,
+    romans_julii_logo (names with _ inside match as a whole: symbol24_romans_julii_grey)."""
     stem = os.path.splitext(name)[0].lower()
-    return t in re.split(r"[^a-z0-9]+", stem) or stem == t or stem.endswith("_" + t) or stem.startswith(t + "_")
+    return t in re.split(r"[^a-z0-9]+", stem) or stem == t or stem.endswith("_" + t) or \
+        stem.startswith(t + "_") or ("_" + t + "_") in stem
 
 
 def art_files(plan, campaign):

@@ -936,6 +936,40 @@ class ToolTest(unittest.TestCase):
         with open(edu_path) as fh:
             self.assertIn("stat_cost\t1, 400, 170", fh.read())
 
+    def test_faction_art_and_select_map(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from faction_tool import factionart as FA
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        os.remove(os.path.join(camp, "map_alpha.tga"))
+        for n in ("alpha", "gamma", "delta"):                # three maps of one background
+            Image.new("RGB", (8, 8), (100, 100, 100)).save(os.path.join(camp, "map_%s.tga" % n))
+        menu = os.path.join(self.root, "data", "menu", "symbols", "FE_buttons_24")
+        os.makedirs(menu)
+        for n in ("symbol24_alpha.tga", "symbol24_alpha_roll.tga"):
+            Image.new("RGBA", (30, 30), (1, 2, 3, 255)).save(os.path.join(menu, n))
+        mod = ModData(self.root)
+        labels = {p["label"] for p in FA.faction_pictures(mod, "test", "alpha")}
+        self.assertIn("small campaign-menu button (mouse over)", labels)
+        self.assertIn("campaign-select map (its land lit)", labels)
+        png = os.path.join(self.root, "button.png")
+        Image.new("RGB", (64, 64), (200, 0, 0)).save(png)
+        plan = build(mod, "test", "alpha", "beta", {
+            "start": {"regions": ["B_R"], "leader": {"name": "Boris"}},
+            "art": {"menu/symbols/FE_buttons_24/symbol24_beta_roll.tga": png},
+            "select_map": {"colour": [0, 200, 0]}})
+        plan.apply()
+        roll = os.path.join(menu, "symbol24_beta_roll.tga")
+        self.assertEqual(FA.tga_info(roll), (30, 30, 32))                # the template's size and depth
+        self.assertEqual(Image.open(roll).convert("RGB").getpixel((5, 5)), (200, 0, 0))
+        sel = Image.open(os.path.join(camp, "map_beta.tga")).convert("RGB")
+        self.assertEqual(sel.size, (8, 8))
+        # B_R (blue) is the right half of the 4 x 4 region map: lit green there, grey on the left
+        self.assertGreater(sel.getpixel((7, 4))[1], 150)
+        self.assertEqual(sel.getpixel((0, 4)), (100, 100, 100))
+
     def test_logs_zip(self):
         import zipfile
         from faction_tool import log
