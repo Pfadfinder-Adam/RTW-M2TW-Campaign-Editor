@@ -901,6 +901,65 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(religions_for(regions, None, None), {"catholic": 90, "pagan": 10})         # most common
         self.assertEqual(religions_for(regions, {"pagan": 100}, "C"), {"pagan": 100})             # given, sums to 100
 
+    def test_unit_pack_round_trip(self):
+        # a unit taken out with its model, mount, texture, card, texts and recruit place, put into
+        # another mod where its names and its model's name are taken: all renamed, nothing overwritten
+        from faction_tool import packs
+        from faction_tool.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1\nmount\t\tlight horse\nownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\talpha_model\ntexture\t\talpha, data/models_unit/textures/a.tga\n"
+              "model_flexi\t\tdata/models_unit/a.cas, max\n\n"
+              "type\t\thorse_model\ntexture\t\talpha, data/models_unit/textures/h.tga\n")
+        write(os.path.join(d, "descr_mount.txt"), "type\t\tlight horse\nclass\t\thorse\nmodel\t\thorse_model\n")
+        write(os.path.join(d, "models_unit", "textures", "a.tga.dds"), "A-texture")      # Rome keeps .tga.dds
+        write(os.path.join(d, "models_unit", "a.cas"), "A-model")
+        write(os.path.join(d, "models_unit", "textures", "h.tga.dds"), "H-texture")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, }\n"
+              "        {\n            capability\n            {\n                recruit \"alpha general\"  0  "
+              "requires factions { alpha, }\n            }\n        }\n    }\n}\n")
+        write(os.path.join(d, "text", "export_units.txt"),
+              "{alpha_general}Alpha Guard\n{alpha_general_descr}Good\nmen\n{alpha_general_descr_short}Good\n",
+              utf16=True)
+        pack = os.path.join(self.root, "alpha.zip")
+        man = packs.export_pack(ModData(self.root), ["alpha general"], pack)
+        self.assertEqual(sorted(man["blocks"]["model"]), ["alpha_model", "horse_model"])
+        self.assertIn("models_unit/textures/a.tga.dds", man["files"])
+        self.assertEqual(man["recruit"][0]["chain"], "barracks")
+        # the target: a copy whose alpha_model is another model
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        shutil.copytree(self.root, os.path.join(target, "mod"))
+        troot = os.path.join(target, "mod")
+        write(os.path.join(troot, "data", "descr_model_battle.txt"),
+              "type\t\talpha_model\nmodel_flexi\t\tdata/models_unit/other.cas, max\n\n"
+              "type\t\thorse_model\ntexture\t\talpha, data/models_unit/textures/h.tga\n")
+        before = tree_hash(troot)
+        manifest, files = packs.read_pack(pack)
+        tmod = ModData(troot)
+        plan = Plan(tmod, "pack", "pack", {})
+        packs.import_pack(plan, manifest, files, ["alpha"])
+        bdir = plan.apply()
+        m2 = ModData(troot)
+        edu = m2.load(m2.file("edu"))
+        blocks = packs.type_blocks(edu)
+        self.assertIn("alpha general 2", blocks)
+        unit = "\n".join(edu.text(i) for i in range(*blocks["alpha general 2"]))
+        self.assertIn("alpha_model_2", unit)                       # its model, renamed with it
+        self.assertIn("alpha_general_2", unit)
+        models = packs.type_blocks(m2.load(os.path.join(troot, "data", "descr_model_battle.txt")))
+        self.assertEqual(sorted(models), ["alpha_model", "alpha_model_2", "horse_model"])   # horse shared
+        self.assertTrue(os.path.exists(os.path.join(troot, "data", "ui", "units", "alpha", "#alpha_general_2.tga")))
+        txt = open(m2.text_file("export_units.txt"), "rb").read().decode("utf-16")
+        self.assertIn("{alpha_general_2_descr}Good", txt)
+        self.assertIn('recruit "alpha general 2"', open(m2.file("edb")).read())
+        restore(ModData(troot), bdir)
+        after = {k: v for k, v in tree_hash(troot).items() if "faction_tool_backups" not in k}
+        self.assertEqual(after, before)                              # Restore: byte for byte
+
     def test_medieval_religions(self):
         # Medieval II: a ninth line per region, the religions
         from faction_tool.edit import edit
