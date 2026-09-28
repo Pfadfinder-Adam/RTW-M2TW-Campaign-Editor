@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW Campaign Editor"
 
@@ -519,8 +519,12 @@ class App(tk.Tk):
         self._keys()
 
         # --- actions
+        # the status line and the buttons are packed at the bottom before the tabs: a tab taller than
+        # the window then shrinks, the Apply buttons never go off the window's edge
+        self.status_line = ttk.Label(self, anchor="w")
+        self.status_line.pack(side="bottom", fill="x", padx=6, pady=(0, 6), before=self.nb)
         bar = self.bottom_bar = ttk.Frame(self)
-        bar.pack(fill="x", **pad)
+        bar.pack(side="bottom", fill="x", before=self.nb, **pad)
         self.b_preview = ttk.Button(bar, text="Preview changes", command=self.preview)
         self.b_preview.pack(side="left")
         self.b_create = ttk.Button(bar, text="Create faction", command=self.create)
@@ -544,7 +548,7 @@ class App(tk.Tk):
         tools.pack(side="right")
         self.status = tk.StringVar(value="Pick the Mod, or Browse... to its data folder (for example ...\\HLR\\data) "
                                          "and press Load.")
-        ttk.Label(self, textvariable=self.status, anchor="w").pack(fill="x", padx=6, pady=(0, 6))
+        self.status_line.configure(textvariable=self.status)
         self.status.trace_add("write", lambda *a: self._log_status())
         for k in ("name", "template"):
             self.v[k].trace_add("write", lambda *a: self.update_actions())
@@ -809,7 +813,7 @@ class App(tk.Tk):
                          "are dropped." % ("Edit faction" if w == "edit" else "New faction")):
                 self.v_work.set(self.v_mode.get())         # stay where the work is
                 return
-            self.nb.pack(fill="both", expand=True, padx=6, pady=3, before=self.bottom_bar)
+            self.nb.pack(fill="both", expand=True, padx=6, pady=3, after=self.bottom_bar)
             if self.v_mode.get() != w:
                 self.v_mode.set(w)
                 self.mode_changed()
@@ -820,7 +824,7 @@ class App(tk.Tk):
             if k != w:
                 ed.pack_forget()
         ed = self.editor()
-        ed.pack(fill="both", expand=True, padx=6, pady=3, before=self.bottom_bar)
+        ed.pack(fill="both", expand=True, padx=6, pady=3, after=self.bottom_bar)
         if self.mod and ed.mod is not self.mod:
             self._rebind(ed)
         self.update_actions()

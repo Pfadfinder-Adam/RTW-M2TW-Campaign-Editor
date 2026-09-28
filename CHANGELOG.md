@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1 - 2026-09-28
+
+### Fixed
+- **Preview / Apply changes, Undo, Tools... disappeared** when a tab was taller than the window
+  (a smaller screen, a window made smaller): the buttons and the status line are now held at the
+  bottom first and the tab shrinks instead (checked on a 1000 x 640 window on every tab).
+
 ## 0.7.0 - 2026-09-28
 
 The first release since 0.1.2: it holds 0.2.0 - 0.6.0 below (those were test builds) and this.
