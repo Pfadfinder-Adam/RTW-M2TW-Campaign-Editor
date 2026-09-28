@@ -1,29 +1,46 @@
-"""The Family tab (Edit faction): every character of the faction - on the map with
-their traits and ancillaries, and the family members off the map (character_record) -
-and the family tree drawn the way the game shows it: couples side by side, their
-children in the row below. The picks are kept by the window (App.family_set, with
-Undo) and written on Apply by family.apply."""
+"""The Family tab (Edit faction) and the Character editor (its own work, any faction):
+every character of a faction - on the map with their traits, ancillaries and portrait,
+and the family members off the map (character_record) - and the family tree drawn the
+way the game shows it: portraits, couples side by side, their children in the row below.
+On the Family tab the picks are kept by the window (App.family_set, with Undo) and written
+with the faction; the Character editor keeps its own per faction and writes them itself
+(the editors' dirty / pending / make_plan / rebind, like the unit and building editors).
+Both write through family.apply."""
 
 import copy
+import hashlib
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
 from . import family as FM
 
-CARD_W, CARD_H, GAP, ROW = 128, 58, 16, 100
+CARD_W, CARD_H, GAP, ROW = 150, 66, 16, 110
+PIC_W, PIC_H = 40, 56                           # a portrait on a card (the game's are 69 x 96)
 COUPLE_GAP = 10
 
 
 class FamilyEditor(ttk.Frame):
-    def __init__(self, master, app):
+    kind = "character"
+
+    def __init__(self, master, app, standalone=False):
         super().__init__(master, padding=4)
-        self.app = app
+        self.app, self.standalone = app, standalone
+        self.states = {}                       # Character editor: {faction: family opts}
+        self.mod, self._sig = None, None
+        self._imgs = {}                        # PhotoImages kept alive: {(path, w, h): image}
         self.fam, self.faction, self._for = None, None, None
         self.traits, self.ancs, self.pool = {}, {}, {}
         self.sel = None                        # key of the picked person
         top = ttk.Frame(self)
         top.pack(fill="x")
-        self.title = ttk.Label(top, text="Edit faction: pick the faction on the Faction tab", font=("", 10, "bold"))
+        if standalone:
+            ttk.Label(top, text="Faction", font=("", 10, "bold")).pack(side="left")
+            self.v_fac = tk.StringVar()
+            self.cb_fac = ttk.Combobox(top, textvariable=self.v_fac, state="readonly", width=22)
+            self.cb_fac.pack(side="left", padx=4)
+            self.cb_fac.bind("<<ComboboxSelected>>", lambda e: self.load())
+        self.title = ttk.Label(top, text="" if standalone else "Edit faction: pick the faction on the Faction tab",
+                               font=("", 10, "bold"))
         self.title.pack(side="left")
         ttk.Label(top, text="   Find").pack(side="left")
         self.v_find = tk.StringVar()
@@ -46,7 +63,7 @@ class FamilyEditor(ttk.Frame):
 
         # the people
         cols = (("name", "name", 140), ("kind", "who", 140), ("age", "age", 40), ("where", "where", 80))
-        self.tv = ttk.Treeview(left, columns=[c[0] for c in cols], show="headings", height=9, selectmode="browse")
+        self.tv = ttk.Treeview(left, columns=[c[0] for c in cols], show="headings", height=7, selectmode="browse")
         for cid, text, w in cols:
             self.tv.heading(cid, text=text)
             self.tv.column(cid, width=w, stretch=cid == "name")
@@ -76,10 +93,30 @@ class FamilyEditor(ttk.Frame):
         ttk.Button(r, text="Set name / age", command=self.set_basic).grid(row=1, column=4, pady=2)
         self.lbl_who = ttk.Label(form, text="", foreground="#555", wraplength=420, justify="left")
         self.lbl_who.pack(fill="x", pady=(2, 4))
+        fb = ttk.Frame(form)
+        fb.pack(fill="x", pady=(0, 4))
+        ttk.Button(fb, text="Give a wife...", command=self.add_wife).pack(side="left")
+        ttk.Button(fb, text="Add a child...", command=self.add_child).pack(side="left", padx=4)
+        ttk.Button(fb, text="Take off the tree", command=self.off_tree).pack(side="left")
+        ttk.Button(fb, text="Leave out", command=self.leave_out).pack(side="left", padx=4)
+
+        pf = ttk.LabelFrame(form, text="Portrait", padding=2)
+        pf.pack(fill="x")
+        self.pic_boxes = {}
+        for a in FM.AGES:
+            box = ttk.Frame(pf)
+            box.pack(side="left", padx=4)
+            lab = tk.Label(box, text=a, width=7, height=4, relief="sunken", bg="#ddd")
+            lab.pack()
+            b = ttk.Button(box, text="Replace...", command=lambda a=a: self.replace_portrait(a))
+            b.pack(pady=1)
+            self.pic_boxes[a] = (lab, b)
+        self.lbl_pic = ttk.Label(pf, text="", foreground="#555", wraplength=230, justify="left", font=("", 8))
+        self.lbl_pic.pack(side="left", padx=6, fill="x", expand=True)
 
         tr = ttk.LabelFrame(form, text="Traits (level)", padding=2)
         tr.pack(fill="both", expand=True)
-        self.tv_tr = ttk.Treeview(tr, columns=("trait", "level", "lname"), show="headings", height=5)
+        self.tv_tr = ttk.Treeview(tr, columns=("trait", "level", "lname"), show="headings", height=4)
         for cid, text, w in (("trait", "trait", 150), ("level", "level", 45), ("lname", "level name", 170)):
             self.tv_tr.heading(cid, text=text)
             self.tv_tr.column(cid, width=w, stretch=cid == "lname")
@@ -107,13 +144,6 @@ class FamilyEditor(ttk.Frame):
         ttk.Button(ab, text="Remove", command=self.remove_anc).pack(side="left")
         self.char_parts = [tr, an]
 
-        fb = ttk.Frame(form)
-        fb.pack(fill="x", pady=(6, 0))
-        ttk.Button(fb, text="Give a wife...", command=self.add_wife).pack(side="left")
-        ttk.Button(fb, text="Add a child...", command=self.add_child).pack(side="left", padx=4)
-        ttk.Button(fb, text="Take off the tree", command=self.off_tree).pack(side="left")
-        ttk.Button(fb, text="Leave out", command=self.leave_out).pack(side="left", padx=4)
-
         # the tree
         self.cv = tk.Canvas(right, bg="#efe6d2", highlightthickness=0)
         xs = ttk.Scrollbar(right, orient="horizontal", command=self.cv.xview)
@@ -131,17 +161,41 @@ class FamilyEditor(ttk.Frame):
     # ---------------------------------------------------------------- data
     @property
     def st(self):
+        if self.standalone:
+            return self.states.setdefault(self.faction, {}) if self.faction else {}
         return self.app.family_set
 
-    def load(self):
+    def campaign(self):
+        return self.app.v_campaign.get()
+
+    def path(self):
+        mod = self.mod if self.standalone else self.app.mod
+        try:
+            return mod.campaign_file(self.campaign(), "descr_strat.txt") if mod else None
+        except Exception:
+            return None
+
+    def load(self, mod=None):
         app = self.app
-        faction = app.v["template"].get().strip() if app.editing() else ""
+        if self.standalone:
+            if mod is not None:
+                self.mod = mod
+            if not self.mod:
+                return
+            s = app.strat
+            names = [fb.name for fb in s.factions] if s else []
+            self.cb_fac["values"] = names
+            if self.v_fac.get() not in names:
+                self.v_fac.set(names[0] if names else "")
+            faction = self.v_fac.get()
+        else:
+            faction = app.v["template"].get().strip() if app.editing() else ""
         if not app.mod or not faction or not app.strat or not app.strat.faction(faction):
             self.fam, self.faction = None, None
             self.title.configure(text="Edit faction: pick the faction on the Faction tab")
             self.redraw()
             return
-        path = app.mod.campaign_file(app.v_campaign.get(), "descr_strat.txt")
+        path = self.path()
         key = (app.mod.data, path, faction)
         if self._for != key:
             try:
@@ -153,11 +207,64 @@ class FamilyEditor(ttk.Frame):
                 self.fam = None
                 return
             self.faction, self._for, self.sel = faction, key, None
-        self.title.configure(text="People and family of %s" % faction)
+            self.m2 = self.fam["medieval"]
+            if self.standalone and self._sig is None:
+                self._sig = self._signature()
+        self.title.configure(text=("  people and family" if self.standalone else "People and family of %s" % faction))
         self.redraw()
+
+    # ---- as an editor of its own (Character editor), like the unit and building editors ----
+    def _signature(self):
+        p = self.path()
+        try:
+            with open(p, "rb") as fh:
+                return hashlib.md5(fh.read()).hexdigest()
+        except (OSError, TypeError):
+            return None
+
+    def dirty(self):
+        return any(v for st in self.states.values() for v in st.values())
+
+    def pending(self):
+        n = 0
+        for st in self.states.values():
+            n += len(st.get("people") or {}) + len(st.get("new") or []) + len(st.get("remove") or []) + \
+                len(st.get("portraits") or {}) + (1 if st.get("tree") is not None else 0)
+        return n
+
+    def rebind(self, mod):
+        """The window loaded the mod again: changes wait while descr_strat is as it was read."""
+        lost = 0
+        if self.mod is not None and self.dirty() and mod.data == self.mod.data:
+            self.mod = mod
+            if self._signature() != self._sig:
+                lost = self.pending()
+                self.states = {}
+        else:
+            self.states = {}
+        self.mod, self._for = mod, None
+        self._sig = self._signature()
+        self.load(mod)
+        return lost
+
+    def make_plan(self):
+        from .moddata import ModData
+        from .plan import Plan
+        if not self.mod:
+            raise ValueError("load a mod first")
+        if not self.dirty():
+            raise ValueError("nothing changed in the Character editor")
+        mod = ModData(self.mod.data)
+        plan = Plan(mod, "characters", "characters", {})
+        f = plan.edit(mod.campaign_file(self.campaign(), "descr_strat.txt"))
+        for faction, st in self.states.items():
+            if any(st.values()):
+                FM.apply(plan, f, faction, st)
+        return plan
 
     def forget(self):
         self._for, self.fam, self.sel = None, None, None
+        self._imgs.clear()
 
     def people(self):
         """Everyone as they will be: [dict] with 'changed' / 'new' marks."""
@@ -171,7 +278,7 @@ class FamilyEditor(ttk.Frame):
             d = p.as_dict()
             c = ch.get(p.key) or {}
             d.update({k: copy.deepcopy(v) for k, v in c.items() if v is not None})
-            d["changed"], d["new"] = bool(c), False
+            d["changed"], d["new"] = bool(c) or p.key in (self.st.get("portraits") or {}), False
             out.append(d)
         for i, n in enumerate(self.st.get("new") or []):
             out.append({"key": "new:%d" % i, "name": n["name"], "source": "record", "kind": "record",
@@ -194,12 +301,78 @@ class FamilyEditor(ttk.Frame):
     def person(self, key):
         return next((p for p in self.people() if p["key"] == key), None)
 
+    # ---- portraits ----
+    def portrait_info(self, p):
+        wives = {b for _, b, _ in self.tree()}
+        d = dict(p, wife=p["name"] in wives)
+        info = FM.portraits(self.app.mod, self.faction, d, getattr(self, "m2", False))
+        new = (self.st.get("portraits") or {}).get(p["key"]) or {}
+        return info, new
+
+    def image(self, path, w, h):
+        """A picture file as a PhotoImage of w x h (kept), or None."""
+        if not path:
+            return None
+        k = (path, w, h)
+        if k not in self._imgs:
+            try:
+                from PIL import Image, ImageTk
+                with Image.open(path) as im:
+                    im = im.convert("RGBA")
+                    im.thumbnail((w, h))
+                    self._imgs[k] = ImageTk.PhotoImage(im)
+            except Exception:
+                self._imgs[k] = None
+        return self._imgs[k]
+
+    def card_picture(self, p):
+        info, new = self.portrait_info(p)
+        age = "old" if (p.get("age") or 0) >= 45 else "young"
+        return new.get(age) or new.get("young") or info["files"].get(age) or info["files"].get("young") or \
+            info["sample"]
+
+    def fill_portrait(self, p):
+        info, new = self.portrait_info(p)
+        own = getattr(self, "m2", False) and p["source"] == "map"
+        for a, (lab, b) in self.pic_boxes.items():
+            path = new.get(a) or info["files"].get(a) or (info["sample"] if a == "young" else None)
+            if a != "young" and not (new.get(a) or info["files"].get(a)) and new.get("young"):
+                path = new["young"]
+            img = self.image(path, 52, 72)
+            lab.configure(image=img or "", text="" if img else a, width=52 if img else 7, height=72 if img else 4)
+            lab.image = img
+            b.configure(state="normal" if own else "disabled")
+        text = info["how"]
+        if new:
+            text = "new portrait on Apply (%s) - " % ", ".join(sorted(new)) + text
+        if not own:
+            text += (". Rome has no portrait of one's own for a character: the game rolls one of its culture's "
+                     "pool." if not getattr(self, "m2", False) and p["source"] == "map" else "")
+        self.lbl_pic.configure(text=text)
+
+    def replace_portrait(self, age):
+        from tkinter import filedialog
+        p = self.person(self.sel)
+        if not p or p["source"] != "map" or not getattr(self, "m2", False):
+            return
+        src = filedialog.askopenfilename(parent=self, title="Portrait (%s) of %s" % (age, p["name"]), filetypes=[
+            ("Pictures", "*.png *.jpg *.jpeg *.tga *.bmp *.dds"), ("All files", "*.*")])
+        if not src:
+            return
+        self._before()
+        self.st.setdefault("portraits", {}).setdefault(p["key"], {})[age] = src
+        self.changed()
+
     def changed(self):
-        self.app.status.set("Family: changes waiting - Preview, then Apply changes.")
+        self.app.status.set("%s: changes waiting - Preview, then Apply changes." % (
+            "Character editor" if self.standalone else "Family"))
         self.redraw()
+        if self.standalone:
+            self.app._mark_work()
 
     def _before(self):
-        self.app.remember()
+        if not self.standalone:                 # the Character editor's own changes are not in the window's Undo
+            self.app.remember()
 
     def _own_tree(self):
         """The tree as the window's own list (made from the file on the first change)."""
@@ -246,6 +419,10 @@ class FamilyEditor(ttk.Frame):
             self.tv_tr.delete(*self.tv_tr.get_children())
             self.lb_an.delete(0, "end")
             self.lbl_who.configure(text="")
+            for lab, b in self.pic_boxes.values():
+                lab.configure(image="", text="", width=7, height=4)
+                b.configure(state="disabled")
+            self.lbl_pic.configure(text="")
             return
         self.form.configure(text="Person: %s" % p["name"])
         first = p["name"].split(" ")[0]
@@ -264,6 +441,7 @@ class FamilyEditor(ttk.Frame):
             who = "On the map at %d, %d: %s%s." % (p["xy"][0], p["xy"][1], p["kind"],
                                                    ", " + p["role"] if p.get("role") else "") if p.get("xy") else p["kind"]
         self.lbl_who.configure(text=who)
+        self.fill_portrait(p)
         self.tv_tr.delete(*self.tv_tr.get_children())
         for i, (t, n) in enumerate(p["traits"]):
             levels = (self.traits.get(t) or {}).get("levels") or []
@@ -296,14 +474,13 @@ class FamilyEditor(ttk.Frame):
         cv = self.cv
         cv.delete("all")
         if not self.fam:
-            cv.create_text(20, 20, anchor="nw", text="Pick the faction on the Faction tab (Edit faction).",
-                           fill="#555")
+            cv.create_text(20, 20, anchor="nw", fill="#555", text="Load a mod and pick the faction above." if
+                           self.standalone else "Pick the faction on the Faction tab (Edit faction).")
             return
         people = {p["name"]: p for p in self.people() if p["source"] == "record" or
                   p["kind"] in ("named character", "princess")}
         tree = self.tree()
         couples = {a: (a, b, ks) for a, b, ks in tree}
-        wives = {b for _, b, _ in tree if b}
         kids = {k for _, _, ks in tree for k in ks}
         roots = [a for a, b, _ in tree if a not in kids and b not in kids]
         placed = {}
@@ -380,7 +557,12 @@ class FamilyEditor(ttk.Frame):
             crown = "♛ "
         elif p and p.get("role") == "heir":
             crown = "♘ "
-        cv.create_text(x + 6, y + 5, anchor="nw", text=crown + name, width=CARD_W - 10,
+        tx = x + 6
+        img = self.image(self.card_picture(p), PIC_W, PIC_H) if p else None
+        if img:
+            cv.create_image(x + 4, y + (CARD_H - PIC_H) / 2, anchor="nw", image=img, tags=(tag,))
+            tx = x + PIC_W + 8
+        cv.create_text(tx, y + 5, anchor="nw", text=crown + name, width=x + CARD_W - tx - 4,
                        font=("", 9, "bold"), fill="#222", tags=(tag,))
         if p is None:
             sub = "nobody of the faction!"
@@ -389,7 +571,7 @@ class FamilyEditor(ttk.Frame):
             sub = "age %s, %s" % (p["age"] if p["age"] is not None else "?", where)
             if p.get("role"):
                 sub = "%s, %s" % (p["role"], sub)
-        cv.create_text(x + 6, y + CARD_H - 6, anchor="sw", text=sub, width=CARD_W - 10, font=("", 8),
+        cv.create_text(tx, y + CARD_H - 5, anchor="sw", text=sub, width=x + CARD_W - tx - 4, font=("", 8),
                        fill="#444", tags=(tag,))
         if p and (p["changed"] or p["new"]):
             cv.create_oval(x + CARD_W - 12, y + 4, x + CARD_W - 4, y + 12, fill="#2a9d3a" if p["new"] else "#1c5bd6",
@@ -625,6 +807,9 @@ class FamilyEditor(ttk.Frame):
         self._before()
         self.st.clear()
         self.changed()
+
+    def leave(self):
+        """Nothing here for the window's Undo to put back."""
 
 
 class _PersonDialog(simpledialog.Dialog):

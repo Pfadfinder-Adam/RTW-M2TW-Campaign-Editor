@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW Campaign Editor"
 
@@ -42,7 +42,7 @@ START
      mod of that game folder (the game itself, bi, HLR, the mods made here) - pick one to load it.
   2. Pick the campaign (usually imperial_campaign).
   3. Pick the work at the top: New faction (pick a template to copy), Edit faction (pick
-     the faction to change), Unit editor or Building editor.
+     the faction to change), Unit editor, Building editor or Character editor.
 
 THE TABS (in the order that works best)
   Faction      names, texts, colours, AI, money, playable; the towns it starts with
@@ -75,7 +75,15 @@ THE TABS (in the order that works best)
   Family       (Edit) everyone of the faction: characters on the map (name, age, traits,
                ancillaries) and family members off the map (name, sex, age), and the family
                tree drawn like the game's. Give a wife, Add a child, Take off the tree, Leave
-               out; a renamed person is renamed on the tree too.
+               out; a renamed person is renamed on the tree too; portraits as the Character editor.
+
+CHARACTER EDITOR
+  Pick any faction at the top: its characters on the map and its family off the map, and the
+  family tree with the portraits the game shows. Edit names, ages, traits, ancillaries; Give a
+  wife, Add a child, Take off the tree, Leave out. Portrait: Rome rolls one of the culture's
+  pool at random (the tree shows one of them); Medieval II takes a character's own picture from
+  ui/custom_portraits/<folder> - Replace... writes it in the right size and adds the portrait
+  line. The same editor is the Family tab of Edit faction (written together with the faction).
 
 UNIT EDITOR / BUILDING EDITOR
   Pick a unit (a building chain) on the left; every line of its block is a field - change
@@ -809,10 +817,11 @@ class App(tk.Tk):
             load()
 
     WORK_TITLES = {"new": "New faction", "edit": "Edit faction", "units": "Unit editor",
-                   "buildings": "Building editor"}
+                   "buildings": "Building editor", "characters": "Character editor"}
     WORK_HINTS = {"new": "make a new faction from a template", "edit": "change a faction that is in the game",
                   "units": "every line of a unit in export_descr_unit.txt, its card and picture",
-                  "buildings": "every line of a building chain in export_descr_buildings.txt, its pictures"}
+                  "buildings": "every line of a building chain in export_descr_buildings.txt, its pictures",
+                  "characters": "any faction's characters: names, ages, traits, ancillaries, portraits, family tree"}
 
     def work_changed(self):
         """New / Edit faction share the campaign tabs; the unit and building editors
@@ -845,13 +854,17 @@ class App(tk.Tk):
         self._mark_work()
 
     def editor(self):
-        """The unit or building editor on show, made the first time; None for the faction work."""
+        """The unit, building or character editor on show, made the first time; None for the faction work."""
         w = self.v_work.get()
-        if w not in ("units", "buildings"):
+        if w not in ("units", "buildings", "characters"):
             return None
         if w not in self.editors:
-            from .gui_editors import RecordEditor
-            self.editors[w] = RecordEditor(self, self, "unit" if w == "units" else "building")
+            if w == "characters":
+                from .gui_family import FamilyEditor
+                self.editors[w] = FamilyEditor(self, self, standalone=True)
+            else:
+                from .gui_editors import RecordEditor
+                self.editors[w] = RecordEditor(self, self, "unit" if w == "units" else "building")
         return self.editors[w]
 
     def editing(self):
@@ -2638,7 +2651,8 @@ class App(tk.Tk):
         editors first (their changes sit on the file's lines as read), then the faction
         tabs (built from the files as the editors leave them)."""
         out = []
-        for key, name in (("units", "Unit editor"), ("buildings", "Building editor")):
+        for key, name in (("units", "Unit editor"), ("buildings", "Building editor"),
+                          ("characters", "Character editor")):
             ed = self.editors.get(key)
             if ed is not None and ed.mod is not None and ed.dirty():
                 out.append((key, "%s: %d change(s)" % (name, ed.pending())))

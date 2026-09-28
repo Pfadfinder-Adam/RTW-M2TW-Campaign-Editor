@@ -765,6 +765,43 @@ class ToolTest(unittest.TestCase):
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
 
+    def test_family_m2_portrait(self):
+        """Medieval II: a character's own portrait = ui/custom_portraits/<folder>/portrait_young|old|dead.tga
+        + ', portrait <folder>' on his line; Rome refuses; Restore removes the pictures and the folder."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from faction_tool import family
+        from faction_tool.edit import edit
+        mod = ModData(self.root)
+        path = mod.campaign_file("test", "descr_strat.txt")
+        with self.assertRaises(ValueError):                  # Rome: the game rolls portraits itself
+            key = family.read(mod.load(path), "alpha")["people"][0].key
+            edit(mod, "test", "alpha", {"family": {"portraits": {key: {"young": "x.png"}}}})
+        with open(path) as fh:
+            text = fh.read()
+        with open(path, "w") as fh:
+            fh.write(text.replace("Aaron Alphid, named character, leader, age 40, , x 1, y 1",
+                                  "Aaron Alphid, named character, male, leader, age 40, x 1, y 1"))
+        src = os.path.join(self.root, "face.png")
+        Image.new("RGB", (120, 160), (200, 10, 10)).save(src)
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        key = family.read(mod.load(path), "alpha")["people"][0].key
+        edit(mod, "test", "alpha", {"family": {"portraits": {key: {"young": src}}}}).apply()
+        with open(path) as fh:
+            self.assertIn("male, leader, age 40, x 1, y 1, portrait alpha_aaron_alphid", fh.read())
+        folder = os.path.join(self.root, "data", "ui", "custom_portraits", "alpha_aaron_alphid")
+        for a in ("young", "old", "dead"):
+            with Image.open(os.path.join(folder, "portrait_%s.tga" % a)) as im:
+                self.assertEqual(im.size, (69, 96))
+        mod = ModData(self.root)
+        restore(mod, backups(mod)[0])
+        self.assertFalse(os.path.exists(os.path.join(self.root, "data", "ui", "custom_portraits")))
+        after = tree_hash(self.root)
+        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
+
     def test_family_tree_checks(self):
         from faction_tool.family import ordered, tree_problems
         people = [{"name": n, "sex": s} for n, s in (("A", "male"), ("B", "female"), ("C", "male"), ("D", "female"),

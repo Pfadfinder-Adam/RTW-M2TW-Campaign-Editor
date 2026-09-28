@@ -23,6 +23,7 @@ class Person:
         self.key = self.name = self.source = self.kind = self.sex = self.role = None
         self.age, self.status, self.line, self.xy = None, "", None, None
         self.traits, self.ancillaries = [], []
+        self.portrait = None                    # Medieval II: the folder under ui/custom_portraits
         self.__dict__.update(kw)
 
     @property
@@ -36,7 +37,7 @@ class Person:
 
     def as_dict(self):
         return {k: getattr(self, k) for k in ("key", "name", "source", "kind", "sex", "role", "age", "status",
-                                               "xy", "traits", "ancillaries")}
+                                               "xy", "traits", "ancillaries", "portrait")}
 
 
 def _parts(line, head):
@@ -111,7 +112,9 @@ def read(f, faction):
                                                   ("female" if c.kind in ("princess", "witch") else "male"))
         m = RE_AGE.search(texts[c.start])
         head = _head_lines(texts, c)
+        portrait = next((x.split(None, 1)[1].strip() for x in parts if x.startswith("portrait ")), None)
         p = Person(key=key("map", c.name), name=c.name, source="map", kind=c.kind, sex=sex, role=c.role,
+                   portrait=portrait,
                    age=int(m.group(1)) if m else None, line=c.start, xy=c.xy, chunk=(c.start, c.end),
                    traits=parse_traits(texts[head["traits"]]) if "traits" in head else [],
                    ancillaries=parse_ancillaries(texts[head["ancillaries"]]) if "ancillaries" in head else [])
@@ -393,6 +396,17 @@ def apply(plan, f, faction, opts):
         p, ch = x
         _person(plan, f, texts, p, ch, faction)
 
+    # own portraits (Medieval II): on the lines as they are now
+    if opts.get("portraits"):
+        now = {p.key: p for p in read(f, faction)["people"]}
+        for key, pics in opts["portraits"].items():
+            p = now.get(key)
+            if p is None and key in people and key in changes and changes[key].get("name"):
+                p = next((x for x in now.values() if x.name == changes[key]["name"] and x.source == "map"), None)
+            if p is None:
+                raise ValueError("%s: no such character of %s any more" % (key.split(":", 1)[-1], faction))
+            set_portraits(plan, f, faction, p, pics, m2)
+
     # new records and the tree: after the characters, where the records / relatives stand
     fam2 = read(f, faction)
     recs, rels = fam2["record_lines"], fam2["relative_lines"]
@@ -485,5 +499,158 @@ def _person(plan, f, texts, p, ch, faction):
         plan.note(f, "%s: %s - %s" % (faction, p.name, "; ".join(said)))
 
 
+# ---------------------------------------------------------------- portraits
+# Medieval II: `, portrait <folder>` at the end of a character line takes the pictures from
+# data/ui/custom_portraits/<folder>/portrait_young.tga, portrait_old.tga, portrait_dead.tga
+# (the game's own strings; vanilla uses it in norman_prologue). Without it - and always in
+# Rome - the game gives each character one of its culture's pool at random:
+# ui/<portrait_mapping>/portraits/portraits/young|old|dead/<generals|civilians|rogues>/NNN.tga,
+# family members off the map ui/<portrait_mapping>/portraits/family/<wife|son|daughter>.tga.
+AGES = ("young", "old", "dead")
+
+
+def data_roots(mod):
+    """The mod's data, then the game's own data (a mod falls back to it)."""
+    import os
+    from .newmod import game_of
+    out = [mod.data]
+    try:
+        game = os.path.join(game_of(mod.data), "data")
+    except Exception:
+        game = None
+    if game and os.path.isdir(game) and os.path.abspath(game) != os.path.abspath(mod.data):
+        out.append(game)
+    return out
+
+
+def _find(mod, *parts):
+    import os
+    from .moddata import _ci
+    for root in data_roots(mod):
+        cur = root
+        for p in parts:
+            cur = _ci(cur, p) if cur else None
+        if cur and os.path.exists(cur):
+            return cur
+    return None
+
+
+def portrait_culture(mod, faction):
+    """The portrait_mapping of the faction's culture (descr_cultures.txt)."""
+    culture = dict(mod.factions()).get(faction)
+    path = _find(mod, "descr_cultures.txt")
+    if not path or not culture:
+        return culture
+    cur = None
+    for l in mod.load(path).texts():
+        t = tokens(l)
+        if t[:1] == ["culture"] and len(t) > 1:
+            cur = t[1]
+        elif t[:1] == ["portrait_mapping"] and len(t) > 1 and cur == culture:
+            return t[1]
+    return culture
+
+
+POOL_OF = {"named character": "generals", "general": "generals", "admiral": "generals", "spy": "rogues",
+           "assassin": "rogues", "witch": "rogues", "heretic": "rogues"}
+
+
+def portraits(mod, faction, person, m2):
+    """What the game shows for a person: {'custom': folder or None, 'files': {age: path of the
+    custom picture}, 'sample': a picture of the pool (or the family picture), 'pool': how many the
+    game picks from, 'how': plain words}."""
+    import os
+    out = {"custom": person.get("portrait"), "files": {}, "sample": None, "pool": 0, "how": ""}
+    if out["custom"]:
+        for a in AGES:
+            out["files"][a] = _find(mod, "ui", "custom_portraits", out["custom"], "portrait_%s.tga" % a)
+        out["how"] = "its own portrait: ui/custom_portraits/%s/" % out["custom"]
+        return out
+    c = portrait_culture(mod, faction)
+    if not c:
+        return out
+    if person.get("source") == "record":
+        pic = "son" if person.get("sex") != "female" else ("wife" if person.get("wife") else "daughter")
+        out["sample"] = _find(mod, "ui", c, "portraits", "family", pic + ".tga")
+        if out["sample"]:
+            out["how"] = "off the map the game shows the family picture ui/%s/portraits/family/%s.tga" % (c, pic)
+            return out
+        kind = "record"
+    else:
+        kind = person.get("kind") or ""
+    age = "old" if (person.get("age") or 0) >= 45 else "young"
+    pool = POOL_OF.get(kind, "civilians")
+    if kind == "princess":
+        pool = "princesses" if m2 else "civilians"
+    folder = _find(mod, "ui", c, "portraits", "portraits", age, pool)
+    if folder:
+        pics = sorted(n for n in os.listdir(folder) if n.lower().endswith(".tga"))
+        if pics:
+            # the game rolls one at random at the start: show the same one each time for a name
+            i = sum(ord(ch) for ch in person.get("name") or "") % len(pics)
+            out["sample"], out["pool"] = os.path.join(folder, pics[i]), len(pics)
+    out["how"] = ("the game picks one of %d pictures of ui/%s/portraits/portraits/%s/%s at random - shown: one of "
+                  "them" % (out["pool"], c, age, pool)) if out["pool"] else "no portrait pool found for %s" % c
+    return out
+
+
+def portrait_size(mod, faction, m2):
+    """(w, h) a portrait of this mod has: another custom portrait, else the culture's pool."""
+    import os
+    from PIL import Image
+    for root in data_roots(mod):
+        d = os.path.join(root, "ui", "custom_portraits")
+        if os.path.isdir(d):
+            for sub in sorted(os.listdir(d)):
+                for a in AGES:
+                    p = os.path.join(d, sub, "portrait_%s.tga" % a)
+                    if os.path.isfile(p):
+                        with Image.open(p) as im:
+                            return im.size
+    c = portrait_culture(mod, faction)
+    folder = _find(mod, "ui", c or "", "portraits", "portraits", "young", "generals")
+    if folder:
+        pics = sorted(n for n in os.listdir(folder) if n.lower().endswith(".tga"))
+        if pics:
+            with Image.open(os.path.join(folder, pics[0])) as im:
+                return im.size
+    return (69, 96)
+
+
+def portrait_folder(faction, name):
+    return re.sub(r"[^a-z0-9_]+", "_", ("%s_%s" % (faction, name)).lower()).strip("_")
+
+
+def set_portraits(plan, f, faction, person, pics, m2):
+    """Medieval II: person's own portrait from pictures {age: source picture}; the line gets
+    `, portrait <folder>` (kept when it has one). Pictures for the ages not given are the
+    'young' one."""
+    import os
+    from .editors import tga_bytes
+    if not m2:
+        raise ValueError("%s: Rome gives portraits from its culture's pool at random - a portrait of one's own "
+                         "is Medieval II's `portrait` line" % person.name)
+    if not person.on_map:
+        raise ValueError("%s is off the map: the game shows the family picture for such a person" % person.name)
+    folder = person.portrait or portrait_folder(faction, person.name)
+    size = portrait_size(plan.mod, faction, m2)
+    base = os.path.join(plan.mod.data, "ui", "custom_portraits", folder)
+    first = pics.get("young") or next(iter(pics.values()))
+    for a in AGES:
+        src = pics.get(a)
+        have = _find(plan.mod, "ui", "custom_portraits", folder, "portrait_%s.tga" % a)
+        if not src and have:
+            continue                            # the ones not replaced stay
+        plan.binary(os.path.join(base, "portrait_%s.tga" % a), tga_bytes(src or first, size))
+    plan.notes.append((plan.mod.rel(base), "%s: portrait (%s) from %s (%d x %d)" % (
+        person.name, ", ".join(sorted(pics)), ", ".join(os.path.basename(p) for p in pics.values()), size[0], size[1])))
+    if not person.portrait:
+        i = person.line
+        line = f.text(i).rstrip()
+        f.set(i, line + ", portrait %s" % folder)
+        plan.note(f, "%s: portrait %s" % (person.name, folder))
+
+
 __all__ = ["read", "apply", "trait_list", "ancillary_list", "tree_problems", "rename_in_tree", "check_name",
-           "ordered", "relative_line", "trait_kind"]
+           "ordered", "relative_line", "trait_kind", "portraits",
+           "set_portraits", "portrait_culture"]

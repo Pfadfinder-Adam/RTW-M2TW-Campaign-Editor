@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.0 - 2026-09-29
+
+### Added
+- **Character editor** (its own work at the top, like the unit and building editors): any faction's
+  characters and family tree, written on its own Apply with a backup.
+- **Portraits** on the family tree and in the person form, as the game shows them: Rome's culture pool
+  (the game picks one at random - the tree shows one of them and says so) and the family pictures of
+  members off the map; Medieval II's own portraits (`ui/custom_portraits/<folder>/portrait_young|old|dead.tga`
+  + `, portrait <folder>` on the character's line). **Replace...** writes a Medieval II character's own
+  portrait from a PNG / JPG / TGA in the size of the mod's portraits.
+- README: how to install (the exe in a folder of its own) and what the tool does with your own pictures.
+
+### Fixed
+- Restore removes the folders a run made for its new files when they are left empty.
+
 ## 0.8.0 - 2026-09-29
 
 ### Added

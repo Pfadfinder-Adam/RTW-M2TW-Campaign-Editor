@@ -174,5 +174,11 @@ def restore(mod, bdir):
             shutil.rmtree(p)
         elif os.path.exists(p):
             os.remove(p)
+        # folders the run made for its new files (ui/custom_portraits/<name>/) go when left empty
+        d = os.path.dirname(p)
+        while os.path.abspath(d).startswith(os.path.abspath(mod.data) + os.sep) and os.path.isdir(d) \
+                and not os.listdir(d):
+            os.rmdir(d)
+            d = os.path.dirname(d)
     shutil.move(bdir, bdir + "_restored")
     return manifest
