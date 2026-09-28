@@ -22,23 +22,35 @@ class MapView(ttk.Frame):
         self.status = status
         bar = ttk.Frame(self, padding=(0, 0, 0, 4))
         bar.pack(fill="x")
+        # the layers, in one menu: what is drawn on the map
         self.v_pol = tk.BooleanVar(value=True)
-        ttk.Checkbutton(bar, text="Political", variable=self.v_pol, command=self.render).pack(side="left")
+        self.v_borders = tk.BooleanVar(value=True)
         self.v_names = tk.BooleanVar(value=True)
-        ttk.Checkbutton(bar, text="Town names", variable=self.v_names, command=self.render).pack(side="left", padx=8)
         self.v_ports = tk.BooleanVar(value=True)
-        ttk.Checkbutton(bar, text="Ports", variable=self.v_ports, command=self.render).pack(side="left")
         self.v_chars = tk.BooleanVar(value=True)
-        ttk.Checkbutton(bar, text="Characters", variable=self.v_chars, command=self.render).pack(side="left", padx=8)
-        self.v_regions = tk.BooleanVar(value=False)
-        ttk.Checkbutton(bar, text="Regions", variable=self.v_regions,
-                        command=lambda: self.on_layers() if self.on_layers else self.render()).pack(side="left", padx=8)
         self.v_res = tk.BooleanVar(value=False)
-        ttk.Checkbutton(bar, text="Resources", variable=self.v_res,
-                        command=lambda: self.on_layers() if self.on_layers else self.render()).pack(side="left")
         self.v_dip = tk.BooleanVar(value=False)
-        ttk.Checkbutton(bar, text="Diplomacy", variable=self.v_dip,
-                        command=lambda: self.on_layers() if self.on_layers else self.render()).pack(side="left")
+        self.v_regions = tk.BooleanVar(value=False)
+        relayer = lambda: self.on_layers() if self.on_layers else self.render()
+        lb = ttk.Menubutton(bar, text="Layers")
+        lm = tk.Menu(lb, tearoff=False)
+        for label, var, cmd in (("Political colours", self.v_pol, self.render), ("Borders", self.v_borders, relayer),
+                                ("Town names", self.v_names, self.render), ("Ports", self.v_ports, self.render),
+                                ("Characters", self.v_chars, self.render), ("Resources", self.v_res, relayer),
+                                ("Diplomacy colours", self.v_dip, relayer)):
+            lm.add_checkbutton(label=label, variable=var, command=cmd)
+        lb["menu"] = lm
+        lb.pack(side="left")
+        # the two modes that change what a click does, as switches of their own
+        ttk.Checkbutton(bar, text="Edit regions", variable=self.v_regions,
+                        command=self._regions_toggled).pack(side="left", padx=(12, 4))
+        ttk.Checkbutton(bar, text="Edit resources", variable=self.v_res, command=relayer).pack(side="left", padx=4)
+        self.lbl_layers = ttk.Label(bar, text="", foreground="#666")
+        self.lbl_layers.pack(side="left", padx=8)
+        for v in (self.v_pol, self.v_borders, self.v_names, self.v_ports, self.v_chars, self.v_res, self.v_dip,
+                  self.v_regions):
+            v.trace_add("write", lambda *a: self._layers_label())
+        self._layers_label()
         ttk.Button(bar, text="Fit", width=5, command=self.fit).pack(side="right")
         ttk.Button(bar, text="+", width=3, command=lambda: self.zoom_by(1)).pack(side="right", padx=2)
         ttk.Button(bar, text="-", width=3, command=lambda: self.zoom_by(-1)).pack(side="right")
@@ -82,6 +94,28 @@ class MapView(ttk.Frame):
         c.bind("<Motion>", self._hover)
         c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
         self._hot = None                                # the marker under the mouse, drawn bigger
+
+    def _layers_label(self):
+        on = [n for n, v in (("political", self.v_pol), ("borders", self.v_borders), ("names", self.v_names),
+                             ("ports", self.v_ports), ("characters", self.v_chars), ("resources", self.v_res),
+                             ("diplomacy", self.v_dip)) if v.get()]
+        self.lbl_layers.configure(text="shown: " + (", ".join(on) or "the ground only"))
+
+    def _regions_toggled(self):
+        """Regions mode colours the land by region: the political colours and the
+        borders are switched off meanwhile, and come back as they were after."""
+        if self.v_regions.get():
+            self._before_regions = (self.v_pol.get(), self.v_borders.get())
+            self.v_pol.set(False)
+            self.v_borders.set(False)
+        elif getattr(self, "_before_regions", None):
+            self.v_pol.set(self._before_regions[0])
+            self.v_borders.set(self._before_regions[1])
+            self._before_regions = None
+        if self.on_layers:
+            self.on_layers()
+        else:
+            self.render()
 
     # ---- data ----
     def load(self, cmap, owners, colours, faction=None, chosen=(), on_city=None, chars=(), draggable=(),
@@ -238,11 +272,16 @@ class MapView(ttk.Frame):
         made again only when the colours change - moving the map only crops it."""
         bg = self.cmap.background()
         if self.region_mode:
-            pol = self.cmap.regions_layer(self.region_painted, self.region_colours, borders=self.borders)
-        elif not self.v_pol.get():
+            pol = self.cmap.regions_layer(self.region_painted, self.region_colours, borders=self.v_borders.get())
+        elif not self.v_pol.get() and not self.v_borders.get():
             return bg
         else:
-            pol = self.cmap.political(self.owners, self.colours, self.faction)
+            if self.v_pol.get():
+                pol = self.cmap.political(self.owners, self.colours, self.faction, borders=self.v_borders.get(),
+                                          painted=self.region_painted)
+            else:                                   # the borders alone
+                pol = self.cmap.political(self.owners, self.colours, None, alpha=0, borders=True,
+                                          painted=self.region_painted)
         key = (id(bg), id(pol))
         if getattr(self, "_base_key", None) != key:
             over = pol.resize((pol.width * 2, pol.height * 2), Image.NEAREST)

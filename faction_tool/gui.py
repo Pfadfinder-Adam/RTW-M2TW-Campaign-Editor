@@ -368,8 +368,6 @@ class App(tk.Tk):
         ttk.Button(rb, text="Place its port", command=lambda: self.region_point("port")).pack(side="left", padx=2)
         ttk.Button(rb, text="Delete this new region", command=self.drop_region).pack(side="left", padx=2)
         ttk.Button(rb, text="Religions...", command=self.religions_dialog).pack(side="left", padx=2)
-        self.v_borders = tk.BooleanVar(value=True)
-        ttk.Checkbutton(rb, text="Borders", variable=self.v_borders, command=self.show_map).pack(side="left", padx=8)
         ttk.Label(rb, text="left drag paints, right click picks a region, right drag moves the map",
                   foreground="#666").pack(side="left", padx=10)
         self.res_bar = ttk.Frame(tab, padding=(0, 0, 0, 4))
@@ -384,6 +382,7 @@ class App(tk.Tk):
         ttk.Label(xb, text="click a resource: pick it   right drag: move it   a region has the resources on its land",
                   foreground="#666").pack(side="left", padx=10)
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
+        self.v_borders = self.map_view.v_borders
         self.map_view.pack(fill="both", expand=True)
         self.map_view.on_stroke = self.remember
         self._cmap, self._cmap_for = None, None
@@ -894,7 +893,8 @@ class App(tk.Tk):
             self.region_bar.pack(fill="x", before=self.map_view)
         else:
             self.region_bar.pack_forget()
-            return {"region_mode": False}
+            # the political colours show the painted land too (the map as it will be)
+            return {"region_mode": False, "region_painted": self.region_paint}
         cols = self._region_colours()
         names = sorted(cols)
         self.cb_paint["values"] = [r["name"] + "  (new)" for r in self.new_regions] + names
@@ -1351,6 +1351,8 @@ class App(tk.Tk):
             colours[me] = tuple(self.colours["primary"] or colours.get(template, (255, 215, 0)))
         elif self.colours["primary"]:
             colours[me] = tuple(self.colours["primary"])
+        for r in self.new_regions:                  # a new region: its owner at the start, else the rebels
+            owners[r["name"]] = r.get("owner") or "slave"
         for r in self.chosen:
             owners[r] = me
         if self.editing() and self.editing_now:

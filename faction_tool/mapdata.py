@@ -206,10 +206,13 @@ class CampaignMap:
         self._regions_layers = (key, im)
         return im
 
-    def political(self, owners, colours, highlight=None, alpha=160):
+    def political(self, owners, colours, highlight=None, alpha=160, borders=True, painted=None):
         """RGBA, 1 px per tile: each region in its owner's primary colour, see-through,
-        borders darker; the highlighted faction a little stronger."""
-        key = (tuple(sorted(owners.items())), tuple(sorted(colours.items())), highlight, alpha)
+        borders darker (unless borders is False); the highlighted faction a little
+        stronger. painted {(x, y): region}: tiles given to another region, in its
+        owner's colour (the map as it will be)."""
+        key = (tuple(sorted(owners.items())), tuple(sorted(colours.items())), highlight, alpha, borders,
+               tuple(sorted((painted or {}).items())))
         if key in self._political:
             return self._political[key]
         layers, mask = self._labels()
@@ -236,7 +239,19 @@ class CampaignMap:
             # this group's pixels only: its label image is 0 elsewhere
             fill = a_img if fill is None else Image.composite(a_img, fill, here)
             dark = b_img if dark is None else Image.composite(b_img, dark, here)
-        im = Image.composite(dark, fill, mask)
+        im = Image.composite(dark, fill, mask) if borders else fill
+        if painted:
+            im = im.copy()
+            px = im.load()
+            for (x, y), r in painted.items():
+                if 0 <= x < self.w and 0 <= y < self.h:
+                    owner = owners.get(r)
+                    if owner is None:
+                        px[x, self.h - 1 - y] = (0, 0, 0, 0)
+                        continue
+                    rgb = REBELS if owner == "slave" else colours.get(owner, REBELS)
+                    a = min(255, alpha + 60) if owner == highlight else (alpha // 4 if owner == "slave" else alpha)
+                    px[x, self.h - 1 - y] = tuple(rgb) + (a,)
         self._political = {key: im}
         return im
 
