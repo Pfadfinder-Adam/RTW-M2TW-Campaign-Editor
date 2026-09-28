@@ -2,6 +2,8 @@
 
 (formerly RTW Faction Tool)
 
+[![Support on Ko-fi](https://img.shields.io/badge/Support%20on-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/pfadfinder)
+
 A campaign editor for games on the **Rome: Total War engine**: Rome: Total War (with Barbarian Invasion and Alexander, plain or modded, on REX or the original exe) and, in early support, **Medieval II: Total War** (with Kingdoms, on M2EX or the original exe). It works on the game's or mod's own data files, shows every change before writing it, keeps a backup and can undo it byte for byte.
 
 Medieval II: the tool loads and edits it (factions, towns, map, its agents such as merchants, priests and princesses, religions, character lines as Medieval II writes them), but support is new and less tested than Rome's. Medieval II keeps most data in `packs`; run the game's `tools\unpacker\unpack_all.bat` first.
@@ -129,3 +131,7 @@ The Windows `.exe` is the window only. Use Python for the command line.
 ## License
 
 MIT
+
+## Support
+
+The editor is free and stays free. It is built with the help of AI, which costs money every month; if the tool saves you time, a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) keeps new features coming. Thank you!

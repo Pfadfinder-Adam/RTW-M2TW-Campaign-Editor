@@ -30,6 +30,7 @@ from .textio import tokens
 from .units import faction_units, read_units
 
 VERSION = "0.2.0"
+KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW Campaign Editor"
 
 HELP = """RTW Campaign Editor - how to use it
@@ -84,6 +85,10 @@ WHEN SOMETHING GOES WRONG
 MEDIEVAL II
   Works on Medieval II too (run the game's tools\\unpacker\\unpack_all.bat first):
   its agents (merchant, priest, princess...), character lines with the sex, religions.
+
+SUPPORT
+  The tool is free. If it helps you, a coffee keeps new features coming:
+  https://ko-fi.com/pfadfinder  (the Support on Ko-fi button)
 """
 
 _showerror = messagebox.showerror
@@ -398,6 +403,9 @@ class App(tk.Tk):
         self.b_create.pack(side="left", padx=6)
         ttk.Button(bar, text="Undo", width=6, command=self.undo).pack(side="left", padx=(12, 0))
         ttk.Button(bar, text="Redo", width=6, command=self.redo).pack(side="left", padx=4)
+        tk.Button(bar, text="\u2615  Support on Ko-fi", command=self.support, bg="#ff5e5b", fg="white",
+                  activebackground="#e14b48", activeforeground="white", relief="flat", cursor="hand2",
+                  font=("", 9, "bold"), padx=10).pack(side="right", padx=(8, 0))
         ttk.Button(bar, text="Help", command=self.show_help).pack(side="right", padx=(6, 0))
         tools = ttk.Menubutton(bar, text="Tools")
         menu = tk.Menu(tools, tearoff=False)
@@ -808,6 +816,12 @@ class App(tk.Tk):
         self.bind_all("<F5>", lambda e: self.load())
         for i in range(5):
             self.bind_all("<Control-Key-%d>" % (i + 1), lambda e, i=i: self.nb.select(i))
+
+    def support(self):
+        """The Ko-fi page in the browser: donations keep the work on the tool going."""
+        import webbrowser
+        webbrowser.open(KOFI)
+        self.status.set("Thank you! %s opened in your browser." % KOFI)
 
     def show_help(self):
         self.show_text("Help", HELP)
