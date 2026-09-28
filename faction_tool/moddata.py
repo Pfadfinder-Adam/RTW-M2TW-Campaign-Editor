@@ -76,6 +76,55 @@ def religions_line(rel):
     return "religions { %s }" % " ".join("%s %d" % (k, v) for k, v in rel.items())
 
 
+RE_COLOUR = re.compile(r"^\s*\d+\s+\d+\s+\d+\s*$")
+
+
+def region_entries(f):
+    """{region: {field: (line index, value)}} of a loaded descr_regions.txt. A region is its name at the
+    start of a line, then indented value lines: settlement, creator, rebels, 'r g b', resources, triumph,
+    farming (and Medieval II's religions). The colour line (three numbers) anchors the rest, so a
+    region with a line more or less before it (seen in BI's file: 'Pictii' where the colour was
+    expected) still reads right: settlement and creator are the first two, rebels the line before
+    the colour, resources / triumph / farming the lines after it. The one place that knows the
+    layout - readers and writers all use it."""
+    out, cur, vals = {}, None, []
+
+    def flush():
+        if not cur:
+            return
+        e = {}
+        ci = next((k for k, (_, v) in enumerate(vals) if RE_COLOUR.match(v)), None)
+        rel = next((k for k, (_, v) in enumerate(vals) if v.startswith("religions")), None)
+        plain = [k for k in range(len(vals)) if k != rel]
+        if plain:
+            e["settlement"] = vals[plain[0]]
+        if len(plain) > 1 and (ci is None or plain[1] < ci - 1):
+            e["creator"] = vals[plain[1]]
+        if ci is not None:
+            e["colour"] = vals[ci]
+            if ci - 1 > 0:
+                e["rebels"] = vals[ci - 1]
+            after = [k for k in plain if k > ci]
+            for name, k in zip(("resources", "triumph", "farming"), after):
+                e[name] = vals[k]
+        if rel is not None:
+            e["religions"] = vals[rel]
+        out[cur] = e
+
+    texts = f.texts() if hasattr(f, "texts") else f
+    for i, line in enumerate(texts):
+        code = strip_comment(line)
+        if not code.strip():
+            continue
+        if not code[0].isspace():
+            flush()
+            cur, vals = code.strip(), []
+        else:
+            vals.append((i, code.strip()))
+    flush()
+    return out
+
+
 class ModData:
     def __init__(self, path):
         self.data = find_data_dir(path)
@@ -214,32 +263,20 @@ class ModData:
 
     # ---- map ----
     def regions(self, campaign):
-        """{region: {'settlement', 'creator', 'rebels', 'colour', 'resources'}} from descr_regions.txt."""
-        path = self.campaign_file(campaign, "descr_regions.txt")
-        f = self.load(path)
+        """{region: {'settlement', 'creator', 'rebels', 'colour', 'resources', 'triumph', 'farming'
+        (, 'religions')}} from descr_regions.txt (see region_entries)."""
+        f = self.load(self.campaign_file(campaign, "descr_regions.txt"))
         out = {}
-        cur = None
-        vals = []
-        def flush():
-            if cur and len(vals) >= 4:
-                colour = tuple(int(v) for v in vals[3].split()[:3])
-                out[cur] = {"settlement": vals[0], "creator": vals[1], "rebels": vals[2], "colour": colour,
-                            "resources": vals[4] if len(vals) > 4 else "",
-                            "triumph": vals[5] if len(vals) > 5 else "", "farming": vals[6] if len(vals) > 6 else ""}
-                rel = next((v for v in vals[5:] if v.startswith("religions")), None)
-                if rel:                                      # Medieval II: religions { catholic 90 pagan 10 }
-                    out[cur]["religions"] = parse_religions(rel)
-        for line in f.texts():
-            s = strip_comment(line)
-            if not s.strip():
+        for name, e in region_entries(f).items():
+            v = {k: val for k, (_, val) in e.items()}
+            if "colour" not in v:
                 continue
-            if not s[0].isspace():
-                flush()
-                cur = s.strip()
-                vals = []
-            else:
-                vals.append(s.strip())
-        flush()
+            v["colour"] = tuple(int(x) for x in v["colour"].split()[:3])
+            if "religions" in v:                         # Medieval II: religions { catholic 90 pagan 10 }
+                v["religions"] = parse_religions(v["religions"])
+            for k in ("settlement", "creator", "rebels", "resources", "triumph", "farming"):
+                v.setdefault(k, "")
+            out[name] = v
         return out
 
     def city_tiles(self, campaign):

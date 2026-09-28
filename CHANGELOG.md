@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.4 - 2026-09-29
+
+### Fixed
+- **Barbarian Invasion (bi) would not load its campaign** ("invalid literal for int() ... 'Pictii'"): an entry
+  of its `descr_regions.txt` has a line more before the colour. The file is now read by one reader for
+  everyone (the colour line anchors each entry), and the tool's writers (Edit region, region tags) use it too.
+- Loading a Rome mod after a Medieval II one with *Edit faction* on no longer shows "france has no faction
+  block": a faction the new mod does not have is cleared.
+
+### Changed
+- Scan mod knows the **Barbarian Invasion** files (the game manifest now has `bi/`, from the user's install).
+
 ## 0.9.3 - 2026-09-29
 
 ### Added / changed

@@ -354,9 +354,30 @@ def _mercenary_pools(plan, campaign, new_regions, painted, by_colour, img):
                 break
 
 
-# the value lines of a region in descr_regions.txt after its name (Medieval II adds religions)
-REGION_FIELDS = ("settlement", "creator", "rebels", "colour", "resources", "triumph", "farming")
 EDITABLE = ("creator", "rebels", "resources", "triumph", "farming")
+
+
+def set_region_lines(plan, f, changes, why=""):
+    """changes = {region: {field: value}} on a loaded descr_regions.txt, each value line found by
+    moddata.region_entries (the one place that knows the layout); the line keeps its indent and
+    comment. Raises for a region or line the file does not have."""
+    from .moddata import region_entries
+    entries = region_entries(f)
+    for region, ch in changes.items():
+        e = entries.get(region)
+        if e is None:
+            raise ValueError("%s is no region of descr_regions.txt" % region)
+        for field, want in ch.items():
+            if field not in e:
+                raise ValueError("%s: descr_regions.txt has no %s line for it" % (region, field))
+            i = e[field][0]
+            line = f.text(i).rstrip("\r\n")
+            code = line.split(";", 1)[0]
+            indent = line[:len(line) - len(line.lstrip())]
+            tail = line[len(code.rstrip()):]            # what follows the value (spaces, a comment) stays
+            if code.strip() != want:
+                f.set(i, indent + want + tail)
+                plan.note(f, "%s: %s %s -> %s%s" % (region, field, code.strip(), want, why))
 
 
 def edit_regions(plan, campaign, edits):
@@ -366,46 +387,27 @@ def edit_regions(plan, campaign, edits):
     if not edits:
         return
     mod = plan.mod
-    known = mod.regions(campaign)
     facs = {n for n, _ in mod.factions()}
-    f = plan.edit(mod.campaign_file(campaign, "descr_regions.txt"))
-    cur, n, done = None, 0, set()
-    for i in range(len(f.raw)):
-        line = f.text(i)
-        code = line.split(";", 1)[0]
-        if not code.strip():
-            continue
-        if not code[0].isspace():
-            cur, n = code.strip(), 0
-            continue
-        field = REGION_FIELDS[n] if n < len(REGION_FIELDS) else None
-        n += 1
-        want = (edits.get(cur) or {}).get(field) if field in EDITABLE else None
-        if want is None:
-            continue
-        if field == "resources":
-            want = ", ".join(x.strip() for x in (want if isinstance(want, list) else str(want).split(","))
-                             if x.strip()) or "none"
-        elif field in ("triumph", "farming"):
-            if not str(want).strip().isdigit():
-                raise ValueError("%s: %s must be a whole number" % (cur, field))
-            want = str(int(want))
-        elif field == "creator" and want not in facs:
-            raise ValueError("%s: %s is no faction of this mod" % (cur, want))
-        else:
-            want = str(want).strip()
-        if not want:
-            continue
-        indent = line[:len(line) - len(line.lstrip())]
-        comment = line[len(code.rstrip("\r\n")):] if ";" in line else ""
-        new = indent + want + comment.rstrip("\r\n")
-        if new != line.rstrip("\r\n"):
-            f.set(i, new)
-            plan.note(f, "%s: %s %s" % (cur, field, want))
-        done.add(cur)
-    for r in edits:
-        if r not in known:
-            raise ValueError("%s is no region of descr_regions.txt" % r)
+    changes = {}
+    for region, ch in edits.items():
+        out = {}
+        for field in EDITABLE:
+            want = ch.get(field)
+            if want is None or str(want).strip() == "":
+                continue
+            if field == "resources":
+                want = ", ".join(x.strip() for x in (want if isinstance(want, list) else str(want).split(","))
+                                 if x.strip()) or "none"
+            elif field in ("triumph", "farming"):
+                if not str(want).strip().isdigit():
+                    raise ValueError("%s: %s must be a whole number" % (region, field))
+                want = str(int(want))
+            elif field == "creator" and want not in facs:
+                raise ValueError("%s: %s is no faction of this mod" % (region, want))
+            out[field] = str(want).strip()
+        if out:
+            changes[region] = out
+    set_region_lines(plan, plan.edit(mod.campaign_file(campaign, "descr_regions.txt")), changes)
 
 
 def apply_opts(plan, campaign, regions):

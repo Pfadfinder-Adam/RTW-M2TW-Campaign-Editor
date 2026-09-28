@@ -198,30 +198,13 @@ def _resources_start(f):
 
 
 def set_region_tags(plan, campaign, tags):
-    """tags = {region: 'a, b, c'}: line 6 of the regions' entries in descr_regions.txt
+    """tags = {region: 'a, b, c'}: the resources line of the regions' entries in descr_regions.txt
     (the region's resource tags; in HLR also the hidden resources that open units)."""
-    mod = plan.mod
-    f = plan.edit(mod.campaign_file(campaign, "descr_regions.txt"))
-    cur, n, done = None, 0, set()
-    for i in range(len(f.raw)):
-        line = f.text(i)
-        code = strip_comment(line)
-        if not code.strip():
-            continue
-        if not code[0].isspace():
-            cur, n = code.strip(), 0
-            continue
-        n += 1
-        if cur in tags and n == 5:                     # settlement, creator, rebels, colour, resources
-            want = ", ".join(x.strip() for x in tags[cur].split(",") if x.strip())
-            if not want:
-                raise ValueError("%s: a region needs at least one resource tag" % cur)
-            indent = line[:len(line) - len(line.lstrip())]
-            comment = line[len(code):]
-            if code.strip() != want:
-                f.set(i, indent + want + comment)
-                plan.note(f, "%s: resources %s -> %s" % (cur, code.strip(), want))
-            done.add(cur)
-    for r in tags:
-        if r not in done:
-            raise ValueError("no region %s in descr_regions.txt" % r)
+    from .regionedit import set_region_lines
+    changes = {}
+    for r, t in tags.items():
+        want = ", ".join(x.strip() for x in t.split(",") if x.strip())
+        if not want:
+            raise ValueError("%s: a region needs at least one resource tag" % r)
+        changes[r] = {"resources": want}
+    set_region_lines(plan, plan.edit(plan.mod.campaign_file(campaign, "descr_regions.txt")), changes)

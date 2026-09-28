@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.9.3"
+VERSION = "0.9.4"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
 
@@ -931,7 +931,7 @@ class App(tk.Tk):
         self.field, self._placing = [], None
         self.refresh_field()
         self.refresh_chosen()
-        if edit and self.v["template"].get():
+        if edit and self.v["template"].get() and self.strat and self.strat.faction(self.v["template"].get().strip()):
             self.template_changed()
         self.status.set("Edit: pick the faction to change; untouched fields stay as they are." if edit else
                         "New: pick the template to copy.")
@@ -2212,6 +2212,9 @@ class App(tk.Tk):
         # after Apply (which reloads) or a campaign change, the edited faction is read
         # afresh: its towns as they are now, never a stale list from before
         t = self.v["template"].get().strip()
+        if t and t not in {n for n, _ in self.mod.factions()}:
+            self.v["template"].set("")               # a faction of the mod loaded before (france in a Rome mod)
+            t = ""
         if self.editing() and t and self.strat.faction(t):
             self.load_existing()
             self._baseline = self._faction_state()

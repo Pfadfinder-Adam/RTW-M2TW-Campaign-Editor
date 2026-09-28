@@ -36,7 +36,7 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 > With these the cause is usually found and fixed **the same day** (the logs name the file, line and
 > the game's own error); without them it is guesswork and takes much longer.
 
-Version **0.9.3** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
+Version **0.9.4** - see [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
 
 Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
 

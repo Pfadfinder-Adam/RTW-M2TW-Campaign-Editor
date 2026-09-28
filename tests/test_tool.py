@@ -842,6 +842,27 @@ class ToolTest(unittest.TestCase):
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
 
+    def test_descr_regions_with_an_odd_entry(self):
+        """BI's descr_regions.txt has an entry with a line more before the colour ('Pictii' where the
+        colour was read - every map read failed). The colour line anchors the entry; writers use the same."""
+        from faction_tool.moddata import region_entries
+        from faction_tool.plan import Plan
+        from faction_tool.regionedit import edit_regions
+        path = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_regions.txt")
+        with open(path) as fh:
+            text = fh.read()
+        with open(path, "w") as fh:
+            fh.write(text.replace("B_R\n\tBtown\n\tslave\n\tRebels\n", "B_R\n\tBtown\n\tslave\n\tPictii\n\tRebels\n", 1))
+        mod = ModData(self.root)
+        r = mod.regions("test")["B_R"]
+        self.assertEqual((r["colour"], r["rebels"], r["creator"], r["triumph"]), ((0, 0, 255), "Rebels", "slave", "5"))
+        plan = Plan(mod, "x", "x")
+        edit_regions(plan, "test", {"B_R": {"farming": "4", "rebels": "Picts"}})
+        lines = plan.files[path].texts()
+        e = region_entries(plan.files[path])["B_R"]
+        self.assertEqual((lines[e["farming"][0]], lines[e["rebels"][0]]), ("\t4", "\tPicts"))
+        self.assertIn("\tPictii", lines)
+
     def test_family_tree_checks(self):
         from faction_tool.family import ordered, tree_problems
         people = [{"name": n, "sex": s} for n, s in (("A", "male"), ("B", "female"), ("C", "male"), ("D", "female"),
