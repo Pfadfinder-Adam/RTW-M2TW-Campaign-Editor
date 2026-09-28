@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.7.2"
+VERSION = "0.7.3"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW Campaign Editor"
 
@@ -2988,8 +2988,14 @@ class App(tk.Tk):
             mod_dir = os.path.dirname(os.path.abspath(self.mod.data))
         stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         base = os.path.basename(mod_dir) if mod_dir else "tool"
+        # into the tool's own folder (RTW-Campaign-Editor-files/logs next to the exe), not the game's
+        where = os.path.join(os.path.dirname(log.path()), "logs") if log.path() else (mod_dir or "")
+        try:
+            os.makedirs(where, exist_ok=True)
+        except OSError:
+            where = mod_dir or ""
         out = filedialog.asksaveasfilename(title="Save the logs", defaultextension=".zip",
-                                           initialdir=mod_dir or "", initialfile="%s_logs_%s.zip" % (base, stamp),
+                                           initialdir=where, initialfile="%s_logs_%s.zip" % (base, stamp),
                                            filetypes=[("Zip", "*.zip")])
         if not out:
             return

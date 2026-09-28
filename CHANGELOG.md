@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3 - 2026-09-28
+
+### Changed
+- **Tools > Save logs (zip)** offers RTW-Campaign-Editor-files\logs next to the exe (not the game's
+  folder), so everything the tool writes for itself stays in one place.
+
 ## 0.7.2 - 2026-09-28
 
 ### Changed
