@@ -19,12 +19,12 @@ class Level:
         self.turns = 0
 
     def factions(self):
-        m = re.search(r"factions\s*\{([^}]*)\}", self.requires)
+        m = re.search(r"(?<![A-Za-z0-9_])factions\s*\{([^}]*)\}", self.requires)
         return [x.strip() for x in m.group(1).replace(",", " ").split()] if m else None
 
     def conditional(self):
         """Requirements beyond the faction list (resources, other buildings...)."""
-        rest = re.sub(r"factions\s*\{[^}]*\}", "", self.requires).strip()
+        rest = re.sub(r"(?<![A-Za-z0-9_])factions\s*\{[^}]*\}", "", self.requires).strip()
         return rest.lstrip("and").strip()
 
 

@@ -11,6 +11,9 @@ from .moddata import ModData
 from .plan import Plan
 
 CHANGED = "#fff2b3"          # a field changed and not written yet
+REMOVED = "#f4c7c3"          # a line to be removed
+ADDED = "#d9f2d0"            # a line to be added
+SMALL = dict(padx=3, pady=0, bd=1, font=("", 8), cursor="hand2")
 
 
 class RecordEditor(ttk.Frame):
@@ -21,6 +24,9 @@ class RecordEditor(ttk.Frame):
         self.app, self.kind = app, kind
         self.mod = None
         self.blocks, self.changes, self.imports = [], {}, []    # changes {line: value}; imports [(src, targets, size)]
+        # lines added [{'at': block's first line, 'block', 'place', 'level', 'key', 'text', 'own': [factions]}]
+        # and removed {line}; both placed on Apply, after the changed fields
+        self.adds, self.removes = [], set()
         self.current = None
         side = ttk.Frame(self)
         side.pack(side="left", fill="y", padx=(0, 8))
@@ -43,12 +49,18 @@ class RecordEditor(ttk.Frame):
         ttk.Button(head, text="Undo all changes here", command=self.reset).pack(side="right")
         ttk.Button(head, text="Copy as new %s..." % ("unit" if kind == "unit" else "building"),
                    command=self.copy_dialog).pack(side="right", padx=6)
+        ttk.Button(head, text="Add line...", command=self.add_dialog).pack(side="right")
         self.copy_ops = []                   # [(source, new name, details)] written on Apply
         self.pics = ttk.LabelFrame(right, text="Pictures", padding=6)
         self.pics.pack(fill="x", pady=(6, 6))
+        self.links = ttk.LabelFrame(right, text="Tied to it (kept in step when you change it)", padding=(6, 2))
+        self.links.pack(fill="x", pady=(0, 6))
+        self.lbl_links = ttk.Label(self.links, text="", justify="left", foreground="#333", wraplength=820)
+        self.lbl_links.pack(anchor="w")
         ttk.Label(right, text="Every line of the block: the key on the left, what follows it on the right. "
-                              "Changed fields turn yellow; Preview, then Apply writes them (with a backup).",
-                  foreground="#555").pack(anchor="w")
+                              "Changed fields turn yellow, lines to add green, lines to remove red (x on the left); "
+                              "Preview, then Apply writes them (with a backup).",
+                  foreground="#555", wraplength=900, justify="left").pack(anchor="w")
         box = ttk.Frame(right)
         box.pack(fill="both", expand=True)
         canvas = tk.Canvas(box, highlightthickness=0)
@@ -71,6 +83,8 @@ class RecordEditor(ttk.Frame):
     def load(self, mod):
         self.mod = mod
         self.changes, self.imports, self.current, self.copy_ops = {}, [], None, []
+        self.adds, self.removes = [], set()
+        self._recruits = self._required = None      # read from the file when first asked
         p = self.path()
         if not p:
             self.blocks = []
@@ -90,7 +104,8 @@ class RecordEditor(ttk.Frame):
         self.shown = [b for b in self.blocks if not q or q in b[0].lower()]
         self.lb.delete(0, "end")
         for name, a, b in self.shown:
-            mark = " *" if any(a <= ln < b for ln in self.changes) else ""
+            mark = " *" if any(a <= ln < b for ln in list(self.changes) + list(self.removes)) or \
+                any(op["at"] == a for op in self.adds) else ""
             self.lb.insert("end", name + mark)
         for src, new, _ in self.copy_ops:
             self.lb.insert("end", "%s  (new, from %s - on Apply)" % (new, src))
@@ -104,18 +119,83 @@ class RecordEditor(ttk.Frame):
         name, a, b = self.current
         f = self.mod.load(self.path())
         self.fields = E.fields(f, a, b)
+        self.tree = E.chain_tree(f, a, b) if self.kind == "building" else None
         self.title.configure(text=("unit " if self.kind == "unit" else "building ") + name)
         for w in self.form.winfo_children():
             w.destroy()
-        for row, fd in enumerate(self.fields):
-            ttk.Label(self.form, text="    " * fd.depth + fd.key, font=("", 9, "bold")).grid(
-                row=row, column=0, sticky="w", padx=(0, 8))
+        # the lines to add, each shown after the field it will follow
+        pending = []
+        for n, op in enumerate(self.adds):
+            if op["at"] != a:
+                continue
+            try:
+                at, make = E.line_place(f, self.kind, self.current, op.get("place"), op.get("level"), op.get("key"))
+            except ValueError:
+                continue
+            pending.append((at, n, make(op["text"])))
+        row = 0
+
+        def added_rows(before):
+            nonlocal row
+            for at, n, lines in [p for p in pending if p[0] <= before]:
+                for text in lines:
+                    ttk.Label(self.form, text="+ new", foreground="#2a7a1f", font=("", 9, "bold")).grid(
+                        row=row, column=1, sticky="w", padx=(0, 8))
+                    tk.Label(self.form, text=text.expandtabs(4).strip(), anchor="w", background=ADDED,
+                             font=("", 9)).grid(row=row, column=2, sticky="we", pady=1)
+                    if text.strip() == self.adds[n]["text"].strip():
+                        tk.Button(self.form, text="x", command=lambda n=n: self.drop_add(n), **SMALL).grid(
+                            row=row, column=0, padx=(0, 4))
+                    row += 1
+                pending.remove((at, n, lines))
+        for fd in self.fields:
+            added_rows(fd.line)
+            gone = fd.line in self.removes
+            ttk.Label(self.form, text="    " * fd.depth + fd.key, font=("", 9, "bold", "overstrike") if gone else
+                      ("", 9, "bold")).grid(row=row, column=1, sticky="w", padx=(0, 8))
             v = tk.StringVar(value=self.changes.get(fd.line, fd.value))
             e = tk.Entry(self.form, textvariable=v, width=90,
-                         background=CHANGED if fd.line in self.changes else "white")
-            e.grid(row=row, column=1, sticky="we", pady=1)
+                         background=REMOVED if gone else CHANGED if fd.line in self.changes else "white")
+            e.grid(row=row, column=2, sticky="we", pady=1)
             v.trace_add("write", lambda *x, fd=fd, v=v, e=e: self.edited(fd, v.get(), e))
+            why = E.removable(self.kind, fd, self.tree, self.required())
+            if why is None:
+                tk.Button(self.form, text="\u21ba" if gone else "x", command=lambda fd=fd: self.toggle_remove(fd),
+                          **SMALL).grid(row=row, column=0, padx=(0, 4))
+            row += 1
+        added_rows(b + 1)
         self.show_pictures()
+        self.show_links()
+
+    def required(self):
+        if getattr(self, "_required", None) is None:
+            self._required = E.required_keys(self.mod.load(self.path()), self.kind)
+        return self._required
+
+    def toggle_remove(self, fd):
+        if fd.line in self.removes:
+            self.removes.discard(fd.line)
+        else:
+            self.removes.add(fd.line)
+            self.changes.pop(fd.line, None)
+        self._changed()
+        self.show()
+
+    def drop_add(self, n):
+        del self.adds[n]
+        self._changed()
+        self.show()
+
+    def _changed(self):
+        self.fill_list_keep()
+        self.app.status.set("%d field(s) changed, %d line(s) to add, %d to remove in %s - Preview, then Apply." % (
+            len(self.changes), len(self.adds), len(self.removes), os.path.basename(self.path())))
+
+    def fill_list_keep(self):
+        sel = self.lb.curselection()
+        self.fill_list()
+        if sel:
+            self.lb.selection_set(sel[0])
 
     def edited(self, fd, value, entry):
         if value.strip() == fd.value:
@@ -133,9 +213,221 @@ class RecordEditor(ttk.Frame):
 
     def reset(self):
         self.changes, self.imports, self.copy_ops = {}, [], []
+        self.adds, self.removes = [], set()
         self.fill_list()
         self.show()
         self.app.status.set("Nothing changed in the %s editor." % self.kind)
+
+    # ---- what it is tied to ----
+    def recruits(self):
+        """[(line, unit, chain, level)] of the buildings file, read once per load."""
+        if self._recruits is None:
+            from .roster import recruit_lines
+            edb = self.mod.file("edb")
+            self._recruits = recruit_lines(self.mod.load(edb)) if edb else []
+        return self._recruits
+
+    def show_links(self):
+        try:
+            text = self._unit_links() if self.kind == "unit" else self._building_links()
+        except Exception as e:                     # information only: never in the way of editing
+            text = "(could not read: %s)" % e
+        self.lbl_links.configure(text=text)
+
+    def _short(self, items, n=6):
+        items = list(items)
+        return ", ".join(items[:n]) + (" and %d more" % (len(items) - n) if len(items) > n else "") if items else "none"
+
+    def _unit_links(self):
+        from .roster import covers, factions_in
+        name = self.current[0]
+        own = [x for x in self.value("ownership").replace(",", " ").split() if x]
+        facs = self.mod.factions()
+        owners = [f for f, c in facs if covers(own, f, c)]
+        edb = self.mod.load(self.mod.file("edb")) if self.mod.file("edb") else None
+        places = ["%s/%s (%s)" % (c, l, " ".join(factions_in(edb.text(i)) or ["all"]))
+                  for i, u, c, l in self.recruits() if u == name]
+        camp = self.app.v_campaign.get()
+        armies = 0
+        if self.app.strat is not None:
+            from .start import unit_name
+            from .textio import tokens
+            armies = sum(1 for l in self.app.strat.lines if tokens(l)[:1] == ["unit"] and unit_name(l) == name)
+        return ("owned by: %s\nrecruited in: %s\nin armies at the start of %s: %d\n"
+                "follows a change: new 'type' -> recruit lines, armies of every campaign, mercenaries, rebels; "
+                "new 'dictionary' -> texts and cards copied; new owners -> their cards" % (
+                    self._short(owners), self._short(places, 4), camp or "the campaign", armies))
+
+    def _building_links(self):
+        from .roster import factions_in
+        name, a, b = self.current
+        f = self.mod.load(self.path())
+        lv_txt = []
+        for lv in self.tree["levels"]:
+            names = factions_in(f.text(lv["head"]))
+            lv_txt.append("%s: %s" % (lv["name"], "everyone" if names is None else self._short(names, 3)))
+        need = []
+        rx = E.re.compile(r"\bbuilding_present(?:_min_level)?\s+%s\b" % E.re.escape(name))
+        for c, x, y in self.blocks:
+            if c != name and any(rx.search(f.text(i)) for i in range(x, y)):
+                need.append(c)
+        towns = 0
+        if self.app.strat is not None:
+            from .textio import tokens
+            towns = sum(1 for l in self.app.strat.lines if tokens(l)[:2] == ["type", name])
+        return ("who may build: %s\nrequired by (building_present...): %s;   in towns at the start of %s: %d\n"
+                "follows a change: new chain name -> towns of every campaign and the requirements naming it; "
+                "a recruit line added -> its factions own the unit and get its cards" % (
+                    ";  ".join(lv_txt), self._short(need), self.app.v_campaign.get() or "the campaign", towns))
+
+    # ---- adding a line ----
+    def add_dialog(self):
+        if not self.current:
+            messagebox.showerror("Add line", "pick the %s on the left first" % self.kind)
+            return
+        name, a, b = self.current
+        f = self.mod.load(self.path())
+        w = tk.Toplevel(self)
+        w.title("Add a line to %s" % name)
+        w.transient(self)
+        frm = ttk.Frame(w, padding=10)
+        frm.pack(fill="both", expand=True)
+        v = {k: tk.StringVar() for k in ("place", "level", "key", "value", "unit", "exp", "factions", "extra")}
+        v["exp"].set("0")
+        v_own = tk.BooleanVar(value=True)
+        body = ttk.Frame(frm)
+        preview = ttk.Label(frm, text="", font=("Courier", 10))
+        problems = ttk.Label(frm, text="", foreground="#b00020", justify="left", wraplength=620)
+        levels = [lv["name"] for lv in self.tree["levels"]] if self.tree else []
+        units = E.unit_names(self.mod) if self.kind == "building" else []
+        conds = E.conditions_seen(f) if self.kind == "building" else []
+        seen = {}
+
+        def keys(place):
+            if place not in seen:
+                seen[place] = E.keys_seen(f, self.kind, place)
+            return seen[place]
+
+        def text():
+            place = v["place"].get()
+            if place == "recruit":
+                fs = [x for x in v["factions"].get().replace(",", " ").split() if x]
+                t = 'recruit "%s"  %s' % (v["unit"].get().strip(), v["exp"].get().strip() or "0")
+                if fs:
+                    t += "  requires factions { %s}" % "".join("%s, " % x for x in fs)
+                extra = v["extra"].get().strip()
+                if extra:
+                    t += (" " if fs else "  requires ") + (extra if fs or not extra.startswith("and ") else extra[4:])
+                return t
+            if place == "upgrades":
+                return v["value"].get().strip()
+            return ("%s %s" % (v["key"].get().strip(), v["value"].get().strip())).strip()
+
+        def refresh(*_):
+            t = text()
+            preview.configure(text=t)
+            probs = E.check_text(self.mod, self.kind, t) if t else []
+            if v["place"].get() == "upgrades" and t and t not in levels:
+                probs.append((True, "'%s' is not a level of %s" % (t, name)))
+            if v["place"].get() == "upgrades" and t == v["level"].get():
+                probs.append((True, "a level cannot upgrade to itself"))
+            problems.configure(text="\n".join(("error: " if e else "note: ") + m for e, m in probs))
+
+        def rebuild(*_):
+            for c in body.winfo_children():
+                c.destroy()
+            place = v["place"].get()
+            r = 0
+
+            def row(label, widget, hint=None):
+                nonlocal r
+                ttk.Label(body, text=label).grid(row=r, column=0, sticky="w", pady=2)
+                widget.grid(row=r, column=1, sticky="we", padx=6, pady=2)
+                if hint:
+                    ttk.Label(body, text=hint, foreground="#666", wraplength=420, justify="left").grid(
+                        row=r + 1, column=1, sticky="w", padx=6)
+                    r += 1
+                r += 1
+            if place == "recruit":
+                cb = ttk.Combobox(body, textvariable=v["unit"], values=units, width=40)
+                cb.bind("<KeyRelease>", lambda e: cb.configure(
+                    values=[u for u in units if v["unit"].get().lower() in u.lower()]))
+
+                def unit_picked(*_):
+                    from .roster import ownership, _find_unit
+                    try:
+                        edu = self.mod.load(self.mod.file("edu"))
+                        v["factions"].set(", ".join(ownership(edu, _find_unit(edu, v["unit"].get()))))
+                    except ValueError:
+                        pass
+                cb.bind("<<ComboboxSelected>>", unit_picked)
+                row("Unit", cb)
+                row("Experience", ttk.Spinbox(body, from_=0, to=9, textvariable=v["exp"], width=5))
+                row("Factions", ttk.Entry(body, textvariable=v["factions"], width=50),
+                    "who recruits it here: factions or cultures, comma separated (the unit's owners when you pick it)")
+                row("More conditions", ttk.Entry(body, textvariable=v["extra"], width=50),
+                    "optional, e.g. 'and not marian_reforms'. This mod uses: " + ", ".join(conds[:12]))
+                ttk.Checkbutton(body, text="factions named here that do not own the unit get it "
+                                           "(its ownership line) and its cards", variable=v_own).grid(
+                    row=r, column=0, columnspan=2, sticky="w", pady=(4, 0))
+            elif place == "upgrades":
+                row("Upgrades to", ttk.Combobox(body, textvariable=v["value"], values=levels, state="readonly"))
+            else:
+                ks = keys("capability" if place == "capability" else "level" if place == "level" else None)
+                cb = ttk.Combobox(body, textvariable=v["key"], values=sorted(ks), width=40)
+
+                def key_picked(*_):
+                    v["value"].set(ks.get(v["key"].get(), ""))
+                cb.bind("<<ComboboxSelected>>", key_picked)
+                row("Key", cb, "the keys this mod already uses here; the value is filled with an example")
+                row("Value", ttk.Entry(body, textvariable=v["value"], width=50))
+            refresh()
+        top = ttk.Frame(frm)
+        top.pack(fill="x")
+        if self.kind == "building":
+            ttk.Label(top, text="Level").pack(side="left")
+            v["level"].set(self.v_level.get() if getattr(self, "v_level", None) and self.v_level.get() in levels
+                           else (levels[0] if levels else ""))
+            ttk.Combobox(top, textvariable=v["level"], values=levels, state="readonly", width=28).pack(
+                side="left", padx=(4, 12))
+            for label, val in (("Recruit a unit", "recruit"), ("Capability (bonus...)", "capability"),
+                               ("Upgrades to", "upgrades"), ("Other line of the level", "level")):
+                ttk.Radiobutton(top, text=label, value=val, variable=v["place"], command=rebuild).pack(side="left")
+            v["place"].set("recruit")
+        else:
+            v["place"].set("unit")
+        body.pack(fill="x", pady=8)
+        ttk.Label(frm, text="The line:").pack(anchor="w")
+        preview.pack(anchor="w", pady=(0, 4))
+        problems.pack(anchor="w")
+        for x in v.values():
+            x.trace_add("write", refresh)
+
+        def ok():
+            t = text()
+            probs = E.check_text(self.mod, self.kind, t) if t else [(True, "empty line")]
+            place = v["place"].get()
+            if place == "upgrades" and (t not in levels or t == v["level"].get()):
+                probs.append((True, "pick another level of this chain"))
+            errs = [m for e, m in probs if e]
+            if errs:
+                messagebox.showerror("Add line", "\n".join(errs), parent=w)
+                return
+            op = {"at": a, "block": name, "place": "capability" if place == "recruit" else place,
+                  "level": v["level"].get() or None, "key": v["key"].get().strip() or None, "text": t}
+            if place == "recruit" and v_own.get():
+                op["own"] = [x for x in v["factions"].get().replace(",", " ").split() if x]
+            if self.kind == "unit":
+                op["place"], op["level"] = None, None
+            self.adds.append(op)
+            w.destroy()
+            self._changed()
+            self.show()
+        bar = ttk.Frame(frm)
+        bar.pack(anchor="e", pady=(8, 0))
+        ttk.Button(bar, text="Add", command=ok).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+        rebuild()
 
     # ---- pictures ----
     def _thumb(self, parent, path, size=(80, 100)):
@@ -271,7 +563,56 @@ class RecordEditor(ttk.Frame):
 
     # ---- writing ----
     def dirty(self):
-        return bool(self.changes or self.imports or self.copy_ops)
+        return bool(self.changes or self.imports or self.copy_ops or self.adds or self.removes)
+
+    def _check(self, mod, f, changes):
+        """Nothing is written while a changed or added line names what the mod has not
+        (a unit, a building level), or a chain's levels line and its level blocks differ."""
+        errs, notes = [], []
+        for ln, value in changes.items():
+            key = E.tokens(f.text(ln))[:1]
+            name = next((b[0] for b in self.blocks if b[1] <= ln < b[2]), "")
+            text = "%s %s" % (key[0] if key else "", value)
+            for e, m in E.check_text(mod, self.kind, text):
+                (errs if e else notes).append("%s, line %d: %s" % (name, ln + 1, m))
+            if self.kind == "building" and key == ["levels"]:
+                blk = next(b for b in self.blocks if b[1] <= ln < b[2])
+                have = [lv["name"] for lv in E.chain_tree(f, blk[1], blk[2])["levels"]]
+                if sorted(value.split()) != sorted(have):
+                    errs.append("%s: 'levels' must name its level blocks (%s); a new or renamed level: "
+                                "Copy as new building" % (name, " ".join(have)))
+        for op in self.adds:
+            for e, m in E.check_text(mod, self.kind, op["text"]):
+                (errs if e else notes).append("%s: %s" % (op["block"], m))
+        if errs:
+            raise ValueError("Nothing written:\n" + "\n".join(errs))
+        self._notes = notes
+
+    def _follow(self, plan, f, changes):
+        for n in getattr(self, "_notes", []):
+            plan.warn(None, n)
+        from .roster import copy_cards, covers
+        for ln, value in changes.items():
+            key = E.tokens(f.text(ln))[:1]
+            old = E.strip_comment(f.text(ln)).strip()[len(key[0]):].strip() if key else ""
+            new = " ".join(value.split())
+            if self.kind == "unit" and key == ["type"] and new != old:
+                E.rename_unit(plan, old, new)
+            elif self.kind == "unit" and key == ["dictionary"] and new != old:
+                E.rename_dictionary(plan, old, new)
+            elif self.kind == "unit" and key == ["ownership"]:
+                was = [x for x in old.replace(",", " ").split() if x]
+                now = [x for x in new.replace(",", " ").split() if x]
+                blk = next(b for b in self.blocks if b[1] <= ln < b[2])
+                dic = next((E.tokens(f.text(i))[1] for i in range(blk[1], blk[2])
+                            if E.tokens(f.text(i))[:1] == ["dictionary"] and len(E.tokens(f.text(i))) > 1), None)
+                facs = plan.mod.factions()
+                owners = [x for x, c in facs if covers(was, x, c)]
+                for fac, cult in facs:
+                    if covers(now, fac, cult) and not covers(was, fac, cult) and fac != "slave" and dic:
+                        copy_cards(plan, fac, dic, owners)
+            elif self.kind == "building" and key == ["building"] and new != old:
+                E.rename_chain(plan, old, new)
 
     def copy_dialog(self):
         """A new unit (building chain) made from the one on show: new names, then Apply."""
@@ -333,13 +674,34 @@ class RecordEditor(ttk.Frame):
         plan = Plan(mod, self.kind + "s", self.kind + "s", {})
         path = mod.file("edu" if self.kind == "unit" else "edb")
         f = mod.load(path)
+        changes = {ln: v for ln, v in self.changes.items() if ln not in self.removes}
+        self._check(mod, f, changes)
         by_line = {}
         for name, a, b in self.blocks:
-            for ln in self.changes:
+            for ln in changes:
                 if a <= ln < b:
-                    by_line.setdefault(name, {})[ln] = self.changes[ln]
+                    by_line.setdefault(name, {})[ln] = changes[ln]
         for name, ch in by_line.items():
             E.apply_fields(plan, path, ch, "%s %s" % (self.kind, name))
+        # what the changed fields drag along (names used elsewhere, new owners' cards)
+        self._follow(plan, f, changes)
+        # lines added and removed: the blocks are found by their first line (a renamed
+        # unit or chain keeps it), so this works on the file with the fields changed
+        g = plan.edit(path)
+        now = {b[1]: b[0] for b in (E.unit_blocks(g) if self.kind == "unit" else E.building_blocks(g))}
+        adds = [dict(op, block=now.get(op["at"], op["block"])) for op in self.adds]
+        E.restructure(plan, path, self.kind, adds, sorted(self.removes))
+        from .roster import copy_cards, dictionary, _find_unit, own_unit
+        for op in self.adds:                            # a recruit line's factions that do not own the unit
+            if not op.get("own"):
+                continue
+            unit = E.re.match(r'\s*recruit\s+"([^"]+)"', op["text"]).group(1)
+            edu = plan.edit(mod.file("edu"))
+            blk = _find_unit(edu, unit)
+            facs = dict(mod.factions())
+            for fac in op["own"]:
+                if fac in facs and own_unit(plan, fac, unit, True):
+                    copy_cards(plan, fac, dictionary(edu, blk))
         for src, targets, size in self.imports:
             E.import_picture(plan, src, targets, size)
         for src, new, d in self.copy_ops:                 # after the field changes: copies add lines

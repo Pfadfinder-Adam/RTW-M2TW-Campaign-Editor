@@ -15,6 +15,7 @@ reads them from, in the format the mod's own pictures have.
 
 import io
 import os
+import re
 
 from .textio import strip_comment, tokens
 
@@ -58,6 +59,44 @@ def building_blocks(f):
             out.append(tuple(cur))
             cur, depth = None, 0
     return out
+
+
+def chain_tree(f, start, end):
+    """The shape of a building chain's block [start, end):
+    {'levels_line': i, 'levels': [{'name', 'head', 'open', 'close',
+     'capability': (open, close) or None, 'upgrades': (open, close) or None}]}
+    - 'head' is the '<level> requires ...' line, open/close its braces' lines.
+    Braces inside one line ('factions { a, b, }') do not count."""
+    out = {"levels_line": None, "levels": []}
+    stack = []                     # [(key, head line, open line)]
+    key, key_line = None, None
+    names = []
+    for i in range(start, end):
+        code = RE_INLINE.sub("", strip_comment(f.text(i)))
+        s = code.strip()
+        word = s.replace("{", " ").replace("}", " ").split()
+        if word:
+            key, key_line = word[0], i
+            if key == "levels" and out["levels_line"] is None:
+                out["levels_line"] = i
+                names = word[1:]
+        for ch in code:
+            if ch == "{":
+                stack.append((key, key_line, i))
+            elif ch == "}" and stack:
+                k, head, op = stack.pop()
+                depth = len(stack)
+                if depth == 2 and k in names:
+                    lv = {"name": k, "head": head, "open": op, "close": i, "capability": None, "upgrades": None}
+                    lv.update(out.pop("_inner", {}))
+                    out["levels"].append(lv)
+                elif depth == 3 and k in ("capability", "upgrades"):
+                    out.setdefault("_inner", {})[k] = (op, i)
+    out.pop("_inner", None)
+    return out
+
+
+RE_INLINE = re.compile(r"\{[^{}]*\}")      # a list closed on its own line
 
 
 def fields(f, start, end):
@@ -366,3 +405,317 @@ def copy_building(plan, src_chain, new_chain, level_names):
                     n = names.get(("#%s_%s%s" % (cult, old, tail)).lower())
                     if n:
                         plan.copy(os.path.join(folder, n), os.path.join(folder, "#%s_%s%s" % (cult, new, tail)))
+
+
+# ---------------------------------------------------------------------------
+# Lines added and removed, and what a change drags along
+# ---------------------------------------------------------------------------
+# lines that hold a block together: never removed by hand
+FIXED_UNIT = {"type", "dictionary"}
+FIXED_BUILDING = {"building", "levels", "capability", "upgrades"}
+PLACES = ("capability", "upgrades", "level")
+
+
+def _indent(f, a, b):
+    """The indent of the lines inside braces opened on line a and closed on line b."""
+    for i in range(a + 1, b):
+        s = strip_comment(f.text(i))
+        if s.strip() and s.strip() not in ("{", "}"):
+            return s[:len(s) - len(s.lstrip())]
+    close = f.text(b)
+    lead = close[:len(close) - len(close.lstrip())]
+    return lead + ("\t" if "\t" in lead else "    ")
+
+
+def line_place(f, kind, block, place=None, level=None, key=None):
+    """(position, [lines]) for a new line in a unit block or a building chain:
+    position = the line it goes before; lines = a function text -> the lines to
+    insert (with a capability / upgrades block around it when the level has none)."""
+    name, a, b = block
+    if kind == "unit":
+        last = same = None
+        for i in range(a, b):
+            if strip_comment(f.text(i)).strip():
+                last = i
+                if key and tokens(f.text(i))[:1] == [key]:
+                    same = i                       # next to the lines of its kind (officer, officer...)
+        at = (same if same is not None else last if last is not None else a) + 1
+        ind = f.text(a)[:len(f.text(a)) - len(f.text(a).lstrip())]
+        return at, lambda text: [ind + text]
+    tree = chain_tree(f, a, b)
+    lv = next((x for x in tree["levels"] if x["name"] == level), None)
+    if lv is None:
+        raise ValueError("no level %s in %s" % (level, name))
+    if place in ("capability", "upgrades"):
+        if lv[place]:
+            op, cl = lv[place]
+            ind = _indent(f, op, cl)
+            return cl, lambda text: [ind + text]
+        ind = _indent(f, lv["open"], lv["close"])
+        inner = ind + ("\t" if "\t" in ind else "    ")
+        at = lv["open"] + 1 if place == "capability" else lv["close"]
+        return at, lambda text: [ind + place, ind + "{", inner + text, ind + "}"]
+    ind = _indent(f, lv["open"], lv["close"])
+    at = lv["close"]
+    if lv["upgrades"]:                    # before 'upgrades', where the level's own lines are
+        at = lv["upgrades"][0]
+        if tokens(f.text(at))[:1] != ["upgrades"] and tokens(f.text(at - 1))[:1] == ["upgrades"]:
+            at -= 1
+    return at, lambda text: [ind + text]
+
+
+def removable(kind, fd, tree=None, required=()):
+    """Why a field's line may not be removed, or None. required: the keys every unit
+    (every building level) of the mod has - the game expects them."""
+    fixed = FIXED_UNIT if kind == "unit" else FIXED_BUILDING
+    if fd.key in fixed:
+        return "%s holds the block together" % fd.key
+    if tree and any(lv["head"] == fd.line for lv in tree["levels"]):
+        return "a level's own line - remove the level from 'levels' by copying the chain instead"
+    if fd.key in required and (kind == "unit" or fd.depth == 3):
+        return "every %s has a '%s' line" % ("unit" if kind == "unit" else "building level", fd.key)
+    return None
+
+
+def required_keys(f, kind):
+    """The keys every unit block has (kind 'unit'), or every building level has on its
+    own (not inside capability / upgrades)."""
+    sets = []
+    if kind == "unit":
+        for _, a, b in unit_blocks(f):
+            sets.append({fd.key for fd in fields(f, a, b)})
+    else:
+        for _, a, b in building_blocks(f):
+            for lv in chain_tree(f, a, b)["levels"]:
+                inner = set()
+                for p in ("capability", "upgrades"):
+                    if lv[p]:
+                        inner.update(range(lv[p][0], lv[p][1] + 1))
+                sets.append({tokens(f.text(i))[0] for i in range(lv["open"] + 1, lv["close"])
+                             if i not in inner and tokens(f.text(i)) and tokens(f.text(i))[0] not in ("{", "}")})
+    return set.intersection(*sets) if sets else set()
+
+
+def restructure(plan, path, kind, adds, removes):
+    """adds = [{'block': name, 'place', 'level', 'key', 'text'}], removes = [line] (lines
+    of the file as it is on disk; field changes keep the line count). Every insert and
+    removal is placed first, then done from the bottom up."""
+    if not adds and not removes:
+        return
+    f = plan.edit(path)
+    blocks = unit_blocks(f) if kind == "unit" else building_blocks(f)
+    by = {b[0]: b for b in blocks}
+    work = []                                   # (position, order, 'del' | lines)
+    for n, op in enumerate(adds):
+        blk = by.get(op["block"])
+        if blk is None:
+            raise ValueError("no %s %s" % (kind, op["block"]))
+        at, make = line_place(f, kind, blk, op.get("place"), op.get("level"), op.get("key"))
+        work.append((at, 1, n, make(op["text"].strip())))
+        plan.note(f, "%s %s%s: + %s" % (kind, op["block"], "/" + op["level"] if op.get("level") else "",
+                                         op["text"].strip()))
+    for ln in sorted(set(removes)):
+        work.append((ln, 0, 0, "del"))
+        plan.note(f, "%s: - %s" % (_block_of(blocks, ln), " ".join(strip_comment(f.text(ln)).split())))
+    # bottom first; at one position the removal before the inserts, inserts in the order given
+    work.sort(key=lambda w: (-w[0], w[1], -w[2]))
+    for at, _, _, what in work:
+        if what == "del":
+            f.delete(at, at + 1)
+        else:
+            f.insert(at, what)
+
+
+def _block_of(blocks, line):
+    return next(("%s" % b[0] for b in blocks if b[1] <= line < b[2]), "line %d" % (line + 1))
+
+
+def keys_seen(f, kind, place=None):
+    """{key: an example value} of the lines the mod has in that place: unit lines,
+    capability lines (not recruit), or a level's own lines."""
+    out = {}
+    if kind == "unit":
+        for i in range(len(f.raw)):
+            s = strip_comment(f.text(i)).strip()
+            if s:
+                k, _, v = s.partition(" ") if " " in s else s.partition("\t")
+                out.setdefault(k, v.strip())
+        out.pop("type", None)
+        return out
+    for chain, a, b in building_blocks(f):
+        for lv in chain_tree(f, a, b)["levels"]:
+            if place == "capability" and lv["capability"]:
+                rng = range(lv["capability"][0] + 1, lv["capability"][1])
+            elif place == "level":
+                inner = set()
+                for p in ("capability", "upgrades"):
+                    if lv[p]:
+                        inner.update(range(lv[p][0] - 1, lv[p][1] + 1))
+                rng = [i for i in range(lv["open"] + 1, lv["close"]) if i not in inner]
+            else:
+                continue
+            for i in rng:
+                s = strip_comment(f.text(i)).strip()
+                if s and s not in ("{", "}"):
+                    k, _, v = s.replace("\t", " ").partition(" ")
+                    if k != "recruit":
+                        out.setdefault(k, v.strip())
+    return out
+
+
+def conditions_seen(f):
+    """The words that follow 'requires' / 'and' / 'or' / 'not' in the buildings file:
+    what a requirement may name in this mod (factions, building_present_min_level,
+    hidden_resource, marian_reforms...)."""
+    seen = {}
+    for l in f.texts():
+        for m in re.finditer(r"\b(?:requires|and|or|not)\s+([a-z_]+)", strip_comment(l)):
+            seen[m.group(1)] = seen.get(m.group(1), 0) + 1
+    seen.pop("not", None)
+    return sorted(seen, key=lambda k: -seen[k])
+
+
+# ---- checks ----
+RE_PRESENT = re.compile(r"\bbuilding_present(?:_min_level)?\s+([A-Za-z0-9_]+)(?:\s+([A-Za-z0-9_+\-]+))?")
+
+
+def check_text(mod, kind, text, chain=None, levels=()):
+    """Problems of a line about to be written: a recruit line naming no unit, an
+    upgrade to a level the chain has not, a requirement naming a building or a
+    faction the mod has not. [(error?, message)]."""
+    out = []
+    s = strip_comment(text).strip()
+    if not s:
+        return [(True, "empty line")]
+    if kind == "building":
+        m = re.match(r'recruit\s+"([^"]+)"\s*(\S*)', s)
+        if s.startswith("recruit"):
+            if not m:
+                out.append((True, 'a recruit line is: recruit "unit name" <experience> requires factions { ... }'))
+            else:
+                units = unit_names(mod)
+                if m.group(1) not in units:
+                    close = [u for u in units if u.lower() == m.group(1).lower()]
+                    out.append((True, "no unit '%s' in export_descr_unit.txt%s" % (
+                        m.group(1), " (did you mean '%s'?)" % close[0] if close else "")))
+                if not m.group(2).isdigit():
+                    out.append((True, "the experience after the unit's name must be a number (0-9)"))
+        edb = mod.file("edb")
+        chains = {}
+        if edb:
+            f = mod.load(edb)
+            for c, a, b in building_blocks(f):
+                chains[c] = [lv["name"] for lv in chain_tree(f, a, b)["levels"]]
+        for m in RE_PRESENT.finditer(s):
+            if m.group(1) not in chains:
+                out.append((True, "no building chain '%s'" % m.group(1)))
+            elif m.group(2) and "_min_level" in m.group(0) and m.group(2) not in chains[m.group(1)]:
+                out.append((True, "%s has no level '%s'" % (m.group(1), m.group(2))))
+    from .roster import factions_in
+    names = factions_in(s)
+    if names:
+        known = {"all"} | {n for n, _ in mod.factions()} | {c for _, c in mod.factions() if c}
+        bad = [n for n in names if n not in known]
+        if bad:
+            out.append((False, "not a faction or culture of this mod: %s" % ", ".join(bad)))
+    return out
+
+
+def unit_names(mod):
+    edu = mod.file("edu")
+    return [b[0] for b in unit_blocks(mod.load(edu))] if edu else []
+
+
+# ---- what a rename drags along ----
+def _unit_span(line):
+    """(start, end) of the unit name in 'unit <name>[,] exp ...' lines (descr_strat,
+    descr_mercenaries, descr_rebel_factions), or None."""
+    m = re.match(r"^(\s*unit\s+)(.+?)(\s*,|\s+exp\s+\d|\s*;|\s*$)", line)
+    return (m.end(1), m.end(2)) if m else None
+
+
+def rename_unit(plan, old, new):
+    """A unit's type renamed: its recruit lines, the armies in every campaign's
+    descr_strat, the mercenary pools and the rebels' lists follow."""
+    mod = plan.mod
+    if new in unit_names(mod):
+        raise ValueError("a unit '%s' exists already" % new)
+    edb = mod.file("edb")
+    if edb:
+        e = plan.edit(edb)
+        n = 0
+        for i in range(len(e.raw)):
+            t = e.text(i)
+            if tokens(t)[:1] == ["recruit"] and '"%s"' % old in t:
+                e.set(i, t.replace('"%s"' % old, '"%s"' % new, 1))
+                n += 1
+        if n:
+            plan.note(e, "recruit lines follow the new name %s (%d)" % (new, n))
+    files = [mod.campaign_file(c, "descr_strat.txt") for c in mod.campaigns()] + \
+        [mod.campaign_file(c, "descr_mercenaries.txt") for c in mod.campaigns()] + \
+        [os.path.join(mod.data, "descr_rebel_factions.txt")]
+    seen = set()
+    for p in files:
+        if not p or not os.path.isfile(p) or p in seen:
+            continue
+        seen.add(p)
+        f = plan.edit(p)
+        n = 0
+        for i in range(len(f.raw)):
+            t = f.text(i)
+            sp = _unit_span(t)
+            if sp and t[sp[0]:sp[1]] == old:
+                f.set(i, t[:sp[0]] + new + t[sp[1]:])
+                n += 1
+        if n:
+            plan.note(f, "%d line(s) follow the unit's new name %s" % (n, new))
+
+
+def rename_dictionary(plan, old, new):
+    """A unit's dictionary renamed: its names and descriptions and its cards are
+    copied under the new name (the old ones stay; nothing else reads them)."""
+    mod = plan.mod
+    copy_text_entries(plan, _text_file(mod, "export_units.txt"), {
+        old: new, old + "_descr": new + "_descr", old + "_descr_short": new + "_descr_short"})
+    from .moddata import _ci
+    for sub, pattern in (("units", "#%s.tga"), ("unit_info", "%s_info.tga")):
+        folder = os.path.join(mod.data, "ui", sub)
+        if not os.path.isdir(folder):
+            continue
+        for fac in sorted(os.listdir(folder)):
+            d = os.path.join(folder, fac)
+            src = _ci(d, pattern % old) if os.path.isdir(d) else None
+            if src and not _ci(d, pattern % new):
+                plan.copy(src, os.path.join(d, pattern % new))
+
+
+def rename_chain(plan, old, new):
+    """A building chain renamed: the towns' buildings in every campaign's descr_strat
+    and the requirements naming it (building_present...) follow."""
+    mod = plan.mod
+    e = plan.edit(mod.file("edb"))
+    if any(b[0] == new for b in building_blocks(mod.load(mod.file("edb")))):   # the file as it is on disk
+        raise ValueError("a building chain '%s' exists already" % new)
+    rx = re.compile(r"(\bbuilding_present(?:_min_level)?\s+)%s\b" % re.escape(old))
+    n = 0
+    for i in range(len(e.raw)):
+        t = e.text(i)
+        if rx.search(t):
+            e.set(i, rx.sub(lambda m: m.group(1) + new, t))
+            n += 1
+    if n:
+        plan.note(e, "%d requirement(s) follow the chain's new name %s" % (n, new))
+    for c in mod.campaigns():
+        p = mod.campaign_file(c, "descr_strat.txt")
+        if not p:
+            continue
+        f = plan.edit(p)
+        k = 0
+        for i in range(len(f.raw)):
+            t = f.text(i)
+            tk = tokens(t)
+            if tk[:2] == ["type", old] and len(tk) > 2:
+                f.set(i, re.sub(r"(\btype\s+)%s\b" % re.escape(old), lambda m: m.group(1) + new, t, count=1))
+                k += 1
+        if k:
+            plan.note(f, "%d town building(s) follow the chain's new name %s" % (k, new))

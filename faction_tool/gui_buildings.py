@@ -42,6 +42,7 @@ class BuildingsEditor(ttk.Frame):
         self._width = 0
         canvas.bind("<Configure>", self._resized, add="+")
         self.bpics = None
+        self.roster = {}                  # {(chain, level): give?} from the Roster tab
 
     def _resized(self, e):
         if abs(e.width - self._width) > 40 and getattr(self, "buildings", None) is not None:
@@ -82,7 +83,9 @@ class BuildingsEditor(ttk.Frame):
         plus chains the town already has."""
         out = []
         for b in self.buildings:
-            lv = [l for l in b.levels if available(l, self.faction, self.culture, self.template)]
+            # a level given or taken on the Roster tab counts as the faction's list will be
+            lv = [l for l in b.levels if self.roster.get((b.name, l.name),
+                                                         available(l, self.faction, self.culture, self.template))]
             if lv or b.name in self.current:
                 out.append((b, lv))
         return out

@@ -1037,6 +1037,173 @@ class ToolTest(unittest.TestCase):
         self.assertIn("reports/report-7-26_09_27.txt", names)        # the newest, without the nick
         self.assertEqual(len([n for n in names if n.startswith("reports/")]), 1)
 
+    # ---- 0.5.0: roster, lines added / removed, renames, mod list, file origins ----
+    RICH_EDB = """building barracks
+{
+    levels muster big_barracks
+    {
+        muster requires factions { barbarian, }
+        {
+            capability
+            {
+                recruit "rebel spear"  0  requires factions { slave, }
+            }
+            construction  1
+            cost  100
+            settlement_min town
+            upgrades
+            {
+                big_barracks
+            }
+        }
+        big_barracks requires factions { barbarian, }
+        {
+            capability
+            {
+                recruit "rebel spear"  1  requires factions { slave, }
+            }
+            construction  2
+            cost  200
+            settlement_min town
+        }
+    }
+}
+building shrine
+{
+    levels altar
+    {
+        altar requires factions { alpha, } and building_present_min_level barracks muster
+        {
+            capability
+            {
+                happiness_bonus bonus 1
+            }
+            construction  1
+            cost  50
+            settlement_min town
+        }
+    }
+}
+"""
+
+    def _rich(self):
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"), self.RICH_EDB)
+        write(os.path.join(d, "ui", "units", "slave", "#rebel_spear.tga"), "spear card")
+        write(os.path.join(d, "ui", "unit_info", "slave", "rebel_spear_info.tga"), "spear info")
+        return ModData(self.root)
+
+    def test_roster_give_and_take_keep_every_place_in_step(self):
+        from faction_tool import roster as R
+        from faction_tool.edit import edit
+        mod = self._rich()
+        before = tree_hash(self.root)
+        r = R.roster(mod, "alpha")
+        self.assertEqual({u["type"]: u["has"] for u in r["units"]}, {"alpha general": "own", "rebel spear": None})
+        self.assertEqual({(b["chain"], b["level"]): b["has"] for b in r["buildings"]},
+                         {("barracks", "muster"): None, ("barracks", "big_barracks"): None, ("shrine", "altar"): "own"})
+        plan = edit(mod, "test", "alpha", {"roster": {"unit:rebel spear": True, "building:barracks:muster": True,
+                                                      "unit:alpha general": False}})
+        edu = plan.files[mod.file("edu")].dump().decode("latin-1")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn("ownership\tslave, alpha", edu)                     # given: owned...
+        self.assertEqual(edb.count('recruit "rebel spear"  0  requires factions { slave, alpha, }'), 1)  # ...recruited
+        self.assertIn("muster requires factions { barbarian, alpha, }", edb)    # ...and the level it needs
+        self.assertIn("big_barracks requires factions { barbarian, }", edb)
+        self.assertIn("ownership\tslave", edu.split("type\t\trebel spear")[0])  # taken: never an empty line
+        self.assertTrue(any("start with alpha general" in m for _, m in plan.warnings), plan.report())
+        self.assertTrue(any("big_barracks" not in m for _, m in plan.notes))
+        plan.apply()
+        ui = os.path.join(mod.data, "ui")
+        self.assertEqual(open(os.path.join(ui, "units", "alpha", "#rebel_spear.tga")).read().strip(), "spear card")
+        self.assertTrue(os.path.exists(os.path.join(ui, "unit_info", "alpha", "rebel_spear_info.tga")))
+        restore(mod, backups(mod)[0])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        self.assertEqual(before, after)
+
+    def test_roster_take_a_culture_writes_the_others_out(self):
+        from faction_tool import roster as R
+        from faction_tool.plan import Plan
+        mod = self._rich()
+        plan = Plan(mod, "x", "x")
+        R.set_level(plan, "slave", "barracks", "muster", give=False)      # slave is barbarian: the culture goes
+        R.set_level(plan, "alpha", "shrine", "altar", give=False)
+        edb = plan.files[mod.file("edb")].texts()
+        self.assertIn("        muster requires factions { }", edb)             # no other barbarian faction
+        self.assertIn("        altar requires factions { } and building_present_min_level barracks muster", edb)
+        self.assertTrue(plan.warnings)
+
+    def test_lines_added_and_removed_in_their_place(self):
+        from faction_tool import editors as E
+        from faction_tool.plan import Plan
+        mod = self._rich()
+        plan = Plan(mod, "b", "b")
+        edb = mod.file("edb")
+        f = mod.load(edb)
+        rm = next(i for i, l in enumerate(f.texts()) if "recruit" in l and " 1 " in l)
+        E.restructure(plan, edb, "building", [
+            {"block": "barracks", "place": "capability", "level": "muster", "text": 'recruit "alpha general"  0'},
+            {"block": "barracks", "place": "upgrades", "level": "big_barracks", "text": "muster"},
+            {"block": "shrine", "place": "level", "level": "altar", "text": "fake 1"}], [rm])
+        g = plan.files[edb]
+        t = g.texts()
+        i = t.index('                recruit "alpha general"  0')
+        self.assertEqual(t[i - 1].strip(), 'recruit "rebel spear"  0  requires factions { slave, }')
+        self.assertFalse(any('"rebel spear"  1' in l for l in t))               # removed
+        self.assertIn("            upgrades", t)
+        self.assertEqual(t.count("            upgrades"), 2)                    # a block made for the new one
+        blocks = E.building_blocks(g)
+        tree = E.chain_tree(g, *next(b for b in blocks if b[0] == "barracks")[1:])
+        self.assertEqual([lv["name"] for lv in tree["levels"]], ["muster", "big_barracks"])
+        self.assertIsNotNone(tree["levels"][1]["upgrades"])
+        self.assertEqual(t[t.index("            fake 1") + 1].strip(), "}")        # inside the level
+        # checks: a recruit line naming no unit, an unknown level
+        self.assertTrue(any(e for e, _ in E.check_text(mod, "building", 'recruit "no such unit"  0')))
+        self.assertTrue(any(e for e, _ in E.check_text(mod, "building",
+                                                        "x requires building_present_min_level barracks nope")))
+        self.assertFalse(E.check_text(mod, "building", 'recruit "rebel spear"  0  requires factions { alpha, }'))
+        self.assertEqual(E.required_keys(g, "building") >= {"construction", "cost", "settlement_min"}, True)
+
+    def test_renamed_unit_and_chain_are_followed(self):
+        from faction_tool import editors as E
+        from faction_tool.plan import Plan
+        mod = self._rich()
+        plan = Plan(mod, "u", "u")
+        E.rename_unit(plan, "rebel spear", "rebel pike")
+        strat = plan.files[mod.campaign_file("test", "descr_strat.txt")].texts()
+        self.assertIn("unit\t\trebel pike\t\texp 0 armour 0 weapon_lvl 0", strat)
+        edb = "\n".join(plan.files[mod.file("edb")].texts())
+        self.assertEqual(edb.count('"rebel pike"'), 2)
+        self.assertNotIn('"rebel spear"', edb)
+        plan = Plan(mod, "c", "c")
+        E.rename_chain(plan, "barracks", "camp")
+        self.assertIn("building_present_min_level camp muster", "\n".join(plan.files[mod.file("edb")].texts()))
+        with self.assertRaises(ValueError):
+            E.rename_unit(Plan(mod, "u", "u"), "rebel spear", "alpha general")
+
+    def test_mod_list_of_a_game_folder(self):
+        from faction_tool.newmod import game_of, list_mods
+        game = os.path.join(self.root, "game")
+        for rel in ("data", "HLR/data", "bi/data", "mods/m2mod/data"):
+            write(os.path.join(game, rel, "descr_sm_factions.txt"), "faction a\n")
+        write(os.path.join(game, "RomeTW.exe"), "x")
+        write(os.path.join(game, "notamod", "readme.txt"), "x")
+        self.assertEqual([l for l, _ in list_mods(game)], ["(the game's own data)", "bi", "HLR", "mods/m2mod"])
+        self.assertEqual(game_of(os.path.join(game, "HLR", "data")), game)
+        self.assertEqual(game_of(os.path.join(game, "mods", "m2mod", "data")), game)
+
+    def test_file_origins_from_manifests(self):
+        from faction_tool.scan import Origins
+        p = os.path.join(self.root, "data", "x.txt")
+        write(p, "same")
+        md5 = hashlib.md5(open(p, "rb").read()).hexdigest()
+        size = os.path.getsize(p)
+        o = Origins({"data/x.txt": [size, md5], "data/y.txt": [5, "0"]}, {"data/z.txt": [size, md5]}, ["t"])
+        self.assertEqual(o.classify("data/X.txt", p, size), "game")        # the game's paths ignore case
+        self.assertEqual(o.classify("data/y.txt", p, size), "changed")
+        self.assertEqual(o.classify("data/z.txt", p, size), "rex")
+        self.assertEqual(o.classify("data/new.txt", p, size), "own")
+
 
 if __name__ == "__main__":
     unittest.main()

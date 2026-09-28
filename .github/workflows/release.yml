@@ -22,7 +22,8 @@ jobs:
           python-version: "3.12"
       - run: python -m unittest discover -s tests
       - run: pip install pyinstaller pillow
-      - run: pyinstaller --onefile --windowed --name RTW-Campaign-Editor rtw_faction_tool.py
+      # the game manifests go inside the exe: Scan tells game, REX and mod files apart
+      - run: pyinstaller --onefile --windowed --name RTW-Campaign-Editor --add-data "docs/reference/*.json.gz;reference" rtw_faction_tool.py
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ inputs.version }}

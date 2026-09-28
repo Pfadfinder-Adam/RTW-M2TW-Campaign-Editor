@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.5.0 - 2026-09-28
+
+### New
+- **Roster tab** (Edit faction): every unit and building level of the mod and whether
+  the faction has it (by its own name, its culture or everyone); **Give / Take away**.
+  Apply keeps every place tied to it in step: a unit's `ownership` (export_descr_unit),
+  the `recruit` lines that let the faction train it (export_descr_buildings) and its
+  cards (ui/units, ui/unit_info, copied from an owner's); a building level's
+  `requires factions` list. When only this faction loses what its culture (or everyone)
+  had, the list is written out as the other factions. The preview warns about armies
+  and towns that already hold it, and about a unit no building level of the faction
+  recruits. The Units & armies and Buildings tabs offer what the faction will have.
+- **Add and remove lines** in the Unit and Building editors: **Add line...** puts a recruit
+  line, a capability (bonus), an upgrade or another level line in its place in a
+  building level (a capability / upgrades block is made when the level has none), or
+  any key the mod's units use in a unit. Factions named on a new recruit line that do
+  not own the unit get it and its cards. **x** removes a line - never one that every
+  unit (building level) of the mod has.
+- **Changes drag along what is tied to them**: a unit's new `type` reaches its recruit
+  lines, the armies of every campaign, the mercenary pools and the rebels; a new
+  `dictionary` copies its texts and cards; factions added to `ownership` get the cards;
+  a building chain's new name reaches the towns of every campaign and the requirements
+  naming it. A line naming a unit, a building chain or level the mod has not is refused;
+  a `levels` line must name the chain's level blocks.
+- **Tied to it**: above the lines, who owns and recruits the unit (or may build each
+  level), what requires the chain, and how many armies / towns hold it at the start.
+- **The mod is remembered**: the last mod and each mod's campaign load at the next
+  start; **Mod** at the top lists every mod of the game folder (the game, bi, alexander,
+  HLR, the mods made with New mod folder, Medieval II's mods/...).
+- **Scan mod tells files apart**: the game's own (unchanged), changed by the mod, REX's,
+  or the mod's own - from the game manifests, which now come inside the exe (a manifest
+  made on your PC with Game manifest... wins). Each unhandled mention shows which it is.
+
 ## 0.4.2 - 2026-09-28
 
 - **New regions and painted borders reach everything tied to them**: the

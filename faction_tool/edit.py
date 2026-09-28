@@ -103,6 +103,14 @@ def edit(mod, campaign, faction, opts):
     if opts.get("relations"):
         from .diplomacy import apply_opts
         apply_opts(plan, campaign, faction, opts["relations"])
+    if opts.get("roster"):
+        from .roster import apply as apply_roster
+        apply_roster(plan, faction, opts["roster"], campaign)
+        taken = {k[5:] for k, v in opts["roster"].items() if k.startswith("unit:") and v is False}
+        for region, units in (opts.get("garrisons") or {}).items():
+            gone = sorted(set(units) & taken)
+            if gone:
+                plan.warn(None, "%s's new garrison has %s, taken away on the Roster" % (region, ", ".join(gone)))
     from .factionart import apply_opts as apply_art
     plan.opts["_primary_changed"] = bool(opts.get("primary_colour")) and \
         tuple(opts["primary_colour"]) != tuple(now.get("primary_colour") or ())
@@ -577,7 +585,8 @@ def _buildings(plan, f, s):
             lv = b.level(lv_name) if b else None
             if known and not lv:
                 raise ValueError("%s: %s %s is not in export_descr_buildings.txt" % (region, chain, lv_name))
-            if lv and not available(lv, plan.new, culture):
+            given = (plan.opts.get("roster") or {}).get("building:%s:%s" % (chain, lv_name))
+            if lv and not (given if given is not None else available(lv, plan.new, culture)):
                 plan.warn(f, "%s: %s is not in %s's faction list (%s)" % (region, lv_name, plan.new, lv.requires))
             if lv and not ranks_ok(lv, level):
                 plan.warn(f, "%s: %s needs a %s, the settlement is a %s" % (region, lv_name, lv.settlement_min, level))

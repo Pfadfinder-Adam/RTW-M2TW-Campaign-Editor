@@ -34,6 +34,40 @@ def game_root_of(data_dir):
     return os.path.dirname(base), os.path.basename(base)
 
 
+def game_of(data_dir):
+    """The game folder a data folder belongs to (Medieval II: <game>/mods/<mod>/data)."""
+    game = game_root_of(data_dir)[0]
+    if os.path.basename(game).lower() == "mods" and is_game(os.path.dirname(game)):
+        game = os.path.dirname(game)
+    return game
+
+
+def is_game(folder):
+    return bool(folder) and any(os.path.isfile(os.path.join(folder, e)) for e in GAME_EXES)
+
+
+def list_mods(game):
+    """[(label, data folder)] of what a game folder holds: the game's own data, the
+    expansions (bi, alexander), every mod folder with a data/descr_sm_factions.txt
+    of its own, and Medieval II's mods/<name>/data. Sorted: the game first."""
+    out = []
+    if not game or not os.path.isdir(game):
+        return out
+    if os.path.isfile(os.path.join(game, "data", "descr_sm_factions.txt")):
+        out.append(("(the game's own data)", os.path.join(game, "data")))
+    found = []
+    for parent, prefix in ((game, ""), (os.path.join(game, "mods"), "mods/")):
+        if not os.path.isdir(parent):
+            continue
+        for n in sorted(os.listdir(parent), key=str.lower):
+            if n == BACKUP_DIR or (not prefix and n.lower() in ("data", "mods")):
+                continue
+            d = os.path.join(parent, n, "data")
+            if os.path.isfile(os.path.join(d, "descr_sm_factions.txt")):
+                found.append((prefix + n, d))
+    return out + found
+
+
 def marker(mod_dir):
     try:
         with open(os.path.join(mod_dir, MARKER), encoding="utf-8") as f:

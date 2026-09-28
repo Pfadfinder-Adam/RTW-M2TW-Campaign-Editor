@@ -9,14 +9,14 @@ import traceback
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
-from . import log
+from . import log, settings
 from .build import build, template_display
 from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need, population_of, rank,
                         read_buildings, settlement_info)
 from .mapdata import CampaignMap, faction_colours
 from .moddata import ModData
 from .mapedit import orig as place_orig, place_problem, port_fleets, sea_spot
-from .newmod import create_mod, game_root_of
+from .newmod import create_mod, game_of, game_root_of, is_game, list_mods
 from .edit import edit as edit_faction, read_faction
 from .gui_buildings import BuildingsEditor
 from .gui_diplomacy import DiplomacyEditor, colour as dip_colour
@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.4.2"
+VERSION = "0.5.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW Campaign Editor"
 
@@ -38,6 +38,8 @@ HELP = """RTW Campaign Editor - how to use it
 START
   1. Close the game. Browse... to the mod's data folder (for example ...\\HLR\\data), press Load.
      Better: New mod folder... makes a copy of the mod to work on; the base stays untouched.
+     The tool remembers the mod and campaign for the next start; Mod at the top lists every
+     mod of that game folder (the game itself, bi, HLR, the mods made here) - pick one to load it.
   2. Pick the campaign (usually imperial_campaign).
   3. Pick the work at the top: New faction (pick a template to copy), Edit faction (pick
      the faction to change), Unit editor or Building editor.
@@ -65,6 +67,11 @@ THE TABS (in the order that works best)
   Art          every picture of the faction (buttons, logos, captain cards, leader picture...)
                with what it needs and Replace...; the campaign-select map drawn from its
                towns in a colour you pick.
+  Roster       (Edit) every unit and building level of the mod and whether the faction has it;
+               Give / Take away (or double click). Apply keeps everything tied to it in step:
+               a unit's ownership, the recruit lines that let the faction train it and its
+               cards; a level's 'requires factions' list. The Units and Buildings tabs offer
+               what the faction will have.
 
 UNIT EDITOR / BUILDING EDITOR
   Pick a unit (a building chain) on the left; every line of its block is a field - change
@@ -73,6 +80,15 @@ UNIT EDITOR / BUILDING EDITOR
   description pictures for every faction that owns the unit; building pictures per
   culture and level). Copy as new... makes a new unit (building chain) from the one on
   show: its lines, texts, pictures and recruit lines under the new names.
+  Add line... adds a line in its place: in a building level a recruit line (the unit, its
+  experience, the factions - who do not own the unit yet get it and its cards), a capability
+  (bonus), an upgrade or another line of the level; in a unit any key the mod's units use.
+  x on the left removes a line (not the ones every unit or level needs); lines to add are
+  green, to remove red. A changed or added line naming a unit or building the mod has not
+  is refused. What a change drags along is written too: a unit's new name reaches the recruit
+  lines, the armies of every campaign, the mercenary pools and the rebels; a new dictionary
+  copies its texts and cards; a chain's new name reaches the towns and the requirements.
+  "Tied to it" above the lines shows who owns / recruits / builds it and where it stands.
   Preview, then Apply writes it all with a backup; Restore undoes it.
 
   Only the map (regions, towns, ports, resources)? In New faction mode with no faction named the
@@ -93,6 +109,8 @@ KEYS
 WHEN SOMETHING GOES WRONG
   Log shows what the tool did and every error (faction_tool.log next to the exe).
   Check mod reads the whole mod and reports anything it cannot make sense of.
+  Scan mod lists every mention of the faction and tells each file apart: the game's own
+  (unchanged), changed by the mod, REX's, or the mod's own (manifests inside the tool).
   Tools > Save logs (zip) packs faction_tool.log with the game's system.log.txt and its
   newest crash report - send that file.
 
@@ -188,6 +206,7 @@ class App(tk.Tk):
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         self._res_placing, self._res_sel = None, None
         self.art_replace, self.sel_map = {}, {}      # Art tab: {path under data: picture}, {colour, off}
+        self.roster_set = {}            # Roster tab: {'unit:<type>' | 'building:<chain>:<level>': give?}
         self._region_point = None       # ('city' | 'port', region) waiting for a click
         self.undo_stack, self.redo_stack = [], []   # snapshots of what the window keeps (Ctrl+Z / Ctrl+Y)
         self.sizes = {}                 # {region: {'level', 'population'}} set by hand on the Buildings tab
@@ -205,7 +224,14 @@ class App(tk.Tk):
         pad = {"padx": 6, "pady": 3}
         top = ttk.Frame(self)
         top.pack(fill="x", **pad)
-        ttk.Label(top, text="Mod data folder").pack(side="left")
+        ttk.Label(top, text="Mod").pack(side="left")
+        # the mods of the game folder last used; picking one loads it
+        self.v_modpick = tk.StringVar()
+        self.cb_mods = ttk.Combobox(top, textvariable=self.v_modpick, state="readonly", width=22)
+        self.cb_mods.pack(side="left", padx=(4, 8))
+        self.cb_mods.bind("<<ComboboxSelected>>", lambda e: self.mod_picked())
+        self._mods = []
+        ttk.Label(top, text="data folder").pack(side="left")
         self.v_path = tk.StringVar()
         ttk.Entry(top, textvariable=self.v_path).pack(side="left", fill="x", expand=True, padx=6)
         ttk.Button(top, text="Browse...", command=self.browse).pack(side="left")
@@ -215,7 +241,7 @@ class App(tk.Tk):
         self.v_campaign = tk.StringVar()
         self.cb_campaign = ttk.Combobox(top, textvariable=self.v_campaign, state="readonly", width=24)
         self.cb_campaign.pack(side="left")
-        self.cb_campaign.bind("<<ComboboxSelected>>", lambda e: self.load_campaign())
+        self.cb_campaign.bind("<<ComboboxSelected>>", lambda e: self.campaign_picked())
         self.v_mode = tk.StringVar(value="new")
         # what the window works on: a new faction, an existing one, the units, the buildings
         work = ttk.Frame(self)
@@ -418,6 +444,11 @@ class App(tk.Tk):
         self.nb.add(tab, text="  Art  ")
         self.art_editor = ArtEditor(tab, self)
         self.art_editor.pack(fill="both", expand=True)
+        from .gui_roster import RosterEditor
+        tab = ttk.Frame(self.nb)
+        self.nb.add(tab, text="  Roster  ")
+        self.roster_editor = RosterEditor(tab, self)
+        self.roster_editor.pack(fill="both", expand=True)
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self.tab_opened())
         self._keys()
 
@@ -445,12 +476,14 @@ class App(tk.Tk):
         menu.add_command(label="Save logs (zip)...", command=self.save_logs)
         tools["menu"] = menu
         tools.pack(side="right")
-        self.status = tk.StringVar(value="Choose the mod's data folder (for example ...\\HLR\\data) and press Load.")
+        self.status = tk.StringVar(value="Pick the Mod, or Browse... to its data folder (for example ...\\HLR\\data) "
+                                         "and press Load.")
         ttk.Label(self, textvariable=self.status, anchor="w").pack(fill="x", padx=6, pady=(0, 6))
         self.status.trace_add("write", lambda *a: self._log_status())
         for k in ("name", "template"):
             self.v[k].trace_add("write", lambda *a: self.update_actions())
         self.update_actions()
+        self.after(50, self.load_last)
 
     def _build_units_tab(self):
         """Units & armies: the chosen towns on the left, their garrisons on the right."""
@@ -595,6 +628,7 @@ class App(tk.Tk):
         # the chains offer the levels of the settlement as it will be: set by hand, grown
         # by a picked governor's building, or as the file has it
         shown = size.get("level") or self._grown_level(self.buildings_picked.get(region), town_level)
+        self.buildings_editor.roster = self._roster_levels()
         self.buildings_editor.load(region, shown, self._edb, own, self.buildings_picked.get(region),
                                    self.mod.culture(template), self.v["name"].get().strip().lower() or template,
                                    template, self._bpics, changed)
@@ -673,6 +707,9 @@ class App(tk.Tk):
             return
         if tab == 5:
             self.art_editor.load()
+            return
+        if tab == 6:
+            self.roster_editor.load()
             return
         lb, load = {1: (self.lb_units, self.load_garrison), 2: (self.lb_build, self.load_buildings)}.get(tab, (None, None))
         if lb is not None and self.chosen and not lb.curselection():
@@ -753,6 +790,7 @@ class App(tk.Tk):
         self.garrison_editor.auto_text = ("unchanged - the town keeps its garrison" if edit else None)
         self.chosen, self.garrisons, self.buildings_picked, self.sizes = [], {}, {}, {}
         self.art_replace, self.sel_map = {}, {}
+        self.roster_set = {}
         self.editing_now = None
         self.char_moves = {}
         self.field, self._placing = [], None
@@ -796,7 +834,8 @@ class App(tk.Tk):
         self.v_give.set("slave")
         self.chosen = list(now.get("regions", []))
         self.garrisons, self.buildings_picked, self.sizes = {}, {}, {}
-        self.char_moves = {}
+        self.char_moves, self.roster_set = {}, {}
+        self.roster_editor.forget()
         self.field, self.removed_existing, self._placing = self._existing_field(faction), [], None
         self.dip_set.clear()
         self.refresh_field()
@@ -832,7 +871,7 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ undo / redo
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "place_moves", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions",
-                 "res_moves", "res_removed", "res_added", "region_tags", "art_replace", "sel_map")
+                 "res_moves", "res_removed", "res_added", "region_tags", "art_replace", "sel_map", "roster_set")
 
     def snapshot(self):
         st = {k: copy.deepcopy(getattr(self, k)) for k in self.UNDO_KEYS}
@@ -869,6 +908,31 @@ class App(tk.Tk):
             self.show_map()
         elif tab == 4:
             self.load_diplomacy()
+        elif tab == 6:
+            self.roster_editor.redraw()
+
+    def roster_changed(self):
+        """A unit or building level given or taken on the Roster tab: the garrison and
+        building pickers offer what the faction will have, not only what the files say."""
+        self.status.set("Roster: %d change(s) - Preview, then Apply changes." % len(self.roster_set))
+
+    def _roster_units(self, units):
+        """The faction's units as the Roster leaves them: given ones added, taken ones out."""
+        if not self.editing() or not self.roster_set:
+            return units
+        taken = {k[5:] for k, v in self.roster_set.items() if k.startswith("unit:") and v is False}
+        given = {k[5:] for k, v in self.roster_set.items() if k.startswith("unit:") and v is True}
+        have = {u.type for u in units}
+        out = [u for u in units if u.type not in taken]
+        if given - have and self.mod.file("edu"):
+            out += [u for u in read_units(self.mod.load(self.mod.file("edu"))) if u.type in given - have]
+        return out
+
+    def _roster_levels(self):
+        """{(chain, level): give?} picked on the Roster tab (Edit only)."""
+        if not self.editing():
+            return {}
+        return {tuple(k.split(":", 2)[1:]): v for k, v in self.roster_set.items() if k.startswith("building:")}
 
     def _in_editor(self):
         """The unit / building editors keep their own changes: Undo there would undo the
@@ -1604,10 +1668,44 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------------ loading
     def browse(self):
-        d = filedialog.askdirectory(title="The mod's data folder")
+        d = filedialog.askdirectory(title="The mod's data folder",
+                                    initialdir=settings.get("game") or "")
         if d:
             self.v_path.set(d)
             self.load()
+
+    def load_last(self):
+        """At start: the mod loaded last time, if its folder is still there."""
+        self.fill_mods(settings.get("game"))
+        last = settings.get("mod_data")
+        if last and os.path.isfile(os.path.join(last, "descr_sm_factions.txt")):
+            self.v_path.set(last)
+            self.load()
+
+    def fill_mods(self, game):
+        """The Mod list: what the game folder holds (the game, bi, HLR, mods made here...)."""
+        self._mods = list_mods(game) if game else []
+        self.cb_mods["values"] = [label for label, _ in self._mods]
+        here = os.path.normcase(os.path.abspath(self.mod.data)) if self.mod else None
+        self.v_modpick.set(next((label for label, d in self._mods
+                                 if here and os.path.normcase(os.path.abspath(d)) == here), ""))
+
+    def mod_picked(self):
+        d = next((d for label, d in self._mods if label == self.v_modpick.get()), None)
+        if d and (not self.mod or os.path.abspath(d) != os.path.abspath(self.mod.data)):
+            if self.undo_stack and not messagebox.askyesno(
+                    APP, "Load %s? The changes not written yet are dropped." % self.v_modpick.get()):
+                self.fill_mods(settings.get("game"))
+                return
+            self.v_path.set(d)
+            self.load()
+
+    def campaign_picked(self):
+        if self.mod:
+            camps = settings.get("campaigns") or {}
+            camps[self.mod.data] = self.v_campaign.get()
+            settings.put("campaigns", camps)
+        self.load_campaign()
 
     def load(self):
         try:
@@ -1618,9 +1716,18 @@ class App(tk.Tk):
             return
         self.v_path.set(self.mod.data)
         log.write("Load %s" % self.mod.data)
+        self.roster_editor.forget()
+        # remembered for the next start: this mod, its game folder, the campaign picked in it
+        game = game_of(self.mod.data)
+        settings.put("mod_data", self.mod.data)
+        if is_game(game):
+            settings.put("game", game)
+        self.fill_mods(settings.get("game"))
         camps = self.mod.campaigns()
         self.cb_campaign["values"] = camps
-        self.v_campaign.set("imperial_campaign" if "imperial_campaign" in camps else (camps[0] if camps else ""))
+        was = (settings.get("campaigns") or {}).get(self.mod.data)
+        self.v_campaign.set(was if was in camps else
+                            "imperial_campaign" if "imperial_campaign" in camps else (camps[0] if camps else ""))
         names = [n for n, _ in self.mod.factions() if n != "slave"]
         self.cb_template["values"] = names
         self.load_campaign()
@@ -1722,6 +1829,7 @@ class App(tk.Tk):
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         self._res_placing, self._res_sel, self._res_cache = None, None, None
         self.art_replace, self.sel_map = {}, {}
+        self.roster_set = {}
         self._cmap_for = None                  # the map is read again: after Apply towns may stand elsewhere
         self.undo_stack, self.redo_stack = [], []
         self.refresh_field()
@@ -2045,7 +2153,7 @@ class App(tk.Tk):
         if self._units_for != template:
             self._units_cache = faction_units(self.mod, template, mercs=True)
             self._units_for = template
-        units = self._units_cache
+        units = self._roster_units(self._units_cache)
         capital = self.v["capital"].get() or self.chosen[0]
         order = [capital] + [r for r in self.chosen if r != capital]      # as the build orders them
         heir_town = order[1] if self.v["heir_first"].get().strip() and len(order) > 1 else None
@@ -2177,7 +2285,8 @@ class App(tk.Tk):
             "regions": self._regions_opts(),
             "resources": self._resources_opts(),
             "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen},
-            "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()}}
+            "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()},
+            "roster": dict(self.roster_set)}
 
     def _places(self):
         return [{"what": w, "region": r, "to": xy} for (w, r), xy in self.place_moves.items()]
@@ -2319,7 +2428,7 @@ class App(tk.Tk):
 
     def game_manifest(self):
         """Fingerprint every file of the game (not of its mods) into rtw_manifest.json.gz."""
-        start = game_root_of(self.mod.data)[0] if self.mod else None
+        start = game_of(self.mod.data) if self.mod else settings.get("game")
         root = filedialog.askdirectory(title="The game folder (the one with RomeTW.exe / REX.exe)",
                                        initialdir=start or "")
         if not root:
@@ -2461,9 +2570,7 @@ class App(tk.Tk):
         newest REX crash report), found from the loaded mod's game folder."""
         game = mod_dir = None
         if self.mod:
-            game = game_root_of(self.mod.data)[0]
-            if os.path.basename(game).lower() == "mods":     # Medieval II: <game>/mods/<mod>/data
-                game = os.path.dirname(game)
+            game = game_of(self.mod.data)                    # Medieval II: <game>/mods/<mod>/data
             mod_dir = os.path.dirname(os.path.abspath(self.mod.data))
         stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         base = os.path.basename(mod_dir) if mod_dir else "tool"

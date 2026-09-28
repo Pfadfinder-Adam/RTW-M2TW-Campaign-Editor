@@ -123,10 +123,18 @@ class Scan:
         self.skipped = []                # text files too big or unreadable
         self.other_mods = []             # mod folders inside the scanned folder, left out
         self.rules = load_ignore(self.root)
+        self.origins = Origins.for_mod(mod)     # game / REX manifests: where each file comes from
+        self.origin = {}                 # rel path -> 'game' | 'changed' | 'rex' | 'own'
+        self.origin_bytes = Counter()
         self.user_dirs, self.user_files = [], 0     # left out by the ignore list
 
     def rel(self, path):
         return os.path.relpath(path, self.root).replace("\\", "/")
+
+    def rel_game(self, path):
+        """The path as the game's own install would have it: data/... from the mod's
+        data folder (a mod folder mirrors the game's layout)."""
+        return "data/" + os.path.relpath(path, self.mod.data).replace("\\", "/")
 
     # ---- the walk ----
     def run(self, progress=None):
@@ -161,6 +169,10 @@ class Scan:
                     self.user_files += 1
                     continue
                 self.files.append((rel, size))
+                if self.origins:
+                    o = self.origins.classify(self.rel_game(p), p, size)
+                    self.origin[rel] = o
+                    self.origin_bytes[o] += size
                 if word.search(os.path.splitext(n)[0]):
                     self.named.append(rel)
                 if os.path.splitext(n)[1].lower() not in TEXT_EXT:
@@ -283,6 +295,25 @@ class Scan:
         out.append("    by folder: " + ", ".join("%s %d" % (d, n) for d, n in top.most_common(20)))
         if self.skipped:
             out.append("    not read (binary or over 32 MB): %d text-type file(s)" % len(self.skipped))
+        if self.origins:
+            out.append("    where they come from (by %s):" % self.origins.label())
+            n = Counter(self.origin.values())
+            for o in ("game", "rex", "changed", "own"):
+                if n[o]:
+                    out.append("        %-44s %6d  (%.1f MB)" % (ORIGIN_TEXT[o], n[o], self.origin_bytes[o] / 1048576.0))
+            for o in ("changed", "own"):
+                folders = Counter()
+                for r, x in self.origin.items():
+                    if x == o and not r.lower().startswith("data/"):
+                        folders[r.split("/")[0]] += 1
+                    elif x == o:
+                        parts = r.split("/")
+                        folders["/".join(parts[:2]) if len(parts) > 2 else parts[0]] += 1
+                if folders:
+                    out.append("        %s by folder: %s" % (ORIGIN_TEXT[o].split(" (")[0], ", ".join(
+                        "%s %d" % kv for kv in folders.most_common(10))))
+        else:
+            out.append("    (no game manifest found: files are not told apart as the game's, REX's or the mod's own)")
 
         if self.other_mods:
             out.append("    other mods inside this folder, not scanned: " + ", ".join(self.other_mods))
@@ -308,7 +339,8 @@ class Scan:
         out.append("    check these by hand: a new faction may need an entry here too")
         for rel in groups["other"]:
             lines = self.hits[rel]
-            out.append("  %s  (%d line(s))" % (rel, len(lines)))
+            tag = ORIGIN_TAG.get(self.origin.get(rel), "")
+            out.append("  %s  (%d line(s))%s" % (rel, len(lines), tag))
             for no, l in lines[:samples]:
                 out.append("      %6d: %s" % (no, l.strip()[:140]))
             if len(lines) > samples:
@@ -352,6 +384,119 @@ class Scan:
 
 def scan(mod, faction, campaign=None, progress=None):
     return Scan(mod, faction, campaign).run(progress)
+
+
+# ---------------------------------------------------------------------------
+# Where a mod's file comes from: the game's manifests (a clean install and REX)
+# ---------------------------------------------------------------------------
+ORIGIN_TEXT = {"game": "game files, unchanged", "rex": "REX's files (the 64-bit engine's own)",
+               "changed": "game files changed by the mod", "own": "the mod's own files (not in the game)"}
+ORIGIN_TAG = {"game": "  [the game's own file, unchanged]", "rex": "  [REX's file]",
+              "changed": "  [game file changed by the mod]", "own": "  [the mod's own file]"}
+
+
+def reference_dir():
+    """The folder with the manifests that come with the tool (docs/reference in the
+    source, 'reference' inside the exe)."""
+    import sys
+    base = getattr(sys, "_MEIPASS", None)
+    if base:
+        return os.path.join(base, "reference")
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "reference")
+
+
+def _load_manifest(path):
+    import gzip
+    import json
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            d = json.load(f)
+        return {k.lower(): v for k, v in d.get("files", {}).items()}
+    except (OSError, ValueError):
+        return None
+
+
+class Origins:
+    """Tells a file apart: the game's own (as in a clean install), REX's, a game file
+    the mod changed, or the mod's own. Sizes first; a file is read (md5) only when
+    its size matches."""
+    _cache = {}
+
+    def __init__(self, game, rex, names):
+        self.game, self.rex, self.names = game or {}, rex or {}, names
+
+    def label(self):
+        return " + ".join(self.names)
+
+    @classmethod
+    def for_mod(cls, mod):
+        """The manifests for the game the mod belongs to: the one made on the user's own
+        PC (<game>/rtw_manifest.json.gz, Tools > Game manifest) first, else the one that
+        comes with the tool (Rome: Total War Gold, Steam; Medieval II), and REX's."""
+        from .newmod import game_of
+        game_dir = game_of(mod.data)
+        medieval = any(os.path.isfile(os.path.join(game_dir, e)) for e in ("medieval2.exe", "kingdoms.exe", "M2EX.exe"))
+        ref = reference_dir()
+        own = os.path.join(game_dir, MANIFEST_NAME)
+        picks = [(own, "this PC's game manifest")] if os.path.isfile(own) else []
+        picks.append((os.path.join(ref, "m2tw_manifest.json.gz" if medieval else "rtw_gold_steam_manifest.json.gz"),
+                      "Medieval II manifest" if medieval else "Rome: Total War Gold manifest"))
+        game = names = None
+        for path, name in picks:
+            key = (path, os.path.getmtime(path) if os.path.isfile(path) else 0)
+            if key not in cls._cache:
+                cls._cache[key] = _load_manifest(path)
+            if cls._cache[key]:
+                game, names = cls._cache[key], [name]
+                break
+        rex = None
+        if not medieval:
+            p = os.path.join(ref, "rex_manifest.json.gz")
+            if p not in cls._cache:
+                cls._cache[p] = _load_manifest(p)
+            rex = cls._cache[p]
+            if rex:
+                names = (names or []) + ["REX manifest"]
+        if not game and not rex:
+            return None
+        return cls(game, rex, names)
+
+    def classify(self, rel, path, size):
+        low = rel.lower()
+        g, r = self.game.get(low), self.rex.get(low)
+        digest = None
+        for entry, kind in ((r, "rex"), (g, "game")):
+            if entry and entry[0] == size:
+                if digest is None:
+                    digest = _md5(path)
+                if digest == entry[1]:
+                    return kind
+        return "changed" if g or r else "own"
+
+
+_md5_cache = {}                     # (path, size, mtime) -> md5: a second scan reads nothing again
+
+
+def _md5(path):
+    try:
+        key = (path, os.path.getsize(path), os.path.getmtime(path))
+    except OSError:
+        return None
+    if key not in _md5_cache:
+        _md5_cache[key] = _md5_read(path)
+    return _md5_cache[key]
+
+
+def _md5_read(path):
+    import hashlib
+    h = hashlib.md5()
+    try:
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+    except OSError:
+        return None
+    return h.hexdigest()
 
 
 # ---------------------------------------------------------------------------
