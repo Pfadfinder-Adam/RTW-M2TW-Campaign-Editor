@@ -101,8 +101,12 @@ class Plan:
         bdir = os.path.join(root, BACKUP_DIR, "%s_%s" % (stamp, self.new))
         os.makedirs(bdir)
         manifest = {"faction": self.new, "template": self.template, "modified": [], "created": []}
+        created = []
         for path in self.changed_files():
             rel = os.path.relpath(path, root)
+            if path not in self.originals and not os.path.exists(path):
+                created.append(rel.replace("\\", "/"))     # a new picture: Restore removes it
+                continue
             dst = os.path.join(bdir, rel)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             if path in self.originals:
@@ -111,7 +115,6 @@ class Plan:
             else:                               # a picture or a removed file: back up what is on disk
                 shutil.copy2(path, dst)
             manifest["modified"].append(rel.replace("\\", "/"))
-        created = []
         for src, dst in self.copies:
             if os.path.exists(dst):
                 continue
@@ -128,6 +131,7 @@ class Plan:
             if path in self.files:
                 self.files[path].save(path)
             elif path in self.binaries:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
                 tmp = path + ".faction_tool_tmp"
                 with open(tmp, "wb") as out:
                     out.write(self.binaries[path])

@@ -886,6 +886,56 @@ class ToolTest(unittest.TestCase):
         for p in glob.glob(os.path.join(here, "faction_tool", "*.py")) + [os.path.join(here, "rtw_faction_tool.py")]:
             py_compile.compile(p, cfile=os.path.join(self.root, "x.pyc"), doraise=True)
 
+    def test_unit_and_building_editors(self):
+        from faction_tool import editors as E
+        from faction_tool.plan import Plan
+        d = os.path.join(self.root, "data")
+        with open(os.path.join(d, "export_descr_unit.txt"), "a") as fh:
+            fh.write("\ntype\t\tbeta spear\ndictionary\tbeta_spear\t; the card name\n"
+                     "stat_cost\t1, 400, 170, 60, 70, 400\nownership\talpha\n")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building core_building\n{\n    levels hut house\n    {\n        hut requires factions { alpha, }\n"
+              "        {\n            settlement_min village\n            construction  2\n        }\n    }\n}\n")
+        mod = ModData(self.root)
+        edu_path = mod.file("edu")
+        f = mod.load(edu_path)
+        blocks = E.unit_blocks(f)
+        self.assertEqual([b[0] for b in blocks], ["alpha general", "rebel spear", "beta spear"])
+        fs = E.fields(f, blocks[2][1], blocks[2][2])
+        cost = next(x for x in fs if x.key == "stat_cost")
+        self.assertEqual(cost.value, "1, 400, 170, 60, 70, 400")
+        dic = next(x for x in fs if x.key == "dictionary")
+        self.assertEqual(dic.value, "beta_spear")
+        edb = mod.load(mod.file("edb"))
+        (chain, a, b), = E.building_blocks(edb)
+        self.assertEqual(chain, "core_building")
+        turns = next(x for x in E.fields(edb, a, b) if x.key == "construction")
+        self.assertEqual((turns.value, turns.depth), ("2", 3))
+        # a picture for the card, from a PNG (Pillow: in the exe; the CI test run may lack it)
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        png = os.path.join(self.root, "card.png")
+        Image.new("RGB", (100, 80), (0, 128, 0)).save(png)
+        plan = Plan(mod, "units", "units", {})
+        E.apply_fields(plan, edu_path, {cost.line: "1, 500, 170, 60, 70, 500", dic.line: "beta_spear"}, "unit beta spear")
+        E.apply_fields(plan, mod.file("edb"), {turns.line: "3"}, "core_building hut")
+        targets = E.unit_picture_targets(mod, "beta_spear", ["alpha"])
+        E.import_picture(plan, png, targets, (48, 64))
+        bdir = plan.apply()
+        with open(edu_path) as fh:
+            text = fh.read()
+        self.assertIn("stat_cost\t1, 500, 170, 60, 70, 500\n", text)
+        self.assertIn("dictionary\tbeta_spear\t; the card name\n", text)      # the comment kept
+        with open(mod.file("edb")) as fh:
+            self.assertIn("            construction  3\n", fh.read())
+        self.assertEqual(E.tga_info(targets[0]), (48, 64, 32))
+        restore(ModData(self.root), bdir)
+        self.assertFalse(os.path.exists(targets[0]))                     # Restore removes the new card
+        with open(edu_path) as fh:
+            self.assertIn("stat_cost\t1, 400, 170", fh.read())
+
     def test_logs_zip(self):
         import zipfile
         from faction_tool import log
