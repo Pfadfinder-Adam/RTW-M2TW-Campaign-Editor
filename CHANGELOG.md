@@ -1,6 +1,31 @@
 # Changelog
 
-## 0.6.0 - 2026-09-28
+## 0.7.0 - 2026-09-28
+
+The first release since 0.1.2: it holds 0.2.0 - 0.6.0 below (those were test builds) and this.
+
+### New
+- **Unit packs (export / import)**: Unit editor -> Export pack... takes the picked unit (or every
+  unit the list shows) with its models, mount, engine, animal, textures, sprites, cards, names,
+  descriptions and recruit places into one .zip; Import pack... puts it into another mod of the same
+  game: taken names get free ones, the owners are picked, a model with other lines under the same
+  name is added under a new one, files that exist are never overwritten; Preview, backup, Restore.
+- **A new region given to the faction you edit** is one of its towns at once (garrison, buildings,
+  capital) and is written with it in one Apply (one backup).
+- **New region: builder, rebels and religions** come from the region its land is cut from unless
+  picked; religions are written only when they add up to 100 (else the donor's), so a skipped or
+  zeroed dialog cannot break the game.
+
+### Fixed
+- **Campaign-select map (Medieval II) lit in the wrong place in the game** (shifted right): the
+  place of the map inside the picture is now learnt from where the game lights each vanilla faction
+  on its own map (a scale per axis); the land is filled solid (the see-through fill looked poor),
+  the picture's border lines kept.
+- New faction with no faction named: the buttons say Preview / Apply changes (not "map changes"),
+  the work bar says only the map is written.
+- The Art tab's "Finding where the map lies..." line no longer stays in the status bar.
+
+## 0.6.0 - 2026-09-28 (test build)
 
 ### New
 - **Map by tiles**: the ground is drawn one colour per tile (mountain, land, water - the type the

@@ -67,6 +67,10 @@ class RecordEditor(ttk.Frame):
         ttk.Button(head, text="Copy as new %s..." % ("unit" if kind == "unit" else "building"),
                    command=self.copy_dialog).pack(side="right", padx=6)
         ttk.Button(head, text="Add line...", command=self.add_dialog).pack(side="right")
+        if kind == "unit":
+            # packs: units taken out with everything they need, and put into another mod
+            ttk.Button(head, text="Import pack...", command=self.import_pack).pack(side="right", padx=(0, 12))
+            ttk.Button(head, text="Export pack...", command=self.export_pack).pack(side="right", padx=4)
         self.copy_ops = []                   # [(source, new name, details)] written on Apply
         self.pics = ttk.LabelFrame(right, text="Pictures", padding=6)
         self.pics.pack(fill="x", pady=(6, 6))
@@ -695,6 +699,150 @@ class RecordEditor(ttk.Frame):
     # ---- writing ----
     def dirty(self):
         return bool(self.changes or self.imports or self.copy_ops or self.adds or self.removes)
+
+    # ---- unit packs ----
+    def export_pack(self):
+        """The picked unit - or every unit the list shows - with its models, mount, textures,
+        cards, texts and recruit places, into one .zip for another mod."""
+        from tkinter import filedialog
+        from . import packs
+        if not self.mod:
+            return
+        sel = self.lb.curselection()
+        picked = self.shown[sel[0]][0] if sel and sel[0] < len(self.shown) else None
+        types = [b[0] for b in self.shown]
+        if picked and len(types) > 1:
+            one = messagebox.askyesnocancel(
+                "Export pack", "Yes: only %s\nNo: all %d units the list shows now (Show / Find)" % (picked, len(types)),
+                parent=self)
+            if one is None:
+                return
+            if one:
+                types = [picked]
+        elif picked:
+            types = [picked]
+        if not types:
+            messagebox.showinfo("Export pack", "no unit in the list", parent=self)
+            return
+        name = (types[0] if len(types) == 1 else "%d_units" % len(types)).replace(" ", "_")
+        path = filedialog.asksaveasfilename(parent=self, defaultextension=".zip", initialfile="%s_pack.zip" % name,
+                                            filetypes=[("Unit pack", "*.zip")])
+        if not path:
+            return
+        try:
+            man = packs.export_pack(self.mod, types, path)
+        except Exception as e:
+            messagebox.showerror("Export pack", str(e), parent=self)
+            return
+        miss = man.get("missing") or []
+        blocks = man["blocks"]
+        messagebox.showinfo("Export pack", (
+            "%s\n\n%d unit(s), %d model(s), %d mount(s), %d engine(s), %d animal(s), %d file(s), "
+            "%d name / description text(s), %d recruit place(s).%s" % (
+                path, len(man["units"]), len(blocks["model"]), len(blocks["mount"]), len(blocks["engine"]),
+                len(blocks["animal"]), len(man["files"]), len(man["texts"]), len(man["recruit"]),
+                ("\n\n%d file(s) the units name are not in this mod (the game takes them from its own data "
+                 "or they are missing): %s%s" % (len(miss), ", ".join(miss[:3]), " ..." if len(miss) > 3 else ""))
+                if miss else "")), parent=self)
+        self.app.status.set("Pack written: %s (%d unit(s))." % (path, len(man["units"])))
+
+    def import_pack(self):
+        """A pack's units put into this mod: names checked (taken ones get a free name you may
+        change), the factions or cultures that own them picked, then Preview and a written plan
+        with a backup like every other change."""
+        from tkinter import filedialog
+        from . import packs
+        from .plan import Plan
+        if not self.mod:
+            return
+        if self.pending() and not messagebox.askyesno(
+                "Import pack", "The unit editor holds changes not written yet; the import writes "
+                               "export_descr_unit.txt, so they would be dropped. Go on?", parent=self):
+            return
+        path = filedialog.askopenfilename(parent=self, filetypes=[("Unit pack", "*.zip")])
+        if not path:
+            return
+        try:
+            man, files = packs.read_pack(path)
+            names = packs.plan_names(self.mod, man)
+        except Exception as e:
+            messagebox.showerror("Import pack", str(e), parent=self)
+            return
+        w = tk.Toplevel(self)
+        w.title("Import pack - %s" % os.path.basename(path))
+        w.transient(self)
+        frm = ttk.Frame(w, padding=10)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, text="Units (a name taken in this mod has a free one already; change it if you like)",
+                  font=("", 9, "bold")).grid(row=0, column=0, columnspan=3, sticky="nw")
+        vs = {}
+        for c, head in enumerate(("in the pack", "type in this mod", "dictionary (cards, texts)")):
+            ttk.Label(frm, text=head, foreground="#555").grid(row=0, column=c, sticky="w", pady=(18, 0))
+        for i, u in enumerate(man["units"]):
+            t, d = names[u["type"]]
+            ttk.Label(frm, text=u["type"]).grid(row=i + 1, column=0, sticky="w")
+            vt, vd = tk.StringVar(value=t), tk.StringVar(value=d or "")
+            ttk.Entry(frm, textvariable=vt, width=30).grid(row=i + 1, column=1, padx=4, pady=1)
+            ttk.Entry(frm, textvariable=vd, width=26).grid(row=i + 1, column=2, padx=4, pady=1)
+            vs[u["type"]] = (vt, vd)
+        row = len(man["units"]) + 1
+        ttk.Label(frm, text="Given to (factions or cultures - pick one or more):",
+                  font=("", 9, "bold")).grid(row=row, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        facs = [n for n, _ in self.mod.factions()]
+        cultures = sorted({self.mod.culture(n) for n in facs if self.mod.culture(n)})
+        choices = facs + [c for c in cultures if c not in facs]
+        lb = tk.Listbox(frm, selectmode="multiple", height=min(12, len(choices)), exportselection=False)
+        for c in choices:
+            lb.insert("end", c + ("  (culture)" if c in cultures and c not in facs else ""))
+        had = set()
+        for u in man["units"]:
+            for v in packs._values(u["lines"], "ownership"):
+                had |= set(v)
+        for i, c in enumerate(choices):
+            if c in had:
+                lb.selection_set(i)
+        lb.grid(row=row + 1, column=0, columnspan=3, sticky="we")
+        what = "%d model(s), %d mount(s), %d file(s), %d recruit place(s)%s" % (
+            len(man["blocks"]["model"]), len(man["blocks"]["mount"]), len(files), len(man["recruit"]),
+            " - from Medieval II" if man.get("game") == "medieval2" else " - from Rome")
+        ttk.Label(frm, text="In the pack: " + what, foreground="#555").grid(
+            row=row + 2, column=0, columnspan=3, sticky="w", pady=(6, 0))
+
+        def make():
+            owners = [choices[i] for i in lb.curselection()]
+            chosen = {k: (vt.get().strip(), vd.get().strip() or None) for k, (vt, vd) in vs.items()}
+            plan = Plan(self.mod, "pack", "unit_pack", {})
+            packs.import_pack(plan, man, files, owners, chosen)
+            return plan
+
+        def preview():
+            try:
+                plan = make()
+            except Exception as e:
+                messagebox.showerror("Import pack", str(e), parent=w)
+                return
+            self.app.show_text("Import pack - preview (nothing written)", plan.report())
+
+        def write():
+            try:
+                plan = make()
+            except Exception as e:
+                messagebox.showerror("Import pack", str(e), parent=w)
+                return
+            if not messagebox.askyesno("Import pack", "Write %d file(s)? A backup is made first (Restore undoes "
+                                                      "it)." % len(plan.changed_files()), parent=w):
+                return
+            bdir = plan.apply()
+            from . import log
+            log.write("Unit pack %s written (backup %s)\n%s" % (path, bdir, plan.report()))
+            w.destroy()
+            self.app.load()
+            self.app.status.set("Pack put in: %d unit(s) (backup %s)." % (len(man["units"]), bdir))
+        bar = ttk.Frame(frm)
+        bar.grid(row=row + 3, column=0, columnspan=3, sticky="e", pady=(8, 0))
+        ttk.Button(bar, text="Preview", command=preview).pack(side="left")
+        ttk.Button(bar, text="Write it in", command=write).pack(side="left", padx=4)
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
 
     def pending(self):
         """How many changes wait for Apply here."""

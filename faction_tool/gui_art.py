@@ -209,7 +209,8 @@ class ArtEditor(ttk.Frame):
         self.b_colour.configure(bg="#%02x%02x%02x" % col, fg="white" if sum(col) < 380 else "black")
         if not a.mod:
             return
-        if ("select_frame", a.v_campaign.get()) not in a.mod._cache:
+        finding = ("select_frame", a.v_campaign.get()) not in a.mod._cache
+        if finding:
             # the first time for a mod (Medieval II): learning where the map lies takes a few seconds
             a.status.set("Finding where the map lies in the campaign-select pictures (once per mod)...")
             self.update_idletasks()
@@ -218,6 +219,8 @@ class ArtEditor(ttk.Frame):
         except Exception as e:
             im = None
             self.lbl_map.configure(text="cannot draw it: %s" % e)
+        if finding and a.status.get().startswith("Finding where the map lies"):
+            a.status.set("")
         if im is None:
             self._map_im = None
             self.map_pic.configure(image="", text="(this campaign has fewer than three\ncampaign-select maps "

@@ -300,6 +300,12 @@ def import_pack(plan, manifest, files, owners, names=None):
     if not owners:
         raise ValueError("pick at least one faction (or culture) the units go to")
     names = names or plan_names(mod, manifest)
+    have = {t.lower() for t in type_blocks(mod.load(mod.file("edu")))}
+    for old, (t, d) in names.items():
+        if not t or t.lower() in have:
+            raise ValueError("a unit '%s' exists in this mod already - give the pack's %s another name" % (t, old))
+        if d and (" " in d or not d.strip()):
+            raise ValueError("%s: the dictionary name needs letters, digits and _ only" % t)
     facs = [n for n, _ in mod.factions()]
     known = set(facs) | {mod.culture(n) for n in facs if mod.culture(n)} | {"all"}
     bad = [o for o in owners if known and o not in known]
