@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.18.0 - 2026-09-30
 
 - **License**: GNU GPL v3.0 from this version on (up to 0.17.1: MIT). The editor stays free and open; programs
   built from its code must stay open under GPL-3.0 and keep the author's copyright notice.
@@ -48,7 +48,7 @@
   Apply writes map_heights.tga, changes the same points in **map_heights.hgt** (the game's own copy of the
   heights, read instead of the picture while it is there; Medieval II needs it to load) and deletes map.rwm. Land
   never goes down to pure black (the game may take it for sea). Same file
-  layout on Rome and Medieval II (checked on both vanilla maps). Not yet tested in the game.
+  layout on Rome and Medieval II (checked on both vanilla maps). Tested in the game on both (video: https://youtu.be/mTdRAWympuw).
 - **Find on the map** (Map tab and Terrain editor): type part of a name - a town (also the name shown for
   its owner), a port, a general, agent or fleet, a unit in an army, a fort, a resource - and pick a hit: the
   map zooms in close on it and a ring blinks round it. Names come first (typing "rom" lists Rome before the Romans' armies).
