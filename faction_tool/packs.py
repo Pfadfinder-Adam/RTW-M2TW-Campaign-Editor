@@ -27,7 +27,7 @@ import os
 import re
 import zipfile
 
-from .moddata import _ci
+from .moddata import _ci, ci_path
 from .textio import TextFile, strip_comment, tokens
 
 PACK_VERSION = 1
@@ -87,9 +87,8 @@ def _on_disk(mod, ref):
     writes 'data/models_unit/x.tga' and keeps x.tga.dds; Medieval II 'unit_models/...'."""
     rel = ref[5:] if ref.lower().startswith("data/") else ref
     for cand in (rel, rel + ".dds"):
-        folder, name = os.path.split(os.path.join(mod.data, *cand.split("/")))
-        p = _ci(folder, name) if os.path.isdir(folder) else None
-        if p:
+        p = ci_path(mod.data, cand)
+        if p and os.path.isfile(p):
             return os.path.relpath(p, mod.data).replace("\\", "/"), p
     return None
 
@@ -108,69 +107,89 @@ def game_kind(mod):
 # ---------------------------------------------------------------------------
 # Taking units out
 # ---------------------------------------------------------------------------
+class _Gather:
+    """What a pack takes: dependency blocks (models, mounts, engines, animals) with every file they name, and
+    Medieval II's modeldb models - found by following names the same way for units and for single models."""
+
+    def __init__(self, mod):
+        self.mod = mod
+        self.deps = {k: (mod.load(p) if p else None) for k, p in
+                     ((k, _ci(mod.data, v)) for k, v in DEP_FILES.items())}
+        self.dep_blocks = {k: type_blocks(f) if f else {} for k, f in self.deps.items()}
+        self.manifest = {"pack": PACK_VERSION, "game": game_kind(mod), "units": [],
+                         "blocks": {k: {} for k in DEP_FILES}, "texts": {}, "recruit": [], "files": [],
+                         "missing": [], "modeldb": {}}
+        self.files = {}
+        self.db = None
+        if self.manifest["game"] == "medieval2":      # Medieval II reads its battle models from the modeldb
+            from . import modeldb as MDB
+            src, _ = MDB.find(mod)
+            self.db = MDB.load(src) if src else None
+
+    def add_ref(self, ref):
+        got = _on_disk(self.mod, ref)
+        if got is None:
+            if ref not in self.manifest["missing"]:
+                self.manifest["missing"].append(ref)
+            return
+        rel, path = got
+        if rel not in self.files:
+            with open(path, "rb") as fh:
+                self.files[rel] = fh.read()
+
+    def add_files(self, lines):
+        for ref in _file_refs(lines):
+            self.add_ref(ref)
+
+    def add_dep(self, kind, name):
+        """The block kind / name and what it needs; returns the name as the files spell it (or None)."""
+        from . import modeldb as MDB
+        man = self.manifest
+        if not name:
+            return None
+        if name in man["blocks"][kind] or (kind == "model" and name in man["modeldb"]):
+            return name
+        in_db = None
+        if kind == "model" and self.db is not None:
+            m = self.db.model(name)
+            if m is not None:
+                in_db = m.name
+                if m.name not in man["modeldb"]:
+                    man["modeldb"][m.name] = MDB.to_dict(m)
+                    for ref in MDB.files_of(m):           # paths may hold spaces here
+                        self.add_ref(ref)
+        span = self.dep_blocks[kind].get(name)
+        if span is None:                                   # the game reads these names without case
+            low = name.lower()
+            real = next((k for k in self.dep_blocks[kind] if k.lower() == low), None)
+            if real is not None:
+                if real in man["blocks"][kind]:
+                    return real
+                name, span = real, self.dep_blocks[kind][real]
+        if span is None and in_db:
+            return in_db
+        if span is None:
+            man["missing"].append("%s %s" % (DEP_FILES[kind], name))
+            return None
+        lines = _block_lines(self.deps[kind], span)
+        man["blocks"][kind][name] = lines
+        self.add_files(lines)
+        for v in _values(lines, "model"):                  # a mount's / animal's model
+            if kind != "model":
+                self.add_dep("model", v[0])
+        return in_db or name
+
+    def done(self):
+        self.manifest["files"] = sorted(self.files)
+        return self.manifest, self.files
+
+
 def collect(mod, unit_types):
     """The pack's contents for these units: a dict (the manifest) and {data path: bytes}."""
     edu = mod.load(mod.file("edu"))
     blocks = type_blocks(edu)
-    deps = {k: (mod.load(p) if p else None) for k, p in
-            ((k, _ci(mod.data, v)) for k, v in DEP_FILES.items())}
-    dep_blocks = {k: type_blocks(f) if f else {} for k, f in deps.items()}
-    manifest = {"pack": PACK_VERSION, "game": game_kind(mod), "units": [], "blocks": {k: {} for k in DEP_FILES},
-                "texts": {}, "recruit": [], "files": [], "missing": [], "modeldb": {}}
-    files = {}
-    db = None
-    if manifest["game"] == "medieval2":              # Medieval II reads its battle models from the modeldb
-        from . import modeldb as MDB
-        src, _ = MDB.find(mod)
-        db = MDB.load(src) if src else None
-
-    def add_ref(ref):
-        got = _on_disk(mod, ref)
-        if got is None:
-            if ref not in manifest["missing"]:
-                manifest["missing"].append(ref)
-            return
-        rel, path = got
-        if rel not in files:
-            with open(path, "rb") as fh:
-                files[rel] = fh.read()
-
-    def add_files(lines):
-        for ref in _file_refs(lines):
-            add_ref(ref)
-
-    def add_dep(kind, name):
-        if not name or name in manifest["blocks"][kind]:
-            return
-        in_db = False
-        if kind == "model" and db is not None:
-            m = db.model(name)
-            if m is not None:
-                in_db = True
-                if m.name not in manifest["modeldb"]:
-                    manifest["modeldb"][m.name] = MDB.to_dict(m)
-                    for ref in MDB.files_of(m):           # paths may hold spaces here
-                        add_ref(ref)
-        span = dep_blocks[kind].get(name)
-        if span is None:                                   # the game reads these names without case
-            low = name.lower()
-            real = next((k for k in dep_blocks[kind] if k.lower() == low), None)
-            if real is not None:
-                if real in manifest["blocks"][kind]:
-                    return
-                name, span = real, dep_blocks[kind][real]
-        if span is None and in_db:
-            return
-        if span is None:
-            manifest["missing"].append("%s %s" % (DEP_FILES[kind], name))
-            return
-        lines = _block_lines(deps[kind], span)
-        manifest["blocks"][kind][name] = lines
-        add_files(lines)
-        for v in _values(lines, "model"):                  # a mount's / animal's model
-            if kind != "model":
-                add_dep("model", v[0])
-
+    g = _Gather(mod)
+    manifest, files = g.manifest, g.files
     for t in unit_types:
         span = blocks.get(t)
         if span is None:
@@ -181,7 +200,7 @@ def collect(mod, unit_types):
         for key, kind in (("soldier", "model"), ("officer", "model"), ("mount", "mount"),
                           ("engine", "engine"), ("animal", "animal")):
             for v in _values(lines, key):
-                add_dep(kind, v[0])
+                g.add_dep(kind, v[0])
         if d:
             for key in (d, d + "_descr", d + "_descr_short"):
                 val = _text_entry(mod, "export_units.txt", key)
@@ -197,8 +216,17 @@ def collect(mod, unit_types):
                         with open(p, "rb") as fh:
                             files[os.path.relpath(p, mod.data).replace("\\", "/")] = fh.read()
     manifest["recruit"] = _recruit_places(mod, unit_types)
-    manifest["files"] = sorted(files)
-    return manifest, files
+    return g.done()
+
+
+def collect_models(mod, names):
+    """(manifest, files) holding battle models only - these and every file they name. Raises when one is not in
+    the mod."""
+    g = _Gather(mod)
+    for n in names:
+        if g.add_dep("model", n) is None:
+            raise ValueError("no battle model '%s' in %s" % (n, mod.data))
+    return g.done()
 
 
 def _text_entry(mod, table, key):
@@ -338,7 +366,67 @@ def import_pack(plan, manifest, files, owners, names=None):
     bad = [o for o in owners if known and o not in known]
     if bad:
         raise ValueError("no faction or culture %s in this mod" % ", ".join(bad))
-    # dependency blocks: the same content is shared, another content with the same name is renamed
+    renamed = _put_blocks(plan, manifest, owners)
+    # the units
+    edu = plan.edit(mod.file("edu"))
+    while edu.raw and not edu.text(len(edu.raw) - 1).strip():
+        del edu.raw[-1]
+    text_renames = {}
+    for u in manifest["units"]:
+        t, d = names[u["type"]]
+        lines = _set_line(u["lines"], "type", t)
+        if d:
+            lines = _set_line(lines, "dictionary", d)
+        for key, kind in (("soldier", "model"), ("officer", "model"), ("mount", "mount"),
+                          ("engine", "engine"), ("animal", "animal")):
+            for old, new in renamed[kind].items():
+                lines = _rename_ref(lines, key, old, new)
+        lines = _set_line(lines, "ownership", ", ".join(owners))
+        edu.raw.extend(edu.make(x) for x in [""] + lines)
+        plan.note(edu, "unit %s added (dictionary %s), owned by %s" % (t, d, ", ".join(owners)))
+        if d and u.get("dictionary"):
+            for suffix in ("", "_descr", "_descr_short"):
+                text_renames[u["dictionary"] + suffix] = d + suffix
+    edu.raw.append(edu.make(""))
+    # texts
+    table = mod.text_file("export_units.txt")
+    if table and manifest.get("texts"):
+        tf = plan.edit(table)
+        while tf.raw and not tf.text(len(tf.raw) - 1).strip():
+            del tf.raw[-1]
+        n = 0
+        for key, value in manifest["texts"].items():
+            new = text_renames.get(key, key)
+            tf.raw.extend(tf.make(x) for x in ["{%s}%s" % (new, value[0])] + value[1:])
+            n += 1
+        tf.raw.append(tf.make(""))
+        plan.note(tf, "%d name(s) and description(s) added" % n)
+    # files: models, textures, sprites as they are; cards and info pictures for each owner faction
+    factions = [o for o in owners if o in {n for n, _ in mod.factions()}]
+    dict_of = {u["dictionary"]: names[u["type"]][1] for u in manifest["units"] if u.get("dictionary")}
+    _put_files(plan, files)
+    for old, new in dict_of.items():
+        for sub, pattern in (("units", "#%s.tga"), ("unit_info", "%s_info.tga")):
+            src = [(rel, data) for rel, data in files.items()
+                   if rel.lower().startswith("ui/%s/" % sub) and rel.split("/")[-1].lower() == (pattern % old).lower()]
+            if not src:
+                continue
+            for fac in factions or [src[0][0].split("/")[2]]:
+                pick = next((data for rel, data in src if rel.split("/")[2] == fac), src[0][1])
+                _put(plan, "ui/%s/%s/%s" % (sub, fac, pattern % new), pick)
+    # recruiting: the same chain and level as in the source mod, where the target has them
+    if manifest.get("recruit") and mod.file("edb"):
+        _recruit(plan, manifest, names, owners)
+    _say_missing(plan, manifest)
+    return plan
+
+
+def _put_blocks(plan, manifest, owners):
+    """The pack's dependency blocks (models, mounts, engines, animals) and modeldb models written into plan.mod:
+    the same content is shared, another content under a taken name is added under a free one. Every faction of
+    owners gets texture entries on the models. Returns {kind: {old name: new name}}."""
+    mod = plan.mod
+    facs = [n for n, _ in mod.factions()]
     renamed = {k: {} for k in DEP_FILES}
     owner_facs = [o for o in owners if o in set(facs)]
     for kind in ("model", "mount", "engine", "animal"):
@@ -382,66 +470,37 @@ def import_pack(plan, manifest, files, owners, names=None):
     # Medieval II: the battle models in battle_models.modeldb, under the names descr_model_battle got
     if manifest.get("modeldb"):
         _modeldb(plan, manifest, renamed, owners)
-    # the units
-    edu = plan.edit(mod.file("edu"))
-    while edu.raw and not edu.text(len(edu.raw) - 1).strip():
-        del edu.raw[-1]
-    text_renames = {}
-    for u in manifest["units"]:
-        t, d = names[u["type"]]
-        lines = _set_line(u["lines"], "type", t)
-        if d:
-            lines = _set_line(lines, "dictionary", d)
-        for key, kind in (("soldier", "model"), ("officer", "model"), ("mount", "mount"),
-                          ("engine", "engine"), ("animal", "animal")):
-            for old, new in renamed[kind].items():
-                lines = _rename_ref(lines, key, old, new)
-        lines = _set_line(lines, "ownership", ", ".join(owners))
-        edu.raw.extend(edu.make(x) for x in [""] + lines)
-        plan.note(edu, "unit %s added (dictionary %s), owned by %s" % (t, d, ", ".join(owners)))
-        if d and u.get("dictionary"):
-            for suffix in ("", "_descr", "_descr_short"):
-                text_renames[u["dictionary"] + suffix] = d + suffix
-    edu.raw.append(edu.make(""))
-    # texts
-    table = mod.text_file("export_units.txt")
-    if table and manifest.get("texts"):
-        tf = plan.edit(table)
-        while tf.raw and not tf.text(len(tf.raw) - 1).strip():
-            del tf.raw[-1]
-        n = 0
-        for key, value in manifest["texts"].items():
-            new = text_renames.get(key, key)
-            tf.raw.extend(tf.make(x) for x in ["{%s}%s" % (new, value[0])] + value[1:])
-            n += 1
-        tf.raw.append(tf.make(""))
-        plan.note(tf, "%d name(s) and description(s) added" % n)
-    # files: models, textures, sprites as they are; cards and info pictures for each owner faction
-    factions = [o for o in owners if o in {n for n, _ in mod.factions()}]
-    dict_of = {u["dictionary"]: names[u["type"]][1] for u in manifest["units"] if u.get("dictionary")}
+    return renamed
+
+
+def _put_files(plan, files):
+    """The pack's files at their paths (cards and info pictures are per owner - the unit import places them)."""
     for rel, data in sorted(files.items()):
         parts = rel.split("/")
         if len(parts) == 4 and parts[0].lower() == "ui" and parts[1].lower() in ("units", "unit_info"):
-            continue                                           # cards: below, per owner
+            continue
         _put(plan, rel, data)
-    for old, new in dict_of.items():
-        for sub, pattern in (("units", "#%s.tga"), ("unit_info", "%s_info.tga")):
-            src = [(rel, data) for rel, data in files.items()
-                   if rel.lower().startswith("ui/%s/" % sub) and rel.split("/")[-1].lower() == (pattern % old).lower()]
-            if not src:
-                continue
-            for fac in factions or [src[0][0].split("/")[2]]:
-                pick = next((data for rel, data in src if rel.split("/")[2] == fac), src[0][1])
-                _put(plan, "ui/%s/%s/%s" % (sub, fac, pattern % new), pick)
-    # recruiting: the same chain and level as in the source mod, where the target has them
-    if manifest.get("recruit") and mod.file("edb"):
-        _recruit(plan, manifest, names, owners)
+
+
+def _say_missing(plan, manifest):
     missing = manifest.get("missing") or []
     if missing:
-        plan.warn(None, "%d file(s) the units name were not in the source mod, so not in the pack either "
+        plan.warn(None, "%d file(s) the source names were not in the source mod, so not brought over either "
                         "(the game may take them from its own data): %s%s" % (
                             len(missing), ", ".join(missing[:4]), " ..." if len(missing) > 4 else ""))
-    return plan
+
+
+def import_models(plan, manifest, files, owners):
+    """Battle models gathered by collect_models put into plan.mod (same rules as a unit pack's models).
+    Returns {old name: name in this mod}."""
+    if manifest.get("game") and manifest["game"] != game_kind(plan.mod):
+        raise ValueError("models go between mods of one game (this one is %s, the model's %s)" % (
+            game_kind(plan.mod), manifest["game"]))
+    renamed = _put_blocks(plan, manifest, owners)
+    _put_files(plan, files)
+    _say_missing(plan, manifest)
+    names = list(manifest["blocks"]["model"]) + [n for n in manifest["modeldb"] if n not in manifest["blocks"]["model"]]
+    return {n: renamed["model"].get(n, n) for n in names}
 
 
 def _modeldb(plan, manifest, renamed, owners):
@@ -533,4 +592,5 @@ def _recruit(plan, manifest, names, owners):
         plan.warn(f, "no %s in this mod: recruit the units there by hand (Building editor)" % m)
 
 
-__all__ = ["type_blocks", "collect", "export_pack", "read_pack", "plan_names", "import_pack", "game_kind"]
+__all__ = ["type_blocks", "collect", "collect_models", "export_pack", "read_pack", "plan_names", "import_pack",
+           "import_models", "game_kind"]

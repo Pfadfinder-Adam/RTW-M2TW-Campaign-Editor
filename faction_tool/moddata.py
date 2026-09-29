@@ -30,6 +30,17 @@ def _ci(folder, name):
     return None
 
 
+def ci_path(root, rel):
+    """root/rel found without case in every folder on the way (the game's files name 'unit_models/_Units/EN_x/..'
+    while the disk may say '_units/en_x'), or None."""
+    cur = root
+    for part in [x for x in rel.replace("\\", "/").split("/") if x]:
+        cur = _ci(cur, part)
+        if cur is None:
+            return None
+    return cur
+
+
 DATA_FILES = {
     # key: file name in the data root
     "sm_factions": "descr_sm_factions.txt",
