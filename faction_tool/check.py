@@ -215,7 +215,12 @@ def rehearse(data, campaign, step=None):
             cap = tiles.get(now["regions"][0])
             units = [u.type for u in faction_units(mod, fac)][:3]
             ships = [u.type for u in faction_units(mod, fac, ships=True, mercs=True)][:2]
-            first = ((mod.name_pool(fac) or {}).get("characters") or ["X"])[0]
+            from .strat import faction_names
+            pool_names = (mod.name_pool(fac) or {}).get("characters") or ["X"]
+            used_names = set(faction_names(Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))), fac))
+            free = [n for n in pool_names if n not in used_names] or pool_names
+            first = free[0]
+            spare = (free[1:] + free)[:2]           # the rehearsal's spy and fleet: names of their own
             take = sorted(rebels, key=lambda r: abs(tiles[r][0] - cap[0]) + abs(tiles[r][1] - cap[1]))[:1] if cap else []
             land = sea = None
             if cap:
@@ -234,15 +239,16 @@ def rehearse(data, campaign, step=None):
             if land and units:
                 chars.append({"kind": "army", "name": first, "age": 30, "units": units, "xy": land})
             if cap:
-                chars.append({"kind": "spy", "name": first, "age": 25, "units": [], "xy": cap})
+                chars.append({"kind": "spy", "name": spare[0], "age": 25, "units": [], "xy": cap})
             if sea:
-                chars.append({"kind": "fleet", "name": first, "age": 30, "units": ships, "xy": sea})
+                chars.append({"kind": "fleet", "name": spare[1], "age": 30, "units": ships, "xy": sea})
             plan = edit(mod, campaign, fac, {"take": take, "garrisons": {r: units[:2] for r in take if units},
                                              "characters": chars})
             _file_checks(plan, mod, campaign, fac, "edit", fails)
             mod = ModData(data)
             plan = build(mod, campaign, fac, "zzcheck", {
                 "display_name": "Check", "short_name": "Check", "adjective": "Check", "copy_art": False,
+                "raise_faction_limit": True,                  # in memory only: a full campaign still rehearses
                 "start": {"regions": now["regions"][:1] + take, "leader": {"name": first}}})
             _file_checks(plan, mod, campaign, fac, "new faction", fails)
         except ValueError as e:

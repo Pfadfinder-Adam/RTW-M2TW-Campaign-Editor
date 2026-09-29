@@ -273,6 +273,7 @@ class App(tk.Tk):
         self.chosen = []
         self.garrisons = {}             # region -> [unit type] picked by hand
         self.field = []                 # [{kind, name, age, units, xy}] armies/agents/fleets to place
+        self._limit_raise = None        # the mod whose max_factions the user agreed to raise
         self.removed_existing = []      # Edit: [{name, from}] characters taken off the map
         self.place_moves = {}           # {('city' | 'port', region): (x, y)} towns and ports moved on the map
         self.dip_set = {}               # {(kind, from, to): value or None} picked on the Diplomacy tab ('me' = the faction)
@@ -2026,7 +2027,12 @@ class App(tk.Tk):
         names = [n for n, _ in self.mod.factions() if n != "slave"]
         self.cb_template["values"] = names
         self.load_campaign()
-        self.status.set("%d factions, %d campaign(s)." % (len(names) + 1, len(camps)))
+        from .limits import describe, faction_limit
+        lim = faction_limit(self.mod)
+        full = len(names) + 1 >= lim["max"] and lim["known"]
+        self.status.set("%s, %d campaign(s).%s" % (describe(lim, len(names) + 1), len(camps),
+                        (" Full: a new faction needs a higher max_factions (asked on Preview)." if lim["engine"]
+                         else " Full: the original exe takes no new faction.") if full else ""))
         if not getattr(self, "_fix_queued", False):
             self._fix_queued = True
             self.after_idle(self.offer_fixes)
@@ -2837,8 +2843,18 @@ class App(tk.Tk):
             return edit_faction(ModData(self.mod.data), self.v_campaign.get(), faction, opts)
         template, name, opts = self.gather()
         # a fresh read, so a previous preview's edits never leak in
-        mod = ModData(self.mod.data)
-        return build(mod, self.v_campaign.get(), template, name, opts)
+        from .limits import LimitError
+        if self._limit_raise == self.mod.data:
+            opts["raise_faction_limit"] = True
+        try:
+            return build(ModData(self.mod.data), self.v_campaign.get(), template, name, opts)
+        except LimitError as e:
+            if not e.can_raise or not messagebox.askyesno(APP, "%s\n\nRaise it now? (written with the faction and "
+                                                               "its backup; Restore takes it back)" % e):
+                raise
+            self._limit_raise = self.mod.data         # asked once per mod: Preview and Apply both use it
+            opts["raise_faction_limit"] = True
+            return build(ModData(self.mod.data), self.v_campaign.get(), template, name, opts)
 
     def show_text(self, title, text, extra=()):
         w = tk.Toplevel(self)

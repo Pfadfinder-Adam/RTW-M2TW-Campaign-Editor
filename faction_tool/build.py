@@ -168,6 +168,5 @@ def validate(plan, campaign):
             if v > count:
                 plan.warn(ch, "character type '%s' lists %d factions, more than the %d factions" % (k, v, count))
     plan.faction_count = count
-    if count > 31:
-        plan.warn(sm, "%d factions (slave included). Classic RTW stops at 31; REX lifts the faction limit "
-                      "(its README) - fine under REX, test a new campaign" % count)
+    from .limits import check as check_limit
+    check_limit(plan, count, allow_raise=bool(plan.opts.get("raise_faction_limit")))

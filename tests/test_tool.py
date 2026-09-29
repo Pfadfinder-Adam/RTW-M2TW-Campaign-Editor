@@ -848,6 +848,39 @@ class ToolTest(unittest.TestCase):
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
 
+    def test_faction_limit(self):
+        """REX / M2EX read max_factions from data/descr_ex.txt: over it the game closes at start ("Too many
+        factions described here, maximum is(21)" - the user's nabataea). The new faction is refused, or with
+        the user's yes max_factions is raised (backup, Restore); the original exe cannot be raised."""
+        from faction_tool.limits import LimitError, faction_limit
+        start = {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}}
+        mod = ModData(self.root)
+        self.assertFalse(faction_limit(mod)["known"])            # no exe beside the data: warned only
+        build(mod, "test", "alpha", "beta", start)
+        d = os.path.join(self.root, "data")
+        write(os.path.join(self.root, "RomeTW.exe"), "exe")
+        write(os.path.join(d, "descr_ex.txt"), "max_factions 2\n")
+        lim = faction_limit(ModData(self.root))                   # the original exe: 21, descr_ex.txt not read
+        self.assertEqual((lim["max"], lim["engine"], lim["known"]), (21, None, True))
+        os.remove(os.path.join(self.root, "RomeTW.exe"))
+        write(os.path.join(self.root, "REX.exe"), "exe")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertEqual(faction_limit(mod)["max"], 2)
+        with self.assertRaises(LimitError) as e:
+            build(mod, "test", "alpha", "beta", start)
+        self.assertTrue(e.exception.can_raise)
+        plan = build(mod, "test", "alpha", "beta", dict(start, raise_faction_limit=True))
+        plan.apply()
+        with open(os.path.join(d, "descr_ex.txt")) as fh:
+            self.assertIn("max_factions 3", fh.read())
+        restore(ModData(self.root), backups(ModData(self.root))[0])
+        after = tree_hash(self.root)
+        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
+        # no descr_ex.txt at all: REX's default (21 for Rome) - far from 3 factions here
+        os.remove(os.path.join(d, "descr_ex.txt"))
+        self.assertEqual(faction_limit(ModData(self.root))["max"], 21)
+
     def test_log_in_logs_folder(self):
         """The log lies in <the tool's folder>/logs with the logs zips; the settings stay in the tool's
         folder; a log an older version left in the tool's folder moves into logs/ once."""
