@@ -47,6 +47,9 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **Installing:** make a new, empty folder for the editor wherever suits you (for example `Documents\RTW & M2TW Campaign Editor` - not the game folder, not straight into Downloads or the desktop) and put the `.exe` in it. Start it from there. Next to the exe it makes the folder `RTW-M2TW-Campaign-Editor-files` with its settings and, in its `logs` folder, its log and the logs zips you send with a bug report; an update is simply the new exe in the same folder (the settings stay).
 - **Any OS with Python 3.8+:** `python rtw_faction_tool.py` (standard library; Pillow for the pictures).
+  **Linux:** the window needs tkinter and Pillow's Tk part, which many distributions ship apart from Python -
+  Debian / Ubuntu / Mint: `sudo apt install python3-tk python3-pil python3-pil.imagetk`, then
+  `python3 rtw_faction_tool.py` (Fedora: `python3-tkinter python3-pillow-tk`; Arch: `tk python-pillow`).
 
 **Unit packs:** in the **Unit editor**, pick a unit (or narrow the list with Show / Find) and press **Export pack...**: the unit - or every unit the list shows - goes into one `.zip` with its models, textures, sprites, mount, engine or animal, cards, texts and recruit places. **Import pack...** in another mod of the same game shows the units with their names in that mod (taken names get a free one you can change), asks which factions or cultures own them, and **Preview** / **Write it in** puts them in with a backup. A model that exists with other lines is added under a new name; a file that exists is kept, never overwritten; recruit lines go into the same building and level where the mod has them (else the preview says to add them in the Building editor).
 
