@@ -14,7 +14,8 @@ import colorsys
 import os
 import re
 
-from .clone import ART_ROOTS, _token_hit
+from .clone import (ART_ROOTS, _token_hit, disk_tail, link_users, own_picture_ref, picture_file, picture_links,
+                    set_picture_ref)
 from .editors import tga_info
 from .moddata import _ci
 
@@ -98,16 +99,17 @@ def faction_pictures(mod, campaign, faction):
     named after the faction under data/ui, data/menu, data/loading_screen, the
     campaign folder, and its banner textures in descr_banners.txt - not the
     unit cards (the unit editor has those)."""
-    out, seen = [], set()
+    out, seen = [], {}
 
     def add(p):
         n = os.path.normcase(os.path.abspath(p))
         if n in seen or not os.path.isfile(p):
-            return
-        seen.add(n)
+            return seen.get(n)
         rel = os.path.relpath(p, mod.data).replace("\\", "/")
-        out.append({"path": p, "rel": rel, "label": label_of(rel), "where": where_shown(rel),
-                    "size": tga_info(p) if p.lower().endswith(".tga") else None})
+        e = {"path": p, "rel": rel, "label": label_of(rel), "where": where_shown(rel), "size": picture_info(p)}
+        seen[n] = e
+        out.append(e)
+        return e
     roots = [os.path.join(mod.data, r) for r in ART_ROOTS] + [mod.campaign_dir(campaign)]
     for root in roots:
         if not os.path.isdir(root):
@@ -127,19 +129,87 @@ def faction_pictures(mod, campaign, faction):
             for n in filenames:
                 if n.lower().endswith(PICTURE_EXT) and _token_hit(n, faction):
                     add(os.path.join(dirpath, n))
-    banners = mod.file("banners")
-    if banners:
-        cur = None
-        for l in mod.load(banners).texts():
-            t = l.split(";")[0].split()
-            if len(t) >= 2 and t[0] == "faction":
-                cur = t[1]
-            elif cur == faction and len(t) >= 2 and t[0].endswith("_texture"):
-                p = _ci(mod.data, t[1].replace("\\", "/"))
-                if p:
-                    add(p)
+    # pictures the faction's lines name by path (banners, loading logo): 'link' = [file key, field],
+    # 'ref' = the path as written, 'shared' = the other factions naming the same file
+    links = picture_links(mod)
+    users = link_users(links)
+    for l in links:
+        got = picture_file(mod.data, l["ref"]) if l["faction"] == faction else None
+        e = add(got[1]) if got else None
+        if e is not None:
+            e.update(link=[l["key"], l["field"]], ref=l["ref"],
+                     shared=sorted(users.get(l["ref"].replace("\\", "/").lower(), set()) - {faction}))
     out.sort(key=lambda e: (e["label"], e["rel"]))
     return out
+
+
+def picture_info(path):
+    """(width, height, depth) of a picture: bits per pixel for a TGA, the DDS format
+    ('DXT5', 'DXT1', 'RGBA'...) for a DDS; None when unknown."""
+    low = path.lower()
+    if low.endswith(".tga"):
+        return tga_info(path)
+    if low.endswith(".dds"):
+        got = dds_info(path)
+        return got[:3] if got else None
+    return None
+
+
+def dds_info(path):
+    """(width, height, format, mipmap levels) from a DDS header, or None."""
+    try:
+        with open(path, "rb") as fh:
+            h = fh.read(128)
+    except OSError:
+        return None
+    if len(h) < 128 or h[:4] != b"DDS ":
+        return None
+    le = lambda k: int.from_bytes(h[k:k + 4], "little")
+    four = h[84:88]
+    fmt = four.decode("latin-1") if le(80) & 0x4 else ("RGBA" if le(80) & 0x1 else "RGB")
+    return le(16), le(12), fmt, max(1, le(28))
+
+
+def picture_target(e, owner, new):
+    """Where a picture of the list is written for faction `new` (`owner` = the faction the
+    list was read for: the template of a new faction, else the same). A picture found by its
+    name gets the name swapped (as the clone copies it); a picture a line names gets the name
+    the clone gives it, or, shared with other factions, a copy of the faction's own."""
+    rel = e["rel"]
+    if e.get("link"):
+        if not e.get("shared") and owner == new:
+            return rel                                    # already its own
+        ref = own_picture_ref(e["ref"], owner, new)
+        ref = ref[5:] if ref.lower().startswith("data/") else ref
+        return ref + disk_tail(e["ref"], rel)
+    if not new or new == owner:
+        return rel
+    return re.sub(r"(?i)(^|[^a-z0-9])%s(?=$|[^a-z0-9])" % re.escape(owner), lambda m: m.group(1) + new, rel)
+
+
+def original_picture(mod, rel):
+    """The picture under data/rel as it was before this tool first changed it: the copy the
+    oldest backup kept (what Restore brings back), or for a picture the tool made, the file it
+    was copied from; None when the tool never changed it (it is the original)."""
+    import json
+    from .plan import backups
+    root = os.path.dirname(mod.data)
+    want = os.path.normcase(os.path.relpath(os.path.join(mod.data, *rel.split("/")), root))
+    for b in reversed(backups(mod)):                    # the oldest first
+        try:
+            with open(os.path.join(b, "manifest.json"), encoding="utf-8") as fh:
+                m = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        for r in m.get("modified", []):
+            if os.path.normcase(r) == want and os.path.isfile(os.path.join(b, r)):
+                return os.path.join(b, r)
+        for r in m.get("created", []):
+            if os.path.normcase(r) == want:
+                src = (m.get("copied_from") or {}).get(r)
+                p = os.path.join(root, src) if src else None
+                return p if p and os.path.isfile(p) else None
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -509,14 +579,49 @@ def replace_picture(plan, src, target, like=None):
     """src (PNG, JPG, TGA...) written over target in the size and depth of `like`
     (the file it replaces, or the template's picture it is copied from)."""
     from PIL import Image
-    info = tga_info(like) if like and like.lower().endswith(".tga") else None
+    info = picture_info(like) if like else None
     im = Image.open(src)
     size = info[:2] if info else None
     if size and im.size != tuple(size):
         im = im.resize(tuple(size), Image.LANCZOS)
-    plan.binary(target, image_tga(im, like))
-    plan.notes.append((plan.mod.rel(target), "picture replaced by %s%s" % (
-        os.path.basename(src), " (%d x %d, %d-bit)" % info if info else "")))
+    dds = target.lower().endswith(".dds")
+    plan.binary(target, image_dds(im, like) if dds else image_tga(im, like))
+    what = ""
+    if info:
+        what = " (%d x %d, %s)" % (info[0], info[1], ("DDS " + info[2]) if dds else "%d-bit" % info[2])
+    plan.notes.append((plan.mod.rel(target), "picture replaced by %s%s" % (os.path.basename(src), what)))
+
+
+def image_dds(im, like=None):
+    """A Pillow image as DDS bytes in the format of `like` (a DDS file: DXT1/3/5 or
+    uncompressed) with as many mipmap levels as it has - Rome's .tga.dds textures are DXT5
+    with a full chain; a DDS written as TGA inside is a picture the game cannot read."""
+    import io
+    from PIL import Image
+    info = dds_info(like) if like and like.lower().endswith(".dds") else None
+    fmt = info[2] if info and info[2] in ("DXT1", "DXT3", "DXT5") else None
+    im = im.convert("RGBA")
+    want = info[3] if info else 1
+    levels, (w, h) = [], im.size
+    for k in range(want):
+        lw, lh = max(1, w >> k), max(1, h >> k)
+        lv = im if k == 0 else im.resize((lw, lh), Image.LANCZOS)
+        buf = io.BytesIO()
+        if fmt:
+            lv.save(buf, format="DDS", pixel_format=fmt)
+        else:
+            lv.save(buf, format="DDS")
+        levels.append(buf.getvalue())
+        if lw == 1 and lh == 1:
+            break
+    head = bytearray(levels[0][:128])
+    if len(levels) > 1:
+        put = lambda k, v: head.__setitem__(slice(k, k + 4), v.to_bytes(4, "little"))
+        get = lambda k: int.from_bytes(head[k:k + 4], "little")
+        put(8, get(8) | 0x20000)                       # DDSD_MIPMAPCOUNT
+        put(28, len(levels))
+        put(108, get(108) | 0x400008)                  # DDSCAPS_COMPLEX | DDSCAPS_MIPMAP
+    return bytes(head) + b"".join(lv[128:] for lv in levels)
 
 
 def colour_on_map(mod, campaign, faction, regions):
@@ -607,6 +712,47 @@ def redraw_others(plan, campaign, changed_factions, force=False):
         write_select_map(plan, campaign, fac, new, colour)
 
 
+def art_source(pick):
+    """The file an Art pick takes its picture from (a pick is a path, or {'src', 'exact', 'link'})."""
+    return pick.get("src") if isinstance(pick, dict) else pick
+
+
+def write_art(plan, faction, rel, pick):
+    """One Art pick written to data/rel: the picture made the size and format of the one it
+    replaces, or with 'exact' (back to the original) the file's bytes as they are. With
+    'link' = [file key, field] the faction's line is pointed at rel (a picture of its own in
+    place of one it shared) - the line of this faction only."""
+    mod = plan.mod
+    target = os.path.join(mod.data, *rel.replace("\\", "/").split("/"))
+    src = art_source(pick)
+    link = pick.get("link") if isinstance(pick, dict) else None
+    line = None
+    if link:
+        line = next((l for l in picture_links(mod, plan.edit)
+                     if l["faction"] == faction and l["key"] == link[0] and l["field"] == link[1]), None)
+    like = target if os.path.exists(target) else next(
+        (s for s, d in plan.copies if os.path.normcase(d) == os.path.normcase(target)), None)
+    if like is None and line is not None:
+        got = picture_file(mod.data, line["ref"])        # the picture it shared until now
+        like = got[1] if got else None
+    if isinstance(pick, dict) and pick.get("exact"):
+        with open(src, "rb") as fh:
+            plan.binary(target, fh.read())
+        plan.notes.append((mod.rel(target), "picture put back as it was (%s)" % mod.rel(src)))
+    else:
+        replace_picture(plan, src, target, like)
+    if line is not None:
+        # the path written as the line writes it: x.tga for x.tga.dds, data/ when it had it
+        ref = rel
+        if rel.lower().endswith(".tga.dds") and not line["ref"].lower().endswith(".dds"):
+            ref = rel[:-4]
+        if line["ref"].replace("\\", "/").lower().startswith("data/"):
+            ref = "data/" + ref
+        if ref.lower() != line["ref"].replace("\\", "/").lower():     # (a new faction's own: the clone did it)
+            set_picture_ref(plan.edit(line["path"]), line["line"], line["ref"], ref)
+            plan.note(plan.files[line["path"]], "%s's %s now %s (was %s)" % (faction, line["field"], ref, line["ref"]))
+
+
 def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
     """opts['art'] = {path under data: picture to put there}; opts['select_map'] =
     {'on': True, 'colour': [r, g, b]}: only when asked (the Art tab's optional part), the
@@ -614,11 +760,8 @@ def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
     land changed follow. Without it every map_<faction>.tga stays as it is (0.9.3: the user wants
     the originals kept unless he asks; a new faction keeps the template's copy)."""
     mod = plan.mod
-    for rel, src in sorted((plan.opts.get("art") or {}).items()):
-        target = os.path.join(mod.data, *rel.replace("\\", "/").split("/"))
-        like = target if os.path.exists(target) else next(
-            (s for s, d in plan.copies if os.path.normcase(d) == os.path.normcase(target)), None)
-        replace_picture(plan, src, target, like)
+    for rel, pick in sorted((plan.opts.get("art") or {}).items()):
+        write_art(plan, faction, rel, pick)
     sel = plan.opts.get("select_map") or {}
     if not sel.get("on"):
         return

@@ -99,8 +99,14 @@ class Plan:
         root = os.path.dirname(self.mod.data)
         stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         bdir = os.path.join(root, BACKUP_DIR, "%s_%s" % (stamp, self.new))
+        k = 1
+        while os.path.exists(bdir) or os.path.exists(bdir + "_restored"):   # two writes in one second
+            k += 1
+            bdir = os.path.join(root, BACKUP_DIR, "%s_%s_%d" % (stamp, self.new, k))
         os.makedirs(bdir)
-        manifest = {"faction": self.new, "template": self.template, "modified": [], "created": []}
+        # copied_from {created: its source}: what a copied picture was before it was replaced (Art's
+        # "Back to the original"); Restore does not need it
+        manifest = {"faction": self.new, "template": self.template, "modified": [], "created": [], "copied_from": {}}
         created = []
         for path in self.changed_files():
             rel = os.path.relpath(path, root)
@@ -124,6 +130,8 @@ class Plan:
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
                 shutil.copy2(src, dst)
             created.append(os.path.relpath(dst, root).replace("\\", "/"))
+            if not os.path.isdir(src):
+                manifest["copied_from"][created[-1]] = os.path.relpath(src, root).replace("\\", "/")
         manifest["created"] = created
         with open(os.path.join(bdir, "manifest.json"), "w", encoding="utf-8") as out:
             json.dump(manifest, out, indent=2)

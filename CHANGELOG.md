@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **A new faction's banners were the template's files**: `descr_banners.txt` kept the template's texture paths,
+  so replacing the new faction's banner in the Art tab would have changed the template's too. A new faction now
+  gets banner textures and a loading-screen logo of its own, named after it (`standard_macedonia` ->
+  `standard_epirus`), and its lines point at them; the template's files stay untouched.
+- The loading-screen logo (`loading_logo` in descr_sm_factions) was copied under the new name but the line
+  still named the template's picture: it now names the copy.
+- Replacing a `.dds` picture (Rome's `*.tga.dds` banner textures) wrote a TGA inside the .dds name; it now
+  writes a real DDS in the format of the one replaced (DXT1/3/5, with its mipmaps).
+- Two writes in the same second no longer fail on the backup folder's name.
+
+### Added
+- Art tab: a picture several factions share (the rebels' or routing banner) becomes the faction's own copy when
+  replaced - written under its own name, and only this faction's line points at it.
+- Art tab: **Back to the original** puts back a picture the tool changed (as the first backup kept it; for a
+  new faction, the template's picture it was copied from). A pending change still has *Keep the current one*.
+- Art tab: each picture says which file and line names it, and who shares it.
+
 ## 0.10.0 - 2026-09-29
 
 ### Added

@@ -477,6 +477,119 @@ def art_files(plan, campaign):
 
 
 # ---------------------------------------------------------------------------
+# Pictures a faction's lines name by path: banner textures, the loading-screen logo
+# ---------------------------------------------------------------------------
+# (file key, fields in a `faction X` block that name a picture under data)
+PICTURE_LINKS = (("banners", ("standard_texture", "rebels_texture", "routing_texture", "ally_texture")),
+                 ("sm_factions", ("loading_logo",)))
+
+
+def picture_file(data, ref):
+    """(path under data as it lies on disk, absolute path) of a picture a line names, or
+    None. Rome writes models/textures/x.tga and keeps x.tga.dds."""
+    from .moddata import _ci
+    rel = ref.replace("\\", "/")
+    rel = rel[5:] if rel.lower().startswith("data/") else rel
+    for cand in (rel, rel + ".dds"):
+        folder, name = os.path.split(os.path.join(data, *cand.split("/")))
+        p = _ci(folder, name) if os.path.isdir(folder) else None
+        if p:
+            return os.path.relpath(p, data).replace("\\", "/"), p
+    return None
+
+
+def picture_links(mod, load=None):
+    """[{'faction', 'key', 'path', 'line', 'field', 'ref'}] of every picture path in the
+    factions' blocks of descr_banners / descr_sm_factions; load = plan.edit to see the
+    files as a plan leaves them (default: as on disk)."""
+    out = []
+    for key, fields in PICTURE_LINKS:
+        path = mod.file(key)
+        if not path:
+            continue
+        f = (load or mod.load)(path)
+        cur = None
+        for i in range(len(f)):
+            t = tokens(f.text(i))
+            if len(t) == 2 and t[0] == "faction":
+                cur = t[1]
+            elif cur and len(t) >= 2 and t[0] in fields:
+                out.append({"faction": cur, "key": key, "path": path, "line": i, "field": t[0], "ref": t[1]})
+    return out
+
+
+def link_users(links, but=None):
+    """{ref lower: set of factions naming it} - who shares a picture."""
+    users = {}
+    for l in links:
+        if l["faction"] != but:
+            users.setdefault(l["ref"].replace("\\", "/").lower(), set()).add(l["faction"])
+    return users
+
+
+def own_picture_ref(ref, owner, new):
+    """The name a picture gets as `new`'s own: the owner's name in it swapped for the new one
+    (standard_julii -> standard_saba for romans_julii, standard_macedonia_ally -> standard_saba_ally
+    for macedon: a word of the owner's name, or a word that starts like it), else _<new> added
+    (standard_greek_rebels -> standard_greek_rebels_saba). The folder and extension stay."""
+    ref = ref.replace("\\", "/")
+    folder, name = (ref.rsplit("/", 1) if "/" in ref else ("", ref))
+    stem, dot, ext = name.partition(".")
+    whole = re.sub(r"(?i)(^|[^a-z0-9])%s(?=$|[^a-z0-9])" % re.escape(owner), lambda m: m.group(1) + new,
+                   stem, count=1) if owner else stem
+    if whole == stem and owner:
+        words = [w for w in owner.lower().split("_") if len(w) >= 4]
+        parts = re.split(r"([^A-Za-z0-9]+)", stem)
+        for k, p in enumerate(parts):
+            low = p.lower()
+            if len(low) >= 4 and any(low == w or low.startswith(w) or w.startswith(low) for w in words):
+                parts[k] = new
+                whole = "".join(parts)
+                break
+    if whole == stem:
+        whole = "%s_%s" % (stem, new)
+    return (folder + "/" if folder else "") + whole + dot + ext
+
+
+def disk_tail(ref, disk):
+    """What the file on disk adds to the name a line writes: '.dds' for x.tga kept as x.tga.dds."""
+    a, b = ref.replace("\\", "/").split("/")[-1], os.path.basename(disk)
+    return b[len(a):] if b.lower().startswith(a.lower()) else ""
+
+
+def set_picture_ref(f, line, old, new):
+    """Point line `line` of f at another picture (only the path changes)."""
+    f.set(line, f.text(line).replace(old, new, 1))
+
+
+def own_pictures(plan):
+    """The new faction's banner textures and loading-screen logo become files of its own: a
+    picture only the template names is copied under the new name (standard_macedonia ->
+    standard_saba) and the new block points at the copy - else a picture replaced for the new
+    faction would change the template's too. Pictures several factions share (rebels,
+    routing) stay shared; the Art tab's Replace makes the faction a copy of its own then."""
+    t, new, mod = plan.template, plan.new, plan.mod
+    links = picture_links(mod, plan.edit)
+    users = link_users(links, but=new)
+    planned = {os.path.normcase(os.path.abspath(d)) for _, d in plan.copies}
+    count = 0
+    for l in links:
+        if l["faction"] != new or users.get(l["ref"].replace("\\", "/").lower()) != {t}:
+            continue
+        got = picture_file(mod.data, l["ref"])
+        if not got:
+            continue
+        ref = own_picture_ref(l["ref"], t, new)
+        dst = os.path.join(os.path.dirname(got[1]), ref.split("/")[-1] + disk_tail(l["ref"], got[1]))
+        if os.path.normcase(os.path.abspath(dst)) not in planned and not os.path.exists(dst):
+            plan.copy(got[1], dst)
+        set_picture_ref(plan.edit(l["path"]), l["line"], l["ref"], ref)
+        count += 1
+    if count:
+        plan.note(None, "%d picture(s) of %s's banners / loading logo copied as %s's own" % (count, t, new))
+
+
+# ---------------------------------------------------------------------------
 # Unit cards: followed from export_descr_unit, not guessed from folder names
 # ---------------------------------------------------------------------------
 CARD_KINDS = (("units", "#%s.tga", "unit card"), ("unit_info", "%s_info.tga", "unit info picture"))

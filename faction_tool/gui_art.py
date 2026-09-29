@@ -43,8 +43,8 @@ class ArtEditor(ttk.Frame):
         self._map_im, self._map_scale = None, 0
         top.bind("<Configure>", lambda e: self._fit_map(), add="+")
         self.bind("<Configure>", lambda e: self._fit_map(), add="+")        # the tab's height counts too
-        self.pics_note = ttk.Label(self, text="Every picture of the faction. Replace... takes a PNG, JPG or TGA and makes it the "
-                             "size and depth the game's own has; Preview, then Apply writes it (with a backup).",
+        self.pics_note = ttk.Label(self, text="Every picture of the faction. Replace... takes a PNG, JPG, TGA or DDS and makes it the "
+                             "size and format the game's own has (a DDS stays a DDS); Preview, then Apply writes it (with a backup).",
                   foreground="#555")
         self.pics_note.pack(anchor="w", pady=(8, 2))
         box = ttk.Frame(self)
@@ -107,15 +107,6 @@ class ArtEditor(ttk.Frame):
             return f, f
         return a.v["template"].get().strip(), (a.v["name"].get().strip().lower() or None)
 
-    def _target(self, rel, src_faction, new):
-        """The path a template's picture gets for the new faction: its name swapped where it
-        stands as a whole (symbol24_romans_julii_roll -> symbol24_saba_roll), as the clone does."""
-        import re
-        if not new or new == src_faction:
-            return rel
-        return re.sub(r"(?i)(^|[^a-z0-9])%s(?=$|[^a-z0-9])" % re.escape(src_faction),
-                      lambda m: m.group(1) + new, rel)
-
     def _thumb(self, parent, path, box=(72, 72)):
         from PIL import Image, ImageTk
         try:
@@ -145,34 +136,58 @@ class ArtEditor(ttk.Frame):
             ttk.Label(self.inner, text="No pictures named after %s were found." % src_faction).grid(row=0, column=0)
         self.cells = []
         for i, p in enumerate(pics):
-            target = self._target(p["rel"], src_faction, new)
+            target = FA.picture_target(p, src_faction, new or src_faction)
             row = ttk.Frame(self.inner, padding=3, relief="groove")
             self.cells.append(row)
-            pending = a.art_replace.get(target)
+            pick = a.art_replace.get(target)
+            pending = FA.art_source(pick) if pick else None
             self._thumb(row, pending or p["path"]).grid(row=0, column=0, rowspan=4, sticky="n")
             ttk.Label(row, text=p["label"], font=("", 9, "bold"), wraplength=self.CELL - 110).grid(
                 row=0, column=1, sticky="w", padx=6)
             if p.get("where"):
                 ttk.Label(row, text="in the game: " + p["where"], wraplength=self.CELL - 110, justify="left").grid(
                     row=1, column=1, sticky="w", padx=6)
-            size = p["size"]
-            need = ("needs %d x %d, %d-bit TGA" % size) if size else "as the file it replaces"
-            ttk.Label(row, foreground="#555", justify="left", wraplength=self.CELL - 110, text="%s\n%s%s" % (
-                target, need, "\nnew: %s (not written yet)" % os.path.basename(pending) if pending else "")).grid(
+            text = "%s\n%s" % (target, self._need(p["size"], target))
+            if p.get("link"):
+                text += "\nnamed in %s (%s)" % (os.path.basename(a.mod.file(p["link"][0]) or ""), p["link"][1])
+                if target != p["rel"]:
+                    text += "\n" + ("shared with %s - Replace gives %s a copy of its own under this name" % (
+                        ", ".join(p["shared"]), new or src_faction) if p.get("shared") else
+                        "%s's own copy, made from %s" % (new, p["rel"]))
+            if pick:
+                text += "\nnew: %s (not written yet)" % (
+                    "the original, as it was" if isinstance(pick, dict) and pick.get("exact") else
+                    os.path.basename(pending))
+            ttk.Label(row, foreground="#555", justify="left", wraplength=self.CELL - 110, text=text).grid(
                 row=2, column=1, sticky="w", padx=6)
             bar = ttk.Frame(row)
             bar.grid(row=3, column=1, sticky="w", padx=6)
-            ttk.Button(bar, text="Replace...", command=lambda t=target, s=size, l=p["label"]: self.replace(t, s, l)).pack(
-                side="left")
-            if pending:
-                ttk.Button(bar, text="Keep the old one", command=lambda t=target: self.unreplace(t)).pack(
+            link = p.get("link") if target != p["rel"] else None
+            ttk.Button(bar, text="Replace...", command=lambda t=target, s=p["size"], l=p["label"], k=link:
+                       self.replace(t, s, l, k)).pack(side="left")
+            if pick:
+                ttk.Button(bar, text="Keep the current one", command=lambda t=target: self.unreplace(t)).pack(
                     side="left", padx=4)
+            else:
+                orig = FA.original_picture(a.mod, target) if os.path.exists(os.path.join(a.mod.data, target)) \
+                    else None
+                if orig and not _same(orig, os.path.join(a.mod.data, target)):
+                    ttk.Button(bar, text="Back to the original", command=lambda t=target, o=orig, k=link:
+                               self.revert(t, o, k)).pack(side="left", padx=4)
         self._reflow(force=True)
         self.draw_map()
 
-    def replace(self, target, size, label):
+    @staticmethod
+    def _need(size, target):
+        if not size:
+            return "as the file it replaces"
+        if target.lower().endswith(".dds"):
+            return "needs %d x %d, DDS %s (with its mipmaps)" % size
+        return "needs %d x %d, %d-bit TGA" % size
+
+    def replace(self, target, size, label, link=None):
         src = filedialog.askopenfilename(title=label, filetypes=[
-            ("Pictures", "*.tga *.png *.jpg *.jpeg *.bmp"), ("All files", "*.*")])
+            ("Pictures", "*.tga *.png *.jpg *.jpeg *.bmp *.dds"), ("All files", "*.*")])
         if not src:
             return
         try:
@@ -188,8 +203,18 @@ class ArtEditor(ttk.Frame):
                                                                              tuple(size[:2]) + tuple(size[:2]))):
                 return
         self.app.remember()
-        self.app.art_replace[target] = src
+        self.app.art_replace[target] = {"src": src, "link": link} if link else src
         self.app.status.set("%s: %s - Preview, then Apply." % (label, os.path.basename(src)))
+        self.load()
+
+    def revert(self, target, orig, link=None):
+        """The picture as it was before the tool first changed it (a pending change, written on Apply)."""
+        self.app.remember()
+        pick = {"src": orig, "exact": True}
+        if link:
+            pick["link"] = link
+        self.app.art_replace[target] = pick
+        self.app.status.set("%s goes back to the original on Apply." % target)
         self.load()
 
     def unreplace(self, target):
@@ -291,3 +316,14 @@ class ArtEditor(ttk.Frame):
                                               Image.LANCZOS)
         self._map_photo = ImageTk.PhotoImage(big)
         self.map_pic.configure(image=self._map_photo, text="", width=big.width, height=big.height)
+
+
+def _same(a, b):
+    """Whether two files hold the same bytes."""
+    try:
+        if os.path.getsize(a) != os.path.getsize(b):
+            return False
+        with open(a, "rb") as x, open(b, "rb") as y:
+            return x.read() == y.read()
+    except OSError:
+        return False

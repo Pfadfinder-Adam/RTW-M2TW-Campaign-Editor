@@ -1440,6 +1440,108 @@ class ToolTest(unittest.TestCase):
         am = Image.open(os.path.join(camp, "map_alpha.tga")).convert("RGB")
         self.assertNotEqual(am.getpixel((7, 7)), (100, 100, 100))            # (3, 0) is the bottom right corner
 
+    def test_faction_picture_links(self):
+        """Banners / loading logo are named by path: a clone gets files of its own (the template's
+        stay untouched), a shared picture replaced becomes the faction's own copy, a DDS stays a
+        DDS, and Back to the original finds what the tool changed."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from faction_tool import factionart as FA
+        d = os.path.join(self.root, "data")
+        with open(os.path.join(d, "descr_sm_factions.txt"), "rb") as fh:
+            sm = fh.read().decode("latin-1").replace(
+                "culture\t\teastern\r\n", "culture\t\teastern\r\nloading_logo\t\tloading_screen/symbols/symbol128_alpha.tga\r\n")
+        write(os.path.join(d, "descr_sm_factions.txt"), sm.replace("\r\n", "\n"))
+        write(os.path.join(d, "descr_banners.txt"),
+              "faction\t\talpha\nstandard_texture\tmodels/textures/standard_alphan.tga\n"
+              "rebels_texture\t\tmodels/textures/standard_rebels.tga\n"
+              "ally_texture\t\tmodels/textures/standard_alphan_ally.tga\n\n"
+              "faction\t\tslave\nstandard_texture\tmodels/textures/standard_slave.tga\n"
+              "rebels_texture\t\tmodels/textures/standard_rebels.tga\n")
+        tex = os.path.join(d, "models", "textures")
+        os.makedirs(tex)
+
+        def dds(path, colour, levels=3):                  # a DXT5 texture with mipmaps, as Rome keeps them
+            import io
+            parts = []
+            for k in range(levels):
+                buf = io.BytesIO()
+                Image.new("RGBA", (16 >> k, 16 >> k), colour).save(buf, format="DDS", pixel_format="DXT5")
+                parts.append(buf.getvalue())
+            head = bytearray(parts[0][:128])
+            head[28:32] = levels.to_bytes(4, "little")
+            with open(path, "wb") as fh:
+                fh.write(bytes(head) + b"".join(p[128:] for p in parts))
+        for n in ("standard_alphan", "standard_alphan_ally", "standard_rebels", "standard_slave"):
+            dds(os.path.join(tex, n + ".tga.dds"), (10, 20, 30, 255))
+        logo = os.path.join(d, "loading_screen", "symbols")
+        os.makedirs(logo)
+        Image.new("RGBA", (128, 128), (1, 2, 3, 255)).save(os.path.join(logo, "symbol128_alpha.tga"))
+        self.assertEqual(FA.own_picture_ref("models/textures/standard_macedonia_ally.tga", "macedon", "epirus"),
+                         "models/textures/standard_epirus_ally.tga")
+        self.assertEqual(FA.own_picture_ref("models/textures/standard_julii.tga", "romans_julii", "epirus"),
+                         "models/textures/standard_epirus.tga")
+        self.assertEqual(FA.own_picture_ref("models/textures/standard_greek_rebels.tga", "macedon", "epirus"),
+                         "models/textures/standard_greek_rebels_epirus.tga")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        plan.apply()
+        with open(os.path.join(d, "descr_banners.txt")) as fh:
+            banners = fh.read()
+        beta = banners[banners.index("faction\t\tbeta"):]
+        self.assertIn("models/textures/standard_beta.tga", beta)
+        self.assertIn("models/textures/standard_beta_ally.tga", beta)
+        self.assertIn("models/textures/standard_rebels.tga", beta)          # shared: stays shared
+        self.assertIn("standard_texture\tmodels/textures/standard_alphan.tga", banners)
+        self.assertTrue(os.path.isfile(os.path.join(tex, "standard_beta.tga.dds")))
+        with open(os.path.join(d, "descr_sm_factions.txt")) as fh:
+            self.assertIn("loading_screen/symbols/symbol128_beta.tga", fh.read())
+        self.assertTrue(os.path.isfile(os.path.join(logo, "symbol128_beta.tga")))
+        # the Art list: beta's own banner; the rebels' banner shared with alpha and slave
+        mod = ModData(self.root)
+        pics = {p["rel"]: p for p in FA.faction_pictures(mod, "test", "beta")}
+        own = pics["models/textures/standard_beta.tga.dds"]
+        self.assertEqual((own["link"], own["shared"], own["size"]), (["banners", "standard_texture"], [], (16, 16, "DXT5")))
+        reb = pics["models/textures/standard_rebels.tga.dds"]
+        self.assertEqual(reb["shared"], ["alpha", "slave"])
+        target = FA.picture_target(reb, "beta", "beta")
+        self.assertEqual(target, "models/textures/standard_rebels_beta.tga.dds")
+        png = os.path.join(self.root, "flag.png")
+        Image.new("RGB", (40, 40), (200, 0, 0)).save(png)
+        from faction_tool.edit import edit
+        plan = edit(mod, "test", "beta", {"art": {target: {"src": png, "link": reb["link"]},
+                                                  own["rel"]: png}})
+        plan.apply()
+        with open(os.path.join(d, "descr_banners.txt")) as fh:
+            banners = fh.read()
+        self.assertIn("rebels_texture\t\tmodels/textures/standard_rebels_beta.tga", banners)
+        self.assertEqual(banners.count("models/textures/standard_rebels.tga"), 2)   # alpha's and slave's lines
+        got = FA.dds_info(os.path.join(tex, "standard_rebels_beta.tga.dds"))
+        self.assertEqual(got, (16, 16, "DXT5", 3))                          # the shared one's size, format, mipmaps
+        im = Image.open(os.path.join(tex, "standard_rebels_beta.tga.dds")).convert("RGB")
+        self.assertEqual(im.size, (16, 16))
+        self.assertGreater(im.getpixel((8, 8))[0], 180)
+        with Image.open(os.path.join(tex, "standard_rebels.tga.dds")) as a, \
+                Image.open(os.path.join(tex, "standard_alphan.tga.dds")) as b:
+            self.assertEqual(a.convert("RGB").getpixel((8, 8)), b.convert("RGB").getpixel((8, 8)))   # untouched
+        # Back to the original: beta's banner as the clone made it (alpha's picture)
+        mod = ModData(self.root)
+        orig = FA.original_picture(mod, own["rel"])
+        self.assertEqual(os.path.normcase(orig), os.path.normcase(os.path.join(tex, "standard_alphan.tga.dds")))
+        self.assertIsNone(FA.original_picture(mod, "models/textures/standard_slave.tga.dds"))
+        plan = edit(mod, "test", "beta", {"art": {own["rel"]: {"src": orig, "exact": True}}})
+        plan.apply()
+        with open(orig, "rb") as a, open(os.path.join(tex, "standard_beta.tga.dds"), "rb") as b:
+            self.assertEqual(a.read(), b.read())
+        for b in backups(ModData(self.root)):                  # newest first
+            restore(ModData(self.root), b)
+        after = tree_hash(self.root)
+        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k and k != "flag.png"},
+                         before)
+
     def test_copy_unit_and_building(self):
         from faction_tool import editors as E
         from faction_tool.plan import Plan
