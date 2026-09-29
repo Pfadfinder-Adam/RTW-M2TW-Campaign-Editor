@@ -287,7 +287,7 @@ def build_start(plan, campaign, start):
     template_army = default_army(s, t)
     if not template_army and not start.get("army"):
         plan.warn(f, "the template leader has no army to copy - the leader starts with no units")
-    pool = plan.mod.name_pool(new) or plan.mod.name_pool(t)
+    pool = plan.name_pool(new) or plan.name_pool(t)
 
     def merge(role_units, region, into):
         """Fold the armies that join with `region` into `into`'s units; the

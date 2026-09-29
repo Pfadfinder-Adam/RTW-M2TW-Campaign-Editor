@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.13.0"
+VERSION = "0.14.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
 
@@ -282,6 +282,7 @@ class App(tk.Tk):
         self.new_regions = []           # [{name, settlement, creator, rebels, resources, colour, city, port, owner, level}]
         self.region_religions = {}      # {region: {religion: percent}} set by hand (Medieval II)
         self.culture_names = {}         # {settlement: {culture or '*': name}} (REX renames the town for its owner)
+        self.name_list = {}             # {faction or '(new)': {pool: [names]}} a name list of its own (Name list...)
         # resources on the map: moved {index: (x, y)}, removed [index], added [{type, xy}], region tags {region: text}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         self._res_placing, self._res_sel = None, None
@@ -424,7 +425,7 @@ class App(tk.Tk):
         lf.columnconfigure(1, weight=1)
 
         # --- leaders
-        lf2 = self.lf2 = ttk.LabelFrame(left, text="Leader and heir (names must come from the template's name list)")
+        lf2 = self.lf2 = ttk.LabelFrame(left, text="Leader and heir (names come from the faction's name list)")
         lf2.pack(fill="x", pady=(8, 0))
         self.cb_names = []
         for r, who in enumerate(("leader", "heir")):
@@ -437,6 +438,11 @@ class App(tk.Tk):
             self.cb_names.append((a, b))
         ttk.Label(lf2, text="first name / surname / age - leave the heir empty for none").grid(
             row=2, column=0, columnspan=4, sticky="w", padx=4)
+        nl = ttk.Frame(lf2)
+        nl.grid(row=3, column=0, columnspan=4, sticky="w", padx=4, pady=(2, 4))
+        ttk.Button(nl, text="Name list...", command=self.name_list_dialog).pack(side="left")
+        self.l_name_list = ttk.Label(nl, foreground="#666", text="its own men's names, surnames and women's names")
+        self.l_name_list.pack(side="left", padx=6)
 
         # --- towns
         tf = ttk.LabelFrame(right, text="Starting settlements")
@@ -486,6 +492,7 @@ class App(tk.Tk):
             edit=(self.tv.selection() or [""])[0] or self.selected_town())).pack(pady=2)
         ttk.Button(mid, text="Names by culture...", command=lambda: self.culture_names_dialog(
             (self.tv.selection() or [""])[0] or self.selected_town())).pack(pady=2)
+        ttk.Button(mid, text="All towns' names...", command=self.culture_names_table).pack(pady=2)
         self.tv = ttk.Treeview(left_pane, columns=("town", "owner"), show="tree headings", height=18)
         self.tv.heading("#0", text="Region")
         self.tv.heading("town", text="Settlement")
@@ -582,6 +589,7 @@ class App(tk.Tk):
         tools = ttk.Menubutton(bar, text="Tools")
         menu = tk.Menu(tools, tearoff=False)
         menu.add_command(label="Check mod", command=self.check)
+        menu.add_command(label="Settlement names by culture (every town)...", command=self.culture_names_table)
         menu.add_command(label="Scan mod (every mention of the faction)", command=self.scan)
         menu.add_command(label="Restore a backup...", command=self.restore)
         menu.add_separator()
@@ -995,6 +1003,7 @@ class App(tk.Tk):
         self.garrisons, self.buildings_picked, self.sizes = {}, {}, {}
         self.char_moves, self.roster_set = {}, {}
         self.family_set = {}
+        self.name_list = {}
         self.roster_editor.forget()
         self.family_editor.forget()
         self.field, self.removed_existing, self._placing = self._existing_field(faction), [], None
@@ -1034,7 +1043,7 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ undo / redo
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "place_moves", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions", "region_edits",
-                 "culture_names", "res_moves", "res_removed", "res_added", "region_tags", "art_replace", "sel_map", "roster_set",
+                 "culture_names", "name_list", "res_moves", "res_removed", "res_added", "region_tags", "art_replace", "sel_map", "roster_set",
                  "family_set")
 
     def snapshot(self):
@@ -1060,6 +1069,7 @@ class App(tk.Tk):
                 setattr(self, k, copy.deepcopy(st[k]))
         self.v["capital"].set(st["capital"])
         self.refresh_chosen()
+        self.refresh_name_combos()
         self.refresh_field()
         self.fill_towns()
         tab = self.nb.index("current")
@@ -1527,6 +1537,14 @@ class App(tk.Tk):
                 "edits": {k: dict(v) for k, v in self.region_edits.items()},
                 "culture_names": {k: dict(v) for k, v in self.culture_names.items()}}
 
+    def culture_names_table(self):
+        """Every town's names by culture in one table (sort, filter, edit in place)."""
+        if not self.mod or not self.strat:
+            messagebox.showerror(APP, "Load a mod first.")
+            return
+        from .gui_culturenames import CultureNamesTable
+        CultureNamesTable(self)
+
     def culture_names_dialog(self, region):
         """REX: the town's name for each culture of its owner - the game renames it when it changes hands."""
         if not self.mod or not self.strat:
@@ -1536,8 +1554,7 @@ class App(tk.Tk):
         new = self._new_region(region) if region else None
         info = new or self.regions.get(region) if region else None
         if not info or not info.get("settlement"):
-            messagebox.showerror(APP, "Pick a region first: a town in the list on the Faction tab, or 'Paint with' "
-                                      "on the Map (right click a region).")
+            self.culture_names_table()          # no town picked: the table of every town
             return
         town = info["settlement"]
         cults = CN.cultures(self.mod)
@@ -1583,6 +1600,8 @@ class App(tk.Tk):
         bar.grid(row=len(rows) + 1, column=0, columnspan=2, pady=(8, 0), sticky="w")
         ttk.Button(bar, text="OK", command=ok).pack(side="left")
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+        ttk.Button(bar, text="All towns...", command=lambda: (w.destroy(), self.culture_names_table())).pack(
+            side="left", padx=(16, 0))
 
     def religions_dialog(self):
         """Medieval II: the religions of the region in 'Paint with' (percent, 100 in all)."""
@@ -1863,14 +1882,7 @@ class App(tk.Tk):
             colours[me] = tuple(self.colours["primary"] or colours.get(template, (255, 215, 0)))
         elif self.colours["primary"]:
             colours[me] = tuple(self.colours["primary"])
-        for r in self.new_regions:                  # a new region: its owner at the start, else the rebels
-            owners[r["name"]] = r.get("owner") or "slave"
-        for r in self.chosen:
-            owners[r] = me
-        if self.editing() and self.editing_now:
-            for r in self.editing_now.get("regions", []):
-                if r not in self.chosen:
-                    owners[r] = self.v_give.get() or "slave"
+        owners = self.owners_after(me, owners)
         chars, armies_at = [], set()
         tiles = self.mod.city_tiles(self.v_campaign.get())
         town_moves = {tiles[r]: xy for (w, r), xy in self.place_moves.items() if w == "city" and r in tiles}
@@ -2294,6 +2306,7 @@ class App(tk.Tk):
         self.region_edits = {}
         self.region_religions = {}
         self.culture_names = {}
+        self.name_list = {}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         self._res_placing, self._res_sel, self._res_cache = None, None, None
         self.art_replace, self.sel_map = {}, {}
@@ -2352,6 +2365,79 @@ class App(tk.Tk):
         towns.update({r["name"]: r["settlement"] for r in self.new_regions if r.get("settlement")})
         return CN.labels(table, towns, owners, cultures.get)
 
+    def owners_after(self, me=None, owners=None):
+        """{region: owner} as the next Apply leaves the towns: new regions, the faction's chosen towns (me = the
+        edited faction, or the new one's name), the towns it gives away."""
+        if me is None:
+            me = self.v["template"].get().strip() if self.editing() else \
+                (self.v["name"].get().strip().lower() or "(new)")
+        owners = dict(self.town_owners() if owners is None else owners)
+        for r in self.new_regions:                  # a new region: its owner at the start, else the rebels
+            owners[r["name"]] = r.get("owner") or "slave"
+        for r in self.chosen:
+            owners[r] = me
+        if self.editing() and self.editing_now:
+            for r in self.editing_now.get("regions", []):
+                if r not in self.chosen:
+                    owners[r] = self.v_give.get() or "slave"
+        return owners
+
+    def name_list_key(self):
+        return self.v["template"].get().strip() if self.editing() else "(new)"
+
+    def pool_for(self, faction):
+        """The faction's name pools as the next Apply leaves them (a Name list... waiting counts)."""
+        from .namelists import key_of
+        key = faction if self.editing() else ("(new)" if faction == self.v["template"].get().strip() else faction)
+        pools = self.name_list.get(key)
+        if pools and self.editing() and faction == self.v["template"].get().strip():
+            from .namelists import keep_used
+            pools = keep_used(self.mod, faction, pools)[0]
+        if pools:
+            return {p: [key_of(n) for n in v] for p, v in pools.items() if v}
+        return self.mod.name_pool(faction) or {}
+
+    def leader_pool(self):
+        return self.pool_for(self.v["template"].get().strip())
+
+    def refresh_name_combos(self):
+        pool = self.leader_pool()
+        for a, b in self.cb_names:
+            a["values"] = first_names(pool, "general")
+            b["values"] = [""] + pool.get("surnames", [])
+        own = self.name_list.get(self.name_list_key())
+        if hasattr(self, "l_name_list"):
+            from .namelists import counts
+            self.l_name_list.configure(text=("its own list, written with Apply: " + counts(own)) if own else
+                                       "its own men's names, surnames and women's names")
+
+    def name_list_dialog(self):
+        if not self.mod:
+            return
+        t = self.v["template"].get().strip()
+        if not t:
+            messagebox.showerror(APP, "pick the %s first" % ("faction" if self.editing() else "template"))
+            return
+        from .gui_names import NameListWizard
+        key = self.name_list_key()
+        label = t if self.editing() else (self.v["name"].get().strip() or "the new faction")
+        start = self.name_list.get(key)
+        if start is None and not self.editing():
+            start = {}                         # a new faction: its own names typed in (or copied, step by step)
+        NameListWizard(self, t if self.editing() else key, label, start)
+
+    def name_list_set(self, who, pools):
+        from .namelists import counts
+        self.remember()
+        self.name_list[self.name_list_key()] = {p: list(v) for p, v in pools.items()}
+        self.refresh_name_combos()
+        pool = self.leader_pool()
+        for role in ("leader", "heir"):        # a name the new list lacks is emptied (the game crashes on it)
+            if self.v[role + "_first"].get() and self.v[role + "_first"].get() not in pool.get("characters", []):
+                self.v[role + "_first"].set("")
+                self.v[role + "_last"].set("")
+        self.status.set("Name list: %s - written with the next Apply." % counts(pools))
+
     def fill_towns(self):
         if not self.strat:
             return
@@ -2406,10 +2492,8 @@ class App(tk.Tk):
         seen = {" ".join(x.header.split(";")[0].split(",", 1)[1].split())
                 for x in (self.strat.factions if self.strat else []) if "," in x.header}
         self.cb_ai["values"] = AI_CHOICES + sorted(v for v in seen if v and v not in AI_CHOICES)
-        pool = self.mod.name_pool(t)
-        for a, b in self.cb_names:
-            a["values"] = first_names(pool, "general")
-            b["values"] = [""] + pool.get("surnames", [])
+        pool = self.leader_pool()
+        self.refresh_name_combos()
         if not self.editing():                 # names left from another faction are not in this one's lists
             for role in ("leader", "heir"):
                 if self.v[role + "_first"].get() and self.v[role + "_first"].get() not in pool.get("characters", []):
@@ -2534,7 +2618,7 @@ class App(tk.Tk):
         if not self.mod or not self.field_faction():
             messagebox.showerror(APP, "load a mod and pick the %s first" % ("faction" if self.editing() else "template"))
             return
-        pool = self.mod.name_pool(self.field_faction()) or {}
+        pool = self.pool_for(self.field_faction())
         w = tk.Toplevel(self)
         w.title({"army": "New army", "fleet": "New fleet"}.get(kind, "New agent"))
         w.transient(self)
@@ -2781,6 +2865,7 @@ class App(tk.Tk):
             "art": dict(self.art_replace), "select_map": dict(self.sel_map),
             "regions": self._regions_opts(),
             "resources": self._resources_opts(),
+            "names": self.name_list.get("(new)"),
         }
         return v["template"], v["name"].lower(), opts
 
@@ -2824,6 +2909,7 @@ class App(tk.Tk):
             "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen},
             "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()},
             "roster": dict(self.roster_set),
+            "names": self.name_list.get(v["template"]),
             "family": copy.deepcopy(self.family_set) if self.family_set else None}
 
     def _places(self):

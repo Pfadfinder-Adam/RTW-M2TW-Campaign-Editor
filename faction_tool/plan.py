@@ -35,6 +35,15 @@ class Plan:
             self.files[path] = f
         return self.files[path]
 
+    def name_pool(self, faction):
+        """The faction's name pools as this plan leaves descr_names.txt (a name list written in this
+        run counts at once: the leader, captains and records get names of the faction's own list)."""
+        from .moddata import pool_in
+        path = self.mod.file("names")
+        if path in self.files:
+            return pool_in(self.files[path].texts(), faction)
+        return self.mod.name_pool(faction)
+
     def copy(self, src, dst):
         self.copies.append((src, dst))
         self.note(None, "copy %s -> %s" % (self.mod.rel(src), self.mod.rel(dst)))

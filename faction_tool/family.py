@@ -338,7 +338,7 @@ def apply(plan, f, faction, opts):
     people = {p.key: p for p in fam["people"]}
     changes = opts.get("people") or {}
     remove = set(opts.get("remove") or [])
-    pool = plan.mod.name_pool(faction) or {}
+    pool = plan.name_pool(faction) or {}
     known_traits = trait_list(plan.mod)
     known_ancs = ancillary_list(plan.mod)
     renames = {}

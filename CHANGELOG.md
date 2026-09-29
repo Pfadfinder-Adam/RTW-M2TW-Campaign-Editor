@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.14.0 - 2026-09-29
+
+Name lists of one's own and every town's names by culture in one table (the user's wishes). Checked on a plain Rome
+copy (the julii's own list: Preview, the names kept that its characters carry; a new faction with its own list in
+the synthetic mod, Restore byte-exact) and in the window; not yet tested in the game.
+
+### Added
+- **Name list...** (Faction tab, under the leader and heir; New and Edit faction): a faction's own men's names,
+  surnames and women's names in three steps - type or paste them, one per line or separated by commas (then a name
+  may have spaces), or by spaces; each step can copy or add another faction's names. Written together: the faction's
+  own section in `descr_names.txt` (a section it shared, as in BI, is left to the others), the shown names in
+  `text/names.txt` and the keys in `descr_names_lookup.txt`. The leader, heir, captains and family records take
+  names from the new list in the same Apply. Editing: names the faction's characters and records already carry
+  stay in the list (Preview says which) - the game crashes on a name that is in no list. Only Latin letters,
+  digits, ' and - (the game's files and font take no others).
+- **All towns' names...** (Faction tab, the per-town dialog, Tools): every town's names by culture in one table -
+  a column per culture, the owner, its culture and the name shown now; sort by any column, filter by culture
+  (with / without a name for it), by the owner's culture, by what waits for Apply, search; double click a cell to
+  type a name in place. Towns the mod's own campaign script renames show grey and are left alone.
+
+### Noted
+- Big maps: a tester's mod with a **5456 x 2464** campaign map loaded in the tool.
+
 ## 0.13.0 - 2026-09-29
 
 Settlement names that follow the owner's culture (REX), shown live in the window. Checked in the window on a

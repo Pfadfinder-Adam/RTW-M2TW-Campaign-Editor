@@ -116,6 +116,26 @@ def read(mod, campaign, plan=None):
     return {}
 
 
+RE_RENAME = re.compile(r"^\s*console_command\s+rename_settlement\s+(\S+)", re.I)
+
+
+def foreign(mod, campaign):
+    """{settlement: count} renamed by the campaign script outside the tool's block (the mod's own script):
+    shown, not edited here - both would rename the town and the last one run would win."""
+    texts = _texts(mod, campaign)
+    if not texts:
+        return {}
+    got = _block(texts)
+    out = {}
+    for i, t in enumerate(texts):
+        if got and got[0] <= i <= got[1]:
+            continue
+        m = RE_RENAME.match(strip_comment(t))
+        if m:
+            out[m.group(1)] = out.get(m.group(1), 0) + 1
+    return out
+
+
 def block(table, indent="\t"):
     """The script lines of the tool's block for a table."""
     out = [BEGIN, "; DATA " + json.dumps(table, ensure_ascii=True, sort_keys=True)]

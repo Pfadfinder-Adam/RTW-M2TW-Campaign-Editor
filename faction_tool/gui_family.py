@@ -207,7 +207,7 @@ class FamilyEditor(ttk.Frame):
             try:
                 self.fam = FM.read(app.mod.load(path), faction)
                 self.traits, self.ancs = FM.trait_list(app.mod), FM.ancillary_list(app.mod)
-                self.pool = app.mod.name_pool(faction) or {}
+                self.pool = app.pool_for(faction) if hasattr(app, "pool_for") else (app.mod.name_pool(faction) or {})
             except Exception as e:
                 messagebox.showerror("Family", str(e))
                 self.fam = None

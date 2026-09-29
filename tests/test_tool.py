@@ -263,6 +263,40 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertNotEqual(mid, after)
 
+    def test_own_name_list_for_new_and_edited_faction(self):
+        from faction_tool import namelists as NL
+        from faction_tool.edit import edit
+        self.assertEqual(NL.parse("Abd al-Malik, Harun\nYusuf"), ["Abd al-Malik", "Harun", "Yusuf"])
+        self.assertEqual(NL.parse("Harun  Yusuf harun"), ["Harun", "Yusuf"])
+        self.assertTrue(NL.problems({"characters": ["X"], "women": []}))
+        self.assertTrue(NL.problems({"characters": ["Жан"], "women": ["A"]}))
+        write(os.path.join(self.root, "data", "text", "names.txt"), "{Aaron}\t\tAaron\n", utf16=True)
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        pools = {"characters": ["Harun", "Abd al-Malik"], "surnames": ["ibn Said"], "women": ["Aisha"]}
+        plan = build(mod, "test", "alpha", "beta", {"names": pools, "start": {"regions": ["B_R"], "leader": {"name": "Harun"}}})
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual(mod.name_pool("beta"), {"characters": ["Harun", "Abd_al-Malik"], "surnames": ["ibn_Said"],
+                                                 "women": ["Aisha"]})
+        self.assertEqual(mod.name_pool("alpha")["characters"], ["Aaron", "Boris"])      # the template's untouched
+        with open(mod.campaign_file("test", "descr_strat.txt")) as fh:
+            strat = fh.read()
+        leader = strat[strat.index("faction\tbeta") if "faction\tbeta" in strat else strat.index("faction beta"):]
+        self.assertTrue(any(n in leader.split("character", 1)[1][:60] for n in ("Harun", "Abd_al-Malik")), leader[:300])
+        texts = mod.load(mod.text_file("names.txt")).texts()
+        self.assertIn("{Abd_al-Malik}\t\t\tAbd al-Malik", texts)
+        # editing: a list that drops a name a character carries keeps that name
+        p2 = edit(mod, "test", "beta", {"names": {"characters": ["Omar"], "women": ["Layla"]}})
+        self.assertTrue(any("kept in the new list" in w for _, w in p2.warnings))
+        got = p2.name_pool("beta")["characters"]
+        self.assertEqual(got[0], "Omar")
+        self.assertEqual(len(got), 2)
+        p2.apply()
+        restore_to(ModData(self.root), backups(ModData(self.root))[-1])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        self.assertEqual(before, after)
+
     def test_name_section_shared_by_factions(self):
         # BI: one section serves a faction and its rebels ('faction: empire_east, empire_east_rebels')
         path = os.path.join(self.root, "data", "descr_names.txt")

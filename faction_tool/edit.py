@@ -97,6 +97,9 @@ def edit(mod, campaign, faction, opts):
     _colours(plan)
     # new regions first: a new town given to this faction is then one of its towns for the
     # garrisons, buildings and capital below (one Apply, one backup)
+    if opts.get("names"):                  # before anything that picks names (captains, records)
+        from .namelists import apply as apply_names
+        apply_names(plan, faction, opts["names"])
     if opts.get("regions"):
         from .regionedit import apply_opts as apply_region_opts
         apply_region_opts(plan, campaign, opts["regions"])
@@ -289,7 +292,7 @@ def _strat(plan, campaign, now):
         from .start import extra_characters
         s = Strat(f)
         armies = {c.xy for x in s.factions for c in x.characters if c.xy and _has_army(s.lines[c.start:c.end])}
-        lines = extra_characters(plan, f, campaign, o["characters"], plan.mod.name_pool(fac) or {}, armies)
+        lines = extra_characters(plan, f, campaign, o["characters"], plan.name_pool(fac) or {}, armies)
         at = _chars_at(f, s.faction(fac))
         f.raw[at:at] = lines
     s = Strat(f)
@@ -467,7 +470,7 @@ def _moves(plan, f, campaign):
 
 def _people(plan, f, now):
     """New names (from the faction's own name list) and ages for leader and heir."""
-    pool = plan.mod.name_pool(plan.new) or {}
+    pool = plan.name_pool(plan.new) or {}
     fb = Strat(f).faction(plan.new)
     for role in ("leader", "heir"):
         want, have = plan.opts.get(role), now.get(role)
@@ -551,7 +554,7 @@ def _garrisons(plan, f, s, campaign):
         return
     fb = s.faction(plan.new)
     tiles = plan_tiles(plan, campaign)
-    pool = plan.mod.name_pool(plan.new) or {}
+    pool = plan.name_pool(plan.new) or {}
     used = {c.name.split()[0] for x in s.factions for c in x.characters if c.name}
     # the faction's family records too (egypt's Heruben is a character_record: a captain Heruben is skipped
     # by the game as a duplicate), and the names of characters this edit adds (a new army named Heruben: no captain Heruben too)

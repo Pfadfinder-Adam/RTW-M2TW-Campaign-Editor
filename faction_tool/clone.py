@@ -169,6 +169,12 @@ def names(plan):
     from .moddata import name_sections
     path = plan.mod.file("names")
     t, new = plan.template, plan.new
+    if plan.opts.get("names"):                 # a name list of its own, typed in the window
+        if any(new in o for _, o in name_sections(plan.edit(path).texts())):
+            raise ValueError("faction '%s' already has names in descr_names.txt" % new)
+        from .namelists import apply
+        apply(plan, new, plan.opts["names"])
+        return
     f = plan.edit(path)
     heads = name_sections(f.texts())
     owners = [o for _, o in heads]

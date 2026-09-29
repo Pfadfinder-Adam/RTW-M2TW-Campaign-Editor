@@ -242,25 +242,7 @@ class ModData:
         """descr_names.txt pools: {'characters': [...], 'surnames': [...], 'women': [...]}.
         A section may serve several factions (BI: 'faction: empire_east, empire_east_rebels');
         when a faction has more than one section (BI's alemanni), the first one counts."""
-        f = self.load(self.file("names"))
-        texts = f.texts()
-        heads = name_sections(texts)
-        for k, (start, owners) in enumerate(heads):
-            if faction not in owners:
-                continue
-            end = heads[k + 1][0] if k + 1 < len(heads) else len(texts)
-            pools, section = {}, None
-            for line in texts[start + 1:end]:
-                s = strip_comment(line).strip()
-                if not s:
-                    continue
-                if s in ("characters", "surnames", "women"):
-                    section = s
-                    pools.setdefault(section, [])
-                elif section:
-                    pools[section].append(s)
-            return pools
-        return {}
+        return pool_in(self.load(self.file("names")).texts(), faction)
 
     # ---- map ----
     def regions(self, campaign):
@@ -435,6 +417,27 @@ class ModData:
 
 
 RE_NAME_HEAD = re.compile(r"\s*faction\s*:\s*(.+)")
+
+
+def pool_in(texts, faction):
+    """The faction's pools in descr_names.txt lines (see ModData.name_pool)."""
+    heads = name_sections(texts)
+    for k, (start, owners) in enumerate(heads):
+        if faction not in owners:
+            continue
+        end = heads[k + 1][0] if k + 1 < len(heads) else len(texts)
+        pools, section = {}, None
+        for line in texts[start + 1:end]:
+            s = strip_comment(line).strip()
+            if not s:
+                continue
+            if s in ("characters", "surnames", "women"):
+                section = s
+                pools.setdefault(section, [])
+            elif section:
+                pools[section].append(s)
+        return pools
+    return {}
 
 
 def name_sections(texts):
