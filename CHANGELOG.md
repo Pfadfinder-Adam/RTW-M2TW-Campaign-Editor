@@ -11,6 +11,8 @@
   units and religions as lifted for both engines (their own notes: "no faction, religion, region, unit, cultures,
   model limits"). The faction count still follows the engine's max_factions, which the tool offers to raise. On
   the original exes the limits stay as before.
+- **A son off the map may be as old as the mod's own age of manhood** (REX `age_of_manhood` in descr_ex.txt,
+  Medieval II `<age_of_manhood>` in descr_campaign_db.xml), not a fixed 16; 16 when the mod does not set it.
 - **Family tab**: a son or other living man written off the map (a record) older than 16 is refused -
   the game crashes on one; new sons now start at 16 or younger. One already in the file is only warned about.
 - **Flag symbols (Rome)**: the banner sheets are read from descr_standards.txt (Barbarian Invasion uses

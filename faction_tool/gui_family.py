@@ -174,6 +174,15 @@ class FamilyEditor(ttk.Frame):
     def campaign(self):
         return self.app.v_campaign.get()
 
+    def _manhood(self):
+        """The mod's age of manhood (REX descr_ex.txt / M2TW descr_campaign_db.xml, else 16)."""
+        from .limits import manhood_age
+        mod = self.mod if self.standalone else self.app.mod
+        try:
+            return manhood_age(mod) if mod else FM.MAX_RECORD_AGE
+        except Exception:
+            return FM.MAX_RECORD_AGE
+
     def path(self):
         mod = self.mod if self.standalone else self.app.mod
         try:
@@ -753,10 +762,11 @@ class FamilyEditor(ttk.Frame):
         if name in taken:
             messagebox.showerror("Family", "%s is already the name of someone of the faction" % name)
             return None
-        if sex == "male" and a not in (None, "") and int(a) > FM.MAX_RECORD_AGE:
+        most = self._manhood()
+        if sex == "male" and a not in (None, "") and int(a) > most:
             messagebox.showerror("Family", "A new son is written off the map, and the game crashes on a living man "
-                                 "off the map older than %d. Give him an age of %d or less - he comes of age "
-                                 "in the game by himself." % (FM.MAX_RECORD_AGE, FM.MAX_RECORD_AGE))
+                                 "off the map older than %d (this mod's age of manhood). Give him an age of %d or "
+                                 "less - he comes of age in the game by himself." % (most, most))
             return None
         return name, a
 
@@ -863,7 +873,7 @@ class FamilyEditor(ttk.Frame):
         by = {x["name"]: x for x in self.people()}
         young = min([(by.get(n) or {}).get("age") or 40 for n in couple[:2]])
         got = self._ask_person("Child of %s and %s" % (couple[0], couple[1]), sex,
-                                min(FM.MAX_RECORD_AGE, max(1, young - 20)) if sex == "male" else max(1, young - 20),
+                                min(self._manhood(), max(1, young - 20)) if sex == "male" else max(1, young - 20),
                                 surname)
         if not got:
             return

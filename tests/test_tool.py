@@ -690,6 +690,21 @@ building smith
             self.assertIn(key, ENGINE_LIFTS["REX.exe"])
             self.assertIn(key, ENGINE_LIFTS["M2EX.exe"])
 
+    def test_record_age_follows_the_mods_age_of_manhood(self):
+        """A living son off the map may be as old as the mod's age of manhood - REX's descr_ex.txt setting
+        (default 16), not a fixed 16."""
+        from faction_tool import family as FM
+        from faction_tool.limits import manhood_age
+        game, hlr = self._game()
+        mod = ModData(hlr)
+        self.assertEqual(manhood_age(mod), 16)
+        son = [{"source": "record", "sex": "male", "age": 17, "name": "Boy", "key": "record:Boy#0"}]
+        self.assertTrue(FM.record_age_problems(son, None, manhood_age(mod)))
+        write(os.path.join(hlr, "data", "descr_ex.txt"), "; REX\nage_of_manhood 18\n")
+        mod = ModData(hlr)
+        self.assertEqual(manhood_age(mod), 18)
+        self.assertFalse(FM.record_age_problems(son, None, manhood_age(mod)))
+
     def test_religion_limit_only_on_the_original_exe(self):
         """The original exe takes 9 religions; with REX / M2EX beside the game a 10th is not refused (their
         README: religions uncapped) - the tool must not hold modders on REX to vanilla's limits."""

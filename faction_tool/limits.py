@@ -79,7 +79,24 @@ LIMIT_WORDS = {"regions": "regions (the sea counts as one)", "map_size": "map_re
                "chains": "building chains", "levels": "levels in one building chain",
                "hidden_resources": "hidden resources (export_descr_buildings.txt)"}
 
-FAMILY_DEFAULTS = {"max_num_ancillaries": 8, "max_num_children": 4}
+FAMILY_DEFAULTS = {"max_num_ancillaries": 8, "max_num_children": 4, "age_of_manhood": 16}
+
+
+def manhood_age(mod):
+    """The age a boy comes of age - the oldest a living man off the map (a record) may be. A setting, not a fixed
+    number: Rome + REX read `age_of_manhood` in descr_ex.txt, Medieval II `<age_of_manhood uint="N"/>` in
+    descr_campaign_db.xml (the mod's copy, else the game's); vanilla and the defaults say 16."""
+    import re
+    from .newmod import game_of
+    if game_kind(mod) != "medieval2":
+        return ex_setting(mod, "age_of_manhood") or 16
+    game = game_of(mod.data)
+    for folder in (mod.data, _ci(game, "data") if game else None):
+        p = _ci(folder, "descr_campaign_db.xml") if folder else None
+        if p:
+            m = re.search(r"<age_of_manhood\s+(?:uint|int|float)=\"(\d+)", open(p, encoding="latin-1").read())
+            return int(m.group(1)) if m else 16
+    return 16
 
 
 def ex_setting(mod, key):
