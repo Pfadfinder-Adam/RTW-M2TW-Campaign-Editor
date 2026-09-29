@@ -842,6 +842,33 @@ class ToolTest(unittest.TestCase):
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
 
+    def test_portrait_library_add_m2_layout(self):
+        """Medieval II's pools (vanilla southern_european): no cards, old only for generals, the dead
+        princesses in portraits/dead/princesses - a new princess gets young + dead there, nothing more."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from faction_tool import portraits as PL
+        from faction_tool.plan import Plan
+        base = os.path.join(self.root, "data", "ui", "eastern", "portraits", "portraits")
+        for folder in (("young", "generals"), ("old", "generals"), ("dead",), ("young", "princesses"),
+                       ("dead", "princesses")):
+            d = os.path.join(base, *folder)
+            os.makedirs(d)
+            for n in (0, 1, 2):
+                Image.new("RGBA", (69, 96), (9, 9, 9, 255)).save(os.path.join(d, "%03d.tga" % n))
+        src = os.path.join(self.root, "face.png")
+        Image.new("RGB", (200, 300), (250, 0, 0)).save(src)
+        mod = ModData(self.root)
+        lib = PL.library(mod, "eastern")
+        self.assertEqual(len(lib["princesses"]["dead"]), 3)
+        self.assertEqual((lib["generals"]["cards"], len(lib["generals"]["dead"])), ({}, 3))
+        plan = Plan(mod, "characters", "characters")
+        self.assertEqual(PL.add(plan, "eastern", "princesses", [{"young": src}]), [3])
+        self.assertEqual(sorted(os.path.relpath(p, base).replace("\\", "/") for p in plan.binaries),
+                         ["dead/princesses/003.tga", "young/princesses/003.tga"])
+
     def test_descr_regions_with_an_odd_entry(self):
         """BI's descr_regions.txt has an entry with a line more before the colour ('Pictii' where the
         colour was read - every map read failed). The colour line anchors the entry; writers use the same."""

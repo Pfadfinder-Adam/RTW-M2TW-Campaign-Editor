@@ -921,9 +921,10 @@ class PortraitLibrary(tk.Toplevel):
         new = self.pending()
         self.info.configure(text=(
             "%d portraits of %s / %s (%s shown). The game gives each character one of them at random when the campaign "
-            "starts; the same number is the same man young, old and dead. New ones: any picture - made %d x %d with a "
-            "%d x %d card, under the next free number in every folder of the group%s. %s") % (
-            e["count"], self.v_c.get(), self.v_g.get(), age, pw, ph, cw, chh,
+            "starts; the same number is the same man young, old and dead. New ones: any picture - made %d x %d%s, "
+            "under the next free number in every folder of the group%s. %s") % (
+            e["count"], self.v_c.get(), self.v_g.get(), age, pw, ph,
+            (" with a %d x %d card" % (cw, chh)) if e.get("cards") else "",
             " (the dead one greyed unless you give one)" if e.get("dead") else "",
             ("%d new waiting for Apply (green)." % len(new)) if new else ""))
         W, H, cols = 50, 70, max(1, (cv.winfo_width() or 900) // 56)

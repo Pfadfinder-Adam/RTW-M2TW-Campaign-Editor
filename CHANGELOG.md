@@ -12,6 +12,9 @@
 - Replacing a `.dds` picture (Rome's `*.tga.dds` banner textures) wrote a TGA inside the .dds name; it now
   writes a real DDS in the format of the one replaced (DXT1/3/5, with its mipmaps).
 - Two writes in the same second no longer fail on the backup folder's name.
+- Medieval II portrait library (checked on the game's own southern_european pools): a new portrait no
+  longer makes Rome-only folders (`cards`, `old` for groups that have none), and a new princess also gets
+  her dead portrait (`portraits/dead/princesses`) - without it the game would show its placeholder.
 
 ### Added
 - Art tab: a picture several factions share (the rebels' or routing banner) becomes the faction's own copy when

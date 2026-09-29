@@ -53,8 +53,8 @@ def cultures(mod):
 
 
 def library(mod, culture):
-    """{group: {'young': {n: path}, 'old': {...}, 'dead': {...} (generals), 'cards': {age: {n: path}},
-    'count': n}} - the mod's pictures over the game's (a mod's file wins by number)."""
+    """{group: {'young': {n: path}, 'old': {...}, 'dead': {...} (generals; Medieval II's princesses too),
+    'cards': {age: {n: path}} (Rome only), 'count': n}} - the mod's pictures over the game's (a mod's file wins by number)."""
     out = {}
     for root in reversed(data_roots(mod)):                 # the game first, the mod on top
         base = _dir(root, "ui", culture, "portraits")
@@ -70,11 +70,20 @@ def library(mod, culture):
                     continue
                 e = out.setdefault(g.lower(), {"young": {}, "old": {}, "cards": {}})
                 e[age].update(_numbers(gd))
-                e["cards"].setdefault(age, {}).update(_numbers(_dir(base, "cards", age, g)))
+                cd = _dir(base, "cards", age, g)
+                if cd:                                   # Rome's cards; Medieval II has none
+                    e["cards"].setdefault(age, {}).update(_numbers(cd))
+        # the dead: Rome's generals in portraits/dead; Medieval II's too, and its princesses in dead/princesses
         dead = _numbers(_dir(base, "portraits", "dead"))
         if dead and "generals" in out:
             out["generals"].setdefault("dead", {}).update(dead)
-            out["generals"]["cards"].setdefault("dead", {}).update(_numbers(_dir(base, "cards", "dead")))
+            cd = _dir(base, "cards", "dead")
+            if cd:
+                out["generals"]["cards"].setdefault("dead", {}).update(_numbers(cd))
+        for g, e in out.items():
+            gd = _dir(base, "portraits", "dead", g) if g != "generals" else None
+            if gd:
+                e.setdefault("dead", {}).update(_numbers(gd))
     for e in out.values():
         e["count"] = max([len(e["young"]), len(e["old"])])
     return out
@@ -127,7 +136,8 @@ def add(plan, culture, group, pics):
     if entry is None:
         raise ValueError("%s has no portrait group %s (it has: %s)" % (culture, group, ", ".join(sorted(lib)) or "none"))
     (pw, ph), (cw, chh) = sizes(plan.mod, culture)
-    ages = list(AGES) + (["dead"] if entry.get("dead") else [])
+    # the ages the group has folders for (Medieval II: old only for generals); young always
+    ages = [a for a in AGES if a == "young" or entry.get(a)] + (["dead"] if entry.get("dead") else [])
     done = []
     n = next_number(entry)
     for p in pics:
@@ -144,11 +154,14 @@ def add(plan, culture, group, pics):
                     im = grey
                 big = im.resize((pw, ph), Image.LANCZOS)
                 small = im.resize((cw, chh), Image.LANCZOS)
-            where = ("portraits", "dead") if age == "dead" else ("portraits", age, group)
+            if age == "dead":
+                where = ("portraits", "dead") if group.lower() == "generals" else ("portraits", "dead", group)
+            else:
+                where = ("portraits", age, group)
             cwhere = ("cards", "dead") if age == "dead" else ("cards", age, group)
             target = os.path.join(_folder_name(plan.mod, culture, *where), "%03d.tga" % n)
             plan.binary(target, image_tga(big, _like(entry, age)))
-            if entry["cards"].get(age) is not None or age == "young":
+            if age in entry["cards"]:                    # only where the game keeps cards (Rome)
                 ct = os.path.join(_folder_name(plan.mod, culture, *cwhere), "%03d.tga" % n)
                 plan.binary(ct, image_tga(small, _like(entry, age, card=True)))
         plan.notes.append((plan.mod.rel(_folder_name(plan.mod, culture, "portraits")),
