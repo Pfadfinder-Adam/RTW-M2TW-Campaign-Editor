@@ -1146,9 +1146,14 @@ building smith
         for bad in ({"people": {lead.key: {"traits": [["Brave", 3]]}}},          # Brave has 2 levels
                     {"people": {lead.key: {"traits": [["Nosuch", 1]]}}},
                     {"people": {lead.key: {"name": "Zed"}}},                      # no such name: the game crashes
-                    {"tree": [["Aaron Alphid", "Anna", ["Aaron Alphid"]]]}):     # his own child
+                    {"tree": [["Aaron Alphid", "Anna", ["Aaron Alphid"]]]},     # his own child
+                    # a living man off the map over 16 crashes the game (heavengames descr_strat reference)
+                    {"new": [{"name": "Aaron", "sex": "male", "age": 25}]}):
             with self.assertRaises(ValueError):
                 edit(ModData(self.root), "test", "alpha", {"family": bad})
+        # no age given: a son is written at 16, a daughter at 20
+        p1 = edit(ModData(self.root), "test", "alpha", {"family": {"new": [{"name": "Aaron", "sex": "male"}]}})
+        self.assertTrue(any("Aaron, " in l and "age 16," in l for l in Strat(p1.files[path]).lines))
         # the leader renamed on the Faction tab: the tree follows (a stale name there is nobody)
         p0 = edit(ModData(self.root), "test", "alpha", {"leader": {"name": "Boris Alphid", "age": 40}})
         self.assertIn("relative \tBoris Alphid, \tAnna,\t\tend", Strat(p0.files[path]).lines)

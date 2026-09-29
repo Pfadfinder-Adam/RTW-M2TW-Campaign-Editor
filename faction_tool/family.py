@@ -16,6 +16,10 @@ from .strat import Strat, medieval
 from .textio import strip_comment, tokens
 
 RE_AGE = re.compile(r"\bage\s+(\d+)")
+# A living man off the map is a boy: older ones belong on the map, and the game crashes on a living male
+# character_record over 16 (heavengames "The Descr_Strat Reference"; vanilla keeps to it - RTW 0 of 74,
+# M2TW 0 of 21 living male records are older).
+MAX_RECORD_AGE = 16
 
 
 class Person:
@@ -300,6 +304,25 @@ def rename_in_tree(f, faction, old, new):
             f.set(i, relative_line(names[0], names[1], names[2:]))
 
 
+def record_age_problems(after, before=None):
+    """Living men off the map (records) older than MAX_RECORD_AGE: [(name, age, new)] - new is False
+    for one the file already had at that age (the edit did not make it so)."""
+    old = {d.get("key"): d.get("age") for d in before or [] if d.get("key")}
+    out = []
+    for d in after:
+        if d.get("source") != "record" or d.get("sex") != "male" or d.get("age") in (None, ""):
+            continue
+        if "dead" in (d.get("status") or "") or int(d["age"]) <= MAX_RECORD_AGE:
+            continue
+        was = old.get(d.get("key"))
+        out.append((d["name"], int(d["age"]), was in (None, "") or int(was) != int(d["age"])))
+    return out
+
+
+def default_record_age(sex):
+    return MAX_RECORD_AGE if sex == "male" else 20
+
+
 def limit_warnings(mod, tree, changes, people, renames=None, old_tree=None):
     """Ancillaries and children over what the game takes (limits.ex_setting: REX's descr_ex.txt
     max_num_ancillaries / max_num_children, else the original game's 8 / 4)."""
@@ -400,6 +423,12 @@ def apply(plan, f, faction, opts):
                 raise ValueError("%s heads a couple on the family tree - take them off the tree first"
                                  % (a if a in gone else b))
     tree = [[a, b, list(ks)] for a, b, ks in tree]
+    for name, age, new in record_age_problems(after, [p.as_dict() for p in fam["people"]]):
+        msg = ("%s (%d) is a living man off the map (a record) - the game crashes on one older than %d: "
+               "make him %d or younger, or put him on the map" % (name, age, MAX_RECORD_AGE, MAX_RECORD_AGE))
+        if new:
+            raise ValueError(msg)
+        plan.warn(f, msg + " (already so in the file)")
     bad = tree_problems(tree, after)
     if bad:
         raise ValueError("family tree of %s: %s" % (faction, "; ".join(bad)))
@@ -441,11 +470,13 @@ def apply(plan, f, faction, opts):
     # new records and the tree: after the characters, where the records / relatives stand
     fam2 = read(f, faction)
     recs, rels = fam2["record_lines"], fam2["relative_lines"]
-    new_lines = [record_line(f.texts(), n["name"], n.get("sex", "male"), n.get("age") or 20, m2)
+    def age_of(n):
+        return n.get("age") or default_record_age(n.get("sex", "male"))
+    new_lines = [record_line(f.texts(), n["name"], n.get("sex", "male"), age_of(n), m2)
                  for n in opts.get("new") or []]
     for n in opts.get("new") or []:
         plan.note(f, "%s: %s (%s, age %s) added off the map" % (faction, n["name"], n.get("sex", "male"),
-                                                                 n.get("age") or 20))
+                                                                 age_of(n)))
     old_tree = [_parse_relative(f.text(i)) for i in rels]
     want = ordered(tree)
     if want == old_tree and not new_lines:

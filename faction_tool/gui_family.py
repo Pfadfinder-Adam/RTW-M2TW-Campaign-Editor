@@ -753,6 +753,11 @@ class FamilyEditor(ttk.Frame):
         if name in taken:
             messagebox.showerror("Family", "%s is already the name of someone of the faction" % name)
             return None
+        if sex == "male" and a not in (None, "") and int(a) > FM.MAX_RECORD_AGE:
+            messagebox.showerror("Family", "A new son is written off the map, and the game crashes on a living man "
+                                 "off the map older than %d. Give him an age of %d or less - he comes of age "
+                                 "in the game by himself." % (FM.MAX_RECORD_AGE, FM.MAX_RECORD_AGE))
+            return None
         return name, a
 
     def _picked(self):
@@ -857,7 +862,9 @@ class FamilyEditor(ttk.Frame):
         surname = father[len(first):].strip() if sex == "male" else ""
         by = {x["name"]: x for x in self.people()}
         young = min([(by.get(n) or {}).get("age") or 40 for n in couple[:2]])
-        got = self._ask_person("Child of %s and %s" % (couple[0], couple[1]), sex, max(1, young - 20), surname)
+        got = self._ask_person("Child of %s and %s" % (couple[0], couple[1]), sex,
+                                min(FM.MAX_RECORD_AGE, max(1, young - 20)) if sex == "male" else max(1, young - 20),
+                                surname)
         if not got:
             return
         self._before()
