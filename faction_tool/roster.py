@@ -46,18 +46,49 @@ def recruit_dialect(f):
 # ---------------------------------------------------------------------------
 # factions { ... } lists
 # ---------------------------------------------------------------------------
+def factions_groups(text):
+    """Every 'factions { ... }' list of a line, in order. REX lets one line carry several,
+    each with conditions of its own: 'requires ( ( factions { greek, } and X ) or
+    ( factions { middle_eastern, } and Y ) )'."""
+    return [[w for w in m.group(1).replace(",", " ").split() if w]
+            for m in RE_FACTIONS.finditer(strip_comment(text))]
+
+
 def factions_in(text):
-    """The names of a line's 'factions { ... }' list, or None when it has none."""
-    m = RE_FACTIONS.search(strip_comment(text))
-    if not m:
+    """The names of a line's factions lists (all of them, once each), or None when it has none."""
+    groups = factions_groups(text)
+    if not groups:
         return None
-    return [w for w in m.group(1).replace(",", " ").split() if w]
+    out = []
+    for g in groups:
+        out += [n for n in g if n not in out]
+    return out
+
+
+def _body(names):
+    return "factions { %s}" % "".join("%s, " % n for n in names)
 
 
 def with_factions(text, names):
-    """The line with its factions list replaced by names (the layout 'a, b, ' kept)."""
-    body = "{ %s}" % "".join("%s, " % n for n in names)
-    return RE_FACTIONS.sub(lambda m: "factions " + body, text, count=1)
+    """The line with its (first) factions list replaced by names (the layout 'a, b, ' kept)."""
+    return RE_FACTIONS.sub(lambda m: _body(names), text, count=1)
+
+
+def add_faction(text, faction):
+    """The faction written into the line's first factions list (a line of several REX
+    groups: the first group's conditions then apply to it)."""
+    names = (factions_groups(text) or [[]])[0]
+    return with_factions(text, names + [faction]) if faction not in names else text
+
+
+def drop_faction(text, faction):
+    """The faction out of every factions list of the line; None when that would leave a
+    list empty on a line of several groups (such a line is for a person to rewrite)."""
+    groups = factions_groups(text)
+    if len(groups) > 1 and any(g == [faction] for g in groups):
+        return None
+    it = iter(groups)
+    return RE_FACTIONS.sub(lambda m: _body([n for n in next(it) if n != faction]), text)
 
 
 def covers(names, faction, culture):
@@ -266,7 +297,10 @@ def give_unit(plan, faction, unit):
         for i, _, chain, level in lines:
             names = factions_in(e.text(i))
             if names is not None and not covers(names, faction, culture):
-                e.set(i, with_factions(e.text(i), names + [faction]))
+                if len(factions_groups(e.text(i))) > 1:
+                    plan.warn(e, "%s/%s: the recruit line has several faction groups - %s joins the first one "
+                                 "and its conditions" % (chain, level, faction))
+                e.set(i, add_faction(e.text(i), faction))
                 if "%s/%s" % (chain, level) not in added:
                     added.append("%s/%s" % (chain, level))
             if covers(factions_in(e.text(heads[(chain, level)])), faction, culture):
@@ -301,8 +335,13 @@ def take_unit(plan, faction, unit, campaign=None):
             names = factions_in(e.text(i))
             if names and faction in names:
                 rest = [n for n in names if n != faction]
+                new = drop_faction(e.text(i), faction) if rest else None
+                if rest and new is None:
+                    plan.warn(e, "%s/%s: %s is a faction group of its own on a recruit line with several groups - "
+                                 "rewrite that line in the Building editor" % (chain, level, faction))
+                    continue
                 if rest:
-                    e.set(i, with_factions(e.text(i), rest))
+                    e.set(i, new)
                 else:
                     e.delete(i, i + 1)
                 gone.append("%s/%s" % (chain, level))
@@ -349,7 +388,10 @@ def set_level(plan, faction, chain, level, give=True, campaign=None):
     if give:
         if now:
             return False
-        e.set(i, with_factions(text, names + [faction]))
+        if len(factions_groups(text)) > 1:
+            plan.warn(e, "%s/%s: the level has several faction groups - %s joins the first one and its conditions"
+                      % (chain, level, faction))
+        e.set(i, add_faction(text, faction))
         plan.note(e, "%s/%s: %s may build it" % (chain, level, faction))
         # its picture comes from the faction's culture folder (ui/<culture>/buildings)
         from .buildings import BuildingPictures
@@ -369,6 +411,14 @@ def set_level(plan, faction, chain, level, give=True, campaign=None):
             new_text = "%srequires factions { %s} and %s%s" % (head, "".join("%s, " % n for n in new), cond.strip(), rest)
         else:
             new_text = "%s requires factions { %s}%s" % (code, "".join("%s, " % n for n in new), rest)
+        e.set(i, new_text)
+    elif len(factions_groups(text)) > 1:                # REX groups: out of every group, by name only
+        new_text = drop_faction(text, faction) if now == "own" else None
+        if new_text is None:
+            plan.warn(e, "%s/%s: the level's faction groups let %s in %s - rewrite that line in the Building "
+                         "editor" % (chain, level, faction, "by its culture or 'all'" if now != "own"
+                                     else "through a group of its own"))
+            return False
         e.set(i, new_text)
     else:
         new = _spelled_out(names, faction, cultures)

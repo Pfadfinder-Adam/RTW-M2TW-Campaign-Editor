@@ -522,7 +522,8 @@ def _recruit(plan, manifest, names, owners):
             missing.add("%s %s" % (r["chain"], r["level"]))
             continue
         line = r["line"].replace('"%s"' % r["unit"], '"%s"' % names[r["unit"]][0], 1)
-        line = re.sub(r"factions\s*\{[^}]*\}", "factions { %s, }" % ", ".join(owners), line, count=1)
+        # every factions list (REX lines may carry several groups) names the pack's owners here
+        line = re.sub(r"(?<![A-Za-z0-9_])factions\s*\{[^}]*\}", "factions { %s, }" % ", ".join(owners), line)
         at, make = line_place(f, "building", blk, "capability", r["level"], line.split()[0])
         f.insert(at, make(line))
         n += 1

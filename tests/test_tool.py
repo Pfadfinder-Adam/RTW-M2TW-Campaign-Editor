@@ -2291,6 +2291,59 @@ building shrine
         self.assertTrue(any(e for e, _ in E.check_text(mod, "building", 'recruit_pool "rebel spear"  0')))
         self.assertTrue(any(e for e, _ in E.check_text(mod, "building", 'recruit "rebel spear"  x')))
 
+    BRACKET_EDB = """building sea_trade
+{
+    levels merchants_wharf
+    {
+        merchants_wharf city requires ( ( factions { alpha, barbarian, } and building_present_min_level port port ) or ( factions { eastern, } and building_present_min_level market corn_exchange ) )
+        {
+            capability
+            {
+                trade_fleet 2
+                recruit_pool "rebel spear"  1   0.5   4  0  requires ( ( factions { slave, } and building_present_min_level port port ) or ( factions { alpha, } ) )
+            }
+            construction  3
+            cost  1600
+            settlement_min city
+        }
+    }
+}
+"""
+
+    def test_rex_bracket_requirements_read_every_faction_group(self):
+        # REX: one line, several 'factions { }' groups, each with conditions of its own
+        from faction_tool import roster as R
+        from faction_tool.buildings import read_buildings
+        from faction_tool.edit import edit
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"), self.BRACKET_EDB)
+        mod = ModData(self.root)
+        f = mod.load(mod.file("edb"))
+        head = next(l for l in f.texts() if "merchants_wharf city" in l)
+        self.assertEqual(R.factions_groups(head), [["alpha", "barbarian"], ["eastern"]])
+        self.assertEqual(R.factions_in(head), ["alpha", "barbarian", "eastern"])
+        lv = read_buildings(f)[0].levels[0]
+        self.assertEqual(lv.factions(), ["alpha", "barbarian", "eastern"])      # alpha's culture 'eastern' counts
+        units = {u["type"]: u for u in R.roster(mod, "alpha")["units"]}
+        self.assertEqual(units["rebel spear"]["recruit"], [("sea_trade", "merchants_wharf")])  # the 2nd group
+        # taking the unit from alpha leaves slave's group and its conditions alone
+        plan = Plan(mod, None, "roster")
+        R.take_unit(plan, "slave", "rebel spear")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('factions { slave, } and building_present_min_level port port', edb)  # slave's group alone...
+        self.assertTrue(any("rewrite that line" in m for _, m in plan.warnings), plan.report())  # ...left to a person
+        plan = edit(mod, "test", "alpha", {"roster": {"unit:rebel spear": False}})
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn("( factions { alpha, } )", edb)                  # alpha's own group: left, said so
+        self.assertTrue(any("rewrite that line" in m for _, m in plan.warnings), plan.report())
+        # a faction named in two groups goes out of both; one alone in a group is left for a person
+        line = "requires ( ( factions { a, b, } and x ) or ( factions { b, c, } and y ) )"
+        self.assertEqual(R.drop_faction(line, "b"),
+                         "requires ( ( factions { a, } and x ) or ( factions { c, } and y ) )")
+        self.assertIsNone(R.drop_faction(line.replace("{ b, c, }", "{ b, }"), "b"))
+        self.assertEqual(R.add_faction(line, "d"),
+                         "requires ( ( factions { a, b, d, } and x ) or ( factions { b, c, } and y ) )")
+
     def test_roster_take_a_culture_writes_the_others_out(self):
         from faction_tool import roster as R
         from faction_tool.plan import Plan

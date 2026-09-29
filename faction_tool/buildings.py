@@ -21,8 +21,9 @@ class Level:
         self.convert_to = None                    # the level of the chain's convert_to it becomes
 
     def factions(self):
-        m = re.search(r"(?<![A-Za-z0-9_])factions\s*\{([^}]*)\}", self.requires)
-        return [x.strip() for x in m.group(1).replace(",", " ").split()] if m else None
+        """Every faction / culture named in the level's factions lists (REX may have several), or None."""
+        from .roster import factions_in
+        return factions_in(self.requires)
 
     def conditional(self):
         """Requirements beyond the faction list (resources, other buildings...)."""
