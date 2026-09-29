@@ -96,60 +96,217 @@ def _read_image(plan, path):
 # ---------------------------------------------------------------------------
 # The flag symbol
 # ---------------------------------------------------------------------------
+DEFAULT_SHEETS = (["banners/symbols%d.tga" % n for n in range(1, 6)],
+                  ["banners/symbols%d.tga" % n for n in range(6, 9)])
+
+
+def _standards(plan_or_mod):
+    """(path it was read from or None, TextFile or None, path the plan writes) of descr_standards.txt:
+    the plan's copy, the mod's, else the game's (a copy in the mod is written when it changes)."""
+    mod = getattr(plan_or_mod, "mod", plan_or_mod)
+    plan = plan_or_mod if hasattr(plan_or_mod, "files") else None
+    mine = os.path.join(mod.data, "descr_standards.txt")
+    if plan is not None:
+        for p in (mine, _ci(mod.data, "descr_standards.txt")):
+            if p and p in plan.binaries:
+                return p, TextFile.from_bytes(p, plan.binaries[p]), p
+    src = _find(mod, "descr_standards.txt")
+    if not src:
+        return None, None, mine
+    return src, TextFile.load(src), (src if os.path.dirname(src) == os.path.normpath(mod.data) else mine)
+
+
+def _sheet_rel(path):
+    """'../amazon/data/banners/symbols1.tga' -> 'banners/symbols1.tga' (the mod:switch form)."""
+    path = path.replace("\\", "/")
+    low = path.lower()
+    at = low.rfind("data/")
+    return path[at + 5:] if at >= 0 else path.lstrip("./")
+
+
+def sheet_lists(plan_or_mod):
+    """([faction sheets], [rebel sheets]) as data-relative paths, in descr_standards.txt's order - the
+    game takes standard_index k from the (k // 4)th sheet of the faction list followed by the rebel
+    list (vanilla RTW: symbols1-5 + 6-8, slave 20 = the first rebel sheet; BI: symbols9-13 + 14-15).
+    No file: vanilla RTW's lists."""
+    _, f, _ = _standards(plan_or_mod)
+    if f is None:
+        return list(DEFAULT_SHEETS[0]), list(DEFAULT_SHEETS[1])
+    fac, reb, cur = [], [], None
+    for line in f.texts():
+        t = tokens(strip_comment(line))
+        if t[:1] == ["factions"]:
+            cur = fac
+        elif t[:1] == ["rebels_factions"]:
+            cur = reb
+        elif t[:1] == ["symbols"] and len(t) > 1 and cur is not None:
+            cur.append(_sheet_rel(t[1]))
+    if not fac and not reb:
+        return list(DEFAULT_SHEETS[0]), list(DEFAULT_SHEETS[1])
+    return fac, reb
+
+
 def slot_box(k, size=128):
-    """(sheet number, (x, y, w, h)) of standard_index k."""
+    """(x, y, w, h) of slot k inside its sheet: k % 4 = top left, top right, bottom left, bottom right."""
     h = size // 2
-    return k // 4 + 1, ((k % 2) * h, ((k // 2) % 2) * h, h, h)
+    return ((k % 2) * h, ((k // 2) % 2) * h, h, h)
 
 
-def sheet_path(mod, n, plan=None):
-    """The sheet symbols<n>: the plan's new one, the mod's, else the game's (None when none)."""
-    mine = os.path.join(mod.data, "banners", "symbols%d.tga.dds" % n)
-    if plan is not None and mine in plan.binaries:
-        return mine
-    return _find(mod, "banners", "symbols%d.tga.dds" % n)
+def slot_sheet(plan_or_mod, k, lists=None):
+    """The data-relative sheet slot k lies on, or None past the last sheet."""
+    fac, reb = lists or sheet_lists(plan_or_mod)
+    both = fac + reb
+    return both[k // 4] if 0 <= k // 4 < len(both) else None
+
+
+def sheet_path(mod, rel, plan=None):
+    """The sheet's file: the plan's new one, the mod's, else the game's (None when none). rel is the
+    descr_standards path ('banners/symbols1.tga'); the picture on disk is its .dds."""
+    if not rel:
+        return None
+    names = [rel + ".dds", rel] if not rel.lower().endswith(".dds") else [rel]
+    for name in names:
+        mine = os.path.join(mod.data, *name.split("/"))
+        if plan is not None and mine in plan.binaries:
+            return mine
+    for name in names:
+        got = _find(mod, *name.split("/"))
+        if got:
+            return got
+    return None
+
+
+def _target(mod, rel):
+    rel = rel if rel.lower().endswith(".dds") else rel + ".dds"
+    return os.path.join(mod.data, *rel.split("/"))
+
+
+def rebel_slots(plan_or_mod, lists=None):
+    """Slots the rebels' flags take: descr_cultures.txt rebel_standard_index r = slot r of the rebel sheets."""
+    mod = getattr(plan_or_mod, "mod", plan_or_mod)
+    fac, _ = lists or sheet_lists(plan_or_mod)
+    p = _find(mod, "descr_cultures.txt")
+    out = set()
+    if p:
+        for line in mod.load(p).texts():
+            t = tokens(strip_comment(line))
+            if t[:1] == ["rebel_standard_index"] and len(t) > 1 and t[1].isdigit():
+                out.add(4 * len(fac) + int(t[1]))
+    return out
 
 
 def flag_of(plan_or_mod, faction):
-    """{'index', 'sheet' (path or None), 'box', 'shared': [factions]} or None."""
+    """{'index', 'rel' (the sheet in descr_standards), 'sheet' (its file or None), 'box', 'shared': [factions]}
+    or None."""
     mod = getattr(plan_or_mod, "mod", plan_or_mod)
     _, f = _sm(plan_or_mod)
     vals = sm_values(f, "standard_index")
     if faction not in vals or not vals[faction][1].isdigit():
         return None
     k = int(vals[faction][1])
-    n, box = slot_box(k)
+    rel = slot_sheet(plan_or_mod, k)
     shared = sorted(x for x, (_, v) in vals.items() if v == str(k) and x != faction)
-    return {"index": k, "sheet": sheet_path(mod, n, plan_or_mod if hasattr(plan_or_mod, "files") else None),
-            "box": box, "shared": shared}
+    return {"index": k, "rel": rel,
+            "sheet": sheet_path(mod, rel, plan_or_mod if hasattr(plan_or_mod, "files") else None),
+            "box": slot_box(k), "shared": shared}
+
+
+def used_slots(plan_or_mod, lists=None):
+    _, f = _sm(plan_or_mod)
+    return {int(v) for _, v in sm_values(f, "standard_index").values() if v.isdigit()} | \
+        rebel_slots(plan_or_mod, lists)
 
 
 def free_slot(plan_or_mod):
-    """The lowest standard_index no faction uses."""
-    _, f = _sm(plan_or_mod)
-    used = {int(v) for _, v in sm_values(f, "standard_index").values() if v.isdigit()}
-    k = 0
-    while k in used:
-        k += 1
-    return k
+    """The lowest slot of the faction sheets that no faction and no rebels' flag uses, or None (full:
+    vanilla RTW has its 20 faction slots taken)."""
+    lists = sheet_lists(plan_or_mod)
+    used = used_slots(plan_or_mod, lists)
+    return next((k for k in range(4 * len(lists[0])) if k not in used), None)
+
+
+def _sheet_like(plan, rel):
+    """The sheet as a picture and the file whose format / mipmaps to write in."""
+    from PIL import Image
+    mod = plan.mod
+    src = sheet_path(mod, rel, plan)
+    fac, reb = sheet_lists(plan)
+    like = src or next((sheet_path(mod, r) for r in fac + reb if sheet_path(mod, r)), None)
+    sheet = _read_image(plan, src) if src else Image.new("RGBA", (128, 128), (0, 0, 0, 0))
+    return sheet, like
+
+
+def _new_faction_sheet(plan, why):
+    """A faction sheet appended to descr_standards.txt's faction list (a new file banners/symbols<N>.tga.dds).
+    The slots it now holds that some faction already points at (slave's 20 on vanilla RTW, read from the
+    first rebel sheet until now) get the picture they showed, so nothing already there changes.
+    Returns the new sheet's first slot."""
+    from PIL import Image
+    from .factionart import image_dds
+    mod = plan.mod
+    fac, reb = old = sheet_lists(plan)
+    src, f, target = _standards(plan)
+    nums = [int(m.group(1)) for r in fac + reb for m in [re.search(r"symbols(\d+)", r, re.I)] if m]
+    rel = "banners/symbols%d.tga" % (max(nums) + 1 if nums else 1)
+    first = 4 * len(fac)
+    sheet = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
+    _, fsm = _sm(plan)
+    shown = {int(v) for _, v in sm_values(fsm, "standard_index").values() if v.isdigit()}
+    like = None
+    for k in range(first, first + 4):
+        if k in shown and slot_sheet(plan, k, old):
+            p = sheet_path(mod, slot_sheet(plan, k, old), plan)
+            if p:
+                old_im = _read_image(plan, p)
+                box = slot_box(k, old_im.size[0])
+                piece = old_im.crop((box[0], box[1], box[0] + box[2], box[1] + box[3])).resize((64, 64))
+                sheet.paste(piece, slot_box(k)[:2])
+                like = like or p
+    like = like or next((sheet_path(mod, r) for r in fac + reb if sheet_path(mod, r)), None)
+    plan.binary(_target(mod, rel), image_dds(sheet, like))
+    plan.notes.append((mod.rel(_target(mod, rel)), "a new banner sheet (slots %d-%d) %s" % (first, first + 3, why)))
+    # descr_standards.txt: the new sheet after the last faction sheet
+    if f is None:
+        lines = ["factions"] + ["symbols\t\t\t\t%s" % r for r in fac + [rel]] + \
+                ["rebels_factions"] + ["symbols\t\t\t\t%s" % r for r in reb]
+        data = ("\r\n".join(lines) + "\r\n").encode("latin-1")
+    else:
+        texts, at, in_fac = f.texts(), None, False
+        for i, line in enumerate(texts):
+            t = tokens(strip_comment(line))
+            if t[:1] == ["factions"]:
+                in_fac, at = True, i
+            elif t[:1] == ["rebels_factions"]:
+                in_fac = False
+            elif in_fac and t[:1] == ["symbols"]:
+                at = i
+        pattern = texts[at] if at is not None and tokens(strip_comment(texts[at]))[:1] == ["symbols"] else None
+        new_line = re.sub(r"(symbols\s+)\S+", lambda m: m.group(1) + rel, pattern, 1) if pattern \
+            else "symbols\t\t\t\t" + rel
+        f.raw[at + 1:at + 1] = [f.make(new_line)]
+        data = f.dump()
+    plan.binary(target, data)
+    plan.notes.append((mod.rel(target), "banner sheet %s added to the faction sheets" % rel))
+    plan.warn(None, "%s: every banner slot was taken, so a new banner sheet (%s, slots %d-%d) was added to "
+                    "descr_standards.txt - check in the game that the flag shows (REX reads it; the original "
+                    "game's own sheet count is not known)" % (why.replace("for ", ""), rel, first, first + 3))
+    return first
 
 
 def _paste_flag(plan, k, im, why):
     """Picture im into slot k of its sheet (written to the mod's banners folder, in the sheet's
-    own format and mipmaps; a sheet the game does not have yet is made like symbols1)."""
+    own format and mipmaps)."""
     from PIL import Image
     from .factionart import image_dds
     mod = plan.mod
-    n, (x, y, w, h) = slot_box(k)
-    src = sheet_path(mod, n, plan)
-    # the format and mipmaps to write in: the sheet on disk, else symbols1's
-    like = _find(mod, "banners", "symbols%d.tga.dds" % n) or _find(mod, "banners", "symbols1.tga.dds")
-    sheet = _read_image(plan, src) if src else Image.new("RGBA", (w * 2, h * 2), (0, 0, 0, 0))
-    if sheet.size != (w * 2, h * 2):
-        _, (x, y, w, h) = slot_box(k, sheet.size[0])
+    rel = slot_sheet(plan, k)
+    if rel is None:
+        raise ValueError("flag slot %d lies past the banner sheets descr_standards.txt lists" % k)
+    sheet, like = _sheet_like(plan, rel)
+    x, y, w, h = slot_box(k, sheet.size[0])
     im = im.convert("RGBA").resize((w, h), Image.LANCZOS)
     sheet.paste(im, (x, y))
-    target = os.path.join(mod.data, "banners", "symbols%d.tga.dds" % n)
+    target = _target(mod, rel)
     plan.binary(target, image_dds(sheet, like))
     plan.notes.append((mod.rel(target), "flag symbol %d (%s) %s" % (k, ("top left", "top right", "bottom left",
                                                                          "bottom right")[k % 4], why)))
@@ -161,7 +318,7 @@ def flag_image(plan_or_mod, faction):
     if not got or not got["sheet"]:
         return None
     sheet = _read_image(plan_or_mod if hasattr(plan_or_mod, "files") else None, got["sheet"])
-    n, (x, y, w, h) = slot_box(got["index"], sheet.size[0])
+    x, y, w, h = slot_box(got["index"], sheet.size[0])
     return sheet.crop((x, y, x + w, y + h))
 
 
@@ -174,13 +331,19 @@ def own_flag(plan, faction, im=None):
     pic = im if im is not None else flag_image(plan, faction)
     k = got["index"]
     path, f = _sm(plan)
-    if got["shared"]:
+    lists = sheet_lists(plan)
+    on_rebels = k in rebel_slots(plan, lists) or k >= 4 * len(lists[0])
+    if got["shared"] or on_rebels:
         k = free_slot(plan)
+        if k is None:
+            k = _new_faction_sheet(plan, "for %s" % faction)
+            k = next(x for x in range(k, k + 4) if x not in used_slots(plan))
         f = plan.edit(path)
         i = sm_values(f, "standard_index")[faction][0]
         _set_value(f, i, k)
-        plan.note(f, "%s's flag symbol: slot %d of its own (was %d, shared with %s)" % (
-            faction, k, got["index"], ", ".join(got["shared"])))
+        plan.note(f, "%s's flag symbol: slot %d of its own (was %d, %s)" % (
+            faction, k, got["index"], ("shared with " + ", ".join(got["shared"])) if got["shared"]
+            else "on the rebels' banner sheet"))
     if pic is not None:
         _paste_flag(plan, k, pic, "for %s" % faction if im is None else "replaced for %s" % faction)
     return k
@@ -335,12 +498,12 @@ def entries(mod, faction):
     out = []
     got = flag_of(mod, faction)
     if got and got["sheet"]:
-        n, box = slot_box(got["index"])
+        box = got["box"]
         out.append({"path": got["sheet"], "rel": FLAG, "label": LABELS[FLAG][0], "where": LABELS[FLAG][1],
                     "size": (box[2], box[3], "DXT5"), "crop": box, "symbol": True,
-                    "note": "slot %d of banners/symbols%d.tga.dds%s" % (
-                        got["index"], n, (" - shared with %s: Replace gives it a slot of its own"
-                                          % ", ".join(got["shared"])) if got["shared"] else "")})
+                    "note": "slot %d of %s.dds%s" % (
+                        got["index"], got["rel"], (" - shared with %s: Replace gives it a slot of its own"
+                                                   % ", ".join(got["shared"])) if got["shared"] else "")})
     xml = sprite_mode(mod) == "xml"
     for which in (LOGO, SMALL):
         lg = logo_of(mod, faction, which)

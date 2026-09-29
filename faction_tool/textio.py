@@ -41,7 +41,11 @@ class TextFile:
     @classmethod
     def load(cls, path):
         with open(path, "rb") as f:
-            data = f.read()
+            return cls.from_bytes(path, f.read())
+
+    @classmethod
+    def from_bytes(cls, path, data):
+        """A file's bytes (as on disk, or a plan's new content) read the way load() reads them."""
         bom = b""
         if data.startswith(codecs.BOM_UTF16_LE):
             encoding, bom, data = "utf-16-le", codecs.BOM_UTF16_LE, data[2:]

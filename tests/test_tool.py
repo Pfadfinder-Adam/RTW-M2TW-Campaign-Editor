@@ -503,6 +503,46 @@ building smith
         # other keys keep the rule
         self.assertIsNotNone(E.room_for(f, "building", blk, "capability", "militia_barracks", "law_bonus", limits))
 
+    def test_flag_sheets_follow_descr_standards(self):
+        """The banner sheets are descr_standards.txt's faction list and then its rebel list; with the
+        faction sheets full a new faction gets a new faction sheet - never a rebels' slot - and slave's
+        flag (vanilla RTW: 20, the first rebel slot) keeps the picture it showed."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from faction_tool import symbols as SY
+        from faction_tool.factionart import image_dds
+        d = os.path.join(self.root, "data")
+        extra = "".join("faction\t\tfill%d\nculture\t\teastern\nstandard_index\t\t%d\n\n" % (n, n) for n in (1, 2, 3))
+        sm = SM.replace("culture\t\teastern\n", "culture\t\teastern\nstandard_index\t\t0\n", 1)
+        sm = sm.replace("culture\t\tbarbarian\n", "culture\t\tbarbarian\nstandard_index\t\t4\n", 1)
+        write(os.path.join(d, "descr_sm_factions.txt"), extra + sm)
+        write(os.path.join(d, "descr_standards.txt"), "file_scale\t0.185f\n\nfactions\nsymbols\t\t\t\tbanners/symbols1.tga\n"
+              "rebels_factions\nsymbols\t\t\t\tbanners/symbols2.tga\n")
+        write(os.path.join(d, "descr_cultures.txt"), "culture\t\teastern\nrebel_standard_index\t0\n")
+        os.makedirs(os.path.join(d, "banners"))
+        for n, colour in ((1, (0, 200, 0, 255)), (2, (250, 130, 0, 255))):
+            sheet = Image.new("RGBA", (128, 128), colour)
+            with open(os.path.join(d, "banners", "symbols%d.tga.dds" % n), "wb") as fh:
+                fh.write(image_dds(sheet))
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertEqual(SY.sheet_lists(mod), (["banners/symbols1.tga"], ["banners/symbols2.tga"]))
+        self.assertEqual(SY.flag_of(mod, "slave")["rel"], "banners/symbols2.tga")
+        self.assertIsNone(SY.free_slot(mod))                 # 0-3 taken; 4 is slave's and the rebels'
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual(SY.sheet_lists(mod), (["banners/symbols1.tga", "banners/symbols3.tga"], ["banners/symbols2.tga"]))
+        self.assertEqual(SY.flag_of(mod, "beta")["index"], 5)
+        self.assertEqual(SY.flag_of(mod, "slave")["index"], 4)
+        self.assertGreater(SY.flag_image(mod, "slave").getpixel((32, 32))[0], 200)     # still orange
+        self.assertEqual(SY.flag_image(mod, "beta").getpixel((32, 32))[:3], SY.flag_image(mod, "alpha").getpixel((32, 32))[:3])
+        restore_to(mod, backups(mod)[-1])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        self.assertEqual(before, after)
+
     def test_new_faction_gets_its_own_flag_symbol_and_logos(self):
         try:
             from PIL import Image
