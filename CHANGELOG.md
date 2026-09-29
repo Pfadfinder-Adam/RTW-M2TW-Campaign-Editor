@@ -20,6 +20,9 @@
   Two writes made by one Apply are undone in the right order.
 
 ### Fixed
+- Building editor: **Add line** refused a new `recruit` line once a level had as many as the busiest level of the
+  mod ("no building level in this mod has more than 101 'recruit' lines"). Recruit lines only list units and the
+  game takes any number of them, so they are no longer held to that rule. (Reported by a tester.)
 - Buildings tab: a town showed **another culture's pictures** (BI's Eastern Empire got barbarian huts) and empty
   boxes for pictures that exist. The pictures are now looked for only in the town's own culture (and the cultures
   `descr_ui_buildings.txt` sends it to), in the mod and then in the game's own `data` - where Barbarian

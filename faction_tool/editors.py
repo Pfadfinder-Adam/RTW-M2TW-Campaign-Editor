@@ -826,11 +826,18 @@ def line_limits(f, kind):
     return out
 
 
+# Lines that only list what a level recruits: the game takes any number of them (HLR has 702 in
+# one capability), so they are not held to the most the mod already has (a tester's 101, 2026-09-29).
+LIST_KEYS = {"recruit", "recruit_pool"}
+
+
 def room_for(f, kind, block, place, level, key, limits, pending=0):
     """None when one more line of key fits in that place, else why not."""
     place_key = None if kind == "unit" else place
     k = "(level)" if place == "upgrades" else key
     most = (limits.get(place_key) or {}).get(k, 0)
+    if kind != "unit" and place == "capability" and key in LIST_KEYS and most:
+        return None
     have = _count(f, _place_lines(f, kind, block, place, level), place == "upgrades").get(k, 0) + pending
     if have >= most:
         return "no %s in this mod has more than %d '%s' line(s) %s" % (

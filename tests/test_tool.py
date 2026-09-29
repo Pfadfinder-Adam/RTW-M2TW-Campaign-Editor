@@ -317,6 +317,25 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(len(w), 3, w)                                    # 9 ancillaries; Boris and Anna 5 kids
         self.assertEqual(limit_warnings(mod, tree, {}, {}, old_tree=tree), [])   # nothing added: no warning
 
+    def test_recruit_lines_are_not_capped(self):
+        from faction_tool import editors as E
+        edb = ("building barracks\n{\n    levels militia_barracks\n    {\n"
+               "        militia_barracks requires factions { alpha, }\n        {\n"
+               "            capability\n            {\n"
+               "                recruit \"alpha general\" 0 requires factions { alpha, }\n"
+               "                law_bonus bonus 1\n            }\n"
+               "            construction 1\n            cost 100\n            settlement_min town\n"
+               "            upgrades\n            {\n            }\n        }\n    }\n}\n")
+        p = os.path.join(self.root, "edb_test.txt")
+        write(p, edb)
+        f = TextFile.load(p)
+        blk = E.building_blocks(f)[0]
+        limits = E.line_limits(f, "building")
+        # one recruit line is the most the "mod" has, yet another one may go in
+        self.assertIsNone(E.room_for(f, "building", blk, "capability", "militia_barracks", "recruit", limits))
+        # other keys keep the rule
+        self.assertIsNotNone(E.room_for(f, "building", blk, "capability", "militia_barracks", "law_bonus", limits))
+
     def test_unit_cards_fill_a_folder_left_from_an_earlier_attempt(self):
         # ui/units/beta exists already (an old manual attempt) but lacks alpha's cards
         write(os.path.join(self.root, "data", "ui", "units", "beta", "#old_unit.tga"), "old")
