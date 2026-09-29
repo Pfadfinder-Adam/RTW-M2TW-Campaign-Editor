@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.17.0 - 2026-09-29
+
+REX's new features, read from REX's own notes, and two things the tool got wrong on Medieval II.
+
+### Fixed
+- **Medieval II recruitment lines**: Medieval II recruits with `recruit_pool` lines (the vanilla buildings file has
+  1475 of them and no `recruit` line at all), but the Roster tab, unit renames, unit packs, "Copy as new" and the
+  line checks read only Rome's `recruit`. On Medieval II the Roster showed no place a unit is recruited, a renamed
+  unit kept its recruit_pool lines on the old name, and unit packs carried no recruit places. One reader now knows
+  `recruit`, `recruit_pool` and REX's retrain-only `retrain` / `retrain_pool`; "Add line" writes the file's own form
+  (Medieval II: units at the start, new units a turn, most units waiting). Checked on vanilla Medieval II (england:
+  37 of its 46 units recruited, with their buildings) and Rome.
+- **Forts** (`fort x y ...` lines in descr_strat, Medieval II and REX) were not read: a fort line inside a faction's
+  block was taken as part of the character before it (moved or removed with him), and armies could be placed on a
+  fort's tile. Forts and watchtowers are now read on their own, drawn on the map (owner, name and "permanent" on
+  hover, in the legend) and their tiles kept free; the terrain editor keeps their ground.
+
+### Added
+- **REX bracket requirements**: one requires line may carry several `factions { }` groups, each with conditions of
+  its own (`( ( factions { greek, } and ... ) or ( factions { middle_eastern, } and ... ) )`). Every group is read;
+  giving a unit or a level joins the first group (said in Preview), taking removes the faction from every group,
+  and a group it alone forms is left for a person to rewrite, said in plain words. Unit packs name their owners in
+  every group.
+- **Unit editor: what REX adds to units** - a REX... button next to the attributes, stat_mental, stat_ground and
+  weapon lines ticks REX's words with their effect in plain words: expendable, elitist, steadfast, intimidate,
+  immune_to_psychology, relentless, disciplined_missile, inexhaustible, brace_for_charge, aggressive_push,
+  disciplined_charge, ai_cannot_skirmish, ai_cannot_toggle_formation, desert_raider, forest_ambusher,
+  troublemaker, police, client_kingdom_only_units, infinite_ammo, no_scale, single_entity, sp (shield piercing).
+  `recruit_priority_offset` may be added although no unit of the mod has one yet.
+
 ## 0.16.1 - 2026-09-29
 
 The user's Medieval II run (scotland: Edinburgh castle and back, Inverness taken and made a city): the game started
