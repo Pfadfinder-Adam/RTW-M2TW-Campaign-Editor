@@ -1,6 +1,7 @@
 """The Terrain editor (its own work at the top): paint what each tile of the campaign map is
 (map_ground_types.tga), what runs across it (map_features.tga: rivers, fords, sources,
-cliffs) and its climate (map_climates.tga, the climates of descr_climates.txt), on the map drawn tile by tile. Kept here until Apply, written by terrain.apply with
+cliffs), its climate (map_climates.tga, the climates of descr_climates.txt) and how high the land is
+(map_heights.tga, a spray brush: held longer, it raises / lowers more), on the map drawn tile by tile. Kept here until Apply, written by terrain.apply with
 a backup like the unit and building editors (dirty / pending / make_plan / rebind)."""
 
 import hashlib
@@ -18,7 +19,10 @@ class TerrainEditor(ttk.Frame):
         self.app = app
         self.mod, self._sig, self.cmap = None, None, None
         self.ground, self.features, self.climate = {}, {}, {}     # painted tiles: {(x, y): colour}
+        self.heights = {}               # sprayed map_heights pixels: {(px, py): grey}
+        self._hvals = {}                # their running values with fractions (small puffs add up)
         self.base = {}                  # what the files have there: {('ground'|'features'|'climate', xy): colour}
+        self.hbase = {}                 # map_heights pixels as the file has them: {(px, py): grey}
         self._undo, self._redo = [], []
         self._last_river = None         # the last river tile of the stroke: the next one joins it side to side
         top = ttk.Frame(self)
@@ -26,12 +30,12 @@ class TerrainEditor(ttk.Frame):
         ttk.Label(top, text="Paint", font=("", 10, "bold")).pack(side="left")
         self.v_what = tk.StringVar(value="ground")
         for val, text in (("ground", "Ground"), ("features", "Rivers, fords, cliffs"),
-                          ("climate", "Climates")):
+                          ("climate", "Climates"), ("heights", "Heights")):
             ttk.Radiobutton(top, text=text, value=val, variable=self.v_what, command=self.fill_palette).pack(
                 side="left", padx=4)
         ttk.Label(top, text="   brush").pack(side="left")
         self.v_brush = tk.IntVar(value=1)
-        ttk.Spinbox(top, from_=1, to=6, width=3, textvariable=self.v_brush,
+        ttk.Spinbox(top, from_=1, to=12, width=3, textvariable=self.v_brush,
                     command=lambda: setattr(self.view, "brush", self.v_brush.get())).pack(side="left", padx=2)
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
         self.v_grid_here = tk.BooleanVar(value=True)
@@ -42,6 +46,9 @@ class TerrainEditor(ttk.Frame):
         self.palette = ttk.Frame(self, padding=(0, 4))
         self.palette.pack(fill="x")
         self.v_colour = tk.StringVar()
+        self.v_tool = tk.StringVar(value="raise")       # the heights brush
+        self.v_strength = tk.IntVar(value=4)
+        self.v_level = tk.IntVar(value=40)
         self.hint = ttk.Label(self, foreground="#555", justify="left", wraplength=1200)
         self.hint.pack(fill="x")
         from .gui_map import MapView
@@ -78,7 +85,7 @@ class TerrainEditor(ttk.Frame):
 
     def _signature(self):
         h = hashlib.md5()
-        for name in ("map_ground_types.tga", "map_features.tga", "map_climates.tga"):
+        for name in ("map_ground_types.tga", "map_features.tga", "map_climates.tga", "map_heights.tga"):
             try:
                 with open(self.mod.campaign_file(self.app.v_campaign.get(), name), "rb") as fh:
                     h.update(fh.read())
@@ -87,10 +94,10 @@ class TerrainEditor(ttk.Frame):
         return h.hexdigest()
 
     def dirty(self):
-        return bool(self.ground or self.features or self.climate)
+        return bool(self.ground or self.features or self.climate or self.heights)
 
     def pending(self):
-        return len(self.ground) + len(self.features) + len(self.climate)
+        return len(self.ground) + len(self.features) + len(self.climate) + (1 if self.heights else 0)
 
     def rebind(self, mod):
         lost = 0
@@ -98,6 +105,7 @@ class TerrainEditor(ttk.Frame):
             lost = self.pending()
         if lost or self.mod is None or mod.data != self.mod.data or not self.dirty():
             self.ground, self.features, self.climate, self.base = {}, {}, {}, {}
+            self.heights, self._hvals, self.hbase = {}, {}, {}
             self._undo, self._redo = [], []
         from .moddata import ModData
         self.mod = ModData(mod.data)                 # its own copy: the pictures are changed in memory
@@ -113,7 +121,7 @@ class TerrainEditor(ttk.Frame):
             raise ValueError("nothing painted in the Terrain editor")
         mod = ModData(self.mod.data)
         plan = Plan(mod, "terrain", "terrain", {})
-        T.apply(plan, self.app.v_campaign.get(), self.ground, self.features, self.climate)
+        T.apply(plan, self.app.v_campaign.get(), self.ground, self.features, self.climate, self.heights)
         broken = T.river_warnings(self._features_now(), self.cmap.w, self.cmap.h, self.cmap.is_sea) \
             if self.features else []
         for x, y, n in broken[:20]:
@@ -150,9 +158,11 @@ class TerrainEditor(ttk.Frame):
                 (s.taken_tiles() if s else set())
             self._apply_memory()
         self.cmap.show_climates = self.v_what.get() == "climate"
+        self.cmap.show_heights = self.v_what.get() == "heights"
         self.view.brush = self.v_brush.get()
         self.view.load(self.cmap, {}, {}, region_mode=True, on_paint=self.paint, on_pick=self.pick,
                        brush=self.v_brush.get(), plain=True)
+        self.view.on_spray = self.spray if self.v_what.get() == "heights" else None
 
     def _img(self, name):
         return self.mod._optional_map(self.app.v_campaign.get(), name)
@@ -171,8 +181,12 @@ class TerrainEditor(ttk.Frame):
             self._set_px(cl, px, py, c)
         for (x, y), c in self.features.items():
             self._set_px(f, x, y, c)
+        h = self._img("map_heights.tga")
+        for (px, py), v in self.heights.items():
+            self._set_px(h, px, py, (v, v, v))
         if self.cmap is not None:
             self.cmap.__dict__.pop("_backgrounds", None)
+            self.cmap._hpil = None
 
     def _features_now(self):
         f = self._img("map_features.tga")
@@ -228,7 +242,40 @@ class TerrainEditor(ttk.Frame):
         self.app._mark_work()
         return took
 
+    def spray(self, px, py):
+        """One puff of the heights brush at map_heights pixel (px, py); True when a pixel changed."""
+        img = self._img("map_heights.tga")
+        if img is None:
+            self.app.status.set("This campaign has no map_heights.tga.")
+            return False
+        tool = self.v_tool.get()
+        # the brush in tiles, a tile being 2 pixels of map_heights: size 1 = about one tile across
+        radius = max(1.5, 2.0 * self.v_brush.get() - 0.5)
+        got = T.height_spray(img, (px, py), radius, tool, max(1, min(10, self.v_strength.get())), self._hvals,
+                             level=self.v_level.get())
+        for p, v in got.items():
+            self.hbase.setdefault(p, img.get(*p)[0])
+            self._set_px(img, p[0], p[1], (v, v, v))
+            self.cmap.set_height(p[0], p[1], v)
+            if self.hbase[p] == v:
+                self.heights.pop(p, None)
+            else:
+                self.heights[p] = v
+        if got:
+            self.cmap.__dict__.pop("_backgrounds", None)
+            self.app.status.set("Terrain: %d pixel(s) of height changed - Preview, then Apply changes."
+                                % len(self.heights))
+            self.app._mark_work()
+        return bool(got)
+
     def pick(self, xy):
+        if self.v_what.get() == "heights":
+            hv = self.cmap.height_at(*xy) if self.cmap else None
+            if hv is not None:
+                self.v_level.set(hv)
+                self.v_tool.set("level")
+                self.app.status.set("Terrain: height %d picked - 'Level' brings the land towards it." % hv)
+            return
         c = self._current(self.v_what.get(), tuple(xy))
         if c is not None:
             self.v_colour.set("%d,%d,%d" % c)
@@ -240,9 +287,9 @@ class TerrainEditor(ttk.Frame):
         self._redo = []                          # a new stroke drops the strokes undone before it
 
     def _state(self):
-        return dict(self.ground), dict(self.features), dict(self.climate)
+        return dict(self.ground), dict(self.features), dict(self.climate), dict(self.heights)
 
-    def _restore_to(self, ground, features, climate):
+    def _restore_to(self, ground, features, climate, heights=None):
         # back to the files' colours first, then the kept strokes on top
         g, f = self._img("map_ground_types.tga"), self._img("map_features.tga")
         cl = self._img("map_climates.tga")
@@ -254,7 +301,12 @@ class TerrainEditor(ttk.Frame):
                     self._set_px(g if what == "ground" else cl, px, py, cc)
             else:
                 self._set_px(f, t[0], t[1], c)
+        h = self._img("map_heights.tga")
+        for (px, py), v in self.hbase.items():
+            self._set_px(h, px, py, (v, v, v))
         self.ground, self.features, self.climate = ground, features, climate
+        self.heights = dict(heights or {})
+        self._hvals = {p: float(v) for p, v in self.heights.items()}
         self._apply_memory()
         self.view.render()
         self.app._mark_work()
@@ -281,7 +333,7 @@ class TerrainEditor(ttk.Frame):
 
     def reset(self):
         self._undo, self._redo = [], []
-        self._restore_to({}, {}, {})
+        self._restore_to({}, {}, {}, {})
         self.app.status.set("Terrain: nothing painted.")
 
     def fill_palette(self):
@@ -305,6 +357,11 @@ class TerrainEditor(ttk.Frame):
                 "The climates are the mod's own (descr_climates.txt), drawn here in their colours over the land; "
                 "the sea keeps its climate. On Apply: map_climates.tga written, map.rwm deleted." if found else
                 "This mod has no descr_climates.txt, so its climates are not known here."))
+        elif what == "heights":
+            self._heights_palette()
+            if self.cmap is not None and not getattr(self.cmap, "show_heights", False):
+                self.show()
+            return
         else:
             items = [("marks", T.FEATURE_BRUSHES, T.FEATURES)]
             self.hint.configure(text=(
@@ -335,5 +392,27 @@ class TerrainEditor(ttk.Frame):
                 first = first or "%d,%d,%d" % c
         if first and self.v_colour.get() not in swatches:
             self.v_colour.set(first)
-        if self.cmap is not None and getattr(self.cmap, "show_climates", False) != (what == "climate"):
+        if self.cmap is not None and (getattr(self.cmap, "show_climates", False) != (what == "climate") or
+                                      getattr(self.cmap, "show_heights", False)):
             self.show()
+
+    def _heights_palette(self):
+        """The heights brush: what it does, how strong, and the height 'Level' brings the land to."""
+        box = ttk.Frame(self.palette)
+        box.pack(side="left")
+        ttk.Label(box, text="brush:").pack(side="left", padx=(8, 2))
+        for val, text in (("raise", "Raise"), ("lower", "Lower"), ("smooth", "Smooth"),
+                          ("level", "Level to height")):
+            ttk.Radiobutton(box, text=text, value=val, variable=self.v_tool).pack(side="left", padx=3)
+        ttk.Spinbox(box, from_=0, to=255, width=4, textvariable=self.v_level).pack(side="left")
+        ttk.Label(box, text="   strength").pack(side="left", padx=(12, 2))
+        ttk.Scale(box, from_=1, to=10, orient="horizontal", length=140,
+                  command=lambda v: self.v_strength.set(int(float(v)))).pack(side="left")
+        box.winfo_children()[-1].set(self.v_strength.get())
+        self.hint.configure(text=(
+            "Like a spray can: hold the left button and the land under the brush rises (or sinks) more the "
+            "longer you hold; the middle of the brush does the most, the edge fades out. Smooth evens out bumps, "
+            "Level brings the land towards the height set beside it (right click picks a tile's own height). "
+            "Shown as map_heights.tga is: land grey - black low, white high (brightened a little here) - "
+            "the sea blue; only land is changed, the coast stays. On Apply: map_heights.tga written, "
+            "map_heights.hgt and map.rwm deleted (the game reads the picture then and builds its map again)."))

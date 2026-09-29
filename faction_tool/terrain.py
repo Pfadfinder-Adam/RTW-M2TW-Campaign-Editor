@@ -182,7 +182,69 @@ def ground_changes(ground_tiles):
     return out
 
 
-def apply(plan, campaign, ground=None, features=None, climate=None):
+# ---- heights (map_heights.tga) ----
+# 2 x the map + 1 like the ground. Land is grey: 0 the lowest, 255 descr_terrain's max_land_height (vanilla RTW
+# 7511); the sea is blue (0, 0, b) - b the depth (253 nearly everywhere) - and lies exactly under the sea
+# ground types (vanilla RTW and M2TW measured). The brush changes land only; the coast stays where it is.
+# map_heights.hgt beside it (floats, the game's own converted copy) wins over the picture while it is there
+# and is not made again by the game (TWC wiki "Map heights.hgt"), so a heights edit deletes it - the game then
+# reads the picture; Restore puts the file back.
+HEIGHT_TOOLS = ("raise", "lower", "smooth", "level")
+
+
+def is_land_height(c):
+    return c is not None and c[0] == c[1] == c[2]
+
+
+def height_spray(img, centre, radius, tool, strength, values, level=None):
+    """One puff of the heights brush, like a spray can: held longer, it does more. img: map_heights.tga
+    (tga.Image, bottom-up); centre: (px, py) in its pixels, fractions allowed; radius in pixels; strength
+    1..10; values: {(px, py): float} - the running heights of pixels touched so far (kept between puffs,
+    so small steps add up), updated here. Returns {(px, py): int} of the pixels whose grey changed."""
+    cx, cy = centre
+    r = max(float(radius), 1.0)
+    out = {}
+    x0, x1 = max(int(cx - r), 0), min(int(cx + r) + 1, img.width - 1)
+    y0, y1 = max(int(cy - r), 0), min(int(cy + r) + 1, img.height - 1)
+
+    def now(x, y):
+        v = values.get((x, y))
+        if v is None:
+            c = img.get(x, y)
+            v = float(c[0]) if is_land_height(c) else None
+        return v
+
+    k = strength / 10.0
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            d = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+            if d > r:
+                continue
+            v = now(x, y)
+            if v is None:                               # the sea: left alone
+                continue
+            w = (1 - d / r) ** 2 if r > 1 else 1.0      # soft edge: the middle gets the most
+            if tool == "raise":
+                nv = v + 4.0 * k * w
+            elif tool == "lower":
+                nv = v - 4.0 * k * w
+            elif tool == "smooth":
+                near = [now(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                        if 0 <= x + dx < img.width and 0 <= y + dy < img.height]
+                near = [n for n in near if n is not None]
+                nv = v + (sum(near) / len(near) - v) * 0.5 * k * w
+            elif tool == "level" and level is not None:
+                nv = v + (level - v) * 0.35 * k * w
+            else:
+                continue
+            nv = min(max(nv, 0.0), 255.0)
+            values[(x, y)] = nv
+            if int(round(nv)) != img.get(x, y)[0]:
+                out[(x, y)] = int(round(nv))
+    return out
+
+
+def apply(plan, campaign, ground=None, features=None, climate=None, heights=None):
     """Write the painted tiles: ground {(x, y): colour} into map_ground_types.tga, features
     {(x, y): colour} into map_features.tga, climate {(x, y): colour} into map_climates.tga (the same
     3 x 3 block per tile as the ground); map.rwm deleted so the game builds the map again."""
@@ -190,7 +252,8 @@ def apply(plan, campaign, ground=None, features=None, climate=None):
     ground = {tuple(k): tuple(v) for k, v in (ground or {}).items()}
     features = {tuple(k): tuple(v) for k, v in (features or {}).items()}
     climate = {tuple(k): tuple(v) for k, v in (climate or {}).items()}
-    if not ground and not features and not climate:
+    heights = {tuple(k): int(v) for k, v in (heights or {}).items()}
+    if not ground and not features and not climate and not heights:
         return
     from collections import Counter
     climate_names = {c: n for n, c, _ in climates(mod)}
@@ -206,10 +269,27 @@ def apply(plan, campaign, ground=None, features=None, climate=None):
         count = Counter(names.get(c, str(c)) for c in tiles.values())
         plan.notes.append((mod.rel(path), "%d tile(s): %s" % (len(tiles), ", ".join(
             "%d %s" % (n, k) for k, n in count.most_common()))))
+    if heights:
+        path = mod.campaign_file(campaign, "map_heights.tga")
+        if not path:
+            raise ValueError("this campaign has no map_heights.tga")
+        img = mod._optional_map(campaign, "map_heights.tga")
+        bad = [p for p in heights if not is_land_height(img.get(*p))]
+        if bad:
+            raise ValueError("heights painted on the sea at %d, %d - the brush changes land only" % bad[0])
+        plan.binary(path, patched(path, {p: (v, v, v) for p, v in heights.items()}))
+        up = sum(1 for p, v in heights.items() if v > img.get(*p)[0])
+        plan.notes.append((mod.rel(path), "%d pixel(s) of land: %d raised, %d lowered" % (
+            len(heights), up, len(heights) - up)))
+        hgt = os.path.join(os.path.dirname(path), "map_heights.hgt")
+        if os.path.isfile(hgt):
+            plan.delete(hgt, "the game's own copy of the heights: while it is there the game reads it and not the "
+                             "picture, and it does not make it again - without it the game takes map_heights.tga")
     for folder in {os.path.dirname(mod.campaign_file(campaign, "map_regions.tga")),
                    os.path.join(mod.data, "world", "maps", "base")}:
         plan.delete(os.path.join(folder, "map.rwm"), "the game builds the map again from the changed pictures")
 
 
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "FEATURE_BRUSHES", "paint_problem",
-           "river_warnings", "river_shapes", "river_path", "climates", "apply"]
+           "river_warnings", "river_shapes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray",
+           "apply"]

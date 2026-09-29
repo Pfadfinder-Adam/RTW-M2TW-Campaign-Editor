@@ -83,8 +83,24 @@ class MapView(ttk.Frame):
         self.v_legend = tk.BooleanVar(value=bool(settings.get("map_legend", True)))
         ttk.Checkbutton(bar, text="Legend", variable=self.v_legend, command=self._legend_toggled).pack(
             side="left", padx=(4, 0), before=self.lbl_layers)
+        # Find: a town, port, army, agent, fleet, unit, fort or resource by any part of its name
+        self.v_find = tk.StringVar()
+        ttk.Label(bar, text="Find:").pack(side="left", padx=(12, 2), before=self.lbl_layers)
+        self.find_entry = ttk.Entry(bar, textvariable=self.v_find, width=22)
+        self.find_entry.pack(side="left", before=self.lbl_layers)
+        self.find_entry.bind("<KeyRelease>", self._find_typed)
+        self.find_entry.bind("<Return>", lambda e: self._find_go(0))
+        self.find_entry.bind("<Down>", lambda e: self._find_focus())
+        self.find_entry.bind("<Escape>", lambda e: self._find_close())
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
+        self._body = body
+        self.find_list = tk.Listbox(body, height=12, width=90, activestyle="dotbox", exportselection=False)
+        self.find_list.bind("<Return>", lambda e: self._find_go(None))
+        self.find_list.bind("<Double-Button-1>", lambda e: self._find_go(None))
+        self.find_list.bind("<ButtonRelease-1>", lambda e: self._find_go(None))
+        self.find_list.bind("<Escape>", lambda e: self._find_close())
+        self._found = []
         self.canvas = tk.Canvas(body, background="#1d2b3a", highlightthickness=0, cursor="crosshair")
         self.canvas.pack(side="left", fill="both", expand=True)
         # the legend: what every sign means, on the right; shown or hidden as last time
@@ -113,6 +129,9 @@ class MapView(ttk.Frame):
         self.region_painted, self.region_colours = {}, {}
         self.on_paint = self.on_pick = None
         self.brush, self._painting, self._rclick = 1, False, False
+        # a spray brush (the Terrain editor's heights): on_spray(px, py) is called again and again while the
+        # left button is held - the longer, the more it does; px, py = map_heights pixels (bottom-up, fractions)
+        self.on_spray, self._spray = None, None
         self.chars, self.draggable, self.symbols = [], set(), {}
         self.on_char_move = self.check_tile = None
         # resources: [{id, kind, xy}]; check_res(id, xy) -> None or why; on_res_move(id, xy); on_res_click(id)
@@ -867,6 +886,89 @@ class MapView(ttk.Frame):
                 c.tag_raise(tag)
 
     # ---- mouse ----
+    # ---- Find ----
+    def find_items(self):
+        """[(text, xy, name)] of everything on the map one may look for: towns (the shown name too), ports,
+        characters with their faction and the units of their army, forts, resources. name: what the thing
+        is called (a hit there comes first)."""
+        if not self.cmap:
+            return []
+        out = []
+        for region, xy in self.cmap.cities.items():
+            town = self.cmap.info.get(region, {}).get("settlement", "")
+            shown = self.labels.get(region)
+            owner = self.owners.get(region)
+            out.append(("town %s%s - region %s%s" % (town, " (shown: %s)" % shown if shown and shown != town else "",
+                                                       region, ", %s" % owner if owner else ""), tuple(xy),
+                        " ".join(x for x in (town, shown or "", region) if x)))
+        for region, xy in self.cmap.ports.items():
+            town = self.cmap.info.get(region, {}).get("settlement", region)
+            out.append(("port of %s (%s)" % (town, region), tuple(xy), "%s %s" % (town, region)))
+        for c in self.chars:
+            what = "fleet" if c["kind"] == "admiral" else "army" if c["army"] else c["kind"]
+            units = c.get("unit_names") or []
+            text = "%s - %s of %s" % (c["name"] or "(no name)", what, c["faction"])
+            if units:
+                text += " - " + ", ".join(units)
+            out.append((text, tuple(c["xy"]), c["name"] or ""))
+        for f in self.forts:
+            out.append(("%s%s of %s" % (f.kind, " '%s'" % f.name if f.name else "", f.owner or "no faction"),
+                        tuple(f.xy), f.name or f.kind))
+        for r in self.resources:
+            out.append(("resource %s - %s" % (r["kind"], self.cmap.region_at(*r["xy"]) or ""), tuple(r["xy"]),
+                        r["kind"]))
+        return out
+
+    def _find_typed(self, e=None):
+        if e is not None and e.keysym in ("Return", "Down", "Escape", "Up"):
+            return
+        words = self.v_find.get().lower().split()
+        if not words:
+            return self._find_close()
+        hits = [h for h in self.find_items() if all(w in h[0].lower() for w in words)]
+
+        def rank(h):
+            name = h[2].lower().replace("_", " ").split()
+            text = h[0].lower().replace("-", " ").replace("_", " ").split()
+            # the name itself first (typing "rom" finds the town Roma before the Romans' armies), then a word
+            # starting so, then the rest
+            return (0 if any(p.startswith(words[0]) for p in name) else
+                    1 if any(p.startswith(words[0]) for p in text) else 2, h[0].lower())
+        hits.sort(key=rank)
+        self._found = [(t, xy) for t, xy, _ in hits[:200]]
+        lb = self.find_list
+        lb.delete(0, "end")
+        if not hits:
+            lb.insert("end", "nothing on the map is called so")
+        for t, xy in self._found:
+            lb.insert("end", "%s   (%d, %d)" % (t, xy[0], xy[1]))
+        if len(hits) > len(self._found):
+            lb.insert("end", "... %d more - type more of the name" % (len(hits) - len(self._found)))
+        lb.configure(height=min(12, max(1, lb.size())))
+        lb.place(x=4, y=4)
+        lb.lift()
+
+    def _find_focus(self):
+        if self._found and self.find_list.winfo_ismapped():
+            self.find_list.focus_set()
+            self.find_list.selection_clear(0, "end")
+            self.find_list.selection_set(0)
+            self.find_list.activate(0)
+
+    def _find_go(self, index):
+        if index is None:
+            sel = self.find_list.curselection()
+            index = sel[0] if sel else None
+        if index is None or index >= len(self._found):
+            return
+        text, xy = self._found[index]
+        self._find_close()
+        self.centre_on(xy)
+        self.readout.configure(text="found: %s at %d, %d" % (text, xy[0], xy[1]))
+
+    def _find_close(self):
+        self.find_list.place_forget()
+
     def _wheel(self, e, direction=None):
         d = direction if direction is not None else (1 if e.delta > 0 else -1)
         self.zoom_by(d, (e.x, e.y))
@@ -886,6 +988,10 @@ class MapView(ttk.Frame):
             if not icons and not self.on_place:           # left: paint
                 if getattr(self, "on_stroke", None):
                     self.on_stroke()                      # one Undo step per stroke
+                if self.on_spray:
+                    self._spray = (e.x, e.y)
+                    self._spray_tick()
+                    return
                 self._painting = True
                 self._paint_at(e)
                 return
@@ -916,7 +1022,36 @@ class MapView(ttk.Frame):
             return
         self._drag = (e.x, e.y, self.ox, self.oy, False)
 
+    def _spray_at(self, sx, sy):
+        """Canvas point -> map_heights pixel (bottom-up, with fractions): tile x spans pixels 2x..2x+2."""
+        fx = self.ox + sx / self.z
+        fr = self.oy + sy / self.z
+        return 2 * fx, 2 * (self.cmap.h - fr)
+
+    def _spray_tick(self):
+        if not self._spray or not self.cmap or not self.on_spray:
+            self._spray = None
+            return
+        if self.on_spray(*self._spray_at(*self._spray)):
+            self._refresh_bg()
+        self.after(50, self._spray_tick)
+
+    def _refresh_bg(self):
+        """Only the background again (the markers stay): quick enough to follow a spraying brush."""
+        c = self.canvas
+        if not self.cmap or not c.find_withtag("bg"):
+            return self.render()
+        cw, ch = c.winfo_width(), c.winfo_height()
+        box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
+        pic = self._base().crop(tuple(int(round(v * 2)) for v in box)).resize(
+            (cw, ch), Image.NEAREST if self.z >= 12 else Image.BILINEAR)
+        self._photo = ImageTk.PhotoImage(pic)
+        c.itemconfigure("bg", image=self._photo)
+
     def _move(self, e):
+        if self._spray:
+            self._spray = (e.x, e.y)
+            return
         if self._painting:
             self._paint_at(e)
             return
@@ -976,6 +1111,10 @@ class MapView(ttk.Frame):
                 self._pending = self.after(15, self._pan)
 
     def _release(self, e):
+        if self._spray:
+            self._spray = None
+            self.render()
+            return
         if self._painting:
             self._painting = False
             self.render()

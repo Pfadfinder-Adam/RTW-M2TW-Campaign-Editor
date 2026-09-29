@@ -86,6 +86,9 @@ class CampaignMap:
         g = self.ground_at(x, y)
         if g is not None:
             parts.append(GROUND.get(g, "ground %s" % (g,)))
+        if getattr(self, "show_heights", False):
+            hv = self.height_at(x, y)
+            parts.append("height %d of 255" % hv if hv is not None else "sea")
         if region and px not in (CITY, PORT) and not self.is_sea(x, y):
             why = self.mod.land_problem(self.campaign, (x, y))
             parts.append("armies and agents may stand here" if not why else "no one can stand here: " + why)
@@ -114,6 +117,8 @@ class CampaignMap:
         by choice). Returned at 2 px per tile. tiles: every tile one square in the
         colour of the ground at its middle (what the tool checks); relief: shaded
         from map_heights.tga; rivers: map_features.tga's rivers, fords and cliffs."""
+        if getattr(self, "show_heights", False):
+            return self.heights_view()                  # the Terrain editor's Heights mode: map_heights itself
         climates = bool(getattr(self, "show_climates", False))
         key = (bool(tiles), bool(relief), bool(rivers), climates)
         cache = self.__dict__.setdefault("_backgrounds", {})
@@ -168,6 +173,46 @@ class CampaignMap:
         over.putdata(cols)
         mask.putdata(keep)
         return Image.composite(over.resize(im.size, Image.NEAREST), im, mask.resize(im.size, Image.NEAREST))
+
+    @staticmethod
+    def height_look(c):
+        """How a map_heights.tga pixel is drawn: land in grey (brightened, so the low land - most of
+        vanilla's, 10-20 of 255 - is not all black), the sea blue, darker where deeper."""
+        if c[0] == c[1] == c[2]:
+            g = int(round(255 * (c[0] / 255.0) ** 0.5))
+            return g, g, g
+        d = max(0, min(255, c[2]))
+        return 20, 40 + (d - 145) // 3 if d > 145 else 30, 60 + (d - 100) // 2 if d > 100 else 50
+
+    def heights_view(self):
+        """map_heights.tga as drawn (height_look), at 2 px per tile like background(); kept and changed
+        pixel by pixel (set_height) while the heights brush sprays."""
+        if getattr(self, "_hpil", None) is None:
+            t = self.mod._optional_map(self.campaign, "map_heights.tga")
+            if t is None:
+                return self._tiles().resize((2 * self.w, 2 * self.h), Image.NEAREST)
+            im = Image.new("RGB", (t.width, t.height))
+            look = {}
+            im.putdata([look.setdefault(p, self.height_look(p)) for p in t.pixels])
+            self._hpil = im.transpose(Image.FLIP_TOP_BOTTOM)
+        im = self._hpil
+        view = im.crop((0, 1, 2 * self.w, 2 * self.h + 1)) if im.size == (2 * self.w + 1, 2 * self.h + 1) else \
+            im.resize((2 * self.w, 2 * self.h), Image.BILINEAR)
+        return view
+
+    def set_height(self, px, py, value):
+        """The drawn heights picture follows one changed pixel (px, py bottom-up, grey value)."""
+        im = getattr(self, "_hpil", None)
+        if im is not None and 0 <= px < im.width and 0 <= py < im.height:
+            im.putpixel((px, im.height - 1 - py), self.height_look((value, value, value)))
+
+    def height_at(self, x, y):
+        """The grey of tile (x, y)'s middle in map_heights.tga (land), or None (the sea, no file)."""
+        t = self.mod._optional_map(self.campaign, "map_heights.tga")
+        if t is None or not (0 <= 2 * x + 1 < t.width and 0 <= 2 * y + 1 < t.height):
+            return None
+        c = t.get(2 * x + 1, 2 * y + 1)
+        return c[0] if c[0] == c[1] == c[2] else None
 
     def _pil(self, name):
         """A campaign map file as a top-down Pillow picture, or None."""

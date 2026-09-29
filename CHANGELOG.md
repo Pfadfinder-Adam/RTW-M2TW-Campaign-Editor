@@ -13,6 +13,17 @@
   right engine; under M2EX the names are written the way REX documents it (to test in the game once).
 
 ### Added
+- **Terrain editor: Heights** (`map_heights.tga`), a spray brush: hold the left button and the land under the
+  brush rises (Raise) or sinks (Lower) the more the longer you hold; the middle does the most, the edge fades.
+  **Smooth** evens out bumps, **Level to height** brings the land towards a height (right click picks a
+  tile's own). Strength slider, brush up to 12 tiles. The map shows the heights as the file has them - land
+  grey (black low, white high, brightened a little), the sea blue; only land is changed, the coast stays.
+  Apply writes map_heights.tga and deletes **map_heights.hgt** (the game's own copy of the heights: while it
+  is there the game reads it instead of the picture, and it does not make it again) and map.rwm. Same file
+  layout on Rome and Medieval II (checked on both vanilla maps). Not yet tested in the game.
+- **Find on the map** (Map tab and Terrain editor): type part of a name - a town (also the name shown for
+  its owner), a port, a general, agent or fleet, a unit in an army, a fort, a resource - and pick a hit: the
+  map centres on it. Names come first (typing "rom" lists Rome before the Romans' armies).
 - **Check mod**: the factions against max_factions, and the original exe's limits (regions, map size, units, building chains, levels, hidden
   resources) counted against the mod, saying whether REX / M2EX is beside the game and what it is known to
   lift (REX: regions - HLR runs 750); win conditions naming a missing region or faction; Medieval II rebels

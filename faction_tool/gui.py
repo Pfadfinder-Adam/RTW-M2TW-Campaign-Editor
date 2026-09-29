@@ -2048,6 +2048,7 @@ class App(tk.Tk):
                         taken.discard(c.xy)
                         taken.add(dest)
                         fleet_moves[c.start] = dest
+        from .start import unit_name
         for fb in self.strat.factions:
             for i, c in enumerate(fb.characters):
                 if not c.xy:
@@ -2056,8 +2057,9 @@ class App(tk.Tk):
                 army = any(tokens(l)[:1] == ["army"] for l in lines)
                 cid = "%s:%d" % (fb.name, i)
                 xy = self.char_moves.get(cid, town_moves.get(c.xy) or fleet_moves.get(c.start) or c.xy)
+                ulines = [l for l in lines if tokens(l)[:1] == ["unit"]]
                 chars.append({"id": cid, "faction": fb.name, "name": c.name, "kind": c.kind, "xy": xy,
-                              "army": army, "units": sum(1 for l in lines if tokens(l)[:1] == ["unit"]),
+                              "army": army, "units": len(ulines), "unit_names": [unit_name(l) for l in ulines],
                               "from": c.xy})
                 if army:
                     armies_at.add(xy)
@@ -2066,7 +2068,9 @@ class App(tk.Tk):
             if fc.get("xy") and not fc.get("existing"):         # those are drawn from descr_strat
                 rtw_kind, army = KINDS[fc["kind"]]
                 chars.append({"id": "new:%d" % i, "faction": me, "name": fc["name"], "kind": rtw_kind,
-                              "xy": tuple(fc["xy"]), "army": army, "units": len(fc["units"]), "from": None})
+                              "xy": tuple(fc["xy"]), "army": army, "units": len(fc["units"]),
+                              "unit_names": [u if isinstance(u, str) else str(u.get("name", "")) if isinstance(u, dict)
+                                             else str(u) for u in fc["units"]], "from": None})
                 if army:
                     armies_at.add(tuple(fc["xy"]))
         mine = [ch["id"] for ch in chars if (self.editing() and ch["faction"] == me) or ch["id"].startswith("new:")]

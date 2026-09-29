@@ -1509,6 +1509,52 @@ building smith
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
 
+    def test_heights_spray_and_restore(self):
+        """Heights brush: a spray on land raises the middle most, never touches the sea (blue), puffs add up;
+        written into map_heights.tga, map_heights.hgt (the game's copy that wins over the picture) and map.rwm
+        deleted; Restore gives every file back."""
+        from faction_tool import terrain as T
+        from faction_tool.plan import Plan
+        from faction_tool.tga import read_tga
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        land, sea = (10, 10, 10), (0, 0, 253)
+        write_tga(os.path.join(camp, "map_heights.tga"), 9, 9,
+                  [[sea if x >= 7 else land for x in range(9)] for y in range(9)])
+        write(os.path.join(camp, "map_heights.hgt"), "floats")
+        write(os.path.join(camp, "map.rwm"), "x")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        img = mod._optional_map("test", "map_heights.tga")
+        vals = {}
+        first = T.height_spray(img, (5.0, 4.0), 3, "raise", 10, vals)
+        self.assertTrue(first)
+        self.assertTrue(all(x < 7 for x, _ in first))                        # the sea is left alone
+        self.assertEqual(max(first, key=first.get), (5, 4))                  # the middle gets the most
+        for p, v in first.items():
+            img.pixels[p[1] * img.width + p[0]] = (v, v, v)
+        second = T.height_spray(img, (5.0, 4.0), 3, "raise", 10, vals)
+        self.assertGreater(second[(5, 4)], first[(5, 4)])                    # held longer, higher
+        weak = T.height_spray(img, (1.0, 1.0), 3, "lower", 1, {})
+        self.assertTrue(all(v <= 10 for v in weak.values()))
+        heights = dict(first)
+        heights.update(second)
+        with self.assertRaises(ValueError):                                  # never the sea
+            T.apply(Plan(ModData(self.root), "terrain", "terrain"), "test", heights={(8, 8): 50})
+        mod = ModData(self.root)
+        plan = Plan(mod, "terrain", "terrain")
+        T.apply(plan, "test", heights=heights)
+        self.assertTrue(any("raised" in n for _, n in plan.notes))
+        plan.apply()
+        h = read_tga(os.path.join(camp, "map_heights.tga"))
+        self.assertEqual(h.get(5, 4)[0], second[(5, 4)])
+        self.assertEqual(h.get(8, 4), sea)
+        self.assertFalse(os.path.exists(os.path.join(camp, "map_heights.hgt")))
+        self.assertFalse(os.path.exists(os.path.join(camp, "map.rwm")))
+        mod = ModData(self.root)
+        restore(mod, backups(mod)[0])
+        after = tree_hash(self.root)
+        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
+
     def test_family_tree_checks(self):
         from faction_tool.family import ordered, tree_problems
         people = [{"name": n, "sex": s} for n, s in (("A", "male"), ("B", "female"), ("C", "male"), ("D", "female"),
