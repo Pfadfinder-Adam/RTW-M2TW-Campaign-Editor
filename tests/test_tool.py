@@ -2779,5 +2779,33 @@ class CoreLevelTest(unittest.TestCase):
         self.assertIsNone(core_level_for(town, "village"))
         self.assertEqual(core_level_for(town, "large_town").name, "wooden_wall")
 
+
+
+class M2DiplomacyEndTest(unittest.TestCase):
+    def test_last_faction_block_stops_before_faction_standings(self):
+        """Medieval II's diplomacy starts with faction_standings (Rome's with core_attitudes): the slave block, the
+        last one, must end before it - a rebel army written after it was never read (the user's M2TW, 2026-09-30)."""
+        from faction_tool.strat import Strat
+        from faction_tool.textio import TextFile
+        text = ("campaign\timperial_campaign\r\n"
+                "faction\tslave, comfortable caliph\r\n"
+                "denari\t5000\r\n"
+                "character\tsub_faction turks, Abi, general, male, age 30, x 1, y 2\r\n"
+                "army\r\n"
+                "unit\t\tSpear Militia\t\t\t\texp 0 armour 0 weapon_lvl 0\r\n"
+                "\r\n"
+                ";;;;;;;;\r\n"
+                "; >>>> start of diplomacy section <<<<\r\n"
+                "\r\n"
+                "faction_standings\tengland,\t\t-1.0\tslave\r\n"
+                "faction_relationships\tslave, at_war_with\tengland\r\n")
+        s = Strat(TextFile.from_bytes("descr_strat.txt", text.encode("latin-1")))
+        lines = s.lines
+        self.assertEqual(lines[s.diplomacy_start].split()[0], "faction_standings")
+        slave = s.factions[-1]
+        self.assertEqual(slave.name, "slave")
+        self.assertTrue(all(not lines[k].startswith("faction_standings") for k in range(slave.start, slave.end)))
+        self.assertEqual(lines[slave.end - 1].split()[0], "unit")
+
 if __name__ == "__main__":
     unittest.main()

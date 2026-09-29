@@ -68,6 +68,11 @@ class GarrisonEditor(ttk.Frame):
         cb.bind("<<ComboboxSelected>>", lambda e: self.fill_roster())
         self.v_gen = tk.BooleanVar(value=False)
         ttk.Checkbutton(top, text="general's units", variable=self.v_gen, command=self.fill_roster).pack(side="left")
+        # the choices keep their room at the right; the town's name is the one cut in a narrow window
+        from .gui_util import first
+        for w in top.pack_slaves()[1:]:
+            w.pack_configure(side="right")
+            first(w)
 
         self.info = ttk.Label(self, text="", anchor="w", foreground="#444")
         self.info.pack(fill="x")
@@ -85,7 +90,9 @@ class GarrisonEditor(ttk.Frame):
         self.total = ttk.Label(bar, text="", font=("", 10, "bold"))
         self.total.pack(side="left")
         ttk.Button(bar, text="Automatic", command=self.clear).pack(side="right", padx=4)
-        ttk.Button(bar, text="Suggest", command=self.suggest).pack(side="right", padx=4)
+        b = ttk.Button(bar, text="Suggest", command=self.suggest)
+        b.pack(side="right", padx=4)
+        first(b, bar.pack_slaves()[1])            # Automatic, Suggest before the total
 
     def load(self, mod, faction, region, units, current, on_change, auto=None, held=False, unchanged=False):
         """unchanged: current is what stands in the town now, shown until the first click."""

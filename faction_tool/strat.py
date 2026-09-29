@@ -58,6 +58,10 @@ class Fort:
         self.name = " ".join(rest[rest.index("name") + 1:]).strip('"') if "name" in rest else ""
 
 
+# the lines that open the diplomacy section: Rome core_attitudes, Medieval II faction_standings
+DIPLOMACY_HEADS = ("core_attitudes", "faction_standings", "faction_relationships")
+
+
 class FactionBlock:
     def __init__(self, name, start, end, header):
         self.name, self.start, self.end, self.header = name, start, end, header
@@ -76,7 +80,7 @@ class Strat:
         self.unlockable = self._list("unlockable")
         self.nonplayable = self._list("nonplayable")
         self.diplomacy_start = next((i for i, l in enumerate(lines)
-                                     if _head(l) in ("core_attitudes", "faction_relationships")), len(lines))
+                                     if _head(l) in DIPLOMACY_HEADS), len(lines))
         # the block of the last faction stops at the comment banner before the diplomacy section
         stop = self.diplomacy_start
         while stop > 0 and (lines[stop - 1].strip() == "" or lines[stop - 1].lstrip().startswith(";")):

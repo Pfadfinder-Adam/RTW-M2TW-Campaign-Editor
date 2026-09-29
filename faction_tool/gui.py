@@ -266,7 +266,7 @@ class App(tk.Tk):
         super().__init__()
         self.title("%s %s" % (APP, VERSION))
         self.geometry("1200x800")
-        self.minsize(900, 640)
+        self.minsize(1024, 640)
         self.mod = None
         self.strat = None
         self.regions = {}
@@ -313,21 +313,26 @@ class App(tk.Tk):
         ttk.Label(top, text="Mod").pack(side="left")
         # the mods of the game folder last used; picking one loads it
         self.v_modpick = tk.StringVar()
-        self.cb_mods = ttk.Combobox(top, textvariable=self.v_modpick, state="readonly", width=22)
+        self.cb_mods = ttk.Combobox(top, textvariable=self.v_modpick, state="readonly", width=18)
         self.cb_mods.pack(side="left", padx=(4, 8))
         self.cb_mods.bind("<<ComboboxSelected>>", lambda e: self.mod_picked())
         self._mods = []
         ttk.Label(top, text="data folder").pack(side="left")
         self.v_path = tk.StringVar()
-        ttk.Entry(top, textvariable=self.v_path).pack(side="left", fill="x", expand=True, padx=6)
+        ttk.Entry(top, textvariable=self.v_path, width=8).pack(side="left", fill="x", expand=True, padx=6)
         ttk.Button(top, text="Browse...", command=self.browse).pack(side="left")
         ttk.Button(top, text="Load", command=self.load).pack(side="left", padx=4)
         ttk.Button(top, text="New mod folder...", command=self.new_mod).pack(side="left", padx=4)
         ttk.Label(top, text="Campaign").pack(side="left", padx=(12, 2))
         self.v_campaign = tk.StringVar()
-        self.cb_campaign = ttk.Combobox(top, textvariable=self.v_campaign, state="readonly", width=24)
+        self.cb_campaign = ttk.Combobox(top, textvariable=self.v_campaign, state="readonly", width=20)
         self.cb_campaign.pack(side="left")
         self.cb_campaign.bind("<<ComboboxSelected>>", lambda e: self.campaign_picked())
+        # a narrow window shortens the data folder field, never the campaign
+        from .gui_util import first
+        for w in top.pack_slaves()[-2:]:
+            w.pack_configure(side="right")
+        first(top.pack_slaves()[-2], self.cb_campaign)
         self.v_mode = tk.StringVar(value="new")
         # what the window works on: a new faction, an existing one, the units, the buildings
         work = ttk.Frame(self)
@@ -344,6 +349,7 @@ class App(tk.Tk):
         self.lbl_work.pack(side="left", padx=10)
         self.b_theme = ttk.Button(work, text="", command=self.toggle_theme)
         self.b_theme.pack(side="right")
+        first(self.b_theme)                        # the hint beside the work buttons is the one cut
         self._theme_label()
         self.editors = {}
 
@@ -351,10 +357,17 @@ class App(tk.Tk):
         self.nb.pack(fill="both", expand=True, **pad)
         body = ttk.Frame(self.nb, padding=4)
         self.nb.add(body, text="  Faction  ")
-        left = ttk.Frame(body)
-        left.pack(side="left", fill="y")
-        right = ttk.Frame(body)
-        right.pack(side="left", fill="both", expand=True, padx=(10, 0))
+        # the form | the towns: the line between them can be dragged; the form scrolls in a low window
+        from .gui_util import ScrollFrame
+        panes = ttk.Panedwindow(body, orient="horizontal")
+        panes.pack(fill="both", expand=True)
+        lsf = ScrollFrame(panes)
+        panes.add(lsf, weight=0)
+        left = lsf.inner
+        from .gui_util import fit_first_pane
+        fit_first_pane(panes, left)
+        right = ttk.Frame(panes)
+        panes.add(right, weight=1)
 
         # --- faction
         lf = self.lf = ttk.LabelFrame(left, text="New faction")
@@ -615,36 +628,40 @@ class App(tk.Tk):
         """Units & armies: the chosen towns on the left, their garrisons on the right."""
         tab = ttk.Frame(self.nb, padding=4)
         self.nb.add(tab, text="  Units & armies  ")
-        side = ttk.Frame(tab)
-        side.pack(side="left", fill="y", padx=(0, 8))
+        # the towns and armies | the garrison: the line between them can be dragged
+        panes = ttk.Panedwindow(tab, orient="horizontal")
+        panes.pack(fill="both", expand=True)
+        side = ttk.Frame(panes, padding=(0, 0, 6, 0))
+        panes.add(side, weight=0)
         # towns above, armies/agents/fleets below; the sash between them can be dragged
         split = ttk.PanedWindow(side, orient="vertical")
         split.pack(fill="both", expand=True)
         top = ttk.Frame(split)
         split.add(top, weight=1)
         ttk.Label(top, text="Your towns", font=("", 10, "bold")).pack(anchor="w")
+        # the hints and buttons are packed before the lists: a lower window shrinks the lists, never them
+        ttk.Label(top, text="add towns on the Faction tab", foreground="#666").pack(side="bottom", anchor="w")
         self.lb_units = tk.Listbox(top, width=30, height=8, exportselection=False)
         self.lb_units.pack(fill="both", expand=True)
         self.lb_units.bind("<<ListboxSelect>>", lambda e: (self.lb_field.selection_clear(0, "end"),
                                                            self.load_garrison()))
-        ttk.Label(top, text="add towns on the Faction tab", foreground="#666").pack(anchor="w")
         # field armies, agents and fleets, placed on the Map
         ff = ttk.LabelFrame(split, text="Armies, agents & fleets  (drag the line above to resize)", padding=4)
         split.add(ff, weight=2)
+        ttk.Label(ff, text="double click: show it on the map", foreground="#666").pack(side="bottom", anchor="w")
+        fb = ttk.Frame(ff)
+        fb.pack(side="bottom", fill="x", pady=(4, 0))
         self.lb_field = FieldTable(ff)
         self.lb_field.pack(fill="both", expand=True)
         self.lb_field.bind("<<ListboxSelect>>", lambda e: self.lb_field.curselection() and (
             self.lb_units.selection_clear(0, "end"), self.load_field()))
         self.lb_field.bind("<Double-1>", lambda e: self.field_on_map())
-        fb = ttk.Frame(ff)
-        fb.pack(fill="x", pady=(4, 0))
         for text, kind in (("+ Army", "army"), ("+ Agent", "agent"), ("+ Fleet", "fleet")):
             ttk.Button(fb, text=text, width=8, command=lambda k=kind: self.add_field(k)).pack(side="left", padx=1)
         ttk.Button(fb, text="Place on map", command=self.place_field).pack(side="left", padx=(8, 1))
         ttk.Button(fb, text="Remove", command=self.remove_field).pack(side="left", padx=1)
-        ttk.Label(ff, text="double click: show it on the map", foreground="#666").pack(anchor="w")
         opts = self.units_opts = ttk.LabelFrame(side, text="Towns without a garrison of your own", padding=6)
-        opts.pack(fill="x", pady=(10, 0))
+        opts.pack(side="bottom", fill="x", pady=(10, 0), before=split)
         ttk.Label(opts, text="Leader's army").grid(row=0, column=0, sticky="w")
         self.v_army = tk.StringVar(value="balanced")
         ttk.Combobox(opts, textvariable=self.v_army, state="readonly", width=12,
@@ -657,22 +674,25 @@ class App(tk.Tk):
         gf.grid(row=3, column=0, columnspan=2, sticky="w")
         ttk.Radiobutton(gf, text="replace with own units", value="replace", variable=self.v_garrison).pack(side="left")
         ttk.Radiobutton(gf, text="keep", value="keep", variable=self.v_garrison).pack(side="left")
-        self.garrison_editor = GarrisonEditor(tab, pictures=self.pictures)
-        self.garrison_editor.pack(side="left", fill="both", expand=True)
+        self.garrison_editor = GarrisonEditor(panes, pictures=self.pictures)
+        panes.add(self.garrison_editor, weight=1)
 
     def _build_buildings_tab(self):
         """Buildings: the chosen towns on the left, what stands in the selected one on the right."""
         tab = ttk.Frame(self.nb, padding=4)
         self.nb.add(tab, text="  Buildings  ")
-        side = ttk.Frame(tab)
-        side.pack(side="left", fill="y", padx=(0, 8))
+        # the towns | the buildings: the line between them can be dragged
+        panes = ttk.Panedwindow(tab, orient="horizontal")
+        panes.pack(fill="both", expand=True)
+        side = ttk.Frame(panes, padding=(0, 0, 6, 0))
+        panes.add(side, weight=0)
         ttk.Label(side, text="Your towns", font=("", 10, "bold")).pack(anchor="w")
+        ttk.Label(side, text="add towns on the Faction tab", foreground="#666").pack(side="bottom", anchor="w")
         self.lb_build = tk.Listbox(side, width=30, height=12, exportselection=False)
         self.lb_build.pack(fill="both", expand=True)
         self.lb_build.bind("<<ListboxSelect>>", lambda e: self.load_buildings())
-        ttk.Label(side, text="add towns on the Faction tab", foreground="#666").pack(anchor="w")
-        right = ttk.Frame(tab)
-        right.pack(side="left", fill="both", expand=True)
+        right = ttk.Frame(panes, padding=(6, 0, 0, 0))
+        panes.add(right, weight=1)
         bar = ttk.Frame(right, padding=(0, 0, 0, 6))
         bar.pack(fill="x")
         ttk.Label(bar, text="Settlement level").pack(side="left")
@@ -687,7 +707,7 @@ class App(tk.Tk):
         e.pack(side="left", padx=(4, 12))
         e.bind("<KeyRelease>", lambda ev: self.size_changed())
         self.lbl_size = ttk.Label(bar, text="", foreground="#666")
-        self.lbl_size.pack(side="left")
+        self.lbl_size.pack(side="left", fill="x", expand=True)
         self.buildings_editor = BuildingsEditor(right, self.pictures)
         self.buildings_editor.pack(fill="both", expand=True)
 

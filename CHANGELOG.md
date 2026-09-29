@@ -5,6 +5,19 @@
 - **License**: GNU GPL v3.0 from this version on (up to 0.17.1: MIT). The editor stays free and open; programs
   built from its code must stay open under GPL-3.0 and keep the author's copyright notice.
 
+### Fixed (from the user's tests)
+- **Medieval II: a new army, agent or fleet of the rebels never showed up in the game.** In Medieval II the rebels
+  are the last faction in descr_strat, and their block ends where the diplomacy starts with `faction_standings`
+  (Rome starts it with `core_attitudes`). The tool knew only Rome's word, so it wrote the rebel army after the
+  diplomacy lines, where the game does not read it. Now it goes into the rebels' block.
+- **Smaller windows keep their buttons.** + Army / Place on map / Remove on Units & armies, Automatic / Suggest,
+  the map's zoom buttons, the Unit editor's pack buttons, the Terrain editor's undo buttons and the Campaign box no
+  longer drop out of a narrow or low window - a long hint is cut instead. The Faction tab's form and the Character
+  editor's person form scroll when the window is lower than they are (Leader and heir, portraits, traits stay
+  reachable). The smallest window is now 1024 x 640.
+- **Drag the line** between the left side and the rest on the Faction, Units & armies and Buildings tabs: a wider
+  towns list, or more room for the roster cards.
+
 ### Fixed (from the modders' guides, checked on the vanilla files)
 - **REX / M2EX: the original game's limits no longer hold a modder back.** With REX or M2EX beside the game the
   religions limit (9) is not applied (New religion... says "no limit"), and Check mod counts regions, map size,

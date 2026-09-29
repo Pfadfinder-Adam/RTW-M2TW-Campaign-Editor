@@ -76,7 +76,10 @@ class MapView(ttk.Frame):
         self._layers_label()
         ttk.Button(bar, text="Fit", width=5, command=self.fit).pack(side="right")
         ttk.Button(bar, text="+", width=3, command=lambda: self.zoom_by(1)).pack(side="right", padx=2)
-        ttk.Button(bar, text="-", width=3, command=lambda: self.zoom_by(-1)).pack(side="right")
+        b = ttk.Button(bar, text="-", width=3, command=lambda: self.zoom_by(-1))
+        b.pack(side="right")
+        from .gui_util import first
+        first(b, *bar.pack_slaves()[-3:-1][::-1])  # the zoom buttons keep their room; the hint is cut
         ttk.Label(bar, text="wheel: zoom   left drag: map   right drag: markers   click a town: take / give",
                   foreground="#666").pack(side="right", padx=12)
         from . import settings

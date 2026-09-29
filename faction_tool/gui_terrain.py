@@ -43,6 +43,12 @@ class TerrainEditor(ttk.Frame):
             side="left", padx=(16, 0))
         ttk.Button(top, text="Redo stroke", command=self.redo_stroke).pack(side="right", padx=(0, 4))
         ttk.Button(top, text="Undo stroke", command=self.undo_stroke).pack(side="right", padx=4)
+        from .gui_util import first
+        first(*[w for w in top.pack_slaves() if w.pack_info().get("side") == "right"][::-1])
+        rights = [w for w in top.pack_slaves() if w.pack_info().get("side") == "right"]
+        grid = [w for w in top.pack_slaves() if str(w.cget("text") if w.winfo_class() == "TCheckbutton" else "") == "Grid"]
+        if grid:                                   # Grid beside the undo buttons, not after the brush controls
+            grid[0].pack_configure(side="right", after=rights[-1], padx=(0, 12))
         self.palette = ttk.Frame(self, padding=(0, 4))
         self.palette.pack(fill="x")
         self.v_colour = tk.StringVar()

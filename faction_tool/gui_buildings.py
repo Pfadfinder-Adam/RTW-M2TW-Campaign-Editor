@@ -23,7 +23,10 @@ class BuildingsEditor(ttk.Frame):
         self.v_all = tk.BooleanVar(value=False)
         ttk.Checkbutton(top, text="show levels too big for the settlement", variable=self.v_all,
                         command=self.redraw).pack(side="left", padx=12)
-        ttk.Button(top, text="Keep the town's own", command=self.reset).pack(side="right")
+        self.b_keep = ttk.Button(top, text="Keep the town's own", command=self.reset)
+        self.b_keep.pack(side="right")
+        from .gui_util import first
+        first(self.b_keep)
         # Medieval II: a city or a castle (shown only where the game has castles)
         self.kind_box = ttk.Frame(top)
         ttk.Label(self.kind_box, text="Settlement is a").pack(side="left")
@@ -67,7 +70,7 @@ class BuildingsEditor(ttk.Frame):
         self.kind, self.on_kind = kind, on_kind
         if kind:
             self.v_kind.set(kind)
-            self.kind_box.pack(side="right", padx=12)
+            self.kind_box.pack(side="right", padx=12, after=self.b_keep)
         else:
             self.kind_box.pack_forget()
         self.region, self.town_level = region, town_level

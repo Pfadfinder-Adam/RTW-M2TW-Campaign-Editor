@@ -71,6 +71,8 @@ class RecordEditor(ttk.Frame):
             # packs: units taken out with everything they need, and put into another mod
             ttk.Button(head, text="Import pack...", command=self.import_pack).pack(side="right", padx=(0, 12))
             ttk.Button(head, text="Export pack...", command=self.export_pack).pack(side="right", padx=4)
+        from .gui_util import first
+        first(*head.pack_slaves()[1:][::-1])       # the buttons keep their room; the title is the one cut
         self.copy_ops = []                   # [(source, new name, details)] written on Apply
         self.pics = ttk.LabelFrame(right, text="Pictures", padding=6)
         self.pics.pack(fill="x", pady=(6, 6))

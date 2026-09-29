@@ -50,6 +50,8 @@ class FamilyEditor(ttk.Frame):
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
         if standalone:
             ttk.Button(top, text="Portrait library...", command=self.open_library).pack(side="right", padx=6)
+        from .gui_util import first
+        first(*[w for w in top.pack_slaves() if w.pack_info().get("side") == "right"][::-1])
         self.lib_adds = []                     # Character editor: [{'culture', 'group', 'pics': {age: src}}]
         ttk.Label(self, foreground="#555", justify="left", wraplength=1100, text=(
             "Everyone of the faction: characters on the map (name, age, traits, ancillaries) and family members "
@@ -76,9 +78,14 @@ class FamilyEditor(ttk.Frame):
         self.tv.bind("<<TreeviewSelect>>", lambda e: self._picked_row())
 
         # the person's form
-        form = ttk.LabelFrame(left, text="Person", padding=4)
-        form.pack(fill="both", expand=True, pady=(6, 0))
-        self.form = form
+        # the form scrolls when the window is lower than it (the portrait, traits and ancillaries stay reachable)
+        from .gui_util import ScrollFrame
+        box = ttk.LabelFrame(left, text="Person", padding=4)
+        box.pack(fill="both", expand=True, pady=(6, 0))
+        sf = ScrollFrame(box)
+        sf.pack(fill="both", expand=True)
+        form = sf.inner
+        self.form = box                           # its title names the person
         r = ttk.Frame(form)
         r.pack(fill="x")
         ttk.Label(r, text="Name").grid(row=0, column=0, sticky="w")
