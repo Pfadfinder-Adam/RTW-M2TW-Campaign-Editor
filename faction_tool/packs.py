@@ -116,25 +116,51 @@ def collect(mod, unit_types):
             ((k, _ci(mod.data, v)) for k, v in DEP_FILES.items())}
     dep_blocks = {k: type_blocks(f) if f else {} for k, f in deps.items()}
     manifest = {"pack": PACK_VERSION, "game": game_kind(mod), "units": [], "blocks": {k: {} for k in DEP_FILES},
-                "texts": {}, "recruit": [], "files": [], "missing": []}
+                "texts": {}, "recruit": [], "files": [], "missing": [], "modeldb": {}}
     files = {}
+    db = None
+    if manifest["game"] == "medieval2":              # Medieval II reads its battle models from the modeldb
+        from . import modeldb as MDB
+        src, _ = MDB.find(mod)
+        db = MDB.load(src) if src else None
+
+    def add_ref(ref):
+        got = _on_disk(mod, ref)
+        if got is None:
+            if ref not in manifest["missing"]:
+                manifest["missing"].append(ref)
+            return
+        rel, path = got
+        if rel not in files:
+            with open(path, "rb") as fh:
+                files[rel] = fh.read()
 
     def add_files(lines):
         for ref in _file_refs(lines):
-            got = _on_disk(mod, ref)
-            if got is None:
-                if ref not in manifest["missing"]:
-                    manifest["missing"].append(ref)
-                continue
-            rel, path = got
-            if rel not in files:
-                with open(path, "rb") as fh:
-                    files[rel] = fh.read()
+            add_ref(ref)
 
     def add_dep(kind, name):
         if not name or name in manifest["blocks"][kind]:
             return
+        in_db = False
+        if kind == "model" and db is not None:
+            m = db.model(name)
+            if m is not None:
+                in_db = True
+                if m.name not in manifest["modeldb"]:
+                    manifest["modeldb"][m.name] = MDB.to_dict(m)
+                    for ref in MDB.files_of(m):           # paths may hold spaces here
+                        add_ref(ref)
         span = dep_blocks[kind].get(name)
+        if span is None:                                   # the game reads these names without case
+            low = name.lower()
+            real = next((k for k in dep_blocks[kind] if k.lower() == low), None)
+            if real is not None:
+                if real in manifest["blocks"][kind]:
+                    return
+                name, span = real, dep_blocks[kind][real]
+        if span is None and in_db:
+            return
         if span is None:
             manifest["missing"].append("%s %s" % (DEP_FILES[kind], name))
             return
@@ -284,7 +310,7 @@ def _rename_ref(lines, key, old, new):
     """'key old, ...' lines naming old renamed to new (the rest of the line kept)."""
     out = []
     for l in lines:
-        m = re.match(r"^(\s*%s\s+)(%s)(\s*(,|;|$).*)$" % (re.escape(key), re.escape(old)), l)
+        m = re.match(r"^(\s*%s\s+)(%s)(\s*(,|;|$).*)$" % (re.escape(key), re.escape(old)), l, re.I)
         out.append(m.group(1) + new + m.group(3) if m else l)
     return out
 
@@ -313,6 +339,7 @@ def import_pack(plan, manifest, files, owners, names=None):
         raise ValueError("no faction or culture %s in this mod" % ", ".join(bad))
     # dependency blocks: the same content is shared, another content with the same name is renamed
     renamed = {k: {} for k in DEP_FILES}
+    owner_facs = [o for o in owners if o in set(facs)]
     for kind in ("model", "mount", "engine", "animal"):
         want = manifest["blocks"].get(kind) or {}
         if not want:
@@ -326,19 +353,34 @@ def import_pack(plan, manifest, files, owners, names=None):
             if kind == "mount" or kind == "animal":
                 for old, new in renamed["model"].items():
                     lines = _rename_ref(lines, "model", old, new)
-            if name in have:
-                if [strip_comment(x).split() for x in _block_lines(f, have[name])] == \
+            same_name = next((k for k in have if k.lower() == name.lower()), None)
+            if same_name is not None:
+                if [strip_comment(x).split() for x in _block_lines(f, have[same_name])] == \
                         [strip_comment(x).split() for x in lines]:
-                    continue                                   # the very same: shared
+                    if kind == "model":                        # the very same: shared, textured for the owners
+                        a, b = have[same_name]
+                        got, added = _owner_textures(_block_lines(f, (a, b)), owner_facs)
+                        if added:
+                            f.raw[a:a + len(_block_lines(f, (a, b)))] = [f.make(x) for x in got]
+                            have = type_blocks(f)
+                            plan.note(f, "model %s: texture lines for %s" % (same_name, ", ".join(added)))
+                    continue
                 new = free_name(have, name, sep="_" if kind == "model" else " ")
                 renamed[kind][name] = new
                 lines = _set_line(lines, "type", new)
                 plan.note(f, "%s %s exists with other lines: the pack's is added as %s" % (kind, name, new))
+            if kind == "model":                                # every faction the units go to gets a texture
+                lines, added = _owner_textures(lines, owner_facs)
+                if added:
+                    plan.note(f, "model %s: texture lines for %s" % (renamed[kind].get(name, name), ", ".join(added)))
             while f.raw and not f.text(len(f.raw) - 1).strip():
                 del f.raw[-1]
             f.raw.extend(f.make(x) for x in [""] + lines + [""])
             have[renamed[kind].get(name, name)] = (0, 0)
             plan.note(f, "%s %s added" % (kind, renamed[kind].get(name, name)))
+    # Medieval II: the battle models in battle_models.modeldb, under the names descr_model_battle got
+    if manifest.get("modeldb"):
+        _modeldb(plan, manifest, renamed, owners)
     # the units
     edu = plan.edit(mod.file("edu"))
     while edu.raw and not edu.text(len(edu.raw) - 1).strip():
@@ -398,15 +440,61 @@ def import_pack(plan, manifest, files, owners, names=None):
         plan.warn(None, "%d file(s) the units name were not in the source mod, so not in the pack either "
                         "(the game may take them from its own data): %s%s" % (
                             len(missing), ", ".join(missing[:4]), " ..." if len(missing) > 4 else ""))
-    # a model with a texture per faction: say which owners it has none for
-    for name, lines in (manifest["blocks"].get("model") or {}).items():
-        textured = {v[0] for v in _values(lines, "texture") if len(v) > 1}
-        lack = [o for o in factions if textured and o not in textured]
-        if lack:
-            plan.warn(None, "model %s has no texture line for %s - the game shows another faction's "
-                            "texture (a recolour for them is planned)" % (renamed["model"].get(name, name),
-                                                                         ", ".join(lack)))
     return plan
+
+
+def _modeldb(plan, manifest, renamed, owners):
+    """The pack's modeldb models added to the mod's battle_models.modeldb (a copy of the game's goes into the
+    mod when it has none): a model with the same content is shared, another one with a taken name is added under
+    a free name (the units follow it), and every faction the units go to gets a texture entry."""
+    from . import modeldb as MDB
+    mod = plan.mod
+    src, dst = MDB.find(mod)
+    if not src:
+        plan.warn(None, "no battle_models.modeldb found: the units' models are only in descr_model_battle.txt")
+        return
+    db = MDB._db_in_plan(plan, src, dst)
+    factions = [o for o in owners if o in {n for n, _ in mod.factions()}]
+    n = 0
+    for name, d in manifest["modeldb"].items():
+        m = MDB.from_dict(d)
+        want = renamed["model"].get(name, name)
+        have = db.model(want)
+        if have is not None and MDB.same(have, m) and not [f for f in factions if f not in have.factions()]:
+            continue                                               # the very same, textured for the owners
+        if have is not None and not MDB.same(have, m):
+            new = free_name([x.name for x in db.models], want)
+            renamed["model"][name] = new
+            plan.warn(None, "battle model %s exists with other content - the pack's is added as %s" % (want, new))
+            want, have = new, None
+        if have is None:
+            have = db.add_model(m, want)
+            n += 1
+        added = MDB.give_owners(have, factions)
+        if added:
+            plan.notes.append((mod.rel(dst), "battle model %s: texture entries for %s (copied from its %s)" % (
+                want, ", ".join(added), "mercenaries'" if "merc" in {r[0] for r in m.textures} else "first")))
+    plan.binary(dst, db.dump().encode("latin-1"))
+    plan.notes.append((mod.rel(dst), "%d battle model(s) added%s" % (
+        n, "" if src == dst else " (a copy of the game's modeldb, now the mod's own)")))
+
+
+def _owner_textures(lines, facs):
+    """A model block's lines with a 'texture <faction>, ...' line for every faction that has none, copied from
+    the mercenaries' line (else the first faction's): (lines, [factions added]). A model with no per-faction
+    texture lines is left as it is (one texture for everyone)."""
+    tex = [(i, l) for i, l in enumerate(lines) if strip_comment(l).split(None, 1)[:1] == ["texture"]
+           and len(_values([l], "texture")[0]) > 1 and "/" not in _values([l], "texture")[0][0]]
+    if not tex:
+        return lines, []
+    have = {_values([l], "texture")[0][0] for _, l in tex}
+    src = next((l for _, l in tex if _values([l], "texture")[0][0] == "merc"), tex[0][1])
+    src_f = _values([src], "texture")[0][0]
+    add = [f for f in facs if f not in have]
+    new = [re.sub(r"(texture\s+)%s(\s*,)" % re.escape(src_f), lambda m, f=f: m.group(1) + f + m.group(2), src,
+                  count=1) for f in add]
+    at = tex[-1][0] + 1
+    return lines[:at] + new + lines[at:], add
 
 
 def _put(plan, rel, data):

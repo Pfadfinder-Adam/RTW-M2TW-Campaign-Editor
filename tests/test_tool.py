@@ -263,6 +263,43 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertNotEqual(mid, after)
 
+    def test_modeldb_round_trip_and_clone(self):
+        # Medieval II battle_models.modeldb: read back byte for byte, the clone copies the template's texture
+        # entries (and attachment sets) for the new faction, Restore undoes it
+        from faction_tool import modeldb as MDB
+        def model(name, facs, first=False):
+            m = MDB.from_dict({"name": name, "scale": "1.12", "lods": [["unit_models/x/%s_lod0.mesh" % name, "121"]],
+                               "textures": [[f, "unit_models/x/tex %s.texture" % f, "unit_models/x/n.texture",
+                                             "unit_sprites/%s_s.spr" % f] for f in facs],
+                               "attach": [[facs[0], "unit_models/a/shield.texture", "unit_models/a/n.texture", ""]],
+                               "mounts": [{"type": "Horse", "primary": "fs_horse", "secondary": "",
+                                           "weapons": ["w1"], "weapons2": []}],
+                               "torch": ["-1", "0", "0", "0", "0", "0", "0"]})
+            if first:
+                m.ci = {k: ["0", "0"] for k in ("lodvec", "lod", "texvec", "tex", "mountvec", "mount", "weapons",
+                                                 "torch")}
+            return m
+        text = "22 serialization::archive 3 0 0 0 0 2 0 0 " + " ".join(
+            MDB.ModelDB.dump_models([model("knights", ["alpha", "slave"], True), model("spears", ["slave"])]))
+        db = MDB.ModelDB(text)
+        self.assertEqual(db.dump(), text)
+        self.assertEqual(db.model("KNIGHTS").factions(), ["alpha", "slave"])
+        path = os.path.join(self.root, "data", "unit_models", "battle_models.modeldb")
+        os.makedirs(os.path.dirname(path))
+        with open(path, "wb") as fh:
+            fh.write(text.encode("latin-1"))
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        plan.apply()
+        got = MDB.load(path)
+        self.assertEqual(got.model("knights").factions(), ["alpha", "slave", "beta"])
+        self.assertEqual([r[0] for r in got.model("knights").attach], ["alpha", "beta"])
+        self.assertEqual(got.model("spears").factions(), ["slave"])           # the template has none there
+        self.assertEqual(MDB.ModelDB(got.dump()).dump(), got.dump())
+        restore(ModData(self.root), backups(ModData(self.root))[0])
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "faction_tool_backups" not in k}, before)
+
     def test_medieval_city_and_castle(self):
         # M2: a castle = `settlement castle` + castle levels; the game converts by each level's convert_to
         from faction_tool.buildings import (read_buildings, convert, set_kind, settlement_kind, kind_problem,
@@ -1450,6 +1487,40 @@ building smith
         restore(ModData(self.root), bdir)
         after = {k: v for k, v in tree_hash(self.root).items() if "faction_tool_backups" not in k}
         self.assertEqual(after, before)
+
+    def test_old_culture_names_module_moves_into_the_script(self):
+        # an early 0.12 build wrote script/modules/ft_settlement_names.nut (the user's HLR, 2026-09-29)
+        from faction_tool import gamefix, culturenames as CN
+        game, hlr = self._game()
+        write(os.path.join(hlr, "data", "descr_cultures.txt"), "culture roman\n{\n}\nculture barbarian\n{\n}\n")
+        old = os.path.join(hlr, "script", "modules", "ft_settlement_names.nut")
+        write(old, '// generated\n// DATA {"Atown": {"barbarian": "Atburg"}}\nlocal x = 1;\n')
+        before = tree_hash(hlr)
+        mod = ModData(hlr)
+        found = [p for p in gamefix.problems(mod) if p["id"] == "old_culture_names"]
+        self.assertEqual(found[0]["table"], {"Atown": {"barbarian": "Atburg"}})
+        gamefix.fix_plan(mod, found).apply()
+        self.assertFalse(os.path.exists(old))
+        self.assertEqual(CN.read(ModData(hlr), "test"), {"Atown": {"barbarian": "Atburg"}})
+        restore_to(ModData(hlr), backups(ModData(hlr))[-1])
+        self.assertEqual({k: v for k, v in tree_hash(hlr).items() if "faction_tool_backups" not in k}, before)
+
+    def test_army_on_the_new_town_tile_steps_aside(self):
+        # the user's HLR run: taking Odessus sent its garrison out onto the tile he then moved the town to -
+        # "Philokles's army stands on 257, 254 - move it first" blocked the Apply
+        from faction_tool.edit import edit
+        mod = ModData(self.root)
+        path = mod.campaign_file("test", "descr_strat.txt")
+        with open(path) as fh:
+            text = fh.read()
+        with open(path, "w") as fh:
+            fh.write(text.replace("Grog, general, age 30, , x 2, y 2", "Grog, general, age 30, , x 0, y 2"))
+        plan = edit(ModData(self.root), "test", "alpha", {"places": [{"what": "city", "region": "A_R", "to": (0, 2)}]})
+        s = Strat(plan.files[path])
+        grog = next(c for c in s.faction("slave").characters if "Grog" in c.line)
+        self.assertNotEqual(grog.xy, (0, 2))
+        self.assertEqual(s.faction("alpha").characters[0].xy, (0, 2))
+        self.assertTrue(any("steps aside" in n for _, n in plan.notes))
 
     def test_diplomacy_both_ways(self):
         from faction_tool.edit import edit

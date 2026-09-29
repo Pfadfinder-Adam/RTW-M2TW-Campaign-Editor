@@ -165,4 +165,14 @@ def apply_places(plan, campaign, places):
             plan.note(f, "%s moves with the town of %s to %d, %d" % (c.name, region, to[0], to[1]))
         for c in s.characters_at(tuple(to)):
             if any(l.split(None, 1)[:1] == ["army"] for l in s.lines[c.start:c.end]):
-                raise ValueError("%s: %s's army stands on %d, %d - move it first" % (region, c.name, to[0], to[1]))
+                # an army on the town's new tile (often one this very plan sent out of a taken town) steps
+                # aside to the nearest free tile of the region - two armies may not share a tile
+                busy = {cc.xy for fb in s.factions for cc in fb.characters if cc.xy} | set(moved.values()) | \
+                    {tuple(orig(mod, campaign, w, r)) for (w, r) in moved}
+                dest = mod.free_tile(campaign, region, busy, start=tuple(to))
+                if dest is None:
+                    raise ValueError("%s: %s's army stands on %d, %d and there is no free tile next to it - move "
+                                     "it first" % (region, c.name, to[0], to[1]))
+                f.set(c.start, RE_XY.sub("x %d, y %d" % dest, f.text(c.start), 1))
+                plan.note(f, "%s's army steps aside to %d, %d: the town of %s moves onto its tile" % (
+                    c.name, dest[0], dest[1], region))

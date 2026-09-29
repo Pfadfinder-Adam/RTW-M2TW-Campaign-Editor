@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.16.0 - 2026-09-29
+
+### Added
+- **Medieval II `battle_models.modeldb`** (asked for by the Stainless Steel author): the tool reads and writes the
+  battle model database the game loads (a Boost text archive: length-prefixed strings, class info on a class's
+  first appearance - the vanilla file of 701 models reads back byte for byte). **New faction**: every battle
+  model with texture or attachment (shield) entries for the template gets the same for the new faction (vanilla
+  england -> 121 models), so its units are not untextured in battle; a mod folder without its own modeldb gets a
+  copy of the game's with the additions. **Unit packs** carry their modeldb models with the meshes, textures and
+  sprites they name; on import a model with the same name and other content is added under a free name in
+  modeldb and descr_model_battle.txt alike (the unit's soldier / officer lines and mounts follow), and every owner
+  gets texture entries in both files (from the model's mercenary texture, else its first). Checked on vanilla
+  Medieval II (clone england -> wessex, pack export / import, Restore byte-exact); not yet in the game.
+- **Unit packs give every new owner a texture line** in descr_model_battle.txt (Rome too), instead of only
+  warning that one was missing.
+
+### Fixed
+- **"<army> stands on x, y - move it first" when moving a town** (the user's HLR log): taking Odessus sent its
+  garrison out to the next free tile, the very tile the town was then moved to, and Apply refused every time. An
+  army on a moved town's new tile now steps aside to the nearest free tile of the region (said in Preview).
+- **Unit packs (Medieval II)**: a model named `Feudal_Knights` in the unit and `feudal_knights` in
+  descr_model_battle.txt was not found (the game reads these names without case) - now it is.
+- **An early 0.12 names-by-culture module** (`<mod>/script/modules/ft_settlement_names.nut`, with guessed REX
+  calls, which REX loads as a script module) is found on Load; with a yes its names move into the campaign
+  script (REX's documented way) and the module goes.
+
 ## 0.15.1 - 2026-09-29
 
 ### Changed

@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.15.1"
+VERSION = "0.16.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
 
@@ -2239,7 +2239,7 @@ class App(tk.Tk):
         if not found:
             return
         text = "\n\n".join(p["why"] for p in found)
-        if not messagebox.askyesno(APP, "This game / mod will not start as it is:\n\n%s\n\nPut it right now? "
+        if not messagebox.askyesno(APP, "Found on Load - set-up problems of this game / mod:\n\n%s\n\nPut them right now? "
                                         "A backup is made first (Restore undoes it)." % text):
             declined = dict(declined)
             declined[self.mod.data] = declined.get(self.mod.data, []) + [p["id"] for p in found]

@@ -53,6 +53,8 @@ def build(mod, campaign, template, new, opts):
     clone.edb_factions(plan)
     clone.texture_lines(plan, "model_battle")
     clone.texture_lines(plan, "model_strat")
+    from .modeldb import plan_add_faction
+    plan_add_faction(plan, template, new)        # Medieval II: battle_models.modeldb (none in Rome)
     clone.faction_blocks(plan, "banners", heads=("faction",))
     clone.faction_blocks(plan, "lbc_db", heads=("faction",))
     clone.faction_blocks(plan, "offmap", braced=True)

@@ -36,13 +36,46 @@ def problems(mod):
                            "at start ('Failed to load text vegetation database'). The fix: vegetation_source "
                            "binary (the game's own vegetation.db, M2EX's default for mods).",
                     "file": caps, "line": i, "new": f.text(i).replace(m.group(0), m.group(1) + "binary", 1)})
+    old = _old_culture_module(mod)
+    if old:
+        out.append({"id": "old_culture_names", "file": old[0], "table": old[1],
+                    "why": "script/modules/ft_settlement_names.nut was written by an early 0.12 build of this tool "
+                           "(names by culture as a Squirrel module with guessed REX calls - REX loads every "
+                           "module there). The names now live in the campaign's campaign_script.txt, the way "
+                           "REX's documentation gives. The fix: its %d town(s) move there and the module goes."
+                           % len(old[1])})
     return out
+
+
+OLD_MODULE = ("script", "modules", "ft_settlement_names.nut")
+
+
+def _old_culture_module(mod):
+    """(path, table) of the early names-by-culture module, or None."""
+    import json
+    path = os.path.join(os.path.dirname(os.path.abspath(mod.data)), *OLD_MODULE)
+    if not os.path.isfile(path):
+        return None
+    with open(path, "rb") as fh:
+        text = fh.read().decode("utf-8", "replace")
+    m = re.search(r"^// DATA (.*)$", text, re.M)
+    try:
+        table = json.loads(m.group(1)) if m else {}
+    except ValueError:
+        table = {}
+    return path, table if isinstance(table, dict) else {}
 
 
 def fix_plan(mod, found):
     """A Plan that puts the problems found right."""
     plan = Plan(mod, "setup", "setup_fix")
     for p in found:
+        if p["id"] == "old_culture_names":
+            from . import culturenames as CN
+            for camp in mod.campaigns() if p["table"] else []:
+                CN.apply(plan, camp, p["table"])
+            plan.delete(p["file"], "the early names-by-culture module - its names are in the campaign script now")
+            continue
         f = plan.edit(p["file"])
         f.set(p["line"], p["new"])
         plan.note(f, "%s: text -> binary (the game started without it closing)" % p["id"])
