@@ -62,16 +62,51 @@ def paint_problem(cmap, what, xy, colour, standing):
     return None
 
 
-def river_warnings(features, w, h):
-    """Rivers that stop in the middle of the land: a river tile with no river, ford or source
-    next to it (the game draws a broken river). features: tile -> colour, everything painted."""
-    out = []
-    for (x, y), c in features.items():
-        if c not in RIVERY:
+def river_warnings(features, w, h, is_sea=None):
+    """[(x, y, n)] for river pieces the game will not draw: the game follows a river from where it joins
+    the sea, the map's edge, a river source or another river, edge to edge - a step where two river tiles
+    touch only by a corner stops it, and everything past it is left out (the user's river west of the Nile,
+    2026-09-29). A piece = river, ford and source tiles joined by edges; one joined to none of those is
+    named by its tile nearest the top left and its size. features: tile -> colour, the whole map as painted."""
+    rivery = {t for t, c in features.items() if c in RIVERY}
+    seen, out = set(), []
+    for t0 in sorted(rivery, key=lambda t: (t[1], t[0])):
+        if t0 in seen:
             continue
-        near = [features.get((x + dx, y + dy)) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))]
-        if not any(n in RIVERY for n in near):
-            out.append((x, y))
+        piece, stack = [], [t0]
+        seen.add(t0)
+        while stack:
+            x, y = stack.pop()
+            piece.append((x, y))
+            for n in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if n in rivery and n not in seen:
+                    seen.add(n)
+                    stack.append(n)
+        joined = False
+        for x, y in piece:
+            if features.get((x, y)) == (255, 255, 255) or x in (0, w - 1) or y in (0, h - 1):
+                joined = True
+                break
+            if is_sea and any(0 <= nx < w and 0 <= ny < h and is_sea(nx, ny)
+                              for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1))):
+                joined = True
+                break
+        if not joined:
+            x, y = min(piece, key=lambda t: (t[1], t[0]))
+            out.append((x, y, len(piece)))
+    return out
+
+
+def river_path(a, b):
+    """The tiles from a (left out) to b that keep a river joined by edges: a diagonal or a longer jump
+    of the brush becomes a staircase of edge steps, the corner tile before the diagonal one."""
+    (x, y), out = a, []
+    while (x, y) != tuple(b):
+        if x != b[0] and (y == b[1] or len(out) % 2 == 0):
+            x += 1 if b[0] > x else -1
+        else:
+            y += 1 if b[1] > y else -1
+        out.append((x, y))
     return out
 
 
@@ -111,4 +146,4 @@ def apply(plan, campaign, ground=None, features=None):
 
 
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "FEATURE_BRUSHES", "paint_problem",
-           "river_warnings", "apply"]
+           "river_warnings", "river_path", "apply"]

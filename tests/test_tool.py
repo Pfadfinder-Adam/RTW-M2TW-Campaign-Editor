@@ -848,6 +848,26 @@ class ToolTest(unittest.TestCase):
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
 
+    def test_river_pieces(self):
+        """The game follows a river side to side from the sea, the map's edge, a source or another river,
+        and stops at a corner-only step (the user's river west of the Nile): such a piece is named."""
+        from faction_tool import terrain as T
+        R = (0, 0, 255)
+        joined = {(0, 3): R, (1, 3): R, (2, 3): R, (2, 2): R}               # from the map's edge
+        corner = {(3, 1): R, (4, 1): R}                                     # only a corner touches (2, 2)
+        self.assertEqual(T.river_warnings({**joined, **corner}, 8, 8), [(3, 1, 2)])
+        self.assertEqual(T.river_warnings(joined, 8, 8), [])
+        inland = {(4, 4): R, (5, 4): R}
+        self.assertEqual(T.river_warnings(inland, 8, 8), [(4, 4, 2)])
+        self.assertEqual(T.river_warnings(inland, 8, 8, is_sea=lambda x, y: (x, y) == (6, 4)), [])
+        self.assertEqual(T.river_warnings({**inland, (3, 4): (255, 255, 255)}, 8, 8), [])  # a source
+        # the brush's staircase: a diagonal step gets the corner tile before it, a jump every tile between
+        self.assertEqual(T.river_path((2, 2), (3, 1)), [(3, 2), (3, 1)])
+        path = T.river_path((0, 0), (3, 2))
+        self.assertEqual(path[-1], (3, 2))
+        for a, b in zip([(0, 0)] + path, path):
+            self.assertEqual(abs(a[0] - b[0]) + abs(a[1] - b[1]), 1)
+
     def test_faction_limit(self):
         """REX / M2EX read max_factions from data/descr_ex.txt: over it the game closes at start ("Too many
         factions described here, maximum is(21)" - the user's nabataea). The new faction is refused, or with
@@ -975,7 +995,7 @@ class ToolTest(unittest.TestCase):
         self.assertTrue(T.paint_problem(Map(), "ground", (1, 1), (98, 65, 65), {(1, 1)}))       # no mountains under a town
         self.assertTrue(T.paint_problem(Map(), "features", (1, 1), (0, 0, 255), {(1, 1)}))
         self.assertEqual(T.river_warnings({(0, 0): (0, 0, 255), (0, 1): (0, 255, 255), (2, 2): (0, 0, 255)}, 4, 4),
-                         [(2, 2)])
+                         [(2, 2, 1)])
         plan = Plan(mod, "terrain", "terrain")
         T.apply(plan, "test", {(1, 2): (128, 128, 64)}, {(0, 0): (0, 0, 255)})
         plan.apply()

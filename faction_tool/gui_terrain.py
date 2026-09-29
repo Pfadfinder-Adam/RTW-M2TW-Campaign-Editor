@@ -20,6 +20,7 @@ class TerrainEditor(ttk.Frame):
         self.ground, self.features = {}, {}          # painted tiles: {(x, y): colour}
         self.base = {}                               # what the files have there: {('ground'|'features', xy): colour}
         self._undo = []
+        self._last_river = None         # the last river tile of the stroke: the next one joins it side to side
         top = ttk.Frame(self)
         top.pack(fill="x")
         ttk.Label(top, text="Paint", font=("", 10, "bold")).pack(side="left")
@@ -110,10 +111,13 @@ class TerrainEditor(ttk.Frame):
         mod = ModData(self.mod.data)
         plan = Plan(mod, "terrain", "terrain", {})
         T.apply(plan, self.app.v_campaign.get(), self.ground, self.features)
-        broken = T.river_warnings(self._features_now(), self.cmap.w, self.cmap.h) if self.features else []
-        for xy in broken[:20]:
-            plan.warnings.append(("map_features.tga", "a river tile at %d, %d touches no other river, ford or source "
-                                                      "- the game draws a broken river" % xy))
+        broken = T.river_warnings(self._features_now(), self.cmap.w, self.cmap.h, self.cmap.is_sea) \
+            if self.features else []
+        for x, y, n in broken[:20]:
+            plan.warnings.append(("map_features.tga", "the river at %d, %d (%d tile(s)) joins no sea, map edge, river "
+                                                      "source or other river by a tile's side - the game will not draw "
+                                                      "it: it follows a river side to side and stops where two river "
+                                                      "tiles touch only by a corner" % (x, y, n)))
         return plan
 
     # ---- the map ----
@@ -171,6 +175,12 @@ class TerrainEditor(ttk.Frame):
         if colour is None:
             return []
         store = self.ground if what == "ground" else self.features
+        if what == "features" and colour in T.RIVERY and len(tiles) == 1:
+            # a river drawn with the 1-tile brush stays joined side to side: a diagonal step (or a fast
+            # drag's jump) gets the tiles between (the game stops a river at a corner-only step)
+            last, self._last_river = self._last_river, tuple(tiles[0])
+            if last and max(abs(last[0] - tiles[0][0]), abs(last[1] - tiles[0][1])) >= 1:
+                tiles = T.river_path(last, tiles[0])
         took, why = [], None
         for t in tiles:
             if self._current(what, t) == colour:
@@ -203,6 +213,7 @@ class TerrainEditor(ttk.Frame):
             self.v_colour.set("%d,%d,%d" % c)
 
     def _stroke(self):
+        self._last_river = None
         self._undo.append((dict(self.ground), dict(self.features)))
         del self._undo[:-100]
 
@@ -247,9 +258,10 @@ class TerrainEditor(ttk.Frame):
             items = [("marks", T.FEATURE_BRUSHES, T.FEATURES)]
             self.hint.configure(text=(
                 "Rivers, fords (the tiles where armies cross a river), river sources and cliffs: one per tile in "
-                "map_features.tga. A ford goes on the river's own line; 'nothing' rubs a mark out. Rivers stay "
-                "one tile wide and joined - Preview warns about a river tile that touches no other. Not under "
-                "towns, ports or characters (the game refuses them there)."))
+                "map_features.tga. A ford goes on the river's own line; 'nothing' rubs a mark out. The game follows "
+                "a river side to side from the sea, a source or another river and stops where two river tiles "
+                "touch only by a corner - the 1-tile brush fills such steps itself, and Preview names a river "
+                "the game will not draw. Not under towns, ports or characters (the game refuses them there)."))
         from .mapdata import GROUND_LOOK, CampaignMap
         first = None
         for label, colours, names in items:
