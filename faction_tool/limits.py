@@ -56,7 +56,7 @@ def _setting(path, key="max_factions"):
 # Not here: heavengames' "20 landmasses" - vanilla RTW's own map has 32 separate pieces of land and runs,
 # so what the game counts is not known.
 HARD_LIMITS = {
-    "rome": {"regions": 200, "map_size": 500, "units": 500, "chains": 64, "levels": 9, "hidden_resources": 63},
+    "rome": {"regions": 200, "map_size": 510, "units": 500, "chains": 64, "levels": 9, "hidden_resources": 63},
     "medieval2": {"regions": 200, "map_size": 510, "units": 500, "chains": 128, "levels": 9,
                   "hidden_resources": 64},
 }
