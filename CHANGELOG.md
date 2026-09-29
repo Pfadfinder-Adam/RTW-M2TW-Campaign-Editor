@@ -1,6 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 - 2026-09-29
+
+Tested in the game by the user on Rome + REX: a new faction (Nabataea) made in a few clicks with new regions,
+its own pictures shown everywhere, the painted terrain drawn; the bugs he found are fixed here.
+
+### Added
+- **Faction limit**: the tool knows how many factions the game takes (slave included) - the original exes stop
+  at 21 (Rome) / 31 (Medieval II); REX and M2EX read `max_factions` in `data/descr_ex.txt`. Load says "N of max
+  factions"; a new faction over it is refused before anything is written, or - with your yes - `max_factions`
+  is raised in the same write (backup, Restore). Over the limit the game closed at start ("Too many factions
+  described here, maximum is(21)").
+- Family: **someone already in the faction can be the wife or the child** - a new faction's heir can become its
+  leader's son; before, only new people could be added, so a new faction's tree could not be built.
+- Terrain: **Redo stroke**; the bottom Undo / Redo (and Ctrl+Z / Ctrl+Y) undo and redo strokes in the Terrain
+  editor.
 
 ### Changed
 - The tool's log `faction_tool.log` now lies in `RTW-M2TW-Campaign-Editor-files\logs`, together with the
@@ -8,6 +22,20 @@
   `RTW-M2TW-Campaign-Editor-files`; a log an older version left there moves into `logs` by itself.
 
 ### Fixed
+- **Two characters of one faction with the same name**: the game skipped the second ("duplicated character name
+  in this faction, skipping") - an army named like the leader, a spy named like an automatic captain. Names now
+  stay unique in a faction: the automatic captain skips taken names, the New army / agent dialog refuses one,
+  and Preview refuses a write that would repeat a name.
+- **Rivers**: the game follows a river side to side and stops where two river tiles touch only by a corner -
+  everything past it is not drawn (the user's test). The 1-tile river brush now fills such steps itself, and
+  Preview names every river piece that joins no sea, map edge, source or other river.
+- Family buttons with nobody picked now say to pick a person instead of doing nothing.
+- Portrait library: the portraits filled only one column when the window opened.
+- Character editor: traits for `Characters all` are offered to everyone; ancillaries barred to the faction's
+  culture (`ExcludeCultures`) are no longer offered.
+- Rome portraits: young, old and dead of the same man are shown; the greyed Replace buttons gave way to a plain
+  line and **Portrait library...** (Rome gives no portrait of one's own; Medieval II keeps Replace).
+- The bottom Undo in the Terrain / Character editor did nothing and named the building editor.
 - **A new faction's banners were the template's files**: `descr_banners.txt` kept the template's texture paths,
   so replacing the new faction's banner in the Art tab would have changed the template's too. A new faction now
   gets banner textures and a loading-screen logo of its own, named after it (`standard_macedonia` ->
