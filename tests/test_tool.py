@@ -391,6 +391,30 @@ class ToolTest(unittest.TestCase):
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
         self.assertEqual(before, after)
 
+    def test_settlement_names_by_culture_rex_module(self):
+        from faction_tool import culturenames as CN
+        from faction_tool.regionedit import apply_opts
+        game, hlr = self._game()
+        write(os.path.join(hlr, "data", "descr_cultures.txt"), "culture roman\n{\n}\nculture barbarian\n{\n}\n")
+        before = tree_hash(hlr)
+        mod = ModData(hlr)
+        self.assertEqual(CN.cultures(mod), ["roman", "barbarian"])
+        plan = Plan(mod, None, "map")
+        apply_opts(plan, "test", {"culture_names": {"Atown": {"*": "Atown", "barbarian": "Atburg"}}})
+        plan.apply()
+        mod = ModData(hlr)
+        self.assertEqual(CN.read(mod), {"Atown": {"*": "Atown", "barbarian": "Atburg"}})
+        text = open(CN.module_path(mod), encoding="utf-8").read()
+        self.assertIn('[\"Atown\"] = { [\"*\"] = \"Atown\", [\"barbarian\"] = \"Atburg\" }', text)
+        self.assertIn('rename_settlement', text)
+        self.assertTrue(CN.module_path(mod).startswith(hlr))            # the mod's scope, next to data
+        with self.assertRaises(ValueError):                            # a culture the mod has not
+            p2 = Plan(mod, None, "map")
+            apply_opts(p2, "test", {"culture_names": {"Atown": {"gaulish": "X"}}})
+        restore_to(mod, backups(mod)[-1])
+        after = {k: v for k, v in tree_hash(hlr).items() if not k.startswith("faction_tool_backups")}
+        self.assertEqual(before, after)
+
     def test_unit_cards_fill_a_folder_left_from_an_earlier_attempt(self):
         # ui/units/beta exists already (an old manual attempt) but lacks alpha's cards
         write(os.path.join(self.root, "data", "ui", "units", "beta", "#old_unit.tga"), "old")

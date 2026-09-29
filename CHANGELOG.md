@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Settlement names by the owner's culture (REX)**: **Names by culture...** (next to Edit region..., and on the Map's
+  region bar) gives a town a name for each culture - Roma for the Romans, Rom for the barbarians - and a name for
+  every other culture. The tool writes a REX script module (`<mod>/script/modules/ft_settlement_names.nut`)
+  that renames the town when it changes hands: at the start of the turn and whenever the campaign map opens
+  (after the battle too), through REX's `rename_settlement`. Needs REX; backup and Restore as for every write.
+  Not yet tested in the game. (Asked for on Discord.)
+
 ## 0.12.0 - 2026-09-29
 
 Built from a tester's questions and the user's Barbarian Invasion run. Checked on Rome (plain + REX) and

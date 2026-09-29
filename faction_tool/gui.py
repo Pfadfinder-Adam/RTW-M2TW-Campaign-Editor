@@ -281,6 +281,7 @@ class App(tk.Tk):
         self.region_edits = {}          # {region: {creator, rebels, resources, triumph, farming}} of regions there are
         self.new_regions = []           # [{name, settlement, creator, rebels, resources, colour, city, port, owner, level}]
         self.region_religions = {}      # {region: {religion: percent}} set by hand (Medieval II)
+        self.culture_names = {}         # {settlement: {culture or '*': name}} (REX renames the town for its owner)
         # resources on the map: moved {index: (x, y)}, removed [index], added [{type, xy}], region tags {region: text}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         self._res_placing, self._res_sel = None, None
@@ -483,6 +484,8 @@ class App(tk.Tk):
         ttk.Button(mid, text="Garrison...", command=lambda: self.show_units(self.selected_town())).pack(pady=(14, 2))
         ttk.Button(mid, text="Edit region...", command=lambda: self.new_region_dialog(
             edit=(self.tv.selection() or [""])[0] or self.selected_town())).pack(pady=2)
+        ttk.Button(mid, text="Names by culture...", command=lambda: self.culture_names_dialog(
+            (self.tv.selection() or [""])[0] or self.selected_town())).pack(pady=2)
         self.tv = ttk.Treeview(left_pane, columns=("town", "owner"), show="tree headings", height=18)
         self.tv.heading("#0", text="Region")
         self.tv.heading("town", text="Settlement")
@@ -517,6 +520,8 @@ class App(tk.Tk):
         ttk.Button(rb, text="Place its port", command=lambda: self.region_point("port")).pack(side="left", padx=2)
         ttk.Button(rb, text="Delete this new region", command=self.drop_region).pack(side="left", padx=2)
         ttk.Button(rb, text="Religions...", command=self.religions_dialog).pack(side="left", padx=2)
+        ttk.Button(rb, text="Names by culture...", command=lambda: self.culture_names_dialog(
+            self.v_paint.get().replace("  (new)", "").strip())).pack(side="left", padx=2)
         ttk.Label(rb, text="left drag paints, right click picks a region, right drag moves the map",
                   foreground="#666").pack(side="left", padx=10)
         self.res_bar = ttk.Frame(tab, padding=(0, 0, 0, 4))
@@ -1029,7 +1034,7 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ undo / redo
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "place_moves", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions", "region_edits",
-                 "res_moves", "res_removed", "res_added", "region_tags", "art_replace", "sel_map", "roster_set",
+                 "culture_names", "res_moves", "res_removed", "res_added", "region_tags", "art_replace", "sel_map", "roster_set",
                  "family_set")
 
     def snapshot(self):
@@ -1505,7 +1510,8 @@ class App(tk.Tk):
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
 
     def _regions_opts(self):
-        if not self.region_paint and not self.new_regions and not self.region_religions and not self.region_edits:
+        if not self.region_paint and not self.new_regions and not self.region_religions and not self.region_edits \
+                and not self.culture_names:
             return None
         me = self.v["template"].get().strip()
         new = []
@@ -1518,7 +1524,62 @@ class App(tk.Tk):
             new.append(r)
         return {"painted": dict(self.region_paint), "new": new,
                 "religions": {k: dict(v) for k, v in self.region_religions.items()},
-                "edits": {k: dict(v) for k, v in self.region_edits.items()}}
+                "edits": {k: dict(v) for k, v in self.region_edits.items()},
+                "culture_names": {k: dict(v) for k, v in self.culture_names.items()}}
+
+    def culture_names_dialog(self, region):
+        """REX: the town's name for each culture of its owner - the game renames it when it changes hands."""
+        if not self.mod or not self.strat:
+            return
+        from . import culturenames as CN
+        from .limits import faction_limit
+        new = self._new_region(region) if region else None
+        info = new or self.regions.get(region) if region else None
+        if not info or not info.get("settlement"):
+            messagebox.showerror(APP, "Pick a region first: a town in the list on the Faction tab, or 'Paint with' "
+                                      "on the Map (right click a region).")
+            return
+        town = info["settlement"]
+        cults = CN.cultures(self.mod)
+        now = dict(CN.read(self.mod).get(town) or {})
+        now.update(self.culture_names.get(town) or {})
+        now.setdefault(CN.DEFAULT, (new or {}).get("settlement_label") or CN.shown_name(
+            self.mod, self.v_campaign.get(), town))
+        w = tk.Toplevel(self)
+        w.title("Names of %s by culture" % town)
+        w.transient(self)
+        frm = ttk.Frame(w, padding=10)
+        frm.pack(fill="both", expand=True)
+        rex = faction_limit(self.mod).get("engine") == "REX.exe"
+        ttk.Label(frm, justify="left", wraplength=460, foreground="#555" if rex else "#a33", text=(
+            "When the town changes hands, REX renames it for the new owner's culture (at the start of the turn "
+            "and whenever the campaign map opens, e.g. after the battle). Empty = no name of its own for that "
+            "culture: the name for 'every other culture' is used." if rex else
+            "Needs REX: the game folder has no REX.exe, so nothing will be written.")).grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        rows = [(CN.DEFAULT, "every other culture")] + [(c, c) for c in cults]
+        vs = {}
+        for i, (key, label) in enumerate(rows):
+            ttk.Label(frm, text=label).grid(row=i + 1, column=0, sticky="w", padx=(0, 8), pady=1)
+            v = tk.StringVar(value=now.get(key, ""))
+            ttk.Entry(frm, textvariable=v, width=30).grid(row=i + 1, column=1, sticky="w", pady=1)
+            vs[key] = v
+
+        def ok():
+            got = {k: v.get().strip() for k, v in vs.items() if v.get().strip()}
+            bad = CN.problems(self.mod, {town: got})
+            if bad:
+                messagebox.showerror(APP, "\n".join(bad), parent=w)
+                return
+            self.remember()
+            self.culture_names[town] = got
+            self.status.set("%s: names by culture for %d culture(s) - written with the next Apply." % (
+                town, len(got)))
+            w.destroy()
+        bar = ttk.Frame(frm)
+        bar.grid(row=len(rows) + 1, column=0, columnspan=2, pady=(8, 0), sticky="w")
+        ttk.Button(bar, text="OK", command=ok).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
 
     def religions_dialog(self):
         """Medieval II: the religions of the region in 'Paint with' (percent, 100 in all)."""
@@ -2225,6 +2286,7 @@ class App(tk.Tk):
         self.region_paint, self.new_regions, self._region_point = {}, [], None
         self.region_edits = {}
         self.region_religions = {}
+        self.culture_names = {}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         self._res_placing, self._res_sel, self._res_cache = None, None, None
         self.art_replace, self.sel_map = {}, {}
