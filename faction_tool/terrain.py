@@ -101,6 +101,43 @@ def river_warnings(features, w, h, is_sea=None):
     return out
 
 
+def river_shapes(features, painted=None):
+    """[('square', x, y) | ('loop', x, y, n)] - river shapes the modders' guides say the game cannot take
+    (heavengames "Changing Terrain Features in RTW"): a 2 x 2 block of river tiles, and a river that
+    rejoins itself around land. Vanilla RTW / M2TW have neither; HLR has 6 loops and runs, so a loop is
+    a softer warning. painted: only shapes touching these tiles (what this edit makes); None = all.
+    A loop = a piece whose cycles are more than its 2 x 2 blocks (V - 1 edges make a tree)."""
+    rivery = {t for t, c in features.items() if c in RIVERY}
+    out, seen = [], set()
+    touch = set(painted) if painted is not None else None
+
+    def near(tiles):
+        return touch is None or any(t in touch for t in tiles)
+
+    for x, y in sorted(rivery, key=lambda t: (t[1], t[0])):
+        block = [(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)]
+        if all(t in rivery for t in block) and near(block):
+            out.append(("square", x, y))
+    for t0 in sorted(rivery, key=lambda t: (t[1], t[0])):
+        if t0 in seen:
+            continue
+        piece, stack, edges, squares = [], [t0], 0, 0
+        seen.add(t0)
+        while stack:
+            x, y = stack.pop()
+            piece.append((x, y))
+            edges += ((x + 1, y) in rivery) + ((x, y + 1) in rivery)
+            squares += all(t in rivery for t in ((x + 1, y), (x, y + 1), (x + 1, y + 1)))
+            for n in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if n in rivery and n not in seen:
+                    seen.add(n)
+                    stack.append(n)
+        if edges - len(piece) + 1 - squares > 0 and near(piece):
+            x, y = min(piece, key=lambda t: (t[1], t[0]))
+            out.append(("loop", x, y, len(piece)))
+    return out
+
+
 def river_path(a, b):
     """The tiles from a (left out) to b that keep a river joined by edges: a diagonal or a longer jump
     of the brush becomes a staircase of edge steps, the corner tile before the diagonal one."""
@@ -175,4 +212,4 @@ def apply(plan, campaign, ground=None, features=None, climate=None):
 
 
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "FEATURE_BRUSHES", "paint_problem",
-           "river_warnings", "river_path", "climates", "apply"]
+           "river_warnings", "river_shapes", "river_path", "climates", "apply"]

@@ -1308,6 +1308,15 @@ building smith
         self.assertEqual(T.river_warnings(inland, 8, 8), [(4, 4, 2)])
         self.assertEqual(T.river_warnings(inland, 8, 8, is_sea=lambda x, y: (x, y) == (6, 4)), [])
         self.assertEqual(T.river_warnings({**inland, (3, 4): (255, 255, 255)}, 8, 8), [])  # a source
+        # 2 x 2 blocks and rings (heavengames: a river is one tile wide and never rejoins itself)
+        block = {(1, 1): R, (2, 1): R, (1, 2): R, (2, 2): R}
+        self.assertEqual(T.river_shapes(block), [("square", 1, 1)])
+        ring = {(x, y): R for x in range(1, 5) for y in range(1, 5) if x in (1, 4) or y in (1, 4)}
+        self.assertEqual(T.river_shapes(ring), [("loop", 1, 1, 12)])
+        self.assertEqual(T.river_shapes(ring, painted={(7, 7)}), [])                   # not this edit's
+        self.assertEqual(T.river_shapes(joined), [])
+        self.assertEqual(T.river_shapes({(x, y): R for x in range(3) for y in range(3)}),   # a solid 3 x 3: blocks only
+                         [("square", 0, 0), ("square", 1, 0), ("square", 0, 1), ("square", 1, 1)])
         # the brush's staircase: a diagonal step gets the corner tile before it, a jump every tile between
         self.assertEqual(T.river_path((2, 2), (3, 1)), [(3, 2), (3, 1)])
         path = T.river_path((0, 0), (3, 2))

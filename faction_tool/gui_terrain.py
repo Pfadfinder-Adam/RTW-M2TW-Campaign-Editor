@@ -121,6 +121,16 @@ class TerrainEditor(ttk.Frame):
                                                       "source or other river by a tile's side - the game will not draw "
                                                       "it: it follows a river side to side and stops where two river "
                                                       "tiles touch only by a corner" % (x, y, n)))
+        painted = {t for t, c in self.features.items()} if self.features else set()
+        for shape in (T.river_shapes(self._features_now(), painted) if painted else [])[:20]:
+            if shape[0] == "square":
+                plan.warnings.append(("map_features.tga", "river tiles at %d, %d form a 2 x 2 block - rivers must be "
+                                                          "one tile wide (the game cannot draw a block of river)"
+                                      % shape[1:]))
+            else:
+                plan.warnings.append(("map_features.tga", "the river at %d, %d (%d tile(s)) closes into a ring around "
+                                                          "land - the modders' guides say a river may split but never "
+                                                          "rejoin itself (big mods have a few that load)" % shape[1:]))
         return plan
 
     # ---- the map ----
