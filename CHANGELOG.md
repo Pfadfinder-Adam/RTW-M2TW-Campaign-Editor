@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.17.1 - 2026-09-29
+
+Asked on Discord: where are the rebels?
+
+### Added
+- **The rebels (`slave`) in Edit faction**: their armies, fleets, agents, garrisons, towns, buildings and units
+  (Roster) are edited like any faction's. Every rebel character in the game files carries `sub_faction <faction>`
+  and takes its name from that faction's list (all 91 vanilla rebels, Rome and Medieval II); the tool writes the
+  same: a captain for an empty rebel town takes the sub_faction of the nearest rebel (else the region's creator),
+  and **+ Army / + Fleet / + Agent** ask whose rebels they are (**Rebels of**) and offer that faction's names.
+  The rebels are never made playable and have no capital, leader or heir (greyed out). Checked on vanilla Rome
+  and Medieval II (rebels take a town, a captain and a new army written, Restore byte-exact) and in the window.
+
+### Fixed
+- **A new faction no longer takes its template's shadow / spawn ties** (BI / Medieval II `descr_sm_factions`):
+  a clone of `empire_east` was also `shadowed_by empire_east_rebels`, so two factions claimed one civil-war
+  shadow; `spawns_on_revolt`, `spawned_by` and `spawned_on_event` were copied the same way. The clone starts as a
+  plain faction and Preview says which tie stayed with the template.
+
 ## 0.17.0 - 2026-09-29
 
 REX's new features, read from REX's own notes, and two things the tool got wrong on Medieval II.
