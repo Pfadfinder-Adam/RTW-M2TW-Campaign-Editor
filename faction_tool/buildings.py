@@ -233,6 +233,13 @@ def has_castles(known):
     return any(l.kind == "castle" for b in known.values() for l in b.levels)
 
 
+def castles_allowed(mod, known):
+    """Whether settlements may be switched between city and castle: only Medieval II (its exe, else its data -
+    religions) AND its buildings mark castle levels. Rome, Barbarian Invasion and Alexander have no castles."""
+    from .limits import game_kind
+    return game_kind(mod) == "medieval2" and has_castles(known)
+
+
 def core_chain(known, kind):
     """The governor's chain of a city or of a castle (core_building / core_castle_building)."""
     cores = [b for n, b in known.items() if n.lower().startswith("core") and b.levels]
@@ -308,6 +315,8 @@ def with_kind(plan, f, region, raw, kind, picked, known):
     now = settlement_kind(texts)
     if kind not in KINDS or kind == now:
         return raw, picked
+    if not castles_allowed(plan.mod, known):
+        raise ValueError("%s: only Medieval II has castles - this game has cities only" % region)
     bad = kind_problem(known, kind, level)
     if bad:
         raise ValueError("%s: %s" % (region, bad))
@@ -321,6 +330,14 @@ def with_kind(plan, f, region, raw, kind, picked, known):
         elif new:
             plan.note(f, "%s: governor's building %s %s" % (region, new[0], new[1]))
     return set_kind(raw, kind, f.make), items
+
+
+def castle_fits(plan, region, raw, level, known):
+    """A castle (Medieval II) bigger than castles go is refused before anything is written."""
+    if settlement_kind([l.rstrip("\r") for l in raw]) == "castle" and castles_allowed(plan.mod, known):
+        bad = kind_problem(known, "castle", level)
+        if bad:
+            raise ValueError("%s: %s - make it a city (Buildings tab: Settlement is a city)" % (region, bad))
 
 
 def set_buildings(raw, buildings, make):

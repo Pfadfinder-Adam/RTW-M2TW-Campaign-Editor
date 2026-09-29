@@ -601,7 +601,7 @@ def _garrisons(plan, f, s, campaign):
 
 
 def _buildings(plan, f, s):
-    from .buildings import available, ranks_ok, read_buildings, set_buildings, sized, with_kind
+    from .buildings import available, castle_fits, ranks_ok, read_buildings, set_buildings, sized, with_kind
     picked = dict(plan.opts.get("buildings") or {})
     sizes = plan.opts.get("sizes") or {}
     kinds = plan.opts.get("kinds") or {}
@@ -625,6 +625,7 @@ def _buildings(plan, f, s):
         items = [tuple(x) for x in picked.get(region, [])]
         raw, level = sized(plan, f, region, f.raw[st.start:st.end], items, sizes.get(region), known)
         f.raw[st.start:st.end] = raw
+        castle_fits(plan, region, raw, level, known)
         if region not in picked:
             continue
         for chain, lv_name in items:

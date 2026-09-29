@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.15.1 - 2026-09-29
+
+### Changed
+- **City or castle: Medieval II only, twice checked.** The switch shows (and the write is allowed) only when the game
+  is Medieval II (its exe, else its data) **and** its buildings mark castle levels; Rome, Barbarian Invasion and
+  Alexander never show it, and a castle asked for there is refused before anything is written.
+- **A castle never outgrows castles**: picking huge city for a castle on the Buildings tab is refused with the reason
+  (castles end at the citadel, a large city - make it a city first), and Preview refuses such a castle too.
+
 ## 0.15.0 - 2026-09-29
 
 ### Added

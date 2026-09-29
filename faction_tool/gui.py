@@ -12,7 +12,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 from . import log, settings
 from .build import build, template_display
 from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need, core_settlement, population_of, rank,
-                        convert, has_castles, kind_problem, read_buildings, settlement_info, settlement_kind)
+                        castles_allowed, convert, kind_problem, read_buildings, settlement_info, settlement_kind)
 from .mapdata import CampaignMap, faction_colours
 from .moddata import ModData
 from .mapedit import orig as place_orig, place_problem, port_fleets, sea_spot
@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.15.0"
+VERSION = "0.15.1"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
 
@@ -761,7 +761,7 @@ class App(tk.Tk):
         self.buildings_editor.load(region, shown, self._edb, own, self.buildings_picked.get(region),
                                    self.mod.culture(template), self.v["name"].get().strip().lower() or template,
                                    template, self._bpics, changed,
-                                   kind=self.kinds.get(region, file_kind) if has_castles(known) else None,
+                                   kind=self.kinds.get(region, file_kind) if castles_allowed(self.mod, known) else None,
                                    on_kind=lambda k: self.set_kind(region, k))
 
     def set_kind(self, region, kind):
@@ -804,6 +804,13 @@ class App(tk.Tk):
         return need if need and rank(need) > rank(town_level) else town_level
 
     def level_picked(self):
+        region = getattr(self, "_size_region", None)
+        if region and self.buildings_editor.kind == "castle":
+            bad = kind_problem({b.name: b for b in self._edb}, "castle", self.v_level.get())
+            if bad:                               # a castle ends at the citadel: the level goes back
+                messagebox.showerror(APP, "%s: %s. Make it a city first (Settlement is a: city)." % (region, bad))
+                self.v_level.set(self.buildings_editor.town_level)
+                return
         self._level_to(self.v_level.get())
 
     def _level_to(self, level, sync_core=True):
@@ -823,7 +830,7 @@ class App(tk.Tk):
         self.size_changed()
         core = ed.core_for(level) if sync_core else None
         ed.town_level = level
-        ed.title.configure(text="%s - a %s" % (region, level))
+        ed.title.configure(text="%s - a %s%s" % (region, level, " castle" if ed.kind == "castle" else ""))
         said = []
         if core and core[1] and ed.current.get(core[0]) != core[1]:
             ed.pick(core[0], core[1])                 # remembers for Undo and redraws

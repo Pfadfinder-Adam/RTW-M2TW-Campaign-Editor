@@ -347,6 +347,11 @@ building smith
         # Rome has no castle levels: nothing offered
         rome = {b.name: b for b in read_buildings(ModData(self.root).load(ModData(self.root).file("edb")))}
         self.assertFalse(has_castles(rome))
+        from faction_tool.buildings import castles_allowed, with_kind
+        self.assertFalse(castles_allowed(ModData(self.root), known))    # Rome: castle levels alone are not enough
+        p = Plan(ModData(self.root), None, "x")
+        with self.assertRaises(ValueError):
+            with_kind(p, None, "R", raw, "castle", None, known)
 
     def test_own_name_list_for_new_and_edited_faction(self):
         from faction_tool import namelists as NL
