@@ -1520,7 +1520,10 @@ building smith
         land, sea = (10, 10, 10), (0, 0, 253)
         write_tga(os.path.join(camp, "map_heights.tga"), 9, 9,
                   [[sea if x >= 7 else land for x in range(9)] for y in range(9)])
-        write(os.path.join(camp, "map_heights.hgt"), "floats")
+        import struct
+        hgt_path = os.path.join(camp, "map_heights.hgt")
+        with open(hgt_path, "wb") as fh:                   # the game's copy: w, h, then floats bottom-up
+            fh.write(struct.pack("<II", 9, 9) + struct.pack("<81f", *([300.0] * 81)))
         write(os.path.join(camp, "map.rwm"), "x")
         before = tree_hash(self.root)
         mod = ModData(self.root)
@@ -1536,6 +1539,10 @@ building smith
         self.assertGreater(second[(5, 4)], first[(5, 4)])                    # held longer, higher
         weak = T.height_spray(img, (1.0, 1.0), 3, "lower", 1, {})
         self.assertTrue(all(v <= 10 for v in weak.values()))
+        low = {}
+        for _ in range(40):                                                  # held long: never down to black
+            T.height_spray(img, (1.0, 1.0), 3, "lower", 10, low)
+        self.assertEqual(min(low.values()), 1.0)
         heights = dict(first)
         heights.update(second)
         with self.assertRaises(ValueError):                                  # never the sea
@@ -1548,7 +1555,10 @@ building smith
         h = read_tga(os.path.join(camp, "map_heights.tga"))
         self.assertEqual(h.get(5, 4)[0], second[(5, 4)])
         self.assertEqual(h.get(8, 4), sea)
-        self.assertFalse(os.path.exists(os.path.join(camp, "map_heights.hgt")))
+        with open(hgt_path, "rb") as fh:                   # kept, the same pixels moved by the grey step
+            floats = struct.unpack("<81f", fh.read()[8:])
+        self.assertAlmostEqual(floats[4 * 9 + 5], 300.0 + (second[(5, 4)] - 10) * 7511.272 / 255, places=2)
+        self.assertEqual(floats[0], 300.0)
         self.assertFalse(os.path.exists(os.path.join(camp, "map.rwm")))
         mod = ModData(self.root)
         restore(mod, backups(mod)[0])

@@ -415,4 +415,6 @@ class TerrainEditor(ttk.Frame):
             "Level brings the land towards the height set beside it (right click picks a tile's own height). "
             "Shown as map_heights.tga is: land grey - black low, white high (brightened a little here) - "
             "the sea blue; only land is changed, the coast stays. On Apply: map_heights.tga written, "
-            "map_heights.hgt and map.rwm deleted (the game reads the picture then and builds its map again)."))
+            "the same points changed in map_heights.hgt (the game's own copy of the heights, read instead of the "
+            "picture while it is there), map.rwm deleted (the game builds its map again). Land never goes down to "
+            "black: the game may take black for sea."))

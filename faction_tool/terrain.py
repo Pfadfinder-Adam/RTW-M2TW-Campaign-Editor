@@ -186,9 +186,13 @@ def ground_changes(ground_tiles):
 # 2 x the map + 1 like the ground. Land is grey: 0 the lowest, 255 descr_terrain's max_land_height (vanilla RTW
 # 7511); the sea is blue (0, 0, b) - b the depth (253 nearly everywhere) - and lies exactly under the sea
 # ground types (vanilla RTW and M2TW measured). The brush changes land only; the coast stays where it is.
-# map_heights.hgt beside it (floats, the game's own converted copy) wins over the picture while it is there
-# and is not made again by the game (TWC wiki "Map heights.hgt"), so a heights edit deletes it - the game then
-# reads the picture; Restore puts the file back.
+# Land stays 1 or more: a black 0 0 0 may be read as sea (TWC wiki "map_heights.tga"; vanilla keeps a few 0s on
+# the coast - left as they are unless the brush raises them).
+# map_heights.hgt beside it (the game's own converted copy: two uint32 w, h, then w * h float32 heights, bottom-up;
+# vanilla RTW and M2TW measured) wins over the picture while it is there and is not made again by the game, and
+# M2TW needs map changes to load without it (TWC wiki "Map heights.hgt") - so it is kept and the same pixels are
+# changed in it: old height + (new grey - old grey) x max_land_height / 255 (descr_terrain.txt; vanilla 7511.272,
+# about 29.45 a grey step - the vanilla files agree), the rest of the file byte for byte as it was.
 HEIGHT_TOOLS = ("raise", "lower", "smooth", "level")
 
 
@@ -237,11 +241,40 @@ def height_spray(img, centre, radius, tool, strength, values, level=None):
                 nv = v + (level - v) * 0.35 * k * w
             else:
                 continue
-            nv = min(max(nv, 0.0), 255.0)
+            floor = 1.0 if v >= 1.0 else v                 # land never goes down to black (sea)
+            nv = min(max(nv, floor), 255.0)
             values[(x, y)] = nv
             if int(round(nv)) != img.get(x, y)[0]:
                 out[(x, y)] = int(round(nv))
     return out
+
+
+def max_land_height(mod, campaign):
+    """descr_terrain.txt's max_land_height (the campaign's copy, else the base map's), else vanilla's 7511.272."""
+    import re
+    path = mod.campaign_file(campaign, "descr_terrain.txt")
+    if path:
+        m = re.search(r"max_land_height\s+(-?[\d.]+)", open(path, encoding="latin-1").read())
+        if m:
+            return float(m.group(1))
+    return 7511.272
+
+
+def hgt_patched(path, img, changes, step):
+    """map_heights.hgt's bytes with the pixels {(px, py): (old grey, new grey)} moved by (new - old) x step;
+    refused when its size is not the picture's (then the game's copy and the picture do not match anyway)."""
+    import struct
+    with open(path, "rb") as fh:
+        data = bytearray(fh.read())
+    w, h = struct.unpack_from("<II", data, 0)
+    if (w, h) != (img.width, img.height) or len(data) != 8 + w * h * 4:
+        raise ValueError("map_heights.hgt is %d x %d, map_heights.tga %d x %d - they do not match, so the "
+                         "heights cannot be changed in both; nothing written" % (w, h, img.width, img.height))
+    for (px, py), (old, new) in changes.items():
+        at = 8 + (py * w + px) * 4
+        v = struct.unpack_from("<f", data, at)[0]
+        struct.pack_into("<f", data, at, v + (new - old) * step)
+    return bytes(data)
 
 
 def apply(plan, campaign, ground=None, features=None, climate=None, heights=None):
@@ -283,13 +316,15 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
             len(heights), up, len(heights) - up)))
         hgt = os.path.join(os.path.dirname(path), "map_heights.hgt")
         if os.path.isfile(hgt):
-            plan.delete(hgt, "the game's own copy of the heights: while it is there the game reads it and not the "
-                             "picture, and it does not make it again - without it the game takes map_heights.tga")
+            step = max_land_height(mod, campaign) / 255.0
+            plan.binary(hgt, hgt_patched(hgt, img, {p: (img.get(*p)[0], v) for p, v in heights.items()}, step))
+            plan.notes.append((mod.rel(hgt), "the same %d pixel(s) changed (the game reads this copy of the heights "
+                                             "while it is there; %.2f per grey step)" % (len(heights), step)))
     for folder in {os.path.dirname(mod.campaign_file(campaign, "map_regions.tga")),
                    os.path.join(mod.data, "world", "maps", "base")}:
         plan.delete(os.path.join(folder, "map.rwm"), "the game builds the map again from the changed pictures")
 
 
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "FEATURE_BRUSHES", "paint_problem",
-           "river_warnings", "river_shapes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray",
+           "river_warnings", "river_shapes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray", "max_land_height", "hgt_patched",
            "apply"]

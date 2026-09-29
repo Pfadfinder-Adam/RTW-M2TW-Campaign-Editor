@@ -21,8 +21,9 @@
   **Smooth** evens out bumps, **Level to height** brings the land towards a height (right click picks a
   tile's own). Strength slider, brush up to 12 tiles. The map shows the heights as the file has them - land
   grey (black low, white high, brightened a little), the sea blue; only land is changed, the coast stays.
-  Apply writes map_heights.tga and deletes **map_heights.hgt** (the game's own copy of the heights: while it
-  is there the game reads it instead of the picture, and it does not make it again) and map.rwm. Same file
+  Apply writes map_heights.tga, changes the same points in **map_heights.hgt** (the game's own copy of the
+  heights, read instead of the picture while it is there; Medieval II needs it to load) and deletes map.rwm. Land
+  never goes down to pure black (the game may take it for sea). Same file
   layout on Rome and Medieval II (checked on both vanilla maps). Not yet tested in the game.
 - **Find on the map** (Map tab and Terrain editor): type part of a name - a town (also the name shown for
   its owner), a port, a general, agent or fleet, a unit in an army, a fort, a resource - and pick a hit: the
