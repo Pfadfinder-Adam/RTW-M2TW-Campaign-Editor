@@ -32,6 +32,9 @@ class TerrainEditor(ttk.Frame):
         ttk.Spinbox(top, from_=1, to=6, width=3, textvariable=self.v_brush,
                     command=lambda: setattr(self.view, "brush", self.v_brush.get())).pack(side="left", padx=2)
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
+        self.v_grid_here = tk.BooleanVar(value=True)
+        ttk.Checkbutton(top, text="Grid", variable=self.v_grid_here, command=self._grid_toggled).pack(
+            side="left", padx=(16, 0))
         ttk.Button(top, text="Undo stroke", command=self.undo_stroke).pack(side="right", padx=4)
         self.palette = ttk.Frame(self, padding=(0, 4))
         self.palette.pack(fill="x")
@@ -51,7 +54,17 @@ class TerrainEditor(ttk.Frame):
             elif w.winfo_class() == "TLabel" and str(w.cget("text")).startswith("wheel"):
                 w.configure(text="wheel: zoom   left drag: paint   right click: pick that tile's   right drag: map")
         self.view.legend.pack_forget()
+        self.v_grid_here.set(self.view.v_grid.get())
         self.fill_palette()
+
+    def _grid_toggled(self):
+        """The lines between the tiles up close, on or off (the same switch as Layers > grid, kept)."""
+        from . import settings
+        self.view.v_grid.set(self.v_grid_here.get())
+        look = dict(settings.get("map_look") or {})
+        look["grid"] = self.v_grid_here.get()
+        settings.put("map_look", look)
+        self.view.render()
 
     # ---- the editor protocol (like the unit / building / character editors) ----
     def path(self):

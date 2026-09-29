@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.9.4"
+VERSION = "0.10.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
 
@@ -42,7 +42,7 @@ START
      mod of that game folder (the game itself, bi, HLR, the mods made here) - pick one to load it.
   2. Pick the campaign (usually imperial_campaign).
   3. Pick the work at the top: New faction (pick a template to copy), Edit faction (pick
-     the faction to change), Unit editor, Building editor or Character editor.
+     the faction to change), Unit editor, Building editor, Character editor or Terrain editor.
 
 THE TABS (in the order that works best)
   Faction      names, texts, colours, AI, money, playable; the towns it starts with
@@ -89,6 +89,15 @@ CHARACTER EDITOR
   rogues), as the game gives them out at random; Add portraits... puts new ones in (any picture,
   made the culture's size with its card, under the next free number in every folder of the
   group); Medieval II: Use for <character> makes the picked one his own.
+
+TERRAIN EDITOR
+  Paint what each tile of the campaign map is (Ground: fertility, wilderness, forest, hills,
+  mountains, swamp; the kinds of sea) and what runs across it (rivers, fords where armies
+  cross, river sources, cliffs). Left drag paints, right click picks a tile's own, right drag
+  moves the map; Grid on / off. Land stays land and sea stays sea; nothing the game refuses is
+  put under a town, port or character. Apply writes map_ground_types.tga / map_features.tga and
+  deletes map.rwm: the game builds its map again on the next start. The heights
+  (map_heights.tga) are a picture of their own: a mountain tile does not raise the land.
 
 UNIT EDITOR / BUILDING EDITOR
   Pick a unit (a building chain) on the left; every line of its block is a field - change

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.10.0 - 2026-09-29
+
+### Added
+- **Terrain editor** (its own work at the top): paint the campaign map tile by tile - the ground (fertility,
+  wilderness, forests, hills, mountains, high mountains, swamp; the kinds of sea) and the marks across it
+  (rivers, fords where armies cross, river sources, cliffs). Land stays land and sea stays sea; nothing the game
+  refuses goes under a town, port or character; Preview warns about a broken river. Apply writes
+  `map_ground_types.tga` and `map_features.tga` with a backup and deletes `map.rwm` (the game builds its map
+  again). Not yet tested in the game.
+- The map draws each feature in its own colour (rivers, fords, sources, cliffs, volcanoes).
+
+### Fixed
+- Medieval II's impassable land (`64 64 64` in map_ground_types) now refuses characters like mountains do.
+
 ## 0.9.4 - 2026-09-29
 
 ### Fixed

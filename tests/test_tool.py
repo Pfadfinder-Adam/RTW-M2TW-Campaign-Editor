@@ -863,6 +863,45 @@ class ToolTest(unittest.TestCase):
         self.assertEqual((lines[e["farming"][0]], lines[e["rebels"][0]]), ("\t4", "\tPicts"))
         self.assertIn("\tPictii", lines)
 
+    def test_terrain_paint_and_restore(self):
+        """Terrain editor: a tile's ground is the 3 x 3 block around (2x + 1, 2y + 1) of map_ground_types.tga,
+        features one pixel per tile; land stays land, nothing refused under a town; map.rwm goes; Restore."""
+        from faction_tool import terrain as T
+        from faction_tool.plan import Plan
+        from faction_tool.tga import read_tga
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        wild, sea = (0, 0, 0), (64, 0, 0)
+        write_tga(os.path.join(camp, "map_ground_types.tga"), 9, 9,
+                  [[sea if x >= 7 else wild for x in range(9)] for y in range(9)])
+        write_tga(os.path.join(camp, "map_features.tga"), 4, 4, [[wild] * 4 for _ in range(4)])
+        write(os.path.join(camp, "map.rwm"), "x")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+
+        class Map:                                        # what paint_problem asks of the map
+            w = h = 4
+
+            def is_sea(self, x, y):
+                return x == 3
+        self.assertIsNone(T.paint_problem(Map(), "ground", (0, 0), (128, 128, 64), set()))
+        self.assertTrue(T.paint_problem(Map(), "ground", (3, 0), (128, 128, 64), set()))        # sea stays sea
+        self.assertTrue(T.paint_problem(Map(), "ground", (1, 1), (98, 65, 65), {(1, 1)}))       # no mountains under a town
+        self.assertTrue(T.paint_problem(Map(), "features", (1, 1), (0, 0, 255), {(1, 1)}))
+        self.assertEqual(T.river_warnings({(0, 0): (0, 0, 255), (0, 1): (0, 255, 255), (2, 2): (0, 0, 255)}, 4, 4),
+                         [(2, 2)])
+        plan = Plan(mod, "terrain", "terrain")
+        T.apply(plan, "test", {(1, 2): (128, 128, 64)}, {(0, 0): (0, 0, 255)})
+        plan.apply()
+        g = read_tga(os.path.join(camp, "map_ground_types.tga"))
+        self.assertEqual({g.get(x, y) for x in (2, 3, 4) for y in (4, 5, 6)}, {(128, 128, 64)})
+        self.assertEqual(g.get(1, 5), wild)
+        self.assertEqual(read_tga(os.path.join(camp, "map_features.tga")).get(0, 0), (0, 0, 255))
+        self.assertFalse(os.path.exists(os.path.join(camp, "map.rwm")))
+        mod = ModData(self.root)
+        restore(mod, backups(mod)[0])
+        after = tree_hash(self.root)
+        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
+
     def test_family_tree_checks(self):
         from faction_tool.family import ordered, tree_problems
         people = [{"name": n, "sex": s} for n, s in (("A", "male"), ("B", "female"), ("C", "male"), ("D", "female"),
