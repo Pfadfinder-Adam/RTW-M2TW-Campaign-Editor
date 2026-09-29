@@ -120,6 +120,7 @@ class BuildingsEditor(ttk.Frame):
         if now and now not in names:
             names.append(now)
         img = self.pics.get(self.bpics.find(self.culture, now), PICTURE) if now else None
+        missing = bool(now) and img is None
         if img is None:                   # an empty slot the picture's size (a Label's width is in characters otherwise)
             if not hasattr(self, "_blank"):
                 self._blank = tk.PhotoImage(width=PICTURE[0], height=PICTURE[1])
@@ -137,6 +138,9 @@ class BuildingsEditor(ttk.Frame):
             ("needs a %s" % lv.settlement_min if lv else "")
         tip = ("%s: %s, cost %d, %d turn(s), %s%s" % (b.name, lv.name, lv.cost, lv.turns, need,
                ("; also " + lv.conditional()) if lv.conditional() else "")) if lv else b.name
+        if missing:
+            tip += "\nno picture for the %s culture (ui/%s/buildings) (nor in the cultures descr_ui_buildings.txt sends it to)" % (
+                self.culture, self.culture)
         for w in (f, pic, cb):
             w.bind("<Enter>", lambda e, t=tip: self.info.configure(text=t))
         return f

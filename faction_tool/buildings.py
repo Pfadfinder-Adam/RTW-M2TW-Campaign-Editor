@@ -231,18 +231,30 @@ def set_buildings(raw, buildings, make):
 # Pictures: ui/<culture>/buildings/#<culture>_<level>.tga, with fallbacks
 # ---------------------------------------------------------------------------
 class BuildingPictures:
-    """Finds the picture the game would show for a building level."""
+    """Finds the picture the game would show for a building level: the culture's own
+    folder, then the cultures descr_ui_buildings.txt sends it to (lookup_variants), in the
+    mod and then in the game's data (Barbarian Invasion and REX mods read what they lack
+    there). Never another culture's picture: a Roman town must not show barbarian huts."""
 
     def __init__(self, mod):
         self.ui = os.path.join(mod.data, "ui")
-        self.index = {}                        # culture folder -> {lower file name: path}
-        if os.path.isdir(self.ui):
-            for c in os.listdir(self.ui):
-                b = _ci(os.path.join(self.ui, c), "buildings")
+        folders = [mod.data]
+        game = _game_data(mod.data)
+        if game:
+            folders.append(game)
+        self.index = {}                        # culture folder -> {lower file name: path}, the mod's first
+        for data in folders:
+            ui = _ci(data, "ui")
+            if not ui or not os.path.isdir(ui):
+                continue
+            for c in os.listdir(ui):
+                b = _ci(os.path.join(ui, c), "buildings")
                 if b and os.path.isdir(b):
-                    self.index[c.lower()] = {n.lower(): os.path.join(b, n) for n in os.listdir(b)}
+                    files = self.index.setdefault(c.lower(), {})
+                    for n in os.listdir(b):
+                        files.setdefault(n.lower(), os.path.join(b, n))
         self.variants, self.aliases = {}, {}
-        path = _ci(mod.data, "descr_ui_buildings.txt")
+        path = next((p for p in (_ci(d, "descr_ui_buildings.txt") for d in folders) if p), None)
         if path:
             for l in mod.load(path).texts():
                 t = tokens(l)
@@ -253,13 +265,14 @@ class BuildingPictures:
                         self.aliases[t[0]] = t[1]
 
     def cultures(self, culture):
+        """The culture, then the ones descr_ui_buildings.txt sends it to - nothing else."""
         order, todo = [], [culture]
         while todo:
             c = todo.pop(0)
             if c and c not in order:
                 order.append(c)
                 todo += self.variants.get(c, [])
-        return order + sorted(c for c in self.index if c not in order)
+        return order
 
     def names(self, level):
         """The level, its alias from descr_ui_buildings, then with prefixes dropped
@@ -273,9 +286,9 @@ class BuildingPictures:
 
     def find(self, culture, level, constructed=False):
         tail = "_constructed.tga" if constructed else ".tga"
-        for name in self.names(level):
-            for c in self.cultures(culture):
-                files = self.index.get(c, {})
+        for c in self.cultures(culture):              # the culture's own picture beats a variant's
+            files = self.index.get(c, {})
+            for name in self.names(level):
                 p = files.get(("#%s_%s%s" % (c, name, tail)).lower())
                 if p:
                     return p
@@ -286,3 +299,13 @@ class BuildingPictures:
                 if hit:
                     return hit
         return None
+
+
+def _game_data(data):
+    """The game's own data folder when data is a mod's or Barbarian Invasion's (None for the game's)."""
+    from .newmod import game_of
+    game = game_of(data)
+    d = _ci(game, "data") if game else None
+    if d and os.path.normcase(os.path.abspath(d)) != os.path.normcase(os.path.abspath(data)):
+        return d
+    return None

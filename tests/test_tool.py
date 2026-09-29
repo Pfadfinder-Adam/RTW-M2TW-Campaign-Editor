@@ -280,6 +280,27 @@ class ToolTest(unittest.TestCase):
         self.assertIn("faction: beta\n", text)
         self.assertIn("faction: alpha, alpha_rebels\n", text)
 
+    def test_building_pictures_from_the_game_and_never_another_culture(self):
+        # Barbarian Invasion: bi/data has no roman pictures; the game's data/ui has them.
+        # A roman level with no roman picture must stay empty, not show a barbarian one.
+        from faction_tool.buildings import BuildingPictures
+        game, _ = self._game()
+        gui = os.path.join(game, "data", "ui")
+        write(os.path.join(gui, "roman", "buildings", "#roman_governors_house.tga"), "r")
+        write(os.path.join(gui, "barbarian", "buildings", "#barbarian_governors_house.tga"), "b")
+        write(os.path.join(gui, "barbarian", "buildings", "#barbarian_stables.tga"), "b")
+        write(os.path.join(gui, "greek", "buildings", "#greek_temple.tga"), "g")
+        write(os.path.join(game, "data", "descr_ui_buildings.txt"), "lookup_variants\n{\n\troman greek\n}\n")
+        bi = os.path.join(game, "bi", "data")
+        shutil.copytree(os.path.join(self.root, "data"), bi)
+        write(os.path.join(bi, "ui", "roman", "buildings", "#roman_forum.tga"), "bi")
+        pics = BuildingPictures(ModData(os.path.dirname(bi)))
+        self.assertTrue(pics.find("roman", "governors_house").endswith(os.path.join("roman", "buildings", "#roman_governors_house.tga")))
+        self.assertTrue(pics.find("roman", "forum").startswith(bi))
+        self.assertTrue(pics.find("roman", "temple").endswith("#greek_temple.tga"))   # the file's variant
+        self.assertIsNone(pics.find("roman", "stables"))                              # never barbarian
+        self.assertTrue(pics.find("barbarian", "stables").endswith("#barbarian_stables.tga"))
+
     def test_unit_cards_fill_a_folder_left_from_an_earlier_attempt(self):
         # ui/units/beta exists already (an old manual attempt) but lacks alpha's cards
         write(os.path.join(self.root, "data", "ui", "units", "beta", "#old_unit.tga"), "old")

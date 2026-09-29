@@ -16,6 +16,10 @@
   Two writes made by one Apply are undone in the right order.
 
 ### Fixed
+- Buildings tab: a town showed **another culture's pictures** (BI's Eastern Empire got barbarian huts) and empty
+  boxes for pictures that exist. The pictures are now looked for only in the town's own culture (and the cultures
+  `descr_ui_buildings.txt` sends it to), in the mod and then in the game's own `data` - where Barbarian
+  Invasion and REX mods take what they do not have. A level with no picture of its culture says so.
 - Barbarian Invasion: the Eastern / Western Empire had no names ("no name in empire_east's name list for a
   captain"). BI's `descr_names.txt` gives one name list to several factions (`faction: empire_east,
   empire_east_rebels`); the tool now reads such lists for every faction on them, and a new faction cloned from
