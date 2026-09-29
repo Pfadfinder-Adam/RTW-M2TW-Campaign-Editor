@@ -23,7 +23,7 @@
   layout on Rome and Medieval II (checked on both vanilla maps). Not yet tested in the game.
 - **Find on the map** (Map tab and Terrain editor): type part of a name - a town (also the name shown for
   its owner), a port, a general, agent or fleet, a unit in an army, a fort, a resource - and pick a hit: the
-  map centres on it. Names come first (typing "rom" lists Rome before the Romans' armies).
+  map zooms in close on it and a ring blinks round it. Names come first (typing "rom" lists Rome before the Romans' armies).
 - **Check mod**: the factions against max_factions, and the original exe's limits (regions, map size, units, building chains, levels, hidden
   resources) counted against the mod, saying whether REX / M2EX is beside the game and what it is known to
   lift (REX: regions - HLR runs 750); win conditions naming a missing region or faction; Medieval II rebels

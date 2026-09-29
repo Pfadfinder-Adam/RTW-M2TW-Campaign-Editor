@@ -355,17 +355,23 @@ class MapView(ttk.Frame):
         self.oy = (self.cmap.h - 1 - xy[1]) + 0.5 - ch / 2 / self.z
         self.render()
         self._flash = xy
-        self.after(60, self._mark_flash)
+        self._flash_n = getattr(self, "_flash_n", 0) + 1        # a newer find stops the older one's blinking
+        self.after(60, lambda n=self._flash_n: self._mark_flash(n, 0))
 
-    def _mark_flash(self):
+    def _mark_flash(self, n, step):
+        """A ring round the found tile, blinking for about 4 seconds (dark and yellow, seen on any ground)."""
         xy = getattr(self, "_flash", None)
-        if not xy or not self.cmap:
+        if not xy or not self.cmap or n != getattr(self, "_flash_n", 0):
             return
         self.canvas.delete("flash")
-        sx, sy = self.to_screen(*xy)
-        r = max(self.z, 8)
-        self.canvas.create_oval(sx - r, sy - r, sx + r, sy + r, outline="#ffd400", width=3, tags=("flash",))
-        self.after(1500, lambda: self.canvas.delete("flash"))
+        if step >= 10:
+            return
+        if step % 2 == 0:
+            sx, sy = self.to_screen(*xy)
+            r = max(self.z * 1.2, 14)
+            self.canvas.create_oval(sx - r, sy - r, sx + r, sy + r, outline="#000000", width=7, tags=("flash",))
+            self.canvas.create_oval(sx - r, sy - r, sx + r, sy + r, outline="#ffd400", width=4, tags=("flash",))
+        self.after(400, lambda: self._mark_flash(n, step + 1))
 
     def zoom_by(self, step, at=None):
         if not self.cmap:
@@ -963,7 +969,7 @@ class MapView(ttk.Frame):
             return
         text, xy = self._found[index]
         self._find_close()
-        self.centre_on(xy)
+        self.centre_on(xy, zoom=32)                     # close enough to see the flag, the town and its tile
         self.readout.configure(text="found: %s at %d, %d" % (text, xy[0], xy[1]))
 
     def _find_close(self):
