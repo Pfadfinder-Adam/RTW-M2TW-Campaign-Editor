@@ -723,8 +723,52 @@ class FamilyEditor(ttk.Frame):
             return None
         return name, a
 
-    def add_wife(self):
+    def _picked(self):
+        """The person picked in the list or on the tree, or None with a word on what to do."""
         p = self.person(self.sel)
+        if not p:
+            messagebox.showinfo("Family", "Pick a person first: a row in the list or a card on the tree.")
+        return p
+
+    def _off_tree(self, sex=None, but=()):
+        """People of the faction no couple has as a child yet (and not in `but`), of one sex if given."""
+        kids = {k for _, _, ks in self.tree() for k in ks}
+        return [x for x in self.people() if x["name"] not in kids and x["name"] not in but
+                and (sex is None or x["sex"] == sex)]
+
+    def _choose(self, title, people):
+        """A name from people already in the faction, "" for someone new, or None (cancelled)."""
+        if not people:
+            return ""
+        w = tk.Toplevel(self)
+        w.title(title)
+        w.transient(self.winfo_toplevel())
+        ttk.Label(w, text="Someone already in the faction, or a new person from the name lists:",
+                  padding=(10, 8, 10, 2)).pack(anchor="w")
+        lb = tk.Listbox(w, height=min(10, len(people)), width=46, exportselection=False)
+        for x in people:
+            lb.insert("end", "%s  (%s, age %s, %s)" % (x["name"], x["sex"], x.get("age") or "?",
+                                                       "on the map" if x["source"] == "map" else "off the map"))
+        lb.pack(fill="both", expand=True, padx=10)
+        lb.selection_set(0)
+        out = {"v": None}
+
+        def done(v):
+            out["v"] = v
+            w.destroy()
+        bar = ttk.Frame(w, padding=10)
+        bar.pack(fill="x")
+        ttk.Button(bar, text="This one", command=lambda: done(people[lb.curselection()[0]]["name"]
+                                                            if lb.curselection() else None)).pack(side="left")
+        ttk.Button(bar, text="Someone new...", command=lambda: done("")).pack(side="left", padx=4)
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
+        lb.bind("<Double-Button-1>", lambda e: done(people[lb.curselection()[0]]["name"]))
+        w.grab_set()
+        self.wait_window(w)
+        return out["v"]
+
+    def add_wife(self):
+        p = self._picked()
         if not p:
             return
         if p["sex"] != "male":
@@ -734,12 +778,20 @@ class FamilyEditor(ttk.Frame):
         if any(a == p["name"] and b for a, b, _ in tree):
             messagebox.showinfo("Family", "%s has a wife already." % p["name"])
             return
-        got = self._ask_person("Wife of %s" % p["name"], "female", max(16, (p["age"] or 30) - 3))
-        if not got:
+        wives = {b for _, b, _ in tree if b}
+        pick = self._choose("Wife of %s" % p["name"], [x for x in self._off_tree("female") if x["name"] not in wives])
+        if pick is None:
             return
+        if pick:
+            got = (pick, None)
+        else:
+            got = self._ask_person("Wife of %s" % p["name"], "female", max(16, (p["age"] or 30) - 3))
+            if not got:
+                return
         self._before()
         t = self._own_tree()
-        self.st.setdefault("new", []).append({"name": got[0], "sex": "female", "age": got[1]})
+        if not pick:
+            self.st.setdefault("new", []).append({"name": got[0], "sex": "female", "age": got[1]})
         hit = next((c for c in t if c[0] == p["name"]), None)
         if hit:
             hit[1] = got[0]
@@ -748,7 +800,7 @@ class FamilyEditor(ttk.Frame):
         self.changed()
 
     def add_child(self):
-        p = self.person(self.sel)
+        p = self._picked()
         if not p:
             return
         tree = self.tree()
@@ -757,8 +809,18 @@ class FamilyEditor(ttk.Frame):
             messagebox.showinfo("Family", "Give %s a wife first: a child is written under a couple." % p["name"]
                                 if p["sex"] == "male" else "Pick a married man or woman.")
             return
-        sex = "female" if messagebox.askyesno("Family", "A daughter? (No = a son)") else "male"
         father = couple[0]
+        # someone already in the faction as the child (a new faction's heir as its leader's son)
+        pick = self._choose("Child of %s and %s" % (couple[0], couple[1]), self._off_tree(but=couple[:2]))
+        if pick is None:
+            return
+        if pick:
+            self._before()
+            t = self._own_tree()
+            next(c for c in t if c[0] == father)[2].append(pick)
+            self.changed()
+            return
+        sex = "female" if messagebox.askyesno("Family", "A daughter? (No = a son)") else "male"
         first = father.split(" ")[0]
         surname = father[len(first):].strip() if sex == "male" else ""
         by = {x["name"]: x for x in self.people()}
@@ -774,7 +836,7 @@ class FamilyEditor(ttk.Frame):
         self.changed()
 
     def off_tree(self):
-        p = self.person(self.sel)
+        p = self._picked()
         if not p:
             return
         t = self.tree()
@@ -795,7 +857,7 @@ class FamilyEditor(ttk.Frame):
         self.changed()
 
     def leave_out(self):
-        p = self.person(self.sel)
+        p = self._picked()
         if not p:
             return
         if p["source"] == "map":
