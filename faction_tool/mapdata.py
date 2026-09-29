@@ -10,22 +10,15 @@ from .textio import tokens
 PORT = (255, 255, 255)
 CITY = (0, 0, 0)
 
-# map_ground_types.tga colours, for the tile read-out
-GROUND = {
-    (101, 124, 0): "low fertility", (96, 160, 64): "medium fertility", (0, 128, 0): "high fertility",
-    (0, 0, 0): "wilderness", (0, 64, 0): "dense forest", (0, 128, 128): "sparse forest",
-    (128, 128, 64): "hills", (98, 65, 65): "mountains", (196, 128, 128): "high mountains",
-    (0, 255, 128): "swamp", (255, 255, 255): "beach / impassable", (64, 0, 0): "ocean",
-    (128, 0, 0): "deep sea", (196, 0, 0): "shallow sea",
-}
-SEA = {(64, 0, 0), (128, 0, 0), (196, 0, 0)}
+from .terrain import GROUND, SEA                                   # noqa: E402  (one place for the colours)
 # the background: a colour per ground type of map_ground_types.tga
 GROUND_LOOK = {
     (101, 124, 0): (170, 160, 95), (96, 160, 64): (120, 150, 80), (0, 128, 0): (80, 130, 60),
     (0, 0, 0): (200, 180, 130), (0, 64, 0): (45, 90, 45), (0, 128, 128): (70, 115, 70),
     (128, 128, 64): (140, 125, 85), (98, 65, 65): (125, 110, 95), (196, 128, 128): (225, 225, 225),
     (0, 255, 128): (90, 110, 80), (255, 255, 255): (215, 200, 160), (64, 0, 0): (45, 75, 120),
-    (128, 0, 0): (35, 60, 105), (196, 0, 0): (60, 95, 140),
+    (128, 0, 0): (35, 60, 105), (196, 0, 0): (60, 95, 140), (64, 64, 64): (95, 90, 85),
+    (128, 128, 128): (30, 45, 70),
 }
 REBELS = (130, 130, 130)
 
@@ -170,15 +163,23 @@ class CampaignMap:
         lit = ImageChops.overlay(im, shade) if hasattr(ImageChops, "overlay") else ImageChops.multiply(im, shade)
         return Image.blend(im, lit, 0.55)
 
+    # how map_features.tga's marks are drawn: rivers blue, fords (crossings) light, sources white,
+    # cliffs brown-yellow, volcanoes red, Medieval II's land bridges green
+    FEATURE_LOOK = {(0, 0, 255): (50, 105, 200), (0, 255, 255): (140, 210, 235), (255, 255, 255): (235, 240, 255),
+                    (255, 255, 0): (190, 160, 60), (255, 0, 0): (200, 40, 30), (0, 255, 0): (60, 170, 60)}
+
     def _rivers(self, im, tiles):
-        """map_features.tga's non-black tiles (rivers, fords, cliffs) drawn in blue."""
+        """map_features.tga's non-black tiles drawn over the ground, each kind in its colour."""
         f = self._pil("map_features.tga")
         if f is None or f.size != (self.w, self.h):
             return im
-        mask = f.convert("L").point(lambda v: 255 if v else 0).resize(im.size, Image.NEAREST)
+        over = Image.new("RGB", f.size)
+        over.putdata([self.FEATURE_LOOK.get(p, (50, 105, 200)) for p in f.getdata()])
+        mask = f.convert("L").point(lambda v: 255 if v else 0)
+        over, mask = over.resize(im.size, Image.NEAREST), mask.resize(im.size, Image.NEAREST)
         if not tiles:
             mask = mask.point(lambda v: 190 if v else 0)          # the terrain shows a little through
-        return Image.composite(Image.new("RGB", im.size, (50, 105, 200)), im, mask)
+        return Image.composite(over, im, mask)
 
     def _drawn(self):
         g = self.ground

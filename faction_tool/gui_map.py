@@ -262,7 +262,8 @@ class MapView(ttk.Frame):
              places=None, check_place=None, on_place_move=None,
              region_mode=False, paint_overlay=None, on_paint=None, on_pick=None, brush=1, region_points=(),
              region_painted=None, region_colours=None, borders=True, ghost=None, locked=None,
-             resources=None, check_res=None, on_res_move=None, on_res_click=None, res_sel=None, new_land=None):
+             resources=None, check_res=None, on_res_move=None, on_res_click=None, res_sel=None, new_land=None,
+             plain=False):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
@@ -295,6 +296,7 @@ class MapView(ttk.Frame):
         self.resources = list(resources or [])
         self.check_res, self.on_res_move, self.on_res_click = check_res, on_res_move, on_res_click
         self.res_sel = res_sel
+        self.plain = plain                  # the Terrain editor: the ground alone, no political or region colours
         if first:
             self.fit()
         else:
@@ -418,6 +420,8 @@ class MapView(ttk.Frame):
         """The background with the political colours laid on, at 2 px per tile,
         made again only when the colours change - moving the map only crops it."""
         bg = self.cmap.background(self.v_tiles.get(), self.v_relief.get(), self.v_rivers.get())
+        if getattr(self, "plain", False):
+            return bg
         land = () if self.region_mode else tuple(sorted(self.new_land.items()))
         if self.region_mode:
             pol = self.cmap.regions_layer(self.region_painted, self.region_colours, borders=self.v_borders.get())

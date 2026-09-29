@@ -827,11 +827,13 @@ class App(tk.Tk):
             load()
 
     WORK_TITLES = {"new": "New faction", "edit": "Edit faction", "units": "Unit editor",
-                   "buildings": "Building editor", "characters": "Character editor"}
+                   "buildings": "Building editor", "characters": "Character editor",
+                   "terrain": "Terrain editor"}
     WORK_HINTS = {"new": "make a new faction from a template", "edit": "change a faction that is in the game",
                   "units": "every line of a unit in export_descr_unit.txt, its card and picture",
                   "buildings": "every line of a building chain in export_descr_buildings.txt, its pictures",
-                  "characters": "any faction's characters: names, ages, traits, ancillaries, portraits, family tree"}
+                  "characters": "any faction's characters: names, ages, traits, ancillaries, portraits, family tree",
+                  "terrain": "paint the campaign map's ground, rivers, fords and cliffs"}
 
     def work_changed(self):
         """New / Edit faction share the campaign tabs; the unit and building editors
@@ -866,10 +868,13 @@ class App(tk.Tk):
     def editor(self):
         """The unit, building or character editor on show, made the first time; None for the faction work."""
         w = self.v_work.get()
-        if w not in ("units", "buildings", "characters"):
+        if w not in ("units", "buildings", "characters", "terrain"):
             return None
         if w not in self.editors:
-            if w == "characters":
+            if w == "terrain":
+                from .gui_terrain import TerrainEditor
+                self.editors[w] = TerrainEditor(self, self)
+            elif w == "characters":
                 from .gui_family import FamilyEditor
                 self.editors[w] = FamilyEditor(self, self, standalone=True)
             else:
@@ -2756,7 +2761,7 @@ class App(tk.Tk):
         tabs (built from the files as the editors leave them)."""
         out = []
         for key, name in (("units", "Unit editor"), ("buildings", "Building editor"),
-                          ("characters", "Character editor")):
+                          ("characters", "Character editor"), ("terrain", "Terrain editor")):
             ed = self.editors.get(key)
             if ed is not None and ed.mod is not None and ed.dirty():
                 out.append((key, "%s: %d change(s)" % (name, ed.pending())))
