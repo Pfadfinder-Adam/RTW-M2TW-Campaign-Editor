@@ -2401,6 +2401,18 @@ building shrine
         with self.assertRaises(ValueError):              # the rebels are never playable
             edit(mod, "test", "slave", {"playable": True})
 
+    def test_clone_leaves_the_templates_shadow_and_spawn_ties(self):
+        # BI: 'faction empire_east, shadowed_by empire_east_rebels' - a clone must not claim the same shadow
+        sm = os.path.join(self.root, "data", "descr_sm_factions.txt")
+        write(sm, SM.replace("faction\t\talpha\n", "faction\t\talpha, shadowed_by slave\n", 1))
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"],
+                                                              "leader": {"name": "Boris Alphid", "age": 35}}})
+        text = plan.files[sm].dump().decode("latin-1").replace("\r", "")
+        self.assertIn("faction\t\tbeta\n", text)
+        self.assertIn("faction\t\talpha, shadowed_by slave\n", text)
+        self.assertTrue(any("shadowed_by slave" in m for _, m in plan.notes), plan.report())
+
     def test_roster_take_a_culture_writes_the_others_out(self):
         from faction_tool import roster as R
         from faction_tool.plan import Plan

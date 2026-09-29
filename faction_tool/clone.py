@@ -38,6 +38,12 @@ def _replace_word(text, old, new):
 # ---------------------------------------------------------------------------
 # descr_sm_factions.txt / .json
 # ---------------------------------------------------------------------------
+# descr_sm_factions header ties: 'faction empire_east, shadowed_by empire_east_rebels', 'faction goths,
+# spawns_on_revolt ostrogoths', 'faction ostrogoths, spawned_by goths', 'faction slavs, spawned_on_event'
+RE_TIES = re.compile(r"\s*,\s*(?:shadowed_by|shadowing|spawned_by|spawns_on_revolt)\s+\S+"
+                     r"|\s*,\s*spawned_on_event\b")
+
+
 def sm_factions(plan):
     t, new = plan.template, plan.new
     f = plan.edit(plan.mod.file("sm_factions"))
@@ -58,6 +64,12 @@ def sm_factions(plan):
         tk = tokens(text)
         if tk[:1] == ["faction"]:
             text = text.replace(t, new, 1)
+            # BI / Medieval II ties of the template to other factions (its civil-war shadow, the horde it
+            # spawns, an event that makes it appear) are the template's own: the clone starts plain
+            m = RE_TIES.search(text)
+            if m:
+                plan.note(f, "%s is a plain faction: '%s' stays the template's" % (new, m.group(0).strip(", \t")))
+                text = text[:m.start()] + text[m.end():]
         elif tk[:1] == ["primary_colour"] and plan.opts.get("primary_colour"):
             r, g, b = plan.opts["primary_colour"]
             text = re.sub(r"red\s*\d+\s*,\s*green\s*\d+\s*,\s*blue\s*\d+", "red %d, green %d, blue %d" % (r, g, b), text)
