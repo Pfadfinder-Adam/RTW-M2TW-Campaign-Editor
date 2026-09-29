@@ -21,7 +21,7 @@ the synthetic mod, Restore byte-exact) and in the window; not yet tested in the 
   type a name in place. Towns the mod's own campaign script renames show grey and are left alone.
 
 ### Noted
-- Big maps: a tester's mod with a **5456 x 2464** campaign map loaded in the tool.
+- Big maps: a tester's mod with a campaign map of **5456 x 2464 tiles** (map_regions.tga pixels) loaded in the tool, regions painted on it.
 
 ## 0.13.0 - 2026-09-29
 
