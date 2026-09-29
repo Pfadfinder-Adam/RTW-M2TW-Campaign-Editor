@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Terrain editor: **Climates** - paint each land tile's climate (`map_climates.tga`: trees and plants on the
+  campaign and battle maps, winter snow, heat). The climates and their colours come from the mod's own
+  `descr_climates.txt`, so Rome, Medieval II and mods with their own climates all work; the map shows the
+  climates in their colours while this mode is on. Undo / Redo, backup and Restore as for the ground.
+  (Asked for on Discord.) Adding a *new* climate is not in yet.
+
+### Changed
+- Terrain editor: long palettes wrap into rows, so every brush stays inside the window.
+
 ## 0.11.0 - 2026-09-29
 
 Tested in the game by the user on Rome + REX: a new faction (Nabataea) made in a few clicks with new regions,

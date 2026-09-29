@@ -49,6 +49,13 @@ class CampaignMap:
             return None
         return g.get(2 * x + 1, 2 * y + 1)
 
+    def climate_at(self, x, y):
+        """The tile's colour in map_climates.tga (its middle, like the ground), or None."""
+        c = self.mod._optional_map(self.campaign, "map_climates.tga")
+        if c is None or not (0 <= 2 * x + 1 < c.width and 0 <= 2 * y + 1 < c.height):
+            return None
+        return c.get(2 * x + 1, 2 * y + 1)
+
     def is_sea(self, x, y):
         c = self.regions_img.get(x, y) if 0 <= x < self.w and 0 <= y < self.h else None
         if c in (CITY, PORT):
@@ -107,7 +114,8 @@ class CampaignMap:
         by choice). Returned at 2 px per tile. tiles: every tile one square in the
         colour of the ground at its middle (what the tool checks); relief: shaded
         from map_heights.tga; rivers: map_features.tga's rivers, fords and cliffs."""
-        key = (bool(tiles), bool(relief), bool(rivers))
+        climates = bool(getattr(self, "show_climates", False))
+        key = (bool(tiles), bool(relief), bool(rivers), climates)
         cache = self.__dict__.setdefault("_backgrounds", {})
         if key not in cache:
             size = (2 * self.w, 2 * self.h)
@@ -115,6 +123,8 @@ class CampaignMap:
                 # everything worked out per tile, then blown up: each square one colour, nothing
                 # bleeds into the next tile (the grid and the picture agree)
                 im = self._tiles()
+                if climates:
+                    im = self._climates(im)
                 if relief:
                     im = self._relief(im)
                 if rivers:
@@ -122,6 +132,8 @@ class CampaignMap:
                 im = im.resize(size, Image.NEAREST)
             else:
                 im = self._drawn().resize(size, Image.BILINEAR)
+                if climates:
+                    im = self._climates(im)
                 if relief:
                     im = self._relief(im)
                 if rivers:
@@ -142,6 +154,20 @@ class CampaignMap:
                     data.append(GROUND_LOOK.get(g, (150, 150, 150)))
         im.putdata(data)
         return im
+
+    def _climates(self, im):
+        """Each land tile tinted in its map_climates.tga colour (the Terrain editor's Climates mode)."""
+        over = Image.new("RGB", (self.w, self.h))
+        mask = Image.new("L", (self.w, self.h))
+        cols, keep = [], []
+        for y in range(self.h - 1, -1, -1):
+            for x in range(self.w):
+                c = None if self.is_sea(x, y) else self.climate_at(x, y)
+                cols.append(c or (0, 0, 0))
+                keep.append(170 if c else 0)
+        over.putdata(cols)
+        mask.putdata(keep)
+        return Image.composite(over.resize(im.size, Image.NEAREST), im, mask.resize(im.size, Image.NEAREST))
 
     def _pil(self, name):
         """A campaign map file as a top-down Pillow picture, or None."""

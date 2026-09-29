@@ -43,12 +43,16 @@ from .moddata import BLOCKED_GROUND                                       # noqa
 
 
 def paint_problem(cmap, what, xy, colour, standing):
-    """None, or why tile xy cannot take colour. what: 'ground' | 'features'; cmap: the
+    """None, or why tile xy cannot take colour. what: 'ground' | 'features' | 'climate'; cmap: the
     CampaignMap as painted so far; standing: tiles with a town, port or character."""
     x, y = xy
     if not (0 <= x < cmap.w and 0 <= y < cmap.h):
         return "off the map"
     sea = cmap.is_sea(x, y)
+    if what == "climate":
+        if sea:
+            return "the sea keeps its climate - climates are painted on land"
+        return None
     if what == "ground":
         if (colour in SEA) != sea:
             return "land and sea are not swapped here (the coast is also the regions and the heights)"
@@ -110,6 +114,27 @@ def river_path(a, b):
     return out
 
 
+def climates(mod):
+    """[(name, colour, heat)] of data/descr_climates.txt in its order - each colour is a climate on
+    map_climates.tga (what grows on the strategy and battle maps, winter, heat - fatigue in battle)."""
+    import re
+    from .moddata import _ci
+    from .textio import strip_comment
+    path = _ci(mod.data, "descr_climates.txt")
+    if not path:
+        return []
+    out, cur, heat = [], None, None
+    for l in mod.load(path).texts():
+        t = strip_comment(l).split()
+        if len(t) == 2 and t[0] == "climate":
+            cur = t[1]
+        elif cur and t[:1] == ["colour"] and len(t) >= 4:
+            out.append([cur, tuple(int(v) for v in t[1:4]), None])
+        elif cur and t[:1] == ["heat"] and len(t) >= 2 and out and out[-1][0] == cur:
+            out[-1][2] = int(t[1]) if re.match(r"^\d+$", t[1]) else None
+    return [tuple(x) for x in out]
+
+
 def ground_changes(ground_tiles):
     """{(px, py): colour} for map_ground_types.tga: each painted tile's 3 x 3 block."""
     out = {}
@@ -120,17 +145,21 @@ def ground_changes(ground_tiles):
     return out
 
 
-def apply(plan, campaign, ground=None, features=None):
+def apply(plan, campaign, ground=None, features=None, climate=None):
     """Write the painted tiles: ground {(x, y): colour} into map_ground_types.tga, features
-    {(x, y): colour} into map_features.tga; map.rwm deleted so the game builds the map again."""
+    {(x, y): colour} into map_features.tga, climate {(x, y): colour} into map_climates.tga (the same
+    3 x 3 block per tile as the ground); map.rwm deleted so the game builds the map again."""
     mod = plan.mod
     ground = {tuple(k): tuple(v) for k, v in (ground or {}).items()}
     features = {tuple(k): tuple(v) for k, v in (features or {}).items()}
-    if not ground and not features:
+    climate = {tuple(k): tuple(v) for k, v in (climate or {}).items()}
+    if not ground and not features and not climate:
         return
     from collections import Counter
+    climate_names = {c: n for n, c, _ in climates(mod)}
     for name, tiles, names, changes in (("map_ground_types.tga", ground, GROUND, ground_changes(ground)),
-                                        ("map_features.tga", features, FEATURES, features)):
+                                        ("map_features.tga", features, FEATURES, features),
+                                        ("map_climates.tga", climate, climate_names, ground_changes(climate))):
         if not tiles:
             continue
         path = mod.campaign_file(campaign, name)
@@ -146,4 +175,4 @@ def apply(plan, campaign, ground=None, features=None):
 
 
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "FEATURE_BRUSHES", "paint_problem",
-           "river_warnings", "river_path", "apply"]
+           "river_warnings", "river_path", "climates", "apply"]

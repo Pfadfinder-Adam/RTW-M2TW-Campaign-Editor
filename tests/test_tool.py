@@ -981,6 +981,11 @@ class ToolTest(unittest.TestCase):
         write_tga(os.path.join(camp, "map_ground_types.tga"), 9, 9,
                   [[sea if x >= 7 else wild for x in range(9)] for y in range(9)])
         write_tga(os.path.join(camp, "map_features.tga"), 4, 4, [[wild] * 4 for _ in range(4)])
+        write_tga(os.path.join(camp, "map_climates.tga"), 9, 9, [[(236, 0, 140)] * 9 for _ in range(9)])
+        write(os.path.join(self.root, "data", "descr_climates.txt"),
+              "climates\n{\n\ttest_climate\n\tsandy_desert\n}\n\nclimate test_climate\n{\n\tcolour 236 0 140\n"
+              "\theat 1\n}\n\n;climate old_one\n;{\n;\tcolour 1 2 3\n;}\nclimate sandy_desert\n{\n\tcolour 102 45 145\n"
+              "\theat 4\n}\n")
         write(os.path.join(camp, "map.rwm"), "x")
         before = tree_hash(self.root)
         mod = ModData(self.root)
@@ -997,8 +1002,15 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(T.river_warnings({(0, 0): (0, 0, 255), (0, 1): (0, 255, 255), (2, 2): (0, 0, 255)}, 4, 4),
                          [(2, 2, 1)])
         plan = Plan(mod, "terrain", "terrain")
-        T.apply(plan, "test", {(1, 2): (128, 128, 64)}, {(0, 0): (0, 0, 255)})
+        self.assertEqual(T.climates(mod), [("test_climate", (236, 0, 140), 1), ("sandy_desert", (102, 45, 145), 4)])
+        self.assertTrue(T.paint_problem(Map(), "climate", (3, 0), (102, 45, 145), set()))    # the sea keeps its own
+        self.assertIsNone(T.paint_problem(Map(), "climate", (1, 1), (102, 45, 145), {(1, 1)}))
+        T.apply(plan, "test", {(1, 2): (128, 128, 64)}, {(0, 0): (0, 0, 255)}, {(2, 1): (102, 45, 145)})
+        self.assertTrue(any("1 sandy_desert" in n for _, n in plan.notes))
         plan.apply()
+        c = read_tga(os.path.join(camp, "map_climates.tga"))
+        self.assertEqual({c.get(x, y) for x in (4, 5, 6) for y in (2, 3, 4)}, {(102, 45, 145)})
+        self.assertEqual(c.get(3, 3), (236, 0, 140))
         g = read_tga(os.path.join(camp, "map_ground_types.tga"))
         self.assertEqual({g.get(x, y) for x in (2, 3, 4) for y in (4, 5, 6)}, {(128, 128, 64)})
         self.assertEqual(g.get(1, 5), wild)

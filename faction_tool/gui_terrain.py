@@ -1,6 +1,6 @@
 """The Terrain editor (its own work at the top): paint what each tile of the campaign map is
-(map_ground_types.tga) and what runs across it (map_features.tga: rivers, fords, sources,
-cliffs), on the map drawn tile by tile. Kept here until Apply, written by terrain.apply with
+(map_ground_types.tga), what runs across it (map_features.tga: rivers, fords, sources,
+cliffs) and its climate (map_climates.tga, the climates of descr_climates.txt), on the map drawn tile by tile. Kept here until Apply, written by terrain.apply with
 a backup like the unit and building editors (dirty / pending / make_plan / rebind)."""
 
 import hashlib
@@ -17,15 +17,16 @@ class TerrainEditor(ttk.Frame):
         super().__init__(master, padding=4)
         self.app = app
         self.mod, self._sig, self.cmap = None, None, None
-        self.ground, self.features = {}, {}          # painted tiles: {(x, y): colour}
-        self.base = {}                               # what the files have there: {('ground'|'features', xy): colour}
+        self.ground, self.features, self.climate = {}, {}, {}     # painted tiles: {(x, y): colour}
+        self.base = {}                  # what the files have there: {('ground'|'features'|'climate', xy): colour}
         self._undo, self._redo = [], []
         self._last_river = None         # the last river tile of the stroke: the next one joins it side to side
         top = ttk.Frame(self)
         top.pack(fill="x")
         ttk.Label(top, text="Paint", font=("", 10, "bold")).pack(side="left")
         self.v_what = tk.StringVar(value="ground")
-        for val, text in (("ground", "Ground"), ("features", "Rivers, fords, cliffs")):
+        for val, text in (("ground", "Ground"), ("features", "Rivers, fords, cliffs"),
+                          ("climate", "Climates")):
             ttk.Radiobutton(top, text=text, value=val, variable=self.v_what, command=self.fill_palette).pack(
                 side="left", padx=4)
         ttk.Label(top, text="   brush").pack(side="left")
@@ -77,7 +78,7 @@ class TerrainEditor(ttk.Frame):
 
     def _signature(self):
         h = hashlib.md5()
-        for name in ("map_ground_types.tga", "map_features.tga"):
+        for name in ("map_ground_types.tga", "map_features.tga", "map_climates.tga"):
             try:
                 with open(self.mod.campaign_file(self.app.v_campaign.get(), name), "rb") as fh:
                     h.update(fh.read())
@@ -86,17 +87,18 @@ class TerrainEditor(ttk.Frame):
         return h.hexdigest()
 
     def dirty(self):
-        return bool(self.ground or self.features)
+        return bool(self.ground or self.features or self.climate)
 
     def pending(self):
-        return len(self.ground) + len(self.features)
+        return len(self.ground) + len(self.features) + len(self.climate)
 
     def rebind(self, mod):
         lost = 0
         if self.mod is not None and self.dirty() and mod.data == self.mod.data and self._signature() != self._sig:
             lost = self.pending()
         if lost or self.mod is None or mod.data != self.mod.data or not self.dirty():
-            self.ground, self.features, self.base, self._undo = {}, {}, {}, []
+            self.ground, self.features, self.climate, self.base = {}, {}, {}, {}
+            self._undo, self._redo = [], []
         from .moddata import ModData
         self.mod = ModData(mod.data)                 # its own copy: the pictures are changed in memory
         self._sig = self._signature()
@@ -111,7 +113,7 @@ class TerrainEditor(ttk.Frame):
             raise ValueError("nothing painted in the Terrain editor")
         mod = ModData(self.mod.data)
         plan = Plan(mod, "terrain", "terrain", {})
-        T.apply(plan, self.app.v_campaign.get(), self.ground, self.features)
+        T.apply(plan, self.app.v_campaign.get(), self.ground, self.features, self.climate)
         broken = T.river_warnings(self._features_now(), self.cmap.w, self.cmap.h, self.cmap.is_sea) \
             if self.features else []
         for x, y, n in broken[:20]:
@@ -137,6 +139,7 @@ class TerrainEditor(ttk.Frame):
             self.standing = set(self.cmap.cities.values()) | set(self.cmap.ports.values()) | \
                 {c.xy for fb in (s.factions if s else []) for c in fb.characters if c.xy}
             self._apply_memory()
+        self.cmap.show_climates = self.v_what.get() == "climate"
         self.view.brush = self.v_brush.get()
         self.view.load(self.cmap, {}, {}, region_mode=True, on_paint=self.paint, on_pick=self.pick,
                        brush=self.v_brush.get(), plain=True)
@@ -153,6 +156,9 @@ class TerrainEditor(ttk.Frame):
         g, f = self._img("map_ground_types.tga"), self._img("map_features.tga")
         for (px, py), c in T.ground_changes(self.ground).items():
             self._set_px(g, px, py, c)
+        cl = self._img("map_climates.tga")
+        for (px, py), c in T.ground_changes(self.climate).items():
+            self._set_px(cl, px, py, c)
         for (x, y), c in self.features.items():
             self._set_px(f, x, y, c)
         if self.cmap is not None:
@@ -167,6 +173,8 @@ class TerrainEditor(ttk.Frame):
     def _current(self, what, xy):
         if what == "ground":
             return self.cmap.ground_at(*xy)
+        if what == "climate":
+            return self.cmap.climate_at(*xy)
         f = self._img("map_features.tga")
         return f.get(*xy) if f and 0 <= xy[0] < f.width and 0 <= xy[1] < f.height else None
 
@@ -175,7 +183,7 @@ class TerrainEditor(ttk.Frame):
         colour = tuple(int(v) for v in self.v_colour.get().split(",")) if self.v_colour.get() else None
         if colour is None:
             return []
-        store = self.ground if what == "ground" else self.features
+        store = {"ground": self.ground, "climate": self.climate}.get(what, self.features)
         if what == "features" and colour in T.RIVERY and len(tiles) == 1:
             # a river drawn with the 1-tile brush stays joined side to side: a diagonal step (or a fast
             # drag's jump) gets the tiles between (the game stops a river at a corner-only step)
@@ -194,13 +202,15 @@ class TerrainEditor(ttk.Frame):
                 store.pop(t, None)
             else:
                 store[t] = colour
-            if what == "ground":
+            if what in ("ground", "climate"):
+                img = self._img("map_ground_types.tga" if what == "ground" else "map_climates.tga")
                 for (px, py), c in T.ground_changes({t: colour}).items():
-                    self._set_px(self._img("map_ground_types.tga"), px, py, c)
+                    self._set_px(img, px, py, c)
             else:
                 self._set_px(self._img("map_features.tga"), t[0], t[1], colour)
             from .mapdata import GROUND_LOOK, CampaignMap
-            took.append((t, GROUND_LOOK.get(colour) if what == "ground" else CampaignMap.FEATURE_LOOK.get(colour, (0, 0, 0))))
+            took.append((t, GROUND_LOOK.get(colour) if what == "ground" else colour if what == "climate" else
+                         CampaignMap.FEATURE_LOOK.get(colour, (0, 0, 0))))
         if took:
             self.cmap.__dict__.pop("_backgrounds", None)
         self.app.status.set(("Terrain: %d tile(s) painted - Preview, then Apply changes." % self.pending()) +
@@ -215,29 +225,33 @@ class TerrainEditor(ttk.Frame):
 
     def _stroke(self):
         self._last_river = None
-        self._undo.append((dict(self.ground), dict(self.features)))
+        self._undo.append(self._state())
         del self._undo[:-100]
         self._redo = []                          # a new stroke drops the strokes undone before it
 
-    def _restore_to(self, ground, features):
+    def _state(self):
+        return dict(self.ground), dict(self.features), dict(self.climate)
+
+    def _restore_to(self, ground, features, climate):
         # back to the files' colours first, then the kept strokes on top
         g, f = self._img("map_ground_types.tga"), self._img("map_features.tga")
+        cl = self._img("map_climates.tga")
         for (what, t), c in self.base.items():
             if c is None:
                 continue
-            if what == "ground":
+            if what in ("ground", "climate"):
                 for (px, py), cc in T.ground_changes({t: c}).items():
-                    self._set_px(g, px, py, cc)
+                    self._set_px(g if what == "ground" else cl, px, py, cc)
             else:
                 self._set_px(f, t[0], t[1], c)
-        self.ground, self.features = ground, features
+        self.ground, self.features, self.climate = ground, features, climate
         self._apply_memory()
         self.view.render()
         self.app._mark_work()
 
     def undo_stroke(self):
         if self._undo:
-            self._redo.append((dict(self.ground), dict(self.features)))
+            self._redo.append(self._state())
             self._restore_to(*self._undo.pop())
             self.app.status.set("Terrain: a stroke undone (%d more back, %d to redo)." % (len(self._undo), len(self._redo)))
         else:
@@ -245,7 +259,7 @@ class TerrainEditor(ttk.Frame):
 
     def redo_stroke(self):
         if self._redo:
-            self._undo.append((dict(self.ground), dict(self.features)))
+            self._undo.append(self._state())
             self._restore_to(*self._redo.pop())
             self.app.status.set("Terrain: a stroke redone (%d more to redo)." % len(self._redo))
         else:
@@ -257,7 +271,7 @@ class TerrainEditor(ttk.Frame):
 
     def reset(self):
         self._undo, self._redo = [], []
-        self._restore_to({}, {})
+        self._restore_to({}, {}, {})
         self.app.status.set("Terrain: nothing painted.")
 
     def fill_palette(self):
@@ -272,6 +286,15 @@ class TerrainEditor(ttk.Frame):
                 "sea (the coast is the regions and heights too - a later step). Mountains, high mountains and dense "
                 "forest are refused under towns, ports and characters (the game refuses them there). "
                 "On Apply: map_ground_types.tga written, map.rwm deleted - the game builds its map again."))
+        elif what == "climate":
+            found = T.climates(self.mod) if self.mod else []
+            items = [("climates", [c for _, c, _ in found], {c: n for n, c, _ in found})]
+            self.hint.configure(text=(
+                "Left drag paints the picked climate, right click picks a tile's own. The climate decides the trees "
+                "and plants on the campaign and battle maps, the snow in winter and the heat (tiring in battle). "
+                "The climates are the mod's own (descr_climates.txt), drawn here in their colours over the land; "
+                "the sea keeps its climate. On Apply: map_climates.tga written, map.rwm deleted." if found else
+                "This mod has no descr_climates.txt, so its climates are not known here."))
         else:
             items = [("marks", T.FEATURE_BRUSHES, T.FEATURES)]
             self.hint.configure(text=(
@@ -282,17 +305,25 @@ class TerrainEditor(ttk.Frame):
                 "the game will not draw. Not under towns, ports or characters (the game refuses them there)."))
         from .mapdata import GROUND_LOOK, CampaignMap
         first = None
+        swatches = []
         for label, colours, names in items:
-            ttk.Label(self.palette, text=label + ":").pack(side="left", padx=(8, 2))
-            for c in colours:
-                look = GROUND_LOOK.get(c) if what == "ground" else CampaignMap.FEATURE_LOOK.get(c, (20, 20, 20))
+            ttk.Label(self.palette, text=label + ":").pack(side="left", padx=(8, 2), anchor="n")
+            # a long list (a mod's climates) goes in rows, so every one stays in the window
+            box = ttk.Frame(self.palette)
+            box.pack(side="left")
+            per_row = 6 if len(colours) > 8 else len(colours) or 1
+            for i, c in enumerate(colours):
+                look = GROUND_LOOK.get(c) if what == "ground" else c if what == "climate" else \
+                    CampaignMap.FEATURE_LOOK.get(c, (20, 20, 20))
                 hexc = "#%02x%02x%02x" % look
                 fg = "white" if sum(look) < 380 else "black"
-                b = tk.Radiobutton(self.palette, text=names[c], value="%d,%d,%d" % c, variable=self.v_colour,
+                b = tk.Radiobutton(box, text=names[c], value="%d,%d,%d" % c, variable=self.v_colour,
                                    indicatoron=0, bg=hexc, fg=fg, selectcolor=hexc, activebackground=hexc,
                                    padx=6, pady=3, relief="raised", offrelief="flat", bd=3, cursor="hand2")
-                b.pack(side="left", padx=1)
+                b.grid(row=i // per_row, column=i % per_row, padx=1, pady=1, sticky="ew")
+                swatches.append(b.cget("value"))
                 first = first or "%d,%d,%d" % c
-        if first and self.v_colour.get() not in [w.cget("value") for w in self.palette.winfo_children()
-                                                 if isinstance(w, tk.Radiobutton)]:
+        if first and self.v_colour.get() not in swatches:
             self.v_colour.set(first)
+        if self.cmap is not None and getattr(self.cmap, "show_climates", False) != (what == "climate"):
+            self.show()
