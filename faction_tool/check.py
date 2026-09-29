@@ -123,6 +123,17 @@ def check_mod(mod, campaign, deep=False, progress=None):
                 bad("%s has two settlement blocks (%s and %s) - the game crashes" % (st.region, seen[st.region], fb.name))
             seen[st.region] = fb.name
 
+    # ---- the engine's limits, win conditions, rebels ----
+    step("limits...")
+    for msg, fault in engine_limits(mod, campaign, regions, units, blds, img):
+        (bad if fault else say)(msg)
+    for msg in win_condition_problems(mod, campaign, regions, names):
+        bad(msg)
+    for msg in rebel_problems(mod, units):
+        bad(msg)
+    for msg in slaves_problems(mod, regions):
+        bad(msg)
+
     # ---- start positions ----
     step("characters...")
     nchar = sum(len(fb.characters) for fb in s.factions)
@@ -187,6 +198,107 @@ def check_mod(mod, campaign, deep=False, progress=None):
         say("No problems found.")
     say("(%.1f s)" % (time.time() - t0))
     return "\n".join(out)
+
+
+def hidden_resources(mod):
+    """The names on export_descr_buildings.txt's hidden_resources line."""
+    for line in mod.load(mod.file("edb")).texts():
+        t = tokens(line.split(";")[0])
+        if t[:1] == ["hidden_resources"]:
+            return t[1:]
+    return []
+
+
+def engine_limits(mod, campaign, regions, units, blds, img):
+    """[(message, fault)] - the counts against the original exe's hard limits (limits.HARD_LIMITS).
+    Over a limit is a fault on the original exe; with REX / M2EX beside the data it is a note."""
+    from .limits import HARD_LIMITS, LIMIT_WORDS, faction_limit, game_kind
+    kind = game_kind(mod)
+    hard = HARD_LIMITS.get(kind, {})
+    engine = faction_limit(mod).get("engine")
+    counts = {"regions": len(regions) + 1, "map_size": max(img.width, img.height), "units": len(units),
+              "chains": len(blds), "levels": max((len(b.levels) for b in blds), default=0),
+              "hidden_resources": len(hidden_resources(mod))}
+    out = [("LIMITS (the original %s exe%s)" % ("Rome" if kind == "rome" else "Medieval II",
+                                                 "; %s lifts some of them" % engine[:-4] if engine else ""), False)]
+    for key, most in hard.items():
+        n = counts.get(key)
+        over = n is not None and n > most
+        line = "%-46s %5s of %d%s" % (LIMIT_WORDS[key], n, most, "  <- OVER" if over else "")
+        out.append(("    " + line, False))
+        if over:
+            out.append(("%s: %d, the original game stops at %d%s" % (
+                LIMIT_WORDS[key], n, most, " - fine only if %s takes more" % engine[:-4] if engine else
+                " - it may crash or refuse to load"), not engine))
+    return out
+
+
+def win_condition_problems(mod, campaign, regions, factions):
+    """Regions and factions descr_win_conditions.txt names that do not exist (the game crashes when
+    that faction is played - TWC "Crashes and how to fix them")."""
+    p = mod.campaign_file(campaign, "descr_win_conditions.txt")
+    if not p:
+        return []
+    out, known = [], set(factions)
+    for i, line in enumerate(mod.load(p).texts()):
+        t = tokens(line.split(";")[0])
+        if t[:1] == ["short_campaign"]:
+            t = t[1:]
+        if t[:1] == ["hold_regions"]:
+            for r in t[1:]:
+                if r not in regions:
+                    out.append("descr_win_conditions.txt line %d: region '%s' does not exist - the game crashes "
+                               "when that faction is played" % (i + 1, r))
+        elif t[:1] == ["outlive"]:                       # Medieval II: outlive <factions>
+            for fac in t[1:]:
+                if fac not in known:
+                    out.append("descr_win_conditions.txt line %d: faction '%s' does not exist" % (i + 1, fac))
+    return out
+
+
+def rebel_problems(mod, units):
+    """Medieval II: rebel types listing units the slave faction may not own - the game crashes (TWC
+    "Crashes and how to fix them"). Vanilla RTW has five such units and runs, so Rome is not checked."""
+    from .limits import game_kind
+    if game_kind(mod) != "medieval2":
+        return []
+    p = _data_file(mod, "descr_rebel_factions.txt")
+    if not p:
+        return []
+    owners = {u.type: set(u.ownership) for u in units}
+    out, cur = [], None
+    for line in mod.load(p).texts():
+        t = line.split(";")[0].strip()
+        if t.startswith("rebel_type"):
+            cur = t.split(None, 1)[1].strip() if len(t.split()) > 1 else None
+        elif t.startswith("unit") and cur:
+            u = t[4:].strip()
+            if u not in owners:
+                out.append("descr_rebel_factions.txt, %s: unit '%s' is not in export_descr_unit.txt" % (cur, u))
+            elif "slave" not in owners[u]:
+                out.append("descr_rebel_factions.txt, %s: unit '%s' has no 'slave' in its ownership - the game "
+                           "crashes when these rebels appear" % (cur, u))
+    return out
+
+
+def slaves_problems(mod, regions):
+    """Rome: a region without the 'slaves' resource while the mod's other regions have it (every vanilla
+    region does; HLR uses none - the mod's own rule counts)."""
+    from .limits import game_kind
+    if game_kind(mod) != "rome" or not regions:
+        return []
+    def res(v):
+        return [x.strip() for x in str(v.get("resources") or "").split(",")]
+    without = [r for r, v in regions.items() if "slaves" not in res(v)]
+    if not without or len(without) * 2 > len(regions):
+        return []
+    return ["%d region(s) lack the 'slaves' resource the mod's other regions have: %s" % (
+        len(without), ", ".join(sorted(without)[:6]))]
+
+
+def _data_file(mod, name):
+    from .moddata import _ci
+    return _ci(mod.data, name)
 
 
 def rehearse(data, campaign, step=None):

@@ -1601,6 +1601,35 @@ building smith
         text = check_mod(ModData(self.root), "test")
         self.assertIn("FACTIONS: 2 in descr_sm_factions.txt, 2 blocks", text)
         self.assertIn("No problems found", text)
+        self.assertIn("LIMITS (the original Rome exe)", text)
+        self.assertIn("building chains", text)
+
+    def test_check_mod_crash_rules_from_modders(self):
+        """Win conditions naming a missing region or faction, a region without the 'slaves' the mod's
+        others have (Rome), Medieval II rebels with units slave may not own - all crash the game."""
+        from faction_tool.check import check_mod, rebel_problems
+        from faction_tool.units import read_units
+        mod = ModData(self.root)
+        camp = os.path.dirname(mod.campaign_file("test", "descr_strat.txt"))
+        write(os.path.join(camp, "descr_win_conditions.txt"), "alpha\nhold_regions A_R Nowhere\noutlive ghost\n")
+        regions = mod.campaign_file("test", "descr_regions.txt")
+        with open(regions) as fh:
+            text = fh.read()
+        with open(regions, "w") as fh:
+            fh.write(text.replace("255 0 0\n\tnone", "255 0 0\n\tslaves, none", 1))
+        text = check_mod(ModData(self.root), "test")
+        self.assertIn("region 'Nowhere' does not exist", text)
+        self.assertIn("faction 'ghost' does not exist", text)
+        self.assertIn("lack the 'slaves' resource", text)
+        self.assertNotIn("region 'A_R'", text)
+        # Medieval II (descr_religions.txt): the rebels' units must be the slave faction's
+        write(os.path.join(self.root, "data", "descr_religions.txt"), "religions\n{\n    catholic\n}\n")
+        write(os.path.join(self.root, "data", "descr_rebel_factions.txt"),
+              "rebel_type\tRebels\ncategory\tpeasant_revolt\nunit\trebel spear\nunit\talpha general\n")
+        mod = ModData(self.root)
+        got = rebel_problems(mod, read_units(mod.load(mod.file("edu"))))
+        self.assertEqual(len(got), 1)
+        self.assertIn("'alpha general' has no 'slave'", got[0])
 
     def test_new_region_carved_out(self):
         from faction_tool.edit import edit

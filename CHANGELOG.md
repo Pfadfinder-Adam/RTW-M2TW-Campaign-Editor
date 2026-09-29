@@ -2,7 +2,18 @@
 
 ## Unreleased
 
+### Fixed (from the modders' guides, checked on the vanilla files)
+- **Family tab**: a son or other living man written off the map (a record) older than 16 is refused -
+  the game crashes on one; new sons now start at 16 or younger. One already in the file is only warned about.
+- **Flag symbols (Rome)**: the banner sheets are read from descr_standards.txt (Barbarian Invasion uses
+  symbols9-15, not symbols1-8). A new faction no longer puts its symbol on a rebels' sheet: it takes a free
+  faction slot, or a new faction sheet is added (slave's flag keeps its picture).
+- **Terrain editor**: Preview warns about a 2 x 2 block of river and a river closing into a ring.
+
 ### Added
+- **Check mod**: the original exe's limits (regions, map size, units, building chains, levels, hidden
+  resources) counted against the mod; win conditions naming a missing region or faction; Medieval II rebels
+  with units the slave faction may not own; Rome regions lacking the 'slaves' the mod's other regions have.
 - **A new religion for Medieval II** (Map tab, Regions: **New religion...**), e.g. Judaism: its name in
   descr_religions.txt (list + its own block), descr_religions_lookup.txt, text/religions.txt, its symbol
   (ui/pips/pip_<name>.tga - your picture as a 24-bit TGA sized like the religion copied, or a copy of its

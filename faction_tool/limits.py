@@ -50,6 +50,21 @@ def _setting(path, key="max_factions"):
 # REX's descr_ex.txt: "Max ancillaries a single character can hold (default 8)", "Max children a
 # character can have (default 4)" - the original Rome's fixed numbers. Medieval II keeps 8 ancillaries;
 # its children follow descr_campaign_db, so the tool does not count them there.
+# The original exes' hard limits modders found (docs/reference/modding_knowledge.md, section 1:
+# heavengames "A List of Known Hardcodes", TWC "Hardcoded Limits - M2TW"). REX / M2EX lift some of them
+# (HLR runs 750 regions under REX), so with an engine beside the data they are notes, not faults.
+# Not here: heavengames' "20 landmasses" - vanilla RTW's own map has 32 separate pieces of land and runs,
+# so what the game counts is not known.
+HARD_LIMITS = {
+    "rome": {"regions": 200, "map_size": 500, "units": 500, "chains": 64, "levels": 9, "hidden_resources": 63},
+    "medieval2": {"regions": 200, "map_size": 510, "units": 500, "chains": 128, "levels": 9,
+                  "hidden_resources": 64},
+}
+LIMIT_WORDS = {"regions": "regions (the sea counts as one)", "map_size": "map_regions.tga width / height",
+"units": "units in export_descr_unit.txt",
+               "chains": "building chains", "levels": "levels in one building chain",
+               "hidden_resources": "hidden resources (export_descr_buildings.txt)"}
+
 FAMILY_DEFAULTS = {"max_num_ancillaries": 8, "max_num_children": 4}
 
 
