@@ -2,7 +2,7 @@
 
 (formerly RTW Campaign Editor / RTW Faction Tool)
 
-[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/pfadfinder)
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/pfadfinder) [![YouTube - Steel Giant](https://img.shields.io/badge/YouTube-Steel%20Giant-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ)
 
 I'm building a tool that finally lets us improve the games of our childhood ourselves - without digging through files every time, without the fear of breaking something, and without everything falling apart because we forgot one step.
 
@@ -10,7 +10,7 @@ I'm building a tool that finally lets us improve the games of our childhood ours
 
 **Video:** [what the editor does, in a few minutes](https://www.youtube.com/watch?v=m1sCPg-Lzsw).
 
-**More videos:** [editing rivers, fords, cliffs](https://youtu.be/z0T723riXaU) · [editing a height map](https://youtu.be/mTdRAWympuw) · [searching the map for settlements and units](https://youtu.be/6WAdnGovGzA).
+**More videos** (all on my YouTube channel [Steel Giant](https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ)): [editing rivers, fords, cliffs](https://youtu.be/z0T723riXaU) · [editing a height map](https://youtu.be/mTdRAWympuw) · [searching the map for settlements and units](https://youtu.be/6WAdnGovGzA).
 
 **Why support?** I'm building this on my own on an old laptop. If the tool helps you, a small contribution on **[Ko-fi](https://ko-fi.com/pfadfinder)** would mean a lot - it would help me finally get a proper gaming PC, a childhood dream, and give the editor more time and faster testing (big mods and both games load slowly on the old machine).
 
