@@ -2237,6 +2237,60 @@ building shrine
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
         self.assertEqual(before, after)
 
+    POOL_EDB = """building barracks
+{
+    levels muster
+    {
+        muster city requires factions { barbarian, alpha, }
+        {
+            capability
+            {
+                recruit_pool "rebel spear"  1   0.5   4  0  requires factions { slave, }
+                retrain_pool "alpha general"  0   0.2   1  0  requires factions { alpha, }
+            }
+            construction  1
+            cost  100
+            settlement_min town
+        }
+    }
+}
+"""
+
+    def test_medieval2_recruit_pool_and_rex_retrain_lines(self):
+        # Medieval II recruits with recruit_pool lines (vanilla has no 'recruit' at all); REX adds retrain-only lines
+        from faction_tool import editors as E
+        from faction_tool import roster as R
+        from faction_tool import packs
+        from faction_tool.edit import edit
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB)
+        mod = ModData(self.root)
+        f = mod.load(mod.file("edb"))
+        self.assertEqual(R.recruit_dialect(f), "pool")
+        self.assertEqual([(u, c, l) for _, u, c, l in R.recruit_lines(f)], [("rebel spear", "barracks", "muster")])
+        self.assertEqual(len(R.recruit_lines(f, R.RECRUIT_KEYS)), 2)          # retrain_pool too, when asked
+        units = {u["type"]: u for u in R.roster(mod, "slave")["units"]}
+        self.assertEqual(units["rebel spear"]["recruit"], [("barracks", "muster")])
+        # giving writes the faction into the recruit_pool line
+        plan = edit(mod, "test", "alpha", {"roster": {"unit:rebel spear": True}})
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('recruit_pool "rebel spear"  1   0.5   4  0  requires factions { slave, alpha, }', edb)
+        # a rename follows recruit_pool and retrain_pool lines
+        plan = Plan(mod, None, "rename")
+        E.rename_unit(plan, "alpha general", "alpha lord")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('retrain_pool "alpha lord"', edb)
+        self.assertNotIn('"alpha general"', edb)
+        # a unit pack carries its recruit_pool place
+        self.assertEqual([r["line"].split()[0] for r in packs._recruit_places(mod, ["rebel spear"])], ["recruit_pool"])
+        # the line checks know every form; the Add line text is written in the file's own form
+        self.assertEqual([m for e, m in E.check_text(mod, "building", E.recruit_text(
+            "pool", "rebel spear", "0", factions=["slave"])) if e], [])
+        self.assertTrue(E.recruit_text("pool", "rebel spear", "1", retrain=True).startswith('retrain_pool "rebel spear"'))
+        self.assertTrue(E.recruit_text("plain", "rebel spear", "1").startswith('recruit "rebel spear"  1'))
+        self.assertTrue(any(e for e, _ in E.check_text(mod, "building", 'recruit_pool "rebel spear"  0')))
+        self.assertTrue(any(e for e, _ in E.check_text(mod, "building", 'recruit "rebel spear"  x')))
+
     def test_roster_take_a_culture_writes_the_others_out(self):
         from faction_tool import roster as R
         from faction_tool.plan import Plan

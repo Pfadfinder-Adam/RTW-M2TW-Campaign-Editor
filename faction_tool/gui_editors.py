@@ -412,9 +412,16 @@ class RecordEditor(ttk.Frame):
         w.transient(self)
         frm = ttk.Frame(w, padding=10)
         frm.pack(fill="both", expand=True)
-        v = {k: tk.StringVar() for k in ("place", "level", "key", "value", "unit", "exp", "factions", "extra")}
+        v = {k: tk.StringVar() for k in ("place", "level", "key", "value", "unit", "exp", "factions", "extra",
+                                         "start", "per_turn", "most")}
         v["exp"].set("0")
+        v["start"].set("1")
+        v["per_turn"].set("0.5")
+        v["most"].set("4")
         v_own = tk.BooleanVar(value=True)
+        v_retrain = tk.BooleanVar(value=False)
+        from .roster import recruit_dialect
+        dialect = recruit_dialect(f) if self.kind == "building" else "plain"
         body = ttk.Frame(frm)
         preview = ttk.Label(frm, text="", font=("Courier", 10))
         problems = ttk.Label(frm, text="", foreground="#b00020", justify="left", wraplength=620)
@@ -431,14 +438,10 @@ class RecordEditor(ttk.Frame):
         def text():
             place = v["place"].get()
             if place == "recruit":
-                fs = [x for x in v["factions"].get().replace(",", " ").split() if x]
-                t = 'recruit "%s"  %s' % (v["unit"].get().strip(), v["exp"].get().strip() or "0")
-                if fs:
-                    t += "  requires factions { %s}" % "".join("%s, " % x for x in fs)
-                extra = v["extra"].get().strip()
-                if extra:
-                    t += (" " if fs else "  requires ") + (extra if fs or not extra.startswith("and ") else extra[4:])
-                return t
+                return E.recruit_text(dialect, v["unit"].get().strip(), v["exp"].get().strip() or "0",
+                                      (v["start"].get().strip() or "1", v["per_turn"].get().strip() or "0.5",
+                                       v["most"].get().strip() or "4"), v_retrain.get(),
+                                      v["factions"].get().replace(",", " ").split(), v["extra"].get())
             if place == "upgrades":
                 return v["value"].get().strip()
             return ("%s %s" % (v["key"].get().strip(), v["value"].get().strip())).strip()
@@ -482,7 +485,16 @@ class RecordEditor(ttk.Frame):
                         pass
                 cb.bind("<<ComboboxSelected>>", unit_picked)
                 row("Unit", cb)
+                if dialect == "pool":            # Medieval II: a pool of units that fills up turn by turn
+                    row("Units at the start", ttk.Entry(body, textvariable=v["start"], width=8))
+                    row("New units a turn", ttk.Entry(body, textvariable=v["per_turn"], width=8),
+                        "may be a fraction: 0.5 = one unit every two turns")
+                    row("Most units waiting", ttk.Entry(body, textvariable=v["most"], width=8))
                 row("Experience", ttk.Spinbox(body, from_=0, to=9, textvariable=v["exp"], width=5))
+                ttk.Checkbutton(body, text="only retraining, no new units (REX: '%s')" % (
+                    "retrain_pool" if dialect == "pool" else "retrain"), variable=v_retrain,
+                    command=refresh).grid(row=r, column=0, columnspan=2, sticky="w")
+                r += 1
                 row("Factions", ttk.Entry(body, textvariable=v["factions"], width=50),
                     "who recruits it here: factions or cultures, comma separated (the unit's owners when you pick it)")
                 row("More conditions", ttk.Entry(body, textvariable=v["extra"], width=50),

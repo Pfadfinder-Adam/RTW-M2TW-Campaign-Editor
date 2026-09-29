@@ -218,12 +218,14 @@ def _text_entry(mod, table, key):
 
 
 def _recruit_places(mod, unit_types):
-    """[{'unit', 'chain', 'level', 'line'}]: every recruit line naming these units."""
+    """[{'unit', 'chain', 'level', 'line'}]: every recruit line naming these units
+    (recruit / recruit_pool and REX's retrain lines)."""
     from .editors import building_blocks, chain_tree
+    from .roster import recruit_of
     if not mod.file("edb"):
         return []
     f = mod.load(mod.file("edb"))
-    want = {'"%s"' % t: t for t in unit_types}
+    want = set(unit_types)
     out = []
     for name, a, b in building_blocks(f):
         tree = chain_tree(f, a, b)
@@ -233,10 +235,9 @@ def _recruit_places(mod, unit_types):
             op, cl = lv["capability"]
             for i in range(op, cl):
                 text = f.text(i)
-                if tokens(text)[:1] == ["recruit"]:
-                    for q, t in want.items():
-                        if q in text:
-                            out.append({"unit": t, "chain": name, "level": lv["name"], "line": text.strip()})
+                r = recruit_of(text)
+                if r and r[1] in want:
+                    out.append({"unit": r[1], "chain": name, "level": lv["name"], "line": text.strip()})
     return out
 
 
@@ -522,7 +523,7 @@ def _recruit(plan, manifest, names, owners):
             continue
         line = r["line"].replace('"%s"' % r["unit"], '"%s"' % names[r["unit"]][0], 1)
         line = re.sub(r"factions\s*\{[^}]*\}", "factions { %s, }" % ", ".join(owners), line, count=1)
-        at, make = line_place(f, "building", blk, "capability", r["level"], "recruit")
+        at, make = line_place(f, "building", blk, "capability", r["level"], line.split()[0])
         f.insert(at, make(line))
         n += 1
     if n:

@@ -3,8 +3,9 @@ them with everything tied to them kept in step.
 
 A unit is really the faction's only when three places agree:
   * export_descr_unit.txt   'ownership' names the faction (or its culture, or all);
-  * export_descr_buildings  a 'recruit "<unit>" ... requires factions { ... }' line
-                            in a level the faction can build lets it (or its culture);
+  * export_descr_buildings  a 'recruit "<unit>" ... requires factions { ... }' line (Medieval II:
+                            'recruit_pool "<unit>" ...') in a level the faction can build lets it
+                            (or its culture); REX's 'retrain' / 'retrain_pool' lines only retrain;
   * ui/units/<faction>/#<dictionary>.tga and ui/unit_info/<faction>/<dictionary>_info.tga
                             its cards (the game shows an empty card without them).
 A building level is the faction's when its line 'requires factions { ... }' in
@@ -21,7 +22,25 @@ from .moddata import _ci
 from .textio import strip_comment, tokens
 
 RE_FACTIONS = re.compile(r"(?<![A-Za-z0-9_])factions\s*\{([^}]*)\}")
-RE_RECRUIT = re.compile(r'^\s*recruit\s+"([^"]+)"')
+# recruit lines: Rome 'recruit', Medieval II 'recruit_pool', REX's retrain-only 'retrain' / 'retrain_pool'
+RECRUIT_KEYS = ("recruit", "recruit_pool", "retrain", "retrain_pool")
+RECRUITING = ("recruit", "recruit_pool")
+RE_RECRUIT = re.compile(r'^\s*(recruit_pool|retrain_pool|recruit|retrain)\s+"([^"]+)"')
+
+
+def recruit_of(text, keys=RECRUIT_KEYS):
+    """(key, unit) of a recruit line whose key is one of keys, else None."""
+    m = RE_RECRUIT.match(strip_comment(text))
+    return (m.group(1), m.group(2)) if m and m.group(1) in keys else None
+
+
+def recruit_dialect(f):
+    """'pool' when the buildings file recruits with recruit_pool (Medieval II), else 'plain'."""
+    for i in range(len(f.raw)):
+        r = recruit_of(f.text(i))
+        if r:
+            return "pool" if r[0].endswith("_pool") else "plain"
+    return "plain"
 
 
 # ---------------------------------------------------------------------------
@@ -112,16 +131,17 @@ def level_heads(f):
     return out
 
 
-def recruit_lines(f):
-    """[(line, unit, chain, level)] of every recruit line in export_descr_buildings.txt."""
+def recruit_lines(f, keys=RECRUITING):
+    """[(line, unit, chain, level)] of every recruit line in export_descr_buildings.txt
+    (by default the lines that recruit: recruit / recruit_pool, not retrain-only ones)."""
     from .editors import building_blocks, chain_tree
     out = []
     for chain, a, b in building_blocks(f):
         for lv in chain_tree(f, a, b)["levels"]:
             for i in range(lv["open"], lv["close"]):
-                m = RE_RECRUIT.match(f.text(i))
-                if m:
-                    out.append((i, m.group(1), chain, lv["name"]))
+                r = recruit_of(f.text(i), keys)
+                if r:
+                    out.append((i, r[1], chain, lv["name"]))
     return out
 
 
@@ -277,7 +297,7 @@ def take_unit(plan, faction, unit, campaign=None):
     if edb_p:
         e = plan.edit(edb_p)
         gone = []
-        for i, _, chain, level in reversed([r for r in recruit_lines(e) if r[1] == unit]):
+        for i, _, chain, level in reversed([r for r in recruit_lines(e, RECRUIT_KEYS) if r[1] == unit]):
             names = factions_in(e.text(i))
             if names and faction in names:
                 rest = [n for n in names if n != faction]

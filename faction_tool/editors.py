@@ -102,7 +102,7 @@ def block_facets(f, kind, block):
                 out["mercenary"] = "mercenary_unit" in attrs
                 out["general"] = any(x.startswith("general_unit") for x in attrs)
         return out
-    from .roster import factions_in
+    from .roster import factions_in, recruit_of, RECRUITING
     facs, everyone, recruits = set(), False, False
     for lv in chain_tree(f, a, b)["levels"]:
         names = factions_in(f.text(lv["head"]))
@@ -111,7 +111,7 @@ def block_facets(f, kind, block):
         else:
             facs.update(names)
     for i in range(a, b):
-        if tokens(f.text(i))[:1] == ["recruit"] or tokens(f.text(i))[:1] == ["recruit_pool"]:
+        if recruit_of(f.text(i), RECRUITING):
             recruits = True
             break
     return {"factions": None if everyone else sorted(facs), "recruits": recruits, "group": chain_group(name)}
@@ -378,12 +378,13 @@ def copy_unit(plan, src_type, new_type, new_dict, recruit=True):
                 if srcp:
                     plan.copy(srcp, os.path.join(folder, fac, pattern % new_dict))
     if recruit and mod.file("edb"):
+        from .roster import recruit_of
         e = plan.edit(mod.file("edb"))
         n, i = 0, 0
         q = '"%s"' % src_type
         while i < len(e.raw):
             text = e.text(i)
-            if tokens(text)[:1] == ["recruit"] and q in text:
+            if (recruit_of(text) or ("", ""))[1] == src_type:
                 e.insert(i + 1, [text.replace(q, '"%s"' % new_type, 1)])
                 n += 1
                 i += 2
@@ -613,7 +614,7 @@ def keys_seen(f, kind, place=None):
                 s = strip_comment(f.text(i)).strip()
                 if s and s not in ("{", "}"):
                     k, _, v = s.replace("\t", " ").partition(" ")
-                    if k != "recruit":
+                    if k not in RECRUIT_KEYS:
                         out.setdefault(k, v.strip())
     return out
 
@@ -631,6 +632,36 @@ def conditions_seen(f):
 
 
 # ---- checks ----
+RECRUIT_KEYS = ("recruit", "recruit_pool", "retrain", "retrain_pool")
+RECRUIT_FORMS = {
+    "recruit": 'a recruit line is: recruit "unit name" <experience> requires factions { ... }',
+    "retrain": 'a retrain line (REX) is: retrain "unit name" <experience> requires factions { ... }',
+    "recruit_pool": 'a recruit_pool line is: recruit_pool "unit name" <starting units> <new units a turn> '
+                    '<most units> <experience> requires factions { ... }',
+    "retrain_pool": 'a retrain_pool line (REX) is: retrain_pool "unit name" <starting units> <new units a turn> '
+                    '<most units> <experience> requires factions { ... }'}
+
+
+def _number(x):
+    try:
+        float(x)
+        return True
+    except ValueError:
+        return False
+
+
+def recruit_text(dialect, unit, exp, pool=("1", "0.5", "4"), retrain=False, factions=(), extra=""):
+    """A recruit line in the file's own form: Rome 'recruit "u" exp', Medieval II
+    'recruit_pool "u" start per_turn most exp'; retrain = REX's retrain-only key."""
+    key = ("retrain" if retrain else "recruit") + ("_pool" if dialect == "pool" else "")
+    t = '%s "%s"  %s' % (key, unit, ("%s   %s   %s  %s" % (tuple(pool) + (exp,))) if dialect == "pool" else exp)
+    fs = [x for x in factions if x]
+    if fs:
+        t += "  requires factions { %s}" % "".join("%s, " % x for x in fs)
+    extra = extra.strip()
+    if extra:
+        t += (" " if fs else "  requires ") + (extra if fs or not extra.startswith("and ") else extra[4:])
+    return t
 RE_PRESENT = re.compile(r"\bbuilding_present(?:_min_level)?\s+([A-Za-z0-9_]+)(?:\s+([A-Za-z0-9_+\-]+))?")
 
 
@@ -643,18 +674,23 @@ def check_text(mod, kind, text, chain=None, levels=()):
     if not s:
         return [(True, "empty line")]
     if kind == "building":
-        m = re.match(r'recruit\s+"([^"]+)"\s*(\S*)', s)
-        if s.startswith("recruit"):
+        key = s.split()[0] if s.split() else ""
+        if key in RECRUIT_KEYS:
+            m = re.match(r'(\w+)\s+"([^"]+)"\s*(.*)$', s)
+            nums = (m.group(3).split(" requires")[0].split() if m else [])
+            pool = key.endswith("_pool")
             if not m:
-                out.append((True, 'a recruit line is: recruit "unit name" <experience> requires factions { ... }'))
+                out.append((True, RECRUIT_FORMS[key]))
             else:
                 units = unit_names(mod)
-                if m.group(1) not in units:
-                    close = [u for u in units if u.lower() == m.group(1).lower()]
+                if m.group(2) not in units:
+                    close = [u for u in units if u.lower() == m.group(2).lower()]
                     out.append((True, "no unit '%s' in export_descr_unit.txt%s" % (
-                        m.group(1), " (did you mean '%s'?)" % close[0] if close else "")))
-                if not m.group(2).isdigit():
-                    out.append((True, "the experience after the unit's name must be a number (0-9)"))
+                        m.group(2), " (did you mean '%s'?)" % close[0] if close else "")))
+                if len(nums) != (4 if pool else 1) or not all(_number(x) for x in nums):
+                    out.append((True, RECRUIT_FORMS[key]))
+                elif not nums[-1].isdigit():
+                    out.append((True, "the experience (the last number before 'requires') must be a whole number (0-9)"))
         edb = mod.file("edb")
         chains = {}
         if edb:
@@ -699,9 +735,10 @@ def rename_unit(plan, old, new):
     if edb:
         e = plan.edit(edb)
         n = 0
+        from .roster import recruit_of
         for i in range(len(e.raw)):
             t = e.text(i)
-            if tokens(t)[:1] == ["recruit"] and '"%s"' % old in t:
+            if (recruit_of(t) or ("", ""))[1] == old:
                 e.set(i, t.replace('"%s"' % old, '"%s"' % new, 1))
                 n += 1
         if n:
@@ -828,7 +865,7 @@ def line_limits(f, kind):
 
 # Lines that only list what a level recruits: the game takes any number of them (HLR has 702 in
 # one capability), so they are not held to the most the mod already has (a tester's 101, 2026-09-29).
-LIST_KEYS = {"recruit", "recruit_pool"}
+LIST_KEYS = {"recruit", "recruit_pool", "retrain", "retrain_pool"}
 
 
 def room_for(f, kind, block, place, level, key, limits, pending=0):
