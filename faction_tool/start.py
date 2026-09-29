@@ -403,7 +403,7 @@ def build_start(plan, campaign, start):
             raise ValueError("%s: '%s' is not in the %s name list - the game crashes on names it has no "
                              "string for; pick one from the list" % (role, first, t))
         rest = name[len(first):].strip()
-        if rest and names_from and rest not in names_from.get("surnames", []):
+        if rest and pool and rest not in pool.get("surnames", []):
             raise ValueError("%s: surname '%s' is not in the %s surname list" % (role, rest, t))
         region, xy = spots[role]
         if region in custom:
