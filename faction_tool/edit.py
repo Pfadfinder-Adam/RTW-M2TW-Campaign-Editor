@@ -9,7 +9,7 @@ from .buildings import settlement_info
 from .clone import FE_NAMES, description_key, entry_end
 from .plan import Plan
 from .start import MAX_UNITS, _has_army, _units, unit_name
-from .strat import RE_XY, Strat, character_line, village_block
+from .strat import first_names, RE_XY, Strat, character_line, village_block
 from .textio import tokens
 
 RE_RGB = re.compile(r"red\s*(\d+)\s*,\s*green\s*(\d+)\s*,\s*blue\s*(\d+)")
@@ -553,7 +553,13 @@ def _garrisons(plan, f, s, campaign):
     tiles = plan_tiles(plan, campaign)
     pool = plan.mod.name_pool(plan.new) or {}
     used = {c.name.split()[0] for x in s.factions for c in x.characters if c.name}
-    captains = [n for n in pool.get("characters", []) if n not in used] or pool.get("characters", [])
+    # the faction's family records too (egypt's Heruben is a character_record: a captain Heruben is skipped
+    # by the game as a duplicate), and the names of characters this edit adds (a new army named Heruben: no captain Heruben too)
+    from .strat import faction_names
+    used |= {n.split()[0] for n in faction_names(s, plan.new) if n}
+    used |= {(c.get("name") or "").split()[0] for c in plan.opts.get("characters") or [] if c.get("name")}
+    men = first_names(pool, "general")
+    captains = [n for n in men if n not in used] or men
     jobs = []
     for region, types in picked.items():
         if region not in [st.region for st in fb.settlements]:

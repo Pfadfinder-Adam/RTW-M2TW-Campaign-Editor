@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.12.0 - 2026-09-29
+
+Built from a tester's questions and the user's Barbarian Invasion run. Checked on Rome (plain + REX) and
+Medieval II copies, in the window on Linux and with the deep Check; the flag symbols and logos not yet in the game.
 
 ### Added
 - **Flag symbol and faction logos** (Rome): the Art tab now lists the symbol on the faction's campaign-map flags
@@ -32,6 +35,11 @@
   boxes for pictures that exist. The pictures are now looked for only in the town's own culture (and the cultures
   `descr_ui_buildings.txt` sends it to), in the mod and then in the game's own `data` - where Barbarian
   Invasion and REX mods take what they do not have. A level with no picture of its culture says so.
+- A captain made for a garrison could get the name of one of the faction's **family members** (egypt's
+  Heruben), which the game skips as a duplicate - captains now skip the family's names and the names of
+  characters added in the same Apply. Medieval II first names of two words (egypt's `al Adil`, which the game
+  reads as first name `al`) are no longer picked as first names.
+- Linux: without tkinter the tool now says which packages to install instead of a Python error.
 - Barbarian Invasion: the Eastern / Western Empire had no names ("no name in empire_east's name list for a
   captain"). BI's `descr_names.txt` gives one name list to several factions (`faction: empire_east,
   empire_east_rebels`); the tool now reads such lists for every faction on them, and a new faction cloned from

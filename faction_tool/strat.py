@@ -237,7 +237,9 @@ FEMALE_KINDS = ("princess", "witch")
 def first_names(pool, kind):
     """The descr_names list a character of this kind takes its first name from:
     'women' for a princess or witch, 'characters' (the men's) for everyone else."""
-    return (pool or {}).get("women" if kind in FEMALE_KINDS else "characters", [])
+    # a first name of two words (Medieval II's egyptian 'al Adil') cannot start a character line: the game
+    # reads 'al' as the first name and 'Adil' as the surname - such names serve as surnames only
+    return [n for n in (pool or {}).get("women" if kind in FEMALE_KINDS else "characters", []) if " " not in n.strip()]
 
 
 def character_line(lines, name, kind, age, xy, role=None, female=None):

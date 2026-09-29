@@ -358,7 +358,7 @@ def build_start(plan, campaign, start):
         custom[r] = ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % tp for tp in types][:room]
         if len(types) > room:
             plan.warn(f, "%s: %d unit(s) over the %d an army holds were left out" % (r, len(types) - room, MAX_UNITS))
-    captains = [n for n in (pool or {}).get("characters", [])]
+    captains = first_names(pool, "general")
     used = {c.name.split()[0] for fb in s.factions for c in fb.characters if c.name}
     used |= {start[r]["name"].split()[0] for r in ("leader", "heir") if start.get(r) and start[r].get("name")}
     # and the armies / agents placed by hand (written later): a captain never takes one of their names

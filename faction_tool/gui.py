@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.11.0"
+VERSION = "0.12.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
 
@@ -2316,7 +2316,7 @@ class App(tk.Tk):
         self.cb_ai["values"] = AI_CHOICES + sorted(v for v in seen if v and v not in AI_CHOICES)
         pool = self.mod.name_pool(t)
         for a, b in self.cb_names:
-            a["values"] = pool.get("characters", [])
+            a["values"] = first_names(pool, "general")
             b["values"] = [""] + pool.get("surnames", [])
         if not self.editing():                 # names left from another faction are not in this one's lists
             for role in ("leader", "heir"):

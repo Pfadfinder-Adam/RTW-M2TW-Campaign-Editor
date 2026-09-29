@@ -860,6 +860,25 @@ class ToolTest(unittest.TestCase):
         lines = [l.split(None, 1)[0] for l in s.lines[fb.start:fb.end] if l.strip()]
         self.assertLess(max(i for i, w in enumerate(lines) if w == "character"), lines.index("character_record"))
 
+    def test_captain_names_skip_family_records_and_two_word_names(self):
+        # egypt's Heruben is a family record: a captain Heruben was skipped by the game as a duplicate;
+        # Medieval II's 'al Adil' cannot start a character line (the game reads 'al' as the first name)
+        from faction_tool.edit import edit
+        from faction_tool.strat import first_names
+        self.assertEqual(first_names({"characters": ["al Adil", "Omar"]}, "general"), ["Omar"])
+        write(os.path.join(self.root, "data", "descr_names.txt"),
+              NAMES.replace("\t\tAaron\n", "\t\tal Adil\n\t\tAaron\n", 1).replace("\t\tBoris\n", "\t\tBoris\n\t\tCyrus\n", 1))
+        mod = ModData(self.root)
+        path = mod.campaign_file("test", "descr_strat.txt")
+        with open(path) as fh:
+            text = fh.read()
+        with open(path, "w") as fh:
+            fh.write(text.replace("weapon_lvl 0\n;#####<", "weapon_lvl 0\n\ncharacter_record\t\tBoris, \tmale, "
+                                  "age 9, alive, never_a_leader\n;#####<", 1))
+        p = edit(ModData(self.root), "test", "alpha", {"take": ["B_R"], "garrisons": {"B_R": ["alpha general"]}})
+        said = "\n".join(m for _, m in p.notes)
+        self.assertIn("captain Cyrus", said)
+
     def test_family_edit_and_restore(self):
         """Family tab: traits, ages, a renamed leader followed on the tree, a new wife and child
         (records in the file's own form, the tree after them), then Restore byte for byte."""

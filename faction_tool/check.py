@@ -216,7 +216,8 @@ def rehearse(data, campaign, step=None):
             units = [u.type for u in faction_units(mod, fac)][:3]
             ships = [u.type for u in faction_units(mod, fac, ships=True, mercs=True)][:2]
             from .strat import faction_names
-            pool_names = (mod.name_pool(fac) or {}).get("characters") or ["X"]
+            from .strat import first_names
+            pool_names = first_names(mod.name_pool(fac), "general") or ["X"]
             used_names = set(faction_names(Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))), fac))
             free = [n for n in pool_names if n not in used_names] or pool_names
             first = free[0]
