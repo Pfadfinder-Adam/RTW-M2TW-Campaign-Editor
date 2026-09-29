@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from . import editors as E
-from . import theme
+from . import theme, unitattrs
 from .moddata import ModData
 from .plan import Plan
 
@@ -268,6 +268,9 @@ class RecordEditor(ttk.Frame):
                          foreground="#000000" if gone or fd.line in self.changes else theme.palette()["fg"])
             e.grid(row=row, column=2, sticky="we", pady=1)
             v.trace_add("write", lambda *x, fd=fd, v=v, e=e: self.edited(fd, v.get(), e))
+            if self.kind == "unit" and fd.key in unitattrs.LINES and unitattrs.for_line(fd.key) and not gone:
+                ttk.Button(self.form, text="REX...", width=7,
+                           command=lambda fd=fd, v=v: self.attrs_dialog(fd, v)).grid(row=row, column=3, padx=(4, 0))
             why = E.removable(self.kind, fd, self.tree, self.required())
             if why is None:
                 tk.Button(self.form, text="\u21ba" if gone else "x", command=lambda fd=fd: self.toggle_remove(fd),
@@ -276,6 +279,40 @@ class RecordEditor(ttk.Frame):
         added_rows(b + 1)
         self.show_pictures()
         self.show_links()
+
+    def attrs_dialog(self, fd, var):
+        """Tick the words REX knows for this line (attributes, morale, terrain, weapons);
+        the line's value changes like a typed edit."""
+        from .limits import faction_limit
+        w = tk.Toplevel(self)
+        w.title("%s: what REX adds" % fd.key)
+        w.transient(self)
+        frm = ttk.Frame(w, padding=10)
+        frm.pack(fill="both", expand=True)
+        rex = faction_limit(self.mod).get("engine") == "REX.exe"
+        ttk.Label(frm, text=("Ticked = on this unit's '%s' line. These words work only under REX; "
+                             "the original game refuses them%s." % (
+                                 fd.key, "" if rex else " - the game folder has no REX.exe")),
+                  wraplength=560, justify="left").pack(anchor="w", pady=(0, 8))
+        now = unitattrs.words(var.get())
+        ticks = {}
+        for word, effect in unitattrs.for_line(fd.key):
+            ticks[word] = tk.BooleanVar(value=word in now)
+            row = ttk.Frame(frm)
+            row.pack(fill="x", anchor="w")
+            ttk.Checkbutton(row, text=word, variable=ticks[word], width=28).pack(side="left")
+            ttk.Label(row, text=effect, foreground="#666", wraplength=420, justify="left").pack(side="left")
+
+        def ok():
+            value = var.get()
+            for word, t in ticks.items():
+                value = unitattrs.toggled(fd.key, value, word, t.get())
+            var.set(value)
+            w.destroy()
+        bar = ttk.Frame(frm)
+        bar.pack(fill="x", pady=(10, 0))
+        ttk.Button(bar, text="OK", command=ok).pack(side="right")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="right", padx=6)
 
     def limits(self):
         if getattr(self, "_limits", None) is None:
@@ -515,8 +552,10 @@ class RecordEditor(ttk.Frame):
                 def key_picked(*_):
                     v["value"].set(ks.get(v["key"].get(), ""))
                 cb.bind("<<ComboboxSelected>>", key_picked)
+                engine = "; also keys the engine knows: %s" % ", ".join(
+                    "%s (%s)" % (k, d) for k, (_, d) in unitattrs.ENGINE_KEYS.items()) if self.kind == "unit" else ""
                 row("Key", cb, "the keys this mod already uses here, as many lines as the mod has at most; "
-                               "the value is filled with an example")
+                               "the value is filled with an example" + engine)
                 row("Value", ttk.Entry(body, textvariable=v["value"], width=50))
             refresh()
         top = ttk.Frame(frm)

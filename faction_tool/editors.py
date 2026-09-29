@@ -597,6 +597,9 @@ def keys_seen(f, kind, place=None):
                 k, _, v = s.partition(" ") if " " in s else s.partition("\t")
                 out.setdefault(k, v.strip())
         out.pop("type", None)
+        from .unitattrs import ENGINE_KEYS           # keys the engine knows, even when no unit has one yet
+        for k, (example, _) in ENGINE_KEYS.items():
+            out.setdefault(k, example)
         return out
     for chain, a, b in building_blocks(f):
         for lv in chain_tree(f, a, b)["levels"]:
@@ -873,6 +876,10 @@ def room_for(f, kind, block, place, level, key, limits, pending=0):
     place_key = None if kind == "unit" else place
     k = "(level)" if place == "upgrades" else key
     most = (limits.get(place_key) or {}).get(k, 0)
+    if kind == "unit":
+        from .unitattrs import ENGINE_KEYS
+        if k in ENGINE_KEYS:
+            most = max(most, 1)
     if kind != "unit" and place == "capability" and key in LIST_KEYS and most:
         return None
     have = _count(f, _place_lines(f, kind, block, place, level), place == "upgrades").get(k, 0) + pending

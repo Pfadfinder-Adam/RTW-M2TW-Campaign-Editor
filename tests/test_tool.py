@@ -2344,6 +2344,25 @@ building shrine
         self.assertEqual(R.add_faction(line, "d"),
                          "requires ( ( factions { a, b, d, } and x ) or ( factions { b, c, } and y ) )")
 
+    def test_engine_known_unit_keys_and_rex_attributes(self):
+        # a key the engine knows may be added although no unit of the mod has one; REX words toggle on their line
+        from faction_tool import editors as E
+        from faction_tool import unitattrs as A
+        mod = ModData(self.root)
+        f = mod.load(mod.file("edu"))
+        blk = E.unit_blocks(f)[0]
+        limits = E.line_limits(f, "unit")
+        self.assertIn("recruit_priority_offset", E.keys_seen(f, "unit"))
+        self.assertIsNone(E.room_for(f, "unit", blk, None, None, "recruit_priority_offset", limits))
+        self.assertTrue(E.room_for(f, "unit", blk, None, None, "recruit_priority_offset", limits, 1))  # one only
+        self.assertEqual(A.toggled("attributes", "sea_faring, hardy", "ai_cannot_skirmish", True),
+                         "sea_faring, hardy, ai_cannot_skirmish")
+        self.assertEqual(A.toggled("stat_pri_attr", "no", "sp", True), "sp")
+        self.assertEqual(A.toggled("stat_pri_attr", "sp", "sp", False), "no")
+        self.assertEqual(A.toggled("stat_mental", "5, normal, untrained, steadfast", "steadfast", False),
+                         "5, normal, untrained")
+        self.assertIn("immune_to_psychology", [w for w, _ in A.for_line("stat_mental")])
+
     def test_roster_take_a_culture_writes_the_others_out(self):
         from faction_tool import roster as R
         from faction_tool.plan import Plan
