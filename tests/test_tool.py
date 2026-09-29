@@ -391,7 +391,9 @@ class ToolTest(unittest.TestCase):
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
         self.assertEqual(before, after)
 
-    def test_settlement_names_by_culture_rex_module(self):
+    def test_settlement_names_by_culture_campaign_script(self):
+        # REX's documented way (dump_docudemon): SettlementTurnStart / GeneralCaptureSettlement +
+        # SettlementName + FactionCultureType -> console_command rename_settlement
         from faction_tool import culturenames as CN
         from faction_tool.regionedit import apply_opts
         game, hlr = self._game()
@@ -403,17 +405,47 @@ class ToolTest(unittest.TestCase):
         apply_opts(plan, "test", {"culture_names": {"Atown": {"*": "Atown", "barbarian": "Atburg"}}})
         plan.apply()
         mod = ModData(hlr)
-        self.assertEqual(CN.read(mod), {"Atown": {"*": "Atown", "barbarian": "Atburg"}})
-        text = open(CN.module_path(mod), encoding="utf-8").read()
-        self.assertIn('[\"Atown\"] = { [\"*\"] = \"Atown\", [\"barbarian\"] = \"Atburg\" }', text)
-        self.assertIn('rename_settlement', text)
-        self.assertTrue(CN.module_path(mod).startswith(hlr))            # the mod's scope, next to data
+        self.assertEqual(CN.read(mod, "test"), {"Atown": {"*": "Atown", "barbarian": "Atburg"}})
+        with open(CN.script_path(mod, "test"), encoding="latin-1") as fh:
+            text = fh.read()
+        self.assertTrue(text.startswith("script"))
+        self.assertIn("monitor_event SettlementTurnStart SettlementName Atown", text)
+        self.assertIn("and FactionCultureType barbarian", text)
+        self.assertIn('console_command rename_settlement Atown "Atburg"', text)
+        self.assertIn("and not FactionCultureType barbarian", text)
+        self.assertIn("wait_monitors", text)
+        with open(mod.campaign_file("test", "descr_strat.txt")) as fh:
+            self.assertTrue(fh.read().rstrip().endswith("script\ncampaign_script.txt"))
+        # a second write replaces the block, a script of the mod's own around it stays
+        path = CN.script_path(mod, "test")
+        with open(path, encoding="latin-1", newline="") as fh:
+            own = fh.read().replace("script\r\n", "script\r\n\tdeclare_counter mine\r\n", 1)
+        with open(path, "w", encoding="latin-1", newline="") as fh:
+            fh.write(own)
+        p2 = Plan(ModData(hlr), None, "map")
+        apply_opts(p2, "test", {"culture_names": {"Atown": {"roman": "Atopolis"}}})
+        p2.apply()
+        with open(path, encoding="latin-1") as fh:
+            text = fh.read()
+        self.assertIn("declare_counter mine", text)
+        self.assertIn('rename_settlement Atown "Atopolis"', text)
+        self.assertNotIn("Atburg", text)
+        self.assertEqual(text.count(CN.BEGIN), 1)
         with self.assertRaises(ValueError):                            # a culture the mod has not
-            p2 = Plan(mod, None, "map")
-            apply_opts(p2, "test", {"culture_names": {"Atown": {"gaulish": "X"}}})
+            apply_opts(Plan(ModData(hlr), None, "map"), "test", {"culture_names": {"Atown": {"gaulish": "X"}}})
         restore_to(mod, backups(mod)[-1])
         after = {k: v for k, v in tree_hash(hlr).items() if not k.startswith("faction_tool_backups")}
         self.assertEqual(before, after)
+
+    def test_new_mod_from_bi_starts_barbarian_invasion(self):
+        # REX starts BI with -bi (its own "Barbarian Invasion.bat"); a mod made from bi must too, else REX
+        # reads it over the plain game's data (the user's bi_Empire_east log)
+        game, _ = self._game()
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "bi", "data"))
+        create_mod(os.path.join(game, "bi", "data"), "bi_test")
+        with open(os.path.join(game, "bi_test", "Start_bi_test.bat")) as fh:
+            bat = fh.read()
+        self.assertIn("REX.exe -bi -nm -show_err -mod:bi_test", bat)
 
     def test_unit_cards_fill_a_folder_left_from_an_earlier_attempt(self):
         # ui/units/beta exists already (an old manual attempt) but lacks alpha's cards

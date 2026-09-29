@@ -132,7 +132,13 @@ def _bats(base_dir, base_name, name, game):
                 out["Start_%s.bat" % name] = rx.sub(lambda m: m.group(1) + name, text)
                 break
     if not out:
-        out["Start_%s.bat" % name] = "cd ..\\.\r\nstart %s -nm -show_err -mod:%s\r\n" % (_game_exe(game), name)
+        # a mod made from Barbarian Invasion or Alexander starts that game, as REX's own
+        # "Barbarian Invasion.bat" (-bi) and "Alexander.bat" (-alx) do; without it REX reads the mod over
+        # the plain game's data (the user's bi_Empire_east: imperial_campaign parsed with BI's factions)
+        flag = {"bi": " -bi", "alexander": " -alx"}.get((base_name or "").lower(), "") \
+            if _game_exe(game) == "REX.exe" else ""
+        out["Start_%s.bat" % name] = "cd ..\\.\r\nstart %s%s -nm -show_err -mod:%s\r\n" % (
+            _game_exe(game), flag, name)
     return out
 
 

@@ -5,10 +5,17 @@
 ### Added
 - **Settlement names by the owner's culture (REX)**: **Names by culture...** (next to Edit region..., and on the Map's
   region bar) gives a town a name for each culture - Roma for the Romans, Rom for the barbarians - and a name for
-  every other culture. The tool writes a REX script module (`<mod>/script/modules/ft_settlement_names.nut`)
-  that renames the town when it changes hands: at the start of the turn and whenever the campaign map opens
-  (after the battle too), through REX's `rename_settlement`. Needs REX; backup and Restore as for every write.
-  Not yet tested in the game. (Asked for on Discord.)
+  every other culture. The tool writes it into the campaign's `campaign_script.txt` (made, with its `script` line
+  in descr_strat, when the campaign has none; a script of the mod's own is kept around the tool's block): REX
+  renames the town with its `rename_settlement` as soon as a general takes it and at each of its owner's turns
+  (`SettlementTurnStart` / `GeneralCaptureSettlement` + `SettlementName` + `FactionCultureType`, from REX's own
+  documentation). Needs REX; backup and Restore as for every write. Not yet tested in the game. (Asked for on
+  Discord.)
+
+### Fixed
+- **New mod folder made from Barbarian Invasion or Alexander** (REX): its start file now starts that game (`-bi` /
+  `-alx`, as REX's own start files do). Without it REX read the mod over the plain game's data, and the menu's
+  imperial campaign was read with BI's factions (the user's log).
 
 ## 0.12.0 - 2026-09-29
 

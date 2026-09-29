@@ -1541,7 +1541,7 @@ class App(tk.Tk):
             return
         town = info["settlement"]
         cults = CN.cultures(self.mod)
-        now = dict(CN.read(self.mod).get(town) or {})
+        now = dict(CN.read(self.mod, self.v_campaign.get()).get(town) or {})
         now.update(self.culture_names.get(town) or {})
         now.setdefault(CN.DEFAULT, (new or {}).get("settlement_label") or CN.shown_name(
             self.mod, self.v_campaign.get(), town))
@@ -1552,9 +1552,10 @@ class App(tk.Tk):
         frm.pack(fill="both", expand=True)
         rex = faction_limit(self.mod).get("engine") == "REX.exe"
         ttk.Label(frm, justify="left", wraplength=460, foreground="#555" if rex else "#a33", text=(
-            "When the town changes hands, REX renames it for the new owner's culture (at the start of the turn "
-            "and whenever the campaign map opens, e.g. after the battle). Empty = no name of its own for that "
-            "culture: the name for 'every other culture' is used." if rex else
+            "When the town changes hands, REX renames it for the new owner's culture - at once when a general "
+            "takes it, and at the start of each of its owner's turns. Empty = no name of its own for that "
+            "culture: the name for 'every other culture' is used. Written into the campaign's "
+            "campaign_script.txt (made when the campaign has none)." if rex else
             "Needs REX: the game folder has no REX.exe, so nothing will be written.")).grid(
             row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
         rows = [(CN.DEFAULT, "every other culture")] + [(c, c) for c in cults]
