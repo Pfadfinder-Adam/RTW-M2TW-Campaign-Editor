@@ -114,8 +114,11 @@ class FamilyEditor(ttk.Frame):
             b = ttk.Button(box, text="Replace...", command=lambda a=a: self.replace_portrait(a))
             b.pack(pady=1)
             self.pic_boxes[a] = (lab, b)
-        self.lbl_pic = ttk.Label(pf, text="", foreground="#555", wraplength=230, justify="left", font=("", 8))
-        self.lbl_pic.pack(side="left", padx=6, fill="x", expand=True)
+        side = ttk.Frame(pf)
+        side.pack(side="left", padx=6, fill="both", expand=True)
+        self.lbl_pic = ttk.Label(side, text="", foreground="#555", wraplength=230, justify="left", font=("", 8))
+        self.lbl_pic.pack(side="top", anchor="w", fill="x")
+        self.b_pool = ttk.Button(side, text="Portrait library...", command=self.open_library)
 
         tr = ttk.LabelFrame(form, text="Traits (level)", padding=2)
         tr.pack(fill="both", expand=True)
@@ -269,6 +272,16 @@ class FamilyEditor(ttk.Frame):
         return plan
 
     def open_library(self):
+        if not self.standalone:
+            # the Family tab writes with the faction; new pool pictures are the Character editor's own write
+            app = self.app
+            app.v_work.set("characters")
+            app.work_changed()
+            ed = app.editor()
+            if ed is not None and ed.mod:
+                app.status.set("Portrait library: new pictures are written with the Character editor's Apply.")
+                PortraitLibrary(ed)
+            return
         if not self.mod:
             return
         PortraitLibrary(self)
@@ -346,19 +359,29 @@ class FamilyEditor(ttk.Frame):
         info, new = self.portrait_info(p)
         own = getattr(self, "m2", False) and p["source"] == "map"
         for a, (lab, b) in self.pic_boxes.items():
-            path = new.get(a) or info["files"].get(a) or (info["sample"] if a == "young" else None)
+            samples = info.get("samples") or {}
+            path = new.get(a) or info["files"].get(a) or samples.get(a) or (info["sample"] if a == "young" else None)
             if a != "young" and not (new.get(a) or info["files"].get(a)) and new.get("young"):
                 path = new["young"]
             img = self.image(path, 52, 72)
             lab.configure(image=img or "", text="" if img else a, width=52 if img else 7, height=72 if img else 4)
             lab.image = img
-            b.configure(state="normal" if own else "disabled")
+            # Replace only where the game takes a portrait of one's own (Medieval II, on the map)
+            if own:
+                b.pack(pady=1)
+            else:
+                b.pack_forget()
+        rome = not getattr(self, "m2", False) and p["source"] == "map"
+        if rome:
+            self.b_pool.pack(side="bottom", anchor="w", padx=6, pady=2)
+        else:
+            self.b_pool.pack_forget()
         text = info["how"]
         if new:
             text = "new portrait on Apply (%s) - " % ", ".join(sorted(new)) + text
-        if not own:
-            text += (". Rome has no portrait of one's own for a character: the game rolls one of its culture's "
-                     "pool." if not getattr(self, "m2", False) and p["source"] == "map" else "")
+        if rome:
+            text += (" (the same man young, old and dead). Rome gives no portrait of one's own to a character - "
+                     "to see your own pictures in the game, add them to the pool:")
         self.lbl_pic.configure(text=text)
 
     def replace_portrait(self, age):
@@ -461,9 +484,18 @@ class FamilyEditor(ttk.Frame):
         for a in p["ancillaries"]:
             self.lb_an.insert("end", a)
         kind = FM.trait_kind(p["kind"])
+        # traits for this kind of character (`Characters all` fits everyone); ancillaries not barred to the
+        # faction's culture (ExcludeCultures)
         self.cb_trait["values"] = sorted(t for t, info in self.traits.items()
-                                         if not info["characters"] or kind in info["characters"])
-        self.cb_anc["values"] = sorted(self.ancs)
+                                         if not info["characters"] or kind in info["characters"]
+                                         or "all" in info["characters"])
+        try:
+            mod = self.mod if self.standalone else self.app.mod
+            culture = mod.culture(self.faction) if self.faction and mod else None
+        except Exception:
+            culture = None
+        self.cb_anc["values"] = sorted(a for a, info in self.ancs.items()
+                                       if not culture or culture not in (info.get("exclude") or []))
         for part in self.char_parts:
             for w in part.winfo_children():
                 for x in [w] + list(w.winfo_children()):
@@ -955,6 +987,10 @@ class PortraitLibrary(tk.Toplevel):
         self.cv.bind("<Enter>", lambda e: self.cv.bind_all("<MouseWheel>", lambda x: self.cv.yview_scroll(
             int(-x.delta / 120), "units")))
         self.cv.bind("<Leave>", lambda e: self.cv.unbind_all("<MouseWheel>"))
+        # the grid follows the window's width: laid out again when it changes (the first show() ran
+        # before the canvas had its width and put every portrait in one column - the user's report)
+        self._cols = 0
+        self.cv.bind("<Configure>", lambda e: self._cols != self._columns() and self.show(), add="+")
         self.sel = None
         self._imgs = {}
         self.load()
@@ -969,6 +1005,12 @@ class PortraitLibrary(tk.Toplevel):
 
     def pending(self):
         return [a for a in self.ed.lib_adds if a["culture"] == self.v_c.get() and a["group"] == self.v_g.get()]
+
+    def _columns(self):
+        w = self.cv.winfo_width()
+        if w <= 1:                                   # not laid out yet: the window's own width
+            w = max(self.winfo_width(), 980) - 40
+        return max(1, (w - 6) // 56)
 
     def show(self):
         cv = self.cv
@@ -989,7 +1031,8 @@ class PortraitLibrary(tk.Toplevel):
             (" with a %d x %d card" % (cw, chh)) if e.get("cards") else "",
             " (the dead one greyed unless you give one)" if e.get("dead") else "",
             ("%d new waiting for Apply (green)." % len(new)) if new else ""))
-        W, H, cols = 50, 70, max(1, (cv.winfo_width() or 900) // 56)
+        W, H, cols = 50, 70, self._columns()
+        self._cols = cols
         items = sorted(pics.items()) + [("new", a["pics"].get(age) or a["pics"].get("young")) for a in new]
         for i, (n, path) in enumerate(items):
             x, y = 6 + (i % cols) * 56, 6 + (i // cols) * 88

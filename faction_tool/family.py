@@ -583,12 +583,21 @@ def portraits(mod, faction, person, m2):
     if kind == "princess":
         pool = "princesses" if m2 else "civilians"
     folder = _find(mod, "ui", c, "portraits", "portraits", age, pool)
+    out["samples"] = {}
     if folder:
         pics = sorted(n for n in os.listdir(folder) if n.lower().endswith(".tga"))
         if pics:
-            # the game rolls one at random at the start: show the same one each time for a name
+            # the game rolls one at random at the start: show the same one each time for a name - and the
+            # same number young, old and dead (one man at every age)
             i = sum(ord(ch) for ch in person.get("name") or "") % len(pics)
             out["sample"], out["pool"] = os.path.join(folder, pics[i]), len(pics)
+            for a, parts in (("young", ("young", pool)), ("old", ("old", pool)),
+                             ("dead", ("dead",) if pool == "generals" else ("dead", pool))):
+                d = _find(mod, "ui", c, "portraits", "portraits", *parts)
+                from .moddata import _ci
+                p = _ci(d, pics[i]) if d else None
+                if p:
+                    out["samples"][a] = p
     out["how"] = ("the game picks one of %d pictures of ui/%s/portraits/portraits/%s/%s at random - shown: one of "
                   "them" % (out["pool"], c, age, pool)) if out["pool"] else "no portrait pool found for %s" % c
     return out

@@ -19,7 +19,7 @@ class TerrainEditor(ttk.Frame):
         self.mod, self._sig, self.cmap = None, None, None
         self.ground, self.features = {}, {}          # painted tiles: {(x, y): colour}
         self.base = {}                               # what the files have there: {('ground'|'features', xy): colour}
-        self._undo = []
+        self._undo, self._redo = [], []
         self._last_river = None         # the last river tile of the stroke: the next one joins it side to side
         top = ttk.Frame(self)
         top.pack(fill="x")
@@ -36,6 +36,7 @@ class TerrainEditor(ttk.Frame):
         self.v_grid_here = tk.BooleanVar(value=True)
         ttk.Checkbutton(top, text="Grid", variable=self.v_grid_here, command=self._grid_toggled).pack(
             side="left", padx=(16, 0))
+        ttk.Button(top, text="Redo stroke", command=self.redo_stroke).pack(side="right", padx=(0, 4))
         ttk.Button(top, text="Undo stroke", command=self.undo_stroke).pack(side="right", padx=4)
         self.palette = ttk.Frame(self, padding=(0, 4))
         self.palette.pack(fill="x")
@@ -216,6 +217,7 @@ class TerrainEditor(ttk.Frame):
         self._last_river = None
         self._undo.append((dict(self.ground), dict(self.features)))
         del self._undo[:-100]
+        self._redo = []                          # a new stroke drops the strokes undone before it
 
     def _restore_to(self, ground, features):
         # back to the files' colours first, then the kept strokes on top
@@ -235,10 +237,26 @@ class TerrainEditor(ttk.Frame):
 
     def undo_stroke(self):
         if self._undo:
+            self._redo.append((dict(self.ground), dict(self.features)))
             self._restore_to(*self._undo.pop())
+            self.app.status.set("Terrain: a stroke undone (%d more back, %d to redo)." % (len(self._undo), len(self._redo)))
+        else:
+            self.app.status.set("Terrain: nothing to undo.")
+
+    def redo_stroke(self):
+        if self._redo:
+            self._undo.append((dict(self.ground), dict(self.features)))
+            self._restore_to(*self._redo.pop())
+            self.app.status.set("Terrain: a stroke redone (%d more to redo)." % len(self._redo))
+        else:
+            self.app.status.set("Terrain: nothing to redo.")
+
+    # the window's Undo / Redo (bottom bar, Ctrl+Z / Ctrl+Y) while this editor is on show
+    undo_step = undo_stroke
+    redo_step = redo_stroke
 
     def reset(self):
-        self._undo = []
+        self._undo, self._redo = [], []
         self._restore_to({}, {})
         self.app.status.set("Terrain: nothing painted.")
 

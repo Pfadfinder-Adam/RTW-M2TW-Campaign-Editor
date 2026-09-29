@@ -1096,14 +1096,20 @@ class App(tk.Tk):
             return {}
         return {tuple(k.split(":", 2)[1:]): v for k, v in self.roster_set.items() if k.startswith("building:")}
 
-    def _in_editor(self):
-        """The unit / building editors keep their own changes: Undo there would undo the
-        faction tabs' work unseen, so it says what to use instead."""
-        if self.editor() is not None:
-            self.status.set("In the %s editor: 'Undo all changes here' drops its changes; a field goes back "
-                            "when you type its old value." % ("unit" if self.v_work.get() == "units" else "building"))
+    def _in_editor(self, redo=False):
+        """The editors keep their own changes: Undo / Redo there go to the editor on show when it has
+        steps of its own (the Terrain editor's strokes), never to the faction tabs' work unseen; the others
+        say what to use instead (the user clicked the bottom Undo in the Terrain editor and nothing said so)."""
+        ed = self.editor()
+        if ed is None:
+            return False
+        step = getattr(ed, "redo_step" if redo else "undo_step", None)
+        if step:
+            step()
             return True
-        return False
+        self.status.set("In the %s: 'Undo all changes here' drops its changes; a field goes back when you type "
+                        "its old value." % self.WORK_TITLES.get(self.v_work.get(), "editor"))
+        return True
 
     def undo(self, e=None):
         if self._typing():
@@ -1125,7 +1131,7 @@ class App(tk.Tk):
     def redo(self, e=None):
         if self._typing():
             return None
-        if self._in_editor():
+        if self._in_editor(redo=True):
             return "break"
         if not self.redo_stack:
             self.status.set("Nothing to redo.")
