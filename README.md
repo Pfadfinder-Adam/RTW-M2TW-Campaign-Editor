@@ -1,4 +1,4 @@
-# RTW & M2TW Campaign Editor
+# <img src="assets/icon_256.png" width="64" alt="" align="top"> RTW & M2TW Campaign Editor
 
 (formerly RTW Campaign Editor / RTW Faction Tool)
 

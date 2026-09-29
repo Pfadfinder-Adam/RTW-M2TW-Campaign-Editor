@@ -4,6 +4,7 @@ import copy
 import datetime
 import os
 import re
+import sys
 import threading
 import traceback
 import tkinter as tk
@@ -261,10 +262,19 @@ class FieldTable(ttk.Frame):
 AS_LAND = "(as the land it is cut from)"
 
 
+def assets_dir():
+    """The tool's own pictures (assets/ in the source, 'assets' inside the exe)."""
+    base = getattr(sys, "_MEIPASS", None)
+    if base:
+        return os.path.join(base, "assets")
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("%s %s" % (APP, VERSION))
+        self._set_icon()
         self.geometry("1200x800")
         self.minsize(1024, 640)
         self.mod = None
@@ -303,7 +313,17 @@ class App(tk.Tk):
         self.char_moves = {}            # "faction:index" -> (x, y) dragged on the map (Edit)
         self._build()
 
+    def _set_icon(self):
+        """The window's (and every dialog's) icon; the exe carries the same picture for Explorer."""
+        try:
+            self._icons = [tk.PhotoImage(file=os.path.join(assets_dir(), "icon_%d.png" % n))
+                           for n in (256, 48, 32, 16)]
+            self.iconphoto(True, *self._icons)
+        except (tk.TclError, OSError):
+            pass                        # no icon is no reason to stop
+
     # ------------------------------------------------------------------ layout
+
     def _build(self):
         from . import theme
         theme.apply(self)                          # light or dark, as last chosen

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- **An icon of its own** for the exe and the window: a gear ring round a Roman "R" and a medieval "M" (drawn for the editor, no game pictures).
+
 ### Fixed
 - Settlement names by culture under M2EX: checked in the game, so Preview no longer warns that it is untested there.
 - **Medieval II with M2EX: a new mod folder starts the way M2EX's own mods do** - `Start_<name>.bat` runs
