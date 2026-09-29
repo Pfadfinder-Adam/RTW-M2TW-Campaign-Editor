@@ -1635,7 +1635,6 @@ class App(tk.Tk):
         if not self.mod or not self.strat:
             return
         from . import culturenames as CN
-        from .limits import faction_limit
         new = self._new_region(region) if region else None
         info = new or self.regions.get(region) if region else None
         if not info or not info.get("settlement"):
@@ -1652,13 +1651,13 @@ class App(tk.Tk):
         w.transient(self)
         frm = ttk.Frame(w, padding=10)
         frm.pack(fill="both", expand=True)
-        rex = faction_limit(self.mod).get("engine") == "REX.exe"
+        eng, rex = CN.engine(self.mod)
         ttk.Label(frm, justify="left", wraplength=460, foreground="#555" if rex else "#a33", text=(
-            "When the town changes hands, REX renames it for the new owner's culture - at once when a general "
+            "When the town changes hands, " + eng + " renames it for the new owner's culture - at once when a general "
             "takes it, and at the start of each of its owner's turns. Empty = no name of its own for that "
             "culture: the name for 'every other culture' is used. Written into the campaign's "
             "campaign_script.txt (made when the campaign has none)." if rex else
-            "Needs REX: the game folder has no REX.exe, so nothing will be written.")).grid(
+            "Needs %s: the game folder has no %s.exe, so nothing will be written." % (eng, eng))).grid(
             row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
         rows = [(CN.DEFAULT, "every other culture")] + [(c, c) for c in cults]
         vs = {}

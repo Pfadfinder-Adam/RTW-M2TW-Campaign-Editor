@@ -210,26 +210,44 @@ def hidden_resources(mod):
 
 
 def engine_limits(mod, campaign, regions, units, blds, img):
-    """[(message, fault)] - the counts against the original exe's hard limits (limits.HARD_LIMITS).
-    Over a limit is a fault on the original exe; with REX / M2EX beside the data it is a note."""
-    from .limits import HARD_LIMITS, LIMIT_WORDS, faction_limit, game_kind
+    """[(message, fault)] - the counts against the game's limits: factions against the engine's own
+    max_factions (limits.faction_limit), the rest against the original exe's hard limits
+    (limits.HARD_LIMITS) and what REX / M2EX are known to lift (limits.ENGINE_LIFTS). Over a limit is a
+    fault on the original exe; with REX / M2EX beside the data it is a note unless the engine is known
+    to keep that limit."""
+    from .limits import ENGINE_LIFTS, HARD_LIMITS, LIMIT_WORDS, faction_limit, game_kind
     kind = game_kind(mod)
     hard = HARD_LIMITS.get(kind, {})
-    engine = faction_limit(mod).get("engine")
+    lim = faction_limit(mod)
+    engine = lim.get("engine")
+    lifts = ENGINE_LIFTS.get(engine, {})
     counts = {"regions": len(regions) + 1, "map_size": max(img.width, img.height), "units": len(units),
               "chains": len(blds), "levels": max((len(b.levels) for b in blds), default=0),
               "hidden_resources": len(hidden_resources(mod))}
-    out = [("LIMITS (the original %s exe%s)" % ("Rome" if kind == "rome" else "Medieval II",
-                                                 "; %s lifts some of them" % engine[:-4] if engine else ""), False)]
+    exe = "Rome" if kind == "rome" else "Medieval II"
+    out = [("LIMITS (%s)" % ("%s beside the game - it lifts some of the original %s exe's limits" % (engine[:-4], exe)
+                             if engine else "the original %s exe: no REX / M2EX found beside the game" % exe), False)]
+    nfac = len(mod.factions())
+    out.append(("    %-46s %5d of %d (%s)" % ("factions (slave included)", nfac, lim["max"],
+                                             ("max_factions in %s" % os.path.basename(lim["file"])) if lim.get("written")
+                                             else ("%s's default" % engine[:-4]) if engine else "the original exe"),
+                False))
+    if nfac > lim["max"]:
+        out.append(("%d factions, the game takes %d - it closes at the start (\"Too many factions described\")"
+                    % (nfac, lim["max"]), True))
     for key, most in hard.items():
         n = counts.get(key)
         over = n is not None and n > most
-        line = "%-46s %5s of %d%s" % (LIMIT_WORDS[key], n, most, "  <- OVER" if over else "")
-        out.append(("    " + line, False))
-        if over:
+        lifted = lifts.get(key)
+        line = "    %-46s %5s of %d%s" % (LIMIT_WORDS[key], n, most,
+                                          ("  (%s)" % lifted) if lifted else ("  <- OVER" if over else ""))
+        if engine and not lifted and over:
+            line += " (not known whether %s lifts it)" % engine[:-4]
+        out.append((line, False))
+        if over and not lifted:
             out.append(("%s: %d, the original game stops at %d%s" % (
-                LIMIT_WORDS[key], n, most, " - fine only if %s takes more" % engine[:-4] if engine else
-                " - it may crash or refuse to load"), not engine))
+                LIMIT_WORDS[key], n, most, " - fine only if %s takes more; check it in the game" % engine[:-4]
+                if engine else " - it may crash or refuse to load"), not engine))
     return out
 
 

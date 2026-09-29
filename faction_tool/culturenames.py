@@ -177,12 +177,19 @@ def problems(mod, table):
     return out
 
 
+def engine(mod):
+    """(name, present): the engine that runs these renames for this game - REX for Rome, M2EX for
+    Medieval II (REX's own build of it) - and whether its exe is in the game folder."""
+    from .limits import faction_limit, game_kind
+    name = "M2EX" if game_kind(mod) == "medieval2" else "REX"
+    return name, faction_limit(mod).get("engine") == name + ".exe"
+
+
 def apply(plan, campaign, changes):
     """changes = {settlement: {culture: name, '*': name} or {} to drop the town}: merged into what the
     campaign's script holds and written with the plan (a backup, Restore). Not REX: a warning only."""
     if not changes:
         return
-    from .limits import faction_limit
     from .moddata import _ci
     mod = plan.mod
     table = read(mod, campaign, plan)
@@ -195,10 +202,14 @@ def apply(plan, campaign, changes):
     bad = problems(mod, table)
     if bad:
         raise ValueError("names by culture: " + "; ".join(bad))
-    if faction_limit(mod).get("engine") != "REX.exe":
-        plan.warn(None, "names by culture need REX (its rename_settlement renames towns while the campaign runs); "
-                        "the game folder has no REX.exe - nothing written")
+    name, present = engine(mod)
+    if not present:
+        plan.warn(None, "names by culture need %s (its rename_settlement renames towns while the campaign runs); "
+                        "the game folder has no %s.exe - nothing written" % (name, name))
         return
+    if name == "M2EX":
+        plan.warn(None, "names by culture under M2EX: written the way REX documents it (rename_settlement, "
+                        "FactionCultureType); not yet checked in Medieval II - test it in the game once")
     lines = block(table) if table else []
     existing = _ci(mod.campaign_dir(campaign), "campaign_script.txt")
     if existing:

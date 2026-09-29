@@ -60,6 +60,11 @@ HARD_LIMITS = {
     "medieval2": {"regions": 200, "map_size": 510, "units": 500, "chains": 128, "levels": 9,
                   "hidden_resources": 64},
 }
+# What REX / M2EX do with them, as far as the evidence goes (the rest: not known - the original's number shown).
+ENGINE_LIFTS = {
+    "REX.exe": {"regions": "no limit found - HLR runs 750 regions under REX"},
+    "M2EX.exe": {"units": "lifted by M2EX (Medieval 2 GUI Toolkit's notes; not measured here)"},
+}
 LIMIT_WORDS = {"regions": "regions (the sea counts as one)", "map_size": "map_regions.tga width / height",
 "units": "units in export_descr_unit.txt",
                "chains": "building chains", "levels": "levels in one building chain",

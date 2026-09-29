@@ -654,6 +654,38 @@ building smith
         restore_to(mod, backups(mod)[-1])
         after = {k: v for k, v in tree_hash(hlr).items() if not k.startswith("faction_tool_backups")}
         self.assertEqual(before, after)
+        self.assertEqual(CN.engine(mod), ("REX", True))
+        # Medieval II: M2EX runs it (the user: "on Medieval it is M2EX, not REX"); without it nothing is written
+        os.rename(os.path.join(game, "REX.exe"), os.path.join(game, "M2EX.exe"))
+        write(os.path.join(hlr, "data", "descr_religions.txt"), "religions\n{\n    catholic\n}\n")
+        mod = ModData(hlr)
+        self.assertEqual(CN.engine(mod), ("M2EX", True))
+        p3 = Plan(mod, None, "map")
+        apply_opts(p3, "test", {"culture_names": {"Atown": {"barbarian": "Atburg"}}})
+        self.assertIn(CN.script_path(mod, "test"), list(p3.files) + list(p3.binaries))
+        self.assertTrue(any("M2EX" in w for _, w in p3.warnings))
+        os.remove(os.path.join(game, "M2EX.exe"))
+        p4 = Plan(ModData(hlr), None, "map")
+        apply_opts(p4, "test", {"culture_names": {"Atown": {"barbarian": "Atburg"}}})
+        self.assertTrue(any("no M2EX.exe" in w for _, w in p4.warnings))
+
+    def test_check_mod_limits_know_the_engine(self):
+        """Check mod's LIMITS: with REX beside the game it says so, and what REX is known to lift (regions)
+        is never a fault; M2EX is named for Medieval II."""
+        from faction_tool.check import engine_limits
+        from faction_tool.limits import ENGINE_LIFTS
+        game, hlr = self._game()
+        mod = ModData(hlr)
+        img = mod.region_map("test")
+        many = {"R%d" % i: {} for i in range(750)}                       # HLR's 750 regions
+        got = engine_limits(mod, "test", many, [], [], img)
+        self.assertIn("REX beside the game", got[0][0])
+        self.assertTrue(any("HLR runs 750 regions" in m for m, _ in got))
+        self.assertFalse(any(fault for _, fault in got))
+        os.remove(os.path.join(game, "REX.exe"))
+        got = engine_limits(ModData(hlr), "test", many, [], [], img)
+        self.assertTrue(any(fault and "regions" in m for m, fault in got))   # the original exe stops at 200
+        self.assertIn("units", ENGINE_LIFTS["M2EX.exe"])
 
     def test_new_mod_from_bi_starts_barbarian_invasion(self):
         # REX starts BI with -bi (its own "Barbarian Invasion.bat"); a mod made from bi must too, else REX
@@ -1601,7 +1633,7 @@ building smith
         text = check_mod(ModData(self.root), "test")
         self.assertIn("FACTIONS: 2 in descr_sm_factions.txt, 2 blocks", text)
         self.assertIn("No problems found", text)
-        self.assertIn("LIMITS (the original Rome exe)", text)
+        self.assertIn("LIMITS (the original Rome exe: no REX", text)
         self.assertIn("building chains", text)
 
     def test_check_mod_crash_rules_from_modders(self):

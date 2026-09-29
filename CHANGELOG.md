@@ -9,10 +9,13 @@
   symbols9-15, not symbols1-8). A new faction no longer puts its symbol on a rebels' sheet: it takes a free
   faction slot, or a new faction sheet is added (slave's flag keeps its picture).
 - **Terrain editor**: Preview warns about a 2 x 2 block of river and a river closing into a ring.
+- **Names by culture on Medieval II** need **M2EX** (not REX): the check, the window texts and Preview name the
+  right engine; under M2EX the names are written the way REX documents it (to test in the game once).
 
 ### Added
-- **Check mod**: the original exe's limits (regions, map size, units, building chains, levels, hidden
-  resources) counted against the mod; win conditions naming a missing region or faction; Medieval II rebels
+- **Check mod**: the factions against max_factions, and the original exe's limits (regions, map size, units, building chains, levels, hidden
+  resources) counted against the mod, saying whether REX / M2EX is beside the game and what it is known to
+  lift (REX: regions - HLR runs 750); win conditions naming a missing region or faction; Medieval II rebels
   with units the slave faction may not own; Rome regions lacking the 'slaves' the mod's other regions have.
 - **A new religion for Medieval II** (Map tab, Regions: **New religion...**), e.g. Judaism: its name in
   descr_religions.txt (list + its own block), descr_religions_lookup.txt, text/religions.txt, its symbol

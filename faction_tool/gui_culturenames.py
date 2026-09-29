@@ -18,22 +18,22 @@ class CultureNamesTable:
         self.saved = CN.read(mod, camp)                    # what the campaign's script holds now
         self.foreign = CN.foreign(mod, camp)
         self.fcult = dict(mod.factions())
-        from .limits import faction_limit
-        rex = faction_limit(mod).get("engine") == "REX.exe"
+        eng, rex = CN.engine(mod)
         w = self.w = tk.Toplevel(app)
         w.title("Settlement names by culture - %s" % camp)
         w.transient(app)
         w.geometry("1180x640")
         frm = ttk.Frame(w, padding=8)
         frm.pack(fill="both", expand=True)
-        ttk.Label(frm, wraplength=1150, justify="left", foreground="#555" if rex else "#a33", text=(
-            "Each town may have a name for each culture of its owner; REX renames it when it changes hands. "
-            "Double click a culture's cell to type a name (Enter keeps it, Esc drops it, an empty cell = no name "
-            "of its own: 'every other' is used, else the game's name). Double click a town's name for its own "
-            "dialog. Shown now = the name under its owner as the next Apply leaves it. Grey rows are renamed by "
-            "the mod's own campaign script - not edited here." if rex else
-            "Needs REX: the game folder has no REX.exe, so these names are not written. The table still shows "
-            "and keeps them.")).pack(anchor="w")
+        about = ("Each town may have a name for each culture of its owner; %s renames it when it changes hands. "
+                 "Double click a culture's cell to type a name (Enter keeps it, Esc drops it, an empty cell = no name "
+                 "of its own: 'every other' is used, else the game's name). Double click a town's name for its own "
+                 "dialog. Shown now = the name under its owner as the next Apply leaves it. Grey rows are renamed by "
+                 "the mod's own campaign script - not edited here." % eng) if rex else (
+                 "Needs %s: the game folder has no %s.exe, so these names are not written. The table still shows "
+                 "and keeps them." % (eng, eng))
+        ttk.Label(frm, wraplength=1150, justify="left", foreground="#555" if rex else "#a33",
+                  text=about).pack(anchor="w")
         bar = ttk.Frame(frm)
         bar.pack(fill="x", pady=6)
         ttk.Label(bar, text="Culture").pack(side="left")
