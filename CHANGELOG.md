@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.15.0 - 2026-09-29
+
+### Added
+- **City or castle (Medieval II)**: *Settlement is a* city / castle on the Buildings tab (New and Edit faction).
+  A castle is the settlement's `settlement castle` line in descr_strat plus castle buildings; the tool switches the
+  line and converts the buildings as the game does - each level becomes the level its `convert_to` names in the
+  matching chain (core_building <-> core_castle_building, barracks <-> castle_barracks, a church <-> a chapel,
+  roads <-> castle roads...), a level without one goes (a castle has no market or town hall), and the governor's
+  building is fitted to the settlement level (a castle's equals it, a city's is one below). Afterwards only that
+  kind's buildings are offered. A huge city cannot be a castle (castles end at the citadel, a large city) - the
+  tool says so. Preview lists every building converted or gone. Checked on vanilla Medieval II (england: London a
+  castle, Nottingham a city; Restore byte-exact); not yet in the game. Rome has no castles: not shown there.
+  (Asked on Discord - the tool only made cities before.)
+
 ## 0.14.1 - 2026-09-29
 
 ### Fixed

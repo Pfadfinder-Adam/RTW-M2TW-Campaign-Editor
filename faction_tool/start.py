@@ -136,9 +136,12 @@ def _with_buildings(plan, f, region, raw, picked, size=None):
     """The settlement block with the buildings picked by hand, checked against
     export_descr_buildings: the level exists, the faction may build it, and the
     settlement is big enough."""
-    from .buildings import available, ranks_ok, read_buildings, set_buildings, sized
+    from .buildings import available, ranks_ok, read_buildings, set_buildings, sized, with_kind
     edb = plan.files.get(plan.mod.file("edb")) or (plan.mod.load(plan.mod.file("edb")) if plan.mod.file("edb") else None)
     known = {b.name: b for b in read_buildings(edb)} if edb is not None else {}
+    kind = (plan.opts.get("kinds") or {}).get(region)
+    if kind:                                  # Medieval II: a city or a castle (the header, buildings converted)
+        raw, picked = with_kind(plan, f, region, raw, kind, picked, known)
     raw, town_level = sized(plan, f, region, raw, picked or [], size, known)
     if picked is None:
         return raw
@@ -211,7 +214,7 @@ def build_start(plan, campaign, start):
             if st.owner == new:
                 continue
             block_raw = list(f.raw[st.start:st.end])
-        if r in picked_buildings or r in sizes:
+        if r in picked_buildings or r in sizes or r in (plan.opts.get("kinds") or {}):
             block_raw = _with_buildings(plan, f, r, block_raw, picked_buildings.get(r), sizes.get(r))
         moved_blocks.append(block_raw)
         if st.start is not None:

@@ -263,6 +263,91 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertNotEqual(mid, after)
 
+    def test_medieval_city_and_castle(self):
+        # M2: a castle = `settlement castle` + castle levels; the game converts by each level's convert_to
+        from faction_tool.buildings import (read_buildings, convert, set_kind, settlement_kind, kind_problem,
+                                            has_castles)
+        from faction_tool.textio import TextFile
+        path = os.path.join(self.root, "edb_m2.txt")
+        write(path, """building core_building
+{
+    convert_to core_castle_building
+    levels wooden_pallisade wooden_wall
+    {
+        wooden_pallisade city requires factions { northern_european, }
+        {
+            convert_to 1
+            settlement_min town
+        }
+        wooden_wall city requires factions { northern_european, }
+        {
+            convert_to 2
+            settlement_min large_town
+        }
+    }
+}
+building core_castle_building
+{
+    convert_to core_building
+    levels motte_and_bailey wooden_castle castle
+    {
+        motte_and_bailey castle requires factions { northern_european, }
+        {
+            settlement_min village
+        }
+        wooden_castle castle requires factions { northern_european, }
+        {
+            convert_to 0
+            settlement_min town
+        }
+        castle castle requires factions { northern_european, }
+        {
+            convert_to 1
+            settlement_min large_town
+        }
+    }
+}
+building market
+{
+    levels corn_exchange
+    {
+        corn_exchange city requires factions { northern_european, }
+        {
+            settlement_min town
+        }
+    }
+}
+building smith
+{
+    levels leather_tanner
+    {
+        leather_tanner requires factions { northern_european, }
+        {
+            settlement_min town
+        }
+    }
+}
+""")
+        known = {b.name: b for b in read_buildings(TextFile.load(path))}
+        self.assertTrue(has_castles(known))
+        city = [("core_building", "wooden_wall"), ("market", "corn_exchange"), ("smith", "leather_tanner")]
+        got, changes = convert(city, "castle", known, "large_town")
+        self.assertEqual(got, [("core_castle_building", "castle"), ("smith", "leather_tanner")])
+        self.assertIn((("market", "corn_exchange"), None), changes)                 # a castle has no market
+        self.assertEqual(convert(got, "city", known, "large_town")[0][0], ("core_building", "wooden_wall"))
+        self.assertEqual(convert([], "castle", known, "village")[0], [("core_castle_building", "motte_and_bailey")])
+        self.assertEqual(convert([("core_castle_building", "motte_and_bailey")], "city", known, "village")[0], [])
+        self.assertTrue(kind_problem(known, "castle", "city"))           # castles stop at large_town here
+        self.assertIsNone(kind_problem(known, "castle", "large_town"))
+        raw = ["settlement\r\n", "{\r\n", "\tlevel town\r\n", "}\r\n"]
+        castle = set_kind(raw, "castle", lambda t: t + "\r\n")
+        self.assertEqual(castle[0], "settlement castle\r\n")
+        self.assertEqual(settlement_kind(castle), "castle")
+        self.assertEqual(set_kind(castle, "city", lambda t: t + "\r\n"), raw)
+        # Rome has no castle levels: nothing offered
+        rome = {b.name: b for b in read_buildings(ModData(self.root).load(ModData(self.root).file("edb")))}
+        self.assertFalse(has_castles(rome))
+
     def test_own_name_list_for_new_and_edited_faction(self):
         from faction_tool import namelists as NL
         from faction_tool.edit import edit

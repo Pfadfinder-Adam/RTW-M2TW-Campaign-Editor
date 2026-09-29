@@ -24,6 +24,16 @@ class BuildingsEditor(ttk.Frame):
         ttk.Checkbutton(top, text="show levels too big for the settlement", variable=self.v_all,
                         command=self.redraw).pack(side="left", padx=12)
         ttk.Button(top, text="Keep the town's own", command=self.reset).pack(side="right")
+        # Medieval II: a city or a castle (shown only where the game has castles)
+        self.kind_box = ttk.Frame(top)
+        ttk.Label(self.kind_box, text="Settlement is a").pack(side="left")
+        self.v_kind = tk.StringVar(value="city")
+        self.cb_kind = ttk.Combobox(self.kind_box, textvariable=self.v_kind, values=("city", "castle"),
+                                    state="readonly", width=9)
+        self.cb_kind.pack(side="left", padx=4)
+        self.cb_kind.bind("<<ComboboxSelected>>", lambda e: self.on_kind and self.on_kind(self.v_kind.get()))
+        self.kind = None
+        self.on_kind = None
         self.info = ttk.Label(self, text="", anchor="w", foreground="#444")
         self.info.pack(fill="x")
 
@@ -49,9 +59,17 @@ class BuildingsEditor(ttk.Frame):
             self._width = e.width
             self.redraw()
 
-    def load(self, region, town_level, buildings, own, picked, culture, faction, template, bpics, on_change):
+    def load(self, region, town_level, buildings, own, picked, culture, faction, template, bpics, on_change,
+             kind=None, on_kind=None):
         """buildings: [Building]; own: the town's buildings now [(chain, level)];
-        picked: the hand-set list or None; on_change(list or None)."""
+        picked: the hand-set list or None; on_change(list or None); kind: Medieval II 'city' / 'castle' (None
+        in Rome) - the chains offer only that kind's levels; on_kind(kind) when it is switched."""
+        self.kind, self.on_kind = kind, on_kind
+        if kind:
+            self.v_kind.set(kind)
+            self.kind_box.pack(side="right", padx=12)
+        else:
+            self.kind_box.pack_forget()
         self.region, self.town_level = region, town_level
         self.buildings, self.own = buildings, list(own)
         self.culture, self.faction, self.template, self.bpics = culture, faction, template, bpics
@@ -64,7 +82,7 @@ class BuildingsEditor(ttk.Frame):
         """The settlement level the chains offer their levels for: the one picked or
         grown in the window, not only the one in the file."""
         self.town_level = level
-        self.title.configure(text="%s - a %s" % (self.region, level))
+        self.title.configure(text="%s - a %s%s" % (self.region, level, " castle" if self.kind == "castle" else ""))
         self.redraw()
 
     def core_for(self, level):
@@ -85,7 +103,8 @@ class BuildingsEditor(ttk.Frame):
         for b in self.buildings:
             # a level given or taken on the Roster tab counts as the faction's list will be
             lv = [l for l in b.levels if self.roster.get((b.name, l.name),
-                                                         available(l, self.faction, self.culture, self.template))]
+                                                         available(l, self.faction, self.culture, self.template))
+                  and (self.kind is None or l.kind in (None, self.kind))]     # a castle offers castle levels
             if lv or b.name in self.current:
                 out.append((b, lv))
         return out

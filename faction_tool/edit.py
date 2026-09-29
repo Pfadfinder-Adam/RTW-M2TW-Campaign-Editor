@@ -601,19 +601,27 @@ def _garrisons(plan, f, s, campaign):
 
 
 def _buildings(plan, f, s):
-    from .buildings import available, ranks_ok, read_buildings, set_buildings, sized
-    picked = plan.opts.get("buildings") or {}
+    from .buildings import available, ranks_ok, read_buildings, set_buildings, sized, with_kind
+    picked = dict(plan.opts.get("buildings") or {})
     sizes = plan.opts.get("sizes") or {}
-    if not picked and not sizes:
+    kinds = plan.opts.get("kinds") or {}
+    if not picked and not sizes and not kinds:
         return
     fb = s.faction(plan.new)
     known = {b.name: b for b in read_buildings(plan.mod.load(plan.mod.file("edb")))} if plan.mod.file("edb") else {}
     culture = plan.mod.culture(plan.new)
     by_region = {st.region: st for st in fb.settlements}
-    for region in sorted(set(picked) | set(sizes), key=lambda r: -by_region[r].start if r in by_region else 0):
+    for region in sorted(set(picked) | set(sizes) | set(kinds), key=lambda r: -by_region[r].start if r in by_region
+                         else 0):
         st = by_region.get(region)
         if st is None:
             raise ValueError("%s is not a town of %s" % (region, plan.new))
+        if region in kinds:                   # Medieval II: a city or a castle (the header, buildings converted)
+            given = [tuple(x) for x in picked[region]] if region in picked else None
+            raw, got = with_kind(plan, f, region, f.raw[st.start:st.end], kinds[region], given, known)
+            f.raw[st.start:st.end] = raw
+            if got is not given:
+                picked[region] = got
         items = [tuple(x) for x in picked.get(region, [])]
         raw, level = sized(plan, f, region, f.raw[st.start:st.end], items, sizes.get(region), known)
         f.raw[st.start:st.end] = raw

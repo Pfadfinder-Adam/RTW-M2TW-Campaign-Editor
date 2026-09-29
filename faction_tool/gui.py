@@ -12,7 +12,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 from . import log, settings
 from .build import build, template_display
 from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need, core_settlement, population_of, rank,
-                        read_buildings, settlement_info)
+                        convert, has_castles, kind_problem, read_buildings, settlement_info, settlement_kind)
 from .mapdata import CampaignMap, faction_colours
 from .moddata import ModData
 from .mapedit import orig as place_orig, place_problem, port_fleets, sea_spot
@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.14.1"
+VERSION = "0.15.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
 
@@ -292,6 +292,7 @@ class App(tk.Tk):
         self._region_point = None       # ('city' | 'port', region) waiting for a click
         self.undo_stack, self.redo_stack = [], []   # snapshots of what the window keeps (Ctrl+Z / Ctrl+Y)
         self.sizes = {}                 # {region: {'level', 'population'}} set by hand on the Buildings tab
+        self.kinds = {}                 # Medieval II: {region: 'city' | 'castle'} changed on the Buildings tab
         self._units_for, self._units_cache = None, []
         self.buildings_picked = {}      # region -> [(chain, level)] set by hand
         self._edb_for, self._edb, self._bpics = None, [], None
@@ -707,6 +708,8 @@ class App(tk.Tk):
         if new and not st:                          # a new region: the size picked in its dialog
             town_level, pop = new.get("level") or "village", POP_MIN.get(new.get("level") or "village", 400) or 400
         self._size_region, self._size_now = region, (town_level, pop)
+        file_kind = settlement_kind(self.strat.lines[st.start:st.end]) if st else "city"
+        self._kind_now = file_kind
         size = self.sizes.get(region, {})
         self.v_level.set(size.get("level") or town_level)
         self.v_pop.set(str(size.get("population") if size.get("population") is not None else (pop or "")))
@@ -754,9 +757,46 @@ class App(tk.Tk):
         # by a picked governor's building, or as the file has it
         shown = size.get("level") or self._grown_level(self.buildings_picked.get(region), town_level)
         self.buildings_editor.roster = self._roster_levels()
+        known = {b.name: b for b in self._edb}
         self.buildings_editor.load(region, shown, self._edb, own, self.buildings_picked.get(region),
                                    self.mod.culture(template), self.v["name"].get().strip().lower() or template,
-                                   template, self._bpics, changed)
+                                   template, self._bpics, changed,
+                                   kind=self.kinds.get(region, file_kind) if has_castles(known) else None,
+                                   on_kind=lambda k: self.set_kind(region, k))
+
+    def set_kind(self, region, kind):
+        """Medieval II: the town becomes a city or a castle - its buildings converted the game's way (each level's
+        convert_to), the governor's building fitted to the settlement level; written with the next Apply."""
+        known = {b.name: b for b in self._edb}
+        st = self.strat.settlement_of(region)
+        town_level, own = settlement_info(self.strat.lines[st.start:st.end]) if st else ("village", [])
+        level = self.sizes.get(region, {}).get("level") or self._grown_level(self.buildings_picked.get(region),
+                                                                              town_level)
+        now = self.kinds.get(region, self._kind_now)
+        if kind == now:
+            return
+        bad = kind_problem(known, kind, level)
+        if bad:
+            messagebox.showerror(APP, "%s: %s." % (region, bad))
+            self.load_buildings()
+            return
+        self.remember()
+        base = self.buildings_picked.get(region)
+        items, changes = convert(list(base) if base is not None else own, kind, known, level)
+        if kind == self._kind_now and base is None:
+            self.kinds.pop(region, None)
+        else:
+            self.kinds[region] = kind
+            self.buildings_picked[region] = items
+        if kind == self._kind_now and self.buildings_picked.get(region) == own:
+            self.buildings_picked.pop(region, None)
+        gone = [o[1] for o, n in changes if o and not n]
+        moved = ["%s -> %s" % (o[1], n[1]) for o, n in changes if o and n]
+        self.status.set("%s is now a %s (written with Apply)%s%s" % (
+            region, kind, "; " + ", ".join(moved) if moved else "",
+            "; gone (a %s has none): %s" % (kind, ", ".join(gone)) if gone else ""))
+        self.refresh_chosen(keep_units_selection=True)
+        self.load_buildings()
 
     def _grown_level(self, picked, town_level):
         """The level a settlement gets from its picked governor's building (never smaller)."""
@@ -951,6 +991,7 @@ class App(tk.Tk):
         self.update_actions()
         self.garrison_editor.auto_text = ("unchanged - the town keeps its garrison" if edit else None)
         self.chosen, self.garrisons, self.buildings_picked, self.sizes = [], {}, {}, {}
+        self.kinds = {}
         self.art_replace, self.sel_map = {}, {}
         self.roster_set = {}
         self.family_set = {}
@@ -1001,6 +1042,7 @@ class App(tk.Tk):
         self.v_give.set("slave")
         self.chosen = list(now.get("regions", []))
         self.garrisons, self.buildings_picked, self.sizes = {}, {}, {}
+        self.kinds = {}
         self.char_moves, self.roster_set = {}, {}
         self.family_set = {}
         self.name_list = {}
@@ -1041,7 +1083,7 @@ class App(tk.Tk):
         return out
 
     # ------------------------------------------------------------------ undo / redo
-    UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "place_moves", "char_moves", "field",
+    UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "place_moves", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions", "region_edits",
                  "culture_names", "name_list", "res_moves", "res_removed", "res_added", "region_tags", "art_replace", "sel_map", "roster_set",
                  "family_set")
@@ -2298,6 +2340,7 @@ class App(tk.Tk):
         self.garrisons = {}
         self.buildings_picked = {}
         self.sizes = {}
+        self.kinds = {}
         self.field, self._placing = [], None
         self.editing_now, self.char_moves = None, {}
         self.place_moves = {}
@@ -2561,7 +2604,8 @@ class App(tk.Tk):
         for r in self.chosen:
             n = len(self.buildings_picked.get(r, []))
             size = self.sizes.get(r, {})
-            self.lb_build.insert("end", "%s%s%s" % (r, "  [%d buildings]" % n if r in self.buildings_picked
+            self.lb_build.insert("end", "%s%s%s%s" % (r, "  (-> %s)" % self.kinds[r] if r in self.kinds else "",
+                                                    "  [%d buildings]" % n if r in self.buildings_picked
                                                     else "  [its own]",
                                                     "  " + " ".join(str(v) for v in (size.get("level"),
                                                     size.get("population")) if v is not None) if size else ""))
@@ -2866,6 +2910,7 @@ class App(tk.Tk):
             "regions": self._regions_opts(),
             "resources": self._resources_opts(),
             "names": self.name_list.get("(new)"),
+            "kinds": {r: k for r, k in self.kinds.items() if r in self.chosen},
         }
         return v["template"], v["name"].lower(), opts
 
@@ -2910,6 +2955,7 @@ class App(tk.Tk):
             "buildings": {r: [list(x) for x in b] for r, b in self.buildings_picked.items()},
             "roster": dict(self.roster_set),
             "names": self.name_list.get(v["template"]),
+            "kinds": {r: k for r, k in self.kinds.items() if r in self.chosen},
             "family": copy.deepcopy(self.family_set) if self.family_set else None}
 
     def _places(self):

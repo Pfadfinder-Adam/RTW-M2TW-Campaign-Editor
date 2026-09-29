@@ -17,6 +17,8 @@ class Level:
         self.settlement_min = "village"
         self.cost = 0
         self.turns = 0
+        self.kind = None                          # Medieval II: 'city' or 'castle' (the word after the name)
+        self.convert_to = None                    # the level of the chain's convert_to it becomes
 
     def factions(self):
         m = re.search(r"(?<![A-Za-z0-9_])factions\s*\{([^}]*)\}", self.requires)
@@ -33,6 +35,7 @@ class Building:
         self.name = name
         self.levels = []
         self.classification = ""
+        self.convert_to = None                    # Medieval II: the chain a castle's becomes in a city and back
 
     def level(self, name):
         return next((l for l in self.levels if l.name == name), None)
@@ -54,12 +57,18 @@ def read_buildings(edb):
                 cur.classification = t[1]
             elif t[0] == "levels" and depth == 1:
                 names = t[1:]
+            elif t[0] == "convert_to" and depth == 1 and len(t) > 1:
+                cur.convert_to = t[1]
             elif t[0] in names and depth == 2:
                 req = code.split("requires", 1)[1] if "requires" in code else ""
                 pending = Level(t[0], req)
+                if len(t) > 1 and t[1] in ("city", "castle"):
+                    pending.kind = t[1]
                 cur.levels.append(pending)
             elif pending is not None and depth == 3:
-                if t[0] == "settlement_min" and len(t) > 1:
+                if t[0] == "convert_to" and len(t) > 1 and t[1].isdigit():
+                    pending.convert_to = int(t[1])
+                elif t[0] == "settlement_min" and len(t) > 1:
                     pending.settlement_min = t[1]
                 elif t[0] == "cost" and len(t) > 1 and t[1].isdigit():
                     pending.cost = int(t[1])
@@ -202,6 +211,116 @@ def sized(plan, f, region, raw, picked, size, known):
     if new == level and want_pop in (None, pop):
         return raw, level
     return resize(raw, f.make, new if new != level else None, want_pop), new
+
+
+# ---------------------------------------------------------------------------
+# Medieval II: a settlement is a city or a castle
+# ---------------------------------------------------------------------------
+KINDS = ("city", "castle")
+
+
+def settlement_kind(lines):
+    """'castle' for a `settlement castle` block, else 'city'."""
+    for l in lines:
+        t = tokens(l)
+        if t[:1] == ["settlement"]:
+            return "castle" if t[1:2] == ["castle"] else "city"
+    return "city"
+
+
+def has_castles(known):
+    """Whether the mod's buildings know castles (Medieval II); Rome has none."""
+    return any(l.kind == "castle" for b in known.values() for l in b.levels)
+
+
+def core_chain(known, kind):
+    """The governor's chain of a city or of a castle (core_building / core_castle_building)."""
+    cores = [b for n, b in known.items() if n.lower().startswith("core") and b.levels]
+    return next((b for b in cores if any(l.kind == kind for l in b.levels)), None)
+
+
+def kind_problem(known, kind, level):
+    """Why a settlement of this level cannot be that kind, or None."""
+    core = core_chain(known, kind)
+    if kind == "castle" and core is None:
+        return "this game has no castles (no castle core building in export_descr_buildings.txt)"
+    if core is not None and kind == "castle" and rank(level) >= len(core.levels) + core_offset(core):
+        top = SETTLEMENT_LEVELS[len(core.levels) - 1 + core_offset(core)]
+        return "a %s cannot be a castle - castles go up to %s (%s)" % (level, top, core.levels[-1].name)
+    return None
+
+
+def convert(items, kind, known, level):
+    """The buildings as the game converts them when the settlement becomes that kind: a level marked for the
+    other kind becomes level `convert_to` of its chain's `convert_to` chain, or goes (none given). The governor's
+    building then fits the settlement level (a castle's = the level, a city's one below; a village city has none).
+    Returns (items, [(old, new or None)])."""
+    out, changes = [], []
+    for chain, name in items:
+        b = known.get(chain)
+        lv = b.level(name) if b else None
+        if lv is None or lv.kind in (None, kind):
+            out.append((chain, name))
+            continue
+        to = known.get(b.convert_to) if b.convert_to else None
+        if to is not None and lv.convert_to is not None and 0 <= lv.convert_to < len(to.levels):
+            new = (to.name, to.levels[lv.convert_to].name)
+            out.append(new)
+            changes.append(((chain, name), new))
+        else:
+            changes.append(((chain, name), None))
+    core = core_chain(known, kind)
+    if core is not None:
+        want = core_level_for(core, level)
+        have = [x for x in out if x[0].lower().startswith("core")]
+        rest = [x for x in out if not x[0].lower().startswith("core")]
+        if want is not None and have != [(core.name, want.name)]:
+            for h in have:
+                changes.append((h, None))
+            changes.append((None, (core.name, want.name)))
+            out = [(core.name, want.name)] + rest
+        elif want is None and have:
+            for h in have:
+                changes.append((h, None))
+            out = rest
+    return out, changes
+
+
+def set_kind(raw, kind, make):
+    """The settlement block's raw lines with its header `settlement` / `settlement castle`."""
+    out = list(raw)
+    for i, l in enumerate(out):
+        t = tokens(l)
+        if t[:1] == ["settlement"]:
+            code = strip_comment(l.rstrip("\r\n"))
+            rest = l.rstrip("\r\n")[len(code):]
+            lead = code[:len(code) - len(code.lstrip())]
+            out[i] = make(lead + ("settlement castle" if kind == "castle" else "settlement") + rest)
+            break
+    return out
+
+
+def with_kind(plan, f, region, raw, kind, picked, known):
+    """(raw, picked) with the settlement made a city or a castle: the header, and the buildings converted the
+    game's way (the picked ones, else the block's own). Refused where the game has no such settlement."""
+    texts = [l.rstrip("\r") for l in raw]
+    level, own = settlement_info(texts)
+    now = settlement_kind(texts)
+    if kind not in KINDS or kind == now:
+        return raw, picked
+    bad = kind_problem(known, kind, level)
+    if bad:
+        raise ValueError("%s: %s" % (region, bad))
+    items, changes = convert(list(picked) if picked is not None else own, kind, known, level)
+    plan.note(f, "%s: %s -> %s (settlement%s)" % (region, now, kind, " castle" if kind == "castle" else ""))
+    for old, new in changes:
+        if old and new:
+            plan.note(f, "%s: %s %s becomes %s %s" % (region, old[0], old[1], new[0], new[1]))
+        elif old:
+            plan.note(f, "%s: %s %s goes (a %s has no such building)" % (region, old[0], old[1], kind))
+        elif new:
+            plan.note(f, "%s: governor's building %s %s" % (region, new[0], new[1]))
+    return set_kind(raw, kind, f.make), items
 
 
 def set_buildings(raw, buildings, make):
