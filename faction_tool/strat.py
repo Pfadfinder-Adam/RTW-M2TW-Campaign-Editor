@@ -42,6 +42,22 @@ class Character:
         return self.kind == "named character"
 
 
+# forts and watchtowers: 'fort 263 330 cerin_amroth_fort culture middle_eastern permanent name Cerin Amroth'
+# (Medieval II; REX adds 'permanent' and 'name ...'), Rome also 'fort x, y'
+RE_FORT = re.compile(r"^\s*(fort|watchtower)\s+(-?\d+)\s*,?\s*(-?\d+)(.*)$")
+
+
+class Fort:
+    def __init__(self, i, line, owner):
+        m = RE_FORT.match(strip_comment(line))
+        self.line, self.text, self.owner = i, line, owner
+        self.kind = m.group(1)
+        self.xy = (int(m.group(2)), int(m.group(3)))
+        rest = m.group(4).split()
+        self.permanent = "permanent" in rest
+        self.name = " ".join(rest[rest.index("name") + 1:]).strip('"') if "name" in rest else ""
+
+
 class FactionBlock:
     def __init__(self, name, start, end, header):
         self.name, self.start, self.end, self.header = name, start, end, header
@@ -77,6 +93,13 @@ class Strat:
             fb = FactionBlock(t[1], i, e, lines[i])
             self._scan_block(fb)
             self.factions.append(fb)
+        # forts / watchtowers anywhere in the file (a faction's block, or the top)
+        owner_at = {}
+        for fb in self.factions:
+            for k in range(fb.start, fb.end):
+                owner_at[k] = fb.name
+        self.forts = [Fort(i, l, owner_at.get(i)) for i, l in enumerate(lines[:self.diplomacy_start])
+                      if RE_FORT.match(strip_comment(l))]
 
     def _list(self, key):
         for i, l in enumerate(self.lines):
@@ -115,8 +138,8 @@ class Strat:
                 fb.settlements.append(Settlement(i, j, region, fb.name))
                 i = j
                 continue
-            if h in ("character", "character_record", "relative"):
-                marks.append((i, h))
+            if h in ("character", "character_record", "relative", "fort", "watchtower"):
+                marks.append((i, h))                    # a fort line ends the character before it
             i += 1
         for n, (i, h) in enumerate(marks):
             if h != "character":
@@ -144,6 +167,10 @@ class Strat:
     def owners(self):
         """{region: owner} for every settlement in the file."""
         return {s.region: fb.name for fb in self.factions for s in fb.settlements}
+
+    def taken_tiles(self):
+        """Tiles someone stands on at the start: every character, fort and watchtower."""
+        return {c.xy for fb in self.factions for c in fb.characters if c.xy} | {x.xy for x in self.forts}
 
     def characters_at(self, xy):
         return [c for fb in self.factions for c in fb.characters if c.xy == xy]

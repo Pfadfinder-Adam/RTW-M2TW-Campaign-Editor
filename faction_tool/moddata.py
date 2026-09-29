@@ -293,6 +293,15 @@ class ModData:
             self._cache[key] = read_tga(self.campaign_file(campaign, "map_regions.tga"))
         return self._cache[key]
 
+    def forts(self, campaign):
+        """[strat.Fort] of the campaign's descr_strat.txt (forts and watchtowers)."""
+        key = ("forts", campaign)
+        if key not in self._cache:
+            from .strat import Strat
+            p = self.campaign_file(campaign, "descr_strat.txt")
+            self._cache[key] = Strat(self.load(p)).forts if p else []
+        return self._cache[key]
+
     def free_tile(self, campaign, region, taken, reach=4, start=None, own=None):
         """The best tile of `region` near its city that no one stands on, or None.
 
@@ -308,6 +317,7 @@ class ModData:
             return None
         colour = info["colour"] if info else None
         ok, slope = self._standable(campaign)
+        taken = set(taken) | {x.xy for x in self.forts(campaign)}
         best = None
         for y in range(start[1] - reach, start[1] + reach + 1):
             for x in range(start[0] - reach, start[0] + reach + 1):
@@ -407,6 +417,9 @@ class ModData:
         if sea:
             return "that is sea"
         town = xy in set(self.city_tiles(campaign).values())
+        fort = next((x for x in self.forts(campaign) if x.xy == xy), None)
+        if fort:
+            return "a %s stands there%s" % (fort.kind, " (%s)" % fort.name if fort.name else "")
         if army and xy in armies_at:
             return "another army stands there" + (" (a town holds one army)" if town else "")
         if not town:

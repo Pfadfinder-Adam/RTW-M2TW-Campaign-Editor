@@ -118,6 +118,7 @@ class MapView(ttk.Frame):
         # resources: [{id, kind, xy}]; check_res(id, xy) -> None or why; on_res_move(id, xy); on_res_click(id)
         self.resources, self.check_res, self.on_res_move, self.on_res_click = [], None, None, None
         self.res_sel, self._rdrag, self._rpress = None, None, None
+        self.forts, self.labels = [], {}
         self._symimg = {}
         c = self.canvas
         c.bind("<Configure>", lambda e: self.render())
@@ -264,7 +265,7 @@ class MapView(ttk.Frame):
              region_mode=False, paint_overlay=None, on_paint=None, on_pick=None, brush=1, region_points=(),
              region_painted=None, region_colours=None, borders=True, ghost=None, locked=None,
              resources=None, check_res=None, on_res_move=None, on_res_click=None, res_sel=None, new_land=None,
-             plain=False, labels=None):
+             plain=False, labels=None, forts=None):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
@@ -298,6 +299,7 @@ class MapView(ttk.Frame):
         self.check_res, self.on_res_move, self.on_res_click = check_res, on_res_move, on_res_click
         self.res_sel = res_sel
         self.labels = dict(labels or {})     # {region: name} the town shows for its owner (names by culture)
+        self.forts = list(forts or [])       # [strat.Fort] of descr_strat: drawn, and no one may start on them
         self.plain = plain                  # the Terrain editor: the ground alone, no political or region colours
         if first:
             self.fit()
@@ -518,6 +520,7 @@ class MapView(ttk.Frame):
                         self._anchor(sx, sy, r, tags)
         if self.v_res.get():
             self._resources(cw, ch)
+        self._forts(cw, ch)
         for region, (x, y) in cm.cities.items():
             x, y = self.places.get(("city", region), (x, y))
             sx, sy = self.to_screen(x, y)
@@ -708,6 +711,29 @@ class MapView(ttk.Frame):
         h = (sum(ord(ch) * (i + 7) for i, ch in enumerate(kind)) % 360) / 360.0
         r, g, b = colorsys.hsv_to_rgb(h, 0.65, 0.85)
         return "#%02x%02x%02x" % (int(r * 255), int(g * 255), int(b * 255))
+
+    def _forts(self, cw, ch):
+        """A fort: a small brown tower with battlements in the owner's colour (a watchtower: thinner)."""
+        c = self.canvas
+        for fo in self.forts:
+            sx, sy = self.to_screen(*fo.xy)
+            if not (-20 < sx < cw + 20 and -20 < sy < ch + 20):
+                continue
+            col = self.colours.get(fo.owner) if fo.owner else None
+            edge = "#%02x%02x%02x" % tuple(col) if col else "#222222"
+            w = max(2.0, min(self.z * (0.28 if fo.kind == "watchtower" else 0.42), 12))
+            h = w * 1.3
+            tags = ("fort", "fort:%d" % fo.line)
+            c.create_rectangle(sx - w, sy - h * 0.6, sx + w, sy + h * 0.6, fill="#7a5a36", outline=edge,
+                               width=2 if col else 1, tags=tags)
+            if w >= 5:
+                for k in (-1, 0, 1):                  # battlements
+                    bx = sx + k * w * 0.66
+                    c.create_rectangle(bx - w * 0.2, sy - h * 0.6 - w * 0.35, bx + w * 0.2, sy - h * 0.6,
+                                       fill="#7a5a36", outline=edge, tags=tags)
+
+    def _fort_under(self, x, y):
+        return next((fo for fo in self.forts if tuple(fo.xy) == (x, y)), None)
 
     def _resources(self, cw, ch):
         """A small square in the type's colour with its first two letters; on a town's
@@ -1075,6 +1101,11 @@ class MapView(ttk.Frame):
                 return
             x, y = self.to_tile(e.x, e.y)
             text = self.cmap.describe(x, y, self.owners)
+            fo = self._fort_under(x, y)
+            if fo:
+                text += "   %s%s%s of %s%s" % (fo.kind, " '%s'" % fo.name if fo.name else "",
+                                            " (permanent)" if fo.permanent else "", fo.owner or "no faction",
+                                            " - no one may start on it")
             here = [c for c in self.chars if tuple(c["xy"]) == (x, y)]
             if here:                                   # who is in the town: army first, then agents
                 here.sort(key=lambda c: not c["army"])

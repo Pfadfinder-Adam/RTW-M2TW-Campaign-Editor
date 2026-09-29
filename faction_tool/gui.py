@@ -2047,7 +2047,7 @@ class App(tk.Tk):
                            draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols,
                            on_place=on_place,
                            places=self.place_moves, check_place=check_place, on_place_move=place_moved,
-                           locked=self._locked_hint, **region_kw)
+                           locked=self._locked_hint, forts=self.strat.forts if self.strat else [], **region_kw)
 
     def _locked_hint(self, ch):
         """Why a character on the map cannot be dragged, and what to do instead."""

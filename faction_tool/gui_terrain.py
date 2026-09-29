@@ -137,7 +137,7 @@ class TerrainEditor(ttk.Frame):
                 return
             s = self.app.strat
             self.standing = set(self.cmap.cities.values()) | set(self.cmap.ports.values()) | \
-                {c.xy for fb in (s.factions if s else []) for c in fb.characters if c.xy}
+                (s.taken_tiles() if s else set())
             self._apply_memory()
         self.cmap.show_climates = self.v_what.get() == "climate"
         self.view.brush = self.v_brush.get()

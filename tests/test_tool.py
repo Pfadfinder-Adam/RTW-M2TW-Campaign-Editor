@@ -2363,6 +2363,25 @@ building shrine
                          "5, normal, untrained")
         self.assertIn("immune_to_psychology", [w for w, _ in A.for_line("stat_mental")])
 
+    def test_forts_are_read_and_nobody_starts_on_them(self):
+        # REX / M2TW fort lines: kept out of the character before them, their tiles taken
+        from faction_tool.strat import Strat
+        d = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        p = os.path.join(d, "descr_strat.txt")
+        text = open(p, encoding="latin-1").read().replace(
+            "unit\t\talpha general\t\texp 1 armour 0 weapon_lvl 0\n",
+            "unit\t\talpha general\t\texp 1 armour 0 weapon_lvl 0\n"
+            "fort 3 1 cerin_fort culture eastern permanent name Cerin Amroth\n", 1)
+        write(p, text)
+        mod = ModData(self.root)
+        s = Strat(mod.load(p))
+        self.assertEqual([(f.xy, f.owner, f.permanent, f.name) for f in s.forts],
+                         [((3, 1), "alpha", True, "Cerin Amroth")])
+        aaron = s.faction("alpha").characters[0]
+        self.assertFalse(any(l.startswith("fort") for l in s.lines[aaron.start:aaron.end]))  # not the leader's line
+        self.assertIn((3, 1), s.taken_tiles())
+        self.assertIn("fort stands there", mod.tile_problem("test", (3, 1), "named character", True) or "")
+
     def test_roster_take_a_culture_writes_the_others_out(self):
         from faction_tool import roster as R
         from faction_tool.plan import Plan
