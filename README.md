@@ -37,7 +37,7 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 > With these the cause is usually found and fixed **the same day** (the logs name the file, line and
 > the game's own error); without them it is guesswork and takes much longer.
 
-Version **0.10.0** - see [ROADMAP.md](ROADMAP.md) for what it does, what is being tested and what comes next, and [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
+A step-by-step guide is in the [Wiki](../../wiki). Version **0.10.0** - see [ROADMAP.md](ROADMAP.md) for what it does, what is being tested and what comes next, and [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
 
 Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
 
@@ -167,7 +167,7 @@ The Windows `.exe` is the window only. Use Python for the command line.
 ## Known limits
 
 - **Faction count.** HLR ships 31 factions including `slave`. With the tool's new one that makes 32, which ran fine under REX in our tests. Check before adding more.
-- **Banner and logo.** The new faction shares the template's `standard_index`, logos and strat symbol. A unique banner is future work (REX's `--ui-pack` sprite packer makes new logos possible).
+- **Banner and logo.** The new faction gets banner textures and a loading-screen logo of its own (copies of the template's, under its name - replace them on the **Art** tab), but still shares the template's `standard_index` (the strat-map flag symbol), sprite logos and strat symbol model. Those are future work (REX's `--ui-pack` sprite packer makes new logos possible).
 - **Strings.** Copied strings keep the template's text apart from the names ("the wicked Seleucids..."). Edit them in `data/text` if you care.
 - **Character names.** Names must come from the template's lists. Adding new names means editing `descr_names.txt` and the names string table by hand.
 - **Other campaigns.** One campaign is edited per run. Run again for another campaign; the faction files see the faction already exists and refuse, so add those campaigns by hand for now.
