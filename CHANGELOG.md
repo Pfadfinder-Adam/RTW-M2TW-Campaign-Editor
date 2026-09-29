@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **License**: GNU GPL v3.0 from this version on (up to 0.17.1: MIT). The editor stays free and open; programs
+  built from its code must stay open under GPL-3.0 and keep the author's copyright notice.
+
 ### Fixed (from the modders' guides, checked on the vanilla files)
 - **Family tab**: a son or other living man written off the map (a record) older than 16 is refused -
   the game crashes on one; new sons now start at 16 or younger. One already in the file is only warned about.
@@ -37,9 +40,6 @@
   limit). Preview says how many lines of buildings, traits, ancillaries, faction standing and the AI still name
   only the religion copied. Checked on vanilla Medieval II (Judaism, 30 % in Cordoba, Restore byte-exact) and in
   the window; not yet in the game.
-- **docs/reference/modding_knowledge.md**: what the modding community found out about both games (engine
-  limits, crash causes by file, campaign map rules, the religion recipe, the tools modders use) and what the
-  tool still lacks.
 
 ## 0.17.1 - 2026-09-29
 

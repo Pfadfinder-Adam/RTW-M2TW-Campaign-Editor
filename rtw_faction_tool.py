@@ -1,3 +1,5 @@
+# RTW & M2TW Campaign Editor - Copyright (C) 2026 Pfadfinder (Adam)
+# Licensed under the GNU General Public License v3.0 - see LICENSE.
 """Entry point: no arguments opens the window, arguments run the command line.
 
     python rtw_faction_tool.py                      (window)

@@ -1,6 +1,6 @@
 """Medieval II religions: a new one written everywhere the game needs it.
 
-A religion lives in several places that must agree (docs/reference/modding_knowledge.md, section 4):
+A religion lives in several places that must agree:
   * descr_religions.txt       its name in the `religions { }` list (the set the engine reads) and its own
                               `religion <name> { pip_path ui/pips/pip_<name>.tga }` block;
   * descr_religions_lookup.txt its name;

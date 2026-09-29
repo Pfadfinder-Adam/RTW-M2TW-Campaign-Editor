@@ -190,7 +190,13 @@ Privacy: this program will not transfer any information to other networked syste
 
 ## License
 
-MIT
+Copyright (C) 2026 Pfadfinder (Adam) - [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew), the author of
+RTW & M2TW Campaign Editor.
+
+GNU General Public License v3.0 ([LICENSE](LICENSE)). You may use, study, change and share the editor. If you share
+it or a program built from its code, that program must stay under GPL-3.0 with its source open, and must keep the
+copyright notice above and say it is based on this project. Releases up to 0.17.1 were published under the MIT
+license.
 
 ## Support
 

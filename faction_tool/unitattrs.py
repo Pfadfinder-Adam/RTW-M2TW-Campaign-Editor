@@ -2,7 +2,7 @@
 words, so the Unit editor can offer them even when no unit of the mod uses one yet.
 
 REX (the 64-bit engine for Rome: Total War, also Medieval II) added these; the list is
-REX's own (docs/reference/rex_edu_attributes.md). A word goes on one line of the unit:
+REX's own. A word goes on one line of the unit:
 'attributes', 'stat_mental', 'stat_ground' or 'stat_pri_attr' / 'stat_sec_attr'."""
 
 REX = "REX"

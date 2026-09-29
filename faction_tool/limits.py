@@ -50,7 +50,7 @@ def _setting(path, key="max_factions"):
 # REX's descr_ex.txt: "Max ancillaries a single character can hold (default 8)", "Max children a
 # character can have (default 4)" - the original Rome's fixed numbers. Medieval II keeps 8 ancillaries;
 # its children follow descr_campaign_db, so the tool does not count them there.
-# The original exes' hard limits modders found (docs/reference/modding_knowledge.md, section 1:
+# The original exes' hard limits modders found (
 # heavengames "A List of Known Hardcodes", TWC "Hardcoded Limits - M2TW"). REX / M2EX lift some of them
 # (HLR runs 750 regions under REX), so with an engine beside the data they are notes, not faults.
 # Not here: heavengames' "20 landmasses" - vanilla RTW's own map has 32 separate pieces of land and runs,
