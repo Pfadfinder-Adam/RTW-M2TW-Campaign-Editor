@@ -166,7 +166,7 @@ The Windows `.exe` is the window only. Use Python for the command line.
 
 ## Known limits
 
-- **Faction count.** HLR ships 31 factions including `slave`. With the tool's new one that makes 32, which ran fine under REX in our tests. Check before adding more.
+- **Faction count.** The game stops at a set number of factions, `slave` included: plain Rome 21, Medieval II 31. REX reads it from `max_factions` in `data/descr_ex.txt` (REX ships 21; a mod can raise it in its own `descr_ex.txt`); over it the game closes at start ("Too many factions described here, maximum is(21)"). HLR ships 31 factions. Check the limit before adding one.
 - **Banner and logo.** The new faction gets banner textures and a loading-screen logo of its own (copies of the template's, under its name - replace them on the **Art** tab), but still shares the template's `standard_index` (the strat-map flag symbol), sprite logos and strat symbol model. Those are future work (REX's `--ui-pack` sprite packer makes new logos possible).
 - **Strings.** Copied strings keep the template's text apart from the names ("the wicked Seleucids..."). Edit them in `data/text` if you care.
 - **Character names.** Names must come from the template's lists. Adding new names means editing `descr_names.txt` and the names string table by hand.
