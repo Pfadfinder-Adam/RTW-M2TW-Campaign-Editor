@@ -543,10 +543,10 @@ class RecordEditor(ttk.Frame):
                 row("Upgrades to", ttk.Combobox(body, textvariable=v["value"], values=levels, state="readonly"))
             else:
                 ks = keys("capability" if place == "capability" else "level" if place == "level" else None)
-                # only keys the place has room for: never more lines of a key than the mod has somewhere
+                # only keys that may take one more line here (unknown keys and a second one-line key left out)
                 ks = {k: x for k, x in ks.items() if not E.room_for(
                     f, self.kind, self.current, place if self.kind == "building" else None,
-                    v["level"].get() or None, k, self.limits())}
+                    v["level"].get() or None, k, self.limits(), mod=self.mod)}
                 cb = ttk.Combobox(body, textvariable=v["key"], values=sorted(ks), width=40)
 
                 def key_picked(*_):
@@ -554,8 +554,8 @@ class RecordEditor(ttk.Frame):
                 cb.bind("<<ComboboxSelected>>", key_picked)
                 engine = "; also keys the engine knows: %s" % ", ".join(
                     "%s (%s)" % (k, d) for k, (_, d) in unitattrs.ENGINE_KEYS.items()) if self.kind == "unit" else ""
-                row("Key", cb, "the keys this mod already uses here, as many lines as the mod has at most; "
-                               "the value is filled with an example" + engine)
+                row("Key", cb, "the keys this mod already uses here (a one-line key only once, the others as many "
+                               "times as you like); the value is filled with an example" + engine)
                 row("Value", ttk.Entry(body, textvariable=v["value"], width=50))
             refresh()
         top = ttk.Frame(frm)
@@ -599,7 +599,7 @@ class RecordEditor(ttk.Frame):
             full = E.room_for(f, self.kind, self.current, op["place"], op["level"], key, self.limits(),
                               same if op["place"] != "upgrades" else sum(
                                   1 for x in self.adds if x["at"] == a and x.get("place") == "upgrades"
-                                  and x.get("level") == op["level"]))
+                                  and x.get("level") == op["level"]), mod=self.mod)
             if full:
                 messagebox.showerror("Add line", full + " - the tool keeps to what the mod already uses", parent=w)
                 return

@@ -847,7 +847,7 @@ def _count(f, lines, upgrades=False):
 
 def line_limits(f, kind):
     """{place: {key: the most lines of that key one unit (one building level's place)
-    of the mod has}} - a new line may not go beyond what the mod already does.
+    of the mod has}} - which keys the mod uses and whether it repeats them (room_for).
     Places: None for units; 'capability', 'upgrades' (key '(level)'), 'level'."""
     out = {}
 
@@ -866,12 +866,17 @@ def line_limits(f, kind):
     return out
 
 
-# Lines that only list what a level recruits: the game takes any number of them (HLR has 702 in
-# one capability), so they are not held to the most the mod already has (a tester's 101, 2026-09-29).
-LIST_KEYS = {"recruit", "recruit_pool", "retrain", "retrain_pool"}
+# How many lines of a key a place may get (the user, 2026-09-30: no cap of our own - "we removed it once already"):
+# - a key the mod never uses there (and the engine does not know) is refused - most likely a typo;
+# - a key that is one line wherever the mod has it (category, class, soldier, recruit_priority_offset...) stays one
+#   line: a second one is a broken file, not more of the thing;
+# - a key the mod repeats somewhere (officer, recruit lines, bonuses, upgrades) takes any number, except the
+#   original exes' own caps below - and those only when no REX / M2EX runs the game (limits.lifted).
+LIST_KEYS = {"recruit", "recruit_pool", "retrain", "retrain_pool"}       # repeatable even where the mod has one
+GAME_CAPS = {("unit", "officer"): 3}      # TWC wiki Hardcoded Limits (RTW + M2TW): at most 3 officers
 
 
-def room_for(f, kind, block, place, level, key, limits, pending=0):
+def room_for(f, kind, block, place, level, key, limits, pending=0, mod=None):
     """None when one more line of key fits in that place, else why not."""
     place_key = None if kind == "unit" else place
     k = "(level)" if place == "upgrades" else key
@@ -880,13 +885,19 @@ def room_for(f, kind, block, place, level, key, limits, pending=0):
         from .unitattrs import ENGINE_KEYS
         if k in ENGINE_KEYS:
             most = max(most, 1)
-    if kind != "unit" and place == "capability" and key in LIST_KEYS and most:
-        return None
+    repeatable = most >= 2 or k == "(level)" or (key in LIST_KEYS and most)
     have = _count(f, _place_lines(f, kind, block, place, level), place == "upgrades").get(k, 0) + pending
-    if have >= most:
-        return "no %s in this mod has more than %d '%s' line(s) %s" % (
-            "unit" if kind == "unit" else "building level", most, k,
-            "" if kind == "unit" else "in its %s" % place)
+    if not most:
+        return "no %s in this mod has a '%s' line%s - not a key this mod uses there" % (
+            "unit" if kind == "unit" else "building level", k, "" if kind == "unit" else " in its %s" % place)
+    if not repeatable:
+        return "'%s' is one line only (every %s of the mod has at most one)" % (
+            k, "unit" if kind == "unit" else "building level") if have >= 1 else None
+    cap = GAME_CAPS.get((kind, k))
+    if cap and have >= cap:
+        from .limits import lifted
+        if not (mod is not None and lifted(mod, "units")):
+            return "the original game takes at most %d '%s' lines (REX / M2EX not found beside the game)" % (cap, k)
     return None
 
 

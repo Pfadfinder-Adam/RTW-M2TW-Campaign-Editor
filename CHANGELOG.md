@@ -11,6 +11,10 @@
   units and religions as lifted for both engines (their own notes: "no faction, religion, region, unit, cultures,
   model limits"). The faction count still follows the engine's max_factions, which the tool offers to raise. On
   the original exes the limits stay as before.
+- **Unit and Building editors: no cap of our own on lines.** A key the mod repeats (officers, bonuses, recruit
+  lines, upgrades) takes as many lines as you like - no more "not more than the mod already has". A one-line key
+  (category, class, recruit_priority_offset...) stays one line, and a key the mod never uses there is refused (most
+  likely a typo). Officers stop at 3 only on the original exes (their own limit); with REX / M2EX there is no cap.
 - **A son off the map may be as old as the mod's own age of manhood** (REX `age_of_manhood` in descr_ex.txt,
   Medieval II `<age_of_manhood>` in descr_campaign_db.xml), not a fixed 16; 16 when the mod does not set it.
 - **Family tab**: a son or other living man written off the map (a record) older than 16 is refused -

@@ -2554,6 +2554,24 @@ building shrine
         self.assertEqual(R.add_faction(line, "d"),
                          "requires ( ( factions { a, b, d, } and x ) or ( factions { b, c, } and y ) )")
 
+    def test_editor_lines_no_cap_of_our_own(self):
+        """A key the mod repeats takes any number of lines (no "not more than the mod has"); a one-line key stays
+        one line; an unknown key is refused; officers stop at 3 only on the original exe (REX / M2EX lift it)."""
+        from faction_tool import editors as E
+        game, hlr = self._game()
+        mod = ModData(hlr)
+        f = mod.load(mod.file("edu"))
+        blk = E.unit_blocks(f)[0]
+        limits = {None: {"officer": 2, "category": 1}}
+        self.assertIsNone(E.room_for(f, "unit", blk, None, None, "officer", limits, 2, mod=mod))    # a 3rd: fine
+        self.assertIsNone(E.room_for(f, "unit", blk, None, None, "officer", limits, 3, mod=mod))    # REX: a 4th too
+        os.remove(os.path.join(game, "REX.exe"))
+        mod = ModData(hlr)
+        self.assertIn("at most 3", E.room_for(f, "unit", blk, None, None, "officer", limits, 3, mod=mod))
+        self.assertIn("one line only", E.room_for(f, "unit", blk, None, None, "category", {None: {"category": 1}},
+                                                  1, mod=mod))
+        self.assertIn("not a key", E.room_for(f, "unit", blk, None, None, "no_such_key", limits, mod=mod))
+
     def test_engine_known_unit_keys_and_rex_attributes(self):
         # a key the engine knows may be added although no unit of the mod has one; REX words toggle on their line
         from faction_tool import editors as E
