@@ -411,11 +411,14 @@ def edit_regions(plan, campaign, edits):
 
 
 def apply_opts(plan, campaign, regions):
-    """Everything the window's region work holds ({'painted', 'new', 'religions', 'edits',
-    'culture_names'}), in
+    """Everything the window's region work holds ({'new_religions', 'painted', 'new', 'religions',
+    'edits', 'culture_names'}), in
     one place for every kind of run (map only, new faction, edited faction)."""
     if not regions:
         return
+    if regions.get("new_religions"):          # before the shares: a region may be given one at once
+        from .religions import apply as apply_religions
+        apply_religions(plan, regions["new_religions"])
     apply_regions(plan, campaign, regions.get("painted") or {}, regions.get("new") or [])
     set_religions(plan, campaign, regions.get("religions") or {})
     edit_regions(plan, campaign, regions.get("edits") or {})

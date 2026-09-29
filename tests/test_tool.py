@@ -2413,6 +2413,44 @@ building shrine
         self.assertIn("faction\t\talpha, shadowed_by slave\n", text)
         self.assertTrue(any("shadowed_by slave" in m for _, m in plan.notes), plan.report())
 
+    def test_medieval2_new_religion_everywhere(self):
+        # a new religion (Medieval II): list + block, lookup, text, symbol, every region's line, map.rwm
+        from faction_tool import religions as RL
+        from faction_tool.regionedit import apply_opts
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_religions.txt"), "religions\n{\n\tcatholic\n\tislam\n}\n\n"
+              "religion catholic\n{\n\tpip_path\tui/pips/pip_catholic.tga\n}\n\n"
+              "religion islam\n{\n\tpip_path\tui/pips/pip_islam.tga\n}\n")
+        write(os.path.join(d, "descr_religions_lookup.txt"), "catholic\nislam\n")
+        write(os.path.join(d, "text", "religions.txt"), "\u00ac\n{catholic}Catholic\n{islam}Islam\n", utf16=True)
+        write(os.path.join(d, "ui", "pips", "pip_islam.tga"), "pip picture")
+        rp = os.path.join(d, "world", "maps", "campaign", "test", "descr_regions.txt")
+        write(rp, REGIONS.replace("\t1\nB_R", "\t1\n\treligions { catholic 100 islam 0 }\nB_R").rstrip("\n")
+              + "\n\treligions { catholic 0 islam 100 }\n")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertEqual(RL.names(mod), ["catholic", "islam"])
+        spec = {"name": "judaism", "shown": "Judaism", "pip_from": "islam", "picture": None, "factions": ["alpha"]}
+        self.assertEqual(RL.problems(mod, spec), [])
+        self.assertTrue(RL.problems(mod, dict(spec, name="catholic")))          # taken
+        self.assertTrue(RL.problems(mod, dict(spec, shown="")))                 # no text = silent crash
+        plan = Plan(mod, None, "religion")
+        apply_opts(plan, "test", {"new_religions": [spec],
+                                  "religions": {"B_R": {"catholic": 0, "islam": 70, "judaism": 30}}})
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual(RL.names(mod), ["catholic", "islam", "judaism"])
+        self.assertEqual(RL.pip_of(mod, "judaism"), "ui/pips/pip_judaism.tga")
+        self.assertEqual(open(os.path.join(d, "ui", "pips", "pip_judaism.tga")).read(), "pip picture")
+        self.assertIn("judaism", open(os.path.join(d, "descr_religions_lookup.txt")).read())
+        self.assertIn("{judaism}Judaism", open(os.path.join(d, "text", "religions.txt"), "rb").read().decode("utf-16"))
+        regs = mod.regions("test")
+        self.assertEqual(regs["A_R"]["religions"], {"catholic": 100, "islam": 0, "judaism": 0})
+        self.assertEqual(regs["B_R"]["religions"], {"catholic": 0, "islam": 70, "judaism": 30})
+        restore(mod, backups(mod)[0])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        self.assertEqual(before, after)
+
     def test_roster_take_a_culture_writes_the_others_out(self):
         from faction_tool import roster as R
         from faction_tool.plan import Plan

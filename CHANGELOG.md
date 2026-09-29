@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **A new religion for Medieval II** (Map tab, Regions: **New religion...**), e.g. Judaism: its name in
+  descr_religions.txt (list + its own block), descr_religions_lookup.txt, text/religions.txt, its symbol
+  (ui/pips/pip_<name>.tga - your picture as a 24-bit TGA sized like the religion copied, or a copy of its
+  symbol), every region's religions line in every descr_regions.txt at 0 %, map.rwm removed; optionally the
+  factions that follow it. Its shares per region are set with **Religions...** in the same Apply. Refused: a
+  name taken, no shown name (the game crashes silently without its text), more than 9 religions (the engine's
+  limit). Preview says how many lines of buildings, traits, ancillaries, faction standing and the AI still name
+  only the religion copied. Checked on vanilla Medieval II (Judaism, 30 % in Cordoba, Restore byte-exact) and in
+  the window; not yet in the game.
+- **docs/reference/modding_knowledge.md**: what the modding community found out about both games (engine
+  limits, crash causes by file, campaign map rules, the religion recipe, the tools modders use) and what the
+  tool still lacks.
+
 ## 0.17.1 - 2026-09-29
 
 Asked on Discord: where are the rebels?

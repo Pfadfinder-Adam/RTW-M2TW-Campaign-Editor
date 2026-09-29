@@ -281,6 +281,7 @@ class App(tk.Tk):
         self.region_edits = {}          # {region: {creator, rebels, resources, triumph, farming}} of regions there are
         self.new_regions = []           # [{name, settlement, creator, rebels, resources, colour, city, port, owner, level}]
         self.region_religions = {}      # {region: {religion: percent}} set by hand (Medieval II)
+        self.new_religions = []         # Medieval II: new religions waiting for Apply (religions.py specs)
         self.culture_names = {}         # {settlement: {culture or '*': name}} (REX renames the town for its owner)
         self.name_list = {}             # {faction or '(new)': {pool: [names]}} a name list of its own (Name list...)
         # resources on the map: moved {index: (x, y)}, removed [index], added [{type, xy}], region tags {region: text}
@@ -529,6 +530,7 @@ class App(tk.Tk):
         ttk.Button(rb, text="Place its port", command=lambda: self.region_point("port")).pack(side="left", padx=2)
         ttk.Button(rb, text="Delete this new region", command=self.drop_region).pack(side="left", padx=2)
         ttk.Button(rb, text="Religions...", command=self.religions_dialog).pack(side="left", padx=2)
+        ttk.Button(rb, text="New religion...", command=self.new_religion_dialog).pack(side="left", padx=2)
         ttk.Button(rb, text="Names by culture...", command=lambda: self.culture_names_dialog(
             self.v_paint.get().replace("  (new)", "").strip())).pack(side="left", padx=2)
         ttk.Label(rb, text="left drag paints, right click picks a region, right drag moves the map",
@@ -1124,7 +1126,7 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------------ undo / redo
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "place_moves", "char_moves", "field",
-                 "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions", "region_edits",
+                 "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions", "new_religions", "region_edits",
                  "culture_names", "name_list", "res_moves", "res_removed", "res_added", "region_tags", "art_replace", "sel_map", "roster_set",
                  "family_set")
 
@@ -1603,7 +1605,7 @@ class App(tk.Tk):
 
     def _regions_opts(self):
         if not self.region_paint and not self.new_regions and not self.region_religions and not self.region_edits \
-                and not self.culture_names:
+                and not self.culture_names and not self.new_religions:
             return None
         me = self.v["template"].get().strip()
         new = []
@@ -1614,7 +1616,8 @@ class App(tk.Tk):
             if not self.editing() and not self.map_only() and r["name"] in self.chosen:
                 r["owner"] = None                  # the new faction starts there: it takes the rebel village
             new.append(r)
-        return {"painted": dict(self.region_paint), "new": new,
+        return {"new_religions": [dict(r) for r in self.new_religions],
+                "painted": dict(self.region_paint), "new": new,
                 "religions": {k: dict(v) for k, v in self.region_religions.items()},
                 "edits": {k: dict(v) for k, v in self.region_edits.items()},
                 "culture_names": {k: dict(v) for k, v in self.culture_names.items()}}
@@ -1702,6 +1705,7 @@ class App(tk.Tk):
         names = list(next(iter(known.values())).keys())
         for v in known.values():
             names += [k for k in v if k not in names]
+        names += [r["name"] for r in self.new_religions if r["name"] not in names]   # waiting for Apply
         now = (new or {}).get("religions") or self.region_religions.get(name) or known.get(name)
         if not now:
             # a new region: those of the region its land is cut from (what Apply writes when
@@ -1752,6 +1756,73 @@ class App(tk.Tk):
                 name, ", ".join("%s %d%%" % (k, v) for k, v in rel.items() if v)))
         bar = ttk.Frame(frm)
         bar.grid(row=len(names) + 1, column=0, columnspan=2, sticky="e", pady=(8, 0))
+        ttk.Button(bar, text="OK", command=ok).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+
+    def new_religion_dialog(self):
+        """Medieval II: a new religion (e.g. Judaism) written everywhere the game needs it on Apply;
+        its shares per region are set with Religions... afterwards."""
+        if not self.mod:
+            messagebox.showerror(APP, "Load a mod first.")
+            return
+        from . import religions as RL
+        have = RL.names(self.mod)
+        if not have:
+            messagebox.showinfo(APP, "Religions are Medieval II's - this game has no descr_religions.txt.")
+            return
+        w = tk.Toplevel(self)
+        w.title("New religion")
+        w.transient(self)
+        frm = ttk.Frame(w, padding=10)
+        frm.pack(fill="both", expand=True)
+        v = {k: tk.StringVar() for k in ("name", "shown", "pip_from", "picture")}
+        v["pip_from"].set(have[0])
+        ttk.Label(frm, text="%d of %d religions in this mod%s. A new one is written to descr_religions.txt, its "
+                            "lookup, text/religions.txt, its symbol (ui/pips) and every region's religions line "
+                            "(0 %% until you set its share with Religions...); map.rwm is removed." % (
+                                len(have), RL.MAX_RELIGIONS, ", %d waiting" % len(self.new_religions)
+                                if self.new_religions else ""),
+                  wraplength=520, justify="left").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
+        ttk.Label(frm, text="Name in the files").grid(row=1, column=0, sticky="w")
+        ttk.Entry(frm, textvariable=v["name"], width=24).grid(row=1, column=1, sticky="w")
+        ttk.Label(frm, text="e.g. judaism", foreground="#666").grid(row=1, column=2, sticky="w")
+        ttk.Label(frm, text="Name players see").grid(row=2, column=0, sticky="w")
+        ttk.Entry(frm, textvariable=v["shown"], width=24).grid(row=2, column=1, sticky="w")
+        ttk.Label(frm, text="Symbol like").grid(row=3, column=0, sticky="w")
+        ttk.Combobox(frm, textvariable=v["pip_from"], values=have, state="readonly", width=21).grid(
+            row=3, column=1, sticky="w")
+        ttk.Label(frm, text="its size; its picture unless you pick one", foreground="#666").grid(
+            row=3, column=2, sticky="w")
+        ttk.Label(frm, text="Own symbol").grid(row=4, column=0, sticky="w")
+        pic = ttk.Frame(frm)
+        pic.grid(row=4, column=1, columnspan=2, sticky="w")
+        ttk.Entry(pic, textvariable=v["picture"], width=30).pack(side="left")
+        ttk.Button(pic, text="Browse...", command=lambda: v["picture"].set(filedialog.askopenfilename(
+            parent=w, title="The religion's symbol (PNG, JPG, TGA...)") or v["picture"].get())).pack(side="left", padx=4)
+        ttk.Label(frm, text="Factions that follow it").grid(row=5, column=0, sticky="nw", pady=(6, 0))
+        lb = tk.Listbox(frm, selectmode="multiple", height=8, exportselection=False)
+        facs = [n for n, _ in self.mod.factions() if n != "slave"]
+        for n in facs:
+            lb.insert("end", n)
+        lb.grid(row=5, column=1, sticky="w", pady=(6, 0))
+        ttk.Label(frm, text="optional - none keeps every faction's religion", foreground="#666").grid(
+            row=5, column=2, sticky="nw", pady=(6, 0))
+
+        def ok():
+            spec = {"name": v["name"].get().strip().lower(), "shown": v["shown"].get().strip(),
+                    "pip_from": v["pip_from"].get(), "picture": v["picture"].get().strip() or None,
+                    "factions": [facs[i] for i in lb.curselection()]}
+            why = RL.problems(self.mod, spec, self.new_religions)
+            if why:
+                messagebox.showerror(APP, "\n".join(why), parent=w)
+                return
+            self.remember()
+            self.new_religions.append(spec)
+            w.destroy()
+            self.status.set("New religion %s waits for Apply - give it regions with Religions... (Map tab, "
+                            "Regions), then Preview and Apply changes." % spec["name"])
+        bar = ttk.Frame(frm)
+        bar.grid(row=6, column=0, columnspan=3, sticky="e", pady=(10, 0))
         ttk.Button(bar, text="OK", command=ok).pack(side="left")
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
 
@@ -2388,6 +2459,7 @@ class App(tk.Tk):
         self.region_paint, self.new_regions, self._region_point = {}, [], None
         self.region_edits = {}
         self.region_religions = {}
+        self.new_religions = []
         self.culture_names = {}
         self.name_list = {}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
