@@ -842,6 +842,27 @@ class ToolTest(unittest.TestCase):
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
 
+    def test_log_in_logs_folder(self):
+        """The log lies in <the tool's folder>/logs with the logs zips; the settings stay in the tool's
+        folder; a log an older version left in the tool's folder moves into logs/ once."""
+        from faction_tool import log, settings
+        home = os.path.join(self.root, "RTW-M2TW-Campaign-Editor-files")
+        os.makedirs(home)
+        with open(os.path.join(home, "faction_tool.log"), "w") as fh:
+            fh.write("old entry\n")
+        saved = (log._candidates, log._home, log._path, settings._data)
+        try:
+            log._candidates, log._home, log._path, settings._data = (lambda: iter([home])), None, None, None
+            self.assertEqual(log.path(), os.path.join(home, "logs", "faction_tool.log"))
+            self.assertEqual(log.logs_dir(), os.path.join(home, "logs"))
+            self.assertFalse(os.path.exists(os.path.join(home, "faction_tool.log")))
+            log.write("new entry")
+            with open(log.path()) as fh:
+                self.assertEqual([l.split("  ", 1)[-1] for l in fh.read().splitlines()], ["old entry", "new entry"])
+            self.assertEqual(settings._path(), os.path.join(home, "faction_tool_settings.json"))
+        finally:
+            log._candidates, log._home, log._path, settings._data = saved
+
     def test_portrait_library_add_m2_layout(self):
         """Medieval II's pools (vanilla southern_european): no cards, old only for generals, the dead
         princesses in portraits/dead/princesses - a new princess gets young + dead there, nothing more."""

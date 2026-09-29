@@ -45,7 +45,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 - **Windows:** grab `RTW-M2TW-Campaign-Editor.exe` from the [Releases](../../releases) page. No install needed.
 
-**Installing:** make a new, empty folder for the editor wherever suits you (for example `Documents\RTW & M2TW Campaign Editor` - not the game folder, not straight into Downloads or the desktop) and put the `.exe` in it. Start it from there. Next to the exe it makes the folder `RTW-M2TW-Campaign-Editor-files` with its log, settings and the logs zips you send with a bug report; an update is simply the new exe in the same folder (the settings stay).
+**Installing:** make a new, empty folder for the editor wherever suits you (for example `Documents\RTW & M2TW Campaign Editor` - not the game folder, not straight into Downloads or the desktop) and put the `.exe` in it. Start it from there. Next to the exe it makes the folder `RTW-M2TW-Campaign-Editor-files` with its settings and, in its `logs` folder, its log and the logs zips you send with a bug report; an update is simply the new exe in the same folder (the settings stay).
 - **Any OS with Python 3.8+:** `python rtw_faction_tool.py` (standard library; Pillow for the pictures).
 
 **Unit packs:** in the **Unit editor**, pick a unit (or narrow the list with Show / Find) and press **Export pack...**: the unit - or every unit the list shows - goes into one `.zip` with its models, textures, sprites, mount, engine or animal, cards, texts and recruit places. **Import pack...** in another mod of the same game shows the units with their names in that mod (taken names get a free one you can change), asks which factions or cultures own them, and **Preview** / **Write it in** puts them in with a backup. A model that exists with other lines is added under a new name; a file that exists is kept, never overwritten; recruit lines go into the same building and level where the mod has them (else the preview says to add them in the Building editor).
@@ -107,7 +107,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **Undo, keys, help:** **Undo** / **Redo** (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z) step back through towns picked, garrisons, buildings, settlement sizes, map moves, armies and diplomacy. Ctrl+P preview, Ctrl+S apply, F5 load again, Ctrl+1..5 the tabs, F1 or **Help** for a short guide. Far out on the map only towns are drawn; ports and characters show from zoom 4.
 
-**Log:** the tool keeps `faction_tool.log` in the folder `RTW-M2TW-Campaign-Editor-files` next to the exe (or in `%APPDATA%\RTW Faction Tool`): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
+**Log:** the tool keeps `faction_tool.log` in `RTW-M2TW-Campaign-Editor-files\logs` next to the exe, together with the logs zips (or in `%APPDATA%\RTW Faction Tool\logs`): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
 
 **Undo:** press **Restore a backup...** Backups sit in `faction_tool_backups` next to `data`. Restore the newest one first.
 

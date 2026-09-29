@@ -133,8 +133,8 @@ KEYS
   Ctrl+1 .. Ctrl+5 the tabs    Map: wheel zooms, left drag moves the map, right drag moves a marker
 
 WHEN SOMETHING GOES WRONG
-  Log shows what the tool did and every error (faction_tool.log in RTW-M2TW-Campaign-Editor-files
-  next to the exe).
+  Log shows what the tool did and every error (faction_tool.log in RTW-M2TW-Campaign-Editor-files\logs
+  next to the exe, with the logs zips).
   Check mod reads the whole mod and reports anything it cannot make sense of.
   Scan mod lists every mention of the faction and tells each file apart: the game's own
   (unchanged), changed by the mod, REX's, or the mod's own (manifests inside the tool).
@@ -3143,7 +3143,7 @@ class App(tk.Tk):
         stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         base = os.path.basename(mod_dir) if mod_dir else "tool"
         # into the tool's own folder (RTW-M2TW-Campaign-Editor-files/logs next to the exe), not the game's
-        where = os.path.join(os.path.dirname(log.path()), "logs") if log.path() else (mod_dir or "")
+        where = log.logs_dir() or mod_dir or ""
         try:
             os.makedirs(where, exist_ok=True)
         except OSError:

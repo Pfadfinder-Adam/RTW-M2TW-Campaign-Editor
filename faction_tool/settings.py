@@ -1,5 +1,5 @@
 """Small window settings kept between starts (the legend shown or hidden...), in
-faction_tool_settings.json next to the log. Never raises: a missing or broken
+faction_tool_settings.json in the tool's folder (log.home()). Never raises: a missing or broken
 file means the defaults."""
 
 import json
@@ -11,8 +11,8 @@ _data = None
 
 
 def _path():
-    p = log.path()
-    return os.path.join(os.path.dirname(p), "faction_tool_settings.json") if p else None
+    h = log.home()
+    return os.path.join(h, "faction_tool_settings.json") if h else None
 
 
 def _load():

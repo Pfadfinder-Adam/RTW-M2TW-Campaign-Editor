@@ -1,7 +1,8 @@
 """The tool's own log, faction_tool.log: what was loaded, previewed and written,
-every error with its traceback. In the folder RTW-M2TW-Campaign-Editor-files next to the exe
-(with faction_tool_settings.json), next to rtw_faction_tool.py when run from the source, else in
-the user's profile. Kept small: over 1 MB it moves to faction_tool.log.old."""
+every error with its traceback. The tool's folder is RTW-M2TW-Campaign-Editor-files next to the exe
+(next to rtw_faction_tool.py when run from the source, else in the user's profile): the settings
+lie in it, the log in its logs/ folder together with the logs zips (Save logs) - one place to find
+what to send. Kept small: over 1 MB it moves to faction_tool.log.old."""
 
 import datetime
 import os
@@ -10,6 +11,8 @@ import traceback
 
 LIMIT = 1 << 20
 _path = None
+_home = None
+LOGS = "logs"                                    # in the tool's folder: faction_tool.log and the logs zips
 
 
 FOLDER = "RTW-M2TW-Campaign-Editor-files"      # next to the exe: the log and the settings, apart from it
@@ -46,20 +49,46 @@ def _move_old(home, own):
         pass
 
 
-def path():
-    """The log file's path (the first folder we may write to)."""
-    global _path
-    if _path is None:
+def _move_log(home):
+    """Until 0.10.x the log lay in the tool's folder itself: moved into its logs/ once."""
+    try:
+        for n in ("faction_tool.log", "faction_tool.log.old"):
+            old, new = os.path.join(home, n), os.path.join(home, LOGS, n)
+            if os.path.isfile(old) and not os.path.exists(new):
+                os.replace(old, new)
+    except OSError:
+        pass
+
+
+def home():
+    """The tool's own folder (the first one we may write to): the settings lie there."""
+    global _home
+    if _home is None:
         for d in _candidates():
             try:
-                os.makedirs(d, exist_ok=True)
-                p = os.path.join(d, "faction_tool.log")
-                with open(p, "a", encoding="utf-8"):
+                os.makedirs(os.path.join(d, LOGS), exist_ok=True)
+                _move_log(d)                             # before the probe below makes an empty one
+                probe = os.path.join(d, LOGS, "faction_tool.log")
+                with open(probe, "a", encoding="utf-8"):
                     pass
-                _path = p
+                _home = d
                 break
             except OSError:
                 continue
+    return _home
+
+
+def logs_dir():
+    """Where the log and the logs zips go: <the tool's folder>/logs."""
+    h = home()
+    return os.path.join(h, LOGS) if h else None
+
+
+def path():
+    """The log file's path."""
+    global _path
+    if _path is None and home():
+        _path = os.path.join(_home, LOGS, "faction_tool.log")
     return _path
 
 

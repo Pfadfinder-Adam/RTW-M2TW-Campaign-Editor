@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+- The tool's log `faction_tool.log` now lies in `RTW-M2TW-Campaign-Editor-files\logs`, together with the
+  logs zips from **Save logs** - one folder to find what to send. The settings stay in
+  `RTW-M2TW-Campaign-Editor-files`; a log an older version left there moves into `logs` by itself.
+
 ### Fixed
 - **A new faction's banners were the template's files**: `descr_banners.txt` kept the template's texture paths,
   so replacing the new faction's banner in the Art tab would have changed the template's too. A new faction now

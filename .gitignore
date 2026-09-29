@@ -6,3 +6,4 @@ dist/
 faction_tool_backups/
 faction_tool.log*
 faction_tool_settings.json
+logs/
