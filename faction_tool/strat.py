@@ -269,14 +269,38 @@ def first_names(pool, kind):
     return [n for n in (pool or {}).get("women" if kind in FEMALE_KINDS else "characters", []) if " " not in n.strip()]
 
 
-def character_line(lines, name, kind, age, xy, role=None, female=None):
+def character_line(lines, name, kind, age, xy, role=None, female=None, sub_faction=None):
     """A character line in the file's own dialect (see medieval). kind: general,
-    named character, spy, princess...; role: leader / heir or None."""
+    named character, spy, princess...; role: leader / heir or None; sub_faction: a rebel's
+    ('character\tsub_faction britons, Brigomaglos, general, ...' - every rebel in vanilla has one)."""
     extra = ", %s" % role if role else ""
+    sub = "sub_faction %s, " % sub_faction if sub_faction else ""
     if medieval(lines):
         sex = "female" if (female if female is not None else kind in FEMALE_KINDS) else "male"
-        return "character\t%s, %s, %s%s, age %d, x %d, y %d" % (name, kind, sex, extra, int(age), xy[0], xy[1])
-    return "character\t%s, %s%s, age %d, , x %d, y %d" % (name, kind, extra, int(age), xy[0], xy[1])
+        return "character\t%s%s, %s, %s%s, age %d, x %d, y %d" % (sub, name, kind, sex, extra, int(age), xy[0], xy[1])
+    return "character\t%s%s, %s%s, age %d, , x %d, y %d" % (sub, name, kind, extra, int(age), xy[0], xy[1])
+
+
+def rebel_look(s, xy, mod=None, campaign=None):
+    """The sub_faction a new rebel character at xy takes: the nearest rebel's (vanilla picks them by the
+    land around: greek_cities over the Aegean, britons in Britain), else the region's creator, else the
+    first faction. A rebel's name comes from that faction's name list (all 91 vanilla rebels, Rome and
+    Medieval II), not from the slave list."""
+    fb = s.faction("slave")
+    near = [(abs(c.xy[0] - xy[0]) + abs(c.xy[1] - xy[1]), c.sub_faction) for c in (fb.characters if fb else [])
+            if c.xy and c.sub_faction]
+    if near:
+        return min(near)[1]
+    if mod is not None and campaign:
+        img = mod.region_map(campaign)
+        regions = mod.regions(campaign)
+        colour = img.get(*xy) if 0 <= xy[0] < img.width and 0 <= xy[1] < img.height else None
+        region = next((r for r, v in regions.items() if v.get("colour") == colour), None) or next(
+            (r for r, t in mod.city_tiles(campaign).items() if t == tuple(xy)), None)
+        creator = (regions.get(region) or {}).get("creator")
+        if creator and creator != "slave":
+            return creator
+    return next((x.name for x in s.factions if x.name != "slave"), None)
 
 
 def village_block(region, faction):

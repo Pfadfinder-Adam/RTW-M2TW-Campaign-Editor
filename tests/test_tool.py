@@ -2382,6 +2382,25 @@ building shrine
         self.assertIn((3, 1), s.taken_tiles())
         self.assertIn("fort stands there", mod.tile_problem("test", (3, 1), "named character", True) or "")
 
+    def test_rebels_are_edited_like_a_faction(self):
+        # the rebels (slave) in Edit faction: a new rebel army and a captain for an empty rebel town
+        # carry a sub_faction, and their names come from that faction's list (as every vanilla rebel)
+        from faction_tool.edit import edit
+        from faction_tool.strat import Strat
+        mod = ModData(self.root)
+        p = mod.campaign_file("test", "descr_strat.txt")
+        s0 = Strat(mod.load(p))
+        self.assertEqual(s0.faction("slave").characters[0].sub_faction, "alpha")
+        plan = edit(mod, "test", "slave", {
+            "characters": [{"kind": "army", "name": "Boris", "age": 30, "units": ["rebel spear"], "xy": (2, 3)}]})
+        text = plan.files[p].dump().decode("latin-1")
+        self.assertIn("character\tsub_faction alpha, Boris, general, age 30, , x 2, y 3", text)
+        with self.assertRaises(ValueError):              # a name outside alpha's list is refused
+            edit(mod, "test", "slave", {"characters": [{"kind": "army", "name": "Rebel", "units": ["rebel spear"],
+                                                        "xy": (2, 3)}]})
+        with self.assertRaises(ValueError):              # the rebels are never playable
+            edit(mod, "test", "slave", {"playable": True})
+
     def test_roster_take_a_culture_writes_the_others_out(self):
         from faction_tool import roster as R
         from faction_tool.plan import Plan

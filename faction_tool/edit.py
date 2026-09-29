@@ -89,8 +89,8 @@ def edit(mod, campaign, faction, opts):
     primary_colour, secondary_colour, ai, denari, playable,
     garrisons {region: [unit types]}, buildings {region: [(chain, level)]}."""
     names = [n for n, _ in mod.factions()]
-    if faction not in names or faction == "slave":
-        raise ValueError("pick an existing faction (not slave) to edit")
+    if faction not in names:
+        raise ValueError("pick an existing faction to edit")
     now = read_faction(mod, campaign, faction)
     plan = Plan(mod, faction, faction, dict(opts))
     _texts(plan, now, campaign)
@@ -275,6 +275,8 @@ def _strat(plan, campaign, now):
                 plan.note(f, "denari set to %d" % int(o["denari"]))
                 break
     if o.get("playable") is not None and bool(o["playable"]) != now.get("playable"):
+        if fac == "slave":
+            raise ValueError("the rebels (slave) cannot be made playable")
         _move_list(plan, f, fac, bool(o["playable"]))
     if o.get("army_units") or o.get("remove"):
         _army_edits(plan, f)
@@ -286,7 +288,7 @@ def _strat(plan, campaign, now):
         from .family import apply as apply_family
         apply_family(plan, f, fac, o["family"])
     _people(plan, f, now)
-    if o.get("capital"):
+    if o.get("capital") and fac != "slave":           # rebels have no capital
         _capital(plan, f, o["capital"])
     if o.get("characters"):
         from .start import extra_characters
@@ -554,6 +556,7 @@ def _garrisons(plan, f, s, campaign):
         return
     fb = s.faction(plan.new)
     tiles = plan_tiles(plan, campaign)
+    rebels = plan.new == "slave"               # a rebel captain: a sub_faction and a name from its list
     pool = plan.name_pool(plan.new) or {}
     used = {c.name.split()[0] for x in s.factions for c in x.characters if c.name}
     # the faction's family records too (egypt's Heruben is a character_record: a captain Heruben is skipped
@@ -592,10 +595,21 @@ def _garrisons(plan, f, s, campaign):
             plan.note(f, "%s: %s holds the town with %d unit(s)%s" % (
                 region, holder.name, len(lines), " + his bodyguard" if keep else ""))
         else:
-            if not captains:
-                raise ValueError("%s: no name in %s's name list for a captain" % (region, plan.new))
-            name = captains.pop(0)
-            block = [character_line(f, name, "general", 30, xy), "army"] + lines + [""]
+            sub = None
+            if rebels:
+                from .strat import rebel_look
+                sub = rebel_look(s, xy, plan.mod, campaign)
+                men = first_names(plan.name_pool(sub) or {}, "general")
+                picks = [n for n in men if n not in used]
+                if not picks:
+                    raise ValueError("%s: no free name in %s's name list for a rebel captain" % (region, sub))
+                name = picks[0]
+                used.add(name)
+            else:
+                if not captains:
+                    raise ValueError("%s: no name in %s's name list for a captain" % (region, plan.new))
+                name = captains.pop(0)
+            block = [character_line(f, name, "general", 30, xy, sub_faction=sub), "army"] + lines + [""]
             f.insert(_chars_at(f, fb), block)
             plan.note(f, "%s: captain %s holds the town with %d unit(s)" % (region, name, len(lines)))
 

@@ -401,7 +401,8 @@ class App(tk.Tk):
         self.v_triggers = tk.BooleanVar(value=True)
         self.v_art = tk.BooleanVar(value=True)
         self.v_dip = tk.StringVar(value="neutral")
-        ttk.Checkbutton(lf, text="Playable", variable=self.v_playable).grid(row=row, column=0, sticky="w", padx=4)
+        self.chk_playable = ttk.Checkbutton(lf, text="Playable", variable=self.v_playable)
+        self.chk_playable.grid(row=row, column=0, sticky="w", padx=4)
         self.chk_triggers = ttk.Checkbutton(lf, text="Copy trait / ancillary triggers", variable=self.v_triggers)
         self.chk_triggers.grid(row=row, column=1, sticky="w")
         row += 1
@@ -969,9 +970,38 @@ class App(tk.Tk):
         except Exception:
             pass
 
+    def _lock_frame(self, frame, locked):
+        """Every entry / list in the frame greyed out (locked) or back to its own state."""
+        saved = self.__dict__.setdefault("_locked_states", {})
+        for w in frame.winfo_children():
+            self._lock_frame(w, locked)
+            try:
+                if locked:
+                    saved.setdefault(str(w), str(w.cget("state")))
+                    w.configure(state="disabled")
+                elif str(w) in saved:
+                    w.configure(state=saved.pop(str(w)))
+            except tk.TclError:
+                pass
+
+    def fill_faction_list(self):
+        """The factions to pick: a template (New - never the rebels) or the faction to change (Edit - the
+        rebels too: their armies, fleets, garrisons, towns and units are edited like any faction's)."""
+        if not self.mod:
+            return
+        names = [n for n, _ in self.mod.factions() if n != "slave"]
+        if self.editing() and "slave" in [n for n, _ in self.mod.factions()]:
+            names.append("slave")
+        self.cb_template["values"] = names
+        if not self.editing() and self.v["template"].get().strip() == "slave":
+            self.v["template"].set("")
+
     def mode_changed(self):
         """New faction (clone a template) or Edit faction (change one in place)."""
         edit = self.editing()
+        self.fill_faction_list()
+        self.chk_playable.configure(state="normal")
+        self._lock_frame(self.lf2, False)
         self.lf.configure(text="Edit faction" if edit else "New faction")
         self.lbl_template.configure(text="Faction (edited)" if edit else "Template (copied)")
         self.lf2.configure(text="Leader and heir (names from the faction's name list)" if edit else
@@ -1030,6 +1060,9 @@ class App(tk.Tk):
                 (w.grid if k in now else w.grid_remove)()
         self.v["denari"].set(str(now.get("denari", "")))
         self.v_playable.set(bool(now.get("playable")))
+        # the rebels are never playable; they have no capital, leader or heir
+        self.chk_playable.configure(state="disabled" if faction == "slave" else "normal")
+        self._lock_frame(self.lf2, faction == "slave")
         for t, k in ((self.t_descr, "description"), (self.t_long, "long_description")):
             t.delete("1.0", "end")
             t.insert("1.0", now.get(k) or "")
@@ -2052,7 +2085,7 @@ class App(tk.Tk):
     def _locked_hint(self, ch):
         """Why a character on the map cannot be dragged, and what to do instead."""
         if ch["faction"] == "slave":
-            return "%s is a rebel - rebels leave with their town (add it to Chosen)" % ch["name"]
+            return "%s is a rebel - pick 'slave' in Edit faction to move the rebels" % ch["name"]
         if self.editing():
             return "%s belongs to %s - pick %s in Edit faction to move it" % (ch["name"], ch["faction"], ch["faction"])
         return "%s belongs to %s - in New faction only the new faction's characters move; switch to " \
@@ -2160,7 +2193,7 @@ class App(tk.Tk):
         self.v_campaign.set(was if was in camps else
                             "imperial_campaign" if "imperial_campaign" in camps else (camps[0] if camps else ""))
         names = [n for n, _ in self.mod.factions() if n != "slave"]
-        self.cb_template["values"] = names
+        self.fill_faction_list()
         self.load_campaign()
         from .limits import describe, faction_limit
         lim = faction_limit(self.mod)
@@ -2670,6 +2703,15 @@ class App(tk.Tk):
             messagebox.showerror(APP, "load a mod and pick the %s first" % ("faction" if self.editing() else "template"))
             return
         pool = self.pool_for(self.field_faction())
+        rebels = self.field_faction() == "slave"
+        v_sub = tk.StringVar()
+        if rebels:                    # a rebel has a sub_faction: its look and the list its name comes from
+            from collections import Counter
+            fb = self.strat.faction("slave") if self.strat else None
+            seen = Counter(c.sub_faction for c in (fb.characters if fb else []) if c.sub_faction)
+            v_sub.set(seen.most_common(1)[0][0] if seen else next(
+                (n for n, _ in self.mod.factions() if n != "slave"), ""))
+            pool = self.pool_for(v_sub.get())
         w = tk.Toplevel(self)
         w.title({"army": "New army", "fleet": "New fleet"}.get(kind, "New agent"))
         w.transient(self)
@@ -2678,6 +2720,14 @@ class App(tk.Tk):
         agent = kind not in ("army", "fleet")
         v_kind = tk.StringVar(value=self.AGENTS[0] if agent else kind)
         row = 0
+        if rebels:
+            ttk.Label(frm, text="Rebels of").grid(row=row, column=0, sticky="w")
+            cb_sub = ttk.Combobox(frm, textvariable=v_sub, state="readonly", width=16,
+                                  values=[n for n, _ in self.mod.factions() if n != "slave"])
+            cb_sub.grid(row=row, column=1, sticky="w")
+            ttk.Label(frm, text="(sub_faction: their look, and the list their name comes from)",
+                      foreground="#666").grid(row=row, column=2, sticky="w")
+            row += 1
         if agent:
             ttk.Label(frm, text="Agent").grid(row=row, column=0, sticky="w")
             ttk.Combobox(frm, textvariable=v_kind, values=self.AGENTS, state="readonly", width=14).grid(
@@ -2689,18 +2739,26 @@ class App(tk.Tk):
         cb_first = ttk.Combobox(frm, textvariable=v_first, values=first_names(pool, v_kind.get()), width=16)
         cb_first.grid(row=row, column=1)
 
+        cb_last = ttk.Combobox(frm, textvariable=v_last, values=[""] + pool.get("surnames", []), width=16)
+        cb_last.grid(row=row, column=2)
+
         def kind_changed(*a):                 # a princess takes a woman's name, the others a man's
+            nonlocal pool
+            if rebels:
+                pool = self.pool_for(v_sub.get())
+                cb_last["values"] = [""] + pool.get("surnames", [])
             names = first_names(pool, v_kind.get())
             cb_first["values"] = names
             if v_first.get() and v_first.get() not in names:
                 v_first.set("")
         v_kind.trace_add("write", kind_changed)
-        ttk.Combobox(frm, textvariable=v_last, values=[""] + pool.get("surnames", []), width=16).grid(row=row, column=2)
+        v_sub.trace_add("write", kind_changed)
         row += 1
         ttk.Label(frm, text="Age").grid(row=row, column=0, sticky="w")
         ttk.Entry(frm, textvariable=v_age, width=5).grid(row=row, column=1, sticky="w")
         row += 1
-        ttk.Label(frm, text="names come from the faction's name list", foreground="#666").grid(
+        ttk.Label(frm, text="names come from the list of the faction picked in 'Rebels of'" if rebels else
+                  "names come from the faction's name list", foreground="#666").grid(
             row=row, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
         def ok():
@@ -2721,7 +2779,8 @@ class App(tk.Tk):
                 return
             self.remember()
             self.field.append({"kind": v_kind.get(), "name": (first + " " + v_last.get().strip()).strip(),
-                               "age": int(v_age.get()) if v_age.get().isdigit() else 30, "units": [], "xy": None})
+                               "age": int(v_age.get()) if v_age.get().isdigit() else 30, "units": [], "xy": None,
+                               **({"sub_faction": v_sub.get()} if rebels else {})})
             w.destroy()
             self.refresh_field(keep=len(self.field) - 1)
             self.load_field()

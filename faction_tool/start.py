@@ -403,7 +403,7 @@ def build_start(plan, campaign, start):
             raise ValueError("%s: '%s' is not in the %s name list - the game crashes on names it has no "
                              "string for; pick one from the list" % (role, first, t))
         rest = name[len(first):].strip()
-        if rest and pool and rest not in pool.get("surnames", []):
+        if rest and names_from and rest not in names_from.get("surnames", []):
             raise ValueError("%s: surname '%s' is not in the %s surname list" % (role, rest, t))
         region, xy = spots[role]
         if region in custom:
@@ -569,13 +569,19 @@ def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
         name = (c.get("name") or "").strip()
         if not name:
             raise ValueError("%s %d needs a name" % (kind, n))
+        sub, names_from = None, pool
+        if owner == "slave":                  # a rebel: a sub_faction, and a name from its list
+            from .strat import Strat, rebel_look
+            sub = c.get("sub_faction") or (rebel_look(Strat(f), tuple(c["xy"]), plan.mod, campaign)
+                                           if c.get("xy") else None)
+            names_from = (plan.name_pool(sub) or {}) if sub else pool
         first = name.split(" ")[0]
-        names = first_names(pool, rtw_kind)
-        if pool and first not in names:
+        names = first_names(names_from, rtw_kind)
+        if names_from and first not in names:
             raise ValueError("%s: '%s' is not in the %s name list - the game crashes on names it has no string for"
                              % (kind, first, "women's" if rtw_kind in FEMALE_KINDS else "men's"))
         rest = name[len(first):].strip()
-        if rest and pool and rest not in pool.get("surnames", []):
+        if rest and names_from and rest not in names_from.get("surnames", []):
             raise ValueError("%s: surname '%s' is not in the surname list" % (kind, rest))
         xy = c.get("xy")
         if not xy:
@@ -590,7 +596,7 @@ def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
         if army:
             armies_at.add(xy)
         out.append(";;\t%s placed with the faction tool" % kind)
-        out.append(character_line(f, name, rtw_kind, c.get("age") or 30, xy))
+        out.append(character_line(f, name, rtw_kind, c.get("age") or 30, xy, sub_faction=sub))
         if army:
             out.append("army")
             out += ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % u for u in units[:MAX_UNITS]]
