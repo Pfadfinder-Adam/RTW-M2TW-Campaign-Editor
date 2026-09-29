@@ -9,6 +9,10 @@
   climates in their colours while this mode is on. Undo / Redo, backup and Restore as for the ground.
   (Asked for on Discord.) Adding a *new* climate is not in yet.
 
+- Family / Character editor: Preview warns when a character gets more ancillaries, or a parent more children,
+  than the game takes - REX's `max_num_ancillaries` / `max_num_children` in `descr_ex.txt` (the mod's, else the
+  game's), else the original game's 8 and 4.
+
 ### Changed
 - Terrain editor: long palettes wrap into rows, so every brush stays inside the window.
 - **Restore a backup...**: pick any write in the list and **Undo back to here** undoes it and every later one in

@@ -36,15 +36,39 @@ def game_kind(mod):
     return "medieval2" if _ci(mod.data, "descr_religions.txt") else "rome"
 
 
-def _setting(path):
-    """(line index, value) of max_factions in a descr_ex.txt, or (None, None)."""
+def _setting(path, key="max_factions"):
+    """(line index, value) of a number setting in a descr_ex.txt, or (None, None)."""
     from .textio import TextFile
     f = TextFile.load(path)
     for i in range(len(f)):
-        m = re.match(r"^\s*max_factions\s+(\d+)\s*$", strip_comment(f.text(i)))
+        m = re.match(r"^\s*%s\s+(\d+)\s*$" % re.escape(key), strip_comment(f.text(i)))
         if m:
             return i, int(m.group(1))
     return None, None
+
+
+# REX's descr_ex.txt: "Max ancillaries a single character can hold (default 8)", "Max children a
+# character can have (default 4)" - the original Rome's fixed numbers. Medieval II keeps 8 ancillaries;
+# its children follow descr_campaign_db, so the tool does not count them there.
+FAMILY_DEFAULTS = {"max_num_ancillaries": 8, "max_num_children": 4}
+
+
+def ex_setting(mod, key):
+    """A number setting the engine reads from descr_ex.txt (the mod's copy, else the game's data),
+    else the game's default; None when the tool knows no default for this game."""
+    from .newmod import game_of
+    kind = game_kind(mod)
+    default = FAMILY_DEFAULTS.get(key)
+    if kind == "medieval2" and key == "max_num_children":
+        default = None
+    game = game_of(mod.data)
+    game_data = _ci(game, "data") if game else None
+    for folder in (mod.data, game_data):
+        p = _ci(folder, "descr_ex.txt") if folder else None
+        if p:
+            value = _setting(p, key)[1]
+            return value if value is not None else default     # the file the engine reads decides
+    return default
 
 
 def faction_limit(mod):

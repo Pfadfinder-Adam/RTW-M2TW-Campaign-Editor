@@ -301,6 +301,22 @@ class ToolTest(unittest.TestCase):
         self.assertIsNone(pics.find("roman", "stables"))                              # never barbarian
         self.assertTrue(pics.find("barbarian", "stables").endswith("#barbarian_stables.tga"))
 
+    def test_family_limits_from_descr_ex(self):
+        from faction_tool.family import limit_warnings
+        from faction_tool.limits import ex_setting
+        game, hlr = self._game()
+        mod = ModData(hlr)
+        self.assertEqual(ex_setting(mod, "max_num_ancillaries"), 8)       # no descr_ex.txt: the game's default
+        self.assertEqual(ex_setting(mod, "max_num_children"), 4)
+        write(os.path.join(game, "data", "descr_ex.txt"), "max_num_ancillaries 16\nmax_num_children 6\n")
+        self.assertEqual(ex_setting(mod, "max_num_ancillaries"), 16)      # REX falls back to the game's
+        write(os.path.join(hlr, "data", "descr_ex.txt"), "; the mod's own\nmax_factions 31\n")
+        self.assertEqual(ex_setting(mod, "max_num_children"), 4)          # the mod's file decides: default
+        tree = [["Boris", "Anna", ["A", "B", "C", "D", "E"]]]
+        w = limit_warnings(mod, tree, {"k": {"ancillaries": ["a%d" % i for i in range(9)]}}, {})
+        self.assertEqual(len(w), 3, w)                                    # 9 ancillaries; Boris and Anna 5 kids
+        self.assertEqual(limit_warnings(mod, tree, {}, {}, old_tree=tree), [])   # nothing added: no warning
+
     def test_unit_cards_fill_a_folder_left_from_an_earlier_attempt(self):
         # ui/units/beta exists already (an old manual attempt) but lacks alpha's cards
         write(os.path.join(self.root, "data", "ui", "units", "beta", "#old_unit.tga"), "old")

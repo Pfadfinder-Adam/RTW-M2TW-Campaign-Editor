@@ -300,6 +300,35 @@ def rename_in_tree(f, faction, old, new):
             f.set(i, relative_line(names[0], names[1], names[2:]))
 
 
+def limit_warnings(mod, tree, changes, people, renames=None, old_tree=None):
+    """Ancillaries and children over what the game takes (limits.ex_setting: REX's descr_ex.txt
+    max_num_ancillaries / max_num_children, else the original game's 8 / 4)."""
+    from .limits import ex_setting
+    out = []
+    most = ex_setting(mod, "max_num_ancillaries")
+    for key, ch in (changes or {}).items():
+        ancs = ch.get("ancillaries")
+        if most and ancs is not None and len(ancs) > most:
+            p = people.get(key)
+            out.append("%s: %d ancillaries - the game keeps at most %d (max_num_ancillaries in descr_ex.txt)"
+                       % ((renames or {}).get(p.name, p.name) if p else key, len(ancs), most))
+    most = ex_setting(mod, "max_num_children")
+
+    def kids_of(t):
+        kids = {}
+        for father, wife, ks in t or []:
+            for parent in (father, wife):
+                if parent:
+                    kids.setdefault(parent, set()).update(ks)
+        return kids
+    before = kids_of(old_tree)
+    for parent, ks in sorted(kids_of(tree).items()):
+        if most and len(ks) > most and len(ks) > len(before.get(parent, ())):   # only what this edit adds
+            out.append("%s: %d children - the game takes at most %d (max_num_children in descr_ex.txt)"
+                       % (parent, len(ks), most))
+    return out
+
+
 def apply(plan, f, faction, opts):
     """opts = {'people': {key: {'name', 'age', 'sex', 'traits', 'ancillaries'}},
                'new': [{'name', 'sex', 'age'}], 'remove': [key], 'tree': [[father, wife, [kids]]] | None}
@@ -375,6 +404,8 @@ def apply(plan, f, faction, opts):
     if bad:
         raise ValueError("family tree of %s: %s" % (faction, "; ".join(bad)))
     for w in age_warnings(tree, after):
+        plan.warn(f, w)
+    for w in limit_warnings(plan.mod, tree, changes, people, renames, fam["tree"]):
         plan.warn(f, w)
 
     # the lines, from the bottom up so earlier indices stay right
