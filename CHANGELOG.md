@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Medieval II with M2EX: a new mod folder starts the way M2EX's own mods do** - `Start_<name>.bat` runs
+  `M2EX.exe --features.mod=mods/<name>` (as M2EX's Teutonic.bat / Crusades.bat), the plain game keeps
+  `medieval2.exe @mods\<name>\<name>.cfg`.
+
 ## 0.18.1 - 2026-09-30
 
 ### Fixed

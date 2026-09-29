@@ -878,6 +878,16 @@ building smith
         self.assertIn("ui/units/beta/#alpha_general.tga", left)
         self.assertNotIn("ui/units/alpha/#alpha_general.tga", left)     # unchanged: the game has it
 
+    def test_new_mod_under_m2ex_starts_with_features_mod(self):
+        # M2EX's own Teutonic.bat: start "" "%~dp0M2EX.exe" --features.mod=mods/teutonic
+        game = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, game)
+        write(os.path.join(game, "M2EX.exe"), "exe")
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "data"))
+        create_mod(os.path.join(game, "data"), "Beta")
+        with open(os.path.join(game, "mods", "Beta", "Start_Beta.bat"), "rb") as f:
+            self.assertIn(b"M2EX.exe --features.mod=mods/Beta", f.read())
+
     def test_new_mod_on_medieval2_goes_into_mods_with_a_cfg(self):
         game = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, game)

@@ -110,8 +110,11 @@ def _m2_start(game, base_dir, base_name, name):
     """{file name: text} of a Medieval II mod's start files: the .cfg and a .bat that
     starts the game with it (the game's exe from the game folder, two levels up)."""
     exe = next((e for e in M2_EXES if os.path.isfile(os.path.join(game, e))), "medieval2.exe")
+    # M2EX's own start files (Teutonic.bat ...) name the mod folder on the command line, not a .cfg
+    how = ("--features.mod=mods/%s" % name if exe.lower() == "m2ex.exe"
+           else "@mods\\%s\\%s.cfg" % (name, name))
     return {"%s.cfg" % name: _cfg(base_dir, base_name, name),
-            "Start_%s.bat" % name: 'cd /d "%%~dp0..\\.."\r\nstart "" %s @mods\\%s\\%s.cfg\r\n' % (exe, name, name)}
+            "Start_%s.bat" % name: 'cd /d "%%~dp0..\\.."\r\nstart "" %s %s\r\n' % (exe, how)}
 
 
 def _game_exe(game):
