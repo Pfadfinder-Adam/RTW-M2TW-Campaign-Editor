@@ -109,7 +109,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **Log:** the tool keeps `faction_tool.log` in `RTW-M2TW-Campaign-Editor-files\logs` next to the exe, together with the logs zips (or in `%APPDATA%\RTW Faction Tool\logs`): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
 
-**Undo:** press **Restore a backup...** Backups sit in `faction_tool_backups` next to `data`. Restore the newest one first.
+**Undo:** press **Restore a backup...** Backups sit in `faction_tool_backups` next to `data`. Pick the write to go back to: it and every later one are undone in one go.
 
 ## What it changes
 

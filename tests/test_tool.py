@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from faction_tool.build import build                     # noqa: E402
 from faction_tool.moddata import ModData                 # noqa: E402
-from faction_tool.plan import backups, restore           # noqa: E402
+from faction_tool.plan import Plan, backup_label, backups, restore, restore_to  # noqa: E402
 from faction_tool.scan import scan                       # noqa: E402
 from faction_tool.newmod import create_mod, slim         # noqa: E402
 from faction_tool.strat import Strat                     # noqa: E402
@@ -241,6 +241,44 @@ class ToolTest(unittest.TestCase):
         after = tree_hash(self.root)
         after = {k: v for k, v in after.items() if not k.startswith("faction_tool_backups")}
         self.assertEqual(before, after)
+
+    def test_restore_to_undoes_a_backup_and_every_newer_one(self):
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}}).apply()
+        mid = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        mod = ModData(self.root)
+        p2 = Plan(mod, None, "gamma")
+        p2.binary(os.path.join(mod.campaign_dir("test"), "map_beta.tga"), b"repainted")
+        p2.apply()
+        bs = backups(mod)
+        self.assertEqual(len(bs), 2)
+        self.assertTrue(bs[0].endswith("_gamma") and bs[1].endswith("_beta"), bs)
+        self.assertIn("beta (from alpha)", backup_label(bs[1]))
+        self.assertIn("gamma  - 1 file", backup_label(bs[0]))
+        ms = restore_to(mod, bs[1])                  # the oldest: both are undone, newest first
+        self.assertEqual(len(ms), 2)
+        self.assertEqual(backups(mod), [])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        self.assertEqual(before, after)
+        self.assertNotEqual(mid, after)
+
+    def test_name_section_shared_by_factions(self):
+        # BI: one section serves a faction and its rebels ('faction: empire_east, empire_east_rebels')
+        path = os.path.join(self.root, "data", "descr_names.txt")
+        write(path, NAMES.replace("faction: alpha\n", "faction: alpha, alpha_rebels\n", 1))
+        mod = ModData(self.root)
+        self.assertEqual(mod.name_pool("alpha")["characters"], ["Aaron", "Boris"])
+        self.assertEqual(mod.name_pool("alpha_rebels")["surnames"], ["Alphid"])
+        self.assertEqual(mod.name_pool("nobody"), {})
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual(mod.name_pool("beta")["characters"], ["Aaron", "Boris"])
+        self.assertEqual(mod.name_pool("alpha")["characters"], ["Aaron", "Boris"])
+        text = open(path, encoding="latin-1").read()
+        self.assertIn("faction: beta\n", text)
+        self.assertIn("faction: alpha, alpha_rebels\n", text)
 
     def test_unit_cards_fill_a_folder_left_from_an_earlier_attempt(self):
         # ui/units/beta exists already (an old manual attempt) but lacks alpha's cards

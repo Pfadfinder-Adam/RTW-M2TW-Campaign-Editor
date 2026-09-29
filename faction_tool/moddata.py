@@ -239,28 +239,28 @@ class ModData:
         return None
 
     def name_pool(self, faction):
-        """descr_names.txt pools: {'characters': [...], 'surnames': [...], 'women': [...]}."""
+        """descr_names.txt pools: {'characters': [...], 'surnames': [...], 'women': [...]}.
+        A section may serve several factions (BI: 'faction: empire_east, empire_east_rebels');
+        when a faction has more than one section (BI's alemanni), the first one counts."""
         f = self.load(self.file("names"))
-        pools = {}
-        cur = None
-        section = None
-        for line in f.texts():
-            s = strip_comment(line).strip()
-            if not s:
+        texts = f.texts()
+        heads = name_sections(texts)
+        for k, (start, owners) in enumerate(heads):
+            if faction not in owners:
                 continue
-            m = re.match(r"faction\s*:\s*(\S+)", s)
-            if m:
-                cur = m.group(1)
-                section = None
-                continue
-            if cur != faction:
-                continue
-            if s in ("characters", "surnames", "women"):
-                section = s
-                pools.setdefault(section, [])
-            elif section:
-                pools[section].append(s)
-        return pools
+            end = heads[k + 1][0] if k + 1 < len(heads) else len(texts)
+            pools, section = {}, None
+            for line in texts[start + 1:end]:
+                s = strip_comment(line).strip()
+                if not s:
+                    continue
+                if s in ("characters", "surnames", "women"):
+                    section = s
+                    pools.setdefault(section, [])
+                elif section:
+                    pools[section].append(s)
+            return pools
+        return {}
 
     # ---- map ----
     def regions(self, campaign):
@@ -432,3 +432,17 @@ class ModData:
             if why:
                 return "no one can stand here: " + why
         return None
+
+
+RE_NAME_HEAD = re.compile(r"\s*faction\s*:\s*(.+)")
+
+
+def name_sections(texts):
+    """descr_names.txt sections: [(line index, [factions])]. The header lists every faction
+    the section serves: 'faction: romans_julii' or BI's 'faction: empire_east, empire_east_rebels'."""
+    out = []
+    for i, line in enumerate(texts):
+        m = RE_NAME_HEAD.match(strip_comment(line))
+        if m:
+            out.append((i, [x for x in re.split(r"[\s,]+", m.group(1)) if x]))
+    return out

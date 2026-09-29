@@ -22,7 +22,7 @@ from .gui_buildings import NONE, BuildingsEditor
 from .gui_diplomacy import DiplomacyEditor, colour as dip_colour
 from .gui_garrison import GarrisonEditor, Pictures
 from .gui_map import MapView
-from .plan import Plan, backups, restore
+from .plan import Plan, backup_label, backups, restore_to
 from .scan import IGNORE_HELP, ignore_path, make_manifest, scan as scan_mod
 from .start import balanced_army, unit_name
 from .strat import FEMALE_KINDS, Strat, first_names
@@ -3223,28 +3223,45 @@ class App(tk.Tk):
             return
         w = tk.Toplevel(self)
         w.title("Restore a backup")
-        lb = tk.Listbox(w, width=70, height=10)
+        ttk.Label(w, justify="left", text="Newest first. Pick the change to go back to: it and every change made "
+                  "after it are undone in one go,\nnewest first. Pick the lowest line to get the files back as they "
+                  "were before the tool's first write.").pack(anchor="w", padx=6, pady=(6, 0))
+        lb = tk.Listbox(w, width=90, height=14, selectmode="browse")
         for b in bs:
-            lb.insert("end", os.path.basename(b))
+            lb.insert("end", backup_label(b))
         lb.pack(fill="both", expand=True, padx=6, pady=6)
+        info = ttk.Label(w, text="")
+        info.pack(anchor="w", padx=6)
+
+        def picked(_e=None):
+            sel = lb.curselection()
+            lb.selection_clear(0, "end")
+            if sel:
+                lb.selection_set(0, sel[0])             # show every change that will be undone
+                n = sel[0] + 1
+                info.configure(text="%d change%s will be undone." % (n, "" if n == 1 else "s"))
+        lb.bind("<<ListboxSelect>>", picked)
+
         def go():
             sel = lb.curselection()
             if not sel:
                 return
-            b = bs[sel[0]]
-            if sel[0] != 0:
-                messagebox.showwarning(APP, "Restore the newest backup first - backups undo each other in order.")
+            b = bs[max(sel)]
+            n = bs.index(b) + 1
+            text = ("Undo %s?" % backup_label(b) if n == 1 else
+                    "Undo %d changes, from the newest back to\n%s?" % (n, backup_label(b)))
+            if not messagebox.askyesno(APP, text + "\nFiles are put back as they were before it."):
                 return
-            if not messagebox.askyesno(APP, "Undo %s?\nFiles are put back as they were before it." % os.path.basename(b)):
-                return
-            m = restore(self.mod, b)
-            log.write("Restored %s: %d file(s) back, %d copied item(s) removed"
-                      % (b, len(m["modified"]), len(m["created"])))
-            messagebox.showinfo(APP, "Restored %d file(s), removed %d copied item(s)." % (len(m["modified"]), len(m["created"])))
+            ms = restore_to(self.mod, b)
+            back = sum(len(m["modified"]) for m in ms)
+            gone = sum(len(m["created"]) for m in ms)
+            log.write("Restored %d backup(s) down to %s: %d file(s) back, %d copied item(s) removed"
+                      % (len(ms), b, back, gone))
+            messagebox.showinfo(APP, "Undid %d change%s: %d file(s) put back, %d copied item(s) removed."
+                                % (len(ms), "" if len(ms) == 1 else "s", back, gone))
             w.destroy()
             self.load()
-        ttk.Button(w, text="Restore", command=go).pack(pady=(0, 6))
-
+        ttk.Button(w, text="Undo back to here", command=go).pack(pady=(0, 6))
 
 def main():
     log.write("Start %s" % APP)

@@ -11,6 +11,15 @@
 
 ### Changed
 - Terrain editor: long palettes wrap into rows, so every brush stays inside the window.
+- **Restore a backup...**: pick any write in the list and **Undo back to here** undoes it and every later one in
+  one go - no more restoring one by one. The list says when, what (faction, template) and how many files.
+  Two writes made by one Apply are undone in the right order.
+
+### Fixed
+- Barbarian Invasion: the Eastern / Western Empire had no names ("no name in empire_east's name list for a
+  captain"). BI's `descr_names.txt` gives one name list to several factions (`faction: empire_east,
+  empire_east_rebels`); the tool now reads such lists for every faction on them, and a new faction cloned from
+  one gets a list of its own.
 
 ## 0.11.0 - 2026-09-29
 

@@ -166,23 +166,23 @@ def faction_blocks(plan, key, braced=False, heads=("faction", "type")):
 
 
 def names(plan):
+    from .moddata import name_sections
     path = plan.mod.file("names")
     t, new = plan.template, plan.new
     f = plan.edit(path)
-    heads = [(i, re.match(r"\s*faction\s*:\s*(\S+)", f.text(i))) for i in range(len(f))]
-    heads = [(i, m.group(1)) for i, m in heads if m]
-    names_ = [n for _, n in heads]
-    if new in names_:
+    heads = name_sections(f.texts())
+    owners = [o for _, o in heads]
+    if any(new in o for o in owners):
         raise ValueError("faction '%s' already has names in descr_names.txt" % new)
-    if t not in names_:
+    k = next((k for k, o in enumerate(owners) if t in o), None)
+    if k is None:
         raise ValueError("template '%s' has no names in descr_names.txt" % t)
-    k = names_.index(t)
     s = heads[k][0]
     e = heads[k + 1][0] if k + 1 < len(heads) else len(f)
     copy = list(f.raw[s:e])
-    copy[0] = _replace_word(copy[0], t, new)
-    at = heads[names_.index("slave")][0] if "slave" in names_ else len(f)
-    f.insert_raw(at, copy)
+    copy[0] = f.make("faction: %s" % new)          # its own section, never the template's partners
+    slave = next((i for i, o in heads if "slave" in o), None)
+    f.insert_raw(slave if slave is not None else len(f), copy)
     plan.note(f, "name lists copied from %s (the same names, so every one already has a string)" % t)
 
 

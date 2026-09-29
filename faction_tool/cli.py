@@ -13,7 +13,7 @@ import sys
 
 from .build import build
 from .moddata import ModData
-from .plan import backups, restore
+from .plan import backups, restore_to
 from .newmod import create_mod, slim
 from .scan import scan
 from .strat import Strat
@@ -109,8 +109,9 @@ def main(argv=None):
         if not target:
             print("no backup to restore")
             return 1
-        m = restore(mod, target)
-        print("restored %d file(s), removed %d created, from %s" % (len(m["modified"]), len(m["created"]), target))
+        ms = restore_to(mod, target)       # an older backup takes every newer one with it
+        print("restored %d backup(s) down to %s: %d file(s) back, %d created removed" % (
+            len(ms), target, sum(len(m["modified"]) for m in ms), sum(len(m["created"]) for m in ms)))
         return 0
 
     with open(a.arg, encoding="utf-8") as f:

@@ -159,11 +159,44 @@ def backups(mod):
     if not os.path.isdir(root):
         return []
     out = []
-    for n in sorted(os.listdir(root), reverse=True):
+    for n in os.listdir(root):
         m = os.path.join(root, n, "manifest.json")
         if os.path.isfile(m) and not n.endswith("_restored"):
-            out.append(os.path.join(root, n))
-    return out
+            out.append((n[:15], os.path.getmtime(m), n))
+    # newest first; two runs in one second (terrain + faction by one Apply) by the time
+    # their manifest was written, not by name
+    return [os.path.join(root, n) for _, _, n in sorted(out, reverse=True)]
+
+
+def backup_label(bdir):
+    """A backup as a person reads it: '2026-09-29 14:03:12  epirus (from macedon)  - 12 files'."""
+    n = os.path.basename(bdir)
+    when = n[:15]
+    try:
+        when = datetime.datetime.strptime(n[:15], "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        pass
+    try:
+        with open(os.path.join(bdir, "manifest.json"), encoding="utf-8") as f:
+            m = json.load(f)
+    except (OSError, ValueError):
+        return "%s  %s" % (when, n[16:])
+    what = m.get("faction") or n[16:]
+    if m.get("template") and m.get("template") != what:
+        what += " (from %s)" % m["template"]
+    k = len(m.get("modified", [])) + len(m.get("created", []))
+    return "%s  %s  - %d file%s" % (when, what, k, "" if k == 1 else "s")
+
+
+def restore_to(mod, bdir):
+    """Undo bdir and every newer backup, newest first (backups undo each other in
+    order), so the files are as they were before bdir's run. Returns the manifests."""
+    order = backups(mod)
+    norm = [os.path.normcase(os.path.abspath(b)) for b in order]
+    key = os.path.normcase(os.path.abspath(bdir))
+    if key not in norm:
+        raise ValueError("no such backup: %s" % bdir)
+    return [restore(mod, b) for b in order[:norm.index(key) + 1]]
 
 
 def restore(mod, bdir):
