@@ -15,8 +15,10 @@ STEPS = (
      "Wives, daughters and (Medieval II) princesses take one."),
 )
 FORMAT = ("Type or paste the names: one per line, or separated by commas (then a name may have spaces: "
-          "'Abd al-Malik'). Without commas or new lines, spaces separate the names. Latin letters, digits, ' and "
-          "- only. Duplicates are dropped.")
+          "'Abd al-Malik', 'of Sparta'). Without commas or new lines, spaces separate the names - type a name of "
+          "several words with _ then ('of_Sparta'). The game wants no space inside a name, so the tool writes "
+          "it with _ (as vanilla's 'of_Scaldis'; in the console: \"Gaius Julius_Caesar\") and shows it with "
+          "spaces. Latin letters, digits, ' and - only. Duplicates are dropped.")
 
 
 def shown(key):

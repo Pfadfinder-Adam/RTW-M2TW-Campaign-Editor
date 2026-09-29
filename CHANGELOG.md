@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.1 - 2026-09-29
+
+### Fixed
+- **Name list... on Medieval II**: vanilla M2 has surname keys with a space (`de Lyon`, `von Saxony`, `al Rashid` -
+  8 factions' characters carry them). A new list kept such names as `de_Lyon`, another key, so the game would not
+  have found the characters' names. Names the characters already carry are now kept exactly as written; new names
+  are still written with `_` instead of a space (the game and its console want no space inside a name:
+  `"Gaius Julius_Caesar"`, vanilla Rome's `of_Scaldis`), and the wizard says so.
+
 ## 0.14.0 - 2026-09-29
 
 Name lists of one's own and every town's names by culture in one table (the user's wishes). Checked on a plain Rome

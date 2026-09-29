@@ -32,9 +32,16 @@ def parse(text):
     return out
 
 
+class Kept(str):
+    """A key the faction's characters already carry, written back exactly as it is (vanilla Medieval II has
+    surname keys with a space: 'de Avena')."""
+
+
 def key_of(name):
     """The key a name is written under: spaces become _ (descr_strat separates first name and surname by a
-    space, so a key never holds one)."""
+    space, and the console wants "Gaius Julius_Caesar" - so a new key never holds one)."""
+    if isinstance(name, Kept):
+        return str(name)
     return "_".join(name.split())
 
 
@@ -82,13 +89,17 @@ def used_names(mod, faction, plan=None):
     in any campaign's descr_strat (first names, surnames): a new list must keep them, or the game crashes."""
     from .strat import Strat, faction_names
     old = mod.name_pool(faction) or {}
-    words = set()
+    firsts, rests = set(), set()
     for c in mod.campaigns():
         p = mod.campaign_file(c, "descr_strat.txt")
         f = plan.files[p] if plan is not None and p in plan.files else mod.load(p)
         for n in faction_names(Strat(f), faction):
-            words.update(n.split())
-    return {pool: [k for k in old.get(pool) or [] if k in words] for pool in POOLS}
+            parts = n.split(None, 1)             # the first name, then the surname (which may hold a space)
+            firsts.add(parts[0])
+            if len(parts) > 1:
+                rests.add(" ".join(parts[1].split()))
+    return {pool: [k for k in old.get(pool) or [] if (k in rests if pool == "surnames" else k in firsts)]
+            for pool in POOLS}
 
 
 def keep_used(mod, faction, pools, plan=None):
@@ -99,7 +110,7 @@ def keep_used(mod, faction, pools, plan=None):
         have = {key_of(n).lower() for n in out[pool]}
         for k in keys:
             if k.lower() not in have:
-                out[pool].append(k.replace("_", " "))
+                out[pool].append(Kept(k))
                 added.append(k)
     return out, added
 
@@ -143,7 +154,7 @@ def apply(plan, faction, pools):
     if shared:
         plan.note(f, "%s no longer shares the name list of %s" % (
             faction, ", ".join(o for k in shared for o in heads[k][1] if o != faction)))
-    keys = [(key_of(n), n) for pool in POOLS for n in pools.get(pool) or []]
+    keys = [(key_of(n), str(n).replace("_", " ")) for pool in POOLS for n in pools.get(pool) or []]
     tp = mod.text_file("names.txt")
     if tp:
         t = plan.edit(tp)

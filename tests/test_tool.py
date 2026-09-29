@@ -268,6 +268,8 @@ class ToolTest(unittest.TestCase):
         from faction_tool.edit import edit
         self.assertEqual(NL.parse("Abd al-Malik, Harun\nYusuf"), ["Abd al-Malik", "Harun", "Yusuf"])
         self.assertEqual(NL.parse("Harun  Yusuf harun"), ["Harun", "Yusuf"])
+        self.assertEqual(NL.key_of("of Sparta"), "of_Sparta")
+        self.assertEqual(NL.key_of(NL.Kept("de Avena")), "de Avena")        # M2 vanilla keeps such keys
         self.assertTrue(NL.problems({"characters": ["X"], "women": []}))
         self.assertTrue(NL.problems({"characters": ["Жан"], "women": ["A"]}))
         write(os.path.join(self.root, "data", "text", "names.txt"), "{Aaron}\t\tAaron\n", utf16=True)
