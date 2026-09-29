@@ -219,6 +219,8 @@ class MapView(ttk.Frame):
             row("one of your towns", town(red, "#ffd400", 3))
             row("rebel village (no town yet)", town("", "black", 1, hollow=True))
             row("a port", port)
+            row("a fort (top: its owner's colour) - no one may start on it",
+                lambda x, yy: self._fort_icon(lc, x, yy + 2, 7, "#%02x%02x%02x" % self.LEGEND_RED, (), 2))
             head("Characters")
             keep = self.draggable
             self.draggable = set(keep) | {"legend_mine"}
@@ -722,15 +724,21 @@ class MapView(ttk.Frame):
             col = self.colours.get(fo.owner) if fo.owner else None
             edge = "#%02x%02x%02x" % tuple(col) if col else "#222222"
             w = max(2.0, min(self.z * (0.28 if fo.kind == "watchtower" else 0.42), 12))
-            h = w * 1.3
-            tags = ("fort", "fort:%d" % fo.line)
-            c.create_rectangle(sx - w, sy - h * 0.6, sx + w, sy + h * 0.6, fill="#7a5a36", outline=edge,
-                               width=2 if col else 1, tags=tags)
-            if w >= 5:
-                for k in (-1, 0, 1):                  # battlements
-                    bx = sx + k * w * 0.66
-                    c.create_rectangle(bx - w * 0.2, sy - h * 0.6 - w * 0.35, bx + w * 0.2, sy - h * 0.6,
-                                       fill="#7a5a36", outline=edge, tags=tags)
+            self._fort_icon(c, sx, sy, w, edge, ("fort", "fort:%d" % fo.line), 2 if col else 1)
+
+    @staticmethod
+    def _fort_icon(c, sx, sy, w, edge, tags, width=1):
+        """A brown tower outlined in black; its battlements in the owner's colour (edge)."""
+        h = w * 1.3
+        c.create_rectangle(sx - w, sy - h * 0.5, sx + w, sy + h * 0.6, fill="#9a6a38", outline="black",
+                           width=max(1, width), tags=tags)
+        if w >= 4:
+            for k in (-1, 0, 1):                  # battlements
+                bx = sx + k * w * 0.66
+                c.create_rectangle(bx - w * 0.25, sy - h * 0.5 - w * 0.45, bx + w * 0.25, sy - h * 0.5,
+                                   fill=edge, outline="black", tags=tags)
+            c.create_rectangle(sx - w * 0.25, sy + h * 0.1, sx + w * 0.25, sy + h * 0.6, fill="black",
+                               outline="", tags=tags)   # the gate
 
     def _fort_under(self, x, y):
         return next((fo for fo in self.forts if tuple(fo.xy) == (x, y)), None)
