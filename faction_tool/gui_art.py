@@ -107,10 +107,13 @@ class ArtEditor(ttk.Frame):
             return f, f
         return a.v["template"].get().strip(), (a.v["name"].get().strip().lower() or None)
 
-    def _thumb(self, parent, path, box=(72, 72)):
+    def _thumb(self, parent, path, box=(72, 72), crop=None):
         from PIL import Image, ImageTk
         try:
             im = Image.open(path).convert("RGBA")
+            if crop:                                     # a symbol on a shared sheet
+                x, y, w, h = crop
+                im = im.crop((x, y, x + w, y + h))
             im.thumbnail(box)
             ph = ImageTk.PhotoImage(im)
         except Exception:
@@ -141,13 +144,19 @@ class ArtEditor(ttk.Frame):
             self.cells.append(row)
             pick = a.art_replace.get(target)
             pending = FA.art_source(pick) if pick else None
-            self._thumb(row, pending or p["path"]).grid(row=0, column=0, rowspan=4, sticky="n")
+            self._thumb(row, pending or p["path"], crop=None if pending else p.get("crop")).grid(
+                row=0, column=0, rowspan=4, sticky="n")
             ttk.Label(row, text=p["label"], font=("", 9, "bold"), wraplength=self.CELL - 110).grid(
                 row=0, column=1, sticky="w", padx=6)
             if p.get("where"):
                 ttk.Label(row, text="in the game: " + p["where"], wraplength=self.CELL - 110, justify="left").grid(
                     row=1, column=1, sticky="w", padx=6)
-            text = "%s\n%s" % (target, self._need(p["size"], target))
+            note = p.get("note") or ""
+            if p.get("symbol") and new and new != src_faction:
+                note = note.split(" - ")[0]              # the template's sheet; the new faction's own is below
+            text = "%s\n%s" % (note if p.get("symbol") else target, self._need(p["size"], target))
+            if p.get("symbol") and new and new != src_faction:
+                text += "\n%s gets a copy of its own (%s's until you replace it)" % (new, src_faction)
             if p.get("link"):
                 text += "\nnamed in %s (%s)" % (os.path.basename(a.mod.file(p["link"][0]) or ""), p["link"][1])
                 if target != p["rel"]:
@@ -163,6 +172,8 @@ class ArtEditor(ttk.Frame):
             bar = ttk.Frame(row)
             bar.grid(row=3, column=1, sticky="w", padx=6)
             link = p.get("link") if target != p["rel"] else None
+            if p.get("locked"):
+                continue
             ttk.Button(bar, text="Replace...", command=lambda t=target, s=p["size"], l=p["label"], k=link:
                        self.replace(t, s, l, k)).pack(side="left")
             if pick:
@@ -181,6 +192,8 @@ class ArtEditor(ttk.Frame):
     def _need(size, target):
         if not size:
             return "as the file it replaces"
+        if target.startswith("symbol:") and isinstance(size[2], str):
+            return "needs %d x %d (kept in the sheet's DDS %s)" % size
         if target.lower().endswith(".dds"):
             return "needs %d x %d, DDS %s (with its mipmaps)" % size
         return "needs %d x %d, %d-bit TGA" % size

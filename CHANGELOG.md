@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Flag symbol and faction logos** (Rome): the Art tab now lists the symbol on the faction's campaign-map flags
+  (`banners/symbolsN.tga.dds`, slot `standard_index`) and its faction logos (the faction button, `logo_index`;
+  the small logo, `small_logo_index`), and **Replace...** changes them. A new faction gets its own flag slot and,
+  under REX (`sprite_format xml`), logo sprites of its own with the template's pictures copied in, so the
+  template keeps its own. A faction sharing a slot or sprite gets its own on Replace. (Asked for by a tester.)
 - Terrain editor: **Climates** - paint each land tile's climate (`map_climates.tga`: trees and plants on the
   campaign and battle maps, winter snow, heat). The climates and their colours come from the mod's own
   `descr_climates.txt`, so Rome, Medieval II and mods with their own climates all work; the map shows the

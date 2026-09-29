@@ -140,7 +140,8 @@ def faction_pictures(mod, campaign, faction):
             e.update(link=[l["key"], l["field"]], ref=l["ref"],
                      shared=sorted(users.get(l["ref"].replace("\\", "/").lower(), set()) - {faction}))
     out.sort(key=lambda e: (e["label"], e["rel"]))
-    return out
+    from .symbols import entries
+    return entries(mod, faction) + out          # the flag symbol and logos on shared sheets first
 
 
 def picture_info(path):
@@ -176,6 +177,8 @@ def picture_target(e, owner, new):
     name gets the name swapped (as the clone copies it); a picture a line names gets the name
     the clone gives it, or, shared with other factions, a copy of the faction's own."""
     rel = e["rel"]
+    if e.get("symbol"):
+        return rel                                        # symbols.FLAG / LOGO / SMALL: written by symbols.write
     if e.get("link"):
         if not e.get("shared") and owner == new:
             return rel                                    # already its own
@@ -761,7 +764,11 @@ def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
     the originals kept unless he asks; a new faction keeps the template's copy)."""
     mod = plan.mod
     for rel, pick in sorted((plan.opts.get("art") or {}).items()):
-        write_art(plan, faction, rel, pick)
+        if rel.startswith("symbol:"):
+            from .symbols import write
+            write(plan, faction, rel, art_source(pick))
+        else:
+            write_art(plan, faction, rel, pick)
     sel = plan.opts.get("select_map") or {}
     if not sel.get("on"):
         return

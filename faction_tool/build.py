@@ -67,6 +67,8 @@ def build(mod, campaign, template, new, opts):
     if opts.get("copy_art", True):
         clone.art_files(plan, campaign)
         clone.own_pictures(plan)
+        from .symbols import give_own
+        give_own(plan, new)              # its own flag symbol and faction logos (Rome)
     clone.unit_cards(plan)
     # new regions first: a new region picked as a start town is then a region of the map
     # (a rebel village the new faction takes) - one Apply writes the map and the faction

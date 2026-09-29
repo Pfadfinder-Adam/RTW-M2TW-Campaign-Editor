@@ -336,6 +336,61 @@ class ToolTest(unittest.TestCase):
         # other keys keep the rule
         self.assertIsNotNone(E.room_for(f, "building", blk, "capability", "militia_barracks", "law_bonus", limits))
 
+    def test_new_faction_gets_its_own_flag_symbol_and_logos(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from faction_tool import symbols as SY
+        from faction_tool.factionart import image_dds, image_tga
+        d = os.path.join(self.root, "data")
+        sm = SM.replace("culture\t\teastern\n", "culture\t\teastern\nstandard_index\t\t0\n"
+                        "logo_index\t\tFACTION_LOGO_A\nsmall_logo_index\t\tSMALL_FACTION_LOGO_A\n", 1)
+        sm = sm.replace("culture\t\tbarbarian\n", "culture\t\tbarbarian\nstandard_index\t\t1\n", 1)
+        write(os.path.join(d, "descr_sm_factions.txt"), sm)
+        write(os.path.join(d, "descr_caps_ex.txt"), "sprite_format  xml\n")
+        sheet = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
+        sheet.paste(Image.new("RGBA", (64, 64), (0, 200, 0, 255)), (0, 0))      # alpha's slot 0: green
+        os.makedirs(os.path.join(d, "banners"))
+        with open(os.path.join(d, "banners", "symbols1.tga.dds"), "wb") as fh:
+            fh.write(image_dds(sheet))
+        for xml, page, spr, size in (("strat3.sd.xml", "stratpage_02.tga", "FACTION_LOGO_A", 52),
+                                     ("shared2.sd.xml", "sharedpage_01.tga", "SMALL_FACTION_LOGO_A", 32)):
+            write(os.path.join(d, "ui", xml), '<sprite_definitions version="7">\n  <page file="%s" w="64" h="64">\n'
+                  '    <sprite name="%s" x="0" y="0" w="%d" h="%d" alpha="1"/>\n  </page>\n</sprite_definitions>\n'
+                  % (page, spr, size, size))
+            os.makedirs(os.path.join(d, "ui", "roman", "interface"), exist_ok=True)
+            with open(os.path.join(d, "ui", "roman", "interface", page), "wb") as fh:
+                fh.write(image_tga(Image.new("RGBA", (64, 64), (0, 0, 200, 255))))
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertEqual([e["rel"] for e in SY.entries(mod, "alpha")], [SY.FLAG, SY.LOGO, SY.SMALL])
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual(SY.flag_of(mod, "beta")["index"], 2)                   # 0 and 1 are taken
+        self.assertEqual(SY.flag_of(mod, "alpha")["index"], 0)
+        self.assertEqual(SY.logo_of(mod, "beta", SY.LOGO)["name"], "FACTION_LOGO_BETA")
+        self.assertEqual(SY.logo_of(mod, "alpha", SY.LOGO)["name"], "FACTION_LOGO_A")
+        self.assertTrue(SY.logo_of(mod, "beta", SY.SMALL)["own"])
+        self.assertEqual(SY.flag_image(mod, "beta").getpixel((32, 32))[:3], SY.flag_image(mod, "alpha").getpixel((32, 32))[:3])
+        self.assertEqual(SY.logo_image(mod, "beta", SY.LOGO).size, (52, 52))
+        # replacing beta's symbols leaves alpha's as they are
+        red = os.path.join(self.root, "red.png")
+        Image.new("RGBA", (90, 90), (220, 0, 0, 255)).save(red)
+        from faction_tool.edit import edit
+        p2 = edit(mod, "test", "beta", {"art": {SY.FLAG: red, SY.LOGO: red}})
+        p2.apply()
+        mod = ModData(self.root)
+        self.assertGreater(SY.flag_image(mod, "beta").getpixel((32, 32))[0], 180)
+        self.assertLess(SY.flag_image(mod, "alpha").getpixel((32, 32))[0], 60)
+        self.assertGreater(SY.logo_image(mod, "beta", SY.LOGO).getpixel((26, 26))[0], 180)
+        self.assertEqual(SY.logo_image(mod, "alpha", SY.LOGO).getpixel((26, 26))[:3], (0, 0, 200))
+        restore_to(mod, backups(mod)[-1])
+        os.remove(red)
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        self.assertEqual(before, after)
+
     def test_unit_cards_fill_a_folder_left_from_an_earlier_attempt(self):
         # ui/units/beta exists already (an old manual attempt) but lacks alpha's cards
         write(os.path.join(self.root, "data", "ui", "units", "beta", "#old_unit.tga"), "old")
