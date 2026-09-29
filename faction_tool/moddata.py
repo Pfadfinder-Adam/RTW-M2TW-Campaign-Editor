@@ -83,7 +83,8 @@ RE_COLOUR = re.compile(r"^\s*\d+\s+\d+\s+\d+\s*$")
 def region_entries(f):
     """{region: {field: (line index, value)}} of a loaded descr_regions.txt. A region is its name at the
     start of a line, then indented value lines: settlement, creator, rebels, 'r g b', resources, triumph,
-    farming (and Medieval II's religions). The colour line (three numbers) anchors the rest, so a
+    farming (and Medieval II's religions). Barbarian Invasion adds a 'legion: X' line right after the name
+    and a beliefs line after farming ('pagan 90 christianity 10'). The colour line (three numbers) anchors the rest, so a
     region with a line more or less before it (seen in BI's file: 'Pictii' where the colour was
     expected) still reads right: settlement and creator are the first two, rebels the line before
     the colour, resources / triumph / farming the lines after it. The one place that knows the
@@ -96,7 +97,8 @@ def region_entries(f):
         e = {}
         ci = next((k for k, (_, v) in enumerate(vals) if RE_COLOUR.match(v)), None)
         rel = next((k for k, (_, v) in enumerate(vals) if v.startswith("religions")), None)
-        plain = [k for k in range(len(vals)) if k != rel]
+        leg = next((k for k, (_, v) in enumerate(vals) if v.lower().startswith("legion:")), None)
+        plain = [k for k in range(len(vals)) if k not in (rel, leg)]
         if plain:
             e["settlement"] = vals[plain[0]]
         if len(plain) > 1 and (ci is None or plain[1] < ci - 1):
@@ -106,8 +108,10 @@ def region_entries(f):
             if ci - 1 > 0:
                 e["rebels"] = vals[ci - 1]
             after = [k for k in plain if k > ci]
-            for name, k in zip(("resources", "triumph", "farming"), after):
+            for name, k in zip(("resources", "triumph", "farming", "beliefs"), after):
                 e[name] = vals[k]
+        if leg is not None:
+            e["legion"] = vals[leg]
         if rel is not None:
             e["religions"] = vals[rel]
         out[cur] = e
@@ -257,6 +261,8 @@ class ModData:
             v["colour"] = tuple(int(x) for x in v["colour"].split()[:3])
             if "religions" in v:                         # Medieval II: religions { catholic 90 pagan 10 }
                 v["religions"] = parse_religions(v["religions"])
+            if "beliefs" in v:                           # Barbarian Invasion: pagan 90 christianity 10
+                v["beliefs"] = parse_religions("{%s}" % v["beliefs"])
             for k in ("settlement", "creator", "rebels", "resources", "triumph", "farming"):
                 v.setdefault(k, "")
             out[name] = v

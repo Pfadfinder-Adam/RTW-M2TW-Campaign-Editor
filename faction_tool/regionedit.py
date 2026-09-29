@@ -219,6 +219,15 @@ def apply_regions(plan, campaign, painted, new_regions):
         lines = [r["name"], "\t" + r["settlement"], "\t" + creator, "\t" + rebels,
                  "\t%d %d %d" % c, "\t" + res,
                  "\t%d" % int(r.get("triumph", 5)), "\t%d" % int(r.get("farming", 3))]
+        if any("legion" in v for v in regions.values()):
+            # Barbarian Invasion: a legion line after the name and a beliefs line after farming, as the
+            # region most of its land came from (every region of BI's own file has both)
+            legion = d.get("legion") or next(v["legion"] for v in regions.values() if v.get("legion"))
+            lines.insert(1, "\t" + legion)
+            beliefs = d.get("beliefs") or next((v["beliefs"] for v in regions.values() if v.get("beliefs")), {})
+            if beliefs:
+                lines.append("\t" + " ".join("%s %d" % (k, n) for k, n in beliefs.items()))
+            plan.note(dr, "%s: %s, beliefs as %s" % (r["name"], legion, donor))
         if any("religions" in v for v in regions.values()):
             # Medieval II: a ninth line, the religions; given, else the region most land came from
             rel = religions_for(regions, r.get("religions"), donor)

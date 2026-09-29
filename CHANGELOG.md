@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.1 - 2026-09-30
+
+### Fixed
+- **Barbarian Invasion: regions read and written right.** BI's descr_regions.txt has a `legion: ...` line after
+  each region's name and a beliefs line (`pagan 90 christianity 10`) after farming. The tool took the legion
+  line for the town, so a BI region showed the town as "legion: ...", the builder as the town and so on. Now
+  both lines are read, kept when a region is edited, and a new region gets them from the region most of its land
+  came from (checked on BI's own campaign: all 72 regions; a new region written and restored byte for byte).
+
 ## 0.18.0 - 2026-09-30
 
 - **License**: GNU GPL v3.0 from this version on (up to 0.17.1: MIT). The editor stays free and open; programs

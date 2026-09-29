@@ -2807,5 +2807,21 @@ class M2DiplomacyEndTest(unittest.TestCase):
         self.assertTrue(all(not lines[k].startswith("faction_standings") for k in range(slave.start, slave.end)))
         self.assertEqual(lines[slave.end - 1].split()[0], "unit")
 
+
+class BIRegionsTest(unittest.TestCase):
+    def test_bi_regions_legion_and_beliefs(self):
+        """Barbarian Invasion's descr_regions has a 'legion: X' line after the name and a beliefs line after
+        farming (9 value lines, all 72 regions of BI's own file): the reader took the legion for the town."""
+        from faction_tool.moddata import region_entries
+        text = ["Caledonia", "\tlegion: Caledonica", "\tDal_Raida", "\tcelts", "\tPictii", "\t111 111 0",
+                "\tslaves", "\t5", "\t5", "\tpagan 90 christianity 10",
+                "Tribus_Saxones", "\tlegion: Barbaricorum", "\tVicus_Saxones", "\tsaxons", "\tAngles",
+                "\t232 41 55", "\ttimber, slaves, amber", "\t5", "\t3", "\tpagan 100"]
+        e = {k: {f: v for f, (_, v) in d.items()} for k, d in region_entries(text).items()}
+        c = e["Caledonia"]
+        self.assertEqual((c["settlement"], c["creator"], c["rebels"]), ("Dal_Raida", "celts", "Pictii"))
+        self.assertEqual((c["legion"], c["farming"], c["beliefs"]), ("legion: Caledonica", "5", "pagan 90 christianity 10"))
+        self.assertEqual(e["Tribus_Saxones"]["resources"], "timber, slaves, amber")
+
 if __name__ == "__main__":
     unittest.main()
