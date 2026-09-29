@@ -686,6 +686,30 @@ building smith
         got = engine_limits(ModData(hlr), "test", many, [], [], img)
         self.assertTrue(any(fault and "regions" in m for m, fault in got))   # the original exe stops at 200
         self.assertIn("units", ENGINE_LIFTS["M2EX.exe"])
+        for key in ("regions", "map_size", "units", "religions"):          # one engine, the same lifts
+            self.assertIn(key, ENGINE_LIFTS["REX.exe"])
+            self.assertIn(key, ENGINE_LIFTS["M2EX.exe"])
+
+    def test_religion_limit_only_on_the_original_exe(self):
+        """The original exe takes 9 religions; with REX / M2EX beside the game a 10th is not refused (their
+        README: religions uncapped) - the tool must not hold modders on REX to vanilla's limits."""
+        from faction_tool import religions as RL
+        from faction_tool.limits import lifted
+        game, hlr = self._game()
+        mod = ModData(hlr)
+        full = ["r%d" % i for i in range(RL.MAX_RELIGIONS)]
+        spec = {"name": "judaism", "shown": "Judaism", "picture": __file__}
+        real = RL.names
+        try:
+            RL.names = lambda m: full
+            self.assertTrue(lifted(mod, "religions"))
+            self.assertFalse([p for p in RL.problems(mod, spec) if "religions" in p])       # REX: no limit
+            os.remove(os.path.join(game, "REX.exe"))
+            mod = ModData(hlr)
+            self.assertIsNone(lifted(mod, "religions"))
+            self.assertTrue([p for p in RL.problems(mod, spec) if "at most" in p])        # original exe: 9
+        finally:
+            RL.names = real
 
     def test_new_mod_from_bi_starts_barbarian_invasion(self):
         # REX starts BI with -bi (its own "Barbarian Invasion.bat"); a mod made from bi must too, else REX

@@ -20,7 +20,7 @@ import re
 from .moddata import _ci, parse_religions, religions_line
 from .textio import strip_comment, tokens
 
-MAX_RELIGIONS = 9
+from .limits import MAX_RELIGIONS                              # noqa: E402  (the original exe's; REX / M2EX lift it)
 RE_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
@@ -96,9 +96,11 @@ def problems(mod, spec, pending=()):
                    "(e.g. judaism)")
     if name in have or name in [p["name"] for p in pending]:
         out.append("there is a religion called %s already" % name)
-    if len(have) + len(pending) + 1 > MAX_RELIGIONS:
-        out.append("the game takes at most %d religions; this mod has %d%s" % (
-            MAX_RELIGIONS, len(have), " and %d more waiting" % len(pending) if pending else ""))
+    from .limits import lifted
+    if len(have) + len(pending) + 1 > MAX_RELIGIONS and not lifted(mod, "religions"):
+        out.append("the original game takes at most %d religions; this mod has %d%s (REX / M2EX lift the limit - "
+                   "none of them was found beside the game)" % (
+                       MAX_RELIGIONS, len(have), " and %d more waiting" % len(pending) if pending else ""))
     if not (spec.get("shown") or "").strip():
         out.append("give it the name players see (e.g. Judaism) - without a text the game crashes")
     picture = spec.get("picture")

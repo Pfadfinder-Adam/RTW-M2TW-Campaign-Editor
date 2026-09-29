@@ -1776,10 +1776,14 @@ class App(tk.Tk):
         frm.pack(fill="both", expand=True)
         v = {k: tk.StringVar() for k in ("name", "shown", "pip_from", "picture")}
         v["pip_from"].set(have[0])
-        ttk.Label(frm, text="%d of %d religions in this mod%s. A new one is written to descr_religions.txt, its "
+        from .limits import engine_of, lifted
+        count = ("%d religions in this mod (%s beside the game: no limit)" % (len(have), engine_of(self.mod)[:-4])
+                 if lifted(self.mod, "religions") else
+                 "%d of %d religions in this mod (the original game's limit)" % (len(have), RL.MAX_RELIGIONS))
+        ttk.Label(frm, text="%s%s. A new one is written to descr_religions.txt, its "
                             "lookup, text/religions.txt, its symbol (ui/pips) and every region's religions line "
                             "(0 %% until you set its share with Religions...); map.rwm is removed." % (
-                                len(have), RL.MAX_RELIGIONS, ", %d waiting" % len(self.new_religions)
+                                count, ", %d waiting" % len(self.new_religions)
                                 if self.new_religions else ""),
                   wraplength=520, justify="left").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
         ttk.Label(frm, text="Name in the files").grid(row=1, column=0, sticky="w")

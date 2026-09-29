@@ -6,6 +6,11 @@
   built from its code must stay open under GPL-3.0 and keep the author's copyright notice.
 
 ### Fixed (from the modders' guides, checked on the vanilla files)
+- **REX / M2EX: the original game's limits no longer hold a modder back.** With REX or M2EX beside the game the
+  religions limit (9) is not applied (New religion... says "no limit"), and Check mod counts regions, map size,
+  units and religions as lifted for both engines (their own notes: "no faction, religion, region, unit, cultures,
+  model limits"). The faction count still follows the engine's max_factions, which the tool offers to raise. On
+  the original exes the limits stay as before.
 - **Family tab**: a son or other living man written off the map (a record) older than 16 is refused -
   the game crashes on one; new sons now start at 16 or younger. One already in the file is only warned about.
 - **Flag symbols (Rome)**: the banner sheets are read from descr_standards.txt (Barbarian Invasion uses

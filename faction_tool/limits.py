@@ -60,11 +60,20 @@ HARD_LIMITS = {
     "medieval2": {"regions": 200, "map_size": 510, "units": 500, "chains": 128, "levels": 9,
                   "hidden_resources": 64},
 }
-# What REX / M2EX do with them, as far as the evidence goes (the rest: not known - the original's number shown).
-ENGINE_LIFTS = {
-    "REX.exe": {"regions": "no limit found - HLR runs 750 regions under REX"},
-    "M2EX.exe": {"units": "lifted by M2EX (Medieval 2 GUI Toolkit's notes; not measured here)"},
+# What REX / M2EX do with them (one engine, two builds - the same notes). Sources: REX's README "Removed every single
+# major engine limit like factions, regions, religions, cultures etc.", its release notes (08/06 cultures and
+# religions uncapped; 18/04 maps past 32768), the EB II / M2EX thread on TWC ("no faction, religion, region, unit,
+# cultures, model etc. limits"), HLR's 750 regions under REX. Factions stay a number of their own (max_factions).
+# Not named anywhere: building chains, levels, hidden resources - those keep the original's number as a note.
+_LIFTS = {
+    "regions": "lifted by REX / M2EX (HLR runs 750 regions under REX)",
+    "map_size": "lifted by REX / M2EX (their notes: map size limits removed, maps past 32768 fixed)",
+    "units": "lifted by REX / M2EX (\"no ... unit ... limits\" - M2EX's own notes)",
+    "religions": "lifted by REX / M2EX (README: religions uncapped)",
 }
+ENGINE_LIFTS = {"REX.exe": dict(_LIFTS), "M2EX.exe": dict(_LIFTS)}
+# The original exes' fixed numbers the tool refuses beyond when no REX / M2EX runs the game.
+MAX_RELIGIONS = 9
 LIMIT_WORDS = {"regions": "regions (the sea counts as one)", "map_size": "map_regions.tga width / height",
 "units": "units in export_descr_unit.txt",
                "chains": "building chains", "levels": "levels in one building chain",
@@ -91,13 +100,27 @@ def ex_setting(mod, key):
     return default
 
 
+def engine_of(mod):
+    """'REX.exe' / 'M2EX.exe' when that engine lies beside the game the mod belongs to, else None - the one
+    place that decides whether the original exes' limits hold."""
+    from .newmod import game_of
+    game = game_of(mod.data)
+    return next((e for e in ENGINES if game and os.path.isfile(os.path.join(game, e))), None)
+
+
+def lifted(mod, key):
+    """Why the original exe's limit `key` does not hold for this mod (the engine lifts it), or None."""
+    engine = engine_of(mod)
+    return ENGINE_LIFTS.get(engine, {}).get(key) if engine else None
+
+
 def faction_limit(mod):
     """{'max', 'engine' (REX.exe / M2EX.exe or None), 'file' (the descr_ex.txt the engine reads or would
     read), 'line', 'written' (max_factions is in that file), 'game'}."""
     from .newmod import game_of, is_game
     kind = game_kind(mod)
     game = game_of(mod.data)
-    engine = next((e for e in ENGINES if game and os.path.isfile(os.path.join(game, e))), None)
+    engine = engine_of(mod)
     known = bool(game) and is_game(game)             # the game folder found (an exe beside the data)
     out = {"max": DEFAULTS[kind], "engine": engine, "file": None, "line": None, "written": False, "game": kind,
            "known": known}
