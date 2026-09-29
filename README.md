@@ -8,9 +8,20 @@ I'm building a tool that finally lets us improve the games of our childhood ours
 
 [![RTW & M2TW Campaign Editor - video overview](https://img.youtube.com/vi/m1sCPg-Lzsw/hqdefault.jpg)](https://www.youtube.com/watch?v=m1sCPg-Lzsw)
 
-**Video:** [what the editor does, in a few minutes](https://www.youtube.com/watch?v=m1sCPg-Lzsw).
+**▶ Video overview:** [what the editor does, in a few minutes](https://www.youtube.com/watch?v=m1sCPg-Lzsw) (click the picture above).
 
-**More videos** (all on my YouTube channel [Pfadfinder](https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ)): [editing rivers, fords, cliffs](https://youtu.be/z0T723riXaU) · [editing a height map](https://youtu.be/mTdRAWympuw) · [searching the map for settlements and units](https://youtu.be/6WAdnGovGzA).
+### 🎬 More videos
+
+All on my YouTube channel **[Pfadfinder](https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ)** - each one checked in the game:
+
+<table>
+<tr>
+<td align="center" width="25%"><a href="https://youtu.be/z0T723riXaU"><img src="https://img.youtube.com/vi/z0T723riXaU/mqdefault.jpg" width="200" alt="Editing rivers, fords, cliffs"><br><b>▶ Editing rivers, fords, cliffs</b></a></td>
+<td align="center" width="25%"><a href="https://youtu.be/mTdRAWympuw"><img src="https://img.youtube.com/vi/mTdRAWympuw/mqdefault.jpg" width="200" alt="Editing a height map"><br><b>▶ Editing a height map</b></a></td>
+<td align="center" width="25%"><a href="https://youtu.be/6WAdnGovGzA"><img src="https://img.youtube.com/vi/6WAdnGovGzA/mqdefault.jpg" width="200" alt="Searching the map for settlements and units"><br><b>▶ Searching the map for settlements and units</b></a></td>
+<td align="center" width="25%"><a href="https://youtu.be/umwRyWkHoDE"><img src="https://img.youtube.com/vi/umwRyWkHoDE/mqdefault.jpg" width="200" alt="Settlement names by culture"><br><b>▶ Settlement names by culture</b></a></td>
+</tr>
+</table>
 
 **Why support?** I'm building this on my own on an old laptop. If the tool helps you, a small contribution on **[Ko-fi](https://ko-fi.com/pfadfinder)** would mean a lot - it would help me finally get a proper gaming PC, a childhood dream, and give the editor more time and faster testing (big mods and both games load slowly on the old machine).
 
@@ -24,7 +35,7 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 - **Medieval II battle models (`battle_models.modeldb`)**: a new faction gets its template's textures in every battle model (read and written byte-exact, 701 vanilla models); unit packs carry their modeldb models, renamed on clashes and textured for every new owner, kept in step with `descr_model_battle.txt`.
 - **City or castle (Medieval II)**: turn a settlement into a castle or a city on the Buildings tab - `settlement castle` and its buildings converted the game's own way (`convert_to`), only the kind's buildings offered.
 - **Edit existing factions**: names and texts, colours, AI, money, playable, towns taken or given, capital, leader and heir, garrisons, buildings, settlement size, armies, fleets and agents, diplomacy.
-- **Campaign map**: **Find** a town, port, character, unit, fort or resource by name; the map drawn from the ground types, political and diplomacy colours, towns, ports and characters you can drag, new armies, agents and fleets placed by clicking, towns and ports moved, **new regions painted** and borders moved, **resources** placed, moved and removed, religions (Medieval II), **settlement names by the owner's culture** (REX on Rome, M2EX on Medieval II renames a town when it changes hands; the map shows the new owner's name at once; every town's names in one table, sorted and filtered by culture). Big maps load: a tester's map of 5456 x 2464 tiles (map_regions.tga pixels) opened and edits fine.
+- **Campaign map**: **Find** a town, port, character, unit, fort or resource by name; the map drawn from the ground types, political and diplomacy colours, towns, ports and characters you can drag, new armies, agents and fleets placed by clicking, towns and ports moved, **new regions painted** and borders moved, **resources** placed, moved and removed, religions (Medieval II), **settlement names by the owner's culture** (REX on Rome, M2EX on Medieval II renames a town when it changes hands; the map shows the new owner's name at once; every town's names in one table, sorted and filtered by culture; [video](https://youtu.be/umwRyWkHoDE)). Big maps load: a tester's map of 5456 x 2464 tiles (map_regions.tga pixels) opened and edits fine.
 - **Unit and building editors**: every line of a unit or building chain as a field, pictures imported in the right size and format into the right place, new units and buildings copied from existing ones.
 - **Unit packs (export / import)**: take units out of one mod with everything they need - their models (`descr_model_battle`), mount, engine, animal, textures, sprites, cards, names and descriptions and where they are recruited - into one `.zip`, and put them into another mod of the same game. Names that are taken get free ones, nothing of the target mod is overwritten, and it is written with a backup like every change.
 - **Faction art**: every picture of a faction listed and replaceable; optionally the campaign-select map drawn from its start towns (off by default - the original stays).

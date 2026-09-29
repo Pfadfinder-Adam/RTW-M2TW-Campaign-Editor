@@ -663,7 +663,8 @@ building smith
         p3 = Plan(mod, None, "map")
         apply_opts(p3, "test", {"culture_names": {"Atown": {"barbarian": "Atburg"}}})
         self.assertIn(CN.script_path(mod, "test"), list(p3.files) + list(p3.binaries))
-        self.assertTrue(any("M2EX" in w for _, w in p3.warnings))
+        # checked in the game under M2EX (the user, 2026-09-30): no "not checked" warning any more
+        self.assertFalse(any("M2EX" in w for _, w in p3.warnings))
         os.remove(os.path.join(game, "M2EX.exe"))
         p4 = Plan(ModData(hlr), None, "map")
         apply_opts(p4, "test", {"culture_names": {"Atown": {"barbarian": "Atburg"}}})

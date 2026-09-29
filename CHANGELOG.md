@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- Settlement names by culture under M2EX: checked in the game, so Preview no longer warns that it is untested there.
 - **Medieval II with M2EX: a new mod folder starts the way M2EX's own mods do** - `Start_<name>.bat` runs
   `M2EX.exe --features.mod=mods/<name>` (as M2EX's Teutonic.bat / Crusades.bat), the plain game keeps
   `medieval2.exe @mods\<name>\<name>.cfg`.

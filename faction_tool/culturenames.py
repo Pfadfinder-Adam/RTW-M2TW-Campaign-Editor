@@ -207,9 +207,6 @@ def apply(plan, campaign, changes):
         plan.warn(None, "names by culture need %s (its rename_settlement renames towns while the campaign runs); "
                         "the game folder has no %s.exe - nothing written" % (name, name))
         return
-    if name == "M2EX":
-        plan.warn(None, "names by culture under M2EX: written the way REX documents it (rename_settlement, "
-                        "FactionCultureType); not yet checked in Medieval II - test it in the game once")
     lines = block(table) if table else []
     existing = _ci(mod.campaign_dir(campaign), "campaign_script.txt")
     if existing:
