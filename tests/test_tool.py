@@ -374,6 +374,10 @@ building smith
         self.assertEqual(convert(got, "city", known, "large_town")[0][0], ("core_building", "wooden_wall"))
         self.assertEqual(convert([], "castle", known, "village")[0], [("core_castle_building", "motte_and_bailey")])
         self.assertEqual(convert([("core_castle_building", "motte_and_bailey")], "city", known, "village")[0], [])
+        # picked in the window (already fitted to a level set by hand): the governor's building is left alone -
+        # the user's Inverness: wooden_wall for a large_town was refitted to the file's town (0.15.x)
+        self.assertEqual(convert([("core_building", "wooden_wall")], "city", known, "town", fit_core=False)[0],
+                         [("core_building", "wooden_wall")])
         self.assertTrue(kind_problem(known, "castle", "city"))           # castles stop at large_town here
         self.assertIsNone(kind_problem(known, "castle", "large_town"))
         raw = ["settlement\r\n", "{\r\n", "\tlevel town\r\n", "}\r\n"]

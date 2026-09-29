@@ -141,7 +141,7 @@ def _with_buildings(plan, f, region, raw, picked, size=None):
     known = {b.name: b for b in read_buildings(edb)} if edb is not None else {}
     kind = (plan.opts.get("kinds") or {}).get(region)
     if kind:                                  # Medieval II: a city or a castle (the header, buildings converted)
-        raw, picked = with_kind(plan, f, region, raw, kind, picked, known)
+        raw, picked = with_kind(plan, f, region, raw, kind, picked, known, size)
     raw, town_level = sized(plan, f, region, raw, picked or [], size, known)
     castle_fits(plan, region, raw, town_level, known)
     if picked is None:

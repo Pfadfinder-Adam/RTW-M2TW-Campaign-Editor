@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.16.1 - 2026-09-29
+
+The user's Medieval II run (scotland: Edinburgh castle and back, Inverness taken and made a city): the game started
+and ran with the changes, and its own log converts buildings the same way the tool does ("Conversion target
+building not specified ... building will disappear during conversion").
+
+### Fixed
+- **City / castle with a size set by hand**: Inverness (a castle town) made a city and raised to a large town got
+  its governor's building fitted to the file's old size at the write (`wooden_pallisade` in a large town - Preview
+  warned "the game refuses to load that"). Buildings picked in the window keep the governor's building fitted
+  there; without picks the fit follows the size set by hand. Preview now says "wooden_pallisade becomes
+  wooden_wall" instead of "goes".
+
 ## 0.16.0 - 2026-09-29
 
 ### Added

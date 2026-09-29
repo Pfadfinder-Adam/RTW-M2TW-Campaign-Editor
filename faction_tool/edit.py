@@ -618,7 +618,8 @@ def _buildings(plan, f, s):
             raise ValueError("%s is not a town of %s" % (region, plan.new))
         if region in kinds:                   # Medieval II: a city or a castle (the header, buildings converted)
             given = [tuple(x) for x in picked[region]] if region in picked else None
-            raw, got = with_kind(plan, f, region, f.raw[st.start:st.end], kinds[region], given, known)
+            raw, got = with_kind(plan, f, region, f.raw[st.start:st.end], kinds[region], given, known,
+                                 sizes.get(region))
             f.raw[st.start:st.end] = raw
             if got is not given:
                 picked[region] = got

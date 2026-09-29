@@ -257,7 +257,7 @@ def kind_problem(known, kind, level):
     return None
 
 
-def convert(items, kind, known, level):
+def convert(items, kind, known, level, fit_core=True):
     """The buildings as the game converts them when the settlement becomes that kind: a level marked for the
     other kind becomes level `convert_to` of its chain's `convert_to` chain, or goes (none given). The governor's
     building then fits the settlement level (a castle's = the level, a city's one below; a village city has none).
@@ -276,19 +276,16 @@ def convert(items, kind, known, level):
             changes.append(((chain, name), new))
         else:
             changes.append(((chain, name), None))
-    core = core_chain(known, kind)
+    core = core_chain(known, kind) if fit_core else None
     if core is not None:
         want = core_level_for(core, level)
         have = [x for x in out if x[0].lower().startswith("core")]
         rest = [x for x in out if not x[0].lower().startswith("core")]
         if want is not None and have != [(core.name, want.name)]:
-            for h in have:
-                changes.append((h, None))
-            changes.append((None, (core.name, want.name)))
+            changes += [(h, (core.name, want.name)) for h in have] or [(None, (core.name, want.name))]
             out = [(core.name, want.name)] + rest
         elif want is None and have:
-            for h in have:
-                changes.append((h, None))
+            changes += [(h, None) for h in have]
             out = rest
     return out, changes
 
@@ -307,11 +304,15 @@ def set_kind(raw, kind, make):
     return out
 
 
-def with_kind(plan, f, region, raw, kind, picked, known):
+def with_kind(plan, f, region, raw, kind, picked, known, size=None):
     """(raw, picked) with the settlement made a city or a castle: the header, and the buildings converted the
-    game's way (the picked ones, else the block's own). Refused where the game has no such settlement."""
+    game's way. Buildings picked in the window were converted and fitted there already (their governor's
+    building belongs to the level they set): only a wrong-kind level left among them is converted. Without
+    picks the block's own buildings are converted and the governor's building fitted to the settlement's level
+    (the one set by hand, else the file's). Refused where the game has no such settlement."""
     texts = [l.rstrip("\r") for l in raw]
     level, own = settlement_info(texts)
+    level = (size or {}).get("level") or level
     now = settlement_kind(texts)
     if kind not in KINDS or kind == now:
         return raw, picked
@@ -320,11 +321,14 @@ def with_kind(plan, f, region, raw, kind, picked, known):
     bad = kind_problem(known, kind, level)
     if bad:
         raise ValueError("%s: %s" % (region, bad))
-    items, changes = convert(list(picked) if picked is not None else own, kind, known, level)
+    items, changes = convert(list(picked) if picked is not None else own, kind, known, level,
+                             fit_core=picked is None)
     plan.note(f, "%s: %s -> %s (settlement%s)" % (region, now, kind, " castle" if kind == "castle" else ""))
     for old, new in changes:
         if old and new:
             plan.note(f, "%s: %s %s becomes %s %s" % (region, old[0], old[1], new[0], new[1]))
+        elif old and old[0].lower().startswith("core"):
+            plan.note(f, "%s: %s %s goes (a %s village has no governor's building)" % (region, old[0], old[1], kind))
         elif old:
             plan.note(f, "%s: %s %s goes (a %s has no such building)" % (region, old[0], old[1], kind))
         elif new:
