@@ -668,7 +668,7 @@ class ToolTest(unittest.TestCase):
         write_tga(os.path.join(camp, "map_regions.tga"), 4, 4, px)
         chars = [{"kind": "army", "name": "Aaron", "age": 33, "units": ["alpha general"], "xy": (3, 1)},
                  {"kind": "spy", "name": "Boris Alphid", "xy": (2, 2)},          # agents may stand in a town
-                 {"kind": "fleet", "name": "Aaron", "units": ["alpha general"], "xy": (3, 0)}]
+                 {"kind": "fleet", "name": "Aaron Alphid", "units": ["alpha general"], "xy": (3, 0)}]
         mod = ModData(self.root)
         plan = build(mod, "test", "alpha", "beta", {"start": {
             "regions": ["B_R"], "leader": {"name": "Boris"}, "characters": chars}})
@@ -676,7 +676,13 @@ class ToolTest(unittest.TestCase):
         got = [(c.name, c.kind, c.xy) for c in s.faction("beta").characters]
         self.assertIn(("Aaron", "general", (3, 1)), got)
         self.assertIn(("Boris Alphid", "spy", (2, 2)), got)
-        self.assertIn(("Aaron", "admiral", (3, 0)), got)
+        self.assertIn(("Aaron Alphid", "admiral", (3, 0)), got)
+        # a name the faction already gives someone: the game skips the second one ("duplicated character
+        # name in this faction" - the user's nabataea army named like its leader)
+        with self.assertRaises(ValueError) as e:
+            build(ModData(self.root), "test", "alpha", "beta", {"start": {
+                "regions": ["B_R"], "leader": {"name": "Boris"}, "characters": [dict(chars[0], name="Boris")]}})
+        self.assertIn("duplicated character name", str(e.exception))
         bad = [dict(chars[0], name="Zed"), dict(chars[2], xy=(3, 2)), dict(chars[0], xy=(2, 2))]
         for c in bad:                                   # unknown name, fleet on land, army into a held town
             with self.assertRaises(ValueError):

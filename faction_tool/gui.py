@@ -133,7 +133,7 @@ KEYS
   Ctrl+1 .. Ctrl+5 the tabs    Map: wheel zooms, left drag moves the map, right drag moves a marker
 
 WHEN SOMETHING GOES WRONG
-  Log shows what the tool did and every error (faction_tool.log in RTW-M2TW-Campaign-Editor-files\logs
+  Log shows what the tool did and every error (faction_tool.log in RTW-M2TW-Campaign-Editor-files\\logs
   next to the exe, with the logs zips).
   Check mod reads the whole mod and reports anything it cannot make sense of.
   Scan mod lists every mention of the faction and tells each file apart: the game's own
@@ -2474,6 +2474,12 @@ class App(tk.Tk):
                                           "it has no string for" % (first, "women's" if v_kind.get() in FEMALE_KINDS
                                                                      else "men's"), parent=w)
                 return
+            full = (first + " " + v_last.get().strip()).strip()
+            if full in self._faction_names():
+                messagebox.showerror(APP, "%s already has someone called %s - the game skips a second one "
+                                          "with the same name. Pick another name (or add a surname)."
+                                     % (self.field_faction(), full), parent=w)
+                return
             self.remember()
             self.field.append({"kind": v_kind.get(), "name": (first + " " + v_last.get().strip()).strip(),
                                "age": int(v_age.get()) if v_age.get().isdigit() else 30, "units": [], "xy": None})
@@ -2484,6 +2490,18 @@ class App(tk.Tk):
         bar.grid(row=row + 1, column=0, columnspan=3, sticky="w", pady=(8, 0))
         ttk.Button(bar, text="Add", command=ok).pack(side="left")
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+
+    def _faction_names(self):
+        """Names the faction gives someone already or will: its characters and records in the file (Edit),
+        the leader and heir typed on the Faction tab, the armies and agents placed here."""
+        from .strat import faction_names
+        names = set(faction_names(self.strat, self.field_faction())) if self.strat and self.editing() else set()
+        for role in ("leader", "heir"):
+            n = (self.v[role + "_first"].get().strip() + " " + self.v[role + "_last"].get().strip()).strip()
+            if n:
+                names.add(n)
+        names |= {c["name"] for c in self.field}
+        return names
 
     def selected_field(self):
         sel = self.lb_field.curselection()

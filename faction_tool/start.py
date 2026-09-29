@@ -361,6 +361,8 @@ def build_start(plan, campaign, start):
     captains = [n for n in (pool or {}).get("characters", [])]
     used = {c.name.split()[0] for fb in s.factions for c in fb.characters if c.name}
     used |= {start[r]["name"].split()[0] for r in ("leader", "heir") if start.get(r) and start[r].get("name")}
+    # and the armies / agents placed by hand (written later): a captain never takes one of their names
+    used |= {c["name"].split()[0] for c in start.get("characters") or [] if (c.get("name") or "").strip()}
     for r, lines in custom.items():
         agents = [j for j in joined.get(r, []) if not _has_army(j[2])]
         armies = [j for j in joined.get(r, []) if _has_army(j[2])]

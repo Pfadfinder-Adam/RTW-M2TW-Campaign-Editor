@@ -174,6 +174,48 @@ def characters_after_tree(s):
     return bad
 
 
+def faction_names(s, faction):
+    """Every name a faction's block gives its characters and family records, as written
+    (first name and surname) - the game wants each once per faction."""
+    fb = s.faction(faction)
+    out = []
+    for l in (s.lines[fb.start:fb.end] if fb else []):
+        body = strip_comment(l).strip()
+        head = body.split(None, 1)[:1]
+        if head not in (["character"], ["character_record"]):
+            continue
+        parts = [p.strip() for p in body[len(head[0]):].strip().split(",")]
+        if parts and parts[0].startswith("sub_faction"):
+            parts = parts[1:]
+        if parts and parts[0]:
+            out.append(parts[0])
+    return out
+
+
+def duplicate_names(s):
+    """[(faction, name)] for a name used twice in one faction's block: the game skips the
+    second one ("duplicated character name in this faction, skipping", REX world.cpp(987))."""
+    out = []
+    for fb in s.factions:
+        seen = set()
+        for n in faction_names(s, fb.name):
+            if n in seen and (fb.name, n) not in out:
+                out.append((fb.name, n))
+            seen.add(n)
+    return out
+
+
+def check_names(before, after):
+    """Raise ValueError for a name a write would give twice to one faction (names already twice in the
+    file before stay the mod's own business)."""
+    old = set(duplicate_names(before)) if before is not None else set()
+    new = [d for d in duplicate_names(after) if d not in old]
+    if new:
+        raise ValueError("two characters of %s would be called %s - the game skips the second one "
+                         "(\"duplicated character name in this faction\"). Pick another name; nothing written."
+                         % (new[0][0], new[0][1]))
+
+
 def medieval(lines):
     """Whether a descr_strat's character lines name the sex (Medieval II:
     'character Name, general, male, age 30, x 1, y 2'); Rome's do not
