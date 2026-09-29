@@ -55,6 +55,25 @@ def shown_name(mod, campaign, town):
     return town.replace("_", " ")
 
 
+def name_for(names, culture):
+    """The name a town of this table row shows under an owner of that culture, or None (the game's own)."""
+    names = names or {}
+    return names.get(culture) or names.get(DEFAULT) or None
+
+
+def labels(table, towns, owners, culture_of):
+    """{region: name the town shows} for towns whose table row gives a name for its owner's culture.
+    towns {region: settlement}, owners {region: faction}, culture_of(faction) -> culture or None."""
+    out = {}
+    for region, town in towns.items():
+        names = table.get(town)
+        if names:
+            n = name_for(names, culture_of(owners.get(region) or "slave"))
+            if n:
+                out[region] = n
+    return out
+
+
 def script_path(mod, campaign):
     return os.path.join(mod.campaign_dir(campaign), "campaign_script.txt")
 

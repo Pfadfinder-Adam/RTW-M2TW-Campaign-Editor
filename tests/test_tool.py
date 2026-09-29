@@ -391,6 +391,17 @@ class ToolTest(unittest.TestCase):
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
         self.assertEqual(before, after)
 
+    def test_settlement_names_follow_owner_culture(self):
+        # the map and the towns list show the name for the owner's culture as soon as a town changes hands
+        from faction_tool import culturenames as CN
+        table = {"Atown": {"*": "Atown", "barbarian": "Atburg"}, "Btown": {"roman": "Bopolis"}}
+        towns = {"A": "Atown", "B": "Btown", "C": "Ctown"}
+        cult = {"julii": "roman", "gauls": "barbarian", "slave": "carthaginian"}.get
+        self.assertEqual(CN.labels(table, towns, {"A": "gauls", "B": "julii", "C": "gauls"}, cult),
+                         {"A": "Atburg", "B": "Bopolis"})
+        self.assertEqual(CN.labels(table, towns, {"A": "julii", "B": "gauls"}, cult), {"A": "Atown"})
+        self.assertEqual(CN.labels(table, towns, {}, cult), {"A": "Atown"})     # no owner = the rebels
+
     def test_settlement_names_by_culture_campaign_script(self):
         # REX's documented way (dump_docudemon): SettlementTurnStart / GeneralCaptureSettlement +
         # SettlementName + FactionCultureType -> console_command rename_settlement

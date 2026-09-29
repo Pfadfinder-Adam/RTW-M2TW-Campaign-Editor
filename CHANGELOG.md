@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.13.0 - 2026-09-29
+
+Settlement names that follow the owner's culture (REX), shown live in the window. Checked in the window on a
+plain Rome copy (the julii taking Mediolanium); not yet tested in the game.
 
 ### Added
 - **Settlement names by the owner's culture (REX)**: **Names by culture...** (next to Edit region..., and on the Map's
@@ -11,6 +14,10 @@
   (`SettlementTurnStart` / `GeneralCaptureSettlement` + `SettlementName` + `FactionCultureType`, from REX's own
   documentation). Needs REX; backup and Restore as for every write. Not yet tested in the game. (Asked for on
   Discord.)
+- **The name shows at once in the window**: as soon as a town changes hands in the tool (taken or given on the
+  Faction tab or the Map, a new faction's start towns), the Map labels it with the name for its new owner's
+  culture, the status line says it ("Mediolanium (now Mediolanum) added"), and the towns list shows the name the
+  town has now ("(shown: Medhlan)"). A name set in Names by culture... shows on the map the moment OK is pressed.
 
 ### Fixed
 - **New mod folder made from Barbarian Invasion or Alexander** (REX): its start file now starts that game (`-bi` /

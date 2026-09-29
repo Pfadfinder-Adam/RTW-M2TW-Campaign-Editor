@@ -19,6 +19,7 @@ class MapView(ttk.Frame):
         self.on_layers = on_layers                      # the window redraws when a layer that needs it changes
         self.cmap = None
         self.owners, self.colours, self.faction, self.chosen = {}, {}, None, set()
+        self.labels = {}
         self.on_city = None
         self.status = status
         bar = ttk.Frame(self, padding=(0, 0, 0, 4))
@@ -263,7 +264,7 @@ class MapView(ttk.Frame):
              region_mode=False, paint_overlay=None, on_paint=None, on_pick=None, brush=1, region_points=(),
              region_painted=None, region_colours=None, borders=True, ghost=None, locked=None,
              resources=None, check_res=None, on_res_move=None, on_res_click=None, res_sel=None, new_land=None,
-             plain=False):
+             plain=False, labels=None):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
@@ -296,6 +297,7 @@ class MapView(ttk.Frame):
         self.resources = list(resources or [])
         self.check_res, self.on_res_move, self.on_res_click = check_res, on_res_move, on_res_click
         self.res_sel = res_sel
+        self.labels = dict(labels or {})     # {region: name} the town shows for its owner (names by culture)
         self.plain = plain                  # the Terrain editor: the ground alone, no political or region colours
         if first:
             self.fit()
@@ -532,7 +534,7 @@ class MapView(ttk.Frame):
             if r >= 6:
                 self._hall(sx, sy, size / 2, rgb, ("city", "city:" + region))
             if self.v_names.get() and (self.z >= 4 or mine):
-                name = cm.info.get(region, {}).get("settlement", region)
+                name = self.labels.get(region) or cm.info.get(region, {}).get("settlement", region)
                 c.create_text(sx + r + 3, sy + 1, text=name, anchor="w", fill="black", font=font)   # shadow
                 c.create_text(sx + r + 2, sy, text=name, anchor="w", fill="white", font=font)
         if self.v_chars.get() and self.z >= 4 and not self.region_mode:

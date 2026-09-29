@@ -29,7 +29,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.12.0"
+VERSION = "0.13.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
 
@@ -1577,6 +1577,8 @@ class App(tk.Tk):
             self.status.set("%s: names by culture for %d culture(s) - written with the next Apply." % (
                 town, len(got)))
             w.destroy()
+            self.fill_towns()                  # the map and the towns list show the owner's name at once
+            self.show_map()
         bar = ttk.Frame(frm)
         bar.grid(row=len(rows) + 1, column=0, columnspan=2, pady=(8, 0), sticky="w")
         ttk.Button(bar, text="OK", command=ok).pack(side="left")
@@ -1978,7 +1980,9 @@ class App(tk.Tk):
             region_kw["ghost"] = {"kind": fc["kind"] if fc["kind"] in ("army", "fleet") else "agent",
                                   "check": lambda xy: self.mod.tile_problem(self.v_campaign.get(), xy, rtw_kind, army,
                                                                             armies_at)}
+        self._map_labels = self.culture_labels(owners, me)
         self.map_view.load(self._cmap, owners, colours, me, self.chosen, on_city=self.map_city, chars=chars,
+                           labels=self._map_labels,
                            draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols,
                            on_place=on_place,
                            places=self.place_moves, check_place=check_place, on_place_move=place_moved,
@@ -2005,6 +2009,8 @@ class App(tk.Tk):
         self.refresh_chosen()
         self.show_map()
         town = self._cmap.info.get(region, {}).get("settlement", region) if self._cmap else region
+        if getattr(self, "_map_labels", {}).get(region, town) != town:
+            town += " (now %s)" % self._map_labels[region]
         self.status.set("%s %s. %d town(s) chosen." % (town, "added" if region in self.chosen else "taken out",
                                                        len(self.chosen)))
 
@@ -2327,6 +2333,25 @@ class App(tk.Tk):
         owners.update({r["name"]: r.get("owner") or "slave" for r in getattr(self, "new_regions", [])})
         return owners
 
+    def culture_labels(self, owners, me=None):
+        """{region: name} the towns show for these owners by the names-by-culture table (the campaign's
+        script + what waits for Apply): the name follows the owner's culture as soon as a town changes hands."""
+        from . import culturenames as CN
+        if not self.mod or not self.strat:
+            return {}
+        table = dict(CN.read(self.mod, self.v_campaign.get()))
+        table.update({k: v for k, v in self.culture_names.items() if v})
+        for k in [k for k, v in self.culture_names.items() if not v]:
+            table.pop(k, None)
+        if not table:
+            return {}
+        cultures = dict(self.mod.factions())
+        if me and me not in cultures:           # the new faction: the template's culture (the clone keeps it)
+            cultures[me] = cultures.get(self.v["template"].get().strip())
+        towns = {r: i.get("settlement") for r, i in self.regions.items() if i.get("settlement")}
+        towns.update({r["name"]: r["settlement"] for r in self.new_regions if r.get("settlement")})
+        return CN.labels(table, towns, owners, cultures.get)
+
     def fill_towns(self):
         if not self.strat:
             return
@@ -2334,8 +2359,12 @@ class App(tk.Tk):
         q = self.v_search.get().lower().strip()
         want = self.v_owner.get()
         villages = self.villages()
-        for region, owner in sorted(self.town_owners().items(), key=lambda x: (x[1] != "slave", x[1], x[0])):
+        owners = self.town_owners()
+        shown = self.culture_labels(owners)
+        for region, owner in sorted(owners.items(), key=lambda x: (x[1] != "slave", x[1], x[0])):
             town = self.regions.get(region, {}).get("settlement", "")
+            if region in shown and shown[region] != town:
+                town += "  (shown: %s)" % shown[region]
             if want not in ("", "(all)") and owner != want:
                 continue
             if q and q not in region.lower() and q not in town.lower():
