@@ -1721,6 +1721,12 @@ building smith
         write(os.path.join(other, "descr_strat.txt"), STRAT)
         write(os.path.join(d, "text", "test_regions_and_settlement_names.txt"),
               "{A_R}\t\tAlpha land\n{Atown}\t\tAlpha town\n", utf16=True)
+        # people named like the place (vanilla Rome: the woman Apollonia, surnames 'of Epirus') keep their names
+        write(os.path.join(d, "descr_names.txt"), "faction: alpha\n\tcharacters\n\t\tAtown\n\tsurnames\n\t\tof Atown\n")
+        write(os.path.join(d, "descr_names_lookup.txt"), "Atown\n")
+        write(os.path.join(d, "text", "names.txt"), "{Atown}\tAtown\n", utf16=True)
+        write(os.path.join(camp, "descr_strat.txt"), STRAT + "\ncharacter\tAtown of Atown, named character, male, "
+              "age 30, x 1, y 1\ncharacter_record\t\tAtown, \tfemale, age 20, alive, never_a_leader\n")
         before = tree_hash(d)
         mod = ModData(self.root)
         self.assertTrue(problems(mod, "test", "A_R", "B_R", "Newtown"))            # taken by another region
@@ -1734,7 +1740,12 @@ building smith
         self.assertIn("monitor_event SettlementTurnStart SettlementName Newtown", script)
         self.assertIn("\tand FactionType Atown", script)                           # a faction's name stays
         self.assertIn("\tconsole_command reveal_tile A_R_2", script)               # part of a longer name
-        self.assertIn("\tregion New_R", plan.files[os.path.join(camp, "descr_strat.txt")].texts())
+        strat = plan.files[os.path.join(camp, "descr_strat.txt")].texts()
+        self.assertIn("\tregion New_R", strat)
+        self.assertIn("character\tAtown of Atown, named character, male, age 30, x 1, y 1", strat)
+        self.assertIn("character_record\t\tAtown, \tfemale, age 20, alive, never_a_leader", strat)
+        for n in ("descr_names.txt", "descr_names_lookup.txt", os.path.join("text", "names.txt")):
+            self.assertNotIn(os.path.join(d, n), plan.files, n)
         self.assertIn("hold_regions New_R", plan.files[os.path.join(camp, "descr_win_conditions.txt")].texts())
         regions = plan.files[os.path.join(camp, "descr_regions.txt")].texts()
         self.assertEqual(regions[:2], ["New_R", "\tNewtown"])

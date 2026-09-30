@@ -2,11 +2,19 @@
 
 ## Unreleased
 
+### Added
+- **Rename in the files... on the Map** (Edit regions, beside Rename...): the region's and its town's names in the
+  files changed everywhere the mod uses them, from the map too - not only the names players see (asked on
+  Discord). The same window as on the Settlements tab.
+
 ### Changed
 - **Report a bug / Suggest**: the window's opening words are three short sentences - the long list of what is cut
   out (and the names of services in it) scared people off; the wiki page keeps the details.
 
 ### Fixed
+- **Rename in the files renamed people too**: a woman or a surname named like the town (vanilla Rome: Apollonia,
+  "of Epirus") was renamed in descr_names.txt, its lookup and names.txt, and a character named like it in
+  descr_strat. The name lists and characters' names now stay.
 - **Add a relative... on Medieval II**: parents who died before the start are written too (it was refused - the
   form of such a record was thought unknown; the game's own world/template.txt has it: `age 94, dead,
   past_leader`), as on Rome.

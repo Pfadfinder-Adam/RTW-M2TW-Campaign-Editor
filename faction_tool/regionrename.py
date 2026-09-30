@@ -28,13 +28,16 @@ def _token(name):
 # a word right after these is a faction's name, never a place's (a town named like a faction: Jerusalem)
 FACTION_BEFORE = re.compile(r"(Faction\s*=\s*\"|FactionType\s+|FactionIsLocal\s+|\bfaction\s+|\bfactions\s*\{[^}]*|"
                             r"ownership\s+[^;]*|I_CompareCounter\s+)$", re.I)
+# a word on a character's line before its first comma is the person's name (descr_strat: 'character Kaeso of
+# Apollonia, named character, ...', 'character_record Apollonia, female, ...')
+PERSON_BEFORE = re.compile(r"^\s*(?:character|character_record)\s[^,]*$", re.I)
 
 
 def _replace(rx, rep, code):
     """code with rx's matches replaced, except where the word stands as a faction's name; (text, count)."""
     out, last, n = [], 0, 0
     for m in rx.finditer(code):
-        if FACTION_BEFORE.search(code[:m.start()]):
+        if FACTION_BEFORE.search(code[:m.start()]) or PERSON_BEFORE.search(code[:m.start()]):
             continue
         out.append(code[last:m.start()] + rep)
         last = m.end()
@@ -76,6 +79,9 @@ SKIP = re.compile(r"(^|/)world/maps/(battle|custom)/|(^|/)descr_battle\.txt$|(^|
                   r"(^|/)[^/]*\.log(\.txt)?$|(^|/)system\.log|"
                   r"(^|/)(![^/]*|[^/]*kopie[^/]*|[^/]*backup[^/]*|[^/]* - copy[^/]*)(/|$)", re.I)
 PROSE = re.compile(r"(^|/)description[^/]*\.txt$", re.I)      # the campaign screen's faction texts: prose
+# people's names, not places (vanilla Rome: the woman Apollonia, surnames 'of Epirus'): the name lists and their
+# string tables stay as they are
+PEOPLE = re.compile(r"(^|/)descr_names(_lookup)?\.txt$|(^|/)text/([^/]+/)?names\.txt$", re.I)
 
 
 def _files(mod, campaign):
@@ -100,7 +106,7 @@ def _files(mod, campaign):
                 continue
             p = os.path.join(dirpath, n)
             rel = os.path.relpath(p, os.path.dirname(mod.data)).replace("\\", "/")
-            if not SKIP.search(rel) and not PROSE.search(rel):
+            if not SKIP.search(rel) and not PROSE.search(rel) and not PEOPLE.search(rel):
                 yield p
 
 

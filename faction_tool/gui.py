@@ -609,6 +609,7 @@ class App(tk.Tk):
         ttk.Button(rb, text="Edit region...", command=lambda: self.new_region_dialog(
             edit=self.v_paint.get().replace("  (new)", "").strip())).pack(side="left", padx=2)
         ttk.Button(rb, text="Rename...", command=self._rename_painted).pack(side="left", padx=2)
+        ttk.Button(rb, text="Rename in the files...", command=self._rename_painted_files).pack(side="left", padx=2)
         ttk.Button(rb, text="Place its town", command=lambda: self.region_point("city")).pack(side="left", padx=2)
         ttk.Button(rb, text="Place its port", command=lambda: self.region_point("port")).pack(side="left", padx=2)
         ttk.Button(rb, text="Delete this new region", command=self.drop_region).pack(side="left", padx=2)
@@ -2993,6 +2994,17 @@ class App(tk.Tk):
                                       "Rename...")
             return
         self.new_region_dialog(edit=region)
+
+    def _rename_painted_files(self):
+        """Map > Edit regions > Rename in the files...: the names the files use for the region in 'Paint with'
+        and its town, changed everywhere the mod names them (the Settlements tab's window)."""
+        region = self.v_paint.get().replace("  (new)", "").strip()
+        if not region:
+            messagebox.showerror(APP, "Right click a region on the map first (it goes into 'Paint with'), then "
+                                      "Rename in the files...")
+            return
+        from .gui_settlements import rename_in_files
+        rename_in_files(self, region, self)
 
     def rename_town(self):
         """Rename... beside the town list: the region picked on the left (or a chosen town) in Edit region, whose

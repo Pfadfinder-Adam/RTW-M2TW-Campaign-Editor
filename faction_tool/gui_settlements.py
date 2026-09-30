@@ -128,73 +128,80 @@ class SettlementsPanel(ttk.Frame):
             app.map_view.centre_on(tuple(xy), zoom=6)
 
     def rename_files(self):
-        """The region's and its town's names in the files, changed everywhere the mod names them: a window with the
-        new names, Preview (every file and line), then written with a backup at once and the mod read again."""
         region = self.picked()
-        if not region:
+        if region:
+            rename_in_files(self.app, region, self)
+
+
+def rename_in_files(app, region, parent):
+    """The region's and its town's names in the files, changed everywhere the mod names them: a window with the
+    new names, Preview (every file and line), then written with a backup at once and the mod read again. The
+    Settlements tab and the Map (Edit regions) open it."""
+    if region not in app.mod.regions(app.v_campaign.get()):
+        messagebox.showerror(APP, "%s is not in the campaign's files yet - a new region takes its names in Edit "
+                                  "region...; after Apply it can be renamed here." % region, parent=parent)
+        return
+    from .plan import Plan
+    from .regionrename import problems, rename
+    campaign = app.v_campaign.get()
+    town = (app.mod.regions(campaign).get(region) or {}).get("settlement") or ""
+    w = tk.Toplevel(parent)
+    w.title("Rename in the files - %s / %s" % (region, town))
+    w.transient(parent)
+    frm = ttk.Frame(w, padding=10)
+    frm.pack(fill="both", expand=True)
+    ttk.Label(frm, justify="left", wraplength=560, text=(
+        "The names the game's files use for this place. Every text file of the mod that names it gets the new "
+        "name: descr_regions, descr_strat, the names lookup and texts, mercenaries, win conditions, scripts, "
+        "trait and ancillary conditions (SettlementName ...). Words in comments and descriptions stay; a line "
+        "that names a faction of the same name stays. map.rwm is removed (the game builds it again). "
+        "Letters, digits and _ only.")).grid(row=0, column=0, columnspan=3, sticky="w")
+    v_region, v_town = tk.StringVar(value=region), tk.StringVar(value=town)
+    for i, (label, var, now) in enumerate((("Region", v_region, region), ("Town", v_town, town))):
+        ttk.Label(frm, text=label).grid(row=i + 1, column=0, sticky="w", pady=2)
+        ttk.Entry(frm, textvariable=var, width=30).grid(row=i + 1, column=1, sticky="w", padx=6)
+        ttk.Label(frm, text="now %s" % now, foreground="#666").grid(row=i + 1, column=2, sticky="w")
+
+    def plan():
+        names = (v_region.get().strip(), v_town.get().strip())
+        why = problems(app.mod, campaign, region, *names)
+        if why:
+            messagebox.showerror(APP, "\n".join(why), parent=w)
+            return None
+        p = Plan(app.mod, "rename", names[0])
+        try:
+            rename(p, campaign, region, *names)
+        except ValueError as e:
+            messagebox.showerror(APP, str(e), parent=w)
+            return None
+        if not p.changed_files():
+            messagebox.showinfo(APP, "Nothing to change - the names are as they are.", parent=w)
+            return None
+        return p
+
+    def preview():
+        p = plan()
+        if p:
+            app.show_text("Rename in the files - nothing written yet", p.report())
+
+    def write():
+        if app.pending_parts():
+            messagebox.showerror(APP, "Other changes wait for Apply. Apply (or undo) them first - they were made "
+                                      "with the old names.", parent=w)
             return
-        app = self.app
-        from .plan import Plan
-        from .regionrename import problems, rename
-        campaign = app.v_campaign.get()
-        town = (app.mod.regions(campaign).get(region) or {}).get("settlement") or ""
-        w = tk.Toplevel(self)
-        w.title("Rename in the files - %s / %s" % (region, town))
-        w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
-        ttk.Label(frm, justify="left", wraplength=560, text=(
-            "The names the game's files use for this place. Every text file of the mod that names it gets the new "
-            "name: descr_regions, descr_strat, the names lookup and texts, mercenaries, win conditions, scripts, "
-            "trait and ancillary conditions (SettlementName ...). Words in comments and descriptions stay; a line "
-            "that names a faction of the same name stays. map.rwm is removed (the game builds it again). "
-            "Letters, digits and _ only.")).grid(row=0, column=0, columnspan=3, sticky="w")
-        v_region, v_town = tk.StringVar(value=region), tk.StringVar(value=town)
-        for i, (label, var, now) in enumerate((("Region", v_region, region), ("Town", v_town, town))):
-            ttk.Label(frm, text=label).grid(row=i + 1, column=0, sticky="w", pady=2)
-            ttk.Entry(frm, textvariable=var, width=30).grid(row=i + 1, column=1, sticky="w", padx=6)
-            ttk.Label(frm, text="now %s" % now, foreground="#666").grid(row=i + 1, column=2, sticky="w")
-
-        def plan():
-            names = (v_region.get().strip(), v_town.get().strip())
-            why = problems(app.mod, campaign, region, *names)
-            if why:
-                messagebox.showerror(APP, "\n".join(why), parent=w)
-                return None
-            p = Plan(app.mod, "rename", names[0])
-            try:
-                rename(p, campaign, region, *names)
-            except ValueError as e:
-                messagebox.showerror(APP, str(e), parent=w)
-                return None
-            if not p.changed_files():
-                messagebox.showinfo(APP, "Nothing to change - the names are as they are.", parent=w)
-                return None
-            return p
-
-        def preview():
-            p = plan()
-            if p:
-                app.show_text("Rename in the files - nothing written yet", p.report())
-
-        def write():
-            if app.pending_parts():
-                messagebox.showerror(APP, "Other changes wait for Apply. Apply (or undo) them first - they were made "
-                                          "with the old names.", parent=w)
-                return
-            p = plan()
-            if not p or not messagebox.askyesno(APP, "%s\n\nWrite %d file(s)? A backup is made first (Tools > Restore "
-                                                     "undoes it)." % (p.report(), len(p.changed_files())), parent=w):
-                return
-            bdir = p.apply()
-            log.write("Renamed in the files: %s / %s -> %s / %s (backup %s)\n%s" % (
-                region, town, v_region.get().strip(), v_town.get().strip(), bdir, p.report()))
-            w.destroy()
-            app.load()
-            app.status.set("Renamed in the files (backup %s). Check the names players see (Settlements tab), then "
-                           "start the game - it builds map.rwm again." % bdir)
-        bar = ttk.Frame(frm)
-        bar.grid(row=3, column=0, columnspan=3, sticky="e", pady=(10, 0))
-        ttk.Button(bar, text="Preview", command=preview).pack(side="left")
-        ttk.Button(bar, text="Rename", command=write).pack(side="left", padx=4)
-        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
+        p = plan()
+        if not p or not messagebox.askyesno(APP, "%s\n\nWrite %d file(s)? A backup is made first (Tools > Restore "
+                                                 "undoes it)." % (p.report(), len(p.changed_files())), parent=w):
+            return
+        bdir = p.apply()
+        log.write("Renamed in the files: %s / %s -> %s / %s (backup %s)\n%s" % (
+            region, town, v_region.get().strip(), v_town.get().strip(), bdir, p.report()))
+        w.destroy()
+        app.load()
+        app.status.set("Renamed in the files (backup %s). Check the names players see (Settlements tab), then "
+                       "start the game - it builds map.rwm again." % bdir)
+    bar = ttk.Frame(frm)
+    bar.grid(row=3, column=0, columnspan=3, sticky="e", pady=(10, 0))
+    ttk.Button(bar, text="Preview", command=preview).pack(side="left")
+    ttk.Button(bar, text="Rename", command=write).pack(side="left", padx=4)
+    ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
