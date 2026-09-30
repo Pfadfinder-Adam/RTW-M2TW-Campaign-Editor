@@ -14,7 +14,9 @@
   the tool, a backup on every write, Take it out. The first: **Sack Settlement** (Rome + REX) - a 4th choice on the
   capture scroll that tears the town down, pays a reward and leaves the ruins to the rebels. New: **who may sack** -
   only the player (default), everyone, only factions without a town (hordes), the player and hordes, only the
-  computer, or picked factions; a computer faction allowed to sack does it whenever it exterminates.
+  computer, or picked factions; a computer faction allowed to sack does it whenever it exterminates. The chains
+  that stay standing and the rebel units are picked from the mod's own buildings and units (Pick...), and names the
+  mod does not have are refused - as is leaving out the governor's chain.
 
 ### Fixed
 - **3D view: "Weapons and shield" off hid the legs too** on some models (vanilla peasants list their legs after the

@@ -2208,6 +2208,9 @@ building smith
         new = dict(got, RAZE_WHO="homeless", RAZE_GOLD_PER_BUILDING=500, RAZE_KEEP_CHAINS=["core_building"])
         self.assertEqual(AD.read_settings(a, AD.render(a, text, new)), new)
         self.assertTrue(AD.check(a, dict(got, RAZE_WHO="list", RAZE_FACTIONS=[])))
+        # tied to the mod's files: a rebel unit the mod does not have is refused
+        self.assertTrue(any("nobody" in p for p in AD.check(a, dict(got, RAZE_DEFAULT_REBEL_UNITS=["nobody"]), mod)))
+        self.assertFalse(AD.check(a, dict(got, RAZE_DEFAULT_REBEL_UNITS=["alpha general"]), mod))
         plan = Plan(mod, "addon", "sack", {})
         dst = AD.plan_install(plan, a, new)
         self.assertEqual(dst, os.path.join(self.root, "script", "modules", "sack_settlement.nut"))

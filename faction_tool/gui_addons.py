@@ -145,9 +145,50 @@ class AddonsPanel(ttk.Frame):
             return box
         if s.kind in ("list", "set"):
             v = self.vars[s.var] = tk.StringVar(value=", ".join(value or []))
-            return ttk.Entry(parent, textvariable=v, width=46)
+            if s.var not in AD.PICKS:
+                return ttk.Entry(parent, textvariable=v, width=46)
+            box = ttk.Frame(parent)
+            ttk.Entry(box, textvariable=v, width=38).pack(side="left")
+            ttk.Button(box, text="Pick...", command=lambda: self.pick(s, v)).pack(side="left", padx=4)
+            return box
         v = self.vars[s.var] = tk.StringVar(value="" if value is None else str(value))
         return ttk.Entry(parent, textvariable=v, width=46 if s.kind == "text" else 10)
+
+    def pick(self, s, var):
+        """Pick names for a setting from this mod's own file (building chains, unit types)."""
+        what = AD.PICKS[s.var]
+        names = AD.mod_names(self.mod, what)
+        if not names:
+            messagebox.showinfo("Add-ons", "This mod has no %s to pick from - type the names." % (
+                "export_descr_buildings.txt" if what == "chains" else "export_descr_unit.txt"), parent=self)
+            return
+        now = {x.strip().lower() for x in var.get().split(",") if x.strip()}
+        w = tk.Toplevel(self)
+        w.title(s.label)
+        w.transient(self)
+        frm = ttk.Frame(w, padding=10)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, text="%s - from this mod's %s. Click to tick or untick." % (
+            s.label, "buildings" if what == "chains" else "units"), wraplength=420).pack(anchor="w")
+        body = ttk.Frame(frm)
+        body.pack(fill="both", expand=True, pady=6)
+        lb = tk.Listbox(body, selectmode="multiple", height=18, width=44, exportselection=False)
+        sb = ttk.Scrollbar(body, orient="vertical", command=lb.yview)
+        lb.configure(yscrollcommand=sb.set)
+        lb.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+        for i, n in enumerate(names):
+            lb.insert("end", n)
+            if n.lower() in now:
+                lb.selection_set(i)
+
+        def ok():
+            var.set(", ".join(names[i] for i in lb.curselection()))
+            w.destroy()
+        bar = ttk.Frame(frm)
+        bar.pack(anchor="e")
+        ttk.Button(bar, text="OK", command=ok).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
 
     def _value(self, s):
         v = self.vars[s.var]
@@ -175,7 +216,7 @@ class AddonsPanel(ttk.Frame):
         if remove:
             AD.plan_remove(plan, a)
         else:
-            AD.plan_install(plan, a, self.values())
+            AD.plan_install(plan, a, self.values(), self.mod)
         return plan
 
     def preview(self):

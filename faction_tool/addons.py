@@ -156,9 +156,44 @@ def _render(s, v, old):
     return _quote(v)
 
 
-def check(addon, values):
-    """[problem] with the chosen values (empty = fine)."""
+def mod_names(mod, what):
+    """The names a setting picks from, read from the mod: 'chains' (export_descr_buildings.txt), 'units'
+    (export_descr_unit.txt). [] when the file is not there."""
+    try:
+        if what == "chains":
+            from .buildings import read_buildings
+            return [b.name for b in read_buildings(mod.load(mod.file("edb")))]
+        if what == "units":
+            from .units import read_units
+            return [u.type for u in read_units(mod.load(mod.file("edu")))]
+    except Exception:
+        return []
+    return []
+
+
+PICKS = {"RAZE_KEEP_CHAINS": "chains", "RAZE_DEFAULT_REBEL_UNITS": "units"}
+
+
+def check(addon, values, mod=None):
+    """[problem] with the chosen values (empty = fine). With the mod, names are checked against its files: a kept
+    chain or a rebel unit the mod does not have would do nothing (the governor's chain would then be torn down)."""
     out = []
+    if mod is not None:
+        for var, what in PICKS.items():
+            have = mod_names(mod, what)
+            if have and values.get(var):
+                low = {x.lower() for x in have}
+                wrong = [x for x in values[var] if x.lower() not in low]
+                if wrong:
+                    out.append("%s: %s not in this mod's %s" % (
+                        next(s.label for s in addon.settings if s.var == var), ", ".join(wrong),
+                        "export_descr_buildings.txt" if what == "chains" else "export_descr_unit.txt"))
+        chains = mod_names(mod, "chains")
+        if "RAZE_KEEP_CHAINS" in values and chains:
+            core = [c for c in chains if c.lower().startswith("core")]
+            if core and not {c.lower() for c in core} & {x.lower() for x in values["RAZE_KEEP_CHAINS"]}:
+                out.append("Building chains never torn down: keep the governor's chain (%s) - the game breaks "
+                           "without it" % ", ".join(core))
     name = re.compile(r"^[A-Za-z_][\w]*$")
     for s in addon.settings:
         v = values.get(s.var)
@@ -228,8 +263,8 @@ def installed(mod, addon):
         return read_settings(addon, f.read().decode("utf-8", "replace"))
 
 
-def plan_install(plan, addon, values):
-    problems = check(addon, values)
+def plan_install(plan, addon, values, mod=None):
+    problems = check(addon, values, mod)
     if problems:
         raise ValueError("; ".join(problems))
     text = render(addon, addon.template(), values)
