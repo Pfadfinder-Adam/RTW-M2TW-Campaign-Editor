@@ -82,6 +82,14 @@ def read_units(edu):
     return units
 
 
+def owner_factions(mod, ownership):
+    """The factions an ownership list names: factions by name, every faction of a culture it names, all of them
+    for 'all' (in the order of descr_sm_factions.txt). A list naming nothing the mod knows is given back as it is."""
+    own = [x.strip() for x in ownership if x and x.strip()]
+    out = [n for n, c in mod.factions() if n in own or c in own or "all" in own]
+    return out or own
+
+
 def faction_units(mod, faction, ships=False, mercs=False):
     """Units the faction may own (its name, its culture or 'all' in ownership - vanilla
     gives ships by culture): land units, or with ships=True only its ships;

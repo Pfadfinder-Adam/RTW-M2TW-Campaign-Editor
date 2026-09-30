@@ -1967,6 +1967,67 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "faction_tool_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
 
+    def test_replace_battle_model(self):
+        """A unit's soldier model swapped for another of this mod or of another mod (brought with its files, renamed
+        when the name is taken), the unit's factions given textures on it, a seat mismatch warned about, another
+        game refused, Restore byte for byte."""
+        from faction_tool import models as MO
+        from faction_tool.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1 ; the riders\nmount\t\tlight horse\nownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\talpha_model\nskeleton\t\tfs_hc_swordsman\ntexture\t\talpha, data/models_unit/textures/a.tga\n"
+              "model_flexi\t\tdata/models_unit/a.cas, max\n\n"
+              "type\t\tfoot_model\nskeleton\t\tfs_spearman\ntexture\t\tslave, data/models_unit/textures/f.tga\n"
+              "model_flexi\t\tdata/models_unit/f.cas, max\n\n"
+              "type\t\thorse_model\nskeleton\t\tfs_medium_horse\n")
+        write(os.path.join(d, "descr_mount.txt"), "type\t\tlight horse\nclass\t\thorse\nmodel\t\thorse_model\n")
+        # another mod of the same game with a rider model of its own, whose name this mod has too
+        other = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, other)
+        shutil.copytree(self.root, os.path.join(other, "mod"))
+        od = os.path.join(other, "mod", "data")
+        write(os.path.join(od, "descr_model_battle.txt"),
+              "type\t\tfoot_model\nskeleton\t\tfs_hc_spearman\ntexture\t\tmerc, data/models_unit/textures/o.tga\n"
+              "model_flexi\t\tdata/models_unit/o.cas, max\n")
+        write(os.path.join(od, "models_unit", "textures", "o.tga.dds"), "O-texture")
+        write(os.path.join(od, "models_unit", "o.cas"), "O-model")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        cat = MO.catalogue(mod)
+        self.assertEqual(cat["alpha_model"].seats, {"horse", "camel"})
+        self.assertEqual(cat["foot_model"].seats, {"none"})
+        lines = MO.unit_lines(mod, "alpha general")
+        self.assertEqual(MO.unit_slots(lines), [("soldier", 0, "alpha_model")])
+        self.assertEqual(MO.unit_seat(mod, lines), "horse")
+        # this mod's foot model: the line swapped (the rest kept), alpha gets a texture, the seat warned about
+        plan = Plan(mod, "model", "model", {})
+        self.assertEqual(MO.replace(plan, "alpha general", "soldier", 0, "FOOT_MODEL"), "foot_model")
+        edu = Strat(plan.files[mod.file("edu")]).lines
+        self.assertIn("soldier\t\tfoot_model, 20, 0, 1 ; the riders", edu)
+        dmb = "\n".join(plan.files[os.path.join(d, "descr_model_battle.txt")].texts())
+        self.assertIn("texture\t\talpha, data/models_unit/textures/f.tga", dmb)
+        self.assertTrue(any("on a horse" in w and "on foot" in w for _, w in plan.warnings))
+        # from the other mod: brought in with its files as foot_model_2 (foot_model is taken here), no warning
+        plan = Plan(ModData(self.root), "model", "model", {})
+        got = MO.replace(plan, "alpha general", "soldier", 0, "foot_model", src_mod=ModData(os.path.join(other, "mod")))
+        self.assertEqual(got, "foot_model_2")
+        self.assertFalse(plan.warnings)
+        bdir = plan.apply()
+        m2 = ModData(self.root)
+        self.assertEqual(MO.unit_slots(MO.unit_lines(m2, "alpha general")), [("soldier", 0, "foot_model_2")])
+        self.assertIn("alpha", MO.catalogue(m2)["foot_model_2"].textures)
+        self.assertTrue(os.path.exists(os.path.join(d, "models_unit", "o.cas")))
+        restore(ModData(self.root), bdir)
+        after = {k: v for k, v in tree_hash(self.root).items() if "faction_tool_backups" not in k}
+        self.assertEqual(after, before)
+        # another game: refused
+        os.makedirs(os.path.join(od, "unit_models"))
+        with self.assertRaises(ValueError):
+            MO.replace(Plan(ModData(self.root), "model", "model", {}), "alpha general", "soldier", 0, "foot_model",
+                       src_mod=ModData(os.path.join(other, "mod")))
+
     def test_medieval_religions(self):
         # Medieval II: a ninth line per region, the religions
         from faction_tool.edit import edit

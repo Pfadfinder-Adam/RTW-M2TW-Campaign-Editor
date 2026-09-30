@@ -632,10 +632,8 @@ class RecordEditor(ttk.Frame):
     def _factions_of(self):
         """The faction folders a unit's card goes to: the factions its ownership names,
         and those of a culture it names."""
-        own = [x.strip() for x in self.value("ownership").replace(",", " ").split() if x.strip()]
-        facs = self.mod.factions()
-        out = [n for n, c in facs if n in own or c in own or "all" in own]
-        return out or own
+        from .units import owner_factions
+        return owner_factions(self.mod, self.value("ownership").replace(",", " ").split())
 
     def show_pictures(self):
         for w in self.pics.winfo_children():
