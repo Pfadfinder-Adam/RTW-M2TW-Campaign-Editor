@@ -75,6 +75,10 @@ def read_faction(mod, campaign, faction):
             out["denari"] = int(t[1]) if t[1].isdigit() else t[1]
             break
     out["playable"] = bool(s.playable and faction in [n for _, n in s.playable["items"]])
+    from .religions import faction_religion
+    rel = faction_religion(mod, faction)
+    if rel:
+        out["religion"] = rel                                     # Medieval II
     out["regions"] = [st.region for st in fb.settlements]
     for c in fb.characters:
         if c.role in ("leader", "heir") and c.role not in out:
@@ -103,6 +107,9 @@ def edit(mod, campaign, faction, opts):
     if opts.get("regions"):
         from .regionedit import apply_opts as apply_region_opts
         apply_region_opts(plan, campaign, opts["regions"])
+    if opts.get("religion") and opts["religion"] != now.get("religion"):   # after a new religion is written
+        from .religions import set_faction_religion
+        set_faction_religion(plan, faction, opts["religion"])
     _strat(plan, campaign, now)
     if opts.get("places"):
         from .mapedit import apply_places

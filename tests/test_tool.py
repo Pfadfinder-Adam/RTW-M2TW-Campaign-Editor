@@ -2626,6 +2626,32 @@ building smith
         with open(path) as fh:
             self.assertIn("resource\tiron,\t0,\t0", fh.read())
 
+    def test_faction_religion(self):
+        """Medieval II: a faction's religion (descr_sm_factions.txt) read, changed in Edit, given to a new faction -
+        the template keeps its own; a religion the game does not know is refused; Rome has none."""
+        from faction_tool.edit import edit, read_faction
+        from faction_tool.religions import faction_religion
+        sm = os.path.join(self.root, "data", "descr_sm_factions.txt")
+        self.assertIsNone(faction_religion(ModData(self.root), "alpha"))            # Rome: no religion line
+        with open(sm) as fh:
+            text = fh.read()
+        write(sm, text.replace("culture\t\teastern\n", "culture\t\teastern\nreligion\t\tcatholic ; theirs\n", 1))
+        write(os.path.join(self.root, "data", "descr_religions.txt"), "religions\n{\n    catholic\n    orthodox\n}\n")
+        mod = ModData(self.root)
+        self.assertEqual(read_faction(mod, "test", "alpha")["religion"], "catholic")
+        with self.assertRaises(ValueError):
+            edit(mod, "test", "alpha", {"religion": "jedi"})
+        plan = edit(mod, "test", "alpha", {"religion": "orthodox"})
+        bdir = plan.apply()
+        with open(sm) as fh:
+            self.assertIn("religion\t\torthodox ; theirs\n", fh.read())             # spacing and comment kept
+        restore(ModData(self.root), bdir)
+        plan = build(ModData(self.root), "test", "alpha", "beta", {"religion": "orthodox", "start": {
+            "regions": ["B_R"], "leader": {"name": "Boris"}}})
+        text = plan.files[sm].dump().decode().replace("\r\n", "\n")
+        self.assertIn("faction\t\tbeta\nculture\t\teastern\nreligion\t\torthodox", text)
+        self.assertIn("faction\t\talpha\nculture\t\teastern\nreligion\t\tcatholic", text)
+
     def test_path_guard(self):
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads
         out and a crafted backup manifest are refused before anything is written."""

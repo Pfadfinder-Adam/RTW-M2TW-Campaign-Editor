@@ -53,6 +53,41 @@ def names(mod):
     return out
 
 
+def _faction_religion_line(f, faction):
+    """(line index, religion) of `religion X` in faction's block of descr_sm_factions.txt, or (None, None)."""
+    cur = None
+    for i in range(len(f.raw)):
+        t = tokens(f.text(i))
+        if t[:1] == ["faction"] and len(t) > 1:
+            cur = t[1].rstrip(",")
+        elif cur == faction and t[:1] == ["religion"] and len(t) > 1:
+            return i, t[1]
+    return None, None
+
+
+def faction_religion(mod, faction):
+    """The faction's religion (Medieval II: descr_sm_factions.txt `religion catholic`), or None (Rome has none)."""
+    path = mod.file("sm_factions")
+    return _faction_religion_line(mod.load(path), faction)[1] if path else None
+
+
+def set_faction_religion(plan, faction, religion):
+    """Its `religion` line changed (as the plan leaves descr_sm_factions.txt: a new faction's block is there
+    already); the rest of the line - spacing, comment - kept."""
+    f = plan.edit(plan.mod.file("sm_factions"))
+    i, now = _faction_religion_line(f, faction)
+    if i is None:
+        raise ValueError("%s has no religion line in descr_sm_factions.txt (Rome's factions have no religion)"
+                         % faction)
+    known = names(plan.mod) + [s["name"] for s in (plan.opts.get("regions") or {}).get("new_religions") or []]
+    if known and religion not in known:
+        raise ValueError("'%s' is no religion of this game (%s)" % (religion, ", ".join(known)))
+    if now != religion:
+        line = f.text(i)
+        f.set(i, re.sub(r"(\breligion\s+)%s\b" % re.escape(now), lambda m: m.group(1) + religion, line, count=1))
+        plan.note(f, "%s: religion %s (was %s)" % (faction, religion, now))
+
+
 def pip_of(mod, religion):
     """The data-relative pip_path of a religion's block, or None."""
     p = _ci(mod.data, "descr_religions.txt")

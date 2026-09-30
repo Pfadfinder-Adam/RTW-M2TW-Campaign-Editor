@@ -1,4 +1,4 @@
-"""The Family tab (Edit faction) and the Character editor (its own work, any faction):
+"""The family on the Faction tab (Edit faction) and the Character editor (its own work, any faction):
 every character of a faction - on the map with their traits, ancillaries and portrait,
 and the family members off the map (character_record) - and the family tree drawn the
 way the game shows it: portraits, couples side by side, their children in the row below.
@@ -60,12 +60,18 @@ class FamilyEditor(ttk.Frame):
             "children below. Click a card or a row to edit that person. Names come from the faction's name lists "
             "(the game crashes on a name it has no string for); a renamed person is renamed on the tree too.")
                   ).pack(fill="x", pady=(2, 6))
-        panes = ttk.Panedwindow(self, orient="horizontal")
+        # the Character editor: people | tree side by side; beside the Faction tab's form (narrower): the tree on
+        # top at full width, the people under it - the same parts either way
+        panes = ttk.Panedwindow(self, orient="horizontal" if standalone else "vertical")
         panes.pack(fill="both", expand=True)
         left = ttk.Frame(panes)
-        panes.add(left, weight=2)
         right = ttk.LabelFrame(panes, text="Family tree", padding=2)
-        panes.add(right, weight=5)
+        if standalone:
+            panes.add(left, weight=2)
+            panes.add(right, weight=5)
+        else:
+            panes.add(right, weight=2)
+            panes.add(left, weight=3)
 
         # the people
         cols = (("name", "name", 140), ("kind", "who", 140), ("age", "age", 40), ("where", "where", 80))
@@ -75,14 +81,21 @@ class FamilyEditor(ttk.Frame):
             self.tv.column(cid, width=w, stretch=cid == "name")
         self.tv.tag_configure("changed", background="#d9e6ff", foreground="#000000")
         self.tv.tag_configure("new", background="#d9f2d0", foreground="#000000")
-        self.tv.pack(fill="x")
+        if standalone:
+            self.tv.pack(fill="x")
+        else:                                    # under the tree: the people list and the person side by side
+            self.tv.configure(height=12)
+            self.tv.pack(side="left", fill="y", padx=(0, 6))
         self.tv.bind("<<TreeviewSelect>>", lambda e: self._picked_row())
 
         # the person's form
         # the form scrolls when the window is lower than it (the portrait, traits and ancillaries stay reachable)
         from .gui_util import ScrollFrame
         box = ttk.LabelFrame(left, text="Person", padding=4)
-        box.pack(fill="both", expand=True, pady=(6, 0))
+        if standalone:
+            box.pack(fill="both", expand=True, pady=(6, 0))
+        else:
+            box.pack(side="left", fill="both", expand=True)
         sf = ScrollFrame(box)
         sf.pack(fill="both", expand=True)
         form = sf.inner
@@ -218,7 +231,9 @@ class FamilyEditor(ttk.Frame):
             faction = app.v["template"].get().strip() if app.editing() else ""
         if not app.mod or not faction or not app.strat or not app.strat.faction(faction):
             self.fam, self.faction = None, None
-            self.title.configure(text="Edit faction: pick the faction on the Faction tab")
+            self.title.configure(text="Edit faction: pick the faction above" if app.editing() else
+                                 "A new faction's family is its template's (copied on Apply) - change it then in "
+                                 "Edit faction or the Character editor")
             self.redraw()
             return
         path = self.path()

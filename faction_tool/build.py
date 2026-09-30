@@ -103,6 +103,9 @@ def build(mod, campaign, template, new, opts):
     if opts.get("regions"):
         from .regionedit import apply_opts as apply_region_opts
         apply_region_opts(plan, campaign, opts["regions"])
+    if opts.get("religion"):             # Medieval II: the clone's own religion (the template's is kept otherwise)
+        from .religions import set_faction_religion
+        set_faction_religion(plan, new, opts["religion"])
     build_start(plan, campaign, opts["start"])
     if opts.get("places"):
         from .mapedit import apply_places
