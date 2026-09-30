@@ -13,6 +13,25 @@ from .mapdata import REBELS
 ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels per tile
 
 
+
+def view_of(base, box, size, resample):
+    """The part of base (2 px per tile) under the view box (in tiles) drawn at size: only the pixels on the
+    map are taken (a view far wider than a big map once asked Pillow for a 1.3-billion-pixel crop), the rest
+    is the empty margin."""
+    x0, y0, x1, y1 = (v * 2 for v in box)
+    w, h = size
+    out = Image.new(base.mode, size)                  # black, as the crop beyond the map was
+    sx, sy = w / max(x1 - x0, 1e-9), h / max(y1 - y0, 1e-9)
+    cx0, cy0 = max(0, int(x0)), max(0, int(y0))
+    cx1, cy1 = min(base.width, int(round(x1))), min(base.height, int(round(y1)))
+    if cx1 <= cx0 or cy1 <= cy0:
+        return out
+    dx0, dy0 = int(round((cx0 - x0) * sx)), int(round((cy0 - y0) * sy))
+    dx1, dy1 = int(round((cx1 - x0) * sx)), int(round((cy1 - y0) * sy))
+    if dx1 > dx0 and dy1 > dy0:
+        out.paste(base.resize((dx1 - dx0, dy1 - dy0), resample, box=(cx0, cy0, cx1, cy1)), (dx0, dy0))
+    return out
+
 class MapView(ttk.Frame):
     def __init__(self, master, status=None, on_layers=None):
         super().__init__(master)
@@ -418,8 +437,7 @@ class MapView(ttk.Frame):
         base = self._base()                                           # 2 px per tile, colours laid on once
         # while the map is dragged the quick resize, the smooth one when it stops; sharp tiles up close
         quick = self._drag is not None and self._drag[4]
-        pic = base.crop(tuple(int(round(v * 2)) for v in box)).resize(
-            (cw, ch), Image.NEAREST if quick or self.z >= 12 else Image.BILINEAR)
+        pic = view_of(base, box, (cw, ch), Image.NEAREST if quick or self.z >= 12 else Image.BILINEAR)
         self._photo = ImageTk.PhotoImage(pic)
         c.create_image(0, 0, anchor="nw", image=self._photo, tags=("bg",))
         self._drawn_at = (self.ox, self.oy)
@@ -441,7 +459,7 @@ class MapView(ttk.Frame):
         self._clamp()
         cw, ch = c.winfo_width(), c.winfo_height()
         box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
-        pic = self._base().crop(tuple(int(round(v * 2)) for v in box)).resize((cw, ch), Image.NEAREST)
+        pic = view_of(self._base(), box, (cw, ch), Image.NEAREST)
         self._photo = ImageTk.PhotoImage(pic)
         c.itemconfigure("bg", image=self._photo)
         ox, oy = self._drawn_at
@@ -1052,8 +1070,7 @@ class MapView(ttk.Frame):
             return self.render()
         cw, ch = c.winfo_width(), c.winfo_height()
         box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
-        pic = self._base().crop(tuple(int(round(v * 2)) for v in box)).resize(
-            (cw, ch), Image.NEAREST if self.z >= 12 else Image.BILINEAR)
+        pic = view_of(self._base(), box, (cw, ch), Image.NEAREST if self.z >= 12 else Image.BILINEAR)
         self._photo = ImageTk.PhotoImage(pic)
         c.itemconfigure("bg", image=self._photo)
 

@@ -5,6 +5,8 @@
 ### Fixed
 - **Big campaign maps open ten times lighter**: a map of 4080 x 2496 tiles took 38 s and 6.6 GB of memory to open
   in the tool; now 2 s and 0.6 GB. The map is drawn in about a second instead of 19.
+- **The Map tab no longer fails on a very big map zoomed far out** (Pillow refused a 1.3-billion-pixel picture): only
+  the part of the map in view is drawn.
 - **A new faction on Medieval II now has battle banners, a voice, one-liners, movies and campaign music**: it is
   named beside its template in descr_banners_new.xml (with its own copy of the banner texture when that is on disk),
   descr_sounds_accents.txt, descr_sounds_db.xml, descr_movies_tracks.xml, the campaign's descr_faction_movies.xml
