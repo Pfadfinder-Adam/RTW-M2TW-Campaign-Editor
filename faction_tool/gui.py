@@ -550,8 +550,10 @@ class App(tk.Tk):
         self.tv.configure(yscrollcommand=sb.set)
         self.tv.pack(side="left", fill="both", expand=True)
         sb.pack(side="left", fill="y")
-        self.tv.bind("<Double-1>", lambda e: self.add_town())
-        # right click: the region's own menu (rename it, edit it) - a double click adds it to Chosen
+        # a double click renames (the user: it moving the town to Chosen was not wanted); Add > / Enter adds
+        self.tv.bind("<Double-1>", lambda e: self.rename_town() if self.tv.identify_row(e.y) else None)
+        self.tv.bind("<Return>", lambda e: self.add_town())
+        # right click: the region's own menu (rename it, edit it, add it)
         town_menu = tk.Menu(self.tv, tearoff=False)
         town_menu.add_command(label="Rename (the names players see)...", command=self.rename_town)
         town_menu.add_command(label="Edit region...", command=lambda: self.new_region_dialog(

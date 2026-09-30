@@ -30,6 +30,7 @@
   **Rename...** beside the towns list, a right click on a town, and Edit region now show the names players see of the
   region and its town and write them to the campaign's `<campaign>_regions_and_settlement_names.txt` (the key and
   its gap kept, a missing key added; the names in the files stay) - both games.
+  A double click on the town list now opens Rename (it used to move the town into Chosen); **Add >** or Enter adds.
 - **Medieval II clone: "the Kingdom of Kingdom of Jerusalem"** - the game has no short faction names, so the
   template's name inside the copied texts (advice, intro subtitles, "de Sicily" surnames) was swapped for the whole
   new name; now "Kingdom of Sicily" becomes the new full name and a bare "Sicily" the short name (or the end of

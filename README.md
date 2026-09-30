@@ -108,7 +108,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 4. Fill in:
    - **Internal name:** lower case, no spaces, for example `saba`.
    - **Name (full)**, **Name (short)** and **Adjective**, for example `Sabaean Kingdom`, `Saba`, `Sabaean`. The copied strings use them ("Sabaean Spy", "Your forces attack an army of Saba").
-5. **Starting settlements:** filter by owner (for example `slave` for rebel towns), double-click to add, then pick the capital.
+5. **Starting settlements:** filter by owner (for example `slave` for rebel towns), **Add >** (or Enter) to add, then pick the capital; a double click (or **Rename...**) changes the names players see of the region and its town.
 6. **Leader** (and optionally the heir): first name and surname **from the template's name list**. The game crashes on a name that has no string, so the tool only accepts listed names.
 7. Press **Preview changes** to see every file and edit. Nothing is written yet.
 8. Press **Create faction**. Then start a **new** campaign; old saves don't know the faction.
