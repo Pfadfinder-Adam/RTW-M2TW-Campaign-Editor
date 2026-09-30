@@ -59,6 +59,11 @@ DATA_FILES = {
     "ancillaries": "export_descr_ancillaries.txt",
     "lookup_descr": "lookup_campaign_descriptions.txt",
     "resources": "descr_sm_resources.txt",
+    # Medieval II: battle banners, voice accents, one-liners, faction movies (every faction is named in them)
+    "banners_xml": "descr_banners_new.xml",
+    "accents": "descr_sounds_accents.txt",
+    "sounds_db": "descr_sounds_db.xml",
+    "movies_tracks": "descr_movies_tracks.xml",
 }
 
 

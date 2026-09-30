@@ -242,6 +242,47 @@ class ToolTest(unittest.TestCase):
         after = {k: v for k, v in after.items() if not k.startswith("faction_tool_backups")}
         self.assertEqual(before, after)
 
+    def test_clone_names_the_new_faction_in_medieval2_lists(self):
+        """Medieval II names every faction in its battle banners, voice accents, one-liners, movies and campaign
+        music (the VK -> TVB port crashed without them): the clone copies the template's entries, spelled as the
+        file spells names, the banner texture on disk becomes the new faction's own; Restore byte for byte."""
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_banners_new.xml"),
+              '<BannerDB>\n   <FactionBanners>\n      <Banner Name="main_spear">\n         <Textures>\n'
+              '            <Texture Faction="Alpha" DiffuseMap="banners\\textures\\Faction_banner_alpha.texture"/>\n'
+              '            <Texture Faction="Slave" DiffuseMap="banners\\textures\\Faction_banner_slave.texture"/>\n'
+              '         </Textures>\n      </Banner>\n   </FactionBanners>\n</BannerDB>\n')
+        write(os.path.join(d, "banners", "textures", "Faction_banner_alpha.texture"), "A-banner")
+        write(os.path.join(d, "descr_sounds_accents.txt"), "accent English\n    factions slave, normans\n\n"
+                                                            "accent Alphan\n    factions alpha\n")
+        write(os.path.join(d, "descr_sounds_db.xml"), "<SoundDB>\n  <OneLiners>\n    <Faction>alpha</Faction>\n"
+                                                      "    <Faction>slave</Faction>\n  </OneLiners>\n</SoundDB>\n")
+        write(os.path.join(d, "descr_movies_tracks.xml"), '<movies>\n  <faction name="alpha">\n    <track>a.bik</track>\n'
+                                                         '  </faction>\n</movies>\n')
+        camp = os.path.join(d, "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "descr_faction_movies.xml"), "<factions>\n\t<faction>\n\t\t<name>alpha</name>\n"
+                                                             "\t\t<intro>faction/alpha.bik</intro>\n\t</faction>\n</factions>\n")
+        write(os.path.join(d, "world", "maps", "base", "descr_sounds_music_types.txt"),
+              "music_type northern\n\tfactions slave alpha\n")
+        before = tree_hash(self.root)
+        plan = build(ModData(self.root), "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        plan.apply()
+        def rd(*p):
+            with open(os.path.join(d, *p), encoding="latin-1") as fh:
+                return fh.read()
+        self.assertIn('<Texture Faction="Beta" DiffuseMap="banners\\textures\\Faction_banner_beta.texture"/>',
+                      rd("descr_banners_new.xml"))
+        self.assertEqual(rd("banners", "textures", "Faction_banner_beta.texture"), "A-banner")
+        self.assertIn("factions alpha, beta", rd("descr_sounds_accents.txt"))       # the file's commas
+        self.assertIn("<Faction>alpha</Faction>\n    <Faction>beta</Faction>", rd("descr_sounds_db.xml"))
+        self.assertIn('<faction name="beta">\n    <track>a.bik</track>', rd("descr_movies_tracks.xml"))
+        self.assertIn("<name>beta</name>", rd("world", "maps", "campaign", "test", "descr_faction_movies.xml"))
+        self.assertIn("factions slave alpha beta", rd("world", "maps", "base", "descr_sounds_music_types.txt"))
+        self.assertEqual(rd("descr_banners_new.xml").count("Faction="), 3)            # slave's not copied
+        restore(ModData(self.root), backups(ModData(self.root))[0])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        self.assertEqual(before, after)
+
     def test_restore_to_undoes_a_backup_and_every_newer_one(self):
         before = tree_hash(self.root)
         mod = ModData(self.root)

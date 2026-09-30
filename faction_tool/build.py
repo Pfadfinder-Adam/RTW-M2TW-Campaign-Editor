@@ -58,6 +58,7 @@ def build(mod, campaign, template, new, opts):
     clone.faction_blocks(plan, "banners", heads=("faction",))
     clone.faction_blocks(plan, "lbc_db", heads=("faction",))
     clone.faction_blocks(plan, "offmap", braced=True)
+    clone.medieval_lists(plan, campaign)          # Medieval II: banners, accents, one-liners, movies, music
     clone.building_battle(plan)
     if opts.get("copy_triggers", True):
         clone.triggers(plan, "traits")

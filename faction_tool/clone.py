@@ -659,6 +659,154 @@ def unit_cards(plan):
                         "placeholder: %s" % (len(missing), ", ".join(missing[:12]) + (" ..." if len(missing) > 12 else "")))
 
 
+# ---------------------------------------------------------------------------
+# Lists and XML entries that name every faction (Medieval II's banners, accents, one-liners, movies, music)
+# ---------------------------------------------------------------------------
+def _spelled_like(sample, name):
+    """name written the way sample is (Scotland -> Brittany, HRE -> NEW, scotland -> new)."""
+    if sample.isupper() and len(sample) > 1:
+        return name.upper()
+    if sample[:1].isupper():
+        return name[:1].upper() + name[1:]
+    return name
+
+
+def faction_lists(plan, path, why):
+    """Every list of factions naming the template gets the new faction beside it: `factions a, b, c` lines
+    (descr_sounds_accents, commas) and `factions a b c` (descr_sounds_music_types, spaces), and XML
+    `<Faction>a</Faction>` entries (descr_sounds_db.xml: one per line, the new one right after)."""
+    if not path:
+        return
+    t, new = plan.template, plan.new
+    f = plan.edit(path)
+    word = r"(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])" % re.escape(t)
+    # the file's own separator: a list of one ('factions scotland') takes the one the other lists use
+    lists = [strip_comment(f.text(k)) for k in range(len(f)) if tokens(strip_comment(f.text(k)))[:1] == ["factions"]]
+    file_sep = ", " if any("," in x for x in lists) else " "
+    n, i = 0, 0
+    while i < len(f):
+        text = f.text(i)
+        tk = tokens(strip_comment(text))
+        if tk[:1] == ["factions"] and t.lower() in [x.rstrip(",").lower() for x in tk[1:]] and \
+                new.lower() not in [x.rstrip(",").lower() for x in tk[1:]]:
+            sep = ", " if "," in strip_comment(text) else (file_sep if len(tk) == 2 else " ")
+            f.set(i, re.sub(word, lambda m: m.group(0) + sep + new, text, count=1, flags=re.I))
+            n += 1
+        else:
+            m = re.match(r"^(\s*<Faction>\s*)(%s)(\s*</Faction>.*)$" % re.escape(t), text, re.I)
+            if m and not any(re.match(r"^\s*<Faction>\s*%s\s*</Faction>" % re.escape(new), f.text(k), re.I)
+                             for k in range(len(f))):
+                f.insert(i + 1, [m.group(1) + _spelled_like(m.group(2), new) + m.group(3)])
+                n += 1
+                i += 1
+        i += 1
+    if n:
+        plan.note(f, "%s joins %d list(s) beside %s (%s)" % (new, n, t, why))
+
+
+def _xml_element_end(f, i, tag):
+    """The line after the element opened on line i closes (<tag ...> ... </tag>; a self-closed one ends on i)."""
+    if re.search(r"/>\s*$", strip_comment(f.text(i)) or f.text(i)):
+        return i + 1
+    depth = 0
+    for j in range(i, len(f)):
+        s = f.text(j)
+        depth += len(re.findall(r"<%s[\s>]" % tag, s, re.I)) - len(re.findall(r"</%s\s*>" % tag, s, re.I))
+        if depth <= 0 and j >= i:
+            return j + 1
+    return len(f)
+
+
+def faction_xml(plan, path, why):
+    """XML entries of the template copied for the new faction, each right after the template's:
+    single-line `<Texture Faction="Scotland" .../>` / `<MeshAndTexture Faction=...>` (descr_banners_new.xml,
+    names spelled like the file does; a banner texture only the template names gets a copy of its own when it is
+    on disk), `<faction name="scotland"> ... </faction>` (descr_movies_tracks.xml) and `<faction> <name>scotland
+    </name> ... </faction>` (a campaign's descr_faction_movies.xml)."""
+    if not path:
+        return
+    t, new = plan.template, plan.new
+    f = plan.edit(path)
+    have_new = re.compile(r'(Faction|name)\s*=\s*"%s"|<name>\s*%s\s*</name>' % (re.escape(new), re.escape(new)), re.I)
+    if any(have_new.search(f.text(k)) for k in range(len(f))):
+        return                                                 # the new faction is there already
+    n, copies, i = 0, 0, 0
+    while i < len(f):
+        text = f.text(i)
+        m = re.search(r'(Faction|name)(\s*=\s*")(%s)(")' % re.escape(t), text, re.I)
+        start = None
+        if m:
+            tag = re.match(r"\s*<(\w+)", text)
+            start, tag = i, (tag.group(1) if tag else "")
+        elif re.match(r"^\s*<name>\s*%s\s*</name>" % re.escape(t), text, re.I):
+            k = i - 1
+            while k >= 0 and not re.match(r"^\s*<faction\s*>", f.text(k), re.I):
+                k -= 1
+            if k >= 0:
+                start, tag = k, "faction"
+        if start is None or not tag:
+            i += 1
+            continue
+        end = _xml_element_end(f, start, tag)
+        block = [f.text(k) for k in range(start, end)]
+        out = []
+        for line in block:
+            line = re.sub(r'((?:Faction|name)\s*=\s*")(%s)(")' % re.escape(t),
+                          lambda mm: mm.group(1) + _spelled_like(mm.group(2), new) + mm.group(3), line, flags=re.I)
+            line = re.sub(r"(<name>\s*)(%s)(\s*</name>)" % re.escape(t),
+                          lambda mm: mm.group(1) + _spelled_like(mm.group(2), new) + mm.group(3), line, flags=re.I)
+            line, c = _own_xml_pictures(plan, line)
+            copies += c
+            out.append(line)
+        f.insert(end, out)
+        n += 1
+        i = end + len(out)
+    if n:
+        plan.note(f, "%d entr%s of %s copied for %s (%s)%s" % (n, "y" if n == 1 else "ies", t, new, why,
+                  "; %d picture(s) copied as its own" % copies if copies else ""))
+    else:
+        plan.warn(f, "no entry for %s - nothing copied (%s)" % (t, why))
+
+
+def _own_xml_pictures(plan, line):
+    """A copied banner line's texture paths named after the template: the new faction gets its own copy of each
+    file that is on disk (Faction_banner_scotland.texture -> Faction_banner_brittany.texture). (line, copies)."""
+    t, new, mod = plan.template, plan.new, plan.mod
+    planned = {os.path.normcase(os.path.abspath(d)) for _, d in plan.copies}
+    count = 0
+
+    def one(m):
+        nonlocal count
+        ref = m.group(2)
+        if not re.search(r"(?i)(^|[^a-z0-9])%s([^a-z0-9]|$)" % re.escape(t), ref.replace("\\", "/").split("/")[-1]):
+            return m.group(0)
+        got = picture_file(mod.data, ref)
+        if not got:
+            return m.group(0)                                  # not on disk (packed): the template's stays
+        own = own_picture_ref(ref, t, new)
+        sep = "\\" if "\\" in ref else "/"
+        own = own.replace("/", sep)
+        dst = os.path.join(os.path.dirname(got[1]), own.replace("\\", "/").split("/")[-1])
+        if os.path.normcase(os.path.abspath(dst)) not in planned and not os.path.exists(dst):
+            plan.copy(got[1], dst)
+            count += 1
+        return m.group(1) + own + m.group(3)
+    line = re.sub(r'((?:DiffuseMap|TranslucencyMap)\s*=\s*")([^"]+)(")', one, line)
+    return line, count
+
+
+def medieval_lists(plan, campaign):
+    """Medieval II files that name every faction: battle banners, voice accents, one-liners, faction movies and
+    music (vanilla names every faction in each; a faction left out has no banner in battle, no voice, no music)."""
+    mod = plan.mod
+    faction_xml(plan, mod.file("banners_xml"), "battle banners")
+    faction_lists(plan, mod.file("accents"), "voice accent")
+    faction_lists(plan, mod.file("sounds_db"), "one-liners")
+    faction_xml(plan, mod.file("movies_tracks"), "movie tracks")
+    faction_xml(plan, mod.campaign_file(campaign, "descr_faction_movies.xml"), "faction movies")
+    faction_lists(plan, mod.campaign_file(campaign, "descr_sounds_music_types.txt"), "campaign music")
+
+
 def lookup_keys(plan):
     """lookup_campaign_descriptions.txt (vanilla RTW): one campaign-description
     key per line. The new faction's keys go right after the template's."""
