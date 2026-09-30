@@ -28,11 +28,9 @@ def open_report(app, message="", kind="bug"):
     frm = ttk.Frame(w, padding=10)
     frm.pack(fill="both", expand=True)
     ttk.Label(frm, justify="left", wraplength=620, text=(
-        "Sends a problem or an idea to the editor's author in one click - no account needed. A problem takes the "
-        "logs along (they show what went wrong). Before anything leaves, the names "
-        "that could tell who you are are cut out: your Windows user name (also inside folder paths), the computer's "
-        "name, e-mail addresses, Steam IDs, IP addresses and the player's name of REX's crash report. Look at "
-        "exactly what goes with 'Show what is sent'. Nothing is sent before you press Send.")).pack(anchor="w")
+        "Sends a problem or an idea to the editor's author - no account needed. A problem takes the logs along, "
+        "with anything that could tell who you are cut out. 'Show what is sent' shows it all. "
+        "Nothing is sent before you press Send.")).pack(anchor="w")
 
     v_kind = tk.StringVar(value=kind)
     kinds = ttk.Frame(frm)
@@ -57,7 +55,7 @@ def open_report(app, message="", kind="bug"):
     v_hide = tk.StringVar(value=settings.get("report_hide", ""))
     ttk.Label(grid, text="Contact for questions (optional)").grid(row=0, column=0, sticky="w")
     ttk.Entry(grid, textvariable=v_contact, width=40).grid(row=0, column=1, sticky="w", padx=6)
-    ttk.Label(grid, text="your Discord name, for example - only if you want an answer", foreground="#666").grid(
+    ttk.Label(grid, text="only if you want an answer", foreground="#666").grid(
         row=1, column=1, sticky="w", padx=6)
     ttk.Label(grid, text="Hide also these words").grid(row=2, column=0, sticky="w", pady=(4, 0))
     ttk.Entry(grid, textvariable=v_hide, width=40).grid(row=2, column=1, sticky="w", padx=6, pady=(4, 0))

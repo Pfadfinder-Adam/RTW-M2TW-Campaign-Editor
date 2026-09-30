@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+- **Report a bug / Suggest**: the window's opening words are three short sentences - the long list of what is cut
+  out (and the names of services in it) scared people off; the wiki page keeps the details.
+
 ### Fixed
 - **Add a relative... on Medieval II**: parents who died before the start are written too (it was refused - the
   form of such a record was thought unknown; the game's own world/template.txt has it: `age 94, dead,
