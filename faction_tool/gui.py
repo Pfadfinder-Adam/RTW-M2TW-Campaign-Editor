@@ -1864,11 +1864,29 @@ class App(tk.Tk):
             from .regionedit import donor_of, religions_for
             donor = donor_of(self.mod, self.v_campaign.get(), self.region_paint, new) if new else None
             now = religions_for(self.regions, None, donor) or {k: 0 for k in names}
+        # the region as players see it and in the files, with its town - also inside the window: a narrow
+        # window's title bar cuts the name
+        from .regionedit import shown_labels
+        town = (new or self.regions.get(name) or {}).get("settlement") or ""
+        try:
+            shown = shown_labels(self.mod, self.v_campaign.get(), [name, town] if town else [name])
+        except Exception:
+            shown = {}
+        head = shown.get(name) or name
+        if head != name:
+            head += "  (%s)" % name
+        if town:
+            head += "  -  town %s" % (shown.get(town) or town)
         w = tk.Toplevel(self)
-        w.title("Religions of %s" % name)
+        w.title("Religions of %s" % (shown.get(name) or name))
         w.transient(self)
         frm = ttk.Frame(w, padding=10)
         frm.pack(fill="both", expand=True)
+        ttk.Label(frm, text=head, font=("", 10, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(frm, text="percent of the region's people, 100 in all", foreground="#666").grid(
+            row=1, column=0, columnspan=2, sticky="w", pady=(0, 6))
+        frm = ttk.Frame(frm)
+        frm.grid(row=2, column=0, columnspan=2, sticky="w")
         vs = {}
         total = ttk.Label(frm, text="")
         for i, k in enumerate(names):
@@ -1887,7 +1905,7 @@ class App(tk.Tk):
         def sums():
             t = sum(values().values())
             total.configure(text="in all %d%%%s" % (t, "" if t == 100 else " - must be 100"),
-                            foreground="#000" if t == 100 else "#c00000")
+                            foreground="" if t == 100 else "#c00000")
         sums()
 
         def ok():

@@ -7,6 +7,8 @@
   scroll left / right (arrows at the ends, the mouse wheel over them), and the picked one is always in sight.
 - **Faction form on Medieval II**: "Name (short)" and "Tooltip (faction icon)" are hidden - Medieval II's texts have
   neither (they were written for nothing); Rome keeps both.
+- **Religions of a region** (Medieval II) says which region it is inside the window - the name players see, the
+  name in the files and the town (a narrow window's title bar cut it); "in all 100%" is readable in the dark look.
 
 ## 0.20.1 - 2026-09-30
 
