@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.19.1 - 2026-09-30
+
+### Changed
+- **Help (F1) rewritten for newcomers**: an "I want to..." list at the top says which button does what; every
+  tab, editor and tool in plain words, the new ones of 0.19.0 included.
+
 ## 0.19.0 - 2026-09-30
 
 ### Fixed

@@ -30,122 +30,110 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.19.0"
+VERSION = "0.19.1"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
 
 HELP = """RTW & M2TW Campaign Editor - how to use it
 
+Nothing is written until you press Apply, and every Apply makes a backup first:
+Tools > Restore a backup puts your files back exactly as they were. So try things freely.
+
+I WANT TO...  (pick the work in the row at the top, then use the tabs)
+  make a new faction ............ New faction: pick a faction to copy (the template),
+                                  type the new one's name on the Faction tab
+  change a faction that exists .. Edit faction: pick the faction, change what you want
+                                  (in New faction the faction you pick is only the template -
+                                  nothing is written for it; use Edit faction to change it)
+  give / take towns, armies ..... Edit faction: Faction tab (towns), Units & armies (garrisons,
+                                  armies, agents, fleets), Map (click towns, drag characters)
+  change the campaign map ....... Map tab (move towns and ports, paint regions, resources)
+                                  and the Terrain editor (ground, rivers, climates, heights)
+  change a unit or a building ... Unit editor / Building editor
+  make a new unit or building ... Unit / Building editor: New unit (New building) step by step...
+  change a unit's look .......... Unit editor: Battle model - View in 3D..., Replace model...
+  edit characters and families .. Character editor (or the Family tab in Edit faction)
+  put in a mod made by others ... Tools > Check and install a pack...
+  make a copy of the mod to work on  New mod folder... (the base mod stays untouched)
+
 START
-  1. Close the game. Browse... to the mod's data folder (for example ...\\HLR\\data), press Load.
-     Better: New mod folder... makes a copy of the mod to work on; the base stays untouched.
-     The tool remembers the mod and campaign for the next start; Mod at the top lists every
-     mod of that game folder (the game itself, bi, HLR, the mods made here) - pick one to load it.
+  1. Close the game. Browse... to the mod's data folder (for example ...\\HLR\\data) and press
+     Load. The Mod list at the top remembers every mod of that game folder for next time.
   2. Pick the campaign (usually imperial_campaign).
-  3. Pick the work at the top: New faction (pick a template to copy), Edit faction (pick
-     the faction to change), Unit editor, Building editor, Character editor or Terrain editor.
+  3. Pick the work at the top, make the changes, then:
+  4. Preview changes (Ctrl+P) shows every file and line that would change. Nothing is written.
+  5. Apply changes (Ctrl+S) writes it, with a backup first.
+  6. Start a NEW campaign in the game - old saves do not see the changes.
 
-THE TABS (in the order that works best)
+THE TABS
   Faction      names, texts, colours, AI, money, playable; the towns it starts with
-               (double-click in the list, or click towns on the Map); capital, leader, heir.
+               (double click in the list, or click towns on the Map); capital, leader, heir.
+               Name list...: a faction's own men's names, surnames and women's names.
+               Names by culture...: a town gets another name when a faction of another culture
+               takes it (needs REX or M2EX).
   Units & armies
-               the garrison of each town (click cards to add, click the garrison to take out);
-               new armies, agents and fleets (+ Army / + Agent / + Fleet, then Place on map);
-               in Edit also the faction's armies, fleets and agents already on the map
-               (a table below the towns; drag the line between them; double click: on the map).
-  Buildings    what stands in each town; settlement level and population. The level and the
-               governor's building follow each other; the chains offer that level's buildings.
-  Map          left drag moves the map, a click on a town takes it / gives it back;
-               Layers: which colours and markers are shown; Legend: what every sign means;
-               right drag (or Ctrl + left drag) moves your characters, towns and ports;
-               Political, Diplomacy and the other switches change what is shown.
-               Regions: paint borders, new regions, Religions... (Medieval II).
-               Resources: click one to pick it, right drag moves it, Place new, Delete picked,
-               a region's resource tags. Armies and agents stand on any land but sea,
-               mountains, dense forest and rivers; dropped on a bad tile, they go to the
-               nearest good one.
+               each town's garrison (click a card to add, click the garrison to take out);
+               + Army / + Agent / + Fleet, then Place on map; in Edit also everything the
+               faction already has on the map (double click: show it on the map).
+  Buildings    what stands in each town, its level and population (they follow each other);
+               Medieval II: a town can be made a castle or a city.
+  Map          left drag moves the map, the wheel zooms, a click on a town takes or gives it;
+               right drag (or Ctrl + left drag) moves characters, towns and ports;
+               Find: type a town, army, unit, fort or resource and jump to it;
+               Layers: what is shown; Legend: what every sign means.
+               Regions: paint borders, New region, Edit region..., Religions... and
+               New religion... (Medieval II). Resources: place, move, delete.
+               Characters stand on any land but sea, mountains, dense forest and rivers;
+               dropped on a bad tile they go to the nearest good one.
   Diplomacy    how the faction and every other one feel about each other at the start.
-  Art          every picture of the faction (buttons, logos, captain cards, leader picture...)
-               with what it needs and Replace...; the campaign-select map is an optional part
-               (the line at the top opens it): off by default, every map stays the original;
-               ticked, the faction's is drawn from its towns in a colour you pick.
-  Roster       (Edit) every unit and building level of the mod and whether the faction has it;
-               Give / Take away (or double click). Apply keeps everything tied to it in step:
-               a unit's ownership, the recruit lines that let the faction train it and its
-               cards; a level's 'requires factions' list. The Units and Buildings tabs offer
-               what the faction will have.
-  Family       (Edit) everyone of the faction: characters on the map (name, age, traits,
-               ancillaries) and family members off the map (name, sex, age), and the family
-               tree drawn like the game's. Give a wife, Add a child, Take off the tree, Leave
-               out; a renamed person is renamed on the tree too; portraits as the Character editor.
-
-CHARACTER EDITOR
-  Pick any faction at the top: its characters on the map and its family off the map, and the
-  family tree with the portraits the game shows. Edit names, ages, traits, ancillaries; Give a
-  wife, Add a child, Take off the tree, Leave out. Portrait: Rome rolls one of the culture's
-  pool at random (the tree shows one of them); Medieval II takes a character's own picture from
-  ui/custom_portraits/<folder> - Replace... writes it in the right size and adds the portrait
-  line. The same editor is the Family tab of Edit faction (written together with the faction).
-  Portrait library...: every portrait a culture has (young / old / dead, generals, civilians,
-  rogues), as the game gives them out at random; Add portraits... puts new ones in (any picture,
-  made the culture's size with its card, under the next free number in every folder of the
-  group); Medieval II: Use for <character> makes the picked one his own.
-
-TERRAIN EDITOR
-  Paint what each tile of the campaign map is (Ground: fertility, wilderness, forest, hills,
-  mountains, swamp; the kinds of sea) and what runs across it (rivers, fords where armies
-  cross, river sources, cliffs). Left drag paints, right click picks a tile's own, right drag
-  moves the map; Grid on / off. Land stays land and sea stays sea; nothing the game refuses is
-  put under a town, port or character. Apply writes map_ground_types.tga / map_features.tga and
-  deletes map.rwm: the game builds its map again on the next start. The heights
-  (map_heights.tga) are a picture of their own: a mountain tile does not raise the land.
+  Art          every picture of the faction with where the game shows it: Replace... takes any
+               picture and makes it the right size and format; Back to the original.
+  Roster       (Edit) every unit and building level and whether the faction has it:
+               Give / Take away - everything tied to it (recruit lines, cards...) follows.
+  Family       (Edit) the faction's characters and family tree, like the Character editor.
 
 UNIT EDITOR / BUILDING EDITOR
-  Pick a unit (a building chain) on the left; every line of its block is a field - change
-  any, it turns yellow. Pictures: Import... takes a PNG, JPG or TGA, converts it to the
-  mod's own size and format and puts it where the game reads it (unit cards and
-  description pictures for every faction that owns the unit; building pictures per
-  culture and level). New unit / New building step by step... makes a new one from the one on
-  show in steps (Back / Next): names and texts players read, who owns or builds it, its main
-  numbers, pictures, then everything it changes shown before it is added.
-  Add line... adds a line in its place: in a building level a recruit line (the unit, its
-  experience, the factions - who do not own the unit yet get it and its cards), a capability
-  (bonus), an upgrade or another line of the level; in a unit any key the mod's units use.
-  x on the left removes a line (not the ones every unit or level needs); lines to add are
-  green, to remove red. A changed or added line naming a unit or building the mod has not
-  is refused. What a change drags along is written too: a unit's new name reaches the recruit
-  lines, the armies of every campaign, the mercenary pools and the rebels; a new dictionary
-  copies its texts and cards; a chain's new name reaches the towns and the requirements.
-  "Tied to it" above the lines shows who owns / recruits / builds it and where it stands.
-  Preview, then Apply writes it all with a backup; Restore undoes it.
+  Pick a unit (a building chain) on the left; every line is a field - change it, it turns
+  yellow. Import... puts a picture (PNG, JPG, TGA) in the right size wherever the game reads it.
+  New unit / New building step by step...: a new one starts as a copy of one that works in the
+    game, then steps with Back / Next - names and texts players read, who owns it (who may
+    build it), its main numbers, pictures of your own - and last everything it will change.
+  Battle model (units): each soldier / officer model, how it sits (foot, horse, camel...),
+    View in 3D... (Medieval II: turn it with the mouse, the wheel zooms, pick a faction's
+    texture, "Another man" shows the next mix of heads and bodies) and Replace model...
+    (from this mod or another mod of the same game - it comes with its files).
+  Add line... / x: add or remove a line. Renames follow everywhere they are used.
+  Export pack... / Import pack...: take units with everything they need into another mod.
 
-  Only the map (regions, towns, ports, resources)? In New faction mode with no faction named,
-  Apply writes the map alone (the line beside the work bar says so).
-  Check mod, Scan mod, Check and install a pack, Restore a backup, Game manifest, Log and Save logs are under Tools.
+CHARACTER EDITOR
+  Any faction's characters on the map and family off the map, with the family tree and the
+  portraits the game shows: names, ages, traits, ancillaries; Give a wife, Add a child.
+  Portrait library...: every portrait of a culture; Add portraits... puts new ones in.
 
-  4. Preview changes (Ctrl+P) shows every file and line that would change. Nothing is written.
-  5. Create faction / Apply changes (Ctrl+S) writes it, with a backup first.
-  6. Start a NEW campaign in the game - old saves do not see the changes.
-  Something wrong? Restore a backup... puts the files back exactly (newest first).
+TERRAIN EDITOR
+  Paint the campaign map tile by tile: Ground (fertile land, forest, hills, mountains, swamp,
+  seas), Rivers, fords, cliffs, Climates, and Heights (a brush like a spray can: raise, lower,
+  smooth, level). Left drag paints, right click picks a tile's own, right drag moves the map.
+  Nothing the game refuses is put under a town, port or army. The game rebuilds its map on
+  the next start.
+
+TOOLS
+  Check mod: reads the whole mod and says in plain words what the game would stumble on.
+  Scan mod: every mention of a faction, telling the game's own files from the mod's and REX's.
+  Check and install a pack: a "copy these files over data" mod checked file by file first -
+    what is new, what it replaces and what that would lose (REX's own files, pictures of
+    another size); pick for each file, then install with a backup.
+  Restore a backup: undo any Apply (and every later one) exactly.
+  Log / Save logs (zip): for a bug report - send the zip and a screenshot.
 
 KEYS
-  Ctrl+Z undo, Ctrl+Y (or Ctrl+Shift+Z) redo - towns, garrisons, buildings, map moves,
-  armies, diplomacy (in a text box Ctrl+Z undoes the typing instead)
-  Ctrl+P preview    Ctrl+S apply / create    F5 load the mod again    F1 this help
-  Ctrl+1 .. Ctrl+5 the tabs    Map: wheel zooms, left drag moves the map, right drag moves a marker
+  Ctrl+Z undo, Ctrl+Y redo    Ctrl+P preview    Ctrl+S apply    F5 load again    F1 this help
+  Ctrl+1 .. Ctrl+5 the tabs    Map: wheel zooms, left drag moves, right drag moves a marker
 
-WHEN SOMETHING GOES WRONG
-  Log shows what the tool did and every error (faction_tool.log in RTW-M2TW-Campaign-Editor-files\\logs
-  next to the exe, with the logs zips).
-  Check mod reads the whole mod and reports anything it cannot make sense of.
-  Scan mod lists every mention of the faction and tells each file apart: the game's own
-  (unchanged), changed by the mod, REX's, or the mod's own (manifests inside the tool).
-  Tools > Save logs (zip) packs faction_tool.log with the game's system.log.txt and its
-  newest crash report - send that file.
-
-MEDIEVAL II
-  Works on Medieval II too (run the game's tools\\unpacker\\unpack_all.bat first):
-  its agents (merchant, priest, princess...), character lines with the sex, religions.
+THE GAMES
+  Rome: Total War, Barbarian Invasion, Alexander - plain or with REX.
+  Medieval II and Kingdoms - plain or with M2EX (a plain game from Steam is unpacked by the
+  tool on Load, with your yes). Limits of the original games apply only without REX / M2EX.
 
 SUPPORT
   The tool is free. If it helps you, a coffee keeps new features coming:
