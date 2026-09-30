@@ -21,7 +21,13 @@
   and every faction's textures, in their data/ folders), its name call (**Save...**: the sounds, also those inside
   the game's packs) and portraits (a click on the picture). Nothing is written into the mod.
 
+- **One path guard for every write**: whatever a pack, add-on zip or backup names, the editor writes, copies and
+  removes only inside the loaded mod's or its game's folder (a `../`, another drive, a link that leads out are
+  refused before anything is written, and logged); Restore refuses a backup that names files outside.
+
 ### Fixed
+- **SECURITY.md** said the editor sends nothing anywhere - true until Report a bug / Suggest; it now says when it
+  sends.
 - **Barbarian Invasion's 53 watchtowers** (listed after the diplomacy, under the regions) were not read: not drawn
   and their tiles not kept free for new armies.
 - **The work buttons at the top** (New faction ... Add-ons) were cut off at the window's smallest width: they now

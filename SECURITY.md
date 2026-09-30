@@ -20,9 +20,12 @@ editor's Preview show what a pack would write before you apply it.
 ## What the tool does on your PC
 
 RTW & M2TW Campaign Editor only reads and writes the game or mod folder you load, plus its own folder
-`RTW-M2TW-Campaign-Editor-files` next to the exe (log and settings). Every write is shown first and
-backed up (`faction_tool_backups`), and Restore undoes it. It needs no internet connection and sends
-nothing anywhere. The Windows exe is built from this repository's source by GitHub Actions
+`RTW-M2TW-Campaign-Editor-files` next to the exe (log, settings, add-ons you added) and files you pick in a save
+dialog. The code enforces it: every write to the game goes through one guard that refuses a path outside the mod's
+or the game's folder (a `../`, another drive, a link that leads out - whatever a pack, add-on zip or backup names),
+before anything is written, and logs it. Every write is shown first and backed up (`faction_tool_backups`), and
+Restore undoes it (a backup that names files outside is refused too). It needs no internet connection; it sends
+something only when you press **Send** in **Report a bug / Suggest** (below). The Windows exe is built from this repository's source by GitHub Actions
 (`.github/workflows/release.yml`); anyone can check the build log of every release.
 
 The exe is not code-signed yet, so browsers and Windows SmartScreen may warn about it

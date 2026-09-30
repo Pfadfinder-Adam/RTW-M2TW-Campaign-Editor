@@ -115,6 +115,9 @@ class Plan:
 
     # ---- disk ----
     def apply(self):
+        # every path this run touches lies in the mod's or its game's folder (guard.py) - checked before anything
+        from . import guard
+        guard.check(list(self.changed_files()) + [dst for _, dst in self.copies], guard.roots_of(self.mod))
         root = os.path.dirname(self.mod.data)
         stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         bdir = os.path.join(root, BACKUP_DIR, "%s_%s" % (stamp, self.new))
@@ -223,6 +226,12 @@ def restore(mod, bdir):
     root = os.path.dirname(mod.data)
     with open(os.path.join(bdir, "manifest.json"), encoding="utf-8") as f:
         manifest = json.load(f)
+    # a backup names its files relative to the mod's folder; one that points outside it (a crafted manifest,
+    # '../') is refused before anything is put back or removed
+    from . import guard
+    guard.check([os.path.join(root, rel) for rel in manifest.get("modified", []) + manifest.get("created", [])],
+                guard.roots_of(mod), "restore")
+    guard.check([os.path.join(bdir, rel) for rel in manifest.get("modified", [])], [bdir], "restore")
     for rel in manifest["modified"]:
         dst = os.path.join(root, rel)
         if os.path.exists(dst):

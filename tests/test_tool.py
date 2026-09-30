@@ -2626,6 +2626,54 @@ building smith
         with open(path) as fh:
             self.assertIn("resource\tiron,\t0,\t0", fh.read())
 
+    def test_path_guard(self):
+        """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads
+        out and a crafted backup manifest are refused before anything is written."""
+        import json
+        from faction_tool import guard
+        from faction_tool.plan import Plan
+        outside = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, outside, True)
+        mod = ModData(self.root)
+        victim = os.path.join(outside, "victim.txt")
+        write(victim, "keep me")
+        # a binary / copy whose path climbs out of the mod
+        for make in (lambda p: p.binary(os.path.join(self.root, "..", os.path.basename(outside), "victim.txt"), b"x"),
+                     lambda p: p.copy(os.path.join(self.root, "data", "descr_sm_factions.txt"),
+                                      os.path.join(outside, "copied.txt"))):
+            plan = Plan(mod, "t", "t")
+            make(plan)
+            with self.assertRaises(guard.OutsideError):
+                plan.apply()
+        self.assertEqual(open(victim).read(), "keep me")
+        self.assertFalse(os.path.exists(os.path.join(outside, "copied.txt")))
+        # a link inside the mod that leads out
+        if hasattr(os, "symlink"):
+            link = os.path.join(self.root, "data", "out_link")
+            try:
+                os.symlink(outside, link)
+            except OSError:
+                link = None
+            if link:
+                plan = Plan(mod, "t", "t")
+                plan.binary(os.path.join(link, "victim.txt"), b"x")
+                with self.assertRaises(guard.OutsideError):
+                    plan.apply()
+                self.assertEqual(open(victim).read(), "keep me")
+                os.remove(link)
+        # a normal write passes, and its backup restores
+        plan = Plan(mod, "t", "t")
+        plan.binary(os.path.join(self.root, "data", "new.bin"), b"ok")
+        bdir = plan.apply()
+        self.assertTrue(guard.inside(os.path.join(self.root, "data", "new.bin"), self.root))
+        # a crafted manifest that names a file outside is refused - the victim stays
+        with open(os.path.join(bdir, "manifest.json"), "w") as fh:
+            json.dump({"faction": "t", "template": "t", "modified": [], "created": [
+                "../" + os.path.basename(outside) + "/victim.txt"]}, fh)
+        with self.assertRaises(guard.OutsideError):
+            restore(mod, bdir)
+        self.assertEqual(open(victim).read(), "keep me")
+
     def test_addons_from_anyone(self):
         import zipfile
         from unittest import mock
