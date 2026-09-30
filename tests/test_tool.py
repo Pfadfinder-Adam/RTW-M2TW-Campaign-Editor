@@ -2658,6 +2658,49 @@ building smith
         self.assertEqual(t1[:3], [0, 0, 7])
         self.assertEqual(set(t0[3:]) | set(t1[3:]), {0})
 
+    def test_faction_religion(self):
+        """Medieval II: a faction's religion (descr_sm_factions.txt) read, changed in Edit, given to a new faction -
+        the template keeps its own; a religion the game does not know is refused; Rome has none."""
+        from faction_tool.edit import edit, read_faction
+        from faction_tool.religions import faction_religion
+        sm = os.path.join(self.root, "data", "descr_sm_factions.txt")
+        self.assertIsNone(faction_religion(ModData(self.root), "alpha"))            # Rome: no religion line
+        with open(sm) as fh:
+            text = fh.read()
+        write(sm, text.replace("culture\t\teastern\n", "culture\t\teastern\nreligion\t\tcatholic ; theirs\n", 1))
+        write(os.path.join(self.root, "data", "descr_religions.txt"), "religions\n{\n    catholic\n    orthodox\n}\n")
+        mod = ModData(self.root)
+        self.assertEqual(read_faction(mod, "test", "alpha")["religion"], "catholic")
+        with self.assertRaises(ValueError):
+            edit(mod, "test", "alpha", {"religion": "jedi"})
+        plan = edit(mod, "test", "alpha", {"religion": "orthodox"})
+        bdir = plan.apply()
+        with open(sm) as fh:
+            self.assertIn("religion\t\torthodox ; theirs\n", fh.read())             # spacing and comment kept
+        restore(ModData(self.root), bdir)
+        plan = build(ModData(self.root), "test", "alpha", "beta", {"religion": "orthodox", "start": {
+            "regions": ["B_R"], "leader": {"name": "Boris"}}})
+        text = plan.files[sm].dump().decode().replace("\r\n", "\n")
+        self.assertIn("faction\t\tbeta\nculture\t\teastern\nreligion\t\torthodox", text)
+        self.assertIn("faction\t\talpha\nculture\t\teastern\nreligion\t\tcatholic", text)
+
+    def test_dead_parents_record(self):
+        """Parents added on the tree died before the start: Rome writes 'dead' (a dead man off the map may be
+        any age); a living man off the map older than the age of manhood is still refused; Medieval II without a
+        dead record to copy is refused in plain words."""
+        from faction_tool import family as FM
+        texts = ["character_record\t\tMarcus, \tmale, command 0, influence 0, management 0, subterfuge 0, age 12, "
+                 "alive, never_a_leader"]
+        line = FM.record_line(texts, "Gaius", "male", 70, False, dead=True)
+        self.assertIn("age 70, dead, never_a_leader", line)
+        self.assertIn("alive,", FM.record_line(texts, "Gaius", "male", 10, False))
+        self.assertTrue(FM.dead_form_known([], False))
+        self.assertFalse(FM.dead_form_known(["character_record\tMatilda, female, age 49, alive, never_a_leader"], True))
+        self.assertTrue(FM.dead_form_known(["character_record\tOdo, male, age 60, dead, never_a_leader"], True))
+        after = [{"name": "Gaius", "sex": "male", "age": 70, "source": "record", "status": "dead"},
+                 {"name": "Titus", "sex": "male", "age": 40, "source": "record", "status": "alive"}]
+        self.assertEqual([n for n, _, _ in FM.record_age_problems(after, [], 16)], ["Titus"])
+
     def test_path_guard(self):
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads
         out and a crafted backup manifest are refused before anything is written."""

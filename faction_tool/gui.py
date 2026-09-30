@@ -45,7 +45,7 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   change a faction that exists .. Edit faction: pick the faction, change what you want
                                   (in New faction the faction you pick is only the template -
                                   nothing is written for it; use Edit faction to change it)
-  give / take towns, armies ..... Edit faction: Faction tab (towns), Units & armies (garrisons,
+  give / take towns, armies ..... Edit faction: Map (a click on a town), Units & armies (garrisons,
                                   armies, agents, fleets), Map (click towns, drag characters)
   change the campaign map ....... Map tab (move towns and ports, paint regions, resources)
                                   and the Terrain editor (ground, rivers, climates, heights)
@@ -53,13 +53,13 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   make a new unit or building ... Unit / Building editor: New unit (New building) step by step...
   change a unit's look .......... Unit editor: Battle model - View in 3D..., Replace model...
   hear a unit, give it a voice .. Unit editor: Voice in battle - Play, Put in my own...
-  edit characters and families .. Character editor (or the Family tab in Edit faction)
+  edit characters and families .. Character editor (or the Faction tab in Edit faction)
   put in a mod made by others ... Tools > Check and install a pack...
   change the campaign's rules ... Tools > Campaign rules... (ages, agents, towns, diplomacy, unit sizes)
   add a religion ................ Tools > New religion... (Medieval II; Rome has no religions)
   add Sack Settlement ........... Add-ons (Rome + REX): who may sack, reward, what stays standing
-  rename a region or its town ... Faction tab: Rename... (names players see); Settlements tab:
-                                  Rename in the files... (the system names, everywhere)
+  rename a region or its town ... Settlements tab: Rename... (names players see), Rename in the
+                                  files... (the system names, everywhere)
   make a copy of the mod to work on  New mod folder... (the base mod stays untouched)
 
 START
@@ -72,11 +72,10 @@ START
   6. Start a NEW campaign in the game - old saves do not see the changes.
 
 THE TABS
-  Faction      names, texts, colours, AI, money, playable; the towns it starts with
-               (double click in the list, or click towns on the Map); capital, leader, heir.
+  Faction      names, texts, colours, AI, money, playable, religion (Medieval II), capital, leader,
+               heir; beside them the faction's family tree and characters (Edit). Its towns are
+               given and taken with a click on the Map.
                Name list...: a faction's own men's names, surnames and women's names.
-               Names by culture...: a town gets another name when a faction of another culture
-               takes it (needs REX or M2EX).
   Units & armies
                each town's garrison (click a card to add, click the garrison to take out);
                + Army / + Agent / + Fleet, then Place on map; in Edit also everything the
@@ -96,7 +95,6 @@ THE TABS
                picture and makes it the right size and format; Back to the original.
   Roster       (Edit) every unit and building level and whether the faction has it:
                Give / Take away - everything tied to it (recruit lines, cards...) follows.
-  Family       (Edit) the faction's characters and family tree, like the Character editor.
 
 UNIT EDITOR / BUILDING EDITOR
   Pick a unit (a building chain) on the left; every line is a field - change it, it turns
@@ -394,7 +392,11 @@ class App(tk.Tk):
         self.nb.pack(fill="both", expand=True, **pad)
         body = ttk.Frame(self.nb, padding=4)
         self.nb.add(body, text="  Faction  ")
-        # the form | the towns: the line between them can be dragged; the form scrolls in a low window
+        # the Faction tab is the faction itself: the form, and its family tree beside it. Its towns are given and
+        # taken on the Map (a click on a town), their buildings on Buildings, garrisons on Units & armies - the
+        # old town list (below) is kept only as the window's own record of the picked towns, never shown
+        # (the user, 2026-09-30: "a third way to add towns makes no sense")
+        # the form | the family tree: the line between them can be dragged; the form scrolls in a low window
         from .gui_util import ScrollFrame
         panes = ttk.Panedwindow(body, orient="horizontal")
         panes.pack(fill="both", expand=True)
@@ -403,8 +405,9 @@ class App(tk.Tk):
         left = lsf.inner
         from .gui_util import fit_first_pane
         fit_first_pane(panes, left)
-        right = ttk.Frame(panes)
-        panes.add(right, weight=1)
+        self._family_host = ttk.Frame(panes)
+        panes.add(self._family_host, weight=1)
+        right = ttk.Frame(self)                   # never packed: the picked towns' list lives on, unseen
 
         # --- faction
         lf = self.lf = ttk.LabelFrame(left, text="New faction")
@@ -445,7 +448,24 @@ class App(tk.Tk):
                 w.grid_remove()
         self.cb_ai = ttk.Combobox(lf, textvariable=self.v["ai"], state="readonly", values=AI_CHOICES)
         field("AI personality", self.cb_ai)
+        # Medieval II: the faction's religion (descr_sm_factions.txt); Rome has none - the row is hidden there
+        self.v["religion"] = tk.StringVar()
+        self.cb_religion = ttk.Combobox(lf, textvariable=self.v["religion"], state="readonly")
+        field("Religion", self.cb_religion)
+        self.m2_rows = [lf.grid_slaves(row=row - 1, column=c)[0] for c in (0, 1)]
         field("Starting denari", ttk.Entry(lf, textvariable=self.v["denari"]))
+        # its towns: a click on a town on the Map gives or takes it; the capital is one of them
+        self.cb_capital = ttk.Combobox(lf, textvariable=self.v["capital"], state="readonly")
+        self.cb_capital.bind("<<ComboboxSelected>>", lambda e: self.refresh_chosen())
+        field("Capital", self.cb_capital)
+        self.lbl_towns = ttk.Label(lf, foreground="#666", text="", wraplength=330, justify="left")
+        self.lbl_towns.grid(row=row, column=1, sticky="w", padx=4)
+        row += 1
+        # Edit: where the towns taken from it go
+        self.v_give = tk.StringVar(value="slave")
+        self.cb_give = FactionBox(lf, self.v_give, state="readonly")
+        field("Removed towns go to", self.cb_give)
+        self.give_row = [lf.grid_slaves(row=row - 1, column=c)[0] for c in (0, 1)]
         cf = ttk.Frame(lf)
         self.b_primary = tk.Button(cf, text="primary", width=10, command=lambda: self.pick_colour("primary"))
         self.b_primary.pack(side="left")
@@ -529,16 +549,6 @@ class App(tk.Tk):
         self.lb.pack(fill="both", expand=True)
         self.lb.bind("<Double-1>", lambda e: self.remove_town())
         self.lb.bind("<Delete>", lambda e: self.remove_town())
-        ttk.Label(cf2, text="Capital").pack(anchor="w", pady=(6, 0))
-        self.cb_capital = ttk.Combobox(cf2, textvariable=self.v["capital"], state="readonly", width=24)
-        self.cb_capital.pack(fill="x")
-        self.cb_capital.bind("<<ComboboxSelected>>", lambda e: self.refresh_chosen())
-        # Edit: where the towns taken out of Chosen go
-        self.give_frame = ttk.Frame(cf2)
-        ttk.Label(self.give_frame, text="Removed towns go to").pack(anchor="w", pady=(6, 0))
-        self.v_give = tk.StringVar(value="slave")
-        self.cb_give = FactionBox(self.give_frame, self.v_give, state="readonly", width=24)
-        self.cb_give.pack(fill="x")
         mid = ttk.Frame(left_pane)
         mid.pack(side="right", padx=6)
         self.b_add = ttk.Button(mid, text="Add >", command=self.add_town)
@@ -642,9 +652,7 @@ class App(tk.Tk):
         self.roster_editor = RosterEditor(tab, self)
         self.roster_editor.pack(fill="both", expand=True)
         from .gui_family import FamilyEditor
-        tab = ttk.Frame(self.nb)
-        self.nb.add(tab, text="  Family  ")
-        self.family_editor = FamilyEditor(tab, self)
+        self.family_editor = FamilyEditor(self._family_host, self)
         self.family_editor.pack(fill="both", expand=True)
         from .gui_settlements import SettlementsPanel
         tab = ttk.Frame(self.nb)
@@ -716,7 +724,7 @@ class App(tk.Tk):
         split.add(top, weight=1)
         ttk.Label(top, text="Your towns", font=("", 10, "bold")).pack(anchor="w")
         # the hints and buttons are packed before the lists: a lower window shrinks the lists, never them
-        ttk.Label(top, text="add towns on the Faction tab", foreground="#666").pack(side="bottom", anchor="w")
+        ttk.Label(top, text="give it towns on the Map (a click on a town)", foreground="#666").pack(side="bottom", anchor="w")
         self.lb_units = tk.Listbox(top, width=30, height=8, exportselection=False)
         self.lb_units.pack(fill="both", expand=True)
         self.lb_units.bind("<<ListboxSelect>>", lambda e: (self.lb_field.selection_clear(0, "end"),
@@ -763,7 +771,7 @@ class App(tk.Tk):
         side = ttk.Frame(panes, padding=(0, 0, 6, 0))
         panes.add(side, weight=0)
         ttk.Label(side, text="Your towns", font=("", 10, "bold")).pack(anchor="w")
-        ttk.Label(side, text="add towns on the Faction tab", foreground="#666").pack(side="bottom", anchor="w")
+        ttk.Label(side, text="give it towns on the Map (a click on a town)", foreground="#666").pack(side="bottom", anchor="w")
         self.lb_build = tk.Listbox(side, width=30, height=12, exportselection=False)
         self.lb_build.pack(fill="both", expand=True)
         self.lb_build.bind("<<ListboxSelect>>", lambda e: self.load_buildings())
@@ -979,28 +987,37 @@ class App(tk.Tk):
         self.lbl_size.configure(text="now: %s, %s people (the level and the governor's building follow each other)"
                                      % (level_now, pop_now))
 
+    def tab_name(self):
+        """The name of the faction tab on show ('Faction', 'Settlements', 'Map' ...), '' when none."""
+        cur = self.nb.select()
+        return self.nb.tab(cur, "text").strip() if cur else ""
+
+    def select_tab(self, name):
+        self.nb.select([self.nb.tab(t, "text").strip() for t in self.nb.tabs()].index(name))
+
     def tab_opened(self):
         """A town tab with nothing selected opens the capital."""
-        tab = self.nb.index("current")
-        if tab == 3:
+        tab = self.tab_name()
+        if tab == "Map":
             self.show_map()
             return
-        if tab == 4:
+        if tab == "Diplomacy":
             self.load_diplomacy()
             return
-        if tab == 5:
+        if tab == "Art":
             self.art_editor.load()
             return
-        if tab == 6:
+        if tab == "Roster":
             self.roster_editor.load()
             return
-        if tab == 7:
+        if tab == "Faction":
             self.family_editor.load()
             return
-        if tab == 8:
+        if tab == "Settlements":
             self.settlements.load()
             return
-        lb, load = {1: (self.lb_units, self.load_garrison), 2: (self.lb_build, self.load_buildings)}.get(tab, (None, None))
+        lb, load = {"Units & armies": (self.lb_units, self.load_garrison),
+                    "Buildings": (self.lb_build, self.load_buildings)}.get(tab, (None, None))
         if lb is not None and self.chosen and not lb.curselection():
             capital = self.v["capital"].get() or self.chosen[0]
             lb.selection_set(self.chosen.index(capital) if capital in self.chosen else 0)
@@ -1008,8 +1025,8 @@ class App(tk.Tk):
 
     WORK_TITLES = {"new": "New faction", "edit": "Edit faction", "units": "Unit editor",
                    "buildings": "Building editor", "characters": "Character editor",
-                   "terrain": "Terrain editor", "addons": "Add-ons"}
-    WORK_HINTS = {"addons": "ready-made scripts that add something new to the game (Sack Settlement...)","new": "make a new faction from a template", "edit": "change a faction that is in the game",
+                   "terrain": "Terrain editor", "addons": "Add-ons", "religions": "Religions"}
+    WORK_HINTS = {"religions": "the game's religions and each region's shares (Medieval II)", "addons": "ready-made scripts that add something new to the game (Sack Settlement...)","new": "make a new faction from a template", "edit": "change a faction that is in the game",
                   "units": "every line of a unit in export_descr_unit.txt, its card and picture",
                   "buildings": "every line of a building chain in export_descr_buildings.txt, its pictures",
                   "characters": "any faction's characters: names, ages, traits, ancillaries, portraits, family tree",
@@ -1044,16 +1061,21 @@ class App(tk.Tk):
         ed.pack(fill="both", expand=True, padx=6, pady=3, after=self.bottom_bar)
         if self.mod and ed.mod is not self.mod:
             self._rebind(ed)
+        elif w == "religions":
+            ed.fill()                          # the shares may have changed on the Map since
         self.update_actions()
         self._mark_work()
 
     def editor(self):
         """The unit, building or character editor on show, made the first time; None for the faction work."""
         w = self.v_work.get()
-        if w not in ("units", "buildings", "characters", "terrain", "addons"):
+        if w not in ("units", "buildings", "characters", "terrain", "addons", "religions"):
             return None
         if w not in self.editors:
-            if w == "addons":
+            if w == "religions":
+                from .gui_religions import ReligionsPanel
+                self.editors[w] = ReligionsPanel(self, self)
+            elif w == "addons":
                 from .gui_addons import AddonsPanel
                 self.editors[w] = AddonsPanel(self, self)
             elif w == "terrain":
@@ -1131,9 +1153,11 @@ class App(tk.Tk):
             else:
                 w.grid()
         if edit:
-            self.give_frame.pack(fill="x")
+            for w in self.give_row:
+                w.grid()
         else:
-            self.give_frame.pack_forget()
+            for w in self.give_row:
+                w.grid_remove()
         for w in self.units_opts.winfo_children():
             try:
                 w.configure(state="disabled" if edit else "normal")
@@ -1153,6 +1177,8 @@ class App(tk.Tk):
         self.refresh_chosen()
         if edit and self.v["template"].get() and self.strat and self.strat.faction(self.v["template"].get().strip()):
             self.template_changed()
+        if self.tab_name() == "Faction":
+            self.family_editor.load()
         self.status.set("Edit: pick the faction to change; untouched fields stay as they are." if edit else
                         "New: pick the template to copy.")
 
@@ -1166,7 +1192,7 @@ class App(tk.Tk):
             return
         self.editing_now = now
         self.v["name"].set(faction)
-        for k in ("display_name", "short_name", "adjective", "ai"):
+        for k in ("display_name", "short_name", "adjective", "ai", "religion"):
             self.v[k].set(now.get(k) or "")
         for k, ws in self.extra_rows.items():
             self.v[k].set(now.get(k) or "")
@@ -1268,20 +1294,20 @@ class App(tk.Tk):
         self.refresh_name_combos()
         self.refresh_field()
         self.fill_towns()
-        tab = self.nb.index("current")
-        if tab == 1 and self.lb_units.curselection():
+        tab = self.tab_name()
+        if tab == "Units & armies" and self.lb_units.curselection():
             self.load_garrison()
-        elif tab == 1 and self.lb_field.curselection():
+        elif tab == "Units & armies" and self.lb_field.curselection():
             self.load_field()
-        elif tab == 2 and self.lb_build.curselection():
+        elif tab == "Buildings" and self.lb_build.curselection():
             self.load_buildings()
-        elif tab == 3:
+        elif tab == "Map":
             self.show_map()
-        elif tab == 4:
+        elif tab == "Diplomacy":
             self.load_diplomacy()
-        elif tab == 6:
+        elif tab == "Roster":
             self.roster_editor.redraw()
-        elif tab == 7:
+        elif tab == "Faction":
             self.family_editor.redraw()
 
     def roster_changed(self):
@@ -1551,7 +1577,7 @@ class App(tk.Tk):
         old = self.regions.get(edit) if edit and not cur else None
         if edit is not None and not cur and not old:
             messagebox.showerror(APP, "Pick a region first: 'Paint with' on the Map (right click a region), "
-                                      "or a town in the list on the Faction tab.")
+                                      "or a town on the Settlements tab.")
             return
         w = tk.Toplevel(self)
         w.title("Region %s%s" % (edit, " (new)" if cur else "") if edit else "New region")
@@ -2416,7 +2442,7 @@ class App(tk.Tk):
             messagebox.showerror(APP, "add a town to Chosen first")
             return
         region = region or self.v["capital"].get() or self.chosen[0]
-        self.nb.select(1)
+        self.select_tab("Units & armies")
         i = self.chosen.index(region) if region in self.chosen else 0
         self.lb_units.selection_clear(0, "end")
         self.lb_units.selection_set(i)
@@ -2522,13 +2548,24 @@ class App(tk.Tk):
             self._rebind(ed)
         self._mark_work()
 
+    def _m2(self):
+        from .limits import game_kind
+        return bool(self.mod) and game_kind(self.mod) == "medieval2"
+
     def _game_rows(self):
         """The faction form shows only what the loaded game has: Rome's short name and icon tooltip are hidden on
         Medieval II (its texts have neither)."""
-        from .limits import game_kind
-        m2 = game_kind(self.mod) == "medieval2"
+        m2 = self._m2()
         for w in self.rome_rows:
             (w.grid_remove if m2 else w.grid)()
+        for w in self.m2_rows:
+            (w.grid if m2 else w.grid_remove)()
+        if m2:
+            from .religions import names
+            self.cb_religion["values"] = names(self.mod) + [r["name"] for r in self.new_religions
+                                                            if r["name"] not in names(self.mod)]
+        else:
+            self.v["religion"].set("")
         if m2:
             self.v["short_name"].set("")
             self.t_descr.delete("1.0", "end")
@@ -2735,7 +2772,7 @@ class App(tk.Tk):
             self._baseline = self._faction_state()
         # an open Map (or Diplomacy) tab shows the files as they are now - after Apply,
         # Restore or a campaign change - not the picture read before
-        if self.nb.index("current") in (3, 4):
+        if self.tab_name() in ("Map", "Diplomacy"):
             self.tab_opened()
 
     def villages(self):
@@ -2890,6 +2927,8 @@ class App(tk.Tk):
                         return                        # not written (refused or failed): stay
                     self.v["template"].set(t)
             self.load_existing()
+        if self.tab_name() == "Faction":             # its family tree sits beside the form
+            self.family_editor.load()
         fb = self.strat.faction(t) if self.strat else None
         if fb:
             parts = fb.header.split(";")[0].split(",", 1)
@@ -2921,6 +2960,11 @@ class App(tk.Tk):
         if now.get("denari") is not None and (not d or d == getattr(self, "_auto_denari", None)):
             self._auto_denari = str(now["denari"])             # the last template's, replaced by the next
             self.v["denari"].set(self._auto_denari)
+        # the religion starts as the template's (Medieval II); one picked by hand for this faction stays
+        r = self.v["religion"].get()
+        if now.get("religion") and (not r or r == getattr(self, "_auto_religion", None)):
+            self._auto_religion = now["religion"]
+            self.v["religion"].set(now["religion"])
         for key, b in (("primary", self.b_primary), ("secondary", self.b_secondary)):
             rgb = self.colours.get(key) or now.get(key + "_colour")
             if rgb:
@@ -3001,6 +3045,10 @@ class App(tk.Tk):
         self.cb_capital["values"] = self.chosen
         if self.v["capital"].get() not in self.chosen:
             self.v["capital"].set(self.chosen[0] if self.chosen else "")
+        n = len(self.chosen)
+        self.lbl_towns.configure(text=("%d town(s): %s%s" % (n, ", ".join(self.chosen[:4]), " ..." if n > 4 else "")
+                                       if n else "no town yet") + " - a click on a town on the Map gives or "
+                                                                   "takes it")
 
     # ---- field armies, agents, fleets ----
     @property
@@ -3031,7 +3079,7 @@ class App(tk.Tk):
         if not xy:
             self.place_field()
             return
-        self.nb.select(3)
+        self.select_tab("Map")
         self.show_map()
         self.update()
         self.map_view.centre_on(tuple(xy))
@@ -3206,10 +3254,10 @@ class App(tk.Tk):
             messagebox.showinfo(APP, "%s is on the map already: drag it on the Map tab to move it." % c["name"])
             return
         self._placing = i
-        if self.nb.index("current") == 3:
+        if self.tab_name() == "Map":
             self.show_map()                 # already there: no tab event, so refresh by hand
         else:
-            self.nb.select(3)
+            self.select_tab("Map")
         self.status.set("Click the tile for %s %s (%s)." % (c["kind"], c["name"],
                         "sea" if c["kind"] == "fleet" else "land, or a town for an agent"))
 
@@ -3299,6 +3347,7 @@ class App(tk.Tk):
             "display_name": v["display_name"], "short_name": v["short_name"], "adjective": v["adjective"],
             "description": self.t_descr.get("1.0", "end").strip(),
             "long_description": self.t_long.get("1.0", "end").strip(),
+            "religion": (v.get("religion") or None) if self._m2() else None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "copy_triggers": self.v_triggers.get(), "copy_art": self.v_art.get(),
             "start": {"regions": list(self.chosen), "capital": v["capital"], "leader": leader,
@@ -3326,7 +3375,7 @@ class App(tk.Tk):
             raise ValueError("pick the faction to edit")
         had = list((self.editing_now or {}).get("regions", []))
         if had and not self.chosen:
-            raise ValueError("the faction would be left without towns - keep or add at least one (Faction tab)")
+            raise ValueError("the faction would be left without towns - keep or give it at least one (a click on a town on the Map)")
 
         def person(role):
             if not v[role + "_first"]:
@@ -3337,6 +3386,7 @@ class App(tk.Tk):
             "display_name": v["display_name"], "short_name": v["short_name"], "adjective": v["adjective"],
             "description": self.t_descr.get("1.0", "end").strip(),
             "long_description": self.t_long.get("1.0", "end").strip(),
+            "religion": (v.get("religion") or None) if self._m2() else None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "ai": v["ai"], "denari": int(v["denari"]) if v["denari"].isdigit() else None,
             "playable": self.v_playable.get(),

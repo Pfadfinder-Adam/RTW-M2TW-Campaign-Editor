@@ -1,4 +1,4 @@
-"""The Family tab (Edit faction) and the Character editor (its own work, any faction):
+"""The family on the Faction tab (Edit faction) and the Character editor (its own work, any faction):
 every character of a faction - on the map with their traits, ancillaries and portrait,
 and the family members off the map (character_record) - and the family tree drawn the
 way the game shows it: portraits, couples side by side, their children in the row below.
@@ -60,12 +60,18 @@ class FamilyEditor(ttk.Frame):
             "children below. Click a card or a row to edit that person. Names come from the faction's name lists "
             "(the game crashes on a name it has no string for); a renamed person is renamed on the tree too.")
                   ).pack(fill="x", pady=(2, 6))
-        panes = ttk.Panedwindow(self, orient="horizontal")
+        # the Character editor: people | tree side by side; beside the Faction tab's form (narrower): the tree on
+        # top at full width, the people under it - the same parts either way
+        panes = ttk.Panedwindow(self, orient="horizontal" if standalone else "vertical")
         panes.pack(fill="both", expand=True)
         left = ttk.Frame(panes)
-        panes.add(left, weight=2)
         right = ttk.LabelFrame(panes, text="Family tree", padding=2)
-        panes.add(right, weight=5)
+        if standalone:
+            panes.add(left, weight=2)
+            panes.add(right, weight=5)
+        else:
+            panes.add(right, weight=2)
+            panes.add(left, weight=3)
 
         # the people
         cols = (("name", "name", 140), ("kind", "who", 140), ("age", "age", 40), ("where", "where", 80))
@@ -75,14 +81,21 @@ class FamilyEditor(ttk.Frame):
             self.tv.column(cid, width=w, stretch=cid == "name")
         self.tv.tag_configure("changed", background="#d9e6ff", foreground="#000000")
         self.tv.tag_configure("new", background="#d9f2d0", foreground="#000000")
-        self.tv.pack(fill="x")
+        if standalone:
+            self.tv.pack(fill="x")
+        else:                                    # under the tree: the people list and the person side by side
+            self.tv.configure(height=12)
+            self.tv.pack(side="left", fill="y", padx=(0, 6))
         self.tv.bind("<<TreeviewSelect>>", lambda e: self._picked_row())
 
         # the person's form
         # the form scrolls when the window is lower than it (the portrait, traits and ancillaries stay reachable)
         from .gui_util import ScrollFrame
         box = ttk.LabelFrame(left, text="Person", padding=4)
-        box.pack(fill="both", expand=True, pady=(6, 0))
+        if standalone:
+            box.pack(fill="both", expand=True, pady=(6, 0))
+        else:
+            box.pack(side="left", fill="both", expand=True)
         sf = ScrollFrame(box)
         sf.pack(fill="both", expand=True)
         form = sf.inner
@@ -108,8 +121,11 @@ class FamilyEditor(ttk.Frame):
         fb.pack(fill="x", pady=(0, 4))
         ttk.Button(fb, text="Give a wife...", command=self.add_wife).pack(side="left")
         ttk.Button(fb, text="Add a child...", command=self.add_child).pack(side="left", padx=4)
-        ttk.Button(fb, text="Take off the tree", command=self.off_tree).pack(side="left")
+        ttk.Button(fb, text="Add a relative...", command=self.add_relative).pack(side="left")
+        ttk.Button(fb, text="Take off the tree", command=self.off_tree).pack(side="left", padx=4)
         ttk.Button(fb, text="Leave out", command=self.leave_out).pack(side="left", padx=4)
+        from .gui_util import flow
+        flow(fb)                                 # a narrow form (beside the Faction tab's) puts them in rows
 
         pf = ttk.LabelFrame(form, text="Portrait  (a click on a picture saves a copy)", padding=2)
         pf.pack(fill="x")
@@ -218,7 +234,9 @@ class FamilyEditor(ttk.Frame):
             faction = app.v["template"].get().strip() if app.editing() else ""
         if not app.mod or not faction or not app.strat or not app.strat.faction(faction):
             self.fam, self.faction = None, None
-            self.title.configure(text="Edit faction: pick the faction on the Faction tab")
+            self.title.configure(text="Edit faction: pick the faction above" if app.editing() else
+                                 "A new faction's family is its template's (copied on Apply) - change it then in "
+                                 "Edit faction or the Character editor")
             self.redraw()
             return
         path = self.path()
@@ -763,7 +781,7 @@ class FamilyEditor(ttk.Frame):
         self._change(p, ancillaries=[a for i, a in enumerate(p["ancillaries"]) if i != s[0]])
         self.changed()
 
-    def _ask_person(self, title, sex, age, surname=""):
+    def _ask_person(self, title, sex, age, surname="", dead=False):
         """(name, age) for a new person from the name lists, or None."""
         names = self.pool.get("women" if sex == "female" else "characters", [])
         taken = {p["name"] for p in self.people()}
@@ -780,7 +798,7 @@ class FamilyEditor(ttk.Frame):
             messagebox.showerror("Family", "%s is already the name of someone of the faction" % name)
             return None
         most = self._manhood()
-        if sex == "male" and a not in (None, "") and int(a) > most:
+        if sex == "male" and not dead and a not in (None, "") and int(a) > most:
             messagebox.showerror("Family", "A new son is written off the map, and the game crashes on a living man "
                                  "off the map older than %d (this mod's age of manhood). Give him an age of %d or "
                                  "less - he comes of age in the game by himself." % (most, most))
@@ -899,6 +917,135 @@ class FamilyEditor(ttk.Frame):
         self.st.setdefault("new", []).append({"name": got[0], "sex": sex, "age": got[1]})
         c = next(c for c in t if c[0] == father)
         c[2].append(got[0])
+        self.changed()
+
+    RELATIONS = (("son", "son"), ("daughter", "daughter"), ("wife", "wife"), ("husband", "husband"),
+                 ("brother", "brother"), ("sister", "sister"), ("parents", "father and mother (died before the start)"),
+                 ("uncle", "uncle (the father's brother)"), ("aunt", "aunt (the father's sister)"))
+
+    def add_relative(self):
+        """A new person tied to the picked one: son, daughter, wife, husband, brother, sister, parents, uncle,
+        aunt. The game's tree is couples (a man, his wife) with their children, so each relation is written as
+        that: a brother is another child of the same parents, an uncle a child of the grandparents."""
+        p = self._picked()
+        if not p:
+            return
+        w = tk.Toplevel(self)
+        w.title("A relative of %s" % p["name"])
+        w.transient(self.winfo_toplevel())
+        ttk.Label(w, text="%s's new relative is their:" % p["name"], padding=(10, 8, 10, 2)).pack(anchor="w")
+        v = tk.StringVar(value="son")
+        for key, label in self.RELATIONS:
+            ttk.Radiobutton(w, text=label, value=key, variable=v).pack(anchor="w", padx=16)
+        out = {}
+
+        def ok():
+            out["v"] = v.get()
+            w.destroy()
+        bar = ttk.Frame(w, padding=10)
+        bar.pack(fill="x")
+        ttk.Button(bar, text="Next...", command=ok).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+        w.grab_set()
+        self.wait_window(w)
+        rel = out.get("v")
+        if not rel:
+            return
+        tree = self.tree()
+        by = {x["name"]: x for x in self.people()}
+        age = p.get("age") or 30
+        parents = next((c for c in tree if p["name"] in c[2]), None)
+        if rel in ("son", "daughter"):
+            return self._new_child(p, "male" if rel == "son" else "female")
+        if rel == "wife":
+            return self.add_wife()
+        if rel == "husband":
+            if p["sex"] != "female":
+                return messagebox.showinfo("Family", "Pick a woman to give her a husband.")
+            if any(b == p["name"] for _, b, _ in tree):
+                return messagebox.showinfo("Family", "%s has a husband already." % p["name"])
+            got = self._ask_person("Husband of %s" % p["name"], "male", min(self._manhood(), age + 3))
+            if got:
+                self._before()
+                self.st.setdefault("new", []).append({"name": got[0], "sex": "male", "age": got[1]})
+                self._own_tree().append([got[0], p["name"], []])
+                self.changed()
+            return
+        if rel in ("brother", "sister"):
+            if not parents:
+                return messagebox.showinfo("Family", "%s has no parents on the tree - add the parents first "
+                                                     "(Add a relative... > father and mother), then the %s."
+                                           % (p["name"], rel))
+            return self._new_child({"name": parents[0], "sex": "male"}, "male" if rel == "brother" else "female",
+                                   around=age)
+        if rel == "parents":
+            if parents:
+                return messagebox.showinfo("Family", "%s has parents on the tree already (%s and %s)." % (
+                    p["name"], parents[0], parents[1]))
+            if not FM.dead_form_known(self.app.mod.load(self.path()).texts(), getattr(self, "m2", False)):
+                return messagebox.showinfo("Family", "On Medieval II a person who died before the start cannot be "
+                                                     "written yet (the form of that line is not known here). Send a "
+                                                     "campaign's descr_strat.txt that has one and it is added.")
+            surname = p["name"][len(p["name"].split(" ")[0]):].strip() if p["sex"] == "male" else ""
+            fa = self._ask_person("Father of %s (died before the start)" % p["name"], "male", age + 28, surname,
+                                  dead=True)
+            if not fa:
+                return
+            mo = self._ask_person("Mother of %s (died before the start)" % p["name"], "female", age + 25, dead=True)
+            if not mo:
+                return
+            self._before()
+            new = self.st.setdefault("new", [])
+            new.append({"name": fa[0], "sex": "male", "age": fa[1], "dead": True})
+            new.append({"name": mo[0], "sex": "female", "age": mo[1], "dead": True})
+            self._own_tree().append([fa[0], mo[0], [p["name"]]])
+            self.changed()
+            return
+        if rel in ("uncle", "aunt"):
+            if not parents:
+                return messagebox.showinfo("Family", "Add %s's parents first, then the father's parents - an %s "
+                                                     "is their child." % (p["name"], rel))
+            grand = next((c for c in tree if parents[0] in c[2]), None)
+            if not grand:
+                return messagebox.showinfo("Family", "The father %s has no parents on the tree - pick him and add "
+                                                     "his parents first; the %s is their child." % (parents[0], rel))
+            fa_age = (by.get(parents[0]) or {}).get("age") or age + 28
+            return self._new_child({"name": grand[0], "sex": "male"}, "male" if rel == "uncle" else "female",
+                                   around=fa_age)
+
+    def _new_child(self, parent, sex, around=None):
+        """A new son / daughter of the couple the parent heads (or is the wife of); around: the age of a
+        sibling to start from."""
+        tree = self.tree()
+        couple = next((c for c in tree if parent["name"] in (c[0], c[1])), None)
+        if not couple or not couple[1]:
+            return messagebox.showinfo("Family", "Give %s a wife first: a child is written under a couple."
+                                       % parent["name"] if parent["sex"] == "male" else "Pick a married man or woman.")
+        by = {x["name"]: x for x in self.people()}
+        young = min([(by.get(n) or {}).get("age") or 40 for n in couple[:2]])
+        first = couple[0].split(" ")[0]
+        surname = couple[0][len(first):].strip() if sex == "male" else ""
+        age = around if around is not None else max(1, young - 20)
+        got = self._ask_person("Child of %s and %s" % (couple[0], couple[1]), sex, age, surname, dead=True)
+        if not got:
+            return
+        dead = False
+        most = self._manhood()
+        if sex == "male" and got[1] not in (None, "") and int(got[1]) > most:
+            # the game crashes on a living man off the map older than the age of manhood: only as one who died
+            if not FM.dead_form_known(self.app.mod.load(self.path()).texts(), getattr(self, "m2", False)):
+                return messagebox.showerror("Family", "A living man off the map may be %d at most (the game "
+                                                      "crashes otherwise), and on Medieval II one who died before "
+                                                      "the start cannot be written yet. Give him an age of %d or "
+                                                      "less." % (most, most))
+            if not messagebox.askyesno("Family", "A living man off the map may be %d at most - the game crashes "
+                                                 "otherwise. Write %s as one who died before the start?"
+                                       % (most, got[0])):
+                return
+            dead = True
+        self._before()
+        self.st.setdefault("new", []).append({"name": got[0], "sex": sex, "age": got[1], "dead": dead})
+        next(c for c in self._own_tree() if c[0] == couple[0])[2].append(got[0])
         self.changed()
 
     def off_tree(self):

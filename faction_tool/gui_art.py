@@ -309,7 +309,7 @@ class ArtEditor(ttk.Frame):
             return
         self._map_im, self._map_scale = im, 0
         self._fit_map()
-        self.lbl_map.configure(text="%d town(s) lit - the towns chosen on the Faction tab (written with the "
+        self.lbl_map.configure(text="%d town(s) lit - the faction's towns (given on the Map) (written with the "
                                     "borders as painted on the Map tab).\n%s" % (
             len(a.chosen), "Written on Apply / Create." if self.v_draw.get() else
             "Only a preview: the file stays the original (for a new faction: the template's copy)."))

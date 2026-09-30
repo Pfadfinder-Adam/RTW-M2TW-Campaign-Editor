@@ -261,8 +261,10 @@ def relative_line(father, wife, kids):
     return "relative \t%s, \t%s,\t\t%s" % (father, wife, "".join("%s,\t" % k for k in kids) + "end")
 
 
-def record_line(texts, name, sex, age, m2):
-    """A character_record line in the file's own form (another record as the pattern)."""
+def record_line(texts, name, sex, age, m2, dead=False):
+    """A character_record line in the file's own form (another record as the pattern); dead: the person died
+    before the start (a parent on the tree - Rome writes 'dead' where a living one has 'alive')."""
+    status = "dead" if dead else "alive"
     for l in texts:
         if tokens(l)[:1] == ["character_record"]:
             parts = _parts(l, "character_record")
@@ -273,10 +275,20 @@ def record_line(texts, name, sex, age, m2):
                     p = sex
                 elif p.startswith("age"):
                     p = "age %d" % int(age)
+                elif p.split()[:1] in (["alive"], ["dead"]):
+                    p = status
                 rest.append(p)
             return "%s%s, \t%s" % (head, name, ", ".join(rest))
     skills = "" if m2 else "command 0, influence 0, management 0, subterfuge 0, "
-    return "character_record\t\t%s, \t%s, %sage %d, alive, never_a_leader" % (name, sex, skills, int(age))
+    return "character_record\t\t%s, \t%s, %sage %d, %s, never_a_leader" % (name, sex, skills, int(age), status)
+
+
+def dead_form_known(texts, m2):
+    """Whether a dead person can be written: Rome's 'dead' is known (the engine reads it - HLR's records); on
+    Medieval II only when the file already has a dead record to copy (its form there is not known yet)."""
+    if not m2:
+        return True
+    return any(tokens(l)[:1] == ["character_record"] and " dead" in l for l in texts)
 
 
 def check_name(pool, name, sex, faction):
@@ -407,7 +419,8 @@ def apply(plan, f, faction, opts):
         d = p.as_dict()
         d.update({k: v for k, v in (changes.get(p.key) or {}).items() if k in ("name", "age", "sex") and v})
         after.append(d)
-    after += [{"name": n["name"], "sex": n.get("sex", "male"), "age": n.get("age"), "source": "record"}
+    after += [{"name": n["name"], "sex": n.get("sex", "male"), "age": n.get("age"), "source": "record",
+               "status": "dead" if n.get("dead") else "alive"}
               for n in opts.get("new") or []]
     names = [d["name"] for d in after]
     dup = sorted({n for n in names if names.count(n) > 1})
@@ -475,11 +488,14 @@ def apply(plan, f, faction, opts):
     recs, rels = fam2["record_lines"], fam2["relative_lines"]
     def age_of(n):
         return n.get("age") or default_record_age(n.get("sex", "male"), manhood_age(plan.mod))
-    new_lines = [record_line(f.texts(), n["name"], n.get("sex", "male"), age_of(n), m2)
+    if any(n.get("dead") for n in opts.get("new") or []) and not dead_form_known(f.texts(), m2):
+        raise ValueError("a person who died before the start cannot be written on Medieval II yet (the line's "
+                         "form is not known here) - leave the parents off, or send a campaign that has one")
+    new_lines = [record_line(f.texts(), n["name"], n.get("sex", "male"), age_of(n), m2, n.get("dead"))
                  for n in opts.get("new") or []]
     for n in opts.get("new") or []:
-        plan.note(f, "%s: %s (%s, age %s) added off the map" % (faction, n["name"], n.get("sex", "male"),
-                                                                 age_of(n)))
+        plan.note(f, "%s: %s (%s, age %s%s) added off the map" % (
+            faction, n["name"], n.get("sex", "male"), age_of(n), ", died before the start" if n.get("dead") else ""))
     old_tree = [_parse_relative(f.text(i)) for i in rels]
     want = ordered(tree)
     if want == old_tree and not new_lines:
