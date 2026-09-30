@@ -2144,15 +2144,18 @@ building smith
         self.assertEqual(m.positions[7], (1.0, 1.0, 1.0))
         self.assertAlmostEqual(m.uvs[2][0], 0.2, places=5)
         self.assertEqual([g.name for g in m.shown()], ["Head", "Attachments3"])
-        from PIL import Image
+        with self.assertRaises(MV.MeshError):
+            MV.read(b"\x16\x00\x00\x00not a mesh at all.........")
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed - the drawing is not checked")
         tex = Image.new("RGB", (8, 8), (200, 30, 30))
         for textured in (True, False):
             im = MV.render(m, (60, 80), texture=tex, textured=textured)
             self.assertEqual(im.size, (60, 80))
             reds = [p for p in im.getdata() if p[0] > 60 and p[0] > 2 * p[1]]
             self.assertTrue(len(reds) > 200, textured)       # the cube in the man's (red) texture
-        with self.assertRaises(MV.MeshError):
-            MV.read(b"\x16\x00\x00\x00not a mesh at all.........")
 
     def test_replace_battle_model(self):
         """A unit's soldier model swapped for another of this mod or of another mod (brought with its files, renamed
