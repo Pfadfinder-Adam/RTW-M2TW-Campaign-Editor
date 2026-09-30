@@ -2982,6 +2982,82 @@ building smith
         self.assertIn("reports/report-7-26_09_27.txt", names)        # the newest, without the nick
         self.assertEqual(len([n for n in names if n.startswith("reports/")]), 1)
 
+    def test_report_is_anonymous_and_sent(self):
+        import base64
+        import http.server
+        import io
+        import json
+        import threading
+        import zipfile
+        from faction_tool import report, settings
+        # the person's names go: user folders in paths, e-mails, Steam IDs, SIDs, IPs, the given words
+        text = ("C:\\Users\\Adam Smith\\Desktop\\x.txt /home/adam/rtw D:/Documents and Settings/adam/y "
+                "mail adam@example.com id 76561198012345678 S-1-5-21-1-2-3-1001 at 192.168.1.20 v0.19.2 "
+                "Pfadfinder said hi; pfadfinder2 stays; user stays")
+        out = report.scrub(text, ["Pfadfinder", "user", "ab"])
+        for gone in ("Adam", "adam", "example.com", "7656119801", "S-1-5-21", "192.168", "Pfadfinder said"):
+            self.assertNotIn(gone, out)
+        for kept in ("Desktop\\x.txt", "/rtw", "v0.19.2", "pfadfinder2 stays", "user stays"):
+            self.assertIn(kept, out)
+        # the logs found: the newest REX crash report without the player's name - inside it as well
+        game = os.path.join(self.root, "game")
+        os.makedirs(os.path.join(game, "reports"))
+        with open(os.path.join(game, "system.log.txt"), "w") as fh:
+            fh.write("start\nC:\\Users\\Bob\\game\n" + "x" * 50 + "\n")
+        with open(os.path.join(game, "reports", "report-Some Nick-7-26_09_27.txt"), "w") as fh:
+            fh.write("crash of Some Nick")
+        files = report.found(game)
+        names = [n for _, n, _ in files]
+        self.assertIn("system.log.txt", names)
+        self.assertIn("reports/report-7-26_09_27.txt", names)
+        texts = dict(report.contents(files, report.hidden_words(files)))
+        self.assertNotIn("Some Nick", texts["reports/report-7-26_09_27.txt"])
+        self.assertNotIn("Bob", texts["system.log.txt"])
+        # a big log: only its newest part
+        self.assertIn("left out", report._read_tail(os.path.join(game, "system.log.txt"), cap=20))
+        data = report.build_zip(list(texts.items()), "it crashed at C:\\Users\\Bob\\x", "disc#1",
+                                {"editor": "0.19.2"}, words=["Bob"])
+        z = zipfile.ZipFile(io.BytesIO(data))
+        head = z.read("report.txt").decode()
+        self.assertIn("it crashed", head)
+        self.assertNotIn("Bob", head)
+        self.assertIn("disc#1", head)
+        # sent to a relay: its answer is the report's number; a refusal comes back in plain words
+        got = {}
+
+        class Relay(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                got.update(body, agent=self.headers["User-Agent"])
+                ok = body["zip"].startswith("UEsDB")
+                self.send_response(200 if ok else 400)
+                self.end_headers()
+                self.wfile.write(json.dumps({"id": "R-1"} if ok else {"error": "broken"}).encode())
+
+            def log_message(self, *a):
+                pass
+        srv = http.server.HTTPServer(("127.0.0.1", 0), Relay)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            settings.put("report_url", "http://127.0.0.1:%d/" % srv.server_port)
+            self.assertEqual(report.send(data, "it crashed", "disc#1", {"editor": "0.19.2"}), "R-1")
+            self.assertEqual(base64.b64decode(got["zip"]), data)
+            self.assertTrue(got["agent"].startswith("RTW-M2TW-Campaign-Editor/"))
+            with self.assertRaises(RuntimeError) as e:
+                report.send(b"not a zip")
+            self.assertIn("broken", str(e.exception))
+            with self.assertRaises(RuntimeError):
+                report.send(b"x" * (report.ZIP_CAP + 1))
+            settings.put("report_url", "")
+            if not report.REPORT_URL:
+                with self.assertRaises(RuntimeError) as e:
+                    report.send(data)
+                self.assertIn("not set up", str(e.exception))
+        finally:
+            settings.put("report_url", "")
+            srv.shutdown()
+            srv.server_close()
+
     # ---- 0.5.0: roster, lines added / removed, renames, mod list, file origins ----
     RICH_EDB = """building barracks
 {

@@ -77,8 +77,10 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 > [!IMPORTANT]
 > ### ⚠️ Something went wrong? Send the logs - and a video or screenshot ⚠️
 > When the game crashes, the tool shows an error, or something looks wrong, please send:
-> 1. **The logs:** in the tool, **Tools -> Save logs (zip)** - one `.zip` with the tool's log and the
->    game's `system.log.txt` (it is saved in `RTW-M2TW-Campaign-Editor-files/logs` next to the exe).
+> 1. **The logs:** in the tool, **Report a problem** (bottom right) sends them to the author in one click - no
+>    account needed, your names cut out first (Windows user name, computer name, e-mail, Steam ID, the player's
+>    name), and you see exactly what goes before you press Send. Or **Tools -> Save logs (zip)** - the same logs,
+>    names cut out, as one `.zip` in `RTW-M2TW-Campaign-Editor-files/logs` next to the exe, to send yourself.
 > 2. **A video or a screenshot** of what you did and what went wrong.
 >
 > With these the cause is usually found and fixed **the same day** (the logs name the file, line and

@@ -40,5 +40,16 @@ release build).
   report is credited in the CHANGELOG, unless you ask not to be named.
 - If it is declined, you get the reason.
 
-For ordinary bugs and crashes, open an issue and attach the logs (**Tools -> Save logs (zip)**)
-and a video or screenshot.
+For ordinary bugs and crashes, press **Report a problem** in the tool, or open an issue and attach the logs
+(**Tools -> Save logs (zip)**) and a video or screenshot.
+
+## What a report sends
+
+**Report a problem** sends only what its window lists, and only after you press Send: the words you wrote, the
+contact you gave (optional), the editor's version, Windows' version, the game, the engine and the mod folder's name,
+the logs you left ticked and the pictures you picked. Before that the logs lose your Windows user name (also in
+folder paths), the computer's name, e-mail addresses, Steam IDs, Windows SIDs, IP addresses, the player's name of
+REX's crash report and the words you add; **Show what is sent** shows every line. The report goes over HTTPS to a
+relay (`worker/report-relay.js`, a Cloudflare Worker) that files it in the author's **private** reports repo; the
+GitHub token lives only in the relay's settings - never in the exe or this repo - and can touch nothing but that
+repo. The relay keeps no IP addresses.

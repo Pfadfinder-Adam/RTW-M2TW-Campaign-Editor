@@ -126,46 +126,14 @@ def tail(limit=200000):
 # ---------------------------------------------------------------------------
 # The game's logs, packed with ours for a report
 # ---------------------------------------------------------------------------
-import re as _re
-
-_NICK = _re.compile(r"^report-(.+)-(\d+)-(\d{2}_\d{2}_\d{2}(?:-\d+)?)\.txt$")
-
-
-def game_logs(game, mod_dir=None):
-    """[(file, name in the zip)] of the game's logs: system.log.txt in the game's
-    working folder (the start script cd's there) or a logs folder, and the newest
-    crash report in <game>/reports (REX). The report's name loses the player's
-    nick, as HLR's Collect_logs.bat does."""
-    out = []
-    for folder in [game, os.path.join(game, "logs")] + ([mod_dir, os.path.join(mod_dir, "logs")] if mod_dir else []):
-        p = os.path.join(folder, "system.log.txt")
-        if os.path.isfile(p) and all(os.path.normcase(p) != os.path.normcase(q) for q, _ in out):
-            rel = os.path.relpath(p, game).replace("\\", "/")
-            out.append((p, rel if not rel.startswith("..") else "mod_" + os.path.basename(p)))
-    reports = os.path.join(game, "reports")
-    if os.path.isdir(reports):
-        txts = [os.path.join(reports, n) for n in os.listdir(reports) if n.lower().endswith(".txt")]
-        txts = [p for p in txts if os.path.isfile(p)]
-        if txts:
-            latest = max(txts, key=os.path.getmtime)
-            name = os.path.basename(latest)
-            m = _NICK.match(name)
-            out.append((latest, "reports/" + ("report-%s-%s.txt" % (m.group(2), m.group(3)) if m else name)))
-    return out
-
-
-def pack(zip_path, game, mod_dir=None):
-    """Write zip_path with faction_tool.log (+ .old) and the game's logs.
-    Returns [names put in]."""
+def pack(zip_path, game, mod_dir=None, extra_words=()):
+    """Write zip_path with faction_tool.log (+ .old) and the game's logs, the person's names cut out as in a sent
+    report (report.scrub). Returns [names put in]."""
     import zipfile
-    names = []
+    from . import report
+    files = report.found(game, mod_dir)
+    texts = report.contents(files, report.hidden_words(files, extra_words))
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-        p = path()
-        for f in ([p, p + ".old"] if p else []):
-            if os.path.isfile(f):
-                z.write(f, os.path.basename(f))
-                names.append(os.path.basename(f))
-        for f, name in game_logs(game, mod_dir) if game else []:
-            z.write(f, name)
-            names.append(name)
-    return names
+        for name, text in texts:
+            z.writestr(name, text)
+    return [name for name, _ in texts]

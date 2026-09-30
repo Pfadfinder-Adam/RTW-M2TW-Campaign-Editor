@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **Report a problem** (bottom right; Tools > Send a report...; offered when the editor shows an error): a few words
+  of what happened, screenshots if wanted, and the logs - the editor's, the game's `system.log.txt`, the newest REX
+  crash report - reach the author in one click, no account needed; a report number comes back. Anonymous: the logs
+  lose the Windows user name (also in paths), the computer's name, e-mail addresses, Steam IDs, SIDs, IP addresses,
+  the player's name of REX's crash report and any words the user adds; **Show what is sent** shows every line, and
+  nothing leaves before Send. Sent through a small relay (`worker/`, a Cloudflare Worker) that keeps the GitHub
+  token - never in the exe. **Save logs (zip)** cuts the same names out now.
 - **Settlements tab** (Edit / New faction): every region and its town with the names in the files, the names
   players see, the owner and names by culture; **Rename in the files...** changes a region's and its town's system
   names everywhere the mod names them - descr_regions, descr_strat, the names lookup and every language's names text

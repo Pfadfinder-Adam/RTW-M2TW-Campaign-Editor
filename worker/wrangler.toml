@@ -1,0 +1,16 @@
+# Only for deploying with wrangler (npx wrangler deploy); the Cloudflare dashboard works without it (worker/README.md).
+name = "rtw-editor-reports"
+main = "report-relay.js"
+compatibility_date = "2025-09-01"
+
+[vars]
+REPORTS_REPO = "MasterOogwayHomebrew/RTW-editor-reports"
+
+# 3 reports a minute from one address
+[[ratelimits]]
+name = "REPORT_LIMIT"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 3
+  period = 60
