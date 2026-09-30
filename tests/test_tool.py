@@ -2157,6 +2157,80 @@ building smith
             reds = [p for p in im.getdata() if p[0] > 60 and p[0] > 2 * p[1]]
             self.assertTrue(len(reds) > 200, textured)       # the cube in the man's (red) texture
 
+    def test_unit_voices_hear_and_put_in_own(self):
+        """Sound packs read (a loose file wins over the pack), a unit's voice found by the owners' culture (Rome) or
+        accent (Medieval II) and its voice_type, its name call replaced by the user's wav: a shared line split,
+        a unit without one given a block in the file's own layout, events.dat / .idx removed; Restore byte for byte."""
+        from faction_tool import sounds as SN
+        d = os.path.join(self.root, "data")
+        wav = b"RIFF" + struct.pack("<I", 36) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 22050, 44100, 2, 16) \
+            + b"data" + struct.pack("<I", 0)
+        folder = "data/sounds/Voice/Human/Localized/Battle_Map"
+        names = [folder + "/Eastern_Heavy_1_name_x_1.wav", folder + "/Eastern_Heavy_1_Group_Created_1.wav"]
+        idx, dat = bytearray(b"SND.PACK" + struct.pack("<4I", 4, len(names), len(names), len(wav) * 2)), b""
+        for n in names:
+            idx += struct.pack("<6I", 24 + len(dat), len(wav), 22050, 16, 1, 1) + n.encode() + b"\0abc"
+            dat += wav
+        os.makedirs(os.path.join(d, "sounds"))
+        with open(os.path.join(d, "sounds", "Voice1.idx"), "wb") as f:
+            f.write(bytes(idx))
+        with open(os.path.join(d, "sounds", "Voice1.dat"), "wb") as f:
+            f.write(b"PACKHEAD" * 3 + dat)
+        for n in ("events.dat", "events.idx"):
+            write(os.path.join(d, "sounds", n), "compiled")
+        write(os.path.join(d, SN.VOICE_FILE),
+              "BANK: unit_voice\n\tculture eastern,carthaginian\n\t\tclass Heavy_1\n\t\t\tvocal Group_Created\n"
+              "\t\t\t\tevent\n\t\t\t\t\tfolder %s\n\t\t\t\t\tEastern_Heavy_1_Group_Created_1.wav\n\t\t\t\tend\n"
+              "\t\t\tvocal Unit_Select\n\t\t\t\tunit alpha general,other unit\n\t\t\t\tevent\n"
+              "\t\t\t\t\tfolder %s\n\t\t\t\t\tEastern_Heavy_1_name_x_1.wav\n\t\t\t\t\tgroup\n\t\t\t\tend\n" % (folder, folder))
+        mod = ModData(self.root)
+        index = SN.pack_index(mod)
+        self.assertEqual(SN.find(mod, names[0], index)[0], "pack")
+        self.assertEqual(SN.sound_bytes(mod, names[0].upper(), index), wav)
+        events = SN.voice_events(mod.load(SN.voice_file(mod)))
+        self.assertEqual([(e.vocal, e.target, e.names) for e in events],
+                         [("Group_Created", None, []), ("Unit_Select", "unit", ["alpha general", "other unit"])])
+        uv = SN.unit_voices(mod, events, "Alpha General", "Heavy_1", ["alpha"])
+        self.assertEqual([(u.key, u.factions, u.known_class) for u in uv], [("eastern", ["alpha"], True)])
+        self.assertEqual(uv[0].name_call.files, [names[0]])
+        self.assertEqual([e.vocal for e in uv[0].orders], ["Group_Created"])
+        self.assertFalse(SN.unit_voices(mod, events, "alpha general", "Light_1", ["alpha"])[0].known_class)
+        # a loose file of that name wins
+        write(os.path.join(d, "sounds", "voice", "human", "localized", "battle_map", "eastern_heavy_1_name_x_1.wav"),
+              "LOOSE")
+        self.assertEqual(SN.sound_bytes(mod, names[0], index), b"LOOSE")
+        before = tree_hash(d)
+        other = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, other)
+        mine = os.path.join(other, "mine.wav")
+        with open(mine, "wb") as f:
+            f.write(wav)
+        plan = Plan(mod, "voice", "unit_voice", {})
+        got = SN.set_name_call(plan, "alpha general", "eastern", "Heavy_1", [mine])
+        self.assertEqual(got, [folder + "/Eastern_Heavy_1_name_alpha_general_custom_1.wav"])
+        text = plan.files[SN.voice_file(mod)].texts()
+        self.assertIn("\t\t\t\tunit other unit", text)
+        k = text.index("\t\t\t\tunit alpha general")
+        self.assertEqual(text[k:k + 6], ["\t\t\t\tunit alpha general", "\t\t\t\tevent", "\t\t\t\t\tfolder " + folder,
+                                         "\t\t\t\t\tEastern_Heavy_1_name_alpha_general_custom_1.wav",
+                                         "\t\t\t\t\tgroup", "\t\t\t\tend"])
+        with self.assertRaises(ValueError):
+            SN.set_name_call(Plan(mod, "v", "v", {}), "alpha general", "eastern", "Heavy_1", [os.path.join(d, SN.VOICE_FILE)])
+        bdir = plan.apply()
+        self.assertFalse(os.path.exists(os.path.join(d, "sounds", "events.dat")))
+        new = SN.voice_events(TextFile.load(SN.voice_file(mod)))
+        again = SN.unit_voices(mod, new, "alpha general", "Heavy_1", ["alpha"])[0].name_call
+        self.assertEqual(again.names, ["alpha general"])
+        self.assertEqual(SN.sound_bytes(mod, again.files[0]), wav)
+        # the same unit again: its own block is rewritten, the name not taken twice
+        plan = Plan(mod, "voice", "unit_voice", {})
+        self.assertEqual(SN.set_name_call(plan, "alpha general", "eastern", "Heavy_1", [mine]),
+                         [folder + "/Eastern_Heavy_1_name_alpha_general_custom_2.wav"])
+        b2 = plan.apply()
+        restore(mod, b2)
+        restore(mod, bdir)
+        self.assertEqual(tree_hash(d), before)
+
     def test_replace_battle_model(self):
         """A unit's soldier model swapped for another of this mod or of another mod (brought with its files, renamed
         when the name is taken), the unit's factions given textures on it, a seat mismatch warned about, another

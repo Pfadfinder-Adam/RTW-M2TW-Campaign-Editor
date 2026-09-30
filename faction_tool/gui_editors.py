@@ -673,6 +673,7 @@ class RecordEditor(ttk.Frame):
             ttk.Button(box, text="Import...", command=lambda t=targets, n=need, l=label: self.import_pic(t, n, l)).grid(
                 row=2, column=1, sticky="w", padx=6)
         self._unit_models(2)
+        self._unit_voice(3)
 
     # ---- battle models ----
     def _model_catalogue(self, mod=None):
@@ -764,6 +765,141 @@ class RecordEditor(ttk.Frame):
             if info is not None:
                 ttk.Button(bar, text="View in 3D...", command=lambda i=info: self.view_model(i)).pack(
                     side="left", padx=4)
+
+    # ---- voice ----
+    def _voice_data(self):
+        """(pack index, voice events) of this mod, kept while the voice file and the packs are unchanged."""
+        from . import sounds as SN
+        from .textio import TextFile
+        path = SN.voice_file(self.mod)
+        idxs = [os.path.join(d, n) for d in SN.sound_dirs(self.mod) for n in os.listdir(d) if n.lower().endswith(".idx")]
+        stamp = tuple(os.path.getmtime(p) for p in [path] + idxs if p and os.path.exists(p))
+        got = self.__dict__.get("_voice_cache")
+        if not got or got[0] != (self.mod.data, stamp):
+            events = SN.voice_events(TextFile.load(path)) if path else []
+            got = self._voice_cache = ((self.mod.data, stamp), SN.pack_index(self.mod), events)
+        return got[1], got[2]
+
+    def _unit_voice(self, row):
+        """What the unit says in battle, for each accent (Medieval II) / culture (Rome) of its owners: its voice class,
+        its own name call (Play, Put in my own...), and its orders (Play)."""
+        from . import sounds as SN
+        box = ttk.LabelFrame(self.pics, text="Voice in battle", padding=6)
+        box.grid(row=row, column=0, sticky="nwe", pady=(4, 0))
+        unit = self.current[0]
+        vt = self.value("voice_type").split(";")[0].strip()
+        if not SN.voice_file(self.mod):
+            ttk.Label(box, text="this mod has no %s - no unit voices to show" % SN.VOICE_FILE).grid(sticky="w")
+            return
+        if not vt:
+            ttk.Label(box, foreground="#b60", wraplength=420, justify="left", text=(
+                "no voice_type line - the unit says nothing. Add a voice_type line (Add line...) to give it a "
+                "voice.")).grid(sticky="w")
+            return
+        try:
+            index, events = self._voice_data()
+        except Exception as e:
+            ttk.Label(box, text="cannot read the voices: %s" % e, foreground="#a33").grid(sticky="w")
+            return
+        facs = self._factions_of()
+        r = 0
+        for uv in SN.unit_voices(self.mod, events, unit, vt, facs):
+            who = ", ".join(uv.factions[:4]) + (" ..." if len(uv.factions) > 4 else "")
+            if uv.key is None:
+                ttk.Label(box, foreground="#a33", wraplength=420, justify="left", text=(
+                    "%s: no accent in %s - these factions have no voice in battle. Add them to an accent "
+                    "there." % (who, SN.ACCENTS_FILE))).grid(row=r, column=0, sticky="w")
+                r += 1
+                continue
+            head = ("%s accent" if SN.accents(self.mod) else "culture %s") % (uv.label or uv.key)
+            ttk.Label(box, text="%s (%s), voice %s" % (head, who, vt), font=("", 9, "bold")).grid(
+                row=r, column=0, sticky="w", pady=(4 if r else 0, 0))
+            r += 1
+            if not uv.known_class:
+                ttk.Label(box, foreground="#a33", wraplength=420, justify="left", text=(
+                    "this voice file has no class %s here - the unit stays silent. Change the voice_type line above "
+                    "to one of: %s." % (vt, ", ".join(uv.classes)))).grid(row=r, column=0, sticky="w")
+                r += 1
+                continue
+            line = ttk.Frame(box)
+            line.grid(row=r, column=0, sticky="w")
+            r += 1
+            nc = uv.name_call
+            ttk.Label(line, text=("Name call: %d sound(s)" % len(nc.files)) if nc else
+                      "Name call: none of its own (it says only its orders)",
+                      foreground="#555" if nc else "#b60").pack(side="left")
+            if nc:
+                ttk.Button(line, text="Play", width=6,
+                           command=lambda fs=nc.files: self.play_sound(fs)).pack(side="left", padx=4)
+            ttk.Button(line, text="Put in my own...",
+                       command=lambda uv=uv: self.own_name_call(uv)).pack(side="left", padx=(4 if not nc else 0, 0))
+            orders = [ev for ev in uv.orders if ev.files]
+            if orders:
+                line = ttk.Frame(box)
+                line.grid(row=r, column=0, sticky="w", pady=(2, 0))
+                r += 1
+                ttk.Label(line, text="Orders (%d):" % len(orders), foreground="#555").pack(side="left")
+                names = [ev.vocal for ev in orders]
+                v = tk.StringVar(value=names[0])
+                ttk.Combobox(line, textvariable=v, values=names, state="readonly", width=30).pack(side="left", padx=4)
+                ttk.Button(line, text="Play", width=6, command=lambda v=v, o=orders: self.play_sound(
+                    next(ev.files for ev in o if ev.vocal == v.get()))).pack(side="left")
+        ttk.Label(box, foreground="#555", wraplength=420, justify="left", text=(
+            "The voice class is the voice_type line above (%s)." % ", ".join(
+                sorted({ev.cls for ev in events}, key=str.lower)))).grid(row=r, column=0, sticky="w", pady=(4, 0))
+
+    def play_sound(self, files):
+        """Play the next of a set of sounds (each click the next one, as the game picks among them)."""
+        from . import sounds as SN
+        if not files:
+            return
+        k = self.__dict__.setdefault("_play_turn", {})
+        i = k.get(tuple(files), 0) % len(files)
+        k[tuple(files)] = i + 1
+        index, _ = self._voice_data()
+        rel = files[i]
+        data = SN.sound_bytes(self.mod, rel, index)
+        if data is None:
+            messagebox.showerror("Play", "%s is in no sound pack and not on disk - the game has nothing to play "
+                                         "there. Put in your own sound for it." % rel, parent=self)
+            return
+        try:
+            why = SN.play(data, rel)
+        except Exception as e:
+            why = str(e)
+        self.app.status.set("Playing %s (%d of %d)%s" % (os.path.basename(rel), i + 1, len(files),
+                                                        (" - " + why) if why else ""))
+
+    def own_name_call(self, uv):
+        """The unit's name call for one accent / culture from the user's own .wav files: Preview, then written with a
+        backup (Restore undoes it)."""
+        from . import sounds as SN
+        from . import log
+        unit = self.current[0]
+        paths = filedialog.askopenfilenames(parent=self, title="Sounds for the name call of %s (%s)" % (unit, uv.key),
+                                            filetypes=[("wav sounds", "*.wav"), ("all files", "*.*")])
+        if not paths:
+            return
+        plan = Plan(self.mod, "voice", "unit_voice", {})
+        try:
+            SN.set_name_call(plan, unit, uv.key, uv.cls, list(paths))
+        except Exception as e:
+            messagebox.showerror("Name call", "%s\n\nNothing was written." % e, parent=self)
+            return
+        warns = "\n".join(x for _, x in plan.warnings)
+        if not messagebox.askyesno("Name call", (
+                "%s (%s, class %s) will say your %d sound(s) when selected.\n\n%s%sWrite %d file(s)? A backup is made "
+                "first (Restore undoes it).\n\nThen start the game: it builds data/sounds/events.dat again on the "
+                "first start (that start takes a little longer)." % (
+                    unit, uv.key, uv.cls, len(paths), plan.report(), ("\n\n" + warns + "\n\n") if warns else "\n\n",
+                    len(plan.changed_files()))), parent=self):
+            return
+        bdir = plan.apply()
+        log.write("Name call of %s (%s, %s) replaced (backup %s)\n%s" % (unit, uv.key, uv.cls, bdir, plan.report()))
+        self.__dict__.pop("_voice_cache", None)
+        self.show_pictures()
+        self.app.status.set("%s has its own name call for %s now (backup %s) - start the game to hear it." % (
+            unit, uv.key, bdir))
 
     def view_model(self, info, mod=None):
         from .gui_meshview import ModelViewer

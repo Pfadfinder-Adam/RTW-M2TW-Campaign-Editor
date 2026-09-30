@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Hear a unit and give it a voice** (Unit editor, Voice in battle), both games: for each accent (Medieval II) or
+  culture (Rome) of the unit's owners - its voice class, Play its own name call ("Khan's Guard!") and each of its
+  orders, straight from the game's sound packs; Put in my own... makes your .wav files its name call (a unit that
+  shares a line with others gets its own; a new unit gets one), shown before writing, with a backup. The game
+  builds its sound list (events.dat) again on the next start.
+
 ## 0.19.1 - 2026-09-30
 
 ### Changed
