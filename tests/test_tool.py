@@ -1002,6 +1002,62 @@ building smith
         self.assertEqual({im.getpixel((2 + dx, 2 + dy)) for dx in (0, 1) for dy in (0, 1)}, {GROUND_LOOK[hills]})
         self.assertEqual(im.getpixel((0, 0)), GROUND_LOOK[sea])
 
+    def test_check_and_install_a_pack(self):
+        """A 'copy data over the game' pack checked file by file: new / same / replaces; a sprite page of another
+        size that leaves sprites outside is kept back; a text differing in a few lines goes in as 'only its
+        changes' (lines it would drop stay); another mod's whole file is kept back; README outside data/ is not
+        put in; the install is one Plan and Restore gives the mod back byte for byte."""
+        import zipfile
+        from faction_tool import modpack as MP
+        from faction_tool.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "ui", "test.sd.xml"), '<sprite_definitions>\n  <page file="page.tga" w="64" h="64">\n'
+              '    <sprite name="TOP" x="0" y="0" w="32" h="30"/>\n    <sprite name="LOW" x="0" y="40" w="32" h="20"/>\n'
+              '  </page>\n</sprite_definitions>\n')
+        red = [[(200, 0, 0)] * 64 for _ in range(64)]
+        os.makedirs(os.path.join(d, "ui", "roman", "interface"), exist_ok=True)
+        write_tga(os.path.join(d, "ui", "roman", "interface", "page.tga"), 64, 64, red)
+        common = "".join("line %d\n" % i for i in range(30))
+        write(os.path.join(d, "descr_things.txt"), common + "one 1\ntwo 2\nthree 3\nrex_only 9\nfour 4\n")
+        before = tree_hash(self.root)
+        pack = os.path.join(tempfile.mkdtemp(), "pack.zip")
+        self.addCleanup(shutil.rmtree, os.path.dirname(pack))
+        small = os.path.join(os.path.dirname(pack), "small.tga")
+        write_tga(small, 64, 32, [[(0, 0, 200)] * 64 for _ in range(32)])
+        with zipfile.ZipFile(pack, "w") as z:
+            z.writestr("README.txt", "copy data over the game")
+            with open(small, "rb") as fh:
+                z.writestr("data/ui/roman/interface/page.tga", fh.read())
+            z.writestr("data/ui/units/alpha/#new_card.tga", b"card")
+            z.writestr("data/descr_things.txt", common + "one 1\ntwo 22\nthree 3\nfour 4\nfive 5\n")
+            z.writestr("data/export_descr_unit.txt", "type something else entirely\n" * 40)
+            with open(os.path.join(d, "descr_sm_factions.txt"), "rb") as fh:
+                z.writestr("data/descr_sm_factions.txt", fh.read())
+        files, left = MP.read(pack)
+        self.assertEqual(left, ["README.txt"])
+        mod = ModData(self.root)
+        by = {e["rel"]: e for e in MP.check(mod, files)}
+        self.assertEqual((by["ui/units/alpha/#new_card.tga"]["state"], by["ui/units/alpha/#new_card.tga"]["choice"]),
+                         ("new", "install"))
+        self.assertEqual(by["descr_sm_factions.txt"]["state"], "same")
+        page = by["ui/roman/interface/page.tga"]
+        self.assertEqual(page["choice"], "keep")
+        self.assertIn("LOW", page["notes"][0][1])
+        self.assertEqual(by["descr_things.txt"]["choice"], "merge")
+        self.assertEqual(by["descr_things.txt"]["merge"], {"changed": 1, "added": 1, "kept": 1})
+        self.assertEqual(by["export_descr_unit.txt"]["choice"], "keep")
+        plan = Plan(mod, "pack", "mod_pack", {})
+        MP.install(plan, files, list(by.values()))
+        plan.apply()
+        with open(os.path.join(d, "descr_things.txt")) as fh:
+            self.assertEqual(fh.read(), common + "one 1\ntwo 22\nthree 3\nrex_only 9\nfour 4\nfive 5\n")
+        self.assertTrue(os.path.exists(os.path.join(d, "ui", "units", "alpha", "#new_card.tga")))
+        with open(os.path.join(d, "ui", "roman", "interface", "page.tga"), "rb") as fh:
+            self.assertEqual(MP.picture_size(fh.read(), "page.tga"), (64, 64))
+        restore(ModData(self.root), backups(ModData(self.root))[0])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        self.assertEqual(before, after)
+
     def test_town_ring_rule(self):
         """The 8 tiles round a town are its own region or sea (0 exceptions in vanilla Rome and Medieval II), and
         on Medieval II no port stands in a town's 3 x 3: a move, a painted tile or a new region that breaks it is

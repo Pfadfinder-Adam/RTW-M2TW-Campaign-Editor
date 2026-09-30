@@ -13,6 +13,13 @@
   what a map already breaks.
 
 ### Added
+- **Check and install a pack** (Tools): a "copy data over the game" mod checked file by file before it goes in -
+  new, the same, or what a replacement would lose: a file of REX's own, a picture of another size (for an interface
+  icon page, the icons left outside it), another mod's whole text file. A text file that differs in a few lines can
+  go in as "only its changes" (the pack's changed and added lines; lines it would drop stay). Pick per file, Preview,
+  Install with a backup; Restore takes it all back. Found on a Julii unit-card pack that also brought the original
+  game's battlepage_03.tga over REX's (the schiltrom / shield-wall buttons lost their pictures), an older
+  descr_projectile_new.txt and a whole export_descr_unit.txt.
 - **Replace a unit's battle model** (Unit editor, new **Battle model** block): the soldiers' (and each officer's)
   model with a texture of one of the unit's factions, how the model sits (on foot, on a horse or camel, an
   elephant, a chariot) against the unit's mount, and **Replace model...**: pick another model of this mod or of

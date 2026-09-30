@@ -120,7 +120,7 @@ UNIT EDITOR / BUILDING EDITOR
 
   Only the map (regions, towns, ports, resources)? In New faction mode with no faction named,
   Apply writes the map alone (the line beside the work bar says so).
-  Check mod, Scan mod, Restore a backup, Game manifest, Log and Save logs are under Tools.
+  Check mod, Scan mod, Check and install a pack, Restore a backup, Game manifest, Log and Save logs are under Tools.
 
   4. Preview changes (Ctrl+P) shows every file and line that would change. Nothing is written.
   5. Create faction / Apply changes (Ctrl+S) writes it, with a backup first.
@@ -628,6 +628,7 @@ class App(tk.Tk):
         menu.add_command(label="Check mod", command=self.check)
         menu.add_command(label="Settlement names by culture (every town)...", command=self.culture_names_table)
         menu.add_command(label="Scan mod (every mention of the faction)", command=self.scan)
+        menu.add_command(label="Check and install a pack...", command=self.install_pack)
         menu.add_command(label="Restore a backup...", command=self.restore)
         menu.add_separator()
         menu.add_command(label="Game manifest...", command=self.game_manifest)
@@ -3270,6 +3271,11 @@ class App(tk.Tk):
             self._limit_raise = self.mod.data         # asked once per mod: Preview and Apply both use it
             opts["raise_faction_limit"] = True
             return build(ModData(self.mod.data), self.v_campaign.get(), template, name, opts)
+
+    def install_pack(self):
+        """Tools > Check and install a pack...: a pack that says 'copy data over the game' checked file by file."""
+        from .gui_modpack import open_pack
+        open_pack(self)
 
     def show_text(self, title, text, extra=()):
         w = tk.Toplevel(self)
