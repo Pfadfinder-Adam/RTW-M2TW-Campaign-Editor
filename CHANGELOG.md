@@ -26,6 +26,14 @@
   refused before anything is written, and logged); Restore refuses a backup that names files outside.
 
 ### Fixed
+- **3D view** (testers): Medieval II's weapons and shields were grey - their textures (AttachmentSets) are named
+  only in battle_models.modeldb and were lost when both model files were read (690 of 701 vanilla models have
+  them). **Mounted units now show their mount**: the Battle model block has a Mount row (its model from
+  descr_mount.txt, View in 3D, Save its files), and View in 3D of the soldiers has **With its mount** - the rider
+  sat on it by descr_mount's rider_offset (Medieval II; on Rome over the middle of its back), legs straight as the
+  files hold him. **Ships**: the Battle model and Voice blocks say plainly that a ship has neither (the game fights
+  at sea by auto-resolve; its soldier and voice lines are only what the file's form asks for) instead of showing
+  that placeholder land model and voice as its own - both games.
 - **The Map did not open on some big maps** (a tester's "paneuroafricasia", Rome + REX): the political colours
   crashed with "IndexError: list index out of range" when the map had fewer than 256 region colours and Pillow took
   its fast path (the Windows exe). The Terrain editor was not touched by it.

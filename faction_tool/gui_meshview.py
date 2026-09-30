@@ -12,9 +12,12 @@ SIZE = (420, 520)
 
 
 class ModelViewer(tk.Toplevel):
-    def __init__(self, parent, mod, info, factions=()):
+    def __init__(self, parent, mod, info, factions=(), mount=None):
+        """mount: (its ModelInfo, root_node_height, rider_offset, mount type) - the unit's horse, camel ...: the
+        rider can be shown sat on it."""
         super().__init__(parent)
-        self.mod, self.info = mod, info
+        self.mod, self.info, self.mount = mod, info, mount
+        self.mount_mesh = None
         self.title("Battle model in 3D - %s" % info.name)
         self.yaw, self.pitch, self.zoom, self.look = 35.0, 8.0, 1.0, 0
         self._drag, self._tex, self._photo, self.mesh = None, {}, None, None
@@ -43,6 +46,10 @@ class ModelViewer(tk.Toplevel):
         self.v_weapons = tk.BooleanVar(value=True)
         ttk.Checkbutton(side, text="Weapons and shield", variable=self.v_weapons,
                         command=self.draw).pack(anchor="w", pady=(8, 0))
+        self.v_mount = tk.BooleanVar(value=bool(mount))
+        if mount:
+            ttk.Checkbutton(side, text="With its mount (%s)" % mount[3], variable=self.v_mount,
+                            command=self.draw).pack(anchor="w")
         self.b_look = ttk.Button(side, text="Another man", command=self.next_look)
         self.b_look.pack(anchor="w", pady=(8, 0))
         ttk.Button(side, text="Front", command=lambda: self.turn_to(0)).pack(anchor="w", pady=(8, 0))
@@ -84,6 +91,14 @@ class ModelViewer(tk.Toplevel):
                 msg = "cannot read %s: %s" % (rel, e)
         if self.mesh is not None:
             self.b_look.state(["!disabled"] if self.mesh.looks() > 1 else ["disabled"])
+        self.mount_mesh = None
+        if self.mount:                                  # the mount's mesh at the same detail (or its closest)
+            ms = self.mount[0].meshes
+            mp = MV.mesh_path(self.mod, ms[min(i, len(ms) - 1)]) if ms else None
+            try:
+                self.mount_mesh = MV.read_file(mp) if mp else None
+            except Exception:
+                self.mount_mesh = None
         if msg:
             self.canvas.delete("all")
             self.canvas.create_text(SIZE[0] // 2, SIZE[1] // 2, text=msg, fill="#ddd", width=SIZE[0] - 40)
@@ -105,13 +120,27 @@ class ModelViewer(tk.Toplevel):
         tex, att = self._texture(self.info.textures), self._texture(self.info.attach)
         if tex is None and self.mesh.texture_ref:       # Rome: no texture line - the one the .cas names
             tex = self._texture({"": self.mesh.texture_ref})
-        img = MV.render(self.mesh, SIZE, self.yaw, self.pitch, self.zoom, tex, att, groups,
-                        quality=1 if quick else 2, textured=not quick)
+        mesh, more = self.mesh, None
+        riding = self.mount and self.v_mount.get() and self.mount_mesh is not None
+        if riding:
+            mi = self.mount[0]
+            mesh = MV.combine(self.mesh, groups, self.mount_mesh, self.mount_mesh.shown(0, True), self.mount[1],
+                              self.mount[2], mount_one=True if not mi.attach else None)
+            groups = mesh.groups
+            more = {2: self._texture(mi.textures) if mi.textures else None,
+                    3: self._texture(mi.attach) if mi.attach else None}
+            if more[2] is None and self.mount_mesh.texture_ref:
+                more[2] = self._texture({"": self.mount_mesh.texture_ref})
+        img = MV.render(mesh, SIZE, self.yaw, self.pitch, self.zoom, tex, att, groups,
+                        quality=1 if quick else 2, textured=not quick, more=more)
         self._photo = ImageTk.PhotoImage(img)
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
         if not quick:
             n = sum(len(g.tris) // 3 for g in groups)
+            if self.mount and self.v_mount.get() and self.mount_mesh is None:
+                self.info_lbl.configure(text="the mount's mesh file is not in this mod or the game")
+                return
             self.info_lbl.configure(text="man %d of %d; %d triangles, %d points%s%s" % (
                 self.look % self.mesh.looks() + 1, self.mesh.looks(), n, self.mesh.count,
                 "" if tex is not None else "\nno texture file found for the man",

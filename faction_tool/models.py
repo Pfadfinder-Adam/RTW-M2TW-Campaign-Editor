@@ -152,6 +152,8 @@ def catalogue(mod):
             m.where |= o.where
             if o.exact and not m.exact:
                 m.seats, m.exact = set(o.seats), True
+            for f, t in o.attach.items():            # the weapons / shields textures live in the modeldb only
+                m.attach.setdefault(f, t)
     return read
 
 
@@ -189,6 +191,55 @@ def mount_classes(mod):
         c = _values(_block_lines(f, span), "class")
         out[name.lower()] = (c[0][0].lower() if c and c[0] else "")
     return out
+
+
+def unit_mount(mod, lines):
+    """(mount type, its battle model) of the unit's mount line (descr_mount.txt `model`), or (None, None)."""
+    from .packs import _block_lines, _values, type_blocks
+    mounts = _values(lines, "mount")
+    if not mounts or not mounts[0] or not mounts[0][0]:
+        return None, None
+    kind = mounts[0][0]
+    path = _ci(mod.data, "descr_mount.txt")
+    if not path:
+        return kind, None
+    f = mod.load(path)
+    span = next((sp for name, sp in type_blocks(f).items() if name.lower() == kind.lower()), None)
+    model = _values(_block_lines(f, span), "model") if span else None
+    return kind, (model[0][0] if model and model[0] else None)
+
+
+def mount_seat(mod, kind):
+    """(root_node_height, rider_offset (x, y, z)) of a mount type in descr_mount.txt - where its rider sits
+    (both games have them); defaults when a line is missing."""
+    from .packs import _block_lines, _values, type_blocks
+    root, off = 1.0, (0.0, 0.4, 0.0)
+    path = _ci(mod.data, "descr_mount.txt")
+    if not path or not kind:
+        return root, off
+    f = mod.load(path)
+    span = next((sp for name, sp in type_blocks(f).items() if name.lower() == kind.lower()), None)
+    if not span:
+        return root, off
+    lines = _block_lines(f, span)
+    r = _values(lines, "root_node_height")
+    o = _values(lines, "rider_offset")
+    try:
+        if r and r[0]:
+            root = float(r[0][0])
+        if o and len(o[0]) >= 3:
+            off = tuple(float(x) for x in o[0][:3])
+    except ValueError:
+        pass
+    return root, off
+
+
+def is_ship(lines):
+    """A ship (category ship): the game fights at sea by auto-resolve - no battle model, no voice; its soldier and
+    voice lines are only what the file's form asks for."""
+    from .packs import _values
+    cat = _values(lines, "category")
+    return bool(cat and cat[0] and cat[0][0].lower() == "ship")
 
 
 def unit_seat(mod, lines):

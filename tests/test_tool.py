@@ -2626,6 +2626,22 @@ building smith
         with open(path) as fh:
             self.assertIn("resource\tiron,\t0,\t0", fh.read())
 
+    def test_rider_on_mount(self):
+        """A rider drawn on his mount: Medieval II meshes have their origin at the root node - the rider's hips go
+        to the mount's root moved by rider_offset; the mount's parts take pictures 2 / 3."""
+        from faction_tool import meshview as MV
+        rider = MV.Mesh([MV.Group("body", "m", [0, 1, 2], False)], [(0, -1.0, 0), (0, 0.9, 0), (0.2, 0, 0)],
+                        [(0.1, 0.1)] * 3)
+        horse = MV.Mesh([MV.Group("horse", "m", [0, 1, 2], False)], [(0, -1.9, 0), (0, 0.7, 2), (0.3, 0, 1)],
+                        [(0.2, 0.2)] * 3)
+        both = MV.combine(rider, rider.groups, horse, horse.groups, 1.0, (0.0, 0.38, 0.70), mount_one=True)
+        self.assertEqual(both.count, 6)
+        self.assertAlmostEqual(both.positions[0][1], -1.0 + 0.38)                # hips (origin) at root + offset
+        self.assertAlmostEqual(both.positions[0][2], 0.70)
+        self.assertEqual([getattr(g, "pic", 0) for g in both.groups], [0, 2])
+        self.assertEqual(both.groups[1].tris, [3, 4, 5])
+        self.assertTrue(both.groups[1].one)
+
     def test_label_table_few_colours(self):
         """The political map's palette table on a map with fewer than 256 colours (a tester's map would not open:
         IndexError in _labels)."""

@@ -439,8 +439,64 @@ def _affine(src, dst):
     return tuple(out)
 
 
+def _root_y(mesh, root_height, share):
+    """Where a mesh's root node (a man's hips, a horse's root) stands: Medieval II's meshes have their origin
+    there (they reach well below 0); a mesh standing on 0 (feet at the ground) has it `root_height` up, or
+    `share` of its height when no height is given."""
+    ys = [p[1] for p in mesh.positions] or [0.0]
+    if min(ys) < -0.3:
+        return 0.0
+    return root_height if root_height is not None else share * max(ys)
+
+
+def combine(rider, rider_groups, mount, mount_groups, root_height, offset, mount_one=None):
+    """One Mesh of a rider sat on his mount: the rider's hips put at the mount's root node moved by descr_mount's
+    rider_offset (x, y, z); root_height = its root_node_height (for a mesh drawn from the ground up). The files
+    hold the rider standing (legs straight - the game bends them with its animations), so his legs show through
+    the horse. The mount's groups take pictures 2 and 3 (render's `more`); mount_one: its uv over one picture (a
+    mount with no attachment texture)."""
+    dx = offset[0]
+    dy = _root_y(mount, root_height, 0.5) + offset[1] - _root_y(rider, None, 0.53)
+    dz = offset[2]
+    if mount.one_texture:
+        # Rome's .cas mount: its root node is not under the saddle in the files as read here, so the rider goes
+        # over its back: the saddle lies on the widest part of the body (the barrel - head, neck, legs and tail are
+        # narrower, whichever way it faces); the rider's hips go on its top
+        P = mount.positions
+        wide = max((abs(p[0]) for p in P), default=0.0)
+        barrel = [p for p in P if abs(p[0]) >= 0.7 * wide]
+        if barrel:
+            lo, hi = min(p[2] for p in barrel), max(p[2] for p in barrel)
+            mid = (lo + hi) / 2
+            head = max(P, key=lambda p: p[1])[2]         # the head is its highest point: the saddle sits a little
+            mid += 0.25 * (head - mid) if abs(head - mid) > 0.2 else 0.0    # toward it (the hind thighs are wide)
+            body = [p for p in P if abs(p[2] - mid) <= 0.3] or barrel
+        else:
+            body = []
+        if body:
+            top = max(p[1] for p in body)
+            dz = mid + offset[2]
+            dy = top + offset[1] - _root_y(rider, None, 0.53) - 0.1
+    pos = [(x + dx, y + dy, z + dz) for x, y, z in rider.positions] + list(mount.positions)
+    n = rider.count
+    ru = rider.uvs or [(0.0, 0.0)] * rider.count
+    mu = mount.uvs or [(0.0, 0.0)] * mount.count
+    groups = []
+    for g in rider_groups:
+        h = Group(g.name, g.material, g.tris, g.attachment)
+        h.pic, h.one = 0, rider.one_texture
+        groups.append(h)
+    for g in mount_groups:
+        h = Group(g.name, g.material, [i + n for i in g.tris], g.attachment)
+        h.pic, h.one = 2, mount.one_texture if mount_one is None else mount_one
+        groups.append(h)
+    out = Mesh(groups, pos, ru + mu)
+    out.texture_ref = rider.texture_ref
+    return out
+
+
 def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, attach=None, groups=None,
-           quality=2, background=BACK, textured=True):
+           quality=2, background=BACK, textured=True, more=None):
     """The mesh drawn as a Pillow picture, turned by yaw (round the up axis) and pitch (degrees) and lit from the
     upper left. textured: the pictures laid on every triangle (a still picture); else one colour per triangle
     (quick, for turning it with the mouse). texture = the man's picture, attach = weapons and shields; a part
@@ -472,6 +528,8 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
     L = [a / ln for a in L]
     pics = {0: texture.convert("RGB") if texture is not None else None,
             1: attach.convert("RGB") if attach is not None else None}
+    for k, im in (more or {}).items():                   # a mount's texture (2) and attachment (3)
+        pics[k] = im.convert("RGB") if im is not None else None
     if textured:
         for k, im in pics.items():
             if im is not None and max(im.size) > 512:
@@ -481,6 +539,7 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
     tris = []
     for g in groups:
         t = g.tris
+        base, one = getattr(g, "pic", 0), getattr(g, "one", mesh.one_texture)
         for j in range(0, len(t) - 2, 3):
             a, b, e = view[t[j]], view[t[j + 1]], view[t[j + 2]]
             # screen y runs down, and x was mirrored: the outward side is the one turning clockwise on screen
@@ -494,11 +553,12 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
             half, src = 0, None
             if uvs:
                 ua, ub, uc = uvs[t[j]], uvs[t[j + 1]], uvs[t[j + 2]]
-                if mesh.one_texture:
+                if one:
                     src = [(q[0], q[1]) for q in (ua, ub, uc)]
                 else:
                     half = 1 if (ua[0] + ub[0] + uc[0]) / 3 >= 0.5 else 0      # which of the two pictures
                     src = [(q[0] * 2 - half, q[1]) for q in (ua, ub, uc)]
+                half += base
             tris.append((a[2] + b[2] + e[2], ((a[0], a[1]), (b[0], b[1]), (e[0], e[1])), shade, half, src))
     tris.sort(key=lambda x: x[0])
     draw = ImageDraw.Draw(img)

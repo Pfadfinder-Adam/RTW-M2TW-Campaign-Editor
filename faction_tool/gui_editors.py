@@ -738,12 +738,21 @@ class RecordEditor(ttk.Frame):
         except Exception as e:
             ttk.Label(box, text="cannot read the battle models: %s" % e, foreground="#a33").grid(sticky="w")
             return
+        if MO.is_ship(lines):
+            ttk.Label(box, foreground="#555", wraplength=380, justify="left", text=(
+                "A ship: the game fights sea battles by itself (auto-resolve), so a ship has no battle model. Its "
+                "soldier line (%s) is only there because the file's form asks for one." % (
+                    ", ".join(m for _, _, m in MO.unit_slots(lines)) or "none"))).grid(sticky="w")
+            return
         seat = MO.unit_seat(self.mod, lines)
         slots = MO.unit_slots(lines)
         if not slots:
             ttk.Label(box, text="no soldier line - nothing to show").grid(sticky="w")
             return
         facs = self._factions_of()
+        kind, mmodel = MO.unit_mount(self.mod, lines)
+        minfo = cat.get((mmodel or "").lower()) if kind else None
+        mount = (minfo,) + MO.mount_seat(self.mod, kind) + (kind,) if minfo is not None else None
         for r, (key, idx, model) in enumerate(slots):
             info = cat.get(model.lower())
             tex = None
@@ -773,10 +782,29 @@ class RecordEditor(ttk.Frame):
             ttk.Button(bar, text="Replace model...",
                        command=lambda k=key, i=idx, m=model: self.replace_model(k, i, m)).pack(side="left")
             if info is not None:
-                ttk.Button(bar, text="View in 3D...", command=lambda i=info: self.view_model(i)).pack(
-                    side="left", padx=4)
+                ttk.Button(bar, text="View in 3D...", command=lambda i=info, k=key: self.view_model(
+                    i, mount=mount if k == "soldier" else None)).pack(side="left", padx=4)
                 ttk.Button(bar, text="Save its files...", command=lambda i=info: self.save_model_files(i)).pack(
                     side="left")
+        # the mount (horse, camel, elephant ...): its own model, from descr_mount.txt
+        if kind:
+            r = len(slots)
+            info = minfo
+            tex = next(iter(info.textures.values()), None) if info and info.textures else None
+            self._texture_thumb(box, self.mod, tex).grid(row=r, column=0, sticky="nw", pady=2)
+            cell = ttk.Frame(box)
+            cell.grid(row=r, column=1, sticky="nw", padx=6)
+            ttk.Label(cell, text="Mount: %s" % kind, font=("", 9, "bold")).pack(anchor="w")
+            ttk.Label(cell, foreground="#555" if info else "#a33", justify="left", wraplength=300, text=(
+                "its model %s (descr_mount.txt)" % mmodel if info else
+                "descr_mount.txt names the model %s - not in this mod's battle models" % mmodel if mmodel else
+                "no such mount in descr_mount.txt")).pack(anchor="w")
+            if info is not None:
+                bar = ttk.Frame(cell)
+                bar.pack(anchor="w", pady=(2, 0))
+                ttk.Button(bar, text="View in 3D...", command=lambda i=info: self.view_model(i)).pack(side="left")
+                ttk.Button(bar, text="Save its files...", command=lambda i=info: self.save_model_files(i)).pack(
+                    side="left", padx=4)
 
     def save_model_files(self, info):
         """The model's files (meshes, textures) copied into a folder the user picks, in their data/ folders - a
@@ -851,6 +879,16 @@ class RecordEditor(ttk.Frame):
         box.grid(row=row, column=column, sticky="nwe", pady=(4, 0), padx=(12 if column else 0, 0))
         unit = self.current[0]
         vt = self.value("voice_type").split(";")[0].strip()
+        from . import models as MO
+        try:
+            ship = MO.is_ship(self._unit_lines())
+        except Exception:
+            ship = False
+        if ship:
+            ttk.Label(box, foreground="#555", wraplength=320, justify="left", text=(
+                "A ship: it never stands on a battlefield, so it says nothing in battle. Its voice_type line (%s) "
+                "is only there because the file's form asks for one." % (vt or "none"))).grid(sticky="w")
+            return
         if not SN.voice_file(self.mod):
             ttk.Label(box, text="this mod has no %s - no unit voices to show" % SN.VOICE_FILE).grid(sticky="w")
             return
@@ -966,9 +1004,9 @@ class RecordEditor(ttk.Frame):
         self.app.status.set("%s has its own name call for %s now (backup %s) - start the game to hear it." % (
             unit, uv.key, bdir))
 
-    def view_model(self, info, mod=None):
+    def view_model(self, info, mod=None, mount=None):
         from .gui_meshview import ModelViewer
-        ModelViewer(self, mod or self.mod, info, self._factions_of())
+        ModelViewer(self, mod or self.mod, info, self._factions_of(), mount=mount)
 
     def replace_model(self, key, idx, current):
         """Another battle model for this unit's soldiers (or an officer): from this mod or another mod folder of the
