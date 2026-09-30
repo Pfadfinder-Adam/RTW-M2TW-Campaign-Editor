@@ -2,6 +2,7 @@
 terrain picture, the political colours over it on demand, cities and ports.
 Wheel zooms at the mouse, dragging pans, clicking a city picks it."""
 
+import math
 import tkinter as tk
 from tkinter import ttk
 
@@ -14,13 +15,14 @@ ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels pe
 
 
 
-def view_of(base, box, size, resample):
+def view_of(base, box, size, resample, field=(0, 0, 0)):
     """The part of base (2 px per tile) under the view box (in tiles) drawn at size: only the pixels on the
     map are taken (a view far wider than a big map once asked Pillow for a 1.3-billion-pixel crop), the rest
-    is the empty margin."""
+    is the empty field around the map (the map is a free canvas), with a thin line along the map's edge."""
+    from PIL import ImageDraw
     x0, y0, x1, y1 = (v * 2 for v in box)
     w, h = size
-    out = Image.new(base.mode, size)                  # black, as the crop beyond the map was
+    out = Image.new(base.mode, size, field if base.mode == "RGB" else None)
     sx, sy = w / max(x1 - x0, 1e-9), h / max(y1 - y0, 1e-9)
     cx0, cy0 = max(0, int(x0)), max(0, int(y0))
     cx1, cy1 = min(base.width, int(round(x1))), min(base.height, int(round(y1)))
@@ -30,7 +32,12 @@ def view_of(base, box, size, resample):
     dx1, dy1 = int(round((cx1 - x0) * sx)), int(round((cy1 - y0) * sy))
     if dx1 > dx0 and dy1 > dy0:
         out.paste(base.resize((dx1 - dx0, dy1 - dy0), resample, box=(cx0, cy0, cx1, cy1)), (dx0, dy0))
+        if base.mode == "RGB":                       # the map's edge, where it shows
+            ex0, ey0 = (-x0) * sx - 1, (-y0) * sy - 1
+            ex1, ey1 = (base.width - x0) * sx, (base.height - y0) * sy
+            ImageDraw.Draw(out).rectangle((ex0, ey0, ex1, ey1), outline=(120, 124, 132))
     return out
+
 
 class MapView(ttk.Frame):
     def __init__(self, master, status=None, on_layers=None):
@@ -358,8 +365,8 @@ class MapView(ttk.Frame):
         return (x - self.ox + 0.5) * self.z, ((self.cmap.h - 1 - y) - self.oy + 0.5) * self.z
 
     def to_tile(self, sx, sy):
-        x = int(self.ox + sx / self.z)
-        row = int(self.oy + sy / self.z)
+        x = math.floor(self.ox + sx / self.z)          # floor: left of / above the map are tiles -1, -2 ...
+        row = math.floor(self.oy + sy / self.z)
         return x, self.cmap.h - 1 - row
 
     def fit(self):
@@ -367,7 +374,7 @@ class MapView(ttk.Frame):
             return
         cw, ch = max(self.canvas.winfo_width(), 200), max(self.canvas.winfo_height(), 200)
         self.z = min(cw / self.cmap.w, ch / self.cmap.h)
-        self.ox = self.oy = 0.0
+        self.ox, self.oy = (self.cmap.w - cw / self.z) / 2, (self.cmap.h - ch / self.z) / 2      # in the middle
         self.render()
 
     def centre_on(self, xy, zoom=16):
@@ -407,18 +414,35 @@ class MapView(ttk.Frame):
         bigger = [z for z in ZOOMS if z > self.z + 1e-6]
         smaller = [z for z in ZOOMS if z < self.z - 1e-6]
         fit = min(cw / self.cmap.w, ch / self.cmap.h)
-        if step > 0 and bigger:
-            self.z = bigger[0]
+        least = min(fit / 4, ZOOMS[0])                  # out to a quarter of the view: the field around it
+        if step > 0:
+            self.z = min(self.z * 1.5, ZOOMS[0]) if self.z < ZOOMS[0] - 1e-6 else (bigger[0] if bigger else self.z)
         elif step < 0:
-            self.z = max(smaller[-1] if smaller else fit, fit)
+            self.z = max(smaller[-1] if smaller else self.z / 1.5, least)
         self.ox, self.oy = tx - sx / self.z, ty - sy / self.z
         self.render()
 
     def _clamp(self):
+        """The map is a free canvas: it may be dragged past its edges and zoomed out smaller than the view, with
+        the empty field around it - only a strip of it always stays in sight (a quarter of the smaller of the
+        view and the map), so it is never lost."""
         cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
         vw, vh = cw / self.z, ch / self.z
-        self.ox = min(max(self.ox, 0), max(self.cmap.w - vw, 0)) if vw < self.cmap.w else (self.cmap.w - vw) / 2
-        self.oy = min(max(self.oy, 0), max(self.cmap.h - vh, 0)) if vh < self.cmap.h else (self.cmap.h - vh) / 2
+        kx, ky = min(vw, self.cmap.w) / 4, min(vh, self.cmap.h) / 4
+        self.ox = min(max(self.ox, kx - vw), self.cmap.w - kx)
+        self.oy = min(max(self.oy, ky - vh), self.cmap.h - ky)
+
+    @staticmethod
+    def _field():
+        """The empty field around the map: a little darker than the window."""
+        return (24, 25, 28) if theme.dark() else (168, 172, 178)
+
+    def inside(self, xy):
+        """Whether tile xy is on the map (a click on the field around it is not)."""
+        return bool(self.cmap) and 0 <= xy[0] < self.cmap.w and 0 <= xy[1] < self.cmap.h
+
+    def _outside(self, xy):
+        return None if self.inside(xy) else "outside the map"
 
     # ---- drawing ----
     def render(self):
@@ -440,7 +464,7 @@ class MapView(ttk.Frame):
         base = self._base()                                           # 2 px per tile, colours laid on once
         # while the map is dragged the quick resize, the smooth one when it stops; sharp tiles up close
         quick = self._drag is not None and self._drag[4]
-        pic = view_of(base, box, (cw, ch), Image.NEAREST if quick or self.z >= 12 else Image.BILINEAR)
+        pic = view_of(base, box, (cw, ch), Image.NEAREST if quick or self.z >= 12 else Image.BILINEAR, self._field())
         self._photo = ImageTk.PhotoImage(pic)
         c.create_image(0, 0, anchor="nw", image=self._photo, tags=("bg",))
         self._drawn_at = (self.ox, self.oy)
@@ -462,7 +486,7 @@ class MapView(ttk.Frame):
         self._clamp()
         cw, ch = c.winfo_width(), c.winfo_height()
         box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
-        pic = view_of(self._base(), box, (cw, ch), Image.NEAREST)
+        pic = view_of(self._base(), box, (cw, ch), Image.NEAREST, self._field())
         self._photo = ImageTk.PhotoImage(pic)
         c.itemconfigure("bg", image=self._photo)
         ox, oy = self._drawn_at
@@ -507,20 +531,25 @@ class MapView(ttk.Frame):
         return self._base_img
 
     def _grid(self, cw, ch):
-        """Thin lines between the tiles up close: what is placed or painted is one square."""
+        """Thin lines between the tiles up close: what is placed or painted is one square (on the map only, not
+        on the field around it)."""
         c, z = self.canvas, self.z
         col = "#000000"
-        x0 = int(self.ox) - 1
-        while (x0 - self.ox) * z < cw:
+        left, top = max(0.0, -self.ox * z), max(0.0, -self.oy * z)
+        right, bottom = min(cw, (self.cmap.w - self.ox) * z), min(ch, (self.cmap.h - self.oy) * z)
+        if right <= left or bottom <= top:
+            return
+        x0 = max(int(self.ox) - 1, 0)
+        while x0 <= self.cmap.w and (x0 - self.ox) * z <= right:
             sx = (x0 - self.ox) * z
-            if sx >= 0:
-                c.create_line(sx, 0, sx, ch, fill=col, stipple="gray50", tags=("grid",))
+            if sx >= left:
+                c.create_line(sx, top, sx, bottom, fill=col, stipple="gray50", tags=("grid",))
             x0 += 1
-        y0 = int(self.oy) - 1
-        while (y0 - self.oy) * z < ch:
+        y0 = max(int(self.oy) - 1, 0)
+        while y0 <= self.cmap.h and (y0 - self.oy) * z <= bottom:
             sy = (y0 - self.oy) * z
-            if sy >= 0:
-                c.create_line(0, sy, cw, sy, fill=col, stipple="gray50", tags=("grid",))
+            if sy >= top:
+                c.create_line(left, sy, right, sy, fill=col, stipple="gray50", tags=("grid",))
             y0 += 1
 
     def _painted(self, cw, ch):
@@ -544,8 +573,9 @@ class MapView(ttk.Frame):
     def _paint_at(self, e):
         x, y = self.to_tile(e.x, e.y)
         b = self.brush - 1
-        tiles = [(x + dx, y + dy) for dx in range(-b, b + 1) for dy in range(-b, b + 1)]
-        took = self.on_paint(tiles) if self.on_paint else []
+        tiles = [(x + dx, y + dy) for dx in range(-b, b + 1) for dy in range(-b, b + 1)
+                 if self.inside((x + dx, y + dy))]
+        took = self.on_paint(tiles) if self.on_paint and tiles else []
         z, c = self.z, self.canvas
         for (tx, ty), rgb in took:
             self.paint_overlay[(tx, ty)] = rgb
@@ -870,7 +900,7 @@ class MapView(ttk.Frame):
         if not g or not self.cmap:
             return
         xy = self.to_tile(sx, sy)
-        why = g["check"](xy) if g.get("check") else None
+        why = self._outside(xy) or (g["check"](xy) if g.get("check") else None)
         cx, cy = self.to_screen(*xy)
         size = max(8, min(self.z * 0.9, 60))
         r = size / 2
@@ -1087,7 +1117,7 @@ class MapView(ttk.Frame):
             return self.render()
         cw, ch = c.winfo_width(), c.winfo_height()
         box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
-        pic = view_of(self._base(), box, (cw, ch), Image.NEAREST if self.z >= 12 else Image.BILINEAR)
+        pic = view_of(self._base(), box, (cw, ch), Image.NEAREST if self.z >= 12 else Image.BILINEAR, self._field())
         self._photo = ImageTk.PhotoImage(pic)
         c.itemconfigure("bg", image=self._photo)
 
@@ -1105,7 +1135,7 @@ class MapView(ttk.Frame):
             self.canvas.move("res:" + rid, e.x - lx, e.y - ly)
             self._rdrag = [rid, e.x, e.y, True]
             x, y = self.to_tile(e.x, e.y)
-            why = self.check_res(rid, (x, y)) if self.check_res else None
+            why = self._outside((x, y)) or (self.check_res(rid, (x, y)) if self.check_res else None)
             self.canvas.delete("target")
             ax, ay = self.to_screen(x, y)
             r = max(self.z / 2, 4)
@@ -1168,7 +1198,7 @@ class MapView(ttk.Frame):
             self._drag = None
             if moved:
                 self.render()
-            elif self.on_pick:
+            elif self.on_pick and self.inside(self.to_tile(e.x, e.y)):
                 self.on_pick(self.to_tile(e.x, e.y))
             return
         if self._rdrag:
@@ -1176,7 +1206,7 @@ class MapView(ttk.Frame):
             self._rdrag = None
             if started:
                 xy = self.to_tile(e.x, e.y)
-                why = self.check_res(rid, xy) if self.check_res else None
+                why = self._outside(xy) or (self.check_res(rid, xy) if self.check_res else None)
                 if why:
                     self.readout.configure(text="not moved - " + why)
                     self.render()
@@ -1191,7 +1221,7 @@ class MapView(ttk.Frame):
             self._pdrag = None
             if started:
                 xy = self.to_tile(e.x, e.y)
-                why = self.check_place(what, region, xy) if self.check_place else None
+                why = self._outside(xy) or (self.check_place(what, region, xy) if self.check_place else None)
                 if why:
                     self.readout.configure(text="not moved - " + why)
                     self.render()
@@ -1203,10 +1233,10 @@ class MapView(ttk.Frame):
             cid = self._cdrag[0]
             self._cdrag = None
             xy = self.to_tile(e.x, e.y)
-            why = self.check_tile(cid, xy) if self.check_tile else None
+            why = self._outside(xy) or (self.check_tile(cid, xy) if self.check_tile else None)
             note = None
             if why:
-                alt = self.nearest(lambda p: self.check_tile(cid, p), xy)
+                alt = self.nearest(lambda p: self._outside(p) or self.check_tile(cid, p), xy)
                 if alt is None:
                     self.readout.configure(text="not moved - " + why)
                     self.render()
@@ -1230,6 +1260,9 @@ class MapView(ttk.Frame):
             return
         if self.on_place:
             xy = self.to_tile(e.x, e.y)
+            if not self.inside(xy):
+                self.readout.configure(text="cannot place here - outside the map")
+                return
             why = self.on_place(xy)
             if why and self.ghost and self.ghost.get("kind") in ("army", "agent", "fleet") and self.ghost.get("check"):
                 alt = self.nearest(self.ghost["check"], xy)       # a character: the nearest good tile

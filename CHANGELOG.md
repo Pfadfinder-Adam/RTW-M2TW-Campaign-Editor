@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **The map is a free canvas** (Map tab and Terrain editor): it can be dragged past its edges and zoomed out
+  smaller than the view, with an empty field around it and a thin line along its edge (a strip of it always stays
+  in sight); the wheel zooms to the point under the mouse; **Fit** puts it in the middle. A click on the field
+  places, paints and drops nothing ("outside the map").
 - **Rename in the files... on the Map** (Edit regions, beside Rename...): the region's and its town's names in the
   files changed everywhere the mod uses them, from the map too - not only the names players see (asked on
   Discord). The same window as on the Settlements tab.
