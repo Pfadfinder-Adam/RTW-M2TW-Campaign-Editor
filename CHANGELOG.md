@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- **Settlements tab** (Edit / New faction): every region and its town with the names in the files, the names
+  players see, the owner and names by culture; **Rename in the files...** changes a region's and its town's system
+  names everywhere the mod names them - descr_regions, descr_strat, the names lookup and every language's names text
+  ({keys} only), mercenaries, win conditions, campaign scripts, trait / ancillary conditions (`SettlementName ...`) -
+  as whole words, spelled exactly, never in comments or descriptions, never where the line names a faction of the
+  same name, not in a campaign with a map of its own; Preview, a backup, map.rwm removed. Checked on vanilla Rome
+  (Latium / Rome) and Medieval II (Jerusalem_Province / Jerusalem: 37 files), Restore byte for byte. The Map's
+  Edit regions bar has **Rename...** for the names players see.
 - **Tools > New religion... / Religions of a region...** (Medieval II): the religion dialogs reached from the menu
   too - the Map opens with Edit regions on; on Rome the menu says Rome has no religions.
 - **View in 3D for Rome**: Rome's `.cas` battle models (units, officers, mounts, animals - every one of the 807 vanilla

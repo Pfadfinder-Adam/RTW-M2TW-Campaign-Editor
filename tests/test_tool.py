@@ -1681,6 +1681,48 @@ building smith
         with open(path, "rb") as fh:
             self.assertEqual(fh.read(), before)
 
+    def test_rename_region_in_the_files(self):
+        """Settlements > Rename in the files: the region and its town renamed as whole words in every text file of
+        the mod (descr_regions, descr_strat, win conditions, scripts), the {keys} of the names texts; comments,
+        a word inside a longer name, a line naming a faction and a campaign with its own map keep theirs; taken
+        or bad names refused; Restore byte for byte."""
+        from faction_tool.plan import Plan, restore
+        from faction_tool.regionrename import problems, rename
+        d = os.path.join(self.root, "data")
+        camp = os.path.join(d, "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "campaign_script.txt"),
+              "script\n; A_R is Alpha's heart\nmonitor_event SettlementTurnStart SettlementName Atown\n"
+              "\tand FactionType Atown\n\tconsole_command reveal_tile A_R_2\nend_monitor\nend_script\n")
+        other = os.path.join(d, "world", "maps", "campaign", "prologue")
+        write(os.path.join(other, "descr_regions.txt"), REGIONS)
+        write(os.path.join(other, "descr_strat.txt"), STRAT)
+        write(os.path.join(d, "text", "test_regions_and_settlement_names.txt"),
+              "{A_R}\t\tAlpha land\n{Atown}\t\tAlpha town\n", utf16=True)
+        before = tree_hash(d)
+        mod = ModData(self.root)
+        self.assertTrue(problems(mod, "test", "A_R", "B_R", "Newtown"))            # taken by another region
+        self.assertTrue(problems(mod, "test", "A_R", "New R", "Newtown"))          # a space
+        self.assertTrue(problems(mod, "test", "A_R", "Same", "Same"))
+        plan = Plan(mod, "rename", "New_R")
+        counts = rename(plan, "test", "A_R", "New_R", "Newtown")
+        self.assertEqual(set(counts), {"A_R", "Atown"})
+        script = plan.files[os.path.join(camp, "campaign_script.txt")].texts()
+        self.assertIn("; A_R is Alpha's heart", script)                            # a comment keeps its words
+        self.assertIn("monitor_event SettlementTurnStart SettlementName Newtown", script)
+        self.assertIn("\tand FactionType Atown", script)                           # a faction's name stays
+        self.assertIn("\tconsole_command reveal_tile A_R_2", script)               # part of a longer name
+        self.assertIn("\tregion New_R", plan.files[os.path.join(camp, "descr_strat.txt")].texts())
+        self.assertIn("hold_regions New_R", plan.files[os.path.join(camp, "descr_win_conditions.txt")].texts())
+        regions = plan.files[os.path.join(camp, "descr_regions.txt")].texts()
+        self.assertEqual(regions[:2], ["New_R", "\tNewtown"])
+        names = plan.files[os.path.join(d, "text", "test_regions_and_settlement_names.txt")].texts()
+        self.assertEqual(names[:2], ["{New_R}\t\tAlpha land", "{Newtown}\t\tAlpha town"])   # keys only
+        self.assertFalse(any(p.startswith(other) for p in plan.files))              # a map of its own: untouched
+        bdir = plan.apply()
+        self.assertIn("New_R", ModData(self.root).regions("test"))
+        restore(ModData(self.root), bdir)
+        self.assertEqual(tree_hash(d), before)
+
     def test_terrain_paint_and_restore(self):
         """Terrain editor: a tile's ground is the 3 x 3 block around (2x + 1, 2y + 1) of map_ground_types.tga,
         features one pixel per tile; land stays land, nothing refused under a town; map.rwm goes; Restore."""

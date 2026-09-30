@@ -58,7 +58,8 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   change the campaign's rules ... Tools > Campaign rules... (ages, agents, towns, diplomacy, unit sizes)
   add a religion ................ Tools > New religion... (Medieval II; Rome has no religions)
   add Sack Settlement ........... Add-ons (Rome + REX): who may sack, reward, what stays standing
-  rename a region or its town ... Faction tab: pick it in the list, Rename... (or right click it)
+  rename a region or its town ... Faction tab: Rename... (names players see); Settlements tab:
+                                  Rename in the files... (the system names, everywhere)
   make a copy of the mod to work on  New mod folder... (the base mod stays untouched)
 
 START
@@ -585,6 +586,7 @@ class App(tk.Tk):
         ttk.Button(rb, text="New region...", command=self.new_region_dialog).pack(side="left", padx=(12, 2))
         ttk.Button(rb, text="Edit region...", command=lambda: self.new_region_dialog(
             edit=self.v_paint.get().replace("  (new)", "").strip())).pack(side="left", padx=2)
+        ttk.Button(rb, text="Rename...", command=self._rename_painted).pack(side="left", padx=2)
         ttk.Button(rb, text="Place its town", command=lambda: self.region_point("city")).pack(side="left", padx=2)
         ttk.Button(rb, text="Place its port", command=lambda: self.region_point("port")).pack(side="left", padx=2)
         ttk.Button(rb, text="Delete this new region", command=self.drop_region).pack(side="left", padx=2)
@@ -631,6 +633,11 @@ class App(tk.Tk):
         self.nb.add(tab, text="  Family  ")
         self.family_editor = FamilyEditor(tab, self)
         self.family_editor.pack(fill="both", expand=True)
+        from .gui_settlements import SettlementsPanel
+        tab = ttk.Frame(self.nb)
+        self.nb.add(tab, text="  Settlements  ")
+        self.settlements = SettlementsPanel(tab, self)
+        self.settlements.pack(fill="both", expand=True)
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self.tab_opened())
         self._keys()
 
@@ -973,6 +980,9 @@ class App(tk.Tk):
             return
         if tab == 7:
             self.family_editor.load()
+            return
+        if tab == 8:
+            self.settlements.load()
             return
         lb, load = {1: (self.lb_units, self.load_garrison), 2: (self.lb_build, self.load_buildings)}.get(tab, (None, None))
         if lb is not None and self.chosen and not lb.curselection():
@@ -2830,6 +2840,15 @@ class App(tk.Tk):
             self.colours[which] = rgb
             btn = self.b_primary if which == "primary" else self.b_secondary
             btn.configure(**colour_look(rgb))
+
+    def _rename_painted(self):
+        """Map > Edit regions > Rename...: the names players see of the region in 'Paint with' (right click one)."""
+        region = self.v_paint.get().replace("  (new)", "").strip()
+        if not region:
+            messagebox.showerror(APP, "Right click a region on the map first (it goes into 'Paint with'), then "
+                                      "Rename...")
+            return
+        self.new_region_dialog(edit=region)
 
     def rename_town(self):
         """Rename... beside the town list: the region picked on the left (or a chosen town) in Edit region, whose
