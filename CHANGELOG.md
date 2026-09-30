@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **The work buttons at the top** (New faction ... Add-ons) were cut off at the window's smallest width: they now
+  scroll left / right (arrows at the ends, the mouse wheel over them), and the picked one is always in sight.
+
 ## 0.20.1 - 2026-09-30
 
 ### Added

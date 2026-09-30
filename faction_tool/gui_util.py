@@ -66,6 +66,62 @@ class ScrollFrame(ttk.Frame):
             self.canvas.yview_scroll(-1 if e.delta > 0 else 1, "units")
 
 
+class HScroll(ttk.Frame):
+    """A row (built in .inner) that scrolls left and right when the window is narrower than it: arrows at its
+    ends then, and the mouse wheel over it. Nothing in the row is ever cut off for good."""
+    STEP = 60
+
+    def __init__(self, parent, **kw):
+        super().__init__(parent, **kw)
+        self.back = ttk.Button(self, text="\u25c0", width=2, command=lambda: self.step(-1))
+        self.fore = ttk.Button(self, text="\u25b6", width=2, command=lambda: self.step(1))
+        self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0, xscrollincrement=self.STEP)
+        self.canvas.pack(side="left", fill="x", expand=True)
+        self.inner = ttk.Frame(self.canvas)
+        self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
+        self.inner.bind("<Configure>", lambda e: self._resize())
+        self.canvas.bind("<Configure>", lambda e: self._resize())
+        self.bind("<Enter>", lambda e: self._wheel(True))
+        self.bind("<Leave>", lambda e: self._wheel(False))
+
+    def _resize(self):
+        w, h = self.inner.winfo_reqwidth(), self.inner.winfo_reqheight()
+        self.canvas.configure(width=w, height=h, scrollregion=(0, 0, w, h))    # asks for the whole row
+        if w > self.canvas.winfo_width() + (self.back.winfo_width() * 2 if self.back.winfo_ismapped() else 0):
+            if not self.back.winfo_ismapped():
+                # packed before the canvas, so the canvas (asking for the whole row) is the one that shrinks
+                self.back.pack(side="left", fill="y", before=self.canvas)
+                self.fore.pack(side="right", fill="y", before=self.canvas)
+        elif self.back.winfo_ismapped():
+            self.back.pack_forget()
+            self.fore.pack_forget()
+            self.canvas.xview_moveto(0)
+
+    def step(self, d):
+        self.canvas.xview_scroll(d, "units")
+
+    def show(self, widget):
+        """Scroll so that widget (in .inner) is in sight."""
+        self.update_idletasks()
+        total = max(self.inner.winfo_reqwidth(), 1)
+        lo, hi = self.canvas.xview()
+        x0, x1 = widget.winfo_x() / total, (widget.winfo_x() + widget.winfo_width()) / total
+        if x0 < lo:
+            self.canvas.xview_moveto(x0)
+        elif x1 > hi:
+            self.canvas.xview_moveto(x1 - (hi - lo))
+
+    def _wheel(self, on):
+        if on and self.back.winfo_ismapped():
+            self.bind_all("<MouseWheel>", lambda e: self.step(-1 if e.delta > 0 else 1))
+            self.bind_all("<Shift-MouseWheel>", lambda e: self.step(-1 if e.delta > 0 else 1))
+            self.bind_all("<Button-4>", lambda e: self.step(-1))
+            self.bind_all("<Button-5>", lambda e: self.step(1))
+        else:
+            for ev in ("<MouseWheel>", "<Shift-MouseWheel>", "<Button-4>", "<Button-5>"):
+                self.unbind_all(ev)
+
+
 def fit_first_pane(panes, inner, extra=20):
     """Set a horizontal Panedwindow's first sash to the width its first pane's contents ask for, once, when the
     window first shows it (a ScrollFrame asks for no width of its own)."""

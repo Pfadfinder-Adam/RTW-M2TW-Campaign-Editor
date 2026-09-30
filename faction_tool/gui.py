@@ -365,21 +365,26 @@ class App(tk.Tk):
         first(top.pack_slaves()[-2], self.cb_campaign)
         self.v_mode = tk.StringVar(value="new")
         # what the window works on: a new faction, an existing one, the units, the buildings
+        # the work buttons scroll left / right when the window is narrower than they are (more come)
+        from .gui_util import HScroll
         work = ttk.Frame(self)
         work.pack(fill="x", padx=6, pady=(4, 0))
+        self.b_theme = ttk.Button(work, text="", command=self.toggle_theme)
+        self.b_theme.pack(side="right", padx=(6, 0))
+        self.work_row = HScroll(work)
+        self.work_row.pack(side="left", fill="x", expand=True)
         self.v_work = tk.StringVar(value="new")
         self.work_buttons = {}
         for val, text in self.WORK_TITLES.items():
-            b = tk.Radiobutton(work, text=text, value=val, variable=self.v_work, indicatoron=0,
+            b = tk.Radiobutton(self.work_row.inner, text=text, value=val, variable=self.v_work, indicatoron=0,
                                command=self.work_changed, padx=16, pady=5, font=("", 10, "bold"),
                                selectcolor="#cfe3ff", relief="raised", offrelief="groove", cursor="hand2")
             b.pack(side="left", padx=(0, 4))
             self.work_buttons[val] = b
+        self.work_row.pack_configure(expand=False)
+        # the hint beside them is the one cut when the window is narrow (packed last)
         self.lbl_work = ttk.Label(work, text="", foreground="#555")
         self.lbl_work.pack(side="left", padx=10)
-        self.b_theme = ttk.Button(work, text="", command=self.toggle_theme)
-        self.b_theme.pack(side="right")
-        first(self.b_theme)                        # the hint beside the work buttons is the one cut
         self._theme_label()
         self.editors = {}
 
@@ -1008,6 +1013,8 @@ class App(tk.Tk):
         take the window's middle instead."""
         w = self.v_work.get()
         self.lbl_work.configure(text=self.WORK_HINTS.get(w, ""))
+        if w in self.work_buttons:
+            self.work_row.show(self.work_buttons[w])
         if w in ("new", "edit"):
             for ed in self.editors.values():
                 ed.pack_forget()
