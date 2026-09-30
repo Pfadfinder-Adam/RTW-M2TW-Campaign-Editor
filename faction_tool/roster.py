@@ -294,9 +294,14 @@ def give_unit(plan, faction, unit):
         heads = level_heads(e)
         lines = [r for r in recruit_lines(e) if r[1] == unit]
         added, reachable = [], []
+        # a level may recruit the unit by several lines for different factions (vanilla: Arab Cavalry for moors
+        # and for egypt): the faction joins one of them, and none when one lets it in already - in each it is
+        # listed twice in the building's description
+        let_in = {(c, l) for i, _, c, l in lines
+                  if factions_in(e.text(i)) is None or covers(factions_in(e.text(i)), faction, culture)}
         for i, _, chain, level in lines:
-            names = factions_in(e.text(i))
-            if names is not None and not covers(names, faction, culture):
+            if (chain, level) not in let_in:
+                let_in.add((chain, level))
                 if len(factions_groups(e.text(i))) > 1:
                     plan.warn(e, "%s/%s: the recruit line has several faction groups - %s joins the first one "
                                  "and its conditions" % (chain, level, faction))

@@ -3610,6 +3610,30 @@ building shrine
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
         self.assertEqual(before, after)
 
+    def test_give_unit_joins_one_recruit_line_per_level(self):
+        """A level that recruits a unit by two lines for different factions (vanilla: Arab Cavalry for moors and
+        for egypt, carthaginian peasant for spain and the carthaginian culture): giving the unit writes the
+        faction into ONE of them - in both it was listed twice in the building's description (a tester)."""
+        from faction_tool import roster as R
+        from faction_tool.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB.replace(
+            'recruit_pool "rebel spear"  1   0.5   4  0  requires factions { slave, }\n',
+            'recruit_pool "rebel spear"  1   0.5   4  0  requires factions { slave, }\n'
+            '                recruit_pool "rebel spear"  1   0.5   4  0  requires factions { beta, }\n'))
+        mod = ModData(self.root)
+        plan = Plan(mod, "x", "x")
+        R.give_unit(plan, "alpha", "rebel spear")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertEqual(sum("rebel spear" in l and "alpha" in l for l in edb.splitlines()), 1, edb)
+        self.assertIn('requires factions { slave, alpha, }', edb)
+        self.assertIn('requires factions { beta, }', edb)
+        # a faction one line already lets in is written nowhere
+        plan = Plan(mod, "x", "x")
+        R.give_unit(plan, "beta", "rebel spear")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertNotIn("slave, beta", edb)
+
     def test_roster_take_a_culture_writes_the_others_out(self):
         from faction_tool import roster as R
         from faction_tool.plan import Plan

@@ -42,6 +42,11 @@
   of its template's); drawing one from the faction's towns comes back in a later release.
 
 ### Fixed
+- **A unit given to a faction was listed twice in a building's description** (a tester, Rome; Medieval II the same):
+  where a level recruits a unit by two lines for different factions (vanilla: Arab Cavalry for the Moors and for
+  Egypt, Turkomans, the Carthaginian peasant for Spain and for the Carthaginian culture - 36 levels in Rome, 107 in
+  Medieval II), giving the unit (Roster, Unit editor) wrote the faction into each. Now it joins one line per level,
+  and none where a line lets it in already. A mod given units this way before: take the unit away and give it again.
 - **3D view** (testers): Medieval II's weapons and shields were grey - their textures (AttachmentSets) are named
   only in battle_models.modeldb and were lost when both model files were read (690 of 701 vanilla models have
   them). **Mounted units now show their mount**: the Battle model block has a Mount row (its model from
