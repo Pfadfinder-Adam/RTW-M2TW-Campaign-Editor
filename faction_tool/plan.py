@@ -76,6 +76,16 @@ class Plan:
             old = self.opts.get("template_" + key)
             nw = self.opts.get(key)
             if old and nw:
+                if key == "display_name" and not self.opts.get("template_short_name"):
+                    # a game without short names (Medieval II: {SICILY}Sicily): the texts use the name inside
+                    # phrases ("the Kingdom of Sicily", "de Sicily") - there the new faction's short name (or
+                    # the end of 'Kingdom of Jerusalem') fits, the full name only where the whole phrase stood
+                    core = (self.opts.get("short_name") or nw.split(" of ")[-1]).strip() or nw
+                    if core != nw:
+                        lead = nw[:len(nw) - len(nw.split(" of ")[-1])] if " of " in nw else ""
+                        if lead:
+                            pairs.append((lead + old, nw))
+                        nw = core
                 pairs.append((old, nw))
         out = []
         for old, nw in pairs:

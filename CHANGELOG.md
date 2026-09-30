@@ -26,6 +26,10 @@
   mod does not have are refused - as is leaving out the governor's chain.
 
 ### Fixed
+- **Medieval II clone: "the Kingdom of Kingdom of Jerusalem"** - the game has no short faction names, so the
+  template's name inside the copied texts (advice, intro subtitles, "de Sicily" surnames) was swapped for the whole
+  new name; now "Kingdom of Sicily" becomes the new full name and a bare "Sicily" the short name (or the end of
+  "Kingdom of Jerusalem"). Found making a Kingdom of Jerusalem with Judaism from Sicily.
 - **Map: the buttons above the map were cut off** at a normal window width (New religion..., Names by culture...
   lay past the right edge - a user could not find them): the Regions and Resources toolbars now wrap onto a second
   row.

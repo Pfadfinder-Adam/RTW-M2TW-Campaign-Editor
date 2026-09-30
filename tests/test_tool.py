@@ -2157,6 +2157,26 @@ building smith
             reds = [p for p in im.getdata() if p[0] > 60 and p[0] > 2 * p[1]]
             self.assertTrue(len(reds) > 200, textured)       # the cube in the man's (red) texture
 
+    def test_clone_names_inside_texts(self):
+        """Medieval II has no short names ({SICILY}Sicily): a clone named 'Kingdom of Jerusalem' must not become
+        'the Kingdom of Kingdom of Jerusalem' or 'de Kingdom of Jerusalem' in the copied texts."""
+        from faction_tool.plan import Plan
+
+        def swap(opts, text):
+            p = Plan.__new__(Plan)
+            p.opts = opts
+            for old, new in p.display_replacements():
+                text = text.replace(old, new)
+            return text
+        m2 = dict(template_display_name="Sicily", display_name="Kingdom of Jerusalem", template_adjective="Sicilian",
+                  adjective="Jerusalemite")
+        self.assertEqual(swap(m2, "The Kingdom of Sicily awaits. de Sicily. Sicilian knights."),
+                         "The Kingdom of Jerusalem awaits. de Jerusalem. Jerusalemite knights.")
+        self.assertEqual(swap(dict(m2, short_name="Outremer"), "de Sicily"), "de Outremer")
+        rome = dict(template_display_name="Macedon", template_short_name="Macedon", display_name="Epirus",
+                    short_name="Epirus")
+        self.assertEqual(swap(rome, "the Kingdom of Macedon"), "the Kingdom of Epirus")
+
     def test_read_and_draw_a_rome_cas(self):
         """A Rome .cas laid out as the vanilla ones (3.05): header with the bone count and parents, frame times, bone
         records, rest places, a shield with its own place and a body whose points hang on a bone. Read back, put
