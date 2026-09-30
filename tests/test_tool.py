@@ -2739,6 +2739,46 @@ building smith
         _kind('{A=true' + ' A=true' * 20000 + ' x')
         self.assertLess(time.time() - t, 2)
 
+    def test_campaign_map_figures(self):
+        """Art tab, Figures on the campaign map: a faction's strat models read per character type; a figure changed
+        in a faction line shared with others gets a line of its own (the others keep theirs); a model without the
+        faction's texture gets one; the textures are Art pictures (picture_links); Restore byte for byte."""
+        from faction_tool import stratmodels as SM
+        from faction_tool.clone import picture_links
+        from faction_tool.edit import edit
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_character.txt"),
+              "type\t\tnamed character\nactions\t\tmoving_normal\n\nfaction\t\talpha, slave ; both\n"
+              "dictionary\t2\nstrat_model\tgeneral\nbattle_model\tg\n\ntype\t\tspy\n"
+              "faction\t\talpha\ndictionary\t3\nstrat_model\tspy_a\n")
+        write(os.path.join(d, "descr_model_strat.txt"),
+              "type\t\tgeneral\nscale\t0.7\ntexture\t\talpha, data/models_strat/textures/gen_alpha.tga\n"
+              "model_flexi\tdata/models_strat/gen.cas, max\n\ntype\t\tgeneral_b\n"
+              "texture\t\tslave, data/models_strat/textures/gb_slave.tga\nmodel_flexi\tdata/models_strat/gb.cas, max\n"
+              "\ntype\t\tspy_a\ntexture\t\talpha, data/models_strat/textures/spy_alpha.tga\n")
+        mod = ModData(self.root)
+        self.assertEqual([(f["type"], f["models"], f["shared"]) for f in SM.figures(mod, "alpha")],
+                         [("named character", ["general"], ["slave"]), ("spy", ["spy_a"], [])])
+        links = [l for l in picture_links(mod) if l["key"] == "model_strat"]
+        self.assertEqual([(l["faction"], l["field"]) for l in links],
+                         [("alpha", "texture:general"), ("slave", "texture:general_b"), ("alpha", "texture:spy_a")])
+        before = tree_hash(d)
+        plan = edit(mod, "test", "alpha", {"figures": {"named character": ["general_b"]}})
+        ch = plan.files[mod.file("character")].texts()
+        self.assertIn("faction\t\tslave ; both", ch)                   # the other keeps the shared entry
+        i = ch.index("faction\t\talpha")
+        self.assertEqual(ch[i + 1:i + 4], ["dictionary\t2", "strat_model\tgeneral_b", "battle_model\tg"])
+        self.assertEqual(ch[ch.index("faction\t\tslave ; both") + 2], "strat_model\tgeneral")
+        ms = plan.files[mod.file("model_strat")].texts()
+        self.assertIn("texture\t\talpha, data/models_strat/textures/gb_slave.tga", ms)   # a texture to show it
+        with self.assertRaises(ValueError):
+            edit(mod, "test", "alpha", {"figures": {"spy": ["no_such_model"]}})
+        bdir = plan.apply()
+        self.assertEqual(SM.figures(ModData(self.root), "alpha")[0]["models"], ["general_b"])
+        self.assertEqual(SM.figures(ModData(self.root), "slave")[0]["models"], ["general"])
+        restore(ModData(self.root), bdir)
+        self.assertEqual(tree_hash(d), before)
+
     def test_path_guard(self):
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads
         out and a crafted backup manifest are refused before anything is written."""

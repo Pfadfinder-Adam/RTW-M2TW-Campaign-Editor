@@ -12,12 +12,12 @@ SIZE = (420, 520)
 
 
 class ModelViewer(tk.Toplevel):
-    def __init__(self, parent, mod, info, factions=(), mount=None):
+    def __init__(self, parent, mod, info, factions=(), mount=None, title="Battle model in 3D"):
         """mount: (its ModelInfo, mount type) - the unit's horse, camel ...: shown standing beside the rider."""
         super().__init__(parent)
         self.mod, self.info, self.mount = mod, info, mount
         self.mount_mesh = None
-        self.title("Battle model in 3D - %s" % info.name)
+        self.title("%s - %s" % (title, info.name))
         self.yaw, self.pitch, self.zoom, self.look = 35.0, 8.0, 1.0, 0
         self._drag, self._tex, self._photo, self.mesh = None, {}, None, None
         facs = [f for f in info.textures if f] or [""]

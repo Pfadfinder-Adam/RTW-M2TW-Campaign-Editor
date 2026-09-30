@@ -48,6 +48,10 @@ class ArtEditor(ttk.Frame):
         self._map_im, self._map_scale = None, 0
         top.bind("<Configure>", lambda e: self._fit_map(), add="+")
         self.bind("<Configure>", lambda e: self._fit_map(), add="+")        # the tab's height counts too
+        # the faction's figures on the campaign map: a strat model per character type, changed here, seen in 3D
+        self.fig_box = ttk.LabelFrame(self, text="Figures on the campaign map - who is shown by which model",
+                                      padding=6)
+        self.fig_box.pack(fill="x", pady=(6, 0))
         self.pics_note = ttk.Label(self, text="Every picture of the faction. Replace... takes a PNG, JPG, TGA or DDS and makes it the "
                              "size and format the game's own has (a DDS stays a DDS); Preview, then Apply writes it (with a backup).",
                   foreground="#555")
@@ -139,6 +143,7 @@ class ArtEditor(ttk.Frame):
                 "faction" if a.editing() else "template")).grid(row=0, column=0, sticky="w")
             self.draw_map()
             return
+        self.fill_figures(src_faction, new)
         pics = FA.faction_pictures(a.mod, a.v_campaign.get(), src_faction)
         if not pics:
             ttk.Label(self.inner, text="No pictures named after %s were found." % src_faction).grid(row=0, column=0)
@@ -197,6 +202,74 @@ class ArtEditor(ttk.Frame):
                                self.revert(t, o, k)).pack(side="left", padx=4)
         self._reflow(force=True)
         self.draw_map()
+
+    def fill_figures(self, faction, new):
+        """A row per character type of the faction: its figure (a strat model of descr_model_strat.txt, one per
+        level) to pick, and View in 3D. The pick waits for Apply like every change (app.figures)."""
+        from . import stratmodels as SM
+        a = self.app
+        box = self.fig_box
+        for w in box.winfo_children():
+            w.destroy()
+        figs = SM.figures(a.mod, faction) if faction else []
+        if not figs:
+            ttk.Label(box, text="%s has no character types in descr_character.txt." % faction if faction else
+                      "Pick the faction first.", foreground="#555").grid(row=0, column=0, sticky="w")
+            return
+        names = sorted(SM.model_types(a.mod), key=str.lower)
+        cols = 3
+        r = c = 0
+        for fg in figs:
+            wide = len(fg["models"]) > 1                # levels (a priest, bishop, cardinal): a row of its own
+            if wide and c:
+                r, c = r + 1, 0
+            cell = ttk.Frame(box, padding=(0, 2, 12, 2))
+            cell.grid(row=r, column=c, columnspan=cols if wide else 1, sticky="w")
+            want = a.figures.get(fg["type"]) or fg["models"]
+            ttk.Label(cell, text=fg["type"], width=16, font=("", 9, "bold")).grid(row=0, column=0, sticky="w")
+            for lv, now in enumerate(fg["models"]):
+                v = tk.StringVar(value=want[lv] if lv < len(want) else now)
+                cb = ttk.Combobox(cell, textvariable=v, values=names, width=20, state="readonly")
+                cb.grid(row=0, column=1 + 2 * lv, padx=(0, 2))
+                cb.bind("<<ComboboxSelected>>", lambda e, t=fg["type"], lv=lv, v=v, fg=fg: self.pick_figure(
+                    t, lv, v.get(), fg["models"]))
+                ttk.Button(cell, text="3D", width=3, command=lambda v=v: self.view_figure(v.get(), faction)).grid(
+                    row=0, column=2 + 2 * lv, padx=(0, 6))
+            if fg["type"] in a.figures:
+                ttk.Label(cell, text="was %s (not written yet)" % ", ".join(fg["models"]),
+                          foreground="#b05a00").grid(row=1, column=1, columnspan=2 * len(fg["models"]), sticky="w")
+            if wide:
+                r, c = r + 1, 0
+            else:
+                r, c = (r + 1, 0) if c + 1 >= cols else (r, c + 1)
+        r += 1 if c else 0
+        ttk.Label(box, foreground="#555", justify="left", wraplength=900, text=(
+            "Pick another model for a character type (the list holds every figure of descr_model_strat.txt); "
+            "Preview, then Apply writes descr_character.txt (a faction sharing its line with others gets a line "
+            "of its own). A model the faction has no texture in gets a line with the model's first texture; "
+            "its picture then shows below after Apply, to Replace. 3D shows the figure with the faction's texture.")
+        ).grid(row=r, column=0, columnspan=cols, sticky="w", pady=(4, 0))
+
+    def pick_figure(self, ctype, level, model, now):
+        a = self.app
+        a.remember()
+        want = list(a.figures.get(ctype) or now)
+        want[level] = model
+        if want == list(now):
+            a.figures.pop(ctype, None)
+        else:
+            a.figures[ctype] = want
+        a.status.set("%s on the campaign map: %s - Preview, then Apply." % (ctype, ", ".join(want)))
+        self.load()
+
+    def view_figure(self, model, faction):
+        from . import stratmodels as SM
+        from .gui_meshview import ModelViewer
+        info = SM.mesh_info(self.app.mod, model)
+        if info is None or not info.meshes:
+            messagebox.showinfo("3D", "%s names no model file (.cas) in descr_model_strat.txt." % model)
+            return
+        ModelViewer(self, self.app.mod, info, (faction,), title="Campaign map figure in 3D")
 
     @staticmethod
     def _need(size, target):

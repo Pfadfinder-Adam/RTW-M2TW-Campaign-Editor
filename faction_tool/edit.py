@@ -128,6 +128,9 @@ def edit(mod, campaign, faction, opts):
             gone = sorted(set(units) & taken)
             if gone:
                 plan.warn(None, "%s's new garrison has %s, taken away on the Roster" % (region, ", ".join(gone)))
+    if opts.get("figures"):                   # before the art: a figure's new texture line may get a picture
+        from .stratmodels import apply as apply_figures
+        apply_figures(plan, faction, opts["figures"])
     from .factionart import apply_opts as apply_art
     plan.opts["_primary_changed"] = bool(opts.get("primary_colour")) and \
         tuple(opts["primary_colour"]) != tuple(now.get("primary_colour") or ())

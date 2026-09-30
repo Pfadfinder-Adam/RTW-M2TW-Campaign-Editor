@@ -518,9 +518,10 @@ def picture_file(data, ref):
 
 def picture_links(mod, load=None):
     """[{'faction', 'key', 'path', 'line', 'field', 'ref'}] of every picture path in the
-    factions' blocks of descr_banners / descr_sm_factions; load = plan.edit to see the
-    files as a plan leaves them (default: as on disk)."""
-    out = []
+    factions' blocks of descr_banners / descr_sm_factions, and the factions' textures of the campaign-map figures
+    (descr_model_strat.txt `texture <faction>, <picture>`: field 'texture:<strat model>'); load = plan.edit to
+    see the files as a plan leaves them (default: as on disk)."""
+    out = _strat_texture_links(mod, load)
     for key, fields in PICTURE_LINKS:
         path = mod.file(key)
         if not path:
@@ -533,6 +534,24 @@ def picture_links(mod, load=None):
                 cur = t[1]
             elif cur and len(t) >= 2 and t[0] in fields:
                 out.append({"faction": cur, "key": key, "path": path, "line": i, "field": t[0], "ref": t[1]})
+    return out
+
+
+def _strat_texture_links(mod, load=None):
+    """The picture links of descr_model_strat.txt: one per faction texture line of every strat model."""
+    from .stratmodels import LINK_KEYS
+    path = mod.file("model_strat")
+    if not path:
+        return []
+    f = (load or mod.load)(path)
+    out, cur = [], None
+    for i in range(len(f)):
+        t = tokens(f.text(i))
+        if t[:1] == ["type"] and len(t) > 1:
+            cur = " ".join(strip_comment(f.text(i)).split()[1:])
+        elif cur and len(t) >= 3 and t[0] in LINK_KEYS:
+            out.append({"faction": t[1], "key": "model_strat", "path": path, "line": i,
+                        "field": "%s:%s" % (t[0], cur), "ref": t[2]})
     return out
 
 

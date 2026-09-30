@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Added
+- **Figures on the campaign map** (Art tab, both games; asked by a tester): every character type of the faction
+  with the strat model that shows it (descr_character.txt / descr_model_strat.txt) - pick another, see it in 3D
+  with the faction's texture, Preview, Apply. A faction sharing its entry gets one of its own; a model it has no
+  texture in gets a texture line. The figures' textures are listed as Art pictures ("campaign map figure: ...")
+  to Replace; only the figures the faction uses are listed.
+- **A new faction's figure textures are its own**: the clone copies the template's campaign-map figure textures
+  under the new name (diplomat_macedon -> diplomat_epirus) where only the template used them, as it does for
+  banners - replacing one no longer changes the template's (before, the new faction pointed at the template's
+  files).
 - **The map is a free canvas** (Map tab and Terrain editor): it can be dragged past its edges and zoomed out
   smaller than the view, with an empty field around it and a thin line along its edge (a strip of it always stays
   in sight); the wheel zooms to the point under the mouse; **Fit** puts it in the middle. A click on the field

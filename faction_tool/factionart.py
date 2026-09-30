@@ -133,12 +133,25 @@ def faction_pictures(mod, campaign, faction):
     # 'ref' = the path as written, 'shared' = the other factions naming the same file
     links = picture_links(mod)
     users = link_users(links)
+    from .stratmodels import figures
+    who = {}                                            # strat model: the faction's characters it shows
+    for fg in figures(mod, faction):
+        for m in fg["models"]:
+            who.setdefault(m, []).append(fg["type"])
     for l in links:
-        got = picture_file(mod.data, l["ref"]) if l["faction"] == faction else None
+        if l["faction"] != faction:
+            continue
+        if l["key"] == "model_strat" and l["field"].split(":", 1)[1] not in who:
+            continue                                    # a figure none of its characters uses: not its picture
+        got = picture_file(mod.data, l["ref"])
         e = add(got[1]) if got else None
         if e is not None:
             e.update(link=[l["key"], l["field"]], ref=l["ref"],
                      shared=sorted(users.get(l["ref"].replace("\\", "/").lower(), set()) - {faction}))
+            if l["key"] == "model_strat":               # a campaign-map figure: which one, who is shown by it
+                kind, model = l["field"].split(":", 1)
+                e["label"] = "campaign map figure: %s%s" % (model, " (standing still)" if kind != "texture" else "")
+                e["where"] = "the campaign map: the faction's %s" % ", ".join(who[model])
     out.sort(key=lambda e: (e["label"], e["rel"]))
     from .symbols import entries
     return entries(mod, faction) + out          # the flag symbol and logos on shared sheets first
