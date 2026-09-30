@@ -8,19 +8,19 @@ cookies.
 
 ## Setting it up (once, about 10 minutes, free)
 
-1. **A private repo for the reports**: GitHub > New repository > `RTW-editor-reports`, **Private**, tick
+1. **A private repo for the reports**: GitHub > New repository > `RTW-M2TW-Campaign-Editor-Reports`, **Private**, tick
    "Add a README file".
 2. **A token only for that repo**: GitHub > Settings > Developer settings > Personal access tokens >
    Fine-grained tokens > Generate new token. Repository access: *Only select repositories* >
-   `RTW-editor-reports`. Permissions > Repository: **Contents: Read and write**, **Issues: Read and write**
+   `RTW-M2TW-Campaign-Editor-Reports`. Permissions > Repository: **Contents: Read and write**, **Issues: Read and write**
    (nothing else). Pick an expiry, generate, copy the token (it is shown once).
 3. **The Worker**: dash.cloudflare.com (a free account) > Workers & Pages > Create > Create Worker > name it
-   `rtw-editor-reports` > Deploy. Then Edit code, replace everything with `report-relay.js` from this folder,
+   `rtw-m2tw-campaign-editor-reports` > Deploy. Then Edit code, replace everything with `report-relay.js` from this folder,
    Deploy.
 4. **Its settings**: the Worker > Settings > Variables and Secrets > Add:
-   - `REPORTS_REPO`, type Text: `MasterOogwayHomebrew/RTW-editor-reports`
+   - `REPORTS_REPO`, type Text: `MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor-Reports`
    - `GITHUB_TOKEN`, type **Secret**: the token from step 2
-5. **Its address**: the Worker's page shows it, like `https://rtw-editor-reports.<account>.workers.dev`. It goes
+5. **Its address**: the Worker's page shows it, like `https://rtw-m2tw-campaign-editor-reports.<account>.workers.dev`. It goes
    into `faction_tool/report.py` (`REPORT_URL`), and the next release sends reports there.
 
 The rate limit (3 a minute from one address) needs `wrangler deploy` with `wrangler.toml` from this folder; without

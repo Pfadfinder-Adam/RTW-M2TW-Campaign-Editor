@@ -1,10 +1,10 @@
 # Only for deploying with wrangler (npx wrangler deploy); the Cloudflare dashboard works without it (worker/README.md).
-name = "rtw-editor-reports"
+name = "rtw-m2tw-campaign-editor-reports"
 main = "report-relay.js"
 compatibility_date = "2025-09-01"
 
 [vars]
-REPORTS_REPO = "MasterOogwayHomebrew/RTW-editor-reports"
+REPORTS_REPO = "MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor-Reports"
 
 # 3 reports a minute from one address
 [[ratelimits]]

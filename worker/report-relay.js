@@ -8,7 +8,7 @@
 // Settings (Worker > Settings > Variables and Secrets):
 //   GITHUB_TOKEN  secret: a fine-grained token for the reports repo only - Contents: read and write,
 //                 Issues: read and write
-//   REPORTS_REPO  text: owner/name of the private reports repo, like MasterOogwayHomebrew/RTW-editor-reports
+//   REPORTS_REPO  text: owner/name of the private reports repo, like MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor-Reports
 // Optional: a rate limit binding named REPORT_LIMIT (wrangler.toml) - 3 reports a minute from one address.
 
 const ZIP_CAP = 4 * 1024 * 1024;            // bytes, as the editor's report.ZIP_CAP
