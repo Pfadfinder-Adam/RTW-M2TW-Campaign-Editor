@@ -24,7 +24,9 @@ FILES = (
 TYPE_WORDS = ("uint", "int", "float", "bool", "string")
 PLAIN_ATTRS = TYPE_WORDS + ("value", "flag", "modifier")
 
-RE_TAG = re.compile(r"<(/?)([A-Za-z_][\w.-]*)((?:\s+[\w.-]+\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s/>]+))*)\s*(/?)>")
+# the tag's inside as quoted texts or single other characters (no two ways to match the same text - linear time;
+# the attributes are then read from it by RE_ATTR)
+RE_TAG = re.compile(r"<(/?)([A-Za-z_][\w.-]*)((?:\"[^\"]*\"|'[^']*'|[^<>\"'])*?)(/?)>")
 RE_ATTR = re.compile(r"([\w.-]+)\s*=\s*(\"([^\"]*)\"|'([^']*)'|([^\s/>]+))")
 
 

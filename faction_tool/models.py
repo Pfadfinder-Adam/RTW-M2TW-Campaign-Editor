@@ -101,8 +101,9 @@ def _text_models(mod):
                 m.textures.setdefault(v[0], v[1])
             elif v and v[0]:
                 m.textures.setdefault("", v[0])                 # one texture for everyone
-        m.meshes = [v[0] for key in ("mesh", "model_flexi", "model_flexi_m", "model_flexi_c")
-                    for v in _values(lines, key) if v and v[0]]
+        m.meshes = [v[0] for line in lines                  # in the file's order: closest first
+                    for key in ("mesh", "model_flexi", "model_flexi_m", "model_flexi_c")
+                    for v in _values([line], key) if v and v[0]]
         for v in _values(lines, "skeleton"):                  # the main one (a general's: its foot seat)
             m.skeletons += [x for x in v if x]
             m.seats |= skeleton_seats(v[0])
@@ -220,8 +221,8 @@ def texture_image(mod, rel):
     """A texture as a picture (Pillow), or None: Rome's x.tga / x.tga.dds, Medieval II's .texture (a 48-byte
     header before a plain DDS)."""
     from PIL import Image
-    from .packs import _on_disk
-    got = _on_disk(mod, rel) if rel else None
+    from .meshview import on_disk
+    got = on_disk(mod, rel)
     if not got:
         return None
     with open(got[1], "rb") as fh:

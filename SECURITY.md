@@ -3,12 +3,19 @@
 ## Supported Versions
 
 Only the latest release gets fixes. Please update to it before reporting a problem:
-[Releases](https://github.com/MasterOogwayHomebrew/RTW-faction-tool/releases).
+[Releases](https://github.com/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor/releases).
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.7.x (latest) | :white_check_mark: |
-| < 0.7   | :x:                |
+| 0.19.x (latest) | :white_check_mark: |
+| < 0.19   | :x:                |
+
+## Where to get it
+
+**Only download the editor from this repository's [Releases](https://github.com/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor/releases) page** (or a link the author posted or approved). Never take the exe - or a "fixed" / "patched" copy of it - from another site, a file-sharing link or someone in a chat, and don't pass it on that way: a copy from elsewhere can be changed to harm your PC. Share the link to the Releases page instead.
+
+The same goes for unit packs, add-ons and mods: take them from their authors' own pages, and let the
+editor's Preview show what a pack would write before you apply it.
 
 ## What the tool does on your PC
 

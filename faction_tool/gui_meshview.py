@@ -1,5 +1,6 @@
-"""The Unit editor's 3D view of a battle model (meshview.py draws it): turn it with the mouse, zoom with the wheel,
-see it in each faction's texture, one man after another (the game mixes the model's heads, arms, legs ...)."""
+"""The Unit editor's 3D view of a battle model (meshview.py draws it) - Medieval II's .mesh and Rome's .cas: turn it
+with the mouse, zoom with the wheel, see it in each faction's texture, one man after another (Medieval II mixes the
+model's heads, arms, legs ...)."""
 
 import tkinter as tk
 from tkinter import ttk
@@ -42,15 +43,17 @@ class ModelViewer(tk.Toplevel):
         self.v_weapons = tk.BooleanVar(value=True)
         ttk.Checkbutton(side, text="Weapons and shield", variable=self.v_weapons,
                         command=self.draw).pack(anchor="w", pady=(8, 0))
-        ttk.Button(side, text="Another man", command=self.next_look).pack(anchor="w", pady=(8, 0))
+        self.b_look = ttk.Button(side, text="Another man", command=self.next_look)
+        self.b_look.pack(anchor="w", pady=(8, 0))
         ttk.Button(side, text="Front", command=lambda: self.turn_to(0)).pack(anchor="w", pady=(8, 0))
         ttk.Button(side, text="Back", command=lambda: self.turn_to(180)).pack(anchor="w")
         self.info_lbl = ttk.Label(side, foreground="#555", justify="left", wraplength=230)
         self.info_lbl.pack(anchor="w", pady=(10, 0))
         ttk.Label(side, foreground="#555", justify="left", wraplength=230, text=(
-            "Drag to turn it, mouse wheel to zoom. The game gives each man one of the model's heads, arms, "
-            "bodies ... - 'Another man' shows the next mix. Shown as it stands in the files (arms out); "
-            "the weapons and shield take the attachment texture.")).pack(anchor="w", pady=(10, 0))
+            "Drag to turn it, mouse wheel to zoom. Shown as it stands in the files (arms out). Medieval II: the "
+            "game gives each man one of the model's heads, arms, bodies ... - 'Another man' shows the next mix; "
+            "the weapons and shield take the attachment texture. Rome: one texture for the man and his "
+            "weapons.")).pack(anchor="w", pady=(10, 0))
         self.canvas.bind("<ButtonPress-1>", self._press)
         self.canvas.bind("<B1-Motion>", self._move)
         self.canvas.bind("<ButtonRelease-1>", lambda e: self.draw())
@@ -69,8 +72,8 @@ class ModelViewer(tk.Toplevel):
         path = MV.mesh_path(self.mod, rel) if rel else None
         if not rel:
             msg = "the model names no mesh"
-        elif not rel.lower().endswith(".mesh"):
-            msg = "Rome's .cas models cannot be shown yet (only Medieval II's .mesh)"
+        elif not rel.lower().endswith((".mesh", ".cas")):
+            msg = "this kind of model file cannot be shown: %s" % rel
         elif not path:
             msg = "the mesh file is not in this mod or the game: %s" % rel
         else:
@@ -79,6 +82,8 @@ class ModelViewer(tk.Toplevel):
                 msg = None
             except Exception as e:
                 msg = "cannot read %s: %s" % (rel, e)
+        if self.mesh is not None:
+            self.b_look.state(["!disabled"] if self.mesh.looks() > 1 else ["disabled"])
         if msg:
             self.canvas.delete("all")
             self.canvas.create_text(SIZE[0] // 2, SIZE[1] // 2, text=msg, fill="#ddd", width=SIZE[0] - 40)
@@ -98,6 +103,8 @@ class ModelViewer(tk.Toplevel):
         from PIL import ImageTk
         groups = self.mesh.shown(self.look, self.v_weapons.get())
         tex, att = self._texture(self.info.textures), self._texture(self.info.attach)
+        if tex is None and self.mesh.texture_ref:       # Rome: no texture line - the one the .cas names
+            tex = self._texture({"": self.mesh.texture_ref})
         img = MV.render(self.mesh, SIZE, self.yaw, self.pitch, self.zoom, tex, att, groups,
                         quality=1 if quick else 2, textured=not quick)
         self._photo = ImageTk.PhotoImage(img)
@@ -108,7 +115,7 @@ class ModelViewer(tk.Toplevel):
             self.info_lbl.configure(text="man %d of %d; %d triangles, %d points%s%s" % (
                 self.look % self.mesh.looks() + 1, self.mesh.looks(), n, self.mesh.count,
                 "" if tex is not None else "\nno texture file found for the man",
-                "" if att is not None or not self.v_weapons.get() else
+                "" if att is not None or not self.v_weapons.get() or self.mesh.one_texture else
                 "\nno attachment texture found - weapons in grey"))
 
     def next_look(self):

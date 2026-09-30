@@ -102,8 +102,8 @@ UNIT EDITOR / BUILDING EDITOR
     game, then steps with Back / Next - names and texts players read, who owns it (who may
     build it), its main numbers, pictures of your own - and last everything it will change.
   Battle model (units): each soldier / officer model, how it sits (foot, horse, camel...),
-    View in 3D... (Medieval II: turn it with the mouse, the wheel zooms, pick a faction's
-    texture, "Another man" shows the next mix of heads and bodies) and Replace model...
+    View in 3D... (both games: turn it with the mouse, the wheel zooms, pick a faction's
+    texture; Medieval II: "Another man" shows the next mix of heads and bodies) and Replace model...
     (from this mod or another mod of the same game - it comes with its files).
   Voice in battle (units): what the unit says, for each accent (Medieval II) or culture (Rome)
     of its owners - Play its name call ("Khan's Guard!") and any of its orders; Put in my own...

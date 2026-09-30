@@ -17,10 +17,11 @@ tool reads of it (worked out on the 3336 vanilla unit meshes; nothing else is ne
 The texture u runs over two pictures side by side: u below 0.5 is the unit's texture (modeldb `textures` per
 faction) at 2u, u from 0.5 the attachment texture (modeldb `attach`: weapons and shields) at 2u - 1; v as it is
 (0 = the picture's top row). Parts from the first "Attachments..." part on are the weapons and shields (and the
-teeth). Rome's .cas models are not read yet."""
+teeth). Rome's .cas models: read_cas."""
 
 import math
 import os
+import re
 import struct
 
 HEADER = b"serialization::archive"
@@ -47,11 +48,14 @@ class Group:
 
 
 class Mesh:
-    """groups [Group]; positions [(x, y, z)], uvs [(u, v)] or None, count = number of vertices."""
+    """groups [Group]; positions [(x, y, z)], uvs [(u, v)] or None, count = number of vertices. one_texture: u v
+    over one picture (Rome) instead of the man's and the attachment texture side by side (Medieval II)."""
 
     def __init__(self, groups, positions, uvs):
         self.groups, self.positions, self.uvs = groups, positions, uvs
         self.count = len(positions)
+        self.one_texture = False
+        self.texture_ref = None
 
     def parts(self):
         """{part name: [its variants]} in file order."""
@@ -64,9 +68,15 @@ class Mesh:
         """The groups one man shows: variant `look` (mod the count) of every part; weapons and shields when asked.
         A man holding his primary weapon shows no secondary one (the game swaps them)."""
         parts = self.parts()
-        primary = any(n.lower().startswith("primary") for n in parts)
+        if self.one_texture:           # Rome: parts of one name are all worn (three shoulder pads), not variants
+            parts = {id(g): [g] for g in self.groups}
+            names = {id(g): g.name for g in self.groups}
+        else:
+            names = {n: n for n in parts}
+        primary = any(n.lower().startswith("primary") for n in names.values())
         out = []
-        for name, gs in parts.items():
+        for key, gs in parts.items():
+            name = names[key]
             low = name.lower()
             # weapons and shields by their name: a file may list body parts (legs, heads) after its first
             # "Attachments" part too (vanilla peasants: Legs after Attachments3)
@@ -77,7 +87,9 @@ class Mesh:
         return out
 
     def looks(self):
-        """How many different men the parts make (the most variants of one part)."""
+        """How many different men the parts make (the most variants of one part; Rome: one)."""
+        if self.one_texture:
+            return 1
         return max((len(v) for v in self.parts().values()), default=1)
 
 
@@ -188,16 +200,209 @@ def read(data):
     return Mesh(groups, pos, uvs)
 
 
+# ---------------------------------------------------------------------------
+# Rome's .cas
+# ---------------------------------------------------------------------------
+def _cas_string(d, p, text=True):
+    """(bytes, end) of a 4-byte length + bytes at p; text: printable with a closing 0, as names are."""
+    if p + 4 > len(d):
+        return None
+    n = struct.unpack_from("<I", d, p)[0]
+    if not (2 if text else 1) <= n <= (80 if text else 200) or p + 4 + n > len(d):
+        return None
+    b = d[p + 4:p + 4 + n]
+    if text and (b[-1] != 0 or not all(32 <= c < 127 for c in b[:-1])):
+        return None
+    return b, p + 4 + n
+
+
+def _cas_body(d, r, nbones):
+    """The vertex data from r: 2-byte vertex and triangle counts, two flag bytes, [a bone per vertex], positions,
+    normals, triangles, [a few bytes], texture u v. None unless the normals are unit long (the check that the
+    layout guess is right)."""
+    if r + 6 > len(d):
+        return None
+    nv, nt, one, two = struct.unpack_from("<2H2B", d, r)
+    r += 6
+    if one != 1 or two > 1 or not nv or not nt:
+        return None
+    for skinned in (True, False):
+        q, vb = r, None
+        if skinned:
+            if q + 4 * nv > len(d):
+                continue
+            vb = struct.unpack_from("<%dI" % nv, d, q)
+            if max(vb) >= nbones:
+                continue
+            q += 4 * nv
+        extra = next((e for e in (0, 4 * nv)            # a rigid part may keep 4 more bytes a vertex before normals
+                      if q + 24 * nv + e + 6 * nt + 8 * nv <= len(d) and sum(
+                          abs(x * x + y * y + z * z - 1) < 0.05 for x, y, z in struct.iter_unpack(
+                              "<3f", d[q + 12 * nv + e:q + 24 * nv + e])) >= 0.9 * nv), None)
+        if extra is None:
+            continue
+        pos = list(struct.iter_unpack("<3f", d[q:q + 12 * nv]))
+        if not all(math.isfinite(x) and abs(x) < 100 for v in pos for x in v):
+            continue
+        q += 24 * nv + extra
+        tris = struct.unpack_from("<%dH" % (3 * nt), d, q)
+        if max(tris) >= nv:
+            continue
+        q += 6 * nt
+        for gap in (4, 0, 8, 12, 16):                # u v after a 4-byte 0 in the vanilla files
+            if q + gap + 8 * nv > len(d):
+                continue
+            uv = list(struct.iter_unpack("<2f", d[q + gap:q + gap + 8 * nv]))
+            if all(math.isfinite(a) and -4 < a < 4 for v in uv for a in v) and len(set(uv)) > min(2, nv - 1):
+                return vb, pos, tris, uv, q + gap + 8 * nv
+    return None
+
+
+def _cas_part(d, p, nbones):
+    """A part of a .cas at p (its name's length): (name, bone, transform or None, bones per vertex, positions,
+    triangles, uvs, end) or None. After the name come 0 to 2 property texts (Rome 3.05 on: '\\0', 'MESH',
+    'GEOM_MESH_KEY_ID = ...'), then (not in the oldest files) the bone it hangs on and 6 or 7 floats - for weapons
+    and shields the quaternion x y z w and the place in the model's space."""
+    s = _cas_string(d, p)
+    if not s:
+        return None
+    name, q0 = s[0][:-1].decode("latin-1"), s[1]
+    starts, q = [q0], q0
+    for _ in range(2):
+        t = _cas_string(d, q, text=False)
+        if not t:
+            break
+        q = t[1]
+        starts.append(q)
+    for q in reversed(starts):
+        body = _cas_body(d, q, nbones)
+        if body:
+            return (name, 0, None) + body
+        for floats in (7, 6):
+            r = q + 4 + 4 * floats
+            if r > len(d):
+                continue
+            bone = struct.unpack_from("<I", d, q)[0]
+            if bone >= nbones:
+                continue
+            body = _cas_body(d, r, nbones)
+            if body:
+                xf = struct.unpack_from("<7f", d, q + 4) if floats == 7 else None
+                if xf and not any(xf):
+                    xf = None
+                return (name, bone, xf) + body
+    return None
+
+
+def _qrot(q, v):
+    x, y, z, w = q
+    vx, vy, vz = v
+    tx, ty, tz = 2 * (y * vz - z * vy), 2 * (z * vx - x * vz), 2 * (x * vy - y * vx)
+    return (vx + w * tx + (y * tz - z * ty), vy + w * ty + (z * tx - x * tz), vz + w * tz + (x * ty - y * tx))
+
+
+def _qmul(a, b):
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return (aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz)
+
+
+def read_cas(data):
+    """A Mesh from a Rome .cas file's bytes (worked out on the 807 vanilla unit, mount and animal models, versions
+    2.22 to 3.2 in the first 4 bytes as a float). The file: a header (the bone count, then each bone's parent),
+    the animation's frame count and times, one record per bone ('Scene Root', bone_pelvis ... - frame counts and
+    offsets into the rotations and positions after the records), the bones' places at rest (from the parent), then
+    the parts - weapons and shields (each with the bone it hangs on and its place), then the body parts (each vertex
+    tied to one bone, its point given from that bone). The model is put together in the first frame's pose (the
+    arms out, as the files keep it); u v over the one texture of the unit."""
+    if len(data) < 60:
+        raise MeshError("not a Rome model (too short)")
+    root = data.find(b"Scene Root\x00")
+    if root < 8:
+        raise MeshError("not a Rome model (no skeleton)")
+    # before the bone records: the frame count and the frame times; before those each bone's parent, and before
+    # those the bone count (at byte 50, or 49 in the 3.02 files - found from the end, not the start)
+    at = next((root - 8 - 4 * n for n in range(0, 5000)
+               if root - 8 - 4 * n >= 0 and struct.unpack_from("<I", data, root - 8 - 4 * n)[0] == n), None)
+    def fits(n):          # the count's byte just before the parents (1 or 2 bytes before), every parent earlier
+        if at is None or at - 4 * n - 2 < 0 or n not in (data[at - 4 * n - 1], data[at - 4 * n - 2]):
+            return False
+        ps = struct.unpack_from("<%dI" % n, data, at - 4 * n)
+        return all(ps[i] < i for i in range(1, n))
+    nb = next((n for n in range(1, 201) if fits(n)), None)
+    if not nb:
+        raise MeshError("the model's bone count does not look right")
+    parents = struct.unpack_from("<%dI" % nb, data, at - 4 * nb)
+    p, bones = root - 4, []
+    for _ in range(nb):
+        s = _cas_string(data, p)
+        if not s or s[1] + 20 > len(data):
+            raise MeshError("the model's bones could not be read")
+        bones.append(struct.unpack_from("<4I", data, s[1]))           # rotations, positions, their offsets
+        p = s[1] + 20
+        if not _cas_string(data, p) and data[p:p + 5] == b"\x01\x00\x00\x00\x00":
+            p += 5                                                     # 3.18: 5 more bytes after each record
+    base = p
+    last = max(bones, key=lambda b: b[3])
+    rest_at = base + last[3] + 12 * last[1]
+    if rest_at + 12 * nb > len(data):
+        raise MeshError("the model's skeleton could not be read")
+    rest = [struct.unpack_from("<3f", data, rest_at + 12 * i) for i in range(nb)]
+    rot, where = [], []
+    for i, (nq, npos, qo, po) in enumerate(bones):
+        q = struct.unpack_from("<4f", data, base + qo) if nq else (0.0, 0.0, 0.0, 1.0)
+        t = struct.unpack_from("<3f", data, base + po) if npos else rest[i]
+        par = parents[i] if i and parents[i] < i else None
+        if par is None:
+            rot.append(q)
+            where.append(t)
+        else:
+            off = _qrot(rot[par], t)
+            where.append(tuple(where[par][k] + off[k] for k in range(3)))
+            rot.append(_qmul(rot[par], q))
+    positions, uvs, groups = [], [], []
+    p = rest_at + 12 * nb
+    while p < len(data) - 8:
+        got = _cas_part(data, p, nb)
+        if not got:
+            p += 1
+            continue
+        name, bone, xf, vb, pos, tris, uv, end = got
+        first = len(positions)
+        for k, v in enumerate(pos):
+            if xf:                                  # a weapon / shield: its own place in the model
+                o = _qrot(xf[:4], v)
+                positions.append((o[0] + xf[4], o[1] + xf[5], o[2] + xf[6]))
+            else:
+                b = vb[k] if vb else bone
+                o = _qrot(rot[b], v)
+                positions.append(tuple(where[b][j] + o[j] for j in range(3)))
+        uvs.extend(uv)
+        groups.append(Group(name, "", tuple(first + t for t in tris), bool(xf)))
+        p = end
+    if not groups:
+        raise MeshError("no parts found in the model")
+    m = Mesh(groups, positions, uvs)
+    m.one_texture = True
+    # the texture the file itself names (textures\x.tga, from models_unit): the game's pick when the model's
+    # descr_model_battle block has no texture line (the female peasants)
+    for hit in re.finditer(rb"[ -~]{1,120}?\.tga\x00", data[-400:]):
+        m.texture_ref = "data/models_unit/" + hit.group()[:-1].decode("latin-1").replace("\\", "/")
+    return m
+
+
 _CACHE = {}
 
 
 def read_file(path):
-    """read() of a file, kept while the file is unchanged."""
+    """read() of a file (.mesh or Rome's .cas), kept while the file is unchanged."""
     key = os.path.normcase(os.path.abspath(path))
     stamp = os.path.getmtime(path)
     if key not in _CACHE or _CACHE[key][0] != stamp:
         with open(path, "rb") as fh:
-            _CACHE[key] = (stamp, read(fh.read()))
+            data = fh.read()
+        _CACHE[key] = (stamp, read_cas(data) if path.lower().endswith(".cas") else read(data))
         while len(_CACHE) > 24:
             _CACHE.pop(next(iter(_CACHE)))
     return _CACHE[key][1]
@@ -289,8 +494,11 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
             half, src = 0, None
             if uvs:
                 ua, ub, uc = uvs[t[j]], uvs[t[j + 1]], uvs[t[j + 2]]
-                half = 1 if (ua[0] + ub[0] + uc[0]) / 3 >= 0.5 else 0      # which of the two pictures
-                src = [(q[0] * 2 - half, q[1]) for q in (ua, ub, uc)]
+                if mesh.one_texture:
+                    src = [(q[0], q[1]) for q in (ua, ub, uc)]
+                else:
+                    half = 1 if (ua[0] + ub[0] + uc[0]) / 3 >= 0.5 else 0      # which of the two pictures
+                    src = [(q[0] * 2 - half, q[1]) for q in (ua, ub, uc)]
             tris.append((a[2] + b[2] + e[2], ((a[0], a[1]), (b[0], b[1]), (e[0], e[1])), shade, half, src))
     tris.sort(key=lambda x: x[0])
     draw = ImageDraw.Draw(img)
@@ -337,8 +545,20 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
     return img
 
 
+def on_disk(mod, rel):
+    """(data-relative path, absolute path) of a model file: the mod's, else the game's own data folder (a mod
+    folder keeps only what it changes), or None."""
+    import types
+    from .packs import _on_disk
+    from .campaignrules import game_data
+    if not rel:
+        return None
+    got = _on_disk(mod, rel)
+    base = None if got else game_data(mod)
+    return got or (_on_disk(types.SimpleNamespace(data=base), rel) if base else None)
+
+
 def mesh_path(mod, rel):
     """The mesh file on disk (the mod's, else the game's), or None."""
-    from .packs import _on_disk
-    got = _on_disk(mod, rel) if rel else None
+    got = on_disk(mod, rel)
     return got[1] if got else None

@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **View in 3D for Rome**: Rome's `.cas` battle models (units, officers, mounts, animals - every one of the 807 vanilla
+  files, versions 2.22 to 3.2) are drawn like Medieval II's: the man put together on his skeleton, weapons and shield
+  in their places (on or off), each faction's texture, the game's detail levels. A model without a texture line
+  (the women peasants) shows the texture its `.cas` names. Model files a mod folder does not have are taken from the
+  game's own data folder (Medieval II too).
 - **Campaign rules** (Tools > Campaign rules...), both games: every value of the campaign's settings files with a
   plain explanation, grouped as the files are, Find, the game's own value beside a changed one (Reset), Preview,
   written with a backup. Medieval II: descr_campaign_db.xml (ages, agents, revolts, crusades, bribery, ransom...),
@@ -19,10 +24,16 @@
   mod does not have are refused - as is leaving out the governor's chain.
 
 ### Fixed
+- **3D view: the detail levels were out of order** when a model mixed `model_flexi` and `model_flexi_m` lines
+  (Rome: "0 - closest" showed the farthest model); they now follow the file.
+- Campaign rules: the settings files' tag pattern could take very long on a crafted line (GitHub code scanning,
+  py/redos); it now reads any line in linear time, with the same result on the games' files.
 - **3D view: "Weapons and shield" off hid the legs too** on some models (vanilla peasants list their legs after the
   first weapons part): weapons and shields are now told by their names.
 
 ### Changed
+- README, wiki, SECURITY: download the editor only from this repository's Releases page (or a link the author
+  posted) - never a copy passed around elsewhere.
 - **Unit editor: the battle model and the voice sit beside the two pictures** (they were below them, leaving half
   the panel empty - a user's screenshot); the unit's lines start higher. Fits a 1280-pixel-wide window.
 

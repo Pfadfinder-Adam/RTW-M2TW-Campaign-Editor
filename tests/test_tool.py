@@ -2157,12 +2157,68 @@ building smith
             reds = [p for p in im.getdata() if p[0] > 60 and p[0] > 2 * p[1]]
             self.assertTrue(len(reds) > 200, textured)       # the cube in the man's (red) texture
 
+    def test_read_and_draw_a_rome_cas(self):
+        """A Rome .cas laid out as the vanilla ones (3.05): header with the bone count and parents, frame times, bone
+        records, rest places, a shield with its own place and a body whose points hang on a bone. Read back, put
+        together in the first frame's pose, the texture the file names, drawn in one texture."""
+        import math
+        import struct
+        from faction_tool import meshview as MV
+
+        def text(t):
+            return struct.pack("<I", len(t) + 1) + t.encode() + b"\x00"
+        cube = [(x, y, z) for x in (-0.1, 0.1) for y in (-0.1, 0.1) for z in (-0.1, 0.1)]
+        faces = [(0, 1, 3), (0, 3, 2), (4, 6, 7), (4, 7, 5), (0, 4, 5), (0, 5, 1),
+                 (2, 3, 7), (2, 7, 6), (0, 2, 6), (0, 6, 4), (1, 5, 7), (1, 7, 3)]
+
+        def vertices(skinned):
+            n = len(cube)
+            out = struct.pack("<2H2B", n, len(faces), 1, 1 if skinned else 0)
+            if skinned:
+                out += struct.pack("<%dI" % n, *([1] * n))
+            out += b"".join(struct.pack("<3f", *v) for v in cube)
+            out += b"".join(struct.pack("<3f", *[c / math.sqrt(0.03) for c in v]) for v in cube)
+            out += b"".join(struct.pack("<3H", *f) for f in faces) + b"\x00" * 4
+            return out + b"".join(struct.pack("<2f", 0.1 * i, 0.9 - 0.1 * i) for i in range(n)) + b"\x00"
+        head = struct.pack("<f", 3.05) + b"\x00" * 46 + struct.pack("<H", 2) + struct.pack("<2I", 0, 0)
+        head += struct.pack("<If", 1, 0.5)                                   # one frame
+        bones = text("Scene Root") + struct.pack("<5I", 0, 0, 0, 0, 0)
+        bones += text("bone_pelvis") + struct.pack("<5I", 1, 0, 0, 16, 0)
+        anim = struct.pack("<4f", 0, 0, 0, 1) + struct.pack("<3f", 0, 0, 0) + struct.pack("<3f", 0, 1, 0)
+        shield = text("shield") + text("")[:-1] + b"\x00" + text("")[:-1] + b"\x00" + struct.pack(
+            "<I7f", 1, 0, 0, 0, 1, 2, 0, 0) + vertices(False)
+        body = text("Body_400") + b"\x01\x00\x00\x00\x00" + struct.pack("<I6f", 0, *([0] * 6)) + vertices(True)
+        data = head + bones + anim + struct.pack("<2I", 1, 1) + shield + body + text("textures\\unit_x.tga") + \
+            b"\x00" * 40
+        m = MV.read_cas(data)
+        self.assertEqual([(g.name, g.attachment, len(g.tris) // 3) for g in m.groups],
+                         [("shield", True, 12), ("Body_400", False, 12)])
+        self.assertTrue(m.one_texture)
+        self.assertEqual(m.texture_ref, "data/models_unit/textures/unit_x.tga")
+        for got, want in zip(m.positions[7], (2.1, 0.1, 0.1)):              # the shield at its own place
+            self.assertAlmostEqual(got, want, places=5)
+        for got, want in zip(m.positions[15], (0.1, 1.1, 0.1)):             # the body on the pelvis, 1 up
+            self.assertAlmostEqual(got, want, places=5)
+        self.assertEqual(len(m.shown(weapons=False)), 1)                     # the shield hidden
+        with self.assertRaises(MV.MeshError):
+            MV.read_cas(b"\x00" * 80)
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed - the drawing is not checked")
+        im = MV.render(m, (200, 240), texture=Image.new("RGB", (8, 8), (200, 30, 30)))
+        self.assertTrue(len([p for p in im.getdata() if p[0] > 60 and p[0] > 2 * p[1]]) > 200)
+
     def test_campaign_rules_and_addons(self):
         """Campaign rules: values of the settings files read with their section (M2EX's unquoted bool=false too),
         a change writes only the value's characters, a bad value is refused, a mod without the file gets the game's
         copy; Restore byte for byte. Add-ons: the script's settings read and written back, the rest untouched."""
         from faction_tool import campaignrules as CR
         from faction_tool import addons as AD
+        import time
+        t0 = time.time()                    # a tag the old pattern took exponential time on (CodeQL py/redos)
+        self.assertEqual(list(CR.RE_TAG.finditer("<A -=" + '"" -=' * 3000)), [])
+        self.assertLess(time.time() - t0, 1.0)
         d = os.path.join(self.root, "data")
         db = ('<?xml version="1.0"?>\n<root>\n   <family_tree>\n      <age_of_manhood uint="16"/>\n'
               '   </family_tree>\n   <display>\n      <keep_original_heretic_portraits bool=false/>\n'
