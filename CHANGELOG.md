@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+- **A new faction on Medieval II now has battle banners, a voice, one-liners, movies and campaign music**: it is
+  named beside its template in descr_banners_new.xml (with its own copy of the banner texture when that is on disk),
+  descr_sounds_accents.txt, descr_sounds_db.xml, descr_movies_tracks.xml, the campaign's descr_faction_movies.xml
+  and descr_sounds_music_types.txt - vanilla names every faction in them, and they were left out.
+- **The ring round a town**: the 8 tiles round a town must be its own region or sea (vanilla Rome and Medieval II
+  never break it), and on Medieval II no port may stand next to a town. Moving a town or port, painting regions
+  and placing a new region's town or port are refused on Medieval II and warned about on Rome; Check mod lists
+  what a map already breaks.
+
 ### Added
 - **Replace a unit's battle model** (Unit editor, new **Battle model** block): the soldiers' (and each officer's)
   model with a texture of one of the unit's factions, how the model sits (on foot, on a horse or camel, an

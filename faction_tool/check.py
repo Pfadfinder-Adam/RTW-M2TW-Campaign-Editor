@@ -133,6 +133,16 @@ def check_mod(mod, campaign, deep=False, progress=None):
         bad(msg)
     for msg in slaves_problems(mod, regions):
         bad(msg)
+    ring = town_ring_problems(mod, campaign)
+    serious = [m for s_, m in ring if s_]
+    for m in serious[:8]:
+        bad(m)
+    if len(serious) > 8:
+        bad("... and %d more town / port placement problem(s) of the same kind" % (len(serious) - 8))
+    light = [m for s_, m in ring if not s_]
+    if light:
+        say("    note: %d town(s) touch another region's land (vanilla never does; the game may still run - "
+            "HLR has 6), e.g. %s" % (len(light), light[0]))
 
     # ---- start positions ----
     step("characters...")
@@ -297,6 +307,13 @@ def rebel_problems(mod, units):
                 out.append("descr_rebel_factions.txt, %s: unit '%s' has no 'slave' in its ownership - the game "
                            "crashes when these rebels appear" % (cur, u))
     return out
+
+
+def town_ring_problems(mod, campaign):
+    """mapedit.ring_problems over the whole map: [(serious, message)]."""
+    from .mapedit import owner_of, ports, ring_problems
+    towns = mod.city_tiles(campaign)
+    return ring_problems(mod, campaign, owner_of(mod, campaign), towns, ports(mod, campaign))
 
 
 def slaves_problems(mod, regions):

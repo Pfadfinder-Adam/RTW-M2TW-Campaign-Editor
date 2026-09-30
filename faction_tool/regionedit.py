@@ -107,6 +107,19 @@ def region_problems(mod, campaign, painted, new_regions):
                 errors.append("%s: a port needs the sea next to it" % r["name"])
             elif c and tuple(p) == tuple(c):
                 errors.append("%s: the port and the town need different tiles" % r["name"])
+    # the ring round each town (mapedit.ring_problems): only what this painting and these new regions make
+    from .mapedit import owner_of, ports as port_map, ring_problems
+    new_towns = {r["name"]: tuple(r["city"]) for r in new_regions if r.get("city")}
+    new_ports = {r["name"]: tuple(r["port"]) for r in new_regions if r.get("port")}
+    towns = dict(tiles)
+    towns.update(new_towns)
+    port_tiles = dict(port_map(mod, campaign))
+    port_tiles.update(new_ports)
+    look = owner_of(mod, campaign, painted={tuple(k): v for k, v in painted.items()}, towns=new_towns,
+                    port_tiles=new_ports)
+    touched = ({tuple(t) for t in painted} | set(new_towns.values()) | set(new_ports.values()), new_names)
+    for serious, msg in ring_problems(mod, campaign, look, towns, port_tiles, touched):
+        (errors if serious else warns).append(msg)
     # regions cut in two
     for r in sorted({v for v in painted.values()} | {owner_before for owner_before in
                      (by_colour.get(img.get(*t)) for t in painted) if owner_before}):

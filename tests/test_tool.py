@@ -1002,6 +1002,52 @@ building smith
         self.assertEqual({im.getpixel((2 + dx, 2 + dy)) for dx in (0, 1) for dy in (0, 1)}, {GROUND_LOOK[hills]})
         self.assertEqual(im.getpixel((0, 0)), GROUND_LOOK[sea])
 
+    def test_town_ring_rule(self):
+        """The 8 tiles round a town are its own region or sea (0 exceptions in vanilla Rome and Medieval II), and
+        on Medieval II no port stands in a town's 3 x 3: a move, a painted tile or a new region that breaks it is
+        refused on Medieval II and warned about on Rome; Check mod finds it on the whole map."""
+        from faction_tool.check import town_ring_problems
+        from faction_tool.mapedit import apply_places, owner_of, place_problem, ring_problems
+        from faction_tool.plan import Plan
+        from faction_tool.regionedit import region_problems
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        R, B, K, S = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233)
+        px = [[R, R, R, B, B, B, S],
+              [R, K, R, B, K, B, S],
+              [R, R, R, B, B, B, S],
+              [R, R, R, B, B, B, S],
+              [R, R, R, B, B, B, S]]
+        write_tga(os.path.join(camp, "map_regions.tga"), 7, 5, px)
+        mod = ModData(self.root)
+        self.assertEqual(mod.city_tiles("test"), {"A_R": (1, 1), "B_R": (4, 1)})
+        self.assertEqual(town_ring_problems(mod, "test"), [])
+        # Rome: warned, not refused
+        self.assertIsNone(place_problem(mod, "test", "city", "B_R", (3, 2)))
+        plan = Plan(mod, "map", "map", {})
+        apply_places(plan, "test", [{"what": "city", "region": "B_R", "to": (3, 2)}])
+        self.assertTrue(any("touches A_R's land" in w for _, w in plan.warnings))
+        errors, warns = region_problems(mod, "test", {(2, 1): "B_R"}, [])
+        self.assertEqual(errors, [])
+        self.assertTrue(any("town of A_R touches B_R" in w for w in warns))
+        # a port beside a town: nothing on Rome
+        towns, ports = {"B_R": (4, 1)}, {"B_R": (5, 2)}
+        self.assertEqual(ring_problems(mod, "test", owner_of(mod, "test"), towns, ports), [])
+        # Medieval II: refused
+        write(os.path.join(self.root, "data", "descr_religions.txt"), "religions\n{\n    catholic\n}\n")
+        mod = ModData(self.root)
+        why = place_problem(mod, "test", "city", "B_R", (3, 2))
+        self.assertIn("touches A_R's land", why)
+        errors, _ = region_problems(mod, "test", {(2, 1): "B_R"}, [])
+        self.assertTrue(any("Medieval II crashes" in e for e in errors))
+        got = ring_problems(mod, "test", owner_of(mod, "test"), towns, ports)
+        self.assertEqual([s_ for s_, _ in got], [True])
+        self.assertIn("port of B_R stands next to the town of B_R", got[0][1])
+        # Check mod sees a town already against another region
+        px[1][2], px[1][1] = K, R                  # A's town moved to 2,1 beside B's land
+        write_tga(os.path.join(camp, "map_regions.tga"), 7, 5, px)
+        mod = ModData(self.root)
+        self.assertTrue(town_ring_problems(mod, "test")[0][0])
+
     def test_garrisons_by_hand(self):
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         # a third, empty rebel town C_R (green) to the right of the map

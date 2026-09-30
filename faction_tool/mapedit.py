@@ -50,7 +50,20 @@ def place_problem(mod, campaign, what, region, xy, moved=None):
     else:
         if not any(mod.is_sea(campaign, (x + dx, y + dy)) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             return "a port needs the sea next to it"
-    return None
+    serious = [m for s, m in _move_ring(mod, campaign, what, region, xy, moved) if s]
+    return serious[0] if serious else None
+
+
+def _move_ring(mod, campaign, what, region, xy, moved):
+    """ring_problems for one town / port put at xy (with the other moves picked)."""
+    moves = dict(moved or {})
+    moves[(what, region)] = tuple(xy)
+    towns = {r: tuple(t) for r, t in mod.city_tiles(campaign).items()}
+    port_tiles = dict(ports(mod, campaign))
+    for (w, r), to in moves.items():
+        (towns if w == "city" else port_tiles)[r] = tuple(to)
+    return ring_problems(mod, campaign, owner_of(mod, campaign, moves), towns, port_tiles,
+                         touched=({tuple(xy)}, {region}))
 
 
 def orig(mod, campaign, what, region):
@@ -89,6 +102,83 @@ def ports(mod, campaign):
     return out
 
 
+# ---------------------------------------------------------------------------
+# The ring round a town (the M2EX Campaign Map Builder's rule, measured on the vanilla maps 2026-09-30):
+# the 8 tiles round a town are its own region or sea - never another region (0 towns in vanilla Rome and
+# Medieval II; HLR has 6 under REX) - and on Medieval II no port stands inside a town's 3 x 3 (vanilla M2TW 0;
+# vanilla Rome 1, HLR 104 - so Rome is not held to it).
+# ---------------------------------------------------------------------------
+def ring(xy):
+    x, y = xy
+    return [(x + dx, y + dy) for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dx or dy]
+
+
+def owner_of(mod, campaign, moved=None, painted=None, towns=None, port_tiles=None):
+    """A function tile -> the region it will belong to (None for sea / off the map), the map as moves (moved
+    {(what, region): xy}), painted tiles ({xy: region}) and new towns / ports leave it."""
+    img = mod.region_map(campaign)
+    by_colour = {v["colour"]: k for k, v in mod.regions(campaign).items()}
+    markers, freed = {}, {}
+    for what, table in (("city", mod.city_tiles(campaign)), ("port", ports(mod, campaign))):
+        for r, xy in table.items():
+            if xy:
+                markers[tuple(xy)] = r
+    for (what, r), to in (moved or {}).items():
+        old = orig(mod, campaign, what, r)
+        if old:
+            markers.pop(tuple(old), None)
+            freed[tuple(old)] = r
+    for (what, r), to in (moved or {}).items():
+        markers[tuple(to)] = r
+    for table in (towns or {}, port_tiles or {}):
+        for r, xy in table.items():
+            if xy:
+                markers[tuple(xy)] = r
+    painted = painted or {}
+
+    def get(xy):
+        x, y = xy
+        if not (0 <= x < img.width and 0 <= y < img.height):
+            return None
+        if xy in markers:
+            return markers[xy]
+        if xy in painted:
+            return painted[xy]
+        if xy in freed:
+            return freed[xy]
+        return by_colour.get(img.get(x, y))
+    return get
+
+
+def ring_problems(mod, campaign, owner, towns, port_tiles, touched=None):
+    """[(serious, message)] for towns {region: xy} and ports {region: xy} on the map owner (owner_of) gives:
+    another region in a town's ring (serious on Medieval II, a warning on Rome), a port in a town's ring
+    (Medieval II only). touched = (tiles, regions): only problems this edit makes - a ring tile or port among
+    the tiles, or a town / port of the regions (None: every problem, for Check mod)."""
+    from .limits import game_kind
+    m2 = game_kind(mod) == "medieval2"
+    tiles, regs = (set(touched[0]), set(touched[1])) if touched else (None, None)
+    port_at = {tuple(v): r for r, v in port_tiles.items() if v}
+    out = []
+    for r, t in sorted(towns.items()):
+        if not t:
+            continue
+        near = ring(tuple(t))
+        mine = touched is None or r in regs or bool(tiles & set(near))
+        others = sorted({owner(n) for n in near} - {None, r})
+        if others and mine:
+            out.append((m2, "the town of %s touches %s's land - the 8 tiles round a town must be its own region "
+                            "or sea%s" % (r, ", ".join(others),
+                                          " (Medieval II crashes on it)" if m2 else " (vanilla Rome never does it)")))
+        if m2:
+            for n in near:
+                pr = port_at.get(n)
+                if pr and (touched is None or mine or pr in regs or n in tiles):
+                    out.append((True, "the port of %s stands next to the town of %s - Medieval II takes no port "
+                                      "inside a town's 3 x 3" % (pr, r)))
+    return out
+
+
 def port_fleets(s, port):
     """The fleets (admirals) lying at most two tiles off a port (vanilla puts
     them one or two tiles out)."""
@@ -122,6 +212,10 @@ def apply_places(plan, campaign, places):
         if why:
             raise ValueError("%s of %s cannot go to %d, %d: %s" % (
                 "town" if p["what"] == "city" else "port", p["region"], p["to"][0], p["to"][1], why))
+        for serious, msg in _move_ring(mod, campaign, p["what"], p["region"], tuple(p["to"]),
+                                       {k: v for k, v in moved.items() if k != key}):
+            if not serious:
+                plan.warn(None, msg)
         moved[key] = tuple(p["to"])
     if not moved:
         return
