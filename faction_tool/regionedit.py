@@ -32,7 +32,7 @@ def _ok_name(n):
 def free_colour(mod, campaign, taken=()):
     """A colour no pixel of map_regions.tga has (nor black, white or near the seas')."""
     img = mod.region_map(campaign)
-    used = set(img.pixels) | set(taken)
+    used = img.colours() | set(taken)
     for i in range(1, 5000):
         c = ((i * 97) % 200 + 30, (i * 57) % 200 + 30, (i * 37) % 200 + 30)
         if c in used or (c[0] < 60 and 120 < c[1] < 160):             # keep clear of the sea blues

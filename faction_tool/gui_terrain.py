@@ -175,7 +175,7 @@ class TerrainEditor(ttk.Frame):
 
     def _set_px(self, img, x, y, colour):
         if img is not None and 0 <= x < img.width and 0 <= y < img.height:
-            img.pixels[y * img.width + x] = tuple(colour)
+            img.set(x, y, colour)
 
     def _apply_memory(self):
         """The painted tiles laid into the in-memory pictures the map is drawn from."""

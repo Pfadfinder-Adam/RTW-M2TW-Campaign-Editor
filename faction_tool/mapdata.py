@@ -23,6 +23,26 @@ GROUND_LOOK = {
 REBELS = (130, 130, 130)
 
 
+def recolour(im, table, default):
+    """im (RGB) with each colour c drawn as table.get(c, default). Pillow does it through a palette (a map of
+    millions of tiles in a moment); the result is checked against the source and done pixel by pixel instead
+    when a palette cannot hold it exactly (more than 256 colours, or colours too close for Pillow's lookup)."""
+    cols = im.getcolors(256)
+    if cols:
+        src = [c for _, c in cols]
+        pad = 256 - len(src)
+        pal = Image.new("P", (1, 1))
+        pal.putpalette([v for c in src + [src[0]] * pad for v in c])
+        q = im.quantize(palette=pal, dither=Image.Dither.NONE)
+        back = q.convert("RGB")
+        if ImageChops.difference(back, im).getbbox() is None:           # every pixel found its own colour
+            q.putpalette([v for c in src + [src[0]] * pad for v in table.get(c, default)])
+            return q.convert("RGB")
+    out = Image.new("RGB", im.size)
+    out.putdata([table.get(p, default) for p in im.getdata()])
+    return out
+
+
 class CampaignMap:
     def __init__(self, mod, campaign):
         self.mod, self.campaign = mod, campaign
@@ -97,17 +117,14 @@ class CampaignMap:
     def _ports(self):
         out = {}
         img = self.regions_img
-        for y in range(self.h):
-            for x in range(self.w):
-                if img.get(x, y) != PORT:
-                    continue
-                votes = {}
-                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
-                    r = self.region_at(x + dx, y + dy)
-                    if r:
-                        votes[r] = votes.get(r, 0) + 1
-                if votes:
-                    out[max(votes, key=votes.get)] = (x, y)
+        for x, y in img.find(PORT):
+            votes = {}
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
+                r = self.region_at(x + dx, y + dy)
+                if r:
+                    votes[r] = votes.get(r, 0) + 1
+            if votes:
+                out[max(votes, key=votes.get)] = (x, y)
         return out
 
     # ---- pictures (top-down, as Pillow draws them) ----
@@ -148,6 +165,11 @@ class CampaignMap:
 
     def _tiles(self):
         """One pixel per tile, top-down, in its ground's colour (the tile's middle)."""
+        g = self.ground
+        if g is not None and (g.width, g.height) == (2 * self.w + 1, 2 * self.h + 1):
+            full = Image.frombytes("RGB", (g.width, g.height), g.rgb_top_down())
+            middles = full.resize((self.w, self.h), Image.NEAREST, box=(0, 0, 2 * self.w, 2 * self.h))
+            return recolour(middles, GROUND_LOOK, (150, 150, 150))
         im = Image.new("RGB", (self.w, self.h))
         data = []
         for y in range(self.h - 1, -1, -1):
@@ -191,14 +213,23 @@ class CampaignMap:
             t = self.mod._optional_map(self.campaign, "map_heights.tga")
             if t is None:
                 return self._tiles().resize((2 * self.w, 2 * self.h), Image.NEAREST)
-            im = Image.new("RGB", (t.width, t.height))
-            look = {}
-            im.putdata([look.setdefault(p, self.height_look(p)) for p in t.pixels])
-            self._hpil = im.transpose(Image.FLIP_TOP_BOTTOM)
+            self._hpil = self._height_picture(t)
         im = self._hpil
         view = im.crop((0, 1, 2 * self.w, 2 * self.h + 1)) if im.size == (2 * self.w + 1, 2 * self.h + 1) else \
             im.resize((2 * self.w, 2 * self.h), Image.BILINEAR)
         return view
+
+    def _height_picture(self, t):
+        """height_look() of every pixel of map_heights.tga t, top-down - done by Pillow per channel (grey land
+        and the blue sea told apart by a mask), not pixel by pixel in Python."""
+        im = Image.frombytes("RGB", (t.width, t.height), t.rgb_top_down())
+        r, g, b = im.split()
+        grey = r.point([self.height_look((v, v, v))[0] for v in range(256)])
+        land = Image.merge("RGB", (grey, grey, grey))
+        sea = Image.merge("RGB", [b.point([self.height_look((0, 0, v))[k] for v in range(256)]) for k in range(3)])
+        other = ImageChops.lighter(ImageChops.difference(r, g), ImageChops.difference(g, b)).point(
+            lambda v: 255 if v else 0)
+        return Image.composite(sea, land, other)
 
     def set_height(self, px, py, value):
         """The drawn heights picture follows one changed pixel (px, py bottom-up, grey value)."""
@@ -219,9 +250,7 @@ class CampaignMap:
         t = self.mod._optional_map(self.campaign, name)
         if t is None:
             return None
-        im = Image.new("RGB", (t.width, t.height))
-        im.putdata(t.pixels)
-        return im.transpose(Image.FLIP_TOP_BOTTOM)
+        return Image.frombytes("RGB", (t.width, t.height), t.rgb_top_down())
 
     def _relief(self, im):
         """Hills lit from the north-west, the valleys in shade (map_heights.tga)."""
@@ -244,8 +273,7 @@ class CampaignMap:
         f = self._pil("map_features.tga")
         if f is None or f.size != (self.w, self.h):
             return im
-        over = Image.new("RGB", f.size)
-        over.putdata([self.FEATURE_LOOK.get(p, (50, 105, 200)) for p in f.getdata()])
+        over = recolour(f, self.FEATURE_LOOK, (50, 105, 200))
         mask = f.convert("L").point(lambda v: 255 if v else 0)
         over, mask = over.resize(im.size, Image.NEAREST), mask.resize(im.size, Image.NEAREST)
         if not tiles:
@@ -259,10 +287,7 @@ class CampaignMap:
             im.putdata([(60, 95, 140) if self.region_at(x, self.h - 1 - y) is None else (170, 160, 110)
                         for y in range(self.h) for x in range(self.w)])
             return im
-        im = Image.new("RGB", (g.width, g.height))
-        im.putdata([GROUND_LOOK.get(g.get(x, g.height - 1 - y), (150, 150, 150))
-                    for y in range(g.height) for x in range(g.width)])
-        return im
+        return recolour(Image.frombytes("RGB", (g.width, g.height), g.rgb_top_down()), GROUND_LOOK, (150, 150, 150))
 
     def _labels(self):
         """([(label image, [region per label])], border mask), made once: each
@@ -283,20 +308,30 @@ class CampaignMap:
             if r in self.info:
                 spot[xy] = where[self.info[r]["colour"]]
         img, w, h = self.regions_img, self.w, self.h
-        planes = [bytearray(w * h) for _ in groups]
-        flat = bytearray(w * h * 3)                   # the map with towns/ports as their region, for borders
-        for y in range(h):
-            row = (h - 1 - y) * w
-            for x in range(w):
-                px = img.get(x, y)
-                gi = spot.get((x, y)) or where.get(px)
+        rgb = Image.frombytes("RGB", (w, h), img.rgb_top_down())
+        for (x, y), gi in spot.items():                # towns and ports drawn as their region
+            if 0 <= x < w and 0 <= y < h:
+                rgb.putpixel((x, h - 1 - y), tuple(self.info[groups[gi[0]][gi[1] - 1]]["colour"]))
+        planes = None
+        cols = rgb.getcolors(256)
+        if cols:                                       # few colours: Pillow maps them through a palette
+            src = [c for _, c in cols]
+            pal = Image.new("P", (1, 1))
+            pal.putpalette([v for c in src + [src[0]] * (256 - len(src)) for v in c])
+            q = rgb.quantize(palette=pal, dither=Image.Dither.NONE)
+            if ImageChops.difference(q.convert("RGB"), rgb).getbbox() is None:
+                index = Image.frombytes("L", (w, h), q.tobytes())
+                planes = [index.point([where.get(src[j], (-1, 0))[1] if where.get(src[j], (-1, 0))[0] == g
+                                       and j < len(src) else 0 for j in range(256)]).tobytes()
+                          for g in range(len(groups))]
+        if planes is None:                             # many colours (HLR's hundreds of regions): row by row
+            planes = [bytearray(w * h) for _ in groups]
+            raw = rgb.tobytes()
+            code = {bytes(c): gi for c, gi in where.items()}
+            for o in range(0, w * h):
+                gi = code.get(raw[3 * o:3 * o + 3])
                 if gi:
-                    planes[gi[0]][row + x] = gi[1]
-                    if (x, y) in spot:
-                        px = self.info[groups[gi[0]][gi[1] - 1]]["colour"]
-                o = (row + x) * 3
-                flat[o:o + 3] = bytes(px)
-        rgb = Image.frombytes("RGB", (w, h), bytes(flat))
+                    planes[gi[0]][o] = gi[1]
         self._flat_rgb = rgb
         edge = ImageChops.add(ImageChops.difference(rgb, ImageChops.offset(rgb, -1, 0)),
                               ImageChops.difference(rgb, ImageChops.offset(rgb, 0, -1))).convert("L")

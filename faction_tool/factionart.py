@@ -298,13 +298,15 @@ def _map_mask(mod, campaign, keep):
     w, h = img.width, img.height
     hit = {}
     data = bytearray(w * h)
+    raw = img.raw
     for y in range(h):                                      # map_regions rows run bottom-up
         row = (h - 1 - y) * w
+        src = y * w * 3
         for x in range(w):
-            c = img.pixels[y * w + x]
+            c = bytes(raw[src + 3 * x:src + 3 * x + 3])
             v = hit.get(c)
             if v is None:
-                v = hit[c] = 255 if keep(c) else 0
+                v = hit[c] = 255 if keep(tuple(c)) else 0
             data[row + x] = v
     return Image.frombytes("L", (w, h), bytes(data))
 
