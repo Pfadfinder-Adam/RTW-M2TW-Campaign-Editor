@@ -32,6 +32,31 @@ def template_display(mod, template, campaign=None):
     return found
 
 
+def display_names(mod, campaign=None):
+    """{faction: the name players see} from the string tables this campaign reads ({ENGLAND} England) - a mod
+    may keep the game's internal name and show another (Medieval II's names are hard-wired: 'turks' shown as
+    'Ryazan'). Factions without a string are left out."""
+    want = {n.upper(): n for n, _ in mod.factions()}
+    found = {}
+    for path in mod.campaign_text_files(campaign):
+        for line in mod.load(path).texts():
+            m = re.match(r"\s*\{([A-Za-z0-9_]+)\}\s*(.*)$", line)
+            if m and m.group(1).upper() in want:
+                name = want[m.group(1).upper()]
+                if name not in found and m.group(2).strip():
+                    found[name] = m.group(2).strip()
+    return found
+
+
+def faction_label(name, shown):
+    """'turks - Ryazan' when the name players see is not the internal one ('england' / 'England',
+    'turks' / 'The Turks' stay plain)."""
+    if not shown:
+        return name
+    norm = lambda s: re.sub(r"[^a-z0-9]", "", re.sub(r"^the\s+", "", s.strip().lower()))
+    return name if norm(shown) == norm(name) else "%s - %s" % (name, shown)
+
+
 def build(mod, campaign, template, new, opts):
     if not RE_NAME.match(new):
         raise ValueError("internal name must be lower case letters, digits and _ (like 'saba')")

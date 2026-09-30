@@ -2157,6 +2157,19 @@ building smith
             reds = [p for p in im.getdata() if p[0] > 60 and p[0] > 2 * p[1]]
             self.assertTrue(len(reds) > 200, textured)       # the cube in the man's (red) texture
 
+    def test_faction_names_players_see(self):
+        """A mod may keep an internal name and show another ('turks' shown as 'Ryazan'): the lists say both; a name
+        that only differs by case or 'The' stays plain (a tester's wish on Discord)."""
+        from faction_tool.build import display_names, faction_label
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "text", "expanded_bi.txt"), "{ALPHA}\t\tRyazan\n{SLAVE}\tRebels\n", utf16=True)
+        mod = ModData(self.root)
+        self.assertEqual(display_names(mod), {"alpha": "Ryazan", "slave": "Rebels"})
+        self.assertEqual(faction_label("alpha", "Ryazan"), "alpha - Ryazan")
+        self.assertEqual(faction_label("turks", "The Turks"), "turks")
+        self.assertEqual(faction_label("papal_states", "The Papal States"), "papal_states")
+        self.assertEqual(faction_label("england", None), "england")
+
     def test_factions_all_lets_everyone_build(self):
         """'requires factions { all, }' (a modder's way to say everyone): every faction may build the level - the
         town's buildings, the Buildings tab and the Building editor say so, and setting it warns about nothing

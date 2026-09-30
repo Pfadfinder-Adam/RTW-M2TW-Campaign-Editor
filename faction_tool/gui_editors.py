@@ -138,17 +138,19 @@ class RecordEditor(ttk.Frame):
             except Exception:                     # a broken block is still listed, only not sorted
                 self.facets[blk[1]] = {}
         facs = self.mod.factions()
+        from .build import faction_label
+        shown = self.app.shown_names() if hasattr(self.app, "shown_names") else {}
         cultures = sorted({c for _, c in facs if c})
         if self.kind == "unit":
             vals = ["all", "mercenaries only", "no mercenaries", "general's units"]
-            vals += ["faction: %s" % n for n, _ in facs]
+            vals += ["faction: %s" % faction_label(n, shown.get(n)) for n, _ in facs]
             vals += ["culture: %s" % c for c in cultures]
             vals += ["category: %s" % c for c in sorted({x.get("category") for x in self.facets.values()} - {"", None})]
             vals += ["class: %s" % c for c in sorted({x.get("class") for x in self.facets.values()} - {"", None})]
         else:
             vals = ["all", "recruit units", "no recruiting"]
             vals += ["type: %s" % g for g, _ in E.CHAIN_GROUPS + (("other", ()),)]
-            vals += ["faction: %s" % n for n, _ in facs]
+            vals += ["faction: %s" % faction_label(n, shown.get(n)) for n, _ in facs]
             vals += ["culture: %s" % c for c in cultures]
         self.cb_show["values"] = vals
         if self.v_show.get() not in vals:
@@ -161,6 +163,7 @@ class RecordEditor(ttk.Frame):
             return True
         fc = self.facets.get(blk[1]) or {}
         kind, _, what = want.partition(": ")
+        what = what.split(" - ")[0] if kind == "faction" else what
         if self.kind == "unit":
             if want == "mercenaries only":
                 return fc.get("mercenary", False)

@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.19.2 - 2026-09-30
+
+### Changed
+- **Factions are listed with the name players see** when the mod shows another one: "turks - Ryazan" (Medieval II's
+  faction names are fixed in the game, so mods keep "turks" and rename it in the texts - a tester on Discord). In
+  every list where a faction is picked: the faction to copy or change, New region's owner and builder, where
+  removed towns go, the towns' owner filter, rebels of, the Character editor, name lists, the editors' Show filter
+  and New religion. The files keep the internal name.
 
 ### Fixed
 - **Buildings whose list says `factions { all, }`** (a modder's way to let everyone build them) were taken as

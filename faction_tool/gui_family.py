@@ -36,7 +36,8 @@ class FamilyEditor(ttk.Frame):
         if standalone:
             ttk.Label(top, text="Faction", font=("", 10, "bold")).pack(side="left")
             self.v_fac = tk.StringVar()
-            self.cb_fac = ttk.Combobox(top, textvariable=self.v_fac, state="readonly", width=22)
+            from .gui_util import FactionBox
+            self.cb_fac = FactionBox(top, self.v_fac, state="readonly", width=26)
             self.cb_fac.pack(side="left", padx=4)
             self.cb_fac.bind("<<ComboboxSelected>>", lambda e: self.load())
         self.title = ttk.Label(top, text="" if standalone else "Edit faction: pick the faction on the Faction tab",
@@ -206,7 +207,7 @@ class FamilyEditor(ttk.Frame):
                 return
             s = app.strat
             names = [fb.name for fb in s.factions] if s else []
-            self.cb_fac["values"] = names
+            self.cb_fac.set_names(names, app.shown_names())
             if self.v_fac.get() not in names:
                 self.v_fac.set(names[0] if names else "")
             faction = self.v_fac.get()

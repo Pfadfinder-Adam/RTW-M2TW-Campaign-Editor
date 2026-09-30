@@ -51,7 +51,8 @@ class NameListWizard:
         bar.pack(fill="x", pady=4)
         ttk.Label(bar, text="Copy this step from").pack(side="left")
         self.v_from = tk.StringVar(value=who if who in self.factions else (app.v["template"].get().strip() or ""))
-        ttk.Combobox(bar, textvariable=self.v_from, values=self.factions, width=18, state="readonly").pack(
+        from .gui_util import FactionBox
+        FactionBox(bar, self.v_from, self.factions, app.shown_names(), width=24, state="readonly").pack(
             side="left", padx=4)
         ttk.Button(bar, text="Copy", command=self.copy_from).pack(side="left")
         ttk.Button(bar, text="Add from it", command=lambda: self.copy_from(add=True)).pack(side="left", padx=4)

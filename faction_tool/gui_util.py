@@ -74,3 +74,45 @@ def fit_first_pane(panes, inner, extra=20):
         panes.update_idletasks()
         panes.sashpos(0, inner.winfo_reqwidth() + extra)
     panes.bind("<Map>", fit)
+
+
+class FactionBox(ttk.Combobox):
+    """A faction picker showing 'turks - Ryazan' (the internal name and the one players see) while its variable
+    keeps the internal name, so the code reading it is unchanged. Other values ('(all)', ...) pass as they are."""
+
+    def __init__(self, master, variable, names=(), shown=None, **kw):
+        self._real = variable
+        self._shown = tk.StringVar()
+        self._labels = {}
+        self._busy = False
+        super().__init__(master, textvariable=self._shown, **kw)
+        variable.trace_add("write", self._from_real)
+        self._shown.trace_add("write", self._from_shown)
+        self.set_names(names, shown or {})
+
+    def set_names(self, names, shown=None):
+        from .build import faction_label
+        shown = shown or {}
+        self._labels = {n: faction_label(n, shown.get(n)) for n in names}
+        self["values"] = [self._labels[n] for n in names]
+        self._from_real()
+
+    def _from_real(self, *_):
+        if self._busy:
+            return
+        self._busy = True
+        try:
+            v = self._real.get()
+            self._shown.set(self._labels.get(v, v))
+        finally:
+            self._busy = False
+
+    def _from_shown(self, *_):
+        if self._busy:
+            return
+        self._busy = True
+        try:
+            s = self._shown.get()
+            self._real.set(next((n for n, l in self._labels.items() if l == s), s))
+        finally:
+            self._busy = False

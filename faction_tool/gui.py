@@ -30,7 +30,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.19.1"
+VERSION = "0.19.2"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
 
@@ -398,7 +398,8 @@ class App(tk.Tk):
             ttk.Label(lf, text=label).grid(row=row, column=0, sticky="w", padx=4, pady=2)
             widget.grid(row=row, column=1, sticky="we", padx=4, pady=2)
             row += 1
-        self.cb_template = ttk.Combobox(lf, textvariable=self.v["template"], state="readonly", width=28)
+        from .gui_util import FactionBox
+        self.cb_template = FactionBox(lf, self.v["template"], state="readonly", width=28)
         self.cb_template.bind("<<ComboboxSelected>>", lambda e: self.template_changed())
         field("Template (copied)", self.cb_template)
         self.lbl_template = lf.grid_slaves(row=row - 1, column=0)[0]
@@ -485,7 +486,7 @@ class App(tk.Tk):
         ttk.Entry(flt, textvariable=self.v_search, width=20).pack(side="left", padx=4)
         ttk.Label(flt, text="Owner").pack(side="left", padx=(10, 2))
         self.v_owner = tk.StringVar(value="(all)")
-        self.cb_owner = ttk.Combobox(flt, textvariable=self.v_owner, state="readonly", width=18)
+        self.cb_owner = FactionBox(flt, self.v_owner, ["(all)"], state="readonly", width=18)
         self.cb_owner.pack(side="left")
         self.cb_owner.bind("<<ComboboxSelected>>", lambda e: self.fill_towns())
         # the town list and the chosen list share a pane: drag the divider to widen either
@@ -509,7 +510,7 @@ class App(tk.Tk):
         self.give_frame = ttk.Frame(cf2)
         ttk.Label(self.give_frame, text="Removed towns go to").pack(anchor="w", pady=(6, 0))
         self.v_give = tk.StringVar(value="slave")
-        self.cb_give = ttk.Combobox(self.give_frame, textvariable=self.v_give, state="readonly", width=24)
+        self.cb_give = FactionBox(self.give_frame, self.v_give, state="readonly", width=24)
         self.cb_give.pack(fill="x")
         mid = ttk.Frame(left_pane)
         mid.pack(side="right", padx=6)
@@ -1029,7 +1030,7 @@ class App(tk.Tk):
         names = [n for n, _ in self.mod.factions() if n != "slave"]
         if self.editing() and "slave" in [n for n, _ in self.mod.factions()]:
             names.append("slave")
-        self.cb_template["values"] = names
+        self.cb_template.set_names(names, self.shown_names())
         if not self.editing() and self.v["template"].get().strip() == "slave":
             self.v["template"].set("")
 
@@ -1115,7 +1116,7 @@ class App(tk.Tk):
             self.v[role + "_first"].set(first)
             self.v[role + "_last"].set(name[len(first):].strip())
             self.v[role + "_age"].set(str(who.get("age") or ""))
-        self.cb_give["values"] = [n for n, _ in self.mod.factions() if n != faction]
+        self.cb_give.set_names([n for n, _ in self.mod.factions() if n != faction], self.shown_names())
         self.v_give.set("slave")
         self.chosen = list(now.get("regions", []))
         self.garrisons, self.buildings_picked, self.sizes = {}, {}, {}
@@ -1528,7 +1529,8 @@ class App(tk.Tk):
             vs[key] = v
             if key in ("creator", "owner"):
                 vals = [AS_LAND] + facs if key == "creator" else ["(rebel village - no settlement written)"] + facs
-                ttk.Combobox(frm, textvariable=v, values=vals, width=34).grid(row=i, column=1, sticky="we", padx=6)
+                from .gui_util import FactionBox
+                FactionBox(frm, v, vals, self.shown_names(), width=34).grid(row=i, column=1, sticky="we", padx=6)
             elif key == "rebels":
                 ttk.Combobox(frm, textvariable=v, values=[AS_LAND] + rebels,
                              width=34).grid(row=i, column=1, sticky="we", padx=6)
@@ -1840,8 +1842,9 @@ class App(tk.Tk):
         ttk.Label(frm, text="Factions that follow it").grid(row=5, column=0, sticky="nw", pady=(6, 0))
         lb = tk.Listbox(frm, selectmode="multiple", height=8, exportselection=False)
         facs = [n for n, _ in self.mod.factions() if n != "slave"]
+        from .build import faction_label
         for n in facs:
-            lb.insert("end", n)
+            lb.insert("end", faction_label(n, self.shown_names().get(n)))
         lb.grid(row=5, column=1, sticky="w", pady=(6, 0))
         ttk.Label(frm, text="optional - none keeps every faction's religion", foreground="#666").grid(
             row=5, column=2, sticky="nw", pady=(6, 0))
@@ -2278,6 +2281,18 @@ class App(tk.Tk):
             settings.put("campaigns", camps)
         self.load_campaign()
 
+    def shown_names(self):
+        """{faction: the name players see} for this mod and campaign (read once per load / campaign)."""
+        from .build import display_names
+        key = (id(self.mod), self.v_campaign.get())
+        if getattr(self, "_shown_key", None) != key:
+            try:
+                self._shown = display_names(self.mod, self.v_campaign.get() or None) if self.mod else {}
+            except Exception:
+                self._shown = {}
+            self._shown_key = key
+        return self._shown
+
     def load(self):
         try:
             self.mod = ModData(self.v_path.get())
@@ -2488,7 +2503,7 @@ class App(tk.Tk):
             messagebox.showerror(APP, "Could not read the campaign: %s" % e)
             return
         owners = sorted(set(self.strat.owners().values()))
-        self.cb_owner["values"] = ["(all)"] + owners
+        self.cb_owner.set_names(["(all)"] + owners, self.shown_names())
         self.chosen = []
         self.garrisons = {}
         self.buildings_picked = {}
@@ -2836,8 +2851,9 @@ class App(tk.Tk):
         row = 0
         if rebels:
             ttk.Label(frm, text="Rebels of").grid(row=row, column=0, sticky="w")
-            cb_sub = ttk.Combobox(frm, textvariable=v_sub, state="readonly", width=16,
-                                  values=[n for n, _ in self.mod.factions() if n != "slave"])
+            from .gui_util import FactionBox
+            cb_sub = FactionBox(frm, v_sub, [n for n, _ in self.mod.factions() if n != "slave"], self.shown_names(),
+                                state="readonly", width=24)
             cb_sub.grid(row=row, column=1, sticky="w")
             ttk.Label(frm, text="(sub_faction: their look, and the list their name comes from)",
                       foreground="#666").grid(row=row, column=2, sticky="w")
