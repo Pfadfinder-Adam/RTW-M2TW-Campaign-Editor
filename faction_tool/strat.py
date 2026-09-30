@@ -97,12 +97,13 @@ class Strat:
             fb = FactionBlock(t[1], i, e, lines[i])
             self._scan_block(fb)
             self.factions.append(fb)
-        # forts / watchtowers anywhere in the file (a faction's block, or the top)
+        # forts / watchtowers anywhere in the file: a faction's block, the top, or after the diplomacy (Barbarian
+        # Invasion lists its 53 watchtowers under the regions there)
         owner_at = {}
         for fb in self.factions:
             for k in range(fb.start, fb.end):
                 owner_at[k] = fb.name
-        self.forts = [Fort(i, l, owner_at.get(i)) for i, l in enumerate(lines[:self.diplomacy_start])
+        self.forts = [Fort(i, l, owner_at.get(i)) for i, l in enumerate(lines)
                       if RE_FORT.match(strip_comment(l))]
 
     def _list(self, key):

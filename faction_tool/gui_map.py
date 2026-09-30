@@ -86,7 +86,7 @@ class MapView(ttk.Frame):
         # the two modes that change what a click does, as switches of their own
         ttk.Checkbutton(bar, text="Edit regions", variable=self.v_regions,
                         command=self._regions_toggled).pack(side="left", padx=(12, 4))
-        ttk.Checkbutton(bar, text="Edit resources", variable=self.v_res, command=relayer).pack(side="left", padx=4)
+        ttk.Checkbutton(bar, text="Edit resources & forts", variable=self.v_res, command=relayer).pack(side="left", padx=4)
         self.lbl_layers = ttk.Label(bar, text="", foreground="#666")
         self.lbl_layers.pack(side="left", padx=8)
         for v in (self.v_pol, self.v_borders, self.v_names, self.v_ports, self.v_chars, self.v_res, self.v_dip,
@@ -763,7 +763,10 @@ class MapView(ttk.Frame):
     def _forts(self, cw, ch):
         """A fort: a small brown tower with battlements in the owner's colour (a watchtower: thinner)."""
         c = self.canvas
+        editing = {r["id"] for r in self.resources} if self.v_res.get() else set()
         for fo in self.forts:
+            if "f%d" % fo.line in editing:              # Edit resources & forts draws it (movable)
+                continue
             sx, sy = self.to_screen(*fo.xy)
             if not (-20 < sx < cw + 20 and -20 < sy < ch + 20):
                 continue
@@ -800,8 +803,15 @@ class MapView(ttk.Frame):
             if not (-20 < sx < cw + 20 and -20 < sy < ch + 20):
                 continue
             tags = ("res", "res:%s" % res["id"])
-            fill = self.res_colour(res["kind"])
             sel = res["id"] == self.res_sel
+            if res["kind"] in ("fort", "watchtower"):          # a fort keeps its tower, picked: a yellow frame
+                w = max(2.0, min(self.z * (0.28 if res["kind"] == "watchtower" else 0.42), 12))
+                self._fort_icon(c, sx, sy, w, "#222222", tags, 1)
+                if sel:
+                    c.create_rectangle(sx - w - 3, sy - w * 1.3 - 3, sx + w + 3, sy + w + 3, outline="#ffd400",
+                                       width=3, tags=tags)
+                continue
+            fill = self.res_colour(res["kind"])
             if self.z < 6:
                 r = max(2, self.z * 0.35)
                 c.create_rectangle(sx - r, sy - r, sx + r, sy + r, fill=fill, outline="#ffd400" if sel else "",

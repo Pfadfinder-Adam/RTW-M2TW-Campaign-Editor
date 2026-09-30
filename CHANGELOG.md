@@ -7,8 +7,13 @@
   games), land bridges on Medieval II - armies walk across a narrow strait (vanilla has 9: the Bosporus, the Danish
   islands, Messina, Corinth...), painted as a straight strip of 3 tiles; Preview names a lone, bent or broken one.
   Both were already drawn on the map, now they can be painted and rubbed out.
+- **Forts and watchtowers on the Map** (Edit resources & forts): picked, dragged to another tile, deleted, and new
+  ones placed - a new one copies the line of the nearest one the campaign already has (the line differs by game and
+  mod; vanilla Rome and Medieval II have none, so there none is offered). Preview, backup, Restore.
 
 ### Fixed
+- **Barbarian Invasion's 53 watchtowers** (listed after the diplomacy, under the regions) were not read: not drawn
+  and their tiles not kept free for new armies.
 - **The work buttons at the top** (New faction ... Add-ons) were cut off at the window's smallest width: they now
   scroll left / right (arrows at the ends, the mouse wheel over them), and the picked one is always in sight.
 - **Faction form on Medieval II**: "Name (short)" and "Tooltip (faction icon)" are hidden - Medieval II's texts have

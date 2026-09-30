@@ -306,6 +306,8 @@ class App(tk.Tk):
         self.name_list = {}             # {faction or '(new)': {pool: [names]}} a name list of its own (Name list...)
         # resources on the map: moved {index: (x, y)}, removed [index], added [{type, xy}], region tags {region: text}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
+        # forts and watchtowers the same way: moved {line: (x, y)}, removed [line], added [{kind, xy}] (forts.py)
+        self.fort_moves, self.fort_removed, self.fort_added = {}, [], []
         self._res_placing, self._res_sel = None, None
         self.art_replace, self.sel_map = {}, {}      # Art tab: {path under data: picture}, {on, colour}
         self.family_set = {}            # Family tab: {'people': {key: changes}, 'new': [...], 'remove': [...], 'tree'}
@@ -609,14 +611,15 @@ class App(tk.Tk):
         flow(rb)
         self.res_bar = ttk.Frame(tab, padding=(0, 0, 0, 4))
         xb = self.res_bar
-        ttk.Label(xb, text="Resource", font=("", 9, "bold")).pack(side="left")
+        ttk.Label(xb, text="Resource / fort", font=("", 9, "bold")).pack(side="left")
         self.v_res_type = tk.StringVar()
         self.cb_res_type = ttk.Combobox(xb, textvariable=self.v_res_type, width=16, state="readonly")
         self.cb_res_type.pack(side="left", padx=4)
         ttk.Button(xb, text="Place new", command=self.res_place_new).pack(side="left", padx=2)
         ttk.Button(xb, text="Delete picked", command=self.res_delete).pack(side="left", padx=2)
         ttk.Button(xb, text="Region tags (hidden resources)...", command=self.region_tags_dialog).pack(side="left", padx=(12, 2))
-        ttk.Label(xb, text="click a resource: pick it   right drag: move it   a region has the resources on its land",
+        ttk.Label(xb, text="click a resource or fort: pick it   right drag: move it   a region has the resources on its "
+                            "land   a new fort / watchtower copies the line of the nearest one the campaign has",
                   foreground="#666").pack(side="left", padx=10)
         flow(xb)
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
@@ -1236,7 +1239,7 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ undo / redo
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "place_moves", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions", "new_religions", "region_edits",
-                 "culture_names", "name_list", "res_moves", "res_removed", "res_added", "region_tags", "art_replace", "sel_map", "roster_set",
+                 "culture_names", "name_list", "res_moves", "res_removed", "res_added", "region_tags", "fort_moves", "fort_removed", "fort_added", "art_replace", "sel_map", "roster_set",
                  "family_set")
 
     def snapshot(self):
@@ -2002,10 +2005,13 @@ class App(tk.Tk):
 
     # ---- resources on the map ----
     def _resources_opts(self):
-        if not (self.res_moves or self.res_removed or self.res_added or self.region_tags):
+        forts = {"moved": {str(k): list(v) for k, v in self.fort_moves.items()}, "removed": list(self.fort_removed),
+                 "added": [dict(a) for a in self.fort_added]} \
+            if (self.fort_moves or self.fort_removed or self.fort_added) else None
+        if not (self.res_moves or self.res_removed or self.res_added or self.region_tags or forts):
             return None
         return {"moved": {str(k): list(v) for k, v in self.res_moves.items()}, "removed": list(self.res_removed),
-                "added": [dict(a) for a in self.res_added], "region_tags": dict(self.region_tags)}
+                "added": [dict(a) for a in self.res_added], "region_tags": dict(self.region_tags), "forts": forts}
 
     def _file_resources(self):
         """The resources of the campaign's descr_strat.txt (read once per load)."""
@@ -2017,14 +2023,16 @@ class App(tk.Tk):
         return self._res_cache[1]
 
     def _resource_view(self):
-        """The Map's resources: shown with their layer, moved, added and removed here."""
+        """The Map's resources, forts and watchtowers: shown with their layer, moved, added and removed here
+        (ids: r<line> / n<i> resources, f<line> / g<i> forts)."""
+        from . import forts as FT
         from .resources import problem, types
         mv = self.map_view
         if not mv.v_res.get():
             self.res_bar.pack_forget()
             return {}
         self.res_bar.pack(fill="x", before=mv)
-        kinds = list(types(self.mod))
+        kinds = list(types(self.mod)) + list(FT.KINDS)
         self.cb_res_type["values"] = kinds
         if not self.v_res_type.get() and kinds:
             self.v_res_type.set(kinds[0])
@@ -2032,16 +2040,34 @@ class App(tk.Tk):
                  for r in self._file_resources() if r.index not in self.res_removed]
         shown += [{"id": "n%d" % i, "kind": a["type"], "xy": tuple(a["xy"])} for i, a in enumerate(self.res_added)]
         camp = self.v_campaign.get()
+        file_forts = self.strat.forts if self.strat else []
+        shown += [{"id": "f%d" % fo.line, "kind": fo.kind, "xy": tuple(self.fort_moves.get(fo.line, fo.xy))}
+                  for fo in file_forts if fo.line not in self.fort_removed]
+        shown += [{"id": "g%d" % i, "kind": a["kind"], "xy": tuple(a["xy"])} for i, a in enumerate(self.fort_added)]
 
-        def taken(but=None):
-            return [r["xy"] for r in shown if r["id"] != but]
+        def is_fort(rid):
+            return rid[:1] in ("f", "g")
+
+        def taken(but=None, forts=False):
+            return [r["xy"] for r in shown if r["id"] != but and is_fort(r["id"]) == forts]
 
         def check(rid, xy):
+            if is_fort(rid):
+                return FT.problem(self.mod, camp, xy, taken(rid, True))
             return problem(self.mod, camp, xy, taken(rid))
 
         def moved(rid, xy):
             self.remember()
-            if rid.startswith("n"):
+            if rid.startswith("g"):
+                self.fort_added[int(rid[1:])]["xy"] = tuple(xy)
+            elif rid.startswith("f"):
+                i = int(rid[1:])
+                orig = next(fo.xy for fo in file_forts if fo.line == i)
+                if tuple(xy) == tuple(orig):
+                    self.fort_moves.pop(i, None)
+                else:
+                    self.fort_moves[i] = tuple(xy)
+            elif rid.startswith("n"):
                 self.res_added[int(rid[1:])]["xy"] = tuple(xy)
             else:
                 i = int(rid[1:])
@@ -2051,7 +2077,8 @@ class App(tk.Tk):
                 else:
                     self.res_moves[i] = tuple(xy)
             self._res_sel = rid
-            self.status.set("Resource moved to %d, %d - Preview, then Apply." % tuple(xy))
+            self.status.set("%s moved to %d, %d - Preview, then Apply." % (
+                next((r["kind"] for r in shown if r["id"] == rid), "Resource").capitalize(), xy[0], xy[1]))
             self.show_map()
 
         def clicked(rid):
@@ -2067,13 +2094,26 @@ class App(tk.Tk):
             kind = self._res_placing
 
             def place(xy):
-                why = problem(self.mod, camp, xy, taken())
+                if kind in FT.KINDS:
+                    why = FT.problem(self.mod, camp, xy, taken(None, True))
+                    alive = [fo for fo in file_forts if fo.line not in self.fort_removed]
+                    if not why and FT.example(alive, kind, xy) is None:
+                        why = FT.no_example(kind)
+                        messagebox.showinfo(APP, "No new %s: %s." % (kind, why))
+                        self._res_placing = None
+                        return why
+                else:
+                    why = problem(self.mod, camp, xy, taken())
                 if why:
                     return why
                 self.remember()
-                self.res_added.append({"type": kind, "xy": tuple(xy)})
+                if kind in FT.KINDS:
+                    self.fort_added.append({"kind": kind, "xy": tuple(xy)})
+                    self._res_sel = "g%d" % (len(self.fort_added) - 1)
+                else:
+                    self.res_added.append({"type": kind, "xy": tuple(xy)})
+                    self._res_sel = "n%d" % (len(self.res_added) - 1)
                 self._res_placing = None
-                self._res_sel = "n%d" % (len(self.res_added) - 1)
                 self.status.set("%s placed at %d, %d - right drag moves it; Preview, then Apply." % (kind, xy[0], xy[1]))
                 self.show_map()
                 return None
@@ -2095,7 +2135,16 @@ class App(tk.Tk):
             messagebox.showerror(APP, "click a resource on the map first")
             return
         self.remember()
-        if rid.startswith("n"):
+        if rid.startswith("g"):
+            i = int(rid[1:])
+            if i < len(self.fort_added):
+                del self.fort_added[i]
+        elif rid.startswith("f"):
+            i = int(rid[1:])
+            if i not in self.fort_removed:
+                self.fort_removed.append(i)
+            self.fort_moves.pop(i, None)
+        elif rid.startswith("n"):
             i = int(rid[1:])
             if i < len(self.res_added):
                 del self.res_added[i]
@@ -2105,7 +2154,7 @@ class App(tk.Tk):
                 self.res_removed.append(i)
             self.res_moves.pop(i, None)
         self._res_sel = None
-        self.status.set("Resource removed - Preview, then Apply (Undo brings it back).")
+        self.status.set("Removed - Preview, then Apply (Undo brings it back).")
         self.show_map()
 
     def region_tags_dialog(self):
@@ -2665,6 +2714,7 @@ class App(tk.Tk):
         self.culture_names = {}
         self.name_list = {}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
+        self.fort_moves, self.fort_removed, self.fort_added = {}, [], []
         self._res_placing, self._res_sel, self._res_cache = None, None, None
         self.art_replace, self.sel_map = {}, {}
         self.roster_set = {}

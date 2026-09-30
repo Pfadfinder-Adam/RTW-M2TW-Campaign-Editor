@@ -120,6 +120,9 @@ def apply(plan, campaign, changes):
     (and descr_regions.txt for region tags)."""
     if not changes:
         return
+    if changes.get("forts"):                     # below the resources: their lines keep their places
+        from .forts import apply as apply_forts
+        apply_forts(plan, campaign, changes["forts"])
     mod = plan.mod
     moved = {int(k): tuple(v) for k, v in (changes.get("moved") or {}).items()}
     removed = {int(k) for k in changes.get("removed") or []}

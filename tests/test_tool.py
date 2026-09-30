@@ -2626,6 +2626,35 @@ building smith
         with open(path) as fh:
             self.assertIn("resource\tiron,\t0,\t0", fh.read())
 
+    def test_forts_moved_removed_added(self):
+        from faction_tool import forts as FT
+        from faction_tool.edit import edit
+        path = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        with open(path, "rb") as fh:
+            before = fh.read()
+        # Barbarian Invasion keeps its watchtowers after the diplomacy, under the regions
+        with open(path, "wb") as fh:
+            fh.write(before + b"\nregion A_R\nwatchtower \t2 3\n\nwatchtower \t0 3 ; west\n")
+        mod = ModData(self.root)
+        now = FT.read(mod, "test")
+        self.assertEqual([(f.kind, f.xy) for f in now], [("watchtower", (2, 3)), ("watchtower", (0, 3))])
+        self.assertIn("fort", FT.no_example("fort"))
+        with self.assertRaises(ValueError):                  # no fort line to copy in this campaign
+            edit(ModData(self.root), "test", "alpha", {"resources": {"forts": {"added": [{"kind": "fort", "xy": [3, 3]}]}}})
+        with self.assertRaises(ValueError):                  # two on one tile
+            edit(ModData(self.root), "test", "alpha", {"resources": {"forts": {"moved": {str(now[0].line): [0, 3]}}}})
+        plan = edit(mod, "test", "alpha", {"resources": {"forts": {
+            "moved": {str(now[0].line): [3, 3]}, "removed": [now[1].line],
+            "added": [{"kind": "watchtower", "xy": [2, 3]}]}}})
+        bdir = plan.apply()
+        with open(path) as fh:
+            new = fh.read()
+        self.assertIn("region A_R\nwatchtower \t3 3\nwatchtower \t2 3\n", new)     # layout kept, new after it
+        self.assertNotIn("0 3 ; west", new)
+        restore(ModData(self.root), bdir)
+        with open(path, "rb") as fh:
+            self.assertEqual(fh.read(), before + b"\nregion A_R\nwatchtower \t2 3\n\nwatchtower \t0 3 ; west\n")
+
     def test_garrison_emptied_by_hand(self):
         from faction_tool.edit import edit
         mod = ModData(self.root)
