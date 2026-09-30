@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import editors as E
 from . import theme, unitattrs
-from .moddata import ModData
+from .moddata import ModData, _ci
 from .plan import Plan
 
 CHANGED = "#fff2b3"          # a field changed and not written yet
@@ -672,8 +672,260 @@ class RecordEditor(ttk.Frame):
                 row=1, column=1, sticky="w", padx=6)
             ttk.Button(box, text="Import...", command=lambda t=targets, n=need, l=label: self.import_pic(t, n, l)).grid(
                 row=2, column=1, sticky="w", padx=6)
-        ttk.Label(self.pics, text="3D model, textures and icons: next steps", foreground="#888").grid(
-            row=2, column=0, sticky="w")
+        self._unit_models(2)
+
+    # ---- battle models ----
+    def _model_catalogue(self, mod=None):
+        """models.catalogue of mod (this one by default), kept while its model files are unchanged."""
+        from . import models as MO
+        from . import modeldb as MDB
+        mod = mod or self.mod
+        src, _ = MDB.find(mod) if MO.game_kind(mod) == "medieval2" else (None, None)
+        stamp = tuple(os.path.getmtime(p) if p and os.path.exists(p) else 0
+                      for p in (_ci(mod.data, MO.TEXT_FILE), src, mod.file("edu")))
+        cache = self.__dict__.setdefault("_models_cache", {})
+        key = os.path.normcase(os.path.abspath(mod.data))
+        if key not in cache or cache[key][0] != stamp:
+            cache[key] = (stamp, MO.catalogue(mod))
+        return cache[key][1]
+
+    def _texture_thumb(self, parent, mod, rel, size=(72, 72)):
+        """A texture as a small picture (cached: a Medieval II texture takes a moment to decode)."""
+        from PIL import ImageTk
+        from . import models as MO
+        cache = self.__dict__.setdefault("_tex_cache", {})
+        k = (mod.data, rel, size)
+        if k not in cache:
+            im = None
+            try:
+                im = MO.texture_image(mod, rel) if rel else None
+                if im is not None:
+                    im.thumbnail(size)
+            except Exception:
+                im = None
+            cache[k] = im
+        im = cache[k]
+        if im is None:
+            return ttk.Label(parent, text="(no texture\nfile here)", width=11, relief="sunken", anchor="center")
+        ph = ImageTk.PhotoImage(im)
+        self._photos.append(ph)
+        return tk.Label(parent, image=ph, relief="sunken")
+
+    def _unit_lines(self):
+        name, a, b = self.current
+        f = self.mod.load(self.path())
+        return [f.text(i) for i in range(a, b)]
+
+    def _unit_models(self, row):
+        """The unit's battle models: each soldier / officer line's model, how it sits, a texture, Replace model..."""
+        from . import models as MO
+        box = ttk.LabelFrame(self.pics, text="Battle model", padding=6)
+        box.grid(row=row, column=0, sticky="nwe", pady=(4, 0))
+        try:
+            cat = self._model_catalogue()
+            lines = self._unit_lines()
+        except Exception as e:
+            ttk.Label(box, text="cannot read the battle models: %s" % e, foreground="#a33").grid(sticky="w")
+            return
+        seat = MO.unit_seat(self.mod, lines)
+        slots = MO.unit_slots(lines)
+        if not slots:
+            ttk.Label(box, text="no soldier line - nothing to show").grid(sticky="w")
+            return
+        facs = self._factions_of()
+        for r, (key, idx, model) in enumerate(slots):
+            info = cat.get(model.lower())
+            tex = None
+            if info:
+                tex = next((info.textures[f] for f in facs if f in info.textures), None) or \
+                    next(iter(info.textures.values()), None)
+            self._texture_thumb(box, self.mod, tex).grid(row=r, column=0, rowspan=1, sticky="nw", pady=2)
+            txt = "%s: %s" % ("Soldiers" if key == "soldier" else "Officer %d" % (idx + 1), model)
+            if info is None:
+                detail, colour = "not in this mod's battle models - the game cannot show the unit", "#a33"
+            else:
+                probs = MO.fit_problems(self.mod, info, seat)
+                missing = [f for f in facs if f not in info.textures and "" not in info.textures]
+                detail = "the model is made %s; the unit is %s" % (info.seat_words(), MO.SEAT_WORDS.get(seat, seat))
+                detail += "\ntextures for %d faction(s)%s" % (
+                    len([f for f in info.textures if f]) or 1,
+                    ("; none for %s" % ", ".join(missing[:4]) + (" ..." if len(missing) > 4 else "")) if missing else "")
+                if probs:
+                    detail += "\n" + "\n".join(("WARNING: " if s else "") + m for s, m in probs)
+                colour = "#a33" if any(s for s, _ in probs) else ("#b60" if probs else "#555")
+            cell = ttk.Frame(box)
+            cell.grid(row=r, column=1, sticky="nw", padx=6)
+            ttk.Label(cell, text=txt, font=("", 9, "bold")).pack(anchor="w")
+            ttk.Label(cell, text=detail, foreground=colour, justify="left", wraplength=380).pack(anchor="w")
+            ttk.Button(cell, text="Replace model...",
+                       command=lambda k=key, i=idx, m=model: self.replace_model(k, i, m)).pack(anchor="w", pady=(2, 0))
+        ttk.Label(box, text="The model in 3D comes next.", foreground="#888").grid(
+            row=len(slots), column=0, columnspan=2, sticky="w", pady=(4, 0))
+
+    def replace_model(self, key, idx, current):
+        """Another battle model for this unit's soldiers (or an officer): from this mod or another mod folder of the
+        same game (it comes with every file it names), Preview, then written with a backup like every change."""
+        from tkinter import filedialog
+        from . import models as MO
+        from .moddata import ModData
+        from .plan import Plan
+        unit = self.current[0]
+        what = "soldiers" if key == "soldier" else "officer %d" % (idx + 1)
+        if self.pending() and not messagebox.askyesno(
+                "Replace model", "The unit editor holds changes not written yet; replacing the model writes "
+                                 "export_descr_unit.txt, so they would be dropped. Go on?", parent=self):
+            return
+        lines = self._unit_lines()
+        seat = MO.unit_seat(self.mod, lines)
+        facs = self._factions_of()
+        st = {"mod": self.mod, "cat": self._model_catalogue(), "names": []}
+        w = tk.Toplevel(self)
+        w.title("Replace battle model - %s, %s" % (unit, what))
+        w.transient(self)
+        frm = ttk.Frame(w, padding=10)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, justify="left", wraplength=640, text=(
+            "%s of %s use %s now. Pick the model to use instead. The unit is %s: a model made to sit otherwise is "
+            "marked. Every faction that owns the unit gets a texture on the model where it has none (a copy of "
+            "the mercenaries' or the first one's)." % (what.capitalize(), unit, current,
+                                                       MO.SEAT_WORDS.get(seat, seat)))).grid(
+            row=0, column=0, columnspan=3, sticky="w")
+        src_bar = ttk.Frame(frm)
+        src_bar.grid(row=1, column=0, columnspan=3, sticky="we", pady=(8, 4))
+        ttk.Label(src_bar, text="Take it from:").pack(side="left")
+        v_src = tk.StringVar(value="this mod")
+        lbl_src = ttk.Label(src_bar, textvariable=v_src, foreground="#555")
+        lbl_src.pack(side="left", padx=6)
+
+        def fill(*_):
+            q = v_find.get().strip().lower()
+            lb.delete(0, "end")
+            st["names"] = []
+            for k in sorted(st["cat"]):
+                info = st["cat"][k]
+                if q and q not in k:
+                    continue
+                fits = not [p for p in MO.fit_problems(self.mod, info, seat) if "made" in p[1]]
+                st["names"].append(info.name)
+                lb.insert("end", "%s%s   (%s)" % ("" if fits else "! ", info.name, info.seat_words()))
+            lbl_n.configure(text="%d model(s)" % len(st["names"]))
+
+        def other():
+            path = filedialog.askdirectory(parent=w, title="The other mod's data folder (or the mod folder)")
+            if not path:
+                return
+            data = path if os.path.isdir(os.path.join(path, "unit_models")) or _ci(path, "descr_sm_factions.txt") \
+                else (_ci(path, "data") or path)
+            try:
+                m = ModData(data)
+                if MO.game_kind(m) != MO.game_kind(self.mod):
+                    raise ValueError("that mod is of the other game - models go between mods of one game")
+                cat = self._model_catalogue(m)
+            except Exception as e:
+                messagebox.showerror("Replace model", str(e), parent=w)
+                return
+            st.update(mod=m, cat=cat)
+            v_src.set(data)
+            fill()
+
+        def mine():
+            st.update(mod=self.mod, cat=self._model_catalogue())
+            v_src.set("this mod")
+            fill()
+        ttk.Button(src_bar, text="Another mod...", command=other).pack(side="right")
+        ttk.Button(src_bar, text="This mod", command=mine).pack(side="right", padx=4)
+        fbar = ttk.Frame(frm)
+        fbar.grid(row=2, column=0, sticky="we")
+        ttk.Label(fbar, text="Find").pack(side="left")
+        v_find = tk.StringVar()
+        ttk.Entry(fbar, textvariable=v_find, width=24).pack(side="left", padx=4)
+        lbl_n = ttk.Label(fbar, foreground="#555")
+        lbl_n.pack(side="left", padx=4)
+        v_find.trace_add("write", fill)
+        lb = tk.Listbox(frm, height=18, width=46, exportselection=False)
+        lb.grid(row=3, column=0, sticky="nsew")
+        sb = ttk.Scrollbar(frm, orient="vertical", command=lb.yview)
+        sb.grid(row=3, column=1, sticky="ns")
+        lb.configure(yscrollcommand=sb.set)
+        side = ttk.Frame(frm, padding=(10, 0))
+        side.grid(row=3, column=2, sticky="nw")
+        frm.rowconfigure(3, weight=1)
+        frm.columnconfigure(0, weight=1)
+
+        def picked():
+            sel = lb.curselection()
+            return st["names"][sel[0]] if sel and sel[0] < len(st["names"]) else None
+
+        def show(*_):
+            for c in side.winfo_children():
+                c.destroy()
+            name = picked()
+            if not name:
+                return
+            info = st["cat"][name.lower()]
+            tex = next((info.textures[f] for f in facs if f in info.textures), None) or \
+                next(iter(info.textures.values()), None)
+            self._texture_thumb(side, st["mod"], tex, size=(160, 160)).pack(anchor="w")
+            have = [f for f in info.textures if f]
+            missing = [f for f in facs if f not in info.textures and "" not in info.textures]
+            ttk.Label(side, text=name, font=("", 10, "bold")).pack(anchor="w", pady=(6, 0))
+            ttk.Label(side, justify="left", wraplength=300, text=(
+                "made %s\ntextures: %s%s%s" % (
+                    info.seat_words(), ", ".join(have[:8]) + (" and %d more" % (len(have) - 8) if len(have) > 8 else "")
+                    if have else "one for everyone",
+                    ("\ngets a texture copy for: %s" % ", ".join(missing)) if missing else "",
+                    "\ncomes with every file it names (meshes, textures, sprites)" if st["mod"] is not self.mod
+                    else ""))).pack(anchor="w")
+            for serious, msg in MO.fit_problems(self.mod, info, seat):
+                ttk.Label(side, text=("WARNING: " if serious else "") + msg, foreground="#a33" if serious else "#b60",
+                          justify="left", wraplength=300).pack(anchor="w", pady=(4, 0))
+        lb.bind("<<ListboxSelect>>", show)
+
+        def make():
+            name = picked()
+            if not name:
+                raise ValueError("pick a model in the list first")
+            plan = Plan(self.mod, "model", "unit_model", {})
+            MO.replace(plan, unit, key, idx, name, src_mod=None if st["mod"] is self.mod else st["mod"])
+            return plan
+
+        def preview():
+            try:
+                plan = make()
+            except Exception as e:
+                messagebox.showerror("Replace model", str(e), parent=w)
+                return
+            self.app.show_text("Replace model - preview (nothing written)", plan.report())
+
+        def write():
+            try:
+                plan = make()
+            except Exception as e:
+                messagebox.showerror("Replace model", str(e), parent=w)
+                return
+            serious = [x for _, x in plan.warnings if "WARNING" in x]
+            if not messagebox.askyesno("Replace model", "%sWrite %d file(s)? A backup is made first (Restore undoes "
+                                                        "it)." % (("\n".join(serious) + "\n\n") if serious else "",
+                                                                  len(plan.changed_files())),
+                                       icon="warning" if serious else "question", parent=w):
+                return
+            bdir = plan.apply()
+            from . import log
+            log.write("Battle model of %s (%s) replaced (backup %s)\n%s" % (unit, what, bdir, plan.report()))
+            w.destroy()
+            self.app.load()
+            self.app.status.set("%s: %s now use another battle model (backup %s)." % (unit, what, bdir))
+        bar = ttk.Frame(frm)
+        bar.grid(row=4, column=0, columnspan=3, sticky="e", pady=(8, 0))
+        ttk.Button(bar, text="Preview", command=preview).pack(side="left")
+        ttk.Button(bar, text="Write it in", command=write).pack(side="left", padx=6)
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
+        fill()
+        if current.lower() in st["cat"]:
+            i = st["names"].index(st["cat"][current.lower()].name)
+            lb.selection_set(i)
+            lb.see(i)
+            show()
 
     def _building_pictures(self):
         from .buildings import BuildingPictures

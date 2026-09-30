@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **Replace a unit's battle model** (Unit editor, new **Battle model** block): the soldiers' (and each officer's)
+  model with a texture of one of the unit's factions, how the model sits (on foot, on a horse or camel, an
+  elephant, a chariot) against the unit's mount, and **Replace model...**: pick another model of this mod or of
+  another mod folder of the same game (it comes with its meshes, textures and sprites; a taken name gets a free
+  one). Every faction that owns the unit gets a texture on the new model where it has none - in
+  descr_model_battle.txt and, on Medieval II, in battle_models.modeldb alike. A model made to sit otherwise is
+  marked in the list and warned about (Medieval II likely crashes on it). Preview, a backup, Restore as always.
 - **An icon of its own** for the exe and the window: a gear ring round a Roman "R" and a medieval "M" (drawn for the editor, no game pictures).
 
 ### Fixed

@@ -48,7 +48,8 @@ class ModelInfo:
         return list(self.textures)
 
     def seat_words(self):
-        return ", ".join(SEAT_WORDS[s] for s in SEATS if s in self.seats) or "not known"
+        w = [SEAT_WORDS[s] for s in SEATS if s in self.seats]
+        return (", ".join(w[:-1]) + " or " + w[-1]) if len(w) > 1 else (w[0] if w else "not known")
 
 
 def game_kind(mod):
@@ -145,8 +146,6 @@ def catalogue(mod):
         o = other.get(key)
         if o is not None:
             m.where |= o.where
-            if o.exact:
-                m.name = o.name                     # vanilla's EDU spells names as the modeldb does
             if o.exact and not m.exact:
                 m.seats, m.exact = set(o.seats), True
     return read
