@@ -9,6 +9,10 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from . import factionart as FA
 
+# The campaign-select map part is put away for now (the user, 2026-10-01): the code stays for a later release;
+# True shows it again. While False the originals stay and nothing is drawn (gui.App.select_map_opts).
+MAP_PART = False
+
 
 class ArtEditor(ttk.Frame):
     def __init__(self, master, app):
@@ -17,8 +21,9 @@ class ArtEditor(ttk.Frame):
         self._photos = []
         from . import settings
         head = ttk.Frame(self)
-        head.pack(fill="x")
-        self.v_open = tk.BooleanVar(value=bool(settings.get("art_map_open")))
+        if MAP_PART:
+            head.pack(fill="x")
+        self.v_open = tk.BooleanVar(value=MAP_PART and bool(settings.get("art_map_open")))
         self.b_open = ttk.Checkbutton(head, variable=self.v_open, command=self.toggle, style="Toolbutton")
         self.b_open.pack(side="left")
         self.lbl_state = ttk.Label(head, text="", foreground="#555")
@@ -76,7 +81,7 @@ class ArtEditor(ttk.Frame):
         else:
             self.top.pack_forget()
         self._state_text()
-        if save:
+        if save and MAP_PART:
             settings.put("art_map_open", on)
 
     def _state_text(self):

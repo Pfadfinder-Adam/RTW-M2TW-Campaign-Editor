@@ -25,6 +25,22 @@
   removes only inside the loaded mod's or its game's folder (a `../`, another drive, a link that leads out are
   refused before anything is written, and logged); Restore refuses a backup that names files outside.
 
+### Changed
+- **The main window, reorganised** (the user's wish; every button that was there still is):
+  - **Towns are picked on the Map**: the "Starting settlements" list is gone - a click on a town on the Map gives it
+    to the faction or takes it back; **Capital** and **Removed towns** are in the Faction form.
+  - **The family is on the Faction tab**: the tree on top, its people and the picked person below (the Family tab is
+    gone). **Add a relative...** adds a son, daughter, wife, husband, brother, sister, parents, uncle or aunt;
+    parents (and a brother / uncle older than the age of manhood, who may not live off the map) are written as died
+    before the start - Rome's `dead` record; on Medieval II it is refused in plain words until a campaign shows the
+    game's form of such a record.
+  - **Settlements tab** = the towns' names only, as before, and the last tab again.
+  - **A faction's religion** (Medieval II): a Religion field in the Faction form (descr_sm_factions.txt; spacing and
+    comment kept, a religion the game does not know refused); a new faction takes the one picked. **Religions** is a
+    work button (the end of the top row).
+- **Art tab: the campaign-select map part is put away for now** - the maps stay the originals (a new faction a copy
+  of its template's); drawing one from the faction's towns comes back in a later release.
+
 ### Fixed
 - **3D view** (testers): Medieval II's weapons and shields were grey - their textures (AttachmentSets) are named
   only in battle_models.modeldb and were lost when both model files were read (690 of 701 vanilla models have

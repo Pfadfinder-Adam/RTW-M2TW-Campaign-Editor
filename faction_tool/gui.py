@@ -1089,6 +1089,11 @@ class App(tk.Tk):
                 self.editors[w] = RecordEditor(self, self, "unit" if w == "units" else "building")
         return self.editors[w]
 
+    def select_map_opts(self):
+        """The Art tab's campaign-select map wish; {} while that part is put away (gui_art.MAP_PART)."""
+        from .gui_art import MAP_PART
+        return dict(self.sel_map) if MAP_PART else {}
+
     def editing(self):
         return self.v_mode.get() == "edit"
 
@@ -3361,7 +3366,7 @@ class App(tk.Tk):
                       "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen}},
             "places": self._places(),
             "relations": self._relations(),
-            "art": dict(self.art_replace), "select_map": dict(self.sel_map),
+            "art": dict(self.art_replace), "select_map": self.select_map_opts(),
             "regions": self._regions_opts(),
             "resources": self._resources_opts(),
             "names": self.name_list.get("(new)"),
@@ -3404,7 +3409,7 @@ class App(tk.Tk):
             "garrisons": dict(self.garrisons),
             "places": self._places(),
             "relations": self._relations(),
-            "art": dict(self.art_replace), "select_map": dict(self.sel_map),
+            "art": dict(self.art_replace), "select_map": self.select_map_opts(),
             "regions": self._regions_opts(),
             "resources": self._resources_opts(),
             "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen},
@@ -3530,7 +3535,7 @@ class App(tk.Tk):
             if regions:
                 apply_region_opts(plan, self.v_campaign.get(), regions)
                 # the campaign-select maps of the factions whose land changed follow the new borders
-                if self.sel_map.get("on"):          # only when asked on the Art tab: the originals stay
+                if self.select_map_opts().get("on"):    # only when asked on the Art tab: the originals stay
                     from .factionart import redraw_map_changes
                     plan.opts["regions"] = regions
                     redraw_map_changes(plan, self.v_campaign.get())
