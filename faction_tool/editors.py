@@ -106,7 +106,7 @@ def block_facets(f, kind, block):
     facs, everyone, recruits = set(), False, False
     for lv in chain_tree(f, a, b)["levels"]:
         names = factions_in(f.text(lv["head"]))
-        if names is None:
+        if names is None or "all" in names:
             everyone = True
         else:
             facs.update(names)

@@ -2157,6 +2157,24 @@ building smith
             reds = [p for p in im.getdata() if p[0] > 60 and p[0] > 2 * p[1]]
             self.assertTrue(len(reds) > 200, textured)       # the cube in the man's (red) texture
 
+    def test_factions_all_lets_everyone_build(self):
+        """'requires factions { all, }' (a modder's way to say everyone): every faction may build the level - the
+        town's buildings, the Buildings tab and the Building editor say so, and setting it warns about nothing
+        (a tester's report on 0.18.1: only the temples were offered)."""
+        from faction_tool.buildings import Level, available
+        from faction_tool import editors as E
+        for req in ("factions { all, }", "factions { all }", "factions { all, } and resource gold",
+                    "factions { roman, all, }"):
+            self.assertTrue(available(Level("stone_wall", req), "athens", "greek"), req)
+        self.assertFalse(available(Level("stone_wall", "factions { roman, }"), "athens", "greek"))
+        self.assertTrue(available(Level("stone_wall", ""), "athens", "greek"))
+        edb = TextFile.from_bytes("x.txt", (
+            "building defenses\n{\n    levels stone_wall\n    {\n        stone_wall city requires factions { all, }\n"
+            "        {\n            capability\n            {\n            }\n            construction 3\n"
+            "            cost 800\n            settlement_min town\n            upgrades\n            {\n"
+            "            }\n        }\n    }\n}\n").encode())
+        self.assertIsNone(E.block_facets(edb, "building", ("defenses", 0, len(edb)))["factions"])
+
     def test_unit_voices_hear_and_put_in_own(self):
         """Sound packs read (a loose file wins over the pack), a unit's voice found by the owners' culture (Rome) or
         accent (Medieval II) and its voice_type, its name call replaced by the user's wav: a shared line split,

@@ -84,9 +84,10 @@ def read_buildings(edb):
 
 def available(level, faction, culture, template=None):
     """Whether a level's faction list lets this faction (or its culture, or the
-    template it copies) build it."""
+    template it copies) build it. 'all' in the list lets everyone in (a modder's
+    'factions { all, }')."""
     fs = level.factions()
-    if fs is None:
+    if fs is None or "all" in fs:
         return True
     return any(x in fs for x in (faction, culture, template) if x)
 

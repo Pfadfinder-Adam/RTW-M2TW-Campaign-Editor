@@ -419,7 +419,7 @@ class RecordEditor(ttk.Frame):
         lv_txt = []
         for lv in self.tree["levels"]:
             names = factions_in(f.text(lv["head"]))
-            lv_txt.append("%s: %s" % (lv["name"], "everyone" if names is None else self._short(names, 3)))
+            lv_txt.append("%s: %s" % (lv["name"], "everyone" if names is None or "all" in names else self._short(names, 3)))
         need = []
         rx = E.re.compile(r"\bbuilding_present(?:_min_level)?\s+%s\b" % E.re.escape(name))
         for c, x, y in self.blocks:

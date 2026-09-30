@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+- **Buildings whose list says `factions { all, }`** (a modder's way to let everyone build them) were taken as
+  buildable by no one: the Buildings tab offered only the other levels, and setting them warned "not in the faction
+  list" (a tester's report). 'all' in a factions list now means every faction, everywhere the tool checks it.
+
 ### Added
 - **Hear a unit and give it a voice** (Unit editor, Voice in battle), both games: for each accent (Medieval II) or
   culture (Rome) of the unit's owners - its voice class, Play its own name call ("Khan's Guard!") and each of its
