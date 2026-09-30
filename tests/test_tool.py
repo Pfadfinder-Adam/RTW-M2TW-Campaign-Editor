@@ -1520,6 +1520,29 @@ building smith
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
 
+    def test_volcanoes_and_land_bridges(self):
+        from faction_tool import terrain as T
+        # land bridges are Medieval II's (vanilla Rome's map has none); volcanoes both games
+        self.assertIn(T.LAND_BRIDGE, T.feature_brushes("medieval2"))
+        self.assertNotIn(T.LAND_BRIDGE, T.feature_brushes("rome"))
+        self.assertIn(T.VOLCANO, T.feature_brushes("rome"))
+        # a straight strip is fine, a lone tile, a bent group or a broken strip is named
+        B = T.LAND_BRIDGE
+        self.assertEqual(T.bridge_warnings({(4, 2): B, (5, 2): B, (6, 2): B, (9, 9): (0, 0, 255)}), [])
+        self.assertEqual(T.bridge_warnings({(4, 2): B, (4, 3): B, (4, 4): B}), [])
+        self.assertEqual(len(T.bridge_warnings({(1, 1): B})), 1)
+        self.assertIn("straight", T.bridge_warnings({(1, 1): B, (2, 2): B})[0][3])
+
+        class Map:
+            w = h = 10
+
+            def is_sea(self, x, y):
+                return x == 5
+        # a bridge may cross the sea, a volcano may not; neither under a town (the bridge's land end may)
+        self.assertIsNone(T.paint_problem(Map(), "features", (5, 2), B, set()))
+        self.assertIn("on land", T.paint_problem(Map(), "features", (5, 2), T.VOLCANO, set()))
+        self.assertIn("town", T.paint_problem(Map(), "features", (3, 2), T.VOLCANO, {(3, 2)}))
+
     def test_river_pieces(self):
         """The game follows a river side to side from the sea, the map's edge, a source or another river,
         and stops at a corner-only step (the user's river west of the Nile): such a piece is named."""

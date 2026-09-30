@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+- **Volcanoes and land bridges in the Terrain editor** (Rivers, cliffs, volcanoes...): volcanoes on land (both
+  games), land bridges on Medieval II - armies walk across a narrow strait (vanilla has 9: the Bosporus, the Danish
+  islands, Messina, Corinth...), painted as a straight strip of 3 tiles; Preview names a lone, bent or broken one.
+  Both were already drawn on the map, now they can be painted and rubbed out.
+
 ### Fixed
 - **The work buttons at the top** (New faction ... Add-ons) were cut off at the window's smallest width: they now
   scroll left / right (arrows at the ends, the mouse wheel over them), and the picked one is always in sight.

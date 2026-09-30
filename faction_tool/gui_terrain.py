@@ -29,7 +29,7 @@ class TerrainEditor(ttk.Frame):
         top.pack(fill="x")
         ttk.Label(top, text="Paint", font=("", 10, "bold")).pack(side="left")
         self.v_what = tk.StringVar(value="ground")
-        for val, text in (("ground", "Ground"), ("features", "Rivers, fords, cliffs"),
+        for val, text in (("ground", "Ground"), ("features", "Rivers, cliffs, volcanoes..."),
                           ("climate", "Climates"), ("heights", "Heights")):
             ttk.Radiobutton(top, text=text, value=val, variable=self.v_what, command=self.fill_palette).pack(
                 side="left", padx=4)
@@ -145,6 +145,8 @@ class TerrainEditor(ttk.Frame):
                 plan.warnings.append(("map_features.tga", "the river at %d, %d (%d tile(s)) closes into a ring around "
                                                           "land - the modders' guides say a river may split but never "
                                                           "rejoin itself (big mods have a few that load)" % shape[1:]))
+        for x, y, n, why in (T.bridge_warnings(self._features_now()) if painted else [])[:20]:
+            plan.warnings.append(("map_features.tga", "the land bridge at %d, %d (%d tile(s)): %s" % (x, y, n, why)))
         return plan
 
     # ---- the map ----
@@ -369,13 +371,17 @@ class TerrainEditor(ttk.Frame):
                 self.show()
             return
         else:
-            items = [("marks", T.FEATURE_BRUSHES, T.FEATURES)]
+            from .limits import game_kind
+            m2 = bool(self.mod) and game_kind(self.mod) == "medieval2"
+            items = [("marks", T.feature_brushes("medieval2" if m2 else "rome"), T.FEATURES)]
             self.hint.configure(text=(
-                "Rivers, fords (the tiles where armies cross a river), river sources and cliffs: one per tile in "
-                "map_features.tga. A ford goes on the river's own line; 'nothing' rubs a mark out. The game follows "
-                "a river side to side from the sea, a source or another river and stops where two river tiles "
-                "touch only by a corner - the 1-tile brush fills such steps itself, and Preview names a river "
-                "the game will not draw. Not under towns, ports or characters (the game refuses them there)."))
+                "Rivers, fords (the tiles where armies cross a river), river sources, cliffs and volcanoes: one per "
+                "tile in map_features.tga. A ford goes on the river's own line; 'nothing' rubs a mark out. The game "
+                "follows a river side to side from the sea, a source or another river and stops where two river "
+                "tiles touch only by a corner - the 1-tile brush fills such steps itself, and Preview names a river "
+                "the game will not draw. Not under towns, ports or characters (the game refuses them there)." +
+                (" Land bridge: armies walk across a narrow strait (vanilla has 9, like the Bosporus and the Danish "
+                 "islands) - paint a straight strip of 3 tiles: land, sea, land." if m2 else "")))
         from .mapdata import GROUND_LOOK, CampaignMap
         first = None
         swatches = []

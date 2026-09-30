@@ -35,8 +35,46 @@ FEATURES = {
     (255, 255, 255): "river source", (255, 255, 0): "cliff", (255, 0, 0): "volcano",
     (0, 255, 0): "land bridge (Medieval II)",
 }
-FEATURE_BRUSHES = [(0, 0, 255), (0, 255, 255), (255, 255, 255), (255, 255, 0), (0, 0, 0)]
+FEATURE_BRUSHES = [(0, 0, 255), (0, 255, 255), (255, 255, 255), (255, 255, 0), (255, 0, 0), (0, 0, 0)]
 RIVERY = {(0, 0, 255), (0, 255, 255), (255, 255, 255)}
+VOLCANO, LAND_BRIDGE = (255, 0, 0), (0, 255, 0)
+
+
+def feature_brushes(game):
+    """The marks the Terrain editor paints for game ('rome' | 'medieval2'): land bridges only on Medieval II
+    (vanilla Rome's map has none, whether its engine reads them is not known)."""
+    return FEATURE_BRUSHES[:-1] + ([LAND_BRIDGE] if game == "medieval2" else []) + [(0, 0, 0)]
+
+
+def bridge_warnings(features):
+    """[(x, y, n, why)] for land bridges (green, Medieval II) the game may not take: vanilla's 9 are straight
+    strips of 3 tiles across a strait (land - sea - land), so a group that is not one straight row or column, or
+    a single tile, is named."""
+    green = {t for t, c in features.items() if c == LAND_BRIDGE}
+    seen, out = set(), []
+    for t0 in sorted(green, key=lambda t: (t[1], t[0])):
+        if t0 in seen:
+            continue
+        group, todo = [], [t0]
+        seen.add(t0)
+        while todo:
+            x, y = todo.pop()
+            group.append((x, y))
+            for n in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1), (x + 1, y + 1), (x - 1, y - 1),
+                      (x + 1, y - 1), (x - 1, y + 1)):
+                if n in green and n not in seen:
+                    seen.add(n)
+                    todo.append(n)
+        xs, ys = {x for x, _ in group}, {y for _, y in group}
+        if len(group) < 2:
+            out.append((t0[0], t0[1], 1, "a single tile - a land bridge crosses a strait: land, sea, land in a "
+                                         "straight line (3 tiles in vanilla)"))
+        elif len(xs) > 1 and len(ys) > 1:
+            out.append((t0[0], t0[1], len(group), "not one straight row or column - vanilla's land bridges are "
+                                                  "straight strips (3 tiles) across a strait"))
+        elif max(len(xs), len(ys)) != len(group):
+            out.append((t0[0], t0[1], len(group), "has a gap - a land bridge is one unbroken strip"))
+    return out
 
 # what no town, port or character may stand on (moddata.BLOCKED_GROUND, the user's checks in game)
 from .moddata import BLOCKED_GROUND                                       # noqa: E402
@@ -59,10 +97,10 @@ def paint_problem(cmap, what, xy, colour, standing):
         if xy in standing and colour in BLOCKED_GROUND:
             return "a town, port or character stands there - the game refuses %s under them" % GROUND.get(colour)
         return None
-    if sea and colour != (0, 0, 0):
-        return "rivers, fords and cliffs are on land"
-    if xy in standing and colour != (0, 0, 0):
-        return "a town, port or character stands there - the game refuses them on a river, ford or cliff"
+    if sea and colour not in ((0, 0, 0), LAND_BRIDGE):
+        return "rivers, fords, cliffs and volcanoes are on land (a land bridge may cross the sea)"
+    if xy in standing and colour not in ((0, 0, 0), LAND_BRIDGE):
+        return "a town, port or character stands there - the game refuses them on a river, ford, cliff or volcano"
     return None
 
 
@@ -326,5 +364,5 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
 
 
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "FEATURE_BRUSHES", "paint_problem",
-           "river_warnings", "river_shapes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray", "max_land_height", "hgt_patched",
+           "river_warnings", "river_shapes", "bridge_warnings", "feature_brushes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray", "max_land_height", "hgt_patched",
            "apply"]
