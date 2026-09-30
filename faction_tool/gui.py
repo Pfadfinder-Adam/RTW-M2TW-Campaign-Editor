@@ -428,6 +428,9 @@ class App(tk.Tk):
         field("Internal name", self.e_name)
         field("Name (full)", ttk.Entry(lf, textvariable=self.v["display_name"]))
         field("Name (short)", ttk.Entry(lf, textvariable=self.v["short_name"]))
+        # Rome only: Medieval II's texts have no short name ({ST_...}) nor the faction icon's tooltip
+        # ({..._DESCR}) - the rows are hidden there (_game_rows)
+        self.rome_rows = [lf.grid_slaves(row=row - 1, column=c)[0] for c in (0, 1)]
         field("Adjective", ttk.Entry(lf, textvariable=self.v["adjective"]))
         # Medieval II's faction screen texts, shown only when the faction has them
         self.extra_rows = {}
@@ -469,6 +472,7 @@ class App(tk.Tk):
         ttk.Label(lf, text="Tooltip\n(faction icon)").grid(row=row, column=0, sticky="nw", padx=4)
         self.t_descr = tk.Text(lf, width=34, height=2, wrap="word")
         self.t_descr.grid(row=row, column=1, sticky="we", padx=4, pady=2)
+        self.rome_rows += [lf.grid_slaves(row=row, column=c)[0] for c in (0, 1)]
         row += 1
         ttk.Label(lf, text="Full description\n(campaign screen)").grid(row=row, column=0, sticky="nw", padx=4)
         self.t_long = tk.Text(lf, width=34, height=7, wrap="word")
@@ -2433,6 +2437,7 @@ class App(tk.Tk):
                             "imperial_campaign" if "imperial_campaign" in camps else (camps[0] if camps else ""))
         names = [n for n, _ in self.mod.factions() if n != "slave"]
         self.fill_faction_list()
+        self._game_rows()
         self.load_campaign()
         from .limits import describe, faction_limit
         lim = faction_limit(self.mod)
@@ -2449,6 +2454,17 @@ class App(tk.Tk):
         if ed is not None:
             self._rebind(ed)
         self._mark_work()
+
+    def _game_rows(self):
+        """The faction form shows only what the loaded game has: Rome's short name and icon tooltip are hidden on
+        Medieval II (its texts have neither)."""
+        from .limits import game_kind
+        m2 = game_kind(self.mod) == "medieval2"
+        for w in self.rome_rows:
+            (w.grid_remove if m2 else w.grid)()
+        if m2:
+            self.v["short_name"].set("")
+            self.t_descr.delete("1.0", "end")
 
     def _rebind(self, ed):
         lost = ed.rebind(self.mod)

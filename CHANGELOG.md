@@ -5,6 +5,8 @@
 ### Fixed
 - **The work buttons at the top** (New faction ... Add-ons) were cut off at the window's smallest width: they now
   scroll left / right (arrows at the ends, the mouse wheel over them), and the picked one is always in sight.
+- **Faction form on Medieval II**: "Name (short)" and "Tooltip (faction icon)" are hidden - Medieval II's texts have
+  neither (they were written for nothing); Rome keeps both.
 
 ## 0.20.1 - 2026-09-30
 
