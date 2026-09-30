@@ -1,6 +1,6 @@
-"""The Add-ons work: ready-made scripts (Sack Settlement ...) put into the game with their settings picked here.
-It writes on its own (Preview / Put it in / Take it out, each with a backup); the bottom Apply is for the other
-works."""
+"""The Add-ons work: ready-made scripts (Sack Settlement ...) and anyone's (Add an add-on...) put into the game with
+their settings picked here; Share... packs one as a zip for others. It writes on its own (Preview / Put it in / Take
+it out, each with a backup); the bottom Apply is for the other works."""
 
 import os
 import tkinter as tk
@@ -23,13 +23,26 @@ class AddonsPanel(ttk.Frame):
         ttk.Label(side, text="Add-ons", font=("", 10, "bold")).pack(anchor="w")
         self.lb = tk.Listbox(side, width=28, height=10, exportselection=False)
         self.lb.pack(fill="y", expand=True)
-        for a in AD.ADDONS:
-            self.lb.insert("end", a.title)
         self.lb.bind("<<ListboxSelect>>", lambda e: self.show())
         ttk.Label(side, text="scripts that add something\nnew to the game", foreground="#666").pack(anchor="w")
+        for text, cmd in (("Add an add-on...", self.add), ("Share...", self.share),
+                          ("Remove from the list", self.drop)):
+            ttk.Button(side, text=text, command=cmd).pack(fill="x", pady=(4, 0))
+        ttk.Label(side, foreground="#666", justify="left", wraplength=190, text=(
+            "Add an add-on: anyone's REX / M2EX script (.nut) or a zip with one - its settings are found by "
+            "themselves. Only from people you trust: a script runs inside the game.")).pack(anchor="w", pady=(4, 0))
         self.sf = ScrollFrame(self)
         self.sf.pack(side="left", fill="both", expand=True)
-        self.lb.selection_set(0)
+        self.fill()
+
+    def fill(self, pick=None):
+        self.addons = AD.library()
+        self.lb.delete(0, "end")
+        for a in self.addons:
+            self.lb.insert("end", a.title + ("   (added)" if a.own else ""))
+        keys = [a.key for a in self.addons]
+        self.lb.selection_clear(0, "end")
+        self.lb.selection_set(keys.index(pick) if pick in keys else 0)
 
     # ---- what the window asks of a work ----
     def rebind(self, mod):
@@ -49,7 +62,58 @@ class AddonsPanel(ttk.Frame):
     # ---- the page ----
     def addon(self):
         sel = self.lb.curselection()
-        return AD.ADDONS[sel[0] if sel else 0]
+        return self.addons[sel[0] if sel else 0]
+
+    def add(self):
+        from tkinter import filedialog
+        src = filedialog.askopenfilename(parent=self, title="An add-on: a Squirrel script or a zip with one",
+                                         filetypes=[("Add-on", "*.nut *.zip"), ("All files", "*.*")])
+        if not src:
+            return
+        try:
+            got = AD.add_to_library(src)
+        except Exception as e:
+            messagebox.showerror("Add-ons", str(e), parent=self)
+            return
+        from . import log
+        log.write("Add-on(s) added to the list: %s (from %s)" % (", ".join(a.file for a in got), src))
+        self.fill(got[0].key)
+        self.show()
+        a = got[0]
+        messagebox.showinfo("Add-ons", "%s is in the list.\n\n%d setting(s) found in it%s. Pick them, then Put it "
+                                       "in." % (a.title, len(a.settings), (": " + ", ".join(s.label for s in
+                                                                                  a.settings[:6]) + (
+                                           " ..." if len(a.settings) > 6 else "")) if a.settings else ""),
+                            parent=self)
+
+    def share(self):
+        from tkinter import filedialog
+        a = self.addon()
+        out = filedialog.asksaveasfilename(parent=self, title="Share %s" % a.title, defaultextension=".zip",
+                                           initialfile="%s.zip" % a.key, filetypes=[("Zip", "*.zip")])
+        if not out:
+            return
+        with_values = self.mod is not None and self.vars and messagebox.askyesno(
+            "Share", "With the settings picked here?\n\nYes: your settings\nNo: the script as it came", parent=self)
+        try:
+            AD.share(a, out, self.values() if with_values else None)
+        except Exception as e:
+            messagebox.showerror("Share", str(e), parent=self)
+            return
+        messagebox.showinfo("Share", "Saved %s - give it to others: Add-ons > Add an add-on... takes it." % out,
+                            parent=self)
+
+    def drop(self):
+        a = self.addon()
+        if not a.own:
+            messagebox.showinfo("Add-ons", "%s is built in - it stays in the list." % a.title, parent=self)
+            return
+        if not messagebox.askyesno("Add-ons", "Take %s off the list? (If it is put into a game it stays there - "
+                                              "Take it out does that.)" % a.title, parent=self):
+            return
+        AD.remove_from_library(a)
+        self.fill()
+        self.show()
 
     def show(self):
         inner = self.sf.inner
@@ -65,7 +129,7 @@ class AddonsPanel(ttk.Frame):
             ttk.Label(inner, text="Load a mod first (Mod or Browse..., then Load).").grid(row=3, column=0, sticky="w")
             return
         from .packs import game_kind
-        if (game_kind(self.mod) == "medieval2") != (a.game == "medieval2"):
+        if not a.fits(game_kind(self.mod)):
             ttk.Label(inner, foreground="#a33", text="This add-on is for %s - the loaded mod is of the other game."
                       % ("Medieval II" if a.game == "medieval2" else "Rome: Total War")).grid(
                 row=3, column=0, columnspan=3, sticky="w", pady=6)
@@ -112,7 +176,9 @@ class AddonsPanel(ttk.Frame):
             ttk.Button(bar, text="Take it out", command=self.remove).pack(side="left")
         ttk.Label(inner, foreground="#555", wraplength=760, justify="left", text=(
             "Every write makes a backup first (Tools > Restore a backup undoes it). Then start the campaign: the "
-            "game log (system.log.txt) says '[SACK] Sack Settlement module loaded'.")).grid(
+            "game log (system.log.txt) says " + ("'[SACK] Sack Settlement module loaded'." if a.key ==
+                                                "sack_settlement" else "that the module %s was loaded (or why "
+                                                "not)." % os.path.splitext(a.file)[0]))).grid(
             row=r + 1, column=0, columnspan=3, sticky="w", pady=(8, 0))
         inner.columnconfigure(2, weight=1)
 
@@ -127,7 +193,7 @@ class AddonsPanel(ttk.Frame):
             cb = ttk.Combobox(parent, textvariable=shown, values=[l for _, l in s.choices], state="readonly", width=46)
             shown.trace_add("write", lambda *a: v.set(next(k for k, l in s.choices if l == shown.get())))
             return cb
-        if s.kind == "list" and s.var == "RAZE_FACTIONS":
+        if s.kind in ("list", "set") and a_picks(self, s) == "factions":
             box = ttk.Frame(parent)
             lb = tk.Listbox(box, selectmode="multiple", height=6, width=40, exportselection=False)
             sb = ttk.Scrollbar(box, orient="vertical", command=lb.yview)
@@ -145,7 +211,7 @@ class AddonsPanel(ttk.Frame):
             return box
         if s.kind in ("list", "set"):
             v = self.vars[s.var] = tk.StringVar(value=", ".join(value or []))
-            if s.var not in AD.PICKS:
+            if not a_picks(self, s):
                 return ttk.Entry(parent, textvariable=v, width=46)
             box = ttk.Frame(parent)
             ttk.Entry(box, textvariable=v, width=38).pack(side="left")
@@ -156,7 +222,7 @@ class AddonsPanel(ttk.Frame):
 
     def pick(self, s, var):
         """Pick names for a setting from this mod's own file (building chains, unit types)."""
-        what = AD.PICKS[s.var]
+        what = a_picks(self, s)
         names = AD.mod_names(self.mod, what)
         if not names:
             messagebox.showinfo("Add-ons", "This mod has no %s to pick from - type the names." % (
@@ -260,3 +326,9 @@ class AddonsPanel(ttk.Frame):
         log.write("Add-on %s %s (backup %s)\n%s" % (self.addon().title, what, bdir, plan.report()))
         self.app.status.set("%s %s (backup %s) - start the campaign to use it." % (self.addon().title, what, bdir))
         self.show()
+
+
+def a_picks(panel, s):
+    """What a setting is picked from (chains, units, factions), or None."""
+    return panel.addon().picks.get(s.var)
+

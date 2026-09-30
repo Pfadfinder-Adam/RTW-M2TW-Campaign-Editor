@@ -2626,6 +2626,67 @@ building smith
         with open(path) as fh:
             self.assertIn("resource\tiron,\t0,\t0", fh.read())
 
+    def test_addons_from_anyone(self):
+        import zipfile
+        from unittest import mock
+        from faction_tool import addons as AD
+        script = (
+            "// Border Tolls - a toll at every border crossing\n"
+            "// @game both\n"
+            "// @pick TOLL_FACTIONS factions\n"
+            "// @label TOLL_GOLD Money per crossing\n"
+            "\n"
+            "// switch it off without taking it out\n"
+            "local TOLL_ON = true\n"
+            "local TOLL_GOLD = 25 // paid by the one who crosses\n"
+            "local TOLL_TEXT = \"Toll paid\"\n"
+            "local TOLL_FACTIONS = [\"romans_julii\"]\n"
+            "local TOLL_SKIP = { slave = true, // the rebels never pay\n}\n"
+            "local TOLL_RATE = 0.5\n"
+            "local helper = 3\n"
+            "function toll() {}\n")
+        a = AD.from_script(script, "border_tolls.nut")
+        self.assertEqual((a.title, a.game), ("Border Tolls", "both"))
+        self.assertTrue(a.fits("rome") and a.fits("medieval2"))
+        kinds = {s.var: s.kind for s in a.settings}
+        self.assertEqual(kinds, {"TOLL_ON": "bool", "TOLL_GOLD": "int", "TOLL_TEXT": "text",
+                                 "TOLL_FACTIONS": "list", "TOLL_SKIP": "set"})       # 0.5 and lower case left out
+        help_ = {s.var: s.help for s in a.settings}
+        self.assertEqual(help_["TOLL_ON"], "switch it off without taking it out")
+        self.assertEqual(help_["TOLL_GOLD"], "paid by the one who crosses")
+        self.assertEqual(next(s.label for s in a.settings if s.var == "TOLL_GOLD"), "Money per crossing")
+        self.assertEqual(a.picks, {"TOLL_FACTIONS": "factions"})
+        self.assertEqual(AD.read_settings(a, script)["TOLL_SKIP"], ["slave"])
+        lib = os.path.join(self.root, "addons")
+        src = os.path.join(self.root, "share.zip")
+        with mock.patch.object(AD, "library_dir", return_value=lib):
+            with open(os.path.join(self.root, "border_tolls.nut"), "w") as fh:
+                fh.write(script)
+            got = AD.add_to_library(os.path.join(self.root, "border_tolls.nut"))
+            self.assertEqual([x.key for x in got], ["border_tolls"])
+            self.assertIn("border_tolls", [x.key for x in AD.library()])
+            own = AD.by_key("border_tolls")
+            self.assertTrue(own.own)
+            # Share: the script with the picked settings and a README; a zip's folders never reach the disk
+            AD.share(own, src, {"TOLL_GOLD": 40})
+            with zipfile.ZipFile(src) as z:
+                self.assertIn("local TOLL_GOLD = 40", z.read("border_tolls.nut").decode())
+                self.assertIn("script/modules", z.read("README.txt").decode())
+            evil = os.path.join(self.root, "evil.zip")
+            with zipfile.ZipFile(evil, "w") as z:
+                z.writestr("../../outside/evil_mod.nut", "local X = 1\n")
+            AD.add_to_library(evil)
+            self.assertTrue(os.path.isfile(os.path.join(lib, "evil_mod.nut")))
+            self.assertFalse(os.path.exists(os.path.join(self.root, "outside")))
+            with self.assertRaises(ValueError):
+                AD.add_to_library(os.path.join(self.root, "notes.txt"))              # not a script
+            with self.assertRaises(ValueError):                       # the built-in one is not added twice
+                with open(os.path.join(self.root, "sack_settlement.nut"), "w") as fh:
+                    fh.write("local A = 1\n")
+                AD.add_to_library(os.path.join(self.root, "sack_settlement.nut"))
+            AD.remove_from_library(own)
+            self.assertNotIn("border_tolls", [x.key for x in AD.library()])
+
     def test_forts_moved_removed_added(self):
         from faction_tool import forts as FT
         from faction_tool.edit import edit

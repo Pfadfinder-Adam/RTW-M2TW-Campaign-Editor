@@ -10,6 +10,12 @@
 - **Forts and watchtowers on the Map** (Edit resources & forts): picked, dragged to another tile, deleted, and new
   ones placed - a new one copies the line of the nearest one the campaign already has (the line differs by game and
   mod; vanilla Rome and Medieval II have none, so there none is offered). Preview, backup, Restore.
+- **Add-ons from anyone** (Add-ons > Add an add-on...): any REX (Rome) / M2EX (Medieval II) Squirrel script (`.nut`,
+  or a zip with one) joins the list, kept in the editor's own folder; its settings are found by themselves (the
+  UPPER_CASE `local NAME = value` lines: ticks, numbers, texts, lists, sets, the comments as help; optional
+  `// @title / @game / @pick VAR chains|units|factions ...` header lines). Put in, updated and taken out with a
+  backup like the built-in ones; **Share...** saves one as a zip with a README; a zip's folders never reach the
+  disk.
 - **Save a copy beside every Import / Replace**: unit cards and description pictures, building pictures and faction
   art (**Save a copy...** - as it is, or as a PNG to edit), a unit's battle model (**Save its files...**: its meshes
   and every faction's textures, in their data/ folders), its name call (**Save...**: the sounds, also those inside
