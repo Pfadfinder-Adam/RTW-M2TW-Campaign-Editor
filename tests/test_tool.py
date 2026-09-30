@@ -2686,20 +2686,34 @@ building smith
 
     def test_dead_parents_record(self):
         """Parents added on the tree died before the start: Rome writes 'dead' (a dead man off the map may be
-        any age); a living man off the map older than the age of manhood is still refused; Medieval II without a
-        dead record to copy is refused in plain words."""
+        any age), Medieval II the same (the game's world/template.txt: 'age 94, dead, past_leader'); a living man
+        off the map older than the age of manhood is still refused."""
         from faction_tool import family as FM
         texts = ["character_record\t\tMarcus, \tmale, command 0, influence 0, management 0, subterfuge 0, age 12, "
                  "alive, never_a_leader"]
         line = FM.record_line(texts, "Gaius", "male", 70, False, dead=True)
         self.assertIn("age 70, dead, never_a_leader", line)
         self.assertIn("alive,", FM.record_line(texts, "Gaius", "male", 10, False))
-        self.assertTrue(FM.dead_form_known([], False))
-        self.assertFalse(FM.dead_form_known(["character_record\tMatilda, female, age 49, alive, never_a_leader"], True))
-        self.assertTrue(FM.dead_form_known(["character_record\tOdo, male, age 60, dead, never_a_leader"], True))
+        m2 = ["character_record\t\tMatilda, \tfemale, age 49, alive, never_a_leader"]   # Medieval II's form
+        self.assertEqual(FM.record_line(m2, "Odo", "male", 60, True, dead=True),
+                         "character_record\t\tOdo, \tmale, age 60, dead, never_a_leader")
         after = [{"name": "Gaius", "sex": "male", "age": 70, "source": "record", "status": "dead"},
                  {"name": "Titus", "sex": "male", "age": 40, "source": "record", "status": "alive"}]
         self.assertEqual([n for n, _, _ in FM.record_age_problems(after, [], 16)], ["Titus"])
+
+    def test_addon_setting_kinds_match_fast(self):
+        """An add-on's list / set values are told in linear time (CodeQL py/redos: a long line of spaces between
+        items backtracked exponentially), with commas or white space between items, a comma after the last."""
+        import time
+        from faction_tool.addons import _kind
+        for v in ('[]', '["a", "b",]', '[ "a" "b" ]', '{A=true, B = true,}', '{ A=true\n B=true // x\n}'):
+            self.assertIn(_kind(v), ("list", "set"), v)
+        for v in ('[,]', '["a",,"b"]', '{A=false}', '{A=true,,B=true}'):
+            self.assertIsNone(_kind(v), v)
+        t = time.time()
+        _kind('["' + '"' + ' ""' * 20000 + ' x')
+        _kind('{A=true' + ' A=true' * 20000 + ' x')
+        self.assertLess(time.time() - t, 2)
 
     def test_path_guard(self):
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads

@@ -103,6 +103,13 @@ NAME_KINDS = ("chains", "units", "factions")
 SCRIPT_CAP = 1 << 20
 
 
+def _seq(item, open_, close):
+    """A bracketed list of items apart by a comma or by white space, a comma after the last allowed - written so
+    that a text can be matched in one way only (the older '\\s*,?\\s*' between items backtracked exponentially
+    on a long line of spaces: CodeQL py/redos)."""
+    return r"%s\s*(?:%s(?:(?:\s*,\s*|\s+)%s)*(?:\s*,)?\s*)?%s" % (open_, item, item, close)
+
+
 def _kind(raw):
     """The setting kind a literal value asks for, or None (not a setting the tool can show)."""
     v = raw.strip()
@@ -112,9 +119,9 @@ def _kind(raw):
         return "int"
     if re.fullmatch(r'"(?:[^"\\]|\\.)*"', v):
         return "text"
-    if v.startswith("[") and re.fullmatch(r'\[\s*(?:"(?:[^"\\]|\\.)*"\s*,?\s*)*\]', v, re.S):
+    if v.startswith("[") and re.fullmatch(_seq(r'"(?:[^"\\]|\\.)*"', r"\[", r"\]"), v, re.S):
         return "list"
-    if v.startswith("{") and re.fullmatch(r"\{\s*(?:[A-Za-z_]\w*\s*=\s*true\s*,?\s*)*\}",
+    if v.startswith("{") and re.fullmatch(_seq(r"[A-Za-z_]\w*\s*=\s*true", r"\{", r"\}"),
                                           re.sub(r"//[^\n]*", "", v), re.S):
         return "set"
     return None

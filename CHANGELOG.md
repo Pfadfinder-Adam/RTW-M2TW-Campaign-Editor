@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+- **Add a relative... on Medieval II**: parents who died before the start are written too (it was refused - the
+  form of such a record was thought unknown; the game's own world/template.txt has it: `age 94, dead,
+  past_leader`), as on Rome.
+- **Add-ons: two settings patterns could hang the editor** on a crafted script (a long line of spaces inside a
+  list or set value took exponential time; found by GitHub code scanning). Now linear; values whose items touch
+  with no comma or space between them (not valid in a script either) are no longer shown as settings.
+
 ## 0.21.0 - 2026-09-30
 
 ### Added

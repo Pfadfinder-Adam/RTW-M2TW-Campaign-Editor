@@ -982,10 +982,6 @@ class FamilyEditor(ttk.Frame):
             if parents:
                 return messagebox.showinfo("Family", "%s has parents on the tree already (%s and %s)." % (
                     p["name"], parents[0], parents[1]))
-            if not FM.dead_form_known(self.app.mod.load(self.path()).texts(), getattr(self, "m2", False)):
-                return messagebox.showinfo("Family", "On Medieval II a person who died before the start cannot be "
-                                                     "written yet (the form of that line is not known here). Send a "
-                                                     "campaign's descr_strat.txt that has one and it is added.")
             surname = p["name"][len(p["name"].split(" ")[0]):].strip() if p["sex"] == "male" else ""
             fa = self._ask_person("Father of %s (died before the start)" % p["name"], "male", age + 28, surname,
                                   dead=True)
@@ -1033,11 +1029,6 @@ class FamilyEditor(ttk.Frame):
         most = self._manhood()
         if sex == "male" and got[1] not in (None, "") and int(got[1]) > most:
             # the game crashes on a living man off the map older than the age of manhood: only as one who died
-            if not FM.dead_form_known(self.app.mod.load(self.path()).texts(), getattr(self, "m2", False)):
-                return messagebox.showerror("Family", "A living man off the map may be %d at most (the game "
-                                                      "crashes otherwise), and on Medieval II one who died before "
-                                                      "the start cannot be written yet. Give him an age of %d or "
-                                                      "less." % (most, most))
             if not messagebox.askyesno("Family", "A living man off the map may be %d at most - the game crashes "
                                                  "otherwise. Write %s as one who died before the start?"
                                        % (most, got[0])):
