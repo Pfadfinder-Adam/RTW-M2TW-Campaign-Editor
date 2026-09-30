@@ -65,7 +65,7 @@ class FamilyEditor(ttk.Frame):
         panes = ttk.Panedwindow(self, orient="horizontal" if standalone else "vertical")
         panes.pack(fill="both", expand=True)
         left = ttk.Frame(panes)
-        right = ttk.LabelFrame(panes, text="Family tree", padding=2)
+        right = ttk.LabelFrame(panes, text="Family tree", padding=2) if not standalone else ttk.Frame(panes)
         if standalone:
             panes.add(left, weight=2)
             panes.add(right, weight=5)
@@ -177,10 +177,31 @@ class FamilyEditor(ttk.Frame):
         ttk.Button(ab, text="Remove", command=self.remove_anc).pack(side="left")
         self.char_parts = [tr, an]
 
+        # the Character editor: the person as the game's character panel shows him, the family tree behind a
+        # switch of its own (the user: the tree hidden by default, the button clearly visible)
+        self.panel = None
+        if standalone:
+            from .gui_charpanel import CharacterPanel
+            sw = ttk.Frame(right)
+            sw.pack(fill="x", pady=(0, 4))
+            self.v_view = tk.StringVar(value="panel")
+            for val, text in (("panel", "Character"), ("tree", "Family tree")):     # like the work buttons
+                tk.Radiobutton(sw, text=text, value=val, variable=self.v_view, indicatoron=0,
+                               command=self._view_changed, padx=16, pady=4, font=("", 10, "bold"),
+                               selectcolor="#cfe3ff", relief="raised", offrelief="groove", cursor="hand2").pack(
+                    side="left", padx=(0, 4))
+            ttk.Label(sw, text="the picked person as the game shows him - or the whole family",
+                      foreground="#555").pack(side="left", padx=8)
+            self.panel = CharacterPanel(right)
+            self.panel.pack(fill="both", expand=True)
+            tree_box = ttk.Frame(right)
+            self.tree_box = tree_box
+        else:
+            tree_box = right
         # the tree
-        self.cv = tk.Canvas(right, bg="#efe6d2", highlightthickness=0)
-        xs = ttk.Scrollbar(right, orient="horizontal", command=self.cv.xview)
-        ys = ttk.Scrollbar(right, orient="vertical", command=self.cv.yview)
+        self.cv = tk.Canvas(tree_box, bg="#efe6d2", highlightthickness=0)
+        xs = ttk.Scrollbar(tree_box, orient="horizontal", command=self.cv.xview)
+        ys = ttk.Scrollbar(tree_box, orient="vertical", command=self.cv.yview)
         self.cv.configure(xscrollcommand=xs.set, yscrollcommand=ys.set)
         ys.pack(side="right", fill="y")
         xs.pack(side="bottom", fill="x")
@@ -190,6 +211,38 @@ class FamilyEditor(ttk.Frame):
         self.cv.bind("<Enter>", lambda e: self.cv.bind_all("<MouseWheel>", lambda x: self.cv.yview_scroll(
             int(-x.delta / 120), "units")))
         self.cv.bind("<Leave>", lambda e: self.cv.unbind_all("<MouseWheel>"))
+
+    def _view_changed(self):
+        """Character / Family tree on the right of the Character editor."""
+        if self.v_view.get() == "tree":
+            self.panel.pack_forget()
+            self.tree_box.pack(fill="both", expand=True)
+            self.redraw()
+        else:
+            self.tree_box.pack_forget()
+            self.panel.pack(fill="both", expand=True)
+            self.show_panel()
+
+    def show_panel(self):
+        """The picked person on the character panel (the Character editor only)."""
+        if self.panel is None or not self.winfo_exists():
+            return
+        p = self.person(self.sel) if self.sel else None
+        mod = self.mod if self.standalone else self.app.mod
+        if not p or not mod:
+            self.panel.show(None)
+            return
+        from . import charpanel as CP
+        try:
+            culture = mod.culture(self.faction)
+        except Exception:
+            culture = None
+        data = CP.panel(mod, p, self.traits, self.ancs, culture)
+        info, new = self.portrait_info(p)
+        age = "old" if (p.get("age") or 0) >= 45 else "young"
+        pic = new.get(age) or new.get("young") or info["files"].get(age) or info["files"].get("young") or \
+            (info.get("samples") or {}).get(age) or info["sample"]
+        self.panel.show(data, pic, self.image)
 
     # ---------------------------------------------------------------- data
     @property
@@ -501,6 +554,7 @@ class FamilyEditor(ttk.Frame):
                 lab.configure(image="", text="", width=7, height=4)
                 b.configure(state="disabled")
             self.lbl_pic.configure(text="")
+            self.show_panel()
             return
         self.form.configure(text="Person: %s" % p["name"])
         first = p["name"].split(" ")[0]
@@ -521,9 +575,12 @@ class FamilyEditor(ttk.Frame):
         self.lbl_who.configure(text=who)
         self.fill_portrait(p)
         self.tv_tr.delete(*self.tv_tr.get_children())
+        from .charpanel import shown, strings
+        vnv = strings(self.mod if self.standalone else self.app.mod, "export_VnVs.txt")
         for i, (t, n) in enumerate(p["traits"]):
             levels = (self.traits.get(t) or {}).get("levels") or []
-            self.tv_tr.insert("", "end", iid=str(i), values=(t, n, levels[n - 1] if 0 < n <= len(levels) else ""))
+            self.tv_tr.insert("", "end", iid=str(i), values=(t, n, shown(vnv, levels[n - 1]) if 0 < n <= len(levels)
+                                                              else ""))
         self.lb_an.delete(0, "end")
         for a in p["ancillaries"]:
             self.lb_an.insert("end", a)
@@ -547,6 +604,7 @@ class FamilyEditor(ttk.Frame):
                         x.configure(state="disabled" if rec else "normal")
                     except tk.TclError:
                         pass
+        self.show_panel()
 
     def _trait_row(self):
         s = self.tv_tr.selection()

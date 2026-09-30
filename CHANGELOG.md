@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **Character editor: the game's character panel** (both games; the user's wish): the picked person as the game
+  shows him - portrait in a frame, name, who he is, age, the attributes as pips added up from his traits' and
+  retinue's effects (Medieval II: Command, Chivalry / Dread, Loyalty / Authority, Piety, agents their skill;
+  Rome: Command, Influence, Management), the traits by the names players see with what each gives, the retinue
+  as picture cards. **Character** / **Family tree** above it switch to the whole family. The traits list on the
+  left shows the level names players see too. Medieval II's compiled string tables (`.strings.bin`) are read
+  when there is no .txt.
 - **Figures on the campaign map** (Art tab, both games; asked by a tester): every character type of the faction
   with the strat model that shows it (descr_character.txt / descr_model_strat.txt) - pick another, see it in 3D
   with the faction's texture, Preview, Apply. A faction sharing its entry gets one of its own; a model it has no

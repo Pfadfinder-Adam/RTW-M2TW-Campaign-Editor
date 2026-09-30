@@ -147,8 +147,8 @@ def read(f, faction):
 
 # ---------------------------------------------------------------- what the mod has
 def trait_list(mod):
-    """{trait: {'characters': [kinds], 'levels': [level names], 'anti': [traits]}} from
-    export_descr_character_traits.txt."""
+    """{trait: {'characters': [kinds], 'levels': [level names], 'anti': [traits], 'effects': [[(attribute, value)]
+    per level]}} from export_descr_character_traits.txt."""
     path = mod.file("traits")
     out, cur = {}, None
     if not path:
@@ -158,7 +158,7 @@ def trait_list(mod):
         if not t:
             continue
         if t[0] == "Trait" and len(t) > 1:
-            cur = out.setdefault(t[1], {"characters": [], "levels": [], "anti": []})
+            cur = out.setdefault(t[1], {"characters": [], "levels": [], "anti": [], "effects": []})
         elif t[0] in ("Trigger", "Ancillary"):
             cur = None
         elif cur is not None and t[0] == "Characters":
@@ -167,11 +167,18 @@ def trait_list(mod):
             cur["anti"] = [x.strip() for x in strip_comment(l).strip()[len("AntiTraits"):].split(",") if x.strip()]
         elif cur is not None and t[0] == "Level" and len(t) > 1:
             cur["levels"].append(t[1])
+            cur["effects"].append([])
+        elif cur is not None and t[0] == "Effect" and len(t) > 2 and cur["effects"]:
+            try:
+                cur["effects"][-1].append((t[1], int(t[2])))
+            except ValueError:
+                pass
     return out
 
 
 def ancillary_list(mod):
-    """{ancillary: {'exclude': [cultures]}} from export_descr_ancillaries.txt."""
+    """{ancillary: {'exclude': [cultures], 'image': picture name, 'effects': [(attribute, value)]}} from
+    export_descr_ancillaries.txt."""
     path = mod.file("ancillaries")
     out, cur = {}, None
     if not path:
@@ -181,9 +188,16 @@ def ancillary_list(mod):
         if not t:
             continue
         if t[0] == "Ancillary" and len(t) > 1:
-            cur = out.setdefault(t[1], {"exclude": []})
+            cur = out.setdefault(t[1], {"exclude": [], "image": None, "effects": []})
         elif t[0] == "Trigger":
             cur = None
+        elif cur is not None and t[0] == "Image" and len(t) > 1:
+            cur["image"] = t[1]
+        elif cur is not None and t[0] == "Effect" and len(t) > 2:
+            try:
+                cur["effects"].append((t[1], int(t[2])))
+            except ValueError:
+                pass
         elif cur is not None and t[0] == "ExcludeCultures":
             cur["exclude"] = [x.strip() for x in strip_comment(l).strip()[len("ExcludeCultures"):].split(",")
                               if x.strip()]

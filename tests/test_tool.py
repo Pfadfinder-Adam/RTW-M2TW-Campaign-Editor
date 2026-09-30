@@ -2779,6 +2779,41 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual(tree_hash(d), before)
 
+    def test_character_panel(self):
+        """Character editor's panel: the attributes the traits and the retinue give (Medieval II: Authority for the
+        leader, Dread when the chivalry is below 0), the traits by the level names players see (a .txt or the
+        compiled .strings.bin), the retinue's names and pictures."""
+        import struct
+        from faction_tool import charpanel as CP
+        from faction_tool import family as FM
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_character_traits.txt"),
+              "Trait GoodCommander\n    Characters family\n\n    Level Good_Commander\n        Threshold  1\n"
+              "        Effect Command  2\n        Effect Chivalry  -3\n\n    Level Great_Commander\n"
+              "        Threshold  2\n        Effect Command  4\n")
+        write(os.path.join(d, "export_descr_ancillaries.txt"),
+              "Ancillary shieldbearer\n    Image shield_bearer.tga\n    Effect Command  1\n")
+        # the compiled string table: u16 2, u16 2048, u32 count, then u16-counted UTF-16 key and text
+        def entry(t):
+            return struct.pack("<H", len(t)) + t.encode("utf-16-le")
+        blob = struct.pack("<HHI", 2, 2048, 1) + entry("Good_Commander") + entry("A Good Commander")
+        self.assertEqual(CP.read_strings_bin(blob), {"Good_Commander": "A Good Commander"})
+        os.makedirs(os.path.join(d, "text"), exist_ok=True)
+        with open(os.path.join(d, "text", "export_VnVs.txt.strings.bin"), "wb") as fh:
+            fh.write(blob)
+        mod = ModData(self.root)
+        td, ad = FM.trait_list(mod), FM.ancillary_list(mod)
+        self.assertEqual(td["GoodCommander"]["effects"], [[("Command", 2), ("Chivalry", -3)], [("Command", 4)]])
+        self.assertEqual(ad["shieldbearer"]["image"], "shield_bearer.tga")
+        attrs = CP.attributes("medieval2", "named character", "leader", [("GoodCommander", 1)], td,
+                              ["shieldbearer"], ad)
+        self.assertEqual(attrs, [("Command", 3), ("Dread", 3), ("Authority", 0), ("Piety", 0)])
+        self.assertEqual(CP.attributes("rome", "spy", "", [], td, [], ad), [("Subterfuge", 0)])
+        got = CP.panel(mod, {"name": "Aaron", "age": 40, "kind": "named character", "role": "leader", "source": "map",
+                             "traits": [("GoodCommander", 1)], "ancillaries": ["shieldbearer"]}, td, ad)
+        self.assertEqual(got["traits"], [("A Good Commander", "GoodCommander", 1, "+2 Command, -3 Chivalry")])
+        self.assertEqual(got["retinue"][0][:2], ("shieldbearer", "shieldbearer"))        # no string: the key
+
     def test_path_guard(self):
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads
         out and a crafted backup manifest are refused before anything is written."""
