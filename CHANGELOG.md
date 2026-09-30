@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Fixed
+- **A faction picked in New faction mode** (to change it, not to copy it) no longer ends in a puzzling "nothing to
+  write" (a tester on Discord): the line at the top and the message on Apply now say that it is the template of
+  a new faction, and to press Edit faction to change it itself.
 - **Big campaign maps open ten times lighter**: a map of 4080 x 2496 tiles took 38 s and 6.6 GB of memory to open
   in the tool; now 2 s and 0.6 GB. The map is drawn in about a second instead of 19.
 - **The Map tab no longer fails on a very big map zoomed far out** (Pillow refused a 1.3-billion-pixel picture): only

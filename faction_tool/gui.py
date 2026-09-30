@@ -3168,7 +3168,10 @@ class App(tk.Tk):
         if getattr(self, "lbl_work", None) is not None and getattr(self, "v_work", None) is not None:
             hint = self.WORK_HINTS.get(self.v_work.get(), "")
             if self.v_work.get() == "new" and self.map_only():
-                hint += "  -  no template / name yet: Apply writes the map's changes only"
+                picked = self.v["template"].get().strip()
+                hint = ("%s = template of a NEW faction. To change %s itself: Edit faction" % (picked, picked)
+                        if picked else hint +
+                        "  -  no template / name yet: Apply writes the map's changes only")
             self.lbl_work.configure(text=hint)
 
     def make_plan(self):
@@ -3234,8 +3237,18 @@ class App(tk.Tk):
         if self.map_only():
             places, regions, res = self._places(), self._regions_opts(), self._resources_opts()
             if not places and not regions and not res:
-                raise ValueError("nothing to write: move a town or port, paint regions or change resources "
-                                 "on the Map (or name a new faction on the Faction tab)")
+                picked = self.v["template"].get().strip()
+                if picked:                  # a faction picked in New faction mode: most likely meant to be edited
+                    raise ValueError(
+                        "Nothing was written: you are in \"New faction\" (top left), where %s is only the "
+                        "template a NEW faction is copied from.\n\n"
+                        "- To change %s itself (its garrisons, towns, armies...): press \"Edit faction\" at the "
+                        "top, pick %s there and make the changes again.\n"
+                        "- To make a new faction from it: type the new faction's name on the Faction tab."
+                        % (picked, picked, picked))
+                raise ValueError("Nothing to write yet. Pick what to do at the top: \"Edit faction\" to change a "
+                                 "faction, \"New faction\" to make one (template + name on the Faction tab), or "
+                                 "move towns, paint regions or change resources on the Map.")
             mod = ModData(self.mod.data)
             plan = Plan(mod, "map", "map", {})
             from .mapedit import apply_places
