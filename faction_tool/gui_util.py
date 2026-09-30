@@ -3,6 +3,7 @@
 A packed widget gets its space in packing order: when a window is too small, the widgets packed last lose it
 first. So buttons are packed first and long hint labels last, and a form taller than the window scrolls."""
 
+import os
 import tkinter as tk
 from tkinter import ttk
 
@@ -120,6 +121,42 @@ class HScroll(ttk.Frame):
         else:
             for ev in ("<MouseWheel>", "<Shift-MouseWheel>", "<Button-4>", "<Button-5>"):
                 self.unbind_all(ev)
+
+
+PICTURE_EXT = (".tga", ".dds", ".png", ".jpg", ".jpeg", ".bmp")
+
+
+def save_copy(parent, path, what="the file"):
+    """'Save a copy...' beside an Import / Replace: the file as it is now, saved where the user picks - as it is,
+    or as a PNG for a picture (to edit it and bring it back with Import). Never writes into the mod."""
+    import shutil
+    from tkinter import filedialog, messagebox
+    if not path or not os.path.isfile(path):
+        messagebox.showerror("Save a copy", "There is no file for %s yet." % what, parent=parent)
+        return None
+    ext = os.path.splitext(path)[1].lower()
+    types = [("As it is (%s)" % ext, "*" + ext)]
+    if ext in PICTURE_EXT and ext != ".png":
+        types.append(("PNG picture (to edit)", "*.png"))
+    out = filedialog.asksaveasfilename(parent=parent, title="Save a copy of %s" % what, initialfile=os.path.basename(
+        path), defaultextension=ext, filetypes=types + [("All files", "*.*")])
+    if not out:
+        return None
+    try:
+        if os.path.normcase(os.path.abspath(out)) == os.path.normcase(os.path.abspath(path)):
+            raise OSError("that is the file itself - pick another folder")
+        if out.lower().endswith(".png") and ext != ".png":
+            from PIL import Image
+            with Image.open(path) as im:
+                im.save(out)
+        else:
+            shutil.copyfile(path, out)
+    except Exception as e:
+        messagebox.showerror("Save a copy", "Could not save %s: %s" % (out, e), parent=parent)
+        return None
+    from . import log
+    log.write("Saved a copy of %s to %s" % (path, out))
+    return out
 
 
 def fit_first_pane(panes, inner, extra=20):

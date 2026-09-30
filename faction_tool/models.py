@@ -333,3 +333,18 @@ def _give_textures(plan, info, factions):
 
 __all__ = ["SEATS", "ModelInfo", "source", "catalogue", "skeleton_seats", "unit_lines", "unit_slots",
            "mount_classes", "unit_seat", "fit_problems", "texture_image", "replace"]
+
+
+def model_files(mod, info):
+    """[(data-relative path, file on disk)] of a battle model: its meshes (every detail level), its textures for
+    every faction and its weapons textures - the mod's own, else the game's (Save its files...)."""
+    from .meshview import on_disk
+    refs = list(info.meshes) + list(info.textures.values()) + list(info.attach.values())
+    out, seen = [], set()
+    for ref in refs:
+        got = on_disk(mod, ref)
+        if got and got[0].lower() not in seen:
+            seen.add(got[0].lower())
+            out.append(got)
+    return out
+

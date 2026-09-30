@@ -111,7 +111,7 @@ class FamilyEditor(ttk.Frame):
         ttk.Button(fb, text="Take off the tree", command=self.off_tree).pack(side="left")
         ttk.Button(fb, text="Leave out", command=self.leave_out).pack(side="left", padx=4)
 
-        pf = ttk.LabelFrame(form, text="Portrait", padding=2)
+        pf = ttk.LabelFrame(form, text="Portrait  (a click on a picture saves a copy)", padding=2)
         pf.pack(fill="x")
         self.pic_boxes = {}
         for a in FM.AGES:
@@ -121,6 +121,9 @@ class FamilyEditor(ttk.Frame):
             lab.pack()
             b = ttk.Button(box, text="Replace...", command=lambda a=a: self.replace_portrait(a))
             b.pack(pady=1)
+            # a click on the picture saves a copy of it (the portrait as it is now)
+            lab.bind("<Button-1>", lambda e, lab=lab, a=a: self.save_portrait(lab, a))
+            lab.configure(cursor="hand2")
             self.pic_boxes[a] = (lab, b)
         side = ttk.Frame(pf)
         side.pack(side="left", padx=6, fill="both", expand=True)
@@ -382,7 +385,7 @@ class FamilyEditor(ttk.Frame):
                 path = new["young"]
             img = self.image(path, 52, 72)
             lab.configure(image=img or "", text="" if img else a, width=52 if img else 7, height=72 if img else 4)
-            lab.image = img
+            lab.image, lab.path = img, path
             # Replace only where the game takes a portrait of one's own (Medieval II, on the map)
             if own:
                 b.pack(pady=1)
@@ -400,6 +403,12 @@ class FamilyEditor(ttk.Frame):
             text += (" (the same man young, old and dead). Rome gives no portrait of one's own to a character - "
                      "to see your own pictures in the game, add them to the pool:")
         self.lbl_pic.configure(text=text)
+
+    def save_portrait(self, lab, age):
+        """A click on a portrait: a copy of the picture saved where the user picks (as it is, or PNG)."""
+        from .gui_util import save_copy
+        if getattr(lab, "path", None):
+            save_copy(self, lab.path, "the %s portrait" % age)
 
     def replace_portrait(self, age):
         from tkinter import filedialog

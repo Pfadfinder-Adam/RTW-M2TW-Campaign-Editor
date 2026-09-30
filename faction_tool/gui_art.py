@@ -176,6 +176,11 @@ class ArtEditor(ttk.Frame):
                 continue
             ttk.Button(bar, text="Replace...", command=lambda t=target, s=p["size"], l=p["label"], k=link:
                        self.replace(t, s, l, k)).pack(side="left")
+            now = os.path.join(a.mod.data, target) if not target.startswith("symbol:") else None
+            if not pick and now and os.path.isfile(now):
+                from .gui_util import save_copy
+                ttk.Button(bar, text="Save a copy...", command=lambda n=now, l=p["label"]: save_copy(self, n, l)).pack(
+                    side="left", padx=4)
             if pick:
                 ttk.Button(bar, text="Keep the current one", command=lambda t=target: self.unreplace(t)).pack(
                     side="left", padx=4)

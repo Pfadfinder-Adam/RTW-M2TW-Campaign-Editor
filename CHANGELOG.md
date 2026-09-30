@@ -10,6 +10,10 @@
 - **Forts and watchtowers on the Map** (Edit resources & forts): picked, dragged to another tile, deleted, and new
   ones placed - a new one copies the line of the nearest one the campaign already has (the line differs by game and
   mod; vanilla Rome and Medieval II have none, so there none is offered). Preview, backup, Restore.
+- **Save a copy beside every Import / Replace**: unit cards and description pictures, building pictures and faction
+  art (**Save a copy...** - as it is, or as a PNG to edit), a unit's battle model (**Save its files...**: its meshes
+  and every faction's textures, in their data/ folders), its name call (**Save...**: the sounds, also those inside
+  the game's packs) and portraits (a click on the picture). Nothing is written into the mod.
 
 ### Fixed
 - **Barbarian Invasion's 53 watchtowers** (listed after the diplomacy, under the regions) were not read: not drawn

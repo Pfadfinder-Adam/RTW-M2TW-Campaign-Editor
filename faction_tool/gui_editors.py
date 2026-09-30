@@ -8,6 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import editors as E
 from . import theme, unitattrs
+from .gui_util import save_copy
 from .moddata import ModData, _ci
 from .plan import Plan
 
@@ -673,8 +674,13 @@ class RecordEditor(ttk.Frame):
                     ", ".join(facs[:4]) + (" and %d more" % (len(facs) - 4) if len(facs) > 4 else "")) +
                 ("\nnew: %s (not written yet)" % os.path.basename(pending) if pending else "")).grid(
                 row=1, column=1, sticky="w", padx=6)
-            ttk.Button(box, text="Import...", command=lambda t=targets, n=need, l=label: self.import_pic(t, n, l)).grid(
-                row=2, column=1, sticky="w", padx=6)
+            bb = ttk.Frame(box)
+            bb.grid(row=2, column=1, sticky="w", padx=6)
+            ttk.Button(bb, text="Import...", command=lambda t=targets, n=need, l=label: self.import_pic(t, n, l)).pack(
+                side="left")
+            if have and not pending:
+                ttk.Button(bb, text="Save a copy...", command=lambda h=have, l=label: save_copy(
+                    self, h, "the %s" % l.lower())).pack(side="left", padx=4)
         # the battle model and the voice beside the two pictures (below them the panel would stay half empty)
         self._unit_models(0, 1)
         self._unit_voice(1, 1)
@@ -769,6 +775,59 @@ class RecordEditor(ttk.Frame):
             if info is not None:
                 ttk.Button(bar, text="View in 3D...", command=lambda i=info: self.view_model(i)).pack(
                     side="left", padx=4)
+                ttk.Button(bar, text="Save its files...", command=lambda i=info: self.save_model_files(i)).pack(
+                    side="left")
+
+    def save_model_files(self, info):
+        """The model's files (meshes, textures) copied into a folder the user picks, in their data/ folders - a
+        copy to keep or to work on before Replace model."""
+        import shutil
+        from tkinter import filedialog
+        from . import models as MO
+        files = MO.model_files(self.mod, info)
+        if not files:
+            messagebox.showerror("Save its files", "No file of %s was found on disk." % info.name, parent=self)
+            return
+        out = filedialog.askdirectory(parent=self, title="A folder for the files of %s" % info.name)
+        if not out:
+            return
+        if os.path.normcase(os.path.abspath(out)).startswith(os.path.normcase(os.path.abspath(self.mod.data))):
+            messagebox.showerror("Save its files", "Pick a folder outside the mod - this saves a copy.", parent=self)
+            return
+        root = os.path.join(out, "%s_files" % info.name.replace(" ", "_"), "data")
+        try:
+            for rel, path in files:
+                dst = os.path.join(root, *rel.split("/"))
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copyfile(path, dst)
+        except OSError as e:
+            messagebox.showerror("Save its files", str(e), parent=self)
+            return
+        from . import log
+        log.write("Saved %d file(s) of %s to %s" % (len(files), info.name, root))
+        messagebox.showinfo("Save its files", "%d file(s) of %s saved in\n%s\n\n%s" % (
+            len(files), info.name, root, "\n".join(rel for rel, _ in files[:12]) +
+            ("\n..." if len(files) > 12 else "")), parent=self)
+
+    def save_sounds(self, files, what):
+        """A set of sounds (from the game's packs or the mod's folders) saved into a folder the user picks."""
+        from tkinter import filedialog
+        from . import sounds as SN
+        out = filedialog.askdirectory(parent=self, title="A folder for %s" % what)
+        if not out:
+            return
+        index, _ = self._voice_data()
+        saved, missing = 0, 0
+        for rel in files:
+            data = SN.sound_bytes(self.mod, rel, index)
+            if data is None:
+                missing += 1
+                continue
+            with open(os.path.join(out, os.path.basename(rel.replace("\\", "/"))), "wb") as fh:
+                fh.write(data)
+            saved += 1
+        self.app.status.set("Saved %d sound(s) of %s in %s%s" % (saved, what, out, (
+            " (%d in no pack and not on disk)" % missing) if missing else ""))
 
     # ---- voice ----
     def _voice_data(self):
@@ -835,6 +894,8 @@ class RecordEditor(ttk.Frame):
             if nc:
                 ttk.Button(line, text="Play", width=6,
                            command=lambda fs=nc.files: self.play_sound(fs)).pack(side="left", padx=4)
+                ttk.Button(line, text="Save...", width=7, command=lambda fs=nc.files, u=unit: self.save_sounds(
+                    fs, "the name call of %s" % u)).pack(side="left", padx=(0, 4))
             ttk.Button(line, text="Put in my own...",
                        command=lambda uv=uv: self.own_name_call(uv)).pack(side="left", padx=(4 if not nc else 0, 0))
             orders = [ev for ev in uv.orders if ev.files]
@@ -1119,8 +1180,14 @@ class RecordEditor(ttk.Frame):
                 "\nPNG / JPG / TGA are converted\ngoes to ui/%s/buildings/%s" % (cult, os.path.basename(target)) +
                 ("\nnew: %s (not written yet)" % os.path.basename(pending) if pending else "")).grid(
                 row=1, column=1, sticky="w", padx=6)
-            ttk.Button(box, text="Import...", command=lambda t=[target], n=need, l=label: self.import_pic(t, n, l)).grid(
-                row=2, column=1, sticky="w", padx=6)
+            bb = ttk.Frame(box)
+            bb.grid(row=2, column=1, sticky="w", padx=6)
+            ttk.Button(bb, text="Import...", command=lambda t=[target], n=need, l=label: self.import_pic(t, n, l)).pack(
+                side="left")
+            now = pics.find(cult, level, constructed)
+            if now and not pending:
+                ttk.Button(bb, text="Save a copy...", command=lambda h=now, l=label: save_copy(
+                    self, h, "the %s" % l.lower())).pack(side="left", padx=4)
 
     def import_pic(self, targets, need, label):
         if not targets:
