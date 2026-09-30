@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+- **Traits and retinue** (Character editor, and Tools; both games): the traits and ancillaries themselves - who
+  can have a trait, each level's name and description as players see them, the points it needs and its effects;
+  an ancillary's name, text, picture (its own when it shared one), barred cultures and effects; a new trait or
+  ancillary as a copy of one there is (levels and text keys renamed, texts copied). Preview, backup, Restore.
+  Medieval II's compiled string tables are turned into a .txt when a text is written (the .bin is left: Preview
+  says to remove it if the game shows the old text).
 - **Character editor: the game's character panel** (both games; the user's wish): the picked person as the game
   shows him - portrait in a frame, name, who he is, age, the attributes as pips added up from his traits' and
   retinue's effects (Medieval II: Command, Chivalry / Dread, Loyalty / Authority, Piety, agents their skill;

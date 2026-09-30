@@ -712,6 +712,8 @@ class App(tk.Tk):
         menu.add_command(label="Check and install a pack...", command=self.install_pack)
         menu.add_command(label="Campaign rules (ages, agents, towns, diplomacy, unit sizes)...",
                          command=self.campaign_rules)
+        menu.add_command(label="Traits and retinue (what they give, their names, new ones)...",
+                         command=self.traits_window)
         menu.add_command(label="New religion... (Medieval II)", command=lambda: self.religions_from_menu(True))
         menu.add_command(label="Religions of a region... (Medieval II)", command=lambda: self.religions_from_menu(False))
         menu.add_command(label="Restore a backup...", command=self.restore)
@@ -3624,6 +3626,11 @@ class App(tk.Tk):
             self._limit_raise = self.mod.data         # asked once per mod: Preview and Apply both use it
             opts["raise_faction_limit"] = True
             return build(ModData(self.mod.data), self.v_campaign.get(), template, name, opts)
+
+    def traits_window(self):
+        """Tools > Traits and retinue... (also in the Character editor): the traits and ancillaries themselves."""
+        from .gui_traits import open_traits
+        open_traits(self)
 
     def campaign_rules(self):
         """Tools > Campaign rules...: the campaign's settings files as plain values."""

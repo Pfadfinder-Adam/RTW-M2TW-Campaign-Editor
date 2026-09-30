@@ -64,10 +64,27 @@ def strings(mod, name):
         return _cache[key]
     out = {}
     if txt:
+        # a text runs on until the next {KEY} or comment line (the tables' own way: a description often starts
+        # on the line under its key)
+        key, parts = None, []
+
+        def done():
+            if key is not None:
+                while parts and not parts[-1].strip():
+                    parts.pop()
+                out.setdefault(key, "\n".join(p.strip() for p in parts).strip())
         for line in mod.load(txt).texts():
-            m = re.match(r"\s*\{([^}]+)\}\s*(.*)$", line)
+            s = line.lstrip()
+            m = re.match(r"\{([^}]+)\}(.*)$", s)
             if m:
-                out.setdefault(m.group(1).upper(), m.group(2).strip())
+                done()
+                key, parts = m.group(1).upper(), [m.group(2)]
+            elif s.startswith("\u00ac"):
+                done()
+                key, parts = None, []
+            elif key is not None:
+                parts.append(line)
+        done()
     else:
         with open(binp, "rb") as fh:
             out = {k.upper(): v for k, v in read_strings_bin(fh.read()).items()}

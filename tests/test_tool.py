@@ -2814,6 +2814,71 @@ building smith
         self.assertEqual(got["traits"], [("A Good Commander", "GoodCommander", 1, "+2 Command, -3 Chivalry")])
         self.assertEqual(got["retinue"][0][:2], ("shieldbearer", "shieldbearer"))        # no string: the key
 
+    def test_traits_and_retinue_editor(self):
+        """Tools > Traits and retinue: a level's threshold and effects changed in place, a trait copied under a new
+        name (its levels and text keys renamed, the texts copied), an ancillary's effects and cultures; a text of a
+        table Medieval II keeps only compiled (.strings.bin) goes into a .txt made from it; Restore byte for byte."""
+        import struct
+        from faction_tool import traitsedit as TE
+        from faction_tool.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_character_traits.txt"),
+              ";------\nTrait GoodCommander\n    Characters family\n\n    Level Good_Commander\n"
+              "        Description Good_Commander_desc\n        Threshold  1 \n\n        Effect Command  1 \n\n"
+              "    Level Great_Commander\n        Description Great_Commander_desc\n        Threshold  3 \n\n"
+              "        Effect Command  2 \n        Effect Loyalty  1 \n\n;------\nTrigger t1\n    WhenToTest X\n")
+        write(os.path.join(d, "export_descr_ancillaries.txt"),
+              "Ancillary healer\n    Image healer.tga\n    Description healer_desc\n    Effect HitPoints  2 \n")
+        write(os.path.join(d, "text", "export_VnVs.txt"),
+              "\u00ac texts\n{Good_Commander}\tGood Commander\n{Good_Commander_desc}\nKnows his men.\n\n"
+              "{Great_Commander}\tGreat Commander\n", utf16=True)
+        def entry(t):
+            return struct.pack("<H", len(t)) + t.encode("utf-16-le")
+        with open(os.path.join(d, "text", "export_ancillaries.txt.strings.bin"), "wb") as fh:
+            fh.write(struct.pack("<HHI", 2, 2048, 2) + entry("healer") + entry("Healer") + entry("healer_desc") +
+                     entry("Mends wounds."))
+        before = tree_hash(d)
+        mod = ModData(self.root)
+        b = TE.blocks(mod.load(TE.file_of(mod, "trait")), "trait")
+        self.assertEqual([(l["name"], l["threshold"][1], [(a, v) for _, a, v in l["effects"]])
+                          for l in b["GoodCommander"]["levels"]],
+                         [("Good_Commander", 1, [("Command", 1)]), ("Great_Commander", 3, [("Command", 2), ("Loyalty", 1)])])
+        self.assertEqual(TE.parse_effects("Command 1, Loyalty -2"), [("Command", 1), ("Loyalty", -2)])
+        with self.assertRaises(ValueError):
+            TE.parse_effects("Command")
+        plan = Plan(mod, "t", "t", {})
+        TE.apply(plan, "trait", {"new": [["GoodCommander", "IronCommander"]],
+                                 "edit": {"GoodCommander": {"levels": {"Great_Commander": {
+                                     "threshold": 4, "effects": [["Command", 3]]}}}},
+                                 "texts": {"Good_Commander": "A Fine Commander"}})
+        TE.apply(plan, "ancillary", {"edit": {"healer": {"effects": [["HitPoints", 3], ["Piety", 1]],
+                                                          "exclude": "roman"}},
+                                     "texts": {"healer": "Physician"}})
+        tr = plan.files[TE.file_of(mod, "trait")].texts()
+        self.assertIn("        Threshold  4 ", tr)
+        i = tr.index("    Level Great_Commander")
+        self.assertIn("        Effect Command  3 ", tr[i:i + 6])
+        self.assertNotIn("        Effect Loyalty  1 ", tr[i:i + 8])
+        self.assertIn("Trait IronCommander", tr)
+        self.assertIn("    Level Good_Commander_IronCommander", tr)
+        self.assertIn("        Description Good_Commander_IronCommander_desc", tr)
+        self.assertLess(tr.index("Trait IronCommander"), tr.index("Trigger t1"))          # among the traits
+        vnv = plan.files[mod.text_file("export_VnVs.txt")].texts()
+        self.assertIn("{Good_Commander}\tA Fine Commander", vnv)
+        self.assertIn("{Good_Commander_IronCommander}\tGood Commander", vnv)           # the texts copied
+        self.assertTrue(any(w for _, w in plan.warnings if "no trigger gives IronCommander" in w))
+        an = plan.files[TE.file_of(mod, "ancillary")].texts()
+        self.assertEqual([l.strip() for l in an if l.strip().startswith(("Effect", "ExcludeCultures"))],
+                         ["ExcludeCultures roman", "Effect HitPoints  3", "Effect Piety  1"])
+        made = os.path.join(d, "text", "export_ancillaries.txt")
+        text = plan.binaries[made].decode("utf-16")
+        self.assertIn("{healer}\tPhysician", text)
+        self.assertIn("{healer_desc}\tMends wounds.", text)
+        self.assertTrue(any("strings.bin" in w for _, w in plan.warnings))
+        bdir = plan.apply()
+        restore(ModData(self.root), bdir)
+        self.assertEqual(tree_hash(d), before)
+
     def test_path_guard(self):
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads
         out and a crafted backup manifest are refused before anything is written."""

@@ -51,6 +51,8 @@ class FamilyEditor(ttk.Frame):
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
         if standalone:
             ttk.Button(top, text="Portrait library...", command=self.open_library).pack(side="right", padx=6)
+            ttk.Button(top, text="Traits and retinue...", command=lambda: self.app.traits_window()).pack(
+                side="right", padx=(0, 6))
         from .gui_util import first
         first(*[w for w in top.pack_slaves() if w.pack_info().get("side") == "right"][::-1])
         self.lib_adds = []                     # Character editor: [{'culture', 'group', 'pics': {age: src}}]
