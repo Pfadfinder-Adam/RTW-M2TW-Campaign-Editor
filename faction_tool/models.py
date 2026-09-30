@@ -38,6 +38,7 @@ class ModelInfo:
         self.name = name
         self.where = set()
         self.textures = {}
+        self.attach = {}                # Medieval II: {faction: the weapons and shields texture}
         self.meshes = []
         self.skeletons = []
         self.seats = set()
@@ -124,6 +125,8 @@ def _modeldb_models(mod):
         m.exact = True
         for r in dm.textures:
             m.textures.setdefault(r[0], r[1])
+        for r in dm.attach:
+            m.attach.setdefault(r[0], r[1])
         m.meshes = [mesh for mesh, _ in dm.lods]
         for mt in dm.mounts:
             t = mt["type"].lower()

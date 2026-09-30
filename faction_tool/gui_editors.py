@@ -757,10 +757,17 @@ class RecordEditor(ttk.Frame):
             cell.grid(row=r, column=1, sticky="nw", padx=6)
             ttk.Label(cell, text=txt, font=("", 9, "bold")).pack(anchor="w")
             ttk.Label(cell, text=detail, foreground=colour, justify="left", wraplength=380).pack(anchor="w")
-            ttk.Button(cell, text="Replace model...",
-                       command=lambda k=key, i=idx, m=model: self.replace_model(k, i, m)).pack(anchor="w", pady=(2, 0))
-        ttk.Label(box, text="The model in 3D comes next.", foreground="#888").grid(
-            row=len(slots), column=0, columnspan=2, sticky="w", pady=(4, 0))
+            bar = ttk.Frame(cell)
+            bar.pack(anchor="w", pady=(2, 0))
+            ttk.Button(bar, text="Replace model...",
+                       command=lambda k=key, i=idx, m=model: self.replace_model(k, i, m)).pack(side="left")
+            if info is not None:
+                ttk.Button(bar, text="View in 3D...", command=lambda i=info: self.view_model(i)).pack(
+                    side="left", padx=4)
+
+    def view_model(self, info, mod=None):
+        from .gui_meshview import ModelViewer
+        ModelViewer(self, mod or self.mod, info, self._factions_of())
 
     def replace_model(self, key, idx, current):
         """Another battle model for this unit's soldiers (or an officer): from this mod or another mod folder of the
@@ -866,6 +873,8 @@ class RecordEditor(ttk.Frame):
             tex = next((info.textures[f] for f in facs if f in info.textures), None) or \
                 next(iter(info.textures.values()), None)
             self._texture_thumb(side, st["mod"], tex, size=(160, 160)).pack(anchor="w")
+            ttk.Button(side, text="View in 3D...", command=lambda: self.view_model(info, st["mod"])).pack(
+                anchor="w", pady=(4, 0))
             have = [f for f in info.textures if f]
             missing = [f for f in facs if f not in info.textures and "" not in info.textures]
             ttk.Label(side, text=name, font=("", 10, "bold")).pack(anchor="w", pady=(6, 0))

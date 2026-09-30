@@ -2110,6 +2110,50 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "faction_tool_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
 
+    def test_read_and_draw_a_medieval2_mesh(self):
+        """A .mesh laid out as the vanilla ones: parts with triangles, then the vertex streams (texture u v,
+        bone weights, positions). Read back, the man shown, drawn both ways."""
+        import struct
+        from faction_tool import meshview as MV
+
+        def text(t):
+            return struct.pack("<I", len(t)) + t.encode()
+        cube = [(x, y, z) for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]
+        faces = [(0, 1, 3), (0, 3, 2), (4, 6, 7), (4, 7, 5), (0, 4, 5), (0, 5, 1),
+                 (2, 3, 7), (2, 7, 6), (0, 2, 6), (0, 6, 4), (1, 5, 7), (1, 7, 3)]
+        n = len(cube)
+        tri = lambda fs: struct.pack("<I", len(fs)) + b"".join(struct.pack("<3H", *f) for f in fs)
+        data = (b"\x16\x00\x00\x00serialization::archive\x03\x04\x04\x04\x08\x01" +
+                bytes.fromhex("0000000000000001000000000004000103000000000000070001000100000000000200000000000b00"
+                              "0103020000 00".replace(" ", "")) +
+                text("Head") + text("head_01") + b"\x00\x00" + tri(faces[:8]) +
+                bytes.fromhex("000000000000000000 0a00010003000000 0b00020000000b0004000000".replace(" ", "")) +
+                text("Attachments3") + text("teeth") + tri(faces[8:]) +
+                bytes.fromhex("0000000000 0a00050000000b00040000000b0006000000".replace(" ", "")) +
+                bytes.fromhex("0600010044000000070001000000") + struct.pack("<I", n) +
+                bytes.fromhex("000002000000000012000100450000000400000000 00".replace(" ", "")) +
+                struct.pack("<I", n) + b"".join(struct.pack("<2f", 0.1 + 0.05 * i, 0.2) for i in range(n)) +
+                bytes.fromhex("000000001b004600000012004700000001000000") + struct.pack("<I", n) +
+                b"".join(struct.pack("<2f", 1.0, 0.0) for i in range(n)) +
+                bytes.fromhex("000000001b004800000017000100490000000000000000 00".replace(" ", "")) +
+                struct.pack("<I", n) + b"".join(struct.pack("<3f", *v) for v in cube) + b"\x00" * 40)
+        m = MV.read(data)
+        self.assertEqual([(g.name, g.material, len(g.tris) // 3) for g in m.groups],
+                         [("Head", "head_01", 8), ("Attachments3", "teeth", 4)])
+        self.assertEqual(m.count, 8)
+        self.assertEqual(m.positions[7], (1.0, 1.0, 1.0))
+        self.assertAlmostEqual(m.uvs[2][0], 0.2, places=5)
+        self.assertEqual([g.name for g in m.shown()], ["Head", "Attachments3"])
+        from PIL import Image
+        tex = Image.new("RGB", (8, 8), (200, 30, 30))
+        for textured in (True, False):
+            im = MV.render(m, (60, 80), texture=tex, textured=textured)
+            self.assertEqual(im.size, (60, 80))
+            reds = [p for p in im.getdata() if p[0] > 60 and p[0] > 2 * p[1]]
+            self.assertTrue(len(reds) > 200, textured)       # the cube in the man's (red) texture
+        with self.assertRaises(MV.MeshError):
+            MV.read(b"\x16\x00\x00\x00not a mesh at all.........")
+
     def test_replace_battle_model(self):
         """A unit's soldier model swapped for another of this mod or of another mod (brought with its files, renamed
         when the name is taken), the unit's factions given textures on it, a seat mismatch warned about, another

@@ -13,6 +13,10 @@
   what a map already breaks.
 
 ### Added
+- Unit editor: **View in 3D...** - a Medieval II battle model (.mesh) drawn in 3D with its texture: turn it with
+  the mouse, zoom with the wheel, pick the faction's texture, the level of detail and 'Another man' (the game's
+  mix of heads, arms, bodies); also in the Replace model window. Reads all 3354 vanilla meshes. Rome's .cas
+  models are not shown yet.
 - **Check and install a pack** (Tools): a "copy data over the game" mod checked file by file before it goes in -
   new, the same, or what a replacement would lose: a file of REX's own, a picture of another size (for an interface
   icon page, the icons left outside it), another mod's whole text file. A text file that differs in a few lines can
