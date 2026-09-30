@@ -21,7 +21,7 @@ import zipfile
 from . import log
 
 # the relay's address (worker/README.md); a settings value 'report_url' overrides it (a test relay)
-REPORT_URL = ""
+REPORT_URL = "https://rtw-m2tw-campaign-editor-reports.aldam-dubaev.workers.dev/"
 TEXT_CAP = 1536 * 1024          # a log's newest 1.5 MB (the game's system.log.txt can grow to hundreds of MB)
 PICTURE_CAP = 3 * 1024 * 1024   # a picked picture
 PICTURES = 3
