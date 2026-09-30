@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.21.0 - 2026-09-30
+
 ### Added
 - **Volcanoes and land bridges in the Terrain editor** (Rivers, cliffs, volcanoes...): volcanoes on land (both
   games), land bridges on Medieval II - armies walk across a narrow strait (vanilla has 9: the Bosporus, the Danish
