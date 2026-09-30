@@ -1535,9 +1535,9 @@ class App(tk.Tk):
         res = self._region_tag_names()
         me = self.v["template"].get().strip()
         fields = [("Region - name in the files", "name", "", "letters, digits, _ ; no spaces (Tribus_Novus)"),
-                  ("Region - name shown in the game", "label", "", "empty = the file name without _"),
+                  ("Region - name shown in the game", "label", "", "empty = the file name without _ (best kept alike)"),
                   ("Town - name in the files", "settlement", "", "must differ from the region's (Novus_Oppidum)"),
-                  ("Town - name shown in the game", "settlement_label", "", "may be the same as the region's"),
+                  ("Town - name shown in the game", "settlement_label", "", "best like its file name (the region's may match)"),
                   ("Built by (culture of its buildings)", "creator", AS_LAND,
                    "the faction whose style the town's buildings have; by default that of the region "
                    "its land is cut from"),
@@ -1570,11 +1570,13 @@ class App(tk.Tk):
             was.update(self.region_edits.get(edit, {}))
             given = {k: (", ".join(was[k]) if isinstance(was.get(k), list) else str(was.get(k) or ""))
                      for k in SHOWN + EDITABLE}
-            fields = [(a, k, given[k], "the name players see (the campaign's names text); the file name %s stays"
+            fields = [(a, k, given[k], "the name players see; the file name %s stays - best keep them alike"
                        % (edit if k == "label" else town) if k in SHOWN else h.split(";")[0].replace("by default ", ""))
                       for a, k, _, h in fields if k in SHOWN + EDITABLE]
             ttk.Label(frm, text="%s - town %s. Written with the next Apply (descr_regions.txt, the names players "
-                                "see in the campaign's names text); the file names and the land stay as they are."
+                                "see in the campaign's names text); the file names and the land stay as they are. Tip: give the name "
+                                "players see and the name in the files the same spelling (Latium / Latium) - a mod is "
+                                "easier to read, search and fix when a place has one name everywhere."
                                 % (edit, town), font=("", 9, "bold"), wraplength=620, justify="left"
                       ).grid(row=99, column=0, columnspan=3, sticky="w", pady=(6, 0))
         vs = {}
