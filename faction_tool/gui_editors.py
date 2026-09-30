@@ -666,7 +666,7 @@ class RecordEditor(ttk.Frame):
             self._thumb(box, have).grid(row=0, column=0, rowspan=3)
             need = E.unit_picture_need(self.mod, info)
             ttk.Label(box, text=label, font=("", 9, "bold")).grid(row=0, column=1, sticky="w", padx=6)
-            ttk.Label(box, foreground="#555", justify="left", text=(
+            ttk.Label(box, foreground="#555", justify="left", wraplength=330, text=(
                 "needs %d x %d, %d-bit TGA (as this mod's own)" % need if need else "size: as you like") +
                 "\nPNG / JPG / TGA are converted\ngoes to %s for %s" % (
                     "ui/unit_info/<faction>/%s_info.tga" % dic if info else "ui/units/<faction>/#%s.tga" % dic,
@@ -675,8 +675,9 @@ class RecordEditor(ttk.Frame):
                 row=1, column=1, sticky="w", padx=6)
             ttk.Button(box, text="Import...", command=lambda t=targets, n=need, l=label: self.import_pic(t, n, l)).grid(
                 row=2, column=1, sticky="w", padx=6)
-        self._unit_models(2)
-        self._unit_voice(3)
+        # the battle model and the voice beside the two pictures (below them the panel would stay half empty)
+        self._unit_models(0, 1)
+        self._unit_voice(1, 1)
 
     # ---- battle models ----
     def _model_catalogue(self, mod=None):
@@ -720,11 +721,11 @@ class RecordEditor(ttk.Frame):
         f = self.mod.load(self.path())
         return [f.text(i) for i in range(a, b)]
 
-    def _unit_models(self, row):
+    def _unit_models(self, row, column=0):
         """The unit's battle models: each soldier / officer line's model, how it sits, a texture, Replace model..."""
         from . import models as MO
         box = ttk.LabelFrame(self.pics, text="Battle model", padding=6)
-        box.grid(row=row, column=0, sticky="nwe", pady=(4, 0))
+        box.grid(row=row, column=column, sticky="nwe", pady=(4, 0), padx=(12 if column else 0, 0))
         try:
             cat = self._model_catalogue()
             lines = self._unit_lines()
@@ -760,7 +761,7 @@ class RecordEditor(ttk.Frame):
             cell = ttk.Frame(box)
             cell.grid(row=r, column=1, sticky="nw", padx=6)
             ttk.Label(cell, text=txt, font=("", 9, "bold")).pack(anchor="w")
-            ttk.Label(cell, text=detail, foreground=colour, justify="left", wraplength=380).pack(anchor="w")
+            ttk.Label(cell, text=detail, foreground=colour, justify="left", wraplength=300).pack(anchor="w")
             bar = ttk.Frame(cell)
             bar.pack(anchor="w", pady=(2, 0))
             ttk.Button(bar, text="Replace model...",
@@ -783,19 +784,19 @@ class RecordEditor(ttk.Frame):
             got = self._voice_cache = ((self.mod.data, stamp), SN.pack_index(self.mod), events)
         return got[1], got[2]
 
-    def _unit_voice(self, row):
+    def _unit_voice(self, row, column=0):
         """What the unit says in battle, for each accent (Medieval II) / culture (Rome) of its owners: its voice class,
         its own name call (Play, Put in my own...), and its orders (Play)."""
         from . import sounds as SN
         box = ttk.LabelFrame(self.pics, text="Voice in battle", padding=6)
-        box.grid(row=row, column=0, sticky="nwe", pady=(4, 0))
+        box.grid(row=row, column=column, sticky="nwe", pady=(4, 0), padx=(12 if column else 0, 0))
         unit = self.current[0]
         vt = self.value("voice_type").split(";")[0].strip()
         if not SN.voice_file(self.mod):
             ttk.Label(box, text="this mod has no %s - no unit voices to show" % SN.VOICE_FILE).grid(sticky="w")
             return
         if not vt:
-            ttk.Label(box, foreground="#b60", wraplength=420, justify="left", text=(
+            ttk.Label(box, foreground="#b60", wraplength=320, justify="left", text=(
                 "no voice_type line - the unit says nothing. Add a voice_type line (Add line...) to give it a "
                 "voice.")).grid(sticky="w")
             return
@@ -809,7 +810,7 @@ class RecordEditor(ttk.Frame):
         for uv in SN.unit_voices(self.mod, events, unit, vt, facs):
             who = ", ".join(uv.factions[:4]) + (" ..." if len(uv.factions) > 4 else "")
             if uv.key is None:
-                ttk.Label(box, foreground="#a33", wraplength=420, justify="left", text=(
+                ttk.Label(box, foreground="#a33", wraplength=320, justify="left", text=(
                     "%s: no accent in %s - these factions have no voice in battle. Add them to an accent "
                     "there." % (who, SN.ACCENTS_FILE))).grid(row=r, column=0, sticky="w")
                 r += 1
@@ -819,7 +820,7 @@ class RecordEditor(ttk.Frame):
                 row=r, column=0, sticky="w", pady=(4 if r else 0, 0))
             r += 1
             if not uv.known_class:
-                ttk.Label(box, foreground="#a33", wraplength=420, justify="left", text=(
+                ttk.Label(box, foreground="#a33", wraplength=320, justify="left", text=(
                     "this voice file has no class %s here - the unit stays silent. Change the voice_type line above "
                     "to one of: %s." % (vt, ", ".join(uv.classes)))).grid(row=r, column=0, sticky="w")
                 r += 1
@@ -847,7 +848,7 @@ class RecordEditor(ttk.Frame):
                 ttk.Combobox(line, textvariable=v, values=names, state="readonly", width=30).pack(side="left", padx=4)
                 ttk.Button(line, text="Play", width=6, command=lambda v=v, o=orders: self.play_sound(
                     next(ev.files for ev in o if ev.vocal == v.get()))).pack(side="left")
-        ttk.Label(box, foreground="#555", wraplength=420, justify="left", text=(
+        ttk.Label(box, foreground="#555", wraplength=320, justify="left", text=(
             "The voice class is the voice_type line above (%s)." % ", ".join(
                 sorted({ev.cls for ev in events}, key=str.lower)))).grid(row=r, column=0, sticky="w", pady=(4, 0))
 

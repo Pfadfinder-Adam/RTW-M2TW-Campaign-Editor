@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **Unit editor: the battle model and the voice sit beside the two pictures** (they were below them, leaving half
+  the panel empty - a user's screenshot); the unit's lines start higher. Fits a 1280-pixel-wide window.
+
 ## 0.19.2 - 2026-09-30
 
 ### Changed
