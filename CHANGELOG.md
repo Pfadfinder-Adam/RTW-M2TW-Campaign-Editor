@@ -26,6 +26,9 @@
   refused before anything is written, and logged); Restore refuses a backup that names files outside.
 
 ### Fixed
+- **The Map did not open on some big maps** (a tester's "paneuroafricasia", Rome + REX): the political colours
+  crashed with "IndexError: list index out of range" when the map had fewer than 256 region colours and Pillow took
+  its fast path (the Windows exe). The Terrain editor was not touched by it.
 - **SECURITY.md** said the editor sends nothing anywhere - true until Report a bug / Suggest; it now says when it
   sends.
 - **Barbarian Invasion's 53 watchtowers** (listed after the diplomacy, under the regions) were not read: not drawn

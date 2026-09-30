@@ -44,6 +44,17 @@ def recolour(im, table, default):
     return out
 
 
+def label_table(src, where, group):
+    """The 256-entry table that turns a palette index into the region's number within `group` (0 = none): src the
+    palette's colours (fewer than 256 - the rest of the table is 0), where {colour: (group, number)}. A map with
+    fewer than 256 region colours crashed here (IndexError, a tester's 'paneuroafricasia' map, 0.20.x)."""
+    out = []
+    for j in range(256):
+        g, n = where.get(src[j], (-1, 0)) if j < len(src) else (-1, 0)
+        out.append(n if g == group else 0)
+    return out
+
+
 class CampaignMap:
     def __init__(self, mod, campaign):
         self.mod, self.campaign = mod, campaign
@@ -313,9 +324,7 @@ class CampaignMap:
             q = rgb.quantize(palette=pal, dither=Image.Dither.NONE)
             if ImageChops.difference(q.convert("RGB"), rgb).getbbox() is None:
                 index = Image.frombytes("L", (w, h), q.tobytes())
-                planes = [index.point([where.get(src[j], (-1, 0))[1] if where.get(src[j], (-1, 0))[0] == g
-                                       and j < len(src) else 0 for j in range(256)]).tobytes()
-                          for g in range(len(groups))]
+                planes = [index.point(label_table(src, where, g)).tobytes() for g in range(len(groups))]
         if planes is None:                             # many colours (HLR's hundreds of regions): row by row
             planes = [bytearray(w * h) for _ in groups]
             raw = rgb.tobytes()

@@ -2626,6 +2626,18 @@ building smith
         with open(path) as fh:
             self.assertIn("resource\tiron,\t0,\t0", fh.read())
 
+    def test_label_table_few_colours(self):
+        """The political map's palette table on a map with fewer than 256 colours (a tester's map would not open:
+        IndexError in _labels)."""
+        from faction_tool.mapdata import label_table
+        src = [(0, 0, 0), (10, 20, 30), (40, 50, 60)]
+        where = {(10, 20, 30): (0, 1), (40, 50, 60): (1, 7)}
+        t0, t1 = label_table(src, where, 0), label_table(src, where, 1)
+        self.assertEqual(len(t0), 256)
+        self.assertEqual(t0[:3], [0, 1, 0])
+        self.assertEqual(t1[:3], [0, 0, 7])
+        self.assertEqual(set(t0[3:]) | set(t1[3:]), {0})
+
     def test_path_guard(self):
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads
         out and a crafted backup manifest are refused before anything is written."""
