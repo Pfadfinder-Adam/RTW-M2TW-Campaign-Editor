@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.19.0 - 2026-09-30
 
 ### Fixed
 - **A faction picked in New faction mode** (to change it, not to copy it) no longer ends in a puzzling "nothing to
