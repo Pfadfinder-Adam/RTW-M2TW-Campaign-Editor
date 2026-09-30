@@ -39,7 +39,8 @@ def recolour(im, table, default):
             q.putpalette([v for c in src + [src[0]] * pad for v in table.get(c, default)])
             return q.convert("RGB")
     out = Image.new("RGB", im.size)
-    out.putdata([table.get(p, default) for p in im.getdata()])
+    b = im.tobytes()                             # not getdata(): Pillow 14 drops it
+    out.putdata([table.get(p, default) for p in zip(b[0::3], b[1::3], b[2::3])])
     return out
 
 

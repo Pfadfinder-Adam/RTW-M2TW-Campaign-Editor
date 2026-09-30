@@ -294,21 +294,12 @@ def select_background(mod, campaign):
 def _map_mask(mod, campaign, keep):
     """An L image the size of map_regions.tga, top row first: 255 where keep(rgb)."""
     from PIL import Image
+    from .mapdata import recolour
     img = mod.region_map(campaign)
     w, h = img.width, img.height
-    hit = {}
-    data = bytearray(w * h)
-    raw = img.raw
-    for y in range(h):                                      # map_regions rows run bottom-up
-        row = (h - 1 - y) * w
-        src = y * w * 3
-        for x in range(w):
-            c = bytes(raw[src + 3 * x:src + 3 * x + 3])
-            v = hit.get(c)
-            if v is None:
-                v = hit[c] = 255 if keep(tuple(c)) else 0
-            data[row + x] = v
-    return Image.frombytes("L", (w, h), bytes(data))
+    rgb = Image.frombytes("RGB", (w, h), img.rgb_top_down())
+    table = {c: (255, 255, 255) for c in img.colours() if keep(c)}
+    return recolour(rgb, table, (0, 0, 0)).convert("L")
 
 
 def _place(mask, frame, size):
