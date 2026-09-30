@@ -30,7 +30,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.20.0"
+VERSION = "0.20.1"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
 
@@ -144,8 +144,8 @@ ADD-ONS
   first; Take it out removes it). Sack Settlement (Rome + REX): a 4th choice when a town is
   taken - it is torn down to its walls and roads, you get a reward, the rebels get the ruins.
   Who may sack: only the player, everyone, hordes (factions without a town), picked factions.
-  Report a problem: the logs (your names cut out - Show what is sent), a few words and screenshots go to the
-    author in one click, no account needed. Log / Save logs (zip): the same zip to send yourself.
+  Report a bug / Suggest: a problem (with the logs, your names cut out - Show what is sent) or an idea, a few
+    words and screenshots go to the author in one click, no account needed. Log / Save logs (zip): the same zip to send yourself.
 
 KEYS
   Ctrl+Z undo, Ctrl+Y redo    Ctrl+P preview    Ctrl+S apply    F5 load again    F1 this help
@@ -659,7 +659,7 @@ class App(tk.Tk):
                   activebackground="#e14b48", activeforeground="white", relief="flat", cursor="hand2",
                   font=("", 9, "bold"), padx=10).pack(side="right", padx=(8, 0))
         ttk.Button(bar, text="Help", command=self.show_help).pack(side="right", padx=(6, 0))
-        ttk.Button(bar, text="Report a problem", command=self.send_report).pack(side="right", padx=(6, 0))
+        ttk.Button(bar, text="Report a bug / Suggest", command=self.send_report).pack(side="right", padx=(6, 0))
         tools = ttk.Menubutton(bar, text="Tools")
         menu = tk.Menu(tools, tearoff=False)
         menu.add_command(label="Check mod", command=self.check)
@@ -675,7 +675,8 @@ class App(tk.Tk):
         menu.add_command(label="Game manifest...", command=self.game_manifest)
         menu.add_command(label="Log", command=self.show_log)
         menu.add_command(label="Save logs (zip)...", command=self.save_logs)
-        menu.add_command(label="Send a report...", command=self.send_report)
+        menu.add_command(label="Report a bug...", command=self.send_report)
+        menu.add_command(label="Suggest an idea...", command=lambda: self.send_report(kind="suggestion"))
         tools["menu"] = menu
         tools.pack(side="right")
         self.status = tk.StringVar(value="Pick the Mod, or Browse... to its data folder (for example ...\\HLR\\data) "
@@ -3732,12 +3733,12 @@ class App(tk.Tk):
     def show_log(self):
         """The tool's log - send faction_tool.log along with the game's system.log.txt."""
         self.show_text("Log - %s" % (log.path() or "no log file"), log.tail() or "(empty)",
-                       extra=[("Save logs (zip)...", self.save_logs), ("Send a report...", self.send_report)])
+                       extra=[("Save logs (zip)...", self.save_logs), ("Report a bug...", self.send_report)])
 
-    def send_report(self, message=""):
-        """The logs, anonymised, to the author in one click (gui_report, report)."""
+    def send_report(self, message="", kind="bug"):
+        """A bug (with the logs, anonymised) or an idea to the author in one click (gui_report, report)."""
         from .gui_report import open_report
-        return open_report(self, message)
+        return open_report(self, message, kind)
 
     def save_logs(self):
         """One zip for a report: the tool's log and the game's (system.log.txt, the
@@ -3772,7 +3773,7 @@ class App(tk.Tk):
             missing.append("no crash report in reports (fine if the game did not crash, or runs without REX)")
         log.write("Logs saved to %s: %s" % (out, ", ".join(names)))
         messagebox.showinfo(APP, "Saved %s\n\n%s%s\n\nYour names are cut out of the logs. Send this file - or use "
-                                 "Report a problem, which sends it in one click." % (
+                                 "Report a bug / Suggest, which sends it in one click." % (
             out, "\n".join(names) or "(nothing found)", ("\n\n" + "\n".join(missing)) if missing else ""))
 
     def report_callback_exception(self, exc, val, tb):

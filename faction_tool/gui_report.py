@@ -1,4 +1,4 @@
-"""The Send a report window: a few words of what happened, the logs found (ticked), pictures the user picks, words to
+"""The Send a report window: a problem or an idea (a suggestion), a few words of what happened or what is wished, the logs found (ticked), pictures the user picks, words to
 hide - Show what is sent, Save as zip, Send. The texts are anonymised by report.scrub before they are shown, saved or
 sent; nothing leaves without the Send button."""
 
@@ -13,7 +13,7 @@ from . import log, report, settings
 APP = "RTW & M2TW Campaign Editor"
 
 
-def open_report(app, message=""):
+def open_report(app, message="", kind="bug"):
     game = mod_dir = None
     if app.mod:
         from .newmod import game_of
@@ -23,18 +23,29 @@ def open_report(app, message=""):
     pictures = []
 
     w = tk.Toplevel(app)
-    w.title("Send a report")
+    w.title("Report a bug or suggest an idea")
     w.transient(app)
     frm = ttk.Frame(w, padding=10)
     frm.pack(fill="both", expand=True)
     ttk.Label(frm, justify="left", wraplength=620, text=(
-        "Sends the logs to the editor's author in one click - no account needed. Before anything leaves, the names "
+        "Sends a problem or an idea to the editor's author in one click - no account needed. A problem takes the "
+        "logs along (they show what went wrong). Before anything leaves, the names "
         "that could tell who you are are cut out: your Windows user name (also inside folder paths), the computer's "
         "name, e-mail addresses, Steam IDs, IP addresses and the player's name of REX's crash report. Look at "
         "exactly what goes with 'Show what is sent'. Nothing is sent before you press Send.")).pack(anchor="w")
 
-    ttk.Label(frm, text="What happened? (what you did, what you expected, what the game or the editor did)").pack(
-        anchor="w", pady=(10, 2))
+    v_kind = tk.StringVar(value=kind)
+    kinds = ttk.Frame(frm)
+    kinds.pack(anchor="w", pady=(10, 0))
+    ttk.Label(kinds, text="It is").pack(side="left")
+    ttk.Radiobutton(kinds, text="a problem (a bug, a crash, something confusing)", value="bug", variable=v_kind,
+                    command=lambda: kind_changed()).pack(side="left", padx=6)
+    ttk.Radiobutton(kinds, text="an idea (a suggestion, a wish)", value="suggestion", variable=v_kind,
+                    command=lambda: kind_changed()).pack(side="left")
+    PROMPTS = {"bug": "What happened? (what you did, what you expected, what the game or the editor did)",
+               "suggestion": "Your idea: what should the editor do, and what would it help you with?"}
+    lbl_prompt = ttk.Label(frm, text=PROMPTS[kind])
+    lbl_prompt.pack(anchor="w", pady=(6, 2))
     txt = tk.Text(frm, width=70, height=6, wrap="word")
     txt.pack(fill="x")
     if message:
@@ -57,13 +68,17 @@ def open_report(app, message=""):
     box.pack(fill="x", pady=(10, 0))
     ticks = []
     for f, name, what in files:
-        v = tk.BooleanVar(value=True)
+        v = tk.BooleanVar(value=kind == "bug")
         ticks.append((v, (f, name, what)))
         ttk.Checkbutton(box, variable=v, text="%s - %s (%d KB)" % (name, what, os.path.getsize(f) // 1024)).pack(
             anchor="w")
     if not any(n.endswith("system.log.txt") for _, n, _ in files):
         ttk.Label(box, foreground="#a60", text="No system.log.txt of the game found%s." % (
             " - load the mod first" if not app.mod else " in %s" % game)).pack(anchor="w")
+    def kind_changed():
+        lbl_prompt.configure(text=PROMPTS[v_kind.get()])
+        for v, _ in ticks:                         # an idea needs no logs (they can still be ticked)
+            v.set(v_kind.get() == "bug")
     lbl_pics = ttk.Label(box, foreground="#666", text="No pictures.")
     lbl_pics.pack(anchor="w", pady=(4, 0))
 
@@ -87,7 +102,7 @@ def open_report(app, message=""):
         picked = [f for v, f in ticks if v.get()]
         hide = report.hidden_words(picked, words())
         texts = report.contents(picked, hide)
-        info = report.about(app.mod, _version())
+        info = dict(kind=v_kind.get(), **report.about(app.mod, _version()))
         msg = txt.get("1.0", "end").strip()
         data = report.build_zip(texts, msg, v_contact.get(), info, pictures, hide)
         return texts, info, msg, hide, data
@@ -126,9 +141,13 @@ def open_report(app, message=""):
 
     def send():
         texts, info, msg, hide, data = gather()
-        if not msg and not messagebox.askyesno(APP, "Nothing written under 'What happened?' - a report with a few "
-                                                    "words is much easier to fix. Send it anyway?", parent=w):
-            return
+        if not msg:
+            if v_kind.get() == "suggestion":
+                messagebox.showerror(APP, "Write your idea first - a few words are enough.", parent=w)
+                return
+            if not messagebox.askyesno(APP, "Nothing written under 'What happened?' - a report with a few words is "
+                                            "much easier to fix. Send it anyway?", parent=w):
+                return
         remember()
         b_send.configure(state="disabled")
         lbl_state.configure(text="Sending...")
@@ -136,7 +155,8 @@ def open_report(app, message=""):
 
         def work():
             try:
-                result["id"] = report.send(data, report.scrub(msg, hide), v_contact.get().strip(), info)
+                result["id"] = report.send(data, ("Idea: " if info["kind"] == "suggestion" else "Bug: ") +
+                                           report.scrub(msg, hide), v_contact.get().strip(), info)
             except Exception as e:           # RuntimeError in plain words; anything else still shown
                 result["error"] = str(e)
         th = threading.Thread(target=work, daemon=True)

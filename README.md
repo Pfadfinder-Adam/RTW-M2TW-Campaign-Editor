@@ -77,7 +77,7 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 > [!IMPORTANT]
 > ### ⚠️ Something went wrong? Send the logs - and a video or screenshot ⚠️
 > When the game crashes, the tool shows an error, or something looks wrong, please send:
-> 1. **The logs:** in the tool, **Report a problem** (bottom right) sends them to the author in one click - no
+> 1. **The logs:** in the tool, **Report a bug / Suggest** (bottom right) sends them to the author in one click - no
 >    account needed, your names cut out first (Windows user name, computer name, e-mail, Steam ID, the player's
 >    name), and you see exactly what goes before you press Send. Or **Tools -> Save logs (zip)** - the same logs,
 >    names cut out, as one `.zip` in `RTW-M2TW-Campaign-Editor-files/logs` next to the exe, to send yourself.
@@ -86,7 +86,7 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 > With these the cause is usually found and fixed **the same day** (the logs name the file, line and
 > the game's own error); without them it is guesswork and takes much longer.
 
-A step-by-step guide is in the [Wiki](../../wiki). Version **0.20.0** - see [ROADMAP.md](ROADMAP.md) for what it does, what is being tested and what comes next, and [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
+A step-by-step guide is in the [Wiki](../../wiki). Version **0.20.1** - see [ROADMAP.md](ROADMAP.md) for what it does, what is being tested and what comes next, and [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
 
 Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
 

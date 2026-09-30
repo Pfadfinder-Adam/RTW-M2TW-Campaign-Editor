@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.20.1 - 2026-09-30
+
+### Added
+- **Ideas too**: the report window (now **Report a bug / Suggest**; Tools > Report a bug... / Suggest an idea...)
+  takes a problem or an idea - an idea needs no logs (they are unticked, can be ticked), its words are required;
+  the author sees "Bug:" or "Idea:" in front of each one.
+
 ## 0.20.0 - 2026-09-30
 
 ### Added

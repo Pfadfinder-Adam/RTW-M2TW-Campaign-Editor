@@ -40,12 +40,12 @@ release build).
   report is credited in the CHANGELOG, unless you ask not to be named.
 - If it is declined, you get the reason.
 
-For ordinary bugs and crashes, press **Report a problem** in the tool, or open an issue and attach the logs
+For ordinary bugs and crashes, press **Report a bug / Suggest** in the tool, or open an issue and attach the logs
 (**Tools -> Save logs (zip)**) and a video or screenshot.
 
 ## What a report sends
 
-**Report a problem** sends only what its window lists, and only after you press Send: the words you wrote, the
+**Report a bug / Suggest** sends only what its window lists, and only after you press Send: the words you wrote, the
 contact you gave (optional), the editor's version, Windows' version, the game, the engine and the mod folder's name,
 the logs you left ticked and the pictures you picked. Before that the logs lose your Windows user name (also in
 folder paths), the computer's name, e-mail addresses, Steam IDs, Windows SIDs, IP addresses, the player's name of
