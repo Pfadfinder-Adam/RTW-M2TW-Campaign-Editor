@@ -2607,6 +2607,48 @@ building smith
         self.assertIn("{tent_desc}\tA hut", bt)
         self.assertIn("{hall}\tHouse", bt)
 
+    def test_new_unit_and_building_step_by_step(self):
+        """What the step-by-step windows give copy_unit / copy_building: texts players read, owners, values,
+        a picture of one's own; factions and texts per level; Restore gives every file back."""
+        from faction_tool import editors as E
+        from faction_tool.plan import Plan, restore
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels hut\n    {\n        hut requires factions { alpha, }\n"
+              "        {\n            capability\n            {\n                recruit \"alpha general\"  0\n"
+              "            }\n        }\n    }\n}\n")
+        write(os.path.join(d, "text", "export_units.txt"), "{alpha_general}\tAlpha General\n", utf16=True)
+        write(os.path.join(d, "text", "export_buildings.txt"), "{hut}\tHut\n", utf16=True)
+        mod = ModData(self.root)
+        before = {p: open(p, "rb").read() for p in (mod.file("edu"), mod.file("edb"),
+                  mod.text_file("export_units.txt"), mod.text_file("export_buildings.txt"))}
+        plan = Plan(mod, "u", "u", {})
+        E.copy_unit(plan, "alpha general", "alpha guard", "alpha_guard", True,
+                    texts={"name": "Alpha Guard", "descr": "Two\nlines", "descr_short": "Short one"},
+                    owners=["alpha", "beta"], values={"stat_cost": "1, 999, 99, 10, 20, 999"})
+        E.copy_building(plan, "barracks", "camp", {"hut": "tent"},
+                        texts={"tent": {"name": "Tent", "desc": "A tent"}}, factions=["beta"])
+        bdir = plan.apply()
+        m2 = ModData(self.root)
+        from faction_tool.units import read_units
+        u = {x.type: x for x in read_units(m2.load(m2.file("edu")))}
+        self.assertEqual(u["alpha guard"].ownership, ["alpha", "beta"])
+        self.assertTrue(any("no 'stat_cost' line" in w for _, w in plan.warnings))   # the mini-mod's units have none
+        ut = open(m2.text_file("export_units.txt"), "rb").read().decode("utf-16").replace("\r", "")
+        self.assertIn("{alpha_guard}\tAlpha Guard", ut)
+        self.assertIn("{alpha_guard_descr}\tTwo\nlines\n", ut)           # over two lines, as the tables do
+        self.assertIn("{alpha_guard_descr_short}\tShort one", ut)
+        self.assertIn("{alpha_general}\tAlpha General", ut)                 # the source keeps its own
+        edb = open(m2.file("edb")).read()
+        self.assertIn("tent requires factions { beta, }", edb)
+        self.assertIn("hut requires factions { alpha, }", edb)
+        bt = open(m2.text_file("export_buildings.txt"), "rb").read().decode("utf-16").replace("\r", "")
+        self.assertIn("{tent}\tTent", bt)
+        self.assertIn("{tent_desc}\tA tent", bt)
+        restore(m2, bdir)
+        for p, data in before.items():
+            self.assertEqual(open(p, "rb").read(), data)
+
     def test_logs_zip(self):
         import zipfile
         from faction_tool import log

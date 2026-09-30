@@ -326,12 +326,53 @@ def copy_text_entries(plan, path, renames):
     return n
 
 
-def copy_unit(plan, src_type, new_type, new_dict, recruit=True):
+def set_text_values(plan, path, values):
+    """In a string table: the value of each key of values ({key: text}, any case) set to its text, the key's
+    own spelling and the gap after it kept; a text of several lines is written over several lines (a value runs
+    until the next {KEY} - the tables' own way). A key the table lacks is added at its end."""
+    from .clone import entry_end_in
+    values = {k: v for k, v in values.items() if v is not None}
+    if not path or not values:
+        return
+    f = plan.edit(path)
+    low = {k.lower(): (k, v) for k, v in values.items()}
+    done, gap = set(), "\t"
+    i = 0
+    while i < len(f.raw):
+        s = f.text(i).lstrip()
+        if s.startswith("{") and "}" in s:
+            key = s[1:s.index("}")]
+            rest = s[s.index("}") + 1:]
+            own = rest[:len(rest) - len(rest.lstrip())]
+            gap = own or gap
+            hit = low.get(key.lower())
+            if hit:
+                end = entry_end_in(f, i)
+                head = f.text(i)[:f.text(i).index("}") + 1]
+                parts = hit[1].split("\n")
+                f.raw[i:end] = [f.make(x) for x in [head + own + parts[0]] + parts[1:]]
+                done.add(key.lower())
+                i += 1
+                continue
+        i += 1
+    new = [k for k in low if k not in done]
+    if new:
+        lines = []
+        for k in new:
+            parts = low[k][1].split("\n")
+            lines += ["{%s}%s%s" % (low[k][0], gap, parts[0])] + parts[1:]
+        f.insert(len(f.raw), lines)
+    plan.note(f, "text of %s" % ", ".join(sorted(v[0] for v in low.values())))
+
+
+def copy_unit(plan, src_type, new_type, new_dict, recruit=True, texts=None, owners=None, values=None, pictures=None):
     """A new unit: the block of src_type copied after it under new_type and new_dict,
     its names and descriptions (export_units.txt) and cards copied to the new
     dictionary name, and - with recruit - a recruit line next to each of the old
-    unit's in export_descr_buildings.txt."""
-    import shutil  # noqa: F401  (copies go through the plan)
+    unit's in export_descr_buildings.txt. The step-by-step New unit window also gives: texts {'name',
+    'descr', 'descr_short'} (what players read), owners [factions or cultures] (its ownership line),
+    values {key: value} for the copied block's lines (soldier, stat_cost ...) and pictures {'card' |
+    'info': a picture file} put in the size the mod's own cards have."""
     mod = plan.mod
     new_type, new_dict = " ".join(new_type.split()), new_dict.strip()
     if not new_type or not new_dict or " " in new_dict:
@@ -358,6 +399,18 @@ def copy_unit(plan, src_type, new_type, new_dict, recruit=True):
     for b in blocks:
         if old_dict and any(tokens(f.text(i))[:2] == ["dictionary", new_dict] for i in range(b[1], b[2])):
             raise ValueError("the dictionary name '%s' is taken by %s" % (new_dict, b[0]))
+    vals = dict(values or {})
+    if owners:
+        vals["ownership"] = ", ".join(owners)
+    seen = set()
+    for i, text in enumerate(lines):
+        t = tokens(text)
+        if t and t[0] in vals and t[0] not in seen and t[0] not in ("type", "dictionary"):
+            lines[i] = set_value(text, vals[t[0]])
+            seen.add(t[0])
+    for key in vals:
+        if key not in seen and key not in ("type", "dictionary"):
+            plan.warn(f, "%s has no '%s' line to set - left out" % (src_type, key))
     while lines and not lines[-1].strip():
         lines.pop()
     at = src[2]
@@ -377,6 +430,31 @@ def copy_unit(plan, src_type, new_type, new_dict, recruit=True):
                     os.path.join(folder, fac)) else None
                 if srcp:
                     plan.copy(srcp, os.path.join(folder, fac, pattern % new_dict))
+    if texts:
+        set_text_values(plan, _text_file(mod, "export_units.txt"), {
+            new_dict: texts.get("name"), new_dict + "_descr": texts.get("descr"),
+            new_dict + "_descr_short": texts.get("descr_short")})
+    if owners:                                      # the new owners' card folders get a copy too
+        facs = dict(mod.factions())
+        for sub, pattern in (("units", "#%s.tga"), ("unit_info", "%s_info.tga")):
+            made = [(a, d) for a, d in plan.copies if os.path.basename(d).lower() == (pattern % new_dict).lower()]
+            if not made:
+                continue
+            for fac in owners:
+                if fac in facs and not any(os.path.basename(os.path.dirname(d)).lower() == fac.lower()
+                                           for _, d in made):
+                    plan.copy(made[0][0], os.path.join(mod.data, "ui", sub, fac, pattern % new_dict))
+    for which, pic in (pictures or {}).items():
+        if not pic:
+            continue
+        info = which == "info"
+        name = (("%s_info.tga" if info else "#%s.tga") % new_dict).lower()
+        targets = [d for _, d in plan.copies if os.path.basename(d).lower() == name]
+        if not targets:
+            targets = unit_picture_targets(mod, new_dict, [o for o in (owners or []) if o in dict(mod.factions())],
+                                           info)
+        plan.copies = [(a, d) for a, d in plan.copies if d not in targets]
+        import_picture(plan, pic, targets, unit_picture_need(mod, info))
     if recruit and mod.file("edb"):
         from .roster import recruit_of
         e = plan.edit(mod.file("edb"))
@@ -394,12 +472,15 @@ def copy_unit(plan, src_type, new_type, new_dict, recruit=True):
             plan.note(e, "%s recruited where %s is (%d line(s))" % (new_type, src_type, n))
 
 
-def copy_building(plan, src_chain, new_chain, level_names):
+def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=None, pictures=None):
     """A new building chain: src_chain's block copied under new_chain with its levels
     renamed by level_names {old: new} (in 'levels', their own blocks and 'upgrades'),
     their names and descriptions (export_buildings.txt, every key made of a level name)
-    and pictures (ui/<culture>/buildings/#<culture>_<level>[_constructed].tga)."""
+    and pictures (ui/<culture>/buildings/#<culture>_<level>[_constructed].tga). The step-by-step New building
+    window also gives: texts {new level: {'name', 'desc', 'desc_short'}}, factions [who may build every
+    level: factions or cultures] and pictures {new level: a picture file}."""
     import re
+    from .roster import factions_groups, with_factions
     mod = plan.mod
     edb = mod.file("edb")
     f = plan.edit(edb)
@@ -435,12 +516,23 @@ def copy_building(plan, src_chain, new_chain, level_names):
             lines.append(swap(text))
         else:
             lines.append(text)
+    new_levels = set(level_names.values())
+    if factions:
+        for i, text in enumerate(lines):
+            head = strip_comment(text).strip().split()[:1]
+            if head and head[0] in new_levels and "requires" in text:
+                groups = factions_groups(text)
+                if len(groups) == 1:
+                    lines[i] = with_factions(text, list(factions))
+                elif len(groups) > 1:
+                    plan.warn(f, "%s: its requires line has %d factions groups (REX) - left as it is, change "
+                                 "it in the Building editor" % (head[0], len(groups)))
     f.insert(src[2], [""] + lines)
     plan.note(f, "building %s copied from %s: levels %s" % (
         new_chain, src_chain, ", ".join("%s -> %s" % kv for kv in level_names.items())))
     path = _text_file(mod, "export_buildings.txt")
+    keys = {}
     if path:
-        keys = {}
         for s in mod.load(path).texts():
             s = s.lstrip()
             if s.startswith("{") and "}" in s:
@@ -461,6 +553,36 @@ def copy_building(plan, src_chain, new_chain, level_names):
                     n = names.get(("#%s_%s%s" % (cult, old, tail)).lower())
                     if n:
                         plan.copy(os.path.join(folder, n), os.path.join(folder, "#%s_%s%s" % (cult, new, tail)))
+    if texts:
+        # a level's name and description, and every culture's / faction's own copy of them (<level>_<culture>,
+        # <level>_<culture>_desc ...): the game shows the most specific one, so all say the new text
+        tpath = _text_file(mod, "export_buildings.txt")
+        made = set(keys.values()) if path else set()
+        vals = {}
+        for lvl, t in texts.items():
+            for k in {lvl} | {k for k in made if k.lower().startswith(lvl.lower() + "_")}:
+                low = k.lower()
+                if low.endswith("_desc_short"):
+                    vals[k] = t.get("desc_short")
+                elif low.endswith("_desc"):
+                    vals[k] = t.get("desc")
+                else:
+                    vals[k] = t.get("name")
+            vals.setdefault(lvl + "_desc", t.get("desc"))
+            vals.setdefault(lvl + "_desc_short", t.get("desc_short"))
+        set_text_values(plan, tpath, vals)
+    for lvl, pic in (pictures or {}).items():
+        if not pic:
+            continue
+        names = {("#%s_%s.tga" % (c, lvl)).lower() for c in (os.listdir(ui) if os.path.isdir(ui) else [])}
+        targets = [d for _, d in plan.copies if os.path.basename(d).lower() in names]
+        if not targets:
+            targets = [building_picture_target(mod, c, lvl) for c in sorted(os.listdir(ui))
+                       if os.path.isdir(os.path.join(ui, c, "buildings"))] if os.path.isdir(ui) else []
+        plan.copies = [(a, d) for a, d in plan.copies if d not in targets]
+        for t in targets:
+            cult = os.path.basename(os.path.dirname(os.path.dirname(t)))
+            import_picture(plan, pic, [t], building_picture_need(mod, cult))
 
 
 # ---------------------------------------------------------------------------

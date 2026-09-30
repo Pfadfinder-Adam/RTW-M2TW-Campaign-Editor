@@ -105,8 +105,9 @@ UNIT EDITOR / BUILDING EDITOR
   any, it turns yellow. Pictures: Import... takes a PNG, JPG or TGA, converts it to the
   mod's own size and format and puts it where the game reads it (unit cards and
   description pictures for every faction that owns the unit; building pictures per
-  culture and level). Copy as new... makes a new unit (building chain) from the one on
-  show: its lines, texts, pictures and recruit lines under the new names.
+  culture and level). New unit / New building step by step... makes a new one from the one on
+  show in steps (Back / Next): names and texts players read, who owns or builds it, its main
+  numbers, pictures, then everything it changes shown before it is added.
   Add line... adds a line in its place: in a building level a recruit line (the unit, its
   experience, the factions - who do not own the unit yet get it and its cards), a capability
   (bonus), an upgrade or another line of the level; in a unit any key the mod's units use.

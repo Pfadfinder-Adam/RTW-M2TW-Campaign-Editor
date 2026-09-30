@@ -64,7 +64,7 @@ class RecordEditor(ttk.Frame):
         self.title = ttk.Label(head, text="Load a mod, then pick one on the left", font=("", 11, "bold"))
         self.title.pack(side="left")
         ttk.Button(head, text="Undo all changes here", command=self.reset).pack(side="right")
-        ttk.Button(head, text="Copy as new %s..." % ("unit" if kind == "unit" else "building"),
+        ttk.Button(head, text="New %s step by step..." % ("unit" if kind == "unit" else "building"),
                    command=self.copy_dialog).pack(side="right", padx=6)
         ttk.Button(head, text="Add line...", command=self.add_dialog).pack(side="right")
         if kind == "unit":
@@ -1201,7 +1201,7 @@ class RecordEditor(ttk.Frame):
                 have = [lv["name"] for lv in E.chain_tree(f, blk[1], blk[2])["levels"]]
                 if sorted(value.split()) != sorted(have):
                     errs.append("%s: 'levels' must name its level blocks (%s); a new or renamed level: "
-                                "Copy as new building" % (name, " ".join(have)))
+                                "New building step by step" % (name, " ".join(have)))
         for op in self.adds:
             for e, m in E.check_text(mod, self.kind, op["text"]):
                 (errs if e else notes).append("%s: %s" % (op["block"], m))
@@ -1236,55 +1236,12 @@ class RecordEditor(ttk.Frame):
                 E.rename_chain(plan, old, new)
 
     def copy_dialog(self):
-        """A new unit (building chain) made from the one on show: new names, then Apply."""
-        if not self.current:
-            messagebox.showerror("Copy", "pick the %s to copy on the left first" % self.kind)
+        """A new unit (building chain) step by step, starting from the one on show (gui_newrecord)."""
+        if not self.mod:
+            messagebox.showerror("New", "load a mod first")
             return
-        name = self.current[0]
-        w = tk.Toplevel(self)
-        w.title("New %s from %s" % (self.kind, name))
-        w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
-        vs = {}
-        if self.kind == "unit":
-            dic = self.value("dictionary")
-            rows = [("type (its name in the files)", "type", name + " 2"),
-                    ("dictionary (cards and text keys; no spaces)", "dict", dic + "_2")]
-        else:
-            levels = self.value("levels").split()
-            rows = [("building chain", "chain", name + "_2")] + \
-                [("level %s becomes" % l, "lv:" + l, l + "_2") for l in levels]
-        for i, (label, key, default) in enumerate(rows):
-            ttk.Label(frm, text=label).grid(row=i, column=0, sticky="w", pady=1)
-            vs[key] = tk.StringVar(value=default)
-            ttk.Entry(frm, textvariable=vs[key], width=40).grid(row=i, column=1, sticky="we", padx=6)
-        v_rec = tk.BooleanVar(value=True)
-        if self.kind == "unit":
-            ttk.Checkbutton(frm, text="recruitable wherever %s is (a recruit line next to each of its own)" % name,
-                            variable=v_rec).grid(row=len(rows), column=0, columnspan=2, sticky="w", pady=(6, 0))
-        ttk.Label(frm, foreground="#555", justify="left", wraplength=460, text=(
-            "Copied too: its names and descriptions in the text tables and its pictures (cards / building "
-            "pictures) under the new names - replace them afterwards. Written on Apply, with a backup.")).grid(
-            row=len(rows) + 1, column=0, columnspan=2, sticky="w", pady=(6, 0))
-
-        def ok():
-            d = {k: v.get().strip() for k, v in vs.items()}
-            if self.kind == "unit":
-                op = (name, d["type"], {"dict": d["dict"], "recruit": v_rec.get()})
-            else:
-                op = (name, d["chain"], {"levels": {k[3:]: v for k, v in d.items() if k.startswith("lv:")}})
-            if not all(d.values()):
-                messagebox.showerror("Copy", "fill in every name", parent=w)
-                return
-            self.copy_ops.append(op)
-            w.destroy()
-            self.app.status.set("New %s %s from %s - Preview, then Apply." % (self.kind, op[1], name))
-            self.fill_list()
-        bar = ttk.Frame(frm)
-        bar.grid(row=len(rows) + 2, column=0, columnspan=2, sticky="e", pady=(8, 0))
-        ttk.Button(bar, text="Add", command=ok).pack(side="left")
-        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+        from .gui_newrecord import NewRecordWizard
+        NewRecordWizard(self, self.current[0] if self.current else None)
 
     def make_plan(self):
         if not self.mod:
@@ -1327,7 +1284,9 @@ class RecordEditor(ttk.Frame):
             E.import_picture(plan, src, targets, size)
         for src, new, d in self.copy_ops:                 # after the field changes: copies add lines
             if self.kind == "unit":
-                E.copy_unit(plan, src, new, d["dict"], d["recruit"])
+                E.copy_unit(plan, src, new, d["dict"], d["recruit"], texts=d.get("texts"), owners=d.get("owners"),
+                            values=d.get("values"), pictures=d.get("pictures"))
             else:
-                E.copy_building(plan, src, new, d["levels"])
+                E.copy_building(plan, src, new, d["levels"], texts=d.get("texts"), factions=d.get("factions"),
+                                pictures=d.get("pictures"))
         return plan

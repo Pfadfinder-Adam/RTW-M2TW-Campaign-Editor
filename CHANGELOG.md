@@ -19,6 +19,11 @@
   what a map already breaks.
 
 ### Added
+- **New unit / New building step by step** (Unit and Building editors; was Copy as new): a new one starts as a
+  copy of one that works in the game, then steps you can go back and forth between - names and the texts
+  players read, who owns the unit or may build the chain (factions or cultures), the unit's main numbers
+  (men, attack, armour, cost...), pictures of your own - and last every file it will change before it is
+  added. On Medieval II a renamed level gets its new name in every culture's own text too.
 - Unit editor: **View in 3D...** - a Medieval II battle model (.mesh) drawn in 3D with its texture: turn it with
   the mouse, zoom with the wheel, pick the faction's texture, the level of detail and 'Another man' (the game's
   mix of heads, arms, bodies); also in the Replace model window. Reads all 3354 vanilla meshes. Rome's .cas
