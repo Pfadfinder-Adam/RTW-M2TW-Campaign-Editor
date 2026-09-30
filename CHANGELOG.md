@@ -26,6 +26,10 @@
   mod does not have are refused - as is leaving out the governor's chain.
 
 ### Fixed
+- **A region or its town could not be renamed** (a user asked; a double click on the town list only adds the town):
+  **Rename...** beside the towns list, a right click on a town, and Edit region now show the names players see of the
+  region and its town and write them to the campaign's `<campaign>_regions_and_settlement_names.txt` (the key and
+  its gap kept, a missing key added; the names in the files stay) - both games.
 - **Medieval II clone: "the Kingdom of Kingdom of Jerusalem"** - the game has no short faction names, so the
   template's name inside the copied texts (advice, intro subtitles, "de Sicily" surnames) was swapped for the whole
   new name; now "Kingdom of Sicily" becomes the new full name and a bare "Sicily" the short name (or the end of

@@ -16,6 +16,7 @@ painted = {(x, y): region} gives tiles to regions (new or old); only land
 tiles can change hands, never a town or port pixel."""
 
 import os
+import re
 
 from .mapedit import CITY, PORT, ports
 from .moddata import religions_line
@@ -385,6 +386,52 @@ def _mercenary_pools(plan, campaign, new_regions, painted, by_colour, img):
 
 
 EDITABLE = ("creator", "rebels", "resources", "triumph", "farming")
+SHOWN = ("label", "settlement_label")          # the names players see, kept in the campaign's labels text
+
+
+def shown_labels(mod, campaign, keys):
+    """{key: text} of the campaign's region labels ({Latium} Latium) for the given region / town names."""
+    p = mod.region_labels_file(campaign)
+    want = {k.lower(): k for k in keys}
+    out = {}
+    if p:
+        for line in mod.load(p).texts():
+            m = re.match(r"\s*\{([^}]+)\}(\s*)(.*)$", line)
+            if m and m.group(1).lower() in want:
+                out[want[m.group(1).lower()]] = m.group(3).strip()
+    return out
+
+
+def set_labels(plan, campaign, labels):
+    """labels = {region or town file name: the name players see}: its {key} line in the campaign's
+    *_regions_and_settlement_names.txt gets the new text (the key and the gap before the text stay), a key the
+    file lacks is added at its end. Every other line keeps its bytes."""
+    if not labels:
+        return
+    for key, text in labels.items():
+        if not text.strip() or "\n" in text or "{" in text or "}" in text:
+            raise ValueError("%s: the name players see must be one line of text without { }" % key)
+    p = plan.mod.region_labels_file(campaign)
+    if not p:
+        raise ValueError("no %s_regions_and_settlement_names.txt found - the names players see live there"
+                         % campaign)
+    f = plan.edit(p)
+    left = {k.lower(): (k, v.strip()) for k, v in labels.items()}
+    for i in range(len(f.raw)):
+        m = re.match(r"(\s*\{([^}]+)\}(\s*))(.*?)(\s*)$", f.text(i))
+        if m and m.group(2).lower() in left:
+            key, text = left.pop(m.group(2).lower())
+            gap = m.group(3) or "\t\t\t"
+            if m.group(4) != text:
+                f.set(i, m.group(1)[:len(m.group(1)) - len(m.group(3))] + gap + text)
+                plan.note(f, "%s: shown as '%s' (was '%s')" % (key, text, m.group(4)))
+    if left:
+        while f.raw and not f.text(len(f.raw) - 1).strip():
+            del f.raw[-1]
+        for key, text in left.values():
+            f.raw.append(f.make("{%s}\t\t\t%s" % (key, text)))
+            plan.note(f, "%s: shown as '%s' (added)" % (key, text))
+        f.raw.append(f.make(""))
 
 
 def set_region_lines(plan, f, changes, why=""):
@@ -419,7 +466,17 @@ def edit_regions(plan, campaign, edits):
     mod = plan.mod
     facs = {n for n, _ in mod.factions()}
     changes = {}
+    shown = {}
+    towns = None
     for region, ch in edits.items():
+        if ch.get("label", "").strip():
+            shown[region] = ch["label"]
+        if ch.get("settlement_label", "").strip():
+            if towns is None:
+                towns = {k: v.get("settlement") for k, v in mod.regions(campaign).items()}
+            if not towns.get(region):
+                raise ValueError("%s has no town in descr_regions.txt" % region)
+            shown[towns[region]] = ch["settlement_label"]
         out = {}
         for field in EDITABLE:
             want = ch.get(field)
@@ -437,7 +494,9 @@ def edit_regions(plan, campaign, edits):
             out[field] = str(want).strip()
         if out:
             changes[region] = out
-    set_region_lines(plan, plan.edit(mod.campaign_file(campaign, "descr_regions.txt")), changes)
+    if changes:
+        set_region_lines(plan, plan.edit(mod.campaign_file(campaign, "descr_regions.txt")), changes)
+    set_labels(plan, campaign, shown)
 
 
 def apply_opts(plan, campaign, regions):

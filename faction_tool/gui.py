@@ -58,6 +58,7 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   change the campaign's rules ... Tools > Campaign rules... (ages, agents, towns, diplomacy, unit sizes)
   add a religion ................ Tools > New religion... (Medieval II; Rome has no religions)
   add Sack Settlement ........... Add-ons (Rome + REX): who may sack, reward, what stays standing
+  rename a region or its town ... Faction tab: pick it in the list, Rename... (or right click it)
   make a copy of the mod to work on  New mod folder... (the base mod stays untouched)
 
 START
@@ -532,6 +533,7 @@ class App(tk.Tk):
         self.b_remove = ttk.Button(mid, text="< Remove", command=self.remove_town)
         self.b_remove.pack(pady=2)
         ttk.Button(mid, text="Garrison...", command=lambda: self.show_units(self.selected_town())).pack(pady=(14, 2))
+        ttk.Button(mid, text="Rename...", command=self.rename_town).pack(pady=2)
         ttk.Button(mid, text="Edit region...", command=lambda: self.new_region_dialog(
             edit=(self.tv.selection() or [""])[0] or self.selected_town())).pack(pady=2)
         ttk.Button(mid, text="Names by culture...", command=lambda: self.culture_names_dialog(
@@ -549,6 +551,19 @@ class App(tk.Tk):
         self.tv.pack(side="left", fill="both", expand=True)
         sb.pack(side="left", fill="y")
         self.tv.bind("<Double-1>", lambda e: self.add_town())
+        # right click: the region's own menu (rename it, edit it) - a double click adds it to Chosen
+        town_menu = tk.Menu(self.tv, tearoff=False)
+        town_menu.add_command(label="Rename (the names players see)...", command=self.rename_town)
+        town_menu.add_command(label="Edit region...", command=lambda: self.new_region_dialog(
+            edit=(self.tv.selection() or [""])[0]))
+        town_menu.add_command(label="Add to Chosen", command=self.add_town)
+
+        def town_menu_at(e):
+            row = self.tv.identify_row(e.y)
+            if row:
+                self.tv.selection_set(row)
+                town_menu.tk_popup(e.x_root, e.y_root)
+        self.tv.bind("<Button-3>", town_menu_at)
 
         self._build_units_tab()
         self._build_buildings_tab()
@@ -1501,7 +1516,7 @@ class App(tk.Tk):
         triumph, farming), written with the next Apply."""
         if not self.mod or not self.strat:
             return
-        from .regionedit import EDITABLE, free_colour
+        from .regionedit import EDITABLE, SHOWN, free_colour, shown_labels
         cur = self._new_region(edit) if edit else None
         old = self.regions.get(edit) if edit and not cur else None
         if edit is not None and not cur and not old:
@@ -1545,12 +1560,20 @@ class App(tk.Tk):
                      "owner": cur.get("owner") or rebel_text, "level": cur.get("level") or "village"}
             fields = [(a, k, given[k], h) for a, k, _, h in fields]
         elif old:
-            was = dict(old, **self.region_edits.get(edit, {}))
-            given = {k: (", ".join(was[k]) if isinstance(was.get(k), list) else str(was.get(k) or "")) for k in EDITABLE}
-            fields = [(a, k, given[k], h.split(";")[0].replace("by default ", "")) for a, k, _, h in fields
-                      if k in EDITABLE]
-            ttk.Label(frm, text="%s - town %s. Written to descr_regions.txt with the next Apply; names and land "
-                                "stay as they are." % (edit, old.get("settlement", "")), font=("", 9, "bold")
+            town = old.get("settlement", "")
+            now_shown = shown_labels(self.mod, self.v_campaign.get(), [edit, town])
+            shown_now = {"label": now_shown.get(edit) or edit.replace("_", " "),
+                         "settlement_label": now_shown.get(town) or town.replace("_", " ")}
+            was = dict(old, **shown_now)
+            was.update(self.region_edits.get(edit, {}))
+            given = {k: (", ".join(was[k]) if isinstance(was.get(k), list) else str(was.get(k) or ""))
+                     for k in SHOWN + EDITABLE}
+            fields = [(a, k, given[k], "the name players see (the campaign's names text); the file name %s stays"
+                       % (edit if k == "label" else town) if k in SHOWN else h.split(";")[0].replace("by default ", ""))
+                      for a, k, _, h in fields if k in SHOWN + EDITABLE]
+            ttk.Label(frm, text="%s - town %s. Written with the next Apply (descr_regions.txt, the names players "
+                                "see in the campaign's names text); the file names and the land stay as they are."
+                                % (edit, town), font=("", 9, "bold"), wraplength=620, justify="left"
                       ).grid(row=99, column=0, columnspan=3, sticky="w", pady=(6, 0))
         vs = {}
         for i, (label, key, default, hint) in enumerate(fields):
@@ -1579,9 +1602,12 @@ class App(tk.Tk):
             d = {k: v.get().strip() for k, v in vs.items()}
             if old:                                      # a region of the map: only what differs
                 ch = {}
-                for k in EDITABLE:
-                    now = str(old.get(k) or "")
+                for k in SHOWN + EDITABLE:
+                    now = shown_now[k] if k in SHOWN else str(old.get(k) or "")
                     val = d[k]
+                    if k in SHOWN and ("{" in val or "}" in val):
+                        messagebox.showerror(APP, "a name players see cannot hold { or }", parent=w)
+                        return
                     if k == "resources":
                         val = ", ".join(x.strip() for x in val.split(",") if x.strip())
                         now = ", ".join(x.strip() for x in now.split(",") if x.strip())
@@ -2800,6 +2826,15 @@ class App(tk.Tk):
             self.colours[which] = rgb
             btn = self.b_primary if which == "primary" else self.b_secondary
             btn.configure(**colour_look(rgb))
+
+    def rename_town(self):
+        """Rename... beside the town list: the region picked on the left (or a chosen town) in Edit region, whose
+        first fields are the names players see of the region and its town."""
+        region = (self.tv.selection() or [""])[0] or self.selected_town()
+        if not region:
+            messagebox.showerror(APP, "Pick a region in the list first (a click on its line), then Rename...")
+            return
+        self.new_region_dialog(edit=region)
 
     def add_town(self):
         self.remember()

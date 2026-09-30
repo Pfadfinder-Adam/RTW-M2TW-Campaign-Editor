@@ -1651,6 +1651,36 @@ building smith
         self.assertEqual((lines[e["farming"][0]], lines[e["rebels"][0]]), ("\t4", "\tPicts"))
         self.assertIn("\tPictii", lines)
 
+    def test_rename_region_and_town_shown_names(self):
+        """Edit region renames what players see: the region's and its town's {key} lines of the campaign's names
+        text get the new text (the key and the gap stay), a missing key is added; the file names stay; Restore
+        gives the file back byte for byte; a name with { } is refused."""
+        from faction_tool.plan import Plan, restore
+        from faction_tool.regionedit import edit_regions, shown_labels
+        mod = ModData(self.root)
+        path = mod.region_labels_file("test")
+        with open(path, "rb") as fh:
+            before = fh.read()
+        self.assertEqual(shown_labels(mod, "test", ["alpha", "Atown"]), {"alpha": "Alpha region"})
+        plan = Plan(mod, "x", "x")
+        edit_regions(plan, "test", {"A_R": {"label": "Latium Novum", "settlement_label": "Roma Nova"}})
+        texts = plan.files[path].texts()
+        self.assertIn("{Alpha}\t\tAlpha region", texts)                 # another key untouched
+        self.assertIn("{A_R}\t\t\tLatium Novum", texts)                  # added: the file had no {A_R}
+        self.assertIn("{Atown}\t\t\tRoma Nova", texts)
+        self.assertNotIn(mod.campaign_file("test", "descr_regions.txt"), plan.files)   # nothing else asked
+        bdir = plan.apply()
+        mod2 = ModData(self.root)
+        self.assertEqual(shown_labels(mod2, "test", ["A_R", "Atown"]), {"A_R": "Latium Novum", "Atown": "Roma Nova"})
+        plan = Plan(mod2, "x", "x")
+        edit_regions(plan, "test", {"A_R": {"label": "Latium"}})          # an existing key: its text replaced
+        self.assertIn("{A_R}\t\t\tLatium", plan.files[path].texts())
+        with self.assertRaises(ValueError):
+            edit_regions(Plan(mod2, "x", "x"), "test", {"A_R": {"label": "bad {name}"}})
+        restore(mod2, bdir)
+        with open(path, "rb") as fh:
+            self.assertEqual(fh.read(), before)
+
     def test_terrain_paint_and_restore(self):
         """Terrain editor: a tile's ground is the 3 x 3 block around (2x + 1, 2y + 1) of map_ground_types.tga,
         features one pixel per tile; land stays land, nothing refused under a town; map.rwm goes; Restore."""
