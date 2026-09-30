@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.20.0 - 2026-09-30
 
 ### Added
 - **Report a problem** (bottom right; Tools > Send a report...; offered when the editor shows an error): a few words
