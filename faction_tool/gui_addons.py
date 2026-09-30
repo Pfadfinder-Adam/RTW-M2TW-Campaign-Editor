@@ -1,0 +1,221 @@
+"""The Add-ons work: ready-made scripts (Sack Settlement ...) put into the game with their settings picked here.
+It writes on its own (Preview / Put it in / Take it out, each with a backup); the bottom Apply is for the other
+works."""
+
+import os
+import tkinter as tk
+from tkinter import messagebox, ttk
+
+from . import addons as AD
+from .gui_util import ScrollFrame
+from .plan import Plan
+
+
+class AddonsPanel(ttk.Frame):
+    kind = "add-ons"
+
+    def __init__(self, master, app):
+        super().__init__(master)
+        self.app, self.mod = app, None
+        self.vars = {}
+        side = ttk.Frame(self, padding=(0, 0, 8, 0))
+        side.pack(side="left", fill="y")
+        ttk.Label(side, text="Add-ons", font=("", 10, "bold")).pack(anchor="w")
+        self.lb = tk.Listbox(side, width=28, height=10, exportselection=False)
+        self.lb.pack(fill="y", expand=True)
+        for a in AD.ADDONS:
+            self.lb.insert("end", a.title)
+        self.lb.bind("<<ListboxSelect>>", lambda e: self.show())
+        ttk.Label(side, text="scripts that add something\nnew to the game", foreground="#666").pack(anchor="w")
+        self.sf = ScrollFrame(self)
+        self.sf.pack(side="left", fill="both", expand=True)
+        self.lb.selection_set(0)
+
+    # ---- what the window asks of a work ----
+    def rebind(self, mod):
+        self.mod = mod
+        self.show()
+        return 0
+
+    def dirty(self):
+        return False
+
+    def pending(self):
+        return 0
+
+    def make_plan(self):
+        raise ValueError("Add-ons write on their own: use Preview / Put it in on the Add-ons page.")
+
+    # ---- the page ----
+    def addon(self):
+        sel = self.lb.curselection()
+        return AD.ADDONS[sel[0] if sel else 0]
+
+    def show(self):
+        inner = self.sf.inner
+        for w in inner.winfo_children():
+            w.destroy()
+        a = self.addon()
+        ttk.Label(inner, text=a.title, font=("", 12, "bold")).grid(row=0, column=0, columnspan=3, sticky="w")
+        ttk.Label(inner, text=a.summary, wraplength=760, justify="left").grid(
+            row=1, column=0, columnspan=3, sticky="w", pady=(2, 4))
+        ttk.Label(inner, text="Needs: " + a.needs, foreground="#555", wraplength=760, justify="left").grid(
+            row=2, column=0, columnspan=3, sticky="w")
+        if not self.mod:
+            ttk.Label(inner, text="Load a mod first (Mod or Browse..., then Load).").grid(row=3, column=0, sticky="w")
+            return
+        from .packs import game_kind
+        if (game_kind(self.mod) == "medieval2") != (a.game == "medieval2"):
+            ttk.Label(inner, foreground="#a33", text="This add-on is for %s - the loaded mod is of the other game."
+                      % ("Medieval II" if a.game == "medieval2" else "Rome: Total War")).grid(
+                row=3, column=0, columnspan=3, sticky="w", pady=6)
+            return
+        dst = AD.target(self.mod, a)
+        now = AD.installed(self.mod, a)
+        ttk.Label(inner, foreground="#2a7a1f" if now is not None else "#b60", wraplength=760, justify="left", text=(
+            "Put in: %s - the settings below are the ones it has now." % dst if now is not None else
+            "Not put in yet. It goes to %s - pick the settings, then Put it in." % dst)).grid(
+            row=3, column=0, columnspan=3, sticky="w", pady=(6, 8))
+        values = now if now is not None else AD.read_settings(a, a.template())
+        self.vars = {}
+        r = 4
+        rows = {}
+        for s in a.settings:
+            lbl = ttk.Label(inner, text=s.label)
+            lbl.grid(row=r, column=0, sticky="nw", padx=(0, 8), pady=2)
+            w = self._widget(inner, s, values.get(s.var))
+            w.grid(row=r, column=1, sticky="w", pady=2)
+            hint = ttk.Label(inner, text=s.help, foreground="#666", wraplength=260, justify="left")
+            hint.grid(row=r, column=2, sticky="w", padx=6)
+            rows[s.var] = (lbl, w, hint, r)
+            r += 1
+
+        def visible(*_):
+            for s in a.settings:
+                if s.when:
+                    on = self._value(a.settings[[x.var for x in a.settings].index(s.when[0])]) in s.when[1]
+                    for x in rows[s.var][:3]:
+                        if on:
+                            x.grid()
+                        else:
+                            x.grid_remove()
+        for s in a.settings:
+            if s.kind == "choice":
+                self.vars[s.var].trace_add("write", visible)
+        visible()
+        bar = ttk.Frame(inner)
+        bar.grid(row=r, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Button(bar, text="Preview", command=self.preview).pack(side="left")
+        ttk.Button(bar, text="Update it" if now is not None else "Put it in", command=self.install).pack(
+            side="left", padx=6)
+        if now is not None:
+            ttk.Button(bar, text="Take it out", command=self.remove).pack(side="left")
+        ttk.Label(inner, foreground="#555", wraplength=760, justify="left", text=(
+            "Every write makes a backup first (Tools > Restore a backup undoes it). Then start the campaign: the "
+            "game log (system.log.txt) says '[SACK] Sack Settlement module loaded'.")).grid(
+            row=r + 1, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        inner.columnconfigure(2, weight=1)
+
+    def _widget(self, parent, s, value):
+        if s.kind == "bool":
+            v = self.vars[s.var] = tk.BooleanVar(value=bool(value))
+            return ttk.Checkbutton(parent, variable=v)
+        if s.kind == "choice":
+            labels = dict(s.choices)
+            v = self.vars[s.var] = tk.StringVar(value=value if value in labels else s.choices[0][0])
+            shown = tk.StringVar(value=labels[v.get()])
+            cb = ttk.Combobox(parent, textvariable=shown, values=[l for _, l in s.choices], state="readonly", width=46)
+            shown.trace_add("write", lambda *a: v.set(next(k for k, l in s.choices if l == shown.get())))
+            return cb
+        if s.kind == "list" and s.var == "RAZE_FACTIONS":
+            box = ttk.Frame(parent)
+            lb = tk.Listbox(box, selectmode="multiple", height=6, width=40, exportselection=False)
+            sb = ttk.Scrollbar(box, orient="vertical", command=lb.yview)
+            lb.configure(yscrollcommand=sb.set)
+            sb.pack(side="right", fill="y")
+            lb.pack(side="left")
+            from .build import faction_label
+            names = [n for n, _ in self.mod.factions() if n != "slave"]
+            shown = self.app.shown_names() if hasattr(self.app, "shown_names") else {}
+            for i, n in enumerate(names):
+                lb.insert("end", faction_label(n, shown.get(n)))
+                if n in (value or []):
+                    lb.selection_set(i)
+            self.vars[s.var] = (lb, names)
+            return box
+        if s.kind in ("list", "set"):
+            v = self.vars[s.var] = tk.StringVar(value=", ".join(value or []))
+            return ttk.Entry(parent, textvariable=v, width=46)
+        v = self.vars[s.var] = tk.StringVar(value="" if value is None else str(value))
+        return ttk.Entry(parent, textvariable=v, width=46 if s.kind == "text" else 10)
+
+    def _value(self, s):
+        v = self.vars[s.var]
+        if isinstance(v, tuple):
+            lb, names = v
+            return [names[i] for i in lb.curselection()]
+        raw = v.get()
+        if s.kind == "int":
+            try:
+                return int(str(raw).strip())
+            except ValueError:
+                return -1
+        if s.kind in ("list", "set"):
+            return [x.strip() for x in str(raw).split(",") if x.strip()]
+        return raw
+
+    def values(self):
+        a = self.addon()
+        return {s.var: self._value(s) for s in a.settings if s.var in self.vars}
+
+    def _plan(self, remove=False):
+        a = self.addon()
+        mod = AD.plan_mod(self.mod, a)
+        plan = Plan(mod, "addon", a.key, {})
+        if remove:
+            AD.plan_remove(plan, a)
+        else:
+            AD.plan_install(plan, a, self.values())
+        return plan
+
+    def preview(self):
+        try:
+            plan = self._plan()
+            a = self.addon()
+            text = AD.render(a, a.template(), self.values())
+        except Exception as e:
+            messagebox.showerror("Add-ons", "%s\n\nNothing was written." % e, parent=self)
+            return
+        lines = [l for l in text.splitlines() if l.startswith("local ") and any(
+            l.startswith("local %s " % s.var) for s in self.addon().settings)]
+        self.app.show_text("Add-ons - preview (nothing written)", plan.report() + "\n\nThe settings in the script:\n  "
+                           + "\n  ".join(lines))
+
+    def install(self):
+        try:
+            plan = self._plan()
+        except Exception as e:
+            messagebox.showerror("Add-ons", "%s\n\nNothing was written." % e, parent=self)
+            return
+        if not plan.changed_files():
+            messagebox.showinfo("Add-ons", "It is in already with exactly these settings - nothing to write.",
+                                parent=self)
+            return
+        if not messagebox.askyesno("Add-ons", "%s\n\nWrite it? A backup is made first (Restore undoes it)."
+                                   % plan.report(), parent=self):
+            return
+        self._apply(plan, "put in")
+
+    def remove(self):
+        plan = self._plan(remove=True)
+        if not messagebox.askyesno("Add-ons", "Take %s out of the game? A backup is made first (Restore puts it "
+                                              "back)." % self.addon().title, parent=self):
+            return
+        self._apply(plan, "taken out")
+
+    def _apply(self, plan, what):
+        bdir = plan.apply()
+        from . import log
+        log.write("Add-on %s %s (backup %s)\n%s" % (self.addon().title, what, bdir, plan.report()))
+        self.app.status.set("%s %s (backup %s) - start the campaign to use it." % (self.addon().title, what, bdir))
+        self.show()

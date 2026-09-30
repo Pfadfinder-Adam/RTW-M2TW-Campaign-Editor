@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Added
+- **Campaign rules** (Tools > Campaign rules...), both games: every value of the campaign's settings files with a
+  plain explanation, grouped as the files are, Find, the game's own value beside a changed one (Reset), Preview,
+  written with a backup. Medieval II: descr_campaign_db.xml (ages, agents, revolts, crusades, bribery, ransom...),
+  descr_settlement_mechanics.xml (each line of the town scrolls: growth, public order, income), descr_diplomacy.xml,
+  descr_recruitment.xml; Rome under REX: descr_settlement_mechanics.xml (the people each settlement level needs);
+  REX / M2EX: descr_unit_sizes.txt (the Unit size choices). Only the value's characters change - M2EX's own
+  unquoted values (bool=false) included.
+- **Add-ons** (a new button beside the editors): ready-made scripts put into the game with their settings picked in
+  the tool, a backup on every write, Take it out. The first: **Sack Settlement** (Rome + REX) - a 4th choice on the
+  capture scroll that tears the town down, pays a reward and leaves the ruins to the rebels. New: **who may sack** -
+  only the player (default), everyone, only factions without a town (hordes), the player and hordes, only the
+  computer, or picked factions; a computer faction allowed to sack does it whenever it exterminates.
+
+### Fixed
+- **3D view: "Weapons and shield" off hid the legs too** on some models (vanilla peasants list their legs after the
+  first weapons part): weapons and shields are now told by their names.
+
 ### Changed
 - **Unit editor: the battle model and the voice sit beside the two pictures** (they were below them, leaving half
   the panel empty - a user's screenshot); the unit's lines start higher. Fits a 1280-pixel-wide window.

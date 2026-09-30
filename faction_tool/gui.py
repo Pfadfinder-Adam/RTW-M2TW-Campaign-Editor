@@ -55,6 +55,8 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   hear a unit, give it a voice .. Unit editor: Voice in battle - Play, Put in my own...
   edit characters and families .. Character editor (or the Family tab in Edit faction)
   put in a mod made by others ... Tools > Check and install a pack...
+  change the campaign's rules ... Tools > Campaign rules... (ages, agents, towns, diplomacy, unit sizes)
+  add Sack Settlement ........... Add-ons (Rome + REX): who may sack, reward, what stays standing
   make a copy of the mod to work on  New mod folder... (the base mod stays untouched)
 
 START
@@ -128,7 +130,17 @@ TOOLS
   Check and install a pack: a "copy these files over data" mod checked file by file first -
     what is new, what it replaces and what that would lose (REX's own files, pictures of
     another size); pick for each file, then install with a backup.
+  Campaign rules: every value of the campaign's settings files (Medieval II descr_campaign_db,
+    town growth / order / income, diplomacy, recruitment; Rome + REX the people each town
+    level needs; REX / M2EX the Unit size choices) with a plain explanation and the game's own
+    value beside a changed one. Change, Preview, Write it in.
   Restore a backup: undo any Apply (and every later one) exactly.
+
+ADD-ONS
+  Ready-made scripts that add something new. Pick the settings, Preview, Put it in (a backup
+  first; Take it out removes it). Sack Settlement (Rome + REX): a 4th choice when a town is
+  taken - it is torn down to its walls and roads, you get a reward, the rebels get the ruins.
+  Who may sack: only the player, everyone, hordes (factions without a town), picked factions.
   Log / Save logs (zip): for a bug report - send the zip and a screenshot.
 
 KEYS
@@ -624,6 +636,8 @@ class App(tk.Tk):
         menu.add_command(label="Settlement names by culture (every town)...", command=self.culture_names_table)
         menu.add_command(label="Scan mod (every mention of the faction)", command=self.scan)
         menu.add_command(label="Check and install a pack...", command=self.install_pack)
+        menu.add_command(label="Campaign rules (ages, agents, towns, diplomacy, unit sizes)...",
+                         command=self.campaign_rules)
         menu.add_command(label="Restore a backup...", command=self.restore)
         menu.add_separator()
         menu.add_command(label="Game manifest...", command=self.game_manifest)
@@ -937,8 +951,8 @@ class App(tk.Tk):
 
     WORK_TITLES = {"new": "New faction", "edit": "Edit faction", "units": "Unit editor",
                    "buildings": "Building editor", "characters": "Character editor",
-                   "terrain": "Terrain editor"}
-    WORK_HINTS = {"new": "make a new faction from a template", "edit": "change a faction that is in the game",
+                   "terrain": "Terrain editor", "addons": "Add-ons"}
+    WORK_HINTS = {"addons": "ready-made scripts that add something new to the game (Sack Settlement...)","new": "make a new faction from a template", "edit": "change a faction that is in the game",
                   "units": "every line of a unit in export_descr_unit.txt, its card and picture",
                   "buildings": "every line of a building chain in export_descr_buildings.txt, its pictures",
                   "characters": "any faction's characters: names, ages, traits, ancillaries, portraits, family tree",
@@ -977,10 +991,13 @@ class App(tk.Tk):
     def editor(self):
         """The unit, building or character editor on show, made the first time; None for the faction work."""
         w = self.v_work.get()
-        if w not in ("units", "buildings", "characters", "terrain"):
+        if w not in ("units", "buildings", "characters", "terrain", "addons"):
             return None
         if w not in self.editors:
-            if w == "terrain":
+            if w == "addons":
+                from .gui_addons import AddonsPanel
+                self.editors[w] = AddonsPanel(self, self)
+            elif w == "terrain":
                 from .gui_terrain import TerrainEditor
                 self.editors[w] = TerrainEditor(self, self)
             elif w == "characters":
@@ -3294,6 +3311,11 @@ class App(tk.Tk):
             self._limit_raise = self.mod.data         # asked once per mod: Preview and Apply both use it
             opts["raise_faction_limit"] = True
             return build(ModData(self.mod.data), self.v_campaign.get(), template, name, opts)
+
+    def campaign_rules(self):
+        """Tools > Campaign rules...: the campaign's settings files as plain values."""
+        from .gui_rules import open_rules
+        open_rules(self)
 
     def install_pack(self):
         """Tools > Check and install a pack...: a pack that says 'copy data over the game' checked file by file."""

@@ -30,6 +30,8 @@ POS, UV, NORMAL = 0, 4, 3
 LIGHT = (-0.35, 0.55, 0.76)
 BACK = (46, 48, 54)
 PLAIN = (150, 144, 132)                             # a part with no texture: dull steel / leather
+# part names that are weapons, shields and gear (every vanilla M2TW mesh read): the "Weapons and shield" box hides them
+WEAPON_PARTS = ("primary", "secondary", "shield", "equipment", "ramrod", "cannon ball", "ballista arrow", "sword")
 
 
 class MeshError(ValueError):
@@ -66,7 +68,9 @@ class Mesh:
         out = []
         for name, gs in parts.items():
             low = name.lower()
-            if gs[0].attachment and not low.startswith("attachment"):
+            # weapons and shields by their name: a file may list body parts (legs, heads) after its first
+            # "Attachments" part too (vanilla peasants: Legs after Attachments3)
+            if low.startswith(WEAPON_PARTS):
                 if not weapons or (primary and low.startswith("secondary")):
                     continue
             out.append(gs[look % len(gs)])

@@ -2157,6 +2157,65 @@ building smith
             reds = [p for p in im.getdata() if p[0] > 60 and p[0] > 2 * p[1]]
             self.assertTrue(len(reds) > 200, textured)       # the cube in the man's (red) texture
 
+    def test_campaign_rules_and_addons(self):
+        """Campaign rules: values of the settings files read with their section (M2EX's unquoted bool=false too),
+        a change writes only the value's characters, a bad value is refused, a mod without the file gets the game's
+        copy; Restore byte for byte. Add-ons: the script's settings read and written back, the rest untouched."""
+        from faction_tool import campaignrules as CR
+        from faction_tool import addons as AD
+        d = os.path.join(self.root, "data")
+        db = ('<?xml version="1.0"?>\n<root>\n   <family_tree>\n      <age_of_manhood uint="16"/>\n'
+              '   </family_tree>\n   <display>\n      <keep_original_heretic_portraits bool=false/>\n'
+              '      <!-- <max_age uint="1"/> -->\n   </display>\n   <factor_modifiers>\n'
+              '      <factor name="SOF_HEALTH">\n         <pip_modifier value="1.0"/>\n      </factor>\n'
+              '   </factor_modifiers>\n</root>\n')
+        write(os.path.join(d, "descr_campaign_db.xml"), db)
+        write(os.path.join(d, "descr_unit_sizes.txt"), "; sizes\nunit_size UI_VIDEO_UNIT_SCALE_SMALL   0.5\n")
+        mod = ModData(self.root)
+        names = [f[0] for f in CR.files(mod)]
+        self.assertEqual(names, ["descr_campaign_db.xml", "descr_unit_sizes.txt"])
+        rules = CR.read(os.path.join(d, "descr_campaign_db.xml"))
+        self.assertEqual([(r.section, r.key, r.value, r.kind) for r in rules],
+                         [("family_tree", "age_of_manhood", "16", "uint"),
+                          ("display", "keep_original_heretic_portraits", "false", "bool"),
+                          ("factor_modifiers / SOF_HEALTH", "pip_modifier", "1.0", "float")])
+        self.assertIn("public order", CR.explain(rules[2]))
+        self.assertEqual(CR.check(rules[0], "-3"), "a whole number, 0 or more")
+        self.assertEqual(CR.check(rules[1], "yes"), "true or false")
+        before = tree_hash(d)
+        plan = Plan(mod, "rules", "rules", {})
+        CR.apply(plan, "descr_campaign_db.xml", {rules[0]: "14", rules[1]: "true"},
+                 os.path.join(d, "descr_campaign_db.xml"), None)
+        sizes = CR.read(os.path.join(d, "descr_unit_sizes.txt"))
+        CR.apply(plan, "descr_unit_sizes.txt", {sizes[0]: "3.0"}, os.path.join(d, "descr_unit_sizes.txt"), None)
+        with self.assertRaises(ValueError):
+            CR.apply(Plan(mod, "r", "r", {}), "descr_campaign_db.xml", {rules[0]: "x"},
+                     os.path.join(d, "descr_campaign_db.xml"), None)
+        bdir = plan.apply()
+        with open(os.path.join(d, "descr_campaign_db.xml")) as f:
+            self.assertEqual(f.read(), db.replace('uint="16"', 'uint="14"').replace("bool=false", "bool=true"))
+        with open(os.path.join(d, "descr_unit_sizes.txt")) as f:
+            self.assertEqual(f.read(), "; sizes\nunit_size UI_VIDEO_UNIT_SCALE_SMALL   3.0\n")
+        restore(mod, bdir)
+        self.assertEqual(tree_hash(d), before)
+        # the Sack Settlement add-on: settings read, changed, written; unchanged ones keep their lines
+        a = AD.by_key("sack_settlement")
+        text = a.template()
+        got = AD.read_settings(a, text)
+        self.assertEqual(got["RAZE_WHO"], "player")
+        self.assertEqual(got["RAZE_KEEP_CHAINS"], ["core_building", "defenses", "hinterland_roads"])
+        self.assertEqual(AD.render(a, text, got), text)
+        new = dict(got, RAZE_WHO="homeless", RAZE_GOLD_PER_BUILDING=500, RAZE_KEEP_CHAINS=["core_building"])
+        self.assertEqual(AD.read_settings(a, AD.render(a, text, new)), new)
+        self.assertTrue(AD.check(a, dict(got, RAZE_WHO="list", RAZE_FACTIONS=[])))
+        plan = Plan(mod, "addon", "sack", {})
+        dst = AD.plan_install(plan, a, new)
+        self.assertEqual(dst, os.path.join(self.root, "script", "modules", "sack_settlement.nut"))
+        bdir = plan.apply()
+        self.assertEqual(AD.installed(mod, a)["RAZE_WHO"], "homeless")
+        restore(mod, bdir)
+        self.assertIsNone(AD.installed(mod, a))
+
     def test_faction_names_players_see(self):
         """A mod may keep an internal name and show another ('turks' shown as 'Ryazan'): the lists say both; a name
         that only differs by case or 'The' stays plain (a tester's wish on Discord)."""
