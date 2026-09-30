@@ -74,26 +74,34 @@ def region_problems(mod, campaign, painted, new_regions):
             errors.append("tile %d, %d holds a town or port - it keeps its region" % (x, y))
         elif px not in by_colour:
             errors.append("tile %d, %d is sea - only land changes region" % (x, y))
-    # what each region would hold
-    owner = {}
-    for y in range(img.height):
-        for x in range(img.width):
-            r = by_colour.get(img.get(x, y))
-            if r:
-                owner[(x, y)] = r
-    owner.update(painted)
-    count = {}
-    for r in owner.values():
-        count[r] = count.get(r, 0) + 1
+    # what each region would hold - worked out only for the regions the painting touches (a map of millions
+    # of tiles once made a dict of every tile here)
+    def before(t):                                   # the tile's colour now (None off the map)
+        x, y = t
+        return img.get(x, y) if 0 <= x < img.width and 0 <= y < img.height else None
+
+    def owner_get(t):
+        if t in painted:
+            return painted[t]
+        x, y = t
+        return by_colour.get(img.get(x, y)) if 0 <= x < img.width and 0 <= y < img.height else None
+    held = {}
+
+    def cells_of(r):
+        if r not in held:
+            col = regions.get(r, {}).get("colour")
+            cells = {t for t in img.find(col) if t not in painted} if col else set()
+            held[r] = cells | {tuple(t) for t, v in painted.items() if v == r}
+        return held[r]
     tiles = mod.city_tiles(campaign)
-    for r in {v for v in painted.values()} | {by_colour.get(img.get(*t)) for t in painted if img.get(*t) in by_colour}:
-        if r and r in regions and not count.get(r):
+    for r in {v for v in painted.values()} | {by_colour.get(before(t)) for t in painted if before(t) in by_colour}:
+        if r and r in regions and not cells_of(r):
             errors.append("%s would have no land left" % r)
     for r in new_regions:
         c = r.get("city")
         if not c:
             errors.append("%s: place its town (a click on one of its tiles)" % r["name"])
-        elif owner.get(tuple(c)) != r["name"]:
+        elif owner_get(tuple(c)) != r["name"]:
             errors.append("%s: the town must stand on its own land" % r["name"])
         else:
             feat = mod._optional_map(campaign, "map_features.tga")
@@ -101,7 +109,7 @@ def region_problems(mod, campaign, painted, new_regions):
                 errors.append("%s: a river, ford or cliff runs where the town is" % r["name"])
         p = r.get("port")
         if p:
-            if owner.get(tuple(p)) != r["name"]:
+            if owner_get(tuple(p)) != r["name"]:
                 errors.append("%s: the port must stand on its own land" % r["name"])
             elif not any(mod.is_sea(campaign, (p[0] + dx, p[1] + dy)) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
                 errors.append("%s: a port needs the sea next to it" % r["name"])
@@ -122,8 +130,8 @@ def region_problems(mod, campaign, painted, new_regions):
         (errors if serious else warns).append(msg)
     # regions cut in two
     for r in sorted({v for v in painted.values()} | {owner_before for owner_before in
-                     (by_colour.get(img.get(*t)) for t in painted) if owner_before}):
-        cells = {t for t, v in owner.items() if v == r}
+                     (by_colour.get(before(t)) for t in painted) if owner_before}):
+        cells = set(cells_of(r))
         town = tiles.get(r) or next((tuple(n["city"]) for n in new_regions if n["name"] == r and n.get("city")), None)
         if town:
             cells.add(tuple(town))

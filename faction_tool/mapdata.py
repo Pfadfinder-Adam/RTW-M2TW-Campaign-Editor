@@ -115,17 +115,8 @@ class CampaignMap:
         return "   ".join(parts)
 
     def _ports(self):
-        out = {}
-        img = self.regions_img
-        for x, y in img.find(PORT):
-            votes = {}
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
-                r = self.region_at(x + dx, y + dy)
-                if r:
-                    votes[r] = votes.get(r, 0) + 1
-            if votes:
-                out[max(votes, key=votes.get)] = (x, y)
-        return out
+        from .mapedit import ports                    # the one reader of port pixels
+        return dict(ports(self.mod, self.campaign))
 
     # ---- pictures (top-down, as Pillow draws them) ----
     def background(self, tiles=False, relief=False, rivers=False):

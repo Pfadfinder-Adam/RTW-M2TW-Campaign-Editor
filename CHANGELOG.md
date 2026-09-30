@@ -7,6 +7,8 @@
   in the tool; now 2 s and 0.6 GB. The map is drawn in about a second instead of 19.
 - **The Map tab no longer fails on a very big map zoomed far out** (Pillow refused a 1.3-billion-pixel picture): only
   the part of the map in view is drawn.
+- **Painting regions on a big map**: the check before writing took 11 s and 800 MB on a 4080 x 2496 map; now a
+  fraction of a second. A tile off the map is refused in plain words (it stopped the check).
 - **A new faction on Medieval II now has battle banners, a voice, one-liners, movies and campaign music**: it is
   named beside its template in descr_banners_new.xml (with its own copy of the banner texture when that is on disk),
   descr_sounds_accents.txt, descr_sounds_db.xml, descr_movies_tracks.xml, the campaign's descr_faction_movies.xml
