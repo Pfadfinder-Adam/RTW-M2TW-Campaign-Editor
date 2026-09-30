@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **Tools > New religion... / Religions of a region...** (Medieval II): the religion dialogs reached from the menu
+  too - the Map opens with Edit regions on; on Rome the menu says Rome has no religions.
 - **View in 3D for Rome**: Rome's `.cas` battle models (units, officers, mounts, animals - every one of the 807 vanilla
   files, versions 2.22 to 3.2) are drawn like Medieval II's: the man put together on his skeleton, weapons and shield
   in their places (on or off), each faction's texture, the game's detail levels. A model without a texture line
@@ -24,6 +26,11 @@
   mod does not have are refused - as is leaving out the governor's chain.
 
 ### Fixed
+- **Map: the buttons above the map were cut off** at a normal window width (New religion..., Names by culture...
+  lay past the right edge - a user could not find them): the Regions and Resources toolbars now wrap onto a second
+  row.
+- **Buildings / Units & armies: a town opened without picking a faction first** - they show what the town's owner
+  may build and recruit (the status line says so) instead of "pick the template faction first".
 - **3D view: the detail levels were out of order** when a model mixed `model_flexi` and `model_flexi_m` lines
   (Rome: "0 - closest" showed the farthest model); they now follow the file.
 - Campaign rules: the settings files' tag pattern could take very long on a crafted line (GitHub code scanning,

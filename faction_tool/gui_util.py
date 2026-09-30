@@ -116,3 +116,46 @@ class FactionBox(ttk.Combobox):
             self._real.set(next((n for n, l in self._labels.items() if l == s), s))
         finally:
             self._busy = False
+
+
+def flow(frame):
+    """Lay the widgets packed side="left" in `frame` out in rows that wrap at the frame's width, as words in a line
+    of text: a toolbar with more buttons than the window is wide goes on to a second row instead of hiding the last
+    ones past the edge. Call it once the toolbar is built; it follows the window's width from then on."""
+    items = []
+    for w in frame.pack_slaves():
+        padx = w.pack_info().get("padx", 0)
+        if isinstance(padx, (tuple, list)):
+            left, right = int(padx[0]), int(padx[-1])
+        else:
+            left = right = int(padx or 0)
+        items.append((w, left, right))
+        w.pack_forget()
+    state = {"key": None}
+
+    def reflow(_=None):
+        width = frame.winfo_width()
+        if width <= 1:
+            width = max(frame.winfo_toplevel().winfo_width() - 20, 200)
+        places, x, y, line = [], 0, 0, 0
+        for w, left, right in items:
+            need = w.winfo_reqwidth() + left + right
+            if x and x + need > width:
+                x, y, line = 0, y + line + 2, 0
+            h = w.winfo_reqheight()
+            places.append((w, x + left, y, h))
+            x += need
+            line = max(line, h)
+        height = y + line + 2
+        key = (width, tuple((p[1], p[2]) for p in places))
+        if key == state["key"]:
+            return
+        state["key"] = key
+        rows = {}
+        for w, px, py, h in places:
+            rows[py] = max(rows.get(py, 0), h)
+        for w, px, py, h in places:
+            w.place(x=px, y=py + (rows[py] - h) // 2)
+        frame.configure(height=height)
+    frame.bind("<Configure>", reflow, add="+")
+    frame.after_idle(reflow)

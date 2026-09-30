@@ -56,6 +56,7 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   edit characters and families .. Character editor (or the Family tab in Edit faction)
   put in a mod made by others ... Tools > Check and install a pack...
   change the campaign's rules ... Tools > Campaign rules... (ages, agents, towns, diplomacy, unit sizes)
+  add a religion ................ Tools > New religion... (Medieval II; Rome has no religions)
   add Sack Settlement ........... Add-ons (Rome + REX): who may sack, reward, what stays standing
   make a copy of the mod to work on  New mod folder... (the base mod stays untouched)
 
@@ -84,8 +85,8 @@ THE TABS
                right drag (or Ctrl + left drag) moves characters, towns and ports;
                Find: type a town, army, unit, fort or resource and jump to it;
                Layers: what is shown; Legend: what every sign means.
-               Regions: paint borders, New region, Edit region..., Religions... and
-               New religion... (Medieval II). Resources: place, move, delete.
+               Edit regions: paint borders, New region, Edit region..., Religions... and
+               New religion... (Medieval II; also in Tools). Resources: place, move, delete.
                Characters stand on any land but sea, mountains, dense forest and rivers;
                dropped on a bad tile they go to the nearest good one.
   Diplomacy    how the faction and every other one feel about each other at the start.
@@ -553,6 +554,7 @@ class App(tk.Tk):
         self._build_buildings_tab()
         tab = ttk.Frame(self.nb, padding=4)
         self.nb.add(tab, text="  Map  ")
+        from .gui_util import flow
         self.region_bar = ttk.Frame(tab, padding=(0, 0, 0, 4))
         rb = self.region_bar
         ttk.Label(rb, text="Paint with", font=("", 9, "bold")).pack(side="left")
@@ -575,6 +577,7 @@ class App(tk.Tk):
             self.v_paint.get().replace("  (new)", "").strip())).pack(side="left", padx=2)
         ttk.Label(rb, text="left drag paints, right click picks a region, right drag moves the map",
                   foreground="#666").pack(side="left", padx=10)
+        flow(rb)
         self.res_bar = ttk.Frame(tab, padding=(0, 0, 0, 4))
         xb = self.res_bar
         ttk.Label(xb, text="Resource", font=("", 9, "bold")).pack(side="left")
@@ -586,6 +589,7 @@ class App(tk.Tk):
         ttk.Button(xb, text="Region tags (hidden resources)...", command=self.region_tags_dialog).pack(side="left", padx=(12, 2))
         ttk.Label(xb, text="click a resource: pick it   right drag: move it   a region has the resources on its land",
                   foreground="#666").pack(side="left", padx=10)
+        flow(xb)
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
         self.v_borders = self.map_view.v_borders
         self.map_view.pack(fill="both", expand=True)
@@ -638,6 +642,8 @@ class App(tk.Tk):
         menu.add_command(label="Check and install a pack...", command=self.install_pack)
         menu.add_command(label="Campaign rules (ages, agents, towns, diplomacy, unit sizes)...",
                          command=self.campaign_rules)
+        menu.add_command(label="New religion... (Medieval II)", command=lambda: self.religions_from_menu(True))
+        menu.add_command(label="Religions of a region... (Medieval II)", command=lambda: self.religions_from_menu(False))
         menu.add_command(label="Restore a backup...", command=self.restore)
         menu.add_separator()
         menu.add_command(label="Game manifest...", command=self.game_manifest)
@@ -741,15 +747,23 @@ class App(tk.Tk):
         self.buildings_editor = BuildingsEditor(right, self.pictures)
         self.buildings_editor.pack(fill="both", expand=True)
 
+    def _faction_for(self, region):
+        """Whose buildings and units a town's tabs offer: the faction picked in the Faction tab, else the town's
+        owner now (no need to pick one first), else the rebels."""
+        picked = self.v["template"].get().strip()
+        if picked:
+            return picked
+        owner = (self.strat.owners().get(region) if self.strat else None) or "slave"
+        self.status.set("No faction picked - showing what %s (the owner of %s) may build and recruit." % (
+            owner, region))
+        return owner
+
     def load_buildings(self):
         sel = self.lb_build.curselection()
         if not sel or not self.mod or not self.strat or sel[0] >= len(self.chosen):
             return
         region = self.chosen[sel[0]]
-        template = self.v["template"].get().strip()
-        if not template:
-            messagebox.showerror(APP, "pick the template faction first (Faction tab)")
-            return
+        template = self._faction_for(region)
         if self._edb_for != self.mod.data:
             self._edb = read_buildings(self.mod.load(self.mod.file("edb"))) if self.mod.file("edb") else []
             self._bpics = BuildingPictures(self.mod)
@@ -1740,6 +1754,35 @@ class App(tk.Tk):
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
         ttk.Button(bar, text="All towns...", command=lambda: (w.destroy(), self.culture_names_table())).pack(
             side="left", padx=(16, 0))
+
+    def religions_from_menu(self, new):
+        """Tools > New religion / Religions of a region: the same dialogs as on the Map (Edit regions), reached
+        without knowing where they live - the Map is opened with Edit regions on, so the shares can be painted
+        region by region afterwards."""
+        if not self.mod:
+            messagebox.showerror(APP, "Load a mod first.")
+            return
+        from . import religions as RL
+        if not RL.names(self.mod):
+            messagebox.showinfo(APP, "Rome has no religions (the game has no descr_religions.txt) - they are "
+                                     "Medieval II's.")
+            return
+        if self.v_work.get() not in ("new", "edit"):
+            self.v_work.set("edit")
+            self.work_changed()
+        tabs = [self.nb.tab(t, "text").strip() for t in self.nb.tabs()]
+        if "Map" in tabs:
+            self.nb.select(tabs.index("Map"))
+        if not self.map_view.v_regions.get():
+            self.map_view.v_regions.set(True)
+            self.show_map()
+        if new:
+            self.new_religion_dialog()
+        elif not self.v_paint.get().strip():
+            self.status.set("Right click a region on the map (or pick it in 'Paint with'), then Religions... above "
+                            "the map.")
+        else:
+            self.religions_dialog()
 
     def religions_dialog(self):
         """Medieval II: the religions of the region in 'Paint with' (percent, 100 in all)."""
@@ -3023,10 +3066,7 @@ class App(tk.Tk):
         if not sel or not self.mod or sel[0] >= len(self.chosen):
             return
         region = self.chosen[sel[0]]
-        template = self.v["template"].get().strip()
-        if not template:
-            messagebox.showerror(APP, "pick the template faction first (Faction tab)")
-            return
+        template = self._faction_for(region)
         if self._units_for != template:
             self._units_cache = faction_units(self.mod, template, mercs=True)
             self._units_for = template
