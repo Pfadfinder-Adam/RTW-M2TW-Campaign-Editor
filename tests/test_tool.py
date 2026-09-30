@@ -2645,6 +2645,10 @@ building smith
     def test_label_table_few_colours(self):
         """The political map's palette table on a map with fewer than 256 colours (a tester's map would not open:
         IndexError in _labels)."""
+        try:
+            import PIL  # noqa: F401  (the map module needs Pillow; the CI test job has none)
+        except ImportError:
+            self.skipTest("Pillow is not installed")
         from faction_tool.mapdata import label_table
         src = [(0, 0, 0), (10, 20, 30), (40, 50, 60)]
         where = {(10, 20, 30): (0, 1), (40, 50, 60): (1, 7)}
