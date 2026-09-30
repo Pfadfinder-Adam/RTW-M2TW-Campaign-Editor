@@ -86,8 +86,29 @@ class Mesh:
             out.append(gs[look % len(gs)])
         return out
 
+    def variants(self, look=0, weapons=True):
+        """[(part, which, of)] of the parts that come in several variants, as `look` shows them - e.g. Head 2 of 4,
+        shield 5 of 8 (the game picks each part per man; there is no fixed number of men). Rome: []."""
+        if self.one_texture:
+            return []
+        out = []
+        for name, gs in self.parts().items():
+            low = name.lower()
+            if len(gs) < 2 or (not weapons and low.startswith(WEAPON_PARTS)):
+                continue
+            label = ("shield" if low.startswith("shield") else "weapon" if low.startswith(("primary", "secondary"))
+                     else name.strip())
+            out.append((label, look % len(gs) + 1, len(gs)))
+        for label in {l for l, _, _ in out}:           # two weapons: first weapon / second weapon
+            same = [i for i, (l, _, _) in enumerate(out) if l == label]
+            if len(same) > 1:
+                for k, i in enumerate(same):
+                    out[i] = ("%s %s" % (("first", "second", "third", "fourth")[min(k, 3)], label),) + out[i][1:]
+        return out
+
     def looks(self):
-        """How many different men the parts make (the most variants of one part; Rome: one)."""
+        """How many looks 'Another man' steps through before all repeat (the most variants of one part; Rome:
+        one)."""
         if self.one_texture:
             return 1
         return max((len(v) for v in self.parts().values()), default=1)
@@ -439,44 +460,16 @@ def _affine(src, dst):
     return tuple(out)
 
 
-def _root_y(mesh, root_height, share):
-    """Where a mesh's root node (a man's hips, a horse's root) stands: Medieval II's meshes have their origin
-    there (they reach well below 0); a mesh standing on 0 (feet at the ground) has it `root_height` up, or
-    `share` of its height when no height is given."""
-    ys = [p[1] for p in mesh.positions] or [0.0]
-    if min(ys) < -0.3:
-        return 0.0
-    return root_height if root_height is not None else share * max(ys)
-
-
-def combine(rider, rider_groups, mount, mount_groups, root_height, offset, mount_one=None):
-    """One Mesh of a rider sat on his mount: the rider's hips put at the mount's root node moved by descr_mount's
-    rider_offset (x, y, z); root_height = its root_node_height (for a mesh drawn from the ground up). The files
-    hold the rider standing (legs straight - the game bends them with its animations), so his legs show through
-    the horse. The mount's groups take pictures 2 and 3 (render's `more`); mount_one: its uv over one picture (a
-    mount with no attachment texture)."""
-    dx = offset[0]
-    dy = _root_y(mount, root_height, 0.5) + offset[1] - _root_y(rider, None, 0.53)
-    dz = offset[2]
-    if mount.one_texture:
-        # Rome's .cas mount: its root node is not under the saddle in the files as read here, so the rider goes
-        # over its back: the saddle lies on the widest part of the body (the barrel - head, neck, legs and tail are
-        # narrower, whichever way it faces); the rider's hips go on its top
-        P = mount.positions
-        wide = max((abs(p[0]) for p in P), default=0.0)
-        barrel = [p for p in P if abs(p[0]) >= 0.7 * wide]
-        if barrel:
-            lo, hi = min(p[2] for p in barrel), max(p[2] for p in barrel)
-            mid = (lo + hi) / 2
-            head = max(P, key=lambda p: p[1])[2]         # the head is its highest point: the saddle sits a little
-            mid += 0.25 * (head - mid) if abs(head - mid) > 0.2 else 0.0    # toward it (the hind thighs are wide)
-            body = [p for p in P if abs(p[2] - mid) <= 0.3] or barrel
-        else:
-            body = []
-        if body:
-            top = max(p[1] for p in body)
-            dz = mid + offset[2]
-            dy = top + offset[1] - _root_y(rider, None, 0.53) - 0.1
+def combine(rider, rider_groups, mount, mount_groups, mount_one=None):
+    """One Mesh of a rider and his mount standing side by side, as the files keep them (two models, both standing:
+    the game seats the rider and bends his legs with its animations - a seat drawn here only looked wrong): their
+    lowest points on one ground, the rider beside the mount's middle, a little apart. The mount's groups take
+    pictures 2 and 3 (render's `more`); mount_one: its uv over one picture (a mount with no attachment texture)."""
+    RP = [rider.positions[i] for g in rider_groups for i in g.tris] or rider.positions or [(0.0, 0.0, 0.0)]
+    MP = [mount.positions[i] for g in mount_groups for i in g.tris] or mount.positions or [(0.0, 0.0, 0.0)]
+    dx = max(p[0] for p in MP) - min(p[0] for p in RP) + 0.15
+    dy = min(p[1] for p in MP) - min(p[1] for p in RP)
+    dz = (min(p[2] for p in MP) + max(p[2] for p in MP)) / 2 - (min(p[2] for p in RP) + max(p[2] for p in RP)) / 2
     pos = [(x + dx, y + dy, z + dz) for x, y, z in rider.positions] + list(mount.positions)
     n = rider.count
     ru = rider.uvs or [(0.0, 0.0)] * rider.count

@@ -2637,21 +2637,34 @@ building smith
         with open(path) as fh:
             self.assertIn("resource\tiron,\t0,\t0", fh.read())
 
-    def test_rider_on_mount(self):
-        """A rider drawn on his mount: Medieval II meshes have their origin at the root node - the rider's hips go
-        to the mount's root moved by rider_offset; the mount's parts take pictures 2 / 3."""
+    def test_rider_beside_mount(self):
+        """3D view with its mount: rider and mount standing side by side on one ground, as the files keep them (a
+        seat drawn over the horse looked wrong - the files hold the rider standing); the mount's parts take
+        pictures 2 / 3."""
         from faction_tool import meshview as MV
         rider = MV.Mesh([MV.Group("body", "m", [0, 1, 2], False)], [(0, -1.0, 0), (0, 0.9, 0), (0.2, 0, 0)],
                         [(0.1, 0.1)] * 3)
         horse = MV.Mesh([MV.Group("horse", "m", [0, 1, 2], False)], [(0, -1.9, 0), (0, 0.7, 2), (0.3, 0, 1)],
                         [(0.2, 0.2)] * 3)
-        both = MV.combine(rider, rider.groups, horse, horse.groups, 1.0, (0.0, 0.38, 0.70), mount_one=True)
+        both = MV.combine(rider, rider.groups, horse, horse.groups, mount_one=True)
         self.assertEqual(both.count, 6)
-        self.assertAlmostEqual(both.positions[0][1], -1.0 + 0.38)                # hips (origin) at root + offset
-        self.assertAlmostEqual(both.positions[0][2], 0.70)
+        self.assertAlmostEqual(both.positions[0][1], -1.9)                       # feet on the horse's ground
+        self.assertGreater(min(p[0] for p in both.positions[:3]), 0.3)           # beside it, not over it
+        self.assertAlmostEqual(both.positions[0][2], 1.0)                        # at its middle
         self.assertEqual([getattr(g, "pic", 0) for g in both.groups], [0, 2])
         self.assertEqual(both.groups[1].tris, [3, 4, 5])
         self.assertTrue(both.groups[1].one)
+
+    def test_mesh_variants_by_part(self):
+        """3D view: the variants shown are counted per part (a tester read 'man 1 of 8' as eight men - it was the
+        eight shields of highlanders, which have 4 heads, 2 bodies, 3 axes)."""
+        from faction_tool import meshview as MV
+        g = lambda name, mat: MV.Group(name, mat, [0, 1, 2], False)
+        mesh = MV.Mesh([g("Head", "h1"), g("Head", "h2"), g("Head", "h3"), g("Head", "h4"), g("Body", "b"),
+                        g("primaryactive1", "a1"), g("primaryactive1", "a2"), g("primaryactive1", "a3")] +
+                       [g("shield0", "s%d" % i) for i in range(8)], [(0, 0, 0)] * 3, [(0, 0)] * 3)
+        self.assertEqual(mesh.variants(0), [("Head", 1, 4), ("weapon", 1, 3), ("shield", 1, 8)])
+        self.assertEqual(mesh.variants(5, weapons=False), [("Head", 2, 4)])
 
     def test_label_table_few_colours(self):
         """The political map's palette table on a map with fewer than 256 colours (a tester's map would not open:

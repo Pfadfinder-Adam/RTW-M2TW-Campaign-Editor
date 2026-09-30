@@ -13,8 +13,7 @@ SIZE = (420, 520)
 
 class ModelViewer(tk.Toplevel):
     def __init__(self, parent, mod, info, factions=(), mount=None):
-        """mount: (its ModelInfo, root_node_height, rider_offset, mount type) - the unit's horse, camel ...: the
-        rider can be shown sat on it."""
+        """mount: (its ModelInfo, mount type) - the unit's horse, camel ...: shown standing beside the rider."""
         super().__init__(parent)
         self.mod, self.info, self.mount = mod, info, mount
         self.mount_mesh = None
@@ -48,7 +47,7 @@ class ModelViewer(tk.Toplevel):
                         command=self.draw).pack(anchor="w", pady=(8, 0))
         self.v_mount = tk.BooleanVar(value=bool(mount))
         if mount:
-            ttk.Checkbutton(side, text="With its mount (%s)" % mount[3], variable=self.v_mount,
+            ttk.Checkbutton(side, text="Its mount beside him (%s)" % mount[1], variable=self.v_mount,
                             command=self.draw).pack(anchor="w")
         self.b_look = ttk.Button(side, text="Another man", command=self.next_look)
         self.b_look.pack(anchor="w", pady=(8, 0))
@@ -124,8 +123,8 @@ class ModelViewer(tk.Toplevel):
         riding = self.mount and self.v_mount.get() and self.mount_mesh is not None
         if riding:
             mi = self.mount[0]
-            mesh = MV.combine(self.mesh, groups, self.mount_mesh, self.mount_mesh.shown(0, True), self.mount[1],
-                              self.mount[2], mount_one=True if not mi.attach else None)
+            mesh = MV.combine(self.mesh, groups, self.mount_mesh, self.mount_mesh.shown(0, True),
+                              mount_one=True if not mi.attach else None)
             groups = mesh.groups
             more = {2: self._texture(mi.textures) if mi.textures else None,
                     3: self._texture(mi.attach) if mi.attach else None}
@@ -141,8 +140,10 @@ class ModelViewer(tk.Toplevel):
             if self.mount and self.v_mount.get() and self.mount_mesh is None:
                 self.info_lbl.configure(text="the mount's mesh file is not in this mod or the game")
                 return
-            self.info_lbl.configure(text="man %d of %d; %d triangles, %d points%s%s" % (
-                self.look % self.mesh.looks() + 1, self.mesh.looks(), n, self.mesh.count,
+            parts = self.mesh.variants(self.look, self.v_weapons.get())
+            self.info_lbl.configure(text="%s%d triangles, %d points%s%s" % (
+                ("variants shown: " + ", ".join("%s %d of %d" % p for p in parts) + "\n") if parts else "",
+                n, self.mesh.count,
                 "" if tex is not None else "\nno texture file found for the man",
                 "" if att is not None or not self.v_weapons.get() or self.mesh.one_texture else
                 "\nno attachment texture found - weapons in grey"))

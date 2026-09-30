@@ -752,7 +752,7 @@ class RecordEditor(ttk.Frame):
         facs = self._factions_of()
         kind, mmodel = MO.unit_mount(self.mod, lines)
         minfo = cat.get((mmodel or "").lower()) if kind else None
-        mount = (minfo,) + MO.mount_seat(self.mod, kind) + (kind,) if minfo is not None else None
+        mount = (minfo, kind) if minfo is not None else None
         for r, (key, idx, model) in enumerate(slots):
             info = cat.get(model.lower())
             tex = None

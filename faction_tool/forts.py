@@ -1,5 +1,5 @@
-"""Forts and watchtowers of a campaign's descr_strat.txt: moved, removed and added on the Map (Edit resources &
-forts), both games.
+"""Forts and watchtowers of a campaign's descr_strat.txt: moved, removed and added on the Map (Edit forts &
+watchtowers), both games.
 
 A fort / watchtower is one line: `watchtower 53 152` (Barbarian Invasion, in its region section after the
 diplomacy), `fort 263 330 cerin_amroth_fort culture middle_eastern permanent name Cerin Amroth` (Medieval II

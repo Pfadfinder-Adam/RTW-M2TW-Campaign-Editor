@@ -209,31 +209,6 @@ def unit_mount(mod, lines):
     return kind, (model[0][0] if model and model[0] else None)
 
 
-def mount_seat(mod, kind):
-    """(root_node_height, rider_offset (x, y, z)) of a mount type in descr_mount.txt - where its rider sits
-    (both games have them); defaults when a line is missing."""
-    from .packs import _block_lines, _values, type_blocks
-    root, off = 1.0, (0.0, 0.4, 0.0)
-    path = _ci(mod.data, "descr_mount.txt")
-    if not path or not kind:
-        return root, off
-    f = mod.load(path)
-    span = next((sp for name, sp in type_blocks(f).items() if name.lower() == kind.lower()), None)
-    if not span:
-        return root, off
-    lines = _block_lines(f, span)
-    r = _values(lines, "root_node_height")
-    o = _values(lines, "rider_offset")
-    try:
-        if r and r[0]:
-            root = float(r[0][0])
-        if o and len(o[0]) >= 3:
-            off = tuple(float(x) for x in o[0][:3])
-    except ValueError:
-        pass
-    return root, off
-
-
 def is_ship(lines):
     """A ship (category ship): the game fights at sea by auto-resolve - no battle model, no voice; its soldier and
     voice lines are only what the file's form asks for."""

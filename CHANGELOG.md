@@ -8,6 +8,16 @@
   Discord). The same window as on the Settlements tab.
 
 ### Changed
+- **Map: Edit resources and Edit forts & watchtowers are two switches** (they were one, "Edit resources & forts"),
+  each with its own bar and a how-to line under it that is never cut off: pick the kind, **Place new**, then click
+  a land tile; drag with the right mouse button to move; click, then **Delete picked** to remove. Where the
+  campaign has no fort or watchtower line to copy (vanilla Rome and Medieval II) the bar says at once that a new
+  one cannot be placed there, instead of after the click.
+- **3D view: "man 1 of 8" read as eight men** - it was the most variants of one part (highlanders: 8 shields). It
+  now names each part that comes in several: "Head 1 of 4, Body 1 of 2, weapon 1 of 3, shield 1 of 8".
+- **3D view: the mount stands beside the rider** ("Its mount beside him"), both on one ground, as the files keep
+  them - the seat drawn in 0.21.0 put a standing man (the files hold him with straight legs; the game bends them
+  with its animations) through the horse's back and looked wrong.
 - **Report a bug / Suggest**: the window's opening words are three short sentences - the long list of what is cut
   out (and the names of services in it) scared people off; the wiki page keeps the details.
 

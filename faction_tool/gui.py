@@ -620,19 +620,41 @@ class App(tk.Tk):
         ttk.Label(rb, text="left drag paints, right click picks a region, right drag moves the map",
                   foreground="#666").pack(side="left", padx=10)
         flow(rb)
+        # Edit resources and Edit forts: a bar each (type, Place new, Delete picked) with its how-to under it
         self.res_bar = ttk.Frame(tab, padding=(0, 0, 0, 4))
-        xb = self.res_bar
-        ttk.Label(xb, text="Resource / fort", font=("", 9, "bold")).pack(side="left")
+        xb = ttk.Frame(self.res_bar)
+        xb.pack(fill="x")
+        ttk.Label(xb, text="Resource", font=("", 9, "bold")).pack(side="left")
         self.v_res_type = tk.StringVar()
         self.cb_res_type = ttk.Combobox(xb, textvariable=self.v_res_type, width=16, state="readonly")
         self.cb_res_type.pack(side="left", padx=4)
-        ttk.Button(xb, text="Place new", command=self.res_place_new).pack(side="left", padx=2)
+        ttk.Button(xb, text="Place new", command=lambda: self.res_place_new(self.v_res_type.get())).pack(
+            side="left", padx=2)
         ttk.Button(xb, text="Delete picked", command=self.res_delete).pack(side="left", padx=2)
         ttk.Button(xb, text="Region tags (hidden resources)...", command=self.region_tags_dialog).pack(side="left", padx=(12, 2))
-        ttk.Label(xb, text="click a resource or fort: pick it   right drag: move it   a region has the resources on its "
-                            "land   a new fort / watchtower copies the line of the nearest one the campaign has",
-                  foreground="#666").pack(side="left", padx=10)
         flow(xb)
+        self._how(self.res_bar, "New: pick the resource above, press Place new, then click a land tile on the map.  "
+                                "Move: drag a resource with the right mouse button.  Remove: click it, then Delete "
+                                "picked.  A region's resources are the ones on its land.")
+        self.fort_bar = ttk.Frame(tab, padding=(0, 0, 0, 4))
+        fb = ttk.Frame(self.fort_bar)
+        fb.pack(fill="x")
+        ttk.Label(fb, text="Fort / watchtower", font=("", 9, "bold")).pack(side="left")
+        from .forts import KINDS as FORT_KINDS
+        self.v_fort_type = tk.StringVar(value=FORT_KINDS[0])
+        ttk.Combobox(fb, textvariable=self.v_fort_type, width=12, state="readonly", values=FORT_KINDS).pack(
+            side="left", padx=4)
+        ttk.Button(fb, text="Place new", command=lambda: self.res_place_new(self.v_fort_type.get())).pack(
+            side="left", padx=2)
+        ttk.Button(fb, text="Delete picked", command=self.res_delete).pack(side="left", padx=2)
+        flow(fb)
+        self._how(self.fort_bar, "New: pick fort or watchtower, press Place new, then click a land tile on the map "
+                                 "(it copies the line of the nearest one the campaign has).  Move: drag one with "
+                                 "the right mouse button.  Remove: click it, then Delete picked.")
+        self.lbl_fort_new = ttk.Label(self.fort_bar, text="", foreground="#b05a00", justify="left")
+        self.lbl_fort_new.pack(fill="x", anchor="w")
+        self.fort_bar.bind("<Configure>", lambda e: self.lbl_fort_new.configure(wraplength=max(200, e.width - 8)),
+                           add="+")
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
         self.v_borders = self.map_view.v_borders
         self.map_view.pack(fill="both", expand=True)
@@ -2054,28 +2076,53 @@ class App(tk.Tk):
             self._res_cache = (key, read(f))
         return self._res_cache[1]
 
+    @staticmethod
+    def _how(parent, text):
+        """A bar's how-to on a line of its own under it, wrapping at the window's width (never cut off)."""
+        lbl = ttk.Label(parent, text=text, foreground="#666", justify="left")
+        lbl.pack(fill="x", anchor="w", pady=(2, 0))
+        parent.bind("<Configure>", lambda e: lbl.configure(wraplength=max(200, e.width - 8)), add="+")
+
     def _resource_view(self):
         """The Map's resources, forts and watchtowers: shown with their layer, moved, added and removed here
         (ids: r<line> / n<i> resources, f<line> / g<i> forts)."""
         from . import forts as FT
         from .resources import problem, types
         mv = self.map_view
-        if not mv.v_res.get():
-            self.res_bar.pack_forget()
+        res_on, forts_on = mv.v_res.get(), mv.v_forts.get()
+        for bar, on in ((self.res_bar, res_on), (self.fort_bar, forts_on)):
+            if on:
+                bar.pack(fill="x", before=mv)
+            else:
+                bar.pack_forget()
+        if not (res_on or forts_on):
+            self._res_placing = None
             return {}
-        self.res_bar.pack(fill="x", before=mv)
-        kinds = list(types(self.mod)) + list(FT.KINDS)
+        kinds = list(types(self.mod))
         self.cb_res_type["values"] = kinds
-        if not self.v_res_type.get() and kinds:
-            self.v_res_type.set(kinds[0])
-        shown = [{"id": "r%d" % r.index, "kind": r.kind, "xy": tuple(self.res_moves.get(r.index, r.xy))}
-                 for r in self._file_resources() if r.index not in self.res_removed]
-        shown += [{"id": "n%d" % i, "kind": a["type"], "xy": tuple(a["xy"])} for i, a in enumerate(self.res_added)]
+        if self.v_res_type.get() not in kinds:
+            self.v_res_type.set(kinds[0] if kinds else "")
+        if self._res_placing and not (forts_on if self._res_placing in FT.KINDS else res_on):
+            self._res_placing = None                    # its mode was switched off
+        shown = []
+        if res_on:
+            shown += [{"id": "r%d" % r.index, "kind": r.kind, "xy": tuple(self.res_moves.get(r.index, r.xy))}
+                      for r in self._file_resources() if r.index not in self.res_removed]
+            shown += [{"id": "n%d" % i, "kind": a["type"], "xy": tuple(a["xy"])} for i, a in enumerate(self.res_added)]
         camp = self.v_campaign.get()
         file_forts = self.strat.forts if self.strat else []
-        shown += [{"id": "f%d" % fo.line, "kind": fo.kind, "xy": tuple(self.fort_moves.get(fo.line, fo.xy))}
-                  for fo in file_forts if fo.line not in self.fort_removed]
-        shown += [{"id": "g%d" % i, "kind": a["kind"], "xy": tuple(a["xy"])} for i, a in enumerate(self.fort_added)]
+        if forts_on:
+            shown += [{"id": "f%d" % fo.line, "kind": fo.kind, "xy": tuple(self.fort_moves.get(fo.line, fo.xy))}
+                      for fo in file_forts if fo.line not in self.fort_removed]
+            shown += [{"id": "g%d" % i, "kind": a["kind"], "xy": tuple(a["xy"])} for i, a in enumerate(self.fort_added)]
+            # a new one copies a line of its kind the campaign has: say at once which kinds cannot be placed
+            have = {fo.kind for fo in file_forts if fo.line not in self.fort_removed}
+            missing = [k for k in FT.KINDS if k not in have]
+            self.lbl_fort_new.configure(text="" if not missing else (
+                "This campaign has no %s line yet, so a new %s cannot be placed here: the line differs by game "
+                "and mod and is copied from one the campaign already has (vanilla Rome and Medieval II have "
+                "none). Moving and removing work for the ones on the map." % (
+                    " or ".join(missing), " / ".join(missing))))
 
         def is_fort(rid):
             return rid[:1] in ("f", "g")
@@ -2117,7 +2164,7 @@ class App(tk.Tk):
             self._res_sel = rid
             kind = next((r["kind"] for r in shown if r["id"] == rid), None)
             if kind:
-                self.v_res_type.set(kind)
+                (self.v_fort_type if is_fort(rid) else self.v_res_type).set(kind)
             self.show_map()
 
         kw = {"resources": shown, "check_res": check, "on_res_move": moved, "on_res_click": clicked,
@@ -2152,19 +2199,20 @@ class App(tk.Tk):
             kw["on_place"] = place
         return kw
 
-    def res_place_new(self):
-        kind = self.v_res_type.get()
+    def res_place_new(self, kind):
+        """Place new on the resource / fort bar: the next click on the map puts one there."""
         if not kind:
-            messagebox.showerror(APP, "pick a resource type first")
+            messagebox.showerror(APP, "Pick what to place first (the list left of Place new).")
             return
         self._res_placing = kind
-        self.status.set("Click the map where the new %s goes." % kind)
+        self.status.set("Now click a land tile on the map where the new %s goes." % kind)
         self.show_map()
 
     def res_delete(self):
         rid = self._res_sel
         if not rid:
-            messagebox.showerror(APP, "click a resource on the map first")
+            messagebox.showerror(APP, "Click the resource or fort on the map first (it gets a frame), then Delete "
+                                      "picked.")
             return
         self.remember()
         if rid.startswith("g"):

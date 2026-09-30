@@ -50,6 +50,7 @@ class MapView(ttk.Frame):
         self.v_ports = tk.BooleanVar(value=True)
         self.v_chars = tk.BooleanVar(value=True)
         self.v_res = tk.BooleanVar(value=False)
+        self.v_forts = tk.BooleanVar(value=False)       # Edit forts: forts and watchtowers picked, moved, placed
         self.v_dip = tk.BooleanVar(value=False)
         self.v_regions = tk.BooleanVar(value=False)
         # how the ground is drawn (kept between starts): tile by tile, relief, rivers, the tile grid up close
@@ -86,7 +87,9 @@ class MapView(ttk.Frame):
         # the two modes that change what a click does, as switches of their own
         ttk.Checkbutton(bar, text="Edit regions", variable=self.v_regions,
                         command=self._regions_toggled).pack(side="left", padx=(12, 4))
-        ttk.Checkbutton(bar, text="Edit resources & forts", variable=self.v_res, command=relayer).pack(side="left", padx=4)
+        ttk.Checkbutton(bar, text="Edit resources", variable=self.v_res, command=relayer).pack(side="left", padx=4)
+        ttk.Checkbutton(bar, text="Edit forts & watchtowers", variable=self.v_forts, command=relayer).pack(
+            side="left", padx=4)
         self.lbl_layers = ttk.Label(bar, text="", foreground="#666")
         self.lbl_layers.pack(side="left", padx=8)
         for v in (self.v_pol, self.v_borders, self.v_names, self.v_ports, self.v_chars, self.v_res, self.v_dip,
@@ -285,7 +288,7 @@ class MapView(ttk.Frame):
                 x - 8, yy - 8, x + 8, yy + 8, outline="#30ff60", width=2))
             row("drop here: refused (why below)", lambda x, yy: lc.create_rectangle(
                 x - 8, yy - 8, x + 8, yy + 8, outline="#ff3030", width=2))
-            kinds = sorted({r["kind"] for r in self.resources})
+            kinds = sorted({r["kind"] for r in self.resources} - {"fort", "watchtower"})
             if kinds or self.v_res.get():
                 head("Resources (first letters)")
                 for k in kinds:
@@ -444,7 +447,7 @@ class MapView(ttk.Frame):
         if self.v_grid.get() and self.z >= 10:
             self._grid(cw, ch)
         self._markers(cw, ch)
-        key = (tuple(sorted({r["kind"] for r in self.resources})), self.v_res.get())
+        key = (tuple(sorted({r["kind"] for r in self.resources})), self.v_res.get(), self.v_forts.get())
         if key != getattr(self, "_legend_key", None):
             self._legend_key = key
             self._draw_legend()
@@ -566,7 +569,7 @@ class MapView(ttk.Frame):
                     c.create_oval(sx - r, sy - r, sx + r, sy + r, fill="#2a6fdb", outline="white", width=1, tags=tags)
                     if r >= 5:
                         self._anchor(sx, sy, r, tags)
-        if self.v_res.get():
+        if self._marks_on():
             self._resources(cw, ch)
         self._forts(cw, ch)
         for region, (x, y) in cm.cities.items():
@@ -763,9 +766,9 @@ class MapView(ttk.Frame):
     def _forts(self, cw, ch):
         """A fort: a small brown tower with battlements in the owner's colour (a watchtower: thinner)."""
         c = self.canvas
-        editing = {r["id"] for r in self.resources} if self.v_res.get() else set()
+        editing = {r["id"] for r in self.resources} if self._marks_on() else set()
         for fo in self.forts:
-            if "f%d" % fo.line in editing:              # Edit resources & forts draws it (movable)
+            if "f%d" % fo.line in editing:              # Edit forts draws it (movable)
                 continue
             sx, sy = self.to_screen(*fo.xy)
             if not (-20 < sx < cw + 20 and -20 < sy < ch + 20):
@@ -829,8 +832,12 @@ class MapView(ttk.Frame):
                 c.create_text(sx, sy, text=res["kind"][:2].capitalize(), fill="white" if dark else "black",
                               font=("", max(6, int(r * 0.8)), "bold"), tags=tags)
 
+    def _marks_on(self):
+        """Edit resources or Edit forts: their markers are drawn to be picked, moved and placed."""
+        return self.v_res.get() or self.v_forts.get()
+
     def _res_under(self, sx, sy):
-        if not self.v_res.get():
+        if not self._marks_on():
             return None
         for item in reversed(self.canvas.find_overlapping(sx - 2, sy - 2, sx + 2, sy + 2)):
             for tag in self.canvas.gettags(item):
