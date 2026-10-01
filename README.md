@@ -6,6 +6,23 @@
 
 I'm building a tool that finally lets us improve the games of our childhood ourselves - without digging through files every time, without the fear of breaking something, and without everything falling apart because we forgot one step.
 
+## 🎯 What this tool is for
+
+One goal: **a bridge between the modder and the game's files.** The editor gives you access to every corner of the
+game's data - factions, campaign map, towns, armies, characters, units, buildings, diplomacy, texts and pictures - for
+Rome: Total War (with REX support) and Medieval II (with M2EX support), and takes over the slow part: finding the
+right files and lines, keeping the tied ones in step, checking for what the game would crash on.
+
+It is for anyone who mods:
+
+- **Mod teams** - work that took hours of file digging done in minutes.
+- **Beginners** - a place to start making something of your own without learning every file format first.
+- **Players** - something of your own in your favourite mod, just for yourself: a faction you always wanted to
+  see, different starting positions, a changed map. Nothing has to be published.
+
+What it is not: a 3D modelling program. Models can be viewed and swapped between units, but making or editing
+models is left to the tools built for that.
+
 ## 🗺️ New in 0.25.0: rescale the whole campaign map 3 x
 
 **Tools > Make the campaign map 3 x bigger** (alpha), Rome (REX) and Medieval II (M2EX). Each tile of
