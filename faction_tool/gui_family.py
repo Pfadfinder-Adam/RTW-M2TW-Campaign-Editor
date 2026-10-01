@@ -12,6 +12,7 @@ import hashlib
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
+from .gui_util import ShortHint
 from . import family as FM
 
 CARD_W, CARD_H, GAP, ROW = 150, 66, 16, 110
@@ -56,7 +57,7 @@ class FamilyEditor(ttk.Frame):
         from .gui_util import first
         first(*[w for w in top.pack_slaves() if w.pack_info().get("side") == "right"][::-1])
         self.lib_adds = []                     # Character editor: [{'culture', 'group', 'pics': {age: src}}]
-        ttk.Label(self, foreground="#555", justify="left", wraplength=1100, text=(
+        ShortHint(self, foreground="#555", justify="left", wraplength=1100, text=(
             "Everyone of the faction: characters on the map (name, age, traits, ancillaries) and family members "
             "off the map (name, sex, age). The tree is drawn like the game's: a couple side by side, their "
             "children below. Click a card or a row to edit that person. Names come from the faction's name lists "

@@ -6,6 +6,7 @@ M2EX). Both games."""
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import ShortHint
 from . import log
 
 APP = "RTW & M2TW Campaign Editor"
@@ -25,7 +26,7 @@ class SettlementsPanel(ttk.Frame):
         self.v_find.trace_add("write", lambda *a: self.fill())
         self.lbl_n = ttk.Label(top, foreground="#666")
         self.lbl_n.pack(side="left", padx=6)
-        ttk.Label(self, foreground="#666", wraplength=1100, justify="left", text=(
+        ShortHint(self, foreground="#666", wraplength=1100, justify="left", text=(
             "Every region and its town. The names players see are quick to change (also on the Map: Edit region). "
             "The names in the files tie the game's files together - renaming them changes every file of the mod "
             "that names the place (shown before anything is written). Tip: keep the name players see and the name "

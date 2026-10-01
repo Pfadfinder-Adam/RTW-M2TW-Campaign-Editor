@@ -307,6 +307,47 @@ def hint(parent, text, **kw):
     return lbl
 
 
+def first_sentence(text, most=160):
+    """The text's first sentence (up to `most` characters) - the short line a hint shows."""
+    text = " ".join(str(text or "").split())
+    for end in (". ", "; ", " - "):
+        i = text.find(end)
+        if 0 < i < most:
+            return text[:i + (1 if end == ". " else 0)]
+    return text if len(text) <= most else text[:most].rsplit(" ", 1)[0] + "..."
+
+
+class ShortHint(ttk.Frame):
+    """A one-line hint with a '?' beside it: the first sentence shows, the whole text when the mouse rests on the
+    '?' or the line (our rule: long explanations in hover texts, the window keeps its room). Drop-in for a Label:
+    configure(text=...)."""
+
+    def __init__(self, master, text="", **kw):
+        super().__init__(master)              # a Label's other options (wraplength, justify...) are not needed
+        self.full = ""
+        self.lbl = ttk.Label(self, foreground=kw.get("foreground", "#555"))
+        self.lbl.pack(side="left")
+        self.q = ttk.Label(self, text=" ? ", foreground="#2050c0", cursor="question_arrow", font=("", 9, "bold"))
+        self.q.pack(side="left")
+        Tip(self.q, lambda: self.full, width=560)
+        Tip(self.lbl, lambda: self.full, width=560)
+        if text:
+            self.configure(text=text)
+
+    def configure(self, cnf=None, **kw):
+        if "text" in kw:
+            self.full = kw.pop("text") or ""
+            short = first_sentence(self.full)
+            self.lbl.configure(text=short)
+            if short.strip() == self.full.strip():
+                self.q.pack_forget()
+            elif not self.q.winfo_ismapped():
+                self.q.pack(side="left")
+        if kw or cnf:
+            super().configure(cnf, **kw)
+    config = configure
+
+
 class StepWindow(tk.Toplevel):
     """A window that walks through steps: '1 Start  [2 Names]  3 ...' on top, the step's title, its body, and
     < Back / Next > below (Back and Next keep what was typed). A subclass gives steps [(title, fn)] to

@@ -1492,7 +1492,16 @@ class App(tk.Tk):
 
         def make(vertical):
             p = Plan(ModData(self.mod.data), "map", "map_x3", {})
-            plan_upscale(p, camp, vertical=vertical)
+            self.config(cursor="watch")
+
+            def step(text):                          # a big map takes half a minute: say what is being done
+                self.status.set("Making the map 3 x bigger: %s" % text)
+                self.update_idletasks()
+            try:
+                plan_upscale(p, camp, vertical=vertical, progress=step)
+            finally:
+                self.config(cursor="")
+            self.status.set("The bigger map is ready to look at - nothing written yet.")
             return p
         try:
             plan = make(3)

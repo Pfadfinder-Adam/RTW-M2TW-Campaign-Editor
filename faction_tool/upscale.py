@@ -461,10 +461,11 @@ def _dimensions(f, vertical=1.0):
     return n
 
 
-def plan_upscale(plan, campaign, vertical=FACTOR):
+def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
     """Every file of the map made 3 x bigger, in the plan (nothing written until Apply). vertical: how much higher
     the hills, mountains and sea floor get (3 = in proportion with the wider land; 1 = as high as before). Returns
-    the warnings."""
+    the warnings. progress(text) is told each step (a big map takes half a minute)."""
+    say = progress or (lambda text: None)
     mod = plan.mod
     warn = []
     regions_path = mod.campaign_file(campaign, "map_regions.tga")
@@ -472,12 +473,15 @@ def plan_upscale(plan, campaign, vertical=FACTOR):
     camp = os.path.dirname(mod.campaign_file(campaign, "descr_strat.txt"))
     colours = [v["colour"] for v in mod.regions(campaign).values()]
     from .terrain import SEA
+    say("the coast (map_regions)...")
     coast = coast_mask(regions_path, colours)              # the regions' land, made bigger with a smooth coast
     hpath = os.path.join(base, "map_heights.tga")
+    say("the heights' coast...")
     hmask = heights_mask(hpath) if os.path.isfile(hpath) else None
     keep_land = ()
     feats = os.path.join(base, "map_features.tga")
     if os.path.isfile(feats):
+        say("rivers and cliffs (map_features)...")
         data, rivers = features_scaled(feats, coast)
         plan.binary(feats, data)
         plan.note(None, "map_features.tga made 3 x bigger (rivers as staircases, mouths on the new coast)")
@@ -486,6 +490,7 @@ def plan_upscale(plan, campaign, vertical=FACTOR):
         p = os.path.join(base, name)
         if not os.path.isfile(p) or name == "map_features.tga":
             continue
+        say("%s..." % name)
         if name == "map_regions.tga":
             data = regions_scaled(p, colours, coast, keep_land)
             note = "with a smooth coast"
@@ -504,6 +509,7 @@ def plan_upscale(plan, campaign, vertical=FACTOR):
         plan.binary(p, data)
         plan.note(None, "%s made 3 x bigger%s" % (name, " (%s)" % note if note else ""))
     hgt = os.path.join(base, "map_heights.hgt")
+    say("map_heights.hgt...")
     if os.path.isfile(hgt) and os.path.isfile(hpath):
         plan.binary(hgt, hgt_scaled(hgt, hpath, hmask, vertical))
         plan.note(None, "map_heights.hgt made 3 x bigger%s (the game reads it instead of the picture and never "

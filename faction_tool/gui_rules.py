@@ -4,6 +4,7 @@ beside a changed one, Preview, Write it in (backup, Restore undoes it)."""
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import ShortHint
 from . import campaignrules as CR
 from .gui_util import ScrollFrame
 from .plan import Plan
@@ -25,7 +26,7 @@ class RulesWindow(tk.Toplevel):
         self._read()
         frm = ttk.Frame(self, padding=8)
         frm.pack(fill="both", expand=True)
-        ttk.Label(frm, wraplength=1060, justify="left", text=(
+        ShortHint(frm, wraplength=1060, justify="left", text=(
             "The rules of the whole campaign, from this mod's settings files. Pick a group on the left (or Find), "
             "change a value, then Preview and Write it in - a backup is made first and Restore undoes it. A value "
             "that differs from the game's own shows the game's beside it, with Reset.")).pack(anchor="w")

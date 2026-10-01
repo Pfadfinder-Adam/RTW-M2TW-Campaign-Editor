@@ -5,6 +5,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from .gui_util import ShortHint
 from . import modpack as MP
 
 WORDS = {"install": "put in", "keep": "keep this mod's", "merge": "only its changes", "skip": "-"}
@@ -54,7 +55,7 @@ class PackWindow(tk.Toplevel):
         frm.pack(fill="both", expand=True)
         count = {k: sum(1 for e in entries if e["state"] == k) for k in STATE}
         serious = sum(1 for e in entries if any(s for s, _ in e["notes"]))
-        ttk.Label(frm, justify="left", wraplength=1060, text=(
+        ShortHint(frm, justify="left", wraplength=1060, text=(
             "%d file(s) in the pack's data folder, checked against %s: %d new, %d replace this mod's, %d already the "
             "same.%s%s\nA red line would lose something (a file of REX's own, a picture of another size, another "
             "mod's whole file) and is set to keep this mod's file. Text files that differ in a few lines go in as "

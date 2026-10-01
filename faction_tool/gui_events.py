@@ -6,6 +6,7 @@ Write it in, with a backup like every write."""
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
+from .gui_util import ShortHint
 from . import events as EV
 from .plan import Plan
 
@@ -25,7 +26,7 @@ class EventsWindow(tk.Toplevel):
         self.rome = game_kind(self.mod) != "medieval2"
         top = ttk.Frame(self, padding=8)
         top.pack(fill="both", expand=True)
-        ttk.Label(top, foreground="#555", justify="left", wraplength=1020, text=(
+        ShortHint(top, foreground="#555", justify="left", wraplength=1020, text=(
             "The campaign's events (descr_events.txt): a historic message, or a plague, volcano, earthquake ... at a "
             "place. The date is %s. The title and text players see are in historic_events.txt. Preview, then "
             "Write it in (a backup first, Tools > Restore undoes it)." % (
@@ -54,7 +55,7 @@ class EventsWindow(tk.Toplevel):
         later = ttk.LabelFrame(top, text="Factions that appear later in the campaign", padding=6)
         later.pack(fill="x")
         rows = EV.later_factions(self.mod, self.campaign)
-        ttk.Label(later, foreground="#555", justify="left", wraplength=1000, text=(
+        ShortHint(later, foreground="#555", justify="left", wraplength=1000, text=(
             "\n".join("%s - dead at the start (dead_until_resurrected in descr_strat.txt); %s" % (
                 f, ("woken by the campaign script: " + "; ".join(lines)) if lines else
                 "no line of the campaign script wakes it (it may never appear)") for f, lines in rows)

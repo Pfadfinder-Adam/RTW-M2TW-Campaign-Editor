@@ -6,6 +6,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from .gui_util import ShortHint
 from . import editors as E
 from . import theme, unitattrs
 from .gui_util import save_copy
@@ -89,7 +90,7 @@ class RecordEditor(ttk.Frame):
         self.links.pack(fill="x", pady=(0, 6))
         self.lbl_links = ttk.Label(self.links, text="", justify="left", foreground="#333", wraplength=820)
         self.lbl_links.pack(anchor="w")
-        ttk.Label(right, text="Every line of the block: the key on the left, what follows it on the right. "
+        ShortHint(right, text="Every line of the block: the key on the left, what follows it on the right. "
                               "Changed fields turn yellow, lines to add green, lines to remove red (x on the left); "
                               "Preview, then Apply writes them (with a backup).",
                   foreground="#555", wraplength=900, justify="left").pack(anchor="w")

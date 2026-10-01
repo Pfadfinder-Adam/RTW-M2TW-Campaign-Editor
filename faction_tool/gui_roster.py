@@ -6,6 +6,7 @@ see roster.py."""
 import tkinter as tk
 from tkinter import ttk
 
+from .gui_util import ShortHint
 from . import roster as R
 
 HAS = {"own": "yes", "culture": "yes (culture)", "all": "yes (everyone)", None: "no"}
@@ -28,7 +29,7 @@ class RosterEditor(ttk.Frame):
         self.v_only = tk.BooleanVar(value=False)
         ttk.Checkbutton(top, text="only what it has", variable=self.v_only, command=self.redraw).pack(side="left", padx=8)
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
-        ttk.Label(self, foreground="#555", justify="left", wraplength=1000, text=(
+        ShortHint(self, foreground="#555", justify="left", wraplength=1000, text=(
             "Give or take a unit or a building level: double click, or select and use the buttons. On Apply the "
             "tool keeps every place in step - a unit: its ownership (export_descr_unit), the recruit lines that "
             "let the faction train it (export_descr_buildings) and its cards (ui/units, ui/unit_info); a building "

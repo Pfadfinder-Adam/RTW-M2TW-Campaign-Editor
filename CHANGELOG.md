@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+- **Long explanations fold into a '?'**: the Terrain editor's hint under each brush, and the intro texts of the
+  Roster, Religions, Settlements, Traits, Events, Campaign rules, Art, pack and family tree panels show their first
+  sentence; the whole text when the mouse rests on it or on its '?' - the map and the lists get the room.
+- Making the map 3 x bigger says what it is working on (the coast, the heights, rivers...) - a big map takes half a
+  minute.
+
 ### Added
 - **Tools > The game's log in plain words**: the game's newest `system.log.txt` for this mod (found anywhere in the
   game folder) read and explained, both games: a crash first, then errors grouped (one kind once, however many units

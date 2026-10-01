@@ -62,7 +62,8 @@ class TerrainEditor(ttk.Frame):
         self.v_level = tk.IntVar(value=40)
         self.v_coast = tk.StringVar(value="land")          # the land / sea brush
         self.v_coast_region = tk.StringVar(value=NEAREST)
-        self.hint = ttk.Label(self, foreground="#555", justify="left", wraplength=1200)
+        from .gui_util import ShortHint
+        self.hint = ShortHint(self)                      # one line; the whole explanation on its '?'
         self.hint.pack(fill="x")
         from .gui_map import MapView
         self.view = MapView(self, status=None, on_layers=self.show)

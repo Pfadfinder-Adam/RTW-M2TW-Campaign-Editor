@@ -7,6 +7,7 @@ import os
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
+from .gui_util import ShortHint
 from . import factionart as FA
 
 # The campaign-select map part is put away for now (the user, 2026-10-01): the code stays for a later release;
@@ -243,7 +244,7 @@ class ArtEditor(ttk.Frame):
             else:
                 r, c = (r + 1, 0) if c + 1 >= cols else (r, c + 1)
         r += 1 if c else 0
-        ttk.Label(box, foreground="#555", justify="left", wraplength=900, text=(
+        ShortHint(box, foreground="#555", justify="left", wraplength=900, text=(
             "Pick another model for a character type (the list holds every figure of descr_model_strat.txt); "
             "Preview, then Apply writes descr_character.txt (a faction sharing its line with others gets a line "
             "of its own). A model the faction has no texture in gets a line with the model's first texture; "

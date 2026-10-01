@@ -5,6 +5,8 @@ Apply with the rest of the campaign work. Rome has no religions: the page says s
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import ShortHint
+
 APP = "RTW & M2TW Campaign Editor"
 
 
@@ -19,7 +21,7 @@ class ReligionsPanel(ttk.Frame):
         ttk.Label(top, text="Religions", font=("", 10, "bold")).pack(side="left")
         self.lbl = ttk.Label(top, foreground="#666")
         self.lbl.pack(side="left", padx=8)
-        ttk.Label(self, foreground="#666", wraplength=1100, justify="left", text=(
+        ShortHint(self, foreground="#666", wraplength=1100, justify="left", text=(
             "Medieval II: the religions of the game and how many of each region's people follow each (100 in all). "
             "A new religion is written everywhere the game needs it; its shares are set region by region. The same "
             "as Religions... / New religion... on the Map - Preview, then Apply changes writes them.")).pack(

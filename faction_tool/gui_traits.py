@@ -7,6 +7,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
+from .gui_util import ShortHint
 from . import traitsedit as TE
 from .plan import Plan
 
@@ -26,7 +27,7 @@ class TraitsWindow(tk.Toplevel):
         self._photos = []
         top = ttk.Frame(self, padding=8)
         top.pack(fill="both", expand=True)
-        ttk.Label(top, foreground="#555", justify="left", wraplength=1060, text=(
+        ShortHint(top, foreground="#555", justify="left", wraplength=1060, text=(
             "The traits and the retinue themselves (export_descr_character_traits.txt, export_descr_ancillaries.txt). "
             "Pick one on the left: each level's name and description as players see them, the points it needs "
             "(Threshold) and what it gives (Effects, like 'Command 1, Loyalty -2'). New... makes a copy of the "
