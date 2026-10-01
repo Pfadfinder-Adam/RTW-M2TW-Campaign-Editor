@@ -130,6 +130,11 @@ def region_entries(f):
             e["legion"] = vals[leg]
         if rel is not None:
             e["religions"] = vals[rel]
+        # REX / M2EX wasteland: 'wasteland' where the settlement stands (Name / wasteland / r g b, or the long form) -
+        # a region without a town, owner or rebels (no town pixel needed)
+        for k in ("settlement", "rebels", "creator"):
+            if k in e and e[k][1].lower() == "wasteland":
+                e["wasteland"] = e.pop(k)
         out[cur] = e
 
     texts = f.texts() if hasattr(f, "texts") else f
@@ -266,8 +271,9 @@ class ModData:
 
     # ---- map ----
     def regions(self, campaign):
-        """{region: {'settlement', 'creator', 'rebels', 'colour', 'resources', 'triumph', 'farming'
-        (, 'religions')}} from descr_regions.txt (see region_entries)."""
+        """{region: {'settlement', 'creator', 'rebels', 'colour', 'resources', 'triumph', 'farming', 'wasteland'
+        (, 'religions')}} from descr_regions.txt (see region_entries); a wasteland region (REX / M2EX) has no
+        settlement ('')."""
         f = self.load(self.campaign_file(campaign, "descr_regions.txt"))
         out = {}
         for name, e in region_entries(f).items():
@@ -279,6 +285,7 @@ class ModData:
                 v["religions"] = parse_religions(v["religions"])
             if "beliefs" in v:                           # Barbarian Invasion: pagan 90 christianity 10
                 v["beliefs"] = parse_religions("{%s}" % v["beliefs"])
+            v["wasteland"] = "wasteland" in v               # REX / M2EX: no town, no owner
             for k in ("settlement", "creator", "rebels", "resources", "triumph", "farming"):
                 v.setdefault(k, "")
             out[name] = v

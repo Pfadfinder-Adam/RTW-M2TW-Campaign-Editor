@@ -325,6 +325,10 @@ class ToolTest(unittest.TestCase):
         db = MDB.ModelDB(text)
         self.assertEqual(db.dump(), text)
         self.assertEqual(db.model("KNIGHTS").factions(), ["alpha", "slave"])
+        # edited by hand (a tester's Total Vanilla Beyond: "modeldb: a number expected"): line breaks, tabs, two
+        # spaces between the values read as the game reads them; the file written back in the game's own form
+        edited = text.replace(" 6 spears ", "\r\n6 spears  ").replace(" 3 0 0", "\t3\t0 0", 1) + "\r\n"
+        self.assertEqual(MDB.ModelDB(edited).dump(), text)
         path = os.path.join(self.root, "data", "unit_models", "battle_models.modeldb")
         os.makedirs(os.path.dirname(path))
         with open(path, "wb") as fh:
@@ -2986,6 +2990,30 @@ building smith
         bdir = plan.apply()
         restore(ModData(self.root), bdir)
         self.assertEqual(tree_hash(d), before)
+
+    def test_wasteland_region(self):
+        """REX / M2EX wasteland regions ('wasteland' where the town stands; the 3-line form too): no settlement, no
+        rebels read from it; Check mod does not ask for its town pixel (a tester's Sahara_Province)."""
+        from faction_tool.check import check_mod
+        from faction_tool.moddata import region_entries
+        from faction_tool.textio import TextFile
+        f = TextFile.from_bytes("x", (REGIONS + "Sahara\n\twasteland\n\t9 9 9\nGobi\n\twasteland\n\tslave\n"
+                                      "\tRebels\n\t8 8 8\n\tnone\n\t5\n\t1\n").encode())
+        e = region_entries(f)
+        self.assertNotIn("settlement", e["Sahara"])
+        self.assertNotIn("rebels", e["Sahara"])
+        self.assertIn("wasteland", e["Sahara"])
+        self.assertIn("wasteland", e["Gobi"])
+        self.assertEqual(e["Gobi"]["rebels"][1], "Rebels")
+        camp = os.path.join(self.root, "data", "world", "maps", "base", "descr_regions.txt")
+        if not os.path.exists(camp):
+            camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_regions.txt")
+        write(camp, REGIONS + "Sahara\n\twasteland\n\t9 9 9\n")
+        mod = ModData(self.root)
+        self.assertTrue(mod.regions("test")["Sahara"]["wasteland"])
+        rep = check_mod(mod, "test")
+        self.assertNotIn("without a town pixel", rep)
+        self.assertIn("wasteland regions", rep)
 
     def test_path_guard(self):
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads

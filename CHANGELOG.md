@@ -66,6 +66,12 @@
   out (and the names of services in it) scared people off; the wiki page keeps the details.
 
 ### Fixed
+- **"modeldb: a number expected at ..." on a mod's battle_models.modeldb** (a tester, Total Vanilla Beyond): a
+  modeldb edited by hand - line breaks, tabs, two spaces between the values - is read as the game reads it (it was
+  refused, so no new faction could be made); written back in the game's own form.
+- **Wasteland regions (REX / M2EX)**: a region with `wasteland` where its town stands is read as a region without
+  a town (it was read as a town called "wasteland"); Check mod no longer asks for its town pixel and names them
+  (a tester's Sahara_Province); a settlement given to one is refused.
 - **Rename in the files renamed people too**: a woman or a surname named like the town (vanilla Rome: Apollonia,
   "of Epirus") was renamed in descr_names.txt, its lookup and names.txt, and a character named like it in
   descr_strat. The name lists and characters' names now stay.

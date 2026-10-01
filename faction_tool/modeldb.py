@@ -34,14 +34,20 @@ class _Reader:
     def __init__(self, text):
         self.t, self.p = text, 0
 
+    WS = " \t\r\n"
+
     def tok(self):
-        t, p = self.t, self.p
-        e = t.find(" ", p)
-        if e < 0:
-            e = len(t)
-        self.p = e + 1
+        """The next number (or word): any run of spaces, tabs or line breaks parts them - a modeldb edited by hand
+        (a modder's line breaks, two spaces) reads as the game reads it."""
+        t, p, n = self.t, self.p, len(self.t)
+        while p < n and t[p] in self.WS:
+            p += 1
+        e = p
+        while e < n and t[e] not in self.WS:
+            e += 1
         if e == p:
-            raise ModelDBError("modeldb: a number expected at %d" % p)
+            raise ModelDBError("modeldb: a number expected at %d, the file ends there" % p)
+        self.p = e
         return t[p:e]
 
     def int(self):
@@ -49,14 +55,22 @@ class _Reader:
         try:
             return int(v)
         except ValueError:
-            raise ModelDBError("modeldb: '%s' is not a count (at %d)" % (v, self.p))
+            raise ModelDBError("modeldb: '%s' is not a count (at %d) - the file is not in the form the game "
+                               "writes it" % (v, self.p))
 
     def str(self):
+        """A string: its length, ONE parting character (a line break counts as one), then exactly that many
+        characters (a path may hold spaces)."""
         n = self.int()
-        s = self.t[self.p:self.p + n]
+        t, p = self.t, self.p
+        if t[p:p + 2] == "\r\n":
+            p += 2
+        elif p < len(t) and t[p] in self.WS:
+            p += 1
+        s = t[p:p + n]
         if len(s) != n:
             raise ModelDBError("modeldb: a string runs past the end of the file")
-        self.p += n + 1
+        self.p = p + n
         return s
 
 
@@ -87,7 +101,7 @@ class ModelDB:
         self.models = []
         for _ in range(count):
             self.models.append(self._model(r, seen))
-        if r.p < len(text):
+        if text[r.p:].strip():
             raise ModelDBError("modeldb: %d characters left after %d models" % (len(text) - r.p, count))
 
     @staticmethod

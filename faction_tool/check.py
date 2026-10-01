@@ -111,9 +111,14 @@ def check_mod(mod, campaign, deep=False, progress=None):
     for r in owners:
         if r not in regions:
             bad("settlement of '%s' in descr_strat.txt, but no such region in descr_regions.txt" % r)
+        elif regions[r].get("wasteland"):
+            bad("'%s' is a wasteland region (no town) but descr_strat.txt gives it a settlement" % r)
         elif r not in tiles:
             bad("region '%s' has no town pixel (black) in map_regions.tga" % r)
-    no_pixel = [r for r in regions if r not in tiles]
+    waste = [r for r in regions if regions[r].get("wasteland")]
+    if waste:
+        say("    wasteland regions (REX / M2EX: no town, no owner): %d - %s" % (len(waste), ", ".join(waste[:5])))
+    no_pixel = [r for r in regions if r not in tiles and not regions[r].get("wasteland")]
     if no_pixel:
         bad("%d region(s) without a town pixel: %s" % (len(no_pixel), ", ".join(no_pixel[:5])))
     seen = {}
