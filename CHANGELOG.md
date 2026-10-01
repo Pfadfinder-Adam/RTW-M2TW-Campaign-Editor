@@ -30,6 +30,8 @@
   shown; each file written in its own format, with a backup.
   The rims of the coloured parts (dull or blended edge pixels) are taken in too, and what is still missed can be
   painted by hand on the 'after' picture (new primary / secondary colour, or keep as it was).
+  It also covers the units' far-away sprites, the campaign-map figures, the faction symbol's texture, the flag on
+  Rome's towns in battle and Medieval II's battle banners; a shared picture a line names gets a copy of its own.
 - **Engine files missing in a mod**: Load (and Check mod files) says when a mod of a game with REX / M2EX lacks
   the engine's own files the game's data has (`descr_ex.txt`, `descr_caps_ex.txt`, other `*_ex` files) - the engine
   may then run it on its built-in defaults - and with a yes copies the game's ones into the mod (backup, Restore).

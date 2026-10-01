@@ -249,15 +249,26 @@ def picture_bytes(im, like):
     return image_tga(im, like)
 
 
+def _short(f):
+    """The short name files use too: romans_julii -> julii (Rome's houses)."""
+    return f.split("_", 1)[1] if f.lower().startswith("romans_") else f
+
+
 def _others_named(path, faction, factions, colours):
-    """[(path, colours)] of the same picture named after other factions (england -> france in the name or folder)."""
-    out = []
-    for f in factions:
-        if f == faction or f not in colours:
+    """[(path, colours)] of the same picture named after other factions (england -> france in the name or folder;
+    spy_julii -> spy_brutii: the short names too)."""
+    out, seen = [], set()
+    for mine, theirs in ((faction, lambda f: f), (_short(faction), _short)):
+        pat = r"(?i)(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(mine)
+        if not re.search(pat, path):
             continue
-        p = re.sub(r"(?i)(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(faction), f, path)
-        if p != path and os.path.isfile(p):
-            out.append((p, colours[f]))
+        for f in factions:
+            if f == faction or f not in colours:
+                continue
+            p = re.sub(pat, theirs(f), path)
+            if p != path and p not in seen and os.path.isfile(p):
+                seen.add(p)
+                out.append((p, colours[f]))
     return out
 
 
@@ -270,13 +281,13 @@ def targets(mod, campaign, faction):
     names = [n for n, _ in mod.factions()]
     out, seen = [], set()
 
-    def add(path, group, label, others=(), crop=None, skip=None, of=()):
+    def add(path, group, label, others=(), crop=None, skip=None, of=(), own=None):
         k = (os.path.normcase(os.path.abspath(path)), crop)
         if k in seen:
             return
         seen.add(k)
         out.append({"path": path, "rel": mod.rel(path), "group": group, "label": label, "others": list(others),
-                    "of": list(of), "crop": crop, "skip": skip})
+                    "of": list(of), "crop": crop, "skip": skip, "own": own, "faction": faction})
     for sub, label in (("units", "unit card"), ("unit_info", "unit info picture")):
         d = _ci(_ci(mod.data, "ui") or "", sub) if _ci(mod.data, "ui") else None
         own = _ci(d, faction) if d else None
@@ -320,17 +331,125 @@ def targets(mod, campaign, faction):
         if not p or not os.path.isfile(p) or not p.lower().endswith(PICTURE_EXT):
             continue
         low = (e.get("label") or "").lower()
-        if " map" in low or low.startswith("map") or "leader picture" in low:
+        if low.startswith(("campaign-select map", "victory conditions map")) or "leader picture" in low:
             continue                        # maps colour land, not the faction's dress; a leader's face stays
-        skip = None
-        if e.get("shared"):
+        skip = own = None
+        if e.get("shared") and e.get("link"):           # a line names it: the faction gets a copy of its own
+            from .factionart import picture_target
+            own = {"rel": picture_target(e, faction, faction), "link": e["link"]}
+        elif e.get("shared"):
             skip = "shared with %s - give the faction its own picture on the Art tab first" % ", ".join(e["shared"][:4])
         elif e.get("locked") or (e.get("crop") and "shared" in (e.get("note") or "")):
             skip = e.get("note")
-        add(p, "symbols and banners", e.get("label") or mod.rel(p),
+        label = e.get("label") or mod.rel(p)
+        if own:
+            label += " - shared with %s: gets a copy of its own" % ", ".join(e["shared"][:3])
+        add(p, "symbols and banners", label,
             [] if e.get("crop") else _others_named(p, faction, names, colours), crop=tuple(e["crop"])
-            if e.get("crop") else None, skip=skip)
+            if e.get("crop") else None, skip=skip, own=own)
+    _more_targets(mod, faction, names, colours, add)
     return out
+
+
+def _texture_file(mod, rel):
+    """A texture named as the game names it (x.tga for x.tga.dds, any case) -> its path in the mod, or None."""
+    from .packs import _on_disk
+    rel = rel.replace("\\", "/")
+    for r in (rel, rel + ".dds", rel[:-4] + ".texture" if rel.lower().endswith(".tga") else None):
+        got = _on_disk(mod, r) if r else None
+        if got:
+            return got[1]
+    return None
+
+
+def _shared_skip(users, faction):
+    others = sorted(set(users) - {faction})
+    return ("shared with %s - recolouring it would change them as well" % ", ".join(others[:4])) if others else None
+
+
+def _more_targets(mod, faction, names, colours, add):
+    """The faction's pictures beyond the cards, battle textures and the Art tab: the units' far-away sprites, the
+    faction symbol's texture (the 3D symbol of descr_sm_factions), the flag on its towns in battle (Rome's
+    descr_building_battle), the battle banners (Medieval II's descr_banners_new.xml). The campaign map's flags need
+    nothing: the game paints them in the faction's colours itself."""
+    from .moddata import _ci
+    # far-away sprites: <faction>_<unit>_sprite_NNN in data/sprites (Rome) or data/unit_sprites (Medieval II)
+    for sub in ("sprites", "unit_sprites"):
+        d = _ci(mod.data, sub)
+        if not d:
+            continue
+        pre = faction.lower() + "_"
+        longer = [f.lower() + "_" for f in names if f.lower().startswith(pre) and f != faction]
+        for n in sorted(os.listdir(d)):
+            low = n.lower()
+            if not low.startswith(pre) or any(low.startswith(l) for l in longer) or \
+                    not low.endswith((".dds", ".texture", ".tga")):
+                continue
+            rest = n[len(pre):]
+            others = [(os.path.join(d, f + "_" + rest), colours[f]) for f in names
+                      if f != faction and f in colours and os.path.isfile(os.path.join(d, f + "_" + rest))]
+            add(os.path.join(d, n), "unit sprites (far away)", "sprite %s" % rest, others[:6])
+    # the faction symbol's texture: the textures the symbol model (.cas) names
+    sm = _ci(mod.data, "descr_sm_factions.txt")
+    cur, cas = None, []
+    if sm and os.path.isfile(sm):
+        for line in open(sm, encoding="latin-1"):
+            t = line.split(";")[0].split()
+            if len(t) >= 2 and t[0] == "faction":
+                cur = t[1].strip(",")
+            elif len(t) >= 2 and t[0] == "symbol" and cur == faction:
+                cas.append(t[1])
+    users = {}
+    if sm and os.path.isfile(sm):
+        c2 = None
+        for line in open(sm, encoding="latin-1"):
+            t = line.split(";")[0].split()
+            if len(t) >= 2 and t[0] == "faction":
+                c2 = t[1].strip(",")
+            elif len(t) >= 2 and t[0] == "symbol":
+                users.setdefault(t[1].lower(), set()).add(c2)
+    for ref in cas:
+        from .packs import _on_disk
+        got = _on_disk(mod, ref.replace("\\", "/"))
+        if not got:
+            continue
+        with open(got[1], "rb") as fh:
+            raw = fh.read()
+        for m in re.finditer(rb"textures[\\/]([^\x00\\/]{1,80}?\.tga)", raw, re.I):
+            tex = _texture_file(mod, os.path.dirname(mod.rel(got[1]))[len("data/"):] + "/textures/" +
+                                m.group(1).decode("latin-1"))
+            if tex:
+                add(tex, "symbols and banners", "faction symbol (3D) texture",
+                    _others_named(tex, faction, names, colours), skip=_shared_skip(users.get(ref.lower(), ()), faction))
+    # the flag on its towns in battle (Rome): '<faction>  ##standard_x.tga' in descr_building_battle.txt
+    bb = _ci(mod.data, "descr_building_battle.txt")
+    if bb:
+        whose = {}
+        for line in open(bb, encoding="latin-1"):
+            t = line.split(";")[0].split()
+            if len(t) == 2 and t[1].lower().endswith(".tga") and t[0] in names:
+                whose.setdefault(t[1].lower(), set()).add(t[0])
+        for tex, fs in sorted(whose.items()):
+            if faction not in fs:
+                continue
+            p = _texture_file(mod, "models_building/textures/" + tex)
+            if p:
+                add(p, "symbols and banners", "flag on its towns in battle", _others_named(p, faction, names, colours),
+                    skip=_shared_skip(fs, faction))
+    # battle banners (Medieval II): <Texture Faction="England" DiffuseMap="banners\textures\x.texture" .../>
+    xml = _ci(mod.data, "descr_banners_new.xml")
+    if xml:
+        text = open(xml, encoding="latin-1").read()
+        whose = {}
+        for m in re.finditer(r'Faction="([^"]+)"[^>]*?DiffuseMap="([^"]+)"', text):
+            whose.setdefault(m.group(2).replace("\\", "/").lower(), set()).add(m.group(1).lower())
+        for tex, fs in sorted(whose.items()):
+            if faction.lower() not in fs or "test_" in tex:
+                continue
+            p = _texture_file(mod, tex)
+            if p:
+                add(p, "symbols and banners", "battle banner %s" % os.path.basename(tex),
+                    _others_named(p, faction, names, colours), skip=_shared_skip(fs, faction.lower()))
 
 
 def plan_recolour(plan, items, source, target):
@@ -360,7 +479,13 @@ def plan_recolour(plan, items, source, target):
                     except Exception:
                         pass
                 new, share = recolour(im, source, target, others, edits=it.get("edits"))
-                if share > 0:
+                if share > 0 and it.get("own"):
+                    import tempfile
+                    from .factionart import write_art
+                    tmp = os.path.join(tempfile.mkdtemp(prefix="recolour_"), "own.png")
+                    new.save(tmp)
+                    write_art(plan, it["faction"], it["own"]["rel"], {"src": tmp, "link": it["own"]["link"]})
+                elif share > 0:
                     plan.binary(it["path"], picture_bytes(new, it["path"]))
             done.append((it, share))
         except Exception as e:
