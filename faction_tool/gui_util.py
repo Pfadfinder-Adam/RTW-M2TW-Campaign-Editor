@@ -59,7 +59,10 @@ class ScrollFrame(ttk.Frame):
                 self.unbind_all(ev)
 
     def _inside(self, e):
-        w = self.winfo_containing(e.x_root, e.y_root)
+        try:
+            w = self.winfo_containing(e.x_root, e.y_root)
+        except KeyError:        # an open Combobox list ('popdown') is not a tkinter widget
+            return False
         return w is not None and str(w).startswith(str(self))
 
     def _on_wheel(self, e):

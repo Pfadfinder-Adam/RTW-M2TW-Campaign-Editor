@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+- A mod without `descr_names.txt` (e.g. a small Medieval II add-on mod) no longer stops the window when a template
+  faction is picked ("expected str, bytes or os.PathLike object, not NoneType"); the name lists are just empty.
+- The mouse wheel over an open drop-down list no longer logs an error.
+
 ## 0.25.0 - 2026-10-01
 
 ### Added

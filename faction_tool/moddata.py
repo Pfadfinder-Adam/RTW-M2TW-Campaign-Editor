@@ -267,7 +267,8 @@ class ModData:
         """descr_names.txt pools: {'characters': [...], 'surnames': [...], 'women': [...]}.
         A section may serve several factions (BI: 'faction: empire_east, empire_east_rebels');
         when a faction has more than one section (BI's alemanni), the first one counts."""
-        return pool_in(self.load(self.file("names")).texts(), faction)
+        path = self.file("names")
+        return pool_in(self.load(path).texts() if path else [], faction)
 
     # ---- map ----
     def regions(self, campaign):
