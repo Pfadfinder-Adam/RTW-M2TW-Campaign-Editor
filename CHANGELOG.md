@@ -21,6 +21,13 @@
   minute.
 
 ### Added
+- **Medieval II faction logos** (M2EX with `sprite_format xml`): the faction logo and small logo on the sprite sheets
+  are on the Art tab, in the faction emblem and replaceable; the sprite moves to a page of the faction's own, factions
+  borrowing it keep theirs as copies.
+- **Shared pictures pulled apart**: a battle banner, the faction symbol's 3D texture or a town flag several factions
+  name - the faction it is named after keeps the file and the others get copies of their own (their lines pointed at
+  them; a symbol model's copy keeps its bytes' length), so recolouring changes one faction only. Crusade and military
+  order banners stay as they are.
 - **The Art tab shows every faction picture**: also the faction symbol's 3D texture, the flag on its towns in battle
   (Rome) and the battle banners (Medieval II, read from descr_banners_new.xml); a shared one says with whom. Thumbnails
   of Medieval II's .texture files are drawn.

@@ -345,20 +345,35 @@ def targets(mod, campaign, faction):
         low = (e.get("label") or "").lower()
         if low.startswith(("campaign-select map", "victory conditions map")) or "leader picture" in low:
             continue                        # maps colour land, not the faction's dress; a leader's face stays
-        skip = own = None
-        if e.get("shared") and e.get("link"):           # a line names it: the faction gets a copy of its own
+        skip = own = out_x = None
+        x = e.get("extra")
+        if x and set(x["users"]) - {faction, faction.lower()}:
+            base = os.path.basename(p).lower()
+            if x["kind"] == "banner" and not x.get("owner") and base.startswith(("holy_", "special_unit")):
+                skip = "a crusade / military order banner, the same for every faction - not its colours"
+            else:
+                out_x = x                                # the web pulled along: copies for whoever shares it
+        elif e.get("shared") and e.get("link"):           # a line names it: the faction gets a copy of its own
             from .factionart import picture_target
             own = {"rel": picture_target(e, faction, faction), "link": e["link"]}
         elif e.get("shared"):
             skip = "shared with %s - give the faction its own picture on the Art tab first" % ", ".join(e["shared"][:4])
         elif e.get("locked") or (e.get("crop") and "shared" in (e.get("note") or "")):
             skip = e.get("note")
+        if out_x is not None:
+            skip = None
         label = e.get("label") or mod.rel(p)
         if own:
             label += " - shared with %s: gets a copy of its own" % ", ".join(e["shared"][:3])
+        if out_x is not None:
+            label += " - shared with %s: %s" % (", ".join(sorted(set(out_x["users"]) - {faction})[:3]), (
+                "they get copies of their own" if (out_x.get("owner") or "").lower() == faction.lower() else
+                "gets a copy of its own"))
         add(p, "symbols and banners", label,
             [] if e.get("crop") else _others_named(p, faction, names, colours), crop=tuple(e["crop"])
             if e.get("crop") else None, skip=skip, own=own)
+        if out_x is not None:
+            out[-1]["share_out"] = out_x
     _more_targets(mod, faction, names, colours, add)
     return out
 
@@ -441,6 +456,9 @@ def plan_recolour(plan, items, source, target):
                     tmp = os.path.join(tempfile.mkdtemp(prefix="recolour_"), "own.png")
                     new.save(tmp)
                     write_art(plan, it["faction"], it["own"]["rel"], {"src": tmp, "link": it["own"]["link"]})
+                elif share > 0 and it.get("share_out"):
+                    from .factionart import share_out
+                    plan.binary(share_out(plan, it["share_out"], it["faction"]), picture_bytes(new, it["path"]))
                 elif share > 0:
                     plan.binary(it["path"], picture_bytes(new, it["path"]))
             done.append((it, share))

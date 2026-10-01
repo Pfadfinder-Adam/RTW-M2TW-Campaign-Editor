@@ -155,10 +155,12 @@ def faction_pictures(mod, campaign, faction):
     for x in extra_pictures(mod, faction):
         e = add(x["path"])
         if e is not None:
-            e.update(label=x["label"], where=x["where"])
+            e.update(label=x["label"], where=x["where"], extra=x)
             others = sorted(u for u in x["users"] if u.lower() != faction.lower())
             if others:
-                e.update(locked=True, note="shared with %s - replacing it would change them too" % ", ".join(others[:4]))
+                e.update(locked=True, note="shared with %s%s" % (", ".join(others[:4]), (
+                    " - Recolour gives them copies of their own first" if (x.get("owner") or "").lower() ==
+                    faction.lower() else " - Recolour gives %s a copy of its own" % faction)))
     out.sort(key=lambda e: (e["label"], e["rel"]))
     from .symbols import entries
     return entries(mod, faction) + out          # the flag symbol and logos on shared sheets first
@@ -201,6 +203,7 @@ def extra_pictures(mod, faction):
             p = texture(base + "/textures/" + m.group(1).decode("latin-1"))
             if p:
                 out.append({"path": p, "label": "faction symbol (3D) texture", "users": set(users),
+                            "kind": "symbol", "ref": ref, "cas": got[1], "tex": m.group(1).decode("latin-1"),
                             "where": "the faction's 3D symbol (%s): the faction-select screen and the campaign "
                                      "map's faction panels" % os.path.basename(ref)})
     bb = _ci(mod.data, "descr_building_battle.txt")
@@ -214,20 +217,113 @@ def extra_pictures(mod, faction):
             if faction in fs:
                 p = texture("models_building/textures/" + tex)
                 if p:
-                    out.append({"path": p, "label": "flag on its towns in battle", "users": fs,
+                    out.append({"path": p, "label": "flag on its towns in battle", "users": fs, "kind": "town_flag",
+                                "ref": tex, "file": bb,
                                 "where": "the flags on the faction's towns and forts in a siege battle"})
     xml = _ci(mod.data, "descr_banners_new.xml")
     if xml:
-        whose = {}
+        whose, refs = {}, {}
         for m in re.finditer(r'Faction="([^"]+)"[^>]*?DiffuseMap="([^"]+)"', open(xml, encoding="latin-1").read()):
-            whose.setdefault(m.group(2).replace("\\", "/").lower(), set()).add(m.group(1).lower())
+            k = m.group(2).replace("\\", "/").lower()
+            whose.setdefault(k, set()).add(m.group(1).lower())
+            refs.setdefault(k, m.group(2))
         for tex, fs in sorted(whose.items()):
             if faction.lower() in fs and "test_" not in tex:
                 p = texture(tex)
                 if p:
                     out.append({"path": p, "label": "battle banner %s" % os.path.basename(tex), "users": fs,
+                                "kind": "banner", "ref": refs[tex], "file": xml,
                                 "where": "the banners over the faction's units in battle"})
+    for x in out:
+        base = os.path.basename(x["path"]).lower()
+        x["owner"] = next((u for u in sorted(x["users"], key=len, reverse=True)
+                           if _token_hit(base, u.lower()) or _token_hit(base, _short_name(u))), None)
     return out
+
+
+def _short_name(f):
+    f = f.lower()
+    return f.split("_", 1)[1] if f.startswith("romans_") else f
+
+
+def _same_length_name(old, owner, who):
+    """A file name as long as `old` with `who` in place of `owner` (a texture name baked into a .cas model is
+    rewritten in place - the same length keeps the model's bytes where they were)."""
+    new = re.sub(re.escape(owner), who, old, flags=re.I) if owner and owner.lower() in old.lower() else old + "_" + who
+    if len(new) > len(old):
+        new = new[:len(old)]
+    return new + "_" * (len(old) - len(new))
+
+
+def share_out(plan, x, faction):
+    """An extra picture (extra_pictures) several factions name, made the faction's own - the web pulled along: when
+    the file carries the faction's name, every other faction naming it first gets a copy of its own (its line
+    pointed at it) and the file stays where it is; otherwise the faction gets the copy. Returns the path the
+    faction's picture is now written to."""
+    others = sorted(set(x["users"]) - {faction, faction.lower()})
+    if x.get("owner") and x["owner"].lower() == faction.lower():
+        for o in others:
+            _copy_for(plan, x, o, keep=True)
+        return x["path"]
+    return _copy_for(plan, x, faction, keep=False)
+
+
+def _copy_for(plan, x, who, keep):
+    """A copy of x's picture for faction `who`, its lines pointed at it. keep: the copy holds the picture as it is
+    (a borrower keeps its look); else the caller writes the new picture there. Returns the copy's path."""
+    mod = plan.mod
+    owner = x.get("owner") or ""
+    folder, name = os.path.split(x["path"])
+    stem, ext = name.split(".", 1)
+    if x["kind"] == "symbol":
+        tex_stem = x["tex"].rsplit(".", 1)[0]
+        new_stem = _same_length_name(tex_stem, owner, who)
+        k = 0
+        while os.path.exists(os.path.join(folder, new_stem + "." + ext)) and k < 9:
+            k += 1
+            new_stem = new_stem[:-1] + str(k)
+        dst = os.path.join(folder, new_stem + "." + ext)
+        with open(x["cas"], "rb") as fh:
+            raw = fh.read()
+        raw = raw.replace(tex_stem.encode("latin-1"), new_stem.encode("latin-1"), 1)
+        cas_dir, cas_name = os.path.split(x["cas"])
+        cas_ext = cas_name.rsplit(".", 1)[1]
+        new_cas = os.path.join(cas_dir, "symbol_%s.%s" % (who, cas_ext))
+        if os.path.exists(new_cas):
+            new_cas = os.path.join(cas_dir, "symbol_%s_own.%s" % (who, cas_ext))
+        plan.binary(new_cas, raw)
+        sm = _ci(mod.data, "descr_sm_factions.txt")
+        f = plan.edit(sm)
+        cur = None
+        for i, t in enumerate(f.texts()):
+            tok = t.split(";")[0].split()
+            if len(tok) >= 2 and tok[0] == "faction":
+                cur = tok[1].strip(",")
+            elif len(tok) >= 2 and tok[0] == "symbol" and cur == who and tok[1] == x["ref"]:
+                ref = x["ref"].rsplit("/", 1)[0] + "/" + os.path.basename(new_cas)
+                set_picture_ref(f, i, x["ref"], ref)
+                plan.note(f, "%s's symbol now %s (was %s, shared)" % (who, ref, x["ref"]))
+    else:
+        new_stem = re.sub(re.escape(owner), who, stem, flags=re.I) if owner and owner.lower() in stem.lower() \
+            else stem + "_" + who
+        dst = os.path.join(folder, new_stem + "." + ext)
+        f = plan.edit(x["file"])
+        new_ref = x["ref"].replace(stem, new_stem) if stem in x["ref"] else \
+            re.sub(re.escape(stem), new_stem, x["ref"], flags=re.I)
+        for i, t in enumerate(f.texts()):
+            if x["kind"] == "banner":
+                m = re.search(r'Faction="([^"]+)"', t)
+                hit = m and m.group(1).lower() == who.lower() and ('DiffuseMap="%s"' % x["ref"]) in t
+            else:
+                tok = t.split(";")[0].split()
+                hit = len(tok) == 2 and tok[0] == who and tok[1].lower() == x["ref"].lower()
+            if hit:
+                set_picture_ref(f, i, x["ref"] if x["kind"] == "banner" else tok[1], new_ref)
+        plan.note(f, "%s's %s now %s (was %s, shared)" % (who, x["label"], new_ref, x["ref"]))
+    if keep:
+        with open(x["path"], "rb") as fh:
+            plan.binary(dst, fh.read())
+    return dst
 
 
 def picture_info(path):

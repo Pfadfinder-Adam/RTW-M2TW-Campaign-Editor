@@ -2650,6 +2650,13 @@ building smith
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
         self.assertEqual(after, before)
 
+    def test_same_length_texture_name_for_a_cas_copy(self):
+        """A texture name baked into a .cas model is rewritten in place: the copy's name keeps the length."""
+        from faction_tool.factionart import _same_length_name
+        self.assertEqual(_same_length_name("#banner_symbol_england", "england", "normans"), "#banner_symbol_normans")
+        self.assertEqual(len(_same_length_name("#banner_symbol_england", "england", "pisa")), 22)
+        self.assertEqual(len(_same_length_name("#banner_symbol_milan", "milan", "papal_states")), 20)
+
     def test_faction_emblem_one_picture_everywhere(self):
         """One emblem picture -> every emblem picture in its own size; mouse over brighter, greyed out grey, selected
         with a glow round the new shape - by the amounts the old pictures show."""
