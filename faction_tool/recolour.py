@@ -94,9 +94,11 @@ def masks(im, source, others=()):
         m = ImageChops.multiply(lit, S.point(lambda s: 255 if s >= smin else 0))
         m = ImageChops.multiply(m, d.point(lambda x: 255 if x <= gap else 0))
         other = dists[1 - k] if len(dists) > 1 else None
+        closer = None
         if other is not None:                    # near both: the nearer one takes it (the primary on a tie)
             closer = ImageChops.subtract(d, other) if k == 0 else ImageChops.subtract(d, other, 1, -1)
-            m = ImageChops.multiply(m, closer.point(lambda x: 255 if x == 0 else 0))
+            closer = closer.point(lambda x: 255 if x == 0 else 0)
+            m = ImageChops.multiply(m, closer)
         use = [dd for dd, cols in diffs if not any(_near(source[k], c) for c in cols)]
         if use:
             diff = use[0]
@@ -105,8 +107,27 @@ def masks(im, source, others=()):
             share = diff.histogram()[255] / float(im.size[0] * im.size[1])
             if 0 < share <= DIFF_MOST:
                 m = ImageChops.multiply(m, diff)
-        out.append(m)
+        out.append(_grow(m, H, S, V, d, gap, closer))
+    if len(out) > 1:                             # grown into each other: the primary keeps its own
+        from PIL import ImageChops as _C
+        out[1] = _C.subtract(out[1], out[0])
     return out
+
+
+def _grow(m, H, S, V, dist, gap, closer=None, rounds=2):
+    """The edges a strict test leaves (a dull or dark rim of a red stripe, a pixel blended with its neighbour)
+    taken in: neighbours of the found parts that are somewhat coloured and of a hue somewhat near, twice."""
+    from PIL import ImageChops, ImageFilter
+    if not m.getbbox():
+        return m
+    loose = ImageChops.multiply(S.point(lambda s: 255 if s >= SAT_MIN * 0.5 * 255 else 0),
+                                V.point(lambda v: 255 if v >= VAL_MIN * 0.6 * 255 else 0))
+    loose = ImageChops.multiply(loose, dist.point(lambda x: 255 if x <= gap * 1.5 else 0))
+    if closer is not None:                       # never into the other colour's parts (a gold lion on red)
+        loose = ImageChops.multiply(loose, closer)
+    for _ in range(rounds):
+        m = ImageChops.lighter(m, ImageChops.multiply(m.filter(ImageFilter.MaxFilter(3)), loose))
+    return m
 
 
 def _shift(im, src, dst):
@@ -123,18 +144,28 @@ def _shift(im, src, dst):
     return Image.merge("HSV", (H, S, V)).convert("RGB")
 
 
-def recolour(im, source, target, others=()):
+def recolour(im, source, target, others=(), edits=None):
     """(new picture, share of pixels changed): im with the parts in the source colours (primary, secondary) in the
-    target colours, alpha kept."""
-    from PIL import Image
+    target colours, alpha kept. edits: the hand touch-ups {'p': mask, 's': mask, 'keep': mask} ('L', the picture's
+    size) - painted as the new primary / secondary, or kept as they were."""
+    from PIL import Image, ImageChops
     ms = masks(im, source, others)
+    if edits:
+        keep = edits.get("keep")
+        for k, key in ((0, "p"), (1, "s")):
+            e = edits.get(key)
+            if e is not None:
+                ms[k] = ImageChops.lighter(ms[k], e)
+                ms[1 - k] = ImageChops.subtract(ms[1 - k], e)
+            if keep is not None:
+                ms[k] = ImageChops.subtract(ms[k], keep)
     rgb = im.convert("RGB")
     out = rgb.copy()
     n = 0
     for m, src, dst in zip(ms, source, target):
-        if not src or not dst or not m.getbbox():
+        if not dst or not m.getbbox():
             continue
-        out.paste(_shift(rgb, src, dst), (0, 0), m)
+        out.paste(_shift(rgb, src or dst, dst), (0, 0), m)
         n += m.histogram()[255]
     if im.mode in ("RGBA", "LA", "P"):
         a = im.convert("RGBA").split()[3]
@@ -317,7 +348,7 @@ def plan_recolour(plan, items, source, target):
                 sheet = sheets.get(it["path"]) or read_picture(it["path"])
                 x, y, w, h = it["crop"]
                 part = sheet.crop((x, y, x + w, y + h))
-                new, share = recolour(part, source, target)
+                new, share = recolour(part, source, target, edits=it.get("edits"))
                 sheet.paste(new, (x, y))
                 sheets[it["path"]] = sheet
             else:
@@ -328,7 +359,7 @@ def plan_recolour(plan, items, source, target):
                         others.append((read_picture(p), c))
                     except Exception:
                         pass
-                new, share = recolour(im, source, target, others)
+                new, share = recolour(im, source, target, others, edits=it.get("edits"))
                 if share > 0:
                     plan.binary(it["path"], picture_bytes(new, it["path"]))
             done.append((it, share))

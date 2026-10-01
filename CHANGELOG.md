@@ -25,6 +25,8 @@
   captain cards moved from the colours they carry (a template's, found by itself) to the faction's own or any picked;
   only the faction-coloured parts change (compared with other factions' copies), light and shade kept; before / after
   shown; each file written in its own format, with a backup.
+  The rims of the coloured parts (dull or blended edge pixels) are taken in too, and what is still missed can be
+  painted by hand on the 'after' picture (new primary / secondary colour, or keep as it was).
 - **Engine files missing in a mod**: Load (and Check mod files) says when a mod of a game with REX / M2EX lacks
   the engine's own files the game's data has (`descr_ex.txt`, `descr_caps_ex.txt`, other `*_ex` files) - the engine
   may then run it on its built-in defaults - and with a yes copies the game's ones into the mod (backup, Restore).
