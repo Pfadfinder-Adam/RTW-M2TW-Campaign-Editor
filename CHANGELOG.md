@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+- **Tools > The game's log in plain words**: the game's newest `system.log.txt` for this mod (found anywhere in the
+  game folder) read and explained, both games: a crash first, then errors grouped (one kind once, however many units
+  or factions it names), each with what it means and what to do, and for a Script Error the mod's line as it reads
+  now. Known messages explained so far: a recruit line for a faction the unit's ownership does not name, a town or
+  a character on a tile no one can reach or stand on, a town founded after the campaign's start year, a city /
+  castle conversion into a level the faction may not build, missing files, portraits and interface pictures, a
+  faction a script names that the mod lacks. "Open another log..." reads any other one.
+
 ### Fixed
 - **Reports came without the game's log**: the report window looked for `system.log.txt` only in the game folder
   and the loaded mod's folder. It now looks in every mod folder of the game (Rome: `<game>/<mod>/`, Medieval II:

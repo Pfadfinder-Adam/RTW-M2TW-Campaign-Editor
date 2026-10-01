@@ -3823,6 +3823,36 @@ building smith
         self.assertIn("reports/report-7-26_09_27.txt", names)        # the newest, without the nick
         self.assertEqual(len([n for n in names if n.startswith("reports/")]), 1)
 
+    def test_game_log_in_plain_words(self):
+        """The game's system.log.txt read: a Script Error's reason (the lines after it), errors of one kind grouped
+        whatever unit / faction they name, a crash first, the mod's line shown, plain words for known messages."""
+        from faction_tool import gamelog
+        game = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, game)
+        write(os.path.join(game, "data", "export_descr_buildings.txt"),
+              "".join("line %d\n" % i for i in range(1, 30)))
+        log_text = ("10:00:00.001 [script.err] [error] Script Error in data/export_descr_buildings.txt, at line 12, "
+                    "column 4\nunit(cog) does not match up to the ownership for faction(normans)\n"
+                    "10:00:00.002 [script.err] [error] Script Error in data/export_descr_buildings.txt, at line 13, "
+                    "column 4\nunit(dhow) does not match up to the ownership for faction(aztecs)\n"
+                    "10:00:01.000 [system.io] [warning] open: models_strat/navy_cog.rum is missing\n"
+                    "10:00:02.000 [core.assert] [fatal] ASSERT FAILED: src\\game_rtw\\culture_db.cpp(882): "
+                    "year_founded_signed <= world.calender.year_get()\n")
+        path = os.path.join(game, "system.log.txt")
+        write(path, log_text)
+        entries = gamelog.parse(log_text)
+        self.assertEqual(entries[0]["file"], "data/export_descr_buildings.txt")
+        self.assertEqual(entries[0]["line"], 12)
+        self.assertIn("unit(cog)", entries[0]["why"])
+        groups = gamelog.summary(entries)
+        self.assertEqual(groups[0][0]["level"], "fatal")                       # the crash first
+        self.assertEqual(groups[1][1], 2)                                       # the two recruit errors as one
+        text = gamelog.report(path, game)
+        self.assertIn("CRASH", text)
+        self.assertIn("year_founded", text)
+        self.assertIn("the line now reads: line 12", text)
+        self.assertIn("ownership", gamelog.explain("unit(cog) does not match up to the ownership for faction(x)"))
+
     def test_report_finds_the_game_logs(self):
         """The game writes system.log.txt where the mod was started from: the report finds the mod's own first, then
         the newest elsewhere in the game folder (a Rome mod folder, Medieval II's mods/<mod>/logs), at most 3."""

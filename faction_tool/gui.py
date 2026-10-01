@@ -733,6 +733,8 @@ class App(tk.Tk):
         tools = ttk.Menubutton(bar, text="Tools")
         menu = tk.Menu(tools, tearoff=False)
         menu.add_command(label="Check mod files (what the game would stumble on)", command=self.check)
+        menu.add_command(label="The game's log in plain words (what went wrong in the game)...",
+                         command=self.game_log_window)
         menu.add_command(label="Settlement names by culture (every town)...", command=self.culture_names_table)
         menu.add_command(label="Make the campaign map 3 x bigger (alpha)...", command=self.upscale_map)
         menu.add_command(label="Check and install a pack...", command=self.install_pack)
@@ -1528,6 +1530,39 @@ class App(tk.Tk):
                        extra=[("Write it (with a backup)", write_it),
                               ("Write it, heights as they are", lambda: write_it(1))])
         holder["w"] = [c for c in self.winfo_children() if c.winfo_class() == "Toplevel"][-1]
+
+    def game_log_window(self, path=None):
+        """Tools > The game's log in plain words: the newest system.log.txt of this mod (else of the game folder)
+        read and explained - errors grouped, the mod's line each one names, what to do (gamelog.py)."""
+        from . import gamelog, report
+        from .newmod import game_of
+        game = game_of(self.mod.data) if self.mod else settings.get("game")
+        mod_dir = os.path.dirname(os.path.abspath(self.mod.data)) if self.mod else None
+        if path is None:
+            logs = report.game_logs(game, mod_dir) if game else []
+            if not logs:
+                if messagebox.askyesno(APP, "No system.log.txt of the game found%s.\n\n%s\n\nPick a log file by "
+                                            "hand?" % (" in %s or its mods" % game if game else "", report.LOG_HOWTO)):
+                    path = filedialog.askopenfilename(title="The game's system.log.txt",
+                                                      filetypes=[("Game log", "*.txt"), ("Any file", "*.*")])
+                if not path:
+                    return
+            else:
+                path = logs[0]
+        try:
+            text = gamelog.report(path, game)
+        except OSError as e:
+            messagebox.showerror(APP, "Cannot read %s: %s" % (path, e))
+            return
+        log.write("Game log read: %s" % path)
+
+        def other():
+            p = filedialog.askopenfilename(title="The game's system.log.txt",
+                                           filetypes=[("Game log", "*.txt"), ("Any file", "*.*")])
+            if p:
+                self.game_log_window(p)
+        self.show_text("The game's log in plain words", "Written %s.\n\n" % report._age(path) + text,
+                       extra=[("Open another log...", other)])
 
     def settings_window(self):
         """Everything the tool keeps between starts, in one window."""
