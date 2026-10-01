@@ -609,10 +609,14 @@ def own_pictures(plan):
     links = picture_links(mod, plan.edit)
     users = link_users(links, but=new)
     planned = {os.path.normcase(os.path.abspath(d)) for _, d in plan.copies}
+    from .stratmodels import figures
+    used = {m for fg in figures(mod, t, plan.edit) for m in fg["models"]}     # a figure the template shows
     count = 0
     for l in links:
         if l["faction"] != new or users.get(l["ref"].replace("\\", "/").lower()) != {t}:
             continue
+        if l["key"] == "model_strat" and l["field"].split(":", 1)[1] not in used:
+            continue                                    # a model none of its characters uses (M2TW's Rome leftovers)
         got = picture_file(mod.data, l["ref"])
         if not got:
             continue

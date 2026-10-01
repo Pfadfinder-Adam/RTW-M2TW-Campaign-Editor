@@ -35,7 +35,8 @@
   texture in gets a texture line. The figures' textures are listed as Art pictures ("campaign map figure: ...")
   to Replace; only the figures the faction uses are listed.
 - **A new faction's figure textures are its own**: the clone copies the template's campaign-map figure textures
-  under the new name (diplomat_macedon -> diplomat_epirus) where only the template used them, as it does for
+  under the new name (diplomat_macedon -> diplomat_epirus) where only the template used them - only the figures
+  its characters show (vanilla Medieval II keeps unused Rome models with faction textures) - as it does for
   banners - replacing one no longer changes the template's (before, the new faction pointed at the template's
   files).
 - **The map is a free canvas** (Map tab and Terrain editor): it can be dragged past its edges and zoomed out
