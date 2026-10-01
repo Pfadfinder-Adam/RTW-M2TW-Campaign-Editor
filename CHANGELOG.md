@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.22.0 - 2026-10-01
+
 ### Added
 - **The Map's legend is a palette** (the user's idea): its signs are buttons - pick a town, fort, watchtower,
   resource, army, fleet or agent, then click the map to make one there. A town asks for its region's names first,
