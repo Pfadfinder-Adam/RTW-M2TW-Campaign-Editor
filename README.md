@@ -21,7 +21,8 @@ It is for anyone who mods:
   see, different starting positions, a changed map. Nothing has to be published.
 
 What it is not: a 3D modelling program. Models can be viewed and swapped between units, but making or editing
-models is left to the tools built for that.
+models is left to the tools built for that. The one exception planned: recolouring the faction colour painted on a
+unit's texture (vanilla-style uniforms), so a new faction's troops wear its own colour.
 
 ## 🗺️ New in 0.25.0: rescale the whole campaign map 3 x
 
