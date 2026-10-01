@@ -12,6 +12,8 @@ from . import theme
 from .mapdata import REBELS
 
 ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels per tile
+MODES = (("political", "Political (the owners)"), ("diplomacy", "Diplomacy (towards the faction)"),
+         ("religion", "Religion (Medieval II)"), ("none", "None (the ground only)"))
 
 
 
@@ -59,7 +61,11 @@ class MapView(ttk.Frame):
         self.v_res = tk.BooleanVar(value=False)
         self.v_forts = tk.BooleanVar(value=False)       # Edit forts: forts and watchtowers picked, moved, placed
         self.v_dip = tk.BooleanVar(value=False)
+        self.v_rel = tk.BooleanVar(value=False)         # religion colours (Medieval II)
         self.v_regions = tk.BooleanVar(value=False)
+        # the land's colours: one mode at a time (they would hide each other): political / diplomacy / religion
+        self.v_mode = tk.StringVar(value="political")
+        self.tint, self.tint_legend, self._religion_ok = None, [], False
         # how the ground is drawn (kept between starts): tile by tile, relief, rivers, the tile grid up close
         from . import settings
         look = settings.get("map_look") or {}
@@ -78,10 +84,15 @@ class MapView(ttk.Frame):
         relayer = lambda: self.on_layers() if self.on_layers else self.render()
         lb = ttk.Menubutton(bar, text="Layers")
         lm = tk.Menu(lb, tearoff=False)
-        for label, var, cmd in (("Political colours", self.v_pol, self.render), ("Borders", self.v_borders, relayer),
+        self._relayer = relayer
+        for key, label in MODES:
+            lm.add_radiobutton(label="Colours: " + label, variable=self.v_mode, value=key,
+                               command=self._mode_changed)
+        self._menu = lm
+        lm.add_separator()
+        for label, var, cmd in (("Borders", self.v_borders, relayer),
                                 ("Town names", self.v_names, self.render), ("Ports", self.v_ports, self.render),
-                                ("Characters", self.v_chars, self.render), ("Resources", self.v_res, relayer),
-                                ("Diplomacy colours", self.v_dip, relayer)):
+                                ("Characters", self.v_chars, self.render), ("Resources", self.v_res, relayer)):
             lm.add_checkbutton(label=label, variable=var, command=cmd)
         lm.add_separator()
         for label, var in (("Ground by tiles: one colour per tile (off = detailed picture)", self.v_tiles),
@@ -91,6 +102,12 @@ class MapView(ttk.Frame):
             lm.add_checkbutton(label=label, variable=var, command=look_changed)
         lb["menu"] = lm
         lb.pack(side="left")
+        # the colour mode, in sight on the bar (also in Layers)
+        ttk.Label(bar, text="Colours").pack(side="left", padx=(10, 2))
+        self.cb_mode = ttk.Combobox(bar, state="readonly", width=19)
+        self.cb_mode.pack(side="left")
+        self.cb_mode.bind("<<ComboboxSelected>>", lambda e: self._mode_picked())
+        self._fill_modes()
         # the two modes that change what a click does, as switches of their own
         ttk.Checkbutton(bar, text="Edit regions", variable=self.v_regions,
                         command=self._regions_toggled).pack(side="left", padx=(12, 4))
@@ -100,7 +117,7 @@ class MapView(ttk.Frame):
         self.lbl_layers = ttk.Label(bar, text="", foreground="#666")
         self.lbl_layers.pack(side="left", padx=8)
         for v in (self.v_pol, self.v_borders, self.v_names, self.v_ports, self.v_chars, self.v_res, self.v_dip,
-                  self.v_regions):
+                  self.v_regions, self.v_mode):
             v.trace_add("write", lambda *a: self._layers_label())
         self._layers_label()
         ttk.Button(bar, text="Fit", width=5, command=self.fit).pack(side="right")
@@ -189,10 +206,52 @@ class MapView(ttk.Frame):
         c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
         self._hot = None                                # the marker under the mouse, drawn bigger
 
+    def _modes(self):
+        return [(k, l) for k, l in MODES if k != "religion" or self._religion_ok]
+
+    def _fill_modes(self):
+        modes = self._modes()
+        self.cb_mode["values"] = [l for _, l in modes]
+        if self.v_mode.get() not in dict(modes):
+            self.v_mode.set("political")
+            self._mode_changed(redraw=False)
+        self.cb_mode.set(dict(modes)[self.v_mode.get()])
+        end = self._menu.index("end")
+        for i in range(end + 1):                         # Layers: the religion item only where there are religions
+            try:
+                if self._menu.entrycget(i, "value") == "religion":
+                    self._menu.entryconfigure(i, state="normal" if self._religion_ok else "disabled")
+            except tk.TclError:
+                pass
+
+    def allow_religion(self, ok):
+        """Religion colours only where the game has religions (Medieval II)."""
+        if bool(ok) != self._religion_ok:
+            self._religion_ok = bool(ok)
+            self._fill_modes()
+
+    def _mode_picked(self):
+        label = self.cb_mode.get()
+        self.v_mode.set(next(k for k, l in self._modes() if l == label))
+        self._mode_changed()
+
+    def _mode_changed(self, redraw=True):
+        m = self.v_mode.get()
+        self.v_pol.set(m != "none")
+        self.v_dip.set(m == "diplomacy")
+        self.v_rel.set(m == "religion")
+        if hasattr(self, "cb_mode"):
+            self.cb_mode.set(dict(self._modes()).get(m, ""))
+        self._legend_key = None
+        if redraw:
+            self._relayer()
+
     def _layers_label(self):
-        on = [n for n, v in (("political", self.v_pol), ("borders", self.v_borders), ("names", self.v_names),
-                             ("ports", self.v_ports), ("characters", self.v_chars), ("resources", self.v_res),
-                             ("diplomacy", self.v_dip)) if v.get()]
+        mode = {"political": "political", "diplomacy": "diplomacy", "religion": "religion"}.get(
+            self.v_mode.get()) if self.v_pol.get() else None
+        on = ([mode] if mode else []) + [n for n, v in (
+            ("borders", self.v_borders), ("names", self.v_names), ("ports", self.v_ports),
+            ("characters", self.v_chars), ("resources", self.v_res)) if v.get()]
         self.lbl_layers.configure(text="shown: " + (", ".join(on) or "the ground only"))
 
     def _regions_toggled(self):
@@ -285,10 +344,15 @@ class MapView(ttk.Frame):
                 row(label, char(k))
             self.draggable = keep
             head("Map")
-            row("political: land in its owner's colour", lambda x, yy: lc.create_rectangle(
-                x - 9, yy - 7, x + 9, yy + 7, fill=red, outline="#401010", width=2))
-            row("rebel land: barely tinted", lambda x, yy: lc.create_rectangle(
-                x - 9, yy - 7, x + 9, yy + 7, fill="#9a9a9a", outline=""))
+            if self.tint is not None and self.tint_legend:
+                for label, rgb in self.tint_legend:
+                    row(label, lambda x, yy, rgb=rgb: lc.create_rectangle(
+                        x - 9, yy - 7, x + 9, yy + 7, fill="#%02x%02x%02x" % tuple(rgb), outline="#303030"))
+            else:
+                row("political: land in its owner's colour", lambda x, yy: lc.create_rectangle(
+                    x - 9, yy - 7, x + 9, yy + 7, fill=red, outline="#401010", width=2))
+                row("rebel land: barely tinted", lambda x, yy: lc.create_rectangle(
+                    x - 9, yy - 7, x + 9, yy + 7, fill="#9a9a9a", outline=""))
             row("the tile under the mouse", lambda x, yy: lc.create_rectangle(
                 x - 8, yy - 8, x + 8, yy + 8, outline="white", width=2))
             row("drop here: fine", lambda x, yy: lc.create_rectangle(
@@ -318,12 +382,14 @@ class MapView(ttk.Frame):
              region_mode=False, paint_overlay=None, on_paint=None, on_pick=None, brush=1, region_points=(),
              region_painted=None, region_colours=None, borders=True, ghost=None, locked=None,
              resources=None, check_res=None, on_res_move=None, on_res_click=None, res_sel=None, new_land=None,
-             plain=False, labels=None, forts=None):
+             plain=False, labels=None, forts=None, tint=None, tint_legend=None):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
         first = self.cmap is None or self.cmap is not cmap
         self.cmap, self.owners, self.colours = cmap, dict(owners), colours
+        # a colour mode's own land colours {region: rgb} (religion), drawn in place of the owners'
+        self.tint, self.tint_legend = (dict(tint) if tint else None), list(tint_legend or [])
         self.faction, self.chosen, self.on_city = faction, set(chosen), on_city
         self.chars, self.draggable = list(chars), set(draggable)
         self.on_char_move, self.check_tile = on_char_move, check_tile
@@ -471,7 +537,8 @@ class MapView(ttk.Frame):
         if self.v_grid.get() and self.z >= 10:
             self._grid(cw, ch)
         self._markers(cw, ch)
-        key = (tuple(sorted({r["kind"] for r in self.resources})), self.v_res.get(), self.v_forts.get())
+        key = (tuple(sorted({r["kind"] for r in self.resources})), self.v_res.get(), self.v_forts.get(),
+               tuple(self.tint_legend) if self.tint is not None else None)
         if key != getattr(self, "_legend_key", None):
             self._legend_key = key
             self._draw_legend()
@@ -509,7 +576,9 @@ class MapView(ttk.Frame):
         elif not self.v_pol.get() and not self.v_borders.get():
             pol = Image.new("RGBA", (self.cmap.w, self.cmap.h), (0, 0, 0, 0))
         else:
-            if self.v_pol.get():
+            if self.v_pol.get() and self.tint is not None:
+                pol = self.cmap.political({r: r for r in self.tint}, self.tint, None, borders=self.v_borders.get())
+            elif self.v_pol.get():
                 pol = self.cmap.political(self.owners, self.colours, self.faction, borders=self.v_borders.get(),
                                           painted=self.region_painted)
             else:                                   # the borders alone

@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **Map colour modes and a religion map**: a **Colours** choice on the map's bar (and in Layers) - Political,
+  Diplomacy, Religion (Medieval II), None - one at a time instead of colour layers that hid each other. Religion
+  colours each region by its main religion (changes made in Religions... not written yet count), paler where the
+  majority is small; the legend lists the religions with their number of regions.
 - **Traits and retinue** (Character editor, and Tools; both games): the traits and ancillaries themselves - who
   can have a trait, each level's name and description as players see them, the points it needs and its effects;
   an ancillary's name, text, picture (its own when it shared one), barred cultures and effects; a new trait or

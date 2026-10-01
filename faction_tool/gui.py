@@ -2457,12 +2457,47 @@ class App(tk.Tk):
                                   "check": lambda xy: self.mod.tile_problem(self.v_campaign.get(), xy, rtw_kind, army,
                                                                             armies_at)}
         self._map_labels = self.culture_labels(owners, me)
+        self.map_view.allow_religion(self._m2())
+        if self.map_view.v_rel.get():                # Religion colours: each region in its main religion's colour
+            region_kw["tint"], region_kw["tint_legend"] = self.religion_tint()
         self.map_view.load(self._cmap, owners, colours, me, self.chosen, on_city=self.map_city, chars=chars,
                            labels=self._map_labels,
                            draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols,
                            on_place=on_place,
                            places=self.place_moves, check_place=check_place, on_place_move=place_moved,
                            locked=self._locked_hint, forts=self.strat.forts if self.strat else [], **region_kw)
+
+    RELIGION_COLOURS = {"catholic": (214, 170, 60), "orthodox": (70, 110, 190), "islam": (60, 150, 70),
+                        "pagan": (140, 95, 50), "heretic": (140, 40, 140)}
+
+    def religion_tint(self):
+        """({region: rgb}, [(legend line, rgb)]) of the religion colours: each region in the colour of its main
+        religion (its descr_regions line, or the share set in Religions... not written yet), paler the smaller that
+        share is."""
+        import colorsys
+        from .religions import names as religion_names
+        regions = self.mod.regions(self.v_campaign.get())
+        known = list(religion_names(self.mod))
+        def colour(rel):
+            if rel in self.RELIGION_COLOURS:
+                return self.RELIGION_COLOURS[rel]
+            h = (sum(map(ord, rel)) * 0.137) % 1.0
+            return tuple(int(c * 255) for c in colorsys.hsv_to_rgb(h, 0.6, 0.8))
+        tint, count = {}, {}
+        for r, v in regions.items():
+            rel = dict(self.region_religions.get(r) or v.get("religions") or {})
+            if not rel:
+                continue
+            main, share = max(rel.items(), key=lambda kv: kv[1])
+            if share <= 0:
+                continue
+            k = 0.45 + 0.55 * min(share, 100) / 100.0             # a small majority: paler
+            tint[r] = tuple(int(c * k + 200 * (1 - k)) for c in colour(main))
+            count[main] = count.get(main, 0) + 1
+        legend = [("%s: %d region(s)" % (rel, count[rel]), colour(rel))
+                  for rel in sorted(count, key=lambda x: (known.index(x) if x in known else 99, x))]
+        legend.append(("paler: a smaller majority", (200, 200, 200)))
+        return tint, legend
 
     def _locked_hint(self, ch):
         """Why a character on the map cannot be dragged, and what to do instead."""
