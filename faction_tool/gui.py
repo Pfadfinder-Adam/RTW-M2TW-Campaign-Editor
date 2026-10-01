@@ -49,6 +49,8 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
                                   armies, agents, fleets), Map (click towns, drag characters)
   change the campaign map ....... Map tab (move towns and ports, paint regions, resources)
                                   and the Terrain editor (ground, rivers, climates, heights)
+  a building / garrisons in many  Tools > Buildings and garrisons for many towns..., or the Map:
+    towns at once ............... Pick towns, click towns (yellow), right click
   change a unit or a building ... Unit editor / Building editor
   make a new unit or building ... Unit / Building editor: New unit (New building) step by step...
   change a unit's look .......... Unit editor: Battle model - View in 3D..., Replace model...
@@ -681,6 +683,7 @@ class App(tk.Tk):
                            add="+")
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
         self.map_view.on_menu = self.map_menu
+        self.map_view.on_pick_menu = self.pick_menu
         self.map_view.on_tool = self.map_tool
         self.v_borders = self.map_view.v_borders
         self.map_view.pack(fill="both", expand=True)
@@ -736,6 +739,7 @@ class App(tk.Tk):
         menu.add_command(label="The game's log in plain words (what went wrong in the game)...",
                          command=self.game_log_window)
         menu.add_command(label="Settlement names by culture (every town)...", command=self.culture_names_table)
+        menu.add_command(label="Buildings and garrisons for many towns...", command=lambda: self.mass_towns())
         menu.add_command(label="Make the campaign map 3 x bigger (alpha)...", command=self.upscale_map)
         menu.add_command(label="Check and install a pack...", command=self.install_pack)
         menu.add_command(label="Campaign rules (ages, agents, towns, diplomacy, unit sizes)...",
@@ -835,6 +839,11 @@ class App(tk.Tk):
         panes.add(side, weight=0)
         ttk.Label(side, text="Your towns", font=("", 10, "bold")).pack(anchor="w")
         ttk.Label(side, text="give it towns on the Map (a click on a town)", foreground="#666").pack(side="bottom", anchor="w")
+        from .gui_util import tip
+        tip(ttk.Button(side, text="Many towns at once...", command=lambda: self.mass_towns()),
+            "Add a building to many towns of any owner at once (or take one out), or give them garrisons - "
+            "towns picked by owner, level, city / castle. Also on the Map: 'Pick towns', then a right click.").pack(
+            side="bottom", anchor="w", pady=(4, 2))
         self.lb_build = tk.Listbox(side, width=30, height=12, exportselection=False)
         self.lb_build.pack(fill="both", expand=True)
         self.lb_build.bind("<<ListboxSelect>>", lambda e: self.load_buildings())
@@ -3654,6 +3663,39 @@ class App(tk.Tk):
                 names.add(n)
         names |= {c["name"] for c in self.field}
         return names
+
+    def mass_towns(self, picked=(), tab="building"):
+        """The window 'Buildings and garrisons for many towns' (the towns picked on the Map already chosen)."""
+        if not self.mod:
+            messagebox.showinfo(APP, "Load a mod first.")
+            return
+        from .gui_masstown import MassTownWindow
+        try:
+            MassTownWindow(self, picked, tab)
+        except Exception as e:
+            log.write("Many towns: %s" % e)
+            messagebox.showerror(APP, "Could not read the towns: %s" % e)
+
+    def pick_menu(self, picked, region):
+        """The Map's right-click menu while 'Pick towns' is on."""
+        mv = self.map_view
+        n = len(picked)
+        items = []
+        if region:
+            town = self._cmap.info.get(region, {}).get("settlement", region) if self._cmap else region
+            owner = mv.owners.get(region)
+            items.append(("%s (%s)" % (town, owner or "no owner"), None))
+            items.append(("Unpick it" if region in picked else "Pick it", lambda: mv.toggle_pick(region)))
+            if owner:
+                items.append(("Pick every town of %s" % owner,
+                              lambda: mv.pick_many([r for r, o in mv.owners.items() if o == owner])))
+            items.append((None, None))
+        items.append(("Add a building to the %d picked town(s)..." % n,
+                      (lambda: self.mass_towns(sorted(picked), "building")) if n else None))
+        items.append(("Garrisons for the %d picked town(s)..." % n,
+                      (lambda: self.mass_towns(sorted(picked), "garrison")) if n else None))
+        items.append(("Unpick all", (lambda: mv.pick_many(None)) if n else None))
+        return items
 
     def map_menu(self, xy, region, cid):
         """The Map's right-click menu: [(label, command)] for what can be done at that spot."""

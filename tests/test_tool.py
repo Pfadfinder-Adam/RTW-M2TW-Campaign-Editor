@@ -2456,6 +2456,64 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "faction_tool_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
 
+    def test_buildings_and_garrisons_for_many_towns(self):
+        import random
+        from faction_tool import masstown as M
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "category\tcavalry\nattributes\tgeneral_unit\nstat_cost\t1, 400, 200, 0, 0, 400\n"
+            "ownership\talpha").replace(
+            "ownership\tslave", "category\tinfantry\nstat_cost\t1, 100, 100, 0, 0, 100\nownership\tslave"))
+        write(os.path.join(d, "export_descr_buildings.txt"), """building market
+{
+    levels stall shop
+    {
+        stall requires factions { alpha, }
+        {
+            settlement_min village
+        }
+        shop requires factions { alpha, }
+        {
+            settlement_min city
+        }
+    }
+}
+""")
+        mod = ModData(self.root)
+        strat = mod.campaign_file("test", "descr_strat.txt")
+        before = open(strat, "rb").read()
+        towns = {t["region"]: t for t in M.towns(mod, "test")}
+        self.assertEqual((towns["A_R"]["owner"], towns["A_R"]["level"], towns["A_R"]["units"]), ("alpha", "town", 1))
+        self.assertEqual(towns["B_R"]["name"], "Btown")
+        known = M.known_buildings(mod)
+        self.assertEqual(M.building_fit(known, towns["A_R"], "market", "stall")[0], "add")
+        self.assertIn("needs a city", M.building_fit(known, towns["A_R"], "market", "shop")[1])
+        self.assertIn("may not build", M.building_fit(known, towns["B_R"], "market", "stall")[1])
+        self.assertEqual(M.building_fit(known, towns["B_R"], "market", "stall", any_owner=True)[0], "add")
+        # garrisons: only the units the owner may have, generals left out; 2..6 under the cap
+        self.assertEqual(M.garrison_pool(mod, "slave"), [("rebel spear", 100)])
+        self.assertEqual(M.garrison_pool(mod, "alpha"), [])
+        rng = random.Random(3)
+        for _ in range(30):
+            g = M.random_garrison([("a", 100), ("b", 300)], 2, 6, 500, rng)
+            self.assertTrue(2 <= len(g) <= 5 and sum({"a": 100, "b": 300}[u] for u in g) <= 500)
+        plan = Plan(mod, "towns", "towns", {})
+        M.apply(plan, "test", {"build": {"A_R": ("market", "stall"), "B_R": ("market", "stall")},
+                               "garrisons": {"B_R": ["rebel spear", "rebel spear"]}, "add_units": True})
+        plan.apply()
+        mod = ModData(self.root)
+        towns = {t["region"]: t for t in M.towns(mod, "test")}
+        self.assertEqual(towns["A_R"]["buildings"], [("market", "stall")])
+        self.assertEqual(towns["B_R"]["units"], 3)                   # Grog's spear + the two added
+        self.assertEqual(M.building_fit(M.known_buildings(mod), towns["A_R"], "market", "stall")[1], "has it already")
+        plan = Plan(mod, "towns", "towns", {})
+        M.apply(plan, "test", {"remove": {"A_R": "market"}})
+        plan.apply()
+        self.assertEqual([t["buildings"] for t in M.towns(ModData(self.root), "test")][0], [])
+        for b in backups(ModData(self.root)):
+            restore(ModData(self.root), b)
+        self.assertEqual(open(strat, "rb").read(), before)
+
     def test_bring_units_and_buildings_from_another_mod(self):
         # straight from another mod's folder (no .zip): a unit whose recruit place is moved to a building the
         # user picks, and a building chain whose names are taken here - renamed with its levels, texts and

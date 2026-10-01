@@ -52,6 +52,9 @@ class MapView(ttk.Frame):
         self.status = status
         bar = ttk.Frame(self, padding=(0, 0, 0, 4))
         bar.pack(fill="x")
+        # the switches wrap onto a second row when the window is narrow (the zoom buttons stay on the right)
+        lbar = ttk.Frame(bar)
+        lbar.pack(side="left", fill="x", expand=True)
         # the layers, in one menu: what is drawn on the map
         self.v_pol = tk.BooleanVar(value=True)
         self.v_borders = tk.BooleanVar(value=True)
@@ -85,7 +88,7 @@ class MapView(ttk.Frame):
                                       "rivers": self.v_rivers.get(), "grid": self.v_grid.get()})
             self.render()
         relayer = lambda: self.on_layers() if self.on_layers else self.render()
-        lb = ttk.Menubutton(bar, text="Layers")
+        lb = ttk.Menubutton(lbar, text="Layers")
         lm = tk.Menu(lb, tearoff=False)
         self._relayer = relayer
         for key, label in MODES:
@@ -106,18 +109,26 @@ class MapView(ttk.Frame):
         lb["menu"] = lm
         lb.pack(side="left")
         # the colour mode, in sight on the bar (also in Layers)
-        ttk.Label(bar, text="Colours").pack(side="left", padx=(10, 2))
-        self.cb_mode = ttk.Combobox(bar, state="readonly", width=19)
+        ttk.Label(lbar, text="Colours").pack(side="left", padx=(10, 2))
+        self.cb_mode = ttk.Combobox(lbar, state="readonly", width=19)
         self.cb_mode.pack(side="left")
         self.cb_mode.bind("<<ComboboxSelected>>", lambda e: self._mode_picked())
         self._fill_modes()
         # the two modes that change what a click does, as switches of their own
-        ttk.Checkbutton(bar, text="Edit regions", variable=self.v_regions,
+        ttk.Checkbutton(lbar, text="Edit regions", variable=self.v_regions,
                         command=self._regions_toggled).pack(side="left", padx=(12, 4))
-        ttk.Checkbutton(bar, text="Edit resources", variable=self.v_res, command=relayer).pack(side="left", padx=4)
-        ttk.Checkbutton(bar, text="Edit forts, towers & wonders", variable=self.v_forts, command=relayer).pack(
+        ttk.Checkbutton(lbar, text="Edit resources", variable=self.v_res, command=relayer).pack(side="left", padx=4)
+        ttk.Checkbutton(lbar, text="Edit forts, towers & wonders", variable=self.v_forts, command=relayer).pack(
             side="left", padx=4)
-        self.lbl_layers = ttk.Label(bar, text="", foreground="#666")
+        # Pick towns: the ground only, a click picks / unpicks a town (yellow), a right click acts on them all
+        self.v_pick = tk.BooleanVar(value=False)
+        self.picked, self.on_pick_menu, self._before_pick = set(), None, None
+        from .gui_util import tip
+        tip(ttk.Checkbutton(lbar, text="Pick towns", variable=self.v_pick, command=self._pick_toggled),
+            "Pick towns for one job: the map shows the ground only, a click on a town picks it (yellow) or "
+            "unpicks it, a right click: add a building to all picked towns, give them garrisons, pick every "
+            "town of an owner.").pack(side="left", padx=4)
+        self.lbl_layers = ttk.Label(lbar, text="", foreground="#666")
         self.lbl_layers.pack(side="left", padx=8)
         for v in (self.v_pol, self.v_borders, self.v_names, self.v_ports, self.v_chars, self.v_res, self.v_dip,
                   self.v_regions, self.v_mode):
@@ -128,22 +139,25 @@ class MapView(ttk.Frame):
         b = ttk.Button(bar, text="-", width=3, command=lambda: self.zoom_by(-1))
         b.pack(side="right")
         from .gui_util import first
-        first(b, *bar.pack_slaves()[-3:-1][::-1])  # the zoom buttons keep their room; the hint is cut
-        ttk.Label(bar, text="wheel: zoom   left drag: map   right drag: markers   click a town: take / give",
-                  foreground="#666").pack(side="right", padx=12)
+        first(b, *bar.pack_slaves()[-3:-1][::-1])  # the zoom buttons keep their room
+        from .gui_util import hint
+        hint(bar, "Wheel: zoom.   Left drag: move the map.   Right drag: move markers (characters, towns, ports).   "
+                  "Click a town: take / give it.   Right click: what can be done there.").pack(side="right", padx=4)
         from . import settings
         self.v_legend = tk.BooleanVar(value=bool(settings.get("map_legend", True)))
-        ttk.Checkbutton(bar, text="Legend", variable=self.v_legend, command=self._legend_toggled).pack(
+        ttk.Checkbutton(lbar, text="Legend", variable=self.v_legend, command=self._legend_toggled).pack(
             side="left", padx=(4, 0), before=self.lbl_layers)
         # Find: a town, port, army, agent, fleet, unit, fort or resource by any part of its name
         self.v_find = tk.StringVar()
-        ttk.Label(bar, text="Find:").pack(side="left", padx=(12, 2), before=self.lbl_layers)
-        self.find_entry = ttk.Entry(bar, textvariable=self.v_find, width=22)
+        ttk.Label(lbar, text="Find:").pack(side="left", padx=(12, 2), before=self.lbl_layers)
+        self.find_entry = ttk.Entry(lbar, textvariable=self.v_find, width=22)
         self.find_entry.pack(side="left", before=self.lbl_layers)
         self.find_entry.bind("<KeyRelease>", self._find_typed)
         self.find_entry.bind("<Return>", lambda e: self._find_go(0))
         self.find_entry.bind("<Down>", lambda e: self._find_focus())
         self.find_entry.bind("<Escape>", lambda e: self._find_close())
+        from .gui_util import flow
+        flow(lbar)
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
         self._body = body
@@ -282,6 +296,44 @@ class MapView(ttk.Frame):
             ("borders", self.v_borders), ("names", self.v_names), ("ports", self.v_ports),
             ("characters", self.v_chars), ("resources", self.v_res)) if v.get()]
         self.lbl_layers.configure(text="shown: " + (", ".join(on) or "the ground only"))
+
+    def _pick_toggled(self):
+        """Pick towns on: the political colours, borders and characters go (the ground only) and come back after."""
+        if self.v_pick.get():
+            if self.v_regions.get():
+                self.v_regions.set(False)
+                self._regions_toggled()
+            self._before_pick = (self.v_mode.get(), self.v_borders.get(), self.v_chars.get())
+            self.v_mode.set("none")
+            self.v_borders.set(False)
+            self.v_chars.set(False)
+            self._mode_changed(redraw=False)
+            self.readout.configure(text="Pick towns: click towns to pick them (yellow), then a right click")
+        elif self._before_pick:
+            mode, borders, chars = self._before_pick
+            self._before_pick = None
+            self.v_mode.set(mode)
+            self.v_borders.set(borders)
+            self.v_chars.set(chars)
+            self._mode_changed(redraw=False)
+        self._relayer()
+
+    def toggle_pick(self, region):
+        self.picked ^= {region}
+        self._picked_changed()
+
+    def pick_many(self, regions):
+        """Pick these towns too (None: unpick all)."""
+        if regions is None:
+            self.picked = set()
+        else:
+            self.picked |= set(regions)
+        self._picked_changed()
+
+    def _picked_changed(self):
+        self.render()
+        self.readout.configure(text="%d town(s) picked - a right click: a building or garrisons for them all"
+                               % len(self.picked))
 
     def _regions_toggled(self):
         """Regions mode colours the land by region: the political colours and the
@@ -727,11 +779,16 @@ class MapView(ttk.Frame):
             owner = self.owners.get(region)
             rgb = REBELS if owner in (None, "slave") else self.colours.get(owner, REBELS)
             mine = region in self.chosen
+            picking = self.v_pick.get()
+            if picking:                                  # Pick towns: the picked ones yellow, the ring is theirs
+                mine = region in self.picked
+                if mine:
+                    rgb = (255, 212, 0)
             r = size / 2 + (2 if mine else 0)
             c.create_rectangle(sx - r, sy - r, sx + r, sy + r,
                                fill="" if owner is None else "#%02x%02x%02x" % rgb,    # hollow: no town at the start
-                               outline="#ffd400" if mine else "black", width=3 if mine else 1,
-                               tags=("city", "city:" + region))
+                               outline=("black" if picking else "#ffd400") if mine else "black",
+                               width=3 if mine else 1, tags=("city", "city:" + region))
             if r >= 6:
                 self._hall(sx, sy, size / 2, rgb, ("city", "city:" + region))
             if self.v_names.get() and (self.z >= 4 or mine):
@@ -1205,8 +1262,11 @@ class MapView(ttk.Frame):
         if not self.inside(xy):
             return
         town = self._town_under(e.x, e.y)
-        cid = self._char_under(e.x, e.y)
-        items = self.on_menu(town[1] if town else xy, town[0] if town else None, cid) or []
+        if self.v_pick.get() and self.on_pick_menu:
+            items = self.on_pick_menu(self.picked, town[0] if town else None) or []
+        else:
+            cid = self._char_under(e.x, e.y)
+            items = self.on_menu(town[1] if town else xy, town[0] if town else None, cid) or []
         m = tk.Menu(self, tearoff=0)
         for label, fn in items:
             if label is None:
@@ -1475,6 +1535,11 @@ class MapView(ttk.Frame):
             self.place_at(self.to_tile(e.x, e.y))
             return
         hit = self.canvas.find_overlapping(e.x - 2, e.y - 2, e.x + 2, e.y + 2)
+        if self.v_pick.get():
+            town = self._town_under(e.x, e.y)
+            if town:
+                self.toggle_pick(town[0])
+            return
         for item in reversed(hit):
             for tag in self.canvas.gettags(item):
                 if tag.startswith("city:") and self.on_city:

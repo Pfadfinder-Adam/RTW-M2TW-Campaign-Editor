@@ -561,36 +561,45 @@ def plan_tiles(plan, campaign):
     return tiles
 
 
-def _garrisons(plan, f, s, campaign):
+def _garrisons(plan, f, s, campaign, faction=None, picked=None, add=False):
     """Each picked garrison replaces the units of the army that holds the town
-    (a named character keeps his bodyguard); a town nobody holds gets a captain."""
-    picked = plan.opts.get("garrisons") or {}
+    (a named character keeps his bodyguard); a town nobody holds gets a captain.
+    faction / picked: another owner's towns (Buildings and garrisons for many towns); add: the units join
+    the army that holds the town (up to its 20) instead of replacing it."""
+    faction = faction or plan.new
+    picked = plan.opts.get("garrisons") if picked is None else picked
     if not picked:
         return
-    fb = s.faction(plan.new)
+    fb = s.faction(faction)
     tiles = plan_tiles(plan, campaign)
-    rebels = plan.new == "slave"               # a rebel captain: a sub_faction and a name from its list
-    pool = plan.name_pool(plan.new) or {}
+    rebels = faction == "slave"                # a rebel captain: a sub_faction and a name from its list
+    pool = plan.name_pool(faction) or {}
     used = {c.name.split()[0] for x in s.factions for c in x.characters if c.name}
     # the faction's family records too (egypt's Heruben is a character_record: a captain Heruben is skipped
     # by the game as a duplicate), and the names of characters this edit adds (a new army named Heruben: no captain Heruben too)
     from .strat import faction_names
-    used |= {n.split()[0] for n in faction_names(s, plan.new) if n}
+    used |= {n.split()[0] for n in faction_names(s, faction) if n}
     used |= {(c.get("name") or "").split()[0] for c in plan.opts.get("characters") or [] if c.get("name")}
     men = first_names(pool, "general")
     captains = [n for n in men if n not in used] or men
     jobs = []
     for region, types in picked.items():
         if region not in [st.region for st in fb.settlements]:
-            raise ValueError("%s is not a town of %s" % (region, plan.new))
+            raise ValueError("%s is not a town of %s" % (region, faction))
         xy = tiles.get(region)
         holder = next((c for c in fb.characters if c.xy == xy and _has_army(s.lines[c.start:c.end])), None)
-        room = MAX_UNITS - (1 if holder is not None and holder.named else 0)
+        if add and holder is not None:
+            room = MAX_UNITS - len(_units(s.lines[holder.start:holder.end]))
+        else:
+            room = MAX_UNITS - (1 if holder is not None and holder.named else 0)
+        if len(types) > room:
+            plan.warn(f, "%s: only %d of the %d unit(s) fit - an army holds %d at most" % (
+                region, max(room, 0), len(types), MAX_UNITS))
         lines = ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % t for t in types][:room]
         jobs.append((region, holder, lines, xy))
     for region, holder, lines, xy in sorted(jobs, key=lambda j: -(j[1].start if j[1] else fb.end)):
         if not lines:                                   # emptied by hand
-            if holder is None:
+            if holder is None or add:
                 continue
             if not holder.named:                        # a captain with nothing to lead goes
                 del f.raw[holder.start:holder.end]
@@ -599,14 +608,18 @@ def _garrisons(plan, f, s, campaign):
         if holder is not None:
             chunk = f.texts()[holder.start:holder.end]
             units = [i for i, l in enumerate(chunk) if tokens(l)[:1] == ["unit"]]
-            keep = units[:1] if holder.named else []
+            keep = units if add else units[:1] if holder.named else []
             first = units[0] if units else next(i for i, l in enumerate(chunk) if tokens(l)[:1] == ["army"]) + 1
             new = [l for i, l in enumerate(chunk) if i not in units or i in keep]
             at = first + len(keep)
             new[at:at] = lines
             f.raw[holder.start:holder.end] = [f.make(l) for l in new]
-            plan.note(f, "%s: %s holds the town with %d unit(s)%s" % (
-                region, holder.name, len(lines), " + his bodyguard" if keep else ""))
+            if add:
+                plan.note(f, "%s: %d unit(s) join %s's army (%d now)" % (region, len(lines), holder.name,
+                                                                         len(keep) + len(lines)))
+            else:
+                plan.note(f, "%s: %s holds the town with %d unit(s)%s" % (
+                    region, holder.name, len(lines), " + his bodyguard" if keep else ""))
         else:
             sub = None
             if rebels:
@@ -620,7 +633,7 @@ def _garrisons(plan, f, s, campaign):
                 used.add(name)
             else:
                 if not captains:
-                    raise ValueError("%s: no name in %s's name list for a captain" % (region, plan.new))
+                    raise ValueError("%s: no name in %s's name list for a captain" % (region, faction))
                 name = captains.pop(0)
             block = [character_line(f, name, "general", 30, xy, sub_faction=sub), "army"] + lines + [""]
             f.insert(_chars_at(f, fb), block)

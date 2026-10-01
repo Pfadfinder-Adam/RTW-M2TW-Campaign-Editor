@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+- The Map's switches wrap onto a second row in a narrow window (Find was cut off); the mouse how-to is a '?'.
 - **Long explanations fold into a '?'**: the Terrain editor's hint under each brush, and the intro texts of the
   Roster, Religions, Settlements, Traits, Events, Campaign rules, Art, pack and family tree panels show their first
   sentence; the whole text when the mouse rests on it or on its '?' - the map and the lists get the room.
@@ -10,6 +11,13 @@
   minute.
 
 ### Added
+- **Buildings and garrisons for many towns** (Tools, the Buildings tab's *Many towns at once...*, and the Map's new
+  **Pick towns**: the ground only, a click picks a town in yellow, a right click acts on all of them): a building
+  level added to (or a chain taken out of) many towns of any owner at once, picked by owner, level and city / castle;
+  each town checked as the game would see it (too small, a castle's building in a city, the owner's faction list, no
+  port) and left out with the reason. Garrisons drawn at random - 2 to 6 units per town or any range - from the units
+  each owner may recruit (a rebel town: the nearest rebel armies' units), under an upkeep limit per town; added to
+  the army in the town or replacing it. Asked for by a Stainless Steel modder.
 - **Tools > The game's log in plain words**: the game's newest `system.log.txt` for this mod (found anywhere in the
   game folder) read and explained, both games: a crash first, then errors grouped (one kind once, however many units
   or factions it names), each with what it means and what to do, and for a Script Error the mod's line as it reads
