@@ -84,22 +84,75 @@ def _read_tail(path, cap=TEXT_CAP):
     return text
 
 
+def game_logs(game, mod_dir=None, keep=3):
+    """The game's system.log.txt files worth sending, newest first: the mod's own (its folder and its logs/), the
+    game folder's and its logs/, and those of every other mod in the game folder (Rome: <game>/<mod>/, Medieval II:
+    <game>/mods/<mod>/; also bi/ and alexander/) - the game writes the log where the mod was started from, so it is
+    looked for everywhere one level down; at most `keep`, the mod's own always first."""
+    seen, mine, others = set(), [], []
+
+    def add(folder, own=False):
+        for f in (os.path.join(folder, "system.log.txt"), os.path.join(folder, "logs", "system.log.txt")):
+            k = os.path.normcase(os.path.abspath(f))
+            if k in seen or not os.path.isfile(f):
+                continue
+            seen.add(k)
+            (mine if own else others).append(f)
+    if mod_dir:
+        add(mod_dir, own=True)
+    add(game)
+    for parent in (game, os.path.join(game, "mods")):
+        try:
+            names = sorted(os.listdir(parent))
+        except OSError:
+            continue
+        for n in names:
+            d = os.path.join(parent, n)
+            if os.path.isdir(d) and n.lower() not in ("data", "faction_tool_backups"):
+                add(d)
+    newest = lambda fs: sorted(fs, key=lambda f: -os.path.getmtime(f))
+    return (newest(mine) + newest(others))[:keep]
+
+
+def _age(path):
+    """'5 minutes ago', '3 hours ago', '2 days ago'."""
+    import time
+    s = max(0, time.time() - os.path.getmtime(path))
+    for size, word in ((86400, "day"), (3600, "hour"), (60, "minute")):
+        if s >= size:
+            n = int(s // size)
+            return "%d %s%s ago" % (n, word, "s" if n != 1 else "")
+    return "just now"
+
+
+LOG_HOWTO = ("The game writes system.log.txt only while its log is on. REX and M2EX keep it on. The original games "
+             "need two lines in the preference file they start with (Rome: RomeTW.preference.cfg - or the mod's "
+             ".cfg; Medieval II: medieval2.preference.cfg - or the mod's .cfg), under [log]:\n"
+             "    [log]\n    to = logs/system.log.txt\n    level = * error\n"
+             "Start the game again, do what went wrong, then send the report: the log is in the game's (or the "
+             "mod's) logs folder.")
+
+
 def found(game=None, mod_dir=None):
     """[(path, name in the zip, what it is)] of the logs a report can carry: the tool's log (+ .old), the game's
     system.log.txt (game folder, mod folder, their logs/), the newest crash report of <game>/reports (REX) - its
     name without the player's name."""
     out = []
+    if not game:
+        try:
+            from . import settings
+            game = settings.get("game") or None            # no mod loaded: the game folder used last
+        except Exception:
+            game = None
     p = log.path()
     for f, what in ((p, "the editor's log"), ((p or "") + ".old", "the editor's older log")):
         if p and os.path.isfile(f):
             out.append((f, os.path.basename(f), what))
     if game:
-        folders = [game, os.path.join(game, "logs")] + ([mod_dir, os.path.join(mod_dir, "logs")] if mod_dir else [])
-        for folder in folders:
-            f = os.path.join(folder, "system.log.txt")
-            if os.path.isfile(f) and all(os.path.normcase(f) != os.path.normcase(q) for q, _, _ in out):
-                rel = os.path.relpath(f, game).replace("\\", "/")
-                out.append((f, rel if not rel.startswith("..") else "mod_system.log.txt", "the game's log"))
+        for f in game_logs(game, mod_dir):
+            rel = os.path.relpath(f, game).replace("\\", "/")
+            out.append((f, rel if not rel.startswith("..") else "mod_system.log.txt",
+                        "the game's log, written %s" % _age(f)))
         reports = os.path.join(game, "reports")
         if os.path.isdir(reports):
             txts = [os.path.join(reports, n) for n in os.listdir(reports) if n.lower().endswith(".txt")]

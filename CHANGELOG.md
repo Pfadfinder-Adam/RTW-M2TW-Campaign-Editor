@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+- **Reports came without the game's log**: the report window looked for `system.log.txt` only in the game folder
+  and the loaded mod's folder. It now looks in every mod folder of the game (Rome: `<game>/<mod>/`, Medieval II:
+  `<game>/mods/<mod>/`, also `bi/` and `alexander/`, each with its `logs/`), and with no mod loaded in the game
+  folder used last - the mod's own log first, then the newest, each with how long ago it was written. When none is
+  found, "How to switch the game's log on" says which lines the game's preference file needs.
+
 ## 0.28.0 - 2026-10-01
 
 ### Added

@@ -71,8 +71,14 @@ def open_report(app, message="", kind="bug"):
         ttk.Checkbutton(box, variable=v, text="%s - %s (%d KB)" % (name, what, os.path.getsize(f) // 1024)).pack(
             anchor="w")
     if not any(n.endswith("system.log.txt") for _, n, _ in files):
-        ttk.Label(box, foreground="#a60", text="No system.log.txt of the game found%s." % (
-            " - load the mod first" if not app.mod else " in %s" % game)).pack(anchor="w")
+        row = ttk.Frame(box)
+        row.pack(anchor="w", fill="x")
+        ttk.Label(row, foreground="#a60", text="No system.log.txt of the game found%s - without it a game crash is "
+                  "guesswork." % (" (load the mod first)" if not app.mod and not game else
+                                  " in %s or its mods" % (game or settings.get("game") or "the game folder"))
+                  ).pack(side="left")
+        ttk.Button(row, text="How to switch the game's log on",
+                   command=lambda: messagebox.showinfo(APP, report.LOG_HOWTO, parent=w)).pack(side="left", padx=6)
     def kind_changed():
         lbl_prompt.configure(text=PROMPTS[v_kind.get()])
         for v, _ in ticks:                         # an idea needs no logs (they can still be ticked)

@@ -3823,6 +3823,24 @@ building smith
         self.assertIn("reports/report-7-26_09_27.txt", names)        # the newest, without the nick
         self.assertEqual(len([n for n in names if n.startswith("reports/")]), 1)
 
+    def test_report_finds_the_game_logs(self):
+        """The game writes system.log.txt where the mod was started from: the report finds the mod's own first, then
+        the newest elsewhere in the game folder (a Rome mod folder, Medieval II's mods/<mod>/logs), at most 3."""
+        from faction_tool import report
+        game = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, game)
+        old = os.path.join(game, "logs", "system.log.txt")
+        hlr = os.path.join(game, "HLR", "logs", "system.log.txt")
+        mine = os.path.join(game, "mods", "mine", "logs", "system.log.txt")
+        for i, p in enumerate((old, hlr, mine)):
+            write(p, "log %d" % i)
+            os.utime(p, (1000 + i, 1000 + i))
+        os.utime(hlr, (5000, 5000))                                    # the newest of the others
+        got = report.game_logs(game, os.path.join(game, "mods", "mine"))
+        self.assertEqual(got, [mine, hlr, old])
+        self.assertEqual(report.game_logs(game), [hlr, mine, old])                # no mod: newest first
+        self.assertIn("[log]", report.LOG_HOWTO)
+
     def test_report_is_anonymous_and_sent(self):
         import base64
         import http.server
