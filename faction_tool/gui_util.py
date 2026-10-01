@@ -305,3 +305,69 @@ def hint(parent, text, **kw):
     lbl = ttk.Label(parent, text=" ? ", foreground="#2050c0", cursor="question_arrow", font=("", 9, "bold"))
     Tip(lbl, text, **kw)
     return lbl
+
+
+class StepWindow(tk.Toplevel):
+    """A window that walks through steps: '1 Start  [2 Names]  3 ...' on top, the step's title, its body, and
+    < Back / Next > below (Back and Next keep what was typed). A subclass gives steps [(title, fn)] to
+    make_steps; fn fills self.body; self._collect (set by a step) reads its widgets back before leaving it;
+    leaving(step) runs after that; the last step's Next is finish_text and calls finish()."""
+    finish_text = "Finish"
+
+    def make_steps(self, steps):
+        self.step, self.steps = 0, steps
+        self._collect = None
+        outer = ttk.Frame(self, padding=10)
+        outer.pack(fill="both", expand=True)
+        self.crumbs = ttk.Label(outer, foreground="#555")
+        self.crumbs.pack(anchor="w")
+        self.head = ttk.Label(outer, font=("", 12, "bold"))
+        self.head.pack(anchor="w", pady=(2, 6))
+        self.body = ttk.Frame(outer)
+        self.body.pack(fill="both", expand=True)
+        nav = ttk.Frame(outer)
+        nav.pack(fill="x", pady=(8, 0))
+        self.b_back = ttk.Button(nav, text="< Back", command=lambda: self.go(-1))
+        self.b_back.pack(side="left")
+        self.b_next = ttk.Button(nav, text="Next >", command=lambda: self.go(1))
+        self.b_next.pack(side="left", padx=4)
+        ttk.Button(nav, text="Cancel", command=self.destroy).pack(side="right")
+
+    def collect(self):
+        """What the step on show holds, into the window's state (called before leaving it)."""
+        fn = self._collect
+        self._collect = None
+        if fn:
+            fn()
+
+    def leaving(self, step):
+        """Called after a step's widgets were read, before moving on."""
+
+    def finish(self):
+        """The last step's button."""
+
+    def go(self, d):
+        self.collect()
+        if self.leaving(self.step) is False:          # the step said no: stay (it told the user why)
+            return self.show()
+        if d > 0 and self.step == len(self.steps) - 1:
+            return self.finish()
+        self.step = max(0, min(len(self.steps) - 1, self.step + d))
+        self.show()
+
+    def show(self):
+        for w in self.body.winfo_children():
+            w.destroy()
+        self.crumbs.configure(text="   ".join(("[%d %s]" if i == self.step else "%d %s") % (i + 1, t)
+                                            for i, (t, _) in enumerate(self.steps)))
+        title, fn = self.steps[self.step]
+        self.head.configure(text="Step %d of %d: %s" % (self.step + 1, len(self.steps), title))
+        self.b_back.state(["disabled"] if self.step == 0 else ["!disabled"])
+        self.b_next.configure(text=self.finish_text if self.step == len(self.steps) - 1 else "Next >")
+        self.b_next.state(["!disabled"])
+        fn()
+
+    def _note(self, text):
+        ttk.Label(self.body, text=text, wraplength=780, justify="left", foreground="#555").pack(anchor="w",
+                                                                                                pady=(0, 6))
+

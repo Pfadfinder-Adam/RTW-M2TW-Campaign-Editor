@@ -472,6 +472,30 @@ def copy_unit(plan, src_type, new_type, new_dict, recruit=True, texts=None, owne
             plan.note(e, "%s recruited where %s is (%d line(s))" % (new_type, src_type, n))
 
 
+def renamed_chain_lines(src_lines, src_chain, new_chain, level_names):
+    """A chain block's lines with the chain and its levels renamed ({old level: new}) where they are names: the
+    'building', 'levels' and 'upgrades' lines, each level's own head, and the lines inside an upgrades list. Other
+    lines (a requires naming another chain, a recruit line) stay as they are. Used by copy_building and by moving a
+    chain into another mod (packs.import_buildings)."""
+    import re
+    words = dict(level_names)
+    words[src_chain] = new_chain
+
+    def swap(text):
+        return re.sub(r"\b[A-Za-z0-9_]+\b", lambda m: words.get(m.group(0), m.group(0)), text)
+    lines = []
+    for text in src_lines:
+        code = strip_comment(text).strip()
+        head = code.split()[:1]
+        if head in (["building"], ["levels"], ["upgrades"]) or (head and head[0] in level_names) or \
+                (lines and strip_comment(lines[-1]).strip().split()[:1] == ["upgrades"]) or \
+                (head and all(w in level_names for w in code.split())):
+            lines.append(swap(text))
+        else:
+            lines.append(text)
+    return lines
+
+
 def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=None, pictures=None):
     """A new building chain: src_chain's block copied under new_chain with its levels
     renamed by level_names {old: new} (in 'levels', their own blocks and 'upgrades'),
@@ -500,22 +524,7 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
             raise ValueError("level name '%s': letters, digits and _ only" % new)
         if new in taken:
             raise ValueError("a level '%s' exists already" % new)
-    words = dict(level_names)
-    words[src_chain] = new_chain
-
-    def swap(text):
-        return re.sub(r"\b[A-Za-z0-9_]+\b", lambda m: words.get(m.group(0), m.group(0)), text)
-    lines = []
-    for i in range(src[1], src[2]):
-        text = f.text(i)
-        code = strip_comment(text).strip()
-        head = code.split()[:1]
-        if head in (["building"], ["levels"], ["upgrades"]) or (head and head[0] in level_names) or \
-                (lines and strip_comment(lines[-1]).strip().split()[:1] == ["upgrades"]) or \
-                (head and all(w in level_names for w in code.split())):
-            lines.append(swap(text))
-        else:
-            lines.append(text)
+    lines = renamed_chain_lines([f.text(i) for i in range(src[1], src[2])], src_chain, new_chain, level_names)
     new_levels = set(level_names.values())
     if factions:
         for i, text in enumerate(lines):

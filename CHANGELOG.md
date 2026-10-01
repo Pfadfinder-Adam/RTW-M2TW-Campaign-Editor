@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+- **Bring units and buildings from another mod** (asked by modders: moving them was hard): **Bring from another
+  mod...** in the Unit editor and the Building editor - straight from the other mod's folder, no pack file to make
+  first, in six steps you can go back and forth between: which mod, which units / building chains, their names here
+  (taken ones get free names; a chain's levels too), who has them, where the units are recruited (pick a level of
+  your mod when the other mod's is not here - before, such recruit lines were dropped and only Preview said so) or
+  which of your units a building recruits, then the check and one write with a backup. Buildings come with all
+  their levels, texts for every culture and level pictures; a `requires` or `convert_to` naming a building your mod
+  lacks is warned about. Both games, same game only.
+- Wiki: **Move units and buildings between mods**, step by step.
+
 ## 0.26.0 - 2026-10-01
 
 ### Added

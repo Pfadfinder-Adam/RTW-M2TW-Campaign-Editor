@@ -2366,6 +2366,61 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "faction_tool_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
 
+    def test_bring_units_and_buildings_from_another_mod(self):
+        # straight from another mod's folder (no .zip): a unit whose recruit place is moved to a building the
+        # user picks, and a building chain whose names are taken here - renamed with its levels, texts and
+        # pictures, its recruit line pointing at the unit brought along, its factions the ones picked
+        from faction_tool import packs
+        from faction_tool.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, }\n"
+              "        {\n            capability\n            {\n                recruit \"alpha general\"  0  "
+              "requires factions { alpha, }\n            }\n        }\n    }\n}\n"
+              "building temple\n{\n    levels shrine big_shrine\n    {\n        shrine requires factions { alpha, }\n"
+              "        {\n            capability\n            {\n                recruit \"alpha general\"  0  "
+              "requires factions { alpha, }\n            }\n            upgrades\n            {\n"
+              "                big_shrine\n            }\n        }\n"
+              "        big_shrine requires factions { alpha, }\n        {\n        }\n    }\n}\n")
+        write(os.path.join(d, "text", "export_buildings.txt"), "{shrine}Shrine\n{shrine_desc}Holy\n{big_shrine}Big\n",
+              utf16=True)
+        write(os.path.join(d, "ui", "greek", "buildings", "#greek_shrine.tga"), "PIC")
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        shutil.copytree(self.root, os.path.join(target, "mod"))
+        troot = os.path.join(target, "mod")
+        before = tree_hash(troot)
+        src, tmod = ModData(self.root), ModData(troot)
+        man, files = packs.collect(src, ["alpha general"])
+        names = packs.plan_names(tmod, man)
+        rmap = packs.default_recruit_map(tmod, man)
+        self.assertEqual(rmap, {("barracks", "hall"): ("barracks", "hall"), ("temple", "shrine"): ("temple", "shrine")})
+        rmap[("barracks", "hall")] = ("temple", "big_shrine")           # the user's pick
+        plan = Plan(tmod, "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"], names, rmap)
+        bman, bfiles = packs.collect_buildings(src, ["temple"])
+        self.assertEqual(bman["buildings"][0]["units"], ["alpha general"])
+        cn, ln = packs.building_names(tmod, bman)
+        self.assertEqual((cn, ln), ({"temple": "temple_2"}, {"shrine": "shrine_2", "big_shrine": "big_shrine_2"}))
+        packs.import_buildings(plan, bman, bfiles, ["alpha"], cn, ln, {"alpha general": names["alpha general"][0]})
+        bdir = plan.apply()
+        m2 = ModData(troot)
+        edb = open(m2.file("edb")).read()
+        block = edb[edb.index("building temple_2"):]
+        self.assertIn("levels shrine_2 big_shrine_2", block)
+        self.assertIn('recruit "alpha general 2"', block)                # pointed at the unit brought along
+        self.assertIn("big_shrine_2\n", block)                            # the upgrades list renamed
+        hall = edb[edb.index("building barracks"):edb.index("building temple\n")]
+        self.assertNotIn("alpha general 2", hall)                          # sent elsewhere by the user
+        big = edb[edb.index("building temple\n"):edb.index("building temple_2")]
+        self.assertIn('recruit "alpha general 2"', big)                    # into the picked level of this mod
+        txt = open(m2.text_file("export_buildings.txt"), "rb").read().decode("utf-16")
+        self.assertIn("{shrine_2_desc}Holy", txt)
+        self.assertTrue(os.path.exists(os.path.join(troot, "data", "ui", "greek", "buildings", "#greek_shrine_2.tga")))
+        restore(ModData(troot), bdir)
+        after = {k: v for k, v in tree_hash(troot).items() if "faction_tool_backups" not in k}
+        self.assertEqual(after, before)                              # Restore: byte for byte
+
     def test_read_and_draw_a_medieval2_mesh(self):
         """A .mesh laid out as the vanilla ones: parts with triangles, then the vertex streams (texture u v,
         bone weights, positions). Read back, the man shown, drawn both ways."""

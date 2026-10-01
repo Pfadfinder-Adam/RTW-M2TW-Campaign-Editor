@@ -344,9 +344,11 @@ def _rename_ref(lines, key, old, new):
     return out
 
 
-def import_pack(plan, manifest, files, owners, names=None):
+def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
     """Put the pack into plan.mod: units given to owners (factions or cultures), under names
-    {old type: (type, dictionary)} (plan_names by default). Everything goes through the plan."""
+    {old type: (type, dictionary)} (plan_names by default). recruit_map {(chain, level): (chain, level) or None}:
+    where each recruit place of the source goes in this mod (None: not recruited there); by default the same chain
+    and level when this mod has them. Everything goes through the plan."""
     mod = plan.mod
     if manifest.get("game") and manifest["game"] != game_kind(mod):
         raise ValueError("this pack is from %s, the mod is %s - packs go between mods of one game" % (
@@ -416,7 +418,7 @@ def import_pack(plan, manifest, files, owners, names=None):
                 _put(plan, "ui/%s/%s/%s" % (sub, fac, pattern % new), pick)
     # recruiting: the same chain and level as in the source mod, where the target has them
     if manifest.get("recruit") and mod.file("edb"):
-        _recruit(plan, manifest, names, owners)
+        _recruit(plan, manifest, names, owners, recruit_map)
     _say_missing(plan, manifest)
     return plan
 
@@ -569,17 +571,46 @@ def _put(plan, rel, data):
     plan.notes.append((plan.mod.rel(path), "from the pack"))
 
 
-def _recruit(plan, manifest, names, owners):
+def recruit_levels(mod):
+    """[(chain, level)] of every building level in the mod, in file order: where a unit may be recruited."""
+    from .editors import building_blocks, chain_tree
+    if not mod.file("edb"):
+        return []
+    f = mod.load(mod.file("edb"))
+    return [(name, lv["name"]) for name, a, b in building_blocks(f) for lv in chain_tree(f, a, b)["levels"]]
+
+
+def default_recruit_map(mod, manifest):
+    """{(chain, level): (chain, level) or None}: each recruit place of the pack, the same place in this mod when it
+    has it, else None (to be picked)."""
+    have = set(recruit_levels(mod))
+    out = {}
+    for r in manifest.get("recruit", []):
+        key = (r["chain"], r["level"])
+        out[key] = key if key in have else None
+    return out
+
+
+def _recruit(plan, manifest, names, owners, recruit_map=None):
     from .editors import building_blocks, chain_tree, line_place
     f = plan.edit(plan.mod.file("edb"))
-    n, missing = 0, set()
+    n, missing, done = 0, set(), set()
     for r in manifest["recruit"]:
-        blocks = {b[0]: b for b in building_blocks(f)}
-        blk = blocks.get(r["chain"])
-        tree = chain_tree(f, blk[1], blk[2]) if blk else None
-        if not tree or not any(lv["name"] == r["level"] for lv in tree["levels"]):
-            missing.add("%s %s" % (r["chain"], r["level"]))
+        src = (r["chain"], r["level"])
+        dst = recruit_map.get(src, src) if recruit_map is not None else src
+        if dst is None:
+            missing.add("%s %s" % src)
             continue
+        if (r["unit"], dst) in done:          # two source places sent to one level: one line is enough
+            continue
+        done.add((r["unit"], dst))
+        blocks = {b[0]: b for b in building_blocks(f)}
+        blk = blocks.get(dst[0])
+        tree = chain_tree(f, blk[1], blk[2]) if blk else None
+        if not tree or not any(lv["name"] == dst[1] for lv in tree["levels"]):
+            missing.add("%s %s" % dst)
+            continue
+        r = dict(r, chain=dst[0], level=dst[1])
         line = r["line"].replace('"%s"' % r["unit"], '"%s"' % names[r["unit"]][0], 1)
         # every factions list (REX lines may carry several groups) names the pack's owners here
         line = re.sub(r"(?<![A-Za-z0-9_])factions\s*\{[^}]*\}", "factions { %s, }" % ", ".join(owners), line)
@@ -589,8 +620,223 @@ def _recruit(plan, manifest, names, owners):
     if n:
         plan.note(f, "%d recruit line(s) added" % n)
     for m in sorted(missing):
-        plan.warn(f, "no %s in this mod: recruit the units there by hand (Building editor)" % m)
+        plan.warn(f, "not recruited at %s (not in this mod or left out): recruit the units by hand where you want "
+                     "them (Building editor: Add line)" % m)
 
 
-__all__ = ["type_blocks", "collect", "collect_models", "export_pack", "read_pack", "plan_names", "import_pack",
+__all__ = ["recruit_levels", "default_recruit_map", "collect_buildings", "building_names", "import_buildings",
+           "type_blocks", "collect", "collect_models", "export_pack", "read_pack", "plan_names", "import_pack",
            "import_models", "game_kind"]
+
+
+# ---------------------------------------------------------------------------
+# Buildings: a chain with its levels, texts and pictures, from one mod into another
+# ---------------------------------------------------------------------------
+def collect_buildings(mod, chains):
+    """(manifest, files) for these building chains: each chain's block, every export_buildings.txt entry made of a
+    level's name (<level>, <level>_desc, <level>_<culture>...), the level pictures
+    (ui/<culture>/buildings/#<culture>_<level>[_constructed].tga) and the units its recruit lines name."""
+    from .editors import building_blocks, chain_tree
+    from .roster import recruit_of
+    edb = mod.load(mod.file("edb"))
+    blocks = {b[0]: b for b in building_blocks(edb)}
+    man = {"pack": PACK_VERSION, "kind": "buildings", "game": game_kind(mod), "buildings": [], "texts": {}}
+    files = {}
+    table = mod.text_file("export_buildings.txt")
+    keys = []
+    if table:
+        for s in mod.load(table).texts():
+            s = s.lstrip()
+            if s.startswith("{") and "}" in s:
+                keys.append(s[1:s.index("}")])
+    ui = os.path.join(mod.data, "ui")
+    for ch in chains:
+        blk = blocks.get(ch)
+        if blk is None:
+            raise ValueError("no building chain '%s' in %s" % (ch, mod.data))
+        _, a, b = blk
+        levels = [lv["name"] for lv in chain_tree(edb, a, b)["levels"]]
+        lines = [edb.text(i) for i in range(a, b)]
+        units = []
+        for l in lines:
+            r = recruit_of(l)
+            if r and r[1] not in units:
+                units.append(r[1])
+        man["buildings"].append({"chain": ch, "levels": levels, "lines": lines, "units": units})
+        for k in keys:
+            low = k.lower()
+            if any(low == lv.lower() or low.startswith(lv.lower() + "_") for lv in levels):
+                val = _text_entry(mod, "export_buildings.txt", k)
+                if val is not None:
+                    man["texts"][k] = val
+        if os.path.isdir(ui):
+            for cult in sorted(os.listdir(ui)):
+                folder = os.path.join(ui, cult, "buildings")
+                if not os.path.isdir(folder):
+                    continue
+                for lv in levels:
+                    for tail in (".tga", "_constructed.tga"):
+                        p = _ci(folder, "#%s_%s%s" % (cult, lv, tail))
+                        if p:
+                            with open(p, "rb") as fh:
+                                files[os.path.relpath(p, mod.data).replace("\\", "/")] = fh.read()
+    return man, files
+
+
+def building_names(mod, manifest):
+    """({old chain: new chain}, {old level: new level}): the pack's names, or free ones where this mod has them."""
+    from .editors import building_blocks, fields
+    edb = mod.load(mod.file("edb"))
+    chains, levels = set(), set()
+    for name, a, b in building_blocks(edb):
+        chains.add(name)
+        for fd in fields(edb, a, b):
+            if fd.key == "levels":
+                levels.update(fd.value.split())
+    cmap, lmap = {}, {}
+    for bd in manifest["buildings"]:
+        c = free_name(chains, bd["chain"])
+        chains.add(c)
+        cmap[bd["chain"]] = c
+        for lv in bd["levels"]:
+            n = free_name(levels, lv)
+            levels.add(n)
+            lmap[lv] = n
+    return cmap, lmap
+
+
+def import_buildings(plan, manifest, files, factions, chain_names=None, level_names=None, unit_map=None):
+    """Put building chains into plan.mod: renamed (building_names by default), every level allowed to factions
+    (factions or cultures of this mod), recruit lines naming unit_map's target unit (a unit this mod lacks and
+    unit_map does not send anywhere: its line left out, said), texts and pictures with them."""
+    import re as _re
+    from .editors import building_blocks, renamed_chain_lines, fields
+    from .roster import recruit_of, factions_groups, with_factions
+    mod = plan.mod
+    if manifest.get("game") and manifest["game"] != game_kind(mod):
+        raise ValueError("these buildings are from %s, the mod is %s - buildings go between mods of one game" % (
+            "Medieval II" if manifest["game"] == "medieval2" else "Rome",
+            "Medieval II" if game_kind(mod) == "medieval2" else "Rome"))
+    if not factions:
+        raise ValueError("pick at least one faction (or culture) that may build them")
+    facs = [n for n, _ in mod.factions()]
+    known = set(facs) | {mod.culture(n) for n in facs if mod.culture(n)} | {"all"}
+    bad = [o for o in factions if o not in known]
+    if bad:
+        raise ValueError("no faction or culture %s in this mod" % ", ".join(bad))
+    dflt = building_names(mod, manifest)
+    chain_names = chain_names or dflt[0]
+    level_names = level_names or dflt[1]
+    f = plan.edit(mod.file("edb"))
+    blocks = building_blocks(f)
+    taken_chains = {b[0].lower() for b in blocks}
+    taken_levels = set()
+    for name, a, b in blocks:
+        for fd in fields(f, a, b):
+            if fd.key == "levels":
+                taken_levels.update(x.lower() for x in fd.value.split())
+    for old, new in list(chain_names.items()) + list(level_names.items()):
+        if not _re.match(r"^[A-Za-z0-9_]+$", new or ""):
+            raise ValueError("'%s': letters, digits and _ only" % new)
+    for old, new in chain_names.items():
+        if new.lower() in taken_chains:
+            raise ValueError("a building chain '%s' exists in this mod already" % new)
+    for old, new in level_names.items():
+        if new.lower() in taken_levels:
+            raise ValueError("a building level '%s' exists in this mod already" % new)
+    units_here = {t.lower(): t for t in type_blocks(mod.load(mod.file("edu")))}
+    unit_map = dict(unit_map or {})
+    dropped = []
+    at = blocks[-1][2] if blocks else len(f.raw)
+    out = []
+    for bd in manifest["buildings"]:
+        lv_names = {lv: level_names.get(lv, lv) for lv in bd["levels"]}
+        lines = renamed_chain_lines(bd["lines"], bd["chain"], chain_names.get(bd["chain"], bd["chain"]), lv_names)
+        new_levels = set(lv_names.values())
+        kept = []
+        for text in lines:
+            r = recruit_of(text)
+            if r:
+                target = unit_map.get(r[1], units_here.get(r[1].lower()))
+                if not target:
+                    d = "%s (%s)" % (r[1], chain_names.get(bd["chain"], bd["chain"]))
+                    if d not in dropped:
+                        dropped.append(d)
+                    continue
+                text = text.replace('"%s"' % r[1], '"%s"' % target, 1)
+            head = strip_comment(text).strip().split()[:1]
+            if (r or (head and head[0] in new_levels and "requires" in text)) and factions_groups(text):
+                if len(factions_groups(text)) == 1:
+                    text = with_factions(text, list(factions))
+                else:
+                    plan.warn(f, "%s: a line with several factions groups (REX) kept as it is - check it in the "
+                                 "Building editor" % (head[0] if head else "?"))
+            kept.append(text)
+        out += [""] + kept
+        plan.note(f, "building %s added (levels %s), may be built by %s" % (
+            chain_names.get(bd["chain"], bd["chain"]), ", ".join(lv_names[lv] for lv in bd["levels"]),
+            ", ".join(factions)))
+    f.insert(at, out)
+    if dropped:
+        plan.warn(f, "recruit line(s) left out - the unit is not in this mod: %s (bring the unit too, or add a "
+                     "recruit line in the Building editor)" % ", ".join(dropped))
+    # what the levels need from this mod: other chains named in their requires lines
+    have_chains = {b[0] for b in blocks} | set(chain_names.values())
+    for bd in manifest["buildings"]:
+        for text in bd["lines"]:
+            m = _re.match(r"\s*convert_to\s+([A-Za-z_][A-Za-z0-9_]*)\s*$", strip_comment(text))
+            if m and m.group(1) not in have_chains:
+                plan.warn(f, "%s turns into '%s' when a city becomes a castle (or back) - this mod has no such "
+                             "building; change its convert_to line in the Building editor" % (
+                                 chain_names.get(bd["chain"], bd["chain"]), m.group(1)))
+            for m in _re.finditer(r"building_present(?:_min_level)?\s+([A-Za-z0-9_]+)", strip_comment(text)):
+                if m.group(1) not in have_chains and m.group(1) not in chain_names:
+                    plan.warn(f, "%s needs the building '%s', which this mod has not - the game may refuse it; "
+                                 "change that requires line in the Building editor" % (
+                                     chain_names.get(bd["chain"], bd["chain"]), m.group(1)))
+    # texts
+    table = mod.text_file("export_buildings.txt")
+    if table and manifest.get("texts"):
+        tf = plan.edit(table)
+        while tf.raw and not tf.text(len(tf.raw) - 1).strip():
+            del tf.raw[-1]
+        n = 0
+        for key, value in manifest["texts"].items():
+            new = key
+            for old, nl in sorted(level_names.items(), key=lambda kv: -len(kv[0])):
+                if key.lower() == old.lower() or key.lower().startswith(old.lower() + "_"):
+                    new = nl + key[len(old):]
+                    break
+            tf.raw.extend(tf.make(x) for x in ["{%s}%s" % (new, value[0])] + value[1:])
+            n += 1
+        tf.raw.append(tf.make(""))
+        plan.note(tf, "%d building name(s) and description(s) added" % n)
+    # pictures: under each culture they came from; the cultures of the new owners get one too
+    ui = os.path.join(mod.data, "ui")
+    cults_here = {c.lower(): c for c in os.listdir(ui)} if os.path.isdir(ui) else {}
+    owners_cults = set()
+    for o in factions:
+        owners_cults.add(o if o in cults_here.values() else mod.culture(o) or "")
+    owners_cults.discard("")
+    put = set()
+    by_level = {}
+    for rel, data in files.items():
+        parts = rel.split("/")
+        if len(parts) != 4 or parts[0].lower() != "ui" or parts[2].lower() != "buildings":
+            continue
+        cult, name = parts[1], parts[3]
+        for old, new in level_names.items():
+            for tail in (".tga", "_constructed.tga"):
+                if name.lower() == ("#%s_%s%s" % (cult, old, tail)).lower():
+                    by_level.setdefault((new, tail), {})[cult] = data
+    for (new, tail), per in by_level.items():
+        for cult in set(per) | owners_cults:
+            if cult.lower() not in cults_here and cult not in per:
+                continue
+            data = per.get(cult) or next(iter(per.values()))
+            rel = "ui/%s/buildings/#%s_%s%s" % (cults_here.get(cult.lower(), cult), cult, new, tail)
+            if rel.lower() not in put:
+                put.add(rel.lower())
+                _put(plan, rel, data)
+    return plan
+

@@ -10,6 +10,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from . import editors as E
+from .gui_util import StepWindow
 from .moddata import ModData
 
 UNIT_VALUES = [
@@ -50,7 +51,7 @@ def _text_value(mod, name, key):
     return ""
 
 
-class NewRecordWizard(tk.Toplevel):
+class NewRecordWizard(StepWindow):
     def __init__(self, editor, start=None):
         super().__init__(editor)
         self.ed, self.kind, self.mod = editor, editor.kind, editor.mod
@@ -67,28 +68,13 @@ class NewRecordWizard(tk.Toplevel):
         self.choices = facs + [c for c in cults if c not in facs] + ["all"]
         self.v = {"src": tk.StringVar(value=start if start in self.names else (self.names[0] if self.names else ""))}
         self.state = {}                      # what each step holds, filled when the source is chosen
-        self.step = 0
-        self.steps = ([("Start from", self.s_start), ("Names and texts", self.s_names), ("Who has it", self.s_who),
+        self.finish_text = "Add to the %s editor" % self.kind
+        self.make_steps([("Start from", self.s_start), ("Names and texts", self.s_names), ("Who has it", self.s_who),
                        ("Numbers", self.s_values), ("Pictures", self.s_pictures), ("Check and add", self.s_check)]
                       if self.kind == "unit" else
                       [("Start from", self.s_start), ("Names and texts", self.s_names),
                        ("Who may build it", self.s_who), ("Pictures", self.s_pictures),
                        ("Check and add", self.s_check)])
-        outer = ttk.Frame(self, padding=10)
-        outer.pack(fill="both", expand=True)
-        self.crumbs = ttk.Label(outer, foreground="#555")
-        self.crumbs.pack(anchor="w")
-        self.head = ttk.Label(outer, font=("", 12, "bold"))
-        self.head.pack(anchor="w", pady=(2, 6))
-        self.body = ttk.Frame(outer)
-        self.body.pack(fill="both", expand=True)
-        nav = ttk.Frame(outer)
-        nav.pack(fill="x", pady=(8, 0))
-        self.b_back = ttk.Button(nav, text="< Back", command=lambda: self.go(-1))
-        self.b_back.pack(side="left")
-        self.b_next = ttk.Button(nav, text="Next >", command=lambda: self.go(1))
-        self.b_next.pack(side="left", padx=4)
-        ttk.Button(nav, text="Cancel", command=self.destroy).pack(side="right")
         self.load_source()
         self.show()
 
@@ -150,38 +136,13 @@ class NewRecordWizard(tk.Toplevel):
                 return name, desc if real(desc) else ""
         return _text_value(self.mod, "export_buildings.txt", lv), ""
 
-    # ---- moving between steps ----
-    def collect(self):
-        """What the step on show holds, into self.state (called before leaving it)."""
-        fn = getattr(self, "_collect", None)
-        if fn:
-            fn()
-        self._collect = None
-
-    def go(self, d):
-        self.collect()
-        if self.step == 0:
+    # ---- moving between steps (gui_util.StepWindow) ----
+    def leaving(self, step):
+        if step == 0:
             self.load_source()
-        if d > 0 and self.step == len(self.steps) - 1:
-            return self.add()
-        self.step = max(0, min(len(self.steps) - 1, self.step + d))
-        self.show()
 
-    def show(self):
-        for w in self.body.winfo_children():
-            w.destroy()
-        self.crumbs.configure(text="   ".join(("[%d %s]" if i == self.step else "%d %s") % (i + 1, t)
-                                            for i, (t, _) in enumerate(self.steps)))
-        title, fn = self.steps[self.step]
-        self.head.configure(text="Step %d of %d: %s" % (self.step + 1, len(self.steps), title))
-        self.b_back.state(["disabled"] if self.step == 0 else ["!disabled"])
-        self.b_next.configure(text="Add to the %s editor" % self.kind if self.step == len(self.steps) - 1
-                              else "Next >")
-        fn()
-
-    def _note(self, text):
-        ttk.Label(self.body, text=text, wraplength=780, justify="left", foreground="#555").pack(anchor="w",
-                                                                                                pady=(0, 6))
+    def finish(self):
+        return self.add()
 
     # ---- step 1 ----
     def s_start(self):
