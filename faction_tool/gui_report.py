@@ -66,7 +66,7 @@ def open_report(app, message="", kind="bug"):
     box.pack(fill="x", pady=(10, 0))
     ticks = []
     for f, name, what in files:
-        v = tk.BooleanVar(value=kind == "bug")
+        v = tk.BooleanVar(value=True)              # the logs always go along (an idea too) - untick to leave out
         ticks.append((v, (f, name, what)))
         ttk.Checkbutton(box, variable=v, text="%s - %s (%d KB)" % (name, what, os.path.getsize(f) // 1024)).pack(
             anchor="w")
@@ -81,8 +81,6 @@ def open_report(app, message="", kind="bug"):
                    command=lambda: messagebox.showinfo(APP, report.LOG_HOWTO, parent=w)).pack(side="left", padx=6)
     def kind_changed():
         lbl_prompt.configure(text=PROMPTS[v_kind.get()])
-        for v, _ in ticks:                         # an idea needs no logs (they can still be ticked)
-            v.set(v_kind.get() == "bug")
     lbl_pics = ttk.Label(box, foreground="#666", text="No pictures.")
     lbl_pics.pack(anchor="w", pady=(4, 0))
 

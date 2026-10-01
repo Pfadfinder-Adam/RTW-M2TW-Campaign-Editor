@@ -162,6 +162,18 @@ def found(game=None, mod_dir=None):
                 m = _NICK.match(os.path.basename(latest))
                 name = "report-%s-%s.txt" % (m.group(2), m.group(3)) if m else os.path.basename(latest)
                 out.append((latest, "reports/" + name, "the newest crash report (REX)"))
+    if not any(n.endswith("system.log.txt") for _, n, _ in out):
+        # the game's log not found where it lies now: the copy the last closed session kept
+        sess = os.path.join(log.logs_dir() or "", log.SESSIONS)
+        try:
+            for n in sorted(os.listdir(sess), reverse=True):
+                f = os.path.join(sess, n, "system.log.txt")
+                if os.path.isfile(f):
+                    out.append((f, "sessions/%s/system.log.txt" % n, "the game's log kept when the editor closed "
+                                "(%s)" % _age(f)))
+                    break
+        except OSError:
+            pass
     return out
 
 
