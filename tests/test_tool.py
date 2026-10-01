@@ -2679,6 +2679,36 @@ building smith
         self.assertEqual(sum(1 for l in head if l.startswith("denari\t")), 1)
         self.assertTrue(any("seldom sends its leader" in n for _, n in plan.notes))
 
+    def test_raze_settlement_lua_addon_for_medieval2(self):
+        """The Medieval II add-on is Lua (M2EX's EOP-compatible scripts): settings written as Lua ({} lists), the file
+        in eopData/eopScripts, one loader line in luaPluginScript.lua (a mod's own lines kept), taken out again."""
+        from faction_tool import addons as A
+        a = next(x for x in A.library() if x.file == "raze_settlement.lua")
+        self.assertTrue(a.fits("medieval2"))
+        self.assertFalse(a.fits("rome"))
+        mod = ModData(self.root)
+        entry = os.path.join(self.root, "eopData", "eopScripts", "luaPluginScript.lua")
+        write(entry, "-- the mod's own\nfunction onPluginLoad() end\n")
+        vals = A.read_settings(a, a.template())
+        vals.update(RAZE_WHO="list", RAZE_FACTIONS=["alpha"], RAZE_GOLD_PER_BUILDING=500, RAZE_KEEP_CHAINS=[])
+        plan = Plan(mod, "addon", "raze", {})
+        dst = A.plan_install(plan, a, vals)
+        plan.apply()
+        self.assertEqual(dst, os.path.join(self.root, "eopData", "eopScripts", "raze_settlement.lua"))
+        text = open(dst).read()
+        self.assertIn('local RAZE_FACTIONS = {"alpha"}', text)
+        self.assertIn("local RAZE_GOLD_PER_BUILDING = 500", text)
+        self.assertEqual(A.installed(mod, a)["RAZE_WHO"], "list")
+        lua = open(entry).read()
+        self.assertIn("function onPluginLoad() end", lua)
+        self.assertEqual(sum(1 for l in lua.splitlines() if "raze_settlement.lua" in l), 1)
+        p2 = Plan(mod, "addon", "raze_off", {})
+        A.plan_remove(p2, a)
+        p2.apply()
+        self.assertFalse(os.path.exists(dst))
+        self.assertNotIn("raze_settlement", open(entry).read())
+        self.assertIn("function onPluginLoad() end", open(entry).read())
+
     def test_faction_emblem_one_picture_everywhere(self):
         """One emblem picture -> every emblem picture in its own size; mouse over brighter, greyed out grey, selected
         with a glow round the new shape - by the amounts the old pictures show."""

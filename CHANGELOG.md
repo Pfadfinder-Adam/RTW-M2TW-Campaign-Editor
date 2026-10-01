@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+- **Raze Settlement for Medieval II** (Add-ons, M2EX): a 4th button on the capture scroll under Occupy / Sack /
+  Exterminate - the game's Exterminate, then every building but the kept chains torn down, most people gone, a
+  reward, the ruins to the rebels with a fresh rebel garrison (`give_settlement slave`); who may raze as in Rome's
+  Sack Settlement. Lua add-ons go to `eopData/eopScripts` with one loader line in `luaPluginScript.lua`. The Add-ons
+  list opens on the add-on of the loaded game.
+
+### Fixed
+- **A new Medieval II faction keeps its template's `ai_label` and `denari_kings_purse`**: they were lost, so the AI
+  ran on the 'default' rule set with no income each turn (one reason new factions stood still). A note in Preview
+  when the new faction starts with one army led by its leader (the computer seldom sends its leader out).
+
 ## 0.29.0 - 2026-10-01
 
 ### Changed

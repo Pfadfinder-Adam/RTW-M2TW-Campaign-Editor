@@ -42,11 +42,24 @@ class AddonsPanel(ttk.Frame):
             self.lb.insert("end", a.title + ("   (added)" if a.own else ""))
         keys = [a.key for a in self.addons]
         self.lb.selection_clear(0, "end")
-        self.lb.selection_set(keys.index(pick) if pick in keys else 0)
+        self.lb.selection_set(keys.index(pick) if pick in keys else self._first_fitting())
+
+    def _first_fitting(self):
+        """The first add-on made for the loaded mod's game (Sack for Rome, Raze for Medieval II)."""
+        if getattr(self, "mod", None) is None:
+            return 0
+        from .limits import game_kind
+        game = game_kind(self.mod)
+        return next((i for i, a in enumerate(self.addons) if a.fits(game)), 0)
 
     # ---- what the window asks of a work ----
     def rebind(self, mod):
         self.mod = mod
+        sel = self.lb.curselection()
+        if mod is not None and (not sel or not self.addons[sel[0]].fits(__import__(
+                "faction_tool.limits", fromlist=["game_kind"]).game_kind(mod))):
+            self.lb.selection_clear(0, "end")
+            self.lb.selection_set(self._first_fitting())
         self.show()
         return 0
 

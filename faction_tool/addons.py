@@ -38,6 +38,10 @@ WHO = [("player", "Only the player (the human)"),
        ("player_and_homeless", "The player, and computer factions without a town (hordes)"),
        ("ai", "Only the computer's factions"),
        ("list", "Only the factions I pick")]
+WHO_M2 = [("player", "Only the player (the human)"),
+          ("everyone", "Everyone - the player and every computer faction"),
+          ("ai", "Only the computer's factions"),
+          ("list", "Only the factions I pick")]
 
 
 class Addon:
@@ -87,6 +91,30 @@ ADDONS = [
            Setting("RAZE_BUTTON_TIP", "text", "Button tooltip", "shown when the mouse is over it")],
           "REX (Rome: Total War). Vanilla Rome has no scripts - the add-on then does nothing.",
           picks={"RAZE_KEEP_CHAINS": "chains", "RAZE_DEFAULT_REBEL_UNITS": "units", "RAZE_FACTIONS": "factions"}),
+    Addon("raze_settlement", "Raze Settlement", "medieval2", "raze_settlement.lua",
+          "A 4th choice on the capture scroll, under Occupy / Sack / Exterminate: Raze Settlement. The town is "
+          "exterminated the game's own way, every building but the kept ones is torn down, most people are gone, "
+          "you get a reward, and the ruins go to the rebels with a fresh rebel garrison M2EX raises itself - the "
+          "Medieval II brother of Rome's Sack Settlement. The computer's factions allowed below raze when they "
+          "exterminate.",
+          [Setting("RAZE_ENABLED", "bool", "Razing on", "off keeps the file but does nothing"),
+           Setting("RAZE_WHO", "choice", "Who may raze", "the player picks it on the capture scroll; a computer "
+                   "faction allowed here razes whenever it exterminates a town", WHO_M2),
+           Setting("RAZE_FACTIONS", "list", "The factions", "for 'Only the factions I pick'",
+                   when=("RAZE_WHO", ["list"])),
+           Setting("RAZE_GIVE_TO_REBELS", "bool", "Ruins go to the rebels", "off: the razed town stays yours"),
+           Setting("RAZE_GOLD_PER_BUILDING", "int", "Money per building torn down", "added to the extermination's"),
+           Setting("RAZE_GOLD_PER_CITIZEN", "int", "Money per inhabitant", "for each person the raze removes"),
+           Setting("RAZE_PEOPLE_LEFT", "int", "People left in the ruins", "the rest are gone"),
+           Setting("RAZE_KEEP_CHAINS", "set", "Building chains never torn down", "the core chain (walls are its "
+                   "levels in Medieval II) must stay; roads by default - use this mod's chain names"),
+           Setting("RAZE_BUTTON", "bool", "The 4th button", "off: no button - Exterminate razes for the factions "
+                   "allowed above"),
+           Setting("RAZE_BUTTON_LABEL", "text", "Button text", "the words on the button"),
+           Setting("RAZE_BUTTON_TIP", "text", "Button tooltip", "shown when the mouse is over it")],
+          "M2EX (Medieval II: Total War) - it runs the mod's eopData/eopScripts/luaPluginScript.lua. Vanilla "
+          "Medieval II runs no scripts - the add-on then does nothing.",
+          picks={"RAZE_KEEP_CHAINS": "chains", "RAZE_FACTIONS": "factions"}),
 ]
 
 
@@ -290,6 +318,11 @@ def share(addon, out, values=None):
 # ---------------------------------------------------------------------------
 # The script's setting lines
 # ---------------------------------------------------------------------------
+def _lua(text):
+    """A Lua script (comments '--') rather than Squirrel ('//')."""
+    return bool(re.search(r"^\s*--", text, re.M)) and not re.search(r"^\s*//", text, re.M)
+
+
 def _span(text, var):
     """(start, end) of the value of 'local VAR = value' (a { } or [ ] value may run over lines), or None."""
     m = re.search(r"^local\s+%s\s*=\s*" % re.escape(var), text, re.M)
@@ -306,7 +339,7 @@ def _span(text, var):
             c = text[end]
             if c == '"' and text[end - 1] != "\\":
                 quoted = not quoted
-            if not quoted and text[end:end + 2] == "//":
+            if not quoted and text[end:end + 2] in ("//", "--"):
                 break
             end += 1
         while end > start and text[end - 1] in " \t\r":
@@ -339,7 +372,7 @@ def read_settings(addon, text):
         elif s.kind == "list":
             out[s.var] = re.findall(r'"((?:[^"\\]|\\.)*)"', raw)
         elif s.kind == "set":
-            body = re.sub(r"//[^\n]*", "", raw)
+            body = re.sub(r"(//|--)[^\n]*", "", raw)
             out[s.var] = re.findall(r"([A-Za-z_][\w]*)\s*=\s*true", body)
         else:
             out[s.var] = _unquote(raw)
@@ -350,13 +383,14 @@ def _quote(v):
     return '"%s"' % str(v).replace("\\", "\\\\").replace('"', '\\"')
 
 
-def _render(s, v, old):
+def _render(s, v, old, lua=False):
     if s.kind == "bool":
         return "true" if v else "false"
     if s.kind == "int":
         return str(int(v))
     if s.kind == "list":
-        return "[" + ", ".join(_quote(x) for x in v) + "]"
+        inner = ", ".join(_quote(x) for x in v)
+        return "{" + inner + "}" if lua else "[" + inner + "]"
     if s.kind == "set":
         indent = re.search(r"\n([ \t]+)\S", old)
         ind = indent.group(1) if indent else "    "
@@ -431,17 +465,27 @@ def render(addon, text, values):
         sp = _span(text, s.var)
         if not sp:
             raise ValueError("the add-on's script has no %s line" % s.var)
-        text = text[:sp[0]] + _render(s, values[s.var], text[sp[0]:sp[1]]) + text[sp[1]:]
+        text = text[:sp[0]] + _render(s, values[s.var], text[sp[0]:sp[1]], _lua(text)) + text[sp[1]:]
     return text
 
 
 # ---------------------------------------------------------------------------
 # Where it goes
 # ---------------------------------------------------------------------------
+EOP_DIR = ("eopData", "eopScripts")
+EOP_ENTRY = "luaPluginScript.lua"
+LOADER = ('do local ok, err = pcall(function() local base = (M2TWEOP and M2TWEOP.getModPath and '
+          'M2TWEOP.getModPath()) or "." dofile(base .. "/eopData/eopScripts/%s") end) if not ok then '
+          'print("[ADDON] %s not loaded: " .. tostring(err)) end end  -- added by RTW & M2TW Campaign Editor: %s')
+
+
 def target(mod, addon):
     """<mod folder>/script/modules/<file>: a mod with a script folder of its own gets it there (REX reads the
-    running mod's scripts), else the game's own script/modules."""
+    running mod's scripts), else the game's own script/modules. A Lua add-on (M2EX's EOP-compatible Lua) goes to
+    <mod folder>/eopData/eopScripts/<file>, loaded by a line in that folder's luaPluginScript.lua."""
     root = os.path.dirname(os.path.abspath(mod.data))
+    if addon.file.lower().endswith(".lua"):
+        return os.path.join(root, *EOP_DIR, addon.file)
     own = _ci(root, "script")
     if not own:
         try:
@@ -482,6 +526,8 @@ def plan_install(plan, addon, values, mod=None):
     text = render(addon, addon.template(), values)
     dst = target(plan.mod, addon)
     plan.binary(dst, text.encode("utf-8"))
+    if dst.lower().endswith(".lua"):
+        _hook_lua(plan, addon, dst, on=True)
     plan.note(None, "%s %s: %s" % ("updated" if os.path.isfile(dst) else "put in", addon.title,
                                    os.path.relpath(dst, os.path.dirname(os.path.abspath(plan.mod.data)))))
     return dst
@@ -490,4 +536,29 @@ def plan_install(plan, addon, values, mod=None):
 def plan_remove(plan, addon):
     dst = target(plan.mod, addon)
     plan.delete(dst, "the %s add-on taken out" % addon.title)
+    if dst.lower().endswith(".lua"):
+        _hook_lua(plan, addon, dst, on=False)
     return dst
+
+
+def _hook_lua(plan, addon, dst, on):
+    """The line in luaPluginScript.lua that loads a Lua add-on: added at the end (after the mod's own handlers, which
+    the add-on then wraps), or taken out. The file is made when the mod has none."""
+    entry = os.path.join(os.path.dirname(dst), EOP_ENTRY)
+    if entry in plan.binaries:
+        text = plan.binaries[entry].decode("utf-8", "replace")
+    elif os.path.isfile(entry):
+        with open(entry, "rb") as fh:
+            text = fh.read().decode("utf-8", "replace")
+    else:
+        if not on:
+            return
+        text = "-- luaPluginScript.lua: M2EX runs this file of the mod (EOP-compatible Lua)\n"
+    mark = "added by RTW & M2TW Campaign Editor: %s" % addon.file
+    lines = [l for l in text.splitlines() if mark not in l]
+    if on:
+        lines.append(LOADER % (addon.file, addon.title, addon.file))
+    new = "\n".join(lines) + "\n"
+    if new != text:
+        plan.binary(entry, new.encode("utf-8"))
+        plan.note(None, "%s: %s %s" % (EOP_ENTRY, "loads" if on else "no longer loads", addon.file))
