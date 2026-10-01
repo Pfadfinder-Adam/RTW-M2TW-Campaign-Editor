@@ -722,6 +722,7 @@ class App(tk.Tk):
         menu = tk.Menu(tools, tearoff=False)
         menu.add_command(label="Check mod files (what the game would stumble on)", command=self.check)
         menu.add_command(label="Settlement names by culture (every town)...", command=self.culture_names_table)
+        menu.add_command(label="Make the campaign map 3 x bigger (alpha)...", command=self.upscale_map)
         menu.add_command(label="Check and install a pack...", command=self.install_pack)
         menu.add_command(label="Campaign rules (ages, agents, towns, diplomacy, unit sizes)...",
                          command=self.campaign_rules)
@@ -1452,6 +1453,48 @@ class App(tk.Tk):
         import webbrowser
         webbrowser.open(KOFI)
         self.status.set("Thank you! %s opened in your browser." % KOFI)
+
+    def upscale_map(self):
+        """Tools > Make the campaign map 3 x bigger: every file of the map at once, shown first, with a backup."""
+        if not self.mod:
+            messagebox.showinfo(APP, "Load a mod first.")
+            return
+        if self.pending_parts():
+            messagebox.showwarning(APP, "There are changes not written yet (%s). Apply or undo them first - the "
+                                        "bigger map is built from the files as they are."
+                                   % ", ".join(l for _, l in self.pending_parts()))
+            return
+        from .upscale import plan_upscale
+        camp = self.v_campaign.get()
+        mod = ModData(self.mod.data)
+        plan = Plan(mod, "map", "map_x3", {})
+        try:
+            plan_upscale(plan, camp)
+        except Exception as e:
+            log.write("upscale failed: %s" % e)
+            messagebox.showerror(APP, "The map could not be made bigger: %s" % e)
+            return
+        intro = ("MAKE THE CAMPAIGN MAP 3 x BIGGER (alpha) - campaign %s\n\n"
+                 "Every tile becomes a 3 x 3 block; towns, ports, armies, agents, resources and forts keep their "
+                 "places in the middle of their blocks, rivers stay 1 pixel wide. Nothing is written until you press "
+                 "'Write it'; a backup is made first and Tools > Restore a backup gives every file back.\n\n" % camp)
+        holder = {}
+
+        def write_it():
+            try:
+                bdir = plan.apply()
+            except Exception as e:
+                messagebox.showerror(APP, "Not written: %s" % e, parent=holder["w"])
+                return
+            log.write("Map made 3 x bigger (backup %s)\n%s" % (bdir, plan.report()))
+            holder["w"].destroy()
+            self.load()
+            messagebox.showinfo(APP, "The map is 3 x bigger now. Start the game and look - the game builds "
+                                     "map.rwm again on the first start (it takes a while).\n\nBackup: %s" % bdir)
+
+        self.show_text("Make the map 3 x bigger - what will be written", intro + plan.report(),
+                       extra=[("Write it (with a backup)", write_it)])
+        holder["w"] = [c for c in self.winfo_children() if c.winfo_class() == "Toplevel"][-1]
 
     def settings_window(self):
         """Everything the tool keeps between starts, in one window."""

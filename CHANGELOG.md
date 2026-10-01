@@ -8,6 +8,15 @@
   and the mod opened last, the map's look and legend, your contact for reports, the set-up fixes you said no to
   (Ask again), and the tool's and the mod's backup folders.
 
+- **Make the campaign map 3 x bigger (alpha)** (Tools), both games: every tile becomes a 3 x 3 block - towns,
+  armies, agents, resources, forts and event positions keep their places in the middle of their blocks, ports stay
+  on the shore of their region, rivers stay 1 pixel wide (redrawn through the blocks' middles; a corner link becomes
+  an L), every map picture made bigger with exact colours (regions, features, trade routes, heights, ground,
+  climates, fog, roughness, disasters, radar maps), descr_terrain's size x 3, map.rwm removed. Shown before it is
+  written, one backup, Restore gives every byte back. Not moved: coordinates in scripts (warned with a count).
+  Without REX / M2EX it warns that the original exe stops at 510 tiles. Checked on both vanilla maps (every town,
+  port and character in place); not yet in the game.
+
 ### Changed
 - **Check mod** is now called **Check mod files** (Tools) - the same check (it took in Scan in 0.22.0): every file
   of the mod read, what the game would stumble on said in plain words.

@@ -2131,6 +2131,43 @@ building smith
         self.assertEqual(len(got), 1)
         self.assertIn("'alpha general' has no 'slave'", got[0])
 
+    def test_map_made_three_times_bigger(self):
+        """Every tile a 3 x 3 block: towns and characters in their blocks' middles, rivers 1 pixel wide (a corner
+        link made an L), descr_terrain's size x 3, map.rwm removed; Restore gives every byte back."""
+        from faction_tool.plan import Plan
+        from faction_tool import upscale
+        from faction_tool.tga import read_tga
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        river, black = (0, 0, 255), (0, 0, 0)
+        px = [[black] * 4 for _ in range(4)]
+        px[0][0] = px[0][1] = px[1][2] = river              # (0,0)-(1,0) straight, (1,0)-(2,1) a corner
+        write_tga(os.path.join(camp, "map_features.tga"), 4, 4, px)
+        write(os.path.join(camp, "descr_terrain.txt"), "dimensions\n{\n\twidth  4\n\theight  4\n}\n")
+        write(os.path.join(camp, "map.rwm"), "cache")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        tiles = mod.city_tiles("test")
+        plan = Plan(mod, "map", "map_x3", {})
+        upscale.plan_upscale(plan, "test")
+        bdir = plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual({r: xy for r, xy in mod.city_tiles("test").items()},
+                         {r: upscale.new_xy(*xy) for r, xy in tiles.items()})
+        s = Strat(mod.load(mod.campaign_file("test", "descr_strat.txt")))
+        self.assertIn((4, 4), [c.xy for fb in s.factions for c in fb.characters])        # was (1, 1)
+        f = read_tga(os.path.join(camp, "map_features.tga"))
+        self.assertEqual((f.width, f.height), (12, 12))
+        rivers = {(x, y) for x in range(12) for y in range(12) if f.get(x, y) == river}
+        self.assertTrue({(1, 1), (2, 1), (3, 1), (4, 1), (7, 4)} <= rivers)
+        self.assertFalse(any({(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)} <= rivers
+                             for x in range(11) for y in range(11)))                     # never 2 x 2
+        self.assertIn("width  12", open(os.path.join(camp, "descr_terrain.txt")).read())
+        self.assertFalse(os.path.exists(os.path.join(camp, "map.rwm")))
+        from faction_tool.plan import restore
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")},
+                         before)
+
     def test_new_region_carved_out(self):
         from faction_tool.edit import edit
         from faction_tool.tga import read_tga
