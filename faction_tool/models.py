@@ -244,15 +244,20 @@ def fit_problems(mod, info, seat):
 
 
 def texture_image(mod, rel):
-    """A texture as a picture (Pillow), or None: Rome's x.tga / x.tga.dds, Medieval II's .texture (a 48-byte
-    header before a plain DDS)."""
+    """A texture as a picture (Pillow), or None: Rome's x.tga / x.tga.dds (loose, else from data/packs/*.pak),
+    Medieval II's .texture (a 48-byte header before a plain DDS)."""
     from PIL import Image
     from .meshview import on_disk
     got = on_disk(mod, rel)
-    if not got:
-        return None
-    with open(got[1], "rb") as fh:
-        data = fh.read()
+    if got:
+        with open(got[1], "rb") as fh:
+            data = fh.read()
+    else:
+        from .rompak import find                    # Rome keeps many textures only in data/packs/*.pak
+        data = find(mod, rel)
+        if data is None:
+            return None
+        got = (rel, rel)
     if got[1].lower().endswith(".texture") and data[48:52] == b"DDS ":
         data = data[48:]
     try:

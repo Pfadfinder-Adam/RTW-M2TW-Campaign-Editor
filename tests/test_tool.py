@@ -2919,6 +2919,31 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual(tree_hash(os.path.join(self.root, "data")), before)
 
+    def test_rome_pak_read(self):
+        """Rome's data/packs/*.pak: the name table, the end offsets, the files one after another - a file not loose
+        on disk is read from the pack (x.tga found as x.tga.dds too)."""
+        import struct
+        from faction_tool import rompak as RP
+        names = ["DATA\\MODELS_UNIT\\TEXTURES\\A.TGA.DDS", "DATA\\UI\\B.TGA"]
+        table = "".join(n + "\0" for n in names)
+        files = [b"first-file", b"second"]
+        start = 12 + len(table) * 2 + 4 * len(names)
+        ends, at = [], start
+        for f in files:
+            at += len(f)
+            ends.append(at)
+        blob = b"PAK0" + struct.pack("<II", len(table), len(names)) + table.encode("utf-16-le") + \
+            struct.pack("<%dI" % len(ends), *ends) + b"".join(files)
+        os.makedirs(os.path.join(self.root, "data", "packs"), exist_ok=True)
+        with open(os.path.join(self.root, "data", "packs", "x.pak"), "wb") as fh:
+            fh.write(blob)
+        mod = ModData(self.root)
+        self.assertEqual(sorted(RP.read_index(os.path.join(self.root, "data", "packs", "x.pak"))),
+                         ["data/models_unit/textures/a.tga.dds", "data/ui/b.tga"])
+        self.assertEqual(RP.find(mod, "data/models_unit/textures/a.tga"), b"first-file")
+        self.assertEqual(RP.find(mod, "ui/B.tga"), b"second")
+        self.assertIsNone(RP.find(mod, "ui/c.tga"))
+
     def test_path_guard(self):
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads
         out and a crafted backup manifest are refused before anything is written."""

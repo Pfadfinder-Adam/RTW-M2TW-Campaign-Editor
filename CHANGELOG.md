@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **Rome's packed textures are read** (data/packs/*.pak): a unit's or figure's texture that is not loose on disk
+  is taken from the game's packs - the Battle model thumbnail and View in 3D show it instead of a grey model.
 - **Events and later factions** (Tools; both games): the campaign's events - date, place, the title and text
   players see - changed, removed, new ones made; the date checked in each game's form; a name used twice (vanilla
   Rome's plague_in_italy) handled. The factions that appear later and the script lines that wake them are listed.
