@@ -43,6 +43,10 @@
   Discord). The same window as on the Settlements tab.
 
 ### Changed
+- **Scan mod is part of Check mod** (they looked like the same thing): with a faction picked, Check mod's report
+  ends with every place that faction is named in the mod (game, REX and mod files told apart), and its window has
+  **Ignore list...**; the separate Tools item is gone. The command line keeps `scan`. Its "missing files" no longer
+  lists Rome textures kept as x.tga.dds or only in data/packs/*.pak.
 - **Map: Edit resources and Edit forts & watchtowers are two switches** (they were one, "Edit resources & forts"),
   each with its own bar and a how-to line under it that is never cut off: pick the kind, **Place new**, then click
   a land tile; drag with the right mouse button to move; click, then **Delete picked** to remove. Where the

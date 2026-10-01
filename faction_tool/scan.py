@@ -257,6 +257,11 @@ class Scan:
         ref = ref.replace("\\", "/").strip().strip('"')
         if not ref.lower().startswith("data/"):
             ref = "data/" + ref
+        # Rome keeps x.tga as x.tga.dds, and many pictures only in data/packs/*.pak: both count as there
+        if ref.lower().endswith(".tga") and self._exists(ref + ".dds"):
+            return True
+        if self._in_packs(ref):
+            return True
         p = os.path.join(os.path.dirname(self.mod.data), *ref.split("/"))
         if os.path.exists(p):
             return True
@@ -266,6 +271,13 @@ class Scan:
             return self._exists_ci(p)
         low = name.lower()
         return any(n.lower() == low for n in os.listdir(folder))
+
+    def _in_packs(self, ref):
+        from .rompak import has
+        try:
+            return has(self.mod, ref)
+        except Exception:
+            return False
 
     def _exists_ci(self, p):
         parts = os.path.normpath(p).split(os.sep)

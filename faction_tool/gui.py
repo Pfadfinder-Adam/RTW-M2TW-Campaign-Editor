@@ -127,7 +127,7 @@ TERRAIN EDITOR
 
 TOOLS
   Check mod: reads the whole mod and says in plain words what the game would stumble on.
-  Scan mod: every mention of a faction, telling the game's own files from the mod's and REX's.
+  Check mod with a faction picked also lists every place the faction is named (game, REX and mod files told apart).
   Check and install a pack: a "copy these files over data" mod checked file by file first -
     what is new, what it replaces and what that would lose (REX's own files, pictures of
     another size); pick for each file, then install with a backup.
@@ -708,7 +708,6 @@ class App(tk.Tk):
         menu = tk.Menu(tools, tearoff=False)
         menu.add_command(label="Check mod", command=self.check)
         menu.add_command(label="Settlement names by culture (every town)...", command=self.culture_names_table)
-        menu.add_command(label="Scan mod (every mention of the faction)", command=self.scan)
         menu.add_command(label="Check and install a pack...", command=self.install_pack)
         menu.add_command(label="Campaign rules (ages, agents, towns, diplomacy, unit sizes)...",
                          command=self.campaign_rules)
@@ -3736,37 +3735,6 @@ class App(tk.Tk):
         t.bind("<<Cut>>", lambda e: "break")
         t.focus_set()
 
-    def scan(self):
-        """Every mention of the template in the whole mod, in a background thread."""
-        if not self.mod:
-            messagebox.showerror(APP, "load a mod first")
-            return
-        faction = self.v["template"].get().strip()
-        if not faction:
-            messagebox.showerror(APP, "pick the template faction to scan for")
-            return
-        campaign = self.v_campaign.get()
-        self.status.set("Scanning the mod for '%s'..." % faction)
-        result = {}
-
-        def work():
-            try:
-                result["text"] = scan_mod(ModData(self.mod.data), faction, campaign).report()
-            except Exception:
-                result["text"] = "Scan failed:\n\n" + traceback.format_exc()
-
-        th = threading.Thread(target=work, daemon=True)
-        th.start()
-
-        def wait():
-            if th.is_alive():
-                self.after(200, wait)
-                return
-            self.status.set("Scan done.")
-            self.show_text("Scan: %s - nothing written" % faction, result["text"],
-                           extra=[("Ignore list...", self.edit_ignore), ("Scan again", self.scan)])
-        wait()
-
     def game_manifest(self):
         """Fingerprint every file of the game (not of its mods) into rtw_manifest.json.gz."""
         start = game_of(self.mod.data) if self.mod else settings.get("game")
@@ -3824,7 +3792,7 @@ class App(tk.Tk):
             with open(path, "w", encoding="utf-8") as f:
                 f.write(t.get("1.0", "end-1c").rstrip("\n") + "\n")
             w.destroy()
-            self.status.set("Saved %s - press Scan mod again." % path)
+            self.status.set("Saved %s - press Check mod again." % path)
         ttk.Button(bar, text="Save", command=save).pack(side="left")
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
         t.focus_set()
@@ -3951,11 +3919,16 @@ class App(tk.Tk):
             return
         from .check import check_mod
         result, data, campaign = {}, self.mod.data, self.v_campaign.get()
+        faction = self.v["template"].get().strip()         # picked: where it is named goes into the report too
 
         def work():
             try:
                 result["text"] = check_mod(ModData(data), campaign, deep=deep,
                                            progress=lambda m: result.__setitem__("step", m))
+                if faction:
+                    result["step"] = "where %s is named..." % faction
+                    result["text"] += "\n\n" + "=" * 70 + "\nWHERE %s IS NAMED (every text file of the mod)\n\n" \
+                        % faction + scan_mod(ModData(data), faction, campaign).report()
             except Exception as e:
                 result["text"] = "The check stopped: %s\n\n%s" % (e, traceback.format_exc())
         th = threading.Thread(target=work, daemon=True)
@@ -3968,7 +3941,8 @@ class App(tk.Tk):
                 return
             self.status.set("Check finished.")
             log.write("Check mod\n" + result["text"])
-            self.show_text("Check mod", result["text"])
+            self.show_text("Check mod" + (" (and where %s is named)" % faction if faction else ""), result["text"],
+                           extra=[("Ignore list...", self.edit_ignore)] if faction else ())
         wait()
 
     def _log_status(self):

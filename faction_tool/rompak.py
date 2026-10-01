@@ -50,6 +50,14 @@ def _paks(mod):
     return out
 
 
+def has(mod, rel):
+    """Whether data/<rel> (or <rel>.dds) is in one of the packs - without reading it."""
+    rel = rel.replace("\\", "/").lower()
+    rel = rel[5:] if rel.startswith("data/") else rel
+    return any(("data/" + rel) in idx or ("data/" + rel + ".dds") in idx
+               for idx in (read_index(p) for p in _paks(mod)))
+
+
 def find(mod, rel):
     """The bytes of data/<rel> from a pack (rel like 'models_unit/textures/x.tga'; x.tga.dds is found too), or
     None."""
