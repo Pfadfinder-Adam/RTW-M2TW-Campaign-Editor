@@ -2,16 +2,24 @@
 
 ## Unreleased
 
+## 0.23.0 - 2026-10-01
+
 ### Added
-- **Alliances and wars at the start, both games**: the Diplomacy tab offers 'alliance' and 'war' in the Start
-  columns (descr_strat `faction_relationships X, allied_to / at_war_with Y`, as Sons of Mars, Barbarian Invasion
+- **Alliances and wars at the start, both games**: the Diplomacy tab offers 'alliance' and 'war' as the Status at
+  the start (descr_strat `faction_relationships X, allied_to / at_war_with Y`, as Sons of Mars, Barbarian Invasion
   and Medieval II write them); picking one side sets the other too. Trade rights have no start line in either
   game, so they are not offered.
 - **Victory conditions on the Faction tab, both games**: regions to hold, regions to take, factions to outlive and
   Rome's goal (be emperor / take Rome), for the long and the short campaign (descr_win_conditions.txt); a region or
   faction that does not exist is refused (the game crashes on it); Undo / Redo. A new faction starts from its
   template's conditions.
-- Hover texts (a small '?') in place of long hint labels - first on the Diplomacy tab.
+- **The Diplomacy tab in plain words**: one **Status at the start** per faction (neutral / alliance / war, both
+  ways) beside the AI feelings both ways; every value with its meaning (`600 (enemies)`, `0.5 (friends)`); a status
+  pulls the feelings along (alliance up to the allied level, war down to the enemies', neutral out).
+- **Family tree folded away**: the Faction tab's **Family tree** button opens it in the form's place; the form has
+  the whole tab otherwise.
+- Hover texts in place of long labels: the work buttons (New faction, Unit editor...), a '?' on the Diplomacy columns
+  and the Victory block.
 
 ### Fixed
 - **Medieval II diplomacy**: the tab now reads and writes `faction_standings` (-1.0 .. 1.0) - before it showed every
