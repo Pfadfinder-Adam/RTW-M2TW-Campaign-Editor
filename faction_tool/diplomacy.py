@@ -20,12 +20,35 @@ KINDS = ("core_attitudes", "faction_standings", "faction_relationships")
 STANCES = ("allied_to", "at_war_with")
 
 # the numbers the window offers (value, word); None = no line (neutral)
-LEVELS = [(-10, "own"), (0, "allied"), (90, "friends"), (100, "friendly"), (200, "neutral"), (310, "wary"),
+LEVELS = [(-10, "own house"), (0, "allied"), (90, "friends"), (100, "friendly"), (200, "neutral"), (310, "wary"),
           (410, "dislike"), (600, "enemies")]
 STANDINGS = [(1.0, "love"), (0.5, "friends"), (0.2, "friendly"), (0.0, "neutral"), (-0.2, "wary"),
              (-0.45, "dislike"), (-0.8, "hate"), (-1.0, "enemies")]
 STANCE_WORDS = {"allied_to": "alliance", "at_war_with": "war"}
 NEUTRAL = "neutral"
+
+
+# The status (alliance / war at the start) pulls the AI's feeling along, so the two never contradict each other:
+# an alliance lifts a worse feeling to the allied level, a war drops a better one to the enemies' level, neutral
+# takes the line out (neutral). Rome: lower is better (BI's own levels: 0 allied, 600 at war); Medieval II: higher.
+STATUS_LEVELS = {"core_attitudes": {"allied_to": 0, "at_war_with": 600},
+                 "faction_standings": {"allied_to": 0.5, "at_war_with": -1.0}}
+
+
+def feeling_for(kind, status, current):
+    """The AI feeling (`kind` core_attitudes / faction_standings) a pair should have once `status` (None neutral,
+    'allied_to', 'at_war_with') is picked; `current` kept when it already fits."""
+    if status is None:
+        return None
+    level = STATUS_LEVELS[kind][status]
+    if not isinstance(current, (int, float)) or isinstance(current, bool):
+        return level
+    lower_better = kind == "core_attitudes"
+    worse = (current > level) if lower_better else (current < level)
+    if status == "allied_to":
+        return level if worse else current
+    better = (current < level) if lower_better else (current > level)
+    return level if better else current
 
 
 def is_medieval(strat):

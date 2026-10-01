@@ -2040,6 +2040,14 @@ building smith
             parse("war", "faction_standings")
         with self.assertRaises(ValueError):
             parse("2.0", "faction_standings")
+        # the status pulls the AI feeling along (lower is better in Rome, higher in Medieval II)
+        from faction_tool.diplomacy import feeling_for
+        self.assertEqual(feeling_for("core_attitudes", "allied_to", 310), 0)
+        self.assertEqual(feeling_for("core_attitudes", "allied_to", -10), -10)
+        self.assertEqual(feeling_for("core_attitudes", "at_war_with", 100), 600)
+        self.assertEqual(feeling_for("faction_standings", "at_war_with", 0.2), -1.0)
+        self.assertEqual(feeling_for("faction_standings", "allied_to", 0.8), 0.8)
+        self.assertIsNone(feeling_for("faction_standings", None, -1.0))
 
     def test_victory_conditions(self):
         """descr_win_conditions.txt: a faction's block read and rewritten (Rome's outlive_factions on the next
