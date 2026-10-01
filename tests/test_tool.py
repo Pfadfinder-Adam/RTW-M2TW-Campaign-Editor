@@ -2605,6 +2605,51 @@ building smith
         self.assertTrue(b > r)                                        # the field: blue now
         self.assertEqual(new.getpixel((33, 33)), (190, 90, 40, 255))  # the star: as it was
 
+    def test_medieval2_faction_logo_moves_to_its_own_page(self):
+        """M2EX (sprite_format xml): FACTION_LOGO_ALPHA already carries alpha's name and slave borrows it. Replacing
+        alpha's logo moves that sprite to a page of alpha's own; slave first gets FACTION_LOGO_SLAVE with the old
+        picture - one definition of each name, slave's picture unchanged; Restore gives every file back."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from unittest import mock
+        from faction_tool import symbols as SY
+        from faction_tool.factionart import image_tga
+        d = os.path.join(self.root, "data")
+        sm = SM.replace("culture\t\teastern\n", "culture\t\teastern\nlogo_index\t\tFACTION_LOGO_ALPHA\n", 1)
+        sm = sm.replace("culture\t\tbarbarian\n", "culture\t\tbarbarian\nlogo_index\t\tFACTION_LOGO_ALPHA\n", 1)
+        write(os.path.join(d, "descr_sm_factions.txt"), sm)
+        write(os.path.join(d, "descr_caps_ex.txt"), "sprite_format  xml\n")
+        write(os.path.join(d, "ui", "strategy.sd.xml"), '<sprite_definitions version="7">\n'
+              '  <page file="stratpage_02.tga" w="128" h="128">\n'
+              '    <sprite name="FACTION_LOGO_ALPHA" x="0" y="0" w="68" h="76" alpha="1"/>\n'
+              '    <sprite name="OTHER" x="68" y="0" w="10" h="10" alpha="1"/>\n  </page>\n</sprite_definitions>\n')
+        os.makedirs(os.path.join(d, "ui", "southern_european", "interface"))
+        with open(os.path.join(d, "ui", "southern_european", "interface", "stratpage_02.tga"), "wb") as fh:
+            fh.write(image_tga(Image.new("RGBA", (128, 128), (0, 0, 200, 255))))
+        before = tree_hash(self.root)
+        with mock.patch.object(SY, "rome", lambda m: False):
+            mod = ModData(self.root)
+            self.assertEqual([e["rel"] for e in SY.entries(mod, "alpha")], [SY.LOGO])
+            plan = Plan(mod, "t", "t", {})
+            self.assertEqual(SY.own_logo(plan, "alpha", SY.LOGO, Image.new("RGBA", (40, 40), (220, 0, 0, 255))),
+                             "FACTION_LOGO_ALPHA")
+            plan.apply()
+            mod = ModData(self.root)
+            xml = open(os.path.join(d, "ui", "strategy.sd.xml")).read()
+            self.assertEqual(xml.count('name="FACTION_LOGO_ALPHA"'), 1)
+            self.assertEqual(xml.count('name="FACTION_LOGO_SLAVE"'), 1)
+            self.assertIn('name="OTHER"', xml)
+            self.assertTrue(SY.logo_of(mod, "alpha", SY.LOGO)["own"])
+            self.assertEqual(SY.logo_of(mod, "slave", SY.LOGO)["name"], "FACTION_LOGO_SLAVE")
+            self.assertGreater(SY.logo_image(mod, "alpha", SY.LOGO).getpixel((30, 30))[0], 180)
+            self.assertEqual(SY.logo_image(mod, "slave", SY.LOGO).getpixel((30, 30))[:3], (0, 0, 200))
+            self.assertEqual(SY.logo_image(mod, "alpha", SY.LOGO).size, (68, 76))
+            restore(mod, backups(mod)[0])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
+        self.assertEqual(after, before)
+
     def test_faction_emblem_one_picture_everywhere(self):
         """One emblem picture -> every emblem picture in its own size; mouse over brighter, greyed out grey, selected
         with a glow round the new shape - by the amounts the old pictures show."""
