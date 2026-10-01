@@ -115,7 +115,7 @@ class MapView(ttk.Frame):
         ttk.Checkbutton(bar, text="Edit regions", variable=self.v_regions,
                         command=self._regions_toggled).pack(side="left", padx=(12, 4))
         ttk.Checkbutton(bar, text="Edit resources", variable=self.v_res, command=relayer).pack(side="left", padx=4)
-        ttk.Checkbutton(bar, text="Edit forts & watchtowers", variable=self.v_forts, command=relayer).pack(
+        ttk.Checkbutton(bar, text="Edit forts, towers & wonders", variable=self.v_forts, command=relayer).pack(
             side="left", padx=4)
         self.lbl_layers = ttk.Label(bar, text="", foreground="#666")
         self.lbl_layers.pack(side="left", padx=8)
@@ -377,6 +377,9 @@ class MapView(ttk.Frame):
             row("a watchtower",
                 lambda x, yy: self._fort_icon(lc, x, yy + 2, 5, "#%02x%02x%02x" % self.LEGEND_RED, (), 2),
                 "watchtower")
+            if any(fo.kind == "landmark" for fo in self.forts):
+                row("a wonder (Edit forts: drag, add)",
+                    lambda x, yy: self._wonder_icon(lc, x, yy, 8, "", ()))
             head("Characters")
             keep = self.draggable
             self.draggable = set(keep) | {"legend_mine"}
@@ -915,6 +918,9 @@ class MapView(ttk.Frame):
             sx, sy = self.to_screen(*fo.xy)
             if not (-20 < sx < cw + 20 and -20 < sy < ch + 20):
                 continue
+            if fo.kind == "landmark":
+                self._wonder_icon(c, sx, sy, max(2.5, min(self.z * 0.45, 13)), fo.type, ("fort", "fort:%d" % fo.line))
+                continue
             col = self.colours.get(fo.owner) if fo.owner else None
             edge = "#%02x%02x%02x" % tuple(col) if col else "#222222"
             w = max(2.0, min(self.z * (0.28 if fo.kind == "watchtower" else 0.42), 12))
@@ -934,6 +940,14 @@ class MapView(ttk.Frame):
             c.create_rectangle(sx - w * 0.25, sy + h * 0.1, sx + w * 0.25, sy + h * 0.6, fill="black",
                                outline="", tags=tags)   # the gate
 
+    def _wonder_icon(self, c, sx, sy, w, kind, tags, sel=False):
+        """A wonder (Rome's landmark): a golden pyramid, its type written beside it up close."""
+        c.create_polygon(sx - w, sy + w * 0.7, sx + w, sy + w * 0.7, sx, sy - w, fill="#e8c34a",
+                         outline="#ffd400" if sel else "#5a4300", width=3 if sel else 1, tags=tags)
+        if self.z >= 10 and kind:
+            c.create_text(sx + w + 3, sy, text=kind.replace("_", " "), anchor="w", fill="#3a2a00",
+                          font=("", 8, "bold"), tags=tags)
+
     def _fort_under(self, x, y):
         return next((fo for fo in self.forts if tuple(fo.xy) == (x, y)), None)
 
@@ -949,6 +963,9 @@ class MapView(ttk.Frame):
                 continue
             tags = ("res", "res:%s" % res["id"])
             sel = res["id"] == self.res_sel
+            if res["kind"] == "landmark":
+                self._wonder_icon(c, sx, sy, max(2.5, min(self.z * 0.45, 13)), res.get("type", ""), tags, sel)
+                continue
             if res["kind"] in ("fort", "watchtower"):          # a fort keeps its tower, picked: a yellow frame
                 w = max(2.0, min(self.z * (0.28 if res["kind"] == "watchtower" else 0.42), 12))
                 self._fort_icon(c, sx, sy, w, "#222222", tags, 1)

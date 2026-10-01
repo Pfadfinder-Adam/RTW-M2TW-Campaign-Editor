@@ -12,7 +12,7 @@ What it writes (Preview lists it; one backup, Restore gives everything back):
     2W x 2H       map_roughness
   and the campaign's disasters.tga, radar_map1 / radar_map2 (when present);
 - descr_terrain.txt: the dimensions (width / height x 3);
-- descr_strat.txt: every character's x / y, every resource, fort and watchtower;
+- descr_strat.txt: every character's x / y, every resource, fort, watchtower and wonder (Rome's landmarks);
 - descr_events.txt: every 'position x, y';
 - map.rwm removed (the game builds it again).
 Not moved (warned): coordinates inside campaign_script.txt and other scripts - they take many forms.
@@ -196,7 +196,7 @@ def features_scaled(path):
 # ---------------------------------------------------------------------------
 RE_CHAR_XY = re.compile(r"(\bx\s+)(-?\d+)(\s*,\s*y\s+)(-?\d+)")
 RE_RESOURCE = re.compile(r"^(\s*resource\s+[^,;]+,\s*)(-?\d+)(\s*,\s*)(-?\d+)")
-RE_FORT = re.compile(r"^(\s*(?:fort|watchtower)\s+)(-?\d+)(\s*,?\s*)(-?\d+)")
+RE_FORT = re.compile(r"^(\s*(?:fort|watchtower|landmark)\s+(?:[A-Za-z_]\w*\s+)?)(-?\d+)(\s*,?\s*)(-?\d+)")
 RE_POSITION = re.compile(r"^(\s*position\s+)(-?\d+)(\s*,\s*)(-?\d+)")
 RE_SCRIPT_XY = re.compile(r"\b\d+\s*,\s*\d+\b")
 
@@ -269,7 +269,7 @@ def plan_upscale(plan, campaign):
             warn.append("descr_terrain.txt: no width / height line found - check its dimensions by hand")
     f = plan.edit(mod.campaign_file(campaign, "descr_strat.txt"))
     n = move_coordinates(f, (RE_CHAR_XY, RE_RESOURCE, RE_FORT))
-    plan.note(f, "%d character / resource / fort place(s) moved to the middle of their 3 x 3 block" % n)
+    plan.note(f, "%d character / resource / fort / wonder place(s) moved to the middle of their 3 x 3 block" % n)
     ev = os.path.join(camp, "descr_events.txt")
     if os.path.isfile(ev):
         f = plan.edit(ev)

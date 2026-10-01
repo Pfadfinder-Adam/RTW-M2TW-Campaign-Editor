@@ -652,18 +652,19 @@ class App(tk.Tk):
         self.fort_bar = ttk.Frame(tab, padding=(0, 0, 0, 4))
         fb = ttk.Frame(self.fort_bar)
         fb.pack(fill="x")
-        ttk.Label(fb, text="Fort / watchtower", font=("", 9, "bold")).pack(side="left")
+        ttk.Label(fb, text="Fort / watchtower / wonder", font=("", 9, "bold")).pack(side="left")
         from .forts import KINDS as FORT_KINDS
         self.v_fort_type = tk.StringVar(value=FORT_KINDS[0])
-        ttk.Combobox(fb, textvariable=self.v_fort_type, width=12, state="readonly", values=FORT_KINDS).pack(
-            side="left", padx=4)
-        ttk.Button(fb, text="Place new", command=lambda: self.res_place_new(self.v_fort_type.get())).pack(
+        self.cb_fort_type = ttk.Combobox(fb, textvariable=self.v_fort_type, width=22, state="readonly",
+                                         values=FORT_KINDS)
+        self.cb_fort_type.pack(side="left", padx=4)
+        ttk.Button(fb, text="Place new", command=lambda: self.res_place_new(self._fort_kind(self.v_fort_type.get()))).pack(
             side="left", padx=2)
         ttk.Button(fb, text="Delete picked", command=self.res_delete).pack(side="left", padx=2)
         flow(fb)
-        self._how(self.fort_bar, "New: pick fort or watchtower, press Place new, then click a land tile on the map "
-                                 "(it copies the line of the nearest one the campaign has).  Move: drag one with "
-                                 "the right mouse button.  Remove: click it, then Delete picked.")
+        self._how(self.fort_bar, "New: pick fort, watchtower or a wonder (Rome), press Place new, then click a land "
+                                 "tile on the map (a fort copies the line of the nearest one the campaign has).  "
+                                 "Move: drag one with the right mouse button.  Remove: click it, then Delete picked.")
         self.lbl_fort_new = ttk.Label(self.fort_bar, text="", foreground="#b05a00", justify="left")
         self.lbl_fort_new.pack(fill="x", anchor="w")
         self.fort_bar.bind("<Configure>", lambda e: self.lbl_fort_new.configure(wraplength=max(200, e.width - 8)),
@@ -2274,7 +2275,8 @@ class App(tk.Tk):
         self.cb_res_type["values"] = kinds
         if self.v_res_type.get() not in kinds:
             self.v_res_type.set(kinds[0] if kinds else "")
-        if self._res_placing and not (forts_on if self._res_placing in FT.KINDS else res_on):
+        if self._res_placing and not (forts_on if (self._res_placing in FT.KINDS or
+                                                   self._res_placing.startswith(FT.LANDMARK)) else res_on):
             self._res_placing = None                    # its mode was switched off
         shown = []
         if res_on:
@@ -2284,9 +2286,13 @@ class App(tk.Tk):
         camp = self.v_campaign.get()
         file_forts = self.strat.forts if self.strat else []
         if forts_on:
-            shown += [{"id": "f%d" % fo.line, "kind": fo.kind, "xy": tuple(self.fort_moves.get(fo.line, fo.xy))}
+            shown += [{"id": "f%d" % fo.line, "kind": fo.kind, "type": fo.type,
+                       "xy": tuple(self.fort_moves.get(fo.line, fo.xy))}
                       for fo in file_forts if fo.line not in self.fort_removed]
-            shown += [{"id": "g%d" % i, "kind": a["kind"], "xy": tuple(a["xy"])} for i, a in enumerate(self.fort_added)]
+            shown += [{"id": "g%d" % i, "kind": a["kind"], "type": a.get("type", ""), "xy": tuple(a["xy"])}
+                      for i, a in enumerate(self.fort_added)]
+            wonders = ["wonder: %s" % t for t in FT.landmark_types(self.mod)]       # Rome's descr_sm_landmarks
+            self.cb_fort_type["values"] = list(FT.KINDS) + wonders
             # a new one copies a line of its kind the campaign has: say at once which kinds cannot be placed
             have = {fo.kind for fo in file_forts if fo.line not in self.fort_removed}
             missing = [k for k in FT.KINDS if k not in have]
@@ -2345,6 +2351,19 @@ class App(tk.Tk):
             kind = self._res_placing
 
             def place(xy):
+                if kind.startswith(FT.LANDMARK + ":"):
+                    why = FT.problem(self.mod, camp, xy, taken(None, True))
+                    if why:
+                        return why
+                    self.remember()
+                    self.fort_added.append({"kind": FT.LANDMARK, "type": kind.split(":", 1)[1], "xy": tuple(xy)})
+                    self._res_sel = "g%d" % (len(self.fort_added) - 1)
+                    self._res_placing = None
+                    self.map_view.set_tool(None)
+                    self.status.set("Wonder %s placed at %d, %d - right drag moves it; Preview, then Apply."
+                                    % (kind.split(":", 1)[1], xy[0], xy[1]))
+                    self.show_map()
+                    return None
                 if kind in FT.KINDS:
                     why = FT.problem(self.mod, camp, xy, taken(None, True))
                     alive = [fo for fo in file_forts if fo.line not in self.fort_removed]
@@ -2371,6 +2390,11 @@ class App(tk.Tk):
                 return None
             kw["on_place"] = place
         return kw
+
+    @staticmethod
+    def _fort_kind(text):
+        """The fort bar's pick as a placing kind: 'fort' / 'watchtower' / 'landmark:<type>' (a wonder)."""
+        return "landmark:" + text.split(":", 1)[1].strip() if text.startswith("wonder:") else text
 
     def res_place_new(self, kind):
         """Place new on the resource / fort bar: the next click on the map puts one there."""

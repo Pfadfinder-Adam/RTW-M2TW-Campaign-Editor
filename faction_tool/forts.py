@@ -6,14 +6,54 @@ diplomacy), `fort 263 330 cerin_amroth_fort culture middle_eastern permanent nam
 mods, in a faction's block). Their exact form differs by game and mod, and neither vanilla Rome nor vanilla Medieval
 II has one, so a new one copies a line of the same kind the campaign already has - the nearest one, only its tile
 changed, put right after it (same section, same owner). Without such a line a new one is refused in plain words.
-A moved one keeps its line, only the tile changes; a removed one loses its line."""
+A moved one keeps its line, only the tile changes; a removed one loses its line.
+
+Rome's wonders (landmarks) go the same way: `landmark pharos 178, 21` near the top of descr_strat.txt (its
+landmarks section), the type one of descr_sm_landmarks.txt (its strat model, picture, battle map). A new one is
+written in that form after the last landmark line. Medieval II's exe reads no landmark lines (no such word in it)."""
 
 import re
 
 from .strat import RE_FORT, Strat
 
 KINDS = ("fort", "watchtower")
-RE_XY_PART = re.compile(r"^(\s*(?:fort|watchtower)\s+)(-?\d+)(\s*,?\s*)(-?\d+)")
+LANDMARK = "landmark"
+RE_XY_PART = re.compile(r"^(\s*(?:fort|watchtower|landmark)\s+(?:[A-Za-z_]\w*\s+)?)(-?\d+)(\s*,?\s*)(-?\d+)")
+
+
+def landmark_types(mod):
+    """The wonder types of descr_sm_landmarks.txt (Rome), [] when the mod has none."""
+    import os
+    p = os.path.join(mod.data, "descr_sm_landmarks.txt")
+    if not os.path.isfile(p):
+        return []
+    out = []
+    for line in mod.load(p).texts():
+        t = line.split(";")[0].split()
+        if len(t) >= 2 and t[0] == "type":
+            out.append(t[1])
+    return out
+
+
+def _landmark_at(f):
+    """The line after which a new landmark goes: the last landmark, else the landmarks section's comment, else
+    before the first resource line."""
+    from .strat import RE_FORT as RF
+    from .textio import strip_comment
+    last = None
+    for i in range(len(f.raw)):
+        m = RF.match(strip_comment(f.text(i)))
+        if m and m.group(1) == LANDMARK:
+            last = i
+    if last is not None:
+        return last
+    for i in range(len(f.raw)):
+        t = f.text(i)
+        if "landmarks section" in t:
+            return i
+        if t.split()[:1] == ["resource"]:
+            return i - 1
+    return -1
 
 
 def read(mod, campaign):
@@ -87,6 +127,15 @@ def apply(plan, campaign, changes):
     inserts = []                                   # (after line, text)
     for a in added:
         kind, xy = a["kind"], tuple(a["xy"])
+        if kind == LANDMARK:
+            why = problem(mod, campaign, xy, others(xy))
+            if why:
+                raise ValueError("a new wonder at %d, %d: %s" % (xy[0], xy[1], why))
+            if a.get("type") not in landmark_types(mod):
+                raise ValueError("'%s' is not a wonder of descr_sm_landmarks.txt" % a.get("type"))
+            inserts.append((_landmark_at(f), "landmark\t%s\t%d,\t%d" % (a["type"], xy[0], xy[1])))
+            plan.note(f, "new wonder %s at %d, %d" % (a["type"], xy[0], xy[1]))
+            continue
         if kind not in KINDS:
             raise ValueError("'%s' is neither a fort nor a watchtower" % kind)
         why = problem(mod, campaign, xy, others(xy))
@@ -114,4 +163,4 @@ def no_example(kind):
             "Medieval II have none), so a new one is made only from one the campaign already has" % kind)
 
 
-__all__ = ["KINDS", "read", "problem", "example", "moved_line", "apply", "no_example", "RE_FORT"]
+__all__ = ["KINDS", "LANDMARK", "landmark_types", "read", "problem", "example", "moved_line", "apply", "no_example", "RE_FORT"]

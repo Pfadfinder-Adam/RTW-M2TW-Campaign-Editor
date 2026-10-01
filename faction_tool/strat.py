@@ -44,7 +44,8 @@ class Character:
 
 # forts and watchtowers: 'fort 263 330 cerin_amroth_fort culture middle_eastern permanent name Cerin Amroth'
 # (Medieval II; REX adds 'permanent' and 'name ...'), Rome also 'fort x, y'
-RE_FORT = re.compile(r"^\s*(fort|watchtower)\s+(-?\d+)\s*,?\s*(-?\d+)(.*)$")
+# forts / watchtowers (both games) and Rome's wonders: `landmark pharos 178, 21` (the type between)
+RE_FORT = re.compile(r"^\s*(fort|watchtower|landmark)\s+(?:([A-Za-z_]\w*)\s+)?(-?\d+)\s*,?\s*(-?\d+)(.*)$")
 
 
 class Fort:
@@ -52,8 +53,9 @@ class Fort:
         m = RE_FORT.match(strip_comment(line))
         self.line, self.text, self.owner = i, line, owner
         self.kind = m.group(1)
-        self.xy = (int(m.group(2)), int(m.group(3)))
-        rest = m.group(4).split()
+        self.type = m.group(2) or ""                     # a landmark's type (descr_sm_landmarks.txt)
+        self.xy = (int(m.group(3)), int(m.group(4)))
+        rest = m.group(5).split()
         self.permanent = "permanent" in rest
         self.name = " ".join(rest[rest.index("name") + 1:]).strip('"') if "name" in rest else ""
 
