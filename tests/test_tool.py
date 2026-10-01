@@ -1588,8 +1588,13 @@ building smith
         d = os.path.join(self.root, "data")
         write(os.path.join(self.root, "RomeTW.exe"), "exe")
         write(os.path.join(d, "descr_ex.txt"), "max_factions 2\n")
-        lim = faction_limit(ModData(self.root))                   # the original exe: 21, descr_ex.txt not read
+        # descr_ex.txt comes only with an engine: REX is taken as installed though its exe was not seen
+        lim = faction_limit(ModData(self.root))
+        self.assertEqual((lim["max"], lim["engine"], lim["known"]), (2, "REX.exe", True))
+        os.rename(os.path.join(d, "descr_ex.txt"), os.path.join(self.root, "ex.bak"))
+        lim = faction_limit(ModData(self.root))                   # the original exe alone: 21
         self.assertEqual((lim["max"], lim["engine"], lim["known"]), (21, None, True))
+        os.rename(os.path.join(self.root, "ex.bak"), os.path.join(d, "descr_ex.txt"))
         os.remove(os.path.join(self.root, "RomeTW.exe"))
         write(os.path.join(self.root, "REX.exe"), "exe")
         before = tree_hash(self.root)
@@ -2455,6 +2460,41 @@ building smith
         restore(ModData(troot), bdir)
         after = {k: v for k, v in tree_hash(troot).items() if "faction_tool_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
+
+    def test_engine_found_in_the_game_folder_and_the_limit_raised_in_the_mod(self):
+        # M2EX copied over the game's root (any case), the mod in mods/<mod>/data: the engine is seen, the
+        # game's descr_ex.txt is read, and a raise goes into the mod's own copy - the game's file untouched
+        from faction_tool import limits
+        game = os.path.join(self.root, "game")
+        os.makedirs(os.path.join(game, "mods"))
+        write(os.path.join(game, "medieval2.exe"), "x")
+        write(os.path.join(game, "data", "descr_ex.txt"), "; Extended settings\nmax_factions 31\nrolloff 1\n")
+        write(os.path.join(game, "data", "descr_religions.txt"), "religions\n{\n}\n")
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "mods", "m", "data"))
+        mod = ModData(os.path.join(game, "mods", "m", "data"))
+        self.assertEqual(limits.engine_of(mod), "M2EX.exe")         # its descr_ex.txt is there
+        self.assertIn("taken as installed", limits.engine_report(mod))
+        os.rename(os.path.join(game, "data", "descr_ex.txt"), os.path.join(game, "ex.bak"))
+        self.assertIsNone(limits.engine_of(mod))
+        self.assertIn("not found", limits.engine_report(mod))
+        os.rename(os.path.join(game, "ex.bak"), os.path.join(game, "data", "descr_ex.txt"))
+        write(os.path.join(game, "m2ex.EXE"), "x")
+        self.assertEqual(limits.engine_of(mod), "M2EX.exe")
+        lim = limits.faction_limit(mod)
+        self.assertEqual((lim["max"], lim["own"]), (31, False))
+        self.assertIn("the mod has none of its own", limits.engine_report(mod))
+        plan = Plan(mod, "a", "b", {})
+        limits.raise_limit(plan, lim, 40)
+        plan.apply()
+        own = os.path.join(game, "mods", "m", "data", "descr_ex.txt")
+        with open(own, "rb") as fh:
+            self.assertIn(b"max_factions 40", fh.read())
+        with open(os.path.join(game, "data", "descr_ex.txt"), "rb") as fh:
+            self.assertIn(b"max_factions 31", fh.read())
+        lim = limits.faction_limit(ModData(mod.data))
+        self.assertEqual((lim["max"], lim["own"]), (40, True))
+        restore(ModData(mod.data), backups(ModData(mod.data))[0])
+        self.assertFalse(os.path.exists(own))
 
     def test_buildings_and_garrisons_for_many_towns(self):
         import random

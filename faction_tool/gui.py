@@ -2921,10 +2921,15 @@ class App(tk.Tk):
         self.fill_faction_list()
         self._game_rows()
         self.load_campaign()
-        from .limits import describe, faction_limit
+        from .limits import describe, engine_report, faction_limit
         lim = faction_limit(self.mod)
+        try:
+            log.write("Engine: " + engine_report(self.mod))
+        except Exception as e:
+            log.write("Engine: not checked (%s)" % e)
         full = len(names) + 1 >= lim["max"] and lim["known"]
-        self.status.set("%s, %d campaign(s).%s" % (describe(lim, len(names) + 1), len(camps),
+        self.status.set("%s%s, %d campaign(s).%s" % (
+            "%s found - " % lim["engine"][:-4] if lim["engine"] else "", describe(lim, len(names) + 1), len(camps),
                         (" Full: a new faction needs a higher max_factions (asked on Preview)." if lim["engine"]
                          else " Full: the original exe takes no new faction.") if full else ""))
         if not getattr(self, "_fix_queued", False):

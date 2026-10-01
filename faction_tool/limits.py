@@ -117,12 +117,53 @@ def ex_setting(mod, key):
     return default
 
 
+RE_ENGINE = re.compile(r"^(rex|m2ex)[^\\/]*\.(exe|xdb)$", re.I)
+
+
+def engine_files(folder):
+    """The engine files in a game folder: REX.exe / M2EX.exe and their .xdb, any case, also a renamed copy
+    ('M2EX (1).exe', 'REX_old.exe') - the engine is copied over the game's root folder."""
+    try:
+        names = os.listdir(folder) if folder and os.path.isdir(folder) else []
+    except OSError:
+        names = []
+    return sorted(n for n in names if RE_ENGINE.match(n) and os.path.isfile(os.path.join(folder, n)))
+
+
 def engine_of(mod):
-    """'REX.exe' / 'M2EX.exe' when that engine lies beside the game the mod belongs to, else None - the one
-    place that decides whether the original exes' limits hold."""
+    """'REX.exe' / 'M2EX.exe' when that engine lies in the game folder the mod belongs to (also when the mod
+    sits in mods/<mod>), else None - the one place that decides whether the original exes' limits hold."""
     from .newmod import game_of
     game = game_of(mod.data)
-    return next((e for e in ENGINES if game and os.path.isfile(os.path.join(game, e))), None)
+    found = engine_files(game)
+    if not found:
+        # descr_ex.txt comes only with an engine (the original games have none): the mod or the game has the
+        # engine's settings, so the engine runs it even when its exe was not seen (renamed, elsewhere)
+        if any(_ci(d, "descr_ex.txt") for d in (mod.data, _ci(game, "data") if game else None) if d):
+            return "M2EX.exe" if game_kind(mod) == "medieval2" else "REX.exe"
+        return None
+    m2 = any(n.lower().startswith("m2ex") for n in found)
+    rex = any(n.lower().startswith("rex") for n in found)
+    if m2 and rex:
+        return "M2EX.exe" if game_kind(mod) == "medieval2" else "REX.exe"
+    return "M2EX.exe" if m2 else "REX.exe"
+
+
+def engine_report(mod):
+    """Plain words: which engine runs this mod, where it was looked for, and where its settings come from."""
+    from .newmod import game_of
+    game = game_of(mod.data)
+    engine = engine_of(mod)
+    name = "M2EX" if game_kind(mod) == "medieval2" else "REX"
+    if not engine:
+        return ("%s not found in %s - the original exe's limits hold (copy %s over the game's folder to lift "
+                "them)" % (name, game or "the game folder (not found)", name))
+    lim = faction_limit(mod)
+    how = "found in %s" % game if engine_files(game) else "taken as installed (its descr_ex.txt is there, its exe " \
+        "was not seen in %s)" % game
+    own = "the mod's own %s" % os.path.basename(lim["file"]) if lim.get("own") else \
+        ("the game's data/descr_ex.txt (the mod has none of its own)" if lim["written"] else "its defaults")
+    return "%s %s - max_factions %d (from %s)" % (engine[:-4], how, lim["max"], own)
 
 
 def lifted(mod, key):
@@ -140,7 +181,7 @@ def faction_limit(mod):
     engine = engine_of(mod)
     known = bool(game) and is_game(game)             # the game folder found (an exe beside the data)
     out = {"max": DEFAULTS[kind], "engine": engine, "file": None, "line": None, "written": False, "game": kind,
-           "known": known}
+           "known": known, "own": False}
     if not engine:
         return out
     game_data = _ci(game, "data") if game else None
@@ -150,6 +191,7 @@ def faction_limit(mod):
             continue
         line, value = _setting(p)
         out["file"] = p
+        out["own"] = folder == mod.data
         if value is not None:
             out.update(max=value, line=line, written=True)
             return out
@@ -176,9 +218,13 @@ def check(plan, count, allow_raise=False):
                   % (count, limit["max"], "Medieval II" if limit["game"] == "medieval2" else "Rome"))
         return limit
     if not limit["engine"]:
+        from .newmod import game_of
+        name = "M2EX" if limit["game"] == "medieval2" else "REX"
         raise LimitError("%d factions, but the game takes at most %d (slave included) - the game would close at "
-                         "start ('Too many factions described here'). The original exe cannot take more; REX "
-                         "(Rome) or M2EX (Medieval II) can. Nothing written." % (count, limit["max"]), limit)
+                         "start ('Too many factions described here'). The original exe cannot take more; %s can, "
+                         "but it was not found in the game folder %s (no %s.exe there). Copy %s over that folder "
+                         "(beside the game's exe) and Load again. Nothing written."
+                         % (count, limit["max"], name, game_of(plan.mod.data), name, name), limit)
     if not allow_raise:
         raise LimitError("%d factions, but %s is set to take at most %d (max_factions%s) - the game would close "
                          "at start ('Too many factions described here'). The tool can raise max_factions to %d "
@@ -193,6 +239,20 @@ def raise_limit(plan, limit, count):
     """max_factions set to count in the descr_ex.txt the engine reads (a line added when missing; the
     file made in the mod's data when there is none) - with the plan's backup like any change."""
     path = limit["file"]
+    own = os.path.join(plan.mod.data, "descr_ex.txt")
+    if path and os.path.isfile(path) and not limit.get("own") and \
+            os.path.normcase(os.path.abspath(path)) != os.path.normcase(os.path.abspath(own)):
+        # the game's copy: the mod gets its own (M2EX's Kingdoms mods each carry their _ex files; the game's
+        # data is never changed for one mod) - the game's file copied, then the line raised in the copy
+        with open(path, "rb") as fh:
+            plan.binary(own, re.sub(rb"(?m)^(\s*max_factions\s+)\d+", lambda m: m.group(1) + str(count).encode(),
+                                    fh.read(), count=1) if limit["line"] is not None else fh.read() +
+                        ("\r\nmax_factions %d\r\n" % count).encode("latin-1"))
+        plan.note(None, "max_factions %d -> %d in %s, a copy of the game's %s for this mod (%s reads it; over it "
+                        "the game closes at start)" % (limit["max"], count, plan.mod.rel(own), plan.mod.rel(path),
+                                                       limit["engine"][:-4]))
+        return
+    path = own if not path else path
     if os.path.isfile(path):
         f = plan.edit(path)
         if limit["line"] is not None:

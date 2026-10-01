@@ -27,6 +27,13 @@
   faction a script names that the mod lacks. "Open another log..." reads any other one.
 
 ### Fixed
+- **M2EX / REX not seen** (a player with M2EX got "the original exe cannot take more"): the engine is found in
+  the game folder by any spelling of its exe or .xdb, and its `descr_ex.txt` (in the mod or the game's data) counts as
+  the engine being installed. Load says which engine was found and where `max_factions` comes from; a refusal says
+  where it looked. Raising the faction limit writes the mod's OWN `descr_ex.txt` (a copy of the game's) - the game's
+  data is not changed for one mod.
+- **Report a bug / Suggest: 'SSL' error on some PCs** (an old Windows or an antivirus checking web traffic): the
+  certificates inside the exe are trusted too; when it still fails, the message says why and to save the zip.
 - **Reports came without the game's log**: the report window looked for `system.log.txt` only in the game folder
   and the loaded mod's folder. It now looks in every mod folder of the game (Rome: `<game>/<mod>/`, Medieval II:
   `<game>/mods/<mod>/`, also `bi/` and `alexander/`, each with its `logs/`), and with no mod loaded in the game

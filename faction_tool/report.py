@@ -232,6 +232,20 @@ def url():
     return (settings.get("report_url") or REPORT_URL).strip()
 
 
+def ssl_context():
+    """The certificates to trust when sending: Windows' own store AND the certifi bundle inside the exe - an old
+    Windows or an antivirus that checks web traffic may lack the root the report service's certificate comes from
+    ('SSL: CERTIFICATE_VERIFY_FAILED' - a player's report did not go)."""
+    import ssl
+    ctx = ssl.create_default_context()
+    try:
+        import certifi
+        ctx.load_verify_locations(certifi.where())
+    except Exception:
+        pass
+    return ctx
+
+
 def send(data, message="", contact="", info=None, timeout=60):
     """The zip to the relay; the report's number it answers (like R-20260930-7F3A). Raises RuntimeError in plain
     words when it did not go."""
@@ -250,7 +264,7 @@ def send(data, message="", contact="", info=None, timeout=60):
         "Content-Type": "application/json", "User-Agent": "RTW-M2TW-Campaign-Editor/%s" % (info or {}).get(
             "editor", "")})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as r:
             answer = json.loads(r.read().decode("utf-8") or "{}")
     except urllib.error.HTTPError as e:
         try:
@@ -259,7 +273,12 @@ def send(data, message="", contact="", info=None, timeout=60):
             why = e.reason
         raise RuntimeError("the report service said no (%s): %s" % (e.code, why))
     except (urllib.error.URLError, OSError, ValueError) as e:
-        raise RuntimeError("could not reach the report service (%s) - is the internet on?" % getattr(e, "reason", e))
+        why = getattr(e, "reason", e)
+        if "SSL" in str(why) or "CERTIFICATE" in str(why).upper():
+            raise RuntimeError("the connection to the report service was refused by a security check on this PC "
+                               "(%s) - often an antivirus that checks web traffic. Save the zip instead and send "
+                               "it on Discord or GitHub." % why)
+        raise RuntimeError("could not reach the report service (%s) - is the internet on?" % why)
     if not answer.get("id"):
         raise RuntimeError("the report service gave no report number: %s" % answer.get("error", answer))
     return answer["id"]
