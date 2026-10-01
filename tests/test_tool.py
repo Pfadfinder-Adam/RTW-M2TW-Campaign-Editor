@@ -2657,6 +2657,28 @@ building smith
         self.assertEqual(len(_same_length_name("#banner_symbol_england", "england", "pisa")), 22)
         self.assertEqual(len(_same_length_name("#banner_symbol_milan", "milan", "papal_states")), 20)
 
+    def test_new_faction_keeps_the_templates_ai_label_and_purse(self):
+        """Medieval II: the template's block header (ai_label - the campaign AI's rule set, denari_kings_purse - its
+        money every turn) comes along to the new faction; the treasury is the one picked."""
+        d = os.path.join(self.root, "data")
+        sp = os.path.join(d, "world", "maps", "campaign", "test", "descr_strat.txt")
+        text = open(sp).read().replace("faction\talpha, balanced smith\ndenari\t1000\n",
+                                       "faction\talpha, balanced smith\nai_label\t\tcatholic\ndenari\t1000\n"
+                                       "denari_kings_purse\t1500\n", 1)
+        self.assertIn("ai_label", text)
+        write(sp, text)
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"},
+                                                              "denari": 3000}})
+        lines = [l.strip() for l in plan.files[sp].texts()]
+        i = lines.index("faction\tbeta, balanced smith")
+        head = lines[i:i + 5]
+        self.assertIn("denari\t3000", head)
+        self.assertIn("ai_label\t\tcatholic", head)
+        self.assertIn("denari_kings_purse\t1500", head)
+        self.assertEqual(sum(1 for l in head if l.startswith("denari\t")), 1)
+        self.assertTrue(any("seldom sends its leader" in n for _, n in plan.notes))
+
     def test_faction_emblem_one_picture_everywhere(self):
         """One emblem picture -> every emblem picture in its own size; mouse over brighter, greyed out grey, selected
         with a glow round the new shape - by the amounts the old pictures show."""

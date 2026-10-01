@@ -179,6 +179,16 @@ def build_start(plan, campaign, start):
     tb = s.faction(t)
     if not tb:
         raise ValueError("template %s has no block in this campaign's descr_strat.txt" % t)
+    head_lines = []                                # the template's header lines but faction / denari (read now,
+    for i in range(tb.start + 1, tb.end):         # before any line of the file moves)
+        tk = tokens(strip_comment(f.text(i)))
+        if not tk:
+            continue
+        if tk[0] in ("settlement", "character", "character_record", "relative", "army", "navy", "fleet") or \
+                tk[0].startswith("{"):
+            break
+        if tk[0] != "denari":
+            head_lines.append(f.text(i).rstrip("\r"))
     from .regionedit import plan_land
     tiles, own = plan_land(plan, campaign)          # new regions of the same Apply count as regions
     new_regions = {r["name"] for r in (plan.opts.get("regions") or {}).get("new") or []}
@@ -437,13 +447,20 @@ def build_start(plan, campaign, start):
             plan.note(f, "heir %s stands next to %s (a town holds one army)" % (name, capital))
     if not own:
         raise ValueError("the new faction needs a leader")
+    if not start.get("characters") and not (start.get("heir") or {}).get("name"):
+        plan.note(f, "AI: %s starts with one army, led by its faction leader: the computer seldom sends its leader out "
+                     "of his town, so an AI-run %s may stand still. Give it a general with an army of his own (Units "
+                     "& armies > New army, or an heir) to make it expand." % (new, new))
 
     header = tokens(tb.header)
     ai = start.get("ai") or " ".join(header[2:]) or "balanced smith"
     block = [f.make(";#######################################################################################>"),
              f.make("faction\t%s, %s" % (new, ai)),
-             f.make("denari\t%d" % int(start.get("denari", 5000))),
-             f.make("")]
+             f.make("denari\t%d" % int(start.get("denari", 5000)))]
+    # the template's other header lines come along (M2TW: ai_label - the campaign AI's rule set in
+    # descr_campaign_ai_db.xml, 'default' when missing; denari_kings_purse - its money every turn)
+    block.extend(f.make(t_) for t_ in head_lines)
+    block.append(f.make(""))
     for b in moved_blocks:
         block.extend(b)
         block.append(f.make(""))
