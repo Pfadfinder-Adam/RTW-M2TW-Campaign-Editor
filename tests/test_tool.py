@@ -2879,6 +2879,46 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual(tree_hash(d), before)
 
+    def test_campaign_events(self):
+        """Tools > Events: descr_events.txt read (a name used twice is name / name#2, as vanilla Rome's
+        plague_in_italy), a date and place changed (the comment kept), one removed, a new one with its title in
+        historic_events.txt; a date the game would not read refused; later factions with the script lines that
+        wake them; Restore byte for byte."""
+        from faction_tool import events as EV
+        from faction_tool.plan import Plan
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "descr_events.txt"),
+              "; events\nevent\tplague\tplague_in_x\ndate\t9 winter ; early\nposition\t1, 2\n\n"
+              "event\thistoric\tnews\ndate\t14\n\nevent\tplague\tplague_in_x\ndate\t20 summer\n")
+        write(os.path.join(self.root, "data", "text", "historic_events.txt"),
+              "{NEWS_TITLE}\tNews\n{NEWS_BODY}\tSomething.\n", utf16=True)
+        write(os.path.join(camp, "campaign_script.txt"), "script\n\tevent\temergent_faction\tslave\nend_script\n")
+        before = tree_hash(os.path.join(self.root, "data"))
+        mod = ModData(self.root)
+        evs = EV.read(mod.load(EV.path_of(mod, "test")))
+        self.assertEqual([(e["id"], e["date"], e["position"]) for e in evs],
+                         [("plague_in_x", "9 winter", (1, 2)), ("news", "14", None), ("plague_in_x#2", "20 summer", None)])
+        self.assertIsNone(EV.date_problem("14 winter", True))
+        self.assertTrue(EV.date_problem("winter 14", True))
+        self.assertTrue(EV.date_problem("14 winter", False))
+        self.assertIsNone(EV.date_problem("210 220", False))
+        plan = Plan(mod, "e", "e", {})
+        EV.apply(plan, "test", {"edit": {"plague_in_x": {"date": "10 summer", "position": [3, 4]}},
+                                "remove": ["plague_in_x#2"],
+                                "new": [{"kind": "volcano", "name": "boom", "date": "30", "position": [5, 6],
+                                         "title": "Boom!"}]})
+        t = plan.files[EV.path_of(mod, "test")].texts()
+        self.assertIn("date\t10 summer ; early", t)
+        self.assertIn("position\t3, 4", t)
+        self.assertEqual(sum(1 for l in t if l.startswith("event")), 3)              # one gone, one new
+        self.assertIn("event\tvolcano\tboom", t)
+        self.assertIn("{BOOM_TITLE}\tBoom!", plan.files[mod.text_file("historic_events.txt")].texts())
+        with self.assertRaises(ValueError):
+            EV.apply(Plan(mod, "e", "e", {}), "test", {"edit": {"news": {"date": "soon"}}})
+        bdir = plan.apply()
+        restore(ModData(self.root), bdir)
+        self.assertEqual(tree_hash(os.path.join(self.root, "data")), before)
+
     def test_path_guard(self):
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads
         out and a crafted backup manifest are refused before anything is written."""

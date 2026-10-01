@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **Events and later factions** (Tools; both games): the campaign's events - date, place, the title and text
+  players see - changed, removed, new ones made; the date checked in each game's form; a name used twice (vanilla
+  Rome's plague_in_italy) handled. The factions that appear later and the script lines that wake them are listed.
 - **Map colour modes and a religion map**: a **Colours** choice on the map's bar (and in Layers) - Political,
   Diplomacy, Religion (Medieval II), None - one at a time instead of colour layers that hid each other. Religion
   colours each region by its main religion (changes made in Religions... not written yet count), paler where the

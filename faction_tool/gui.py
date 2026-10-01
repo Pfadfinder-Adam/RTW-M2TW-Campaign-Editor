@@ -714,6 +714,8 @@ class App(tk.Tk):
                          command=self.campaign_rules)
         menu.add_command(label="Traits and retinue (what they give, their names, new ones)...",
                          command=self.traits_window)
+        menu.add_command(label="Events and later factions (plagues, volcanoes, historic messages)...",
+                         command=self.events_window)
         menu.add_command(label="New religion... (Medieval II)", command=lambda: self.religions_from_menu(True))
         menu.add_command(label="Religions of a region... (Medieval II)", command=lambda: self.religions_from_menu(False))
         menu.add_command(label="Restore a backup...", command=self.restore)
@@ -3661,6 +3663,11 @@ class App(tk.Tk):
             self._limit_raise = self.mod.data         # asked once per mod: Preview and Apply both use it
             opts["raise_faction_limit"] = True
             return build(ModData(self.mod.data), self.v_campaign.get(), template, name, opts)
+
+    def events_window(self):
+        """Tools > Events and later factions...: the campaign's descr_events.txt."""
+        from .gui_events import open_events
+        open_events(self)
 
     def traits_window(self):
         """Tools > Traits and retinue... (also in the Character editor): the traits and ancillaries themselves."""
