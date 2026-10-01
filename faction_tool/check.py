@@ -250,6 +250,12 @@ def engine_limits(mod, campaign, regions, units, blds, img):
     if nfac > lim["max"]:
         out.append(("%d factions, the game takes %d - it closes at the start (\"Too many factions described\")"
                     % (nfac, lim["max"]), True))
+    if engine:
+        from .gamefix import missing_engine_files
+        missing = missing_engine_files(mod)
+        if missing:
+            out.append(("    the mod has no %s of its own (the game's data has) - %s may run it on its built-in "
+                        "defaults; Load offers to copy them in" % (", ".join(missing), engine[:-4]), False))
     for key, most in hard.items():
         n = counts.get(key)
         over = n is not None and n > most

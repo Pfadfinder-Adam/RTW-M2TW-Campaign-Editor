@@ -18,6 +18,9 @@
   minute.
 
 ### Added
+- **Engine files missing in a mod**: Load (and Check mod files) says when a mod of a game with REX / M2EX lacks
+  the engine's own files the game's data has (`descr_ex.txt`, `descr_caps_ex.txt`, other `*_ex` files) - the engine
+  may then run it on its built-in defaults - and with a yes copies the game's ones into the mod (backup, Restore).
 - **Buildings and garrisons for many towns** (Tools, the Buildings tab's *Many towns at once...*, and the Map's new
   **Pick towns**: the ground only, a click picks a town in yellow, a right click acts on all of them): a building
   level added to (or a chain taken out of) many towns of any owner at once, picked by owner, level and city / castle;

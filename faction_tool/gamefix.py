@@ -36,6 +36,17 @@ def problems(mod):
                            "at start ('Failed to load text vegetation database'). The fix: vegetation_source "
                            "binary (the game's own vegetation.db, M2EX's default for mods).",
                     "file": caps, "line": i, "new": f.text(i).replace(m.group(0), m.group(1) + "binary", 1)})
+    missing = missing_engine_files(mod)
+    if missing:
+        from .limits import engine_of
+        name = engine_of(mod)[:-4]
+        out.append({"id": "engine_files", "names": missing,
+                    "why": "This mod has no %s of its own, though %s lies in the game's data. %s reads its "
+                           "settings (the faction limit, sprites, models, AI...) from the mod's own data folder - "
+                           "modders find that a mod without them runs on %s's built-in defaults, not on the game's "
+                           "settings. The fix: the game's copies go into the mod (they can be changed there "
+                           "for this mod alone)." % (", ".join(missing), "it" if len(missing) == 1 else "they",
+                                                     name, name)})
     old = _old_culture_module(mod)
     if old:
         out.append({"id": "old_culture_names", "file": old[0], "table": old[1],
@@ -66,10 +77,37 @@ def _old_culture_module(mod):
     return path, table if isinstance(table, dict) else {}
 
 
+def missing_engine_files(mod):
+    """The engine's own files (descr_ex.txt, descr_caps_ex.txt, *_ex.txt / *_ex.xml) the game's data has and this
+    mod's data lacks - only for a mod (not the game's own data) of a game with REX / M2EX."""
+    from .limits import engine_of
+    from .newmod import game_of
+    game = game_of(mod.data)
+    gdata = _ci(game, "data") if game else None
+    if not gdata or os.path.normcase(os.path.abspath(gdata)) == os.path.normcase(os.path.abspath(mod.data)):
+        return []
+    if not engine_of(mod):
+        return []
+    try:
+        names = sorted(n for n in os.listdir(gdata) if re.search(r"_ex\.(txt|xml)$", n, re.I)
+                       and os.path.isfile(os.path.join(gdata, n)))
+    except OSError:
+        return []
+    return [n for n in names if not _ci(mod.data, n)]
+
+
 def fix_plan(mod, found):
     """A Plan that puts the problems found right."""
     plan = Plan(mod, "setup", "setup_fix")
     for p in found:
+        if p["id"] == "engine_files":
+            from .newmod import game_of
+            gdata = _ci(game_of(mod.data), "data")
+            for n in p["names"]:
+                with open(os.path.join(gdata, n), "rb") as fh:
+                    plan.binary(os.path.join(mod.data, n), fh.read())
+                plan.note(None, "%s copied from the game's data into the mod" % n)
+            continue
         if p["id"] == "old_culture_names":
             from . import culturenames as CN
             for camp in mod.campaigns() if p["table"] else []:

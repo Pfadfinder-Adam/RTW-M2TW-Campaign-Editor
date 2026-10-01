@@ -2512,6 +2512,29 @@ building smith
         restore(ModData(mod.data), backups(ModData(mod.data))[0])
         self.assertFalse(os.path.exists(own))
 
+    def test_engine_files_missing_in_a_mod(self):
+        """A mod of a game with M2EX / REX that lacks the engine's own files (*_ex.txt) is told so on Load, and
+        with a yes gets the game's copies (backup, Restore removes them)."""
+        from faction_tool import gamefix
+        game = os.path.join(self.root, "game")
+        write(os.path.join(game, "medieval2.exe"), "x")
+        write(os.path.join(game, "M2EX.exe"), "x")
+        write(os.path.join(game, "data", "descr_ex.txt"), "max_factions 31\n")
+        write(os.path.join(game, "data", "descr_caps_ex.txt"), "sprite_format xml\n")
+        write(os.path.join(game, "data", "descr_religions.txt"), "x\n")
+        write(os.path.join(game, "data", "descr_sm_factions.txt"), SM)
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "mods", "m", "data"))
+        write(os.path.join(game, "mods", "m", "data", "descr_caps_ex.txt"), "sprite_format xml\n")
+        mod = ModData(os.path.join(game, "mods", "m", "data"))
+        found = [p for p in gamefix.problems(mod) if p["id"] == "engine_files"]
+        self.assertEqual(found[0]["names"], ["descr_ex.txt"])
+        self.assertEqual(gamefix.missing_engine_files(ModData(os.path.join(game, "data"))), [])   # the game itself
+        gamefix.fix_plan(mod, found).apply()
+        self.assertTrue(os.path.isfile(os.path.join(mod.data, "descr_ex.txt")))
+        self.assertEqual(gamefix.missing_engine_files(ModData(mod.data)), [])
+        restore(ModData(mod.data), backups(ModData(mod.data))[0])
+        self.assertFalse(os.path.exists(os.path.join(mod.data, "descr_ex.txt")))
+
     def test_buildings_and_garrisons_for_many_towns(self):
         import random
         from faction_tool import masstown as M
