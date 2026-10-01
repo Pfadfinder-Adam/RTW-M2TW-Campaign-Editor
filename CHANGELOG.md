@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Changed
+- **The exe goes into the game's folder** (beside RomeTW.exe / medieval2.exe): it finds the game and its mods by
+  itself; the Mod list shows the mods of every game folder used (both games at once). Beside it only
+  `CampaignEditor_settings.json` and `CampaignEditor_logs` (the log `CampaignEditor.log`, the zips, `sessions`).
+  Backups go to `CampaignEditor_backups` (old `faction_tool_backups` still listed and restored). Old files are moved
+  in by themselves.
+- **Logs saved by themselves**: on every close, `CampaignEditor_logs/sessions/<time>/` gets that session's log and
+  the game's newest `system.log.txt` (the last 30 sessions kept) - nothing to press.
 - The Map's switches wrap onto a second row in a narrow window (Find was cut off); the mouse how-to is a '?'.
 - **Long explanations fold into a '?'**: the Terrain editor's hint under each brush, and the intro texts of the
   Roster, Religions, Settlements, Traits, Events, Campaign rules, Art, pack and family tree panels show their first

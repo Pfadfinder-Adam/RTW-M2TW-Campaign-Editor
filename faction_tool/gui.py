@@ -165,7 +165,7 @@ _showerror = messagebox.showerror
 
 
 def _logged_error(title=None, message=None, **kw):
-    """Every error box also goes to faction_tool.log."""
+    """Every error box also goes to the log (CampaignEditor.log)."""
     log.error(message)
     return _showerror(title, message, **kw)
 
@@ -2840,7 +2840,7 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ loading
     def browse(self):
         d = filedialog.askdirectory(title="The mod's data folder",
-                                    initialdir=settings.get("game") or "")
+                                    initialdir=log.exe_game() or settings.get("game") or "")
         if d:
             self.v_path.set(d)
             self.load()
@@ -2853,9 +2853,38 @@ class App(tk.Tk):
             self.v_path.set(last)
             self.load()
 
+    def save_session(self):
+        """On close: this session's log and the game's newest system.log.txt into CampaignEditor_logs/sessions
+        (once per run)."""
+        if getattr(self, "_session_saved", False):
+            return
+        self._session_saved = True
+        try:
+            game = (game_of(self.mod.data) if self.mod else None) or log.exe_game() or settings.get("game")
+            mod_dir = os.path.dirname(self.mod.data) if self.mod else None
+            log.write("Close")
+            log.save_session(game, mod_dir)
+        except Exception:
+            pass
+
+    def games(self, game=None):
+        """The game folders the Mod list shows: the one the exe lies in, the one given, the ones used before (a
+        modder with both games sees both - the exe in one game's folder reaches the other's mods too)."""
+        out = []
+        for g in [log.exe_game(), game, settings.get("game")] + list(settings.get("games") or []):
+            if g and is_game(g) and os.path.normcase(os.path.abspath(g)) not in \
+                    [os.path.normcase(os.path.abspath(x)) for x in out]:
+                out.append(g)
+        return out
+
     def fill_mods(self, game):
-        """The Mod list: what the game folder holds (the game, bi, HLR, mods made here...)."""
-        self._mods = list_mods(game) if game else []
+        """The Mod list: what the game folders hold (the game, bi, HLR, mods made here...) - the exe's own game
+        first; with two games each line starts with its game's folder name."""
+        games = self.games(game)
+        self._mods = []
+        for g in games:
+            for label, d in list_mods(g):
+                self._mods.append(("%s: %s" % (os.path.basename(g), label) if len(games) > 1 else label, d))
         self.cb_mods["values"] = [label for label, _ in self._mods]
         here = os.path.normcase(os.path.abspath(self.mod.data)) if self.mod else None
         self.v_modpick.set(next((label for label, d in self._mods
@@ -2911,6 +2940,8 @@ class App(tk.Tk):
         settings.put("mod_data", self.mod.data)
         if is_game(game):
             settings.put("game", game)
+            used = [g for g in settings.get("games") or [] if os.path.normcase(g) != os.path.normcase(game)]
+            settings.put("games", ([game] + used)[:4])
         self.fill_mods(settings.get("game"))
         camps = self.mod.campaigns()
         self.cb_campaign["values"] = camps
@@ -4421,7 +4452,7 @@ class App(tk.Tk):
         self._last_status_shape = shape
 
     def show_log(self):
-        """The tool's log - send faction_tool.log along with the game's system.log.txt."""
+        """The tool's log - send CampaignEditor.log along with the game's system.log.txt."""
         self.show_text("Log - %s" % (log.path() or "no log file"), log.tail() or "(empty)",
                        extra=[("Save logs (zip)...", self.save_logs), ("Report a bug...", self.send_report)])
 
@@ -4439,7 +4470,7 @@ class App(tk.Tk):
             mod_dir = os.path.dirname(os.path.abspath(self.mod.data))
         stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         base = os.path.basename(mod_dir) if mod_dir else "tool"
-        # into the tool's own folder (RTW-M2TW-Campaign-Editor-files/logs next to the exe), not the game's
+        # into the tool's own CampaignEditor_logs next to the exe
         where = log.logs_dir() or mod_dir or ""
         try:
             os.makedirs(where, exist_ok=True)
@@ -4525,5 +4556,14 @@ class App(tk.Tk):
         ttk.Button(w, text="Undo back to here", command=go).pack(pady=(0, 6))
 
 def main():
-    log.write("Start %s" % APP)
-    App().mainloop()
+    log.session_start()
+    log.write("Start %s %s (in %s)" % (APP, VERSION, log.exe_dir()))
+    app = App()
+
+    def close():
+        app.save_session()
+        app.destroy()
+    app.protocol("WM_DELETE_WINDOW", close)
+    import atexit
+    atexit.register(app.save_session)             # also when the window goes another way
+    app.mainloop()

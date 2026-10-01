@@ -129,7 +129,7 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 > 1. **The logs:** in the tool, **Report a bug / Suggest** (bottom right) sends them to the author in one click - no
 >    account needed, your names cut out first (Windows user name, computer name, e-mail, Steam ID, the player's
 >    name), and you see exactly what goes before you press Send ([video](https://youtu.be/7MbYR9ywNsI)). Or **Tools -> Save logs (zip)** - the same logs,
->    names cut out, as one `.zip` in `RTW-M2TW-Campaign-Editor-files/logs` next to the exe, to send yourself.
+>    names cut out, as one `.zip` in `CampaignEditor_logs` next to the exe, to send yourself.
 > 2. **A video or a screenshot** of what you did and what went wrong.
 >
 > With these the cause is usually found and fixed **the same day** (the logs name the file, line and
@@ -150,7 +150,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 - **Windows:** grab `RTW-M2TW-Campaign-Editor.exe` from the [Releases](../../releases) page. No install needed.
 
-**Installing:** make a new, empty folder for the editor wherever suits you (for example `Documents\RTW & M2TW Campaign Editor` - not the game folder, not straight into Downloads or the desktop) and put the `.exe` in it. Start it from there. Next to the exe it makes the folder `RTW-M2TW-Campaign-Editor-files` with its settings and, in its `logs` folder, its log and the logs zips you send with a bug report; an update is simply the new exe in the same folder (the settings stay).
+**Installing:** put the `.exe` into the **game's folder** (beside `RomeTW.exe` / `medieval2.exe`, where REX or M2EX also goes) and start it from there - or make a shortcut to it on the desktop. It then finds the game and every mod in it by itself (Rome: `<game>\<mod>`, Medieval II: `<game>\mods\<mod>`); a mod of the other game, once loaded with Browse..., stays in the Mod list too. Beside the exe it keeps just two things of its own: `CampaignEditor_settings.json` and the folder `CampaignEditor_logs` - its log, the logs zips, and on every close a `sessions` folder with that session's log and the game's newest `system.log.txt` (nothing to press; a bug report sends them). An update is simply the new exe in the same place. Older versions' `RTW-M2TW-Campaign-Editor-files` is moved in by itself.
 - **Any OS with Python 3.8+:** `python rtw_faction_tool.py` (standard library; Pillow for the pictures).
   **Linux:** the window needs tkinter and Pillow's Tk part, which many distributions ship apart from Python -
   Debian / Ubuntu / Mint: `sudo apt install python3-tk python3-pil python3-pil.imagetk`, then
@@ -239,9 +239,9 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **Undo, keys, help:** **Undo** / **Redo** (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z) step back through towns picked, garrisons, buildings, settlement sizes, map moves, armies and diplomacy. Ctrl+P preview, Ctrl+S apply, F5 load again, Ctrl+1..5 the tabs, F1 or **Help** for a short guide. Far out on the map only towns are drawn; ports and characters show from zoom 4.
 
-**Log:** the tool keeps `faction_tool.log` in `RTW-M2TW-Campaign-Editor-files\logs` next to the exe, together with the logs zips (or in `%APPDATA%\RTW Faction Tool\logs`): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
+**Log:** the tool keeps `CampaignEditor.log` in `CampaignEditor_logs` next to the exe, together with the logs zips and the sessions (or in `%APPDATA%\RTW-M2TW-Campaign-Editor` where the exe's folder cannot be written): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
 
-**Undo:** press **Restore a backup...** Backups sit in `faction_tool_backups` next to `data`. Pick the write to go back to: it and every later one are undone in one go.
+**Undo:** press **Restore a backup...** Backups sit in `CampaignEditor_backups` next to `data` (older versions' `faction_tool_backups` are listed too). Pick the write to go back to: it and every later one are undone in one go.
 
 ## What it changes
 
@@ -313,7 +313,7 @@ free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 - Only builds made by this repository's GitHub Actions release workflow from its own source are signed.
 - Committers and reviewers: [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew). Approver (every signing request): [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew).
 
-Privacy: this program will not transfer any information to other networked systems. It reads and writes only the game or mod folder you load and its own `RTW-M2TW-Campaign-Editor-files` folder (see [SECURITY.md](SECURITY.md)).
+Privacy: this program transfers nothing to other networked systems unless you press **Send** in *Report a bug / Suggest* (then only what that window shows). It reads and writes only the game or mod folder you load and its own files beside the exe (`CampaignEditor_settings.json`, `CampaignEditor_logs`, `CampaignEditor_addons`) (see [SECURITY.md](SECURITY.md)).
 
 ## License
 

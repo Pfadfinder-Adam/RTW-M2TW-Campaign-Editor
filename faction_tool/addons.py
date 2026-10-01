@@ -194,7 +194,16 @@ def library_dir():
     """The tool's own addons/ folder (next to the exe): add-ons someone added."""
     from . import log
     home = log.home()
-    return os.path.join(home, "addons") if home else None
+    if not home:
+        return None
+    new = os.path.join(home, log.SHORT + "_addons")              # beside the exe, apart from the game's own folders
+    old = os.path.join(home, log.FOLDER, "addons")                # up to 0.28: in RTW-M2TW-Campaign-Editor-files
+    if os.path.isdir(old) and not os.path.exists(new):
+        try:
+            os.replace(old, new)
+        except OSError:
+            return old
+    return new
 
 
 def library():

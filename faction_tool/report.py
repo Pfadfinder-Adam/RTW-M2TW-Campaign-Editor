@@ -108,7 +108,7 @@ def game_logs(game, mod_dir=None, keep=3):
             continue
         for n in names:
             d = os.path.join(parent, n)
-            if os.path.isdir(d) and n.lower() not in ("data", "faction_tool_backups"):
+            if os.path.isdir(d) and n.lower() not in ("data", "faction_tool_backups", "campaigneditor_backups"):
                 add(d)
     newest = lambda fs: sorted(fs, key=lambda f: -os.path.getmtime(f))
     return (newest(mine) + newest(others))[:keep]
@@ -141,7 +141,7 @@ def found(game=None, mod_dir=None):
     if not game:
         try:
             from . import settings
-            game = settings.get("game") or None            # no mod loaded: the game folder used last
+            game = log.exe_game() or settings.get("game") or None   # no mod loaded: the exe's game, the one used last
         except Exception:
             game = None
     p = log.path()

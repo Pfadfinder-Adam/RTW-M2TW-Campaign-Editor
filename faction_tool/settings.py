@@ -1,5 +1,6 @@
 """Small window settings kept between starts (the legend shown or hidden...), in
-faction_tool_settings.json in the tool's folder (log.home()). Never raises: a missing or broken
+CampaignEditor_settings.json beside the exe (log.home(); older versions' faction_tool_settings.json is moved
+in once). Never raises: a missing or broken
 file means the defaults."""
 
 import json
@@ -12,7 +13,7 @@ _data = None
 
 def _path():
     h = log.home()
-    return os.path.join(h, "faction_tool_settings.json") if h else None
+    return os.path.join(h, log.SETTINGS_NAME) if h else None
 
 
 def _load():

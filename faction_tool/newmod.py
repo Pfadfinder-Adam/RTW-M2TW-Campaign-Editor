@@ -18,7 +18,7 @@ import os
 import re
 import shutil
 
-from .plan import BACKUP_DIR
+from .plan import BACKUP_DIRS
 
 MARKER = "faction_tool_mod.json"
 # written by the tool, so real copies; the rest is linked
@@ -61,7 +61,7 @@ def list_mods(game):
         if not os.path.isdir(parent):
             continue
         for n in sorted(os.listdir(parent), key=str.lower):
-            if n == BACKUP_DIR or (not prefix and n.lower() in ("data", "mods")):
+            if n in BACKUP_DIRS or (not prefix and n.lower() in ("data", "mods")):
                 continue
             d = os.path.join(parent, n, "data")
             if os.path.isfile(os.path.join(d, "descr_sm_factions.txt")):
@@ -169,7 +169,7 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
         starts = _m2_start(game, base_dir, base_name, name) if m2 else _bats(base_dir, base_name, name, game)
         for src_root, dst_root in sources:
             for dirpath, dirnames, filenames in os.walk(src_root):
-                dirnames[:] = [d for d in dirnames if d != BACKUP_DIR]
+                dirnames[:] = [d for d in dirnames if d not in BACKUP_DIRS]
                 rel = os.path.relpath(dirpath, src_root)
                 out_dir = os.path.normpath(os.path.join(dst_root, rel))
                 os.makedirs(out_dir, exist_ok=True)

@@ -1,5 +1,5 @@
-"""Settings: everything the tool keeps between starts, in one window (faction_tool_settings.json in the tool's
-folder) - the look, the language, the game folder and the mod opened last, the map's look, what a report says about
+"""Settings: everything the tool keeps between starts, in one window (CampaignEditor_settings.json beside the exe)
+ - the look, the language, the game folder and the mod opened last, the map's look, what a report says about
 you, the set-up fixes you said no to, and the tool's own folders. Each change is kept at once."""
 
 import os
@@ -160,13 +160,17 @@ class SettingsWindow(tk.Toplevel):
         self._show_fixes()
 
     def _folders(self, body):
-        _, row = self._box(body, "Folders", "The tool's folder holds these settings and the logs; a mod's backups "
-                                            "(Restore) lie beside its data folder in faction_tool_backups.")
-        ttk.Button(row, text="Open the tool's folder", command=lambda: open_folder(log.home())).pack(side="left")
+        _, row = self._box(body, "Folders", "Beside the exe: CampaignEditor_settings.json (these settings) and "
+                                            "CampaignEditor_logs (the log, and on every close the session's log with "
+                                            "the game's system.log.txt in sessions/). A mod's backups (Restore) lie "
+                                            "beside its data folder in CampaignEditor_backups (older ones in "
+                                            "faction_tool_backups).")
+        ttk.Button(row, text="Open the logs folder", command=lambda: open_folder(log.logs_dir())).pack(side="left")
         mod = getattr(self.app, "mod", None)
         if mod is not None:
-            from .plan import BACKUP_DIR
-            b = os.path.join(os.path.dirname(mod.data), BACKUP_DIR)
+            from .plan import BACKUP_DIRS
+            b = next((x for x in (os.path.join(os.path.dirname(mod.data), n) for n in BACKUP_DIRS)
+                      if os.path.isdir(x)), os.path.join(os.path.dirname(mod.data), BACKUP_DIRS[0]))
             btn = ttk.Button(row, text="Open this mod's backups", command=lambda: open_folder(b))
             btn.pack(side="left", padx=6)
             if not os.path.isdir(b):

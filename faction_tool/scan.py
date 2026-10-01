@@ -9,7 +9,7 @@ import re
 from collections import Counter
 
 from .moddata import DATA_FILES
-from .plan import BACKUP_DIR
+from .plan import BACKUP_DIRS
 from .textio import strip_comment, tokens
 
 TEXT_EXT = {".txt", ".json", ".xml", ".nut", ".lua", ".ini", ".cfg", ".csv", ".yml", ".yaml", ".rsd"}
@@ -145,7 +145,7 @@ class Scan:
             keep = []
             for d in sorted(dirnames):
                 full = os.path.join(dirpath, d)
-                if d == BACKUP_DIR:
+                if d in BACKUP_DIRS:
                     continue
                 if self.rules and _ignored(self.rel(full), True, self.rules):
                     self.user_dirs.append(self.rel(full) + "/")
@@ -534,7 +534,7 @@ def make_manifest(game_root, out_path=None, progress=None):
         keep = []
         for d in sorted(dirnames):
             full = os.path.join(dirpath, d)
-            if d == BACKUP_DIR:
+            if d in BACKUP_DIRS:
                 continue
             if dirpath == game_root and d.lower() not in EXPANSIONS and \
                     os.path.isfile(os.path.join(full, "data", "descr_sm_factions.txt")):

@@ -13,7 +13,7 @@ removed (the game builds it again). Everything goes through a Plan: Preview firs
 import os
 import re
 
-from .plan import BACKUP_DIR
+from .plan import BACKUP_DIRS
 from .scan import _read_text
 
 TEXT_EXT = (".txt", ".xml", ".nut", ".lua")
@@ -97,7 +97,7 @@ def _files(mod, campaign):
             if c.lower() != campaign.lower() and _ci(os.path.join(camp_root, c), "descr_regions.txt"):
                 own_map.add(c.lower())
     for dirpath, dirnames, filenames in os.walk(mod.data):
-        dirnames[:] = [d for d in dirnames if d != BACKUP_DIR and not (
+        dirnames[:] = [d for d in dirnames if d not in BACKUP_DIRS and not (
             os.path.normcase(dirpath) == os.path.normcase(camp_root) and d.lower() in own_map)]
         for n in filenames:
             low = n.lower()

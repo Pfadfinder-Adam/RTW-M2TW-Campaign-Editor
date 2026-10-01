@@ -239,7 +239,7 @@ class ToolTest(unittest.TestCase):
 
         restore(mod, backups(mod)[0])
         after = tree_hash(self.root)
-        after = {k: v for k, v in after.items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in after.items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
     def test_clone_names_the_new_faction_in_medieval2_lists(self):
@@ -280,14 +280,14 @@ class ToolTest(unittest.TestCase):
         self.assertIn("factions slave alpha beta", rd("world", "maps", "base", "descr_sounds_music_types.txt"))
         self.assertEqual(rd("descr_banners_new.xml").count("Faction="), 3)            # slave's not copied
         restore(ModData(self.root), backups(ModData(self.root))[0])
-        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
     def test_restore_to_undoes_a_backup_and_every_newer_one(self):
         before = tree_hash(self.root)
         mod = ModData(self.root)
         build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}}).apply()
-        mid = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        mid = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         mod = ModData(self.root)
         p2 = Plan(mod, None, "gamma")
         p2.binary(os.path.join(mod.campaign_dir("test"), "map_beta.tga"), b"repainted")
@@ -300,7 +300,7 @@ class ToolTest(unittest.TestCase):
         ms = restore_to(mod, bs[1])                  # the oldest: both are undone, newest first
         self.assertEqual(len(ms), 2)
         self.assertEqual(backups(mod), [])
-        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
         self.assertNotEqual(mid, after)
 
@@ -343,7 +343,7 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(got.model("spears").factions(), ["slave"])           # the template has none there
         self.assertEqual(MDB.ModelDB(got.dump()).dump(), got.dump())
         restore(ModData(self.root), backups(ModData(self.root))[0])
-        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "faction_tool_backups" not in k}, before)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
     def test_medieval_city_and_castle(self):
         # M2: a castle = `settlement castle` + castle levels; the game converts by each level's convert_to
@@ -472,7 +472,7 @@ building smith
         self.assertEqual(len(got), 2)
         p2.apply()
         restore_to(ModData(self.root), backups(ModData(self.root))[-1])
-        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
     def test_name_section_shared_by_factions(self):
@@ -585,7 +585,7 @@ building smith
         self.assertGreater(SY.flag_image(mod, "slave").getpixel((32, 32))[0], 200)     # still orange
         self.assertEqual(SY.flag_image(mod, "beta").getpixel((32, 32))[:3], SY.flag_image(mod, "alpha").getpixel((32, 32))[:3])
         restore_to(mod, backups(mod)[-1])
-        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
     def test_new_faction_gets_its_own_flag_symbol_and_logos(self):
@@ -640,7 +640,7 @@ building smith
         self.assertEqual(SY.logo_image(mod, "alpha", SY.LOGO).getpixel((26, 26))[:3], (0, 0, 200))
         restore_to(mod, backups(mod)[-1])
         os.remove(red)
-        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
     def test_settlement_names_follow_owner_culture(self):
@@ -697,7 +697,7 @@ building smith
         with self.assertRaises(ValueError):                            # a culture the mod has not
             apply_opts(Plan(ModData(hlr), None, "map"), "test", {"culture_names": {"Atown": {"gaulish": "X"}}})
         restore_to(mod, backups(mod)[-1])
-        after = {k: v for k, v in tree_hash(hlr).items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in tree_hash(hlr).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
         self.assertEqual(CN.engine(mod), ("REX", True))
         # Medieval II: M2EX runs it (the user: "on Medieval it is M2EX, not REX"); without it nothing is written
@@ -795,7 +795,7 @@ building smith
             self.assertTrue(os.path.exists(os.path.join(ui, *rel)), rel)
         self.assertEqual(sum("#alpha_general.tga" in m for _, m in plan.notes), 1, plan.report())
         restore(mod, backups(mod)[0])
-        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
     def test_heir_with_one_town_stands_next_to_it(self):
@@ -1059,7 +1059,7 @@ building smith
         with open(os.path.join(d, "ui", "roman", "interface", "page.tga"), "rb") as fh:
             self.assertEqual(MP.picture_size(fh.read(), "page.tga"), (64, 64))
         restore(ModData(self.root), backups(ModData(self.root))[0])
-        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
     def test_town_ring_rule(self):
@@ -1223,7 +1223,7 @@ building smith
                          ["alpha general", "rebel spear"])          # the bodyguard stays
         self.assertIn("alpha", [n for _, n in s.nonplayable["items"]])
         restore(mod, backups(mod)[0])
-        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
     def _three_towns(self):
@@ -1257,7 +1257,7 @@ building smith
         boris = s.faction("alpha").characters[0]
         self.assertIn(boris.xy, [(2, 2), (5, 1)])                        # moved into one of its new towns
         restore(mod, backups(mod)[0])
-        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
         with self.assertRaises(ValueError):                               # a name with no string
             edit(ModData(self.root), "test", "alpha", {"leader": {"name": "Zed"}})
@@ -1445,7 +1445,7 @@ building smith
         mod = ModData(self.root)
         restore(mod, backups(mod)[0])
         after = tree_hash(self.root)
-        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
+        self.assertEqual({k: v for k, v in after.items() if "_backups" not in k}, before)
 
     def test_family_m2_portrait(self):
         """Medieval II: a character's own portrait = ui/custom_portraits/<folder>/portrait_young|old|dead.tga
@@ -1482,7 +1482,7 @@ building smith
         restore(mod, backups(mod)[0])
         self.assertFalse(os.path.exists(os.path.join(self.root, "data", "ui", "custom_portraits")))
         after = tree_hash(self.root)
-        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
+        self.assertEqual({k: v for k, v in after.items() if "_backups" not in k}, before)
 
     def test_portrait_library_add(self):
         """A new portrait goes under the next free number into every folder of its group (young, old,
@@ -1522,7 +1522,7 @@ building smith
         mod = ModData(self.root)
         restore(mod, backups(mod)[0])
         after = tree_hash(self.root)
-        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
+        self.assertEqual({k: v for k, v in after.items() if "_backups" not in k}, before)
 
     def test_volcanoes_and_land_bridges(self):
         from faction_tool import terrain as T
@@ -1609,31 +1609,47 @@ building smith
             self.assertIn("max_factions 3", fh.read())
         restore(ModData(self.root), backups(ModData(self.root))[0])
         after = tree_hash(self.root)
-        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
+        self.assertEqual({k: v for k, v in after.items() if "_backups" not in k}, before)
         # no descr_ex.txt at all: REX's default (21 for Rome) - far from 3 factions here
         os.remove(os.path.join(d, "descr_ex.txt"))
         self.assertEqual(faction_limit(ModData(self.root))["max"], 21)
 
     def test_log_in_logs_folder(self):
-        """The log lies in <the tool's folder>/logs with the logs zips; the settings stay in the tool's
-        folder; a log an older version left in the tool's folder moves into logs/ once."""
+        """Beside the exe (in the game's folder): CampaignEditor_logs/ (the log, the zips, sessions/) and
+        CampaignEditor_settings.json. An older version's RTW-M2TW-Campaign-Editor-files (settings, logs/ with
+        faction_tool.log and a zip) is moved in once and goes; on close a session folder gets this session's part
+        of the log and the game's system.log.txt."""
         from faction_tool import log, settings
-        home = os.path.join(self.root, "RTW-M2TW-Campaign-Editor-files")
-        os.makedirs(home)
-        with open(os.path.join(home, "faction_tool.log"), "w") as fh:
+        home = os.path.join(self.root, "game")
+        old = os.path.join(home, "RTW-M2TW-Campaign-Editor-files")
+        os.makedirs(os.path.join(old, "logs"))
+        write(os.path.join(home, "RomeTW.exe"), "exe")
+        write(os.path.join(home, "system.log.txt"), "game log\n")
+        with open(os.path.join(old, "logs", "faction_tool.log"), "w") as fh:
             fh.write("old entry\n")
-        saved = (log._candidates, log._home, log._path, settings._data)
+        write(os.path.join(old, "logs", "logs_1.zip"), "zip")
+        write(os.path.join(old, "faction_tool_settings.json"), '{"theme": "dark"}')
+        saved = (log._candidates, log._home, log._path, settings._data, log._session_start)
         try:
             log._candidates, log._home, log._path, settings._data = (lambda: iter([home])), None, None, None
-            self.assertEqual(log.path(), os.path.join(home, "logs", "faction_tool.log"))
-            self.assertEqual(log.logs_dir(), os.path.join(home, "logs"))
-            self.assertFalse(os.path.exists(os.path.join(home, "faction_tool.log")))
+            logs = os.path.join(home, "CampaignEditor_logs")
+            self.assertEqual(log.path(), os.path.join(logs, "CampaignEditor.log"))
+            self.assertEqual(log.logs_dir(), logs)
+            self.assertFalse(os.path.exists(old))                         # moved in and gone
+            self.assertTrue(os.path.isfile(os.path.join(logs, "logs_1.zip")))
+            self.assertEqual(settings._path(), os.path.join(home, "CampaignEditor_settings.json"))
+            self.assertEqual(settings.get("theme"), "dark")
+            log.session_start()
             log.write("new entry")
             with open(log.path()) as fh:
                 self.assertEqual([l.split("  ", 1)[-1] for l in fh.read().splitlines()], ["old entry", "new entry"])
-            self.assertEqual(settings._path(), os.path.join(home, "faction_tool_settings.json"))
+            out = log.save_session(home)
+            with open(os.path.join(out, "CampaignEditor.log")) as fh:
+                self.assertEqual([l.split("  ", 1)[-1] for l in fh.read().splitlines()], ["new entry"])
+            with open(os.path.join(out, "system.log.txt")) as fh:
+                self.assertEqual(fh.read(), "game log\n")
         finally:
-            log._candidates, log._home, log._path, settings._data = saved
+            log._candidates, log._home, log._path, settings._data, log._session_start = saved
 
     def test_portrait_library_add_m2_layout(self):
         """Medieval II's pools (vanilla southern_european): no cards, old only for generals, the dead
@@ -1815,7 +1831,7 @@ building smith
         mod = ModData(self.root)
         restore(mod, backups(mod)[0])
         after = tree_hash(self.root)
-        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
+        self.assertEqual({k: v for k, v in after.items() if "_backups" not in k}, before)
 
     def test_coast_brush_land_and_sea(self):
         """The land / sea brush: a sea tile made land joins the nearest region and gets a land ground and a low
@@ -1887,7 +1903,7 @@ building smith
         self.assertLess(floats[1 * 9 + 1], 0)                                          # new sea: below 0
         mod = ModData(self.root)
         restore(mod, backups(mod)[0])
-        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "faction_tool_backups" not in k}, before)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
     def test_heights_spray_and_restore(self):
         """Heights brush: a spray on land raises the middle most, never touches the sea (blue), puffs add up;
@@ -1943,7 +1959,7 @@ building smith
         mod = ModData(self.root)
         restore(mod, backups(mod)[0])
         after = tree_hash(self.root)
-        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
+        self.assertEqual({k: v for k, v in after.items() if "_backups" not in k}, before)
 
     def test_family_tree_checks(self):
         from faction_tool.family import ordered, tree_problems
@@ -2011,7 +2027,7 @@ building smith
         self.assertFalse(os.path.exists(rwm))             # the game rebuilds it
         self.assertEqual(ModData(self.root).city_tiles("test")["A_R"], (0, 2))
         restore(ModData(self.root), bdir)
-        after = {k: v for k, v in tree_hash(self.root).items() if "faction_tool_backups" not in k}
+        after = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
         self.assertEqual(after, before)
 
     def test_old_culture_names_module_moves_into_the_script(self):
@@ -2029,7 +2045,7 @@ building smith
         self.assertFalse(os.path.exists(old))
         self.assertEqual(CN.read(ModData(hlr), "test"), {"Atown": {"barbarian": "Atburg"}})
         restore_to(ModData(hlr), backups(ModData(hlr))[-1])
-        self.assertEqual({k: v for k, v in tree_hash(hlr).items() if "faction_tool_backups" not in k}, before)
+        self.assertEqual({k: v for k, v in tree_hash(hlr).items() if "_backups" not in k}, before)
 
     def test_army_on_the_new_town_tile_steps_aside(self):
         # the user's HLR run: taking Odessus sent its garrison out onto the tile he then moved the town to -
@@ -2260,7 +2276,7 @@ building smith
         self.assertFalse(os.path.exists(os.path.join(camp, "map.rwm")))
         from faction_tool.plan import restore
         restore(ModData(self.root), bdir)
-        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")},
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))},
                          before)
 
     def test_new_region_carved_out(self):
@@ -2458,7 +2474,7 @@ building smith
         self.assertIn("{alpha_general_2_descr}Good", txt)
         self.assertIn('recruit "alpha general 2"', open(m2.file("edb")).read())
         restore(ModData(troot), bdir)
-        after = {k: v for k, v in tree_hash(troot).items() if "faction_tool_backups" not in k}
+        after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
 
     def test_engine_found_in_the_game_folder_and_the_limit_raised_in_the_mod(self):
@@ -2606,7 +2622,7 @@ building smith
         self.assertIn("{shrine_2_desc}Holy", txt)
         self.assertTrue(os.path.exists(os.path.join(troot, "data", "ui", "greek", "buildings", "#greek_shrine_2.tga")))
         restore(ModData(troot), bdir)
-        after = {k: v for k, v in tree_hash(troot).items() if "faction_tool_backups" not in k}
+        after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
 
     def test_read_and_draw_a_medieval2_mesh(self):
@@ -2952,7 +2968,7 @@ building smith
         self.assertIn("alpha", MO.catalogue(m2)["foot_model_2"].textures)
         self.assertTrue(os.path.exists(os.path.join(d, "models_unit", "o.cas")))
         restore(ModData(self.root), bdir)
-        after = {k: v for k, v in tree_hash(self.root).items() if "faction_tool_backups" not in k}
+        after = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
         self.assertEqual(after, before)
         # another game: refused
         os.makedirs(os.path.join(od, "unit_models"))
@@ -3820,7 +3836,7 @@ building smith
         for b in backups(ModData(self.root)):                  # newest first
             restore(ModData(self.root), b)
         after = tree_hash(self.root)
-        self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k and k != "flag.png"},
+        self.assertEqual({k: v for k, v in after.items() if "_backups" not in k and k != "flag.png"},
                          before)
 
     def test_copy_unit_and_building(self):
@@ -4126,7 +4142,7 @@ building shrine
         self.assertEqual(open(os.path.join(ui, "units", "alpha", "#rebel_spear.tga")).read().strip(), "spear card")
         self.assertTrue(os.path.exists(os.path.join(ui, "unit_info", "alpha", "rebel_spear_info.tga")))
         restore(mod, backups(mod)[0])
-        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
     POOL_EDB = """building barracks
@@ -4358,7 +4374,7 @@ building shrine
         self.assertEqual(regs["A_R"]["religions"], {"catholic": 100, "islam": 0, "judaism": 0})
         self.assertEqual(regs["B_R"]["religions"], {"catholic": 0, "islam": 70, "judaism": 30})
         restore(mod, backups(mod)[0])
-        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("faction_tool_backups")}
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
     def test_give_unit_joins_one_recruit_line_per_level(self):

@@ -19,8 +19,9 @@ editor's Preview show what a pack would write before you apply it.
 
 ## What the tool does on your PC
 
-RTW & M2TW Campaign Editor only reads and writes the game or mod folder you load, plus its own folder
-`RTW-M2TW-Campaign-Editor-files` next to the exe (log, settings, add-ons you added) and files you pick in a save
+RTW & M2TW Campaign Editor only reads and writes the game or mod folder you load, plus its own files
+next to the exe (`CampaignEditor_settings.json`, `CampaignEditor_logs` with the log and the saved sessions,
+`CampaignEditor_addons` with add-ons you added) and files you pick in a save
 dialog. The code enforces it: every write to the game goes through one guard that refuses a path outside the mod's
 or the game's folder (a `../`, another drive, a link that leads out - whatever a pack, add-on zip or backup names),
 before anything is written, and logs it. Every write is shown first and backed up (`faction_tool_backups`), and

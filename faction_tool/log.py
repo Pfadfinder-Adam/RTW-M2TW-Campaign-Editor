@@ -1,8 +1,14 @@
-"""The tool's own log, faction_tool.log: what was loaded, previewed and written,
-every error with its traceback. The tool's folder is RTW-M2TW-Campaign-Editor-files next to the exe
-(next to rtw_faction_tool.py when run from the source, else in the user's profile): the settings
-lie in it, the log in its logs/ folder together with the logs zips (Save logs) - one place to find
-what to send. Kept small: over 1 MB it moves to faction_tool.log.old."""
+"""The tool's own log and its folder. The exe is meant to lie in the game's folder (beside RomeTW.exe /
+medieval2.exe - it then finds the game and every mod by itself); beside it the tool keeps two things of its own:
+
+    CampaignEditor_logs/           its log (CampaignEditor.log), the logs zips (Save logs) and sessions/: on every
+                                   close the session's part of the log and the game's newest system.log.txt
+    CampaignEditor_settings.json   what it keeps between starts
+
+When run from the source the same two lie beside rtw_faction_tool.py; where the exe's folder cannot be written
+(Program Files) in %APPDATA%/RTW-M2TW-Campaign-Editor. Older versions' files (RTW-M2TW-Campaign-Editor-files/,
+faction_tool.log, faction_tool_settings.json) are moved in once, nothing lost. Kept small: over 1 MB the log
+moves to CampaignEditor.log.old."""
 
 import datetime
 import os
@@ -12,63 +18,79 @@ import traceback
 LIMIT = 1 << 20
 _path = None
 _home = None
-LOGS = "logs"                                    # in the tool's folder: faction_tool.log and the logs zips
+SHORT = "CampaignEditor"
+LOGS = SHORT + "_logs"                           # beside the exe: the log, the logs zips, the sessions
+LOG_NAME = SHORT + ".log"
+SETTINGS_NAME = SHORT + "_settings.json"
+SESSIONS = "sessions"
+KEEP_SESSIONS = 30
+APPDATA_NAME = "RTW-M2TW-Campaign-Editor"
+
+FOLDER = "RTW-M2TW-Campaign-Editor-files"      # 0.9.2 - 0.28: the tool's folder beside the exe
+OLD_FOLDERS = ("RTW-Campaign-Editor-files",)     # its name before 0.9.2
+OLD_LOG = "faction_tool.log"
+OLD_SETTINGS = "faction_tool_settings.json"
 
 
-FOLDER = "RTW-M2TW-Campaign-Editor-files"      # next to the exe: the log and the settings, apart from it
-OLD_FOLDERS = ("RTW-Campaign-Editor-files",)     # its name before 0.9.2 (renamed in place, nothing lost)
+def exe_dir():
+    """The folder of the exe (from the source: of rtw_faction_tool.py)."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _candidates():
-    if getattr(sys, "frozen", False):
-        home = os.path.dirname(os.path.abspath(sys.executable))
-        own = os.path.join(home, FOLDER)
-        _move_old(home, own)
-        yield own
-    else:
-        yield os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    yield exe_dir()
     base = os.environ.get("APPDATA") or os.path.expanduser("~")
-    yield os.path.join(base, "RTW Faction Tool")
+    yield os.path.join(base, APPDATA_NAME)
+    yield os.path.join(base, "RTW Faction Tool")                    # where older versions fell back to
 
 
-def _move_old(home, own):
-    """0.7.1 and before kept faction_tool.log and faction_tool_settings.json right next to the exe
-    (in Downloads they mixed with everything else), 0.7.2-0.9.1 in RTW-Campaign-Editor-files:
-    moved into the tool's own folder once."""
+def _move(src, dst):
     try:
-        for name in OLD_FOLDERS:
-            was = os.path.join(home, name)
-            if os.path.isdir(was) and not os.path.exists(own):
-                os.replace(was, own)
-        for n in ("faction_tool.log", "faction_tool.log.old", "faction_tool_settings.json"):
-            old = os.path.join(home, n)
-            if os.path.isfile(old) and not os.path.exists(os.path.join(own, n)):
-                os.makedirs(own, exist_ok=True)
-                os.replace(old, os.path.join(own, n))
+        if os.path.isfile(src) and not os.path.exists(dst):
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            os.replace(src, dst)
     except OSError:
         pass
 
 
-def _move_log(home):
-    """Until 0.10.x the log lay in the tool's folder itself: moved into its logs/ once."""
-    try:
-        for n in ("faction_tool.log", "faction_tool.log.old"):
-            old, new = os.path.join(home, n), os.path.join(home, LOGS, n)
-            if os.path.isfile(old) and not os.path.exists(new):
-                os.replace(old, new)
-    except OSError:
-        pass
+def _move_old(home):
+    """Older versions' files into the new places once: the folder RTW-M2TW-Campaign-Editor-files (its settings,
+    its logs/ with faction_tool.log and the zips), faction_tool.log / faction_tool_settings.json beside the exe."""
+    logs = os.path.join(home, LOGS)
+    for folder in (FOLDER,) + OLD_FOLDERS + ("",):
+        d = os.path.join(home, folder) if folder else home
+        if folder and not os.path.isdir(d):
+            continue
+        _move(os.path.join(d, OLD_SETTINGS), os.path.join(home, SETTINGS_NAME))
+        for sub in ("logs", ""):
+            ld = os.path.join(d, sub) if sub else d
+            for old, new in ((OLD_LOG, LOG_NAME), (OLD_LOG + ".old", LOG_NAME + ".old")):
+                _move(os.path.join(ld, old), os.path.join(logs, new))
+            if sub and os.path.isdir(ld) and folder:
+                try:
+                    for n in os.listdir(ld):                    # the logs zips made by Save logs
+                        _move(os.path.join(ld, n), os.path.join(logs, n))
+                except OSError:
+                    pass
+        if folder:
+            for sub in ("logs", ""):                            # the old folder goes once it is empty
+                try:
+                    os.rmdir(os.path.join(d, sub) if sub else d)
+                except OSError:
+                    pass
 
 
 def home():
-    """The tool's own folder (the first one we may write to): the settings lie there."""
+    """The tool's own place (the first one we may write to): the settings and the logs folder lie there."""
     global _home
     if _home is None:
         for d in _candidates():
             try:
                 os.makedirs(os.path.join(d, LOGS), exist_ok=True)
-                _move_log(d)                             # before the probe below makes an empty one
-                probe = os.path.join(d, LOGS, "faction_tool.log")
+                _move_old(d)                             # before the probe below makes an empty log
+                probe = os.path.join(d, LOGS, LOG_NAME)
                 with open(probe, "a", encoding="utf-8"):
                     pass
                 _home = d
@@ -79,7 +101,7 @@ def home():
 
 
 def logs_dir():
-    """Where the log and the logs zips go: <the tool's folder>/logs."""
+    """Where the log, the logs zips and the sessions go: <the tool's place>/CampaignEditor_logs."""
     h = home()
     return os.path.join(h, LOGS) if h else None
 
@@ -88,8 +110,60 @@ def path():
     """The log file's path."""
     global _path
     if _path is None and home():
-        _path = os.path.join(_home, LOGS, "faction_tool.log")
+        _path = os.path.join(_home, LOGS, LOG_NAME)
     return _path
+
+
+def exe_game():
+    """The game folder the exe lies in (beside RomeTW.exe / medieval2.exe / REX.exe / M2EX.exe), or None."""
+    from .newmod import is_game
+    d = exe_dir()
+    return d if is_game(d) else None
+
+
+_session_start = None
+
+
+def session_start():
+    """Mark where this session's part of the log begins (called at start)."""
+    global _session_start
+    p = path()
+    try:
+        _session_start = (os.path.getsize(p) if p and os.path.exists(p) else 0,
+                          datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    except OSError:
+        _session_start = (0, datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+
+
+def save_session(game=None, mod_dir=None):
+    """On close: CampaignEditor_logs/sessions/<start time>/ gets this session's part of the log and copies of the
+    game's newest system.log.txt (the mod's own first) - no button needed; the oldest sessions beyond
+    KEEP_SESSIONS go. Returns the folder, or None. Never raises."""
+    try:
+        import shutil
+        from . import report
+        logs = logs_dir()
+        if not logs or _session_start is None:
+            return None
+        offset, stamp = _session_start
+        out = os.path.join(logs, SESSIONS, stamp)
+        os.makedirs(out, exist_ok=True)
+        p = path()
+        if p and os.path.exists(p):
+            with open(p, "rb") as fh:
+                size = os.path.getsize(p)
+                fh.seek(offset if offset <= size else 0)            # the log moved to .old meanwhile: all of it
+                with open(os.path.join(out, LOG_NAME), "wb") as o:
+                    o.write(fh.read())
+        for i, f in enumerate(report.game_logs(game, mod_dir, keep=2) if game else []):
+            shutil.copyfile(f, os.path.join(out, "system.log.txt" if i == 0 else "system.log.%d.txt" % i))
+        root = os.path.join(logs, SESSIONS)
+        olds = sorted(n for n in os.listdir(root) if os.path.isdir(os.path.join(root, n)))
+        for n in olds[:-KEEP_SESSIONS]:
+            shutil.rmtree(os.path.join(root, n), ignore_errors=True)
+        return out
+    except Exception:
+        return None
 
 
 def write(text):

@@ -9,7 +9,9 @@ import shutil
 
 from .textio import TextFile
 
-BACKUP_DIR = "faction_tool_backups"
+BACKUP_DIR = "CampaignEditor_backups"
+OLD_BACKUP_DIR = "faction_tool_backups"           # up to 0.28: still listed, Restore works on both
+BACKUP_DIRS = (BACKUP_DIR, OLD_BACKUP_DIR)
 
 
 class Plan:
@@ -177,17 +179,19 @@ def _read(path):
 
 
 def backups(mod):
-    root = os.path.join(os.path.dirname(mod.data), BACKUP_DIR)
-    if not os.path.isdir(root):
-        return []
+    """Every backup of the mod, newest first - in CampaignEditor_backups and in older versions' faction_tool_backups."""
     out = []
-    for n in os.listdir(root):
-        m = os.path.join(root, n, "manifest.json")
-        if os.path.isfile(m) and not n.endswith("_restored"):
-            out.append((n[:15], os.path.getmtime(m), n))
+    for name in BACKUP_DIRS:
+        root = os.path.join(os.path.dirname(mod.data), name)
+        if not os.path.isdir(root):
+            continue
+        for n in os.listdir(root):
+            m = os.path.join(root, n, "manifest.json")
+            if os.path.isfile(m) and not n.endswith("_restored"):
+                out.append((n[:15], os.path.getmtime(m), os.path.join(root, n)))
     # newest first; two runs in one second (terrain + faction by one Apply) by the time
     # their manifest was written, not by name
-    return [os.path.join(root, n) for _, _, n in sorted(out, reverse=True)]
+    return [p for _, _, p in sorted(out, reverse=True)]
 
 
 def backup_label(bdir):
