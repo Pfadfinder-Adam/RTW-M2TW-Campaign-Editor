@@ -24,26 +24,33 @@ What it is not: a 3D modelling program. Models can be viewed and swapped between
 models is left to the tools built for that. The one exception planned: recolouring the faction colour painted on a
 unit's texture (vanilla-style uniforms), so a new faction's troops wear its own colour.
 
-## 🗺️ New in 0.25.0: rescale the whole campaign map 3 x
+## 🗺️ Rescale the whole campaign map 3 x
 
 **Tools > Make the campaign map 3 x bigger** (alpha), Rome (REX) and Medieval II (M2EX). Each tile of
 `map_regions.tga` becomes a 3 x 3 block; everything tied to the map is converted with it:
 
 - **Positions** (`descr_strat.txt`, `descr_events.txt`, ...): towns, characters, fleets, resources, forts,
   watchtowers, wonders and event places go to the middle of their new block.
-- **Ports**: re-placed on the shore pixel of their own region.
-- **Pictures**: `map_regions`, `map_ground_types`, `map_climates`, `map_features`, `map_trade_routes`, fog,
-  roughness, disasters and radar maps scaled with exact colours (no blending).
-- **Heights**: `map_heights` interpolated between the old points, land and sea kept apart so the coastline matches
-  the regions; roughness interpolated too.
-- **Rivers**: kept 1 pixel wide (the game crashes on a 2-pixel river), redrawn through the block centres.
+- **Coast**: smooth - a new pixel is land when most of the old land round it is, so the coastline is a rounded
+  line instead of 3 x 3 squares; every block's middle keeps its old value, so nothing changes under a town, army
+  or resource. Ports stay on the shore pixel of their own region.
+- **Heights**: `map_heights` interpolated between the old points along its own smooth coast, and
+  **`map_heights.hgt`** - the game's float copy, which it reads instead of the picture and never rebuilds - written
+  at the new size too. The hills, mountains and sea floor are made **3 x higher** (`max_land_height`,
+  `min_sea_height` in `descr_terrain.txt`): the land is 3 x wider, so the slopes stay as steep as they were
+  (or keep the old heights - a choice in the window). The sea ground types follow the heights' new coast.
+- **Rivers**: 1 pixel wide (the game crashes on a 2-pixel river), through the block centres, a diagonal step as a
+  staircase; a river mouth runs on to the new coast.
+- **Pictures**: `map_ground_types`, `map_climates`, `map_trade_routes`, fog, roughness, disasters and radar maps
+  scaled with exact colours.
 - `descr_terrain.txt` gets the new size; `map.rwm` is deleted so the game rebuilds it.
 - Preview of every file, one backup, Restore byte-exact.
 
 Not converted: coordinates inside scripts (counted and listed). Without REX / M2EX the original exes stop at
 510 tiles - the tool warns. Checked on both vanilla campaigns (103 / 112 towns, 177 / 216 characters, 75 / 77 ports
-in place) and started in the game. Known limits of the alpha: plains are not flattened and mountain ridges are
-softened by the interpolation. Video: [rescaling the whole map](https://youtu.be/kkfI-WulRmU).
+in place, no river on the sea, every river end at the sea, a river or the map's edge as in the original). The first
+alpha (0.24-0.27) left the old `map_heights.hgt` in place and kept the heights - flat, square-coasted maps; make the
+map again from a backup with this version. Video of the first alpha: [rescaling the whole map](https://youtu.be/kkfI-WulRmU).
 
 [![RTW & M2TW Campaign Editor - video overview](https://img.youtube.com/vi/m1sCPg-Lzsw/hqdefault.jpg)](https://www.youtube.com/watch?v=m1sCPg-Lzsw)
 
@@ -220,7 +227,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **Victory:** the **Faction** tab's **Victory** block shows what the player must do to win the long and the short campaign (`descr_win_conditions.txt`): regions to **Hold**, how many to **Take**, factions to **Outlive**, and in Rome the Senate's **Goal** (be emperor / take Rome). Pick regions and factions from a list; a region or faction that does not exist is refused (the game crashes on it). A new faction starts from its template's conditions.
 
-**Make the campaign map 3 x bigger (alpha):** **Tools > Make the campaign map 3 x bigger** turns every tile into a 3 x 3 block, for room between the towns for new regions and factions. Towns, armies, agents, resources, forts and event positions keep their places in the middle of their blocks, ports stay on their region's shore, rivers stay 1 pixel wide (the game crashes on a 2-pixel river), every picture of the map grows with exact colours, `descr_terrain.txt` gets the new size and `map.rwm` is removed (the game builds it again). The window lists every file first; one backup, Restore gives it all back. Coordinates in scripts are not moved (a count is shown). Past 510 tiles the original exes need REX / M2EX.
+**Make the campaign map 3 x bigger (alpha):** **Tools > Make the campaign map 3 x bigger** turns every tile into a 3 x 3 block, for room between the towns for new regions and factions. The coast is drawn smooth (not in squares), the heights and `map_heights.hgt` (the game's own copy of them) are made at the new size, and the hills, mountains and sea floor 3 x higher so the slopes stay as they were (a choice in the window). Towns, armies, agents, resources, forts and event positions keep their places in the middle of their blocks, ports stay on their region's shore, rivers stay 1 pixel wide (the game crashes on a 2-pixel river), every picture of the map grows with exact colours, `descr_terrain.txt` gets the new size and `map.rwm` is removed (the game builds it again). The window lists every file first; one backup, Restore gives it all back. Coordinates in scripts are not moved (a count is shown). Past 510 tiles the original exes need REX / M2EX.
 
 **Check mod files** (Tools; called Check mod before 0.24.0): reads every file the tool uses and reports what it found (factions, cultures, units, buildings, regions, towns, ports, characters, diplomacy) and anything it cannot make sense of - a settlement without a region, a unit an army names but the unit file lacks, a character after a family tree. The deep check also rehearses, in memory, an edit and a new faction for every faction and checks the result the way the game reads it (minutes on a big mod). Nothing is written.
 

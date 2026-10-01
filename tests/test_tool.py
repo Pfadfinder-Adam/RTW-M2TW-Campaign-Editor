@@ -2133,7 +2133,8 @@ building smith
 
     def test_map_made_three_times_bigger(self):
         """Every tile a 3 x 3 block: towns and characters in their blocks' middles, rivers 1 pixel wide (a corner
-        link made an L), descr_terrain's size x 3, map.rwm removed; Restore gives every byte back."""
+        link a staircase), descr_terrain's size x 3 and its heights x 3, map_heights.hgt at the new size (3 x higher),
+        map.rwm removed; Restore gives every byte back."""
         from faction_tool.plan import Plan
         from faction_tool import upscale
         from faction_tool.tga import read_tga
@@ -2142,7 +2143,14 @@ building smith
         px = [[black] * 4 for _ in range(4)]
         px[0][0] = px[0][1] = px[1][2] = river              # (0,0)-(1,0) straight, (1,0)-(2,1) a corner
         write_tga(os.path.join(camp, "map_features.tga"), 4, 4, px)
-        write(os.path.join(camp, "descr_terrain.txt"), "dimensions\n{\n\twidth  4\n\theight  4\n}\n")
+        write(os.path.join(camp, "descr_terrain.txt"), "dimensions\n{\n\twidth  4\n\theight  4\n}\n"
+              "heights\n{\n\tmin_sea_height  -3122.256\n\tmax_land_height  7511.272\n}\n")
+        import struct
+        hp = [[(0, 0, 253) if x < 3 else (51, 51, 51) for x in range(9)] for y in range(9)]   # sea west, land east
+        write_tga(os.path.join(camp, "map_heights.tga"), 9, 9, hp)
+        with open(os.path.join(camp, "map_heights.hgt"), "wb") as fh:          # the game's own copy, read instead
+            fh.write(struct.pack("<II", 9, 9) + struct.pack("<81f", *[(-24.5 if x < 3 else 1502.3)
+                                                                     for y in range(9) for x in range(9)]))
         write(os.path.join(camp, "map.rwm"), "cache")
         before = tree_hash(self.root)
         mod = ModData(self.root)
@@ -2162,6 +2170,16 @@ building smith
         self.assertFalse(any({(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)} <= rivers
                              for x in range(11) for y in range(11)))                     # never 2 x 2
         self.assertIn("width  12", open(os.path.join(camp, "descr_terrain.txt")).read())
+        self.assertIn("max_land_height  22533.816", open(os.path.join(camp, "descr_terrain.txt")).read())  # x 3
+        with open(os.path.join(camp, "map_heights.hgt"), "rb") as fh:
+            raw = fh.read()
+        hw, hh = struct.unpack_from("<II", raw)
+        self.assertEqual((hw, hh), (25, 25))                                   # the picture's new size: 6W+1
+        vals = struct.unpack_from("<625f", raw, 8)
+        self.assertAlmostEqual(vals[24], 1502.3 * 3, 1)                        # land, 3 x higher
+        self.assertAlmostEqual(vals[0], -24.5 * 3, 1)                          # sea, 3 x deeper
+        hi = read_tga(os.path.join(camp, "map_heights.tga"))
+        self.assertEqual((hi.width, hi.height), (25, 25))
         self.assertFalse(os.path.exists(os.path.join(camp, "map.rwm")))
         from faction_tool.plan import restore
         restore(ModData(self.root), bdir)

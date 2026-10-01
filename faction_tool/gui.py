@@ -1487,22 +1487,33 @@ class App(tk.Tk):
             return
         from .upscale import plan_upscale
         camp = self.v_campaign.get()
-        mod = ModData(self.mod.data)
-        plan = Plan(mod, "map", "map_x3", {})
+
+        def make(vertical):
+            p = Plan(ModData(self.mod.data), "map", "map_x3", {})
+            plan_upscale(p, camp, vertical=vertical)
+            return p
         try:
-            plan_upscale(plan, camp)
+            plan = make(3)
         except Exception as e:
             log.write("upscale failed: %s" % e)
             messagebox.showerror(APP, "The map could not be made bigger: %s" % e)
             return
         intro = ("MAKE THE CAMPAIGN MAP 3 x BIGGER (alpha) - campaign %s\n\n"
                  "Every tile becomes a 3 x 3 block; towns, ports, armies, agents, resources and forts keep their "
-                 "places in the middle of their blocks, rivers stay 1 pixel wide. Nothing is written until you press "
-                 "'Write it'; a backup is made first and Tools > Restore a backup gives every file back.\n\n" % camp)
+                 "places in the middle of their blocks. The coast is drawn smooth (not in 3 x 3 squares), rivers "
+                 "stay 1 pixel wide and run on to the new coast, and the relief is smooth.\n\n"
+                 "HEIGHTS: the land gets 3 x wider, so with the same heights every mountain would be a third as "
+                 "steep - a hillock. 'Write it' makes the hills, mountains and the sea floor 3 x higher too, so "
+                 "they look as they did; 'Write it, heights as they are' keeps the old heights (a flatter world).\n\n"
+                 "Nothing is written until you press one of them; a backup is made first and Tools > Restore a "
+                 "backup gives every file back.\n\n" % camp)
         holder = {}
 
-        def write_it():
+        def write_it(vertical=3):
+            nonlocal plan
             try:
+                if vertical != 3:
+                    plan = make(vertical)
                 bdir = plan.apply()
             except Exception as e:
                 messagebox.showerror(APP, "Not written: %s" % e, parent=holder["w"])
@@ -1514,7 +1525,8 @@ class App(tk.Tk):
                                      "map.rwm again on the first start (it takes a while).\n\nBackup: %s" % bdir)
 
         self.show_text("Make the map 3 x bigger - what will be written", intro + plan.report(),
-                       extra=[("Write it (with a backup)", write_it)])
+                       extra=[("Write it (with a backup)", write_it),
+                              ("Write it, heights as they are", lambda: write_it(1))])
         holder["w"] = [c for c in self.winfo_children() if c.winfo_class() == "Toplevel"][-1]
 
     def settings_window(self):

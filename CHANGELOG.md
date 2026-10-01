@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Fixed
+- **The bigger map (Tools > Make the campaign map 3 x bigger) - played in the game, it was flat and square:**
+  - `map_heights.hgt` - the game's float copy of the heights, which it reads INSTEAD of `map_heights.tga` and never
+    makes again - was left at the old size; it is now written at the new size (measured on both vanilla games:
+    land = grey x max_land_height / 255, sea = min_sea_height x (255 - blue) / 255).
+  - The hills and mountains became hillocks: the land got 3 x wider with the same heights. The heights and the sea
+    floor are now 3 x higher (`descr_terrain.txt` max_land_height / min_sea_height), so the slopes stay as steep as
+    they were; "Write it, heights as they are" keeps the old ones.
+  - The coast was drawn in 3 x 3 squares: now smooth (a new pixel is land when most of the old land round it is;
+    every block's middle keeps its value, so towns, armies, fleets and resources stay where they may stand; ports
+    still touch their region's land). The heights' coast and the sea ground types are made smooth the same way.
+  - Rivers: a diagonal step is a staircase, not an L; a river's mouth runs on to the new coast (and to the map's
+    edge where it ran off it); rivers keep the land under them.
+
 ## 0.27.0 - 2026-10-01
 
 ### Added
