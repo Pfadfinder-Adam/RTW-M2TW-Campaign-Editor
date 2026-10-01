@@ -10,6 +10,8 @@ from tkinter import ttk
 
 from . import terrain as T
 
+NEAREST = "(the nearest region)"
+
 
 class TerrainEditor(ttk.Frame):
     kind = "terrain"
@@ -23,6 +25,9 @@ class TerrainEditor(ttk.Frame):
         self._hvals = {}                # their running values with fractions (small puffs add up)
         self.base = {}                  # what the files have there: {('ground'|'features'|'climate', xy): colour}
         self.hbase = {}                 # map_heights pixels as the file has them: {(px, py): grey}
+        self.coast = {}                 # tiles made land or sea: {(x, y): 'land' | 'sea'}
+        self.cpx = {"regions": {}, "ground": {}, "heights": {}}     # the pixels those tiles change
+        self.cbase = {}                 # those pixels as the files have them: {(file, (x, y)): colour}
         self._undo, self._redo = [], []
         self._last_river = None         # the last river tile of the stroke: the next one joins it side to side
         top = ttk.Frame(self)
@@ -30,7 +35,7 @@ class TerrainEditor(ttk.Frame):
         ttk.Label(top, text="Paint", font=("", 10, "bold")).pack(side="left")
         self.v_what = tk.StringVar(value="ground")
         for val, text in (("ground", "Ground"), ("features", "Rivers, cliffs, volcanoes..."),
-                          ("climate", "Climates"), ("heights", "Heights")):
+                          ("climate", "Climates"), ("heights", "Heights"), ("coast", "Land and sea")):
             ttk.Radiobutton(top, text=text, value=val, variable=self.v_what, command=self.fill_palette).pack(
                 side="left", padx=4)
         ttk.Label(top, text="   brush").pack(side="left")
@@ -55,6 +60,8 @@ class TerrainEditor(ttk.Frame):
         self.v_tool = tk.StringVar(value="raise")       # the heights brush
         self.v_strength = tk.IntVar(value=4)
         self.v_level = tk.IntVar(value=40)
+        self.v_coast = tk.StringVar(value="land")          # the land / sea brush
+        self.v_coast_region = tk.StringVar(value=NEAREST)
         self.hint = ttk.Label(self, foreground="#555", justify="left", wraplength=1200)
         self.hint.pack(fill="x")
         from .gui_map import MapView
@@ -91,7 +98,8 @@ class TerrainEditor(ttk.Frame):
 
     def _signature(self):
         h = hashlib.md5()
-        for name in ("map_ground_types.tga", "map_features.tga", "map_climates.tga", "map_heights.tga"):
+        for name in ("map_ground_types.tga", "map_features.tga", "map_climates.tga", "map_heights.tga",
+                     "map_regions.tga"):
             try:
                 with open(self.mod.campaign_file(self.app.v_campaign.get(), name), "rb") as fh:
                     h.update(fh.read())
@@ -100,10 +108,11 @@ class TerrainEditor(ttk.Frame):
         return h.hexdigest()
 
     def dirty(self):
-        return bool(self.ground or self.features or self.climate or self.heights)
+        return bool(self.ground or self.features or self.climate or self.heights or self.coast)
 
     def pending(self):
-        return len(self.ground) + len(self.features) + len(self.climate) + (1 if self.heights else 0)
+        return len(self.ground) + len(self.features) + len(self.climate) + (1 if self.heights else 0) + \
+            len(self.coast)
 
     def rebind(self, mod):
         lost = 0
@@ -112,6 +121,8 @@ class TerrainEditor(ttk.Frame):
         if lost or self.mod is None or mod.data != self.mod.data or not self.dirty():
             self.ground, self.features, self.climate, self.base = {}, {}, {}, {}
             self.heights, self._hvals, self.hbase = {}, {}, {}
+            self.coast, self.cbase = {}, {}
+            self.cpx = {"regions": {}, "ground": {}, "heights": {}}
             self._undo, self._redo = [], []
         from .moddata import ModData
         self.mod = ModData(mod.data)                 # its own copy: the pictures are changed in memory
@@ -127,7 +138,8 @@ class TerrainEditor(ttk.Frame):
             raise ValueError("nothing painted in the Terrain editor")
         mod = ModData(self.mod.data)
         plan = Plan(mod, "terrain", "terrain", {})
-        T.apply(plan, self.app.v_campaign.get(), self.ground, self.features, self.climate, self.heights)
+        T.apply(plan, self.app.v_campaign.get(), self.ground, self.features, self.climate, self.heights,
+                dict(self.cpx, tiles=self.coast) if self.coast else None)
         broken = T.river_warnings(self._features_now(), self.cmap.w, self.cmap.h, self.cmap.is_sea) \
             if self.features else []
         for x, y, n in broken[:20]:
@@ -164,6 +176,12 @@ class TerrainEditor(ttk.Frame):
             s = self.app.strat
             self.standing = set(self.cmap.cities.values()) | set(self.cmap.ports.values()) | \
                 (s.taken_tiles() if s else set())
+            try:                                       # resources: a coast change never drowns one
+                from . import resources as RS
+                strat = self.mod.campaign_file(camp, "descr_strat.txt")
+                self.standing |= {r.xy for r in RS.read(self.mod.load(strat))}
+            except Exception:
+                pass
             self._apply_memory()
         self.cmap.show_climates = self.v_what.get() == "climate"
         self.cmap.show_heights = self.v_what.get() == "heights"
@@ -190,6 +208,14 @@ class TerrainEditor(ttk.Frame):
         for (x, y), c in self.features.items():
             self._set_px(f, x, y, c)
         h = self._img("map_heights.tga")
+        for (px, py), c in self.cpx["heights"].items():
+            self._set_px(h, px, py, c)
+        for (px, py), c in self.cpx["ground"].items():
+            self._set_px(g, px, py, c)
+        if self.cpx["regions"]:
+            reg = self.mod.region_map(self.app.v_campaign.get())
+            for (x, y), c in self.cpx["regions"].items():
+                self._set_px(reg, x, y, c)
         for (px, py), v in self.heights.items():
             self._set_px(h, px, py, (v, v, v))
         if self.cmap is not None:
@@ -212,6 +238,8 @@ class TerrainEditor(ttk.Frame):
 
     def paint(self, tiles):
         what = self.v_what.get()
+        if what == "coast":
+            return self.paint_coast(tiles)
         colour = tuple(int(v) for v in self.v_colour.get().split(",")) if self.v_colour.get() else None
         if colour is None:
             return []
@@ -247,6 +275,80 @@ class TerrainEditor(ttk.Frame):
             self.cmap.__dict__.pop("_backgrounds", None)
         self.app.status.set(("Terrain: %d tile(s) painted - Preview, then Apply changes." % self.pending()) +
                             ("   (not here: %s)" % why if why else ""))
+        self.app._mark_work()
+        return took
+
+    def _region_tiles(self):
+        """{region: its land tiles now} - counted once, kept up to date by paint_coast."""
+        if getattr(self, "_rtiles", None) is None:
+            from collections import Counter
+            c = Counter()
+            for y in range(self.cmap.h):
+                for x in range(self.cmap.w):
+                    r = self.cmap.region_at(x, y)
+                    if r:
+                        c[r] += 1
+            self._rtiles = c
+        return self._rtiles
+
+    def paint_coast(self, tiles):
+        """The land / sea brush: each tile turned with its regions pixel, the ground and heights round it."""
+        to_land = self.v_coast.get() == "land"
+        camp = self.app.v_campaign.get()
+        reg_img = self.mod.region_map(camp)
+        if not hasattr(self, "_sea"):
+            self._sea = T.sea_colour(reg_img, [v["colour"] for v in self.cmap.info.values()])
+        heights = self._img("map_heights.tga")
+        feats = self._features_now()
+        counts = self._region_tiles()
+        took, why = [], None
+        from .mapdata import GROUND_LOOK
+        for t in tiles:
+            t = tuple(t)
+            if self.cmap.is_sea(*t) != to_land:                     # already what the brush makes
+                continue
+            why = T.coast_problem(self.cmap, t, to_land, self.standing, feats, counts, self.cmap.ports) or None
+            if why:
+                continue
+            region = None
+            if to_land:
+                pick = self.v_coast_region.get()
+                region = pick if pick in self.cmap.info else T.nearest_region(self.cmap, t)
+                if not region:
+                    why = "no region to join near here - pick one in 'new land joins'"
+                    continue
+            px = T.coast_pixels(self.cmap, t, to_land, self.cmap.info[region]["colour"] if region else None,
+                                heights, self._sea)
+            old_region = self.cmap.region_at(*t)
+            for name, img in (("regions", reg_img), ("ground", self._img("map_ground_types.tga")),
+                              ("heights", heights)):
+                for p, c in px[name].items():
+                    if img is None or not (0 <= p[0] < img.width and 0 <= p[1] < img.height):
+                        continue
+                    self.cbase.setdefault((name, p), img.get(*p))
+                    if self.cbase[(name, p)] == c:
+                        self.cpx[name].pop(p, None)
+                    else:
+                        self.cpx[name][p] = c
+                    img.set(p[0], p[1], c)
+                    if name == "heights" and self.cmap is not None:
+                        if c[0] == c[1] == c[2]:
+                            self.cmap.set_height(p[0], p[1], c[0])
+            if to_land:
+                counts[region] += 1
+            elif old_region:
+                counts[old_region] -= 1
+            orig = self.cbase.get(("regions", t))
+            if orig == px["regions"][t]:
+                self.coast.pop(t, None)
+            else:
+                self.coast[t] = "land" if to_land else "sea"
+            took.append((t, GROUND_LOOK.get(px["ground"][(2 * t[0] + 1, 2 * t[1] + 1)], (0, 0, 0))))
+        if took:
+            self.cmap.__dict__.pop("_backgrounds", None)
+            self.cmap._hpil = None
+        self.app.status.set(("Terrain: %d tile(s) of land / sea changed - Preview, then Apply changes."
+                             % len(self.coast)) + ("   (not here: %s)" % why if why else ""))
         self.app._mark_work()
         return took
 
@@ -295,9 +397,10 @@ class TerrainEditor(ttk.Frame):
         self._redo = []                          # a new stroke drops the strokes undone before it
 
     def _state(self):
-        return dict(self.ground), dict(self.features), dict(self.climate), dict(self.heights)
+        return (dict(self.ground), dict(self.features), dict(self.climate), dict(self.heights), dict(self.coast),
+                {k: dict(v) for k, v in self.cpx.items()})
 
-    def _restore_to(self, ground, features, climate, heights=None):
+    def _restore_to(self, ground, features, climate, heights=None, coast=None, cpx=None):
         # back to the files' colours first, then the kept strokes on top
         g, f = self._img("map_ground_types.tga"), self._img("map_features.tga")
         cl = self._img("map_climates.tga")
@@ -312,6 +415,13 @@ class TerrainEditor(ttk.Frame):
         h = self._img("map_heights.tga")
         for (px, py), v in self.hbase.items():
             self._set_px(h, px, py, (v, v, v))
+        imgs = {"regions": self.mod.region_map(self.app.v_campaign.get()) if self.mod else None,
+                "ground": g, "heights": h}
+        for (name, p), c in self.cbase.items():
+            self._set_px(imgs[name], p[0], p[1], c)
+        self.coast = dict(coast or {})
+        self.cpx = {k: dict(v) for k, v in (cpx or {"regions": {}, "ground": {}, "heights": {}}).items()}
+        self._rtiles = None
         self.ground, self.features, self.climate = ground, features, climate
         self.heights = dict(heights or {})
         self._hvals = {p: float(v) for p, v in self.heights.items()}
@@ -341,7 +451,7 @@ class TerrainEditor(ttk.Frame):
 
     def reset(self):
         self._undo, self._redo = [], []
-        self._restore_to({}, {}, {}, {})
+        self._restore_to({}, {}, {}, {}, {}, None)
         self.app.status.set("Terrain: nothing painted.")
 
     def fill_palette(self):
@@ -353,7 +463,7 @@ class TerrainEditor(ttk.Frame):
             self.hint.configure(text=(
                 "Left drag paints the picked ground, right click picks a tile's own, right drag moves the map. "
                 "A tile's ground decides movement, farming and what may stand there; land stays land and sea stays "
-                "sea (the coast is the regions and heights too - a later step). Mountains, high mountains and dense "
+                "sea here - to turn sea into land or land into sea, use 'Land and sea' above. Mountains, high mountains and dense "
                 "forest are refused under towns, ports and characters (the game refuses them there). "
                 "On Apply: map_ground_types.tga written, map.rwm deleted - the game builds its map again."))
         elif what == "climate":
@@ -365,6 +475,12 @@ class TerrainEditor(ttk.Frame):
                 "The climates are the mod's own (descr_climates.txt), drawn here in their colours over the land; "
                 "the sea keeps its climate. On Apply: map_climates.tga written, map.rwm deleted." if found else
                 "This mod has no descr_climates.txt, so its climates are not known here."))
+        elif what == "coast":
+            self._coast_palette()
+            if self.cmap is not None and (getattr(self.cmap, "show_heights", False) or
+                                          getattr(self.cmap, "show_climates", False)):
+                self.show()
+            return
         elif what == "heights":
             self._heights_palette()
             if self.cmap is not None and not getattr(self.cmap, "show_heights", False):
@@ -407,6 +523,26 @@ class TerrainEditor(ttk.Frame):
         if self.cmap is not None and (getattr(self.cmap, "show_climates", False) != (what == "climate") or
                                       getattr(self.cmap, "show_heights", False)):
             self.show()
+
+    def _coast_palette(self):
+        """The land / sea brush: which one, and the region new land joins."""
+        box = ttk.Frame(self.palette)
+        box.pack(side="left")
+        ttk.Label(box, text="brush:").pack(side="left", padx=(8, 2))
+        ttk.Radiobutton(box, text="Land", value="land", variable=self.v_coast).pack(side="left", padx=3)
+        ttk.Radiobutton(box, text="Sea", value="sea", variable=self.v_coast).pack(side="left", padx=3)
+        ttk.Label(box, text="   new land joins").pack(side="left", padx=(12, 2))
+        names = sorted(self.cmap.info) if self.cmap is not None else []
+        ttk.Combobox(box, textvariable=self.v_coast_region, values=[NEAREST] + names, width=24,
+                     state="readonly").pack(side="left")
+        self.hint.configure(text=(
+            "Turn sea into land (a new island, a longer coast) or land into sea (a bay, a strait). Land and sea are "
+            "written in three places that must agree, so each tile changes all of them: map_regions.tga (the "
+            "region's colour or the sea's), map_ground_types.tga (a land ground like its neighbours', or shallow "
+            "sea) and map_heights.tga with map_heights.hgt (a low shore, or the sea's depth). New land joins the "
+            "region of the nearest land, or the one picked here - move borders later on the Map (Regions). Refused: "
+            "drowning a town, port, character, fort or resource, a region's last land, a river (rub it out first) "
+            "or a port's last land. On Apply: those files written, map.rwm deleted (the game builds its map again)."))
 
     def _heights_palette(self):
         """The heights brush: what it does, how strong, and the height 'Level' brings the land to."""

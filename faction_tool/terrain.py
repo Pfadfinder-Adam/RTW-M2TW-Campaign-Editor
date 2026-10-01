@@ -93,7 +93,7 @@ def paint_problem(cmap, what, xy, colour, standing):
         return None
     if what == "ground":
         if (colour in SEA) != sea:
-            return "land and sea are not swapped here (the coast is also the regions and the heights)"
+            return "land and sea are not swapped with the ground brush - use 'Land and sea' (it changes the regions and heights too)"
         if xy in standing and colour in BLOCKED_GROUND:
             return "a town, port or character stands there - the game refuses %s under them" % GROUND.get(colour)
         return None
@@ -298,9 +298,10 @@ def max_land_height(mod, campaign):
     return 7511.272
 
 
-def hgt_patched(path, img, changes, step):
-    """map_heights.hgt's bytes with the pixels {(px, py): (old grey, new grey)} moved by (new - old) x step;
-    refused when its size is not the picture's (then the game's copy and the picture do not match anyway)."""
+def hgt_patched(path, img, changes, step, absolute=None):
+    """map_heights.hgt's bytes with the pixels {(px, py): (old grey, new grey)} moved by (new - old) x step, and the
+    pixels of absolute {(px, py): float} set to that height (land made sea or sea made land); refused when its size
+    is not the picture's (then the game's copy and the picture do not match anyway)."""
     import struct
     with open(path, "rb") as fh:
         data = bytearray(fh.read())
@@ -312,23 +313,167 @@ def hgt_patched(path, img, changes, step):
         at = 8 + (py * w + px) * 4
         v = struct.unpack_from("<f", data, at)[0]
         struct.pack_into("<f", data, at, v + (new - old) * step)
+    for (px, py), v in (absolute or {}).items():
+        struct.pack_into("<f", data, 8 + (py * w + px) * 4, v)
     return bytes(data)
 
 
-def apply(plan, campaign, ground=None, features=None, climate=None, heights=None):
+# ---- land and sea (the coast) ----
+# Land or sea is written in three places that must agree: map_regions.tga (a region's colour, or the sea's),
+# map_heights.tga (grey land, blue sea - and map_heights.hgt, the game's own copy) and map_ground_types.tga (a land
+# or a sea ground) - so the coast brush changes all of them together, tile by tile: its regions pixel, and the 3 x 3
+# block of ground and heights round its middle (2x..2x+2, 2y..2y+2).
+SHALLOW_SEA, NEW_LAND_GROUND = (196, 0, 0), (96, 160, 64)
+SEA_DEPTH, COAST_LAND = 253, 2                      # vanilla's usual sea blue; a low shore (about 60 m)
+
+
+def sea_colour(regions_img, region_colours):
+    """The sea's colour in map_regions.tga: its most common pixel that is no region, town or port."""
+    from collections import Counter
+    regions = set(region_colours) | {(0, 0, 0), (255, 255, 255)}
+    seen = Counter()
+    for y in range(0, regions_img.height, 2):
+        for x in range(0, regions_img.width, 2):
+            c = regions_img.get(x, y)
+            if c not in regions:
+                seen[c] += 1
+    return seen.most_common(1)[0][0] if seen else (41, 140, 233)
+
+
+def nearest_region(cmap, xy, reach=60):
+    """The region of the land tile nearest to xy (ring by ring), or None."""
+    x0, y0 = xy
+    for r in range(1, reach + 1):
+        best = None
+        for dx in range(-r, r + 1):
+            for dy in (-r, r) if abs(dx) != r else range(-r, r + 1):
+                reg = cmap.region_at(x0 + dx, y0 + dy)
+                if reg and (best is None or abs(dx) + abs(dy) < best[0]):
+                    best = (abs(dx) + abs(dy), reg)
+        if best:
+            return best[1]
+    return None
+
+
+def coast_problem(cmap, xy, to_land, standing, features, region_tiles, ports):
+    """None, or why tile xy cannot be made land (to_land) or sea. standing: tiles with a town, port, character,
+    fort or resource; features: map_features {(x, y): colour}; region_tiles: {region: how many land tiles it has
+    now}; ports: {region: (x, y)}."""
+    x, y = xy
+    if not (0 <= x < cmap.w and 0 <= y < cmap.h):
+        return "off the map"
+    if xy in standing:
+        return "a town, port, character, fort or resource stands there"
+    if to_land:
+        return None
+    reg = cmap.region_at(x, y)
+    if reg and region_tiles.get(reg, 0) <= 1:
+        return "it is the last land of %s - a region needs land" % reg
+    if features.get(xy, (0, 0, 0)) not in ((0, 0, 0), LAND_BRIDGE):
+        return "a river, ford, cliff or volcano is there - rub it out first (Rivers, cliffs, volcanoes...: nothing)"
+    for r, p in ports.items():                      # a port must keep touching its region's land
+        if r != reg or max(abs(p[0] - x), abs(p[1] - y)) != 1:
+            continue
+        land = [(p[0] + a, p[1] + b) for a in (-1, 0, 1) for b in (-1, 0, 1)
+                if (a or b) and (p[0] + a, p[1] + b) != xy and cmap.region_at(p[0] + a, p[1] + b) == r]
+        if not land:
+            return "the port of %s would touch no land of its region" % r
+    return None
+
+
+def coast_pixels(cmap, xy, to_land, region_colour, heights, sea):
+    """What one tile made land (in region_colour) or sea changes: {'regions': {(x, y): colour}, 'ground':
+    {(px, py): colour}, 'heights': {(px, py): (r, g, b)}}. heights: map_heights.tga (or None); sea: the sea's
+    colour in map_regions. New land: the ground most of its land neighbours have (else medium fertility), low
+    heights (its land neighbours' if any, at least 1 - black may be read as sea); new sea: shallow sea, its sea
+    neighbours' depth (else vanilla's 253)."""
+    x, y = xy
+    out = {"regions": {xy: region_colour if to_land else sea}, "ground": {}, "heights": {}}
+    from collections import Counter
+    near = Counter()
+    for a in (-1, 0, 1):
+        for b in (-1, 0, 1):
+            if (a or b) and 0 <= x + a < cmap.w and 0 <= y + b < cmap.h:
+                g = cmap.ground_at(x + a, y + b)
+                if g is not None and (g in SEA) != to_land:
+                    near[g] += 1
+    ground = (near.most_common(1)[0][0] if near else NEW_LAND_GROUND) if to_land else SHALLOW_SEA
+    if ground in SEA and to_land:
+        ground = NEW_LAND_GROUND
+    for px in range(2 * x, 2 * x + 3):
+        for py in range(2 * y, 2 * y + 3):
+            out["ground"][(px, py)] = ground
+    if heights is not None:
+        vals = []
+        for px in range(2 * x - 1, 2 * x + 4):
+            for py in range(2 * y - 1, 2 * y + 4):
+                if 0 <= px < heights.width and 0 <= py < heights.height:
+                    c = heights.get(px, py)
+                    if to_land and is_land_height(c):
+                        vals.append(c[0])
+                    elif not to_land and not is_land_height(c):
+                        vals.append(c[2])
+        for px in range(2 * x, 2 * x + 3):
+            for py in range(2 * y, 2 * y + 3):
+                if not (0 <= px < heights.width and 0 <= py < heights.height):
+                    continue
+                c = heights.get(px, py)
+                if to_land and not is_land_height(c):
+                    v = max(1, min(int(sum(vals) / len(vals)) if vals else COAST_LAND, 12))
+                    out["heights"][(px, py)] = (v, v, v)
+                elif not to_land and is_land_height(c):
+                    v = int(sum(vals) / len(vals)) if vals else SEA_DEPTH
+                    out["heights"][(px, py)] = (0, 0, max(1, v))
+    return out
+
+
+def min_sea_height(mod, campaign):
+    """descr_terrain.txt's min_sea_height, else vanilla RTW's -3122.256."""
+    import re
+    path = mod.campaign_file(campaign, "descr_terrain.txt")
+    if path:
+        m = re.search(r"min_sea_height\s+(-?[\d.]+)", open(path, encoding="latin-1").read())
+        if m:
+            return float(m.group(1))
+    return -3122.256
+
+
+def hgt_value(colour, top, low):
+    """map_heights.hgt's float for a map_heights.tga colour (measured on both vanilla games): land grey * top / 255,
+    sea low * (255 - blue) / 255."""
+    if is_land_height(colour):
+        return colour[0] * top / 255.0
+    return low * (255 - colour[2]) / 255.0
+
+
+def apply(plan, campaign, ground=None, features=None, climate=None, heights=None, coast=None):
     """Write the painted tiles: ground {(x, y): colour} into map_ground_types.tga, features
     {(x, y): colour} into map_features.tga, climate {(x, y): colour} into map_climates.tga (the same
-    3 x 3 block per tile as the ground); map.rwm deleted so the game builds the map again."""
+    3 x 3 block per tile as the ground); coast {'tiles': {(x, y): 'land' | 'sea'}, 'regions' / 'ground' /
+    'heights': pixels (coast_pixels)} into map_regions, map_ground_types (the painted ground on top),
+    map_heights and map_heights.hgt; map.rwm deleted so the game builds the map again."""
     mod = plan.mod
     ground = {tuple(k): tuple(v) for k, v in (ground or {}).items()}
     features = {tuple(k): tuple(v) for k, v in (features or {}).items()}
     climate = {tuple(k): tuple(v) for k, v in (climate or {}).items()}
     heights = {tuple(k): int(v) for k, v in (heights or {}).items()}
-    if not ground and not features and not climate and not heights:
+    coast = coast or {}
+    ctiles = coast.get("tiles") or {}
+    if not ground and not features and not climate and not heights and not ctiles:
         return
     from collections import Counter
     climate_names = {c: n for n, c, _ in climates(mod)}
-    for name, tiles, names, changes in (("map_ground_types.tga", ground, GROUND, ground_changes(ground)),
+    if ctiles:
+        path = mod.campaign_file(campaign, "map_regions.tga")
+        plan.binary(path, patched(path, {tuple(k): tuple(v) for k, v in coast["regions"].items()}))
+        n_land = sum(1 for v in ctiles.values() if v == "land")
+        plan.notes.append((mod.rel(path), "%d tile(s) made land, %d made sea" % (n_land, len(ctiles) - n_land)))
+    gchanges = {tuple(k): tuple(v) for k, v in (coast.get("ground") or {}).items()}
+    gchanges.update(ground_changes(ground))
+    gtiles = dict(ground)
+    for xy, v in ctiles.items():
+        gtiles.setdefault(tuple(xy), (SHALLOW_SEA if v == "sea" else NEW_LAND_GROUND))
+    for name, tiles, names, changes in (("map_ground_types.tga", gtiles, GROUND, gchanges),
                                         ("map_features.tga", features, FEATURES, features),
                                         ("map_climates.tga", climate, climate_names, ground_changes(climate))):
         if not tiles:
@@ -340,24 +485,34 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
         count = Counter(names.get(c, str(c)) for c in tiles.values())
         plan.notes.append((mod.rel(path), "%d tile(s): %s" % (len(tiles), ", ".join(
             "%d %s" % (n, k) for k, n in count.most_common()))))
-    if heights:
+    cheights = {tuple(k): tuple(v) for k, v in (coast.get("heights") or {}).items()}
+    if heights or cheights:
         path = mod.campaign_file(campaign, "map_heights.tga")
         if not path:
             raise ValueError("this campaign has no map_heights.tga")
         img = mod._optional_map(campaign, "map_heights.tga")
-        bad = [p for p in heights if not is_land_height(img.get(*p))]
+        bad = [p for p in heights if not is_land_height(cheights.get(p, img.get(*p)))]
         if bad:
             raise ValueError("heights painted on the sea at %d, %d - the brush changes land only" % bad[0])
-        plan.binary(path, patched(path, {p: (v, v, v) for p, v in heights.items()}))
-        up = sum(1 for p, v in heights.items() if v > img.get(*p)[0])
-        plan.notes.append((mod.rel(path), "%d pixel(s) of land: %d raised, %d lowered" % (
-            len(heights), up, len(heights) - up)))
+        final = dict(cheights)
+        final.update({p: (v, v, v) for p, v in heights.items()})
+        plan.binary(path, patched(path, final))
+        if heights:
+            up = sum(1 for p, v in heights.items() if is_land_height(img.get(*p)) and v > img.get(*p)[0])
+            plan.notes.append((mod.rel(path), "%d pixel(s) of land: %d raised, %d lowered" % (
+                len(heights), up, len(heights) - up)))
+        if cheights:
+            plan.notes.append((mod.rel(path), "%d pixel(s) turned from sea to land or land to sea (the coast brush)"
+                               % len(cheights)))
         hgt = os.path.join(os.path.dirname(path), "map_heights.hgt")
         if os.path.isfile(hgt):
-            step = max_land_height(mod, campaign) / 255.0
-            plan.binary(hgt, hgt_patched(hgt, img, {p: (img.get(*p)[0], v) for p, v in heights.items()}, step))
+            top, low = max_land_height(mod, campaign), min_sea_height(mod, campaign)
+            step = top / 255.0
+            relative = {p: (img.get(*p)[0], v) for p, v in heights.items() if p not in cheights}
+            absolute = {p: hgt_value(final[p], top, low) for p in cheights}
+            plan.binary(hgt, hgt_patched(hgt, img, relative, step, absolute))
             plan.notes.append((mod.rel(hgt), "the same %d pixel(s) changed (the game reads this copy of the heights "
-                                             "while it is there; %.2f per grey step)" % (len(heights), step)))
+                                             "while it is there; %.2f per grey step)" % (len(final), step)))
     for folder in {os.path.dirname(mod.campaign_file(campaign, "map_regions.tga")),
                    os.path.join(mod.data, "world", "maps", "base")}:
         plan.delete(os.path.join(folder, "map.rwm"), "the game builds the map again from the changed pictures")
@@ -365,4 +520,4 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
 
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "FEATURE_BRUSHES", "paint_problem",
            "river_warnings", "river_shapes", "bridge_warnings", "feature_brushes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray", "max_land_height", "hgt_patched",
-           "apply"]
+           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "min_sea_height", "hgt_value", "apply"]

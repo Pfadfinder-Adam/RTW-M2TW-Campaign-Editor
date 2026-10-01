@@ -1812,6 +1812,78 @@ building smith
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "faction_tool_backups" not in k}, before)
 
+    def test_coast_brush_land_and_sea(self):
+        """The land / sea brush: a sea tile made land joins the nearest region and gets a land ground and a low
+        shore in the heights (and in map_heights.hgt); a land tile made sea gets the sea's colour, shallow sea and a
+        depth; a town, a region's last land and a river are refused; Restore gives every file back."""
+        try:
+            import PIL  # noqa: F401 - the campaign map module draws with Pillow (the exe has it)
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        import struct
+        from faction_tool import terrain as T
+        from faction_tool.mapdata import CampaignMap
+        from faction_tool.plan import Plan
+        from faction_tool.tga import read_tga
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        red, blue, black, sea = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233)
+        write_tga(os.path.join(camp, "map_regions.tga"), 4, 4, [[red, red, blue, sea], [red, black, blue, sea],
+                                                                 [red, red, black, sea], [red, red, blue, sea]])
+        green, shallow = (96, 160, 64), (196, 0, 0)
+        write_tga(os.path.join(camp, "map_ground_types.tga"), 9, 9,
+                  [[shallow if x >= 6 else green for x in range(9)] for y in range(9)])
+        write_tga(os.path.join(camp, "map_heights.tga"), 9, 9,
+                  [[(0, 0, 250) if x >= 6 else (20, 20, 20) for x in range(9)] for y in range(9)])
+        with open(os.path.join(camp, "map_heights.hgt"), "wb") as fh:
+            fh.write(struct.pack("<II", 9, 9) + struct.pack("<81f", *[(-30.0 if x >= 6 else 589.0)
+                                                                     for y in range(9) for x in range(9)]))
+        write_tga(os.path.join(camp, "map_features.tga"), 4, 4, [[black, black, black, black],
+                                                                  [black, black, black, black],
+                                                                  [black, black, black, black],
+                                                                  [(0, 0, 255), black, black, black]])
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        cmap = CampaignMap(mod, "test")
+        standing = set(cmap.cities.values()) | {(1, 1)}
+        counts = {"A_R": 8, "B_R": 3}
+        self.assertIsNone(T.coast_problem(cmap, (3, 0), True, standing, {}, counts, {}))
+        self.assertIn("stands there", T.coast_problem(cmap, (1, 1), False, standing, {}, counts, {}))
+        self.assertIn("last land", T.coast_problem(cmap, (2, 0), False, standing, {}, {"B_R": 1}, {}))
+        self.assertIn("rub it out", T.coast_problem(cmap, (0, 3), False, standing, {(0, 3): (0, 0, 255)}, counts, {}))
+        self.assertEqual(T.nearest_region(cmap, (3, 0)), "B_R")
+        reg = mod.region_map("test")
+        self.assertEqual(T.sea_colour(reg, [red, blue]), sea)
+        heights = mod._optional_map("test", "map_heights.tga")
+        land = T.coast_pixels(cmap, (3, 0), True, blue, heights, sea)
+        water = T.coast_pixels(cmap, (0, 0), False, None, heights, sea)
+        self.assertEqual(land["regions"], {(3, 0): blue})
+        self.assertEqual(land["ground"][(7, 1)], green)                      # like its land neighbours
+        self.assertTrue(all(c[0] == c[1] == c[2] and c[0] >= 1 for c in land["heights"].values()))
+        self.assertEqual(water["ground"][(1, 1)], shallow)
+        self.assertTrue(all(c[0] == 0 and c[2] > 0 for c in water["heights"].values()))
+        coast = {"tiles": {(3, 0): "land", (0, 0): "sea"}, "regions": {}, "ground": {}, "heights": {}}
+        for px in (land, water):
+            for k in ("regions", "ground", "heights"):
+                coast[k].update(px[k])
+        plan = Plan(ModData(self.root), "terrain", "terrain")
+        T.apply(plan, "test", coast=coast)
+        plan.apply()
+        m2 = ModData(self.root)
+        r = read_tga(os.path.join(camp, "map_regions.tga"))
+        self.assertEqual((r.get(3, 0), r.get(0, 0)), (blue, sea))
+        g = read_tga(os.path.join(camp, "map_ground_types.tga"))
+        self.assertEqual((g.get(7, 1), g.get(1, 1)), (green, shallow))
+        self.assertTrue(CampaignMap(m2, "test").is_sea(0, 0))
+        self.assertFalse(CampaignMap(m2, "test").is_sea(3, 0))
+        with open(os.path.join(camp, "map_heights.hgt"), "rb") as fh:
+            floats = struct.unpack("<81f", fh.read()[8:])
+        h = read_tga(os.path.join(camp, "map_heights.tga"))
+        self.assertAlmostEqual(floats[1 * 9 + 7], h.get(7, 1)[0] * 7511.272 / 255, 2)   # new land: grey x step
+        self.assertLess(floats[1 * 9 + 1], 0)                                          # new sea: below 0
+        mod = ModData(self.root)
+        restore(mod, backups(mod)[0])
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "faction_tool_backups" not in k}, before)
+
     def test_heights_spray_and_restore(self):
         """Heights brush: a spray on land raises the middle most, never touches the sea (blue), puffs add up;
         written into map_heights.tga, map_heights.hgt (the game's copy that wins over the picture) and map.rwm

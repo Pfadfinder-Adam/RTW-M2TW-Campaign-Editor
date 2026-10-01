@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+- **Terrain editor: Land and sea** - turn sea into land (draw a new island, a longer coast) or land into sea (a bay,
+  a strait), both games. Each tile changes everything that says land or sea together: its `map_regions.tga` pixel
+  (the region of the nearest land, or the one picked in "new land joins"; or the sea's colour), the ground round it
+  (a land ground like its neighbours', or shallow sea) and the heights round it (a low shore or the sea's depth) in
+  `map_heights.tga` and `map_heights.hgt`. Refused, in plain words: drowning a town, port, character, fort or
+  resource, a region's last land, a river tile, or a port's last land. Undo / Redo stroke, Preview, one backup.
+
 ### Fixed
 - **The bigger map (Tools > Make the campaign map 3 x bigger) - played in the game, it was flat and square:**
   - `map_heights.hgt` - the game's float copy of the heights, which it reads INSTEAD of `map_heights.tga` and never
