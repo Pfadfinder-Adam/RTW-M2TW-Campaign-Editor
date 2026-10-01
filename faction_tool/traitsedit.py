@@ -22,6 +22,7 @@ Triggers (what gives a trait) are not touched: a new trait is given to character
 import os
 import re
 
+from .strtables import write_texts  # noqa: F401  (the texts players see)
 from .textio import strip_comment, tokens
 
 RE_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
@@ -123,44 +124,6 @@ def effects_words(effects):
 # ---------------------------------------------------------------------------
 # The texts players see
 # ---------------------------------------------------------------------------
-def write_texts(plan, name, values):
-    """{KEY: text} into the string table `name` (export_VnVs.txt ...): the .txt when there is one, else a .txt made
-    from Medieval II's compiled .strings.bin; a .strings.bin beside it is removed (the game builds it again)."""
-    from .charpanel import read_strings_bin
-    from .editors import set_text_values
-    values = {k: v for k, v in (values or {}).items() if v is not None}
-    if not values:
-        return
-    mod = plan.mod
-    txt = mod.text_file(name)
-    binp = None
-    for folder in mod.text_dirs():
-        for n in os.listdir(folder):
-            if n.lower() == name.lower() + ".strings.bin":
-                binp = binp or os.path.join(folder, n)
-    if txt:
-        set_text_values(plan, txt, values)
-    elif binp:
-        with open(binp, "rb") as fh:
-            entries = read_strings_bin(fh.read())
-        low = {k.lower(): k for k in entries}
-        for k, v in values.items():
-            entries[low.get(k.lower(), k)] = v
-        lines = ["¬ made from %s by the editor (the game builds the .strings.bin again from this file)"
-                 % os.path.basename(binp)]
-        lines += ["{%s}\t%s" % (k, v.replace("\r\n", "\n").replace("\n", "\r\n")) for k, v in entries.items()]
-        path = binp[:-len(".strings.bin")]
-        plan.binary(path, b"\xff\xfe" + "\r\n".join(lines + [""]).encode("utf-16-le"))
-        plan.notes.append((mod.rel(path), "made from the compiled %s with %d text(s) changed or added" % (
-            os.path.basename(binp), len(values))))
-    else:
-        plan.warn(None, "no %s in data/text - the new texts are not written (the game shows the keys)" % name)
-        return
-    if binp:        # not removed on our own: that the game builds it again is not checked in the game yet
-        plan.warn(None, "Medieval II keeps %s also compiled (%s): if the game shows the old text or a key, remove "
-                        "that .strings.bin so it is built again from the .txt" % (name, mod.rel(binp)))
-
-
 # ---------------------------------------------------------------------------
 # Writing
 # ---------------------------------------------------------------------------

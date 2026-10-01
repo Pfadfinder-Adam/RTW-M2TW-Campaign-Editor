@@ -7,8 +7,8 @@ u32 count, then per entry a u16-counted UTF-16 key and a u16-counted UTF-16 text
 there (the game builds the .bin again from a newer .txt)."""
 
 import os
-import re
-import struct
+
+from .strtables import read_strings_bin, shown, strings  # noqa: F401  (the panel's texts)
 
 # the attributes the game's panel shows, per game and kind of character (named characters / generals: 'family')
 PANEL = {
@@ -20,82 +20,6 @@ PANEL = {
              "spy": ("Subterfuge",), "assassin": ("Subterfuge",), "diplomat": ("Influence",),
              "admiral": ("Command",)},
 }
-_cache = {}
-
-
-def read_strings_bin(data):
-    """{key: text} of a Medieval II .strings.bin."""
-    out = {}
-    if len(data) < 8:
-        return out
-    count = struct.unpack_from("<I", data, 4)[0]
-    p = 8
-    for _ in range(count):
-        texts = []
-        for _ in range(2):
-            if p + 2 > len(data):
-                return out
-            n = struct.unpack_from("<H", data, p)[0]
-            p += 2
-            texts.append(data[p:p + 2 * n].decode("utf-16-le", "replace"))
-            p += 2 * n
-        out[texts[0]] = texts[1]
-    return out
-
-
-def strings(mod, name):
-    """{KEY upper: text} of a string table (name like 'export_VnVs.txt'): the .txt the game reads, else its
-    .strings.bin; {} when neither is there. Cached by the files' times."""
-    txt = mod.text_file(name)
-    binp = None
-    if not txt:
-        for folder in mod.text_dirs():
-            for n in os.listdir(folder):
-                if n.lower() == name.lower() + ".strings.bin":
-                    binp = os.path.join(folder, n)
-                    break
-            if binp:
-                break
-    path = txt or binp
-    if not path:
-        return {}
-    key = (path, os.path.getmtime(path))
-    if key in _cache:
-        return _cache[key]
-    out = {}
-    if txt:
-        # a text runs on until the next {KEY} or comment line (the tables' own way: a description often starts
-        # on the line under its key)
-        key, parts = None, []
-
-        def done():
-            if key is not None:
-                while parts and not parts[-1].strip():
-                    parts.pop()
-                out.setdefault(key, "\n".join(p.strip() for p in parts).strip())
-        for line in mod.load(txt).texts():
-            s = line.lstrip()
-            m = re.match(r"\{([^}]+)\}(.*)$", s)
-            if m:
-                done()
-                key, parts = m.group(1).upper(), [m.group(2)]
-            elif s.startswith("\u00ac"):
-                done()
-                key, parts = None, []
-            elif key is not None:
-                parts.append(line)
-        done()
-    else:
-        with open(binp, "rb") as fh:
-            out = {k.upper(): v for k, v in read_strings_bin(fh.read()).items()}
-    _cache[key] = out
-    return out
-
-
-def shown(table, key):
-    """The text players see for a key, else the key made readable (Promising_Defender -> Promising Defender)."""
-    got = table.get((key or "").upper())
-    return got if got else (key or "").replace("_", " ")
 
 
 def panel_kind(kind):
