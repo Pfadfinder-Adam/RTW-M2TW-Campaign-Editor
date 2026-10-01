@@ -2041,6 +2041,53 @@ building smith
         with self.assertRaises(ValueError):
             parse("2.0", "faction_standings")
 
+    def test_victory_conditions(self):
+        """descr_win_conditions.txt: a faction's block read and rewritten (Rome's outlive_factions on the next
+        line kept), other blocks byte-exact, a missing region refused (the game crashes on it)."""
+        from faction_tool.edit import edit
+        from faction_tool import wincond
+        mod = ModData(self.root)
+        camp = os.path.dirname(mod.campaign_file("test", "descr_strat.txt"))
+        path = os.path.join(camp, "descr_win_conditions.txt")
+        text = ("alpha\r\ntake_rome \r\nshort_campaign outlive_factions\r\nslave\r\n\r\n"
+                "beta\r\nhold_regions A_R\r\ntake_regions 2\r\n\r\n")
+        with open(path, "wb") as fh:
+            fh.write(text.encode())
+        mod = ModData(self.root)
+        got = wincond.read(mod, "test")
+        self.assertEqual(got["alpha"]["long"]["goals"], ["take_rome"])
+        self.assertEqual(got["alpha"]["short"]["outlive"], ["slave"])
+        self.assertEqual(got["beta"]["long"]["hold"], ["A_R"])
+        self.assertEqual(got["beta"]["long"]["take"], 2)
+        cond = got["alpha"]
+        cond["long"]["hold"] = ["A_R"]
+        cond["short"]["take"] = 1
+        plan = edit(mod, "test", "alpha", {"victory": cond})
+        body = plan.files[path].raw
+        out = "\n".join(body)
+        self.assertIn("alpha\r\ntake_rome\r\nhold_regions A_R\r\nshort_campaign take_regions 1\r\n"
+                      "outlive_factions\r\nslave\r\n\r\nbeta\r\nhold_regions A_R\r\ntake_regions 2\r\n", out)
+        cond["long"]["hold"] = ["Nowhere"]
+        with self.assertRaises(ValueError):
+            edit(ModData(self.root), "test", "alpha", {"victory": cond})
+        # unchanged conditions: the file is not touched
+        plan = edit(ModData(self.root), "test", "alpha", {"victory": wincond.read(ModData(self.root), "test")["alpha"]})
+        self.assertNotIn(path, list(plan.changed_files()))
+        # a new faction: the template's block is copied, then the picks are written over the copy
+        cond = wincond.read(ModData(self.root), "test")["alpha"]
+        cond["long"]["goals"] = ["imperator"]
+        plan = build(ModData(self.root), "test", "alpha", "beta", {
+            "display_name": "Beta", "start": {"regions": ["B_R"], "leader": {"name": "Boris Alphid", "age": 35}},
+            "victory": cond})
+        f = plan.files[path]
+        from faction_tool.wincond import blocks, parse
+        a, b = blocks(f)["beta"]
+        got = parse([f.text(k) for k in range(a + 1, b)])
+        self.assertEqual(got["long"]["goals"], ["imperator"])
+        self.assertEqual(got["short"]["outlive"], ["slave"])
+        a, b = blocks(f)["alpha"]
+        self.assertEqual(f.text(a + 1).strip(), "take_rome")             # the template's own block untouched
+
     def test_check_mod_reads_the_mini_mod(self):
         from faction_tool.check import check_mod
         text = check_mod(ModData(self.root), "test")

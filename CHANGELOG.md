@@ -7,6 +7,10 @@
   columns (descr_strat `faction_relationships X, allied_to / at_war_with Y`, as Sons of Mars, Barbarian Invasion
   and Medieval II write them); picking one side sets the other too. Trade rights have no start line in either
   game, so they are not offered.
+- **Victory conditions on the Faction tab, both games**: regions to hold, regions to take, factions to outlive and
+  Rome's goal (be emperor / take Rome), for the long and the short campaign (descr_win_conditions.txt); a region or
+  faction that does not exist is refused (the game crashes on it); Undo / Redo. A new faction starts from its
+  template's conditions.
 - Hover texts (a small '?') in place of long hint labels - first on the Diplomacy tab.
 
 ### Fixed

@@ -120,6 +120,9 @@ def edit(mod, campaign, faction, opts):
     if opts.get("relations"):
         from .diplomacy import apply_opts
         apply_opts(plan, campaign, faction, opts["relations"])
+    if opts.get("victory"):
+        from .wincond import apply_opts as apply_victory
+        apply_victory(plan, campaign, faction, opts["victory"], opts)
     if opts.get("roster"):
         from .roster import apply as apply_roster
         apply_roster(plan, faction, opts["roster"], campaign)

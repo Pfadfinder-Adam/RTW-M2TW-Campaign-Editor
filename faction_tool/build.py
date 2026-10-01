@@ -116,6 +116,9 @@ def build(mod, campaign, template, new, opts):
     if opts.get("relations"):
         from .diplomacy import apply_opts
         apply_opts(plan, campaign, new, opts["relations"])
+    if opts.get("victory"):
+        from .wincond import apply_opts as apply_victory
+        apply_victory(plan, campaign, new, opts["victory"], opts)
     if opts.get("figures"):                   # before the art: a figure's new texture line may get a picture
         from .stratmodels import apply as apply_figures
         apply_figures(plan, new, opts["figures"])

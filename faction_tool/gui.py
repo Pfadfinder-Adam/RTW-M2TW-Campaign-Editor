@@ -524,6 +524,11 @@ class App(tk.Tk):
         self.l_name_list = ttk.Label(nl, foreground="#666", text="its own men's names, surnames and women's names")
         self.l_name_list.pack(side="left", padx=6)
 
+        # --- victory: what the player must do to win (descr_win_conditions.txt)
+        from .gui_wincond import VictoryBox
+        self.victory = VictoryBox(left, on_change=self._victory_changed, before=self.remember)
+        self.victory.pack(fill="x", pady=(8, 0))
+
         # --- towns
         tf = ttk.LabelFrame(right, text="Starting settlements")
         tf.pack(fill="both", expand=True)
@@ -1306,6 +1311,7 @@ class App(tk.Tk):
     def snapshot(self):
         st = {k: copy.deepcopy(getattr(self, k)) for k in self.UNDO_KEYS}
         st["capital"] = self.v["capital"].get()
+        st["victory"] = (self.victory.faction, copy.deepcopy(self.victory.cond))
         return st
 
     def remember(self):
@@ -1325,6 +1331,10 @@ class App(tk.Tk):
             else:
                 setattr(self, k, copy.deepcopy(st[k]))
         self.v["capital"].set(st["capital"])
+        fac, cond = st.get("victory") or (None, None)
+        if cond is not None and fac == self.victory.faction:     # another faction's conditions never come back
+            self.victory.cond = copy.deepcopy(cond)
+            self.victory.show()
         self.refresh_chosen()
         self.refresh_name_combos()
         self.refresh_field()
@@ -3152,6 +3162,7 @@ class App(tk.Tk):
                 if self.v[role + "_first"].get() and self.v[role + "_first"].get() not in pool.get("characters", []):
                     self.v[role + "_first"].set("")
                     self.v[role + "_last"].set("")
+        self.load_victory(t)
         disp = template_display(self.mod, t, self.v_campaign.get())
         if self.editing():
             self._baseline = self._faction_state()      # what 'not changed yet' looks like
@@ -3178,6 +3189,26 @@ class App(tk.Tk):
                 b.configure(**colour_look(rgb))
         self.status.set("Template %s: %s. Its units, buildings, names, traits and art are copied." %
                         (t, disp.get("display_name", t)))
+
+    def load_victory(self, faction):
+        """The Victory block shows the faction's (a new one: its template's, which the clone copies) conditions."""
+        from .wincond import read
+        from .limits import game_kind
+        try:
+            cond = read(self.mod, self.v_campaign.get()).get(faction)
+        except Exception:
+            cond = None
+        regions = [(r, (v.get("settlement") or "")) for r, v in sorted(self.regions.items())]
+        regions += [(r["name"], r.get("settlement", "")) for r in self.new_regions]
+        names = dict(self.mod.factions())
+        factions = [(fb.name, names.get(fb.name, "")) for fb in (self.strat.factions if self.strat else [])]
+        self.victory.load(cond, regions, factions, game_kind(self.mod) == "medieval2", faction)
+
+    def _victory_changed(self):
+        if self.victory.changed():
+            self.status.set("Victory conditions changed - Preview, then %s." % (
+                "Apply changes" if self.editing() else "Create faction"))
+        self._mark_work()
 
     def pick_colour(self, which):
         c = colorchooser.askcolor(title=which + " colour")
@@ -3598,6 +3629,7 @@ class App(tk.Tk):
             "resources": self._resources_opts(),
             "names": self.name_list.get("(new)"),
             "kinds": {r: k for r, k in self.kinds.items() if r in self.chosen},
+            "victory": self.victory.get(),
         }
         return v["template"], v["name"].lower(), opts
 
@@ -3645,7 +3677,8 @@ class App(tk.Tk):
             "roster": dict(self.roster_set),
             "names": self.name_list.get(v["template"]),
             "kinds": {r: k for r, k in self.kinds.items() if r in self.chosen},
-            "family": copy.deepcopy(self.family_set) if self.family_set else None}
+            "family": copy.deepcopy(self.family_set) if self.family_set else None,
+            "victory": self.victory.get()}
 
     def _places(self):
         return [{"what": w, "region": r, "to": xy} for (w, r), xy in self.place_moves.items()]
@@ -3708,6 +3741,7 @@ class App(tk.Tk):
         st["colours"] = dict(self.colours)
         st["playable"] = self.v_playable.get()
         st["give"] = self.v_give.get()
+        st["victory"] = self.victory.get()
         return st
 
     def pending_parts(self):
