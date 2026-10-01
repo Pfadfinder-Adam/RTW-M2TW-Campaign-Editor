@@ -2581,6 +2581,30 @@ building smith
             import importlib
             importlib.reload(R)
 
+    def test_recolour_keeps_what_all_factions_share(self):
+        """A banner nearly all in the faction's red, with a bronze (orange-red) star that every faction's banner has:
+        the field changes, the star stays - even though most of the picture differs between the factions."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from faction_tool import recolour as R
+
+        def banner(field):
+            im = Image.new("RGBA", (40, 40), field + (255,))
+            for x in range(30, 38):
+                for y in range(30, 38):
+                    im.putpixel((x, y), (190, 90, 40, 255))          # bronze: near red in hue
+            return im
+        mine = banner((200, 20, 20))
+        others = [(banner((20, 140, 30)), ((20, 140, 30), (240, 240, 240))),
+                  (banner((30, 50, 170)), ((30, 50, 170), (240, 240, 240))),
+                  (banner((230, 230, 230)), ((230, 230, 230), (0, 0, 0)))]
+        new, share = R.recolour(mine, ((200, 20, 20), (0, 0, 0)), ((30, 60, 180), (240, 240, 240)), others)
+        r, g, b, a = new.getpixel((5, 5))
+        self.assertTrue(b > r)                                        # the field: blue now
+        self.assertEqual(new.getpixel((33, 33)), (190, 90, 40, 255))  # the star: as it was
+
     def test_faction_emblem_one_picture_everywhere(self):
         """One emblem picture -> every emblem picture in its own size; mouse over brighter, greyed out grey, selected
         with a glow round the new shape - by the amounts the old pictures show."""

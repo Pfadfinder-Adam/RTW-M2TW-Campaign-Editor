@@ -100,6 +100,7 @@ def masks(im, source, others=()):
             closer = closer.point(lambda x: 255 if x == 0 else 0)
             m = ImageChops.multiply(m, closer)
         use = [dd for dd, cols in diffs if not any(_near(source[k], c) for c in cols)]
+        same = None
         if use:
             diff = use[0]
             for dd in use[1:]:
@@ -107,7 +108,18 @@ def masks(im, source, others=()):
             share = diff.histogram()[255] / float(im.size[0] * im.size[1])
             if 0 < share <= DIFF_MOST:
                 m = ImageChops.multiply(m, diff)
-        out.append(_grow(m, H, S, V, d, gap, closer))
+            # what is the same as in a faction that does not wear this colour is never the faction's colour (a
+            # bronze star, a wooden pole, a face) - kept even when most of the picture differs
+            # (by most of them: one other faction with a like part by chance must not keep a speck of the old colour)
+            votes = None
+            for dd in use:
+                one = dd.point(lambda x: 0 if x else 1)
+                votes = one if votes is None else ImageChops.add(votes, one)
+            need = max(1, (len(use) + 1) // 2)
+            same = votes.point(lambda v: 255 if v >= need else 0)
+            m = ImageChops.subtract(m, same)
+        g = _grow(m, H, S, V, d, gap, closer)
+        out.append(ImageChops.subtract(g, same) if same is not None else g)
     if len(out) > 1:                             # grown into each other: the primary keeps its own
         from PIL import ImageChops as _C
         out[1] = _C.subtract(out[1], out[0])
