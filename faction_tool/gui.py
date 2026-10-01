@@ -1571,7 +1571,7 @@ class App(tk.Tk):
             if p:
                 self.game_log_window(p)
         self.show_text("The game's log in plain words", "Written %s.\n\n" % report._age(path) + text,
-                       extra=[("Open another log...", other)])
+                       extra=[("Open another log...", other)], wrap="word")
 
     def settings_window(self):
         """Everything the tool keeps between starts, in one window."""
@@ -4092,7 +4092,7 @@ class App(tk.Tk):
         from .gui_modpack import open_pack
         open_pack(self)
 
-    def show_text(self, title, text, extra=()):
+    def show_text(self, title, text, extra=(), wrap="none"):
         w = tk.Toplevel(self)
         w.title(title)
         w.geometry("900x600")
@@ -4120,7 +4120,7 @@ class App(tk.Tk):
         status = ttk.Label(bar, text="")
         status.pack(side="left", padx=8)
 
-        t = tk.Text(w, wrap="none", font=("Consolas", 10))
+        t = tk.Text(w, wrap=wrap, font=("Consolas", 10))
         sb = ttk.Scrollbar(w, orient="vertical", command=t.yview)
         hb = ttk.Scrollbar(w, orient="horizontal", command=t.xview)
         t.configure(yscrollcommand=sb.set, xscrollcommand=hb.set)

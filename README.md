@@ -46,6 +46,8 @@ unit's texture (vanilla-style uniforms), so a new faction's troops wear its own 
 - `descr_terrain.txt` gets the new size; `map.rwm` is deleted so the game rebuilds it.
 - Preview of every file, one backup, Restore byte-exact.
 
+<img src="docs/images/bigger_map_coast.png" width="700" alt="The coast of Italy made 3 x bigger: before (squares), after (smooth)">
+
 Not converted: coordinates inside scripts (counted and listed). Without REX / M2EX the original exes stop at
 510 tiles - the tool warns. Checked on both vanilla campaigns (103 / 112 towns, 177 / 216 characters, 75 / 77 ports
 in place, no river on the sea, every river end at the sea, a river or the map's edge as in the original). The first
