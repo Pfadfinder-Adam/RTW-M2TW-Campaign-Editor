@@ -368,7 +368,7 @@ class App(tk.Tk):
         self.v_mode = tk.StringVar(value="new")
         # what the window works on: a new faction, an existing one, the units, the buildings
         # the work buttons scroll left / right when the window is narrower than they are (more come)
-        from .gui_util import HScroll
+        from .gui_util import HScroll, tip
         work = ttk.Frame(self)
         work.pack(fill="x", padx=6, pady=(4, 0))
         self.b_theme = ttk.Button(work, text="", command=self.toggle_theme)
@@ -383,10 +383,13 @@ class App(tk.Tk):
                                selectcolor="#cfe3ff", relief="raised", offrelief="groove", cursor="hand2")
             b.pack(side="left", padx=(0, 4))
             self.work_buttons[val] = b
+            tip(b, self.WORK_HINTS.get(val, ""))         # what each work is: shown on hover, takes no room
+        tip(self.b_theme, "light or dark window")
         self.work_row.pack_configure(expand=False)
-        # the hint beside them is the one cut when the window is narrow (packed last)
+        # beside them only a warning that needs to be seen (New faction with a faction picked); cut first when narrow
         self.lbl_work = ttk.Label(work, text="", foreground="#555")
         self.lbl_work.pack(side="left", padx=10)
+        tip(self.lbl_work, lambda: self.lbl_work.cget("text"))
         self._theme_label()
         self.editors = {}
 
@@ -398,17 +401,20 @@ class App(tk.Tk):
         # taken on the Map (a click on a town), their buildings on Buildings, garrisons on Units & armies - the
         # old town list (below) is kept only as the window's own record of the picked towns, never shown
         # (the user, 2026-09-30: "a third way to add towns makes no sense")
-        # the form | the family tree: the line between them can be dragged; the form scrolls in a low window
+        # the form, or (a click on the Family tree button) the family tree in its place - folded away by default so
+        # the form has the room (the user, 2026-10-01); the form scrolls in a low window
         from .gui_util import ScrollFrame
-        panes = ttk.Panedwindow(body, orient="horizontal")
-        panes.pack(fill="both", expand=True)
-        lsf = ScrollFrame(panes)
-        panes.add(lsf, weight=0)
+        fbar = ttk.Frame(body)
+        fbar.pack(fill="x", pady=(0, 4))
+        self.b_family = ttk.Button(fbar, command=self.toggle_family)
+        self.b_family.pack(side="left")
+        self.l_family = ttk.Label(fbar, foreground="#666")
+        self.l_family.pack(side="left", padx=8)
+        lsf = self._form_view = ScrollFrame(body)
+        lsf.pack(fill="both", expand=True)
         left = lsf.inner
-        from .gui_util import fit_first_pane
-        fit_first_pane(panes, left)
-        self._family_host = ttk.Frame(panes)
-        panes.add(self._family_host, weight=1)
+        self._family_host = ttk.Frame(body)               # packed only while the family tree is open
+        self._family_open = False
         right = ttk.Frame(self)                   # never packed: the picked towns' list lives on, unseen
 
         # --- faction
@@ -1045,7 +1051,9 @@ class App(tk.Tk):
             self.roster_editor.load()
             return
         if tab == "Faction":
-            self.family_editor.load()
+            self.show_family_button()
+            if self._family_open:
+                self.family_editor.load()
             return
         if tab == "Settlements":
             self.settlements.load()
@@ -1070,7 +1078,6 @@ class App(tk.Tk):
         """New / Edit faction share the campaign tabs; the unit and building editors
         take the window's middle instead."""
         w = self.v_work.get()
-        self.lbl_work.configure(text=self.WORK_HINTS.get(w, ""))
         if w in self.work_buttons:
             self.work_row.show(self.work_buttons[w])
         if w in ("new", "edit"):
@@ -1217,7 +1224,7 @@ class App(tk.Tk):
         self.refresh_chosen()
         if edit and self.v["template"].get() and self.strat and self.strat.faction(self.v["template"].get().strip()):
             self.template_changed()
-        if self.tab_name() == "Faction":
+        if self.tab_name() == "Faction" and self._family_open:
             self.family_editor.load()
         self.status.set("Edit: pick the faction to change; untouched fields stay as they are." if edit else
                         "New: pick the template to copy.")
@@ -1352,7 +1359,7 @@ class App(tk.Tk):
             self.load_diplomacy()
         elif tab == "Roster":
             self.roster_editor.redraw()
-        elif tab == "Faction":
+        elif tab == "Faction" and self._family_open:
             self.family_editor.redraw()
 
     def roster_changed(self):
@@ -3144,8 +3151,9 @@ class App(tk.Tk):
                         return                        # not written (refused or failed): stay
                     self.v["template"].set(t)
             self.load_existing()
-        if self.tab_name() == "Faction":             # its family tree sits beside the form
+        if self.tab_name() == "Faction" and self._family_open:     # the family tree open in the form's place
             self.family_editor.load()
+        self.show_family_button()
         fb = self.strat.faction(t) if self.strat else None
         if fb:
             parts = fb.header.split(";")[0].split(",", 1)
@@ -3189,6 +3197,28 @@ class App(tk.Tk):
                 b.configure(**colour_look(rgb))
         self.status.set("Template %s: %s. Its units, buildings, names, traits and art are copied." %
                         (t, disp.get("display_name", t)))
+
+    def show_family_button(self):
+        """The Faction tab's Family tree button: what a click does, and whose family it is."""
+        me = self.v["template"].get().strip() if self.v_mode.get() == "edit" else ""
+        if self._family_open:
+            self.b_family.configure(text="\u25c2  Back to the faction")
+            self.l_family.configure(text="")
+        else:
+            self.b_family.configure(text="\u25b8  Family tree%s" % (" of %s" % me if me else ""))
+            self.l_family.configure(text="people, marriages, heirs, portraits - opens here in the form's place")
+
+    def toggle_family(self):
+        """Open the family tree in the form's place, or go back to the form."""
+        self._family_open = not self._family_open
+        if self._family_open:
+            self._form_view.pack_forget()
+            self._family_host.pack(fill="both", expand=True)
+            self.family_editor.load()
+        else:
+            self._family_host.pack_forget()
+            self._form_view.pack(fill="both", expand=True)
+        self.show_family_button()
 
     def load_victory(self, faction):
         """The Victory block shows the faction's (a new one: its template's, which the clone copies) conditions."""
@@ -3701,12 +3731,11 @@ class App(tk.Tk):
         self.b_preview.configure(text=p)
         self.b_create.configure(text=a)
         if getattr(self, "lbl_work", None) is not None and getattr(self, "v_work", None) is not None:
-            hint = self.WORK_HINTS.get(self.v_work.get(), "")
+            hint = ""                 # what each work is: in the work buttons' hover texts
             if self.v_work.get() == "new" and self.map_only():
                 picked = self.v["template"].get().strip()
                 hint = ("%s = template of a NEW faction. To change %s itself: Edit faction" % (picked, picked)
-                        if picked else hint +
-                        "  -  no template / name yet: Apply writes the map's changes only")
+                        if picked else "")
             self.lbl_work.configure(text=hint)
 
     def make_plan(self):
@@ -3721,7 +3750,13 @@ class App(tk.Tk):
         if not self.mod:
             return False
         if self.editing():
-            return bool(self.editing_now) and self._faction_state() != getattr(self, "_baseline", None)
+            base = getattr(self, "_baseline", None)
+            if not self.editing_now or base is None:
+                return False
+            st = self._faction_state()
+            # the faction just picked in the list is not a change of the one being edited
+            st["fields"]["template"] = base["fields"]["template"]
+            return st != base
         if self.map_only():
             return bool(self._places() or self._regions_opts() or self._resources_opts())
         return True
