@@ -2581,6 +2581,52 @@ building smith
             import importlib
             importlib.reload(R)
 
+    def test_faction_emblem_one_picture_everywhere(self):
+        """One emblem picture -> every emblem picture in its own size; mouse over brighter, greyed out grey, selected
+        with a glow round the new shape - by the amounts the old pictures show."""
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            self.skipTest("Pillow")
+        from faction_tool import emblem as E
+        d = tempfile.mkdtemp()
+
+        def disc(size, colour, glow=None):
+            im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+            dr = ImageDraw.Draw(im)
+            if glow:
+                dr.ellipse((0, 0, size - 1, size - 1), fill=glow + (160,))
+            dr.ellipse((4, 4, size - 5, size - 5), fill=colour + (255,))
+            return im
+        olds = {"": disc(40, (100, 20, 20)), "_roll": disc(40, (140, 28, 28)),
+                "_select": disc(40, (140, 28, 28), (230, 190, 40)), "_grey": disc(40, (40, 40, 40))}
+        pics = []
+        for v, im in olds.items():
+            path = os.path.join(d, "symbol48_alpha%s.tga" % v)
+            im.save(path)
+            label = "big campaign-menu button" + {"": "", "_roll": " (mouse over)", "_select": " (selected)",
+                                                  "_grey": " (greyed out)"}[v]
+            pics.append({"path": path, "rel": "menu/symbols/fe_buttons_48/symbol48_alpha%s.tga" % v,
+                         "label": label, "size": (40, 40, 32)})
+        logo = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
+        ImageDraw.Draw(logo).rectangle((10, 10, 117, 117), fill=(20, 60, 160, 255))
+        pics.append({"path": os.path.join(d, "symbol128_alpha.tga"), "rel": "loading_screen/symbols/symbol128_alpha.tga",
+                     "label": "loading-screen logo", "size": (128, 128, 32)})
+        logo.save(pics[-1]["path"])
+        self.assertEqual(len(E.emblem_pictures(pics)), 5)
+        src = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        ImageDraw.Draw(src).rectangle((0, 0, 63, 63), fill=(20, 120, 40, 255))
+        made = E.build(src, pics)
+        self.assertEqual(made[pics[4]["rel"]].size, (128, 128))
+        n, roll, sel, grey = (made[p["rel"]] for p in pics[:4])
+        self.assertEqual(n.size, (40, 40))
+        self.assertGreater(roll.getpixel((20, 20))[1], n.getpixel((20, 20))[1])       # brighter
+        r, g, b, a = grey.getpixel((20, 20))
+        self.assertTrue(r == g == b)                                                    # grey
+        self.assertEqual(n.getpixel((1, 1))[3], 0)                                      # the margin stays clear
+        self.assertGreater(sel.getpixel((2, 20))[3], 0)                                 # the glow round it
+        self.assertGreater(sel.getpixel((2, 20))[0], sel.getpixel((2, 20))[2])          # gold, as the old one
+
     def test_buildings_and_garrisons_for_many_towns(self):
         import random
         from faction_tool import masstown as M

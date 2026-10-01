@@ -21,6 +21,9 @@
   minute.
 
 ### Added
+- **Faction emblem - one picture everywhere** (Art tab), both games: the menu buttons (normal, mouse over,
+  selected, greyed out), loading-screen logo, faction-screen symbol, in-game panels' symbol and the faction logos made
+  from one picture, each in its own size; the button states measured from the mod's own; written with a backup.
 - **Recolour a faction's pictures** (Art tab, Tools), both games: unit cards, battle textures, symbols, banners and
   captain cards moved from the colours they carry (a template's, found by itself) to the faction's own or any picked;
   only the faction-coloured parts change (compared with other factions' copies), light and shade kept; before / after

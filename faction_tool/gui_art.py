@@ -58,10 +58,17 @@ class ArtEditor(ttk.Frame):
                   foreground="#555")
         self.pics_note.pack(anchor="w", pady=(8, 2))
         from .gui_util import tip
-        tip(ttk.Button(self, text="Recolour all its pictures...", command=lambda: self.app.recolour_window()),
+        btns = ttk.Frame(self)
+        btns.pack(anchor="w", pady=(0, 4))
+        tip(ttk.Button(btns, text="Faction emblem - one picture everywhere...", command=self.emblem_window),
+            "The faction's emblem is shown in many places and sizes: the campaign-menu buttons (normal, mouse over, "
+            "selected, greyed out), the loading screen, the faction screen, the faction logo and small logo in the "
+            "game's panels. Pick one picture: every one of them is made from it in its own size; the button states "
+            "the way the mod's own are made (brighter, the glow, grey).").pack(side="left", padx=(0, 6))
+        tip(ttk.Button(btns, text="Recolour all its pictures...", command=lambda: self.app.recolour_window()),
             "Unit cards, battle textures, symbols, banners, captain cards: moved from the colours they carry now "
             "(a template's, for a cloned faction) to the faction's own - light and shade kept, faces and metal "
-            "untouched. Before / after shown; written with a backup.").pack(anchor="w", pady=(0, 4))
+            "untouched. Before / after shown; written with a backup.").pack(side="left")
         box = ttk.Frame(self)
         box.pack(fill="both", expand=True)
         canvas = self.canvas = tk.Canvas(box, highlightthickness=0)
@@ -308,6 +315,76 @@ class ArtEditor(ttk.Frame):
         self.app.art_replace[target] = {"src": src, "link": link} if link else src
         self.app.status.set("%s: %s - Preview, then Apply." % (label, os.path.basename(src)))
         self.load()
+
+    def emblem_window(self):
+        """One picture -> every emblem picture of the faction (emblem.py), shown before / after, then put in as
+        the Art picks (written on Apply with the rest, a backup first)."""
+        from . import emblem as E
+        a = self.app
+        src_faction, new = self._names()
+        if not a.mod or not src_faction:
+            messagebox.showinfo("Faction emblem", "Load a mod and pick the faction first.")
+            return
+        pics = E.emblem_pictures(FA.faction_pictures(a.mod, a.v_campaign.get(), src_faction))
+        if not pics:
+            messagebox.showinfo("Faction emblem", "No emblem pictures of %s were found." % src_faction)
+            return
+        src = filedialog.askopenfilename(title="The faction's emblem (best: a square PNG with a clear background)",
+                                         filetypes=[("Pictures", "*.png *.tga *.dds *.jpg *.jpeg *.bmp"),
+                                                    ("All files", "*.*")])
+        if not src:
+            return
+        try:
+            from .recolour import read_picture
+            made = E.build(read_picture(src), pics)
+        except Exception as e:
+            messagebox.showerror("Faction emblem", "Cannot read %s: %s" % (src, e))
+            return
+        import tempfile
+        paths = E.save_all(made, tempfile.mkdtemp(prefix="emblem_"))
+        w = tk.Toplevel(self)
+        w.title("Faction emblem - %s" % (new or src_faction))
+        w.transient(self.winfo_toplevel())
+        ShortHint(w, text=(
+            "Every place the game shows the emblem, now and after. Each picture keeps its size and format; the "
+            "button states are made like the mod's own. Nothing is written yet: 'Use it' puts them on the Art tab, "
+            "Preview and Apply write them with a backup (Restore gives them back).")).pack(anchor="w", padx=8, pady=6)
+        grid = ttk.Frame(w, padding=8)
+        grid.pack()
+        photos = []
+        from PIL import Image, ImageTk
+        for k, p in enumerate(pics):
+            cell = ttk.Frame(grid, padding=4)
+            cell.grid(row=k // 6, column=k % 6, sticky="n")
+            for j, im in enumerate((E._old(p), made.get(p["rel"]))):
+                if im is None:
+                    continue
+                x = im.copy()
+                if max(x.size) < 48:
+                    x = x.resize((x.size[0] * 2, x.size[1] * 2), Image.NEAREST)
+                x.thumbnail((96, 96))
+                bg = Image.new("RGBA", x.size, (110, 110, 110, 255))
+                bg.alpha_composite(x)
+                ph = ImageTk.PhotoImage(bg)
+                photos.append(ph)
+                tk.Label(cell, image=ph).grid(row=0, column=j, padx=1)
+            ttk.Label(cell, text="%s\n%d x %d" % (p["label"], p["size"][0], p["size"][1]), wraplength=200,
+                      justify="center", foreground="#444").grid(row=1, column=0, columnspan=2)
+        w._photos = photos
+
+        def use():
+            a.remember()
+            for p in pics:
+                if p["rel"] in paths:
+                    a.art_replace[FA.picture_target(p, src_faction, new or src_faction)] = paths[p["rel"]]
+            w.destroy()
+            a.status.set("Faction emblem: %d pictures made from %s - Preview, then Apply." % (
+                len(paths), os.path.basename(src)))
+            self.load()
+        bar = ttk.Frame(w, padding=8)
+        bar.pack(fill="x")
+        ttk.Button(bar, text="Use it (%d pictures)" % len(paths), command=use).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="right")
 
     def revert(self, target, orig, link=None):
         """The picture as it was before the tool first changed it (a pending change, written on Apply)."""
