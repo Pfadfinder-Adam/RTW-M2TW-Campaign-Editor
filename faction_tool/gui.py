@@ -680,6 +680,7 @@ class App(tk.Tk):
         self.fort_bar.bind("<Configure>", lambda e: self.lbl_fort_new.configure(wraplength=max(200, e.width - 8)),
                            add="+")
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
+        self.map_view.on_menu = self.map_menu
         self.map_view.on_tool = self.map_tool
         self.v_borders = self.map_view.v_borders
         self.map_view.pack(fill="both", expand=True)
@@ -3473,9 +3474,10 @@ class App(tk.Tk):
     def field_faction(self):
         return self.v["template"].get().strip()
 
-    def add_field(self, kind, preset=None, then_place=False):
+    def add_field(self, kind, preset=None, then_place=False, at=None):
         """A small form: kind (agents), name from the faction's name list, age. preset: the agent picked;
-        then_place: the next click on the Map puts the new one there (the legend's tools)."""
+        then_place: the next click on the Map puts the new one there (the legend's tools); at: put it on
+        this tile at once (the map's right-click menu; the nearest good tile when it may not stand there)."""
         if not self.mod or not self.field_faction():
             messagebox.showerror(APP, "load a mod and pick the %s first" % ("faction" if self.editing() else "template"))
             return
@@ -3562,6 +3564,12 @@ class App(tk.Tk):
             w.destroy()
             self.refresh_field(keep=len(self.field) - 1)
             self.load_field()
+            if at is not None:                     # the map's menu: placed on that tile at once
+                self._placing = len(self.field) - 1
+                self.show_map()
+                if not self.map_view.place_at(at):
+                    self.status.set("%s could not stand there - pick its tile: click the map." % self.field[-1]["name"])
+                return
             if then_place:                         # the legend's tool: the next click on the map places it
                 self._placing = len(self.field) - 1
                 c = self.field[-1]
@@ -3590,6 +3598,50 @@ class App(tk.Tk):
                 names.add(n)
         names |= {c["name"] for c in self.field}
         return names
+
+    def map_menu(self, xy, region, cid):
+        """The Map's right-click menu: [(label, command)] for what can be done at that spot."""
+        if not self.mod:
+            return []
+        items = []
+        if region:
+            town = self._cmap.info.get(region, {}).get("settlement", region) if self._cmap else region
+            mine = region in self.chosen
+            items.append(("%s (%s)" % (town, region), None))
+            items.append(("Take out of my towns" if mine else "Add to my towns", lambda: self.map_city(region)))
+            if mine:
+                items.append(("Its garrison...  (Units & armies)", lambda: self.show_units(region)))
+
+                def buildings():
+                    self.select_tab("Buildings")
+                    self.lb_build.selection_clear(0, "end")
+                    self.lb_build.selection_set(self.chosen.index(region))
+                    self.load_buildings()
+                items.append(("Its buildings...  (Buildings)", buildings))
+        if cid is not None:
+            i = next((k for k, c in enumerate(self.field)
+                      if cid == "new:%d" % k or (c.get("existing") and c.get("cid") == cid)), None)
+            if i is not None:
+                c = self.field[i]
+
+                def open_it(i=i):
+                    self.select_tab("Units & armies")
+                    self.lb_field.v_find.set("")
+                    self.lb_units.selection_clear(0, "end")
+                    self.lb_field.selection_set(i)
+                    self.load_field()
+                if items:
+                    items.append((None, None))
+                items.append(("%s %s: open it  (Units & armies)" % (c["kind"], c["name"]), open_it))
+        if self.field_faction() and cid is None:
+            if items:
+                items.append((None, None))
+            sea = self.mod.is_sea(self.v_campaign.get(), xy)
+            kinds = (("fleet", "New fleet here..."),) if sea else (("army", "New army here..."),
+                                                                     ("agent", "New agent here..."))
+            for kind, label in kinds:
+                items.append((label, lambda kind=kind: self.add_field(kind, at=xy)))
+        return items
 
     def selected_field(self):
         sel = self.lb_field.curselection()

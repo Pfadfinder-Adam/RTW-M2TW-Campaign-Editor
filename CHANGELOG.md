@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- **A right-click menu on the Map**: what can be done at that spot - a town: add it or take it out, its garrison,
+  its buildings; a character: open it on Units & armies; a free tile: a new army, agent or fleet placed right there
+  (the nearest good tile when it may not stand there).
+- **Dropped into the town**: an army or agent dragged onto a town's sign goes into the town (the sign is drawn
+  bigger than its tile when zoomed out); a town that already holds an army says so.
+- **Roster: building levels pull their chain along**: giving a level gives the levels below it, taking one takes
+  the levels above (a chain is built level by level); the status line names them.
+- The README shows the reports inbox: every bug report and idea really arrives.
 - **Search on the Units & armies tab** (asked in a report): a Search box over "Your towns" (region or town name) and
   one over the armies, agents and fleets (name, tile, or a unit inside the army, e.g. "knight").
 

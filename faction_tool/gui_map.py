@@ -184,6 +184,8 @@ class MapView(ttk.Frame):
         self.region_mode, self.paint_overlay, self.region_points = False, {}, []
         self.region_painted, self.region_colours = {}, {}
         self.on_paint = self.on_pick = None
+        self.on_menu = None              # (tile, town region or None, character id or None) -> [(label, fn)]
+        self._menu_press = None
         self.brush, self._painting, self._rclick = 1, False, False
         # a spray brush (the Terrain editor's heights): on_spray(px, py) is called again and again while the
         # left button is held - the longer, the more it does; px, py = map_heights pixels (bottom-up, fractions)
@@ -1197,7 +1199,70 @@ class MapView(ttk.Frame):
                     return tag[:4], tag[5:]
         return None
 
+    def _show_menu(self, e):
+        """The right-click menu: what can be done at that spot (a town, a character, an empty tile)."""
+        xy = self.to_tile(e.x, e.y)
+        if not self.inside(xy):
+            return
+        town = self._town_under(e.x, e.y)
+        cid = self._char_under(e.x, e.y)
+        items = self.on_menu(town[1] if town else xy, town[0] if town else None, cid) or []
+        m = tk.Menu(self, tearoff=0)
+        for label, fn in items:
+            if label is None:
+                m.add_separator()
+            else:
+                m.add_command(label=label, command=fn, state="normal" if fn else "disabled")
+        if items:
+            m.add_separator()
+        m.add_command(label="Centre the map here", command=lambda: self.centre_on(xy, zoom=self.z))
+        try:
+            m.tk_popup(e.x_root, e.y_root)
+        finally:
+            m.grab_release()
+
+    def place_at(self, xy):
+        """What a click does while a tool is picked: place it on tile xy (a character that may not stand
+        there goes to the nearest good tile). Returns True when it was placed."""
+        if not self.on_place:
+            return False
+        if not self.inside(xy):
+            self.readout.configure(text="cannot place here - outside the map")
+            return False
+        why = self.on_place(xy)
+        if why and self.ghost and self.ghost.get("kind") in ("army", "agent", "fleet") and self.ghost.get("check"):
+            alt = self.nearest(self.ghost["check"], xy)       # a character: the nearest good tile
+            if alt is not None and not self.on_place(alt):
+                self.readout.configure(text="tile %d, %d: %s - placed on the nearest good tile %d, %d" % (
+                    xy[0], xy[1], why, alt[0], alt[1]))
+                return True
+        if why:
+            self.readout.configure(text="cannot place here - " + why)
+            return False
+        return True
+
+    def _town_under(self, sx, sy):
+        """(region, its town tile) when a town's sign is under the screen point, else None: a character
+        dropped on the sign goes into the town even when the sign is drawn bigger than its tile."""
+        if not self.cmap:
+            return None
+        for item in reversed(self.canvas.find_overlapping(sx - 2, sy - 2, sx + 2, sy + 2)):
+            for tag in self.canvas.gettags(item):
+                if tag.startswith("city:") and tag[5:] in self.cmap.cities:
+                    r = tag[5:]
+                    return r, tuple(self.places.get(("city", r), self.cmap.cities[r]))
+        return None
+
+    def _char_target(self, cid, sx, sy):
+        """The tile a dragged character goes to: the town under it when it may stand there, else the tile."""
+        town = self._town_under(sx, sy)
+        if town and not (self.check_tile and self.check_tile(cid, town[1])):
+            return town[1], town[0]
+        return self.to_tile(sx, sy), None
+
     def _press(self, e, icons=False):
+        # a right click that does not move opens the menu of what can be done there (see _release)
+        self._menu_press = (e.x, e.y) if getattr(e, "num", None) == 3 and not self.region_mode else None
         if self.region_mode and self.cmap:
             if not icons and not self.on_place:           # left: paint
                 if getattr(self, "on_stroke", None):
@@ -1304,7 +1369,7 @@ class MapView(ttk.Frame):
             cid, lx, ly = self._cdrag
             self.canvas.move("char:" + cid, e.x - lx, e.y - ly)
             self._cdrag = (cid, e.x, e.y)
-            x, y = self.to_tile(e.x, e.y)
+            (x, y), town = self._char_target(cid, e.x, e.y)
             why = self.check_tile(cid, (x, y)) if self.check_tile else None
             self.canvas.delete("target")
             ax, ay = self.to_screen(x, y)
@@ -1312,7 +1377,8 @@ class MapView(ttk.Frame):
             self.canvas.create_rectangle(ax - r, ay - r, ax + r, ay + r, outline="#ff3030" if why else "#30ff60",
                                          width=2, tags=("target",))
             self.readout.configure(text=("tile %d, %d: " % (x, y)) + (
-                why + " - dropped here it goes to the nearest good tile" if why else "fine - drop it here"))
+                why + " - dropped here it goes to the nearest good tile" if why else
+                "into the town of %s - drop it here" % town if town else "fine - drop it here"))
             return
         if not self._drag or not self.cmap:
             return
@@ -1331,6 +1397,13 @@ class MapView(ttk.Frame):
         if self._painting:
             self._painting = False
             self.render()
+            return
+        mp, self._menu_press = self._menu_press, None
+        if mp and getattr(e, "num", None) == 3 and abs(e.x - mp[0]) + abs(e.y - mp[1]) <= 3 \
+                and self.on_menu and self.cmap:
+            self._cdrag = self._rdrag = self._pdrag = None
+            self.canvas.delete("target")
+            self._show_menu(e)
             return
         if self._rclick:
             self._rclick = False
@@ -1372,7 +1445,7 @@ class MapView(ttk.Frame):
         if self._cdrag:
             cid = self._cdrag[0]
             self._cdrag = None
-            xy = self.to_tile(e.x, e.y)
+            xy, town = self._char_target(cid, e.x, e.y)
             why = self._outside(xy) or (self.check_tile(cid, xy) if self.check_tile else None)
             note = None
             if why:
@@ -1399,19 +1472,7 @@ class MapView(ttk.Frame):
             self.on_res_click(rpress)
             return
         if self.on_place:
-            xy = self.to_tile(e.x, e.y)
-            if not self.inside(xy):
-                self.readout.configure(text="cannot place here - outside the map")
-                return
-            why = self.on_place(xy)
-            if why and self.ghost and self.ghost.get("kind") in ("army", "agent", "fleet") and self.ghost.get("check"):
-                alt = self.nearest(self.ghost["check"], xy)       # a character: the nearest good tile
-                if alt is not None and not self.on_place(alt):
-                    self.readout.configure(text="tile %d, %d: %s - placed on the nearest good tile %d, %d" % (
-                        xy[0], xy[1], why, alt[0], alt[1]))
-                    return
-            if why:
-                self.readout.configure(text="cannot place here - " + why)
+            self.place_at(self.to_tile(e.x, e.y))
             return
         hit = self.canvas.find_overlapping(e.x - 2, e.y - 2, e.x + 2, e.y + 2)
         for item in reversed(hit):

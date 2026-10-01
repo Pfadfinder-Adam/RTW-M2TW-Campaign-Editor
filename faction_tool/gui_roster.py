@@ -176,6 +176,9 @@ class RosterEditor(ttk.Frame):
             self.app.status.set("Select a unit or a building level first.")
             return
         self.app.remember()
+        extra = []
+        if give is not None:
+            keys, extra = self._chain_pull(keys, give)
         for key in keys:
             has = bool(self._has(key))
             if give is None or give == has:
@@ -184,11 +187,34 @@ class RosterEditor(ttk.Frame):
                 self.app.roster_set[key] = give
         self.app.roster_changed()
         self.redraw()
+        if extra:
+            self.app.status.set("%s too: %s (a chain is built level by level)" % (
+                "The levels below were given" if give else "The levels above were taken away",
+                ", ".join(k.split(":", 2)[2] for k in extra)))
         for t in (self.tv_units, self.tv_build):
             present = [k for k in keys if t.exists(k)]
             if present:
                 t.selection_set(present)
                 t.see(present[0])
+
+    def _chain_pull(self, keys, give):
+        """A building level pulls its chain along: giving one gives the levels below it, taking one takes
+        the levels above (the game builds a chain level by level). Returns (all keys, the added ones)."""
+        out, extra = list(keys), []
+        for key in keys:
+            if not key.startswith("building:"):
+                continue
+            chain, level = key.split(":", 2)[1:]
+            levels = [b["level"] for b in self.data["buildings"] if b["chain"] == chain]
+            if level not in levels:
+                continue
+            i = levels.index(level)
+            for other in (levels[:i] if give else levels[i + 1:]):
+                k = "building:%s:%s" % (chain, other)
+                if k not in out and bool(self._has(k)) != give:
+                    out.append(k)
+                    extra.append(k)
+        return out, extra
 
     def toggle(self, tv):
         item = tv.focus()
