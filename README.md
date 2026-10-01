@@ -6,6 +6,29 @@
 
 I'm building a tool that finally lets us improve the games of our childhood ourselves - without digging through files every time, without the fear of breaking something, and without everything falling apart because we forgot one step.
 
+## 🗺️ NEW: make the whole campaign map 3 x bigger - in one click
+
+**The feature modders keep asking for, and - as far as we know - no other tool does: Tools > Make the campaign map 3 x
+bigger.** Every tile of your campaign map becomes a 3 x 3 block, so there is room between the towns for the new
+regions, factions and stories you always wanted - Rome (with REX) and Medieval II (with M2EX) alike.
+
+And the map stays **ready to play**:
+
+- **Every town, port, army, agent, fleet, resource, fort, watchtower, wonder and event position** moves with the
+  map, into the middle of its block - nothing has to be placed again by hand.
+- **Ports stay on their shore**, touching the land of the region they serve.
+- **Regions and borders** grow with the map, every colour exact.
+- **The relief is smooth** - the heights are blended, not blown up into squares, while the coast stays exactly
+  where the regions have it.
+- **Rivers stay 1 pixel wide** (the game crashes on a 2-pixel river), redrawn through the new tiles.
+- Ground, climates, fog, roughness, trade routes, disasters, radar maps and `descr_terrain.txt` all follow;
+  `map.rwm` is removed so the game builds it fresh.
+- **Nothing is lost**: you see every file before it is written, one backup is made, Restore gives every byte back.
+
+Checked on both vanilla campaigns: every one of their 103 / 112 towns, 177 / 216 characters and 75 / 77 ports in
+place. It is an alpha - please try it in the game and tell us how it plays (coordinates inside scripts are not
+moved yet: the tool counts them for you).
+
 [![RTW & M2TW Campaign Editor - video overview](https://img.youtube.com/vi/m1sCPg-Lzsw/hqdefault.jpg)](https://www.youtube.com/watch?v=m1sCPg-Lzsw)
 
 **▶ Video overview:** [what the editor does, in a few minutes](https://www.youtube.com/watch?v=m1sCPg-Lzsw) (click the picture above).
@@ -86,7 +109,7 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 > With these the cause is usually found and fixed **the same day** (the logs name the file, line and
 > the game's own error); without them it is guesswork and takes much longer.
 
-A step-by-step guide is in the [Wiki](../../wiki). Version **0.24.0** - see [ROADMAP.md](ROADMAP.md) for what it does, what is being tested and what comes next, and [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
+A step-by-step guide is in the [Wiki](../../wiki). Version **0.25.0** - see [ROADMAP.md](ROADMAP.md) for what it does, what is being tested and what comes next, and [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
 
 Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
 

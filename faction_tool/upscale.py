@@ -8,8 +8,10 @@ What it writes (Preview lists it; one backup, Restore gives everything back):
     W x H         map_regions (a town / port pixel only in the middle of its block, the rest its region / the sea),
                   map_features (rivers redrawn as 1-pixel lines through the middles - a 2-pixel river crashes the
                   game; fords, sources, cliffs, volcanoes, land bridges on the middle pixel), map_trade_routes
-    2W+1 x 2H+1   map_heights, map_ground_types, map_climates, map_fog (corner points: new j -> old round(j / 3))
-    2W x 2H       map_roughness
+    2W+1 x 2H+1   map_ground_types, map_climates, map_fog (corner points: new j -> old round(j / 3));
+                  map_heights SMOOTH (each new point blends the old ones round it; land and sea apart, so the
+                  coast stays where the regions have it)
+    2W x 2H       map_roughness (smooth)
   and the campaign's disasters.tga, radar_map1 / radar_map2 (when present);
 - descr_terrain.txt: the dimensions (width / height x 3);
 - descr_strat.txt: every character's x / y, every resource, fort, watchtower and wonder (Rome's landmarks);
@@ -81,6 +83,62 @@ def scaled(path, kind):
                 cache.pop(next(iter(cache)))
         out += line
     return _write(data, len(xs), len(ys), step, out), (w, h)
+
+
+def _weights(kind, n_old):
+    """For each new row / column: (old a, old b, weight of b) - where it falls between two old points."""
+    out = []
+    if kind == "corners":
+        n_new = FACTOR * (n_old - 1) + 1
+        pos = [j / FACTOR for j in range(n_new)]
+    else:                                        # pixel middles line up: (j + 0.5) / 3 - 0.5
+        pos = [(j + 0.5) / FACTOR - 0.5 for j in range(n_old * FACTOR)]
+    for p in pos:
+        p = min(max(p, 0.0), n_old - 1.0)
+        a = int(p)
+        b = min(a + 1, n_old - 1)
+        out.append((a, b, p - a))
+    return out
+
+
+def smooth_scaled(path, kind, sea=False):
+    """A height-like picture made bigger SMOOTHLY (no steps): each new point blends the 4 old ones round it.
+    With sea=True (map_heights: land is grey, its level; the sea is blue, its depth) land and sea are blended
+    apart - a point takes the kind of the old point nearest to it, so the coast stays where it was (it must match
+    the regions and the ground), and only points of that kind are blended."""
+    data, w, h, step, top_down, raw = _read(path)
+    xs, ys = _weights(kind, w), _weights(kind, h)
+    W, H = len(xs), len(ys)
+    row = w * step
+    # per old pixel: (is sea, value)
+    def cell(x, y):
+        o = y * row + x * step
+        b, g, r = raw[o], raw[o + 1], raw[o + 2]
+        if sea and r == 0 and g == 0 and b > 0:
+            return True, b
+        return False, r
+    cells = [[cell(x, y) for x in range(w)] for y in range(h)]
+    alpha = b"\xff" if step == 4 else b""
+    out = bytearray()
+    for (ya, yb, fy) in ys:
+        ra, rb = cells[ya], cells[yb]
+        near_row = ra if fy < 0.5 else rb
+        for (xa, xb, fx) in xs:
+            pts = ((ra[xa], (1 - fx) * (1 - fy)), (ra[xb], fx * (1 - fy)), (rb[xa], (1 - fx) * fy), (rb[xb], fx * fy))
+            want = (near_row[xa] if fx < 0.5 else near_row[xb])[0]
+            tot = val = 0.0
+            for (s, v), wt in pts:
+                if s == want:
+                    tot += wt
+                    val += v * wt
+            v = int(val / tot + 0.5) if tot else 0
+            if want:
+                out += bytes((v, 0, 0)) + alpha              # B G R: blue = the depth
+            else:
+                out += bytes((v, v, v)) + alpha
+    if top_down:
+        pass                                     # rows were read and written in the same storage order
+    return _write(data, W, H, step, out)
 
 
 def _pixels(path):
@@ -250,6 +308,10 @@ def plan_upscale(plan, campaign):
             continue
         if name == "map_regions.tga":
             data = regions_scaled(p, colours)
+        elif name == "map_heights.tga":
+            data = smooth_scaled(p, kind, sea=True)          # the relief smooth, no steps
+        elif name == "map_roughness.tga":
+            data = smooth_scaled(p, kind)
         elif name == "map_features.tga":
             data = features_scaled(p)
         else:

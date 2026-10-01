@@ -738,6 +738,17 @@ class MapView(ttk.Frame):
                 c.create_text(sx + r + 2, sy, text=name, anchor="w", fill="white", font=font)
         if self.v_chars.get() and self.z >= 4 and not self.region_mode:
             self._characters(cw, ch, size)
+        self._size_badge(ch)
+
+    def _size_badge(self, ch):
+        """The map's real size, bottom left over the map: tiles (= map_regions.tga pixels) and the 2x+1 pictures."""
+        c = self.canvas
+        w, h = self.cmap.w, self.cmap.h
+        text = "Map %d x %d tiles (map_regions.tga) - heights %d x %d px" % (w, h, 2 * w + 1, 2 * h + 1)
+        t = c.create_text(8, ch - 8, text=text, anchor="sw", fill="white", font=("", 9, "bold"), tags=("badge",))
+        x0, y0, x1, y1 = c.bbox(t)
+        c.create_rectangle(x0 - 4, y0 - 2, x1 + 4, y1 + 2, fill="#202020", outline="#808080", tags=("badge",))
+        c.tag_raise(t)
 
     def _anchor(self, sx, sy, r, tags):
         """An anchor inside the port's circle: ring, shank, stock and flukes."""

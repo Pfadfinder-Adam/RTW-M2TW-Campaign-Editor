@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.25.0 - 2026-10-01
+
+### Added
+- **The bigger map is ready to play**: the relief is now SMOOTH (heights blended between the old points, land and
+  sea apart so the coast stays where the regions have it; roughness blended too) instead of 3 x 3 steps; Rome's
+  wonders move with the map too.
+- **Wonders on the Map (Rome)**: the landmarks of descr_strat.txt (pyramids, pharos, colossus...) drawn as golden
+  pyramids, dragged, removed and added (Edit forts, towers & wonders; a new one of any type of
+  descr_sm_landmarks.txt). Medieval II's exe reads no landmark lines.
+- **The map's real size** shown over the map, bottom left: tiles (map_regions.tga) and the heights' pixels.
+- The bigger map leads the README and the ROADMAP.
+
 ## 0.24.0 - 2026-10-01
 
 ### Added
