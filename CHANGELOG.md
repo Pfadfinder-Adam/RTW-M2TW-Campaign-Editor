@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.27.0 - 2026-10-01
+
 ### Added
 - **Bring units and buildings from another mod** (asked by modders: moving them was hard): **Bring from another
   mod...** in the Unit editor and the Building editor - straight from the other mod's folder, no pack file to make
