@@ -202,6 +202,10 @@ class FieldTable(ttk.Frame):
         cb = ttk.Combobox(bar, textvariable=self.v_show, values=self.SHOW, state="readonly", width=10)
         cb.pack(side="left", padx=4)
         cb.bind("<<ComboboxSelected>>", lambda e: self._draw())
+        ttk.Label(bar, text="Search").pack(side="left", padx=(8, 0))
+        self.v_find = tk.StringVar()
+        self.v_find.trace_add("write", lambda *a: self._draw())
+        ttk.Entry(bar, textvariable=self.v_find, width=14).pack(side="left", padx=4)
         ttk.Label(bar, text="click a heading to sort", foreground="#666").pack(side="left", padx=6)
         self.tv = ttk.Treeview(self, columns=[c[0] for c in self.COLS], show="headings", height=10,
                                selectmode="browse")
@@ -215,10 +219,15 @@ class FieldTable(ttk.Frame):
         self.tv.tag_configure("new", foreground="#0050c0")
         self.tv.tag_configure("changed", foreground="#a05000")
         self.rows, self.sort = [], None          # [values], (column, reverse)
+        self.finds = {}                          # id(row) -> more text the Search matches (unit names)
 
     def _shown(self, values):
         want = self.v_show.get()
         kind = values[0]
+        find = self.v_find.get().strip().lower()
+        if find and not any(find in str(v).lower() for v in values[:-1]) \
+                and find not in self.finds.get(id(values), ""):
+            return False
         return (want == "all" or want == "armies" and kind == "army" or want == "fleets" and kind == "fleet"
                 or want == "agents" and kind not in ("army", "fleet"))
 
@@ -240,11 +249,12 @@ class FieldTable(ttk.Frame):
         self._draw()
 
     def delete(self, *a):
-        self.rows = []
+        self.rows, self.finds = [], {}
         self.tv.delete(*self.tv.get_children())
 
-    def insert(self, _where, values):
+    def insert(self, _where, values, find=""):
         self.rows.append(values)
+        self.finds[id(values)] = find.lower()
         if self._shown(values):
             if self.sort:
                 self._draw()
@@ -766,6 +776,13 @@ class App(tk.Tk):
         top = ttk.Frame(split)
         split.add(top, weight=1)
         ttk.Label(top, text="Your towns", font=("", 10, "bold")).pack(anchor="w")
+        usb = ttk.Frame(top)
+        usb.pack(fill="x", pady=(0, 2))
+        ttk.Label(usb, text="Search").pack(side="left")
+        self.v_units_search = tk.StringVar()
+        self.v_units_search.trace_add("write", lambda *a: self.refresh_chosen(keep_units_selection=True))
+        ttk.Entry(usb, textvariable=self.v_units_search, width=20).pack(side="left", padx=4)
+        self.units_rows = []         # the towns the list shows, in its order (the Search may hide some)
         # the hints and buttons are packed before the lists: a lower window shrinks the lists, never them
         ttk.Label(top, text="give it towns on the Map (a click on a town)", foreground="#666").pack(side="bottom", anchor="w")
         self.lb_units = tk.Listbox(top, width=30, height=8, exportselection=False)
@@ -1061,12 +1078,14 @@ class App(tk.Tk):
         if tab == "Settlements":
             self.settlements.load()
             return
-        lb, load = {"Units & armies": (self.lb_units, self.load_garrison),
-                    "Buildings": (self.lb_build, self.load_buildings)}.get(tab, (None, None))
-        if lb is not None and self.chosen and not lb.curselection():
+        if tab == "Units & armies" and self.chosen and not self.lb_units.curselection() \
+                and not self.lb_field.curselection():
+            self.select_units_town(self.v["capital"].get() or self.chosen[0])
+            self.load_garrison()
+        elif tab == "Buildings" and self.chosen and not self.lb_build.curselection():
             capital = self.v["capital"].get() or self.chosen[0]
-            lb.selection_set(self.chosen.index(capital) if capital in self.chosen else 0)
-            load()
+            self.lb_build.selection_set(self.chosen.index(capital) if capital in self.chosen else 0)
+            self.load_buildings()
 
     WORK_TITLES = {"new": "New faction", "edit": "Edit faction", "units": "Unit editor",
                    "buildings": "Building editor", "characters": "Character editor",
@@ -2739,10 +2758,18 @@ class App(tk.Tk):
             return
         region = region or self.v["capital"].get() or self.chosen[0]
         self.select_tab("Units & armies")
-        i = self.chosen.index(region) if region in self.chosen else 0
-        self.lb_units.selection_clear(0, "end")
-        self.lb_units.selection_set(i)
+        self.select_units_town(region if region in self.chosen else self.chosen[0])
         self.load_garrison()
+
+    def select_units_town(self, region):
+        """Select a town in the Units & armies list; a Search that hides it is cleared."""
+        if region not in self.units_rows:
+            self.v_units_search.set("")
+        self.lb_units.selection_clear(0, "end")
+        if region in self.units_rows:
+            i = self.units_rows.index(region)
+            self.lb_units.selection_set(i)
+            self.lb_units.see(i)
 
     # ------------------------------------------------------------------ loading
     def browse(self):
@@ -3368,15 +3395,20 @@ class App(tk.Tk):
 
     def refresh_chosen(self, keep_units_selection=False):
         sel = self.lb_units.curselection()
+        was = self.units_rows[sel[0]] if sel and sel[0] < len(self.units_rows) else None
         self.lb_units.delete(0, "end")
-        for r in self.chosen:
+        want = self.v_units_search.get().strip().lower()
+        self.units_rows = [r for r in self.chosen
+                           if not want or want in r.lower()
+                           or want in self.regions.get(r, {}).get("settlement", "").lower()]
+        for r in self.units_rows:
             n = len(self.garrisons.get(r, []))
             self.lb_units.insert("end", "%s%s%s" % (r, "  (capital)" if r == (self.v["capital"].get() or
                                  (self.chosen[0] if self.chosen else "")) else "",
                                  "  [%d units]" % n if r in self.garrisons else
                                  ("  [unchanged]" if self.editing() else "  [automatic]")))
-        if keep_units_selection and sel and sel[0] < len(self.chosen):
-            self.lb_units.selection_set(sel[0])
+        if keep_units_selection and was in self.units_rows:
+            self.lb_units.selection_set(self.units_rows.index(was))
         bsel = self.lb_build.curselection()
         self.lb_build.delete(0, "end")
         for r in self.chosen:
@@ -3417,7 +3449,9 @@ class App(tk.Tk):
                 if c["kind"] in ("army", "fleet") else ""
             moved = c.get("existing") and c.get("cid") in self.char_moves
             tag = ("changed" if c.get("changed") or moved else "as it is") if c.get("existing") else "new"
-            self.lb_field.insert("end", (c["kind"], c["name"], units, where, tag))
+            self.lb_field.insert("end", (c["kind"], c["name"], units, where, tag),
+                                 find=" ".join(u if isinstance(u, str) else str(u.get("name", "")) if isinstance(u, dict)
+                                               else str(u) for u in c.get("units", [])))
         if keep is not None and keep < len(self.field):
             self.lb_field.selection_set(keep)
 
@@ -3629,9 +3663,9 @@ class App(tk.Tk):
     def load_garrison(self):
         """Open the selected town of the Units tab in the garrison editor."""
         sel = self.lb_units.curselection()
-        if not sel or not self.mod or sel[0] >= len(self.chosen):
+        if not sel or not self.mod or sel[0] >= len(self.units_rows):
             return
-        region = self.chosen[sel[0]]
+        region = self.units_rows[sel[0]]
         template = self._faction_for(region)
         if self._units_for != template:
             self._units_cache = faction_units(self.mod, template, mercs=True)

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+- **Search on the Units & armies tab** (asked in a report): a Search box over "Your towns" (region or town name) and
+  one over the armies, agents and fleets (name, tile, or a unit inside the army, e.g. "knight").
+
 ### Fixed
 - A mod without `descr_names.txt` (e.g. a small Medieval II add-on mod) no longer stops the window when a template
   faction is picked ("expected str, bytes or os.PathLike object, not NoneType"); the name lists are just empty.
