@@ -6,28 +6,26 @@
 
 I'm building a tool that finally lets us improve the games of our childhood ourselves - without digging through files every time, without the fear of breaking something, and without everything falling apart because we forgot one step.
 
-## 🗺️ NEW: make the whole campaign map 3 x bigger - in one click
+## 🗺️ New in 0.25.0: rescale the whole campaign map 3 x
 
-**The feature modders keep asking for, and - as far as we know - no other tool does: Tools > Make the campaign map 3 x
-bigger.** Every tile of your campaign map becomes a 3 x 3 block, so there is room between the towns for the new
-regions, factions and stories you always wanted - Rome (with REX) and Medieval II (with M2EX) alike.
+**Tools > Make the campaign map 3 x bigger** (alpha), Rome (REX) and Medieval II (M2EX). Each tile of
+`map_regions.tga` becomes a 3 x 3 block; everything tied to the map is converted with it:
 
-And the map stays **ready to play**:
+- **Positions** (`descr_strat.txt`, `descr_events.txt`, ...): towns, characters, fleets, resources, forts,
+  watchtowers, wonders and event places go to the middle of their new block.
+- **Ports**: re-placed on the shore pixel of their own region.
+- **Pictures**: `map_regions`, `map_ground_types`, `map_climates`, `map_features`, `map_trade_routes`, fog,
+  roughness, disasters and radar maps scaled with exact colours (no blending).
+- **Heights**: `map_heights` interpolated between the old points, land and sea kept apart so the coastline matches
+  the regions; roughness interpolated too.
+- **Rivers**: kept 1 pixel wide (the game crashes on a 2-pixel river), redrawn through the block centres.
+- `descr_terrain.txt` gets the new size; `map.rwm` is deleted so the game rebuilds it.
+- Preview of every file, one backup, Restore byte-exact.
 
-- **Every town, port, army, agent, fleet, resource, fort, watchtower, wonder and event position** moves with the
-  map, into the middle of its block - nothing has to be placed again by hand.
-- **Ports stay on their shore**, touching the land of the region they serve.
-- **Regions and borders** grow with the map, every colour exact.
-- **The relief is smooth** - the heights are blended, not blown up into squares, while the coast stays exactly
-  where the regions have it.
-- **Rivers stay 1 pixel wide** (the game crashes on a 2-pixel river), redrawn through the new tiles.
-- Ground, climates, fog, roughness, trade routes, disasters, radar maps and `descr_terrain.txt` all follow;
-  `map.rwm` is removed so the game builds it fresh.
-- **Nothing is lost**: you see every file before it is written, one backup is made, Restore gives every byte back.
-
-Checked on both vanilla campaigns: every one of their 103 / 112 towns, 177 / 216 characters and 75 / 77 ports in
-place. It is an alpha - please try it in the game and tell us how it plays (coordinates inside scripts are not
-moved yet: the tool counts them for you).
+Not converted: coordinates inside scripts (counted and listed). Without REX / M2EX the original exes stop at
+510 tiles - the tool warns. Checked on both vanilla campaigns (103 / 112 towns, 177 / 216 characters, 75 / 77 ports
+in place) and started in the game. Known limits of the alpha: plains are not flattened and mountain ridges are
+softened by the interpolation. Video: [rescaling the whole map](https://youtu.be/kkfI-WulRmU).
 
 [![RTW & M2TW Campaign Editor - video overview](https://img.youtube.com/vi/m1sCPg-Lzsw/hqdefault.jpg)](https://www.youtube.com/watch?v=m1sCPg-Lzsw)
 
