@@ -1520,7 +1520,9 @@ class App(tk.Tk):
             log.write("upscale failed: %s" % e)
             messagebox.showerror(APP, "The map could not be made bigger: %s" % e)
             return
-        intro = ("MAKE THE CAMPAIGN MAP 3 x BIGGER (alpha) - campaign %s\n\n"
+        intro = ("NOTHING IS WRITTEN YET - this is the preview. Press 'Write it' at the bottom of this window to make "
+                 "the map bigger.\n\n"
+                 "MAKE THE CAMPAIGN MAP 3 x BIGGER (alpha) - campaign %s\n\n"
                  "Every tile becomes a 3 x 3 block; towns, ports, armies, agents, resources and forts keep their "
                  "places in the middle of their blocks. The coast is drawn smooth (not in 3 x 3 squares), rivers "
                  "stay 1 pixel wide and run on to the new coast, and the relief is smooth.\n\n"
@@ -1541,12 +1543,27 @@ class App(tk.Tk):
                 messagebox.showerror(APP, "Not written: %s" % e, parent=holder["w"])
                 return
             log.write("Map made 3 x bigger (backup %s)\n%s" % (bdir, plan.report()))
+            def size_now():
+                try:
+                    from .moddata import ModData as _M
+                    img = _M(self.mod.data).region_map(camp)
+                    return img.width, img.height
+                except Exception:
+                    return None
             holder["w"].destroy()
             self.load()
-            messagebox.showinfo(APP, "The map is 3 x bigger now. Start the game and look - the game builds "
-                                     "map.rwm again on the first start (it takes a while).\n\nBackup: %s" % bdir)
+            now = size_now()
+            was = (now[0] // 3, now[1] // 3) if now else None
+            size = ("\n\nThe map: %d x %d tiles -> %d x %d tiles (the badge at the bottom left of the Map tab)."
+                    % (was + now)) if was and now else ""
+            self.status.set("The map is 3 x bigger now%s - written (backup %s)." % (
+                " (%d x %d tiles)" % now if now else "", bdir))
+            messagebox.showinfo(APP, "The map is 3 x bigger now.%s\n\nStart the game and look - the game builds "
+                                     "map.rwm again on the first start (it takes a while).\n\nBackup: %s"
+                                % (size, bdir))
 
-        self.show_text("Make the map 3 x bigger - what will be written", intro + plan.report(),
+        self.show_text("PREVIEW - nothing written yet: press 'Write it' below - Make the map 3 x bigger",
+                       intro + plan.report(),
                        extra=[("Write it (with a backup)", write_it),
                               ("Write it, heights as they are", lambda: write_it(1))])
         holder["w"] = [c for c in self.winfo_children() if c.winfo_class() == "Toplevel"][-1]
