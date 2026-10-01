@@ -223,7 +223,8 @@ def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0):
 
 def ground_scaled(path, mask, sea_colours):
     """map_ground_types made bigger: each point sea or land by the heights' smooth coast (mask), its colour the
-    nearest old point's of that kind (the sea ground types lie under the heights' sea, as in the games' own maps)."""
+    nearest old point's of that kind (the sea ground types lie under the heights' sea, as in the games' own maps);
+    then the land's patches rounded (organic_patches) - forests and hills are not 3 x 3 squares."""
     data, w, h, step, top_down, at = _pixels(path)
     kind_of = lambda x, y: at(x, y) in sea_colours
     W, H = len(_weights("corners", w)), len(_weights("corners", h))
@@ -239,6 +240,56 @@ def ground_scaled(path, mask, sea_colours):
         else:
             c = at(p[0], p[1])
         _put(raw, W, H, step, top_down, X, Y, c)
+    organic_patches(raw, W, H, step, keep=lambda c: c in sea_colours)
+    return _write(data, W, H, step, raw)
+
+
+def organic_patches(raw, W, H, step, keep=lambda c: False, rounds=2):
+    """Round off the 3 x 3 blocks of a picture of kinds (ground types, climates) in place: every new point that is
+    not an old one (X or Y not a multiple of 3) takes the kind most common in the 3 x 3 around it (Pillow's mode
+    filter, twice), so a forest drawn in squares gets ragged, natural edges. The old points keep their kind
+    exactly (the tiles' own ground - what may stand where does not change), and so does any point whose kind or
+    new kind `keep` names (the sea ground: the coast stays where the heights put it)."""
+    from PIL import Image, ImageFilter
+    colours = {}
+    idx = bytearray(W * H)
+    for i in range(W * H):
+        o = i * step
+        c = (raw[o + 2], raw[o + 1], raw[o])
+        k = colours.get(c)
+        if k is None:
+            if len(colours) >= 255:
+                return                                   # not a picture of kinds: leave it
+            k = colours[c] = len(colours)
+        idx[i] = k
+    pal = {v: k for k, v in colours.items()}
+    im = Image.frombytes("L", (W, H), bytes(idx))
+    for _ in range(rounds):
+        im = im.filter(ImageFilter.ModeFilter(3))
+    new = im.tobytes()
+    kept = {k for c, k in colours.items() if keep(c)}
+    for Y in range(H):
+        for X in range(W):
+            if X % FACTOR == 0 and Y % FACTOR == 0:
+                continue
+            i = Y * W + X
+            a, b = idx[i], new[i]
+            if a == b or a in kept or b in kept:
+                continue
+            c = pal[b]
+            o = i * step
+            raw[o:o + 3] = bytes((c[2], c[1], c[0]))
+
+
+def climates_scaled(path):
+    """map_climates made bigger with organic edges (each point its nearest old point's climate, then rounded)."""
+    data, w, h, step, top_down, at = _pixels(path)
+    W, H = len(_weights("corners", w)), len(_weights("corners", h))
+    raw = _blank(W, H, step, (0, 0, 0))
+    for X, Y, pts in _sources("corners", w, h):
+        x, y, _ = max(pts, key=lambda q: q[2])
+        _put(raw, W, H, step, top_down, X, Y, at(x, y))
+    organic_patches(raw, W, H, step)
     return _write(data, W, H, step, raw)
 
 
@@ -499,7 +550,10 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
             note = "smooth, with a smooth coast"
         elif name == "map_ground_types.tga" and hmask is not None:
             data = ground_scaled(p, hmask, SEA)
-            note = "the sea ground under the heights' new coast"
+            note = "the sea ground under the heights' new coast, the land's patches with natural edges"
+        elif name == "map_climates.tga":
+            data = climates_scaled(p)
+            note = "with natural edges"
         elif name == "map_roughness.tga":
             data = smooth_scaled(p, kind)
             note = "smooth"

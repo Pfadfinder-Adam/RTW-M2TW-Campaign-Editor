@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- **The bigger map's ground and climates get natural edges**: forests, hills and climates are no longer drawn in
+  3 x 3 squares - their patches are rounded (each tile's own ground kept exactly, the coast where the heights put it).
+  The x3 preview says plainly that nothing is written until 'Write it', and after writing shows the old and new size.
 - **The exe goes into the game's folder** (beside RomeTW.exe / medieval2.exe): it finds the game and its mods by
   itself; the Mod list shows the mods of every game folder used (both games at once). Beside it only
   `CampaignEditor_settings.json` and `CampaignEditor_logs` (the log `CampaignEditor.log`, the zips, `sessions`).
