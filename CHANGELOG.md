@@ -18,6 +18,10 @@
   minute.
 
 ### Added
+- **Recolour a faction's pictures** (Art tab, Tools), both games: unit cards, battle textures, symbols, banners and
+  captain cards moved from the colours they carry (a template's, found by itself) to the faction's own or any picked;
+  only the faction-coloured parts change (compared with other factions' copies), light and shade kept; before / after
+  shown; each file written in its own format, with a backup.
 - **Engine files missing in a mod**: Load (and Check mod files) says when a mod of a game with REX / M2EX lacks
   the engine's own files the game's data has (`descr_ex.txt`, `descr_caps_ex.txt`, other `*_ex` files) - the engine
   may then run it on its built-in defaults - and with a yes copies the game's ones into the mod (backup, Restore).

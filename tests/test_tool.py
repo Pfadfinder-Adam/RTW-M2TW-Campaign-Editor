@@ -2535,6 +2535,52 @@ building smith
         restore(ModData(mod.data), backups(ModData(mod.data))[0])
         self.assertFalse(os.path.exists(os.path.join(mod.data, "descr_ex.txt")))
 
+    def test_recolour_faction_pictures(self):
+        """A unit card in the faction's red / yellow next to another faction's blue / white copy: the red and yellow
+        parts take the new colours, the brown horse (near red, but the same in both copies and duller) stays;
+        written as a TGA of the same depth with a backup, Restore gives the bytes back."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from faction_tool import recolour as R
+        d = os.path.join(self.root, "data")
+        cols = {"alpha": ((215, 0, 0), (255, 210, 0)), "slave": ((0, 60, 180), (240, 240, 240))}
+
+        def card(c1, c2):
+            im = Image.new("RGBA", (40, 30), (0, 0, 0, 0))
+            for x in range(40):
+                for y in range(30):
+                    im.putpixel((x, y), (c1 if x < 8 else c2 if x < 16 else (120, 80, 50)) + (255,))
+            return im
+        for f, (a, b) in (("alpha", ((200, 10, 10), (250, 200, 20))), ("slave", ((10, 60, 170), (235, 235, 235)))):
+            os.makedirs(os.path.join(d, "ui", "units", f), exist_ok=True)
+            card(a, b).save(os.path.join(d, "ui", "units", f, "#spear.tga"))
+        mod = ModData(self.root)
+        R.faction_colours = lambda m: cols                     # the mini mod's factions have no colour lines
+        try:
+            items = [it for it in R.targets(mod, "test", "alpha") if it["path"].endswith("#spear.tga")]
+            self.assertEqual(len(items), 1)
+            self.assertEqual(len(items[0]["others"]), 1)
+            path = items[0]["path"]
+            with open(path, "rb") as fh:
+                before = fh.read()
+            plan = Plan(mod, "recolour", "recolour_alpha", {})
+            R.plan_recolour(plan, items, cols["alpha"], ((20, 120, 40), (240, 240, 240)))
+            plan.apply()
+            im = Image.open(path).convert("RGB")
+            r, g, b = im.getpixel((5, 5))
+            self.assertTrue(g > r and g > b)                       # red -> green
+            r, g, b = im.getpixel((12, 5))
+            self.assertTrue(min(r, g, b) > 200)                    # yellow -> white-ish
+            self.assertEqual(im.getpixel((30, 5)), (120, 80, 50))  # the horse stays
+            restore(ModData(self.root), backups(ModData(self.root))[0])
+            with open(path, "rb") as fh:
+                self.assertEqual(fh.read(), before)
+        finally:
+            import importlib
+            importlib.reload(R)
+
     def test_buildings_and_garrisons_for_many_towns(self):
         import random
         from faction_tool import masstown as M

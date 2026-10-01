@@ -57,6 +57,11 @@ class ArtEditor(ttk.Frame):
                              "size and format the game's own has (a DDS stays a DDS); Preview, then Apply writes it (with a backup).",
                   foreground="#555")
         self.pics_note.pack(anchor="w", pady=(8, 2))
+        from .gui_util import tip
+        tip(ttk.Button(self, text="Recolour all its pictures...", command=lambda: self.app.recolour_window()),
+            "Unit cards, battle textures, symbols, banners, captain cards: moved from the colours they carry now "
+            "(a template's, for a cloned faction) to the faction's own - light and shade kept, faces and metal "
+            "untouched. Before / after shown; written with a backup.").pack(anchor="w", pady=(0, 4))
         box = ttk.Frame(self)
         box.pack(fill="both", expand=True)
         canvas = self.canvas = tk.Canvas(box, highlightthickness=0)

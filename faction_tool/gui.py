@@ -740,6 +740,8 @@ class App(tk.Tk):
                          command=self.game_log_window)
         menu.add_command(label="Settlement names by culture (every town)...", command=self.culture_names_table)
         menu.add_command(label="Buildings and garrisons for many towns...", command=lambda: self.mass_towns())
+        menu.add_command(label="Recolour a faction's pictures (cards, textures, symbols)...",
+                         command=lambda: self.recolour_window())
         menu.add_command(label="Make the campaign map 3 x bigger (alpha)...", command=self.upscale_map)
         menu.add_command(label="Check and install a pack...", command=self.install_pack)
         menu.add_command(label="Campaign rules (ages, agents, towns, diplomacy, unit sizes)...",
@@ -3711,6 +3713,32 @@ class App(tk.Tk):
         except Exception as e:
             log.write("Many towns: %s" % e)
             messagebox.showerror(APP, "Could not read the towns: %s" % e)
+
+    def recolour_window(self, faction=None):
+        """Recolour the faction's pictures (the faction picked in the window, else asked)."""
+        if not self.mod:
+            messagebox.showinfo(APP, "Load a mod first.")
+            return
+        names = [n for n, _ in self.mod.factions()]
+        faction = faction or self.field_faction()
+        if faction not in names:
+            from tkinter import simpledialog
+            faction = simpledialog.askstring(APP, "Which faction's pictures? (%s)" % ", ".join(names[:12]) +
+                                             (" ..." if len(names) > 12 else ""), parent=self)
+            if not faction:
+                return
+            if faction not in names:
+                messagebox.showerror(APP, "%s is not a faction of this mod" % faction)
+                return
+        if self.editor() is None and self.undo_stack and self.v_mode.get() == "new":
+            messagebox.showinfo(APP, "Recolour works on the files as they are: create the new faction first "
+                                     "(Create faction), then recolour its pictures.")
+        from .gui_recolour import RecolourWindow
+        try:
+            RecolourWindow(self, faction)
+        except Exception as e:
+            log.error("Recolour: %s" % e)
+            messagebox.showerror(APP, "Could not read the pictures: %s" % e)
 
     def pick_menu(self, picked, region):
         """The Map's right-click menu while 'Pick towns' is on."""
