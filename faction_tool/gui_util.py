@@ -252,3 +252,53 @@ def flow(frame):
         frame.configure(height=height)
     frame.bind("<Configure>", reflow, add="+")
     frame.after_idle(reflow)
+
+
+class Tip:
+    """A text shown beside a widget while the mouse rests on it - the long explanations live here instead of
+    in labels, so the window keeps its room (and longer words of other languages still fit)."""
+
+    def __init__(self, widget, text, delay=400, width=420):
+        self.widget, self.text, self.delay, self.width = widget, text, delay, width
+        self.win = self.job = None
+        widget.bind("<Enter>", self._wait, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<ButtonPress>", self._hide, add="+")
+
+    def _wait(self, ev=None):
+        self._hide()
+        self.job = self.widget.after(self.delay, self._show)
+
+    def _show(self):
+        self.job = None
+        text = self.text() if callable(self.text) else self.text
+        if not text or not self.widget.winfo_exists():
+            return
+        x = self.widget.winfo_rootx() + 12
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        self.win = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry("+%d+%d" % (x, y))
+        tk.Label(tw, text=text, justify="left", background="#ffffe0", relief="solid", borderwidth=1,
+                 wraplength=self.width, padx=6, pady=4).pack()
+
+    def _hide(self, ev=None):
+        if self.job:
+            self.widget.after_cancel(self.job)
+            self.job = None
+        if self.win:
+            self.win.destroy()
+            self.win = None
+
+
+def tip(widget, text, **kw):
+    """Give a widget a hover text (see Tip); returns the widget."""
+    Tip(widget, text, **kw)
+    return widget
+
+
+def hint(parent, text, **kw):
+    """A small '?' that shows `text` when the mouse rests on it - in place of a long hint label."""
+    lbl = ttk.Label(parent, text=" ? ", foreground="#2050c0", cursor="question_arrow", font=("", 9, "bold"))
+    Tip(lbl, text, **kw)
+    return lbl

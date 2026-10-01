@@ -506,28 +506,29 @@ def build_start(plan, campaign, start):
         f.insert(after + 1, [indent + new])
         plan.note(f, "%s added to the %s list" % (new, "playable" if start.get("playable", True) else "nonplayable"))
     s = Strat(f)
-    dip = s.diplomacy_lines()
-    add = {"core_attitudes": [], "faction_relationships": []}
+    from .diplomacy import KINDS, _line, rebels, set_relations, value_of
     if start.get("diplomacy") == "template":
+        dip = s.diplomacy_lines()
+        add = {k: [] for k in KINDS}
         for i, kind, a, value, targets in dip:
+            v = value_of(kind, value)
+            if v is None:
+                continue
             if a == t:
                 tg = [x for x in targets if x not in (new, t)]
                 if tg:
-                    add[kind].append("%s\t%s,\t%s\t\t%s" % (kind, new, value, ", ".join(tg)))
+                    add[kind].append(_line(kind, new, v, tg))
             elif t in targets and a != new:
-                add[kind].append("%s\t%s,\t%s\t\t%s" % (kind, a, value, new))
-    else:
-        for kind in add:
-            if any(k == kind for _, k, _, _, _ in dip):
-                add[kind].append("%s\t%s,\t600\t\tslave" % (kind, new))
-                add[kind].append("%s\tslave,\t600\t\t%s" % (kind, new))
-    for kind in ("faction_relationships", "core_attitudes"):
-        if not add[kind]:
-            continue
-        s = Strat(f)
-        last = max((i for i, k, _, _, _ in s.diplomacy_lines() if k == kind), default=len(f) - 1)
-        f.insert(last + 1, add[kind])
-        plan.note(f, "%d %s line(s) for %s" % (len(add[kind]), kind, new))
+                add[kind].append(_line(kind, a, v, [new]))
+        for kind in ("faction_relationships", "faction_standings", "core_attitudes"):
+            if not add[kind]:
+                continue
+            s = Strat(f)
+            last = max((i for i, k, _, _, _ in s.diplomacy_lines() if k == kind), default=len(f) - 1)
+            f.insert(last + 1, add[kind])
+            plan.note(f, "%d %s line(s) for %s" % (len(add[kind]), kind, new))
+    else:                                 # neutral to all, the rebels' enemy as every faction of the game is
+        set_relations(plan, f, new, rebels(s, new))
 
 
 # ---------------------------------------------------------------------------

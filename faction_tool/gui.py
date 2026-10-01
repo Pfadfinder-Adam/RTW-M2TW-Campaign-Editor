@@ -1441,8 +1441,8 @@ class App(tk.Tk):
     def diplomacy_base(self):
         """(me, {(kind, from, to): value}) as the start stands without the picks:
         the file for an edited faction; for a new one its template's relations
-        (or only the rebels' 600) as the build writes them."""
-        from .diplomacy import KINDS, read
+        (or only the rebels' line, as the game's own factions have it) as the build writes them."""
+        from .diplomacy import KINDS, read, rebels
         rel = read(self.strat)
         if self.editing():
             me = self.v["template"].get().strip()
@@ -1457,8 +1457,10 @@ class App(tk.Tk):
                     base[(kind, "me", b)] = v
                 elif src and b == src and a != me:
                     base[(kind, a, "me")] = v
-            if not src and rel[kind]:
-                base[(kind, "me", "slave")] = base[(kind, "slave", "me")] = 600
+        if not src:
+            for kind, pairs in rebels(self.strat, "me").items():
+                for (a, b), v in pairs.items():
+                    base[(kind, a, b)] = v
         return me, base
 
     def load_diplomacy(self):
@@ -1468,9 +1470,11 @@ class App(tk.Tk):
         others = [fb.name for fb in self.strat.factions if fb.name != me]
         names = dict(self.mod.factions())
         self.dip_editor.before = self.remember
+        from .diplomacy import is_medieval, kinds
         self.dip_editor.load(me, others, base, self.dip_set, names,
                              lambda: self.status.set("%d diplomacy change(s) - Preview, then %s." % (
-                                 len(self.dip_set), "Apply changes" if self.editing() else "Create faction")))
+                                 len(self.dip_set), "Apply changes" if self.editing() else "Create faction")),
+                             kinds=kinds(self.strat), medieval=is_medieval(self.strat))
 
     # ------------------------------------------------------------------ regions
     def _region_colours(self):
@@ -2432,9 +2436,12 @@ class App(tk.Tk):
         dip_view = self.map_view.v_dip.get() and self.v["template"].get().strip()
         if dip_view:                         # every owner in the colour of how the faction stands towards it
             _, base = self.diplomacy_base()
+            from .diplomacy import kinds
+            feeling = kinds(self.strat)[0]
             for other in {fb.name for fb in self.strat.factions}:
-                key = ("core_attitudes", "me", other)
-                v = self.dip_set[key] if key in self.dip_set else base.get(key)
+                pick = lambda key: self.dip_set[key] if key in self.dip_set else base.get(key)
+                start = pick(("faction_relationships", "me", other))     # an alliance / a war shows first
+                v = start if isinstance(start, str) else pick((feeling, "me", other))
                 colours[other] = tuple(int(dip_colour(v)[i:i + 2], 16) for i in (1, 3, 5))
         if not self.editing():
             template = self.v["template"].get().strip()

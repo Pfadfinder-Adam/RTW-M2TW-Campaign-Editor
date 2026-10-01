@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Added
+- **Alliances and wars at the start, both games**: the Diplomacy tab offers 'alliance' and 'war' in the Start
+  columns (descr_strat `faction_relationships X, allied_to / at_war_with Y`, as Sons of Mars, Barbarian Invasion
+  and Medieval II write them); picking one side sets the other too. Trade rights have no start line in either
+  game, so they are not offered.
+- Hover texts (a small '?') in place of long hint labels - first on the Diplomacy tab.
+
+### Fixed
+- **Medieval II diplomacy**: the tab now reads and writes `faction_standings` (-1.0 .. 1.0) - before it showed every
+  Medieval II faction as neutral. A new Medieval II faction 'neutral to all' got Rome's `600 slave` lines, which
+  Medieval II does not read (it was not at war with the rebels); now `faction_standings -1.0 slave` and
+  `at_war_with slave` both ways, like every vanilla faction. Rome keeps the form the campaign's own factions use
+  towards the rebels (600, or at_war_with in Barbarian Invasion).
+
 ## 0.22.0 - 2026-10-01
 
 ### Added

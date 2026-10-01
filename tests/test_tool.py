@@ -1987,6 +1987,60 @@ building smith
         self.assertEqual(rel["core_attitudes"], {("alpha", "slave"): 90})
         self.assertEqual(rel["faction_relationships"], {("alpha", "slave"): 600, ("slave", "alpha"): 310})
 
+    def test_diplomacy_alliances_wars_and_standings(self):
+        """Both games: allied_to / at_war_with at the start (both ways), Medieval II's faction_standings floats,
+        and a new faction neutral to all gets the rebels' lines the way the file's own factions have them."""
+        from faction_tool.diplomacy import kinds, read, rebels, set_relations
+        from faction_tool.textio import TextFile
+        from faction_tool.diplomacy import parse
+
+        class P:
+            def note(self, f, t):
+                pass
+        rome = ("; >>>> start of diplomacy section <<<<\r\n"
+                "core_attitudes\talpha,\t600\t\tslave\r\n"
+                "faction_relationships \talpha, at_war_with \tslave\r\n"
+                "faction_relationships \tslave, at_war_with \talpha\r\n")
+        m2 = ("character\tBob, named character, male, age 30, x 1, y 2\r\n"
+              "; >>>> start of diplomacy section <<<<\r\n"
+              "faction_standings\talpha,\t\t-0.45\tbeta\r\n"
+              "faction_standings\talpha,\t\t-1.0\tslave\r\n"
+              "faction_relationships \talpha, at_war_with \tslave\r\n"
+              "faction_relationships \tslave, at_war_with \talpha\r\n")
+        for text, feeling in ((rome, "core_attitudes"), (m2, "faction_standings")):
+            path = os.path.join(self.root, "s.txt")
+            with open(path, "wb") as fh:
+                fh.write(text.encode())
+            f = TextFile.load(path)
+            s = Strat(f)
+            self.assertEqual(kinds(s), (feeling, "faction_relationships"))
+            set_relations(P(), f, "gamma", rebels(s, "gamma"))
+            set_relations(P(), f, "gamma", {"faction_relationships": {("me", "alpha"): "allied_to",
+                                                                      ("alpha", "me"): "allied_to"}})
+            rel = read(Strat(f))
+            self.assertEqual(rel["faction_relationships"][("gamma", "slave")], "at_war_with")
+            self.assertEqual(rel["faction_relationships"][("slave", "gamma")], "at_war_with")
+            self.assertEqual(rel["faction_relationships"][("gamma", "alpha")], "allied_to")
+            self.assertEqual(rel["faction_relationships"][("alpha", "gamma")], "allied_to")
+            body = "\n".join(f.text(i) for i in range(len(f.raw)))
+            self.assertIn("faction_relationships\tgamma, allied_to\talpha", body)
+            self.assertIn("slave, at_war_with\talpha, gamma", body)      # onto the rebels' own line
+            if feeling == "faction_standings":
+                self.assertEqual(rel["faction_standings"][("gamma", "slave")], -1.0)
+                self.assertEqual(rel["faction_standings"][("alpha", "beta")], -0.45)
+                self.assertIn("faction_standings\tgamma,\t-1.0\t\tslave", body)
+                self.assertNotIn("600", body)
+            else:
+                self.assertEqual(rel["core_attitudes"][("gamma", "slave")], 600)
+            self.assertTrue(f.raw[0].endswith(b"\r\n") if isinstance(f.raw[0], bytes) else True)
+        self.assertEqual(parse("alliance", "faction_relationships"), "allied_to")
+        self.assertEqual(parse("-0.45 dislike", "faction_standings"), -0.45)
+        self.assertEqual(parse("310 wary"), 310)
+        with self.assertRaises(ValueError):
+            parse("war", "faction_standings")
+        with self.assertRaises(ValueError):
+            parse("2.0", "faction_standings")
+
     def test_check_mod_reads_the_mini_mod(self):
         from faction_tool.check import check_mod
         text = check_mod(ModData(self.root), "test")

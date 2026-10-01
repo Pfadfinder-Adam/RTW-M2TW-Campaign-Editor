@@ -1,37 +1,99 @@
-"""Diplomacy at the start: the core_attitudes and faction_relationships lines
-at the end of descr_strat.txt.
+"""Diplomacy at the start: the lines at the end of descr_strat.txt.
 
+Rome (and BI, REX):
     core_attitudes         carthage,   310   romans_julii, romans_scipii
     faction_relationships  romans_julii, 100 romans_brutii
+    faction_relationships  romans_julii, allied_to  romans_scipii, romans_senate
+    faction_relationships  gauls, at_war_with  romans_julii
+A number: lower is better (BI names them: 0 allied, 100 suspicious, 200 neutral, 400 hostile, 600 at war;
+the Roman houses -10 among themselves, everyone 600 towards the rebels). allied_to / at_war_with (Sons of
+Mars, BI) put two factions in an alliance or at war from the first turn.
 
-A line says how its first faction stands towards the ones after the number;
-lower is better (the files use -10 for the Roman houses among themselves,
-90-100 friends, 300-310 wary, 400-410 dislike, 600 enemies - everyone towards
-the rebels). A pair with no line is neutral. There are no lines for alliances
-or wars in these files.
+Medieval II (and M2EX) - no core_attitudes:
+    faction_standings      venice,  -0.45  milan, hre        (-1.0 hate .. 1.0 love; how the AI feels)
+    faction_relationships  england, at_war_with  slave       (allied_to / at_war_with only)
 
+A pair with no line is neutral. Trade rights have no start line in either game (the exes read none).
 Only the lines that name the edited faction change; the others keep their bytes."""
 
-KINDS = ("core_attitudes", "faction_relationships")
+KINDS = ("core_attitudes", "faction_standings", "faction_relationships")
+STANCES = ("allied_to", "at_war_with")
 
-# the choices the window offers (value, word); None = no line (neutral)
-LEVELS = [(-10, "own"), (90, "friends"), (100, "friendly"), (310, "wary"), (410, "dislike"), (600, "enemies")]
+# the numbers the window offers (value, word); None = no line (neutral)
+LEVELS = [(-10, "own"), (0, "allied"), (90, "friends"), (100, "friendly"), (200, "neutral"), (310, "wary"),
+          (410, "dislike"), (600, "enemies")]
+STANDINGS = [(1.0, "love"), (0.5, "friends"), (0.2, "friendly"), (0.0, "neutral"), (-0.2, "wary"),
+             (-0.45, "dislike"), (-0.8, "hate"), (-1.0, "enemies")]
+STANCE_WORDS = {"allied_to": "alliance", "at_war_with": "war"}
+NEUTRAL = "neutral"
+
+
+def is_medieval(strat):
+    """Whether the descr_strat is Medieval II's (faction_standings lines, or characters with a sex)."""
+    from .strat import medieval
+    return any(k == "faction_standings" for _, k, _, _, _ in strat.diplomacy_lines()) or bool(medieval(strat.lines))
+
+
+def kinds(strat):
+    """The two kinds of lines the game of this descr_strat reads: (how the AI feels, where they start)."""
+    return ("faction_standings" if is_medieval(strat) else "core_attitudes", "faction_relationships")
+
+
+def value_of(kind, text):
+    """The value of a line's word: 'allied_to' / 'at_war_with', a float for faction_standings, else an int;
+    None when it is none of these."""
+    t = text.strip().rstrip(",")
+    if t in STANCES:
+        return t
+    try:
+        return float(t) if kind == "faction_standings" else int(t)
+    except ValueError:
+        return None
+
+
+def text_of(value):
+    """How a value is written: allied_to, -1.0, 0.45, 600."""
+    if isinstance(value, float):
+        return repr(round(value, 4))
+    return str(value)
 
 
 def word(value):
-    """A word for a value: the nearest of LEVELS."""
+    """A word for a value: the stance, else the nearest level."""
     if value is None:
         return "neutral"
-    return min(LEVELS, key=lambda lv: abs(lv[0] - value))[1]
+    if isinstance(value, str):
+        return STANCE_WORDS.get(value, value)
+    levels = STANDINGS if isinstance(value, float) else LEVELS
+    return min(levels, key=lambda lv: abs(lv[0] - value))[1]
+
+
+def parse(text, kind="core_attitudes"):
+    """'310 wary' / '310' / 'neutral' / 'alliance' / '-0.45 dislike' -> 310 / None / 'allied_to' / -0.45;
+    ValueError for anything else (or a stance where the kind takes none)."""
+    t = text.strip()
+    if not t or t == NEUTRAL:
+        return None
+    w = t.split()[0]
+    for stance in STANCES:
+        if w in (stance, STANCE_WORDS[stance]):
+            if kind == "faction_standings":
+                raise ValueError(t)
+            return stance
+    if kind == "faction_standings":
+        v = float(w)
+        if not -1.0 <= v <= 1.0:
+            raise ValueError(t)
+        return v
+    return int(w)
 
 
 def read(strat):
     """{kind: {(a, b): value}} for every pair in the file."""
     out = {k: {} for k in KINDS}
     for _, kind, a, value, targets in strat.diplomacy_lines():
-        try:
-            v = int(value)
-        except ValueError:
+        v = value_of(kind, value)
+        if v is None:
             continue
         for b in targets:
             out[kind][(a.rstrip(","), b.rstrip(","))] = v
@@ -39,7 +101,38 @@ def read(strat):
 
 
 def _line(kind, a, value, targets):
-    return "%s\t%s,\t%d\t\t%s" % (kind, a, value, ", ".join(targets))
+    if isinstance(value, str):
+        return "%s\t%s, %s\t%s" % (kind, a, value, ", ".join(targets))
+    return "%s\t%s,\t%s\t\t%s" % (kind, a, text_of(value), ", ".join(targets))
+
+
+def _order(v):
+    """Stances first (alliances, then wars), numbers after, low to high."""
+    return (0, STANCES.index(v), 0) if isinstance(v, str) else (1, 0, v)
+
+
+def rebels(strat, faction):
+    """{kind: {(a, b): value}} a faction new to the start needs towards the rebels: written the way the file's
+    own factions stand to them (the commonest value each way), else as the game's vanilla files have it -
+    Rome 600 both ways, Medieval II faction_standings -1.0 and at_war_with both ways."""
+    from collections import Counter
+    rel = read(strat)
+    present = {k for _, k, _, _, _ in strat.diplomacy_lines()}
+    if is_medieval(strat):
+        defaults = {"faction_standings": (-1.0, None), "faction_relationships": ("at_war_with", "at_war_with")}
+    else:
+        defaults = {k: (600, 600) for k in ("core_attitudes", "faction_relationships") if k in present}
+    out = {}
+    for kind, (to, back) in defaults.items():
+        pairs = rel[kind]
+        seen_to = Counter(v for (a, b), v in pairs.items() if b == "slave" and a != faction)
+        seen_back = Counter(v for (a, b), v in pairs.items() if a == "slave" and b != faction)
+        to = seen_to.most_common(1)[0][0] if seen_to else to
+        back = seen_back.most_common(1)[0][0] if seen_back else (to if isinstance(to, str) else back)
+        out[kind] = {(faction, "slave"): to}
+        if back is not None:
+            out[kind][("slave", faction)] = back
+    return out
 
 
 def set_relations(plan, f, faction, wanted):
@@ -67,7 +160,7 @@ def set_relations(plan, f, faction, wanted):
             if v is None:
                 pairs.pop(k, None)
             else:
-                pairs[k] = int(v)
+                pairs[k] = v if isinstance(v, str) else (float(v) if kind == "faction_standings" else int(v))
         if pairs == now[kind]:
             continue
         mine = [d for d in dip if d[1] == kind]
@@ -82,17 +175,16 @@ def set_relations(plan, f, faction, wanted):
         for (a, b), v in sorted(pairs.items()):
             if a == faction:
                 out.setdefault(v, []).append(b)
-        new_out = [_line(kind, faction, v, sorted(tg)) for v, tg in sorted(out.items())]
+        new_out = [_line(kind, faction, v, sorted(tg)) for v, tg in sorted(out.items(), key=lambda x: _order(x[0]))]
         # 2. others' lines naming it: keep where the value still holds, else take it out
         need_in = {a: v for (a, b), v in pairs.items() if b == faction}
         for idx, _, a, value, targets in mine:
             if a == faction or faction not in targets:
                 continue
-            try:
-                v = int(value)
-            except ValueError:
+            v = value_of(kind, value)
+            if v is None:
                 continue
-            if need_in.get(a) == v:
+            if need_in.get(a) == v and type(need_in.get(a)) is type(v):
                 need_in.pop(a)
                 continue
             rest = [t for t in targets if t != faction]
@@ -100,8 +192,8 @@ def set_relations(plan, f, faction, wanted):
         # 3. what is still needed from others: onto a line of theirs with that value, else a line of its own
         extra = []
         for a, v in sorted(need_in.items()):
-            host = next((d for d in mine if d[2] == a and d[3].lstrip("-").isdigit() and int(d[3]) == v
-                         and lines[d[0]][0] != "gone"), None)
+            host = next((d for d in mine if d[2] == a and value_of(kind, d[3]) == v
+                         and type(value_of(kind, d[3])) is type(v) and lines[d[0]][0] != "gone"), None)
             if host:
                 idx = host[0]
                 cur = lines[idx]
@@ -118,8 +210,8 @@ def set_relations(plan, f, faction, wanted):
         for (a, b), v in sorted(want.items()):
             old = now[kind].get((a, b))
             if old != v:
-                plan.note(f, "%s: %s towards %s %s -> %s" % (kind, a, b, "neutral" if old is None else old,
-                                                            "neutral" if v is None else v))
+                plan.note(f, "%s: %s towards %s %s -> %s" % (kind, a, b, "neutral" if old is None else text_of(old),
+                                                            "neutral" if v is None else text_of(v)))
     if changed:
         f.raw[start:] = [x[1] if x[0] == "raw" else f.make(x[1]) for x in lines if x[0] != "gone"]
 

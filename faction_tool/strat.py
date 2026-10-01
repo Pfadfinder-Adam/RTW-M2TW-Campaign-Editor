@@ -181,11 +181,11 @@ class Strat:
         return [c for fb in self.factions for c in fb.characters if c.xy == xy]
 
     def diplomacy_lines(self):
-        """[(index, kind, a, value, b)] for core_attitudes / faction_relationships lines."""
+        """[(index, kind, a, value, b)] for core_attitudes / faction_standings / faction_relationships lines."""
         out = []
         for i in range(self.diplomacy_start, len(self.lines)):
             t = tokens(self.lines[i])
-            if len(t) >= 4 and t[0] in ("core_attitudes", "faction_relationships"):
+            if len(t) >= 4 and t[0] in ("core_attitudes", "faction_standings", "faction_relationships"):
                 out.append((i, t[0], t[1], t[2], t[3:]))
         return out
 
