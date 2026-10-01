@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.26.0 - 2026-10-01
+
 ### Added
 - **A right-click menu on the Map**: what can be done at that spot - a town: add it or take it out, its garrison,
   its buildings; a character: open it on Units & armies; a free tile: a new army, agent or fleet placed right there
