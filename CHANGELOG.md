@@ -21,6 +21,9 @@
   minute.
 
 ### Added
+- **The Art tab shows every faction picture**: also the faction symbol's 3D texture, the flag on its towns in battle
+  (Rome) and the battle banners (Medieval II, read from descr_banners_new.xml); a shared one says with whom. Thumbnails
+  of Medieval II's .texture files are drawn.
 - **Faction emblem - one picture everywhere** (Art tab), both games: the menu buttons (normal, mouse over,
   selected, greyed out), loading-screen logo, faction-screen symbol, in-game panels' symbol and the faction logos made
   from one picture, each in its own size; the button states measured from the mod's own; written with a backup.

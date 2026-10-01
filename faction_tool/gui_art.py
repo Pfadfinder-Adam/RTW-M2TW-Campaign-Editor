@@ -132,7 +132,8 @@ class ArtEditor(ttk.Frame):
     def _thumb(self, parent, path, box=(72, 72), crop=None):
         from PIL import Image, ImageTk
         try:
-            im = Image.open(path).convert("RGBA")
+            from .recolour import read_picture       # .tga, .dds, Medieval II's .texture
+            im = read_picture(path).convert("RGBA")
             if crop:                                     # a symbol on a shared sheet
                 x, y, w, h = crop
                 im = im.crop((x, y, x + w, y + h))
@@ -180,6 +181,8 @@ class ArtEditor(ttk.Frame):
             text = "%s\n%s" % (note if p.get("symbol") else target, self._need(p["size"], target))
             if p.get("symbol") and new and new != src_faction:
                 text += "\n%s gets a copy of its own (%s's until you replace it)" % (new, src_faction)
+            if note and not p.get("symbol"):
+                text += "\n" + note
             if p.get("link"):
                 text += "\nnamed in %s (%s)" % (os.path.basename(a.mod.file(p["link"][0]) or ""), p["link"][1])
                 if target != p["rel"]:

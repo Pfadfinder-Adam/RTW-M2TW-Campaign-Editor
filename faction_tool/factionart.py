@@ -152,9 +152,82 @@ def faction_pictures(mod, campaign, faction):
                 kind, model = l["field"].split(":", 1)
                 e["label"] = "campaign map figure: %s%s" % (model, " (standing still)" if kind != "texture" else "")
                 e["where"] = "the campaign map: the faction's %s" % ", ".join(who[model])
+    for x in extra_pictures(mod, faction):
+        e = add(x["path"])
+        if e is not None:
+            e.update(label=x["label"], where=x["where"])
+            others = sorted(u for u in x["users"] if u.lower() != faction.lower())
+            if others:
+                e.update(locked=True, note="shared with %s - replacing it would change them too" % ", ".join(others[:4]))
     out.sort(key=lambda e: (e["label"], e["rel"]))
     from .symbols import entries
     return entries(mod, faction) + out          # the flag symbol and logos on shared sheets first
+
+
+def extra_pictures(mod, faction):
+    """The faction's pictures named in other files than the Art lines: the faction symbol's texture (the 3D symbol
+    model of descr_sm_factions.txt names it inside), the flag on its towns in battle (Rome's descr_building_battle
+    '<faction> ##standard_x.tga'), the battle banners (Medieval II's descr_banners_new.xml Faction= DiffuseMap=).
+    [{'path', 'label', 'where', 'users': factions naming the same file}]."""
+    from .packs import _on_disk
+    out = []
+
+    def texture(rel):
+        rel = rel.replace("\\", "/")
+        for r in (rel, rel + ".dds", rel[:-4] + ".texture" if rel.lower().endswith(".tga") else None):
+            got = _on_disk(mod, r) if r else None
+            if got:
+                return got[1]
+        return None
+    sm = _ci(mod.data, "descr_sm_factions.txt")
+    symbols, cur = {}, None
+    if sm:
+        for line in open(sm, encoding="latin-1"):
+            t = line.split(";")[0].split()
+            if len(t) >= 2 and t[0] == "faction":
+                cur = t[1].strip(",")
+            elif len(t) >= 2 and t[0] == "symbol" and cur:
+                symbols.setdefault(t[1].lower(), [t[1], set()])[1].add(cur)
+    for ref, users in symbols.values():
+        if faction not in users:
+            continue
+        got = _on_disk(mod, ref.replace("\\", "/"))
+        if not got:
+            continue
+        with open(got[1], "rb") as fh:
+            raw = fh.read()
+        base = os.path.dirname(os.path.relpath(got[1], mod.data)).replace("\\", "/")
+        for m in re.finditer(rb"textures[\\/]([^\x00\\/]{1,80}?\.tga)", raw, re.I):
+            p = texture(base + "/textures/" + m.group(1).decode("latin-1"))
+            if p:
+                out.append({"path": p, "label": "faction symbol (3D) texture", "users": set(users),
+                            "where": "the faction's 3D symbol (%s): the faction-select screen and the campaign "
+                                     "map's faction panels" % os.path.basename(ref)})
+    bb = _ci(mod.data, "descr_building_battle.txt")
+    if bb:
+        whose = {}
+        for line in open(bb, encoding="latin-1"):
+            t = line.split(";")[0].split()
+            if len(t) == 2 and t[1].lower().endswith(".tga") and t[1].startswith("#"):
+                whose.setdefault(t[1].lower(), set()).add(t[0])
+        for tex, fs in sorted(whose.items()):
+            if faction in fs:
+                p = texture("models_building/textures/" + tex)
+                if p:
+                    out.append({"path": p, "label": "flag on its towns in battle", "users": fs,
+                                "where": "the flags on the faction's towns and forts in a siege battle"})
+    xml = _ci(mod.data, "descr_banners_new.xml")
+    if xml:
+        whose = {}
+        for m in re.finditer(r'Faction="([^"]+)"[^>]*?DiffuseMap="([^"]+)"', open(xml, encoding="latin-1").read()):
+            whose.setdefault(m.group(2).replace("\\", "/").lower(), set()).add(m.group(1).lower())
+        for tex, fs in sorted(whose.items()):
+            if faction.lower() in fs and "test_" not in tex:
+                p = texture(tex)
+                if p:
+                    out.append({"path": p, "label": "battle banner %s" % os.path.basename(tex), "users": fs,
+                                "where": "the banners over the faction's units in battle"})
+    return out
 
 
 def picture_info(path):
