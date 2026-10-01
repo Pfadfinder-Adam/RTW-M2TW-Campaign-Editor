@@ -312,6 +312,7 @@ class App(tk.Tk):
         self.family_set = {}            # Family tab: {'people': {key: changes}, 'new': [...], 'remove': [...], 'tree'}
         self.roster_set = {}            # Roster tab: {'unit:<type>' | 'building:<chain>:<level>': give?}
         self._region_point = None       # ('city' | 'port', region) waiting for a click
+        self._town_auto = False         # a town from the legend: its land is painted around the click
         self.undo_stack, self.redo_stack = [], []   # snapshots of what the window keeps (Ctrl+Z / Ctrl+Y)
         self.sizes = {}                 # {region: {'level', 'population'}} set by hand on the Buildings tab
         self.kinds = {}                 # Medieval II: {region: 'city' | 'castle'} changed on the Buildings tab
@@ -657,6 +658,7 @@ class App(tk.Tk):
         self.fort_bar.bind("<Configure>", lambda e: self.lbl_fort_new.configure(wraplength=max(200, e.width - 8)),
                            add="+")
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
+        self.map_view.on_tool = self.map_tool
         self.v_borders = self.map_view.v_borders
         self.map_view.pack(fill="both", expand=True)
         self.map_view.on_stroke = self.remember
@@ -1543,6 +1545,63 @@ class App(tk.Tk):
     def _new_region(self, name):
         return next((r for r in self.new_regions if r["name"] == name), None)
 
+    def _map_tools(self):
+        """The legend's tools the map offers now: towns, forts, watchtowers and resources always; armies, fleets
+        and agents for the faction being made or edited."""
+        if not self.mod or not self.strat:
+            return {}
+        from .resources import types
+        tools = {"town": True, "fort": True, "watchtower": True}
+        tools.update({"res:" + t: True for t in types(self.mod)})
+        if self.v_mode.get() in ("new", "edit") and self.field_faction() and not self.map_only():
+            tools.update({k: True for k in ("army", "fleet")})
+            tools.update({k: True for k in self.AGENTS})
+        return tools
+
+    def map_tool(self, key):
+        """A tool picked in the Map's legend: the next click on the map makes one there (a town first asks for
+        its region's names, then its land around the click is the region's)."""
+        from . import forts as FT
+        mv = self.map_view
+        self._res_placing = None
+        self._region_point, self._town_auto = None, False
+        if key is None:
+            self._placing = None
+            self.status.set("")
+            self.show_map()
+            return
+        if key in FT.KINDS:
+            alive = [fo for fo in (self.strat.forts if self.strat else []) if fo.line not in self.fort_removed]
+            if not any(fo.kind == key for fo in alive):
+                mv.set_tool(None)
+                messagebox.showinfo(APP, "No new %s here: %s." % (key, FT.no_example(key)))
+                return
+            mv.v_forts.set(True)
+            self.v_fort_type.set(key)
+            self.res_place_new(key)
+        elif key.startswith("res:"):
+            mv.v_res.set(True)
+            self.v_res_type.set(key[4:])
+            self.res_place_new(key[4:])
+        elif key == "town":
+            self.new_region_dialog(then=self._start_town, cancelled=lambda: mv.set_tool(None))
+        elif key in ("army", "fleet"):
+            self.add_field(key, then_place=True)
+        else:
+            self.add_field("agent", preset=key, then_place=True)
+
+    def _start_town(self, name):
+        """After New region... from the legend: the next click puts its town; the land around it becomes the new
+        region's (painted in Edit regions, which is switched on - paint more with a left drag)."""
+        mv = self.map_view
+        if not mv.v_regions.get():
+            mv.v_regions.set(True)
+            mv._regions_toggled()
+        self.v_paint.set(name + "  (new)")
+        self._region_point, self._town_auto = ("city", name), True
+        self.status.set("Click the tile where the town of %s stands - the land around it becomes %s's." % (name, name))
+        self.show_map()
+
     def region_point(self, what):
         """The next click on the map puts the town (or port) of the new region being painted."""
         name = self.v_paint.get().replace("  (new)", "").strip()
@@ -1572,15 +1631,44 @@ class App(tk.Tk):
             return "the town and the port need different tiles"
         return None
 
+    def _town_land(self, xy, name):
+        """The tiles around a town placed from the legend that become its region's: the 3 x 3 around it (no other
+        region may touch a town), land only, never another town or port. {tile: region it had in region_paint}."""
+        cm = self._cmap
+        taken = {tuple(r.get(k) or ()) for r in self.new_regions for k in ("city", "port")}
+        got = {}
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                t = (xy[0] + dx, xy[1] + dy)
+                if not (0 <= t[0] < cm.w and 0 <= t[1] < cm.h) or t in taken:
+                    continue
+                if cm.region_at(*t) is None or cm.regions_img.get(*t) in ((0, 0, 0), (255, 255, 255)):
+                    continue                          # sea, towns and ports keep their region
+                got[t] = self.region_paint.get(t)
+                self.region_paint[t] = name
+        return got
+
     def place_region_point(self, xy):
+        what, name = self._region_point
+        before = None
+        if self._town_auto and what == "city":
+            self.remember()
+            before = self._town_land(tuple(xy), name)
         why = self.region_point_problem(xy)
         if why:
+            if before is not None:                    # the land given for nothing goes back
+                for t, was in before.items():
+                    if was is None:
+                        self.region_paint.pop(t, None)
+                    else:
+                        self.region_paint[t] = was
             return why
-        what, name = self._region_point
         r = self._new_region(name)
-        self.remember()
+        if before is None:
+            self.remember()
         r[what] = tuple(xy)
-        self._region_point = None
+        self._region_point, self._town_auto = None, False
+        self.map_view.set_tool(None)
         self.status.set("%s of %s at %d, %d." % ("Town" if what == "city" else "Port", name, xy[0], xy[1]))
         self.show_map()
         return None
@@ -1599,7 +1687,7 @@ class App(tk.Tk):
         self.v_paint.set("")
         self.show_map()
 
-    def new_region_dialog(self, edit=None):
+    def new_region_dialog(self, edit=None, then=None, cancelled=None):
         """New region..., or with edit = a region's name: its data again - a new one (not written
         yet) all of it, a region of the map its descr_regions lines (builder, rebels, tags,
         triumph, farming), written with the next Apply."""
@@ -1782,11 +1870,20 @@ class App(tk.Tk):
             w.destroy()
             self.v_paint.set(d["name"] + "  (new)")
             self.status.set("Paint %s's land (left drag), then 'Place its town' (and 'Place its port')." % d["name"])
+            if then:
+                then(d["name"])
+                return
             self.show_map()
+
+        def cancel():
+            w.destroy()
+            if cancelled:
+                cancelled()
+        w.protocol("WM_DELETE_WINDOW", cancel)
         bar = ttk.Frame(frm)
         bar.grid(row=len(fields) + 1, column=0, columnspan=2, sticky="e", pady=(8, 0))
         ttk.Button(bar, text="OK" if edit else "Add", command=ok).pack(side="left")
-        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+        ttk.Button(bar, text="Cancel", command=cancel).pack(side="left", padx=4)
 
     def _regions_opts(self):
         if not self.region_paint and not self.new_regions and not self.region_religions and not self.region_edits \
@@ -2198,6 +2295,7 @@ class App(tk.Tk):
                     self.res_added.append({"type": kind, "xy": tuple(xy)})
                     self._res_sel = "n%d" % (len(self.res_added) - 1)
                 self._res_placing = None
+                self.map_view.set_tool(None)
                 self.status.set("%s placed at %d, %d - right drag moves it; Preview, then Apply." % (kind, xy[0], xy[1]))
                 self.show_map()
                 return None
@@ -2426,8 +2524,12 @@ class App(tk.Tk):
             self.remember()
             fc["xy"] = xy
             self._placing = None
+            self.map_view.set_tool(None)
             self.refresh_field(keep=i)
-            self.status.set("%s %s placed at %d, %d - drag it to move it." % (fc["kind"], fc["name"], xy[0], xy[1]))
+            self.status.set("%s %s placed at %d, %d - drag it to move it.%s" % (
+                fc["kind"], fc["name"], xy[0], xy[1],
+                " Give it its units on the Units & armies tab (an army needs at least one)."
+                if fc["kind"] in ("army", "fleet") and not fc.get("units") else ""))
             self.show_map()
             return None
         def check_place(what, region, xy):
@@ -2459,6 +2561,9 @@ class App(tk.Tk):
                                                                             armies_at)}
         self._map_labels = self.culture_labels(owners, me)
         self.map_view.allow_religion(self._m2())
+        self.map_view.tools = self._map_tools()           # the legend's signs that are tools here
+        from .resources import types as _res_types
+        self.map_view.res_types = list(_res_types(self.mod))
         if self.map_view.v_rel.get():                # Religion colours: each region in its main religion's colour
             region_kw["tint"], region_kw["tint_legend"] = self.religion_tint()
         self.map_view.load(self._cmap, owners, colours, me, self.chosen, on_city=self.map_city, chars=chars,
@@ -3193,8 +3298,9 @@ class App(tk.Tk):
     def field_faction(self):
         return self.v["template"].get().strip()
 
-    def add_field(self, kind):
-        """A small form: kind (agents), name from the faction's name list, age."""
+    def add_field(self, kind, preset=None, then_place=False):
+        """A small form: kind (agents), name from the faction's name list, age. preset: the agent picked;
+        then_place: the next click on the Map puts the new one there (the legend's tools)."""
         if not self.mod or not self.field_faction():
             messagebox.showerror(APP, "load a mod and pick the %s first" % ("faction" if self.editing() else "template"))
             return
@@ -3214,7 +3320,7 @@ class App(tk.Tk):
         frm = ttk.Frame(w, padding=10)
         frm.pack()
         agent = kind not in ("army", "fleet")
-        v_kind = tk.StringVar(value=self.AGENTS[0] if agent else kind)
+        v_kind = tk.StringVar(value=(preset if preset in self.AGENTS else self.AGENTS[0]) if agent else kind)
         row = 0
         if rebels:
             ttk.Label(frm, text="Rebels of").grid(row=row, column=0, sticky="w")
@@ -3281,10 +3387,22 @@ class App(tk.Tk):
             w.destroy()
             self.refresh_field(keep=len(self.field) - 1)
             self.load_field()
+            if then_place:                         # the legend's tool: the next click on the map places it
+                self._placing = len(self.field) - 1
+                c = self.field[-1]
+                self.status.set("Click the tile for %s %s (%s)." % (c["kind"], c["name"],
+                                "sea" if c["kind"] == "fleet" else "land, or a town for an agent"))
+                self.show_map()
+
+        def cancel():
+            w.destroy()
+            if then_place:
+                self.map_view.set_tool(None)
+        w.protocol("WM_DELETE_WINDOW", cancel)
         bar = ttk.Frame(frm)
         bar.grid(row=row + 1, column=0, columnspan=3, sticky="w", pady=(8, 0))
         ttk.Button(bar, text="Add", command=ok).pack(side="left")
-        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+        ttk.Button(bar, text="Cancel", command=cancel).pack(side="left", padx=4)
 
     def _faction_names(self):
         """Names the faction gives someone already or will: its characters and records in the file (Edit),

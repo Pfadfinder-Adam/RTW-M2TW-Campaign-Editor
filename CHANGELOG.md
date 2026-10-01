@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **The Map's legend is a palette** (the user's idea): its signs are buttons - pick a town, fort, watchtower,
+  resource, army, fleet or agent, then click the map to make one there. A town asks for its region's names first,
+  then the click puts it and gives the land around it (3 x 3) to the new region; an army or agent asks for its
+  name first. The picked button is yellow; a click on it again stops. Both games.
 - **A faction's religion pulls its temples and priests along** (Medieval II): changed in the Faction form (or given
   to a new faction), the faction leaves the old faith's temples and guilds (levels and priest lines) and gets the
   new faith's where a faction of that faith - of its own culture first - has them; its priest, bishop and cardinal

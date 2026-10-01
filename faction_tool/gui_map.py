@@ -66,6 +66,9 @@ class MapView(ttk.Frame):
         # the land's colours: one mode at a time (they would hide each other): political / diplomacy / religion
         self.v_mode = tk.StringVar(value="political")
         self.tint, self.tint_legend, self._religion_ok = None, [], False
+        # the legend is a palette too: a click on a sign picks it as a tool (the next click on the map makes one);
+        # tools {key: True} the window offers, tool = the picked one, on_tool(key or None) tells the window
+        self.tools, self.tool, self.on_tool, self.res_types = {}, None, None, []
         # how the ground is drawn (kept between starts): tile by tile, relief, rivers, the tile grid up close
         from . import settings
         look = settings.get("map_look") or {}
@@ -163,6 +166,10 @@ class MapView(ttk.Frame):
         for seq, step in (("<MouseWheel>", None), ("<Button-4>", -1), ("<Button-5>", 1)):
             self.legend_canvas.bind(seq, lambda e, st=step: self.legend_canvas.yview_scroll(
                 st if st is not None else int(-e.delta / 120), "units"))
+        lc = self.legend_canvas
+        lc.tag_bind("tool", "<Button-1>", self._tool_click)
+        lc.tag_bind("tool", "<Enter>", lambda e: lc.configure(cursor="hand2"))
+        lc.tag_bind("tool", "<Leave>", lambda e: lc.configure(cursor=""))
         if self.v_legend.get():
             self.legend.pack(side="right", fill="y")
         self.readout = ttk.Label(self, text="", anchor="w")
@@ -205,6 +212,26 @@ class MapView(ttk.Frame):
         c.bind("<Motion>", self._hover)
         c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
         self._hot = None                                # the marker under the mouse, drawn bigger
+
+    def _tool_click(self, e):
+        """A click on a tool of the legend: picked (a second click puts it down again)."""
+        lc = self.legend_canvas
+        x, y = lc.canvasx(e.x), lc.canvasy(e.y)
+        for item in reversed(lc.find_overlapping(x, y, x, y)):
+            for tag in lc.gettags(item):
+                if tag.startswith("tool:"):
+                    key = tag[5:]
+                    self.set_tool(None if key == self.tool else key)
+                    if self.on_tool:
+                        self.on_tool(self.tool)
+                    return
+
+    def set_tool(self, key):
+        """The legend's picked tool (None: none), drawn highlighted."""
+        if key != self.tool:
+            self.tool = key
+            self._legend_key = None
+            self._draw_legend()
 
     def _modes(self):
         return [(k, l) for k, l in MODES if k != "religion" or self._religion_ok]
@@ -299,9 +326,20 @@ class MapView(ttk.Frame):
                 lc.create_text(8, y[0], text=text, anchor="w", font=("", 9, "bold"), fill=theme.palette()["fg"])
                 y[0] += 20
 
-            def row(text, draw):
+            def row(text, draw, tool=None):
+                """A sign and its meaning; with a tool the window offers, a button: a click picks it."""
+                on = tool is not None and tool in self.tools
+                if on:                                  # a button: raised; the picked one yellow
+                    picked = tool == self.tool
+                    lc.create_rectangle(3, y[0] - 11, 245, y[0] + 11, fill="#ffd400" if picked else "#e4dccb",
+                                        outline="#a08000" if picked else "#a89c84", width=2 if picked else 1)
                 draw(22, y[0])
-                lc.create_text(44, y[0], text=text, anchor="w", font=("", 9), fill=theme.palette()["fg"])
+                lc.create_text(44, y[0], text=text + ("  +" if on else ""), anchor="w", font=("", 9),
+                               fill="#000000" if on else theme.palette()["fg"])
+                if on:
+                    hit = lc.create_rectangle(2, y[0] - 12, 246, y[0] + 12, outline="", fill="",
+                                              tags=("tool", "tool:" + tool))
+                    lc.tag_raise(hit)
                 y[0] += 24
 
             def town(fill, outline, width, hollow=False):
@@ -323,25 +361,33 @@ class MapView(ttk.Frame):
                     self._draw_char({"id": "legend" if not mine else "legend_mine", "faction": "__legend__",
                                      "kind": kind, "army": army, "name": ""}, x, yy, 20)
                 return d
+            if self.tools:
+                lc.create_text(8, y[0], anchor="w", width=236, font=("", 8), fill=theme.palette()["muted"],
+                               text="Signs on a button (+) are tools: click one, then click the map to make one there; "
+                                    "click it again to stop")
+                y[0] += 22
             head("Towns and ports")
             red = "#%02x%02x%02x" % self.LEGEND_RED
-            row("a town (its owner's colour)", town(red, "black", 1))
+            row("a town (its owner's colour)", town(red, "black", 1), "town")
             row("one of your towns", town(red, "#ffd400", 3))
             row("rebel village (no town yet)", town("", "black", 1, hollow=True))
             row("a port", port)
-            row("a fort (top: its owner's colour) - no one may start on it",
-                lambda x, yy: self._fort_icon(lc, x, yy + 2, 7, "#%02x%02x%02x" % self.LEGEND_RED, (), 2))
+            row("a fort (top: its owner's colour)",
+                lambda x, yy: self._fort_icon(lc, x, yy + 2, 7, "#%02x%02x%02x" % self.LEGEND_RED, (), 2), "fort")
+            row("a watchtower",
+                lambda x, yy: self._fort_icon(lc, x, yy + 2, 5, "#%02x%02x%02x" % self.LEGEND_RED, (), 2),
+                "watchtower")
             head("Characters")
             keep = self.draggable
             self.draggable = set(keep) | {"legend_mine"}
-            row("an army (general)", char("general", army=True))
+            row("an army (general)", char("general", army=True), "army")
             row("yours: drag it (right button)", char("general", army=True, mine=True))
-            row("a fleet (admiral)", char("admiral", army=True))
+            row("a fleet (admiral)", char("admiral", army=True), "fleet")
             row("family member, no army", char("named character"))
             for k, label in (("spy", "spy"), ("assassin", "assassin"), ("diplomat", "diplomat"),
                              ("merchant", "merchant"), ("priest", "priest"), ("princess", "princess"),
                              ("inquisitor", "inquisitor"), ("heretic", "heretic"), ("witch", "witch")):
-                row(label, char(k))
+                row(label, char(k), k)
             self.draggable = keep
             head("Map")
             if self.tint is not None and self.tint_legend:
@@ -359,18 +405,14 @@ class MapView(ttk.Frame):
                 x - 8, yy - 8, x + 8, yy + 8, outline="#30ff60", width=2))
             row("drop here: refused (why below)", lambda x, yy: lc.create_rectangle(
                 x - 8, yy - 8, x + 8, yy + 8, outline="#ff3030", width=2))
-            kinds = sorted({r["kind"] for r in self.resources} - {"fort", "watchtower"})
+            kinds = sorted(({r["kind"] for r in self.resources} | set(self.res_types)) - {"fort", "watchtower"})
             if kinds or self.v_res.get():
                 head("Resources (first letters)")
                 for k in kinds:
                     def d(x, yy, k=k):
                         lc.create_rectangle(x - 9, yy - 9, x + 9, yy + 9, fill=self.res_colour(k), outline="black")
                         lc.create_text(x, yy, text=k[:2].capitalize(), font=("", 8, "bold"))
-                    row(k, d)
-                if not kinds:
-                    lc.create_text(8, y[0], text="(tick Edit resources to see them)", anchor="w",
-                                   fill=theme.palette()["muted"])
-                    y[0] += 20
+                    row(k, d, "res:" + k)
             lc.configure(scrollregion=(0, 0, 250, y[0] + 10))
         finally:
             self.canvas, self.colours = main, colours
@@ -538,7 +580,8 @@ class MapView(ttk.Frame):
             self._grid(cw, ch)
         self._markers(cw, ch)
         key = (tuple(sorted({r["kind"] for r in self.resources})), self.v_res.get(), self.v_forts.get(),
-               tuple(self.tint_legend) if self.tint is not None else None)
+               tuple(self.tint_legend) if self.tint is not None else None, tuple(sorted(self.tools)), self.tool,
+               tuple(self.res_types))
         if key != getattr(self, "_legend_key", None):
             self._legend_key = key
             self._draw_legend()
