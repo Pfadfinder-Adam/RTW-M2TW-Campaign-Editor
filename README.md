@@ -140,7 +140,7 @@ entry with the logs attached, and is read. The search box on the Units & armies 
 
 <img src="docs/images/reports.png" width="700" alt="Reports and ideas sent from the editor, each with its number">
 
-A step-by-step guide is in the [Wiki](../../wiki). Version **0.29.0** - see [ROADMAP.md](ROADMAP.md) for what it does, what is being tested and what comes next, and [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
+A step-by-step guide is in the [Wiki](../../wiki). Version **0.29.1** - see [ROADMAP.md](ROADMAP.md) for what it does, what is being tested and what comes next, and [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
 
 Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
 

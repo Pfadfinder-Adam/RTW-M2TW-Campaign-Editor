@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.29.1 - 2026-10-01
+
 ### Added
 - **Raze Settlement for Medieval II** (Add-ons, M2EX): a 4th button on the capture scroll under Occupy / Sack /
   Exterminate - the game's Exterminate, then every building but the kept chains torn down, most people gone, a
