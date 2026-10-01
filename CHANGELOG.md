@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.28.0 - 2026-10-01
+
 ### Added
 - **Terrain editor: Land and sea** - turn sea into land (draw a new island, a longer coast) or land into sea (a bay,
   a strait), both games. Each tile changes everything that says land or sea together: its `map_regions.tga` pixel
