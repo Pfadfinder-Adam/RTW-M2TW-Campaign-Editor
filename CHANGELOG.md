@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.29.0 - 2026-10-01
+
 ### Changed
 - **The bigger map's ground and climates get natural edges**: forests, hills and climates are no longer drawn in
   3 x 3 squares - their patches are rounded (each tile's own ground kept exactly, the coast where the heights put it).
