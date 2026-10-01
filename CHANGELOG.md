@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **A faction's religion pulls its temples and priests along** (Medieval II): changed in the Faction form (or given
+  to a new faction), the faction leaves the old faith's temples and guilds (levels and priest lines) and gets the
+  new faith's where a faction of that faith - of its own culture first - has them; its priest, bishop and cardinal
+  figures follow. Units and traits of the old faith are named in Preview, not changed.
 - **Rome's packed textures are read** (data/packs/*.pak): a unit's or figure's texture that is not loose on disk
   is taken from the game's packs - the Battle model thumbnail and View in 3D show it instead of a grey model.
 - **Events and later factions** (Tools; both games): the campaign's events - date, place, the title and text

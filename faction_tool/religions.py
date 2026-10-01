@@ -86,6 +86,70 @@ def set_faction_religion(plan, faction, religion):
         line = f.text(i)
         f.set(i, re.sub(r"(\breligion\s+)%s\b" % re.escape(now), lambda m: m.group(1) + religion, line, count=1))
         plan.note(f, "%s: religion %s (was %s)" % (faction, religion, now))
+        follow_religion(plan, faction, now, religion)
+
+
+def follow_religion(plan, faction, old, new):
+    """What hangs on a faction's religion follows it (the web): it leaves the old religion's buildings (temples,
+    the guilds of that faith - `religion X` chains of export_descr_buildings.txt: their levels and the priest lines
+    in them) and gets the new religion's ones wherever a faction of that religion (of its own culture when there is
+    one) has them; its priest figure on the campaign map becomes that faction's (descr_character.txt). A culture or
+    'all' that let it in on an old religion's line is written out as the other factions it stood for."""
+    from .editors import building_blocks
+    from .roster import _spelled_out, add_faction, covers, drop_faction, factions_in, with_factions
+    mod = plan.mod
+    sm = plan.edit(mod.file("sm_factions"))
+    cultures = mod.factions()
+    culture = dict(cultures).get(faction)
+    peers = [x for x, c in cultures if x not in (faction, "slave") and _faction_religion_line(sm, x)[1] == new]
+    if not peers:
+        plan.warn(None, "%s: no other faction has the religion %s - its temples, priests and figures were not changed "
+                        "(give it the buildings on the Roster tab)" % (faction, new))
+        return
+    model = next((x for x in peers if dict(cultures).get(x) == culture), peers[0])
+    model_culture = dict(cultures).get(model)
+    path = mod.file("edb")
+    if path:
+        e = plan.edit(path)
+        left, joined = set(), set()
+        for chain, a, b in building_blocks(e):
+            rel = next((tokens(e.text(i))[1] for i in range(a, b) if tokens(e.text(i))[:1] == ["religion"]
+                        and len(tokens(e.text(i))) > 1), None)
+            if rel not in (old, new):
+                continue
+            for i in range(a, b):
+                text = e.text(i)
+                names = factions_in(text)
+                if names is None:
+                    continue
+                if rel == old:
+                    how = covers(names, faction, culture)
+                    if how == "own":
+                        out = drop_faction(text, faction)
+                    elif how in ("culture", "all"):
+                        out = with_factions(text, _spelled_out(names, faction, cultures))
+                    else:
+                        continue
+                    if out is None:
+                        plan.warn(e, "%s: a line of several faction groups names only %s - left for you to rewrite"
+                                  % (chain, faction))
+                        continue
+                    e.set(i, out)
+                    left.add(chain)
+                elif covers(names, model, model_culture) and not covers(names, faction, culture):
+                    e.set(i, add_faction(text, faction))
+                    joined.add(chain)
+        if left:
+            plan.note(e, "%s leaves the %s buildings: %s" % (faction, old, ", ".join(sorted(left))))
+        if joined:
+            plan.note(e, "%s gets the %s buildings %s has: %s" % (faction, new, model, ", ".join(sorted(joined))))
+    from .stratmodels import figures, set_figure
+    mine = next((x for x in figures(mod, faction, plan.edit) if x["type"] == "priest"), None)
+    theirs = next((x for x in figures(mod, model, plan.edit) if x["type"] == "priest"), None)
+    if mine and theirs and mine["models"] != theirs["models"][:len(mine["models"])]:
+        set_figure(plan, faction, "priest", theirs["models"][:len(mine["models"])])
+    plan.warn(None, "%s now %s: units and traits of the old faith (crusaders, jihad, the Pope's favour...) are not "
+                    "changed - check the Roster tab" % (faction, new))
 
 
 def pip_of(mod, religion):

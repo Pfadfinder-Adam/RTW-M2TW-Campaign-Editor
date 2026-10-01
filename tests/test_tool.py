@@ -2944,6 +2944,49 @@ building smith
         self.assertEqual(RP.find(mod, "ui/B.tga"), b"second")
         self.assertIsNone(RP.find(mod, "ui/c.tga"))
 
+    def test_religion_web(self):
+        """A faction's religion changed (Medieval II): it leaves the old faith's buildings (levels and the priest
+        lines in them) and gets the new faith's where a faction of that faith (of its own culture first) has them;
+        its priest figure follows; the faction of the old faith keeps its own; Restore byte for byte."""
+        from faction_tool.edit import edit
+        d = os.path.join(self.root, "data")
+        sm = os.path.join(d, "descr_sm_factions.txt")
+        with open(sm) as fh:
+            text = fh.read()
+        text = text.replace("culture\t\teastern\n", "culture\t\teastern\nreligion\t\torthodox\n", 1)
+        beta = text[text.index("faction\t\talpha"):text.index("faction\t\tslave")].replace("alpha", "beta")
+        beta = beta.replace("religion\t\torthodox", "religion\t\tcatholic")
+        write(sm, text.replace("faction\t\tslave", beta + "faction\t\tslave", 1))
+        write(os.path.join(d, "descr_religions.txt"), "religions\n{\n    catholic\n    orthodox\n}\n")
+        def temple(rel, level, who):
+            return ("building temple_%s\n{\n    religion %s\n    levels %s\n    {\n"
+                    "        %s city requires factions { %s, }\n        {\n            capability\n            {\n"
+                    "                agent priest  0  requires factions { %s, }\n            }\n        }\n    }\n}\n"
+                    % (rel, rel, level, level, who, who))
+        write(os.path.join(d, "export_descr_buildings.txt"), temple("orthodox", "church", "alpha") +
+              temple("catholic", "chapel", "beta"))
+        write(os.path.join(d, "descr_character.txt"),
+              "type\t\tpriest\nfaction\t\talpha\ndictionary\t1\nstrat_model\torthodox_priest\n\n"
+              "faction\t\tbeta\ndictionary\t1\nstrat_model\tcatholic_priest\n")
+        write(os.path.join(d, "descr_model_strat.txt"),
+              "type\t\torthodox_priest\ntexture\t\talpha, data/x.tga\n\ntype\t\tcatholic_priest\n"
+              "texture\t\tbeta, data/y.tga\n")
+        before = tree_hash(d)
+        mod = ModData(self.root)
+        plan = edit(mod, "test", "alpha", {"religion": "catholic"})
+        edb = plan.files[mod.file("edb")].texts()
+        self.assertIn("        church city requires factions { }", edb)                # left the old faith's
+        self.assertIn("                agent priest  0  requires factions { }", edb)
+        self.assertIn("        chapel city requires factions { beta, alpha, }", edb)   # got the new faith's
+        self.assertIn("                agent priest  0  requires factions { beta, alpha, }", edb)
+        ch = plan.files[mod.file("character")].texts()
+        self.assertEqual(ch[3], "strat_model\tcatholic_priest")                         # its priest figure
+        self.assertIn("texture\t\talpha, data/y.tga", plan.files[mod.file("model_strat")].texts())
+        self.assertTrue(any("not changed" in w for _, w in plan.warnings))
+        bdir = plan.apply()
+        restore(ModData(self.root), bdir)
+        self.assertEqual(tree_hash(d), before)
+
     def test_path_guard(self):
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads
         out and a crafted backup manifest are refused before anything is written."""
