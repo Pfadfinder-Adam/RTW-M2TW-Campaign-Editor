@@ -126,8 +126,8 @@ TERRAIN EDITOR
   the next start.
 
 TOOLS
-  Check mod: reads the whole mod and says in plain words what the game would stumble on.
-  Check mod with a faction picked also lists every place the faction is named (game, REX and mod files told apart).
+  Tools > Check mod files (was Check mod): reads every file of the mod and says in plain words what the game
+  would stumble on (missing pictures, broken lines, crash rules). With a faction picked it also lists every place the faction is named (game, REX and mod files told apart).
   Check and install a pack: a "copy these files over data" mod checked file by file first -
     what is new, what it replaces and what that would lose (REX's own files, pictures of
     another size); pick for each file, then install with a backup.
@@ -716,10 +716,11 @@ class App(tk.Tk):
                   activebackground="#e14b48", activeforeground="white", relief="flat", cursor="hand2",
                   font=("", 9, "bold"), padx=10).pack(side="right", padx=(8, 0))
         ttk.Button(bar, text="Help", command=self.show_help).pack(side="right", padx=(6, 0))
+        ttk.Button(bar, text="\u2699 Settings", command=self.settings_window).pack(side="right", padx=(6, 0))
         ttk.Button(bar, text="Report a bug / Suggest", command=self.send_report).pack(side="right", padx=(6, 0))
         tools = ttk.Menubutton(bar, text="Tools")
         menu = tk.Menu(tools, tearoff=False)
-        menu.add_command(label="Check mod", command=self.check)
+        menu.add_command(label="Check mod files (what the game would stumble on)", command=self.check)
         menu.add_command(label="Settlement names by culture (every town)...", command=self.culture_names_table)
         menu.add_command(label="Check and install a pack...", command=self.install_pack)
         menu.add_command(label="Campaign rules (ages, agents, towns, diplomacy, unit sizes)...",
@@ -1451,6 +1452,11 @@ class App(tk.Tk):
         import webbrowser
         webbrowser.open(KOFI)
         self.status.set("Thank you! %s opened in your browser." % KOFI)
+
+    def settings_window(self):
+        """Everything the tool keeps between starts, in one window."""
+        from .gui_settings import SettingsWindow
+        SettingsWindow(self)
 
     def show_help(self):
         self.show_text("Help", HELP)
@@ -3986,7 +3992,7 @@ class App(tk.Tk):
             with open(path, "w", encoding="utf-8") as f:
                 f.write(t.get("1.0", "end-1c").rstrip("\n") + "\n")
             w.destroy()
-            self.status.set("Saved %s - press Check mod again." % path)
+            self.status.set("Saved %s - press Check mod files again." % path)
         ttk.Button(bar, text="Save", command=save).pack(side="left")
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
         t.focus_set()
@@ -4134,8 +4140,8 @@ class App(tk.Tk):
                 self.after(300, wait)
                 return
             self.status.set("Check finished.")
-            log.write("Check mod\n" + result["text"])
-            self.show_text("Check mod" + (" (and where %s is named)" % faction if faction else ""), result["text"],
+            log.write("Check mod files\n" + result["text"])
+            self.show_text("Check mod files" + (" (and where %s is named)" % faction if faction else ""), result["text"],
                            extra=[("Ignore list...", self.edit_ignore)] if faction else ())
         wait()
 

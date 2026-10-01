@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+- **Settings** (bottom bar, beside Help): everything the tool keeps between starts in one window - light / dark,
+  the window's language (English now; Spanish, French, German, Italian, Russian, Turkish planned), the game folder
+  and the mod opened last, the map's look and legend, your contact for reports, the set-up fixes you said no to
+  (Ask again), and the tool's and the mod's backup folders.
+
+### Changed
+- **Check mod** is now called **Check mod files** (Tools) - the same check (it took in Scan in 0.22.0): every file
+  of the mod read, what the game would stumble on said in plain words.
+
 ## 0.23.0 - 2026-10-01
 
 ### Added
