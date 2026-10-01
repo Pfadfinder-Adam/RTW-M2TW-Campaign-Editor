@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.24.0 - 2026-10-01
+
 ### Added
 - **Settings** (bottom bar, beside Help): everything the tool keeps between starts in one window - light / dark,
   the window's language (English now; Spanish, French, German, Italian, Russian, Turkish planned), the game folder
