@@ -148,6 +148,8 @@ class RecordEditor(ttk.Frame):
         self._lines_open = not self._lines_open
         if self._lines_open:
             self._lines_box.pack(fill="both", expand=True)
+            if getattr(self, "_lines_stale", False) and self.current:
+                self.show()                      # the rows were not made while folded away
         else:
             self._lines_box.pack_forget()
         settings.put("editor_lines_open", self._lines_open)
@@ -301,6 +303,12 @@ class RecordEditor(ttk.Frame):
             except ValueError:
                 continue
             pending.append((at, n, make(op["text"])))
+        self._lines_stale = not self._lines_open
+        if self._lines_stale:                    # folded away: the rows are made when opened (a report: lag)
+            self._lines_label()
+            self.show_pictures()
+            self.show_links()
+            return
         row = 0
 
         def added_rows(before):

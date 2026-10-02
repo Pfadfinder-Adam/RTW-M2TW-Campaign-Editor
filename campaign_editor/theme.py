@@ -42,12 +42,21 @@ def field():
     return palette()["field"]
 
 
+_RGB = {}
+_PAL_HEX = {}                                    # {key group: {hex of a LIGHT or DARK colour: its key}}
+
+
 def _rgb(root, colour):
+    """A colour's (r, g, b), remembered: a window of 900 widgets asked Tk 50 000 times (2 s - a report's lag)."""
+    if colour in _RGB:
+        return _RGB[colour]
     try:
         r, g, b = root.winfo_rgb(colour)
-        return r >> 8, g >> 8, b >> 8
+        got = r >> 8, g >> 8, b >> 8
     except tk.TclError:
-        return None
+        got = None
+    _RGB[colour] = got
+    return got
 
 
 def _neutral(rgb):
@@ -68,10 +77,17 @@ def _translate(root, opt, value, bg_orig):
     cur = palette()
     hx = _hex(rgb)
     # a palette colour (set while the other look was on) becomes this palette's
-    for k in (BG_KEYS if opt in BG_OPTS else FG_KEYS):
-        for pal in (LIGHT, DARK):
-            if _hex(_rgb(root, pal[k])) == hx:
-                return cur[k]
+    keys = BG_KEYS if opt in BG_OPTS else FG_KEYS
+    known = _PAL_HEX.get(keys)
+    if known is None:
+        known = _PAL_HEX[keys] = {}
+        for k in reversed(keys):                 # the first key wins, as the loop it replaces
+            for pal in (DARK, LIGHT):
+                c = _rgb(root, pal[k])
+                if c is not None:
+                    known[_hex(c)] = k
+    if hx in known:
+        return cur[known[hx]]
     if not _state["dark"]:
         return None
     p = DARK

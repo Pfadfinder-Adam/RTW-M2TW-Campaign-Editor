@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- **The Unit and Building editors no longer lag** (a tester): a big building (Medieval II barracks, 316 lines) took
+  2.3 s to show after every pick or added line - now 0.02 s: the block's lines are made only when unfolded, and the
+  look's colours are worked out once instead of 50 000 times per window.
 - **A faction without name lists no longer stops Apply** (found in a tester's log: "no name in empire_east's name
   list for a captain", a faction brought from Barbarian Invasion): it gets a copy of its culture's kin's name lists in
   `descr_names.txt` (said in the preview), so its captains and new characters can be named.
