@@ -3094,6 +3094,7 @@ building smith
         rmap = packs.default_recruit_map(tmod, man)
         self.assertEqual(rmap, {("barracks", "hall"): ("barracks", "hall"), ("temple", "shrine"): ("temple", "shrine")})
         rmap[("barracks", "hall")] = ("temple", "big_shrine")           # the user's pick
+        rmap[("alpha general", "temple", "shrine")] = None               # this unit alone: not at the shrine
         plan = Plan(tmod, "pack", "pack", {})
         packs.import_pack(plan, man, files, ["alpha"], names, rmap)
         bman, bfiles = packs.collect_buildings(src, ["temple"])
@@ -3112,6 +3113,7 @@ building smith
         self.assertNotIn("alpha general 2", hall)                          # sent elsewhere by the user
         big = edb[edb.index("building temple\n"):edb.index("building temple_2")]
         self.assertIn('recruit "alpha general 2"', big)                    # into the picked level of this mod
+        self.assertEqual(big.count('recruit "alpha general 2"'), 1)        # and not at the shrine (unit's own pick)
         txt = open(m2.text_file("export_buildings.txt"), "rb").read().decode("utf-16")
         self.assertIn("{shrine_2_desc}Holy", txt)
         self.assertTrue(os.path.exists(os.path.join(troot, "data", "ui", "greek", "buildings", "#greek_shrine_2.tga")))

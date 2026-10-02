@@ -502,7 +502,7 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
     their names and descriptions (export_buildings.txt, every key made of a level name)
     and pictures (ui/<culture>/buildings/#<culture>_<level>[_constructed].tga). The step-by-step New building
     window also gives: texts {new level: {'name', 'desc', 'desc_short'}}, factions [who may build every
-    level: factions or cultures] and pictures {new level: a picture file}."""
+    level: factions or cultures] and pictures {new level: a picture file, or {'pic': file, 'constructed': file}}."""
     import re
     from .roster import factions_groups, with_factions
     mod = plan.mod
@@ -580,18 +580,22 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
             vals.setdefault(lvl + "_desc", t.get("desc"))
             vals.setdefault(lvl + "_desc_short", t.get("desc_short"))
         set_text_values(plan, tpath, vals)
-    for lvl, pic in (pictures or {}).items():
-        if not pic:
-            continue
-        names = {("#%s_%s.tga" % (c, lvl)).lower() for c in (os.listdir(ui) if os.path.isdir(ui) else [])}
-        targets = [d for _, d in plan.copies if os.path.basename(d).lower() in names]
-        if not targets:
-            targets = [building_picture_target(mod, c, lvl) for c in sorted(os.listdir(ui))
-                       if os.path.isdir(os.path.join(ui, c, "buildings"))] if os.path.isdir(ui) else []
-        plan.copies = [(a, d) for a, d in plan.copies if d not in targets]
-        for t in targets:
-            cult = os.path.basename(os.path.dirname(os.path.dirname(t)))
-            import_picture(plan, pic, [t], building_picture_need(mod, cult))
+    # pictures {level: file} (the picture in the town) or {level: {'pic': file, 'constructed': file}}
+    for lvl, given in (pictures or {}).items():
+        pair = given if isinstance(given, dict) else {"pic": given}
+        for built, pic in ((False, pair.get("pic")), (True, pair.get("constructed"))):
+            if not pic:
+                continue
+            tail = "_constructed.tga" if built else ".tga"
+            names = {("#%s_%s%s" % (c, lvl, tail)).lower() for c in (os.listdir(ui) if os.path.isdir(ui) else [])}
+            targets = [d for _, d in plan.copies if os.path.basename(d).lower() in names]
+            if not targets:
+                targets = [building_picture_target(mod, c, lvl, built) for c in sorted(os.listdir(ui))
+                           if os.path.isdir(os.path.join(ui, c, "buildings"))] if os.path.isdir(ui) else []
+            plan.copies = [(a, d) for a, d in plan.copies if d not in targets]
+            for t in targets:
+                cult = os.path.basename(os.path.dirname(os.path.dirname(t)))
+                import_picture(plan, pic, [t], building_picture_need(mod, cult, built))
 
 
 # ---------------------------------------------------------------------------

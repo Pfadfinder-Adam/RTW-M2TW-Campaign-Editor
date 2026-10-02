@@ -13,6 +13,16 @@
   '?' marks are light blue in the Dark look (they were dark blue on dark grey) - from a tester's reports.
 - **The Faction tab in two columns**: the short fields keep a fitting width, Leader and heir and Victory stand beside
   them, the tooltip and the description below across the whole width.
+- **Bring from another mod and New unit / building step by step show what is picked as the game shows it**: the
+  pictures (a building's in the town and when built, for a culture you pick), the name and description players read
+  and what it does in plain words ("public order from happiness +15%", "trains roman hastati") - not the file's code.
+- **Bring units: one line per unit for where it is trained** - the same buildings as in the other mod, any level of
+  this mod, or nowhere; only the units come over, never a building.
+- **New building step by step: two pictures per level** (in the town and when built), shown as they are and as
+  chosen; the texts step says plainly that only names and texts are written there, with what each level does beside
+  it.
+- **Check mod files** finds building lines naming a hidden resource, resource or religion the mod lacks.
+- **Report a bug: paste a screenshot with Ctrl+V** (or the Paste button) - no file to save first.
 - **Unit and Building editors: the block's lines fold away** behind **Every line of the block** (like the family
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 

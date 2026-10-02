@@ -347,8 +347,9 @@ def _rename_ref(lines, key, old, new):
 def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
     """Put the pack into plan.mod: units given to owners (factions or cultures), under names
     {old type: (type, dictionary)} (plan_names by default). recruit_map {(chain, level): (chain, level) or None}:
-    where each recruit place of the source goes in this mod (None: not recruited there); by default the same chain
-    and level when this mod has them. Everything goes through the plan."""
+    where each recruit place of the source goes in this mod (None: not recruited there); a key (unit, chain, level)
+    sets it for that unit alone (Bring's 'which building trains it'); by default the same chain and level when this
+    mod has them. Everything goes through the plan."""
     mod = plan.mod
     if manifest.get("game") and manifest["game"] != game_kind(mod):
         raise ValueError("this pack is from %s, the mod is %s - packs go between mods of one game" % (
@@ -658,7 +659,11 @@ def _recruit(plan, manifest, names, owners, recruit_map=None):
     known = known_conditions(plan.mod)
     for r in manifest["recruit"]:
         src = (r["chain"], r["level"])
-        dst = recruit_map.get(src, src) if recruit_map is not None else src
+        # a pick for this unit alone (unit, chain, level) wins over one for the place
+        if recruit_map is not None and (r["unit"],) + src in recruit_map:
+            dst = recruit_map[(r["unit"],) + src]
+        else:
+            dst = recruit_map.get(src, src) if recruit_map is not None else src
         if dst is None:
             missing.add("%s %s" % src)
             continue

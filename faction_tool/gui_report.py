@@ -95,7 +95,47 @@ def open_report(app, message="", kind="bug"):
                 pictures.append(p)
         lbl_pics.configure(text=("Pictures: " + ", ".join(os.path.basename(p) for p in pictures)) if pictures
                            else "No pictures.")
-    ttk.Button(box, text="Add a screenshot...", command=add_pictures).pack(anchor="w", pady=(4, 0))
+    def paste_picture(ev=None):
+        """A screenshot from the clipboard (Ctrl+V; Win+Shift+S / PrintScreen first) - saved as a PNG beside the
+        logs and added like a picked one."""
+        try:
+            from PIL import ImageGrab
+            got = ImageGrab.grabclipboard()
+        except Exception:
+            got = None
+        paths = []
+        if isinstance(got, list):                     # files copied in Explorer
+            paths = [p for p in got if str(p).lower().endswith(report.PICTURE_EXT)]
+        elif got is not None and hasattr(got, "save"):
+            folder = os.path.join(log.logs_dir() or os.path.expanduser("~"), "pasted")
+            try:
+                os.makedirs(folder, exist_ok=True)
+                p = os.path.join(folder, "screenshot_%s.png" % datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
+                got.save(p)
+                paths = [p]
+            except Exception as e:
+                messagebox.showerror(APP, "The picture from the clipboard could not be kept: %s" % e, parent=w)
+                return "break"
+        if not paths:
+            if ev is None:
+                messagebox.showinfo(APP, "No picture in the clipboard. Take a screenshot first (Win+Shift+S or "
+                                         "PrintScreen), then Ctrl+V here.", parent=w)
+            return None                               # plain text: pasted as usual
+        for p in paths:
+            why = report.picture_problem(p)
+            if why:
+                messagebox.showerror(APP, why, parent=w)
+            elif p not in pictures and len(pictures) < report.PICTURES:
+                pictures.append(p)
+        lbl_pics.configure(text=("Pictures: " + ", ".join(os.path.basename(p) for p in pictures)) if pictures
+                           else "No pictures.")
+        return "break"
+    pics_row = ttk.Frame(box)
+    pics_row.pack(anchor="w", pady=(4, 0))
+    ttk.Button(pics_row, text="Add a screenshot...", command=add_pictures).pack(side="left")
+    ttk.Button(pics_row, text="Paste a screenshot (Ctrl+V)", command=paste_picture).pack(side="left", padx=6)
+    w.bind("<Control-v>", paste_picture)
+    w.bind("<Control-V>", paste_picture)
 
     def words():
         return [x.strip() for x in v_hide.get().split(",") if x.strip()]

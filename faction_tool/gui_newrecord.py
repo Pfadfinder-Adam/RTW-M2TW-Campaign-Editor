@@ -57,7 +57,7 @@ class NewRecordWizard(StepWindow):
         self.ed, self.kind, self.mod = editor, editor.kind, editor.mod
         self.title("New %s - step by step" % self.kind)
         self.transient(editor)
-        self.geometry("820x620")
+        self.geometry("1000x660")
         self.minsize(700, 520)
         f = self.mod.load(self.mod.file("edu" if self.kind == "unit" else "edb"))
         self.f = f
@@ -117,24 +117,20 @@ class NewRecordWizard(StepWindow):
                         if n not in groups:
                             groups.append(n)
             st.update(chain=src + "_2", levels=[(lv, lv + "_2") + self._level_texts(lv) for lv in levels],
-                      factions=groups, keep_factions=True, pictures={lv: "" for lv in levels})
+                      factions=groups, keep_factions=True,
+                      pictures={lv: {"pic": "", "constructed": ""} for lv in levels})
         st["orig_values"] = dict(st.get("values", {}))
         st["orig"] = {k: st.get(k) for k in ("name", "descr", "descr_short")} if self.kind == "unit" else \
             {old: (name, desc) for old, _, name, desc in st["levels"]}
         self.state = st
 
     def _level_texts(self, lv):
-        """(name, description) players see for a level: its own key, else the first culture's own one (Medieval
-        II keeps 'DO NOT TRANSLATE' under the plain key and the real names under <level>_<culture>)."""
-        def real(t):
-            return t and t.strip() != lv and "DO NOT TRANSLATE" not in t and not t.startswith("WARNING!")
+        """(name, description) players see for a level (gui_preview.level_text: its own key, else a culture's
+        own one - Medieval II keeps 'DO NOT TRANSLATE' under the plain key)."""
+        from .gui_preview import level_text
         cults = sorted({c for _, c in self.mod.factions() if c})
-        for suffix in [""] + ["_" + c for c in cults]:
-            name = _text_value(self.mod, "export_buildings.txt", lv + suffix)
-            if real(name):
-                desc = _text_value(self.mod, "export_buildings.txt", lv + suffix + "_desc")
-                return name, desc if real(desc) else ""
-        return _text_value(self.mod, "export_buildings.txt", lv), ""
+        name, desc = level_text(self.mod, lv, cults[0] if cults else "")
+        return name or _text_value(self.mod, "export_buildings.txt", lv), desc
 
     # ---- moving between steps (gui_util.StepWindow) ----
     def leaving(self, step):
@@ -156,13 +152,14 @@ class NewRecordWizard(StepWindow):
         ttk.Entry(bar, textvariable=v_find, width=24).pack(side="left", padx=4)
         box = ttk.Frame(self.body)
         box.pack(fill="both", expand=True, pady=4)
-        lb = tk.Listbox(box, exportselection=False)
+        lb = tk.Listbox(box, exportselection=False, width=34)
         sb = ttk.Scrollbar(box, command=lb.yview)
         lb.configure(yscrollcommand=sb.set)
-        lb.pack(side="left", fill="both", expand=True)
+        lb.pack(side="left", fill="y")
         sb.pack(side="left", fill="y")
-        info = ttk.Label(box, wraplength=330, justify="left")
-        info.pack(side="left", fill="y", padx=10)
+        from .gui_preview import BuildingPreview, UnitPreview
+        look = (UnitPreview if self.kind == "unit" else BuildingPreview)(box, self.mod)
+        look.pack(side="left", fill="both", expand=True)
         shown = []
 
         def fill(*_):
@@ -182,12 +179,9 @@ class NewRecordWizard(StepWindow):
             if sel:
                 self.v["src"].set(shown[sel[0]])
             src = self.v["src"].get()
-            if not src:
-                return
-            lines = self._lines(src)
-            keys = ("category", "class", "ownership", "soldier") if self.kind == "unit" else ("levels",)
-            info.configure(text="%s\n\n%s" % (src, "\n".join("%s: %s" % (k, self._val(lines, k)) for k in keys
-                                                           if self._val(lines, k) is not None)))
+            if src and getattr(look, "_shown", None) != src:
+                look._shown = src
+                look.show(src)
         v_find.trace_add("write", fill)
         lb.bind("<<ListboxSelect>>", pick)
         fill()
@@ -199,9 +193,10 @@ class NewRecordWizard(StepWindow):
             self._note("The name in the files (type) is what descr_strat and the buildings use; the dictionary "
                        "name keys its cards and texts (no spaces). Players see the name and descriptions.")
         else:
-            self._note("The chain and each of its levels get names of their own in the files; players see "
-                       "each level's name and description (the culture's and faction's own names are copied "
-                       "under the new level names too). Texts left as they are stay the copied ones.")
+            self._note("Only names and the texts players read are written here. Everything the building does - "
+                       "bonuses, the units it trains, what it needs, costs, its pictures - is copied whole from %s "
+                       "(shown in grey under each level); change those later in the Building editor. A text you "
+                       "write here is shown for every culture; one left as it is stays the copied one." % st["src"])
         g = ttk.Frame(self.body)
         g.pack(fill="both", expand=True)
         if self.kind == "unit":
@@ -248,9 +243,17 @@ class NewRecordWizard(StepWindow):
             g.rowconfigure(1, weight=1)
             g.columnconfigure(1, weight=1)
             rows = []
+            from .effects import level_words
+            blk = next(b for b in self.blocks if b[0] == st["src"])
+            does = {lv["name"]: level_words(self.f.text(i) for i in range(*lv["capability"])) if lv["capability"]
+                    else [] for lv in E.chain_tree(self.f, blk[1], blk[2])["levels"]}
             for r, (old, new, name, desc) in enumerate(st["levels"]):
                 ttk.Label(inner, text="level %s" % old, font=("", 9, "bold")).grid(row=3 * r, column=0, sticky="w",
                                                                                   pady=(6, 0))
+                if does.get(old):
+                    ttk.Label(inner, text="does: " + "; ".join(does[old][:6]) + (" ..." if len(does[old]) > 6 else ""),
+                              foreground="#777", wraplength=640, justify="left").grid(
+                        row=3 * r, column=1, columnspan=3, sticky="w", pady=(6, 0))
                 vn, vs_ = tk.StringVar(value=new), tk.StringVar(value=name)
                 ttk.Label(inner, text="name in the files").grid(row=3 * r + 1, column=0, sticky="w")
                 ttk.Entry(inner, textvariable=vn, width=28).grid(row=3 * r + 1, column=1, sticky="w", padx=6)
@@ -348,10 +351,7 @@ class NewRecordWizard(StepWindow):
             rows = [("card", "Unit card", E.unit_picture_need(self.mod)),
                     ("info", "Picture in the description", E.unit_picture_need(self.mod, True))]
         else:
-            self._note("Without a picture of your own each new level shows the copied level's picture. A picture "
-                       "of yours is put in the size of the mod's building pictures, for every culture folder.")
-            names = dict((old, new) for old, new, _, _ in st["levels"])
-            rows = [(old, "level %s" % names.get(old, old), None) for old in pics]
+            return self._building_pictures()
         g = ttk.Frame(self.body)
         g.pack(fill="x")
         vs = {}
@@ -370,6 +370,84 @@ class NewRecordWizard(StepWindow):
                 pics[k] = v.get().strip()
         self._collect = collect
 
+    def _building_pictures(self):
+        """Each level has two pictures: in the town (the building panel) and when built (the wide one shown when
+        it is finished). Shown as they are now (the copied level's) and as chosen; a culture to look with."""
+        from .buildings import BuildingPictures
+        from .gui_preview import _photo
+        st = self.state
+        pics = st["pictures"]
+        self._note("Each level has two pictures: the one in the town and the wide one shown when it is built. "
+                   "Without a picture of your own a new level shows the copied level's (left as it is now). A "
+                   "picture of yours (PNG, JPG, TGA...) is put in the size of this mod's building pictures, into "
+                   "every culture's folder.")
+        bp = BuildingPictures(self.mod)
+        cults = sorted({c for _, c in self.mod.factions() if c})
+        v_cult = tk.StringVar(value=next((c for c in cults if pics and bp.find(c, next(iter(pics)))),
+                                         cults[0] if cults else ""))
+        bar = ttk.Frame(self.body)
+        bar.pack(fill="x")
+        ttk.Label(bar, text="Pictures as the culture").pack(side="left")
+        cb = ttk.Combobox(bar, textvariable=v_cult, values=cults, state="readonly", width=16)
+        cb.pack(side="left", padx=4)
+        ttk.Label(bar, text="sees them (only for looking - yours go to every culture)", foreground="#666").pack(
+            side="left")
+        outer = ttk.Frame(self.body)
+        outer.pack(fill="both", expand=True, pady=4)
+        canvas = tk.Canvas(outer, highlightthickness=0)
+        sb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        inner = ttk.Frame(canvas)
+        canvas.create_window(0, 0, anchor="nw", window=inner)
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.configure(yscrollcommand=sb.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        sb.pack(side="left", fill="y")
+        names = dict((old, new) for old, new, _, _ in st["levels"])
+        keep = []
+        vs = {}
+
+        def draw(*_):
+            for w in inner.winfo_children():
+                w.destroy()
+            keep.clear()
+            for r, old in enumerate(pics):
+                ttk.Label(inner, text="level %s" % names.get(old, old), font=("", 9, "bold")).grid(
+                    row=2 * r, column=0, columnspan=4, sticky="w", pady=(8, 0))
+                for c, (key, label, box) in enumerate((("pic", "in the town", (90, 72)),
+                                                       ("constructed", "when built", (190, 72)))):
+                    cell = ttk.Frame(inner)
+                    cell.grid(row=2 * r + 1, column=c, sticky="nw", padx=(0, 16))
+                    v = vs.setdefault((old, key), tk.StringVar(value=pics[old].get(key, "")))
+                    mine = v.get()
+                    ph = _photo(mine or bp.find(v_cult.get(), old, key == "constructed"), box)
+                    if ph:
+                        keep.append(ph)
+                        ttk.Label(cell, image=ph).pack(anchor="w")
+                    else:
+                        ttk.Label(cell, text="(no picture)", foreground="#888").pack(anchor="w", pady=8)
+                    ttk.Label(cell, text="%s: %s" % (label, os.path.basename(mine) if mine else "the copied one"),
+                              foreground="#2a7a1f" if mine else "#666").pack(anchor="w")
+                    row = ttk.Frame(cell)
+                    row.pack(anchor="w")
+
+                    def browse(v=v):
+                        p = filedialog.askopenfilename(parent=self, title="A picture", filetypes=[
+                            ("Pictures", "*.tga *.png *.jpg *.jpeg *.bmp *.dds"), ("All files", "*.*")])
+                        if p:
+                            v.set(p)
+                            draw()
+                    ttk.Button(row, text="Picture...", command=browse).pack(side="left")
+                    if mine:
+                        ttk.Button(row, text="Back to the copied one",
+                                   command=lambda v=v: (v.set(""), draw())).pack(side="left", padx=4)
+        cb.bind("<<ComboboxSelected>>", draw)
+        draw()
+
+        def collect():
+            for (old, key), v in vs.items():
+                pics[old][key] = v.get().strip()
+        self._collect = collect
+
     # ---- the last step ----
     def op(self):
         st = self.state
@@ -386,7 +464,8 @@ class NewRecordWizard(StepWindow):
                              "desc": desc if desc != st["orig"][old][1] else None}
                        for old, new, name, desc in st["levels"]},
              "factions": None if st["keep_factions"] else (st["factions"] or None),
-             "pictures": {levels[k]: v for k, v in st["pictures"].items() if v and k in levels}}
+             "pictures": {levels[k]: v for k, v in st["pictures"].items()
+                          if k in levels and any((v or {}).values())}}
         return st["src"], st["chain"], d
 
     def problems(self):
@@ -405,6 +484,10 @@ class NewRecordWizard(StepWindow):
                 out.append("the chain needs a name in the files")
             if not st["keep_factions"] and not st["factions"]:
                 out.append("pick who may build it, or keep each level's own list")
+            for lv, pair in st["pictures"].items():
+                for v in (pair or {}).values():
+                    if v and not os.path.isfile(v):
+                        out.append("picture not found: %s" % v)
         return out
 
     def s_check(self):

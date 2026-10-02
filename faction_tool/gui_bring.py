@@ -27,7 +27,7 @@ class BringWindow(StepWindow):
         self.what = "units" if self.kind == "unit" else "buildings"
         self.title("Bring %s from another mod - step by step" % self.what)
         self.transient(editor)
-        self.geometry("860x640")
+        self.geometry("1000x660")
         self.minsize(720, 520)
         self.src = None                       # the other mod (ModData)
         self.picked = []                      # unit types / chain names of the other mod
@@ -121,7 +121,8 @@ class BringWindow(StepWindow):
         return [b[0] for b in building_blocks(self.src.load(self.src.file("edb")))]
 
     def s_pick(self):
-        self._note("Tick the %s to bring (click; Ctrl / Shift for more). %s" % (
+        self._note("Tick the %s to bring (click; Ctrl / Shift for more) - the one clicked shows on the right as the "
+                   "game shows it; '(renamed here)' = this mod has one of that name, it gets a new one. %s" % (
             self.what, "Each comes with what it needs: its battle models, mount, textures, cards, name and "
                        "description." if self.kind == "unit" else
             "Each chain comes with all its levels, their names, descriptions and pictures."))
@@ -141,11 +142,15 @@ class BringWindow(StepWindow):
         info.pack(side="right")
         box = ttk.Frame(self.body)
         box.pack(fill="both", expand=True, pady=4)
-        lb = tk.Listbox(box, selectmode="extended", exportselection=False)
+        lb = tk.Listbox(box, selectmode="extended", exportselection=False, width=40)
         sb = ttk.Scrollbar(box, command=lb.yview)
         lb.configure(yscrollcommand=sb.set)
-        lb.pack(side="left", fill="both", expand=True)
+        lb.pack(side="left", fill="y")
         sb.pack(side="left", fill="y")
+        # the one clicked last, as the game shows it (pictures, names, what it does) - from the other mod
+        from .gui_preview import BuildingPreview, UnitPreview
+        look = (UnitPreview if self.kind == "unit" else BuildingPreview)(box, self.src)
+        look.pack(side="left", fill="both", expand=True)
         chosen = set(self.picked)
         shown = []
 
@@ -162,12 +167,19 @@ class BringWindow(StepWindow):
             shown[:] = [n for n in names if (not v_find.get().strip() or v_find.get().strip().lower() in n.lower())
                         and (not v_new.get() or n.lower() not in here)]
             for i, n in enumerate(shown):
-                lb.insert("end", n + ("    (this mod has one of that name - it gets a new name)"
-                                      if n.lower() in here else ""))
+                lb.insert("end", n + ("   (renamed here)" if n.lower() in here else ""))
                 if n in chosen:
                     lb.selection_set(i)
             info.configure(text="%d picked" % len(chosen))
-        lb.bind("<<ListboxSelect>>", lambda e: (remember(), info.configure(text="%d picked" % len(chosen))))
+        def clicked(e=None):
+            remember()
+            info.configure(text="%d picked" % len(chosen))
+            near = lb.nearest(e.y) if e is not None and hasattr(e, "y") else None
+            i = near if near is not None and near >= 0 else (lb.curselection() or [None])[-1]
+            if i is not None and i < len(shown):
+                look.show(shown[i], self.src)
+        lb.bind("<<ListboxSelect>>", lambda e: clicked())
+        lb.bind("<ButtonRelease-1>", clicked, add="+")
         v_find.trace_add("write", fill)
         v_new.trace_add("write", fill)
         shown[:] = []
@@ -291,11 +303,7 @@ class BringWindow(StepWindow):
     # ---- step 5: recruiting ----
     def s_links(self):
         if self.kind == "unit":
-            self._note("Where each unit is recruited. On the left: the building level that recruits it in the other "
-                       "mod; on the right: the level of THIS mod that will. The same level is picked when this mod "
-                       "has it; otherwise pick one, or leave it '%s' (the unit can then be recruited only where you "
-                       "add it by hand)." % NOWHERE)
-            levels = ["%s / %s" % x for x in packs.recruit_levels(self.mod)]
+            return self._unit_places()
             rows = [("%s / %s" % k, k, "%s / %s" % v if v else NOWHERE) for k, v in self.recruit_map.items()]
             units_at = {}
             for r in self.man.get("recruit", []):
@@ -332,6 +340,69 @@ class BringWindow(StepWindow):
                     self.recruit_map[key] = None if val == NOWHERE else tuple(val.split(" / ", 1))
                 else:
                     self.unit_map[key] = None if val == LEAVE_OUT else val
+        self._collect = collect
+
+    def _unit_places(self):
+        """Units: one row each - which building of THIS mod trains it. Only the units come over, never a building;
+        'as in the other mod' keeps the places this mod has under the same names."""
+        AS_THERE = "the same buildings as in the other mod"
+        self._note("Only the units come over - no building. Pick the building level of THIS mod that trains each "
+                   "unit: '%s' uses the levels this mod has under the same names (shown beside it), '%s' = "
+                   "trained nowhere until you add a recruit line by hand." % (AS_THERE, NOWHERE))
+        levels = ["%s / %s" % x for x in packs.recruit_levels(self.mod)]
+        have = set(packs.recruit_levels(self.mod))
+        places = {}
+        for r in self.man.get("recruit", []):
+            places.setdefault(r["unit"], []).append((r["chain"], r["level"]))
+        units = [u["type"] for u in self.man["units"]] if self.man.get("units") else list(places)
+        if not units:
+            self._note("Nothing to set here.")
+            self._collect = None
+            return
+        outer = ttk.Frame(self.body)
+        outer.pack(fill="both", expand=True)
+        canvas = tk.Canvas(outer, highlightthickness=0)
+        sb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        frm = ttk.Frame(canvas)
+        canvas.create_window(0, 0, anchor="nw", window=frm)
+        frm.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.configure(yscrollcommand=sb.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        sb.pack(side="left", fill="y")
+        vs = []
+        for i, unit in enumerate(units):
+            mine = places.get(unit, [])
+            same = [p for p in mine if p in have]
+            picked = {self.recruit_map.get((unit,) + p, self.recruit_map.get(p, p if p in have else None))
+                      for p in mine}
+            if not mine:
+                cur = NOWHERE
+            elif picked == {p if p in have else None for p in mine}:
+                cur = AS_THERE if same else NOWHERE
+            else:
+                one = next((x for x in picked if x), None)
+                cur = "%s / %s" % one if one else NOWHERE
+            ttk.Label(frm, text=unit, font=("", 9, "bold")).grid(row=2 * i, column=0, sticky="w", pady=(6, 0))
+            v = tk.StringVar(value=cur)
+            ttk.Combobox(frm, textvariable=v, values=([AS_THERE] if same else []) + [NOWHERE] + levels,
+                         state="readonly", width=56).grid(row=2 * i, column=1, sticky="w", padx=8, pady=(6, 0))
+            ttk.Label(frm, foreground="#666", wraplength=700, justify="left", text=(
+                "in the other mod: %s; here under the same names: %s" % (
+                    ", ".join("%s / %s" % p for p in mine) or "nowhere",
+                    ", ".join("%s / %s" % p for p in same) or "none"))).grid(
+                row=2 * i + 1, column=0, columnspan=2, sticky="w")
+            vs.append((unit, mine, v))
+
+        def collect():
+            for unit, mine, v in vs:
+                val = v.get()
+                for p in mine:
+                    if val == AS_THERE:
+                        self.recruit_map[(unit,) + p] = p if p in have else None
+                    elif val == NOWHERE:
+                        self.recruit_map[(unit,) + p] = None
+                    else:
+                        self.recruit_map[(unit,) + p] = tuple(val.split(" / ", 1))
         self._collect = collect
 
     # ---- step 6: check and write ----
