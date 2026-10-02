@@ -58,8 +58,22 @@ def _move(src, dst):
 
 def _move_old(home):
     """Older versions' files into the new places once: the folder RTW-M2TW-Campaign-Editor-files (its settings,
-    its logs/ with faction_tool.log and the zips), faction_tool.log / faction_tool_settings.json beside the exe."""
+    its logs/ with faction_tool.log and the zips), faction_tool.log / faction_tool_settings.json beside the exe, and
+    the settings an older version kept in the user's APPDATA ('RTW Faction Tool', 'RTW-M2TW-Campaign-Editor') when
+    the exe's folder was not writable - copied, so nothing set there is lost."""
     logs = os.path.join(home, LOGS)
+    base = os.environ.get("APPDATA") or os.path.expanduser("~")
+    for d in (os.path.join(base, "RTW Faction Tool"), os.path.join(base, APPDATA_NAME)):
+        if os.path.normcase(os.path.abspath(d)) == os.path.normcase(os.path.abspath(home)):
+            continue
+        for old in (SETTINGS_NAME, OLD_SETTINGS, os.path.join(FOLDER, OLD_SETTINGS)):
+            src, dst = os.path.join(d, old), os.path.join(home, SETTINGS_NAME)
+            if os.path.isfile(src) and not os.path.exists(dst):
+                try:
+                    import shutil
+                    shutil.copy2(src, dst)
+                except OSError:
+                    pass
     for folder in (FOLDER,) + OLD_FOLDERS + ("",):
         d = os.path.join(home, folder) if folder else home
         if folder and not os.path.isdir(d):

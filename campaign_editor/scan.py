@@ -61,6 +61,19 @@ def ignore_path(root):
     return new
 
 
+def save_ignore(root, text):
+    """The ignore list saved under today's name; an older version's list goes (its rules are in text). -> path."""
+    new = os.path.join(root, IGNORE_FILE)
+    with open(new, "w", encoding="utf-8") as f:
+        f.write(text.rstrip("\n") + "\n")
+    for old in OLD_IGNORE_FILES:
+        try:
+            os.remove(os.path.join(root, old))
+        except OSError:
+            pass
+    return new
+
+
 def load_ignore(root):
     try:
         with open(ignore_path(root), encoding="utf-8") as f:

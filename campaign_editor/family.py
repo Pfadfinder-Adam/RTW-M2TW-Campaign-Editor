@@ -444,6 +444,16 @@ def apply(plan, f, faction, opts):
                 raise ValueError("%s heads a couple on the family tree - take them off the tree first"
                                  % (a if a in gone else b))
     tree = [[a, b, list(ks)] for a, b, ks in tree]
+    # a new man tied to no one is not an error: he goes on the map as a general of the faction (with a bodyguard in
+    # its first town); a new woman tied to no one stays a record (the game has no woman on the map in Rome)
+    tied = {x for a, b, ks in tree for x in [a, b] + list(ks)}
+    generals = [n for n in opts.get("new") or [] if n["name"] not in tied and n.get("sex", "male") == "male"
+                and not n.get("dead")]
+    if generals:                                    # (written last: the lines above are changed by index first)
+        opts = dict(opts, new=[n for n in opts.get("new") or [] if n not in generals])
+    if generals:
+        gnames = {n["name"] for n in generals}
+        after = [d for d in after if d["name"] not in gnames]
     from .limits import manhood_age
     most = manhood_age(plan.mod)
     for name, age, new in record_age_problems(after, [p.as_dict() for p in fam["people"]], most):
@@ -457,11 +467,10 @@ def apply(plan, f, faction, opts):
         raise ValueError("family tree of %s: %s" % (faction, "; ".join(bad)))
     for w in age_warnings(tree, after):
         plan.warn(f, w)
-    tied = {x for a, b, ks in tree for x in [a, b] + list(ks)}
     for n in opts.get("new") or []:
         if n["name"] not in tied:
-            plan.warn(f, "%s: %s is new and on no family tree - written as a record no one is related to; tie them "
-                         "on (Add a person... > son, daughter or wife of someone, then pick them) or leave them out" % (faction, n["name"]))
+            plan.warn(f, "%s: %s is new and on no family tree - written as a record no one is related to; tie her "
+                         "on (Add a person... > daughter or wife of someone) or leave her out" % (faction, n["name"]))
     for w in limit_warnings(plan.mod, tree, changes, people, renames, fam["tree"]):
         plan.warn(f, w)
 
@@ -508,6 +517,8 @@ def apply(plan, f, faction, opts):
     old_tree = [_parse_relative(f.text(i)) for i in rels]
     want = ordered(tree)
     if want == old_tree and not new_lines:
+        if generals:
+            _generals(plan, f, faction, generals)
         return
     keep_raw = {}
     for i in rels:
@@ -537,6 +548,53 @@ def apply(plan, f, faction, opts):
     f.raw[at:at] = [keep_raw.get(repr(c)) or f.make(relative_line(*c)) for c in want]
     if want != old_tree:
         plan.note(f, "%s: family tree - %d couple(s)" % (faction, len(want)))
+    if generals:
+        _generals(plan, f, faction, generals)
+
+
+def _generals(plan, f, faction, people):
+    """New men tied to no family: written as generals on the map (not family) in the faction's first town (or the
+    nearest free tile round it), each with the faction's general's unit as his army."""
+    import os
+    from .edit import first_units, _chars_at, _has_army
+    from .start import extra_characters
+    from .strat import Strat
+    campaign = os.path.basename(os.path.dirname(f.path))
+    s = Strat(f)
+    fb = s.faction(faction)
+    tiles = plan.mod.city_tiles(campaign)
+    home = next((tiles.get(st.region) for st in (fb.settlements if fb else []) if tiles.get(st.region)), None)
+    if fb is None or home is None:
+        raise ValueError("%s has no town on the map to put %s in as a general - tie him on the family tree" % (
+            faction, ", ".join(n["name"] for n in people)))
+    armies = {c.xy for x in s.factions for c in x.characters if c.xy and _has_army(s.lines[c.start:c.end])}
+    chars = []
+    for n in people:
+        spot = None
+        for r in range(0, 6):
+            for dx in range(-r, r + 1):
+                for dy in range(-r, r + 1):
+                    if max(abs(dx), abs(dy)) != r or spot:
+                        continue
+                    xy = (home[0] + dx, home[1] + dy)
+                    if not plan.mod.tile_problem(campaign, xy, "general", True, armies):
+                        spot = xy
+            if spot:
+                break
+        if not spot:
+            raise ValueError("no free tile round %s's first town for %s" % (faction, n["name"]))
+        armies.add(spot)
+        units = first_units(plan.mod, campaign, faction, "army", spot)
+        if not units:
+            raise ValueError("%s has no unit to give %s as his army" % (faction, n["name"]))
+        chars.append({"kind": "army", "name": n["name"], "age": n.get("age") or 25, "units": units, "xy": spot})
+    lines = extra_characters(plan, f, campaign, chars, plan.name_pool(faction) or {}, set(armies) - {
+        c["xy"] for c in chars}, owner=faction)
+    at = _chars_at(f, Strat(f).faction(faction))
+    f.raw[at:at] = lines
+    for c in chars:
+        plan.note(f, "%s: %s is on no family tree - put on the map as a general at %d, %d" % (
+            faction, c["name"], c["xy"][0], c["xy"][1]))
 
 
 def _person(plan, f, texts, p, ch, faction):

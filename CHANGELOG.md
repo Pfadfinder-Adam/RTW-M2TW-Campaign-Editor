@@ -12,8 +12,9 @@
   words.
 - **The old "Faction Tool" name is gone** (the author's wish): the code is the `campaign_editor` package, started
   from source with `python campaign_editor.py`; the files it makes beside a mod are `CampaignEditor_ignore.txt` and
-  `CampaignEditor_mod.json`. Older versions' files (`faction_tool_backups`, `faction_tool_ignore.txt`,
-  `faction_tool_mod.json`, `faction_tool.log`, `faction_tool_settings.json`) are still read - nothing breaks.
+  `CampaignEditor_mod.json`. Put over an older version, nothing breaks or is lost: its settings and log are moved in
+  (also the settings an older version kept in APPDATA), its ignore list and mod mark are read and take today's names
+  the next time they are written, its backups (`faction_tool_backups`) stay listed and restorable.
 - **README**: the important things first - download, wiki, roadmap, changelog, what to do when something goes wrong,
   why support it - then what the editor does.
 - **Recolour leaves the white banner a fleeing unit shows and the rebels' banner alone** (found in a tester's log: it
@@ -27,6 +28,8 @@
 - **Victory: many regions or factions at once** (a tester: one by one is too many clicks): drag over rows, Shift-click
   a run, Tick all shown, tick every region a faction holds, or pick the towns **On the map...** (their regions yellow).
 - **Map: a sign grows as the mouse comes near it**, softly, from further away when zoomed out (a tester's wish).
+- **A new man tied to no family is no error**: Apply puts him on the map as a general of the faction (with a
+  bodyguard, in its first town); only a new woman tied to no one stays a record (Preview says so).
 - **People and family: one button, Add a person...** (testers: a person made from nothing; four buttons for one job) -
   step by step: who the new person is to whom (son, daughter, wife, husband, brother, sister, parents, uncle, aunt,
   or the head of a new family tied to no one), then the name, or someone already in the faction; Preview warns while

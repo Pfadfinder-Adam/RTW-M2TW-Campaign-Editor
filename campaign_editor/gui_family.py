@@ -856,7 +856,7 @@ class FamilyEditor(ttk.Frame):
         self._change(p, ancillaries=[a for i, a in enumerate(p["ancillaries"]) if i != s[0]])
         self.changed()
 
-    def _ask_person(self, title, sex, age, surname="", dead=False):
+    def _ask_person(self, title, sex, age, surname="", dead=False, on_map=False):
         """(name, age) for a new person from the name lists, or None."""
         names = self.pool.get("women" if sex == "female" else "characters", [])
         taken = {p["name"] for p in self.people()}
@@ -873,7 +873,7 @@ class FamilyEditor(ttk.Frame):
             messagebox.showerror("Family", "%s is already the name of someone of the faction" % name)
             return None
         most = self._manhood()
-        if sex == "male" and not dead and a not in (None, "") and int(a) > most:
+        if sex == "male" and not dead and not on_map and a not in (None, "") and int(a) > most:
             messagebox.showerror("Family", "A new son is written off the map, and the game crashes on a living man "
                                  "off the map older than %d (this mod's age of manhood). Give him an age of %d or "
                                  "less - he comes of age in the game by himself." % (most, most))
@@ -1001,7 +1001,8 @@ class FamilyEditor(ttk.Frame):
         if not self.fam:
             return
         sex = "female" if messagebox.askyesno("New person", "A woman? (No = a man)", parent=self) else "male"
-        got = self._ask_person("New person of %s" % self.faction, sex, 16 if sex == "female" else self._manhood())
+        got = self._ask_person("New person of %s" % self.faction, sex, 16 if sex == "female" else 25,
+                               on_map=sex == "male")
         if not got:
             return
         self._before()
@@ -1009,8 +1010,10 @@ class FamilyEditor(ttk.Frame):
         self.changed()
         st = self.app.status if hasattr(self.app, "status") else None
         if st:
-            st.set("%s is new and not on the tree yet: Add a person... > son, daughter or wife of someone, and pick "
-                   "%s there." % (got[0], got[0]))
+            st.set(("%s is new and on no family tree: Apply puts him on the map as a general of the faction (in its "
+                    "first town) - or tie him on now (Add a person... > son of someone, and pick him)." if sex == "male"
+                    else "%s is new and on no family tree: tie her on (Add a person... > daughter or wife of someone, "
+                    "and pick her), else she stays a record no one is related to.") % got[0])
 
     RELATIONS = (("son", "son"), ("daughter", "daughter"), ("wife", "wife"), ("husband", "husband"),
                  ("brother", "brother"), ("sister", "sister"), ("parents", "father and mother (died before the start)"),
@@ -1032,7 +1035,7 @@ class FamilyEditor(ttk.Frame):
         frm.pack(fill="both", expand=True)
         ttk.Label(frm, text="The new person is", font=("", 10, "bold")).grid(row=0, column=0, sticky="w")
         v = tk.StringVar(value="son")
-        rels = list(self.RELATIONS) + [("family", "the head of a new family - tied to no one yet")]
+        rels = list(self.RELATIONS) + [("family", "tied to no one (a man goes on the map as a general)")]
         for r, (key, label) in enumerate(rels, start=1):
             ttk.Radiobutton(frm, text=label, value=key, variable=v).grid(row=r, column=0, sticky="w", padx=8)
         ttk.Label(frm, text="of", font=("", 10, "bold")).grid(row=0, column=1, sticky="w", padx=(16, 0))

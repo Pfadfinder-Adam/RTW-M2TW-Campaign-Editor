@@ -71,12 +71,21 @@ def list_mods(game):
 
 
 def marker(mod_dir):
+    """The mod folder's mark (made by New mod folder): CampaignEditor_mod.json; an older version's mark is renamed
+    to it on the first read (the same content)."""
     for name in (MARKER,) + OLD_MARKERS:
+        p = os.path.join(mod_dir, name)
         try:
-            with open(os.path.join(mod_dir, name), encoding="utf-8") as f:
-                return json.load(f)
+            with open(p, encoding="utf-8") as f:
+                got = json.load(f)
         except (OSError, ValueError):
             continue
+        if name != MARKER and not os.path.exists(os.path.join(mod_dir, MARKER)):
+            try:
+                os.replace(p, os.path.join(mod_dir, MARKER))
+            except OSError:
+                pass
+        return got
     return None
 
 

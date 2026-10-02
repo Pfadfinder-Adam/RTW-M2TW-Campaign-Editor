@@ -1488,12 +1488,21 @@ building smith
                     {"people": {lead.key: {"name": "Zed"}}},                      # no such name: the game crashes
                     {"tree": [["Aaron Alphid", "Anna", ["Aaron Alphid"]]]},     # his own child
                     # a living man off the map over 16 crashes the game (heavengames descr_strat reference)
-                    {"new": [{"name": "Aaron", "sex": "male", "age": 25}]}):
+                    {"new": [{"name": "Aaron", "sex": "male", "age": 25}],
+                     "tree": [["Aaron Alphid", "Anna", ["Aaron"]]]}):
             with self.assertRaises(ValueError):
                 edit(ModData(self.root), "test", "alpha", {"family": bad})
         # no age given: a son is written at 16, a daughter at 20
-        p1 = edit(ModData(self.root), "test", "alpha", {"family": {"new": [{"name": "Aaron", "sex": "male"}]}})
+        p1 = edit(ModData(self.root), "test", "alpha", {"family": {"new": [{"name": "Aaron", "sex": "male"}],
+                                                                   "tree": [["Aaron Alphid", "Anna", ["Aaron"]]]}})
         self.assertTrue(any("Aaron, " in l and "age 16," in l for l in Strat(p1.files[path]).lines))
+        # a new man tied to no one is no error: he goes on the map as a general (with an army) in the first town
+        pg = edit(ModData(self.root), "test", "alpha", {"family": {"new": [{"name": "Aaron", "sex": "male",
+                                                                            "age": 25}]}})
+        gl = Strat(pg.files[path]).lines
+        at = next(i for i, l in enumerate(gl) if l.lstrip().startswith("character") and "Aaron, " in l)
+        self.assertIn("general", gl[at])
+        self.assertTrue(any(l.strip() == "army" for l in gl[at:at + 3]))
         # the leader renamed on the Faction tab: the tree follows (a stale name there is nobody)
         p0 = edit(ModData(self.root), "test", "alpha", {"leader": {"name": "Boris Alphid", "age": 40}})
         self.assertIn("relative \tBoris Alphid, \tAnna,\t\tend", Strat(p0.files[path]).lines)
@@ -1759,6 +1768,24 @@ building smith
                 self.assertEqual(fh.read(), "game log\n")
         finally:
             log._candidates, log._home, log._path, settings._data, log._session_start = saved
+
+    def test_older_versions_files_beside_a_mod_still_work(self):
+        """A new version put over an old one: the older names beside a mod are still read - the ignore list, the
+        mod folder's mark, the backups - and take today's names when they are written again."""
+        from campaign_editor import scan as SC
+        from campaign_editor import newmod as NM
+        root = tempfile.mkdtemp()
+        write(os.path.join(root, "faction_tool_ignore.txt"), "junk/\n")
+        self.assertTrue(SC.ignore_path(root).endswith("faction_tool_ignore.txt"))
+        self.assertIn("junk", repr(SC.load_ignore(root)))
+        SC.save_ignore(root, "junk/\nold_stuff/")
+        self.assertEqual(sorted(os.listdir(root)), ["CampaignEditor_ignore.txt"])
+        self.assertIn("old_stuff", repr(SC.load_ignore(root)))
+        with open(os.path.join(root, "faction_tool_mod.json"), "w") as fh:
+            fh.write('{"base": "HLR"}')
+        self.assertEqual(NM.marker(root), {"base": "HLR"})
+        self.assertEqual(sorted(os.listdir(root)), ["CampaignEditor_ignore.txt", "CampaignEditor_mod.json"])
+        self.assertEqual(NM.marker(root), {"base": "HLR"})
 
     def test_portrait_library_add_m2_layout(self):
         """Medieval II's pools (vanilla southern_european): no cards, old only for generals, the dead

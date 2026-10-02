@@ -4609,10 +4609,11 @@ class App(tk.Tk):
         t.insert("1.0", text)
 
         def save():
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(t.get("1.0", "end-1c").rstrip("\n") + "\n")
+            # saved under today's name; an older version's list is moved over (its rules kept, nothing lost)
+            from .scan import save_ignore
+            new = save_ignore(os.path.dirname(path), t.get("1.0", "end-1c"))
             w.destroy()
-            self.status.set("Saved %s - press Check mod files again." % path)
+            self.status.set("Saved %s - press Check mod files again." % new)
         ttk.Button(bar, text="Save", command=save).pack(side="left")
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
         t.focus_set()
