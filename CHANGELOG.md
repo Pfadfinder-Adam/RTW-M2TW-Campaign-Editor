@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.29.2 - 2026-10-02
+
 ### Added
 - **The editor offers to put itself into the game's folder** (where it finds the game and every mod by itself):
   started from elsewhere (the Downloads folder, the desktop), the first start of each new version asks; the user
