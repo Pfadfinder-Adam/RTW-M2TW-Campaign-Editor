@@ -188,6 +188,8 @@ def check_mod(mod, campaign, deep=False, progress=None):
         bad("buildings in towns that export_descr_buildings.txt lacks: %s" % ", ".join(sorted(unknown_buildings)[:8]))
     if off_map:
         bad("characters off the map: %s" % ", ".join(off_map[:5]))
+    for msg in building_condition_problems(mod):
+        bad(msg)
     if bad_names:
         say("    note: %d named character(s) whose first name is not in their faction's list "
             "(fine if the game has the string), e.g. %s" % (len(bad_names), ", ".join(bad_names[:3])))
@@ -233,6 +235,39 @@ def _modeldb_report(mod):
     if note:
         return False, "    note: " + note
     return False, "    battle_models.modeldb: %d models (%s)" % (len(db.models), mod.rel(src))
+
+
+def building_condition_problems(mod):
+    """[message]: export_descr_buildings.txt lines naming a hidden resource, a resource or a religion the mod does
+    not have - the game stops at start ('Hidden resource condition, unrecognised hidden resource 'britain''; a
+    tester's Barbarian Invasion units brought into plain Rome). One message per kind, with the first lines."""
+    from .packs import known_conditions, _COND
+    if not mod.file("edb"):
+        return []
+    known = known_conditions(mod)
+    found = {}
+    for n, line in enumerate(mod.load(mod.file("edb")).texts(), 1):
+        body = line.split(";")[0]
+        t = body.split()
+        if not t or t[0] == "hidden_resources":
+            continue
+        if t[0] == "religious_belief" and len(t) > 1:
+            rel = known["religion"]
+            if rel is None or t[1].lower() not in rel:
+                found.setdefault("religion", []).append("%s (line %d)" % (t[1], n))
+            continue
+        i = body.find("requires")
+        if i < 0 or "(" in body[i:]:
+            continue
+        for m in _COND.finditer(body[i:]):
+            have = known.get(m.group(2))
+            if have is not None and m.group(3).lower() not in have:
+                found.setdefault(m.group(2), []).append("%s (line %d)" % (m.group(3), n))
+    words = {"hidden_resource": "hidden resource(s) the hidden_resources line does not list",
+             "resource": "resource(s) descr_sm_resources.txt does not have",
+             "religion": "religion(s) this game does not have (religious_belief)"}
+    return ["export_descr_buildings.txt names %s - the game stops at start: %s" % (words[k], ", ".join(v[:5]) +
+            (" and %d more" % (len(v) - 5) if len(v) > 5 else "")) for k, v in found.items()]
 
 
 def hidden_resources(mod):

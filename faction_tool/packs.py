@@ -592,12 +592,16 @@ def default_recruit_map(mod, manifest):
 
 
 def known_conditions(mod):
-    """What this mod knows of the names a requires line or a capability line may use: {'hidden_resource': set,
-    'resource': set, 'religion': set or None} (None = the game has no religions / beliefs at all)."""
+    """What this mod knows of the names a requires line or a capability line may use: {'hidden_resource': set or
+    None, 'resource': set or None, 'religion': set or None} (religion None = the game has no religions / beliefs at
+    all; the others None = the list was not found, so not checked)."""
     from .check import hidden_resources
     from . import resources, religions
+    # a list the mod does not have (no hidden_resources line, no descr_sm_resources.txt found) is unknown (None):
+    # nothing is taken out or reported for it
     hidden = {h.lower() for h in hidden_resources(mod)} if mod.file("edb") else set()
     res = {r.lower() for r in resources.types(mod)}
+    hidden, res = hidden or None, res or None
     rel = {r.lower() for r in religions.names(mod)}
     beliefs = _ci(mod.data, "descr_beliefs.txt")
     if beliefs:
@@ -633,7 +637,8 @@ def fit_line(text, known):
         cond = parts[i].strip()
         op = parts[i - 1] if i else None
         c = _COND.fullmatch(cond)
-        if c and c.group(3).lower() not in known.get(c.group(2), set()):
+        have = known.get(c.group(2)) if c else None
+        if c and have is not None and c.group(3).lower() not in have:
             gone.append(cond)
             continue
         keep.append((op, cond))

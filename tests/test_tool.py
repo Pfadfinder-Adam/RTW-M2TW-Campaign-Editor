@@ -3134,7 +3134,7 @@ building smith
         self.addCleanup(shutil.rmtree, target)
         shutil.copytree(self.root, os.path.join(target, "mod"))
         troot = os.path.join(target, "mod")
-        write(os.path.join(troot, "data", "export_descr_buildings.txt"), edb.replace(
+        write(os.path.join(troot, "data", "export_descr_buildings.txt"), "hidden_resources rome\n" + edb.replace(
             " and hidden_resource britain", "").replace("                religious_belief christianity 2\n", ""))
         before = tree_hash(troot)
         src, tmod = ModData(self.root), ModData(troot)
@@ -3152,6 +3152,12 @@ building smith
         self.assertNotIn("britain", text)
         self.assertNotIn("religious_belief", text)                  # Rome has no beliefs
         self.assertIn('recruit "alpha general 2"', text)
+        from faction_tool.check import building_condition_problems
+        self.assertEqual(building_condition_problems(ModData(troot)), [])
+        with open(ModData(troot).file("edb"), "a") as fh:            # as the tester's file was: Check mod says it
+            fh.write("building x\n{\n    levels y\n    {\n        y requires factions { alpha, } and "
+                     "hidden_resource britain\n    }\n}\n")
+        self.assertIn("britain", " ".join(building_condition_problems(ModData(troot))))
         restore(ModData(troot), bdir)
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)
