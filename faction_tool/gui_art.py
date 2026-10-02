@@ -339,10 +339,24 @@ class ArtEditor(ttk.Frame):
             return
         try:
             from .recolour import read_picture
-            made = E.build(read_picture(src), pics)
+            picture = read_picture(src)
         except Exception as e:
             messagebox.showerror("Faction emblem", "Cannot read %s: %s" % (src, e))
             return
+        # first fitted by hand (place, size, turn, the shape, the ground, magic wand, paint bucket), then made
+        # into every emblem picture (a tester: the emblem needs an editor of its own)
+        from . import emblem_edit as EE
+        from .gui_emblem import EmblemFitter
+        from .recolour import faction_colours
+        olds = {p["rel"]: E._old(p) for p in pics}
+        cols = faction_colours(a.mod).get(src_faction, (None, None))
+        EmblemFitter(self, picture, EE.frame_mask(pics, olds), cols,
+                     lambda master: self._emblem_made(master, pics, src, src_faction, new))
+
+    def _emblem_made(self, master, pics, src, src_faction, new):
+        from . import emblem as E
+        a = self.app
+        made = E.build(master, pics)
         import tempfile
         paths = E.save_all(made, tempfile.mkdtemp(prefix="emblem_"))
         w = tk.Toplevel(self)

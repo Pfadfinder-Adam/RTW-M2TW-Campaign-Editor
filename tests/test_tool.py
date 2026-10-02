@@ -3235,6 +3235,39 @@ building smith
         red = [(x, y) for x in range(64) for y in range(64) if im.getpixel((x, y))[:3] == (180, 10, 10)]
         self.assertTrue(all(out.getpixel(p)[2] > 100 for p in red))
 
+    def test_emblem_fitted_by_hand(self):
+        # a tester: the emblem needs an editor of its own - cut to the old emblem's disc, a white background
+        # cleared with the magic wand, a click on the turned picture finds the right pixel
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from faction_tool import emblem_edit as EE
+        from faction_tool.emblem import footprint
+        src = Image.new("RGBA", (200, 100), (255, 255, 255, 255))
+        ImageDraw.Draw(src).rectangle((150, 10, 190, 50), fill=(200, 0, 0, 255))
+        for ang in (0, 30, -45):
+            st = {"scale": 1.0, "dx": 10, "dy": -5, "angle": ang, "shape": None, "frame": None, "ground": None}
+            m = EE.compose(src, st)
+            st["_box"] = footprint(src)
+            hits = [(x, y) for x in range(0, 256, 5) for y in range(0, 256, 5)
+                    if m.getpixel((x, y)) == (200, 0, 0, 255)]
+            self.assertTrue(hits)
+            self.assertTrue(all(src.getpixel(EE.to_source(st, src.size, h))[:3] == (200, 0, 0) for h in hits))
+        n = EE.flood(src, (5, 5), 20)                                  # the magic wand on the white
+        self.assertEqual(n, 200 * 100 - 41 * 41)
+        self.assertEqual(src.getpixel((5, 5))[3], 0)
+        disc = EE.compose(src, {"scale": None, "dx": 0, "dy": 0, "angle": 0, "shape": "circle", "frame": None,
+                                "ground": (0, 0, 255)})
+        self.assertEqual(disc.getpixel((3, 3))[3], 0)                  # outside the circle: clear
+        self.assertEqual(disc.getpixel((128, 10))[:3], (0, 0, 255))   # inside, beside the picture: the ground
+        frame = Image.new("L", (64, 64), 0)
+        ImageDraw.Draw(frame).ellipse((0, 0, 63, 63), fill=255)
+        old = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        old.putalpha(frame)
+        got = EE.frame_mask([{"rel": "a", "label": "loading-screen logo"}], {"a": old})
+        self.assertEqual((got.size, got.getpixel((128, 128)), got.getpixel((2, 2))), ((256, 256), 255, 0))
+
     def test_read_and_draw_a_medieval2_mesh(self):
         """A .mesh laid out as the vanilla ones: parts with triangles, then the vertex streams (texture u v,
         bone weights, positions). Read back, the man shown, drawn both ways."""

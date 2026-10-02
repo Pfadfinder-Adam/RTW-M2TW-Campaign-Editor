@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Changed
+- **Faction emblem: fitted by hand before it is made into every picture** (found by a tester: the emblem needed an
+  editor of its own to fit a picture into the round icons): move, size, turn, cut to the old emblem's own shape (or
+  a circle, a square), a ground in the faction's colours, a magic wand that clears an area of like colour, a paint
+  bucket (emblem_edit.py, gui_emblem.EmblemFitter).
 - **Edit region... holds both names** (a tester: three buttons on the Map's region bar did one job): for a region of
   the map it now has the names in the files of the region and its town beside the names players see; a change of
   the file names is written at once in every file that names them, with a backup (asked first). The Map's
