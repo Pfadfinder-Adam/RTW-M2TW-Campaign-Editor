@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Changed
+- **Campaign rules: the REX / M2EX engine settings** (a tester: on Rome the window was nearly empty) -
+  `descr_ex.txt` (ages and the family, bribery, hordes, camera, max factions, battle visuals...) and `descr_caps_ex.txt`
+  (feature switches: recruitment slots per town, sprite format, trade fleets...), grouped by the file's own headings,
+  each value explained by the comment the engine writes above it; written into the mod's own copy.
 - **One temple per town, as the games want** (both games: a chain named `temple_...`; two in one town stop the game
   with "Settlement specified with multiple temple buildings"): the Buildings tab swaps the old temple for the new
   pick, Buildings for many towns skips a town that has another temple, Check mod files names a town holding two.

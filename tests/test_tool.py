@@ -3587,6 +3587,33 @@ building smith
         im = MV.render(m, (200, 240), texture=Image.new("RGB", (8, 8), (200, 30, 30)))
         self.assertTrue(len([p for p in im.getdata() if p[0] > 60 and p[0] > 2 * p[1]]) > 200)
 
+    def test_engine_settings_in_campaign_rules(self):
+        """descr_ex.txt / descr_caps_ex.txt (REX, M2EX): each 'key value' line a value, its section the banner heading,
+        its explanation the comment above; a write changes the value's characters only."""
+        from campaign_editor import campaignrules as CR
+        from campaign_editor.plan import Plan
+        text = (";;;;;;;;\r\n; Extended settings\r\n;;;;;;;;\r\n\r\n; Maximum number of factions\r\n; Increase for mods\r\n"
+                "max_factions 21\r\n\r\n;;;;;;;;\r\n; Family / ageing\r\n; All in years\r\n;;;;;;;;\r\n\r\n"
+                "; Age of manhood (default 16)\r\nage_of_manhood 16\r\n;unit_group_mode vanilla\r\n"
+                "; colour r g b\r\nrange_indicator_colour 60 200 255\r\n")
+        path = os.path.join(self.root, "data", "descr_ex.txt")
+        with open(path, "w", newline="") as fh:
+            fh.write(text)
+        rules = {r.key: r for r in CR.read(path)}
+        self.assertEqual(sorted(rules), ["age_of_manhood", "max_factions", "range_indicator_colour"])
+        self.assertEqual(rules["max_factions"].section, "Extended settings")
+        self.assertEqual(CR.explain(rules["max_factions"]), "Maximum number of factions\nIncrease for mods")
+        self.assertEqual(rules["age_of_manhood"].section, "Family and ageing")
+        self.assertEqual(rules["range_indicator_colour"].kind, "words")
+        self.assertIsNone(CR.check(rules["range_indicator_colour"], "10 20 30"))
+        self.assertIsNotNone(CR.check(rules["age_of_manhood"], "x"))
+        plan = Plan(ModData(self.root), "rules", "rules")
+        CR.apply(plan, "descr_ex.txt", {rules["age_of_manhood"]: "14", rules["range_indicator_colour"]: "1 2 3"}, path, None)
+        plan.apply()
+        with open(path, newline="") as fh:
+            self.assertEqual(fh.read(), text.replace("age_of_manhood 16", "age_of_manhood 14").replace(
+                "60 200 255", "1 2 3"))
+
     def test_campaign_rules_and_addons(self):
         """Campaign rules: values of the settings files read with their section (M2EX's unquoted bool=false too),
         a change writes only the value's characters, a bad value is refused, a mod without the file gets the game's

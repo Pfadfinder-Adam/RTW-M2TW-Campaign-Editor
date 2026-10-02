@@ -3,7 +3,9 @@
 Medieval II: descr_campaign_db.xml (agents, ages, revolts, crusades...), descr_settlement_mechanics.xml (how towns
 grow, riot and pay), descr_diplomacy.xml (what offers cost), descr_recruitment.xml. Rome under REX:
 descr_settlement_mechanics.xml (population per settlement level, the same factors). REX / M2EX:
-descr_unit_sizes.txt (the Unit size choices).
+descr_unit_sizes.txt (the Unit size choices), and the engines' own settings descr_ex.txt (ages, bribery, hordes,
+camera, max_factions...) and descr_caps_ex.txt (feature switches: recruitment slots, sprite format, conversion...) -
+each value explained by the comment the engine writes above it in the file.
 
 The files are read line by line, not by an XML parser: M2EX's own descr_campaign_db.xml has values without quotes
 (bool=false) that a parser refuses, and a write changes only the value's characters - the rest stays byte for byte."""
@@ -20,6 +22,8 @@ FILES = (
     ("descr_diplomacy.xml", "Diplomacy offers"),
     ("descr_recruitment.xml", "Recruitment"),
     ("descr_unit_sizes.txt", "Unit sizes"),
+    ("descr_ex.txt", "Engine settings (REX / M2EX)"),
+    ("descr_caps_ex.txt", "Engine features (REX / M2EX)"),
 )
 TYPE_WORDS = ("uint", "int", "float", "bool", "string")
 PLAIN_ATTRS = TYPE_WORDS + ("value", "flag", "modifier")
@@ -33,9 +37,10 @@ RE_ATTR = re.compile(r"([\w.-]+)\s*=\s*(\"([^\"]*)\"|'([^']*)'|([^\s/>]+))")
 class Rule:
     """One value of a settings file: where it sits (section, key), its text, its type and its place in the line."""
 
-    def __init__(self, path, section, key, attr, value, kind, line, start, end):
+    def __init__(self, path, section, key, attr, value, kind, line, start, end, note=None):
         self.path, self.section, self.key, self.attr = path, section, key, attr
         self.value, self.kind, self.line, self.start, self.end = value, kind, line, start, end
+        self.note = note                # the file's own explanation (the comment above an engine setting)
 
     @property
     def ident(self):
@@ -132,9 +137,48 @@ def read_unit_sizes(path, f):
     return rules
 
 
+def read_ex(path, f):
+    """[Rule] of an engine settings file (descr_ex.txt / descr_caps_ex.txt of REX or M2EX): 'key value' lines; the
+    section is the last ';;;; / ; Heading / ;;;;' banner, the explanation the comment lines right above the key.
+    Settings left commented out are not offered (the engine's default holds)."""
+    rules, section, note, head = [], "switches" if "caps" in os.path.basename(path).lower() else "general", [], None    # head: None, 'open' (after a banner), 'in'
+    for i, text in enumerate(f.texts()):
+        s = text.strip()
+        if not s:
+            note = []
+            continue
+        if s.startswith(";"):
+            body = s.lstrip(";").strip()
+            if not body:
+                if re.fullmatch(r";{3,}", s):     # a ';;;;' banner line: opens or closes a heading
+                    head = "open" if head is None else None
+                    note = []
+                continue                          # a bare ';' keeps the comment going
+            if head == "open":                 # the heading's first line names the section
+                section, head = body.replace(" / ", " and "), "in"     # ' / ' is the tool's level mark
+            elif head is None:
+                note.append(body)
+            continue
+        head = None
+        m = re.match(r"\s*([A-Za-z_][\w.]*)(\s+)([^;]*?)\s*(;.*)?$", text)
+        if not m or not m.group(3):
+            note = []
+            continue
+        value = m.group(3)
+        start = m.start(3)
+        kind = _kind("", value) if " " not in value and "\t" not in value else "words"
+        rules.append(Rule(path, section, m.group(1), "value", value, kind, i, start, start + len(value),
+                          "\n".join(note) or None))
+        note = []
+    return rules
+
+
 def read(path, f=None):
     f = f or TextFile.load(path)
-    return read_unit_sizes(path, f) if path.lower().endswith(".txt") else read_xml(path, f)
+    low = os.path.basename(path).lower()
+    if low in ("descr_ex.txt", "descr_caps_ex.txt"):
+        return read_ex(path, f)
+    return read_unit_sizes(path, f) if low.endswith(".txt") else read_xml(path, f)
 
 
 def game_data(mod):
@@ -155,6 +199,8 @@ def files(mod):
         own = _ci(mod.data, name)
         base = _ci(game, name) if game else None
         if own or base:
+            if not own and name.lower().endswith("_ex.txt"):    # the engines read these from the mod alone
+                title += " - this mod has none, so the engine's defaults hold; a change puts a copy in the mod"
             out.append((name, title, own, base))
     return out
 
@@ -172,6 +218,8 @@ def check(rule, text):
         return None if re.fullmatch(r"-?\d+(\.\d*)?|-?\.\d+", t) else "a number (like 1.5)"
     if rule.kind == "bool":
         return None if t in ("true", "false") else "true or false"
+    if rule.kind == "words":
+        return None if not re.search(r"[\"'<>;]", t) else "words or numbers, no quotes or ';'"
     return None if not re.search(r"[\"'<>\s]", t) else "one word, no quotes"
 
 
@@ -319,7 +367,9 @@ FACTOR_KINDS = {"SPF": "population growth", "SOF": "public order", "SIF": "incom
 
 
 def explain(rule):
-    """A plain sentence for a value (the key's own words where known)."""
+    """A plain sentence for a value (the key's own words where known; an engine setting: the file's own comment)."""
+    if getattr(rule, "note", None):
+        return rule.note
     words = KEYS.get(rule.key)
     last = rule.section.split(" / ")[-1]
     m = re.match(r"(SPF|SOF|SIF)_(.+)", last)
