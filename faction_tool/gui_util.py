@@ -277,13 +277,7 @@ class Tip:
         text = self.text() if callable(self.text) else self.text
         if not text or not self.widget.winfo_exists():
             return
-        x = self.widget.winfo_rootx() + 12
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
-        self.win = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(True)
-        tw.wm_geometry("+%d+%d" % (x, y))
-        tk.Label(tw, text=text, justify="left", background="#ffffe0", relief="solid", borderwidth=1,
-                 wraplength=self.width, padx=6, pady=4).pack()
+        self.win = popup_text(self.widget, text, self.width)
 
     def _hide(self, ev=None):
         if self.job:
@@ -292,6 +286,115 @@ class Tip:
         if self.win:
             self.win.destroy()
             self.win = None
+
+
+def popup_text(widget, text, width=420):
+    """A yellow hover box with text under widget, kept inside the screen (above the widget when there is no room
+    below, moved left at the right edge). -> the box (a Toplevel)."""
+    tw = tk.Toplevel(widget)
+    tw.wm_overrideredirect(True)
+    tk.Label(tw, text=text, justify="left", background="#ffffe0", foreground="#1e1e1e", relief="solid",
+             borderwidth=1, wraplength=width, padx=6, pady=4).pack()
+    tw.update_idletasks()
+    w, h = tw.winfo_reqwidth(), tw.winfo_reqheight()
+    sw, sh = widget.winfo_screenwidth(), widget.winfo_screenheight()
+    x = widget.winfo_rootx() + 12
+    y = widget.winfo_rooty() + widget.winfo_height() + 4
+    if y + h > sh - 40:                                   # the taskbar too
+        y = max(0, widget.winfo_rooty() - h - 4)
+    x = max(0, min(x, sw - w - 4))
+    tw.wm_geometry("+%d+%d" % (x, y))
+    return tw
+
+
+def install_window_helpers(root):
+    """Things every window of the editor gets, in one place (the testers' reports of 2026-10-02):
+    - a new window opens in the middle of the screen (not at the top left);
+    - a drop-down list is as wide as its longest line (no cut names);
+    - an entry or drop-down whose text is longer than the box shows it whole when the mouse rests on it."""
+    import tkinter.font as tkfont
+
+    def centre(ev):
+        w = ev.widget
+        if not isinstance(w, tk.Toplevel) or getattr(w, "_centred", False):
+            return
+        w._centred = True
+        try:
+            if w.wm_overrideredirect() or w.winfo_class() != "Toplevel":
+                return
+            w.update_idletasks()
+            ww, wh = max(w.winfo_width(), w.winfo_reqwidth()), max(w.winfo_height(), w.winfo_reqheight())
+            sw, sh = w.winfo_screenwidth(), w.winfo_screenheight()
+            w.wm_geometry("+%d+%d" % (max(0, (sw - ww) // 2), max(0, (sh - wh) // 2 - 20)))
+        except tk.TclError:
+            pass
+    root.bind_class("Toplevel", "<Map>", centre, add="+")
+
+    def widen(ev):
+        cb = ev.widget
+
+        def later():
+            try:
+                values = cb.cget("values")
+                if not values or not cb.winfo_exists():
+                    return
+                pop = cb.tk.call("ttk::combobox::PopdownWindow", cb)
+                if not cb.tk.call("winfo", "ismapped", pop):
+                    return
+                font = tkfont.nametofont("TkDefaultFont")
+                need = max(font.measure(str(v)) for v in cb.tk.splitlist(values)) + 40
+                have = cb.winfo_width()
+                if need <= have:
+                    return
+                sw = cb.winfo_screenwidth()
+                need = min(need, sw - 8)
+                x = min(cb.winfo_rootx(), sw - need - 4)
+                y = int(cb.tk.call("winfo", "rooty", pop))
+                h = int(cb.tk.call("winfo", "height", pop))
+                cb.tk.call("wm", "geometry", pop, "%dx%d+%d+%d" % (need, h, x, y))
+            except tk.TclError:
+                pass
+        cb.after(1, later)
+    root.bind_class("TCombobox", "<Button-1>", widen, add="+")
+
+    state = {"job": None, "win": None}
+
+    def hide(ev=None):
+        if state["job"]:
+            try:
+                root.after_cancel(state["job"])
+            except tk.TclError:
+                pass
+            state["job"] = None
+        if state["win"] is not None:
+            try:
+                state["win"].destroy()
+            except tk.TclError:
+                pass
+            state["win"] = None
+
+    def enter(ev):
+        hide()
+        w = ev.widget
+
+        def show():
+            state["job"] = None
+            try:
+                text = w.get()
+                if not text or not w.winfo_exists():
+                    return
+                font = tkfont.nametofont("TkTextFont")
+                if font.measure(text) <= w.winfo_width() - (28 if w.winfo_class() == "TCombobox" else 8):
+                    return
+                state["win"] = popup_text(w, text, 560)
+            except (tk.TclError, AttributeError):
+                pass
+        state["job"] = root.after(600, show)
+    for cls in ("TEntry", "TCombobox", "Entry"):
+        root.bind_class(cls, "<Enter>", enter, add="+")
+        root.bind_class(cls, "<Leave>", hide, add="+")
+        root.bind_class(cls, "<ButtonPress>", hide, add="+")
+        root.bind_class(cls, "<KeyPress>", hide, add="+")
 
 
 def tip(widget, text, **kw):

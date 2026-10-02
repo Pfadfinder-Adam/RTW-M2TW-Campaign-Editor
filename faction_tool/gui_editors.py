@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .gui_util import ShortHint
 from . import editors as E
-from . import theme, unitattrs
+from . import settings, theme, unitattrs
 from .gui_util import save_copy
 from .moddata import ModData, _ci
 from .plan import Plan
@@ -90,12 +90,21 @@ class RecordEditor(ttk.Frame):
         self.links.pack(fill="x", pady=(0, 6))
         self.lbl_links = ttk.Label(self.links, text="", justify="left", foreground="#333", wraplength=820)
         self.lbl_links.pack(anchor="w")
-        ShortHint(right, text="Every line of the block: the key on the left, what follows it on the right. "
-                              "Changed fields turn yellow, lines to add green, lines to remove red (x on the left); "
-                              "Preview, then Apply writes them (with a backup).",
-                  foreground="#555", wraplength=900, justify="left").pack(anchor="w")
-        box = ttk.Frame(right)
-        box.pack(fill="both", expand=True)
+        # the block's lines fold away behind a button (like the family tree): the pictures, model and voice
+        # keep the room; open, the lines take the space below them (a tester: too little room in the editor)
+        bar = ttk.Frame(right)
+        bar.pack(fill="x")
+        self.b_lines = ttk.Button(bar, command=self.toggle_lines)
+        self.b_lines.pack(side="left")
+        ShortHint(bar, text="Every line of the block: the key on the left, what follows it on the right. "
+                            "Changed fields turn yellow, lines to add green, lines to remove red (x on the left); "
+                            "Preview, then Apply writes them (with a backup).",
+                  foreground="#555", wraplength=900, justify="left").pack(side="left", padx=8)
+        self._lines_open = bool(settings.get("editor_lines_open", False))
+        box = self._lines_box = ttk.Frame(right)
+        if self._lines_open:
+            box.pack(fill="both", expand=True)
+        self._lines_label()
         canvas = tk.Canvas(box, highlightthickness=0)
         sb = ttk.Scrollbar(box, orient="vertical", command=canvas.yview)
         self.form = ttk.Frame(canvas)
@@ -108,6 +117,21 @@ class RecordEditor(ttk.Frame):
                     lambda x: canvas.yview_scroll(int(-x.delta / 120), "units")))
         canvas.bind("<Leave>", lambda ev: canvas.unbind_all("<MouseWheel>"))
         self._photos = []
+
+    def _lines_label(self):
+        n = len(getattr(self, "fields", None) or ()) if self.current else 0
+        self.b_lines.configure(text="%s  Every line of the block%s" % (
+            "\u25be" if self._lines_open else "\u25b8", " (%d)" % n if n else ""))
+
+    def toggle_lines(self):
+        """Show or fold away the block's lines (kept for the next start)."""
+        self._lines_open = not self._lines_open
+        if self._lines_open:
+            self._lines_box.pack(fill="both", expand=True)
+        else:
+            self._lines_box.pack_forget()
+        settings.put("editor_lines_open", self._lines_open)
+        self._lines_label()
 
     # ---- data ----
     def path(self):
@@ -292,6 +316,7 @@ class RecordEditor(ttk.Frame):
                           **SMALL).grid(row=row, column=0, padx=(0, 4))
             row += 1
         added_rows(b + 1)
+        self._lines_label()
         self.show_pictures()
         self.show_links()
 
@@ -623,6 +648,8 @@ class RecordEditor(ttk.Frame):
             self.adds.append(op)
             w.destroy()
             self._changed()
+            if not self._lines_open:
+                self.toggle_lines()                  # the new line shows (green) among the others
             self.show()
         bar = ttk.Frame(frm)
         bar.pack(anchor="e", pady=(8, 0))

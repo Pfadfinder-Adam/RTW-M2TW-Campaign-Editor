@@ -12,16 +12,16 @@ from . import settings
 
 LIGHT = {"bg": "#f0f0f0", "fg": "#1e1e1e", "field": "#ffffff", "muted": "#555555", "border": "#b4b4b4",
          "select": "#3874d8", "selectfg": "#ffffff", "accent": "#cfe3ff", "tab": "#dcdcdc", "trough": "#e2e2e2",
-         "button": "#e6e6e6", "active": "#d5e4f7"}
+         "button": "#e6e6e6", "active": "#d5e4f7", "link": "#2050c0"}
 DARK = {"bg": "#2b2d31", "fg": "#e3e3e3", "field": "#1e1f22", "muted": "#a9adb3", "border": "#4b4e55",
         "select": "#3d6fb8", "selectfg": "#ffffff", "accent": "#35598c", "tab": "#35373c", "trough": "#232428",
-        "button": "#3a3d43", "active": "#46505e"}
+        "button": "#3a3d43", "active": "#46505e", "link": "#8ab8ff"}
 
 # colours the window sets by hand that belong to the palette, not to a meaning
 NAMED = {"#cfe3ff": "accent"}
 
 BG_KEYS = ("field", "bg", "tab", "button", "trough", "accent", "active", "select")
-FG_KEYS = ("fg", "muted", "selectfg")
+FG_KEYS = ("fg", "muted", "selectfg", "link")      # link: the hover '?' marks
 BG_OPTS = ("background", "activebackground", "highlightbackground", "troughcolor", "selectcolor",
            "readonlybackground", "disabledbackground")
 FG_OPTS = ("foreground", "activeforeground", "insertbackground", "disabledforeground", "highlightcolor")

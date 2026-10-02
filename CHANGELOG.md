@@ -8,6 +8,14 @@
   the file names is written at once in every file that names them, with a backup (asked first). The Map's
   **Rename...** and **Rename in the files...** buttons are gone (the Settlements tab keeps its own).
 
+- **Every window opens in the middle of the screen**; a hover text stays inside the screen; a drop-down list is as
+  wide as its longest line; a field whose text is longer than the box shows it whole when the mouse rests on it; the
+  '?' marks are light blue in the Dark look (they were dark blue on dark grey) - from a tester's reports.
+- **The Faction tab in two columns**: the short fields keep a fitting width, Leader and heir and Victory stand beside
+  them, the tooltip and the description below across the whole width.
+- **Unit and Building editors: the block's lines fold away** behind **Every line of the block** (like the family
+  tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
+
 ### Fixed
 - **Units and buildings brought from another mod no longer stop the game at start** (a tester brought Barbarian
   Invasion's british legionaries into Rome; REX: "Hidden resource condition, unrecognised hidden resource

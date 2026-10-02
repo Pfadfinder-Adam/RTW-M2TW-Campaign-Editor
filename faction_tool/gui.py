@@ -282,6 +282,7 @@ class FieldTable(ttk.Frame):
 
 
 AS_LAND = "(as the land it is cut from)"
+FIELD_W = 44                     # characters: the Faction tab's short fields (names, AI, capital...)
 
 
 def assets_dir():
@@ -353,6 +354,8 @@ class App(tk.Tk):
     def _build(self):
         from . import theme
         theme.apply(self)                          # light or dark, as last chosen
+        from .gui_util import install_window_helpers
+        install_window_helpers(self)               # windows centred, wide drop-downs, long field texts on hover
         pad = {"padx": 6, "pady": 3}
         top = ttk.Frame(self)
         top.pack(fill="x", **pad)
@@ -432,8 +435,17 @@ class App(tk.Tk):
         right = ttk.Frame(self)                   # never packed: the picked towns' list lives on, unseen
 
         # --- faction
-        lf = self.lf = ttk.LabelFrame(left, text="New faction")
-        lf.pack(fill="x")
+        # two columns (a tester: fields of a few words took a whole line): the faction's short fields on the left,
+        # leader / heir and victory beside them, the long texts below across the whole width
+        upper = ttk.Frame(left)
+        upper.pack(fill="x")
+        lf = self.lf = ttk.LabelFrame(upper, text="New faction")
+        lf.grid(row=0, column=0, sticky="nw")
+        side = ttk.Frame(upper)
+        side.grid(row=0, column=1, sticky="nwe", padx=(8, 0))
+        upper.columnconfigure(1, weight=1)
+        texts = ttk.Frame(left)
+        texts.pack(fill="x", pady=(6, 0))
         self.v = {k: tk.StringVar() for k in ("template", "name", "display_name", "short_name", "adjective",
                                               "ai", "denari", "leader_first", "leader_last", "leader_age",
                                               "heir_first", "heir_last", "heir_age", "capital")}
@@ -444,7 +456,11 @@ class App(tk.Tk):
         def field(label, widget):
             nonlocal row
             ttk.Label(lf, text=label).grid(row=row, column=0, sticky="w", padx=4, pady=2)
-            widget.grid(row=row, column=1, sticky="we", padx=4, pady=2)
+            widget.grid(row=row, column=1, sticky="w", padx=4, pady=2)
+            if isinstance(widget, ttk.Entry):
+                widget.configure(width=FIELD_W)
+            elif isinstance(widget, ttk.Combobox) and int(str(widget.cget("width") or 0)) < FIELD_W - 2:
+                widget.configure(width=FIELD_W - 2)
             row += 1
         from .gui_util import FactionBox
         self.cb_template = FactionBox(lf, self.v["template"], state="readonly", width=28)
@@ -513,20 +529,18 @@ class App(tk.Tk):
             b.pack(side="left")
         field("Diplomacy", df)
         self.dip_row = [df, lf.grid_slaves(row=row - 1, column=0)[0]]
-        ttk.Label(lf, text="Tooltip\n(faction icon)").grid(row=row, column=0, sticky="nw", padx=4)
-        self.t_descr = tk.Text(lf, width=34, height=2, wrap="word")
-        self.t_descr.grid(row=row, column=1, sticky="we", padx=4, pady=2)
-        self.rome_rows += [lf.grid_slaves(row=row, column=c)[0] for c in (0, 1)]
-        row += 1
-        ttk.Label(lf, text="Full description\n(campaign screen)").grid(row=row, column=0, sticky="nw", padx=4)
-        self.t_long = tk.Text(lf, width=34, height=7, wrap="word")
-        self.t_long.grid(row=row, column=1, sticky="we", padx=4, pady=2)
-        row += 1
-        lf.columnconfigure(1, weight=1)
+        ttk.Label(texts, text="Tooltip\n(faction icon)").grid(row=0, column=0, sticky="nw", padx=4)
+        self.t_descr = tk.Text(texts, width=34, height=2, wrap="word")
+        self.t_descr.grid(row=0, column=1, sticky="we", padx=4, pady=2)
+        self.rome_rows += [texts.grid_slaves(row=0, column=c)[0] for c in (0, 1)]
+        ttk.Label(texts, text="Full description\n(campaign screen)").grid(row=1, column=0, sticky="nw", padx=4)
+        self.t_long = tk.Text(texts, width=34, height=7, wrap="word")
+        self.t_long.grid(row=1, column=1, sticky="we", padx=4, pady=2)
+        texts.columnconfigure(1, weight=1)
 
         # --- leaders
-        lf2 = self.lf2 = ttk.LabelFrame(left, text="Leader and heir (names come from the faction's name list)")
-        lf2.pack(fill="x", pady=(8, 0))
+        lf2 = self.lf2 = ttk.LabelFrame(side, text="Leader and heir (names come from the faction's name list)")
+        lf2.pack(fill="x")
         self.cb_names = []
         for r, who in enumerate(("leader", "heir")):
             ttk.Label(lf2, text=who.capitalize()).grid(row=r, column=0, sticky="w", padx=4, pady=2)
@@ -546,7 +560,7 @@ class App(tk.Tk):
 
         # --- victory: what the player must do to win (descr_win_conditions.txt)
         from .gui_wincond import VictoryBox
-        self.victory = VictoryBox(left, on_change=self._victory_changed, before=self.remember)
+        self.victory = VictoryBox(side, on_change=self._victory_changed, before=self.remember)
         self.victory.pack(fill="x", pady=(8, 0))
 
         # --- towns
