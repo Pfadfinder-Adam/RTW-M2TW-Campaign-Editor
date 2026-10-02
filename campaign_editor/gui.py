@@ -119,7 +119,7 @@ UNIT EDITOR / BUILDING EDITOR
 
 CHARACTER EDITOR
   Any faction's characters on the map and family off the map, with the family tree and the
-  portraits the game shows: names, ages, traits, ancillaries; Give a wife, Add a child.
+  portraits the game shows: names, ages, traits, ancillaries; Add a person (step by step: who to whom).
   Portrait library...: every portrait of a culture; Add portraits... puts new ones in.
 
 TERRAIN EDITOR

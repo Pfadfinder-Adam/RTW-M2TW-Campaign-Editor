@@ -27,9 +27,11 @@
 - **Victory: many regions or factions at once** (a tester: one by one is too many clicks): drag over rows, Shift-click
   a run, Tick all shown, tick every region a faction holds, or pick the towns **On the map...** (their regions yellow).
 - **Map: a sign grows as the mouse comes near it**, softly, from further away when zoomed out (a tester's wish).
-- **People and family: New person...** (a tester asked for a person made from nothing) - someone new tied to no one,
-  then put on the tree with Add a child... / Give a wife...; Preview warns while a new person is on no tree. On the
-  Faction tab the tree now stands on the right of the list and the person (it was on top, too cramped - a tester).
+- **People and family: one button, Add a person...** (testers: a person made from nothing; four buttons for one job) -
+  step by step: who the new person is to whom (son, daughter, wife, husband, brother, sister, parents, uncle, aunt,
+  or the head of a new family tied to no one), then the name, or someone already in the faction; Preview warns while
+  a new person is on no tree. On the Faction tab the tree now stands on the right of the list and the person (it was
+  on top, too cramped - a tester).
 - **Character panel: a click on the pips sets the attribute** (a tester's wish): the traits are fitted to it - his own
   trait moved to the level that fits, else a trait giving that attribute alone added; both games.
 - **Traits and retinue window: the labels whole** ("Points it needs (Threshold)" was cut) and the descriptions in the

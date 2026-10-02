@@ -111,10 +111,13 @@ class FamilyEditor(ttk.Frame):
         self.lbl_who.pack(fill="x", pady=(2, 4))
         fb = ttk.Frame(form)
         fb.pack(fill="x", pady=(0, 4))
-        ttk.Button(fb, text="New person...", command=self.new_person).pack(side="left", padx=(0, 4))
-        ttk.Button(fb, text="Give a wife...", command=self.add_wife).pack(side="left")
-        ttk.Button(fb, text="Add a child...", command=self.add_child).pack(side="left", padx=4)
-        ttk.Button(fb, text="Add a relative...", command=self.add_relative).pack(side="left")
+        # one button for every new person, step by step: who they are to whom (a tester: four buttons for one job)
+        b_add = ttk.Button(fb, text="Add a person...", command=self.add_person)
+        b_add.pack(side="left")
+        from .gui_util import tip
+        tip(b_add, "A new person, step by step: a son or daughter of a couple, a wife, a husband, a brother, a "
+                   "sister, parents, an uncle or aunt of someone - or the head of a new family, tied to no one. "
+                   "Someone already in the faction can be taken instead of a new name.")
         ttk.Button(fb, text="Take off the tree", command=self.off_tree).pack(side="left", padx=4)
         ttk.Button(fb, text="Leave out", command=self.leave_out).pack(side="left", padx=4)
         from .gui_util import flow
@@ -994,7 +997,7 @@ class FamilyEditor(ttk.Frame):
     def new_person(self):
         """Someone new from the name lists, tied to no one yet (a tester: 'where is the button to add a person from
         nothing, to say later who he is'): he waits under 'Not on the tree' until a couple takes him as a child
-        (Add a child...) or a man as his wife (Give a wife...)."""
+        or a man as his wife (Add a person... > son / daughter / wife of, then pick them)."""
         if not self.fam:
             return
         sex = "female" if messagebox.askyesno("New person", "A woman? (No = a man)", parent=self) else "male"
@@ -1006,20 +1009,92 @@ class FamilyEditor(ttk.Frame):
         self.changed()
         st = self.app.status if hasattr(self.app, "status") else None
         if st:
-            st.set("%s is new and not on the tree yet: pick a married man and Add a child... (or a man and Give a "
-                   "wife...) and choose %s there." % (got[0], got[0]))
+            st.set("%s is new and not on the tree yet: Add a person... > son, daughter or wife of someone, and pick "
+                   "%s there." % (got[0], got[0]))
 
     RELATIONS = (("son", "son"), ("daughter", "daughter"), ("wife", "wife"), ("husband", "husband"),
                  ("brother", "brother"), ("sister", "sister"), ("parents", "father and mother (died before the start)"),
                  ("uncle", "uncle (the father's brother)"), ("aunt", "aunt (the father's sister)"))
 
-    def add_relative(self):
+    def add_person(self):
+        """'Add a person...': step 1 - who the new person is (a relation, or the head of a new family) and to whom
+        (the picked person first); step 2 - the name and age, or someone already in the faction. One window for
+        what Give a wife / Add a child / Add a relative / New person did."""
+        if not self.fam:
+            return
+        people = [x for x in self.people()]
+        if not people:
+            return self.new_person()
+        w = tk.Toplevel(self)
+        w.title("Add a person - who is it?")
+        w.transient(self.winfo_toplevel())
+        frm = ttk.Frame(w, padding=10)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, text="The new person is", font=("", 10, "bold")).grid(row=0, column=0, sticky="w")
+        v = tk.StringVar(value="son")
+        rels = list(self.RELATIONS) + [("family", "the head of a new family - tied to no one yet")]
+        for r, (key, label) in enumerate(rels, start=1):
+            ttk.Radiobutton(frm, text=label, value=key, variable=v).grid(row=r, column=0, sticky="w", padx=8)
+        ttk.Label(frm, text="of", font=("", 10, "bold")).grid(row=0, column=1, sticky="w", padx=(16, 0))
+        names = [x["name"] for x in people]
+        cur = self.person(self.sel) if self.sel else None
+        v_of = tk.StringVar(value=cur["name"] if cur else names[0])
+        cb = ttk.Combobox(frm, textvariable=v_of, values=names, state="readonly", width=28)
+        cb.grid(row=1, column=1, sticky="nw", padx=(16, 0))
+        note = ttk.Label(frm, foreground="#666", wraplength=260, justify="left", text=(
+            "A son or daughter is written under the couple the person heads (or is the wife in); a brother or sister "
+            "under their parents; an uncle or aunt under the grandparents - the game's tree is couples with their "
+            "children."))
+        note.grid(row=2, column=1, rowspan=6, sticky="nw", padx=(16, 0), pady=(6, 0))
+        out = {}
+
+        def ok():
+            out.update(rel=v.get(), of=v_of.get())
+            w.destroy()
+        bar = ttk.Frame(frm)
+        bar.grid(row=len(rels) + 2, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        ttk.Button(bar, text="Next: the name...", command=ok).pack(side="left")
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+        w.grab_set()
+        self.wait_window(w)
+        rel = out.get("rel")
+        if not rel:
+            return
+        if rel == "family":
+            return self.new_person()
+        p = next((x for x in people if x["name"] == out["of"]), None)
+        if not p:
+            return
+        self.sel = p["key"]
+        if rel == "wife":
+            return self.add_wife()
+        if rel in ("son", "daughter"):
+            sex = "male" if rel == "son" else "female"
+            couple = next((c for c in self.tree() if p["name"] in (c[0], c[1])), None)
+            if not couple or not couple[1]:
+                return messagebox.showinfo("Family", "Give %s a wife first: a child is written under a couple."
+                                           % p["name"] if p["sex"] == "male" else "Pick a married man or woman.")
+            pick = self._choose("%s of %s and %s" % (rel.capitalize(), couple[0], couple[1]),
+                                self._off_tree(sex, but=couple[:2]))
+            if pick is None:
+                return
+            if pick:
+                self._before()
+                next(c for c in self._own_tree() if c[0] == couple[0])[2].append(pick)
+                self.changed()
+                return
+            return self._new_child(p, sex)
+        return self.add_relative(rel)
+
+    def add_relative(self, rel=None):
         """A new person tied to the picked one: son, daughter, wife, husband, brother, sister, parents, uncle,
         aunt. The game's tree is couples (a man, his wife) with their children, so each relation is written as
         that: a brother is another child of the same parents, an uncle a child of the grandparents."""
         p = self._picked()
         if not p:
             return
+        if rel is not None:
+            return self._relative(p, rel)
         w = tk.Toplevel(self)
         w.title("A relative of %s" % p["name"])
         w.transient(self.winfo_toplevel())
@@ -1041,6 +1116,9 @@ class FamilyEditor(ttk.Frame):
         rel = out.get("v")
         if not rel:
             return
+        return self._relative(p, rel)
+
+    def _relative(self, p, rel):
         tree = self.tree()
         by = {x["name"]: x for x in self.people()}
         age = p.get("age") or 30
@@ -1064,8 +1142,8 @@ class FamilyEditor(ttk.Frame):
         if rel in ("brother", "sister"):
             if not parents:
                 return messagebox.showinfo("Family", "%s has no parents on the tree - add the parents first "
-                                                     "(Add a relative... > father and mother), then the %s."
-                                           % (p["name"], rel))
+                                                     "(Add a person... > father and mother of %s), then the %s."
+                                           % (p["name"], p["name"], rel))
             return self._new_child({"name": parents[0], "sex": "male"}, "male" if rel == "brother" else "female",
                                    around=age)
         if rel == "parents":

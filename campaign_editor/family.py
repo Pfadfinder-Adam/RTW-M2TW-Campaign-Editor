@@ -461,7 +461,7 @@ def apply(plan, f, faction, opts):
     for n in opts.get("new") or []:
         if n["name"] not in tied:
             plan.warn(f, "%s: %s is new and on no family tree - written as a record no one is related to; tie them "
-                         "on (Add a child... / Give a wife...) or leave them out" % (faction, n["name"]))
+                         "on (Add a person... > son, daughter or wife of someone, then pick them) or leave them out" % (faction, n["name"]))
     for w in limit_warnings(plan.mod, tree, changes, people, renames, fam["tree"]):
         plan.warn(f, w)
 
