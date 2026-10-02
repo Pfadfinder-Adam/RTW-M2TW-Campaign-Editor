@@ -3,10 +3,14 @@ __pycache__/
 build/
 dist/
 *.spec
+# what the editor makes beside itself and beside a mod (older versions' names too)
+CampaignEditor_backups/
+CampaignEditor_logs/
+CampaignEditor_settings.json
+CampaignEditor_addons/
+CampaignEditor_ignore.txt
+CampaignEditor_mod.json
 faction_tool_backups/
 faction_tool.log*
 faction_tool_settings.json
 logs/
-CampaignEditor_logs/
-CampaignEditor_settings.json
-CampaignEditor_backups/

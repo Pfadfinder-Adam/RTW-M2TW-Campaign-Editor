@@ -420,7 +420,7 @@ def play(data, name="sound.wav"):
     is there. Returns None, or a plain message why nothing plays."""
     import tempfile
     import sys
-    tmp = os.path.join(tempfile.gettempdir(), "faction_tool_sound" + os.path.splitext(name)[1].lower())
+    tmp = os.path.join(tempfile.gettempdir(), "campaign_editor_sound" + os.path.splitext(name)[1].lower())
     with open(tmp, "wb") as f:
         f.write(data)
     if sys.platform.startswith("win"):

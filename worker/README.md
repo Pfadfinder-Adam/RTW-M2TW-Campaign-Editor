@@ -21,7 +21,7 @@ cookies.
    - `REPORTS_REPO`, type Text: `MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor-Reports`
    - `GITHUB_TOKEN`, type **Secret**: the token from step 2
 5. **Its address**: the Worker's page shows it, like `https://rtw-m2tw-campaign-editor-reports.<account>.workers.dev`. It goes
-   into `faction_tool/report.py` (`REPORT_URL`), and the next release sends reports there.
+   into `campaign_editor/report.py` (`REPORT_URL`), and the next release sends reports there.
 
 The rate limit (3 a minute from one address) needs `wrangler deploy` with `wrangler.toml` from this folder; without
 it the relay still works, only without that limit.

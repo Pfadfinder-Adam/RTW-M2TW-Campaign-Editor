@@ -5,7 +5,7 @@ medieval2.exe - it then finds the game and every mod by itself); beside it the t
                                    close the session's part of the log and the game's newest system.log.txt
     CampaignEditor_settings.json   what it keeps between starts
 
-When run from the source the same two lie beside rtw_faction_tool.py; where the exe's folder cannot be written
+When run from the source the same two lie beside campaign_editor.py; where the exe's folder cannot be written
 (Program Files) in %APPDATA%/RTW-M2TW-Campaign-Editor. Older versions' files (RTW-M2TW-Campaign-Editor-files/,
 faction_tool.log, faction_tool_settings.json) are moved in once, nothing lost. Kept small: over 1 MB the log
 moves to CampaignEditor.log.old."""
@@ -34,7 +34,7 @@ OLD_SETTINGS = "faction_tool_settings.json"
 
 
 def exe_dir():
-    """The folder of the exe (from the source: of rtw_faction_tool.py)."""
+    """The folder of the exe (from the source: of campaign_editor.py)."""
     if getattr(sys, "frozen", False):
         return os.path.dirname(os.path.abspath(sys.executable))
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -623,7 +623,7 @@ def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
             raise ValueError("%s %s has no units" % (kind, name))
         if army:
             armies_at.add(xy)
-        out.append(";;\t%s placed with the faction tool" % kind)
+        out.append(";;\t%s placed with the Campaign Editor" % kind)
         out.append(character_line(f, name, rtw_kind, c.get("age") or 30, xy, sub_faction=sub))
         if army:
             out.append("army")

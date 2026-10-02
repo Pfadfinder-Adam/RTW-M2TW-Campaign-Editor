@@ -125,7 +125,7 @@ def build(mod, campaign, template, new, opts):
     from .factionart import apply_opts as apply_art
     try:
         primary = opts.get("primary_colour") or tuple(
-            __import__("faction_tool.edit", fromlist=["x"]).read_faction(mod, campaign, template).get("primary_colour") or ())
+            __import__("campaign_editor.edit", fromlist=["x"]).read_faction(mod, campaign, template).get("primary_colour") or ())
     except Exception:
         primary = None
     apply_art(plan, campaign, new, list(opts["start"].get("regions") or []), primary,

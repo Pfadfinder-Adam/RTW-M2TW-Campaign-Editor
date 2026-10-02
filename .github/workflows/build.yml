@@ -32,7 +32,7 @@ jobs:
           python-version: "3.12"
       - run: pip install pyinstaller pillow certifi
       # the game manifests go inside the exe: Scan tells game, REX and mod files apart
-      - run: pyinstaller --onefile --windowed --name RTW-M2TW-Campaign-Editor --add-data "docs/reference/*.json.gz;reference" --add-data "assets/*.png;assets" --add-data "assets/addons/*;assets/addons" --icon assets/icon.ico rtw_faction_tool.py
+      - run: pyinstaller --onefile --windowed --name RTW-M2TW-Campaign-Editor --add-data "docs/reference/*.json.gz;reference" --add-data "assets/*.png;assets" --add-data "assets/addons/*;assets/addons" --icon assets/icon.ico campaign_editor.py
       - uses: actions/upload-artifact@v4
         with:
           name: RTW-M2TW-Campaign-Editor

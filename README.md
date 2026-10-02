@@ -1,10 +1,32 @@
 # <img src="assets/icon_256.png" width="64" alt="" align="top"> RTW & M2TW Campaign Editor
 
-(formerly RTW Campaign Editor / RTW Faction Tool)
+**An editor for the campaigns of Rome: Total War (with REX) and Medieval II: Total War (with M2EX)** - factions,
+the campaign map, towns, armies, characters, units, buildings, diplomacy, texts and pictures, in a window, with a
+preview of every change and a backup you can always go back to. Version **0.29.2**.
 
-[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/pfadfinder) [![YouTube - Pfadfinder](https://img.shields.io/badge/YouTube-Pfadfinder-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ)
+[![Download](https://img.shields.io/github/v/release/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor?label=Download&style=for-the-badge)](../../releases)
+[![Wiki](https://img.shields.io/badge/Guide-Wiki-2b6cb0?style=for-the-badge)](../../wiki)
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/pfadfinder)
+[![YouTube - Pfadfinder](https://img.shields.io/badge/YouTube-Pfadfinder-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ)
 
-I'm building a tool that finally lets us improve the games of our childhood ourselves - without digging through files every time, without the fear of breaking something, and without everything falling apart because we forgot one step.
+**[⬇ Download](../../releases)** · **[📖 Wiki - step by step](../../wiki)** · **[🗺️ Roadmap](ROADMAP.md)** ·
+**[📝 Changelog](CHANGELOG.md)** · **[🐞 Something went wrong?](#something-went-wrong)** · **[☕ Support](#-why-support-it)** ·
+**[🔒 Security](SECURITY.md)** · **[⚖️ License](#license)**
+
+> [!IMPORTANT]
+> - **Download only from this repository's [Releases](../../releases) page** - never a copy from another site or a chat.
+> - **Close the game before writing**, and keep REX / M2EX beside it: the original exes' limits apply only without them.
+> - **Nothing is lost:** every change is shown first (Preview) and written with a backup; **Restore** gives the files
+>   back byte for byte. Undo / Redo work in the window.
+> - **Something wrong?** **Report a bug / Suggest** (bottom right) sends the logs in one click - see [below](#something-went-wrong).
+> - Features marked 🧪 in the [Roadmap](ROADMAP.md) are out but not yet confirmed in the game - reports welcome.
+
+## ☕ Why support it
+
+I'm building a tool that finally lets us improve the games of our childhood ourselves - without digging through files
+every time, without the fear of breaking something, and without everything falling apart because we forgot one step.
+The editor is free and stays free. It is built with the help of AI, which costs money every month; if the tool saves
+you time, a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) keeps new features coming. Thank you!
 
 ## 🎯 What this tool is for
 
@@ -127,6 +149,8 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 - **Character editor**: any faction's characters - names, ages, traits, ancillaries - shown as the game's character panel (portrait, attributes as pips, traits by the names players see, the retinue as picture cards), the family tree a click away, **Traits and retinue...** to edit the traits and ancillaries themselves (what each level gives, the names and texts players see, the retinue's pictures, new ones as copies), the portraits the game shows, a portrait library per culture to add new portraits to; Medieval II characters get portraits of their own (Replace...).
 - **Safe**: a separate mod folder in one click, preview of every file and line, backups with Restore, Undo/Redo in the window, Check mod files, and a log.
 
+<a id="something-went-wrong"></a>
+
 > [!IMPORTANT]
 > ### ⚠️ Something went wrong? Send the logs - and a video or screenshot ⚠️
 > When the game crashes, the tool shows an error, or something looks wrong, please send:
@@ -144,7 +168,7 @@ entry with the logs attached, and is read. The search box on the Units & armies 
 
 <img src="docs/images/reports.png" width="700" alt="Reports and ideas sent from the editor, each with its number">
 
-A step-by-step guide is in the [Wiki](../../wiki). Version **0.29.2** - see [ROADMAP.md](ROADMAP.md) for what it does, what is being tested and what comes next, and [CHANGELOG.md](CHANGELOG.md) for what is in it and what has been tested in the game.
+A step-by-step guide is in the [Wiki](../../wiki); [ROADMAP.md](ROADMAP.md) says what it does, what is being tested and what comes next, [CHANGELOG.md](CHANGELOG.md) what is in each version and what has been tested in the game.
 
 Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
 
@@ -155,10 +179,10 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 - **Windows:** grab `RTW-M2TW-Campaign-Editor.exe` from the [Releases](../../releases) page. No install needed.
 
 **Installing:** put the `.exe` into the **game's folder** (beside `RomeTW.exe` / `medieval2.exe`, where REX or M2EX also goes) and start it from there - or make a shortcut to it on the desktop. Started from elsewhere (Downloads, the desktop), it offers once per version to put itself there: pick the game's folder (it checks the game is there) and it copies itself over with its settings, adds a desktop shortcut if you like, and starts from there. It then finds the game and every mod in it by itself (Rome: `<game>\<mod>`, Medieval II: `<game>\mods\<mod>`); a mod of the other game, once loaded with Browse..., stays in the Mod list too. Beside the exe it keeps just two things of its own: `CampaignEditor_settings.json` and the folder `CampaignEditor_logs` - its log, the logs zips, and on every close a `sessions` folder with that session's log and a copy of the game's newest `system.log.txt` as `game_system.log.txt` (the game's own log - its errors are the game's; nothing to press, a bug report sends them). An update is simply the new exe in the same place. Older versions' `RTW-M2TW-Campaign-Editor-files` is moved in by itself.
-- **Any OS with Python 3.8+:** `python rtw_faction_tool.py` (standard library; Pillow for the pictures).
+- **Any OS with Python 3.8+:** `python campaign_editor.py` (standard library; Pillow for the pictures).
   **Linux:** the window needs tkinter and Pillow's Tk part, which many distributions ship apart from Python -
   Debian / Ubuntu / Mint: `sudo apt install python3-tk python3-pil python3-pil.imagetk`, then
-  `python3 rtw_faction_tool.py` (Fedora: `python3-tkinter python3-pillow-tk`; Arch: `tk python-pillow`).
+  `python3 campaign_editor.py` (Fedora: `python3-tkinter python3-pillow-tk`; Arch: `tk python-pillow`).
 
 ## Using it
 
@@ -249,7 +273,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **Log:** the tool keeps `CampaignEditor.log` in `CampaignEditor_logs` next to the exe, together with the logs zips and the sessions (or in `%APPDATA%\RTW-M2TW-Campaign-Editor` where the exe's folder cannot be written): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
 
-**Undo:** press **Restore a backup...** Backups sit in `CampaignEditor_backups` next to `data` (older versions' `faction_tool_backups` are listed too). Pick the write to go back to: it and every later one are undone in one go.
+**Undo:** press **Restore a backup...** Backups sit in `CampaignEditor_backups` next to `data` (older versions' backups are listed too). Pick the write to go back to: it and every later one are undone in one go.
 
 ## What it changes
 
@@ -288,19 +312,19 @@ After building, the tool checks:
 ## Command line
 
 ```
-python rtw_faction_tool.py list    --data PATH          # factions, campaigns, backups
-python rtw_faction_tool.py towns   --data PATH --owner slave
-python rtw_faction_tool.py names   --data PATH parthia  # names a leader may use
-python rtw_faction_tool.py example > saba.json          # a config to edit
-python rtw_faction_tool.py new saba.json --data PATH    # preview
-python rtw_faction_tool.py new saba.json --data PATH --apply
-python rtw_faction_tool.py restore --data PATH
-python rtw_faction_tool.py scan gaetulii --data PATH    # every mention of a faction in the whole mod
-python rtw_faction_tool.py newmod HLR_Saba --data PATH  # a separate mod folder built on PATH's mod
-python rtw_faction_tool.py slim --data NEWMOD\data        # plain-game mods: keep only the changed files
+python campaign_editor.py list    --data PATH          # factions, campaigns, backups
+python campaign_editor.py towns   --data PATH --owner slave
+python campaign_editor.py names   --data PATH parthia  # names a leader may use
+python campaign_editor.py example > saba.json          # a config to edit
+python campaign_editor.py new saba.json --data PATH    # preview
+python campaign_editor.py new saba.json --data PATH --apply
+python campaign_editor.py restore --data PATH
+python campaign_editor.py scan gaetulii --data PATH    # every mention of a faction in the whole mod
+python campaign_editor.py newmod HLR_Saba --data PATH  # a separate mod folder built on PATH's mod
+python campaign_editor.py slim --data NEWMOD\data        # plain-game mods: keep only the changed files
 ```
 
-**Where a faction is named** (in **Check mod files** when a faction is picked; on the command line `scan`) reads every text file of the mod (not only `data`) and lists where the faction is named: places the tool does **not** handle (check these by hand), places it does, files and folders named after the faction, and files the faction's models, textures and unit cards point at that do not exist. It tells every file apart - the game's own (unchanged), changed by the mod, REX's, or the mod's own - from the game manifests that come inside the tool (a manifest made on your PC with **Game manifest...** wins). It writes nothing. Folders and files you want it to skip go in `faction_tool_ignore.txt` next to `data` (button **Ignore list...** in the Check mod files window; one rule per line: `folder/`, `name/` for that folder name anywhere, or a mask like `*.bak`). The list only affects the scan.
+**Where a faction is named** (in **Check mod files** when a faction is picked; on the command line `scan`) reads every text file of the mod (not only `data`) and lists where the faction is named: places the tool does **not** handle (check these by hand), places it does, files and folders named after the faction, and files the faction's models, textures and unit cards point at that do not exist. It tells every file apart - the game's own (unchanged), changed by the mod, REX's, or the mod's own - from the game manifests that come inside the tool (a manifest made on your PC with **Game manifest...** wins). It writes nothing. Folders and files you want it to skip go in `CampaignEditor_ignore.txt` next to `data` (button **Ignore list...** in the Check mod files window; one rule per line: `folder/`, `name/` for that folder name anywhere, or a mask like `*.bak`). The list only affects the scan.
 
 The Windows `.exe` is the window only. Use Python for the command line.
 
@@ -335,4 +359,4 @@ license.
 
 ## Support
 
-The editor is free and stays free. It is built with the help of AI, which costs money every month; if the tool saves you time, a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) keeps new features coming. Thank you!
+See [Why support it](#-why-support-it) - a coffee on [Ko-fi](https://ko-fi.com/pfadfinder). Thank you!

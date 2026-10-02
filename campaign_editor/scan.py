@@ -38,7 +38,8 @@ IGNORABLE = (
 )
 
 
-IGNORE_FILE = "faction_tool_ignore.txt"
+IGNORE_FILE = "CampaignEditor_ignore.txt"
+OLD_IGNORE_FILES = ("faction_tool_ignore.txt",)  # older versions' name: read when the new one is not there
 IGNORE_HELP = """# Folders and files the scan leaves out - one rule per line, paths from the
 # mod folder, '/' as separator, case does not matter. Only the scan reads this.
 #
@@ -50,7 +51,14 @@ IGNORE_HELP = """# Folders and files the scan leaves out - one rule per line, pa
 
 
 def ignore_path(root):
-    return os.path.join(root, IGNORE_FILE)
+    """The ignore list of the mod: CampaignEditor_ignore.txt, or an older version's file while that is the one
+    there (it is then edited in place, nothing lost)."""
+    new = os.path.join(root, IGNORE_FILE)
+    if not os.path.isfile(new):
+        for old in OLD_IGNORE_FILES:
+            if os.path.isfile(os.path.join(root, old)):
+                return os.path.join(root, old)
+    return new
 
 
 def load_ignore(root):
@@ -332,7 +340,7 @@ class Scan:
             out.append("    other mods inside this folder, not scanned: " + ", ".join(self.other_mods))
         if self.rules:
             out.append("    left out by %s: %d folder(s)%s, %d file(s) by mask"
-                       % (IGNORE_FILE, len(self.user_dirs),
+                       % (os.path.basename(ignore_path(self.root)), len(self.user_dirs),
                           (" (" + ", ".join(self.user_dirs[:5]) + (" ..." if len(self.user_dirs) > 5 else "") + ")")
                           if self.user_dirs else "", self.user_files))
         groups = {"handled": [], "read": [], "other": [], "ignore": []}

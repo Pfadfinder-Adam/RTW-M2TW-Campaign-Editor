@@ -27,7 +27,7 @@ jobs:
       - run: python -m unittest discover -s tests
       - run: pip install pyinstaller pillow certifi
       # the game manifests go inside the exe: Scan tells game, REX and mod files apart
-      - run: pyinstaller --onefile --windowed --name RTW-M2TW-Campaign-Editor --add-data "docs/reference/*.json.gz;reference" --add-data "assets/*.png;assets" --add-data "assets/addons/*;assets/addons" --icon assets/icon.ico rtw_faction_tool.py
+      - run: pyinstaller --onefile --windowed --name RTW-M2TW-Campaign-Editor --add-data "docs/reference/*.json.gz;reference" --add-data "assets/*.png;assets" --add-data "assets/addons/*;assets/addons" --icon assets/icon.ico campaign_editor.py
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ inputs.version }}

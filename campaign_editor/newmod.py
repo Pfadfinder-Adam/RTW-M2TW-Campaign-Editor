@@ -20,7 +20,8 @@ import shutil
 
 from .plan import BACKUP_DIRS
 
-MARKER = "faction_tool_mod.json"
+MARKER = "CampaignEditor_mod.json"
+OLD_MARKERS = ("faction_tool_mod.json",)          # written by older versions: still read
 # written by the tool, so real copies; the rest is linked
 COPY_EXT = {".txt", ".json", ".xml", ".nut", ".lua", ".ini", ".cfg", ".csv", ".yml", ".yaml", ".bat", ".cmd"}
 GAME_EXES = ("REX.exe", "RomeTW-ALX.exe", "RomeTW-BI.exe", "RomeTW.exe", "M2EX.exe", "medieval2.exe", "kingdoms.exe")
@@ -70,11 +71,13 @@ def list_mods(game):
 
 
 def marker(mod_dir):
-    try:
-        with open(os.path.join(mod_dir, MARKER), encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return None
+    for name in (MARKER,) + OLD_MARKERS:
+        try:
+            with open(os.path.join(mod_dir, name), encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            continue
+    return None
 
 
 M2_EXES = ("M2EX.exe", "medieval2.exe", "kingdoms.exe")
@@ -176,7 +179,7 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
                 out_dir = os.path.normpath(os.path.join(dst_root, rel))
                 os.makedirs(out_dir, exist_ok=True)
                 for n in filenames:
-                    if n == MARKER or n.lower().endswith((".bat", ".cmd") + ((".cfg",) if m2 else ())) \
+                    if n in (MARKER,) + OLD_MARKERS or n.lower().endswith((".bat", ".cmd") + ((".cfg",) if m2 else ())) \
                             and dirpath == base_dir:
                         continue                  # the start files are written for the new name below
                     src = os.path.join(dirpath, n)

@@ -1,10 +1,10 @@
 """Command line: describe the faction in a JSON file, preview, apply, restore.
 
-    python -m faction_tool new  saba.json --data "C:/Games/RTW/HLR/data" [--apply]
-    python -m faction_tool list --data ...            factions, campaigns, backups
-    python -m faction_tool towns --data ... [--campaign imperial_campaign] [--owner slave]
-    python -m faction_tool names --data ... parthia   the name lists a leader can use
-    python -m faction_tool restore --data ... [backup folder]
+    python -m campaign_editor new  saba.json --data "C:/Games/RTW/HLR/data" [--apply]
+    python -m campaign_editor list --data ...            factions, campaigns, backups
+    python -m campaign_editor towns --data ... [--campaign imperial_campaign] [--owner slave]
+    python -m campaign_editor names --data ... parthia   the name lists a leader can use
+    python -m campaign_editor restore --data ... [backup folder]
 """
 
 import argparse
@@ -46,7 +46,7 @@ EXAMPLE = {
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="faction_tool", description="Add a new faction to a Rome: Total War mod.")
+    ap = argparse.ArgumentParser(prog="campaign_editor", description="Add a new faction to a Rome: Total War mod.")
     ap.add_argument("command", choices=["new", "list", "towns", "names", "restore", "example", "scan", "newmod", "slim", "manifest"])
     ap.add_argument("arg", nargs="?")
     ap.add_argument("--data", help="the mod's data folder (or the mod folder)")

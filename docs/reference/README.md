@@ -2,7 +2,7 @@
 
 - `rtw_gold_steam_manifest.json.gz` - every file of a clean *Rome: Total War Gold*
   (Steam, English) install: `{"files": {path: [size, md5]}}`, made with the
-  tool's **Game manifest...** (`python rtw_faction_tool.py manifest <game folder>`).
+  tool's **Game manifest...** (`python campaign_editor.py manifest <game folder>`).
   30,341 files, 3.2 GB, plus the `bi` expansion (`bi/...`, 11,915 files; the one
   file there identical to REX's `bi` overlay is left out, so it counts as REX's).
 - `rex_manifest.json.gz` - the same for the unpacked REX download (REX.zip,

@@ -57,7 +57,7 @@ class AddonsPanel(ttk.Frame):
         self.mod = mod
         sel = self.lb.curselection()
         if mod is not None and (not sel or not self.addons[sel[0]].fits(__import__(
-                "faction_tool.limits", fromlist=["game_kind"]).game_kind(mod))):
+                "campaign_editor.limits", fromlist=["game_kind"]).game_kind(mod))):
             self.lb.selection_clear(0, "end")
             self.lb.selection_set(self._first_fitting())
         self.show()

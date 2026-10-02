@@ -4552,7 +4552,7 @@ class App(tk.Tk):
         wait()
 
     def edit_ignore(self):
-        """A small editor for the mod's faction_tool_ignore.txt."""
+        """A small editor for the mod's CampaignEditor_ignore.txt (or an older version's ignore list)."""
         path = ignore_path(os.path.dirname(self.mod.data))
         try:
             with open(path, encoding="utf-8") as f:

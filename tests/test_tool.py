@@ -11,13 +11,13 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from faction_tool.build import build                     # noqa: E402
-from faction_tool.moddata import ModData                 # noqa: E402
-from faction_tool.plan import Plan, backup_label, backups, restore, restore_to  # noqa: E402
-from faction_tool.scan import scan                       # noqa: E402
-from faction_tool.newmod import create_mod, slim         # noqa: E402
-from faction_tool.strat import Strat                     # noqa: E402
-from faction_tool.textio import TextFile                 # noqa: E402
+from campaign_editor.build import build                     # noqa: E402
+from campaign_editor.moddata import ModData                 # noqa: E402
+from campaign_editor.plan import Plan, backup_label, backups, restore, restore_to  # noqa: E402
+from campaign_editor.scan import scan                       # noqa: E402
+from campaign_editor.newmod import create_mod, slim         # noqa: E402
+from campaign_editor.strat import Strat                     # noqa: E402
+from campaign_editor.textio import TextFile                 # noqa: E402
 
 SM = """faction\t\talpha
 culture\t\teastern
@@ -307,7 +307,7 @@ class ToolTest(unittest.TestCase):
     def test_modeldb_round_trip_and_clone(self):
         # Medieval II battle_models.modeldb: read back byte for byte, the clone copies the template's texture
         # entries (and attachment sets) for the new faction, Restore undoes it
-        from faction_tool import modeldb as MDB
+        from campaign_editor import modeldb as MDB
         def model(name, facs, first=False):
             m = MDB.from_dict({"name": name, "scale": "1.12", "lods": [["unit_models/x/%s_lod0.mesh" % name, "121"]],
                                "textures": [[f, "unit_models/x/tex %s.texture" % f, "unit_models/x/n.texture",
@@ -361,9 +361,9 @@ class ToolTest(unittest.TestCase):
 
     def test_medieval_city_and_castle(self):
         # M2: a castle = `settlement castle` + castle levels; the game converts by each level's convert_to
-        from faction_tool.buildings import (read_buildings, convert, set_kind, settlement_kind, kind_problem,
+        from campaign_editor.buildings import (read_buildings, convert, set_kind, settlement_kind, kind_problem,
                                             has_castles)
-        from faction_tool.textio import TextFile
+        from campaign_editor.textio import TextFile
         path = os.path.join(self.root, "edb_m2.txt")
         write(path, """building core_building
 {
@@ -447,15 +447,15 @@ building smith
         # Rome has no castle levels: nothing offered
         rome = {b.name: b for b in read_buildings(ModData(self.root).load(ModData(self.root).file("edb")))}
         self.assertFalse(has_castles(rome))
-        from faction_tool.buildings import castles_allowed, with_kind
+        from campaign_editor.buildings import castles_allowed, with_kind
         self.assertFalse(castles_allowed(ModData(self.root), known))    # Rome: castle levels alone are not enough
         p = Plan(ModData(self.root), None, "x")
         with self.assertRaises(ValueError):
             with_kind(p, None, "R", raw, "castle", None, known)
 
     def test_own_name_list_for_new_and_edited_faction(self):
-        from faction_tool import namelists as NL
-        from faction_tool.edit import edit
+        from campaign_editor import namelists as NL
+        from campaign_editor.edit import edit
         self.assertEqual(NL.parse("Abd al-Malik, Harun\nYusuf"), ["Abd al-Malik", "Harun", "Yusuf"])
         self.assertEqual(NL.parse("Harun  Yusuf harun"), ["Harun", "Yusuf"])
         self.assertEqual(NL.key_of("of Sparta"), "of_Sparta")
@@ -509,7 +509,7 @@ building smith
     def test_building_pictures_from_the_game_and_never_another_culture(self):
         # Barbarian Invasion: bi/data has no roman pictures; the game's data/ui has them.
         # A roman level with no roman picture must stay empty, not show a barbarian one.
-        from faction_tool.buildings import BuildingPictures
+        from campaign_editor.buildings import BuildingPictures
         game, _ = self._game()
         gui = os.path.join(game, "data", "ui")
         write(os.path.join(gui, "roman", "buildings", "#roman_governors_house.tga"), "r")
@@ -528,8 +528,8 @@ building smith
         self.assertTrue(pics.find("barbarian", "stables").endswith("#barbarian_stables.tga"))
 
     def test_family_limits_from_descr_ex(self):
-        from faction_tool.family import limit_warnings
-        from faction_tool.limits import ex_setting
+        from campaign_editor.family import limit_warnings
+        from campaign_editor.limits import ex_setting
         game, hlr = self._game()
         mod = ModData(hlr)
         self.assertEqual(ex_setting(mod, "max_num_ancillaries"), 8)       # no descr_ex.txt: the game's default
@@ -545,7 +545,7 @@ building smith
         self.assertEqual(limit_warnings(mod, tree, {}, {}, old_tree=tree), [])   # nothing added: no warning
 
     def test_recruit_lines_are_not_capped(self):
-        from faction_tool import editors as E
+        from campaign_editor import editors as E
         edb = ("building barracks\n{\n    levels militia_barracks\n    {\n"
                "        militia_barracks requires factions { alpha, }\n        {\n"
                "            capability\n            {\n"
@@ -571,8 +571,8 @@ building smith
             from PIL import Image
         except ImportError:
             self.skipTest("Pillow is not installed")
-        from faction_tool import symbols as SY
-        from faction_tool.factionart import image_dds
+        from campaign_editor import symbols as SY
+        from campaign_editor.factionart import image_dds
         d = os.path.join(self.root, "data")
         extra = "".join("faction\t\tfill%d\nculture\t\teastern\nstandard_index\t\t%d\n\n" % (n, n) for n in (1, 2, 3))
         sm = SM.replace("culture\t\teastern\n", "culture\t\teastern\nstandard_index\t\t0\n", 1)
@@ -608,8 +608,8 @@ building smith
             from PIL import Image
         except ImportError:
             self.skipTest("Pillow is not installed")
-        from faction_tool import symbols as SY
-        from faction_tool.factionart import image_dds, image_tga
+        from campaign_editor import symbols as SY
+        from campaign_editor.factionart import image_dds, image_tga
         d = os.path.join(self.root, "data")
         sm = SM.replace("culture\t\teastern\n", "culture\t\teastern\nstandard_index\t\t0\n"
                         "logo_index\t\tFACTION_LOGO_A\nsmall_logo_index\t\tSMALL_FACTION_LOGO_A\n", 1)
@@ -645,7 +645,7 @@ building smith
         # replacing beta's symbols leaves alpha's as they are
         red = os.path.join(self.root, "red.png")
         Image.new("RGBA", (90, 90), (220, 0, 0, 255)).save(red)
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         p2 = edit(mod, "test", "beta", {"art": {SY.FLAG: red, SY.LOGO: red}})
         p2.apply()
         mod = ModData(self.root)
@@ -660,7 +660,7 @@ building smith
 
     def test_settlement_names_follow_owner_culture(self):
         # the map and the towns list show the name for the owner's culture as soon as a town changes hands
-        from faction_tool import culturenames as CN
+        from campaign_editor import culturenames as CN
         table = {"Atown": {"*": "Atown", "barbarian": "Atburg"}, "Btown": {"roman": "Bopolis"}}
         towns = {"A": "Atown", "B": "Btown", "C": "Ctown"}
         cult = {"julii": "roman", "gauls": "barbarian", "slave": "carthaginian"}.get
@@ -672,8 +672,8 @@ building smith
     def test_settlement_names_by_culture_campaign_script(self):
         # REX's documented way (dump_docudemon): SettlementTurnStart / GeneralCaptureSettlement +
         # SettlementName + FactionCultureType -> console_command rename_settlement
-        from faction_tool import culturenames as CN
-        from faction_tool.regionedit import apply_opts
+        from campaign_editor import culturenames as CN
+        from campaign_editor.regionedit import apply_opts
         game, hlr = self._game()
         write(os.path.join(hlr, "data", "descr_cultures.txt"), "culture roman\n{\n}\nculture barbarian\n{\n}\n")
         before = tree_hash(hlr)
@@ -733,8 +733,8 @@ building smith
     def test_check_mod_limits_know_the_engine(self):
         """Check mod's LIMITS: with REX beside the game it says so, and what REX is known to lift (regions)
         is never a fault; M2EX is named for Medieval II."""
-        from faction_tool.check import engine_limits
-        from faction_tool.limits import ENGINE_LIFTS
+        from campaign_editor.check import engine_limits
+        from campaign_editor.limits import ENGINE_LIFTS
         game, hlr = self._game()
         mod = ModData(hlr)
         img = mod.region_map("test")
@@ -754,8 +754,8 @@ building smith
     def test_record_age_follows_the_mods_age_of_manhood(self):
         """A living son off the map may be as old as the mod's age of manhood - REX's descr_ex.txt setting
         (default 16), not a fixed 16."""
-        from faction_tool import family as FM
-        from faction_tool.limits import manhood_age
+        from campaign_editor import family as FM
+        from campaign_editor.limits import manhood_age
         game, hlr = self._game()
         mod = ModData(hlr)
         self.assertEqual(manhood_age(mod), 16)
@@ -769,8 +769,8 @@ building smith
     def test_religion_limit_only_on_the_original_exe(self):
         """The original exe takes 9 religions; with REX / M2EX beside the game a 10th is not refused (their
         README: religions uncapped) - the tool must not hold modders on REX to vanilla's limits."""
-        from faction_tool import religions as RL
-        from faction_tool.limits import lifted
+        from campaign_editor import religions as RL
+        from campaign_editor.limits import lifted
         game, hlr = self._game()
         mod = ModData(hlr)
         full = ["r%d" % i for i in range(RL.MAX_RELIGIONS)]
@@ -975,8 +975,8 @@ building smith
         self.assertEqual(data2, os.path.join(game, "mods", "Gamma", "data"))
 
     def test_editor_lists_sort_and_filter_by_what_a_record_is(self):
-        from faction_tool import editors as E
-        from faction_tool.factionart import label_of, where_shown
+        from campaign_editor import editors as E
+        from campaign_editor.factionart import label_of, where_shown
         edu = ("type\t\tmerc spear\ndictionary\tmerc_spear\ncategory\tinfantry\nclass\t\tspearmen\n"
                "attributes\tsea_faring, mercenary_unit\nownership\tslave, alpha\n"
                "type\t\tbeta horse\ndictionary\tbeta_horse\ncategory\tcavalry\nclass\t\theavy\n"
@@ -1010,7 +1010,7 @@ building smith
             import PIL  # noqa: F401 - the map is drawn with Pillow (the exe has it)
         except ImportError:
             self.skipTest("Pillow is not installed")
-        from faction_tool.mapdata import CampaignMap, GROUND_LOOK
+        from campaign_editor.mapdata import CampaignMap, GROUND_LOOK
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         hills, sea = (128, 128, 64), (64, 0, 0)
         # map_ground_types at 2x+1: the middle of tile (1, 2) is hills, the rest sea
@@ -1029,8 +1029,8 @@ building smith
         changes' (lines it would drop stay); another mod's whole file is kept back; README outside data/ is not
         put in; the install is one Plan and Restore gives the mod back byte for byte."""
         import zipfile
-        from faction_tool import modpack as MP
-        from faction_tool.plan import Plan
+        from campaign_editor import modpack as MP
+        from campaign_editor.plan import Plan
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "ui", "test.sd.xml"), '<sprite_definitions>\n  <page file="page.tga" w="64" h="64">\n'
               '    <sprite name="TOP" x="0" y="0" w="32" h="30"/>\n    <sprite name="LOW" x="0" y="40" w="32" h="20"/>\n'
@@ -1083,10 +1083,10 @@ building smith
         """The 8 tiles round a town are its own region or sea (0 exceptions in vanilla Rome and Medieval II), and
         on Medieval II no port stands in a town's 3 x 3: a move, a painted tile or a new region that breaks it is
         refused on Medieval II and warned about on Rome; Check mod finds it on the whole map."""
-        from faction_tool.check import town_ring_problems
-        from faction_tool.mapedit import apply_places, owner_of, place_problem, ring_problems
-        from faction_tool.plan import Plan
-        from faction_tool.regionedit import region_problems
+        from campaign_editor.check import town_ring_problems
+        from campaign_editor.mapedit import apply_places, owner_of, place_problem, ring_problems
+        from campaign_editor.plan import Plan
+        from campaign_editor.regionedit import region_problems
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         R, B, K, S = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233)
         px = [[R, R, R, B, B, B, S],
@@ -1188,7 +1188,7 @@ building smith
 }
 """)
         mod = ModData(self.root)
-        from faction_tool.buildings import read_buildings, settlement_info
+        from campaign_editor.buildings import read_buildings, settlement_info
         bs = read_buildings(mod.load(mod.file("edb")))
         self.assertEqual([(l.name, l.settlement_min, l.cost) for l in bs[0].levels],
                          [("hut", "village", 100), ("hall", "city", 900)])
@@ -1217,7 +1217,7 @@ building smith
                 "regions": ["B_R"], "leader": {"name": "Boris"}, "buildings": {"B_R": [["core_building", "tower"]]}}})
 
     def test_edit_an_existing_faction(self):
-        from faction_tool.edit import edit, read_faction
+        from campaign_editor.edit import edit, read_faction
         before = tree_hash(self.root)
         mod = ModData(self.root)
         now = read_faction(mod, "test", "alpha")
@@ -1257,7 +1257,7 @@ building smith
             ";;\tBtown", "settlement\n{\n\tlevel village\n\tregion C_R\n\tpopulation 400\n}\n\n;;\tBtown"))
 
     def test_edit_takes_and_gives_towns(self):
-        from faction_tool.edit import edit, read_faction
+        from campaign_editor.edit import edit, read_faction
         self._three_towns()
         before = tree_hash(self.root)
         mod = ModData(self.root)
@@ -1282,7 +1282,7 @@ building smith
     def test_pips_click_fits_the_traits(self):
         """A click on the character panel's pips: a trait he has moved to the level that gives the value, else a
         trait giving that attribute alone added; Dread = Chivalry below 0; nothing reaches it -> None."""
-        from faction_tool import charpanel as CP
+        from campaign_editor import charpanel as CP
         defs = {"GoodCommander": {"levels": ["a", "b", "c"], "effects": [[("Command", 1)], [("Command", 2)],
                                                                           [("Command", 3)]], "anti": ["BadCommander"],
                                   "characters": ["family"]},
@@ -1304,8 +1304,8 @@ building smith
     def test_building_level_texts_per_culture(self):
         """The Building editor's texts: the suffixes a level has texts for (both games' {level_culture} keys, with
         _desc and _desc_short), and a changed name / description written into export_buildings.txt."""
-        from faction_tool import editors as E
-        from faction_tool.plan import Plan
+        from campaign_editor import editors as E
+        from campaign_editor.plan import Plan
         body = ("{farms}\tfarms\n{farms_desc}\tDO NOT TRANSLATE\n{farms_desc_short}\tDO NOT TRANSLATE\n"
                 "{farms_eastern_european}\tLand Clearance\n{farms_eastern_european_desc}\tCleared land.\n"
                 "{farms_carthage_desc}\tPunic fields.\n{farms+1_greek}\tCommunal\n")
@@ -1338,7 +1338,7 @@ building smith
         self.assertIn("{hut_beta_desc}\t\tFirst line of the Betans.\\n\\n\nSecond paragraph.\nThird paragraph.",
                       text)
         # and editing replaces the whole value, not just its first line
-        from faction_tool.edit import edit, read_faction
+        from campaign_editor.edit import edit, read_faction
         plan.apply()
         mod = ModData(self.root)
         write(os.path.join(self.root, "data", "text", "campaign_descriptions.txt"),
@@ -1354,7 +1354,7 @@ building smith
         self.assertEqual(p2.files[cd].texts()[:2], ["{TEST_ALPHA_DESCR}\t\tFresh", "{TEST_ALPHA_TITLE}\t\tA"])
 
     def test_edit_moves_characters(self):
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         mod = ModData(self.root)
         # Aaron (alpha's army) from his town A_R (1, 1) to the land tile (0, 0)
         self.assertIsNone(mod.tile_problem("test", (0, 0), "named character", True))
@@ -1398,7 +1398,7 @@ building smith
             with self.assertRaises(ValueError):
                 build(ModData(self.root), "test", "alpha", "beta", {"start": {
                     "regions": ["B_R"], "leader": {"name": "Boris"}, "characters": [c]}})
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         path = mod.campaign_file("test", "descr_strat.txt")
         with open(path) as fh:
             text = fh.read()
@@ -1424,8 +1424,8 @@ building smith
     def test_captain_names_skip_family_records_and_two_word_names(self):
         # egypt's Heruben is a family record: a captain Heruben was skipped by the game as a duplicate;
         # Medieval II's 'al Adil' cannot start a character line (the game reads 'al' as the first name)
-        from faction_tool.edit import edit
-        from faction_tool.strat import first_names
+        from campaign_editor.edit import edit
+        from campaign_editor.strat import first_names
         self.assertEqual(first_names({"characters": ["al Adil", "Omar"]}, "general"), ["Omar"])
         write(os.path.join(self.root, "data", "descr_names.txt"),
               NAMES.replace("\t\tAaron\n", "\t\tal Adil\n\t\tAaron\n", 1).replace("\t\tBoris\n", "\t\tBoris\n\t\tCyrus\n", 1))
@@ -1443,8 +1443,8 @@ building smith
     def test_family_edit_and_restore(self):
         """Family tab: traits, ages, a renamed leader followed on the tree, a new wife and child
         (records in the file's own form, the tree after them), then Restore byte for byte."""
-        from faction_tool import family
-        from faction_tool.edit import edit
+        from campaign_editor import family
+        from campaign_editor.edit import edit
         mod = ModData(self.root)
         path = mod.campaign_file("test", "descr_strat.txt")
         with open(path) as fh:
@@ -1512,8 +1512,8 @@ building smith
             from PIL import Image
         except ImportError:
             self.skipTest("Pillow")
-        from faction_tool import family
-        from faction_tool.edit import edit
+        from campaign_editor import family
+        from campaign_editor.edit import edit
         mod = ModData(self.root)
         path = mod.campaign_file("test", "descr_strat.txt")
         with self.assertRaises(ValueError):                  # Rome: the game rolls portraits itself
@@ -1549,8 +1549,8 @@ building smith
             from PIL import Image
         except ImportError:
             self.skipTest("Pillow")
-        from faction_tool import portraits as PL
-        from faction_tool.plan import Plan
+        from campaign_editor import portraits as PL
+        from campaign_editor.plan import Plan
         base = os.path.join(self.root, "data", "ui", "eastern", "portraits")
         for folder, size in ((("portraits", "Young", "generals"), (69, 96)), (("portraits", "old", "generals"), (69, 96)),
                              (("portraits", "dead"), (69, 96)), (("cards", "Young", "generals"), (44, 63)),
@@ -1583,7 +1583,7 @@ building smith
         self.assertEqual({k: v for k, v in after.items() if "_backups" not in k}, before)
 
     def test_volcanoes_and_land_bridges(self):
-        from faction_tool import terrain as T
+        from campaign_editor import terrain as T
         # land bridges are Medieval II's (vanilla Rome's map has none); volcanoes both games
         self.assertIn(T.LAND_BRIDGE, T.feature_brushes("medieval2"))
         self.assertNotIn(T.LAND_BRIDGE, T.feature_brushes("rome"))
@@ -1608,7 +1608,7 @@ building smith
     def test_river_pieces(self):
         """The game follows a river side to side from the sea, the map's edge, a source or another river,
         and stops at a corner-only step (the user's river west of the Nile): such a piece is named."""
-        from faction_tool import terrain as T
+        from campaign_editor import terrain as T
         R = (0, 0, 255)
         joined = {(0, 3): R, (1, 3): R, (2, 3): R, (2, 2): R}               # from the map's edge
         corner = {(3, 1): R, (4, 1): R}                                     # only a corner touches (2, 2)
@@ -1638,7 +1638,7 @@ building smith
         """REX / M2EX read max_factions from data/descr_ex.txt: over it the game closes at start ("Too many
         factions described here, maximum is(21)" - the user's nabataea). The new faction is refused, or with
         the user's yes max_factions is raised (backup, Restore); the original exe cannot be raised."""
-        from faction_tool.limits import LimitError, faction_limit
+        from campaign_editor.limits import LimitError, faction_limit
         start = {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}}
         mod = ModData(self.root)
         self.assertFalse(faction_limit(mod)["known"])            # no exe beside the data: warned only
@@ -1678,7 +1678,7 @@ building smith
         has none yet), an older copy of the editor there is replaced; a folder without the game is refused."""
         import sys
         from unittest import mock
-        from faction_tool import log, relocate, settings
+        from campaign_editor import log, relocate, settings
         downloads = os.path.join(self.root, "Downloads")
         game = os.path.join(self.root, "Rome Total War")
         exe = os.path.join(downloads, "RTW-M2TW-Campaign-Editor.exe")
@@ -1715,7 +1715,7 @@ building smith
         CampaignEditor_settings.json. An older version's RTW-M2TW-Campaign-Editor-files (settings, logs/ with
         faction_tool.log and a zip) is moved in once and goes; on close a session folder gets this session's part
         of the log and the game's system.log.txt."""
-        from faction_tool import log, settings
+        from campaign_editor import log, settings
         home = os.path.join(self.root, "game")
         old = os.path.join(home, "RTW-M2TW-Campaign-Editor-files")
         os.makedirs(os.path.join(old, "logs"))
@@ -1754,8 +1754,8 @@ building smith
             from PIL import Image
         except ImportError:
             self.skipTest("Pillow")
-        from faction_tool import portraits as PL
-        from faction_tool.plan import Plan
+        from campaign_editor import portraits as PL
+        from campaign_editor.plan import Plan
         base = os.path.join(self.root, "data", "ui", "eastern", "portraits", "portraits")
         for folder in (("young", "generals"), ("old", "generals"), ("dead",), ("young", "princesses"),
                        ("dead", "princesses")):
@@ -1777,9 +1777,9 @@ building smith
     def test_descr_regions_with_an_odd_entry(self):
         """BI's descr_regions.txt has an entry with a line more before the colour ('Pictii' where the
         colour was read - every map read failed). The colour line anchors the entry; writers use the same."""
-        from faction_tool.moddata import region_entries
-        from faction_tool.plan import Plan
-        from faction_tool.regionedit import edit_regions
+        from campaign_editor.moddata import region_entries
+        from campaign_editor.plan import Plan
+        from campaign_editor.regionedit import edit_regions
         path = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_regions.txt")
         with open(path) as fh:
             text = fh.read()
@@ -1799,8 +1799,8 @@ building smith
         """Edit region renames what players see: the region's and its town's {key} lines of the campaign's names
         text get the new text (the key and the gap stay), a missing key is added; the file names stay; Restore
         gives the file back byte for byte; a name with { } is refused."""
-        from faction_tool.plan import Plan, restore
-        from faction_tool.regionedit import edit_regions, shown_labels
+        from campaign_editor.plan import Plan, restore
+        from campaign_editor.regionedit import edit_regions, shown_labels
         mod = ModData(self.root)
         path = mod.region_labels_file("test")
         with open(path, "rb") as fh:
@@ -1830,8 +1830,8 @@ building smith
         the mod (descr_regions, descr_strat, win conditions, scripts), the {keys} of the names texts; comments,
         a word inside a longer name, a line naming a faction and a campaign with its own map keep theirs; taken
         or bad names refused; Restore byte for byte."""
-        from faction_tool.plan import Plan, restore
-        from faction_tool.regionrename import problems, rename
+        from campaign_editor.plan import Plan, restore
+        from campaign_editor.regionrename import problems, rename
         d = os.path.join(self.root, "data")
         camp = os.path.join(d, "world", "maps", "campaign", "test")
         write(os.path.join(camp, "campaign_script.txt"),
@@ -1881,9 +1881,9 @@ building smith
     def test_terrain_paint_and_restore(self):
         """Terrain editor: a tile's ground is the 3 x 3 block around (2x + 1, 2y + 1) of map_ground_types.tga,
         features one pixel per tile; land stays land, nothing refused under a town; map.rwm goes; Restore."""
-        from faction_tool import terrain as T
-        from faction_tool.plan import Plan
-        from faction_tool.tga import read_tga
+        from campaign_editor import terrain as T
+        from campaign_editor.plan import Plan
+        from campaign_editor.tga import read_tga
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         wild, sea = (0, 0, 0), (64, 0, 0)
         write_tga(os.path.join(camp, "map_ground_types.tga"), 9, 9,
@@ -1938,10 +1938,10 @@ building smith
         except ImportError:
             self.skipTest("Pillow is not installed")
         import struct
-        from faction_tool import terrain as T
-        from faction_tool.mapdata import CampaignMap
-        from faction_tool.plan import Plan
-        from faction_tool.tga import read_tga
+        from campaign_editor import terrain as T
+        from campaign_editor.mapdata import CampaignMap
+        from campaign_editor.plan import Plan
+        from campaign_editor.tga import read_tga
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         red, blue, black, sea = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233)
         write_tga(os.path.join(camp, "map_regions.tga"), 4, 4, [[red, red, blue, sea], [red, black, blue, sea],
@@ -2005,9 +2005,9 @@ building smith
         """Heights brush: a spray on land raises the middle most, never touches the sea (blue), puffs add up;
         written into map_heights.tga, map_heights.hgt (the game's copy that wins over the picture) and map.rwm
         deleted; Restore gives every file back."""
-        from faction_tool import terrain as T
-        from faction_tool.plan import Plan
-        from faction_tool.tga import read_tga
+        from campaign_editor import terrain as T
+        from campaign_editor.plan import Plan
+        from campaign_editor.tga import read_tga
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         land, sea = (10, 10, 10), (0, 0, 253)
         write_tga(os.path.join(camp, "map_heights.tga"), 9, 9,
@@ -2058,7 +2058,7 @@ building smith
         self.assertEqual({k: v for k, v in after.items() if "_backups" not in k}, before)
 
     def test_family_tree_checks(self):
-        from faction_tool.family import ordered, tree_problems
+        from campaign_editor.family import ordered, tree_problems
         people = [{"name": n, "sex": s} for n, s in (("A", "male"), ("B", "female"), ("C", "male"), ("D", "female"),
                                                      ("E", "male"))]
         self.assertEqual(tree_problems([["A", "B", ["C"]], ["C", "D", ["E"]]], people), [])
@@ -2068,7 +2068,7 @@ building smith
         self.assertEqual(ordered([["C", "D", ["E"]], ["A", "B", ["C"]]])[0][0], "A")  # parents first
 
     def test_existing_armies_changed_and_removed(self):
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         mod = ModData(self.root)
         # Aaron (named) keeps his bodyguard; units after it are replaced
         plan = edit(mod, "test", "alpha", {"army_units": [{"name": "Aaron Alphid", "from": (1, 1),
@@ -2085,7 +2085,7 @@ building smith
 
     def test_region_without_settlement_is_a_rebel_village(self):
         # the game makes a region descr_strat leaves out a rebel village; taking it writes that village
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         red, blue, green, black = (255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 0, 0)
         px = [[red, red, blue, blue, green, green],
@@ -2106,8 +2106,8 @@ building smith
         self.assertEqual(Strat(plan.files[path]).settlement_of("C_R").owner, "beta")
 
     def test_town_moved_on_the_map(self):
-        from faction_tool.edit import edit
-        from faction_tool.tga import read_tga
+        from campaign_editor.edit import edit
+        from campaign_editor.tga import read_tga
         rwm = os.path.join(self.root, "data", "world", "maps", "base", "map.rwm")
         write(rwm, "compiled map")
         before = tree_hash(self.root)
@@ -2128,7 +2128,7 @@ building smith
 
     def test_old_culture_names_module_moves_into_the_script(self):
         # an early 0.12 build wrote script/modules/ft_settlement_names.nut (the user's HLR, 2026-09-29)
-        from faction_tool import gamefix, culturenames as CN
+        from campaign_editor import gamefix, culturenames as CN
         game, hlr = self._game()
         write(os.path.join(hlr, "data", "descr_cultures.txt"), "culture roman\n{\n}\nculture barbarian\n{\n}\n")
         old = os.path.join(hlr, "script", "modules", "ft_settlement_names.nut")
@@ -2146,7 +2146,7 @@ building smith
     def test_army_on_the_new_town_tile_steps_aside(self):
         # the user's HLR run: taking Odessus sent its garrison out onto the tile he then moved the town to -
         # "Philokles's army stands on 257, 254 - move it first" blocked the Apply
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         mod = ModData(self.root)
         path = mod.campaign_file("test", "descr_strat.txt")
         with open(path) as fh:
@@ -2161,8 +2161,8 @@ building smith
         self.assertTrue(any("steps aside" in n for _, n in plan.notes))
 
     def test_diplomacy_both_ways(self):
-        from faction_tool.edit import edit
-        from faction_tool.diplomacy import read
+        from campaign_editor.edit import edit
+        from campaign_editor.diplomacy import read
         mod = ModData(self.root)
         path = mod.campaign_file("test", "descr_strat.txt")
         with open(path, "a") as fh:
@@ -2179,9 +2179,9 @@ building smith
     def test_diplomacy_alliances_wars_and_standings(self):
         """Both games: allied_to / at_war_with at the start (both ways), Medieval II's faction_standings floats,
         and a new faction neutral to all gets the rebels' lines the way the file's own factions have them."""
-        from faction_tool.diplomacy import kinds, read, rebels, set_relations
-        from faction_tool.textio import TextFile
-        from faction_tool.diplomacy import parse
+        from campaign_editor.diplomacy import kinds, read, rebels, set_relations
+        from campaign_editor.textio import TextFile
+        from campaign_editor.diplomacy import parse
 
         class P:
             def note(self, f, t):
@@ -2230,7 +2230,7 @@ building smith
         with self.assertRaises(ValueError):
             parse("2.0", "faction_standings")
         # the status pulls the AI feeling along (lower is better in Rome, higher in Medieval II)
-        from faction_tool.diplomacy import feeling_for
+        from campaign_editor.diplomacy import feeling_for
         self.assertEqual(feeling_for("core_attitudes", "allied_to", 310), 0)
         self.assertEqual(feeling_for("core_attitudes", "allied_to", -10), -10)
         self.assertEqual(feeling_for("core_attitudes", "at_war_with", 100), 600)
@@ -2241,8 +2241,8 @@ building smith
     def test_victory_conditions(self):
         """descr_win_conditions.txt: a faction's block read and rewritten (Rome's outlive_factions on the next
         line kept), other blocks byte-exact, a missing region refused (the game crashes on it)."""
-        from faction_tool.edit import edit
-        from faction_tool import wincond
+        from campaign_editor.edit import edit
+        from campaign_editor import wincond
         mod = ModData(self.root)
         camp = os.path.dirname(mod.campaign_file("test", "descr_strat.txt"))
         path = os.path.join(camp, "descr_win_conditions.txt")
@@ -2277,7 +2277,7 @@ building smith
             "display_name": "Beta", "start": {"regions": ["B_R"], "leader": {"name": "Boris Alphid", "age": 35}},
             "victory": cond})
         f = plan.files[path]
-        from faction_tool.wincond import blocks, parse
+        from campaign_editor.wincond import blocks, parse
         a, b = blocks(f)["beta"]
         got = parse([f.text(k) for k in range(a + 1, b)])
         self.assertEqual(got["long"]["goals"], ["imperator"])
@@ -2286,7 +2286,7 @@ building smith
         self.assertEqual(f.text(a + 1).strip(), "take_rome")             # the template's own block untouched
 
     def test_check_mod_reads_the_mini_mod(self):
-        from faction_tool.check import check_mod
+        from campaign_editor.check import check_mod
         text = check_mod(ModData(self.root), "test")
         self.assertIn("FACTIONS: 2 in descr_sm_factions.txt, 2 blocks", text)
         self.assertIn("No problems found", text)
@@ -2296,8 +2296,8 @@ building smith
     def test_check_mod_crash_rules_from_modders(self):
         """Win conditions naming a missing region or faction, a region without the 'slaves' the mod's
         others have (Rome), Medieval II rebels with units slave may not own - all crash the game."""
-        from faction_tool.check import check_mod, rebel_problems
-        from faction_tool.units import read_units
+        from campaign_editor.check import check_mod, rebel_problems
+        from campaign_editor.units import read_units
         mod = ModData(self.root)
         camp = os.path.dirname(mod.campaign_file("test", "descr_strat.txt"))
         write(os.path.join(camp, "descr_win_conditions.txt"), "alpha\nhold_regions A_R Nowhere\noutlive ghost\n")
@@ -2324,9 +2324,9 @@ building smith
         """Every tile a 3 x 3 block: towns and characters in their blocks' middles, rivers 1 pixel wide (a corner
         link a staircase), descr_terrain's size x 3 and its heights x 3, map_heights.hgt at the new size (3 x higher),
         map.rwm removed; Restore gives every byte back."""
-        from faction_tool.plan import Plan
-        from faction_tool import upscale
-        from faction_tool.tga import read_tga
+        from campaign_editor.plan import Plan
+        from campaign_editor import upscale
+        from campaign_editor.tga import read_tga
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         river, black = (0, 0, 255), (0, 0, 0)
         px = [[black] * 4 for _ in range(4)]
@@ -2370,7 +2370,7 @@ building smith
         hi = read_tga(os.path.join(camp, "map_heights.tga"))
         self.assertEqual((hi.width, hi.height), (25, 25))
         self.assertFalse(os.path.exists(os.path.join(camp, "map.rwm")))
-        from faction_tool.plan import restore
+        from campaign_editor.plan import restore
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))},
                          before)
@@ -2381,9 +2381,9 @@ building smith
         as dense-forest tile middles with wilderness between (Mirkwood turned to wilderness). Afterwards: one town
         pixel each with its own region round it, the port on land touching the sea and its region, map_regions and
         the heights agree on every tile, every land tile still dense forest, the bridge one unbroken chain."""
-        from faction_tool.plan import Plan
-        from faction_tool import upscale
-        from faction_tool.upscale import _pixels, _heights_sea
+        from campaign_editor.plan import Plan
+        from campaign_editor import upscale
+        from campaign_editor.upscale import _pixels, _heights_sea
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         S, R, B, U, T, P = (40, 140, 230), (255, 0, 0), (0, 0, 255), (10, 200, 10), (0, 0, 0), (255, 255, 255)
         rows = ["SSSSSSSSSS", "SBTBBSSSSS", "SBBBBSSSSS", "SRRRPSUUUS", "SRTRRSUTUS", "SRRRRSUUUS", "SSSSSSSSSS"]
@@ -2449,7 +2449,7 @@ building smith
     def test_new_region_colour_on_a_full_map(self):
         """A map whose regions already use the 200 colours the old walk could make (a tester's big map: 'no free
         colour left') still gets a new colour, one no pixel has."""
-        from faction_tool.regionedit import free_colour
+        from campaign_editor.regionedit import free_colour
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         old = sorted({((i * 97) % 200 + 30, (i * 57) % 200 + 30, (i * 37) % 200 + 30) for i in range(1, 5000)})
         self.assertEqual(len(old), 200)
@@ -2466,8 +2466,8 @@ building smith
         self.assertFalse(set(many) & set(old))
 
     def test_new_region_carved_out(self):
-        from faction_tool.edit import edit
-        from faction_tool.tga import read_tga
+        from campaign_editor.edit import edit
+        from campaign_editor.tga import read_tga
         mod = ModData(self.root)
         new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
                "city": (0, 3), "owner": "alpha", "level": "village"}
@@ -2514,7 +2514,7 @@ building smith
                 "regions": {"edits": {"A_R": {"creator": "nobody"}}}})
 
     def test_setup_fix_vegetation(self):
-        from faction_tool import gamefix
+        from campaign_editor import gamefix
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "descr_caps_ex.txt"), "; caps\nsprite_format  xml\nvegetation_source  text\n")
         mod = ModData(self.root)
@@ -2529,7 +2529,7 @@ building smith
     def test_medieval_unpack(self):
         # a Medieval II straight from Steam: packs only; the unpacker needs two DLLs next to it
         import stat, sys, tempfile
-        from faction_tool import gamefix
+        from campaign_editor import gamefix
         game = tempfile.mkdtemp()
         os.makedirs(os.path.join(game, "packs"))
         os.makedirs(os.path.join(game, "data"))
@@ -2554,7 +2554,7 @@ building smith
     def test_english_text_wins(self):
         # the game reads data/text/english first (Medieval II keeps its tables only there):
         # the tool reads and writes that copy, and a new town gets the core level of its size
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         d = os.path.join(self.root, "data", "text")
         write(os.path.join(d, "english", "test_regions_and_settlement_names.txt"), "{Alpha}\t\tA\n", utf16=True)
         write(os.path.join(d, "english", "extra.txt"), "{X}\t\tx\n", utf16=True)
@@ -2575,13 +2575,13 @@ building smith
         self.assertIn("{N_R}", open(m2.region_labels_file("test"), "rb").read().decode("utf-16"))
         s = Strat(m2.load(m2.campaign_file("test", "descr_strat.txt")))
         st = next(x for x in s.faction("alpha").settlements if x.region == "N_R")
-        from faction_tool.buildings import settlement_info
+        from campaign_editor.buildings import settlement_info
         self.assertEqual(settlement_info(s.lines[st.start:st.end]), ("town", [("core_building", "hut")]))
 
     def test_new_region_takes_after_its_land(self):
         # 'built by' and the rebels left empty: those of the region its land is cut from; the
         # owner's new town takes a garrison in the same Apply (one backup, not two)
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         new = {"name": "N_R", "settlement": "Ntown", "creator": "", "rebels": "", "resources": [],
                "city": (0, 3), "owner": "alpha", "level": "village"}
         plan = edit(ModData(self.root), "test", "alpha", {
@@ -2597,7 +2597,7 @@ building smith
         self.assertTrue(any(c.xy == (0, 3) for c in s.faction("alpha").characters))     # its garrison
 
     def test_new_region_religions_never_broken(self):
-        from faction_tool.regionedit import religions_for
+        from campaign_editor.regionedit import religions_for
         regions = {"A": {"religions": {"catholic": 90, "pagan": 10}}, "B": {"religions": {"catholic": 90, "pagan": 10}},
                    "C": {"religions": {"islam": 100}}}
         self.assertEqual(religions_for(regions, {"catholic": 0, "pagan": 0}, "C"), {"islam": 100})   # zeros: the donor's
@@ -2607,8 +2607,8 @@ building smith
     def test_unit_pack_round_trip(self):
         # a unit taken out with its model, mount, texture, card, texts and recruit place, put into
         # another mod where its names and its model's name are taken: all renamed, nothing overwritten
-        from faction_tool import packs
-        from faction_tool.plan import Plan
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
             "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1\nmount\t\tlight horse\nownership\talpha"))
@@ -2667,7 +2667,7 @@ building smith
         # M2EX copied over the game's root (any case), the mod in mods/<mod>/data: the engine is seen, the
         # game's descr_ex.txt is NOT read for the mod (engines read a mod's own _ex files only - "Mods that don't
         # ship this file get safe defaults"), and a raise makes the mod's own file - the game's file untouched
-        from faction_tool import limits
+        from campaign_editor import limits
         game = os.path.join(self.root, "game")
         os.makedirs(os.path.join(game, "mods"))
         write(os.path.join(game, "medieval2.exe"), "x")
@@ -2706,7 +2706,7 @@ building smith
     def test_engine_files_missing_in_a_mod(self):
         """A mod of a game with M2EX / REX that lacks the engine's own files (*_ex.txt) is told so on Load, and
         with a yes gets the game's copies (backup, Restore removes them)."""
-        from faction_tool import gamefix
+        from campaign_editor import gamefix
         game = os.path.join(self.root, "game")
         write(os.path.join(game, "medieval2.exe"), "x")
         write(os.path.join(game, "M2EX.exe"), "x")
@@ -2729,7 +2729,7 @@ building smith
     def test_engine_settings_come_from_the_mods_own_files_only(self):
         """REX / M2EX read a mod's descr_ex.txt / descr_caps_ex.txt from the mod alone ("Mods that don't ship this
         file get safe defaults"): the game's data copy says nothing about a mod's sprites or battle models."""
-        from faction_tool import gamefix, limits, modeldb, symbols
+        from campaign_editor import gamefix, limits, modeldb, symbols
         game = os.path.join(self.root, "game")
         write(os.path.join(game, "medieval2.exe"), "x")
         write(os.path.join(game, "M2EX.exe"), "x")
@@ -2758,7 +2758,7 @@ building smith
         backup stay, and the error says it in plain words. A read-only file is said in Preview and written."""
         import stat
         from unittest import mock
-        from faction_tool import textio
+        from campaign_editor import textio
         before = tree_hash(self.root)
         mod = ModData(self.root)
         plan = build(mod, "test", "alpha", "beta", {
@@ -2816,7 +2816,7 @@ building smith
         restore(ModData(d), backups(ModData(d))[0])
         self.assertFalse(os.path.exists(os.path.join(d, "menu")))
         # a template with _ in its name (greek_cities): its buttons were never renamed, so never copied
-        from faction_tool.clone import renamed
+        from campaign_editor.clone import renamed
         self.assertEqual(renamed("symbol48_greek_cities_grey.tga", "greek_cities", "athens"),
                          "symbol48_athens_grey.tga")
         self.assertEqual(renamed("romans_julii_logo.tga", "romans_julii", "saba"), "saba_logo.tga")
@@ -2835,7 +2835,7 @@ building smith
             from PIL import Image
         except ImportError:
             self.skipTest("Pillow")
-        from faction_tool import recolour as R
+        from campaign_editor import recolour as R
         d = os.path.join(self.root, "data")
         cols = {"alpha": ((215, 0, 0), (255, 210, 0)), "slave": ((0, 60, 180), (240, 240, 240))}
 
@@ -2880,7 +2880,7 @@ building smith
             from PIL import Image
         except ImportError:
             self.skipTest("Pillow")
-        from faction_tool import recolour as R
+        from campaign_editor import recolour as R
 
         def banner(field):
             im = Image.new("RGBA", (40, 40), field + (255,))
@@ -2906,8 +2906,8 @@ building smith
         except ImportError:
             self.skipTest("Pillow is not installed")
         from unittest import mock
-        from faction_tool import symbols as SY
-        from faction_tool.factionart import image_tga
+        from campaign_editor import symbols as SY
+        from campaign_editor.factionart import image_tga
         d = os.path.join(self.root, "data")
         sm = SM.replace("culture\t\teastern\n", "culture\t\teastern\nlogo_index\t\tFACTION_LOGO_ALPHA\n", 1)
         sm = sm.replace("culture\t\tbarbarian\n", "culture\t\tbarbarian\nlogo_index\t\tFACTION_LOGO_ALPHA\n", 1)
@@ -2944,7 +2944,7 @@ building smith
 
     def test_same_length_texture_name_for_a_cas_copy(self):
         """A texture name baked into a .cas model is rewritten in place: the copy's name keeps the length."""
-        from faction_tool.factionart import _same_length_name
+        from campaign_editor.factionart import _same_length_name
         self.assertEqual(_same_length_name("#banner_symbol_england", "england", "normans"), "#banner_symbol_normans")
         self.assertEqual(len(_same_length_name("#banner_symbol_england", "england", "pisa")), 22)
         self.assertEqual(len(_same_length_name("#banner_symbol_milan", "milan", "papal_states")), 20)
@@ -2974,7 +2974,7 @@ building smith
     def test_raze_settlement_lua_addon_for_medieval2(self):
         """The Medieval II add-on is Lua (M2EX's EOP-compatible scripts): settings written as Lua ({} lists), the file
         in eopData/eopScripts, one loader line in luaPluginScript.lua (a mod's own lines kept), taken out again."""
-        from faction_tool import addons as A
+        from campaign_editor import addons as A
         a = next(x for x in A.library() if x.file == "raze_settlement.lua")
         self.assertTrue(a.fits("medieval2"))
         self.assertFalse(a.fits("rome"))
@@ -3008,7 +3008,7 @@ building smith
             from PIL import Image, ImageDraw
         except ImportError:
             self.skipTest("Pillow")
-        from faction_tool import emblem as E
+        from campaign_editor import emblem as E
         d = tempfile.mkdtemp()
 
         def disc(size, colour, glow=None):
@@ -3055,8 +3055,8 @@ building smith
             from PIL import Image, ImageDraw
         except ImportError:
             self.skipTest("Pillow")
-        from faction_tool import banners as B
-        from faction_tool import emblem as E
+        from campaign_editor import banners as B
+        from campaign_editor import emblem as E
         d = tempfile.mkdtemp()
         blank = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
         dr = ImageDraw.Draw(blank)
@@ -3115,7 +3115,7 @@ building smith
             self.assertEqual(max(range(3), key=lambda i: px[i]), want)
         self.assertEqual(max(range(3), key=lambda i: own.getpixel((8, 60))[i]), 0)   # the other banner too
         # a symbol picture on a white square: the square cleared from its corners, the symbol kept
-        from faction_tool import emblem_edit as EE
+        from campaign_editor import emblem_edit as EE
         sq = Image.new("RGBA", (50, 50), (255, 255, 255, 255))
         ImageDraw.Draw(sq).ellipse((10, 10, 40, 40), fill=(200, 0, 0, 255))
         self.assertGreater(EE.clear_background(sq), 500)
@@ -3125,7 +3125,7 @@ building smith
 
     def test_buildings_and_garrisons_for_many_towns(self):
         import random
-        from faction_tool import masstown as M
+        from campaign_editor import masstown as M
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
             "ownership\talpha", "category\tcavalry\nattributes\tgeneral_unit\nstat_cost\t1, 400, 200, 0, 0, 400\n"
@@ -3185,8 +3185,8 @@ building smith
         # straight from another mod's folder (no .zip): a unit whose recruit place is moved to a building the
         # user picks, and a building chain whose names are taken here - renamed with its levels, texts and
         # pictures, its recruit line pointing at the unit brought along, its factions the ones picked
-        from faction_tool import packs
-        from faction_tool.plan import Plan
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_buildings.txt"),
               "building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, }\n"
@@ -3241,8 +3241,8 @@ building smith
     def test_brought_lines_lose_conditions_this_mod_lacks(self):
         # a tester brought BI's british legionaries into plain Rome: their recruit line kept 'hidden_resource
         # britain', which Rome does not have, and REX stopped at start ('unrecognised hidden resource')
-        from faction_tool import packs
-        from faction_tool.plan import Plan
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
         d = os.path.join(self.root, "data")
         edb = ("building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, }\n"
                "        {\n            capability\n            {\n                recruit \"alpha general\"  0  "
@@ -3271,7 +3271,7 @@ building smith
         self.assertNotIn("britain", text)
         self.assertNotIn("religious_belief", text)                  # Rome has no beliefs
         self.assertIn('recruit "alpha general 2"', text)
-        from faction_tool.check import building_condition_problems
+        from campaign_editor.check import building_condition_problems
         self.assertEqual(building_condition_problems(ModData(troot)), [])
         with open(ModData(troot).file("edb"), "a") as fh:            # as the tester's file was: Check mod says it
             fh.write("building x\n{\n    levels y\n    {\n        y requires factions { alpha, } and "
@@ -3283,8 +3283,8 @@ building smith
 
     def test_a_region_without_a_port_gets_one(self):
         # a tester: the Map's legend offered towns but no port - a region by the sea without a port gets one
-        from faction_tool import mapedit as ME
-        from faction_tool.plan import Plan
+        from campaign_editor import mapedit as ME
+        from campaign_editor.plan import Plan
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         red, blue, black, sea = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233)
         write_tga(os.path.join(camp, "map_regions.tga"), 5, 4, [[red, red, blue, blue, sea],
@@ -3311,8 +3311,8 @@ building smith
     def test_map_changes_for_any_faction(self):
         # a tester: what is put on the Map should not depend on the faction picked elsewhere - a town given to any
         # faction, an army or agent placed for any faction, written with the next Apply
-        from faction_tool.edit import first_units, map_changes
-        from faction_tool.plan import Plan
+        from campaign_editor.edit import first_units, map_changes
+        from campaign_editor.plan import Plan
         mod = ModData(self.root)
         before = tree_hash(self.root)
         free = mod.free_tile("test", "A_R", set(mod.city_tiles("test").values()) | {(1, 1), (2, 2)})
@@ -3338,7 +3338,7 @@ building smith
             from PIL import Image, ImageDraw
         except ImportError:
             self.skipTest("Pillow is not installed")
-        from faction_tool.recolour import recolour
+        from campaign_editor.recolour import recolour
         im = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
         d.ellipse((2, 2, 61, 61), fill=(180, 10, 10, 255))
@@ -3359,8 +3359,8 @@ building smith
             from PIL import Image, ImageDraw
         except ImportError:
             self.skipTest("Pillow is not installed")
-        from faction_tool import emblem_edit as EE
-        from faction_tool.emblem import footprint
+        from campaign_editor import emblem_edit as EE
+        from campaign_editor.emblem import footprint
         src = Image.new("RGBA", (200, 100), (255, 255, 255, 255))
         ImageDraw.Draw(src).rectangle((150, 10, 190, 50), fill=(200, 0, 0, 255))
         for ang in (0, 30, -45):
@@ -3389,7 +3389,7 @@ building smith
         """A .mesh laid out as the vanilla ones: parts with triangles, then the vertex streams (texture u v,
         bone weights, positions). Read back, the man shown, drawn both ways."""
         import struct
-        from faction_tool import meshview as MV
+        from campaign_editor import meshview as MV
 
         def text(t):
             return struct.pack("<I", len(t)) + t.encode()
@@ -3435,7 +3435,7 @@ building smith
     def test_clone_names_inside_texts(self):
         """Medieval II has no short names ({SICILY}Sicily): a clone named 'Kingdom of Jerusalem' must not become
         'the Kingdom of Kingdom of Jerusalem' or 'de Kingdom of Jerusalem' in the copied texts."""
-        from faction_tool.plan import Plan
+        from campaign_editor.plan import Plan
 
         def swap(opts, text):
             p = Plan.__new__(Plan)
@@ -3458,7 +3458,7 @@ building smith
         together in the first frame's pose, the texture the file names, drawn in one texture."""
         import math
         import struct
-        from faction_tool import meshview as MV
+        from campaign_editor import meshview as MV
 
         def text(t):
             return struct.pack("<I", len(t) + 1) + t.encode() + b"\x00"
@@ -3508,8 +3508,8 @@ building smith
         """Campaign rules: values of the settings files read with their section (M2EX's unquoted bool=false too),
         a change writes only the value's characters, a bad value is refused, a mod without the file gets the game's
         copy; Restore byte for byte. Add-ons: the script's settings read and written back, the rest untouched."""
-        from faction_tool import campaignrules as CR
-        from faction_tool import addons as AD
+        from campaign_editor import campaignrules as CR
+        from campaign_editor import addons as AD
         import time
         t0 = time.time()                    # a tag the old pattern took exponential time on (CodeQL py/redos)
         self.assertEqual(list(CR.RE_TAG.finditer("<A -=" + '"" -=' * 3000)), [])
@@ -3573,7 +3573,7 @@ building smith
     def test_faction_names_players_see(self):
         """A mod may keep an internal name and show another ('turks' shown as 'Ryazan'): the lists say both; a name
         that only differs by case or 'The' stays plain (a tester's wish on Discord)."""
-        from faction_tool.build import display_names, faction_label
+        from campaign_editor.build import display_names, faction_label
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "text", "expanded_bi.txt"), "{ALPHA}\t\tRyazan\n{SLAVE}\tRebels\n", utf16=True)
         mod = ModData(self.root)
@@ -3587,8 +3587,8 @@ building smith
         """'requires factions { all, }' (a modder's way to say everyone): every faction may build the level - the
         town's buildings, the Buildings tab and the Building editor say so, and setting it warns about nothing
         (a tester's report on 0.18.1: only the temples were offered)."""
-        from faction_tool.buildings import Level, available
-        from faction_tool import editors as E
+        from campaign_editor.buildings import Level, available
+        from campaign_editor import editors as E
         for req in ("factions { all, }", "factions { all }", "factions { all, } and resource gold",
                     "factions { roman, all, }"):
             self.assertTrue(available(Level("stone_wall", req), "athens", "greek"), req)
@@ -3605,7 +3605,7 @@ building smith
         """Sound packs read (a loose file wins over the pack), a unit's voice found by the owners' culture (Rome) or
         accent (Medieval II) and its voice_type, its name call replaced by the user's wav: a shared line split,
         a unit without one given a block in the file's own layout, events.dat / .idx removed; Restore byte for byte."""
-        from faction_tool import sounds as SN
+        from campaign_editor import sounds as SN
         d = os.path.join(self.root, "data")
         wav = b"RIFF" + struct.pack("<I", 36) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 22050, 44100, 2, 16) \
             + b"data" + struct.pack("<I", 0)
@@ -3679,8 +3679,8 @@ building smith
         """A unit's soldier model swapped for another of this mod or of another mod (brought with its files, renamed
         when the name is taken), the unit's factions given textures on it, a seat mismatch warned about, another
         game refused, Restore byte for byte."""
-        from faction_tool import models as MO
-        from faction_tool.plan import Plan
+        from campaign_editor import models as MO
+        from campaign_editor.plan import Plan
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
             "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1 ; the riders\nmount\t\tlight horse\nownership\talpha"))
@@ -3738,7 +3738,7 @@ building smith
 
     def test_medieval_religions(self):
         # Medieval II: a ninth line per region, the religions
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         text = REGIONS.replace("\t1\nB_R", "\t1\n\treligions { catholic 90 pagan 10 }\nB_R")
         write(os.path.join(camp, "descr_regions.txt"), text + "\treligions { catholic 20 pagan 80 }\n")
@@ -3758,13 +3758,13 @@ building smith
         self.assertEqual(regs["N_R"]["religions"], {"catholic": 90, "pagan": 10})     # A_R, where its land was
 
     def test_princess_takes_a_womans_name(self):
-        from faction_tool.strat import first_names
+        from campaign_editor.strat import first_names
         pool = {"characters": ["Adam"], "women": ["Constance"]}
         self.assertEqual(first_names(pool, "princess"), ["Constance"])
         self.assertEqual(first_names(pool, "spy"), ["Adam"])
 
     def test_medieval_character_lines(self):
-        from faction_tool.strat import character_line
+        from campaign_editor.strat import character_line
         m2 = ["character\tPhilip, named character, male, leader, age 40, x 113, y 131"]
         self.assertEqual(character_line(m2, "Adam", "general", 30, (1, 2)),
                          "character\tAdam, general, male, age 30, x 1, y 2")
@@ -3775,8 +3775,8 @@ building smith
                          "character\tLouis, named character, heir, age 21, , x 1, y 2")
 
     def test_resources(self):
-        from faction_tool import resources as R
-        from faction_tool.edit import edit
+        from campaign_editor import resources as R
+        from campaign_editor.edit import edit
         path = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
         with open(path) as fh:
             text = fh.read()
@@ -3810,7 +3810,7 @@ building smith
         """3D view with its mount: rider and mount standing side by side on one ground, as the files keep them (a
         seat drawn over the horse looked wrong - the files hold the rider standing); the mount's parts take
         pictures 2 / 3."""
-        from faction_tool import meshview as MV
+        from campaign_editor import meshview as MV
         rider = MV.Mesh([MV.Group("body", "m", [0, 1, 2], False)], [(0, -1.0, 0), (0, 0.9, 0), (0.2, 0, 0)],
                         [(0.1, 0.1)] * 3)
         horse = MV.Mesh([MV.Group("horse", "m", [0, 1, 2], False)], [(0, -1.9, 0), (0, 0.7, 2), (0.3, 0, 1)],
@@ -3827,7 +3827,7 @@ building smith
     def test_mesh_variants_by_part(self):
         """3D view: the variants shown are counted per part (a tester read 'man 1 of 8' as eight men - it was the
         eight shields of highlanders, which have 4 heads, 2 bodies, 3 axes)."""
-        from faction_tool import meshview as MV
+        from campaign_editor import meshview as MV
         g = lambda name, mat: MV.Group(name, mat, [0, 1, 2], False)
         mesh = MV.Mesh([g("Head", "h1"), g("Head", "h2"), g("Head", "h3"), g("Head", "h4"), g("Body", "b"),
                         g("primaryactive1", "a1"), g("primaryactive1", "a2"), g("primaryactive1", "a3")] +
@@ -3842,7 +3842,7 @@ building smith
             import PIL  # noqa: F401  (the map module needs Pillow; the CI test job has none)
         except ImportError:
             self.skipTest("Pillow is not installed")
-        from faction_tool.mapdata import label_table
+        from campaign_editor.mapdata import label_table
         src = [(0, 0, 0), (10, 20, 30), (40, 50, 60)]
         where = {(10, 20, 30): (0, 1), (40, 50, 60): (1, 7)}
         t0, t1 = label_table(src, where, 0), label_table(src, where, 1)
@@ -3854,8 +3854,8 @@ building smith
     def test_faction_religion(self):
         """Medieval II: a faction's religion (descr_sm_factions.txt) read, changed in Edit, given to a new faction -
         the template keeps its own; a religion the game does not know is refused; Rome has none."""
-        from faction_tool.edit import edit, read_faction
-        from faction_tool.religions import faction_religion
+        from campaign_editor.edit import edit, read_faction
+        from campaign_editor.religions import faction_religion
         sm = os.path.join(self.root, "data", "descr_sm_factions.txt")
         self.assertIsNone(faction_religion(ModData(self.root), "alpha"))            # Rome: no religion line
         with open(sm) as fh:
@@ -3881,7 +3881,7 @@ building smith
         """Parents added on the tree died before the start: Rome writes 'dead' (a dead man off the map may be
         any age), Medieval II the same (the game's world/template.txt: 'age 94, dead, past_leader'); a living man
         off the map older than the age of manhood is still refused."""
-        from faction_tool import family as FM
+        from campaign_editor import family as FM
         texts = ["character_record\t\tMarcus, \tmale, command 0, influence 0, management 0, subterfuge 0, age 12, "
                  "alive, never_a_leader"]
         line = FM.record_line(texts, "Gaius", "male", 70, False, dead=True)
@@ -3898,7 +3898,7 @@ building smith
         """An add-on's list / set values are told in linear time (CodeQL py/redos: a long line of spaces between
         items backtracked exponentially), with commas or white space between items, a comma after the last."""
         import time
-        from faction_tool.addons import _kind
+        from campaign_editor.addons import _kind
         for v in ('[]', '["a", "b",]', '[ "a" "b" ]', '{A=true, B = true,}', '{ A=true\n B=true // x\n}'):
             self.assertIn(_kind(v), ("list", "set"), v)
         for v in ('[,]', '["a",,"b"]', '{A=false}', '{A=true,,B=true}'):
@@ -3912,9 +3912,9 @@ building smith
         """Art tab, Figures on the campaign map: a faction's strat models read per character type; a figure changed
         in a faction line shared with others gets a line of its own (the others keep theirs); a model without the
         faction's texture gets one; the textures are Art pictures (picture_links); Restore byte for byte."""
-        from faction_tool import stratmodels as SM
-        from faction_tool.clone import picture_links
-        from faction_tool.edit import edit
+        from campaign_editor import stratmodels as SM
+        from campaign_editor.clone import picture_links
+        from campaign_editor.edit import edit
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "descr_character.txt"),
               "type\t\tnamed character\nactions\t\tmoving_normal\n\nfaction\t\talpha, slave ; both\n"
@@ -3953,8 +3953,8 @@ building smith
         leader, Dread when the chivalry is below 0), the traits by the level names players see (a .txt or the
         compiled .strings.bin), the retinue's names and pictures."""
         import struct
-        from faction_tool import charpanel as CP
-        from faction_tool import family as FM
+        from campaign_editor import charpanel as CP
+        from campaign_editor import family as FM
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_character_traits.txt"),
               "Trait GoodCommander\n    Characters family\n\n    Level Good_Commander\n        Threshold  1\n"
@@ -3988,8 +3988,8 @@ building smith
         name (its levels and text keys renamed, the texts copied), an ancillary's effects and cultures; a text of a
         table Medieval II keeps only compiled (.strings.bin) goes into a .txt made from it; Restore byte for byte."""
         import struct
-        from faction_tool import traitsedit as TE
-        from faction_tool.plan import Plan
+        from campaign_editor import traitsedit as TE
+        from campaign_editor.plan import Plan
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_character_traits.txt"),
               ";------\nTrait GoodCommander\n    Characters family\n\n    Level Good_Commander\n"
@@ -4053,8 +4053,8 @@ building smith
         plague_in_italy), a date and place changed (the comment kept), one removed, a new one with its title in
         historic_events.txt; a date the game would not read refused; later factions with the script lines that
         wake them; Restore byte for byte."""
-        from faction_tool import events as EV
-        from faction_tool.plan import Plan
+        from campaign_editor import events as EV
+        from campaign_editor.plan import Plan
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         write(os.path.join(camp, "descr_events.txt"),
               "; events\nevent\tplague\tplague_in_x\ndate\t9 winter ; early\nposition\t1, 2\n\n"
@@ -4092,7 +4092,7 @@ building smith
         """Rome's data/packs/*.pak: the name table, the end offsets, the files one after another - a file not loose
         on disk is read from the pack (x.tga found as x.tga.dds too)."""
         import struct
-        from faction_tool import rompak as RP
+        from campaign_editor import rompak as RP
         names = ["DATA\\MODELS_UNIT\\TEXTURES\\A.TGA.DDS", "DATA\\UI\\B.TGA"]
         table = "".join(n + "\0" for n in names)
         files = [b"first-file", b"second"]
@@ -4117,7 +4117,7 @@ building smith
         """A faction's religion changed (Medieval II): it leaves the old faith's buildings (levels and the priest
         lines in them) and gets the new faith's where a faction of that faith (of its own culture first) has them;
         its priest figure follows; the faction of the old faith keeps its own; Restore byte for byte."""
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         d = os.path.join(self.root, "data")
         sm = os.path.join(d, "descr_sm_factions.txt")
         with open(sm) as fh:
@@ -4159,9 +4159,9 @@ building smith
     def test_wasteland_region(self):
         """REX / M2EX wasteland regions ('wasteland' where the town stands; the 3-line form too): no settlement, no
         rebels read from it; Check mod does not ask for its town pixel (a tester's Sahara_Province)."""
-        from faction_tool.check import check_mod
-        from faction_tool.moddata import region_entries
-        from faction_tool.textio import TextFile
+        from campaign_editor.check import check_mod
+        from campaign_editor.moddata import region_entries
+        from campaign_editor.textio import TextFile
         f = TextFile.from_bytes("x", (REGIONS + "Sahara\n\twasteland\n\t9 9 9\nGobi\n\twasteland\n\tslave\n"
                                       "\tRebels\n\t8 8 8\n\tnone\n\t5\n\t1\n").encode())
         e = region_entries(f)
@@ -4184,8 +4184,8 @@ building smith
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads
         out and a crafted backup manifest are refused before anything is written."""
         import json
-        from faction_tool import guard
-        from faction_tool.plan import Plan
+        from campaign_editor import guard
+        from campaign_editor.plan import Plan
         outside = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, outside, True)
         mod = ModData(self.root)
@@ -4232,7 +4232,7 @@ building smith
         """REX's own script/main.nut (squi) requires every .nut of the game's script/modules; a mod with a script
         plugin of its own (HLR: manifest.nut + main.nut, no module loading) would never run one put beside it - so
         the add-on goes to the game's script/modules. Its code already pasted into the mod's scripts is refused."""
-        from faction_tool import addons as AD
+        from campaign_editor import addons as AD
         game = tempfile.mkdtemp()
         open(os.path.join(game, "REX.exe"), "wb").close()
         write(os.path.join(game, "script", "main.nut"),
@@ -4255,7 +4255,7 @@ building smith
     def test_addons_from_anyone(self):
         import zipfile
         from unittest import mock
-        from faction_tool import addons as AD
+        from campaign_editor import addons as AD
         script = (
             "// Border Tolls - a toll at every border crossing\n"
             "// @game both\n"
@@ -4314,8 +4314,8 @@ building smith
             self.assertNotIn("border_tolls", [x.key for x in AD.library()])
 
     def test_forts_moved_removed_added(self):
-        from faction_tool import forts as FT
-        from faction_tool.edit import edit
+        from campaign_editor import forts as FT
+        from campaign_editor.edit import edit
         path = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
         with open(path, "rb") as fh:
             before = fh.read()
@@ -4347,7 +4347,7 @@ building smith
             self.assertEqual(fh.read(), before + b"\nregion A_R\nwatchtower \t2 3\n\nwatchtower \t0 3 ; west\n")
 
     def test_garrison_emptied_by_hand(self):
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         mod = ModData(self.root)
         path = mod.campaign_file("test", "descr_strat.txt")
         with open(path) as fh:
@@ -4364,14 +4364,14 @@ building smith
         # vanilla gives ships to cultures ("ownership roman, greek"), not factions
         with open(os.path.join(self.root, "data", "export_descr_unit.txt"), "a") as fh:
             fh.write("\ntype\t\teastern bireme\ndictionary\teastern_bireme\ncategory\tship\nownership\teastern\n")
-        from faction_tool.units import faction_units
+        from campaign_editor.units import faction_units
         mod = ModData(self.root)
         self.assertEqual([u.type for u in faction_units(mod, "alpha", ships=True)], ["eastern bireme"])
         self.assertNotIn("eastern bireme", [u.type for u in faction_units(mod, "alpha")])
 
     def test_campaign_screen_key_under_a_front_end_name(self):
         # the template's description sits under a front end name (like GAUL for gauls)
-        from faction_tool import clone
+        from campaign_editor import clone
         clone.FE_NAMES["alpha"] = "ALPHALAND"
         self.addCleanup(clone.FE_NAMES.pop, "alpha")
         write(os.path.join(self.root, "data", "text", "campaign_descriptions.txt"),
@@ -4422,12 +4422,12 @@ building smith
         import glob
         import py_compile
         here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        for p in glob.glob(os.path.join(here, "faction_tool", "*.py")) + [os.path.join(here, "rtw_faction_tool.py")]:
+        for p in glob.glob(os.path.join(here, "campaign_editor", "*.py")) + [os.path.join(here, "campaign_editor.py")]:
             py_compile.compile(p, cfile=os.path.join(self.root, "x.pyc"), doraise=True)
 
     def test_unit_and_building_editors(self):
-        from faction_tool import editors as E
-        from faction_tool.plan import Plan
+        from campaign_editor import editors as E
+        from campaign_editor.plan import Plan
         d = os.path.join(self.root, "data")
         with open(os.path.join(d, "export_descr_unit.txt"), "a") as fh:
             fh.write("\ntype\t\tbeta spear\ndictionary\tbeta_spear\t; the card name\n"
@@ -4480,7 +4480,7 @@ building smith
             from PIL import Image
         except ImportError:
             self.skipTest("Pillow is not installed")
-        from faction_tool import factionart as FA
+        from campaign_editor import factionart as FA
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         os.remove(os.path.join(camp, "map_alpha.tga"))
         with open(os.path.join(self.root, "data", "descr_sm_factions.txt"), "a") as fh:
@@ -4511,7 +4511,7 @@ building smith
         self.assertGreater(sel.getpixel((7, 4))[1], 150)
         self.assertEqual(sel.getpixel((0, 4)), (100, 100, 100))
         # a new region carved out of the rebels' B_R for alpha: alpha's map lights it at once
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
                "city": (3, 0), "owner": "alpha", "level": "village"}
         mod = ModData(self.root)
@@ -4533,7 +4533,7 @@ building smith
             from PIL import Image
         except ImportError:
             self.skipTest("Pillow is not installed")
-        from faction_tool import factionart as FA
+        from campaign_editor import factionart as FA
         d = os.path.join(self.root, "data")
         with open(os.path.join(d, "descr_sm_factions.txt"), "rb") as fh:
             sm = fh.read().decode("latin-1").replace(
@@ -4596,7 +4596,7 @@ building smith
         self.assertEqual(target, "models/textures/standard_rebels_beta.tga.dds")
         png = os.path.join(self.root, "flag.png")
         Image.new("RGB", (40, 40), (200, 0, 0)).save(png)
-        from faction_tool.edit import edit
+        from campaign_editor.edit import edit
         plan = edit(mod, "test", "beta", {"art": {target: {"src": png, "link": reb["link"]},
                                                   own["rel"]: png}})
         plan.apply()
@@ -4628,8 +4628,8 @@ building smith
                          before)
 
     def test_copy_unit_and_building(self):
-        from faction_tool import editors as E
-        from faction_tool.plan import Plan
+        from campaign_editor import editors as E
+        from campaign_editor.plan import Plan
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_buildings.txt"),
               "building barracks\n{\n    levels hut house\n    {\n        hut requires factions { alpha, }\n"
@@ -4648,7 +4648,7 @@ building smith
         E.copy_building(plan, "barracks", "camp", {"hut": "tent", "house": "hall"})
         plan.apply()
         m2 = ModData(self.root)
-        from faction_tool.units import read_units
+        from campaign_editor.units import read_units
         u = {x.type: x for x in read_units(m2.load(m2.file("edu")))}
         self.assertEqual(u["alpha guard"].dictionary, "alpha_guard")
         self.assertEqual(u["alpha guard"].ownership, ["alpha"])
@@ -4668,8 +4668,8 @@ building smith
     def test_new_unit_and_building_step_by_step(self):
         """What the step-by-step windows give copy_unit / copy_building: texts players read, owners, values,
         a picture of one's own; factions and texts per level; Restore gives every file back."""
-        from faction_tool import editors as E
-        from faction_tool.plan import Plan, restore
+        from campaign_editor import editors as E
+        from campaign_editor.plan import Plan, restore
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_buildings.txt"),
               "building barracks\n{\n    levels hut\n    {\n        hut requires factions { alpha, }\n"
@@ -4688,7 +4688,7 @@ building smith
                         texts={"tent": {"name": "Tent", "desc": "A tent"}}, factions=["beta"])
         bdir = plan.apply()
         m2 = ModData(self.root)
-        from faction_tool.units import read_units
+        from campaign_editor.units import read_units
         u = {x.type: x for x in read_units(m2.load(m2.file("edu")))}
         self.assertEqual(u["alpha guard"].ownership, ["alpha", "beta"])
         self.assertTrue(any("no 'stat_cost' line" in w for _, w in plan.warnings))   # the mini-mod's units have none
@@ -4709,7 +4709,7 @@ building smith
 
     def test_logs_zip(self):
         import zipfile
-        from faction_tool import log
+        from campaign_editor import log
         game = os.path.join(self.root, "game")
         os.makedirs(os.path.join(game, "reports"))
         with open(os.path.join(game, "system.log.txt"), "w") as fh:
@@ -4728,7 +4728,7 @@ building smith
     def test_game_log_in_plain_words(self):
         """The game's system.log.txt read: a Script Error's reason (the lines after it), errors of one kind grouped
         whatever unit / faction they name, a crash first, the mod's line shown, plain words for known messages."""
-        from faction_tool import gamelog
+        from campaign_editor import gamelog
         game = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, game)
         write(os.path.join(game, "data", "export_descr_buildings.txt"),
@@ -4761,7 +4761,7 @@ building smith
     def test_report_finds_the_game_logs(self):
         """The game writes system.log.txt where the mod was started from: the report finds the mod's own first, then
         the newest elsewhere in the game folder (a Rome mod folder, Medieval II's mods/<mod>/logs), at most 3."""
-        from faction_tool import report
+        from campaign_editor import report
         game = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, game)
         old = os.path.join(game, "logs", "system.log.txt")
@@ -4783,7 +4783,7 @@ building smith
         import json
         import threading
         import zipfile
-        from faction_tool import report, settings
+        from campaign_editor import report, settings
         # the person's names go: user folders in paths, e-mails, Steam IDs, SIDs, IPs, the given words
         text = ("C:\\Users\\Adam Smith\\Desktop\\x.txt /home/adam/rtw D:/Documents and Settings/adam/y "
                 "mail adam@example.com id 76561198012345678 S-1-5-21-1-2-3-1001 at 192.168.1.20 v0.19.2 "
@@ -4909,8 +4909,8 @@ building shrine
         return ModData(self.root)
 
     def test_roster_give_and_take_keep_every_place_in_step(self):
-        from faction_tool import roster as R
-        from faction_tool.edit import edit
+        from campaign_editor import roster as R
+        from campaign_editor.edit import edit
         mod = self._rich()
         before = tree_hash(self.root)
         r = R.roster(mod, "alpha")
@@ -4957,10 +4957,10 @@ building shrine
 
     def test_medieval2_recruit_pool_and_rex_retrain_lines(self):
         # Medieval II recruits with recruit_pool lines (vanilla has no 'recruit' at all); REX adds retrain-only lines
-        from faction_tool import editors as E
-        from faction_tool import roster as R
-        from faction_tool import packs
-        from faction_tool.edit import edit
+        from campaign_editor import editors as E
+        from campaign_editor import roster as R
+        from campaign_editor import packs
+        from campaign_editor.edit import edit
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB)
         mod = ModData(self.root)
@@ -5011,9 +5011,9 @@ building shrine
 
     def test_rex_bracket_requirements_read_every_faction_group(self):
         # REX: one line, several 'factions { }' groups, each with conditions of its own
-        from faction_tool import roster as R
-        from faction_tool.buildings import read_buildings
-        from faction_tool.edit import edit
+        from campaign_editor import roster as R
+        from campaign_editor.buildings import read_buildings
+        from campaign_editor.edit import edit
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_buildings.txt"), self.BRACKET_EDB)
         mod = ModData(self.root)
@@ -5046,7 +5046,7 @@ building shrine
     def test_editor_lines_no_cap_of_our_own(self):
         """A key the mod repeats takes any number of lines (no "not more than the mod has"); a one-line key stays
         one line; an unknown key is refused; officers stop at 3 only on the original exe (REX / M2EX lift it)."""
-        from faction_tool import editors as E
+        from campaign_editor import editors as E
         game, hlr = self._game()
         mod = ModData(hlr)
         f = mod.load(mod.file("edu"))
@@ -5063,8 +5063,8 @@ building shrine
 
     def test_engine_known_unit_keys_and_rex_attributes(self):
         # a key the engine knows may be added although no unit of the mod has one; REX words toggle on their line
-        from faction_tool import editors as E
-        from faction_tool import unitattrs as A
+        from campaign_editor import editors as E
+        from campaign_editor import unitattrs as A
         mod = ModData(self.root)
         f = mod.load(mod.file("edu"))
         blk = E.unit_blocks(f)[0]
@@ -5082,7 +5082,7 @@ building shrine
 
     def test_forts_are_read_and_nobody_starts_on_them(self):
         # REX / M2TW fort lines: kept out of the character before them, their tiles taken
-        from faction_tool.strat import Strat
+        from campaign_editor.strat import Strat
         d = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         p = os.path.join(d, "descr_strat.txt")
         text = open(p, encoding="latin-1").read().replace(
@@ -5102,8 +5102,8 @@ building shrine
     def test_rebels_are_edited_like_a_faction(self):
         # the rebels (slave) in Edit faction: a new rebel army and a captain for an empty rebel town
         # carry a sub_faction, and their names come from that faction's list (as every vanilla rebel)
-        from faction_tool.edit import edit
-        from faction_tool.strat import Strat
+        from campaign_editor.edit import edit
+        from campaign_editor.strat import Strat
         mod = ModData(self.root)
         p = mod.campaign_file("test", "descr_strat.txt")
         s0 = Strat(mod.load(p))
@@ -5132,8 +5132,8 @@ building shrine
 
     def test_medieval2_new_religion_everywhere(self):
         # a new religion (Medieval II): list + block, lookup, text, symbol, every region's line, map.rwm
-        from faction_tool import religions as RL
-        from faction_tool.regionedit import apply_opts
+        from campaign_editor import religions as RL
+        from campaign_editor.regionedit import apply_opts
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "descr_religions.txt"), "religions\n{\n\tcatholic\n\tislam\n}\n\n"
               "religion catholic\n{\n\tpip_path\tui/pips/pip_catholic.tga\n}\n\n"
@@ -5172,8 +5172,8 @@ building shrine
         """A level that recruits a unit by two lines for different factions (vanilla: Arab Cavalry for moors and
         for egypt, carthaginian peasant for spain and the carthaginian culture): giving the unit writes the
         faction into ONE of them - in both it was listed twice in the building's description (a tester)."""
-        from faction_tool import roster as R
-        from faction_tool.plan import Plan
+        from campaign_editor import roster as R
+        from campaign_editor.plan import Plan
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB.replace(
             'recruit_pool "rebel spear"  1   0.5   4  0  requires factions { slave, }\n',
@@ -5193,8 +5193,8 @@ building shrine
         self.assertNotIn("slave, beta", edb)
 
     def test_roster_take_a_culture_writes_the_others_out(self):
-        from faction_tool import roster as R
-        from faction_tool.plan import Plan
+        from campaign_editor import roster as R
+        from campaign_editor.plan import Plan
         mod = self._rich()
         plan = Plan(mod, "x", "x")
         R.set_level(plan, "slave", "barracks", "muster", give=False)      # slave is barbarian: the culture goes
@@ -5205,8 +5205,8 @@ building shrine
         self.assertTrue(plan.warnings)
 
     def test_lines_added_and_removed_in_their_place(self):
-        from faction_tool import editors as E
-        from faction_tool.plan import Plan
+        from campaign_editor import editors as E
+        from campaign_editor.plan import Plan
         mod = self._rich()
         plan = Plan(mod, "b", "b")
         edb = mod.file("edb")
@@ -5236,8 +5236,8 @@ building shrine
         self.assertEqual(E.required_keys(g, "building") >= {"construction", "cost", "settlement_min"}, True)
 
     def test_renamed_unit_and_chain_are_followed(self):
-        from faction_tool import editors as E
-        from faction_tool.plan import Plan
+        from campaign_editor import editors as E
+        from campaign_editor.plan import Plan
         mod = self._rich()
         plan = Plan(mod, "u", "u")
         E.rename_unit(plan, "rebel spear", "rebel pike")
@@ -5253,7 +5253,7 @@ building shrine
             E.rename_unit(Plan(mod, "u", "u"), "rebel spear", "alpha general")
 
     def test_mod_list_of_a_game_folder(self):
-        from faction_tool.newmod import game_of, list_mods
+        from campaign_editor.newmod import game_of, list_mods
         game = os.path.join(self.root, "game")
         for rel in ("data", "HLR/data", "bi/data", "mods/m2mod/data"):
             write(os.path.join(game, rel, "descr_sm_factions.txt"), "faction a\n")
@@ -5264,7 +5264,7 @@ building shrine
         self.assertEqual(game_of(os.path.join(game, "mods", "m2mod", "data")), game)
 
     def test_file_origins_from_manifests(self):
-        from faction_tool.scan import Origins
+        from campaign_editor.scan import Origins
         p = os.path.join(self.root, "data", "x.txt")
         write(p, "same")
         md5 = hashlib.md5(open(p, "rb").read()).hexdigest()
@@ -5280,7 +5280,7 @@ class CoreLevelTest(unittest.TestCase):
     def test_castle_core_equals_settlement_level(self):
         """M2: 'The castle core building level should be EQUAL the settlement level!' - a castle
         village has motte_and_bailey; a town's core stays one below (the user's crash, 0.7.4)."""
-        from faction_tool.buildings import Building, Level, core_level_for, core_settlement
+        from campaign_editor.buildings import Building, Level, core_level_for, core_settlement
         castle, town = Building("core_castle_building"), Building("core_building")
         castle.levels = [Level(n, "") for n in ("motte_and_bailey", "wooden_castle", "castle", "fortress", "citadel")]
         town.levels = [Level(n, "") for n in ("wooden_pallisade", "wooden_wall", "stone_wall")]
@@ -5298,8 +5298,8 @@ class M2DiplomacyEndTest(unittest.TestCase):
     def test_last_faction_block_stops_before_faction_standings(self):
         """Medieval II's diplomacy starts with faction_standings (Rome's with core_attitudes): the slave block, the
         last one, must end before it - a rebel army written after it was never read (the user's M2TW, 2026-09-30)."""
-        from faction_tool.strat import Strat
-        from faction_tool.textio import TextFile
+        from campaign_editor.strat import Strat
+        from campaign_editor.textio import TextFile
         text = ("campaign\timperial_campaign\r\n"
                 "faction\tslave, comfortable caliph\r\n"
                 "denari\t5000\r\n"
@@ -5325,7 +5325,7 @@ class BIRegionsTest(unittest.TestCase):
     def test_bi_regions_legion_and_beliefs(self):
         """Barbarian Invasion's descr_regions has a 'legion: X' line after the name and a beliefs line after
         farming (9 value lines, all 72 regions of BI's own file): the reader took the legion for the town."""
-        from faction_tool.moddata import region_entries
+        from campaign_editor.moddata import region_entries
         text = ["Caledonia", "\tlegion: Caledonica", "\tDal_Raida", "\tcelts", "\tPictii", "\t111 111 0",
                 "\tslaves", "\t5", "\t5", "\tpagan 90 christianity 10",
                 "Tribus_Saxones", "\tlegion: Barbaricorum", "\tVicus_Saxones", "\tsaxons", "\tAngles",

@@ -165,8 +165,8 @@ class SettingsWindow(tk.Toplevel):
                                             "settings) and CampaignEditor_logs (the log, and on every close the "
                                             "session's log with a copy of the game's system.log.txt as "
                                             "game_system.log.txt in sessions/). A mod's backups (Restore) lie beside "
-                                            "its data folder in CampaignEditor_backups (older ones in "
-                                            "faction_tool_backups).")
+                                            "its data folder in CampaignEditor_backups (older versions' "
+                                            "backups are listed too).")
         ttk.Button(row, text="Open the logs folder", command=lambda: open_folder(log.logs_dir())).pack(side="left")
         from .relocate import running_exe
         mv = ttk.Button(row, text="Put the editor into the game's folder...", command=lambda: self.app.offer_move(True))

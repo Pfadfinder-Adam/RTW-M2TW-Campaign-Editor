@@ -3,7 +3,7 @@
 recoloured one by one, also those made later (a <Map> binding on every widget):
 neutral light colours become the dark palette's, dark text becomes light, and
 colours that mean something (a changed field's yellow, a faction's colour) stay.
-The choice is kept in faction_tool_settings.json ('theme')."""
+The choice is kept in CampaignEditor_settings.json ('theme')."""
 
 import tkinter as tk
 from tkinter import ttk

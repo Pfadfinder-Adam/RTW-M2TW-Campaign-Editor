@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Changed
+- **The old "Faction Tool" name is gone** (the author's wish): the code is the `campaign_editor` package, started
+  from source with `python campaign_editor.py`; the files it makes beside a mod are `CampaignEditor_ignore.txt` and
+  `CampaignEditor_mod.json`. Older versions' files (`faction_tool_backups`, `faction_tool_ignore.txt`,
+  `faction_tool_mod.json`, `faction_tool.log`, `faction_tool_settings.json`) are still read - nothing breaks.
+- **README**: the important things first - download, wiki, roadmap, changelog, what to do when something goes wrong,
+  why support it - then what the editor does.
 - **Recolour leaves the white banner a fleeing unit shows and the rebels' banner alone** (found in a tester's log: it
   made the faction its own recoloured copy of standard_routing / standard_slave).
 - **Add-ons go where REX loads them** (a tester's HLR report): into the game's `script/modules` - a mod with a script
