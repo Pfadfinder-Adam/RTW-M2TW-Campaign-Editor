@@ -56,6 +56,10 @@ class BuildingsEditor(ttk.Frame):
         canvas.bind("<Configure>", self._resized, add="+")
         self.bpics = None
         self.roster = {}                  # {(chain, level): give?} from the Roster tab
+        # nothing picked yet: the buttons and the check box above work on an empty editor (a click before a town
+        # was picked raised AttributeError 'own' / 'buildings' - a report from 0.25.0)
+        self.buildings, self.own, self.current, self.edited = None, [], {}, False
+        self.region = self.town_level = self.culture = self.faction = self.template = None
 
     def _resized(self, e):
         if abs(e.width - self._width) > 40 and getattr(self, "buildings", None) is not None:
@@ -103,7 +107,7 @@ class BuildingsEditor(ttk.Frame):
         """(building, [levels this faction may build]) for every chain it may build,
         plus chains the town already has."""
         out = []
-        for b in self.buildings:
+        for b in self.buildings or ():
             # a level given or taken on the Roster tab counts as the faction's list will be
             lv = [l for l in b.levels if self.roster.get((b.name, l.name),
                                                          available(l, self.faction, self.culture, self.template))
@@ -211,9 +215,12 @@ class BuildingsEditor(ttk.Frame):
         return next((i for i, b in enumerate(self.buildings) if b.name == chain), 999)
 
     def reset(self):
+        if self.buildings is None:
+            return                      # no town picked yet
         self.current = dict(self.own)
         self.edited = False
-        self.on_change(None)
+        if self.on_change:
+            self.on_change(None)
         self.redraw()
 
 

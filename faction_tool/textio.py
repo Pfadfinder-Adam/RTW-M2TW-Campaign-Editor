@@ -15,6 +15,94 @@ Lines handed out by .text(i) have the "\\r" removed; lines added through
 
 import codecs
 import os
+import stat
+import time
+
+
+class WriteError(OSError):
+    """A file the system would not let the tool write, said in plain words."""
+
+
+def make_writable(path):
+    """Take a file's read-only mark off (Windows' Read-only box; mods unpacked from some archives or copied from a
+    disc carry it, and Windows then refuses to replace or remove the file). True when it was read-only."""
+    try:
+        mode = os.stat(path).st_mode
+    except OSError:
+        return False
+    if mode & stat.S_IWRITE:
+        return False
+    try:
+        os.chmod(path, mode | stat.S_IWRITE)
+    except OSError:
+        return False
+    return True
+
+
+def readonly(path):
+    """True when an existing file carries the read-only mark."""
+    try:
+        return not os.stat(path).st_mode & stat.S_IWRITE
+    except OSError:
+        return False
+
+
+def refused(path, err):
+    """Plain words for a file the system would not let the tool write or remove."""
+    where = os.path.abspath(path)
+    tips = ["close the game and any program that has the file open (a text editor, a pack tool, an antivirus "
+            "scan, a cloud folder such as OneDrive syncing it)"]
+    if "program files" in where.lower():
+        tips.append("the game lies under Program Files, where Windows lets only an administrator write - start "
+                    "the editor with 'Run as administrator' or move the game's library out of Program Files")
+    return "%s could not be written - the system refused (%s). Try: %s; then Apply again." % (
+        where, getattr(err, "strerror", None) or err, "; or ".join(tips))
+
+
+def _retrying(do, path):
+    """Run do() (a replace or a remove of path); when the system refuses: take the read-only mark off and try again,
+    and wait a little for a program that holds the file for a moment (about 2.5 s in all). Raises WriteError."""
+    last = None
+    for wait in (0, 0.1, 0.2, 0.4, 0.8, 1.0):
+        if wait:
+            time.sleep(wait)
+        try:
+            return do()
+        except PermissionError as e:              # WinError 5 (access denied) / 32 (in use) / EACCES / EPERM
+            last = e
+            make_writable(path)
+        except OSError as e:
+            if getattr(e, "winerror", None) in (5, 32, 33):
+                last = e
+                continue
+            raise
+    raise WriteError(refused(path, last)) from last
+
+
+def replace_file(path, data):
+    """Write data as the file path: into a temp file beside it, then renamed over the old file - a new file, never
+    written into the old one (in a mod made of hard links the old file may be shared with the base mod). A file
+    marked read-only is made writable; a file held by another program for a moment is tried again. Raises
+    WriteError in plain words when the system still refuses; the temp file never stays behind."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = path + ".CampaignEditor_tmp"
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+        _retrying(lambda: os.replace(tmp, path), path)
+    except PermissionError as e:                  # the temp file itself refused: the folder takes no writes
+        raise WriteError(refused(path, e)) from e
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
+def remove_file(path):
+    """Remove a file (a read-only one too); WriteError in plain words when the system refuses."""
+    _retrying(lambda: os.remove(path), path)
 
 
 def _utf8(data):
@@ -95,14 +183,9 @@ class TextFile:
         return self.bom + "\n".join(self.raw).encode(self.encoding)
 
     def save(self, path=None):
-        path = path or self.path
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         # a new file replaces the old one, never written into it: in a mod made
         # of hard links the old file may be shared with the base mod
-        tmp = path + ".faction_tool_tmp"
-        with open(tmp, "wb") as f:
-            f.write(self.dump())
-        os.replace(tmp, path)
+        replace_file(path or self.path, self.dump())
 
 
 def strip_comment(line):

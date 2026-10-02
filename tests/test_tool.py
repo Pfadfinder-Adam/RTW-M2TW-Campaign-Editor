@@ -2567,6 +2567,48 @@ building smith
         self.assertEqual(symbols.sprite_mode(mod), "xml")
         self.assertFalse(modeldb.text_source(mod))                      # not in the mod's file: default modeldb
 
+    def test_a_refused_write_changes_nothing(self):
+        """A file the system refuses half way through Apply (WinError 5: read-only, or held by another program - a
+        report from a Medieval II mod): the files written before it go back, the copies go, no temp file and no
+        backup stay, and the error says it in plain words. A read-only file is said in Preview and written."""
+        import stat
+        from unittest import mock
+        from faction_tool import textio
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {
+            "display_name": "Betan League", "short_name": "Beta", "adjective": "Betan",
+            "start": {"regions": ["B_R"], "leader": {"name": "Boris Alphid", "age": 35}, "denari": 500}})
+        changed = plan.changed_files()
+        self.assertGreater(len(changed), 3)
+        victim = changed[2]
+        real = textio.os.replace
+
+        def refuse(src, dst):
+            if os.path.normcase(dst) == os.path.normcase(victim):
+                raise PermissionError(13, "Access is denied", dst)
+            return real(src, dst)
+        with mock.patch.object(textio.os, "replace", side_effect=refuse), \
+                mock.patch.object(textio.time, "sleep"):
+            with self.assertRaises(textio.WriteError) as got:
+                plan.apply()
+        self.assertIn("could not be written", str(got.exception))
+        self.assertIn("Nothing was changed", str(got.exception))
+        self.assertEqual(tree_hash(self.root), before)                   # byte for byte, no backup, no temp file
+        # a read-only file: Preview says so, Apply takes the mark off and writes it
+        os.chmod(victim, stat.S_IREAD)
+        try:
+            mod = ModData(self.root)
+            plan = build(mod, "test", "alpha", "beta", {
+                "display_name": "Betan League", "short_name": "Beta", "adjective": "Betan",
+                "start": {"regions": ["B_R"], "leader": {"name": "Boris Alphid", "age": 35}, "denari": 500}})
+            self.assertIn("marked read-only", plan.report())
+            plan.apply()
+            self.assertTrue(os.stat(victim).st_mode & stat.S_IWRITE)
+            restore(ModData(self.root), backups(ModData(self.root))[0])
+        finally:
+            os.chmod(victim, stat.S_IREAD | stat.S_IWRITE)
+
     def test_recolour_faction_pictures(self):
         """A unit card in the faction's red / yellow next to another faction's blue / white copy: the red and yellow
         parts take the new colours, the brown horse (near red, but the same in both copies and duller) stays;

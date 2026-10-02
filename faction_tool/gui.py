@@ -1788,7 +1788,19 @@ class App(tk.Tk):
             "town" if what == "city" else "port", name, ", by the sea" if what == "port" else ""))
         self.show_map()
 
+    def _region_point_gone(self):
+        """Why the town / port waiting for a click can no longer be placed (another tool was picked, or the new
+        region was dropped meanwhile), or None. A map drawn before that still carries the old click handler."""
+        if not self._region_point:
+            return "no town or port is waiting to be placed - pick 'Place its town' again"
+        if not self._new_region(self._region_point[1]):
+            return "the new region %s is gone (dropped) - nothing to place" % self._region_point[1]
+        return None
+
     def region_point_problem(self, xy):
+        gone = self._region_point_gone()
+        if gone:
+            return gone
         what, name = self._region_point
         cm = self._cmap
         if not (0 <= xy[0] < cm.w and 0 <= xy[1] < cm.h):
@@ -1824,6 +1836,13 @@ class App(tk.Tk):
         return got
 
     def place_region_point(self, xy):
+        gone = self._region_point_gone()
+        if gone:
+            self._region_point, self._town_auto = None, False
+            self.map_view.set_tool(None)
+            self.status.set(gone[0].upper() + gone[1:] + ".")
+            self.show_map()                             # the map forgets the old click handler
+            return None
         what, name = self._region_point
         before = None
         if self._town_auto and what == "city":
@@ -4227,7 +4246,7 @@ class App(tk.Tk):
 
         def save_as():
             path = filedialog.asksaveasfilename(parent=w, defaultextension=".txt",
-                                                initialfile="faction_tool_report.txt",
+                                                initialfile="CampaignEditor_report.txt",
                                                 filetypes=[("Text", "*.txt"), ("All files", "*.*")])
             if path:
                 with open(path, "w", encoding="utf-8") as fh:

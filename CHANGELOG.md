@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Fixed
+- **A file the system refuses no longer leaves a mod half written** (reports from a Medieval II mod: "[WinError 5]
+  Access denied" on descr_sounds_accents.txt while making a faction): Apply is all or nothing - when one file cannot
+  be written, the files written before it are put back, the copies removed, no temp file stays, and the message says
+  in plain words what to close or change. A file marked read-only (Windows' Read-only box) is named in Preview and
+  written (the mark is taken off); a file another program holds for a moment is tried again.
+- **Map: no more errors after switching tools while a new region's town waited for its click** (34 errors in one
+  report: a fort placed in between, then every mouse move). The map forgets the old click and says so.
+- **Buildings tab: the buttons above the list work before a town is picked** ('BuildingsEditor' has no
+  attribute 'own').
 - **A mod's engine settings come from the mod's own files only**: REX and M2EX read `descr_ex.txt` /
   `descr_caps_ex.txt` from the mod's data folder - a mod without them runs on the engine's built-in defaults (their
   own words: "Mods that don't ship this file get safe defaults"), not on the game's copy. The tool read the game's
