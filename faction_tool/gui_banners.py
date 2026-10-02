@@ -1,28 +1,24 @@
-"""The window that puts right by hand where the new symbol goes on a battle banner (banners.py finds the old symbol
-on its own; a cloth of two colours or a symbol touching the trim can fool it): a brush marks more of the old symbol
-to fill over (or less), and a box drawn on a banner is where the new symbol goes. The allies' banner takes the
-same places."""
+"""The window for the faction's battle banners (banners.py): which of the game's blank white banners (Roman,
+barbarian, eastern), the cloth's colour, and where the symbol goes - a box drawn on a banner. The own banner and the
+allies' (the symbol faint) are shown side by side."""
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import colorchooser, ttk
 
 from . import banners as B
 from .gui_util import ShortHint
 
-VIEW = 512
+VIEW = 384
 
 
-class BannerFixer(tk.Toplevel):
-    def __init__(self, master, old, symbol, found, on_done, title="Battle banner"):
+class BannerWindow(tk.Toplevel):
+    def __init__(self, master, blanks, symbol, settings, on_done, title="Battle banners"):
         super().__init__(master)
-        self.title(title + " - put the symbol right")
+        self.title(title)
         self.transient(master.winfo_toplevel())
-        self.old = old.convert("RGBA")
-        self.symbol = symbol
-        self.k = VIEW / max(self.old.size)
-        self.found = [[f[0].copy(), tuple(f[1])] for f in (found or [])]
+        self.blanks, self.symbol, self.on_done = blanks, symbol, on_done
+        self.s = dict(settings)
         self.undo = []
-        self.on_done = on_done
         self._build()
         self.redraw()
 
@@ -30,155 +26,130 @@ class BannerFixer(tk.Toplevel):
         frm = ttk.Frame(self, padding=8)
         frm.pack(fill="both", expand=True)
         ShortHint(frm, text=(
-            "Coloured over = the old symbol, filled over with the cloth round it; the dashed box = where the new symbol goes. "
-            "The brush marks more of the old symbol (or less, with 'keep'); drawing a box on a banner moves the new "
-            "symbol there. The allies' banner gets the same places.")).pack(anchor="w")
+            "The banners are made from the game's own blank white banner: its cloth dyed in the colour picked, the "
+            "symbol painted on it with the cloth's folds. Draw a box on a banner to put the symbol there. Right: "
+            "the allies' banner, the symbol faint like the game's own.")).pack(anchor="w")
+        top = ttk.Frame(frm)
+        top.pack(anchor="w", pady=6)
+        ttk.Label(top, text="Blank banner").pack(side="left")
+        self.v_kind = tk.StringVar(value=self.s.get("kind") or next(iter(self.blanks)))
+        cb = ttk.Combobox(top, textvariable=self.v_kind, values=list(self.blanks), state="readonly", width=12)
+        cb.pack(side="left", padx=6)
+        cb.bind("<<ComboboxSelected>>", lambda e: self._kind())
+        ttk.Label(top, text="Cloth colour").pack(side="left", padx=(12, 0))
+        self.b_col = tk.Button(top, width=4, command=self._colour)
+        self.b_col.pack(side="left", padx=6)
+        ttk.Button(top, text="Undo", command=self._undo).pack(side="left", padx=(12, 0))
+        ttk.Button(top, text="Symbol back in the middle", command=self._reset).pack(side="left", padx=4)
         body = ttk.Frame(frm)
-        body.pack(fill="both", expand=True, pady=6)
-        w, h = (round(s * self.k) for s in self.old.size)
-        self.cv = tk.Canvas(body, width=w, height=h, highlightthickness=1, highlightbackground="#999",
+        body.pack()
+        self.cv = tk.Canvas(body, width=VIEW, height=VIEW, highlightthickness=1, highlightbackground="#999",
                             cursor="crosshair")
         self.cv.pack(side="left")
-        side = ttk.Frame(body, padding=(10, 0))
-        side.pack(side="left", fill="y")
-        self.v_show = tk.StringVar(value="before")
-        ttk.Label(side, text="Show").pack(anchor="w")
-        for text, val in (("the old symbol marked", "before"), ("the banner after", "after")):
-            ttk.Radiobutton(side, text=text, value=val, variable=self.v_show, command=self.redraw).pack(anchor="w")
-        ttk.Separator(side).pack(fill="x", pady=8)
-        ttk.Label(side, text="A drag on the banner").pack(anchor="w")
-        self.v_tool = tk.StringVar(value="add")
-        for text, val in (("brush: the old symbol (fill over)", "add"), ("brush: keep (not the symbol)", "keep"),
-                          ("box: the new symbol's place", "box")):
-            ttk.Radiobutton(side, text=text, value=val, variable=self.v_tool).pack(anchor="w")
-        row = ttk.Frame(side)
-        row.pack(anchor="w", pady=(4, 0))
-        ttk.Label(row, text="brush size").pack(side="left")
-        self.v_size = tk.IntVar(value=6)
-        ttk.Spinbox(row, from_=1, to=40, textvariable=self.v_size, width=4).pack(side="left", padx=4)
-        ttk.Separator(side).pack(fill="x", pady=8)
-        bb = ttk.Frame(side)
-        bb.pack(anchor="w")
-        ttk.Button(bb, text="Undo", command=self._undo).pack(side="left")
-        ttk.Button(bb, text="Find it again", command=self._auto).pack(side="left", padx=4)
+        self.cv2 = tk.Canvas(body, width=VIEW // 2, height=VIEW // 2, highlightthickness=1,
+                             highlightbackground="#999")
+        self.cv2.pack(side="left", anchor="n", padx=8)
         bar = ttk.Frame(frm)
-        bar.pack(fill="x")
+        bar.pack(fill="x", pady=(8, 0))
         ttk.Button(bar, text="Done", command=self._done).pack(side="left")
         ttk.Button(bar, text="Cancel", command=self.destroy).pack(side="right")
         self.cv.bind("<ButtonPress-1>", self._press)
         self.cv.bind("<B1-Motion>", self._drag)
         self.cv.bind("<ButtonRelease-1>", self._release)
 
-    # ---- state ----
+    def blank(self):
+        return self.blanks[self.v_kind.get()]
+
+    def boxes(self):
+        return self.s.get("boxes") or B.symbol_boxes(self.blank())
+
+    # ---- changes ----
     def _remember(self):
-        self.undo.append([[m.copy(), b] for m, b in self.found])
+        self.undo.append(dict(self.s))
         del self.undo[:-20]
 
     def _undo(self):
         if self.undo:
-            self.found = self.undo.pop()
+            self.s = self.undo.pop()
+            self.v_kind.set(self.s.get("kind"))
             self.redraw()
 
-    def _auto(self):
+    def _kind(self):
         self._remember()
-        self.found = [[f[0], f[1]] for f in B.find_symbols(self.old)]
+        self.s.update(kind=self.v_kind.get(), boxes=None)       # another shape: the symbol back in its middle
         self.redraw()
 
-    def _xy(self, e):
-        return int(e.x / self.k), int(e.y / self.k)
-
-    def _banner_at(self, xy):
-        """The index into found of the banner holding xy, a new entry made when the banner has none."""
-        for x0, y0, x1, y1 in B._banners(self.old.split()[3], int(self.old.size[1] * 0.72)):
-            if x0 <= xy[0] < x1 and y0 <= xy[1] < y1:
-                for i, (m, b) in enumerate(self.found):
-                    if b and x0 <= (b[0] + b[2]) / 2 < x1:
-                        return i
-                from PIL import Image
-                self.found.append([Image.new("L", self.old.size, 0), (x0 + 10, y0 + 10, x1 - 10, y1 - 30)])
-                return len(self.found) - 1
-        return None
-
-    # ---- the mouse ----
-    def _press(self, e):
-        xy = self._xy(e)
-        i = self._banner_at(xy)
-        if i is None:
-            self._at = None
-            return
+    def _reset(self):
         self._remember()
-        self._at = (i, xy)
-        if self.v_tool.get() != "box":
-            self._paint(i, xy)
+        self.s["boxes"] = None
+        self.redraw()
 
-    def _paint(self, i, xy):
-        from PIL import ImageDraw
-        r = int(self.v_size.get() or 6)
-        ImageDraw.Draw(self.found[i][0]).ellipse((xy[0] - r, xy[1] - r, xy[0] + r, xy[1] + r),
-                                                 fill=255 if self.v_tool.get() == "add" else 0)
-        k = self.k
-        self.cv.create_oval((xy[0] - r) * k, (xy[1] - r) * k, (xy[0] + r) * k, (xy[1] + r) * k,
-                            outline="", fill="#ff3030" if self.v_tool.get() == "add" else "#30c030",
-                            stipple="gray50", tags="stroke")
+    def _colour(self):
+        got = colorchooser.askcolor(color="#%02x%02x%02x" % tuple(self.s["colour"][:3]), parent=self,
+                                    title="The banner's cloth")
+        if got and got[0]:
+            self._remember()
+            self.s["colour"] = tuple(int(v) for v in got[0])
+            self.redraw()
+
+    # ---- the mouse: a box on a banner ----
+    def _xy(self, e):
+        k = self.blank().size[0] / VIEW
+        return int(e.x * k), int(e.y * k)
+
+    def _press(self, e):
+        self._from = self._xy(e)
 
     def _drag(self, e):
-        if not getattr(self, "_at", None):
+        if not getattr(self, "_from", None):
             return
-        i, start = self._at
-        xy = self._xy(e)
-        if self.v_tool.get() == "box":
-            k = self.k
-            self.cv.delete("newbox")
-            self.cv.create_rectangle(start[0] * k, start[1] * k, xy[0] * k, xy[1] * k, outline="#ffd400",
-                                     width=2, tags="newbox")
-        else:
-            self._paint(i, xy)
+        k = VIEW / self.blank().size[0]
+        x, y = self._xy(e)
+        self.cv.delete("newbox")
+        self.cv.create_rectangle(self._from[0] * k, self._from[1] * k, x * k, y * k, outline="#ffd400", width=2,
+                                 tags="newbox")
 
     def _release(self, e):
-        if not getattr(self, "_at", None):
+        start, self._from = getattr(self, "_from", None), None
+        if not start:
             return
-        i, start = self._at
-        self._at = None
-        if self.v_tool.get() == "box":
-            xy = self._xy(e)
-            box = (min(start[0], xy[0]), min(start[1], xy[1]), max(start[0], xy[0]), max(start[1], xy[1]))
-            if box[2] - box[0] >= 4 and box[3] - box[1] >= 4:
-                self.found[i][1] = box
+        x, y = self._xy(e)
+        box = (min(start[0], x), min(start[1], y), max(start[0], x), max(start[1], y))
+        if box[2] - box[0] < 4 or box[3] - box[1] < 4:
+            return
+        banners = B.banner_boxes(self.blank())
+        cx = (box[0] + box[2]) / 2
+        which = next((i for i, b in enumerate(banners) if b[0] <= cx < b[2]), None)
+        if which is None:
+            self.redraw()
+            return
+        self._remember()
+        boxes = list(self.boxes())
+        boxes[which] = box
+        self.s["boxes"] = boxes
         self.redraw()
 
     # ---- drawing ----
-    def places(self):
-        """[(mask, box)] as banners.paint_symbol takes them (banners with nothing marked and no box left out)."""
-        return [(m, b) for m, b in self.found if b]
-
-    def _mark_colour(self):
-        """A colour far from the cloth's (red on a red banner would not show)."""
-        from PIL import ImageStat
-        r, g, b = ImageStat.Stat(self.old.convert("RGB"), self.old.split()[3]).mean[:3]
-        return (0, 220, 255, 255) if r >= max(g, b) else (255, 40, 200, 255) if g >= b else (255, 140, 0, 255)
-
     def redraw(self):
         from PIL import Image, ImageTk
-        if self.v_show.get() == "after":
-            im = B.paint_symbol(self.old, self.symbol, self.places()) or self.old
-        else:
-            im = self.old.copy()
-            red = Image.new("RGBA", im.size, self._mark_colour())
-            for m, _ in self.found:
-                im.paste(red, (0, 0), m.point(lambda v: v * 150 // 255))
-        bg = Image.new("RGBA", im.size, (90, 90, 90, 255))
-        bg.alpha_composite(im)
-        view = bg.resize((round(im.size[0] * self.k), round(im.size[1] * self.k)), Image.LANCZOS)
-        self._ph = ImageTk.PhotoImage(view)
-        c = self.cv
-        c.delete("all")
-        c.create_image(0, 0, image=self._ph, anchor="nw")
-        k = self.k
-        for _, b in self.found:
-            if b:
-                c.create_rectangle(b[0] * k, b[1] * k, b[2] * k, b[3] * k, outline="#ffd400", dash=(4, 3))
+        col = tuple(self.s["colour"][:3])
+        self.b_col.configure(bg="#%02x%02x%02x" % col)
+        views = []
+        for cv, size, strength in ((self.cv, VIEW, 1.0), (self.cv2, VIEW // 2, B.ALLY_STRENGTH)):
+            im = B.paint(self.blank(), col, self.symbol, self.boxes(), strength)
+            bg = Image.new("RGBA", im.size, (90, 90, 90, 255))
+            bg.alpha_composite(im)
+            ph = ImageTk.PhotoImage(bg.resize((size, size), Image.LANCZOS))
+            views.append(ph)
+            cv.delete("all")
+            cv.create_image(0, 0, image=ph, anchor="nw")
+        self._ph = views
+        k = VIEW / self.blank().size[0]
+        for b in self.boxes():
+            self.cv.create_rectangle(b[0] * k, b[1] * k, b[2] * k, b[3] * k, outline="#ffd400", dash=(4, 3))
 
     def _done(self):
-        got = self.places()
+        self.s["kind"] = self.v_kind.get()
+        got = dict(self.s)
         self.destroy()
         self.on_done(got)

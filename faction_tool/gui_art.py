@@ -353,11 +353,27 @@ class ArtEditor(ttk.Frame):
         EmblemFitter(self, picture, EE.frame_mask(pics, olds), cols,
                      lambda master, sym: self._emblem_made(master, pics, src, src_faction, new, sym))
 
-    def _emblem_made(self, master, pics, src, src_faction, new, symbol=None, places=None):
+    def _banner_settings(self, pics, src_faction):
+        """The battle banners' first look: the blank banner nearest the old one's shape, the faction's primary."""
+        from . import banners as B
+        from . import emblem as E
+        from .recolour import faction_colours
+        a = self.app
+        blanks = B.templates(a.mod)
+        if not blanks:
+            return blanks, None
+        own = next((p for p in pics if E.is_banner(p) and p["link"][1] == "standard_texture"), None)
+        colour = a.colours.get("primary") or faction_colours(a.mod).get(src_faction, (None, None))[0] \
+            or (200, 200, 200)
+        kind = B.best_template(blanks, E._old(own) if own else None)
+        return blanks, {"kind": kind, "colour": tuple(colour[:3]), "boxes": None}
+
+    def _emblem_made(self, master, pics, src, src_faction, new, symbol=None, banner=None):
         from . import emblem as E
         a = self.app
-        places = dict(places or {})
-        made = E.build(master, pics, symbol, places)
+        blanks, first = self._banner_settings(pics, src_faction)
+        banner = banner or first
+        made = E.build(master, pics, symbol, dict(banner, blank=blanks[banner["kind"]]) if banner else None)
         import tempfile
         paths = E.save_all(made, tempfile.mkdtemp(prefix="emblem_"))
         w = tk.Toplevel(self)
@@ -365,7 +381,7 @@ class ArtEditor(ttk.Frame):
         w.transient(self.winfo_toplevel())
         ShortHint(w, text=(
             "Every place the game shows the emblem, now and after - the flag on the campaign map and the battle "
-            "banners carry the symbol alone, on their own cloth (the old symbol filled over). Each picture keeps "
+            "banners carry the symbol alone - the banners made from the game's blank white banner dyed in the faction's colour. Each picture keeps "
             "its size and format; the button states are made like the mod's own. Nothing is written yet: 'Use it' puts them on the Art tab, "
             "Preview and Apply write them with a backup (Restore gives them back).")).pack(anchor="w", padx=8, pady=6)
         grid = ttk.Frame(w, padding=8)
@@ -391,36 +407,19 @@ class ArtEditor(ttk.Frame):
                       justify="center", foreground="#444").grid(row=1, column=0, columnspan=2)
             if E.is_banner(p):
                 if p["rel"] not in made:
-                    ttk.Label(cell, text="no symbol found on it - put it right by hand", foreground="#a60",
-                              wraplength=200).grid(row=2, column=0, columnspan=2)
-                ttk.Button(cell, text="Put it right...", command=lambda p=p: fix(p)).grid(
-                    row=3, column=0, columnspan=2)
+                    ttk.Label(cell, text="no blank banner (standard_routing) in the mod - left as it is",
+                              foreground="#a60", wraplength=200).grid(row=2, column=0, columnspan=2)
+                else:
+                    ttk.Button(cell, text="Banner...", command=lambda: fix()).grid(row=3, column=0, columnspan=2)
         w._photos = photos
 
-        def fix(p):
-            from . import banners as B
-            from .gui_banners import BannerFixer
-            old = E._old(p)
-            if old is None:
-                return
-            found = places.get(p["rel"])
-            if found is None:
-                found = [(f[0], f[1]) for f in B.find_symbols(old)]
-                if not found and p["link"][1] == "ally_texture":     # the own banner's places
-                    own = next((q for q in pics if E.is_banner(q) and q["link"][1] == "standard_texture"), None)
-                    found = places.get(own["rel"]) if own else None
-                    if found is None and own is not None and E._old(own) is not None:
-                        found = [(f[0], f[1]) for f in B.find_symbols(E._old(own))]
+        def fix():
+            from .gui_banners import BannerWindow
 
             def done(got):
-                places[p["rel"]] = got
-                if p["link"][1] == "standard_texture":          # the allies' banner follows unless put right itself
-                    for q in pics:
-                        if E.is_banner(q) and q["link"][1] == "ally_texture" and q["rel"] not in places:
-                            places[q["rel"]] = got
                 w.destroy()
-                self._emblem_made(master, pics, src, src_faction, new, symbol, places)
-            BannerFixer(w, old, symbol or master, found, done, title=p["label"])
+                self._emblem_made(master, pics, src, src_faction, new, symbol, got)
+            BannerWindow(w, blanks, symbol or master, banner, done)
 
         def use():
             a.remember()

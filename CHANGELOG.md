@@ -8,12 +8,11 @@
   a circle, a square), a ground in the faction's colours, a magic wand that clears an area of like colour, a paint
   bucket (emblem_edit.py, gui_emblem.EmblemFitter).
 - **Faction emblem: the new symbol on the battle banners and the campaign map's flag (Rome)** (a tester's wish: the
-  symbol on every 3D flag, not only the icons): the old symbol on the faction's standard texture is found, filled
-  over with the cloth round it, and the new symbol painted in its place, shaded by the cloth's folds; the allies'
-  banner takes the same places; the flag symbol gets the bare symbol. **Put it right...** corrects a banner by hand
-  (a brush for what to fill over, a box for where the symbol goes). Found on its own on most of vanilla Rome's
-  banners; a few (a two-coloured cloth, a handle reaching the trim) need a touch by hand (banners.py,
-  gui_banners.BannerFixer).
+  symbol on every 3D flag, not only the icons): the faction's battle banners are made from the game's own blank
+  white banner (standard_routing - Roman, barbarian or eastern, the one nearest the old banner's shape), its cloth
+  dyed in the faction's colour and the symbol painted on it with the cloth's folds; the allies' banner the same with
+  the symbol faint; the flag symbol gets the bare symbol. **Banner...** picks another blank banner or colour and
+  moves the symbol (banners.py, gui_banners.BannerWindow).
 - **Edit region... holds both names** (a tester: three buttons on the Map's region bar did one job): for a region of
   the map it now has the names in the files of the region and its town beside the names players see; a change of
   the file names is written at once in every file that names them, with a backup (asked first). The Map's

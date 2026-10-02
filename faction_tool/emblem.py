@@ -134,33 +134,23 @@ def _glow(old_normal, old_select, new):
     return glow
 
 
-def build(src, pics, symbol=None, places=None):
+def build(src, pics, symbol=None, banner=None):
     """{rel of the Art picture: new picture (RGBA, its size)} for every emblem picture, from one source picture
     (a Pillow image). pics: emblem_pictures(...). symbol: the bare symbol (no disc, no ground) for the flag symbol
-    and the banners - src when not given. places: {rel of a banner: [(mask, box)]} corrected by hand."""
+    and the banners - src when not given. banner: {'blank': the blank white banner (banners.templates), 'colour':
+    the cloth's colour, 'boxes': where the symbol goes or None} - the battle banners are made from it; without it
+    they are left as they are."""
     from PIL import Image
     from . import banners as B
     symbol = symbol or src
     olds = {p["rel"]: _old(p) for p in pics}
     normals = {_family(p): p for p in pics if variant_of(p["label"]) is None}
     out = {}
-    # the banners: the faction's own and its allies' carry the symbol at the same place - found once on the own one
-    own = next((p for p in pics if is_banner(p) and p["link"][1] == "standard_texture"), None)
-    found = (places or {}).get(own["rel"]) if own else None
-    if own and found is None and olds.get(own["rel"]) is not None:
-        found = B.find_symbols(olds[own["rel"]])
     for p in pics:
         if is_banner(p):
-            old = olds.get(p["rel"])
-            if old is None:
-                continue
-            mine = (places or {}).get(p["rel"])
-            if mine is None:
-                same = own is not None and olds.get(own["rel"]) is not None and old.size == olds[own["rel"]].size
-                mine = found if same else None
-            got = B.paint_symbol(old, symbol, mine)
-            if got is not None:
-                out[p["rel"]] = got
+            if banner and banner.get("blank") is not None and banner.get("colour"):
+                out[p["rel"]] = B.paint(banner["blank"], banner["colour"], symbol, banner.get("boxes"),
+                                        B.ALLY_STRENGTH if p["link"][1] == "ally_texture" else 1.0)
             continue
         if any(p["label"].startswith(k) for k in SYMBOL_KINDS):
             old = olds.get(p["rel"])
