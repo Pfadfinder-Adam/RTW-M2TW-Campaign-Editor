@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+- **The editor offers to put itself into the game's folder** (where it finds the game and every mod by itself):
+  started from elsewhere (the Downloads folder, the desktop), the first start of each new version asks; the user
+  picks the game's folder (checked: the game's exe must lie there), the exe is copied there with its settings and
+  add-ons (an older copy of the editor there is replaced), a desktop shortcut is made if wanted (Windows), and it
+  starts from there. 'Not now' asks with the next version, 'Don't ask again' never; Settings > Folders has the button.
+
 ### Fixed
 - **The bigger map (x3) keeps the rules of the games' own maps** (five reports from Divide and Conquer, all of them
   measured on vanilla Medieval II too - 66 of 77 ports there had no water beside them): a town in a region

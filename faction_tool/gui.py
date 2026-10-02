@@ -65,6 +65,8 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   make a copy of the mod to work on  New mod folder... (the base mod stays untouched)
 
 START
+  0. Best: the exe in the game's folder (beside RomeTW.exe / medieval2.exe) - then the Mod list shows every mod
+     of the game at once. Started elsewhere, it offers to put itself there (you pick the game's folder).
   1. Close the game. Browse... to the mod's data folder (for example ...\\HLR\\data) and press
      Load. The Mod list at the top remembers every mod of that game folder for next time.
   2. Pick the campaign (usually imperial_campaign).
@@ -769,6 +771,72 @@ class App(tk.Tk):
             self.v[k].trace_add("write", lambda *a: self.update_actions())
         self.update_actions()
         self.after(50, self.load_last)
+        self.after(700, self.offer_move)
+
+    def offer_move(self, force=False):
+        """Once per version, when the exe lies outside every game folder (the Downloads folder, the desktop): offer to
+        put it into the game's folder - the user picks the folder (relocate.py); Settings > Folders has the same."""
+        from . import relocate
+        if not force and not relocate.should_offer(VERSION):
+            return
+        exe = relocate.running_exe()
+        if not exe:
+            messagebox.showinfo(APP, "The editor runs from its source files here - there is no exe to move.")
+            return
+        relocate.asked(VERSION)
+        w = tk.Toplevel(self)
+        w.title("Put the editor into the game's folder?")
+        w.transient(self)
+        ttk.Label(w, justify="left", wraplength=580, text=(
+            "The editor works best from the game's folder - beside RomeTW.exe or medieval2.exe (and REX.exe / "
+            "M2EX.exe): from there it finds the game and every mod by itself, and keeps its settings and logs in "
+            "one place.\n\nIt now lies in:\n%s\n\nPick the game's folder: the editor copies itself there (its "
+            "settings and add-ons go with it; an older copy of the editor there is replaced) and starts from "
+            "there. The copy here can be deleted afterwards. Nothing else is changed." % os.path.dirname(exe))
+                  ).pack(padx=14, pady=(12, 6), anchor="w")
+        v_short = tk.BooleanVar(value=sys.platform.startswith("win"))
+        ttk.Checkbutton(w, text="and put a shortcut to it on the desktop", variable=v_short).pack(anchor="w", padx=14)
+        bar = ttk.Frame(w)
+        bar.pack(fill="x", padx=14, pady=(10, 12))
+
+        def pick():
+            d = filedialog.askdirectory(parent=w, title="The game's folder (where RomeTW.exe / medieval2.exe is)",
+                                        initialdir=settings.get("game") or "")
+            if not d:
+                return
+            why = relocate.target_problem(d)
+            if why:
+                messagebox.showerror(APP, "Not there: %s." % why, parent=w)
+                return
+            try:
+                new = relocate.move_to(d)
+            except Exception as e:
+                messagebox.showerror(APP, str(e), parent=w)
+                return
+            note = ""
+            if v_short.get():
+                bad = relocate.desktop_shortcut(new)
+                note = ("\n\nA shortcut to it is on the desktop." if not bad else
+                        "\n\nThe desktop shortcut could not be made (%s) - right click the exe there > Send to > "
+                        "Desktop makes one." % bad)
+            settings.put("game", d)
+            messagebox.showinfo(APP, "The editor now lies in %s and starts from there.%s\n\nThe copy in %s can be "
+                                     "deleted." % (d, note, os.path.dirname(exe)), parent=w)
+            w.destroy()
+            try:
+                relocate.start(new)
+            except Exception as e:
+                messagebox.showerror(APP, "Start it from %s (%s)." % (new, e))
+                return
+            self.save_session()
+            self.destroy()
+
+        def never():
+            relocate.asked(VERSION, never=True)
+            w.destroy()
+        ttk.Button(bar, text="Pick the game's folder...", command=pick).pack(side="left")
+        ttk.Button(bar, text="Not now", command=w.destroy).pack(side="left", padx=6)
+        ttk.Button(bar, text="Don't ask again", command=never).pack(side="left")
 
     def _build_units_tab(self):
         """Units & armies: the chosen towns on the left, their garrisons on the right."""

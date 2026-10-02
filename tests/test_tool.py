@@ -1631,6 +1631,44 @@ building smith
         os.remove(os.path.join(d, "descr_ex.txt"))
         self.assertEqual(faction_limit(ModData(self.root))["max"], 21)
 
+    def test_editor_put_into_the_game_folder(self):
+        """An exe started outside every game folder offers once per version to go into the game's folder: the folder
+        the user picks is checked (a game exe must lie there), the exe goes there with the settings (when that place
+        has none yet), an older copy of the editor there is replaced; a folder without the game is refused."""
+        import sys
+        from unittest import mock
+        from faction_tool import log, relocate, settings
+        downloads = os.path.join(self.root, "Downloads")
+        game = os.path.join(self.root, "Rome Total War")
+        exe = os.path.join(downloads, "RTW-M2TW-Campaign-Editor.exe")
+        write(exe, "new editor")
+        write(os.path.join(downloads, "CampaignEditor_settings.json"), '{"theme": "dark"}')
+        write(os.path.join(game, "RomeTW.exe"), "the game")
+        write(os.path.join(game, "RTW-M2TW-Campaign-Editor.exe"), "old editor")
+        saved = (log._candidates, log._home, log._path, settings._data)
+        try:
+            log._candidates, log._home, log._path, settings._data = (lambda: iter([downloads])), None, None, None
+            with mock.patch.object(sys, "frozen", True, create=True), mock.patch.object(sys, "executable", exe):
+                self.assertTrue(relocate.should_offer("9.9"))
+                relocate.asked("9.9")
+                self.assertFalse(relocate.should_offer("9.9"))             # once per version
+                self.assertTrue(relocate.should_offer("9.10"))             # a new version asks again
+                relocate.asked("9.10", never=True)
+                self.assertFalse(relocate.should_offer("9.11"))            # 'Don't ask again'
+                self.assertIn("none of the games' exes", relocate.target_problem(downloads))
+                self.assertIsNone(relocate.target_problem(game))
+                new = relocate.move_to(game)
+                self.assertEqual(new, os.path.join(game, "RTW-M2TW-Campaign-Editor.exe"))
+                with open(new) as fh:
+                    self.assertEqual(fh.read(), "new editor")             # the older copy replaced
+                with open(os.path.join(game, "CampaignEditor_settings.json")) as fh:
+                    self.assertIn("dark", fh.read())                       # the settings came along
+                self.assertTrue(os.path.isfile(exe))                       # the started copy stays where it was
+                with mock.patch.object(sys, "executable", new):
+                    self.assertFalse(relocate.should_offer("10.0"))         # in the game folder: never asks
+        finally:
+            log._candidates, log._home, log._path, settings._data = saved
+
     def test_log_in_logs_folder(self):
         """Beside the exe (in the game's folder): CampaignEditor_logs/ (the log, the zips, sessions/) and
         CampaignEditor_settings.json. An older version's RTW-M2TW-Campaign-Editor-files (settings, logs/ with

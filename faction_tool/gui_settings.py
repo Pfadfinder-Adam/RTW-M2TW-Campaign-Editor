@@ -160,12 +160,19 @@ class SettingsWindow(tk.Toplevel):
         self._show_fixes()
 
     def _folders(self, body):
-        _, row = self._box(body, "Folders", "Beside the exe: CampaignEditor_settings.json (these settings) and "
-                                            "CampaignEditor_logs (the log, and on every close the session's log with "
-                                            "the game's system.log.txt in sessions/). A mod's backups (Restore) lie "
-                                            "beside its data folder in CampaignEditor_backups (older ones in "
+        _, row = self._box(body, "Folders", "The exe is meant to lie in the game's folder (beside RomeTW.exe / "
+                                            "medieval2.exe). Beside the exe: CampaignEditor_settings.json (these "
+                                            "settings) and CampaignEditor_logs (the log, and on every close the "
+                                            "session's log with a copy of the game's system.log.txt as "
+                                            "game_system.log.txt in sessions/). A mod's backups (Restore) lie beside "
+                                            "its data folder in CampaignEditor_backups (older ones in "
                                             "faction_tool_backups).")
         ttk.Button(row, text="Open the logs folder", command=lambda: open_folder(log.logs_dir())).pack(side="left")
+        from .relocate import running_exe
+        mv = ttk.Button(row, text="Put the editor into the game's folder...", command=lambda: self.app.offer_move(True))
+        mv.pack(side="left", padx=6)
+        if not running_exe() or log.exe_game():
+            mv.state(["disabled"])               # from the source, or it lies in a game folder already
         mod = getattr(self.app, "mod", None)
         if mod is not None:
             from .plan import BACKUP_DIRS
