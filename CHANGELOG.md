@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- **Victory: many regions or factions at once** (a tester: one by one is too many clicks): drag over rows, Shift-click
+  a run, Tick all shown, tick every region a faction holds, or pick the towns **On the map...** (their regions yellow).
+- **Map: a sign grows as the mouse comes near it**, softly, from further away when zoomed out (a tester's wish).
 - **People and family: New person...** (a tester asked for a person made from nothing) - someone new tied to no one,
   then put on the tree with Add a child... / Give a wife...; Preview warns while a new person is on no tree. On the
   Faction tab the tree now stands on the right of the list and the person (it was on top, too cramped - a tester).

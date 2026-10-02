@@ -564,6 +564,7 @@ class App(tk.Tk):
         # --- victory: what the player must do to win (descr_win_conditions.txt)
         from .gui_wincond import VictoryBox
         self.victory = VictoryBox(side, on_change=self._victory_changed, before=self.remember)
+        self.victory.app = self                 # its region lists can be picked on the map
         self.victory.pack(fill="x", pady=(8, 0))
 
         # --- towns

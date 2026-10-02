@@ -228,6 +228,7 @@ class MapView(ttk.Frame):
         c.bind("<Motion>", self._hover)
         c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
         self._hot = None                                # the marker under the mouse, drawn bigger
+        self._hot_k = 1.0                               # ... by how much now
 
     def _tool_click(self, e):
         """A click on a tool of the legend: picked (a second click puts it down again)."""
@@ -617,7 +618,7 @@ class MapView(ttk.Frame):
         self._pending = None
         c = self.canvas
         c.delete("all")
-        self._hot = None
+        self._hot, self._hot_k = None, 1.0
         if not self.cmap:
             c.create_text(20, 20, anchor="nw", fill="#ccc", text="Load a mod: the campaign map shows here.")
             return
@@ -1096,6 +1097,36 @@ class MapView(ttk.Frame):
 
     GROW = 1.6
 
+    def _aura(self):
+        """How far (screen pixels) round a sign the mouse already makes it grow: wider when the map is far out and
+        the signs are small (a tester: one should not have to hit the sign itself)."""
+        return max(8.0, min(28.0, 34.0 - self.z * 1.2))
+
+    def _marker_near(self, sx, sy):
+        """(tag, how near 0..1) of the town or character sign nearest the mouse within its aura, or (None, 0)."""
+        r = self._aura()
+        c = self.canvas
+        best = None
+        if self._hot:                                    # the grown sign: measured at its normal size
+            hb = c.bbox(self._hot)
+        for item in c.find_overlapping(sx - r, sy - r, sx + r, sy + r):
+            for tag in c.gettags(item):
+                if not tag.startswith(("char:", "city:")):
+                    continue
+                box = c.bbox(tag)
+                if not box:
+                    continue
+                cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+                half = max(box[2] - box[0], box[3] - box[1]) / 2
+                if tag == self._hot and hb:
+                    half /= self._hot_k or 1
+                d = max(0.0, ((cx - sx) ** 2 + (cy - sy) ** 2) ** 0.5 - half)
+                if d <= r and (best is None or d < best[1]):
+                    best = (tag, d)
+        if not best:
+            return None, 0.0
+        return best[0], 1.0 - best[1] / r
+
     def _ghost(self, sx, sy):
         """What is being placed, under the mouse: green frame where it may go, red where not."""
         c = self.canvas
@@ -1145,22 +1176,27 @@ class MapView(ttk.Frame):
                            tags="tile_outline")
         c.tag_lower("tile_outline", "city") if c.find_withtag("city") else None
 
-    def _grow(self, tag):
-        """Draw the marker under the mouse bigger (and on top); put the last one back."""
-        if tag == self._hot:
+    def _grow(self, tag, near=1.0):
+        """Draw the marker near the mouse bigger (and on top) - the nearer, the bigger, softly (near 0..1 within its
+        aura); put the last one back."""
+        k = 1.0 + (self.GROW - 1.0) * max(0.0, min(1.0, near)) if tag else 1.0
+        old = getattr(self, "_hot_k", 1.0) or 1.0
+        if tag == self._hot and abs(k - old) < 0.04:
             return
         c = self.canvas
-        if self._hot:
+        if self._hot and (tag != self._hot):
             box = c.bbox(self._hot)
             if box:
                 cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
-                c.scale(self._hot, cx, cy, 1 / self.GROW, 1 / self.GROW)
+                c.scale(self._hot, cx, cy, 1 / old, 1 / old)
+            old = 1.0
         self._hot = tag
+        self._hot_k = k if tag else 1.0
         if tag:
             box = c.bbox(tag)
             if box:
                 cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
-                c.scale(tag, cx, cy, self.GROW, self.GROW)
+                c.scale(tag, cx, cy, k / old, k / old)
                 c.tag_raise(tag)
 
     # ---- mouse ----
@@ -1581,7 +1617,7 @@ class MapView(ttk.Frame):
         self.canvas.delete("ghost")
         self._outline(e.x, e.y)
         if self.cmap and not self._cdrag:
-            self._grow(self._marker_under(e.x, e.y))
+            self._grow(*self._marker_near(e.x, e.y))
             rid = self._res_under(e.x, e.y)
             res = next((r for r in self.resources if r["id"] == rid), None) if rid else None
             if res:

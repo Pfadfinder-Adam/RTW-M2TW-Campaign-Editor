@@ -16,12 +16,15 @@ HELP = ("What the PLAYER must do to win (descr_win_conditions.txt; the AI does n
         "does not exist makes the game crash when this faction is played - the tool refuses it.")
 
 
-def pick_many(parent, title, items, chosen):
-    """A list to tick names from: items [(name, label)]; returns the picked names in order, or None (Cancel)."""
+def pick_many(parent, title, items, chosen, groups=None, on_map=None):
+    """A list to tick names from: items [(name, label)]; returns the picked names in order, or None (Cancel).
+    Many at once (a tester: one by one is too many clicks): a drag over rows ticks them all, Shift-click ticks a
+    run, 'Tick all shown' takes what Find shows; groups {label: [names]} ticks a whole group (a faction's regions);
+    on_map(picked) -> picked or None opens the map to click them there."""
     w = tk.Toplevel(parent)
     w.title(title)
     w.transient(parent.winfo_toplevel())
-    w.geometry("380x460")
+    w.geometry("420x520")
     top = ttk.Frame(w, padding=6)
     top.pack(fill="x")
     ttk.Label(top, text="Find").pack(side="left")
@@ -38,9 +41,10 @@ def pick_many(parent, title, items, chosen):
     picked = list(chosen)
     shown = []
 
-    def fill(*_):
+    def fill(*_, fresh=False):
         q = v_find.get().strip().lower()
-        sync()
+        if not fresh:                       # (fresh: picked was set from outside - the rows' ticks are old)
+            sync()
         lb.delete(0, "end")
         shown[:] = [(n, l) for n, l in items if not q or q in n.lower() or q in l.lower()]
         for k, (n, l) in enumerate(shown):
@@ -67,6 +71,60 @@ def pick_many(parent, title, items, chosen):
     ttk.Button(btns, text="OK", command=ok).pack(side="right")
     ttk.Button(btns, text="Cancel", command=w.destroy).pack(side="right", padx=4)
     ttk.Button(btns, text="Clear", command=lambda: (picked.clear(), lb.selection_clear(0, "end"))).pack(side="left")
+    more = ttk.Frame(w, padding=(6, 0))
+    more.pack(side="bottom", fill="x")
+    ttk.Button(more, text="Tick all shown", command=lambda: (lb.selection_set(0, "end"), sync())).pack(side="left")
+    ttk.Button(more, text="Untick shown", command=lambda: (lb.selection_clear(0, "end"), sync())).pack(
+        side="left", padx=4)
+    if groups:
+        v_grp = tk.StringVar(value="tick a whole group...")
+        cg = ttk.Combobox(more, textvariable=v_grp, values=sorted(groups), state="readonly", width=20)
+        cg.pack(side="left", padx=4)
+
+        def group(_e=None):
+            sync()
+            for n in groups.get(v_grp.get(), []):
+                if n not in picked and any(n == x for x, _ in items):
+                    picked.append(n)
+            v_grp.set("tick a whole group...")
+            fill(fresh=True)
+        cg.bind("<<ComboboxSelected>>", group)
+    if on_map:
+        def by_map():
+            sync()
+            got = on_map(list(picked))
+            if got is not None:
+                picked[:] = got
+                fill(fresh=True)
+        ttk.Button(more, text="On the map...", command=by_map).pack(side="right")
+
+    # a drag over the rows ticks (or unticks, from a ticked row) every row it passes; Shift-click a run
+    drag = {}
+
+    def press(e):
+        k = lb.nearest(e.y)
+        drag.update(start=k, on=not lb.selection_includes(k), last=k)
+        if e.state & 1 and "anchor" in drag:                     # Shift: the run from the last click
+            a, b = sorted((drag["anchor"], k))
+            lb.selection_set(a, b)
+            sync()
+            return "break"
+        drag["anchor"] = k
+
+    def motion(e):
+        if "start" not in drag:
+            return
+        k = lb.nearest(e.y)
+        if k == drag.get("last"):
+            return
+        drag["last"] = k
+        a, b = sorted((drag["start"], k))
+        (lb.selection_set if drag["on"] else lb.selection_clear)(a, b)
+        sync()
+        return "break"
+    lb.bind("<ButtonPress-1>", press, add="+")
+    lb.bind("<B1-Motion>", motion)
+    lb.bind("<ButtonRelease-1>", lambda e: (drag.pop("start", None), sync()), add="+")
     v_find.trace_add("write", fill)
     fill()
     ent.focus_set()
@@ -171,8 +229,22 @@ class VictoryBox(ttk.LabelFrame):
         if self.cond is None:
             return
         items = self.regions if what == "hold" else self.factions
+        groups, map_pick = None, None
+        app = getattr(self, "app", None)
+        if what == "hold" and app is not None:
+            try:                                 # 'tick a whole group': the regions each faction holds now
+                groups = {}
+                for r, f in app.owners_after().items():
+                    groups.setdefault("held by %s" % f, []).append(r)
+            except Exception:
+                groups = None
+
+            def on_the_map(now):
+                from .gui_mappick import pick_regions
+                return pick_regions(self, app, now, "Hold these regions - click towns on the map")
+            map_pick = on_the_map
         got = pick_many(self, "Hold these regions" if what == "hold" else "Outlive these factions", items,
-                        self.cond[part][what])
+                        self.cond[part][what], groups=groups, on_map=map_pick)
         if got is not None and got != self.cond[part][what]:
             self._before()
             self.cond[part][what] = got
