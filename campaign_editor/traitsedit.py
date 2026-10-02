@@ -106,6 +106,89 @@ def effect_names(mod):
     return names
 
 
+# every effect the game's exe knows (its own table, read from RomeTW.exe / medieval2.exe), with what it does in plain
+# words, by group - for the Effects field's right-click menu (a tester: nobody knows every bonus by heart)
+EFFECT_GROUPS = (
+    ("Generals and battle", (
+        ("Command", "generals' skill in battle (the stars)"), ("Attack", "melee attack of his men"),
+        ("Defence", "defence of his men"), ("TroopMorale", "morale of his army"),
+        ("MovementPoints", "how far his army moves on the map"), ("Ambush", "chance to ambush / not be ambushed"),
+        ("NightBattle", "can fight at night"), ("SiegeAttack", "attacking towns"), ("SiegeDefence", "defending towns"),
+        ("SiegeEngineering", "building siege equipment faster"), ("NavalCommand", "admirals' skill at sea"),
+        ("CavalryCommand", "command of cavalry"), ("InfantryCommand", "command of infantry"),
+        ("ArtilleryCommand", "command of artillery (Medieval II)"),
+        ("GunpowderCommand", "command of gunpowder units (Medieval II)"),
+        ("BodyguardSize", "men in his bodyguard (Medieval II)"), ("BodyguardValour", "experience of his bodyguard"),
+        ("HitPoints", "his own hit points in battle"), ("BattleSurgery", "wounded men saved after a battle"),
+        ("LineOfSight", "how far he sees on the map"), ("Looting", "money from sacking towns"))),
+    ("Governing towns", (
+        ("Management", "the governor's skill"), ("Influence", "influence (Rome: the stars; diplomats)"),
+        ("Law", "law in his town"), ("Unrest", "unrest in his town"), ("Squalor", "squalor in his town"),
+        ("Health", "health in his town"), ("TaxCollection", "taxes collected"), ("Trading", "trade income"),
+        ("Farming", "farming income"), ("Mining", "mining income"), ("Construction", "cheaper buildings"),
+        ("TrainingUnits", "cheaper units"), ("TrainingAgents", "cheaper agents"),
+        ("TrainingAnimalUnits", "cheaper animal units"), ("Fertility", "children he has"),
+        ("LocalPopularity", "popularity in his town"), ("GrainTrading", "grain trade (Rome)"),
+        ("SlaveTrading", "slave trade (Rome)"), ("PublicSecurity", "security of his town"))),
+    ("Character", (
+        ("Loyalty", "loyalty to the faction"), ("Chivalry", "chivalry (Medieval II; below 0 = Dread)"),
+        ("Piety", "piety (Medieval II; priests too)"), ("Authority", "the leader's authority (Medieval II)"),
+        ("Electability", "chance to be elected (Rome Senate, Medieval II pope)"),
+        ("SenateStanding", "standing with the Senate (Rome)"), ("PopularStanding", "standing with the people (Rome)"),
+        ("PersonalSecurity", "safety from assassins"), ("Generosity", "generosity (Medieval II)"),
+        ("Boldness", "boldness (Medieval II)"), ("Disposition", "disposition (Medieval II)"),
+        ("Violence", "violence (Medieval II)"), ("Purity", "purity (Medieval II)"),
+        ("Eligibility", "worth as a husband / bride (Medieval II)"), ("HeresyImmunity", "safe from heresy"),
+        ("Unorthodoxy", "leaning to heresy (Medieval II)"))),
+    ("Agents", (
+        ("Subterfuge", "spies' and assassins' skill"), ("Bribery", "bribing others"),
+        ("BribeResistance", "resisting bribes"), ("FootInTheDoor", "diplomats' first contact"),
+        ("Negotiation", "diplomats' bargaining"), ("Sabotage", "saboteurs' skill (Medieval II)"),
+        ("Assassination", "assassins' skill (Medieval II)"), ("Charm", "princesses' charm (Medieval II)"),
+        ("Finance", "merchants' skill (Medieval II)"))),
+)
+COMBAT_V = ("Combat_V_", "fighting better against one faction, culture or religion: Combat_V_<name> (Rome: "
+            "Combat_V_<culture or faction>, Medieval II: Combat_V_Faction_<faction>, Combat_V_Religion_<religion>)")
+
+
+def effect_menu(mod, used=()):
+    """[(group, [(name, words)])] for the Effects field's menu: the groups of the game's effects (only those of this
+    game where marked), the Combat_V_ ones this mod uses or its factions give, and any other the mod's files use."""
+    m2 = False
+    try:
+        from .limits import game_kind
+        m2 = game_kind(mod) == "medieval2"
+    except Exception:
+        pass
+    other = "Rome" if m2 else "Medieval II"
+    out, known = [], set()
+    for group, items in EFFECT_GROUPS:
+        keep = [(n, w) for n, w in items if "(%s)" % other not in w and "(%s;" % other not in w]
+        known |= {n for n, _ in keep}
+        out.append((group, keep))
+    combat = sorted(n for n in used if n.startswith("Combat_V_"))
+    try:
+        facs = mod.factions()
+    except Exception:
+        facs = []
+    if m2:                           # Medieval II: by faction (and religion, as the mod's files use them)
+        combat += ["Combat_V_Faction_%s" % f for f, _ in facs]
+    else:                            # Rome: by culture, as vanilla's own (Combat_V_Barbarian)
+        combat += ["Combat_V_%s" % c.capitalize() for _, c in facs if c]
+    out.append(("Against a faction, culture or religion", [(n, "fights better against %s" % n.split("_", 2)[-1])
+                                                           for n in sorted(set(combat))]))
+    rest = sorted(n for n in used if n not in known and not n.startswith("Combat_V_"))
+    if rest:
+        out.append(("Others this mod's files use", [(n, "") for n in rest]))
+    return out
+
+
+def add_effect(text, name, value=1):
+    """The Effects text with 'name value' added after a comma (or alone when empty) - the right-click menu's insert."""
+    t = (text or "").rstrip().rstrip(",").rstrip()
+    return ("%s, %s %d" % (t, name, value)) if t else "%s %d" % (name, value)
+
+
 def parse_effects(text):
     """'Command 1, Chivalry -2' -> [('Command', 1), ('Chivalry', -2)]; ValueError in plain words."""
     out = []

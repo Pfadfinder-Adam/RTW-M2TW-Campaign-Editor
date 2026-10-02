@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- **Traits and retinue: a right click on Effects lists every bonus the game knows** (a tester: nobody knows them all
+  by heart) - grouped, each in plain words, both games (the lists come from the games' own exes); a pick is added
+  after a comma with the value 1.
 - **Map: Delete from the map on the right-click menu** (a tester: things could be added but not taken away): a
   resource, fort, watchtower or wonder, or a character of any faction with his army - gone from descr_strat.txt with
   the next Apply, nothing left behind; the leader, the heir and members of the family tree are refused in plain

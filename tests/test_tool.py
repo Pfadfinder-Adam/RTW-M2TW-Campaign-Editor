@@ -1279,6 +1279,19 @@ building smith
         with self.assertRaises(ValueError):                               # a name with no string
             edit(ModData(self.root), "test", "alpha", {"leader": {"name": "Zed"}})
 
+    def test_effects_menu_and_insert(self):
+        """The Effects field's right-click menu: the game's bonuses by group with plain words, the Combat_V_ ones
+        for this mod; a pick is added after a comma with the value 1."""
+        from campaign_editor import traitsedit as TE
+        self.assertEqual(TE.add_effect("Command -1, TroopMorale 2", "Law"), "Command -1, TroopMorale 2, Law 1")
+        self.assertEqual(TE.add_effect("", "Law"), "Law 1")
+        self.assertEqual(TE.add_effect("Command 1, ", "Law"), "Command 1, Law 1")
+        groups = dict(TE.effect_menu(ModData(self.root), {"Combat_V_Slave", "OddOne"}))
+        self.assertIn("Command", [n for n, _ in groups["Generals and battle"]])
+        self.assertIn("Combat_V_Slave", [n for n, _ in groups["Against a faction, culture or religion"]])
+        self.assertEqual([n for n, _ in groups["Others this mod's files use"]], ["OddOne"])
+        self.assertEqual(TE.parse_effects(TE.add_effect("Command 2", "Law")), [("Command", 2), ("Law", 1)])
+
     def test_pips_click_fits_the_traits(self):
         """A click on the character panel's pips: a trait he has moved to the level that gives the value, else a
         trait giving that attribute alone added; Dread = Chivalry below 0; nothing reaches it -> None."""

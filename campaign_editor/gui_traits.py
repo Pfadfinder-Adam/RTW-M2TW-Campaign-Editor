@@ -119,10 +119,40 @@ class TraitsWindow(tk.Toplevel):
         return t["names"][sel[0]] if sel and sel[0] < len(t["names"]) else None
 
     # ---- the form ----
-    def _entry(self, parent, value, width=40):
+    def _entry(self, parent, value, width=40, effects=False):
         v = tk.StringVar(value=value)
-        ttk.Entry(parent, textvariable=v, width=width).pack(side="left", fill="x", expand=True)
+        e = ttk.Entry(parent, textvariable=v, width=width)
+        e.pack(side="left", fill="x", expand=True)
+        if effects:                                 # a right click lists every bonus the game knows
+            e.bind("<Button-3>", lambda ev, e=e, v=v: self._effect_menu(ev, e, v))
+            from .gui_util import hint
+            hint(parent, "Right click: pick a bonus from every one the game knows (grouped, with what it does) - it "
+                         "is added after a comma with the value 1; change the number by hand (negative = a "
+                         "penalty).").pack(side="left", padx=4)
         return v
+
+    def _effect_menu(self, ev, entry, var):
+        m = tk.Menu(self, tearoff=0)
+        for group, items in TE.effect_menu(self.mod, self.known):
+            if not items:
+                continue
+            sub = tk.Menu(m, tearoff=0)
+            for k, (n, words) in enumerate(items):
+                sub.add_command(label="%s  -  %s" % (n, words) if words else n,
+                                command=lambda n=n: self._add_effect(entry, var, n),
+                                columnbreak=1 if k and k % 25 == 0 else 0)
+            m.add_cascade(label=group, menu=sub)
+        try:
+            m.tk_popup(ev.x_root, ev.y_root)
+        finally:
+            m.grab_release()
+
+    def _add_effect(self, entry, var, name):
+        var.set(TE.add_effect(var.get(), name))
+        entry.focus_set()
+        end = len(var.get())
+        entry.selection_range(end - 1, end)        # the number picked: type over it
+        entry.icursor(end)
 
     def _text(self, parent, value, height=2):
         w = tk.Text(parent, height=height, width=60, wrap="word", font="TkDefaultFont")
@@ -182,7 +212,7 @@ class TraitsWindow(tk.Toplevel):
                 name, ln, "threshold", v.get(), now))
             r = self._row(box, "Effects")
             eff_now = TE.effects_words([(a, v) for _, a, v in lv["effects"]])
-            v_eff = self._entry(r, lp.get("effects_text", eff_now), 50)
+            v_eff = self._entry(r, lp.get("effects_text", eff_now), 50, effects=True)
             v_eff.trace_add("write", lambda *a, ln=lv["name"], v=v_eff, now=eff_now: self._level_set(
                 name, ln, "effects", v.get(), now))
 
@@ -214,7 +244,7 @@ class TraitsWindow(tk.Toplevel):
         v_ex.trace_add("write", lambda *a: self._set("ancillary", name, "exclude", v_ex.get(), ex_now))
         r = self._row(form, "Effects")
         eff_now = TE.effects_words([(a, v) for _, a, v in b["effects"]])
-        v_eff = self._entry(r, pend.get("effects_text", eff_now), 50)
+        v_eff = self._entry(r, pend.get("effects_text", eff_now), 50, effects=True)
         v_eff.trace_add("write", lambda *a: self._set("ancillary", name, "effects_text", v_eff.get(), eff_now))
 
     def _thumb(self, parent, path):
