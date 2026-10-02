@@ -1663,7 +1663,7 @@ building smith
             out = log.save_session(home)
             with open(os.path.join(out, "CampaignEditor.log")) as fh:
                 self.assertEqual([l.split("  ", 1)[-1] for l in fh.read().splitlines()], ["new entry"])
-            with open(os.path.join(out, "system.log.txt")) as fh:
+            with open(os.path.join(out, "game_system.log.txt")) as fh:
                 self.assertEqual(fh.read(), "game log\n")
         finally:
             log._candidates, log._home, log._path, settings._data, log._session_start = saved
@@ -4422,6 +4422,9 @@ building smith
         self.assertIn("year_founded", text)
         self.assertIn("the line now reads: line 12", text)
         self.assertIn("ownership", gamelog.explain("unit(cog) does not match up to the ownership for faction(x)"))
+        # REX's own complaint about its start (a tester saw it in the log copy and blamed the editor)
+        self.assertIn("does not start the game", gamelog.explain(
+            "ERROR: src\\game\\romans_game.cpp(1764) Game selection invalid - is the path '\uad4c\ub2f7' ok?"))
 
     def test_report_finds_the_game_logs(self):
         """The game writes system.log.txt where the mod was started from: the report finds the mod's own first, then

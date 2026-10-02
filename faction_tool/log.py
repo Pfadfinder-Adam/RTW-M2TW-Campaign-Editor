@@ -23,6 +23,7 @@ LOGS = SHORT + "_logs"                           # beside the exe: the log, the 
 LOG_NAME = SHORT + ".log"
 SETTINGS_NAME = SHORT + "_settings.json"
 SESSIONS = "sessions"
+GAME_LOG = "game_system.log.txt"                 # the game's own system.log.txt as a session keeps it
 KEEP_SESSIONS = 30
 APPDATA_NAME = "RTW-M2TW-Campaign-Editor"
 
@@ -156,7 +157,8 @@ def save_session(game=None, mod_dir=None):
                 with open(os.path.join(out, LOG_NAME), "wb") as o:
                     o.write(fh.read())
         for i, f in enumerate(report.game_logs(game, mod_dir, keep=2) if game else []):
-            shutil.copyfile(f, os.path.join(out, "system.log.txt" if i == 0 else "system.log.%d.txt" % i))
+            # named as the GAME's: a tester read its errors in the session folder as the editor's own
+            shutil.copyfile(f, os.path.join(out, GAME_LOG if i == 0 else "game_system.log.%d.txt" % i))
         root = os.path.join(logs, SESSIONS)
         olds = sorted(n for n in os.listdir(root) if os.path.isdir(os.path.join(root, n)))
         for n in olds[:-KEEP_SESSIONS]:

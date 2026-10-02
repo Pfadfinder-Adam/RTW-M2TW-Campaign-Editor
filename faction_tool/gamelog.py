@@ -40,6 +40,11 @@ KNOWN = [
     (r"Unresolved sprite definition\((.+?)\)",
      "An interface picture {0} is not on its sprite page - the game draws another in its place (a faction logo "
      "missing for a new faction, often)."),
+    (r"Game selection invalid - is the path '(.*?)' ok",
+     "The engine could not tell which game or mod to run: the path it read ('{0}') makes no sense - letters it reads "
+     "wrong (a folder with non-Latin letters on the way to the game), or the engine started away from the game's "
+     "folder. Start the mod with its .bat from the mod's folder, or with the -mod: line from the game's folder; this "
+     "is the engine's own log - the campaign editor does not start the game."),
     (r"encountered an unspecified error",
      "The game crashed. The lines just before this one in the log name what it was doing."),
     (r"DATA: src.(.+?)\((\d+)\)",

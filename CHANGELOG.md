@@ -33,6 +33,9 @@
   the mod they were made on, and Apply on the new mod wrote them into the old one's files.
 - **A template that does not play in the open campaign** (Medieval II's saxons outside the Norman prologue) is
   said plainly, with the campaign it plays in.
+- **The game's log kept on close is named `game_system.log.txt`** in the sessions folder (a tester read the game's
+  own errors there as the editor's), and Tools > The game's log in plain words explains REX's "Game selection
+  invalid - is the path ... ok?" (the engine started away from the game's folder, or a path it cannot read).
 - **Start_<mod>.bat of a new Rome mod folder starts the engine from the game's folder** wherever it is started
   from (a shortcut, another folder) - it went `cd ..` from the folder it was started in.
 - **Terrain editor / win conditions**: two buttons that raised an error before a mod was loaded.

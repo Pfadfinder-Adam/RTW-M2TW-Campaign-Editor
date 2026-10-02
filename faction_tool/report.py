@@ -167,8 +167,9 @@ def found(game=None, mod_dir=None):
         sess = os.path.join(log.logs_dir() or "", log.SESSIONS)
         try:
             for n in sorted(os.listdir(sess), reverse=True):
-                f = os.path.join(sess, n, "system.log.txt")
-                if os.path.isfile(f):
+                f = next((p for p in (os.path.join(sess, n, log.GAME_LOG), os.path.join(sess, n, "system.log.txt"))
+                          if os.path.isfile(p)), None)     # (sessions before 0.30 kept it as system.log.txt)
+                if f:
                     out.append((f, "sessions/%s/system.log.txt" % n, "the game's log kept when the editor closed "
                                 "(%s)" % _age(f)))
                     break
