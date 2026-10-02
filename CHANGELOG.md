@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Changed
+- **Wonders on the Map (Rome)**: a double click on a wonder (or the right click's "about it") opens its window as the
+  game shows it - picture, title, what it does, short and long description - with **View it in 3D** (its campaign-map
+  model); the right click on free land has **Put a wonder here** (one of the game's seven - the game knows no
+  others). Written on Apply like the other map changes.
 - **Traits and retinue: a right click on Effects lists every bonus the game knows** (a tester: nobody knows them all
   by heart) - grouped, each in plain words, both games (the lists come from the games' own exes); a pick is added
   after a comma with the value 1.

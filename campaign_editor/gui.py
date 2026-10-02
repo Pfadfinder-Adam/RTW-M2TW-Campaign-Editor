@@ -701,6 +701,7 @@ class App(tk.Tk):
                            add="+")
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
         self.map_view.on_menu = self.map_menu
+        self.map_view.on_wonder = lambda t: __import__("campaign_editor.gui_wonders", fromlist=["show"]).show(self, self.mod, t)
         self.map_view.on_pick_menu = self.pick_menu
         self.map_view.on_tool = self.map_tool
         self.v_borders = self.map_view.v_borders
@@ -4009,6 +4010,24 @@ class App(tk.Tk):
             mark = getattr(self.map_view, "resources", None) or []
             what = next((m for m in mark if m.get("id") == rid), None)
             name = (what or {}).get("kind", "this")
+            if name == "landmark" and (what or {}).get("type") and not getattr(self.map_view, "menu_fort", None):
+                from .gui_wonders import show as show_wonder
+                wt = what["type"]
+                name = "wonder %s" % wt
+                if items:
+                    items.append((None, None))
+                items.append(("About this wonder...  (as the game shows it)",
+                              lambda wt=wt: show_wonder(self, self.mod, wt)))
+
+                def view3d(wt=wt):
+                    from . import wonders as W
+                    from .gui_meshview import ModelViewer
+                    mi = W.model_info(self.mod, wt)
+                    if mi is None:
+                        messagebox.showinfo(APP, "%s names no model in descr_sm_landmarks.txt" % wt)
+                        return
+                    ModelViewer(self, self.mod, mi, title="Wonder on the campaign map, in 3D")
+                items.append(("View it in 3D", view3d))
 
             def delete_mark(rid=rid):
                 self._res_sel = rid
@@ -4016,6 +4035,24 @@ class App(tk.Tk):
             if items:
                 items.append((None, None))
             items.append(("Delete the %s from the map" % name, delete_mark))
+        fl = getattr(self.map_view, "menu_fort", None)
+        fo = next((x for x in (self.strat.forts if self.strat else []) if x.line == fl), None) if fl is not None else None
+        if fo is not None and fo.kind == "landmark":     # a wonder (drawn on every map): its window and its model
+            from .gui_wonders import show as show_wonder
+            if items:
+                items.append((None, None))
+            items.append(("Wonder %s: about it...  (as the game shows it)" % fo.type,
+                          lambda t=fo.type: show_wonder(self, self.mod, t)))
+
+            def view3d(t=fo.type):
+                from . import wonders as W
+                from .gui_meshview import ModelViewer
+                mi = W.model_info(self.mod, t)
+                if mi is None:
+                    messagebox.showinfo(APP, "%s names no model in descr_sm_landmarks.txt" % t)
+                    return
+                ModelViewer(self, self.mod, mi, title="Wonder on the campaign map, in 3D")
+            items.append(("View it in 3D", view3d))
         if cid is not None and ":" in str(cid) and not str(cid).startswith(("map:", "new:")):
             ch = (getattr(self, "_map_chars", None) or {}).get(cid)
             mine = self.field_faction() and not self.map_only() and ch and ch["faction"] == self.field_faction()
@@ -4082,6 +4119,25 @@ class App(tk.Tk):
             for kind, label in kinds:
                 items.append(("%s  (%s)" % (label, whose) if whose else label,
                               lambda kind=kind: add_at(self, kind, tuple(xy))))
+            from . import forts as FT
+            wtypes = FT.landmark_types(self.mod) if not sea else []
+            if wtypes:                                 # Rome: one of the game's wonders put here (written on Apply)
+                placed = {fo.type for fo in (self.strat.forts if self.strat else [])
+                          if fo.kind == FT.LANDMARK and fo.line not in self.fort_removed}
+                placed |= {a.get("type") for a in self.fort_added if a.get("kind") == FT.LANDMARK}
+
+                def put_wonder(t, xy=tuple(xy)):
+                    why = FT.problem(self.mod, self.v_campaign.get(), xy, ())
+                    if why:
+                        messagebox.showerror(APP, "A wonder cannot stand at %d, %d: %s" % (xy[0], xy[1], why))
+                        return
+                    self.remember()
+                    self.fort_added.append({"kind": FT.LANDMARK, "type": t, "xy": xy})
+                    self.status.set("Wonder %s at %d, %d - Preview, then Apply (Undo takes it back)." % (t, xy[0], xy[1]))
+                    self._mark_work()
+                    self.show_map()
+                items.append(("Put a wonder here", [("%s%s" % (t, "  (on the map already - a second one)" if t in placed
+                                                               else ""), lambda t=t: put_wonder(t)) for t in wtypes]))
         return items
 
     def selected_field(self):

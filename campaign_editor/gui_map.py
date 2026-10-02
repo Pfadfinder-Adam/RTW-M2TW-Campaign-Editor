@@ -226,6 +226,8 @@ class MapView(ttk.Frame):
         c.bind("<B3-Motion>", self._move)
         c.bind("<ButtonRelease-3>", self._release)
         c.bind("<Motion>", self._hover)
+        c.bind("<Double-Button-1>", self._double)          # a wonder opens its window, as in the game
+        self.on_wonder = None                            # (type) -> the wonder's window
         c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
         self._hot = None                                # the marker under the mouse, drawn bigger
         self._hot_k = 1.0                               # ... by how much now
@@ -1071,6 +1073,23 @@ class MapView(ttk.Frame):
         """Edit resources or Edit forts: their markers are drawn to be picked, moved and placed."""
         return self.v_res.get() or self.v_forts.get()
 
+    def _fort_line_under(self, sx, sy):
+        """The descr_strat line of the fort / watchtower / wonder sign under the mouse (screen point), or None."""
+        for item in reversed(self.canvas.find_overlapping(sx - 3, sy - 3, sx + 3, sy + 3)):
+            for tag in self.canvas.gettags(item):
+                if tag.startswith("fort:"):
+                    try:
+                        return int(tag[5:])
+                    except ValueError:
+                        return None
+        return None
+
+    def _double(self, e):
+        line = self._fort_line_under(e.x, e.y)
+        fo = next((f for f in (self.forts or []) if f.line == line), None) if line is not None else None
+        if fo is not None and fo.kind == "landmark" and self.on_wonder:
+            self.on_wonder(fo.type)
+
     def _res_under(self, sx, sy):
         if not self._marks_on():
             return None
@@ -1308,6 +1327,7 @@ class MapView(ttk.Frame):
         else:
             cid = self._char_under(e.x, e.y)
             self.menu_res = self._res_under(e.x, e.y)          # a resource / fort / tower under the mouse
+            self.menu_fort = self._fort_line_under(e.x, e.y)        # a fort / tower / wonder sign (also when not editing)
             items = self.on_menu(town[1] if town else xy, town[0] if town else None, cid) or []
         m = tk.Menu(self, tearoff=0)
         for label, fn in items:
