@@ -682,6 +682,7 @@ class App(tk.Tk):
         self.v_fort_type = tk.StringVar(value=FORT_KINDS[0])   # forts: no bar - the legend and the right click
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
         self.map_view.on_menu = self.map_menu
+        self.map_view.on_town = self.open_town
         self.map_view.on_wonder = lambda t: __import__("campaign_editor.gui_wonders", fromlist=["show"]).show(self, self.mod, t)
         self.map_view.on_pick_menu = self.pick_menu
         self.map_view.on_tool = self.map_tool
@@ -3968,8 +3969,38 @@ class App(tk.Tk):
                       (lambda: self.mass_towns(sorted(picked), "building")) if n else None))
         items.append(("Garrisons for the %d picked town(s)..." % n,
                       (lambda: self.mass_towns(sorted(picked), "garrison")) if n else None))
+        items.append(("City / castle and level for the %d picked town(s)..." % n,
+                      (lambda: self.mass_towns(sorted(picked), "town")) if n else None))
         items.append(("Unpick all", (lambda: mv.pick_many(None)) if n else None))
         return items
+
+    def open_town(self, region):
+        """A town straight from the Map (a double click, or the right click's 'Edit this town'): its owner opened in
+        Edit faction and the town picked on the Buildings tab - its level, population, city or castle, buildings;
+        its garrison is on Units & armies."""
+        owner = self.owners_after().get(region)
+        if not owner or not self.mod:
+            self.status.set("%s has no town yet (a rebel village) - give it to a faction first." % region)
+            return
+        if not self.editing():
+            self.v_work.set("edit")
+            self.work_changed()
+        if self.v["template"].get() != owner:
+            self.v["template"].set(owner)
+            self.template_changed()
+            if self.v["template"].get() != owner:
+                return                                  # stayed with the faction before (its changes)
+        if region not in self.chosen:
+            self.status.set("%s is %s's town at the start, but not in its list here." % (region, owner))
+            return
+        self.select_tab("Buildings")
+        self.lb_build.selection_clear(0, "end")
+        self.lb_build.selection_set(self.chosen.index(region))
+        self.lb_build.see(self.chosen.index(region))
+        self.load_buildings()
+        town = self._cmap.info.get(region, {}).get("settlement", region) if self._cmap else region
+        self.status.set("%s (%s, %s): level, population, city or castle and buildings here; its garrison on Units "
+                        "& armies. Preview, then Apply changes." % (town, region, owner))
 
     def map_menu(self, xy, region, cid):
         """The Map's right-click menu: [(label, command)] for what can be done at that spot."""
@@ -3980,6 +4011,7 @@ class App(tk.Tk):
             town = self._cmap.info.get(region, {}).get("settlement", region) if self._cmap else region
             mine = region in self.chosen
             items.append(("%s (%s)" % (town, region), None))
+            items.append(("Edit this town...  (double click)", lambda: self.open_town(region)))
             if self.field_faction() and not self.map_only():
                 items.append(("Take out of my towns" if mine else "Add to my towns", lambda: self.map_city(region)))
             from .gui_mapadd import factions_here, give_town

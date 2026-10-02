@@ -232,6 +232,7 @@ class MapView(ttk.Frame):
         c.bind("<Motion>", self._hover)
         c.bind("<Double-Button-1>", self._double)          # a wonder opens its window, as in the game
         self.on_wonder = None                            # (type) -> the wonder's window
+        self.on_town = None                              # (region) -> the town's own page (a double click)
         c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
         self._hot = None                                # the marker under the mouse, drawn bigger
         self._hot_k = 1.0                               # ... by how much now
@@ -1098,6 +1099,10 @@ class MapView(ttk.Frame):
         return None
 
     def _double(self, e):
+        town = self._town_under(e.x, e.y)
+        if town and self.on_town and not self.v_pick.get():
+            self.on_town(town[0])                        # a town: straight to its own window (a tester)
+            return
         line = self._fort_line_under(e.x, e.y)
         fo = next((f for f in (self.forts or []) if f.line == line), None) if line is not None else None
         if fo is not None and fo.kind == "landmark" and self.on_wonder:

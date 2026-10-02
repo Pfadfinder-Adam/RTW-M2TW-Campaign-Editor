@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Changed
+- **A town straight from the Map** (a tester): a double click on a town (or the right click's *Edit this town...*)
+  opens its owner in Edit faction with the town picked on the Buildings tab - level, population, city or castle,
+  buildings.
+- **Many towns made city / castle and of another level at once** (a tester): a third tab in *Buildings and garrisons
+  for many towns* (also on the Map's Pick towns menu) - city <-> castle with the buildings converted the game's way
+  (Medieval II), a new level with its governor's building and population; towns of any owner, a backup first.
 - **REX / M2EX: no faction limit** (the author: they have none) - every new faction raises `max_factions` in the
   mod's own `descr_ex.txt` by itself, written with the faction (Preview says so), no question asked; the status line
   no longer says "Full" under an engine. Only the original exes still stop at 21 / 31.

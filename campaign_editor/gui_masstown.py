@@ -46,7 +46,7 @@ class MassTownWindow(tk.Toplevel):
         outer.pack(fill="both", expand=True)
         ShortHint(outer, text=(
             "Pick towns on the left (filter them by owner, level%s or name), move them to the right, then add a "
-            "building to all of them or give them garrisons. Each town is checked the way the game would see it: "
+            "building to all of them, give them garrisons, or make them city / castle and of another level. Each town is checked the way the game would see it: "
             "a level the town is too small for, a castle's building in a city (or the other way), a level the "
             "owner's faction list does not allow, a port building in a town without a port - those towns are "
             "left out and the column 'What happens' says why. Only descr_strat.txt is written, with a backup; "
@@ -110,7 +110,8 @@ class MassTownWindow(tk.Toplevel):
         self.nb.pack(fill="x", pady=(8, 0))
         self.nb.add(self._building_tab(self.nb), text="  A building  ")
         self.nb.add(self._garrison_tab(self.nb), text="  Garrisons  ")
-        self.nb.select(1 if tab == "garrison" else 0)
+        self.nb.add(self._town_tab(self.nb), text="  City / castle and level  ")
+        self.nb.select({"garrison": 1, "town": 2}.get(tab, 0))
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self.fill_chosen())
         bar = ttk.Frame(outer)
         bar.pack(fill="x", pady=(8, 0))
@@ -191,6 +192,41 @@ class MassTownWindow(tk.Toplevel):
                           "the level on the Buildings tab instead.", foreground="#666").pack(anchor="w", pady=(6, 0))
         return f
 
+    def _town_tab(self, nb):
+        """The chosen towns' own properties at once (a tester: 'select several towns and set some properties at the
+        same time, like changing from city to castle')."""
+        f = ttk.Frame(nb, padding=8)
+        self.v_tkind, self.v_tlevel = tk.StringVar(value="as it is"), tk.StringVar(value="as it is")
+        row = ttk.Frame(f)
+        row.pack(fill="x")
+        ttk.Label(row, text="Make them").pack(side="left")
+        for text in ("as it is", "city", "castle"):
+            rb = ttk.Radiobutton(row, text=text, value=text, variable=self.v_tkind, command=self.fill_chosen)
+            rb.pack(side="left", padx=(8, 0))
+            if text != "as it is" and not self.castles:
+                rb.state(["disabled"])
+        if not self.castles:
+            ttk.Label(row, text="(this game has no castles - Medieval II only)", foreground="#666").pack(
+                side="left", padx=8)
+        row = ttk.Frame(f)
+        row.pack(fill="x", pady=(6, 0))
+        ttk.Label(row, text="Level").pack(side="left")
+        cb = ttk.Combobox(row, textvariable=self.v_tlevel, state="readonly", width=16,
+                          values=["as it is"] + list(M.SETTLEMENT_LEVELS))
+        cb.pack(side="left", padx=4)
+        cb.bind("<<ComboboxSelected>>", lambda e: self.fill_chosen())
+        ttk.Label(f, foreground="#666", justify="left", wraplength=900, text=(
+            "City <-> castle converts each town's buildings the game's way (a castle has no town hall or market; "
+            "the barracks, church and roads take their castle kind). A new level brings the governor's building "
+            "of that level and raises the population to the level's threshold. Written for towns of any owner; "
+            "a backup first, Restore undoes it.")).pack(anchor="w", pady=(6, 0))
+        return f
+
+    def _town_choice(self):
+        kind = self.v_tkind.get() if self.v_tkind.get() in ("city", "castle") else None
+        level = self.v_tlevel.get() if self.v_tlevel.get() in M.SETTLEMENT_LEVELS else None
+        return kind, level
+
     def _garrison_tab(self, nb):
         f = ttk.Frame(nb, padding=8)
         self.v_lo, self.v_hi, self.v_cap = tk.StringVar(value="2"), tk.StringVar(value="6"), tk.StringVar(value="500")
@@ -256,6 +292,12 @@ class MassTownWindow(tk.Toplevel):
 
     def _what(self, t):
         """(text, tag) for the column 'What happens' of a chosen town."""
+        if self.nb.index("current") == 2:
+            kind, level = self._town_choice()
+            if not kind and not level:
+                return "", ""
+            what, why = M.town_fit(self.known, t, kind, level)
+            return ("left out: " + why if what == "skip" else why), ("skip" if what == "skip" else "do")
         if self.nb.index("current") == 1:
             if t["region"] in self.garrisons:
                 units = self.garrisons[t["region"]]
@@ -369,6 +411,15 @@ class MassTownWindow(tk.Toplevel):
         """The opts for masstown.apply from the tab on show, or raises ValueError in plain words."""
         if not self.chosen:
             raise ValueError("Choose towns first (left list > right list).")
+        if self.nb.index("current") == 2:
+            kind, level = self._town_choice()
+            if not kind and not level:
+                raise ValueError("Pick city / castle or a level.")
+            got = {r: {"kind": kind, "level": level} for r in self.chosen
+                   if M.town_fit(self.known, self.by[r], kind, level)[0] == "set"}
+            if not got:
+                raise ValueError("No chosen town changes - 'What happens' says why for each.")
+            return {"towns": got}
         if self.nb.index("current") == 1:
             if not self.garrisons:
                 raise ValueError("Press 'Draw the garrisons' first - the units show in 'What happens'.")
@@ -397,7 +448,7 @@ class MassTownWindow(tk.Toplevel):
         plan = Plan(self.mod, "towns", "towns", {})
         o = self.opts()
         M.apply(plan, self.camp, o)
-        plan.towns_written = len(o.get("build") or o.get("remove") or o.get("garrisons") or {})
+        plan.towns_written = len(o.get("build") or o.get("remove") or o.get("garrisons") or o.get("towns") or {})
         return plan
 
     def preview(self):

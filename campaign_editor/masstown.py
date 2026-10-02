@@ -106,6 +106,68 @@ def building_fit(known, town, chain, level, mode="upgrade", any_owner=False, cul
     return "add", why
 
 
+def town_fit(known, town, kind=None, level=None):
+    """(what, why) for making a town a city / castle (kind; Medieval II) and / or of another level: 'set' or
+    'skip', in plain words (a tester: change many towns between city and castle at once)."""
+    from .buildings import kind_problem
+    now_kind, now_level = town.get("kind"), town["level"]
+    kind = kind if kind and town.get("kind") is not None else None
+    if kind and kind == now_kind:
+        kind = None
+    level = level if level and level != now_level else None
+    if not kind and not level:
+        return "skip", "is that already"
+    why = kind_problem(known, kind or now_kind, level or now_level) if (kind or now_kind) and known else None
+    if why:
+        return "skip", why
+    parts = []
+    if kind:
+        parts.append("%s -> %s (its buildings converted the game's way)" % (now_kind, kind))
+    if level:
+        parts.append("%s -> %s (the governor's building follows)" % (now_level.replace("_", " "),
+                                                                     level.replace("_", " ")))
+    return "set", "; ".join(parts)
+
+
+def _town_changes(plan, f, campaign, towns_opts):
+    """{region: {'kind', 'level'}} written into descr_strat (f): the kind with buildings.with_kind, the level with
+    the governor's building at the level's own and the population raised to the level's threshold."""
+    from .buildings import castle_fits, core_level_for, sized, with_kind
+    known = known_buildings(plan.mod)
+    s = Strat(f)
+    where = {st.region: st for fb in s.factions for st in fb.settlements}
+    for region in sorted(towns_opts, key=lambda r: -where[r].start if r in where else 0):
+        st = where.get(region)
+        if st is None:
+            raise ValueError("%s has no town in descr_strat.txt" % region)
+        ch = towns_opts[region]
+        size = {"level": ch["level"]} if ch.get("level") else None
+        start, end = st.start, st.end
+        got = None
+        if ch.get("kind"):                          # the header changed; the converted buildings come back
+            raw, got = with_kind(plan, f, region, f.raw[start:end], ch["kind"], None, known, size)
+            f.raw[start:end] = raw
+            end = start + len(raw)
+        raw = f.raw[start:end]
+        level, items = settlement_info([l.rstrip("\r") for l in raw])
+        if got is not None:
+            items = [tuple(x) for x in got]
+        new_level = ch.get("level") or level
+        out = []
+        for c, lv in items:                         # the governor's building of the new level (none: a village)
+            b = known.get(c)
+            if is_core(c) and b is not None:
+                fit = core_level_for(b, new_level)
+                if fit is not None:
+                    out.append((c, fit.name))
+                continue
+            out.append((c, lv))
+        raw, got_level = sized(plan, f, region, raw, out, size, known)
+        raw = set_buildings(raw, out, f.make)
+        f.raw[start:start + (end - start)] = raw
+        castle_fits(plan, region, raw, got_level, known)
+
+
 def random_garrison(pool, lo, hi, cap, rng):
     """[unit type]: between lo and hi units (rng picks how many) drawn from pool [(type, upkeep)], their upkeep
     together not above cap (None: no cap). Fewer than lo when even the cheapest do not fit under the cap."""
@@ -173,9 +235,11 @@ def rebel_pool(mod, campaign, region, near=3, siege=False):
 def apply(plan, campaign, opts):
     """opts: 'build' {region: (chain, level)} | 'remove' {region: chain} (the towns' buildings, checked as the
     window showed them), 'garrisons' {region: [unit type]}, 'add_units' (the units join the army in the town
-    instead of replacing it)."""
+    instead of replacing it), 'towns' {region: {'kind': 'city' | 'castle' | None, 'level': level or None}}."""
     from .edit import _garrisons
     f = plan.edit(plan.mod.campaign_file(campaign, "descr_strat.txt"))
+    if opts.get("towns"):
+        _town_changes(plan, f, campaign, opts["towns"])
     s = Strat(f)
     where = {st.region: st for fb in s.factions for st in fb.settlements}
     jobs = [(r, x, None) for r, x in (opts.get("build") or {}).items()] + \
@@ -209,5 +273,5 @@ def apply(plan, campaign, opts):
     return plan
 
 
-__all__ = ["towns", "building_fit", "random_garrison", "garrison_pool", "rebel_pool", "apply", "known_buildings", "is_core",
+__all__ = ["towns", "building_fit", "town_fit", "random_garrison", "garrison_pool", "rebel_pool", "apply", "known_buildings", "is_core",
            "MAX_UNITS", "SETTLEMENT_LEVELS"]

@@ -3204,6 +3204,19 @@ building smith
         self.assertIsNone(give_names(plan, "beta"))                         # has them now
         self.assertIn("Rebel", plan.name_pool("slave")["characters"])      # the others untouched
 
+    def test_many_towns_city_castle_and_level(self):
+        """Many towns at once made city / castle (Medieval II) and of another level (a tester): what each would do,
+        and the refusals in plain words."""
+        from campaign_editor import masstown as M
+        town = {"region": "A_R", "level": "town", "kind": "city", "buildings": []}
+        self.assertEqual(M.town_fit({}, town, "city", None)[0], "skip")              # is that already
+        what, why = M.town_fit({}, town, "castle", "large_town")
+        self.assertEqual(what, "set")
+        self.assertIn("city -> castle", why)
+        self.assertIn("town -> large town", why)
+        rome = {"region": "A_R", "level": "town", "kind": None, "buildings": []}
+        self.assertEqual(M.town_fit({}, rome, "castle", None)[0], "skip")            # Rome: no castles
+
     def test_one_temple_per_town(self):
         """The games take one temple per town (a chain named temple_...: 'Settlement specified with multiple temple
         buildings'); the many-towns window skips a second, the Check names a town holding two."""
