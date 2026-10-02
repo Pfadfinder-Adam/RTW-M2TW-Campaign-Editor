@@ -5,7 +5,13 @@ A fort / watchtower is one line: `watchtower 53 152` (Barbarian Invasion, in its
 diplomacy), `fort 263 330 cerin_amroth_fort culture middle_eastern permanent name Cerin Amroth` (Medieval II
 mods, in a faction's block). Their exact form differs by game and mod, and neither vanilla Rome nor vanilla Medieval
 II has one, so a new one copies a line of the same kind the campaign already has - the nearest one, only its tile
-changed, put right after it (same section, same owner). Without such a line a new one is refused in plain words.
+changed, put right after it (same section, same owner). Without such a line it is written in the regions section at
+the end of the file, the form both exes read there (RomeTW.exe / medieval2.exe strings: region, road_level,
+farming_level, famine_threat, fort, watchtower; Medieval II's fort wants a type and a culture - wooden_fort is the
+exe's own) and Barbarian Invasion uses for its 53 watchtowers:
+    region Britannia_Inferior / road_level 0 / farming_level 0 / famine_threat 0 / watchtower 53 152
+A region the section lists already gets the line under its block. The region needs a town (the game: 'it doesn't
+have a settlement').
 A moved one keeps its line, only the tile changes; a removed one loses its line.
 
 Rome's wonders (landmarks) go the same way: `landmark pharos 178, 21` near the top of descr_strat.txt (its
@@ -143,7 +149,10 @@ def apply(plan, campaign, changes):
             raise ValueError("a new %s at %d, %d: %s" % (kind, xy[0], xy[1], why))
         ex = example([fo for fo in now if fo.line not in removed], kind, xy)
         if ex is None:
-            raise ValueError(no_example(kind))
+            after, text = region_line(mod, campaign, f, kind, xy)
+            inserts.append((after, text))
+            plan.note(f, "new %s at %d, %d (in the regions section at the end of the file)" % (kind, xy[0], xy[1]))
+            continue
         inserts.append((ex.line, moved_line(f.text(ex.line), xy)))
         plan.note(f, "new %s at %d, %d (its line copied from the one at %d, %d%s)" % (
             kind, xy[0], xy[1], ex.xy[0], ex.xy[1], ", %s's" % ex.owner if ex.owner else ""))
@@ -155,7 +164,63 @@ def apply(plan, campaign, changes):
             del f.raw[line]
             plan.note(f, "%s at %d, %d removed" % (fo.kind, fo.xy[0], fo.xy[1]))
         else:
-            f.raw[line + 1:line + 1] = [f.make(text)]
+            f.raw[line + 1:line + 1] = [f.make(t) for t in text.split("\n")]
+
+
+def town_problem(mod, campaign, xy, strat=None):
+    """None, or why no fort / watchtower may be written for tile xy in the regions section: no region there, or
+    its region has no town (the game: 'You are trying to place a fort or watchtower in this region, but it
+    doesn't have a settlement')."""
+    img = mod.region_map(campaign)
+    by_colour = {v["colour"]: k for k, v in mod.regions(campaign).items()}
+    region = by_colour.get(img.get(*xy))
+    if not region:
+        return "no region there"
+    st = strat or Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
+    if st.settlement_of(region) is None:
+        return "%s has no town, and the game takes forts and watchtowers only in regions with one" % region
+    return None
+
+
+def region_line(mod, campaign, f, kind, xy):
+    """(after which line, text) for a new fort / watchtower the campaign has no line of: under its region's block
+    in the regions section at the end of descr_strat.txt (the block made when missing)."""
+    from .limits import game_kind
+    from .textio import strip_comment
+    st = Strat(f)
+    why = town_problem(mod, campaign, xy, st)
+    if why:
+        raise ValueError("a new %s at %d, %d: %s" % (kind, xy[0], xy[1], why))
+    img = mod.region_map(campaign)
+    region = {v["colour"]: k for k, v in mod.regions(campaign).items()}[img.get(*xy)]
+    town = st.settlement_of(region)
+    text = "%s\t%d %d" % (kind, xy[0], xy[1])
+    if kind == "fort" and game_kind(mod) == "medieval2":
+        culture = mod.culture(town.owner) if town.owner and town.owner != "slave" else None
+        culture = culture or next((c for c in (mod.culture(n) for n, _ in mod.factions()) if c), "southern_european")
+        text += " wooden_fort culture %s" % culture
+    n = len(f.raw)
+    lines = [strip_comment(f.text(i)).split() for i in range(n)]
+    keys = ("road_level", "farming_level", "famine_threat", "fort", "watchtower")
+    start = st.diplomacy_start if st.diplomacy_start is not None else 0
+    for i, t in enumerate(lines):
+        # the regions section's own `region` lines start the line (a settlement block's are indented)
+        if i >= start and t[:2] == ["region", region] and f.text(i)[:1] not in (" ", "\t"):
+            last, j = i, i + 1
+            while j < n and (not lines[j] or lines[j][0] in keys):
+                if lines[j]:
+                    last = j
+                j += 1
+            return last, text
+    # a new block: before a closing `script` line (Medieval II), else at the end
+    at = n - 1
+    for i in range(n - 1, -1, -1):
+        if lines[i][:1] == ["script"]:
+            at = i - 1
+            break
+    while at >= 0 and not lines[at] and not f.text(at).strip():
+        at -= 1
+    return at, "\n".join(["", "region %s" % region, "road_level 0", "farming_level 0", "famine_threat 0", text])
 
 
 def no_example(kind):
@@ -163,4 +228,5 @@ def no_example(kind):
             "Medieval II have none), so a new one is made only from one the campaign already has" % kind)
 
 
-__all__ = ["KINDS", "LANDMARK", "landmark_types", "read", "problem", "example", "moved_line", "apply", "no_example", "RE_FORT"]
+__all__ = ["KINDS", "LANDMARK", "landmark_types", "read", "problem", "example", "moved_line", "apply", "no_example",
+           "region_line", "town_problem", "RE_FORT"]

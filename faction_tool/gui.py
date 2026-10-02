@@ -60,8 +60,8 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   change the campaign's rules ... Tools > Campaign rules... (ages, agents, towns, diplomacy, unit sizes)
   add a religion ................ Tools > New religion... (Medieval II; Rome has no religions)
   add Sack Settlement ........... Add-ons (Rome + REX): who may sack, reward, what stays standing
-  rename a region or its town ... Settlements tab: Rename... (names players see), Rename in the
-                                  files... (the system names, everywhere)
+  rename a region or its town ... Edit region... (Map, or Rename... beside the towns list): the names
+                                  players see and the names in the files (changed everywhere)
   make a copy of the mod to work on  New mod folder... (the base mod stays untouched)
 
 START
@@ -635,8 +635,6 @@ class App(tk.Tk):
         ttk.Button(rb, text="New region...", command=self.new_region_dialog).pack(side="left", padx=(12, 2))
         ttk.Button(rb, text="Edit region...", command=lambda: self.new_region_dialog(
             edit=self.v_paint.get().replace("  (new)", "").strip())).pack(side="left", padx=2)
-        ttk.Button(rb, text="Rename...", command=self._rename_painted).pack(side="left", padx=2)
-        ttk.Button(rb, text="Rename in the files...", command=self._rename_painted_files).pack(side="left", padx=2)
         ttk.Button(rb, text="Place its town", command=lambda: self.region_point("city")).pack(side="left", padx=2)
         ttk.Button(rb, text="Place its port", command=lambda: self.region_point("port")).pack(side="left", padx=2)
         ttk.Button(rb, text="Delete this new region", command=self.drop_region).pack(side="left", padx=2)
@@ -1814,11 +1812,6 @@ class App(tk.Tk):
             self.show_map()
             return
         if key in FT.KINDS:
-            alive = [fo for fo in (self.strat.forts if self.strat else []) if fo.line not in self.fort_removed]
-            if not any(fo.kind == key for fo in alive):
-                mv.set_tool(None)
-                messagebox.showinfo(APP, "No new %s here: %s." % (key, FT.no_example(key)))
-                return
             mv.v_forts.set(True)
             self.v_fort_type.set(key)
             self.res_place_new(key)
@@ -2007,13 +2000,19 @@ class App(tk.Tk):
             was.update(self.region_edits.get(edit, {}))
             given = {k: (", ".join(was[k]) if isinstance(was.get(k), list) else str(was.get(k) or ""))
                      for k in SHOWN + EDITABLE}
-            fields = [(a, k, given[k], "the name players see; the file name %s stays - best keep them alike"
-                       % (edit if k == "label" else town) if k in SHOWN else h.split(";")[0].replace("by default ", ""))
+            fields = [(a, k, given[k], "the name players see - best keep it like the name in the files"
+                       if k in SHOWN else h.split(";")[0].replace("by default ", ""))
                       for a, k, _, h in fields if k in SHOWN + EDITABLE]
-            ttk.Label(frm, text="%s - town %s. Written with the next Apply (descr_regions.txt, the names players "
-                                "see in the campaign's names text); the file names and the land stay as they are. Tip: give the name "
-                                "players see and the name in the files the same spelling (Latium / Latium) - a mod is "
-                                "easier to read, search and fix when a place has one name everywhere."
+            files_hint = ("letters, digits, _ ; a change is written at once in every file that names it, "
+                          "with a backup (asked first)")
+            fields = [("Region - name in the files", "file_region", edit, files_hint),
+                      fields[0],
+                      ("Town - name in the files", "file_town", town, files_hint)] + fields[1:]
+            ttk.Label(frm, text="%s - town %s. The names in the files are changed at once in every file (with a "
+                                "backup); the rest is written with the next Apply (descr_regions.txt, the names "
+                                "players see in the campaign's names text). Tip: give the name players see and the "
+                                "name in the files the same spelling (Latium / Latium) - a mod is easier to read, "
+                                "search and fix when a place has one name everywhere."
                                 % (edit, town), font=("", 9, "bold"), wraplength=620, justify="left"
                       ).grid(row=99, column=0, columnspan=3, sticky="w", pady=(6, 0))
         vs = {}
@@ -2042,6 +2041,13 @@ class App(tk.Tk):
             from .regionedit import _ok_name
             d = {k: v.get().strip() for k, v in vs.items()}
             if old:                                      # a region of the map: only what differs
+                region = edit
+                new_files = (d.get("file_region") or edit, d.get("file_town") or old.get("settlement", ""))
+                if new_files != (edit, old.get("settlement", "")):
+                    from .gui_settlements import rename_now
+                    if not rename_now(self, self.v_campaign.get(), edit, new_files[0], new_files[1], w):
+                        return
+                    region = new_files[0]
                 ch = {}
                 for k in SHOWN + EDITABLE:
                     now = shown_now[k] if k in SHOWN else str(old.get(k) or "")
@@ -2062,12 +2068,15 @@ class App(tk.Tk):
                         ch[k] = val
                 self.remember()
                 if ch:
-                    self.region_edits[edit] = ch
+                    self.region_edits[region] = ch
                 else:
-                    self.region_edits.pop(edit, None)
-                w.destroy()
-                self.status.set("%s: %s - Preview, then Apply." % (edit, ", ".join("%s %s" % x for x in ch.items())
-                                                                     or "as it is"))
+                    self.region_edits.pop(region, None)
+                if w.winfo_exists():
+                    w.destroy()
+                if ch:
+                    self.status.set("%s: %s - Preview, then Apply." % (region, ", ".join("%s %s" % x for x in ch.items())))
+                elif region == edit:
+                    self.status.set("%s: as it is." % region)
                 return
             if not _ok_name(d["name"]) or not _ok_name(d["settlement"]):
                 messagebox.showerror(APP, "names: letters, digits and _ only (like Tribus_Novus)", parent=w)
@@ -2559,10 +2568,7 @@ class App(tk.Tk):
                     why = FT.problem(self.mod, camp, xy, taken(None, True))
                     alive = [fo for fo in file_forts if fo.line not in self.fort_removed]
                     if not why and FT.example(alive, kind, xy) is None:
-                        why = FT.no_example(kind)
-                        messagebox.showinfo(APP, "No new %s: %s." % (kind, why))
-                        self._res_placing = None
-                        return why
+                        why = FT.town_problem(self.mod, camp, xy, self.strat)
                 else:
                     why = problem(self.mod, camp, xy, taken())
                 if why:
@@ -3607,26 +3613,6 @@ class App(tk.Tk):
             self.colours[which] = rgb
             btn = self.b_primary if which == "primary" else self.b_secondary
             btn.configure(**colour_look(rgb))
-
-    def _rename_painted(self):
-        """Map > Edit regions > Rename...: the names players see of the region in 'Paint with' (right click one)."""
-        region = self.v_paint.get().replace("  (new)", "").strip()
-        if not region:
-            messagebox.showerror(APP, "Right click a region on the map first (it goes into 'Paint with'), then "
-                                      "Rename...")
-            return
-        self.new_region_dialog(edit=region)
-
-    def _rename_painted_files(self):
-        """Map > Edit regions > Rename in the files...: the names the files use for the region in 'Paint with'
-        and its town, changed everywhere the mod names them (the Settlements tab's window)."""
-        region = self.v_paint.get().replace("  (new)", "").strip()
-        if not region:
-            messagebox.showerror(APP, "Right click a region on the map first (it goes into 'Paint with'), then "
-                                      "Rename in the files...")
-            return
-        from .gui_settlements import rename_in_files
-        rename_in_files(self, region, self)
 
     def rename_town(self):
         """Rename... beside the town list: the region picked on the left (or a chosen town) in Edit region, whose

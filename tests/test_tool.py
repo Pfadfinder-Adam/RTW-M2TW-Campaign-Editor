@@ -3119,6 +3119,43 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
 
+    def test_brought_lines_lose_conditions_this_mod_lacks(self):
+        # a tester brought BI's british legionaries into plain Rome: their recruit line kept 'hidden_resource
+        # britain', which Rome does not have, and REX stopped at start ('unrecognised hidden resource')
+        from faction_tool import packs
+        from faction_tool.plan import Plan
+        d = os.path.join(self.root, "data")
+        edb = ("building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, }\n"
+               "        {\n            capability\n            {\n                recruit \"alpha general\"  0  "
+               "requires factions { alpha, } and hidden_resource britain\n                religious_belief "
+               "christianity 2\n            }\n        }\n    }\n}\n")
+        write(os.path.join(d, "export_descr_buildings.txt"), "hidden_resources britain\n" + edb)
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        shutil.copytree(self.root, os.path.join(target, "mod"))
+        troot = os.path.join(target, "mod")
+        write(os.path.join(troot, "data", "export_descr_buildings.txt"), edb.replace(
+            " and hidden_resource britain", "").replace("                religious_belief christianity 2\n", ""))
+        before = tree_hash(troot)
+        src, tmod = ModData(self.root), ModData(troot)
+        man, files = packs.collect(src, ["alpha general"])
+        bman, bfiles = packs.collect_buildings(src, ["barracks"])
+        plan = Plan(tmod, "pack", "pack", {})
+        names = packs.plan_names(tmod, man)
+        packs.import_pack(plan, man, files, ["alpha"], names)
+        cn, ln = packs.building_names(tmod, bman)
+        packs.import_buildings(plan, bman, bfiles, ["alpha"], cn, ln, {"alpha general": names["alpha general"][0]})
+        self.assertIn("hidden_resource britain", plan.report())     # said in Preview
+        bdir = plan.apply()
+        with open(ModData(troot).file("edb")) as fh:
+            text = fh.read()
+        self.assertNotIn("britain", text)
+        self.assertNotIn("religious_belief", text)                  # Rome has no beliefs
+        self.assertIn('recruit "alpha general 2"', text)
+        restore(ModData(troot), bdir)
+        after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
+        self.assertEqual(after, before)
+
     def test_read_and_draw_a_medieval2_mesh(self):
         """A .mesh laid out as the vanilla ones: parts with triangles, then the vertex streams (texture u v,
         bone weights, positions). Read back, the man shown, drawn both ways."""
@@ -4036,8 +4073,12 @@ building smith
         now = FT.read(mod, "test")
         self.assertEqual([(f.kind, f.xy) for f in now], [("watchtower", (2, 3)), ("watchtower", (0, 3))])
         self.assertIn("fort", FT.no_example("fort"))
-        with self.assertRaises(ValueError):                  # no fort line to copy in this campaign
-            edit(ModData(self.root), "test", "alpha", {"resources": {"forts": {"added": [{"kind": "fort", "xy": [3, 3]}]}}})
+        # no fort line to copy: written under its region in the regions section (the form both exes read there)
+        p2 = edit(ModData(self.root), "test", "alpha", {"resources": {"forts": {"added": [{"kind": "fort", "xy": [3, 3]}]}}})
+        b2 = p2.apply()
+        with open(path) as fh:
+            self.assertIn("\nregion B_R\nroad_level 0\nfarming_level 0\nfamine_threat 0\nfort\t3 3", fh.read())
+        restore(ModData(self.root), b2)
         with self.assertRaises(ValueError):                  # two on one tile
             edit(ModData(self.root), "test", "alpha", {"resources": {"forts": {"moved": {str(now[0].line): [0, 3]}}}})
         plan = edit(mod, "test", "alpha", {"resources": {"forts": {

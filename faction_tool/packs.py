@@ -591,10 +591,66 @@ def default_recruit_map(mod, manifest):
     return out
 
 
+def known_conditions(mod):
+    """What this mod knows of the names a requires line or a capability line may use: {'hidden_resource': set,
+    'resource': set, 'religion': set or None} (None = the game has no religions / beliefs at all)."""
+    from .check import hidden_resources
+    from . import resources, religions
+    hidden = {h.lower() for h in hidden_resources(mod)} if mod.file("edb") else set()
+    res = {r.lower() for r in resources.types(mod)}
+    rel = {r.lower() for r in religions.names(mod)}
+    beliefs = _ci(mod.data, "descr_beliefs.txt")
+    if beliefs:
+        for l in mod.load(beliefs).texts():
+            w = strip_comment(l).strip()
+            if w and " " not in w and "/" not in w and w != w.upper():
+                rel.add(w.lower())
+    return {"hidden_resource": hidden, "resource": res, "religion": rel or None}
+
+
+_COND = re.compile(r"(?<![A-Za-z0-9_])(not\s+)?(hidden_resource|resource)\s+([A-Za-z0-9_]+)")
+
+
+def fit_line(text, known):
+    """(text, [what was taken out]) - a building line from another mod made fit for this one: conditions naming a
+    hidden resource or a resource this mod does not have are taken out of its requires part (the game stops at
+    start on them: 'Hidden resource condition, unrecognised hidden resource'), and a religious_belief line for a
+    religion this game does not have is dropped whole (text None). Lines with REX brackets are left as they are."""
+    body = strip_comment(text)
+    t = body.split()
+    if t[:1] == ["religious_belief"] and len(t) > 1:
+        rel = known.get("religion")
+        if rel is None or t[1].lower() not in rel:
+            return None, ["religious_belief %s" % t[1]]
+    m = re.search(r"(?<![A-Za-z0-9_])requires(?![A-Za-z0-9_])", body)
+    if not m or "(" in body[m.end():]:
+        return text, []
+    head, conds = text[:m.start()], body[m.end():]
+    tail = text[len(body):]                     # the comment, if any
+    parts = re.split(r"\s+(and|or)\s+", " " + conds.strip())
+    keep, gone = [], []
+    for i in range(0, len(parts), 2):
+        cond = parts[i].strip()
+        op = parts[i - 1] if i else None
+        c = _COND.fullmatch(cond)
+        if c and c.group(3).lower() not in known.get(c.group(2), set()):
+            gone.append(cond)
+            continue
+        keep.append((op, cond))
+    if not gone:
+        return text, []
+    out = ""
+    for op, cond in keep:
+        out += (" %s " % op if out and op else (" and " if out else "")) + cond
+    line = head.rstrip() + (" requires " + out if out else "")
+    return line + (" " + tail.strip() if tail.strip() else ""), gone
+
+
 def _recruit(plan, manifest, names, owners, recruit_map=None):
     from .editors import building_blocks, chain_tree, line_place
     f = plan.edit(plan.mod.file("edb"))
-    n, missing, done = 0, set(), set()
+    n, missing, done, gone = 0, set(), set(), []
+    known = known_conditions(plan.mod)
     for r in manifest["recruit"]:
         src = (r["chain"], r["level"])
         dst = recruit_map.get(src, src) if recruit_map is not None else src
@@ -614,11 +670,16 @@ def _recruit(plan, manifest, names, owners, recruit_map=None):
         line = r["line"].replace('"%s"' % r["unit"], '"%s"' % names[r["unit"]][0], 1)
         # every factions list (REX lines may carry several groups) names the pack's owners here
         line = re.sub(r"(?<![A-Za-z0-9_])factions\s*\{[^}]*\}", "factions { %s, }" % ", ".join(owners), line)
+        line, out = fit_line(line, known)
+        gone += [c for c in out if c not in gone]
         at, make = line_place(f, "building", blk, "capability", r["level"], line.split()[0])
         f.insert(at, make(line))
         n += 1
     if n:
         plan.note(f, "%d recruit line(s) added" % n)
+    if gone:
+        plan.warn(f, "taken out of the recruit lines, this mod does not have them (the game would stop at start): "
+                     "%s" % ", ".join(gone))
     for m in sorted(missing):
         plan.warn(f, "not recruited at %s (not in this mod or left out): recruit the units by hand where you want "
                      "them (Building editor: Add line)" % m)
@@ -746,7 +807,8 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
             raise ValueError("a building level '%s' exists in this mod already" % new)
     units_here = {t.lower(): t for t in type_blocks(mod.load(mod.file("edu")))}
     unit_map = dict(unit_map or {})
-    dropped = []
+    dropped, gone = [], []
+    conds = known_conditions(mod)
     at = blocks[-1][2] if blocks else len(f.raw)
     out = []
     for bd in manifest["buildings"]:
@@ -771,12 +833,18 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
                 else:
                     plan.warn(f, "%s: a line with several factions groups (REX) kept as it is - check it in the "
                                  "Building editor" % (head[0] if head else "?"))
+            text, out_ = fit_line(text, conds)
+            gone += [c for c in out_ if c not in gone]
+            if text is None:
+                continue
             kept.append(text)
         out += [""] + kept
         plan.note(f, "building %s added (levels %s), may be built by %s" % (
             chain_names.get(bd["chain"], bd["chain"]), ", ".join(lv_names[lv] for lv in bd["levels"]),
             ", ".join(factions)))
     f.insert(at, out)
+    if gone:
+        plan.warn(f, "taken out, this mod does not have them (the game would stop at start): %s" % ", ".join(gone))
     if dropped:
         plan.warn(f, "recruit line(s) left out - the unit is not in this mod: %s (bring the unit too, or add a "
                      "recruit line in the Building editor)" % ", ".join(dropped))

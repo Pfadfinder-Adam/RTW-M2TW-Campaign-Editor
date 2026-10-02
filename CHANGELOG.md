@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **Edit region... holds both names** (a tester: three buttons on the Map's region bar did one job): for a region of
+  the map it now has the names in the files of the region and its town beside the names players see; a change of
+  the file names is written at once in every file that names them, with a backup (asked first). The Map's
+  **Rename...** and **Rename in the files...** buttons are gone (the Settlements tab keeps its own).
+
+### Fixed
+- **Units and buildings brought from another mod no longer stop the game at start** (a tester brought Barbarian
+  Invasion's british legionaries into Rome; REX: "Hidden resource condition, unrecognised hidden resource
+  'britain'"): conditions naming a hidden resource or a resource this mod does not have are taken out of the
+  recruit and requires lines, and a `religious_belief` line for a religion the game has not is left out - said in
+  Preview.
+- **New forts and watchtowers on a campaign that has none** (vanilla Rome and Medieval II): they were refused
+  ("no line to copy"); now written under their region in the regions section at the end of descr_strat.txt, the form
+  both games' exes read there (Barbarian Invasion's watchtowers use it; a Medieval II fort as `wooden_fort` with the
+  owner's culture). A region without a town is refused, as the game does.
+- **Roster: a double click right after Apply** no longer shows "'NoneType' object is not subscriptable" (the tab
+  reads the changed files again first).
+
 ## 0.29.2 - 2026-10-02
 
 ### Added

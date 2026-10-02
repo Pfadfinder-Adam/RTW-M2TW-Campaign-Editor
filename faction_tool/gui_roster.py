@@ -160,6 +160,8 @@ class RosterEditor(ttk.Frame):
         return out
 
     def _has(self, key):
+        if not self.data:
+            return None
         kind, _, rest = key.partition(":")
         if kind == "unit":
             return next((u["has"] for u in self.data["units"] if u["type"] == rest), None)
@@ -168,6 +170,8 @@ class RosterEditor(ttk.Frame):
 
     def pick(self, give, tv=None):
         """give True / False, or None for 'as it is', for the selected rows of either table."""
+        if not self.data:
+            self.load()
         if not self.data:
             return
         keys = []
@@ -218,8 +222,10 @@ class RosterEditor(ttk.Frame):
         return out, extra
 
     def toggle(self, tv):
+        if not self.data:
+            self.load()                              # the files changed meanwhile (Apply): read them again
         item = tv.focus()
-        if not item or item.startswith("chain:"):
+        if not self.data or not item or item.startswith("chain:") or not tv.exists(item):
             return
         has = bool(self._has(item))
         pick = self.app.roster_set.get(item)

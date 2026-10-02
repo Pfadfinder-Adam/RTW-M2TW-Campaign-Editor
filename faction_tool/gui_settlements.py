@@ -134,6 +134,40 @@ class SettlementsPanel(ttk.Frame):
             rename_in_files(self.app, region, self)
 
 
+def rename_now(app, campaign, region, new_region, new_town, parent):
+    """The region's and its town's names in the files changed everywhere the mod names them, written at once
+    with a backup (asked first, the whole list of changes shown), the mod read again. -> True when written."""
+    from .plan import Plan
+    from .regionrename import problems, rename
+    town = (app.mod.regions(campaign).get(region) or {}).get("settlement") or ""
+    why = problems(app.mod, campaign, region, new_region, new_town)
+    if why:
+        messagebox.showerror(APP, "\n".join(why), parent=parent)
+        return False
+    if app.pending_parts():
+        messagebox.showerror(APP, "Other changes wait for Apply. Apply (or undo) them first - they were made "
+                                  "with the old names.", parent=parent)
+        return False
+    p = Plan(app.mod, "rename", new_region)
+    try:
+        rename(p, campaign, region, new_region, new_town)
+    except ValueError as e:
+        messagebox.showerror(APP, str(e), parent=parent)
+        return False
+    if not p.changed_files():
+        return False
+    if not messagebox.askyesno(APP, "%s\n\nWrite %d file(s) now? A backup is made first (Tools > Restore undoes "
+                                    "it)." % (p.report(), len(p.changed_files())), parent=parent):
+        return False
+    bdir = p.apply()
+    log.write("Renamed in the files: %s / %s -> %s / %s (backup %s)\n%s" % (
+        region, town, new_region, new_town, bdir, p.report()))
+    app.load()
+    app.status.set("Renamed in the files (backup %s). Check the names players see (Settlements tab), then "
+                   "start the game - it builds map.rwm again." % bdir)
+    return True
+
+
 def rename_in_files(app, region, parent):
     """The region's and its town's names in the files, changed everywhere the mod names them: a window with the
     new names, Preview (every file and line), then written with a backup at once and the mod read again. The
@@ -186,21 +220,9 @@ def rename_in_files(app, region, parent):
             app.show_text("Rename in the files - nothing written yet", p.report())
 
     def write():
-        if app.pending_parts():
-            messagebox.showerror(APP, "Other changes wait for Apply. Apply (or undo) them first - they were made "
-                                      "with the old names.", parent=w)
-            return
-        p = plan()
-        if not p or not messagebox.askyesno(APP, "%s\n\nWrite %d file(s)? A backup is made first (Tools > Restore "
-                                                 "undoes it)." % (p.report(), len(p.changed_files())), parent=w):
-            return
-        bdir = p.apply()
-        log.write("Renamed in the files: %s / %s -> %s / %s (backup %s)\n%s" % (
-            region, town, v_region.get().strip(), v_town.get().strip(), bdir, p.report()))
-        w.destroy()
-        app.load()
-        app.status.set("Renamed in the files (backup %s). Check the names players see (Settlements tab), then "
-                       "start the game - it builds map.rwm again." % bdir)
+        if rename_now(app, campaign, region, v_region.get().strip(), v_town.get().strip(), w):
+            w.destroy()
+
     bar = ttk.Frame(frm)
     bar.grid(row=3, column=0, columnspan=3, sticky="e", pady=(10, 0))
     ttk.Button(bar, text="Preview", command=preview).pack(side="left")
