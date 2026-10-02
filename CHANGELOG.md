@@ -24,6 +24,9 @@
 - **A battle_models.modeldb with models after its count is read** (a tester: "modeldb: 1585 characters left after
   872 models" stopped a new faction): models added by hand while the count at the top stayed as it was are kept
   exactly as they are, and Preview / Check mod say which ones the game never reads and which count would read them.
+- **New regions on a big map get a colour** (a tester: "no free colour left"): the colour search walked only 200
+  colours over and over; it now walks millions, so a map with hundreds of regions still gets new ones.
+- **Recolour window: a touch-up stroke after the colours were changed** no longer raises an error.
 - **Changes waiting for Apply are never written into another mod, and never dropped without asking**: loading
   another mod (Load, F5, Browse, the Mod list) or opening another campaign now asks first when changes wait (the
   editors' and the faction tabs'); every editor then reads the new mod. Before, an editor's changes stayed bound to

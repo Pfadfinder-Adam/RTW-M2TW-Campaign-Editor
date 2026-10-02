@@ -31,15 +31,18 @@ def _ok_name(n):
 
 
 def free_colour(mod, campaign, taken=()):
-    """A colour no pixel of map_regions.tga has (nor black, white or near the seas')."""
+    """A colour no pixel of map_regions.tga has (nor black, white or near the seas'). The three channels step through
+    199, 197 and 193 values (primes): 7.5 million different colours before the walk comes round again - it used to
+    step all three by 200, so only 200 colours were ever tried and a big map (a tester's, with hundreds of regions)
+    ran out ('no free colour left')."""
     img = mod.region_map(campaign)
     used = img.colours() | set(taken)
-    for i in range(1, 5000):
-        c = ((i * 97) % 200 + 30, (i * 57) % 200 + 30, (i * 37) % 200 + 30)
+    for i in range(1, 2000000):
+        c = ((i * 97) % 199 + 30, (i * 57) % 197 + 30, (i * 37) % 193 + 30)
         if c in used or (c[0] < 60 and 120 < c[1] < 160):             # keep clear of the sea blues
             continue
         return c
-    raise ValueError("no free colour left")
+    raise ValueError("no colour left for a new region: map_regions.tga uses nearly every colour")
 
 
 def region_problems(mod, campaign, painted, new_regions):

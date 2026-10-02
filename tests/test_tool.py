@@ -2365,6 +2365,25 @@ building smith
         self.assertEqual(seen, bridge)                                 # one unbroken chain ...
         self.assertTrue({at(*q) for q in bridge} >= {R, U, S})         # ... from land over the water to land
 
+    def test_new_region_colour_on_a_full_map(self):
+        """A map whose regions already use the 200 colours the old walk could make (a tester's big map: 'no free
+        colour left') still gets a new colour, one no pixel has."""
+        from faction_tool.regionedit import free_colour
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        old = sorted({((i * 97) % 200 + 30, (i * 57) % 200 + 30, (i * 37) % 200 + 30) for i in range(1, 5000)})
+        self.assertEqual(len(old), 200)
+        px = [old[y * 20:(y + 1) * 20] for y in range(10)]
+        write_tga(os.path.join(camp, "map_regions.tga"), 20, 10, px)
+        mod = ModData(self.root)
+        c = free_colour(mod, "test", [(1, 2, 3)])
+        self.assertNotIn(c, set(old))
+        self.assertNotEqual(c, (1, 2, 3))
+        many = []
+        for _ in range(300):                                  # and hundreds more after it
+            many.append(free_colour(mod, "test", many))
+        self.assertEqual(len(set(many)), 300)
+        self.assertFalse(set(many) & set(old))
+
     def test_new_region_carved_out(self):
         from faction_tool.edit import edit
         from faction_tool.tga import read_tga

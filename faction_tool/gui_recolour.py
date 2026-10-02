@@ -231,6 +231,7 @@ class RecolourWindow(tk.Toplevel):
     def show(self):
         sel = self.tree.selection()
         if not sel or sel[0] not in self.ticked:
+            self._shown = None                     # a group line: no picture to touch up
             return
         it = self.items[int(sel[0][1:])]
         try:
@@ -275,7 +276,10 @@ class RecolourWindow(tk.Toplevel):
             return
         from PIL import Image, ImageDraw
         key = self._key(it)
-        im = self._cache[key][0]
+        try:
+            im = self._pair(it)[0]                 # read again when the colours changed since it was shown
+        except Exception:
+            return
         ed = self.edits.setdefault(key, {})
         which = self.v_brush.get()
         r = max(1, self.v_size.get()) / 2.0
