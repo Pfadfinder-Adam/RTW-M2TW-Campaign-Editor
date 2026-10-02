@@ -101,8 +101,35 @@ class ModelDB:
         self.models = []
         for _ in range(count):
             self.models.append(self._model(r, seen))
-        if text[r.p:].strip():
-            raise ModelDBError("modeldb: %d characters left after %d models" % (len(text) - r.p, count))
+        # what follows the counted models: nothing in a file the game wrote. A modder who added models and left the
+        # count at the top as it was has them here - the game reads only the counted ones (Boost stops at the
+        # count). Kept exactly as it is; the models found there are told (uncounted_note), never changed.
+        self.tail = text[r.p:] if text[r.p:].strip() else ""      # a line break at the end: written in the game's form
+        self.extra, self.extra_whole = [], True
+        if self.tail.strip():
+            r2, seen2 = _Reader(text), set(seen)
+            r2.p = r.p
+            try:
+                while text[r2.p:].strip():
+                    self.extra.append(self._model(r2, seen2))
+            except ModelDBError:
+                self.extra_whole = False
+
+    def uncounted_note(self):
+        """Plain words for what follows the counted models, or ''."""
+        if not self.tail.strip():
+            return ""
+        n = len(self.models)
+        if self.extra and self.extra_whole:
+            names = ", ".join(m.name for m in self.extra[:6]) + (" ..." if len(self.extra) > 6 else "")
+            return ("battle_models.modeldb counts %d models at its top, but %d more follow (%s): the game reads only "
+                    "the counted ones, so units on those models have no model in the game. Kept as they are - to "
+                    "have them read, set the count (the number after 'serialization::archive' and five more) to %d."
+                    % (n, len(self.extra), names, n + len(self.extra)))
+        return ("battle_models.modeldb: %d characters follow the %d models it counts%s - the game reads only the "
+                "counted models; kept as they are." % (len(self.tail.strip()), n,
+                                                        " (%d whole model(s), then text the tool cannot read)"
+                                                        % len(self.extra) if self.extra else ""))
 
     @staticmethod
     def _ci(r, seen, key, m):
@@ -193,7 +220,7 @@ class ModelDB:
         out = [self._s("serialization::archive")] + self.head + [str(len(self.models))] + self.model_ci
         for m in self.models:
             self._write_model(m, out)
-        return " ".join(out)
+        return " ".join(out) + self.tail             # what followed the counted models, as it was
 
     # ---- questions and changes ----
     def model(self, name):
@@ -331,6 +358,8 @@ def plan_add_faction(plan, template, new):
     if not src:
         return
     db = _db_in_plan(plan, src, dst)
+    if db.uncounted_note():
+        plan.warn(None, db.uncounted_note())
     n = db.add_faction(template, new)
     if not n:
         plan.warn(None, "battle_models.modeldb: %s has no texture entries to copy" % template)

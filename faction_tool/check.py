@@ -95,6 +95,9 @@ def check_mod(mod, campaign, deep=False, progress=None):
         len(blds), sum(len(b.levels) for b in blds)))
     if not any(b.lower().startswith("core") for b in chains):
         say("    (no core_building chain: settlements are not grown by the governor's building)")
+    md = _modeldb_report(mod)
+    if md:
+        (bad if md[0] else say)(md[1])
 
     # ---- map ----
     step("map...")
@@ -213,6 +216,23 @@ def check_mod(mod, campaign, deep=False, progress=None):
         say("No problems found.")
     say("(%.1f s)" % (time.time() - t0))
     return "\n".join(out)
+
+
+def _modeldb_report(mod):
+    """(fault, text) on Medieval II's battle_models.modeldb when the game reads it, or None."""
+    from . import modeldb as MDB
+    src, _ = MDB.find(mod)
+    if not src or MDB.text_source(mod):
+        return None
+    try:
+        db = MDB.load(src)
+    except Exception as e:
+        return True, "battle_models.modeldb cannot be read (%s) - a new faction or a unit pack cannot add its " \
+                     "models' textures until it is put right" % e
+    note = db.uncounted_note()
+    if note:
+        return False, "    note: " + note
+    return False, "    battle_models.modeldb: %d models (%s)" % (len(db.models), mod.rel(src))
 
 
 def hidden_resources(mod):

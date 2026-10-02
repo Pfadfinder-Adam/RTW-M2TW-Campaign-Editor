@@ -8,6 +8,9 @@
   be written, the files written before it are put back, the copies removed, no temp file stays, and the message says
   in plain words what to close or change. A file marked read-only (Windows' Read-only box) is named in Preview and
   written (the mark is taken off); a file another program holds for a moment is tried again.
+- **A battle_models.modeldb with models after its count is read** (a tester: "modeldb: 1585 characters left after
+  872 models" stopped a new faction): models added by hand while the count at the top stayed as it was are kept
+  exactly as they are, and Preview / Check mod say which ones the game never reads and which count would read them.
 - **Map: no more errors after switching tools while a new region's town waited for its click** (34 errors in one
   report: a fort placed in between, then every mouse move). The map forgets the old click and says so.
 - **Buildings tab: the buttons above the list work before a town is picked** ('BuildingsEditor' has no

@@ -329,6 +329,20 @@ class ToolTest(unittest.TestCase):
         # spaces between the values read as the game reads them; the file written back in the game's own form
         edited = text.replace(" 6 spears ", "\r\n6 spears  ").replace(" 3 0 0", "\t3\t0 0", 1) + "\r\n"
         self.assertEqual(MDB.ModelDB(edited).dump(), text)
+        # a model added by hand after the count at the top was left as it was (a tester: "modeldb: 1585 characters
+        # left after 872 models"): the game reads only the counted ones - read, said, kept byte for byte
+        extra = text + " " + " ".join(MDB.ModelDB.dump_models([model("archers", ["alpha"])]))
+        db = MDB.ModelDB(extra)
+        self.assertEqual([m.name for m in db.extra], ["archers"])
+        self.assertIn("1 more follow (archers)", db.uncounted_note())
+        self.assertIn("to 3", db.uncounted_note())
+        self.assertEqual(db.dump(), extra)
+        db.add_faction("alpha", "gamma")
+        self.assertTrue(db.dump().endswith(extra[len(text):]))               # the uncounted model untouched
+        self.assertEqual(MDB.ModelDB(db.dump()).model("knights").factions(), ["alpha", "slave", "gamma"])
+        junk = MDB.ModelDB(text + " 7 broken")
+        self.assertIn("characters follow the 2 models", junk.uncounted_note())
+        self.assertEqual(junk.dump(), text + " 7 broken")
         path = os.path.join(self.root, "data", "unit_models", "battle_models.modeldb")
         os.makedirs(os.path.dirname(path))
         with open(path, "wb") as fh:
