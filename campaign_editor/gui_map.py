@@ -1307,6 +1307,7 @@ class MapView(ttk.Frame):
             items = self.on_pick_menu(self.picked, town[0] if town else None) or []
         else:
             cid = self._char_under(e.x, e.y)
+            self.menu_res = self._res_under(e.x, e.y)          # a resource / fort / tower under the mouse
             items = self.on_menu(town[1] if town else xy, town[0] if town else None, cid) or []
         m = tk.Menu(self, tearoff=0)
         for label, fn in items:

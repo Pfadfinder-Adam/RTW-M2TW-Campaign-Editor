@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Changed
+- **Map: Delete from the map on the right-click menu** (a tester: things could be added but not taken away): a
+  resource, fort, watchtower or wonder, or a character of any faction with his army - gone from descr_strat.txt with
+  the next Apply, nothing left behind; the leader, the heir and members of the family tree are refused in plain
+  words.
 - **The old "Faction Tool" name is gone** (the author's wish): the code is the `campaign_editor` package, started
   from source with `python campaign_editor.py`; the files it makes beside a mod are `CampaignEditor_ignore.txt` and
   `CampaignEditor_mod.json`. Older versions' files (`faction_tool_backups`, `faction_tool_ignore.txt`,

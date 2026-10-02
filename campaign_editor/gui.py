@@ -311,7 +311,7 @@ class App(tk.Tk):
         self.place_moves = {}           # {('city' | 'port', region): (x, y)} towns and ports moved on the map
         # the Map's changes for any faction (not only the one made or edited): towns given {region: new owner},
         # armies / agents / fleets placed {faction: [character dicts]} - written with the next Apply
-        self.map_owners, self.map_chars = {}, {}
+        self.map_owners, self.map_chars, self.map_removed = {}, {}, {}
         self.dip_set = {}               # {(kind, from, to): value or None} picked on the Diplomacy tab ('me' = the faction)
         self.region_paint = {}          # {(x, y): region} tiles painted to another region (Regions mode)
         self.region_edits = {}          # {region: {creator, rebels, resources, triumph, farming}} of regions there are
@@ -1433,7 +1433,7 @@ class App(tk.Tk):
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "place_moves", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions", "new_religions", "region_edits",
                  "culture_names", "name_list", "res_moves", "res_removed", "res_added", "region_tags", "fort_moves", "fort_removed", "fort_added", "art_replace", "sel_map", "figures", "roster_set",
-                 "family_set", "map_owners", "map_chars")
+                 "family_set", "map_owners", "map_chars", "map_removed")
 
     def snapshot(self):
         st = {k: copy.deepcopy(getattr(self, k)) for k in self.UNDO_KEYS}
@@ -2779,9 +2779,10 @@ class App(tk.Tk):
                         taken.add(dest)
                         fleet_moves[c.start] = dest
         from .start import unit_name
+        removed = {(f, x["name"], tuple(x["from"])) for f, xs in self.map_removed.items() for x in xs}
         for fb in self.strat.factions:
             for i, c in enumerate(fb.characters):
-                if not c.xy:
+                if not c.xy or (fb.name, c.name, tuple(c.xy)) in removed:
                     continue
                 lines = self.strat.lines[c.start:c.end]
                 army = any(tokens(l)[:1] == ["army"] for l in lines)
@@ -3404,7 +3405,7 @@ class App(tk.Tk):
         self.field, self._placing = [], None
         self.editing_now, self.char_moves = None, {}
         self.place_moves = {}
-        self.map_owners, self.map_chars = {}, {}
+        self.map_owners, self.map_chars, self.map_removed = {}, {}, {}
         self.dip_set.clear()
         self.region_paint, self.new_regions, self._region_point = {}, [], None
         self.region_edits = {}
@@ -4003,6 +4004,35 @@ class App(tk.Tk):
                     self.lb_build.selection_set(self.chosen.index(region))
                     self.load_buildings()
                 items.append(("Its buildings...  (Buildings)", buildings))
+        rid = getattr(self.map_view, "menu_res", None)
+        if rid:                                        # a resource, fort, watchtower or wonder: gone with its line
+            mark = getattr(self.map_view, "resources", None) or []
+            what = next((m for m in mark if m.get("id") == rid), None)
+            name = (what or {}).get("kind", "this")
+
+            def delete_mark(rid=rid):
+                self._res_sel = rid
+                self.res_delete()
+            if items:
+                items.append((None, None))
+            items.append(("Delete the %s from the map" % name, delete_mark))
+        if cid is not None and ":" in str(cid) and not str(cid).startswith(("map:", "new:")):
+            ch = (getattr(self, "_map_chars", None) or {}).get(cid)
+            mine = self.field_faction() and not self.map_only() and ch and ch["faction"] == self.field_faction()
+            if ch and not mine:
+                def delete_char(ch=ch):
+                    self.remember()
+                    self.map_removed.setdefault(ch["faction"], []).append({"name": ch["name"],
+                                                                            "from": list(ch["from"])})
+                    self.status.set("%s %s of %s goes with the next Apply%s - Preview first; Undo brings him back."
+                                    % (ch["kind"], ch["name"], ch["faction"], " (his army too)" if ch.get("army")
+                                       else ""))
+                    self._mark_work()
+                    self.show_map()
+                if items:
+                    items.append((None, None))
+                items.append(("Delete %s (%s of %s) from the map%s" % (
+                    ch["name"], ch["kind"], ch["faction"], ", with his army" if ch.get("army") else ""), delete_char))
         if cid is not None and str(cid).startswith("map:"):
             _, fac, k = str(cid).split(":")
             k = int(k)
@@ -4033,6 +4063,13 @@ class App(tk.Tk):
                 if items:
                     items.append((None, None))
                 items.append(("%s %s: open it  (Units & armies)" % (c["kind"], c["name"]), open_it))
+
+                def delete_own(i=i):
+                    self.lb_field.selection_clear(0, "end")
+                    self.lb_field.selection_set(i)
+                    self.remove_field()
+                    self.show_map()
+                items.append(("Delete %s from the map" % c["name"], delete_own))
         if cid is None and self.strat:
             # for any faction: the land's owner by default, another picked in the window
             from .gui_mapadd import add_at, owner_at
@@ -4332,6 +4369,9 @@ class App(tk.Tk):
         chars = {f: list(cs) for f, cs in self.map_chars.items() if cs}
         if chars:
             out["characters"] = chars
+        gone = {f: list(cs) for f, cs in self.map_removed.items() if cs}
+        if gone:
+            out["remove"] = gone
         return out
 
     def _faction_label(self):

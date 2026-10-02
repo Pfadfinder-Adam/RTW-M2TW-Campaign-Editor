@@ -3308,6 +3308,27 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_map_deletes_a_character_of_any_faction(self):
+        """The Map's right-click Delete: a character of any faction goes with his whole block (army too); the leader,
+        the heir and one on the family tree are refused."""
+        from campaign_editor.edit import map_changes
+        mod = ModData(self.root)
+        strat = mod.campaign_file("test", "descr_strat.txt")
+        s = Strat(mod.load(strat))
+        fb = next(fb for fb in s.factions if any(c.xy and not c.role and c.kind != "named character"
+                                                 for c in fb.characters))
+        c = next(c for c in fb.characters if c.xy and not c.role and c.kind != "named character")
+        plan = Plan(mod, "map", "map", {})
+        map_changes(plan, "test", {"remove": {fb.name: [{"name": c.name, "from": list(c.xy)}]}})
+        after = Strat(plan.files[strat])
+        self.assertFalse(any(x.name == c.name and x.xy == c.xy for x in after.faction(fb.name).characters))
+        self.assertEqual(len(plan.files[strat].raw), len(mod.load(strat).raw) - (c.end - c.start))
+        lead = next((x for f in s.factions for x in f.characters if x.role == "leader" and x.xy), None)
+        if lead:
+            with self.assertRaises(ValueError):
+                map_changes(Plan(mod, "map", "map", {}), "test",
+                            {"remove": {lead.owner: [{"name": lead.name, "from": list(lead.xy)}]}})
+
     def test_map_changes_for_any_faction(self):
         # a tester: what is put on the Map should not depend on the faction picked elsewhere - a town given to any
         # faction, an army or agent placed for any faction, written with the next Apply

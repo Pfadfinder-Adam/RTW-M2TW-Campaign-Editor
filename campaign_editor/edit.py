@@ -470,11 +470,35 @@ def first_units(mod, campaign, faction, kind, xy):
 def map_changes(plan, campaign, changes):
     """What the Map changed for factions other than the one being made or edited (or with none picked):
     changes = {'owners': {region: new owner}, 'characters': {faction: [character dicts as start.extra_characters
-    takes them]}} - written into the plan's descr_strat.txt like the edited faction's own changes."""
-    if not changes or not (changes.get("owners") or changes.get("characters")):
+    takes them]}, 'remove': {faction: [{'name', 'from': (x, y)}]}} - written into the plan's descr_strat.txt like
+    the edited faction's own changes. A removed character goes with his whole block (his army or fleet too); a
+    member of the family tree is refused (the relative lines name him)."""
+    if not changes or not (changes.get("owners") or changes.get("characters") or changes.get("remove")):
         return
     from .start import extra_characters
     f = plan.edit(plan.mod.campaign_file(campaign, "descr_strat.txt"))
+    gone = []
+    for fac, items in (changes.get("remove") or {}).items():
+        fb = Strat(f).faction(fac)
+        if fb is None:
+            raise ValueError("%s has no faction block in descr_strat.txt" % fac)
+        for m in items:
+            src = tuple(m["from"])
+            c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
+            if c is None:
+                raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], fac))
+            if c.role:
+                raise ValueError("%s is %s's %s - the faction needs him; make another the %s first" % (
+                    c.name, fac, c.role, c.role))
+            if c.named and any(t.split()[:1] == ["relative"] and c.name in t
+                               for t in f.texts()[fb.start:fb.end] if t.strip()):
+                raise ValueError("%s is on %s's family tree - take him off it in the Character editor first (the "
+                                 "relative lines name him)" % (c.name, fac))
+            gone.append((c.start, c.end, "%s %s (%s) at %d, %d removed with everything under him" % (
+                fac, c.name, c.kind, src[0], src[1])))
+    for start, end, note in sorted(gone, reverse=True):
+        del f.raw[start:end]
+        plan.note(f, note)
     if changes.get("owners"):
         now = _owners_now(plan.mod, campaign, f)
         moves = [(r, now.get(r), to) for r, to in changes["owners"].items() if now.get(r) != to]
