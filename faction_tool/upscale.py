@@ -343,8 +343,12 @@ def kinds_scaled(path, mask=None, sea_colours=(), rounds=2):
 def _round_tiles(types, TW, TH, keep=lambda c: False, rounds=2):
     """Round off the 3 x 3 blocks of new tiles in place: a tile that is not its block's middle takes the kind most
     common in the 3 x 3 tiles round it (Pillow's mode filter, `rounds` times) - never a kind `keep` names (the sea
-    stays where the heights put it) and never into one."""
-    from PIL import Image, ImageFilter
+    stays where the heights put it) and never into one. Without Pillow (only a run from the source may lack it - the
+    exe has it) the blocks stay as they are: every tile keeps its old tile's kind either way."""
+    try:
+        from PIL import Image, ImageFilter
+    except ImportError:
+        return
     ids, pal = {}, []
     idx = bytearray(TW * TH)
     for i, c in enumerate(types):
