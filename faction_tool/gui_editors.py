@@ -6,7 +6,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from .gui_util import ShortHint
+from .gui_util import ShortHint, hint
 from . import editors as E
 from . import settings, theme, unitattrs
 from .gui_util import save_copy
@@ -31,8 +31,12 @@ class RecordEditor(ttk.Frame):
         # and removed {line}; both placed on Apply, after the changed fields
         self.adds, self.removes = [], set()
         self.current = None
-        side = ttk.Frame(self)
-        side.pack(side="left", fill="y", padx=(0, 8))
+        self.text_edits = {}                 # {key in export_buildings / export_units: new text}, written on Apply
+        # the list and the record side by side; the line between them is dragged to make the list wider (kept)
+        pane = self.pane = ttk.Panedwindow(self, orient="horizontal")
+        pane.pack(fill="both", expand=True)
+        side = ttk.Frame(pane, padding=(0, 0, 6, 0))
+        pane.add(side, weight=0)
         ttk.Label(side, text="Units" if kind == "unit" else "Building chains", font=("", 10, "bold")).pack(anchor="w")
         self.v_find = tk.StringVar()
         e = ttk.Entry(side, textvariable=self.v_find, width=32)
@@ -54,13 +58,17 @@ class RecordEditor(ttk.Frame):
         fl.winfo_children()[-1].bind("<<ComboboxSelected>>", lambda ev: self.fill_list())
         fl.columnconfigure(1, weight=1)
         self.facets = {}
-        self.lb = tk.Listbox(side, width=34, exportselection=False)
+        self.lb = tk.Listbox(side, width=34, exportselection=False)        # (as wide as the pane gives it)
         self.lb.pack(fill="both", expand=True)
         self.lb.bind("<<ListboxSelect>>", lambda ev: self.show())
         self.lbl_count = ttk.Label(side, text="", foreground="#666")
         self.lbl_count.pack(anchor="w")
-        right = ttk.Frame(self)
-        right.pack(side="left", fill="both", expand=True)
+        right = ttk.Frame(pane, padding=(6, 0, 0, 0))
+        pane.add(right, weight=1)
+        w0 = settings.get("editor_list_width_" + kind)
+        if isinstance(w0, int) and w0 > 80:
+            self.after(50, lambda: self._sash_to(w0))
+        pane.bind("<ButtonRelease-1>", lambda e: self._sash_kept())
         head = ttk.Frame(right)
         head.pack(fill="x")
         self.title = ttk.Label(head, text="Load a mod, then pick one on the left", font=("", 11, "bold"))
@@ -118,6 +126,18 @@ class RecordEditor(ttk.Frame):
         canvas.bind("<Leave>", lambda ev: canvas.unbind_all("<MouseWheel>"))
         self._photos = []
 
+    def _sash_to(self, x):
+        try:
+            self.pane.sashpos(0, x)
+        except tk.TclError:
+            pass
+
+    def _sash_kept(self):
+        try:
+            settings.put("editor_list_width_" + self.kind, int(self.pane.sashpos(0)))
+        except tk.TclError:
+            pass
+
     def _lines_label(self):
         n = len(getattr(self, "fields", None) or ()) if self.current else 0
         self.b_lines.configure(text="%s  Every line of the block%s" % (
@@ -140,7 +160,7 @@ class RecordEditor(ttk.Frame):
     def load(self, mod):
         self.mod = mod
         self.changes, self.imports, self.current, self.copy_ops = {}, [], None, []
-        self.adds, self.removes = [], set()
+        self.adds, self.removes, self.text_edits = [], set(), {}
         self._recruits = self._required = self._limits = None      # read from the file when first asked
         p = self.path()
         self._sig = self._signature()
@@ -404,7 +424,7 @@ class RecordEditor(ttk.Frame):
         return self.changes.get(fd.line, fd.value) if fd else ""
 
     def reset(self):
-        self.changes, self.imports, self.copy_ops = {}, [], []
+        self.changes, self.imports, self.copy_ops, self.text_edits = {}, [], [], {}
         self.adds, self.removes = [], set()
         self.fill_list()
         self.show()
@@ -1262,6 +1282,67 @@ class RecordEditor(ttk.Frame):
             if now and not pending:
                 ttk.Button(bb, text="Save a copy...", command=lambda h=now, l=label: save_copy(
                     self, h, "the %s" % l.lower())).pack(side="left", padx=4)
+        self._building_texts(level, cult)
+
+    def _building_texts(self, level, cult):
+        """The level's name and descriptions players read, for a culture or faction (the game takes
+        <level>_<faction>, else <level>_<culture>, else the plain <level>): shown and changed here, written on Apply
+        into export_buildings.txt."""
+        from .gui_newrecord import _text_value
+        box = ttk.LabelFrame(self.pics, text="Texts players read", padding=6)
+        box.grid(row=2, column=0, columnspan=3, sticky="we", pady=(8, 0))
+        have = E.level_text_suffixes(self.mod, level)
+        cults = sorted({c for _, c in self.mod.factions() if c})
+        facs = sorted(f for f, _ in self.mod.factions())
+        choices = ["(plain)"] + [c for c in dict.fromkeys(cults + facs + [x for x in have if x])]
+        marked = ["%s%s" % (c, " *" if (c == "(plain)" and "" in have) or c.lower() in have else "") for c in choices]
+        self.v_tfor = getattr(self, "v_tfor", tk.StringVar())
+        cur = self.v_tfor.get().rstrip(" *")
+        if cur not in choices:
+            # the picture's culture when it has texts of its own (Rome names some by faction: carthage, parthia)
+            cur = next((c for c in (cult, cult.replace("ian", "")) if c.lower() in have), "(plain)")
+        self.v_tfor.set(marked[choices.index(cur)])
+        top = ttk.Frame(box)
+        top.grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(top, text="Texts for").pack(side="left")
+        cb = ttk.Combobox(top, textvariable=self.v_tfor, values=marked, state="readonly", width=26)
+        cb.pack(side="left", padx=4)
+        cb.bind("<<ComboboxSelected>>", lambda ev: self.show_pictures())
+        hint(top, "The game shows a level's texts for the faction first ({level_faction}), else for its culture "
+                  "({level_culture}), else the plain ones ({level}). * = this one has texts of its own. A change is "
+                  "written to export_buildings.txt on Apply (with a backup).").pack(side="left", padx=4)
+        suffix = "" if cur == "(plain)" else cur
+        base = level + ("_" + suffix if suffix else "")
+        rows = []
+        for r, (part, label) in enumerate(E.TEXT_PARTS, start=1):
+            key = base + part
+            now = self.text_edits.get(key)
+            if now is None:
+                now = _text_value(self.mod, "export_buildings.txt", key)
+            ttk.Label(box, text=label.capitalize()).grid(row=r, column=0, sticky="nw", padx=(0, 6), pady=2)
+            if part == "_desc":
+                w = tk.Text(box, height=4, width=60, wrap="word", font="TkDefaultFont")
+                w.insert("1.0", now)
+                w.bind("<KeyRelease>", lambda ev, k=key, w=w: self._text_edited(k, w.get("1.0", "end-1c")))
+            else:
+                v = tk.StringVar(value=now)
+                w = ttk.Entry(box, textvariable=v, width=60)
+                w.bind("<KeyRelease>", lambda ev, k=key, v=v: self._text_edited(k, v.get()))
+            w.grid(row=r, column=1, sticky="we", pady=2)
+            rows.append(w)
+        if not suffix and any("DO NOT TRANSLATE" in _text_value(self.mod, "export_buildings.txt", base + p)
+                              for p, _ in E.TEXT_PARTS[1:]):
+            ttk.Label(box, foreground="#a60", text="The plain texts are stand-ins the game never shows - pick a "
+                                                    "culture or faction above.").grid(row=4, column=1, sticky="w")
+        box.columnconfigure(1, weight=1)
+
+    def _text_edited(self, key, text):
+        from .gui_newrecord import _text_value
+        if text == _text_value(self.mod, "export_buildings.txt", key):
+            self.text_edits.pop(key, None)
+        else:
+            self.text_edits[key] = text
+        self.app._mark_work() if hasattr(self.app, "_mark_work") else None
 
     def import_pic(self, targets, need, label):
         if not targets:
@@ -1291,7 +1372,7 @@ class RecordEditor(ttk.Frame):
 
     # ---- writing ----
     def dirty(self):
-        return bool(self.changes or self.imports or self.copy_ops or self.adds or self.removes)
+        return bool(self.changes or self.imports or self.copy_ops or self.adds or self.removes or self.text_edits)
 
     # ---- unit packs ----
     def bring_dialog(self):
@@ -1447,7 +1528,8 @@ class RecordEditor(ttk.Frame):
 
     def pending(self):
         """How many changes wait for Apply here."""
-        return len(self.changes) + len(self.imports) + len(self.copy_ops) + len(self.adds) + len(self.removes)
+        return len(self.changes) + len(self.imports) + len(self.copy_ops) + len(self.adds) + len(self.removes) + \
+            len(self.text_edits)
 
     def _signature(self):
         """What the file is now (its bytes' md5): the changes wait on the lines as they were read."""
@@ -1571,6 +1653,9 @@ class RecordEditor(ttk.Frame):
                     copy_cards(plan, fac, dictionary(edu, blk))
         for src, targets, size in self.imports:
             E.import_picture(plan, src, targets, size)
+        if self.text_edits:                              # names and descriptions players read
+            E.set_text_values(plan, mod.text_file("export_buildings.txt" if self.kind == "building" else
+                                                  "export_units.txt"), dict(self.text_edits))
         for src, new, d in self.copy_ops:                 # after the field changes: copies add lines
             if self.kind == "unit":
                 E.copy_unit(plan, src, new, d["dict"], d["recruit"], texts=d.get("texts"), owners=d.get("owners"),

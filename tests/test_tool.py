@@ -1279,6 +1279,25 @@ building smith
         with self.assertRaises(ValueError):                               # a name with no string
             edit(ModData(self.root), "test", "alpha", {"leader": {"name": "Zed"}})
 
+    def test_building_level_texts_per_culture(self):
+        """The Building editor's texts: the suffixes a level has texts for (both games' {level_culture} keys, with
+        _desc and _desc_short), and a changed name / description written into export_buildings.txt."""
+        from faction_tool import editors as E
+        from faction_tool.plan import Plan
+        body = ("{farms}\tfarms\n{farms_desc}\tDO NOT TRANSLATE\n{farms_desc_short}\tDO NOT TRANSLATE\n"
+                "{farms_eastern_european}\tLand Clearance\n{farms_eastern_european_desc}\tCleared land.\n"
+                "{farms_carthage_desc}\tPunic fields.\n{farms+1_greek}\tCommunal\n")
+        write(os.path.join(self.root, "data", "text", "export_buildings.txt"), body, utf16=True)
+        mod = ModData(self.root)
+        self.assertEqual(E.level_text_suffixes(mod, "farms"), ["", "carthage", "eastern_european"])
+        plan = Plan(mod, "buildings", "buildings", {})
+        path = mod.text_file("export_buildings.txt")
+        E.set_text_values(plan, path, {"farms_eastern_european": "Woods Cut", "farms_greek_desc": "Olive groves.\nAnd more."})
+        text = "\n".join(plan.files[path].texts())
+        self.assertIn("{farms_eastern_european}\tWoods Cut", text)
+        self.assertIn("{farms_eastern_european_desc}\tCleared land.", text)    # the rest untouched
+        self.assertIn("{farms_greek_desc}\tOlive groves.\nAnd more.", text)       # a new key added
+
     def test_long_texts_are_copied_whole(self):
         # a value runs over several lines until the next {KEY}; the copy must not split it
         body = ("{hut_alpha}\t\tAlphan Hut\n"

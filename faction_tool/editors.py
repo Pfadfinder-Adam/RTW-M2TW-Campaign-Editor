@@ -1036,6 +1036,35 @@ def room_for(f, kind, block, place, level, key, limits, pending=0, mod=None):
     return None
 
 
+TEXT_PARTS = (("", "name"), ("_desc_short", "short description"), ("_desc", "description"))
+
+
+def level_text_suffixes(mod, level):
+    """The suffixes a building level's texts have in export_buildings.txt: '' (its plain texts) and every culture or
+    faction it has a text of its own for ({<level>_<suffix>}, {..._desc}, {..._desc_short}) - both games."""
+    path = _text_file(mod, "export_buildings.txt")
+    out = {""}
+    if not path:
+        return [""]
+    low = level.lower() + "_"
+    for t in mod.load(path).texts():
+        s = t.lstrip()
+        if not (s.startswith("{") and "}" in s):
+            continue
+        k = s[1:s.index("}")].lower()
+        if not k.startswith(low):
+            continue
+        rest = k[len(low):]
+        for end in ("_desc_short", "_desc"):
+            if rest.endswith(end):
+                rest = rest[:-len(end)]
+                break
+        if rest in ("desc", "desc_short"):
+            continue
+        out.add(rest)
+    return sorted(out)
+
+
 def level_names(mod, level):
     """[(suffix, name)] of a building level in export_buildings.txt: its own name and
     the names for a culture or a faction ({<level>_<culture or faction>}, e.g. Shrine to

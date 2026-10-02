@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Changed
+- **Building editor: the texts players read** (a tester: the description tied to a culture was missing): the level's
+  name, short description and description for each culture or faction, shown under the pictures and changed there;
+  written to export_buildings.txt on Apply.
+- **Unit and Building editors: the list's width can be dragged** (a tester's report), the line's grip drawn in the
+  text's colour so it shows on either look; the width is kept.
 - **Faction emblem: fitted by hand before it is made into every picture** (found by a tester: the emblem needed an
   editor of its own to fit a picture into the round icons): move, size, turn, cut to the old emblem's own shape (or
   a circle, a square), a ground in the faction's colours, a magic wand that clears an area of like colour, a paint

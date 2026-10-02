@@ -174,6 +174,9 @@ def _style(root):
     st.configure("TLabelframe", background=p["bg"], bordercolor=p["border"])
     st.configure("TLabelframe.Label", background=p["bg"], foreground=p["fg"])
     st.configure("TScrollbar", background=p["button"], arrowcolor=p["fg"])
+    # the line between two panes, dragged to resize: drawn in the text's colour so it stands out on either look
+    st.configure("Sash", sashthickness=8, gripcount=60, background=p["muted"], lightcolor=p["fg"],
+                 darkcolor=p["fg"], bordercolor=p["border"])
     # the tabs stand out: bigger, bold, the one open coloured like the work bar's button
     st.configure("TNotebook", background=p["bg"], tabmargins=(2, 4, 2, 0))
     st.configure("TNotebook.Tab", background=p["tab"], foreground=p["fg"], padding=(16, 6),
