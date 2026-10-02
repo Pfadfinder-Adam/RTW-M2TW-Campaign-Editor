@@ -33,6 +33,8 @@
   the mod they were made on, and Apply on the new mod wrote them into the old one's files.
 - **A template that does not play in the open campaign** (Medieval II's saxons outside the Norman prologue) is
   said plainly, with the campaign it plays in.
+- **Start_<mod>.bat of a new Rome mod folder starts the engine from the game's folder** wherever it is started
+  from (a shortcut, another folder) - it went `cd ..` from the folder it was started in.
 - **Terrain editor / win conditions**: two buttons that raised an error before a mod was loaded.
 - **Map: no more errors after switching tools while a new region's town waited for its click** (34 errors in one
   report: a fort placed in between, then every mouse move). The map forgets the old click and says so.

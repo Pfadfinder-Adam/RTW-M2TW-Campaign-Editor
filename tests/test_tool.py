@@ -928,7 +928,9 @@ building smith
         data, st = create_mod(os.path.join(game, "data"), "Beta")
         self.assertEqual(st["base"], "(game)")
         with open(os.path.join(game, "Beta", "Start_Beta.bat"), "rb") as f:
-            self.assertIn(b"REX.exe -nm -show_err -mod:Beta", f.read())
+            bat = f.read()
+        self.assertIn(b"REX.exe -nm -show_err -mod:Beta", bat)
+        self.assertTrue(bat.startswith(b'cd /d "%~dp0.."'))       # the game's folder wherever it is started from
         plan = build(ModData(data), "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
         plan.apply()
         removed = slim(data)
