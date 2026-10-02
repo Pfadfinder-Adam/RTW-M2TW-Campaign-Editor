@@ -25,8 +25,11 @@ class RecolourWindow(tk.Toplevel):
         self.camp = app.v_campaign.get()
         self.title("%s - %s" % (TITLE, faction))
         self.transient(app)
-        self.geometry("1180x720")
-        self.minsize(900, 560)
+        self.minsize(820, 520)
+        # the 'now' and 'after' pictures fit the screen (a tester: 'after' went past the window's edge)
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        self.side = max(180, min(SIDE, (min(sw, 1400) - 620) // 2, sh - 470))
+        self.geometry("%dx%d" % (min(sw - 40, 600 + 2 * self.side + 60), min(sh - 80, 720)))
         self.colours = R.faction_colours(self.mod)
         self.items = R.targets(self.mod, self.camp, faction)
         paths = [it for it in self.items if it["group"] != "symbols and banners" and not it["skip"]] or \
@@ -64,8 +67,11 @@ class RecolourWindow(tk.Toplevel):
                   "a template: the template's). Click a colour to pick another.").pack(side="left")
         ttk.Label(bar, text="    to").pack(side="left")
         self.sw_to = [self._swatch(bar, "to", 0), self._swatch(bar, "to", 1)]
-        hint(bar, "The faction's own primary and secondary colour (descr_sm_factions.txt). Click to pick others - "
-                  "the faction's colour lines are not changed here (the Faction tab does that).").pack(side="left")
+        hint(bar, "The faction's own primary and secondary colour (descr_sm_factions.txt). Click to pick others; "
+                  "with the box beside ticked they become the faction's colours too (the flags on the campaign "
+                  "map, the political map, the Faction tab follow).").pack(side="left")
+        self.v_set = tk.BooleanVar(value=True)
+        ttk.Checkbutton(bar, text="make them the faction's colours", variable=self.v_set).pack(side="left", padx=8)
         panes = ttk.PanedWindow(outer, orient="horizontal")
         panes.pack(fill="both", expand=True, pady=(8, 0))
         left = ttk.Frame(panes)
@@ -90,7 +96,7 @@ class RecolourWindow(tk.Toplevel):
         pics = ttk.Frame(right)
         pics.pack(anchor="w", pady=6)
         self.before = tk.Label(pics, relief="sunken")
-        self.after = tk.Canvas(pics, width=SIDE, height=SIDE, highlightthickness=1, highlightbackground="#999",
+        self.after = tk.Canvas(pics, width=self.side, height=self.side, highlightthickness=1, highlightbackground="#999",
                                cursor="crosshair")
         ttk.Label(pics, text="now").grid(row=0, column=0)
         ttk.Label(pics, text="after").grid(row=0, column=1)
@@ -241,7 +247,7 @@ class RecolourWindow(tk.Toplevel):
             return
         from PIL import Image, ImageTk
         self._shown = it
-        fit = min(SIDE / im.size[0], SIDE / im.size[1], 6.0)
+        fit = min(self.side / im.size[0], self.side / im.size[1], 6.0)
         k = self.k = fit * self.zoom.get(self._key(it), 1.0)
         size = (max(1, int(im.size[0] * fit)), max(1, int(im.size[1] * fit)))
         big = (max(1, int(im.size[0] * k)), max(1, int(im.size[1] * k)))
@@ -329,6 +335,13 @@ class RecolourWindow(tk.Toplevel):
         self.status.configure(text="recolouring %d picture(s)..." % len(items))
         self.update_idletasks()
         done = R.plan_recolour(plan, items, self.source, self.target)
+        now = tuple(tuple(c) if c else None for c in self.colours.get(self.faction, (None, None)))
+        if self.v_set.get() and tuple(tuple(c) for c in self.target) != now:
+            # the pictures and the faction's own colour lines move together (our rule: a change pulls along
+            # what is tied to it - a tester found the colours unchanged after a recolour)
+            from .edit import set_faction_colours
+            set_faction_colours(plan, self.faction, tuple(self.target[0]),
+                                tuple(self.target[1]) if self.target[1] else None)
         for it, how in done:
             if not isinstance(how, float):
                 plan.warn(None, "%s: %s" % (it["rel"], how))
@@ -358,6 +371,10 @@ class RecolourWindow(tk.Toplevel):
         self.status.configure(text="%d picture(s) written (backup %s) - Restore undoes it" % (n, bdir))
         self.app.status.set("%s: %d picture(s) of %s recoloured (backup %s)." % (TITLE, n, self.faction, bdir))
         self._cache, self.edits = {}, {}
+        if self.v_set.get():
+            self.app.load()                         # the faction's colours are read again everywhere
+            self.mod = self.app.mod
+            self.colours = R.faction_colours(self.mod)
         self.items = R.targets(self.mod, self.camp, self.faction)
         self.source = list(self.target)
         self.v_from.set(self.faction if tuple(self.target) == tuple(self.colours.get(self.faction, ())) else CUSTOM)

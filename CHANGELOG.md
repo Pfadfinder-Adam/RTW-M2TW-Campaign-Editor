@@ -41,6 +41,12 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Recolour keeps a bright colour of its own** (found by a tester: an emblem's gold wolf and laurel on red turned
+  red): the edge growth past the colour test takes only a dull or dark rim, never a clean bright colour next to it.
+- **Recolour makes its 'to' colours the faction's own too** (found by a tester: after a recolour the faction's
+  primary and secondary colours were still the old ones): a box, ticked, writes them into descr_sm_factions.txt
+  (and REX's .json) with the pictures - one shared writer with the Faction tab (edit.set_faction_colours).
+- **Recolour's pictures fit the screen** (found by a tester: the 'after' picture ran past the window's edge).
 - **Units and buildings brought from another mod no longer stop the game at start** (a tester brought Barbarian
   Invasion's british legionaries into Rome; REX: "Hidden resource condition, unrecognised hidden resource
   'britain'"): conditions naming a hidden resource or a resource this mod does not have are taken out of the

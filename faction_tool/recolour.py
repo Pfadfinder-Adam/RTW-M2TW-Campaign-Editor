@@ -135,6 +135,11 @@ def _grow(m, H, S, V, dist, gap, closer=None, rounds=2):
     loose = ImageChops.multiply(S.point(lambda s: 255 if s >= SAT_MIN * 0.5 * 255 else 0),
                                 V.point(lambda v: 255 if v >= VAL_MIN * 0.6 * 255 else 0))
     loose = ImageChops.multiply(loose, dist.point(lambda x: 255 if x <= gap * 1.5 else 0))
+    # past the strict hue gap only a rim is taken - dull or dark pixels; a bright clean colour of its own (the gold
+    # of a wreath next to red) stays (a tester's emblem: its gold wolf and laurel turned red)
+    rim = ImageChops.lighter(S.point(lambda s: 255 if s < 0.55 * 255 else 0),
+                             V.point(lambda v: 255 if v < 0.55 * 255 else 0))
+    loose = ImageChops.multiply(loose, ImageChops.lighter(dist.point(lambda x: 255 if x <= gap else 0), rim))
     if closer is not None:                       # never into the other colour's parts (a gold lion on red)
         loose = ImageChops.multiply(loose, closer)
     for _ in range(rounds):

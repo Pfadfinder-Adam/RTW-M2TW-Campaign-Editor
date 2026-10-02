@@ -233,23 +233,30 @@ def _texts(plan, now, campaign):
 
 def _colours(plan):
     o = plan.opts
-    if not (o.get("primary_colour") or o.get("secondary_colour")):
+    set_faction_colours(plan, plan.new, o.get("primary_colour"), o.get("secondary_colour"))
+
+
+def set_faction_colours(plan, faction, primary=None, secondary=None):
+    """The faction's primary / secondary colour lines in descr_sm_factions.txt (and REX's .json when there is
+    one) - the one writer, used by the Faction tab and by Recolour (its 'to' colours become the faction's)."""
+    want = {"primary_colour": primary, "secondary_colour": secondary}
+    if not (primary or secondary):
         return
     f = plan.edit(plan.mod.file("sm_factions"))
     cur, n = None, 0
     for i in range(len(f)):
         t = tokens(f.text(i))
         if t[:1] == ["faction"] and len(t) > 1:
-            cur = t[1]
-        elif cur == plan.new and t[:1] in (["primary_colour"], ["secondary_colour"]):
-            rgb = o.get(t[0])
+            cur = t[1].rstrip(",")
+        elif cur == faction and t[:1] in (["primary_colour"], ["secondary_colour"]):
+            rgb = want.get(t[0])
             if rgb:
                 new = RE_RGB.sub("red %d, green %d, blue %d" % tuple(rgb), f.text(i), 1)
                 if new != f.text(i):
                     f.set(i, new)
                     n += 1
     if n:
-        plan.note(f, "colours set")
+        plan.note(f, "colours of %s set" % faction)
     path = plan.mod.file("sm_factions_json")
     if not path:
         return
@@ -257,11 +264,11 @@ def _colours(plan):
     inside = depth = 0
     for i in range(len(j)):
         line = j.text(i)
-        if not inside and re.match(r'\s*"%s"\s*:' % re.escape(plan.new), line):
+        if not inside and re.match(r'\s*"%s"\s*:' % re.escape(faction), line):
             inside, depth = 1, 0
         if inside:
             for key in ("primary", "secondary"):
-                rgb = o.get(key + "_colour")
+                rgb = want.get(key + "_colour")
                 if rgb and re.match(r'\s*"%s"\s*:\s*\[' % key, line):
                     j.set(i, re.sub(r"\[[^\]]*\]", "[ %d, %d, %d ]" % tuple(rgb), line, 1))
             depth += line.count("{") - line.count("}")

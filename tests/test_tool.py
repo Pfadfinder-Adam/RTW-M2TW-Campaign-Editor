@@ -3215,6 +3215,26 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_recolour_keeps_a_bright_colour_of_its_own(self):
+        # a tester's emblem: a gold wolf and laurel on red turned red - the rim growth took bright gold for red
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from faction_tool.recolour import recolour
+        im = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        d.ellipse((2, 2, 61, 61), fill=(180, 10, 10, 255))
+        for k in range(6):
+            d.line((10 + 7 * k, 12, 14 + 7 * k, 50), fill=(225, 175, 30, 255), width=2)
+        d.rectangle((24, 26, 40, 38), fill=(205, 160, 40, 255))
+        out, share = recolour(im, ((165, 20, 20), (0, 0, 0)), ((20, 40, 170), (255, 255, 255)))
+        gold = [(x, y) for x in range(64) for y in range(64)
+                if im.getpixel((x, y))[:3] in ((225, 175, 30), (205, 160, 40))]
+        self.assertTrue(all(out.getpixel(p)[:3] == im.getpixel(p)[:3] for p in gold))
+        red = [(x, y) for x in range(64) for y in range(64) if im.getpixel((x, y))[:3] == (180, 10, 10)]
+        self.assertTrue(all(out.getpixel(p)[2] > 100 for p in red))
+
     def test_read_and_draw_a_medieval2_mesh(self):
         """A .mesh laid out as the vanilla ones: parts with triangles, then the vertex streams (texture u v,
         bone weights, positions). Read back, the man shown, drawn both ways."""
