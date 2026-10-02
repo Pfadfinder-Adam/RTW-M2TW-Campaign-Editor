@@ -32,14 +32,23 @@ class BannerWindow(tk.Toplevel):
             "across or slanting, quarters, a cross, a border - and the symbol painted on it with the cloth's folds. "
             "Draw a box on a banner to put the symbol there. Right: the allies' banner, the symbol faint like the "
             "game's own.")).pack(anchor="w")
+        # the three blank banners side by side - any of them for any faction, whatever its culture
+        from PIL import Image, ImageTk
+        shapes = ttk.Frame(frm)
+        shapes.pack(anchor="w", pady=(6, 0))
+        ttk.Label(shapes, text="Banner shape\n(any, for any faction)").pack(side="left", padx=(0, 8))
+        self.v_kind = tk.StringVar(value=self.s.get("kind") or next(iter(self.blanks)))
+        self._thumbs = []
+        for kind, im in self.blanks.items():
+            bg = Image.new("RGBA", im.size, (90, 90, 90, 255))
+            bg.alpha_composite(im)
+            ph = ImageTk.PhotoImage(bg.resize((72, 72), Image.LANCZOS))
+            self._thumbs.append(ph)
+            ttk.Radiobutton(shapes, text=kind, image=ph, compound="top", value=kind, variable=self.v_kind,
+                            command=self._kind).pack(side="left", padx=4)
         top = ttk.Frame(frm)
         top.pack(anchor="w", pady=6)
-        ttk.Label(top, text="Blank banner").pack(side="left")
-        self.v_kind = tk.StringVar(value=self.s.get("kind") or next(iter(self.blanks)))
-        cb = ttk.Combobox(top, textvariable=self.v_kind, values=list(self.blanks), state="readonly", width=12)
-        cb.pack(side="left", padx=6)
-        cb.bind("<<ComboboxSelected>>", lambda e: self._kind())
-        ttk.Label(top, text="Pattern").pack(side="left", padx=(12, 0))
+        ttk.Label(top, text="Pattern").pack(side="left")
         self.v_pat = tk.StringVar(value=self.s.get("pattern") or "plain")
         cp = ttk.Combobox(top, textvariable=self.v_pat, values=list(B.PATTERNS), state="readonly", width=32)
         cp.pack(side="left", padx=6)

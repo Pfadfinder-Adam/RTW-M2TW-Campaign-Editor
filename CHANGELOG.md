@@ -9,7 +9,7 @@
   bucket (emblem_edit.py, gui_emblem.EmblemFitter).
 - **Faction emblem: the new symbol on the battle banners and the campaign map's flag (Rome)** (a tester's wish: the
   symbol on every 3D flag, not only the icons): the faction's battle banners are made from the game's own blank
-  white banner (standard_routing - Roman, barbarian or eastern, the one nearest the old banner's shape), its cloth
+  white banner (standard_routing - Roman, barbarian or eastern, any of the three for any faction, whatever its culture), its cloth
   dyed in the faction's colour and the symbol painted on it with the cloth's folds; the allies' banner the same with
   the symbol faint; the flag symbol gets the bare symbol. **Banner...** picks another blank banner, a pattern of up
   to three colours (plain, tricolours upright / across / slanting, quarters, crosses, a border...), the symbol on or
