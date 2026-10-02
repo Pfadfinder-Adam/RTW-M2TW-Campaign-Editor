@@ -42,6 +42,21 @@ class Building:
         return next((l for l in self.levels if l.name == name), None)
 
 
+def is_temple(chain):
+    """A temple chain as the games see it: its name starts with 'temple_' (RomeTW.exe, RomeTW-BI.exe and
+    medieval2.exe test that prefix). A town holds ONE temple: a second is refused when built and in descr_strat.txt
+    stops the game ('Settlement specified with multiple temple buildings'); modders who want more name the chain
+    without 'temple'."""
+    return chain.lower().startswith("temple_")
+
+
+def other_temple(chains, chain):
+    """The town's temple chain other than `chain` (chains: names it holds), or None - only when chain is a temple."""
+    if not is_temple(chain):
+        return None
+    return next((c for c in chains if c != chain and is_temple(c)), None)
+
+
 def read_buildings(edb):
     """[Building] from a loaded export_descr_buildings TextFile."""
     out, cur, names, pending = [], None, [], None

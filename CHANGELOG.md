@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- **One temple per town, as the games want** (both games: a chain named `temple_...`; two in one town stop the game
+  with "Settlement specified with multiple temple buildings"): the Buildings tab swaps the old temple for the new
+  pick, Buildings for many towns skips a town that has another temple, Check mod files names a town holding two.
 - **Terrain editor: impassable land and impassable sea brushes** (a tester: the Medieval II map is full of them) -
   Medieval II always; Rome only with REX (REX knows these ground types, the original exe does not; not yet tried in
   the game on Rome). Refused under towns, ports and characters like mountains.

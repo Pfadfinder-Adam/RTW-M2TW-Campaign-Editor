@@ -3170,6 +3170,21 @@ building smith
         self.assertEqual(sq.getpixel((25, 25)), (200, 0, 0, 255))
         self.assertEqual(EE.clear_background(sq), 0)                    # already clear: nothing more
 
+    def test_one_temple_per_town(self):
+        """The games take one temple per town (a chain named temple_...: 'Settlement specified with multiple temple
+        buildings'); the many-towns window skips a second, the Check names a town holding two."""
+        from campaign_editor import buildings as B, masstown as MT
+        self.assertTrue(B.is_temple("temple_of_battle") and B.is_temple("Temple_catholic"))
+        self.assertFalse(B.is_temple("church") or B.is_temple("temples_market"))
+        town = {"buildings": [("temple_of_battle", "shrine")], "kind": None, "level": "town", "owner": "x"}
+        what, why = MT.building_fit({}, town, "temple_of_law", "shrine")
+        self.assertEqual(what, "skip")
+        self.assertIn("one temple", why)
+        self.assertEqual(MT.building_fit({}, town, "temple_of_battle", "temple")[0], "upgrade")
+        self.assertEqual(MT.building_fit({}, town, "barracks", "x")[0], "add")
+        self.assertEqual(B.other_temple(["temple_of_battle", "barracks"], "temple_of_law"), "temple_of_battle")
+        self.assertIsNone(B.other_temple(["temple_of_battle"], "barracks"))
+
     def test_buildings_and_garrisons_for_many_towns(self):
         import random
         from campaign_editor import masstown as M

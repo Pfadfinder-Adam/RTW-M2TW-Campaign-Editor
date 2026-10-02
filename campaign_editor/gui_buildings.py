@@ -206,7 +206,14 @@ class BuildingsEditor(ttk.Frame):
         if level == NONE:
             self.current.pop(chain, None)
         else:
+            from .buildings import other_temple
+            old = other_temple(self.current, chain)
+            if old:                                  # one temple per town (the games' rule): the new one replaces it
+                self.current.pop(old, None)
             self.current[chain] = level
+            if old:
+                self.after_idle(lambda: self.info.configure(text="%s replaces %s - a town holds one temple only "
+                                                                  "(as in the game)" % (chain, old)))
         self.edited = True
         self.on_change(sorted(self.current.items(), key=lambda x: self._order(x[0])))
         self.redraw()

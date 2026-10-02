@@ -88,6 +88,10 @@ def building_fit(known, town, chain, level, mode="upgrade", any_owner=False, cul
         return "skip", "the town has no port on the map"
     if have == level:
         return "skip", "has it already"
+    from .buildings import other_temple
+    temple = other_temple([c for c, _ in town["buildings"]], chain)
+    if temple:
+        return "skip", "a town holds one temple only (the game stops at 'multiple temple buildings') - it has %s" % temple
     if have:
         names = [l.name for l in b.levels] if b else []
         higher = names.index(have) > names.index(level) if have in names and level in names else False

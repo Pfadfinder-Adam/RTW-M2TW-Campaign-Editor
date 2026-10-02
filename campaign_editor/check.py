@@ -10,7 +10,7 @@ import os
 import time
 import traceback
 
-from .buildings import read_buildings, settlement_info
+from .buildings import is_temple, read_buildings, settlement_info
 from .strat import Strat, characters_after_tree
 from .textio import tokens
 from .units import read_units
@@ -178,6 +178,10 @@ def check_mod(mod, campaign, deep=False, progress=None):
                 bad_names.append("%s (%s)" % (c.name, fb.name))
         for st in fb.settlements:
             _, bs = settlement_info(s.lines[st.start:st.end])
+            temples = [c for c, _ in bs if is_temple(c)]
+            if len(temples) > 1:
+                bad("%s holds %d temples (%s) - the game stops: 'Settlement specified with multiple temple "
+                    "buildings'; keep one" % (st.region, len(temples), ", ".join(temples)))
             for chain, level in bs:
                 b = chains.get(chain)
                 if not b or not b.level(level):
