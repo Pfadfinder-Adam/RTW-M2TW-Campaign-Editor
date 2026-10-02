@@ -8,6 +8,12 @@
   be written, the files written before it are put back, the copies removed, no temp file stays, and the message says
   in plain words what to close or change. A file marked read-only (Windows' Read-only box) is named in Preview and
   written (the mark is taken off); a file another program holds for a moment is tried again.
+- **A new faction gets its faction-select buttons and the rest of its template's pictures** (a tester: new
+  factions made from greek_cities showed no buttons on the campaign's faction-select screen): (1) a template whose
+  name holds `_` (greek_cities, romans_julii, papal_states) never had its loose pictures copied - symbol24 /
+  symbol48 buttons, the loading-screen symbol, the campaign-select map; (2) a mod that keeps the game's own pictures
+  (its folder holds only what it changed - common for REX and Medieval II mods) now gets copies of the template's
+  pictures, unit cards and banners from the game's data, written into the mod (the game's data is never touched).
 - **A battle_models.modeldb with models after its count is read** (a tester: "modeldb: 1585 characters left after
   872 models" stopped a new faction): models added by hand while the count at the top stayed as it was are kept
   exactly as they are, and Preview / Check mod say which ones the game never reads and which count would read them.

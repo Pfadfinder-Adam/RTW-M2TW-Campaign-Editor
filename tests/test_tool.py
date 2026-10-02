@@ -2623,6 +2623,39 @@ building smith
         finally:
             os.chmod(victim, stat.S_IREAD | stat.S_IWRITE)
 
+    def test_clone_takes_the_templates_pictures_from_the_games_data(self):
+        """A mod that keeps the game's own pictures (its folder holds what it changed): the template's faction
+        buttons, unit cards and banner lie in the game's data. The new faction gets copies in the MOD (a tester's
+        REX mod: new factions had no buttons on the faction-select screen); the game's data stays untouched."""
+        game, hlr = self._game()
+        gdata = os.path.join(game, "data")
+        write(os.path.join(gdata, "menu", "symbols", "FE_buttons_48", "symbol48_alpha.tga"), "button")
+        write(os.path.join(gdata, "ui", "units", "alpha", "#alpha_general.tga"), "card")
+        write(os.path.join(gdata, "loading_screen", "symbols", "symbol128_alpha.tga"), "logo")
+        shutil.rmtree(os.path.join(hlr, "data", "ui"))                  # the mod keeps none of its own
+        before = tree_hash(gdata)
+        mod = ModData(os.path.join(hlr, "data"))
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        plan.apply()
+        d = os.path.join(hlr, "data")
+        self.assertTrue(os.path.isfile(os.path.join(d, "menu", "symbols", "FE_buttons_48", "symbol48_beta.tga")))
+        self.assertTrue(os.path.isfile(os.path.join(d, "loading_screen", "symbols", "symbol128_beta.tga")))
+        self.assertTrue(os.path.isfile(os.path.join(d, "ui", "units", "beta", "#alpha_general.tga")))
+        self.assertEqual(tree_hash(gdata), before)                      # nothing written into the game's data
+        restore(ModData(d), backups(ModData(d))[0])
+        self.assertFalse(os.path.exists(os.path.join(d, "menu")))
+        # a template with _ in its name (greek_cities): its buttons were never renamed, so never copied
+        from faction_tool.clone import renamed
+        self.assertEqual(renamed("symbol48_greek_cities_grey.tga", "greek_cities", "athens"),
+                         "symbol48_athens_grey.tga")
+        self.assertEqual(renamed("romans_julii_logo.tga", "romans_julii", "saba"), "saba_logo.tga")
+        self.assertEqual(renamed("gaulsx.tga", "gauls", "new"), "gaulsx.tga")
+        # the mod's own copy of a template picture wins over the game's
+        write(os.path.join(d, "menu", "symbols", "FE_buttons_48", "symbol48_alpha.tga"), "mod's button")
+        plan = build(ModData(d), "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        src = [s_ for s_, d_ in plan.copies if d_.endswith("symbol48_beta.tga")]
+        self.assertEqual(src, [os.path.join(d, "menu", "symbols", "FE_buttons_48", "symbol48_alpha.tga")])
+
     def test_recolour_faction_pictures(self):
         """A unit card in the faction's red / yellow next to another faction's blue / white copy: the red and yellow
         parts take the new colours, the brown horse (near red, but the same in both copies and duller) stays;

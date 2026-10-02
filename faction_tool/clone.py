@@ -455,38 +455,74 @@ def _token_hit(name, t):
         stem.startswith(t + "_") or ("_" + t + "_") in stem
 
 
+def renamed(name, t, new):
+    """A file name with the faction t in it as a whole word swapped for new: symbol48_greek_cities_grey.tga ->
+    symbol48_athens_grey.tga (a name with _ inside counts as one word - split into words, greek_cities matched no
+    word and such files were never copied: a new faction from greek_cities had no faction-select buttons)."""
+    stem, ext = os.path.splitext(name)
+    return re.sub(r"(?i)(^|[^a-z0-9])%s(?=$|[^a-z0-9])" % re.escape(t), lambda m: m.group(1) + new, stem) + ext
+
+
+def data_roots(mod):
+    """The data folders the game reads for this mod, the mod's own first: a mod folder that holds only what it
+    changed (common for Medieval II mods and REX mods in Rome) reads every other file - the faction's pictures
+    among them - from the game's data. The clone takes the template's pictures from wherever the game would show
+    them; its copies always go into the mod."""
+    from .buildings import _game_data
+    game = _game_data(mod.data)
+    return [mod.data] + ([game] if game else [])
+
+
+def _in_mod(mod, data, path):
+    """path (under the data folder `data`) as the same place in the mod's own data."""
+    return os.path.join(mod.data, os.path.relpath(path, data))
+
+
 def art_files(plan, campaign):
     t, new = plan.template, plan.new
-    found = []
-    roots = [os.path.join(plan.mod.data, r) for r in ART_ROOTS] + [plan.mod.campaign_dir(campaign)]
-    for root in roots:
-        if not os.path.isdir(root):
-            continue
-        for dirpath, dirnames, filenames in os.walk(root):
-            for d in list(dirnames):
-                if d.lower() == t:
-                    src = os.path.join(dirpath, d)
-                    dst = _ci(dirpath, new) or os.path.join(dirpath, new)
-                    if not os.path.exists(dst):
-                        found.append((src, dst))
-                    else:
-                        # a folder left from an earlier attempt: fill in what it lacks
-                        for sp, _, fs in os.walk(src):
-                            for n in fs:
-                                sf = os.path.join(sp, n)
-                                df = os.path.join(dst, os.path.relpath(sf, src))
-                                if not os.path.exists(df):
-                                    found.append((sf, df))
-                    dirnames.remove(d)
-            for n in filenames:
-                if not n.lower().endswith((".tga", ".dds", ".png", ".bmp")) or not _token_hit(n, t):
-                    continue
-                stem, ext = os.path.splitext(n)
-                parts = re.split(r"([^A-Za-z0-9]+)", stem)
-                parts = [new if p.lower() == t else p for p in parts]
-                dst = os.path.join(dirpath, "".join(parts) + ext)
-                if dst != os.path.join(dirpath, n) and not os.path.exists(dst):
-                    found.append((os.path.join(dirpath, n), dst))
+    mod = plan.mod
+    found, taken = [], set()                   # taken: data-relative places a copy goes to (the mod's copy wins)
+
+    def add(src, dst):
+        key = os.path.normcase(os.path.relpath(dst, mod.data))
+        if key in taken or os.path.exists(dst):
+            return
+        taken.add(key)
+        found.append((src, dst))
+    camp_rel = os.path.relpath(mod.campaign_dir(campaign), mod.data)
+    for data in data_roots(mod):
+        from_mod = data == mod.data
+        roots = [os.path.join(data, r) for r in ART_ROOTS] + [os.path.join(data, camp_rel)]
+        for root in roots:
+            if not os.path.isdir(root):
+                continue
+            for dirpath, dirnames, filenames in os.walk(root):
+                for d in list(dirnames):
+                    if d.lower() == t:
+                        src = os.path.join(dirpath, d)
+                        here = _in_mod(mod, data, dirpath)
+                        if not from_mod and os.path.isdir(here) and _ci(here, d):
+                            dirnames.remove(d)          # the mod has the template's folder: its own set counts
+                            continue
+                        dst = (_ci(here, new) if os.path.isdir(here) else None) or os.path.join(here, new)
+                        if not os.path.exists(dst):
+                            add(src, dst)
+                        else:
+                            # a folder left from an earlier attempt: fill in what it lacks
+                            for sp, _, fs in os.walk(src):
+                                for n in fs:
+                                    sf = os.path.join(sp, n)
+                                    add(sf, os.path.join(dst, os.path.relpath(sf, src)))
+                        dirnames.remove(d)
+                for n in filenames:
+                    if not n.lower().endswith((".tga", ".dds", ".png", ".bmp")) or not _token_hit(n, t):
+                        continue
+                    here = _in_mod(mod, data, dirpath)
+                    if not from_mod and os.path.isdir(here) and _ci(here, n):
+                        continue                        # the mod has its own copy of the template's picture
+                    name = renamed(n, t, new)
+                    if name != n:
+                        add(os.path.join(dirpath, n), os.path.join(here, name))
     for src, dst in found:
         plan.copy(src, dst)
     if not found:
@@ -617,11 +653,13 @@ def own_pictures(plan):
             continue
         if l["key"] == "model_strat" and l["field"].split(":", 1)[1] not in used:
             continue                                    # a model none of its characters uses (M2TW's Rome leftovers)
-        got = picture_file(mod.data, l["ref"])
+        got = next((g for g in (picture_file(d, l["ref"]) for d in data_roots(mod)) if g), None)
         if not got:
             continue
         ref = own_picture_ref(l["ref"], t, new)
-        dst = os.path.join(os.path.dirname(got[1]), ref.split("/")[-1] + disk_tail(l["ref"], got[1]))
+        # the copy beside the template's picture - in the mod's own data even when the game's data holds that one
+        folder = os.path.join(mod.data, *os.path.dirname(got[0]).split("/")) if os.path.dirname(got[0]) else mod.data
+        dst = os.path.join(folder, ref.split("/")[-1] + disk_tail(l["ref"], got[1]))
         if os.path.normcase(os.path.abspath(dst)) not in planned and not os.path.exists(dst):
             plan.copy(got[1], dst)
         set_picture_ref(plan.edit(l["path"]), l["line"], l["ref"], ref)
@@ -657,21 +695,33 @@ def unit_cards(plan):
     planned = {os.path.normcase(d) for _, d in plan.copies}
     missing = []
     for folder, pattern, label in CARD_KINDS:
-        root = os.path.join(plan.mod.data, "ui", folder)
-        if not os.path.isdir(root):
+        # the cards may lie in the mod or, for a mod that keeps the game's own, in the game's data; copies go to the mod
+        roots = [r for r in (os.path.join(d, "ui", folder) for d in data_roots(plan.mod)) if os.path.isdir(r)]
+        if not roots:
             continue
-        others = sorted(d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))
-                        and d.lower() not in (t, new))
-        dst_dir = _ci(root, new) or os.path.join(root, new)
+        mine = os.path.join(plan.mod.data, "ui", folder)
+        dst_dir = (_ci(mine, new) if os.path.isdir(mine) else None) or os.path.join(mine, new)
+
+        def card(name):
+            for root in roots:                       # the template's own card, the mod's first
+                d = _ci(root, t)
+                p = _ci(d, name) if d and os.path.isdir(d) else None
+                if p:
+                    return p
+            for root in roots:                       # else any other faction's
+                for o in sorted(o for o in os.listdir(root) if os.path.isdir(os.path.join(root, o))
+                                and o.lower() not in (t, new)):
+                    p = _ci(os.path.join(root, o), name)
+                    if p:
+                        return p
+            return None
         for d in dicts:
             name = pattern % d
-            dst = _ci(dst_dir, name) or os.path.join(dst_dir, name)
+            dst = (_ci(dst_dir, name) if os.path.isdir(dst_dir) else None) or os.path.join(dst_dir, name)
             nd = os.path.normcase(dst)
             if os.path.exists(dst) or any(nd == p or nd.startswith(p + os.sep) for p in planned):
                 continue
-            src = _ci(os.path.join(root, t), name) if _ci(root, t) else None
-            if not src:
-                src = next((p for p in (_ci(os.path.join(root, o), name) for o in others) if p), None)
+            src = card(name)
             if src:
                 plan.copy(src, dst)
                 planned.add(os.path.normcase(dst))
