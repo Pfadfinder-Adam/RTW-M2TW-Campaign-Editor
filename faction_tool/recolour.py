@@ -350,6 +350,8 @@ def targets(mod, campaign, faction):
         low = (e.get("label") or "").lower()
         if low.startswith(("campaign-select map", "victory conditions map")) or "leader picture" in low:
             continue                        # maps colour land, not the faction's dress; a leader's face stays
+        if e.get("link") and e["link"][0] == "banners" and e["link"][1] in ("routing_texture", "rebels_texture"):
+            continue                        # the white banner a fleeing unit shows and the rebels' are not its dress
         skip = own = out_x = None
         x = e.get("extra")
         if x and set(x["users"]) - {faction, faction.lower()}:

@@ -23,7 +23,7 @@ def assets_dir():
 
 class Setting:
     """One setting: the variable in the script, how it is shown and what it takes.
-    kind: 'bool', 'int', 'text', 'choice' (choices = [(value, label)]), 'list' (Squirrel array of strings),
+    kind: 'bool', 'int', 'float', 'text', 'choice' (choices = [(value, label)]), 'list' (Squirrel array of strings),
     'set' (Squirrel table of names = true, written one per line)."""
 
     def __init__(self, var, kind, label, help, choices=None, when=None):
@@ -115,6 +115,25 @@ ADDONS = [
           "M2EX (Medieval II: Total War) - it runs the mod's eopData/eopScripts/luaPluginScript.lua. Vanilla "
           "Medieval II runs no scripts - the add-on then does nothing.",
           picks={"RAZE_KEEP_CHAINS": "chains", "RAZE_FACTIONS": "factions"}),
+    Addon("player_diplomacy", "Player Diplomacy", "rome", "player_diplomacy.nut",
+          "The computer's factions stop attacking you when it makes no sense: after a ceasefire they keep the peace "
+          "for some turns (a war they declare in that time is undone), your client kingdoms never plan to invade "
+          "you, and a faction far weaker than you does not either (its allies already at war with you count on its "
+          "side, so a big alliance still comes). Only how the computer treats YOU changes; its wars with each other "
+          "stay as they are. The console: sq ::truce_status(), sq ::truce_set(\"egypt\", 10), sq ::power(\"egypt\").",
+          [Setting("TRUCE_TURNS", "int", "Turns a ceasefire holds", "your turns; 0 = no truce rule"),
+           Setting("TRUCE_STEER_AI", "bool", "The computer plans no invasion of you in a truce", "the main rule"),
+           Setting("TRUCE_RESTORE_PEACE", "bool", "A war declared in a truce is undone", "peace put back at once"),
+           Setting("CLIENT_NEVER_ATTACK", "bool", "Client kingdoms never attack you", "while they are your "
+                   "protectorates"),
+           Setting("DETER_ENABLED", "bool", "Far weaker factions do not attack you", "by strength below"),
+           Setting("DETER_RATIO", "float", "You this many times stronger", "units in all armies and garrisons, "
+                   "plus the settlements below; 3.0 = three times"),
+           Setting("STRENGTH_PER_SETTLEMENT", "int", "A settlement counts as units", "in that strength"),
+           Setting("COALITIONS_COUNT", "bool", "Allies at war with you add their strength", "so small factions "
+                   "still join a big alliance against you")],
+          "REX (Rome: Total War), its campaign AI hook (calculateLtgd). Vanilla Rome has no scripts - the add-on "
+          "then does nothing."),
 ]
 
 
@@ -369,6 +388,11 @@ def read_settings(addon, text):
                 out[s.var] = int(raw.strip())
             except ValueError:
                 out[s.var] = 0
+        elif s.kind == "float":
+            try:
+                out[s.var] = float(raw.strip())
+            except ValueError:
+                out[s.var] = 0.0
         elif s.kind == "list":
             out[s.var] = re.findall(r'"((?:[^"\\]|\\.)*)"', raw)
         elif s.kind == "set":
@@ -388,6 +412,8 @@ def _render(s, v, old, lua=False):
         return "true" if v else "false"
     if s.kind == "int":
         return str(int(v))
+    if s.kind == "float":
+        return repr(float(v))                      # 3.0, never 3 (Squirrel would make it a whole number)
     if s.kind == "list":
         inner = ", ".join(_quote(x) for x in v)
         return "{" + inner + "}" if lua else "[" + inner + "]"
@@ -420,8 +446,16 @@ PICKS = {"RAZE_KEEP_CHAINS": "chains", "RAZE_DEFAULT_REBEL_UNITS": "units"}     
 
 def check(addon, values, mod=None):
     """[problem] with the chosen values (empty = fine). With the mod, names are checked against its files: a kept
-    chain or a rebel unit the mod does not have would do nothing (the governor's chain would then be torn down)."""
+    chain or a rebel unit the mod does not have would do nothing (the governor's chain would then be torn down);
+    and the add-on's own code already pasted into the mod's scripts is refused (it would run twice)."""
     out = []
+    if mod is not None and not addon.file.lower().endswith(".lua"):
+        dup = already_in_scripts(mod, addon)
+        if dup:
+            out.append("this mod's own %s already holds the %s code - it would run twice (two buttons); take it out "
+                       "of that file first, or leave the add-on out" % (
+                           ", ".join(os.path.relpath(p, os.path.dirname(os.path.abspath(mod.data))) for p in dup),
+                           addon.title))
     if mod is not None:
         for var, what in addon.picks.items():
             if what not in ("chains", "units"):
@@ -447,6 +481,8 @@ def check(addon, values, mod=None):
             continue
         if s.kind == "int" and (not isinstance(v, int) or v < 0):
             out.append("%s: a whole number, 0 or more" % s.label)
+        if s.kind == "float" and (not isinstance(v, (int, float)) or v < 0):
+            out.append("%s: a number, 0 or more (like 3.0)" % s.label)
         if s.kind == "set" and any(not name.match(x) for x in v):
             out.append("%s: names of letters, digits and _" % s.label)
         if s.kind == "choice" and v not in [c for c, _ in s.choices]:
@@ -479,23 +515,75 @@ LOADER = ('do local ok, err = pcall(function() local base = (M2TWEOP and M2TWEOP
           'print("[ADDON] %s not loaded: " .. tostring(err)) end end  -- added by RTW & M2TW Campaign Editor: %s')
 
 
+def loads_modules(folder):
+    """True when <folder>/script/main.nut requires every .nut of its script/modules (REX's own squi plugin does:
+    scripting.listModules("modules")). A mod's own script plugin (a manifest.nut and main.nut of its own, like HLR's)
+    does not - a module put beside it is never run."""
+    sd = _ci(folder, "script") if folder else None
+    main = _ci(sd, "main.nut") if sd else None
+    if not main:
+        return False
+    try:
+        with open(main, "rb") as fh:
+            return b"listModules" in fh.read()
+    except OSError:
+        return False
+
+
 def target(mod, addon):
-    """<mod folder>/script/modules/<file>: a mod with a script folder of its own gets it there (REX reads the
-    running mod's scripts), else the game's own script/modules. A Lua add-on (M2EX's EOP-compatible Lua) goes to
+    """Where the add-on goes: <game>/script/modules/<file> - REX's own scripts (script/main.nut, the squi plugin)
+    require every .nut there for whatever mod runs (a tester's HLR has a script plugin of its own whose main.nut
+    loads no modules: an add-on in the mod's script/modules never ran). The mod's own script/modules only when the
+    mod's main.nut loads them, or the game folder is not known. A Lua add-on (M2EX's EOP-compatible Lua) goes to
     <mod folder>/eopData/eopScripts/<file>, loaded by a line in that folder's luaPluginScript.lua."""
     root = os.path.dirname(os.path.abspath(mod.data))
     if addon.file.lower().endswith(".lua"):
         return os.path.join(root, *EOP_DIR, addon.file)
-    own = _ci(root, "script")
-    if not own:
-        try:
-            from .newmod import game_of
-            game = game_of(mod.data)
-            if game and _ci(game, "script"):
-                root = game
-        except Exception:
-            pass
+    game = None
+    try:
+        from .newmod import game_of
+        game = game_of(mod.data)
+    except Exception:
+        pass
+    if loads_modules(root):
+        return os.path.join(root, "script", "modules", addon.file)
+    if game and (loads_modules(game) or _ci(game, "script")):
+        return os.path.join(game, "script", "modules", addon.file)
     return os.path.join(root, "script", "modules", addon.file)
+
+
+def marker(addon):
+    """A line only this add-on's code has (its log prefix, 'local PREFIX = "[SACK] "'), or None."""
+    m = re.search(r'^\s*local\s+PREFIX\s*=\s*"([^"]+)"', addon.template(), re.M)
+    return m.group(1).strip() if m else None
+
+
+def already_in_scripts(mod, addon):
+    """[the mod's own script files (not its modules folder) that already hold this add-on's code] - pasted into a
+    mod's main.nut, a second copy as an add-on would run it twice (two buttons on the capture scroll)."""
+    mk = marker(addon)
+    # its settings' own lines too ('local RAZE_BUTTON_LABEL = ...'): code pasted into a mod's main.nut keeps them
+    # while it logs under the mod's prefix
+    decl = [re.compile(r"^\s*local\s+%s\s*=" % re.escape(x.var), re.M) for x in addon.settings]
+    root = os.path.dirname(os.path.abspath(mod.data))
+    sd = _ci(root, "script")
+    if not (mk or decl) or not sd:
+        return []
+    out = []
+    for dirpath, dirs, files in os.walk(sd):
+        dirs[:] = [d for d in dirs if d.lower() != "modules"]
+        for f in files:
+            if not f.lower().endswith(".nut"):
+                continue
+            p = os.path.join(dirpath, f)
+            try:
+                with open(p, "rb") as fh:
+                    text = fh.read().decode("utf-8", "replace")
+            except OSError:
+                continue
+            if (mk and mk in text) or sum(1 for r in decl if r.search(text)) >= min(2, len(decl)):
+                out.append(p)
+    return out
 
 
 def plan_mod(mod, addon):

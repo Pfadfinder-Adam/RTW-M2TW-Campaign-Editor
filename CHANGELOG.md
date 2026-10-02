@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Changed
+- **Add-ons go where REX loads them** (a tester's HLR report): into the game's `script/modules` - a mod with a script
+  plugin of its own (manifest.nut + main.nut, as HLR has) loads no modules from its own folder, so an add-on put
+  there never ran. An add-on whose code is already pasted into the mod's own scripts is refused (it would run
+  twice).
+- **New add-on: Player Diplomacy** (Rome + REX): truces that hold, client kingdoms that never invade you, far weaker
+  factions that keep away; settings for each (add-on settings may now be numbers like 3.0).
 - **Victory: many regions or factions at once** (a tester: one by one is too many clicks): drag over rows, Shift-click
   a run, Tick all shown, tick every region a faction holds, or pick the towns **On the map...** (their regions yellow).
 - **Map: a sign grows as the mouse comes near it**, softly, from further away when zoomed out (a tester's wish).

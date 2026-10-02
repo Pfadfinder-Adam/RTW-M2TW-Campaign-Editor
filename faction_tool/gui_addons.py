@@ -280,6 +280,11 @@ class AddonsPanel(ttk.Frame):
                 return int(str(raw).strip())
             except ValueError:
                 return -1
+        if s.kind == "float":
+            try:
+                return float(str(raw).strip().replace(",", "."))
+            except ValueError:
+                return -1.0
         if s.kind in ("list", "set"):
             return [x.strip() for x in str(raw).split(",") if x.strip()]
         return raw

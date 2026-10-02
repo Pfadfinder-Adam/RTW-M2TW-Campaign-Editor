@@ -4228,6 +4228,30 @@ building smith
             restore(mod, bdir)
         self.assertEqual(open(victim).read(), "keep me")
 
+    def test_addon_goes_where_rex_loads_it(self):
+        """REX's own script/main.nut (squi) requires every .nut of the game's script/modules; a mod with a script
+        plugin of its own (HLR: manifest.nut + main.nut, no module loading) would never run one put beside it - so
+        the add-on goes to the game's script/modules. Its code already pasted into the mod's scripts is refused."""
+        from faction_tool import addons as AD
+        game = tempfile.mkdtemp()
+        open(os.path.join(game, "REX.exe"), "wb").close()
+        write(os.path.join(game, "script", "main.nut"),
+              'foreach (name in ::scripting.listModules("modules")) { require(name) }\n')
+        data = os.path.join(game, "HLR", "data")
+        write(os.path.join(data, "descr_sm_factions.txt"), "")
+        write(os.path.join(game, "HLR", "script", "manifest.nut"), 'return { name = "HLR" entry = "main" }\n')
+        write(os.path.join(game, "HLR", "script", "main.nut"), 'let events = require("game.events")\n')
+        mod = ModData(data)
+        sack = AD.by_key("sack_settlement")
+        self.assertEqual(os.path.normcase(AD.target(mod, sack)),
+                         os.path.normcase(os.path.join(game, "script", "modules", "sack_settlement.nut")))
+        self.assertEqual(AD.marker(sack), "[SACK]")
+        self.assertFalse(AD.already_in_scripts(mod, sack))
+        write(os.path.join(game, "HLR", "script", "main.nut"),
+              'let events = require("game.events")\nlocal PREFIX = "[SACK] "\n')
+        self.assertTrue(any("main.nut" in p for p in AD.already_in_scripts(mod, sack)))
+        self.assertTrue(any("run twice" in x for x in AD.check(sack, {}, mod)))
+
     def test_addons_from_anyone(self):
         import zipfile
         from unittest import mock
