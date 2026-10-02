@@ -671,6 +671,10 @@ def _garrisons(plan, f, s, campaign, faction=None, picked=None, add=False):
     tiles = plan_tiles(plan, campaign)
     rebels = faction == "slave"                # a rebel captain: a sub_faction and a name from its list
     pool = plan.name_pool(faction) or {}
+    if not rebels and not first_names(pool, "general"):
+        from .clone import give_names            # a faction brought without name lists: a kin's copy (a report)
+        if give_names(plan, faction):
+            pool = plan.name_pool(faction) or {}
     used = {c.name.split()[0] for x in s.factions for c in x.characters if c.name}
     # the faction's family records too (egypt's Heruben is a character_record: a captain Heruben is skipped
     # by the game as a duplicate), and the names of characters this edit adds (a new army named Heruben: no captain Heruben too)

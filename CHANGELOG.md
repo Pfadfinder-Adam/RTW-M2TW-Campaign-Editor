@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- **A faction without name lists no longer stops Apply** (found in a tester's log: "no name in empire_east's name
+  list for a captain", a faction brought from Barbarian Invasion): it gets a copy of its culture's kin's name lists in
+  `descr_names.txt` (said in the preview), so its captains and new characters can be named.
 - **Events: the picture players see and what the event does** (a tester) - the scroll's picture (a historic event
   its own `ui/<culture>/eventpics/<event>.tga`, a plague / volcano / earthquake its kind's `disaster_<kind>.tga`),
   **Picture...** puts your own in for every culture at the game's size, and each kind says in plain words what it

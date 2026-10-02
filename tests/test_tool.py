@@ -3170,6 +3170,20 @@ building smith
         self.assertEqual(sq.getpixel((25, 25)), (200, 0, 0, 255))
         self.assertEqual(EE.clear_background(sq), 0)                    # already clear: nothing more
 
+    def test_faction_without_names_borrows_a_kins(self):
+        """A faction with no name lists (brought from another game - a report: 'no name in empire_east's name list
+        for a captain') gets a copy of its culture's kin's section, so captains and new characters can be named."""
+        from campaign_editor.clone import give_names
+        from campaign_editor.plan import Plan
+        write(os.path.join(self.root, "data", "descr_sm_factions.txt"),
+              SM + "\nfaction\t\tbeta\nculture\t\teastern\n")
+        plan = Plan(ModData(self.root), "e", "e", {})
+        self.assertEqual(plan.name_pool("beta"), {})
+        self.assertEqual(give_names(plan, "beta"), "alpha")
+        self.assertIn("Aaron", plan.name_pool("beta")["characters"])
+        self.assertIsNone(give_names(plan, "beta"))                         # has them now
+        self.assertIn("Rebel", plan.name_pool("slave")["characters"])      # the others untouched
+
     def test_one_temple_per_town(self):
         """The games take one temple per town (a chain named temple_...: 'Settlement specified with multiple temple
         buildings'); the many-towns window skips a second, the Check names a town holding two."""

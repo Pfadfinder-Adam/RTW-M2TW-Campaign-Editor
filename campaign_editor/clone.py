@@ -204,6 +204,51 @@ def names(plan):
     plan.note(f, "name lists copied from %s (the same names, so every one already has a string)" % t)
 
 
+def give_names(plan, faction):
+    """A faction with no name lists in descr_names.txt (one brought from another game or mod) gets a copy of a kin
+    faction's section - its culture's first, else any faction's (slave last) - so a captain or a new character can
+    be named (a name in no pool crashes the game). Returns the kin faction, or None when it had names already or
+    none can be found."""
+    from .moddata import name_sections
+    path = plan.mod.file("names")
+    if not path:
+        return None
+    f = plan.edit(path)
+    heads = name_sections(f.texts())
+    if any(faction in o for _, o in heads):
+        return None
+    try:
+        culture = plan.mod.culture(faction)
+    except Exception:
+        culture = None
+    have = [(k, o) for k, (_, o) in enumerate(heads)]
+
+    def kin_rank(item):
+        k, owners = item
+        same = culture is not None and any(_safe_culture(plan.mod, o) == culture for o in owners)
+        return (0 if same else 1, 1 if "slave" in owners else 0, k)
+    if not have:
+        return None
+    k, owners = min(have, key=kin_rank)
+    s = heads[k][0]
+    e = heads[k + 1][0] if k + 1 < len(heads) else len(f)
+    copy = list(f.raw[s:e])
+    copy[0] = f.make("faction: %s" % faction)
+    slave = next((i for i, o in heads if "slave" in o), None)
+    f.insert_raw(slave if slave is not None else len(f), copy)
+    kin = next(o for o in owners if o != "slave") if [o for o in owners if o != "slave"] else owners[0]
+    plan.note(f, "%s had no name lists - it gets a copy of %s's (the same names, so every one has its string)"
+              % (faction, kin))
+    return kin
+
+
+def _safe_culture(mod, faction):
+    try:
+        return mod.culture(faction)
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Lists of factions inside lines
 # ---------------------------------------------------------------------------
