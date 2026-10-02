@@ -1279,6 +1279,28 @@ building smith
         with self.assertRaises(ValueError):                               # a name with no string
             edit(ModData(self.root), "test", "alpha", {"leader": {"name": "Zed"}})
 
+    def test_pips_click_fits_the_traits(self):
+        """A click on the character panel's pips: a trait he has moved to the level that gives the value, else a
+        trait giving that attribute alone added; Dread = Chivalry below 0; nothing reaches it -> None."""
+        from faction_tool import charpanel as CP
+        defs = {"GoodCommander": {"levels": ["a", "b", "c"], "effects": [[("Command", 1)], [("Command", 2)],
+                                                                          [("Command", 3)]], "anti": ["BadCommander"],
+                                  "characters": ["family"]},
+                "Mixed": {"levels": ["m"], "effects": [[("Command", 1), ("Influence", 2)]], "anti": [],
+                          "characters": ["family"]},
+                "Spyish": {"levels": ["s"], "effects": [[("Influence", 5)]], "anti": [], "characters": ["spy"]},
+                "Brute": {"levels": ["x", "y"], "effects": [[("Chivalry", -1)], [("Chivalry", -3)]], "anti": [],
+                          "characters": ["family"]}}
+        got, what = CP.traits_for("named character", [("GoodCommander", 1)], defs, [], {}, "Command", 3)
+        self.assertEqual(dict(got)["GoodCommander"], 3)                     # his own trait moved up
+        got, what = CP.traits_for("named character", [("Mixed", 1)], defs, [], {}, "Command", 4)
+        self.assertEqual(sum(CP.attributes("rome", "named character", "", got, defs, [], {})[0][1:]), 4)
+        got, _ = CP.traits_for("named character", [("GoodCommander", 2)], defs, [], {}, "Command", 0)
+        self.assertNotIn("GoodCommander", dict(got))                        # taken off
+        self.assertIsNone(CP.traits_for("named character", [], defs, [], {}, "Influence", 5))  # a spy's trait only
+        got, _ = CP.traits_for("named character", [], defs, [], {}, "Dread", 3)
+        self.assertEqual(dict(got)["Brute"], 2)
+
     def test_building_level_texts_per_culture(self):
         """The Building editor's texts: the suffixes a level has texts for (both games' {level_culture} keys, with
         _desc and _desc_short), and a changed name / description written into export_buildings.txt."""

@@ -125,7 +125,7 @@ class TraitsWindow(tk.Toplevel):
         return v
 
     def _text(self, parent, value, height=2):
-        w = tk.Text(parent, height=height, width=60, wrap="word")
+        w = tk.Text(parent, height=height, width=60, wrap="word", font="TkDefaultFont")
         w.insert("1.0", value)
         w.pack(fill="x")
         return w
@@ -150,7 +150,7 @@ class TraitsWindow(tk.Toplevel):
     def _row(self, parent, label):
         r = ttk.Frame(parent)
         r.pack(fill="x", pady=2)
-        ttk.Label(r, text=label, width=22).pack(side="left")
+        ttk.Label(r, text=label, width=30).pack(side="left")      # the longest label whole (a tester)
         return r
 
     def _trait_form(self, form, name, b, pend):

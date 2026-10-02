@@ -195,7 +195,7 @@ class FamilyEditor(ttk.Frame):
                     side="left", padx=(0, 4))
             ttk.Label(sw, text="the picked person as the game shows him - or the whole family",
                       foreground="#555").pack(side="left", padx=8)
-            self.panel = CharacterPanel(right)
+            self.panel = CharacterPanel(right, on_pip=self.set_attribute)
             self.panel.pack(fill="both", expand=True)
             tree_box = ttk.Frame(right)
             self.tree_box = tree_box
@@ -810,6 +810,27 @@ class FamilyEditor(ttk.Frame):
         self._before()
         self._change(p, traits=traits)
         self.changed()
+
+    def set_attribute(self, attribute, want):
+        """A click on the panel's pips: the traits fitted so the attribute shows want (charpanel.traits_for)."""
+        from . import charpanel as CP
+        p = self.person(self.sel)
+        if not p or p["source"] != "map":
+            return
+        got = CP.traits_for(p.get("kind") or "record", p["traits"], self.traits, p.get("ancillaries") or [],
+                            self.ancs, attribute, want)
+        st = self.app.status if hasattr(self.app, "status") else None
+        if not got:
+            if st:
+                st.set("%s %d: no trait of this mod brings %s there - add one in Traits and retinue..." % (
+                    attribute, want, p.get("name", "")))
+            return
+        traits, what = got
+        self._before()
+        self._change(p, traits=[list(x) for x in traits])
+        self.changed()
+        if st:
+            st.set("%s of %s: %s - Preview, then Apply." % (attribute, p.get("name", ""), "; ".join(what)))
 
     def remove_trait(self):
         p = self.person(self.sel)

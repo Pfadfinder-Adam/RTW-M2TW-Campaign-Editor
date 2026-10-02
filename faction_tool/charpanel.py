@@ -51,6 +51,72 @@ def attributes(game, kind, role, traits, trait_defs, ancs, anc_defs):
     return out
 
 
+def _total(traits, trait_defs, ancs, anc_defs, key):
+    t = 0
+    for name, n in traits:
+        eff = (trait_defs.get(name) or {}).get("effects") or []
+        if 0 < n <= len(eff):
+            t += sum(v for a, v in eff[n - 1] if a == key)
+    for a in ancs:
+        t += sum(v for at, v in (anc_defs.get(a) or {}).get("effects") or [] if at == key)
+    return t
+
+
+def traits_for(kind, traits, trait_defs, ancs, anc_defs, attribute, want):
+    """The person's traits changed so that the panel's attribute reaches want (a click on its pips): a trait he has
+    that gives it moved to another level (or taken off), else a trait of his kind that gives that attribute alone
+    added at the level that fits - up to three such steps. -> (new traits [(trait, level)], [what changed]) or
+    None when nothing of this mod reaches it. Dread is Chivalry below 0; the retinue's part stays as it is."""
+    sign, key = (-1, "Chivalry") if attribute == "Dread" else (1, attribute)
+    pk = panel_kind(kind)
+    traits = [tuple(x) for x in traits]
+    have = {t for t, _ in traits}
+    anti = set()
+    for t in have:
+        anti |= set((trait_defs.get(t) or {}).get("anti") or ())
+
+    def gives(t):
+        return [sum(v for a, v in lv if a == key) for lv in (trait_defs.get(t) or {}).get("effects") or []]
+
+    def allowed(t):
+        who = (trait_defs.get(t) or {}).get("characters") or []
+        return not who or "all" in who or pk in who or (pk == "family" and "family" in who)
+
+    shown_attrs = {a for kinds in PANEL.values() for names in kinds.values() for a in names} | {"Authority"}
+
+    def pure(t):      # no other attribute of the panel moves with it (Electability, Law... may)
+        return all(a == key or a not in shown_attrs for lv in (trait_defs.get(t) or {}).get("effects") or []
+                   for a, _ in lv)
+    done, changed = set(), []
+    for _ in range(3):
+        now = sign * _total(traits, trait_defs, ancs, anc_defs, key)
+        if now == want:
+            break
+        cands = [t for t, _ in traits if t not in done and any(gives(t))] + sorted(
+            (t for t in trait_defs if t not in have and t not in done and t not in anti and allowed(t)
+             and any(gives(t)) and pure(t)), key=lambda t: -len(gives(t)))
+        best = None
+        for t in cands:
+            cur = dict(traits).get(t, 0)
+            g = gives(t)
+            base = now - sign * (g[cur - 1] if cur else 0)
+            for lvl in range(0, len(g) + 1):
+                got = base + sign * (g[lvl - 1] if lvl else 0)
+                score = (abs(want - got), 0 if t in have else 1, lvl)
+                if best is None or score < best[0]:
+                    best = (score, t, lvl, cur)
+        if best is None or best[0][0] >= abs(want - now):
+            break
+        _, t, lvl, cur = best
+        done.add(t)
+        traits = [x for x in traits if x[0] != t] + ([(t, lvl)] if lvl else [])
+        changed.append("%s %s" % (t, ("level %d" % lvl) if lvl else "taken off") if cur or lvl else t)
+        have = {x for x, _ in traits}
+    if not changed:
+        return None
+    return traits, changed
+
+
 def effects_text(effects):
     """'+1 Defence, -2 Loyalty'."""
     return ", ".join("%+d %s" % (v, a) for a, v in effects)

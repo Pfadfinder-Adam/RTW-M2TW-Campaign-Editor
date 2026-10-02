@@ -15,8 +15,9 @@ PIP = {"Command": "#c9a227", "Chivalry": "#3d6fb8", "Dread": "#8a1f1f", "Loyalty
 
 
 class CharacterPanel(ttk.Frame):
-    def __init__(self, master):
+    def __init__(self, master, on_pip=None):
         super().__init__(master)
+        self.on_pip = on_pip                 # on_pip(attribute, value): a click on the pips
         self.cv = tk.Canvas(self, bg=PARCHMENT, highlightthickness=0)
         ys = ttk.Scrollbar(self, orient="vertical", command=self.cv.yview)
         self.cv.configure(yscrollcommand=ys.set)
@@ -72,7 +73,7 @@ class CharacterPanel(ttk.Frame):
         ay = y + 76
         for name, value in d["attributes"]:
             c.create_text(tx, ay, anchor="nw", text=name, fill=INK, font=("", 10, "bold"))
-            self._pips(tx + 116, ay + 8, value, PIP.get(name, GOLD))
+            self._pips(tx + 116, ay + 8, value, PIP.get(name, GOLD), name)
             c.create_text(tx + 116 + 10 * 17 + 8, ay, anchor="nw", text=str(value), fill=MUTED, font=("", 9))
             ay += 22
         y = max(y + ph + 20, ay + 10)
@@ -118,9 +119,17 @@ class CharacterPanel(ttk.Frame):
         y += chh + 16
         c.configure(scrollregion=(0, 0, w, y))
 
-    def _pips(self, x, y, value, colour):
-        """Ten pips (stars), the first `value` filled; more than ten: all filled."""
+    def _pips(self, x, y, value, colour, name=None):
+        """Ten pips (stars), the first `value` filled; more than ten: all filled. A click on pip k asks for the
+        value k (the filled last one again: one less) - the traits are fitted to it."""
         c = self.cv
+        if self.on_pip and name:
+            tag = "pips_" + name
+            c.create_rectangle(x, y - 9, x + 10 * 17 + 4, y + 9, outline="", fill="", tags=tag)
+            c.tag_bind(tag, "<Button-1>", lambda e: self.on_pip(
+                name, (lambda k: k - 1 if k == value else k)(min(10, max(0, int((e.x - x) // 17) + 1)))))
+            c.tag_bind(tag, "<Enter>", lambda e: c.configure(cursor="hand2"))
+            c.tag_bind(tag, "<Leave>", lambda e: c.configure(cursor=""))
         for k in range(10):
             cx = x + k * 17 + 7
             pts = []
@@ -128,4 +137,5 @@ class CharacterPanel(ttk.Frame):
                 r = 7 if j % 2 == 0 else 3
                 a = -math.pi / 2 + j * math.pi / 5
                 pts += [cx + r * math.cos(a), y + r * math.sin(a)]
-            c.create_polygon(pts, fill=colour if k < value else "", outline=colour if k < value else "#b9ab8e")
+            c.create_polygon(pts, fill=colour if k < value else "", outline=colour if k < value else "#b9ab8e",
+                             tags=("pips_" + name,) if self.on_pip and name else ())

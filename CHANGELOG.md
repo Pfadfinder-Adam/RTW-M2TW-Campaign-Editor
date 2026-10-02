@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Changed
+- **Character panel: a click on the pips sets the attribute** (a tester's wish): the traits are fitted to it - his own
+  trait moved to the level that fits, else a trait giving that attribute alone added; both games.
+- **Traits and retinue window: the labels whole** ("Points it needs (Threshold)" was cut) and the descriptions in the
+  window's own font (a tester's report).
 - **Building editor: the texts players read** (a tester: the description tied to a culture was missing): the level's
   name, short description and description for each culture or faction, shown under the pictures and changed there;
   written to export_buildings.txt on Apply.
