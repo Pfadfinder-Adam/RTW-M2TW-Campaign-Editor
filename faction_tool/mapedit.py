@@ -29,19 +29,21 @@ def place_problem(mod, campaign, what, region, xy, moved=None):
     if not info:
         return "%s is not a region of this map" % region
     now = current(mod, campaign, what, region, moved)
-    if now is None:
-        return "%s has no %s on the map" % (region, "town" if what == "city" else "port")
-    if tuple(xy) == tuple(now):
-        return "already there"
+    if now is None and what == "city":
+        return "%s has no town on the map" % region
+    if now is not None and tuple(xy) == tuple(now):
+        return "already there"                         # a region without a port gets a new one (now is None)
+    here = orig(mod, campaign, what, region)
+    here = tuple(here) if here else None
     # the tile as it would be: freed spots of other moves count as the region's own land
     px = img.get(x, y)
     for (w, r), to in moved.items():
         if tuple(to) == (x, y) and (w, r) != (what, region):
             return "the new %s of %s goes there" % ("town" if w == "city" else "port", r)
     freed = {tuple(orig(mod, campaign, w, r)): r for (w, r) in moved if (w, r) != (what, region)}
-    if px in (CITY, PORT) and (x, y) not in freed and (x, y) != tuple(orig(mod, campaign, what, region)):
+    if px in (CITY, PORT) and (x, y) not in freed and (x, y) != here:
         return "another town or port stands there"
-    if px != info["colour"] and freed.get((x, y)) != region and (x, y) != tuple(orig(mod, campaign, what, region)):
+    if px != info["colour"] and freed.get((x, y)) != region and (x, y) != here:
         return "not %s's land" % region
     if what == "city":
         why = mod.land_problem(campaign, (x, y))
@@ -50,6 +52,20 @@ def place_problem(mod, campaign, what, region, xy, moved=None):
     else:
         if not any(mod.is_sea(campaign, (x + dx, y + dy)) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             return "a port needs the sea next to it"
+        # a port belongs to the region most of the land round it is (as ports() reads it): there must be more
+        # of this region's tiles round it than of any other's, or the port would count as the neighbour's
+        by_colour = {v["colour"]: k for k, v in mod.regions(campaign).items()}
+        votes = {}
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < img.width and 0 <= ny < img.height:
+                r = by_colour.get(img.get(nx, ny))
+                if (nx, ny) == here:
+                    r = region
+                if r:
+                    votes[r] = votes.get(r, 0) + 1
+        if votes.get(region, 0) <= max([n for r, n in votes.items() if r != region] or [0]):
+            return "most of the land round it is another region's - the port would count as theirs"
     serious = [m for s, m in _move_ring(mod, campaign, what, region, xy, moved) if s]
     return serious[0] if serious else None
 
@@ -220,12 +236,15 @@ def apply_places(plan, campaign, places):
     regions = mod.regions(campaign)
     changes = {}
     for (what, region), to in moved.items():                 # old spots first, then the new ones
-        changes[tuple(orig(mod, campaign, what, region))] = regions[region]["colour"]
+        old = orig(mod, campaign, what, region)
+        if old:
+            changes[tuple(old)] = regions[region]["colour"]
     for (what, region), to in moved.items():
         changes[to] = CITY if what == "city" else PORT
         old = orig(mod, campaign, what, region)
         plan.notes.append((mod.rel(path), "%s of %s moved from %d, %d to %d, %d" % (
-            "town" if what == "city" else "port", region, old[0], old[1], to[0], to[1])))
+            "town" if what == "city" else "port", region, old[0], old[1], to[0], to[1]) if old else
+            "a new port for %s at %d, %d (its town can build a port now)" % (region, to[0], to[1])))
     plan.binary(path, patched(path, changes))
     for folder in {os.path.dirname(path), os.path.join(mod.data, "world", "maps", "base")}:
         rwm = os.path.join(folder, "map.rwm")
@@ -236,7 +255,7 @@ def apply_places(plan, campaign, places):
     s = Strat(f)
     taken = {c.xy for fb in s.factions for c in fb.characters if c.xy}
     for (what, region), to in moved.items():
-        if what != "port":
+        if what != "port" or not orig(mod, campaign, what, region):
             continue
         for c in port_fleets(s, orig(mod, campaign, what, region)):
             dest = sea_spot(mod, campaign, to, taken)

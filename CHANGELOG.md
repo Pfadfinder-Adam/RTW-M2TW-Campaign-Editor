@@ -22,6 +22,14 @@
   chosen; the texts step says plainly that only names and texts are written there, with what each level does beside
   it.
 - **Check mod files** finds building lines naming a hidden resource, resource or religion the mod lacks.
+- **Map: a port from the legend** - click a coastal land tile and the port of the region there goes to it; a region
+  without a port gets one (the port belongs to the region most of the land round it is, else refused).
+- **Map: Pick towns shows the picked towns' regions in yellow**; every named character is drawn as a general's flag
+  (as in the game - the separate family-member sign meant nothing there); painting on the map shows the painted
+  tiles solid with a thin yellow edge while the brush moves (a see-through fill was invisible on a like colour and
+  shimmered on the coast).
+- **The bigger map's write buttons say what they do**: "Write it - hills 3 x higher" / "Write it - heights as they
+  are (flatter)".
 - **Report a bug: paste a screenshot with Ctrl+V** (or the Paste button) - no file to save first.
 - **Unit and Building editors: the block's lines fold away** behind **Every line of the block** (like the family
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.

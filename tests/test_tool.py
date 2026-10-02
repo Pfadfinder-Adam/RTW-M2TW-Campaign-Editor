@@ -3164,6 +3164,33 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)
 
+    def test_a_region_without_a_port_gets_one(self):
+        # a tester: the Map's legend offered towns but no port - a region by the sea without a port gets one
+        from faction_tool import mapedit as ME
+        from faction_tool.plan import Plan
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        red, blue, black, sea = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233)
+        write_tga(os.path.join(camp, "map_regions.tga"), 5, 4, [[red, red, blue, blue, sea],
+                                                                 [red, black, blue, blue, sea],
+                                                                 [red, red, blue, black, sea],
+                                                                 [red, red, blue, blue, sea]])
+        write_tga(os.path.join(camp, "map_heights.tga"), 11, 9,
+                  [[(0, 0, 250) if x >= 8 else (20, 20, 20) for x in range(11)] for y in range(9)])
+        mod = ModData(self.root)
+        self.assertEqual(ME.ports(mod, "test"), {})
+        region = mod.regions("test") and next(r for r, v in mod.regions("test").items() if v["colour"] == blue)
+        spot = next((x, y) for y in range(4) for x in range(5)
+                    if mod.region_map("test").get(x, y) == blue and not ME.place_problem(mod, "test", "port", region,
+                                                                                         (x, y)))
+        before = tree_hash(self.root)
+        plan = Plan(mod, "map", "port", {})
+        ME.apply_places(plan, "test", [{"what": "port", "region": region, "to": spot}])
+        self.assertIn("a new port for %s" % region, plan.report())
+        bdir = plan.apply()
+        self.assertEqual(tuple(ME.ports(ModData(self.root), "test").get(region)), spot)
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_read_and_draw_a_medieval2_mesh(self):
         """A .mesh laid out as the vanilla ones: parts with triangles, then the vertex streams (texture u v,
         bone weights, positions). Read back, the man shown, drawn both ways."""

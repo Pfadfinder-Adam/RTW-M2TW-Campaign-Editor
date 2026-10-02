@@ -425,7 +425,7 @@ class MapView(ttk.Frame):
             row("a town (its owner's colour)", town(red, "black", 1), "town")
             row("one of your towns", town(red, "#ffd400", 3))
             row("rebel village (no town yet)", town("", "black", 1, hollow=True))
-            row("a port", port)
+            row("a port (click the coast)", port, "port")
             row("a fort (top: its owner's colour)",
                 lambda x, yy: self._fort_icon(lc, x, yy + 2, 7, "#%02x%02x%02x" % self.LEGEND_RED, (), 2), "fort")
             row("a watchtower",
@@ -437,10 +437,9 @@ class MapView(ttk.Frame):
             head("Characters")
             keep = self.draggable
             self.draggable = set(keep) | {"legend_mine"}
-            row("an army (general)", char("general", army=True), "army")
+            row("a general / an army", char("general", army=True), "army")
             row("yours: drag it (right button)", char("general", army=True, mine=True))
             row("a fleet (admiral)", char("admiral", army=True), "fleet")
-            row("family member, no army", char("named character"))
             for k, label in (("spy", "spy"), ("assassin", "assassin"), ("diplomat", "diplomat"),
                              ("merchant", "merchant"), ("priest", "priest"), ("princess", "princess"),
                              ("inquisitor", "inquisitor"), ("heretic", "heretic"), ("witch", "witch")):
@@ -669,7 +668,11 @@ class MapView(ttk.Frame):
         if getattr(self, "plain", False):
             return bg
         land = () if self.region_mode else tuple(sorted(self.new_land.items()))
-        if self.region_mode:
+        if self.v_pick.get() and self.picked and not self.region_mode:
+            # Pick towns: the picked towns' regions see-through yellow (a tester: the towns alone were hard to see)
+            pol = self.cmap.political({r: "picked" for r in self.picked}, {"picked": (255, 212, 0)}, None,
+                                      alpha=110, borders=True)
+        elif self.region_mode:
             pol = self.cmap.regions_layer(self.region_painted, self.region_colours, borders=self.v_borders.get())
         elif not self.v_pol.get() and not self.v_borders.get() and not land:
             return bg
@@ -749,8 +752,10 @@ class MapView(ttk.Frame):
         for (tx, ty), rgb in took:
             self.paint_overlay[(tx, ty)] = rgb
             sx, sy = self.to_screen(tx, ty)
+            # solid, with a thin yellow edge when the tiles are big enough: a see-through (stippled) fill was
+            # invisible on a like colour and shimmered on the coast (testers' reports); until the stroke ends
             c.create_rectangle(sx - z / 2, sy - z / 2, sx + z / 2, sy + z / 2, fill="#%02x%02x%02x" % rgb,
-                               outline="", stipple="gray50", tags=("paint",))     # until the stroke ends
+                               outline="#ffd400" if z >= 6 else "", width=1, tags=("paint",))
 
     def _markers(self, cw, ch):
         c, cm = self.canvas, self.cmap
@@ -759,7 +764,8 @@ class MapView(ttk.Frame):
         size = max(3, min(self.z * 0.9, 60))           # a town fills its tile
         font = ("", 8 if self.z < 10 else 9)
         if self.v_ports.get() and self.z >= 4:        # far out: towns only - less to draw, less clutter
-            for region, (x, y) in cm.ports.items():
+            new = {r: xy for (w, r), xy in self.places.items() if w == "port" and r not in cm.ports}
+            for region, (x, y) in list(cm.ports.items()) + list(new.items()):     # a new port too (not written yet)
                 x, y = self.places.get(("port", region), (x, y))
                 sx, sy = self.to_screen(x, y)
                 if -10 < sx < cw + 10 and -10 < sy < ch + 10:
@@ -930,7 +936,9 @@ class MapView(ttk.Frame):
             c.create_polygon(sx - w, sy - w * 0.1, sx + w, sy - w * 0.1, sx + w * 0.6, sy + w * 0.5,
                              sx - w * 0.6, sy + w * 0.5, fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
             c.create_line(sx, sy - w * 0.1, sx, sy - w, fill=edge, width=2, tags=tags)
-        elif ch_["army"]:
+        else:
+            # an army - and a family member without units too: the game shows every named character on the map
+            # as a general with his flag (a tester: a sign of its own meant nothing in the game)
             h = size
             sx -= h * 0.3                                  # the flag, not its pole, sits on the tile
             c.create_line(sx, sy + h * 0.5, sx, sy - h * 0.5, fill="black", width=2, tags=tags)
@@ -939,9 +947,6 @@ class MapView(ttk.Frame):
             if mine:
                 c.create_rectangle(sx - 2, sy + h * 0.5 - 2, sx + 2, sy + h * 0.5 + 2, fill="#ffd400", outline="",
                                    tags=tags)
-        else:                                          # a named character without an army
-            r = size * 0.4
-            c.create_polygon(sx, sy - r, sx + r, sy, sx, sy + r, sx - r, sy, fill=fill, outline=edge, tags=tags)
 
     def _symbol(self, faction, px):
         path = self.symbols.get(faction)

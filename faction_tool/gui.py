@@ -1607,8 +1607,9 @@ class App(tk.Tk):
                  "places in the middle of their blocks. The coast is drawn smooth (not in 3 x 3 squares), rivers "
                  "stay 1 pixel wide and run on to the new coast, and the relief is smooth.\n\n"
                  "HEIGHTS: the land gets 3 x wider, so with the same heights every mountain would be a third as "
-                 "steep - a hillock. 'Write it' makes the hills, mountains and the sea floor 3 x higher too, so "
-                 "they look as they did; 'Write it, heights as they are' keeps the old heights (a flatter world).\n\n"
+                 "steep - a hillock. 'Write it - hills 3 x higher' makes the hills, mountains and the sea floor 3 x "
+                 "higher too, so they look as they did; 'Write it - heights as they are' keeps the old heights (a "
+                 "flatter world). Both make a backup first.\n\n"
                  "Nothing is written until you press one of them; a backup is made first and Tools > Restore a "
                  "backup gives every file back.\n\n" % camp)
         holder = {}
@@ -1644,8 +1645,8 @@ class App(tk.Tk):
 
         self.show_text("PREVIEW - nothing written yet: press 'Write it' below - Make the map 3 x bigger",
                        intro + plan.report(),
-                       extra=[("Write it (with a backup)", write_it),
-                              ("Write it, heights as they are", lambda: write_it(1))])
+                       extra=[("Write it - hills 3 x higher (they look as before)", write_it),
+                              ("Write it - heights as they are (flatter)", lambda: write_it(1))])
         holder["w"] = [c for c in self.winfo_children() if c.winfo_class() == "Toplevel"][-1]
 
     def game_log_window(self, path=None):
@@ -1806,7 +1807,7 @@ class App(tk.Tk):
         if not self.mod or not self.strat:
             return {}
         from .resources import types
-        tools = {"town": True, "fort": True, "watchtower": True}
+        tools = {"town": True, "port": True, "fort": True, "watchtower": True}
         tools.update({"res:" + t: True for t in types(self.mod)})
         if self.v_mode.get() in ("new", "edit") and self.field_faction() and not self.map_only():
             tools.update({k: True for k in ("army", "fleet")})
@@ -1820,6 +1821,12 @@ class App(tk.Tk):
         mv = self.map_view
         self._res_placing = None
         self._region_point, self._town_auto = None, False
+        self._port_tool = key == "port"
+        if key == "port":
+            self.status.set("Click a coastal land tile: the port of the region there goes to it (a region without a "
+                            "port gets one). Click the sign again to stop.")
+            self.show_map()
+            return
         if key is None:
             self._placing = None
             self.status.set("")
@@ -2855,6 +2862,23 @@ class App(tk.Tk):
                 "Apply changes" if self.editing() else "Create faction"))
             self.show_map()
         region_kw = self._region_view(place)
+        if getattr(self, "_port_tool", False) and self._cmap:
+            def port_why(xy):
+                region = self._cmap.region_at(*xy)
+                if not region:
+                    return "not a region's land"
+                return check_place("port", region, xy)
+
+            def port_click(xy):
+                why = port_why(xy)
+                if why:
+                    return why
+                self._port_tool = False
+                self.map_view.set_tool(None)
+                place_moved("port", self._cmap.region_at(*xy), xy)
+                return None
+            region_kw["on_place"] = port_click
+            region_kw["ghost"] = {"kind": "port", "check": port_why}
         res_kw = self._resource_view()
         on_place = region_kw.pop("on_place", place if placing is not None else None)
         if res_kw.get("on_place"):
