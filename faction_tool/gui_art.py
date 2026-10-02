@@ -351,20 +351,22 @@ class ArtEditor(ttk.Frame):
         olds = {p["rel"]: E._old(p) for p in pics}
         cols = faction_colours(a.mod).get(src_faction, (None, None))
         EmblemFitter(self, picture, EE.frame_mask(pics, olds), cols,
-                     lambda master: self._emblem_made(master, pics, src, src_faction, new))
+                     lambda master, sym: self._emblem_made(master, pics, src, src_faction, new, sym))
 
-    def _emblem_made(self, master, pics, src, src_faction, new):
+    def _emblem_made(self, master, pics, src, src_faction, new, symbol=None, places=None):
         from . import emblem as E
         a = self.app
-        made = E.build(master, pics)
+        places = dict(places or {})
+        made = E.build(master, pics, symbol, places)
         import tempfile
         paths = E.save_all(made, tempfile.mkdtemp(prefix="emblem_"))
         w = tk.Toplevel(self)
         w.title("Faction emblem - %s" % (new or src_faction))
         w.transient(self.winfo_toplevel())
         ShortHint(w, text=(
-            "Every place the game shows the emblem, now and after. Each picture keeps its size and format; the "
-            "button states are made like the mod's own. Nothing is written yet: 'Use it' puts them on the Art tab, "
+            "Every place the game shows the emblem, now and after - the flag on the campaign map and the battle "
+            "banners carry the symbol alone, on their own cloth (the old symbol filled over). Each picture keeps "
+            "its size and format; the button states are made like the mod's own. Nothing is written yet: 'Use it' puts them on the Art tab, "
             "Preview and Apply write them with a backup (Restore gives them back).")).pack(anchor="w", padx=8, pady=6)
         grid = ttk.Frame(w, padding=8)
         grid.pack()
@@ -387,7 +389,38 @@ class ArtEditor(ttk.Frame):
                 tk.Label(cell, image=ph).grid(row=0, column=j, padx=1)
             ttk.Label(cell, text="%s\n%d x %d" % (p["label"], p["size"][0], p["size"][1]), wraplength=200,
                       justify="center", foreground="#444").grid(row=1, column=0, columnspan=2)
+            if E.is_banner(p):
+                if p["rel"] not in made:
+                    ttk.Label(cell, text="no symbol found on it - put it right by hand", foreground="#a60",
+                              wraplength=200).grid(row=2, column=0, columnspan=2)
+                ttk.Button(cell, text="Put it right...", command=lambda p=p: fix(p)).grid(
+                    row=3, column=0, columnspan=2)
         w._photos = photos
+
+        def fix(p):
+            from . import banners as B
+            from .gui_banners import BannerFixer
+            old = E._old(p)
+            if old is None:
+                return
+            found = places.get(p["rel"])
+            if found is None:
+                found = [(f[0], f[1]) for f in B.find_symbols(old)]
+                if not found and p["link"][1] == "ally_texture":     # the own banner's places
+                    own = next((q for q in pics if E.is_banner(q) and q["link"][1] == "standard_texture"), None)
+                    found = places.get(own["rel"]) if own else None
+                    if found is None and own is not None and E._old(own) is not None:
+                        found = [(f[0], f[1]) for f in B.find_symbols(E._old(own))]
+
+            def done(got):
+                places[p["rel"]] = got
+                if p["link"][1] == "standard_texture":          # the allies' banner follows unless put right itself
+                    for q in pics:
+                        if E.is_banner(q) and q["link"][1] == "ally_texture" and q["rel"] not in places:
+                            places[q["rel"]] = got
+                w.destroy()
+                self._emblem_made(master, pics, src, src_faction, new, symbol, places)
+            BannerFixer(w, old, symbol or master, found, done, title=p["label"])
 
         def use():
             a.remember()

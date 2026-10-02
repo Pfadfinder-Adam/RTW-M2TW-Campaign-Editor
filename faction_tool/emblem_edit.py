@@ -12,11 +12,11 @@ def frame_mask(pics, olds, size=MASTER):
     """The old emblem's outline ('L', size x size, 255 inside): the alpha of its biggest normal picture, scaled -
     the shape the game's own emblems have (most a disc). None when there is none to take."""
     from PIL import Image
-    from .emblem import variant_of
+    from .emblem import EMBLEM_KINDS, variant_of
     best = None
     for p in pics:
         im = olds.get(p["rel"])
-        if im is None or variant_of(p["label"]) is not None:
+        if im is None or variant_of(p["label"]) is not None or not p["label"].startswith(EMBLEM_KINDS):
             continue
         if best is None or im.size[0] * im.size[1] > best.size[0] * best.size[1]:
             best = im

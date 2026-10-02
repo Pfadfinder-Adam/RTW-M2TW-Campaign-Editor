@@ -11,6 +11,8 @@ import statistics
 EMBLEM_KINDS = ("small campaign-menu button", "big campaign-menu button", "loading-screen logo",
                 "symbol on the faction screen", "faction symbol (in-game panels)", "faction logo (faction button)",
                 "small faction logo")
+SYMBOL_KINDS = ("flag symbol on the campaign map",)         # the bare symbol, no disc or ground round it
+BANNER_FIELDS = ("standard_texture", "ally_texture")       # Rome's battle banners (descr_banners.txt)
 VARIANTS = (("(mouse over)", "roll"), ("(selected)", "select"), ("(greyed out)", "grey"))
 DEFAULT = {"roll": 1.4, "grey": 0.75}
 
@@ -22,9 +24,15 @@ def variant_of(label):
     return None
 
 
+def is_banner(p):
+    return bool(p.get("link")) and p["link"][0] == "banners" and p["link"][1] in BANNER_FIELDS
+
+
 def emblem_pictures(pics):
-    """The Art tab's pictures (factionart.faction_pictures) that show the emblem, not locked."""
-    return [p for p in pics if not p.get("locked") and any(p["label"].startswith(k) for k in EMBLEM_KINDS)
+    """The Art tab's pictures (factionart.faction_pictures) that show the emblem, not locked: the emblem itself,
+    the flag symbol on the campaign map and the battle banners that carry the symbol."""
+    return [p for p in pics if not p.get("locked") and (
+        any(p["label"].startswith(k) for k in EMBLEM_KINDS + SYMBOL_KINDS) or is_banner(p))
             and "(rebel)" not in p["label"] and "(dead)" not in p["label"]]
 
 
@@ -126,14 +134,39 @@ def _glow(old_normal, old_select, new):
     return glow
 
 
-def build(src, pics):
+def build(src, pics, symbol=None, places=None):
     """{rel of the Art picture: new picture (RGBA, its size)} for every emblem picture, from one source picture
-    (a Pillow image). pics: emblem_pictures(...)."""
+    (a Pillow image). pics: emblem_pictures(...). symbol: the bare symbol (no disc, no ground) for the flag symbol
+    and the banners - src when not given. places: {rel of a banner: [(mask, box)]} corrected by hand."""
     from PIL import Image
+    from . import banners as B
+    symbol = symbol or src
     olds = {p["rel"]: _old(p) for p in pics}
     normals = {_family(p): p for p in pics if variant_of(p["label"]) is None}
     out = {}
+    # the banners: the faction's own and its allies' carry the symbol at the same place - found once on the own one
+    own = next((p for p in pics if is_banner(p) and p["link"][1] == "standard_texture"), None)
+    found = (places or {}).get(own["rel"]) if own else None
+    if own and found is None and olds.get(own["rel"]) is not None:
+        found = B.find_symbols(olds[own["rel"]])
     for p in pics:
+        if is_banner(p):
+            old = olds.get(p["rel"])
+            if old is None:
+                continue
+            mine = (places or {}).get(p["rel"])
+            if mine is None:
+                same = own is not None and olds.get(own["rel"]) is not None and old.size == olds[own["rel"]].size
+                mine = found if same else None
+            got = B.paint_symbol(old, symbol, mine)
+            if got is not None:
+                out[p["rel"]] = got
+            continue
+        if any(p["label"].startswith(k) for k in SYMBOL_KINDS):
+            old = olds.get(p["rel"])
+            if old is not None:
+                out[p["rel"]] = fit(symbol, old.size, footprint(old))
+            continue
         size = tuple(p["size"][:2]) if p.get("size") else (olds[p["rel"]].size if olds[p["rel"]] else None)
         if not size:
             continue
@@ -175,4 +208,4 @@ def save_all(made, folder):
     return paths
 
 
-__all__ = ["EMBLEM_KINDS", "emblem_pictures", "build", "save_all", "variant_of", "measure", "fit"]
+__all__ = ["EMBLEM_KINDS", "SYMBOL_KINDS", "is_banner", "emblem_pictures", "build", "save_all", "variant_of", "measure", "fit"]

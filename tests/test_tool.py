@@ -3006,6 +3006,61 @@ building smith
         self.assertGreater(sel.getpixel((2, 20))[3], 0)                                 # the glow round it
         self.assertGreater(sel.getpixel((2, 20))[0], sel.getpixel((2, 20))[2])          # gold, as the old one
 
+    def test_symbol_painted_on_the_battle_banners(self):
+        """The new symbol on Rome's battle banners: the old one found and filled over with the cloth, the new one
+        in its place; the allies' banner (the symbol faint) takes the own banner's places; the flag symbol on the
+        campaign map gets the bare symbol."""
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            self.skipTest("Pillow")
+        from faction_tool import banners as B
+        from faction_tool import emblem as E
+        d = tempfile.mkdtemp()
+
+        def banner(sym_colour):
+            im = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
+            dr = ImageDraw.Draw(im)
+            for x0, x1 in ((4, 104), (112, 252)):                      # two banners of red cloth
+                dr.rectangle((x0, 4, x1, 180), fill=(170, 30, 30, 255))
+            dr.ellipse((30, 50, 78, 120), fill=sym_colour + (255,))    # the old symbol on each
+            dr.ellipse((150, 50, 214, 130), fill=sym_colour + (255,))
+            dr.rectangle((20, 200, 200, 230), fill=(200, 180, 40, 255))  # stars and pole below, never touched
+            return im
+        own, ally = banner((20, 20, 20)), banner((140, 25, 25))         # the ally's symbol: a faint shade
+        found = B.find_symbols(own)
+        self.assertEqual(len(found), 2)
+        self.assertTrue(found[0][1][0] <= 30 and found[0][1][2] >= 78)
+        flag = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        ImageDraw.Draw(flag).ellipse((8, 8, 56, 56), fill=(0, 0, 0, 255))
+        pics = []
+        for name, im, field in (("standard_alpha", own, "standard_texture"),
+                                ("standard_alpha_ally", ally, "ally_texture")):
+            path = os.path.join(d, name + ".tga")
+            im.save(path)
+            pics.append({"path": path, "rel": "models/textures/%s.tga" % name, "label": "banner / standard texture",
+                         "link": ["banners", field], "size": (256, 256, 32)})
+        flag.save(os.path.join(d, "flag.tga"))
+        pics.append({"path": os.path.join(d, "flag.tga"), "rel": "symbol:flag",
+                     "label": "flag symbol on the campaign map", "size": (64, 64, 32)})
+        self.assertEqual(len(E.emblem_pictures(pics)), 3)
+        sym = Image.new("RGBA", (40, 40), (0, 0, 0, 0))
+        ImageDraw.Draw(sym).polygon(((20, 0), (40, 40), (0, 40)), fill=(20, 160, 40, 255))
+        made = E.build(sym, pics, sym)
+        for rel in (pics[0]["rel"], pics[1]["rel"]):
+            new = made[rel]
+            r, g, b, a = new.getpixel((182, 120))                      # the new symbol where the old one was
+            self.assertGreater(g, r)
+            r, g, b, a = new.getpixel((153, 90))                       # the old one's edge: cloth again
+            self.assertGreater(r, 100)
+            self.assertLess(g, 80)
+            self.assertEqual(new.getpixel((100, 215)), (200, 180, 40, 255))   # the stars' row as it was
+            self.assertEqual(new.getpixel((108, 50))[3], 0)            # the gap between the banners stays clear
+        f = made["symbol:flag"]
+        self.assertEqual(f.size, (64, 64))
+        self.assertEqual(f.getpixel((2, 2))[3], 0)
+        self.assertGreater(f.getpixel((32, 40))[1], 100)               # the bare symbol, no disc or ground
+
     def test_buildings_and_garrisons_for_many_towns(self):
         import random
         from faction_tool import masstown as M

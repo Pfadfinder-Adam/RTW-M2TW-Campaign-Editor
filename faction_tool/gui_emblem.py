@@ -1,6 +1,7 @@
 """The window that fits a picture into the faction's emblem (emblem_edit.py): drag to move, the wheel to make it
 bigger or smaller, a turn, the shape it is cut to, the ground inside, the magic wand and the paint bucket. Its
-master picture goes on to the window that shows every emblem picture made from it."""
+master picture goes on to the window that shows every emblem picture made from it, with the bare symbol (no
+shape, no ground) for the flags and banners."""
 
 import tkinter as tk
 from tkinter import colorchooser, ttk
@@ -195,6 +196,14 @@ class EmblemFitter(tk.Toplevel):
         st.pop("_box", None)
         return EE.compose(self.src, st)
 
+    def symbol(self):
+        """The picture as placed and turned, without the shape's cut and the ground: the symbol a flag or a
+        banner carries on its own cloth."""
+        st = dict(self.state)
+        st.pop("_box", None)
+        st.update(shape=None, ground=None)
+        return EE.compose(self.src, st)
+
     def redraw(self):
         from PIL import Image, ImageDraw, ImageTk
         m = self.picture()
@@ -219,6 +228,6 @@ class EmblemFitter(tk.Toplevel):
                 c.create_oval(box[0], box[1], box[2], box[3], outline="#ffd400", dash=(4, 3))
 
     def _next(self):
-        m = self.picture()
+        m, sym = self.picture(), self.symbol()
         self.destroy()
-        self.on_done(m)
+        self.on_done(m, sym)
