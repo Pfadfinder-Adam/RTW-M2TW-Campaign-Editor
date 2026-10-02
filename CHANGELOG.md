@@ -22,6 +22,12 @@
   chosen; the texts step says plainly that only names and texts are written there, with what each level does beside
   it.
 - **Check mod files** finds building lines naming a hidden resource, resource or religion the mod lacks.
+- **Map: armies, fleets, agents and towns for any faction, no faction to pick first** (the user's wish): a click
+  with the legend's army / fleet / agent tool (or a right click: New army / agent / fleet here) asks for the name,
+  the faction set to the one holding that land (a fleet: the owner of the nearest land) and changeable there; a
+  right click on a town: **Give this town to** any faction. The faction being made or edited gets them as before;
+  any other faction's are written with the next Apply (edit.map_changes; edit.move_towns is now the one writer of
+  towns changing hands), an army or fleet starting with the first unit of that faction's nearest one.
 - **Map: a port from the legend** - click a coastal land tile and the port of the region there goes to it; a region
   without a port gets one (the port belongs to the region most of the land round it is, else refused).
 - **Map: Pick towns shows the picked towns' regions in yellow**; every named character is drawn as a general's flag

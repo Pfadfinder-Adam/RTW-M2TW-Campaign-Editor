@@ -309,6 +309,9 @@ class App(tk.Tk):
         self._limit_raise = None        # the mod whose max_factions the user agreed to raise
         self.removed_existing = []      # Edit: [{name, from}] characters taken off the map
         self.place_moves = {}           # {('city' | 'port', region): (x, y)} towns and ports moved on the map
+        # the Map's changes for any faction (not only the one made or edited): towns given {region: new owner},
+        # armies / agents / fleets placed {faction: [character dicts]} - written with the next Apply
+        self.map_owners, self.map_chars = {}, {}
         self.dip_set = {}               # {(kind, from, to): value or None} picked on the Diplomacy tab ('me' = the faction)
         self.region_paint = {}          # {(x, y): region} tiles painted to another region (Regions mode)
         self.region_edits = {}          # {region: {creator, rebels, resources, triumph, farming}} of regions there are
@@ -1429,7 +1432,7 @@ class App(tk.Tk):
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "place_moves", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions", "new_religions", "region_edits",
                  "culture_names", "name_list", "res_moves", "res_removed", "res_added", "region_tags", "fort_moves", "fort_removed", "fort_added", "art_replace", "sel_map", "figures", "roster_set",
-                 "family_set")
+                 "family_set", "map_owners", "map_chars")
 
     def snapshot(self):
         st = {k: copy.deepcopy(getattr(self, k)) for k in self.UNDO_KEYS}
@@ -1809,9 +1812,9 @@ class App(tk.Tk):
         from .resources import types
         tools = {"town": True, "port": True, "fort": True, "watchtower": True}
         tools.update({"res:" + t: True for t in types(self.mod)})
-        if self.v_mode.get() in ("new", "edit") and self.field_faction() and not self.map_only():
-            tools.update({k: True for k in ("army", "fleet")})
-            tools.update({k: True for k in self.AGENTS})
+        # armies, fleets and agents for any faction: the land clicked says whose (the window lets another be picked)
+        tools.update({k: True for k in ("army", "fleet")})
+        tools.update({k: True for k in self.AGENTS})
         return tools
 
     def map_tool(self, key):
@@ -1822,6 +1825,13 @@ class App(tk.Tk):
         self._res_placing = None
         self._region_point, self._town_auto = None, False
         self._port_tool = key == "port"
+        self._map_add = (key, None) if key in ("army", "fleet") else ("agent", key) if key in self.AGENTS else None
+        if self._map_add:
+            self.status.set("Click the %s for the new %s - it goes to the faction holding it (the window lets you pick "
+                            "another). Click the sign again to stop." % (
+                                "sea" if key == "fleet" else "tile", key))
+            self.show_map()
+            return
         if key == "port":
             self.status.set("Click a coastal land tile: the port of the region there goes to it (a region without a "
                             "port gets one). Click the sign again to stop.")
@@ -1842,10 +1852,7 @@ class App(tk.Tk):
             self.res_place_new(key[4:])
         elif key == "town":
             self.new_region_dialog(then=self._start_town, cancelled=lambda: mv.set_tool(None))
-        elif key in ("army", "fleet"):
-            self.add_field(key, then_place=True)
-        else:
-            self.add_field("agent", preset=key, then_place=True)
+
 
     def _start_town(self, name):
         """After New region... from the legend: the next click puts its town; the land around it becomes the new
@@ -2795,6 +2802,14 @@ class App(tk.Tk):
                                              else str(u) for u in fc["units"]], "from": None})
                 if army:
                     armies_at.add(tuple(fc["xy"]))
+        for fac, cs in self.map_chars.items():           # placed on the Map for other factions, written on Apply
+            for i, fc in enumerate(cs):
+                rtw_kind, army = KINDS[fc["kind"]]
+                chars.append({"id": "map:%s:%d" % (fac, i), "faction": fac, "name": fc["name"], "kind": rtw_kind,
+                              "xy": tuple(fc["xy"]), "army": army, "units": len(fc["units"]),
+                              "unit_names": list(fc["units"]), "from": None})
+                if army:
+                    armies_at.add(tuple(fc["xy"]))
         mine = [ch["id"] for ch in chars if (self.editing() and ch["faction"] == me) or ch["id"].startswith("new:")]
         self._map_chars = {ch["id"]: ch for ch in chars}
 
@@ -2862,6 +2877,24 @@ class App(tk.Tk):
                 "Apply changes" if self.editing() else "Create faction"))
             self.show_map()
         region_kw = self._region_view(place)
+        if getattr(self, "_map_add", None) and self._cmap:
+            kind, preset = self._map_add
+            from .start import KINDS as _K
+
+            def add_why(xy):
+                rtw, army = _K[kind if kind != "agent" else preset]
+                return self.mod.tile_problem(self.v_campaign.get(), xy, rtw, army, ())
+
+            def add_click(xy):
+                why = add_why(xy)
+                if why:
+                    return why
+                self._map_add = None
+                from .gui_mapadd import add_at
+                add_at(self, kind, tuple(xy), preset)
+                return None
+            region_kw["on_place"] = add_click
+            region_kw["ghost"] = {"kind": kind if kind != "agent" else "agent", "check": add_why}
         if getattr(self, "_port_tool", False) and self._cmap:
             def port_why(xy):
                 region = self._cmap.region_at(*xy)
@@ -3370,6 +3403,7 @@ class App(tk.Tk):
         self.field, self._placing = [], None
         self.editing_now, self.char_moves = None, {}
         self.place_moves = {}
+        self.map_owners, self.map_chars = {}, {}
         self.dip_set.clear()
         self.region_paint, self.new_regions, self._region_point = {}, [], None
         self.region_edits = {}
@@ -3452,6 +3486,7 @@ class App(tk.Tk):
             for r in self.editing_now.get("regions", []):
                 if r not in self.chosen:
                     owners[r] = self.v_give.get() or "slave"
+        owners.update(getattr(self, "map_owners", {}))   # towns given to any faction on the Map
         return owners
 
     def name_list_key(self):
@@ -3950,7 +3985,14 @@ class App(tk.Tk):
             town = self._cmap.info.get(region, {}).get("settlement", region) if self._cmap else region
             mine = region in self.chosen
             items.append(("%s (%s)" % (town, region), None))
-            items.append(("Take out of my towns" if mine else "Add to my towns", lambda: self.map_city(region)))
+            if self.field_faction() and not self.map_only():
+                items.append(("Take out of my towns" if mine else "Add to my towns", lambda: self.map_city(region)))
+            from .gui_mapadd import factions_here, give_town
+            owner = self.owners_after().get(region)
+            names = self.shown_names()
+            items.append(("Give this town to", [(("%s - %s" % (f, names[f]) if names.get(f) else f),
+                                                 lambda f=f: give_town(self, region, f))
+                                                for f in factions_here(self) if f != owner]))
             if mine:
                 items.append(("Its garrison...  (Units & armies)", lambda: self.show_units(region)))
 
@@ -3960,6 +4002,21 @@ class App(tk.Tk):
                     self.lb_build.selection_set(self.chosen.index(region))
                     self.load_buildings()
                 items.append(("Its buildings...  (Buildings)", buildings))
+        if cid is not None and str(cid).startswith("map:"):
+            _, fac, k = str(cid).split(":")
+            k = int(k)
+
+            def drop(fac=fac, k=k):
+                self.remember()
+                if k < len(self.map_chars.get(fac, [])):
+                    gone = self.map_chars[fac].pop(k)
+                    self.status.set("%s %s of %s taken out (it was not written yet)." % (gone["kind"], gone["name"], fac))
+                self._mark_work()
+                self.show_map()
+            c = (self.map_chars.get(fac) or [None] * (k + 1))[k]
+            if c:
+                items.append(("%s %s of %s (written with the next Apply)" % (c["kind"], c["name"], fac), None))
+                items.append(("Take it out", drop))
         if cid is not None:
             i = next((k for k, c in enumerate(self.field)
                       if cid == "new:%d" % k or (c.get("existing") and c.get("cid") == cid)), None)
@@ -3975,14 +4032,18 @@ class App(tk.Tk):
                 if items:
                     items.append((None, None))
                 items.append(("%s %s: open it  (Units & armies)" % (c["kind"], c["name"]), open_it))
-        if self.field_faction() and cid is None:
+        if cid is None and self.strat:
+            # for any faction: the land's owner by default, another picked in the window
+            from .gui_mapadd import add_at, owner_at
             if items:
                 items.append((None, None))
             sea = self.mod.is_sea(self.v_campaign.get(), xy)
+            whose = owner_at(self, xy)
             kinds = (("fleet", "New fleet here..."),) if sea else (("army", "New army here..."),
                                                                      ("agent", "New agent here..."))
             for kind, label in kinds:
-                items.append((label, lambda kind=kind: self.add_field(kind, at=xy)))
+                items.append(("%s  (%s)" % (label, whose) if whose else label,
+                              lambda kind=kind: add_at(self, kind, tuple(xy))))
         return items
 
     def selected_field(self):
@@ -4259,8 +4320,18 @@ class App(tk.Tk):
             st["fields"]["template"] = base["fields"]["template"]
             return st != base
         if self.map_only():
-            return bool(self._places() or self._regions_opts() or self._resources_opts())
+            return bool(self._places() or self._regions_opts() or self._resources_opts() or self._map_changes())
         return True
+
+    def _map_changes(self):
+        """The Map's changes for other factions, as edit.map_changes takes them (empty parts left out)."""
+        out = {}
+        if self.map_owners:
+            out["owners"] = dict(self.map_owners)
+        chars = {f: list(cs) for f, cs in self.map_chars.items() if cs}
+        if chars:
+            out["characters"] = chars
+        return out
 
     def _faction_label(self):
         if self.editing():
@@ -4309,8 +4380,18 @@ class App(tk.Tk):
             b.configure(text=base + ("  *" if mine else ""))
 
     def _faction_plan(self):
+        plan = self._faction_plan_own()
+        extra = self._map_changes()
+        if extra:
+            from .edit import map_changes
+            map_changes(plan, self.v_campaign.get(), extra)
+        return plan
+
+    def _faction_plan_own(self):
         if self.map_only():
             places, regions, res = self._places(), self._regions_opts(), self._resources_opts()
+            if not places and not regions and not res and self._map_changes():
+                return Plan(ModData(self.mod.data), "map", "map", {})
             if not places and not regions and not res:
                 picked = self.v["template"].get().strip()
                 if picked:                  # a faction picked in New faction mode: most likely meant to be edited

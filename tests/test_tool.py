@@ -3191,6 +3191,30 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_map_changes_for_any_faction(self):
+        # a tester: what is put on the Map should not depend on the faction picked elsewhere - a town given to any
+        # faction, an army or agent placed for any faction, written with the next Apply
+        from faction_tool.edit import first_units, map_changes
+        from faction_tool.plan import Plan
+        mod = ModData(self.root)
+        before = tree_hash(self.root)
+        free = mod.free_tile("test", "A_R", set(mod.city_tiles("test").values()) | {(1, 1), (2, 2)})
+        self.assertIsNotNone(free)
+        units = first_units(mod, "test", "alpha", "army", free)
+        self.assertEqual(units, ["alpha general"])                   # its nearest army's first unit
+        plan = Plan(mod, "map", "map", {})
+        map_changes(plan, "test", {"owners": {"B_R": "alpha"},
+                                   "characters": {"alpha": [{"kind": "army", "name": "Boris", "age": 30,
+                                                             "units": units, "xy": free}]}})
+        self.assertIn("B_R: slave -> alpha", plan.report())
+        bdir = plan.apply()
+        st = Strat(ModData(self.root).load(ModData(self.root).campaign_file("test", "descr_strat.txt")))
+        alpha = st.faction("alpha")
+        self.assertIn("B_R", [x.region for x in alpha.settlements])
+        self.assertIn("Boris", [c.name for c in alpha.characters])
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_read_and_draw_a_medieval2_mesh(self):
         """A .mesh laid out as the vanilla ones: parts with triangles, then the vertex streams (texture u v,
         bone weights, positions). Read back, the man shown, drawn both ways."""

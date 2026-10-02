@@ -1276,6 +1276,11 @@ class MapView(ttk.Frame):
         for label, fn in items:
             if label is None:
                 m.add_separator()
+            elif isinstance(fn, list):                   # a sub-menu: [(label, command)]
+                sub = tk.Menu(m, tearoff=0)
+                for sl, sf in fn:
+                    sub.add_command(label=sl, command=sf)
+                m.add_cascade(label=label, menu=sub)
             else:
                 m.add_command(label=label, command=fn, state="normal" if fn else "disabled")
         if items:

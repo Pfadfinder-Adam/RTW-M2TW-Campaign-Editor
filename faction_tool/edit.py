@@ -330,15 +330,30 @@ def _towns(plan, f, campaign):
     go to one of its other towns (next to it if that town has an army already);
     a captain with a garrison (not named) goes with the town to its new owner,
     except rebels leaving a town, who simply go."""
-    mod, fac = plan.mod, plan.new
+    fac = plan.new
+    owners = _owners_now(plan.mod, campaign, f)
+    moves = [(r, owners.get(r), fac) for r in plan.opts.get("take") or []]
+    moves += [(r, fac, to or "slave") for r, to in (plan.opts.get("give") or {}).items()]
+    move_towns(plan, f, campaign, moves, fac, plan.opts.get("take") or [])
+
+
+def _owners_now(mod, campaign, f):
+    """{region: owner} of descr_strat as f holds it - a region with no settlement block is the game's rebel village."""
     s = Strat(f)
     tiles = mod.city_tiles(campaign)
     owners = s.owners()
-    # a region with no settlement block is a rebel village in the game
-    villages = {r for r in mod.regions(campaign) if r not in owners and tiles.get(r)}
-    owners.update({r: "slave" for r in villages})
-    moves = [(r, owners.get(r), fac) for r in plan.opts.get("take") or []]
-    moves += [(r, fac, to or "slave") for r, to in (plan.opts.get("give") or {}).items()]
+    owners.update({r: "slave" for r in mod.regions(campaign) if r not in owners and tiles.get(r)})
+    return owners
+
+
+def move_towns(plan, f, campaign, moves, fac=None, taking=()):
+    """Towns change hands: moves [(region, old owner, new owner)] - the whole settlement block moves; in a town
+    that changes hands the old owner's named characters and agents go to one of its other towns (fac's towns
+    being taken count as its own), a captain with a garrison goes with the town, rebels leaving simply go.
+    Shared by Edit faction's take / give and the Map's 'give this town to' for any faction."""
+    mod = plan.mod
+    s = Strat(f)
+    tiles = mod.city_tiles(campaign)
     for r, old, new in moves:
         if old is None:
             raise ValueError("%s has no settlement in descr_strat.txt" % r)
@@ -382,7 +397,7 @@ def _towns(plan, f, campaign):
                 continue
             keep = [x.region for x in ob.settlements if x.region not in moving and tiles.get(x.region)]
             if old == fac:                  # the towns this faction takes are its own too
-                keep += [t for t in plan.opts.get("take") or [] if tiles.get(t)]
+                keep += [t for t in taking if tiles.get(t)]
             if not keep:
                 raise ValueError("%s: %s of %s stands in the town and %s has no other town to go to"
                                  % (r, c.name, old, old))
@@ -414,9 +429,60 @@ def _towns(plan, f, campaign):
         else:
             at = next((i + 1 for i in range(fb.start, fb.end) if tokens(f.text(i))[:1] == ["denari"]), fb.start + 1)
         f.raw[at:at] = [l for t in add["towns"] for l in t]
-    left = [st.region for st in Strat(f).faction(fac).settlements]
-    if not left:
-        plan.warn(f, "%s is left with no town - it starts as a horde or dies on turn 1" % fac)
+    for who in {old for _, old, _ in moves if old and old != "slave"}:
+        fb = Strat(f).faction(who)
+        if fb is not None and not fb.settlements:
+            plan.warn(f, "%s is left with no town - it starts as a horde or dies on turn 1" % who)
+
+
+def first_units(mod, campaign, faction, kind, xy):
+    """[unit] for a new army / fleet of faction placed on the Map: the first unit of its nearest army (a fleet:
+    of its nearest fleet) - the general's bodyguard -, else the first unit it may own (ships for a fleet).
+    Its units can be changed afterwards in Edit faction > Units & armies."""
+    from .start import unit_name
+    from .units import faction_units
+    s = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
+    fb = s.faction(faction)
+    best = None
+    for c in (fb.characters if fb else []):
+        lines = s.lines[c.start:c.end]
+        if not c.xy or not _has_army(lines):
+            continue
+        if (c.kind == "admiral") != (kind == "fleet"):
+            continue
+        d = (c.xy[0] - xy[0]) ** 2 + (c.xy[1] - xy[1]) ** 2
+        first = next((unit_name(l) for l in lines if tokens(l)[:1] == ["unit"]), None)
+        if first and (best is None or d < best[0]):
+            best = (d, first)
+    if best:
+        return [best[1]]
+    owned = faction_units(mod, faction, ships=kind == "fleet")
+    return [owned[0].type] if owned else []
+
+
+def map_changes(plan, campaign, changes):
+    """What the Map changed for factions other than the one being made or edited (or with none picked):
+    changes = {'owners': {region: new owner}, 'characters': {faction: [character dicts as start.extra_characters
+    takes them]}} - written into the plan's descr_strat.txt like the edited faction's own changes."""
+    if not changes or not (changes.get("owners") or changes.get("characters")):
+        return
+    from .start import extra_characters
+    f = plan.edit(plan.mod.campaign_file(campaign, "descr_strat.txt"))
+    if changes.get("owners"):
+        now = _owners_now(plan.mod, campaign, f)
+        moves = [(r, now.get(r), to) for r, to in changes["owners"].items() if now.get(r) != to]
+        move_towns(plan, f, campaign, moves)
+    for fac, chars in (changes.get("characters") or {}).items():
+        if not chars:
+            continue
+        s = Strat(f)
+        fb = s.faction(fac)
+        if fb is None:
+            raise ValueError("%s has no faction block in descr_strat.txt" % fac)
+        armies = {c.xy for x in s.factions for c in x.characters if c.xy and _has_army(s.lines[c.start:c.end])}
+        lines = extra_characters(plan, f, campaign, chars, plan.name_pool(fac) or {}, armies, owner=fac)
+        at = _chars_at(f, fb)
+        f.raw[at:at] = lines
 
 
 def _army_edits(plan, f):
