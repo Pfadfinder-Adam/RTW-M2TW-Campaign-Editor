@@ -2294,6 +2294,77 @@ building smith
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))},
                          before)
 
+    def test_bigger_map_keeps_towns_ports_bridges_and_ground(self):
+        """x3 on a map like a tester's DaC: a town in a region descr_regions does not list (Erebor became 9 town
+        pixels), a port (ports were left off the water), a land bridge over a strait (left as dots), forests painted
+        as dense-forest tile middles with wilderness between (Mirkwood turned to wilderness). Afterwards: one town
+        pixel each with its own region round it, the port on land touching the sea and its region, map_regions and
+        the heights agree on every tile, every land tile still dense forest, the bridge one unbroken chain."""
+        from faction_tool.plan import Plan
+        from faction_tool import upscale
+        from faction_tool.upscale import _pixels, _heights_sea
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        S, R, B, U, T, P = (40, 140, 230), (255, 0, 0), (0, 0, 255), (10, 200, 10), (0, 0, 0), (255, 255, 255)
+        rows = ["SSSSSSSSSS", "SBTBBSSSSS", "SBBBBSSSSS", "SRRRPSUUUS", "SRTRRSUTUS", "SRRRRSUUUS", "SSSSSSSSSS"]
+        key = {"S": S, "R": R, "B": B, "U": U, "T": T, "P": P}
+        px = [[key[c] for c in row] for row in rows]                   # rows[y], y = 0 at the bottom
+        write_tga(os.path.join(camp, "map_regions.tga"), 10, 7, px)
+        land = lambda x, y: 0 <= x < 10 and 0 <= y < 7 and px[y][x] != S
+        hp, gp = [], []
+        for j in range(15):
+            hrow, grow = [], []
+            for i in range(21):
+                tiles = [(a, b) for a in ((i - 1) // 2,) if i % 2 for b in ((j - 1) // 2,) if j % 2] or \
+                    [(a, b) for a in {(i - 1) // 2, i // 2} for b in {(j - 1) // 2, j // 2}
+                     if 0 <= a < 10 and 0 <= b < 7]
+                on = any(land(a, b) for a, b in tiles)
+                hrow.append((60, 60, 60) if on else (0, 0, 253))
+                grow.append(((0, 64, 0) if i % 2 and j % 2 else (0, 0, 0)) if on else (196, 0, 0))
+            hp.append(hrow)
+            gp.append(grow)
+        write_tga(os.path.join(camp, "map_heights.tga"), 21, 15, hp)
+        write_tga(os.path.join(camp, "map_ground_types.tga"), 21, 15, gp)
+        fp = [[(0, 0, 0)] * 10 for _ in range(7)]
+        for x in (4, 5, 6):
+            fp[4][x] = (0, 255, 0)                                     # red land - the strait - the unlisted land
+        write_tga(os.path.join(camp, "map_features.tga"), 10, 7, fp)
+        mod = ModData(self.root)
+        plan = Plan(mod, "map", "map_x3", {})
+        upscale.plan_upscale(plan, "test")
+        plan.apply()
+        _, W, H, _, _, at = _pixels(os.path.join(camp, "map_regions.tga"))
+        _, _, _, _, _, hat = _pixels(os.path.join(camp, "map_heights.tga"))
+        _, _, _, _, _, gat = _pixels(os.path.join(camp, "map_ground_types.tga"))
+        _, _, _, _, _, fat = _pixels(os.path.join(camp, "map_features.tga"))
+        sea = _heights_sea(hat)
+        self.assertEqual((W, H), (30, 21))
+        towns = [(x, y) for y in range(H) for x in range(W) if at(x, y) == T]
+        self.assertEqual(sorted(towns), sorted(upscale.new_xy(*t) for t in ((2, 1), (2, 4), (7, 4))))
+        for x, y in towns:                                             # its own region (or sea) all round it
+            ring = {at(x + a, y + b) for a in (-1, 0, 1) for b in (-1, 0, 1) if a or b}
+            self.assertEqual(len(ring - {S}), 1, (x, y, ring))
+        self.assertEqual({at(x + 1, y) for x, y in towns if (x, y) == upscale.new_xy(7, 4)}, {U})
+        ports = [(x, y) for y in range(H) for x in range(W) if at(x, y) == P]
+        self.assertEqual(len(ports), 1)
+        (x, y), = ports
+        sides = ((1, 0), (-1, 0), (0, 1), (0, -1))
+        self.assertFalse(sea(2 * x + 1, 2 * y + 1))                    # a port stands on land
+        self.assertTrue(any(sea(2 * (x + a) + 1, 2 * (y + b) + 1) for a, b in sides))
+        self.assertTrue(any(at(x + a, y + b) == R for a, b in sides))
+        for Y in range(H):
+            for X in range(W):
+                self.assertEqual(at(X, Y) != S, not sea(2 * X + 1, 2 * Y + 1), (X, Y))   # one coast
+                if at(X, Y) != S:
+                    self.assertEqual(gat(2 * X + 1, 2 * Y + 1), (0, 64, 0), (X, Y))      # the forest stays
+        bridge = {(X, Y) for X in range(W) for Y in range(H) if fat(X, Y) == (0, 255, 0)}
+        seen, todo = set(), [next(iter(bridge))]
+        while todo:
+            q = todo.pop()
+            seen.add(q)
+            todo += [(q[0] + a, q[1] + b) for a, b in sides if (q[0] + a, q[1] + b) in bridge - seen]
+        self.assertEqual(seen, bridge)                                 # one unbroken chain ...
+        self.assertTrue({at(*q) for q in bridge} >= {R, U, S})         # ... from land over the water to land
+
     def test_new_region_carved_out(self):
         from faction_tool.edit import edit
         from faction_tool.tga import read_tga

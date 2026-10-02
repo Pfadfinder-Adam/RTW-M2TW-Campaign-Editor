@@ -33,16 +33,20 @@ unit's texture (vanilla-style uniforms), so a new faction's troops wear its own 
   watchtowers, wonders and event places go to the middle of their new block.
 - **Coast**: smooth - a new pixel is land when most of the old land round it is, so the coastline is a rounded
   line instead of 3 x 3 squares; every block's middle keeps its old value, so nothing changes under a town, army
-  or resource. Ports stay on the shore pixel of their own region.
-- **Heights**: `map_heights` interpolated between the old points along its own smooth coast, and
+  or resource. The rules the games' own maps keep are kept: every town has its own region (or sea) all round it,
+  every port stands on a coastal land tile touching the sea and its region, and a region `descr_regions.txt` does
+  not list still counts as land.
+- **Heights**: `map_heights` interpolated between the old points, with **the same coast as `map_regions`** (every
+  tile's middle point is sea exactly when the tile is - as in both games' own maps), and
   **`map_heights.hgt`** - the game's float copy, which it reads instead of the picture and never rebuilds - written
   at the new size too. The hills, mountains and sea floor are made **3 x higher** (`max_land_height`,
   `min_sea_height` in `descr_terrain.txt`): the land is 3 x wider, so the slopes stay as steep as they were
   (or keep the old heights - a choice in the window). The sea ground types follow the heights' new coast.
 - **Rivers**: 1 pixel wide (the game crashes on a 2-pixel river), through the block centres, a diagonal step as a
-  staircase; a river mouth runs on to the new coast.
-- **Pictures**: `map_ground_types`, `map_climates`, `map_trade_routes`, fog, roughness, disasters and radar maps
-  scaled with exact colours.
+  staircase; a river mouth runs on to the new coast. Cliffs and Medieval II's land bridges stay unbroken lines too.
+- **Ground and climates by tile**: every new tile gets the ground type and climate of the old tile it lies in (a
+  forest stays a forest), with natural edges where two kinds meet.
+- **Pictures**: `map_trade_routes`, fog, roughness, disasters and radar maps scaled with exact colours.
 - `descr_terrain.txt` gets the new size; `map.rwm` is deleted so the game rebuilds it.
 - Preview of every file, one backup, Restore byte-exact.
 

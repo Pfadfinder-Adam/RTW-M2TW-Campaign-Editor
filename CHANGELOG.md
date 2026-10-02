@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Fixed
+- **The bigger map (x3) keeps the rules of the games' own maps** (five reports from Divide and Conquer, all of them
+  measured on vanilla Medieval II too - 66 of 77 ports there had no water beside them): a town in a region
+  descr_regions does not list stays one town pixel with its land round it (Erebor became nine); every port stands on
+  a coastal land tile touching the sea and its region; map_regions and the heights share one coast (7024 tiles
+  disagreed); every new tile keeps the ground type and climate of the old tile it lies in (Mirkwood's forest turned
+  to wilderness - 8 of 9 new tiles took the old picture's in-between points); land bridges stay unbroken chains from
+  land to land (they were left as dots on the water).
 - **A file the system refuses no longer leaves a mod half written** (reports from a Medieval II mod: "[WinError 5]
   Access denied" on descr_sounds_accents.txt while making a faction): Apply is all or nothing - when one file cannot
   be written, the files written before it are put back, the copies removed, no temp file stays, and the message says

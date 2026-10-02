@@ -7,14 +7,20 @@ What it writes (Preview lists it; one backup, Restore gives everything back):
 - world/maps/base pictures (colours stay exact - no new colours are made, except the heights' blended values):
     W x H         map_regions with a SMOOTH coast (a new point is land when most of the old land round it is: the
                   coast is a rounded line, not 3 x 3 squares; every block's middle keeps its old value, so towns,
-                  armies and resources stay on their kind of ground; a town / port pixel only in the middle of its
-                  block, a port on the shore side, touching its region's land),
+                  armies and resources stay on their kind of ground). The rules both games' own maps keep (measured
+                  on vanilla Rome and Medieval II, 2026-10-02): a town pixel in its block's middle with its own
+                  region (or sea) all round it; a port on a coastal LAND tile (its heights' point is land) touching
+                  the sea and its region's land; any colour descr_regions does not list but the heights hold above
+                  the sea counts as land (land_colours),
                   map_features (rivers redrawn as 1-pixel lines through the middles - a 2-pixel river crashes the
-                  game -, a corner link as a staircase, a river mouth carried on to the new coast; fords, sources,
-                  cliffs, volcanoes, land bridges on the middle pixel), map_trade_routes
-    2W+1 x 2H+1   map_heights SMOOTH (blended, land and sea apart along its own smooth coast) and
-                  map_heights.hgt beside it at the new size (the game reads it instead of the picture and never
-                  makes it again); map_ground_types (the sea ground under the heights' sea), map_climates, map_fog
+                  game -, a corner link as a staircase, a river mouth carried on to the new coast; cliffs and land
+                  bridges as unbroken lines too, a bridge's end on the water carried on to the land; fords, sources
+                  and volcanoes on the middle pixel), map_trade_routes
+    2W+1 x 2H+1   map_heights SMOOTH (blended, land and sea apart) with ONE coast: each tile's middle point sea
+                  exactly when the new map_regions has sea there (heights_from_tiles), and map_heights.hgt beside it
+                  at the new size (the game reads it instead of the picture and never makes it again);
+                  map_ground_types and map_climates BY TILES (kinds_scaled: every new tile the kind of the old tile
+                  it lies in, natural edges between kinds, the sea ground under the heights' sea), map_fog
     2W x 2H       map_roughness (smooth)
   and the campaign's disasters.tga, radar_map1 / radar_map2 (when present);
 - descr_terrain.txt: the dimensions (width / height x 3) and - by default - the heights x 3 (max_land_height,
@@ -35,6 +41,7 @@ FACTOR = 3
 CITY, PORT = (0, 0, 0), (255, 255, 255)
 RIVERY = {(0, 0, 255), (0, 255, 255), (255, 255, 255)}      # river, ford, source: one line
 CLIFF = (255, 255, 0)
+BRIDGE = (0, 255, 0)                                          # Medieval II's land bridge: a chain over the water
 BASE_PICTURES = {                       # name: how its size follows the map's W x H
     "map_regions.tga": "tiles", "map_features.tga": "tiles", "map_trade_routes.tga": "tiles",
     "map_heights.tga": "corners", "map_ground_types.tga": "corners", "map_climates.tga": "corners",
@@ -117,21 +124,49 @@ def _sources(kind, w, h):
                          (xa, yb, (1 - fx) * fy), (xb, yb, fx * fy))
 
 
+class Mask:
+    """A yes / no picture, one byte a point, read and set by (X, Y) like a dict - a 1500 x 1500-tile map has
+    9 million height points, too many for a dict."""
+
+    def __init__(self, W, H):
+        self.W, self.H = W, H
+        self.b = bytearray(W * H)
+
+    def __getitem__(self, xy):
+        return bool(self.b[xy[1] * self.W + xy[0]])
+
+    def __setitem__(self, xy, v):
+        self.b[xy[1] * self.W + xy[0]] = 1 if v else 0
+
+    def get(self, xy, default=None):
+        x, y = xy
+        if 0 <= x < self.W and 0 <= y < self.H:
+            return bool(self.b[y * self.W + x])
+        return default
+
+
 def _share_mask(kind, w, h, flag):
     """A yes / no picture made bigger SMOOTHLY: a new point is yes when more than half of the 4 old points round it
     (by weight) are (a tie: its nearest old point decides). Blocks become rounded shapes - a coast drawn in
-    3 x 3 squares becomes a smooth line - while every old middle keeps its value. -> {(X, Y): bool}, W, H."""
-    out = {}
-    W = H = 0
+    3 x 3 squares becomes a smooth line - while every old middle keeps its value. -> Mask, W, H."""
+    W, H = len(_weights(kind, w)), len(_weights(kind, h))
+    out = Mask(W, H)
+    flags = {}
     for X, Y, pts in _sources(kind, w, h):
-        share = sum(wt for x, y, wt in pts if flag(x, y))
+        share = 0.0
+        for x, y, wt in pts:
+            f = flags.get((x, y))
+            if f is None:
+                f = flags[(x, y)] = bool(flag(x, y))
+            if f:
+                share += wt
         if abs(share - 0.5) < 1e-9:
             x, y, _ = max(pts, key=lambda p: p[2])
-            yes = flag(x, y)
+            yes = flags[(x, y)]
         else:
             yes = share > 0.5
-        out[(X, Y)] = yes
-        W, H = max(W, X + 1), max(H, Y + 1)
+        if yes:
+            out.b[Y * W + X] = 1
     return out, W, H
 
 
@@ -157,6 +192,24 @@ def heights_mask(path):
     return _share_mask("corners", w, h, _heights_sea(at))[0]
 
 
+def _nearest_kind(pts, want, kind_of, w, h, reach=4):
+    """The old point of the wanted kind nearest the new point's 4 (pts) within `reach`, or None: the coast was
+    set by the tiles, so a new land point may have only sea points round it (its height comes from the nearest
+    land point, not from a sea depth read as a grey)."""
+    x0, y0, _ = max(pts, key=lambda p: p[2])
+    for r in range(1, reach + 1):
+        best = None
+        for x in range(max(0, x0 - r), min(w, x0 + r + 1)):
+            for y in range(max(0, y0 - r), min(h, y0 + r + 1)):
+                if max(abs(x - x0), abs(y - y0)) == r and kind_of(x, y) == want:
+                    d = (x - x0) ** 2 + (y - y0) ** 2
+                    if best is None or d < best[0]:
+                        best = (d, x, y)
+        if best:
+            return best[1], best[2]
+    return None
+
+
 def smooth_scaled(path, kind, sea=False, mask=None):
     """A height-like picture made bigger SMOOTHLY (no steps): each new point blends the old ones round it. With
     sea=True (map_heights: land grey, its level; the sea blue, its depth) land and sea are blended apart: a point is
@@ -176,10 +229,15 @@ def smooth_scaled(path, kind, sea=False, mask=None):
                 tot += wt
                 val += (c[2] if want else c[0]) * wt
         if not tot:                                  # no old point of that kind round it: the nearest one's value
-            x, y, _ = _pick(pts, want, is_sea) or max(pts, key=lambda p: p[2])
-            c = at(x, y)
-            val, tot = (c[2] if is_sea(x, y) else c[0]), 1.0
+            got = _nearest_kind(pts, want, is_sea, w, h)
+            if got:
+                c = at(*got)
+                val, tot = (c[2] if want else c[0]), 1.0
+            else:                                    # none near: the lowest land / the usual sea
+                val, tot = (253.0 if want else 1.0), 1.0
         v = int(val / tot + 0.5)
+        if not want and sea:
+            v = max(v, 1)                            # land never black (0 0 0 may be read as sea)
         if want:
             _put(raw, W, H, step, top_down, X, Y, (0, 0, max(v, 1)))
         else:
@@ -210,8 +268,8 @@ def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0):
                 tot += wt
                 val += vals[y * w + x] * wt
         if not tot:
-            x, y, _ = _pick(pts, want, is_sea) or max(pts, key=lambda p: p[2])
-            val, tot = vals[y * w + x], 1.0
+            got = _nearest_kind(pts, want, is_sea, w, h)
+            val, tot = (vals[got[1] * w + got[0]] if got else 0.0), 1.0
         v = val / tot
         if want:
             v = min(v, 0.0)
@@ -221,76 +279,107 @@ def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0):
     return struct.pack("<II", W, H) + struct.pack("<%df" % (W * H), *out)
 
 
-def ground_scaled(path, mask, sea_colours):
-    """map_ground_types made bigger: each point sea or land by the heights' smooth coast (mask), its colour the
-    nearest old point's of that kind (the sea ground types lie under the heights' sea, as in the games' own maps);
-    then the land's patches rounded (organic_patches) - forests and hills are not 3 x 3 squares."""
+def kinds_scaled(path, mask=None, sea_colours=(), rounds=2):
+    """A picture of kinds on the heights' grid (map_ground_types, map_climates; 2W+1 x 2H+1, a tile = the point at
+    its middle and the 8 round it) made 3 x bigger BY TILES - a tester's DaC map lost its forests: 8 of every 9 new
+    tiles took their kind from the old picture's in-between points (Mirkwood: dense forest middles, wilderness
+    between them), not from the old tile:
+    - each new tile's middle point: the kind of the old tile it lies in (sea or land as mask - the heights' new
+      coast - says; where the coast moved, the nearest old tile of that kind);
+    - natural edges: the new tiles round each block's middle take the kind most common round them (a mode filter on
+      the tiles, twice) - only kinds of real old tiles, the block's middle tile never changes, the sea never;
+    - the points between tiles: the old picture's nearest point when its kind is one of the tiles round it (the
+      painter's patterns stay), else the kind of the tile round it the nearest old point lies in.
+    -> bytes."""
     data, w, h, step, top_down, at = _pixels(path)
-    kind_of = lambda x, y: at(x, y) in sea_colours
+    ow, oh = (w - 1) // 2, (h - 1) // 2               # old tiles
     W, H = len(_weights("corners", w)), len(_weights("corners", h))
+    TW, TH = (W - 1) // 2, (H - 1) // 2               # new tiles (3 x)
+    seas = set(sea_colours)
+    is_sea = (lambda c: c in seas) if mask is not None else (lambda c: False)
+    old = lambda x, y: at(2 * x + 1, 2 * y + 1)      # an old tile's kind
+    default = {True: (196, 0, 0), False: (0, 0, 0)}  # shallow sea / wilderness when nothing near has the kind
+    types = [None] * (TW * TH)
+    for TY in range(TH):
+        oy = min(TY // FACTOR, oh - 1)
+        for TX in range(TW):
+            ox = min(TX // FACTOR, ow - 1)
+            want = bool(mask[(2 * TX + 1, 2 * TY + 1)]) if mask is not None else None
+            c = old(ox, oy)
+            if want is not None and is_sea(c) != want:     # the coast moved: the nearest old tile of that kind
+                best = None
+                fx, fy = (TX + 0.5) / FACTOR - 0.5, (TY + 0.5) / FACTOR - 0.5
+                for x in range(max(0, ox - 2), min(ow, ox + 3)):
+                    for y in range(max(0, oy - 2), min(oh, oy + 3)):
+                        k = old(x, y)
+                        if is_sea(k) == want:
+                            d = (x - fx) ** 2 + (y - fy) ** 2
+                            if best is None or d < best[0]:
+                                best = (d, k)
+                c = best[1] if best else default[want]
+            types[TY * TW + TX] = c
+    if rounds:
+        _round_tiles(types, TW, TH, keep=is_sea)
     raw = _blank(W, H, step, (0, 0, 0))
-    for X, Y, pts in _sources("corners", w, h):
-        want = mask.get((X, Y))
-        p = _pick(pts, want, kind_of) if want is not None else None
-        if p is None:
-            p = max(pts, key=lambda q: q[2])
-            c = at(p[0], p[1])
-            if want is not None and (c in sea_colours) != want:       # no old point of that kind round it
-                c = (196, 0, 0) if want else (0, 0, 0)               # shallow sea / wilderness
-        else:
-            c = at(p[0], p[1])
-        _put(raw, W, H, step, top_down, X, Y, c)
-    organic_patches(raw, W, H, step, keep=lambda c: c in sea_colours)
+    near = lambda j: int(j / FACTOR + 0.5)            # the old point nearest a new one (as _index('corners'))
+    for Y in range(H):
+        ty = ((Y - 1) // 2,) if Y % 2 else tuple(t for t in (Y // 2 - 1, Y // 2) if 0 <= t < TH)
+        for X in range(W):
+            tx = ((X - 1) // 2,) if X % 2 else tuple(t for t in (X // 2 - 1, X // 2) if 0 <= t < TW)
+            if len(tx) == 1 and len(ty) == 1:
+                c = types[ty[0] * TW + tx[0]]
+            else:
+                want = bool(mask[(X, Y)]) if mask is not None else None
+                round_ = [types[b * TW + a] for a in tx for b in ty]
+                if want is not None:
+                    round_ = [k for k in round_ if is_sea(k) == want] or [default[want]]
+                c = at(min(near(X), w - 1), min(near(Y), h - 1))
+                if c not in round_:
+                    c = round_[0]
+            _put(raw, W, H, step, top_down, X, Y, c)
     return _write(data, W, H, step, raw)
 
 
-def organic_patches(raw, W, H, step, keep=lambda c: False, rounds=2):
-    """Round off the 3 x 3 blocks of a picture of kinds (ground types, climates) in place: every new point that is
-    not an old one (X or Y not a multiple of 3) takes the kind most common in the 3 x 3 around it (Pillow's mode
-    filter, twice), so a forest drawn in squares gets ragged, natural edges. The old points keep their kind
-    exactly (the tiles' own ground - what may stand where does not change), and so does any point whose kind or
-    new kind `keep` names (the sea ground: the coast stays where the heights put it)."""
+def _round_tiles(types, TW, TH, keep=lambda c: False, rounds=2):
+    """Round off the 3 x 3 blocks of new tiles in place: a tile that is not its block's middle takes the kind most
+    common in the 3 x 3 tiles round it (Pillow's mode filter, `rounds` times) - never a kind `keep` names (the sea
+    stays where the heights put it) and never into one."""
     from PIL import Image, ImageFilter
-    colours = {}
-    idx = bytearray(W * H)
-    for i in range(W * H):
-        o = i * step
-        c = (raw[o + 2], raw[o + 1], raw[o])
-        k = colours.get(c)
+    ids, pal = {}, []
+    idx = bytearray(TW * TH)
+    for i, c in enumerate(types):
+        k = ids.get(c)
         if k is None:
-            if len(colours) >= 255:
+            if len(ids) >= 255:
                 return                                   # not a picture of kinds: leave it
-            k = colours[c] = len(colours)
+            k = ids[c] = len(pal)
+            pal.append(c)
         idx[i] = k
-    pal = {v: k for k, v in colours.items()}
-    im = Image.frombytes("L", (W, H), bytes(idx))
+    im = Image.frombytes("L", (TW, TH), bytes(idx))
     for _ in range(rounds):
         im = im.filter(ImageFilter.ModeFilter(3))
     new = im.tobytes()
-    kept = {k for c, k in colours.items() if keep(c)}
-    for Y in range(H):
-        for X in range(W):
-            if X % FACTOR == 0 and Y % FACTOR == 0:
-                continue
-            i = Y * W + X
+    kept = {ids[c] for c in ids if keep(c)}
+    for TY in range(TH):
+        for TX in range(TW):
+            if TX % FACTOR == FACTOR // 2 and TY % FACTOR == FACTOR // 2:
+                continue                                 # the block's middle: the old tile's own kind
+            i = TY * TW + TX
             a, b = idx[i], new[i]
-            if a == b or a in kept or b in kept:
-                continue
-            c = pal[b]
-            o = i * step
-            raw[o:o + 3] = bytes((c[2], c[1], c[0]))
+            if a != b and a not in kept and b not in kept:
+                types[i] = pal[b]
+
+
+def ground_scaled(path, mask, sea_colours):
+    """map_ground_types made bigger by tiles (kinds_scaled): sea or land as the heights' new coast (mask) says, the
+    sea ground under the heights' sea as in the games' own maps."""
+    return kinds_scaled(path, mask, sea_colours)
 
 
 def climates_scaled(path):
-    """map_climates made bigger with organic edges (each point its nearest old point's climate, then rounded)."""
-    data, w, h, step, top_down, at = _pixels(path)
-    W, H = len(_weights("corners", w)), len(_weights("corners", h))
-    raw = _blank(W, H, step, (0, 0, 0))
-    for X, Y, pts in _sources("corners", w, h):
-        x, y, _ = max(pts, key=lambda q: q[2])
-        _put(raw, W, H, step, top_down, X, Y, at(x, y))
-    organic_patches(raw, W, H, step)
-    return _write(data, W, H, step, raw)
+    """map_climates made bigger by tiles (kinds_scaled): every new tile the climate of the old tile it lies in, the
+    edges between climates natural."""
+    return kinds_scaled(path)
 
 
 def _pixels(path):
@@ -315,86 +404,219 @@ def _put(raw, w, h, step, top_down, x, y, colour):
     raw[o:o + 3] = bytes((colour[2], colour[1], colour[0]))
 
 
-def coast_mask(path, region_colours):
-    """map_regions' land made bigger smoothly: {(X, Y): land}. A town counts as land, a port as sea (it sits in the
-    sea next to its region)."""
-    data, w, h, step, top_down, at = _pixels(path)
-    regions = set(region_colours)
-    return _share_mask("tiles", w, h, lambda x, y: at(x, y) in regions or at(x, y) == CITY)[0]
-
-
-def regions_scaled(path, region_colours, mask=None, keep_land=()):
-    """map_regions x3 with a SMOOTH coast (mask: coast_mask): a land pixel takes the region of the old land tile
-    round it with the most weight, a sea pixel the sea's colour; keep_land (pixels under a river) stay land. A
-    town / port only on its block's middle pixel (a port on the shore side of its block, touching its region's
-    land)."""
-    data, w, h, step, top_down, at = _pixels(path)
-    regions = set(region_colours)
-    if mask is None:
-        mask = coast_mask(path, region_colours)
-    keep_land = set(keep_land)
-    fill = {}                                  # an old town / port tile: the colour round it
+def land_colours(regions_path, region_colours, heights_path=None):
+    """The colours of map_regions that are land: the regions' (descr_regions), towns' and ports' (a port stands on
+    a coastal LAND tile - its heights' point is land in every vanilla map of both games), and any other colour
+    whose tiles the heights mostly hold above the sea - a region descr_regions does not list (a mod's own form, a
+    typo) is land all the same; without it its town lost its land round it (a tester's Erebor: 9 town pixels)."""
+    lands = set(region_colours) | {CITY, PORT}
+    data, w, h, step, top_down, at = _pixels(regions_path)
+    others = {}
     for y in range(h):
         for x in range(w):
             c = at(x, y)
-            if c not in (CITY, PORT):
-                continue
-            near = [at(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
-                    if (dx or dy) and 0 <= x + dx < w and 0 <= y + dy < h]
+            if c not in lands:
+                others.setdefault(c, []).append((x, y))
+    if not others:
+        return lands
+    if heights_path and os.path.isfile(heights_path):
+        _, hw, hh, _, _, hat = _pixels(heights_path)
+        sea = _heights_sea(hat)
+        for c, tiles in others.items():
+            land = sum(1 for x, y in tiles if 2 * x + 1 < hw and 2 * y + 1 < hh and not sea(2 * x + 1, 2 * y + 1))
+            if land * 2 > len(tiles):
+                lands.add(c)
+    return lands
+
+
+def coast_mask(path, lands):
+    """map_regions' land made bigger smoothly: Mask of the new tiles (lands: land_colours - towns and ports count as
+    land)."""
+    data, w, h, step, top_down, at = _pixels(path)
+    lands = set(lands) | {CITY, PORT}
+    return _share_mask("tiles", w, h, lambda x, y: at(x, y) in lands)[0]
+
+
+def _mode(cols):
+    return max(sorted(set(cols)), key=cols.count) if cols else None
+
+
+def regions_scaled(path, lands, mask=None, keep_land=(), info=None):
+    """map_regions x3 with a SMOOTH coast (mask: coast_mask): a land pixel takes the region of the old land tile round
+    it with the most weight, a sea pixel the sea's colour; keep_land (pixels under a river) stay land. Each town on its
+    block's middle pixel with its own region all round it (the game wants the 8 tiles round a town its region or
+    sea); each port on a coastal land pixel of its block touching the sea and its region's land (as every port of the
+    games' own maps stands). info (a dict) gets 'land': Mask of the new tiles' land (towns and ports land) and
+    'moved_ports'. -> bytes."""
+    data, w, h, step, top_down, at = _pixels(path)
+    lands = set(lands) | {CITY, PORT}
+    plain = lands - {CITY, PORT}                  # the colours a land pixel takes
+    if mask is None:
+        mask = coast_mask(path, lands)
+    keep_land = set(keep_land)
+    N4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    N8 = N4 + ((1, 1), (1, -1), (-1, 1), (-1, -1))
+
+    def around(x, y, ring, ok):
+        return [at(x + dx, y + dy) for dx, dy in ring if 0 <= x + dx < w and 0 <= y + dy < h
+                and ok(at(x + dx, y + dy))]
+
+    def nearest_land(x, y):
+        for r in range(2, 7):
+            cols = [at(a, b) for a in range(max(0, x - r), min(w, x + r + 1)) for b in range(max(0, y - r), min(h, y + r + 1))
+                    if max(abs(a - x), abs(b - y)) == r and at(a, b) in plain]
+            if cols:
+                return _mode(cols)
+        return None
+    fill, towns, ports = {}, [], []              # an old town / port tile: the region's colour round it
+    for y in range(h):
+        for x in range(w):
+            c = at(x, y)
             if c == CITY:
-                pick = [n for n in near if n in regions]
-            else:
-                pick = [n for n in near if n not in regions and n not in (CITY, PORT)]
-            fill[(x, y)] = max(set(pick), key=pick.count) if pick else c
+                fill[(x, y)] = _mode(around(x, y, N8, lambda q: q in plain)) or nearest_land(x, y) or c
+                towns.append((x, y))
+            elif c == PORT:                       # the region it serves: its land on a side first
+                fill[(x, y)] = _mode(around(x, y, N4, lambda q: q in plain)) or \
+                    _mode(around(x, y, N8, lambda q: q in plain)) or nearest_land(x, y) or c
+                ports.append((x, y))
     colour = lambda x, y: fill.get((x, y), at(x, y))
-    land_of = lambda x, y: colour(x, y) in regions
+    land_of = lambda x, y: colour(x, y) in plain
     W, H = w * FACTOR, h * FACTOR
     raw = _blank(W, H, step, (0, 0, 0))
     for X, Y, pts in _sources("tiles", w, h):
         land = mask[(X, Y)] or (X, Y) in keep_land
-        p = _pick(pts, land, land_of) or max(pts, key=lambda q: q[2])
-        if land and not land_of(p[0], p[1]):          # a river kept on land where the 4 round it are sea
+        p = _pick(pts, land, land_of)
+        if p is None and land:                    # no land tile round it (a river kept on land, a coast corner)
             p = min(((x, y) for x in range(max(0, X // FACTOR - 1), min(w, X // FACTOR + 2))
                      for y in range(max(0, Y // FACTOR - 1), min(h, Y // FACTOR + 2)) if land_of(x, y)),
-                    key=lambda q: abs(new_xy(*q)[0] - X) + abs(new_xy(*q)[1] - Y), default=(p[0], p[1])) + (0,)
+                    key=lambda q: abs(new_xy(*q)[0] - X) + abs(new_xy(*q)[1] - Y), default=None)
+            p = p + (0,) if p else None
+        if p is None:
+            p = max(pts, key=lambda q: q[2])
         _put(raw, W, H, step, top_down, X, Y, colour(p[0], p[1]))
-    for (x, y), c0 in fill.items():
-        c = at(x, y)
+
+    def get(X, Y):
+        r = (H - 1 - Y) if top_down else Y
+        o = (r * W + X) * step
+        return (raw[o + 2], raw[o + 1], raw[o])
+    town_px = set()
+    for x, y in towns:                            # the town and its own region all round it (its 3 x 3 block)
         cx, cy = new_xy(x, y)
-        if c == PORT:          # a port must touch its region's land: the block's pixel on the shore side
-            cx, cy = port_spot(at, w, h, x, y, regions)
-            dx, dy = cx - new_xy(x, y)[0], cy - new_xy(x, y)[1]
-            lx, ly = cx + dx, cy + dy                   # the pixel beyond it, in the land block: kept land
-            if 0 <= lx < W and 0 <= ly < H:
-                r = (H - 1 - ly) if top_down else ly
-                o = (r * W + lx) * step
-                if (raw[o + 2], raw[o + 1], raw[o]) not in regions:
-                    land = [at(x + dx, y + dy)] if at(x + dx, y + dy) in regions else [c0]
-                    _put(raw, W, H, step, top_down, lx, ly, land[0])
-        _put(raw, W, H, step, top_down, cx, cy, c)
+        for dx, dy in N8:
+            if get(cx + dx, cy + dy) in plain:
+                _put(raw, W, H, step, top_down, cx + dx, cy + dy, fill[(x, y)])
+        _put(raw, W, H, step, top_down, cx, cy, CITY)
+        town_px.add((cx, cy))
+    near_town = {(a + dx, b + dy) for a, b in town_px for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
+    port_px, moved = set(), []
+
+    def sea_px(X, Y):
+        return 0 <= X < W and 0 <= Y < H and get(X, Y) not in lands
+
+    def good(X, Y, reg, convert):
+        if not (0 <= X < W and 0 <= Y < H) or (X, Y) in near_town or (X, Y) in port_px:
+            return False
+        here = get(X, Y)
+        if convert:
+            if here in lands:
+                return False
+        elif here not in plain:
+            return False
+        sides = [(X + dx, Y + dy) for dx, dy in N4]
+        return any(sea_px(a, b) for a, b in sides) and \
+            any(0 <= a < W and 0 <= b < H and get(a, b) == reg for a, b in sides)
+    for x, y in ports:
+        reg = fill[(x, y)]
+        cx, cy = new_xy(x, y)
+        toward = [(dx, dy) for dx, dy in N4 if not (0 <= x + dx < w and 0 <= y + dy < h)
+                  or at(x + dx, y + dy) not in lands]          # where the old port met the sea
+        pref = (cx + toward[0][0], cy + toward[0][1]) if toward else (cx, cy)
+        spot = None
+        for convert in (False, True):            # a land pixel by the sea first; else a sea pixel by the land
+            cands = [(X, Y) for X in range(cx - 4, cx + 5) for Y in range(cy - 4, cy + 5) if good(X, Y, reg, convert)]
+            if cands:
+                spot = min(cands, key=lambda q: (max(abs(q[0] - cx), abs(q[1] - cy)), get(*q) != reg,
+                                                 abs(q[0] - pref[0]) + abs(q[1] - pref[1]), q[1], q[0]))
+                break
+        if spot is None:
+            spot = pref if 0 <= pref[0] < W and 0 <= pref[1] < H else (cx, cy)
+            moved.append(((x, y), spot, "no coastal place found - check this port"))
+        _put(raw, W, H, step, top_down, spot[0], spot[1], PORT)
+        port_px.add(spot)
+    if info is not None:
+        land = Mask(W, H)
+        for Y in range(H):
+            for X in range(W):
+                if get(X, Y) in lands:
+                    land.b[Y * W + X] = 1
+        info["land"] = land
+        info["moved_ports"] = moved
     return _write(data, W, H, step, raw)
 
 
-def port_spot(at, w, h, x, y, regions):
-    """Where an old port tile's pixel goes in its 3 x 3 block: next to the land of the region it serves (a side
-    first, else a corner), so it touches that land's block as it touched the tile before."""
-    cx, cy = new_xy(x, y)
-    land = {}
-    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
-        if 0 <= x + dx < w and 0 <= y + dy < h and at(x + dx, y + dy) in regions:
-            land.setdefault(at(x + dx, y + dy), []).append((dx, dy))
-    if not land:
-        return cx, cy
-    best = max(land, key=lambda k: len(land[k]))
-    dx, dy = land[best][0]                     # sides come first in the order above
-    return cx + dx, cy + dy
+def _agreement(regions_path, heights_path, lands):
+    """agree(x, y): whether the old map_regions and map_heights agreed about tile (x, y) - land in one, land in the
+    other (they always do in both games' own maps; a mod may differ here and there, and keeps that)."""
+    _, w, h, _, _, rat = _pixels(regions_path)
+    _, hw, hh, _, _, hat = _pixels(heights_path)
+    sea = _heights_sea(hat)
+    lands = set(lands) | {CITY, PORT}
+
+    def agree(x, y):
+        if not (0 <= x < w and 0 <= y < h) or 2 * x + 1 >= hw or 2 * y + 1 >= hh:
+            return False
+        return (rat(x, y) in lands) == (not sea(2 * x + 1, 2 * y + 1))
+    return agree
+
+
+def heights_from_tiles(land, agree, own):
+    """The heights' sea at the new size made to fit the new map_regions (land: info['land'] of regions_scaled): a
+    tile's middle point is sea exactly when its tile is - as in both games' own maps -, a point between tiles is sea
+    when every tile round it is; where those tiles differ, or where the old map_regions and map_heights did not agree
+    about the old tile (agree(x, y) False - a mod's own mismatch, kept as it was), the heights' own smooth coast (own)
+    decides. -> Mask of the points (6W+1 x 6H+1)."""
+    TW, TH = land.W, land.H
+    PW, PH = 2 * TW + 1, 2 * TH + 1
+    out = Mask(PW, PH)
+
+    def tiles_of(i, n):
+        if i % 2:
+            return ((i - 1) // 2,)
+        return tuple(t for t in (i // 2 - 1, i // 2) if 0 <= t < n)
+    ok_old = {}
+    for J in range(PH):
+        ty = tiles_of(J, TH)
+        for I in range(PW):
+            tx = tiles_of(I, TW)
+            first, same, fine = None, True, True
+            for a in tx:
+                for b in ty:
+                    v = land.b[b * TW + a]
+                    if first is None:
+                        first = v
+                    elif v != first:
+                        same = False
+                    k = (a // FACTOR, b // FACTOR)
+                    g = ok_old.get(k)
+                    if g is None:
+                        g = ok_old[k] = agree(*k)
+                    fine = fine and g
+            if same and fine and first is not None:
+                sea = not first
+            else:
+                sea = own[(I, J)]
+            if sea:
+                out.b[J * PW + I] = 1
+    return out
 
 
 def features_scaled(path, land=None):
     """map_features x3: black, rivers drawn as 1-pixel lines from block middle to block middle - a corner link a
     staircase (one step across, one up, ...: always side by side, never a corner-only step the game stops a river
-    at); a river that met the sea runs on to the new, smoother coast (land: coast_mask); every other feature on its
-    block's middle pixel. -> (bytes, the river pixels)."""
+    at); a river that met the sea runs on to the new, smoother coast (land: coast_mask); cliffs and Medieval II's
+    land bridges drawn as lines the same way (a bridge only on its middles left the water between them: a tester's
+    DaC map), a bridge that ended on the water carried on to the land beside it; every other feature on its block's
+    middle pixel. -> (bytes, the river pixels)."""
     data, w, h, step, top_down, at = _pixels(path)
     W, H = w * FACTOR, h * FACTOR
     raw = _blank(W, H, step, (0, 0, 0))
@@ -408,7 +630,8 @@ def features_scaled(path, land=None):
     drawn = set()
 
     def kind(c):
-        return "river" if c in RIVERY else ("cliff" if c == CLIFF else None)
+        return "river" if c in RIVERY else ("cliff" if c == CLIFF else ("bridge" if c == BRIDGE else None))
+    line_colour = {"river": river, "cliff": CLIFF, "bridge": BRIDGE}
 
     def paint(px, py, c):
         if 0 <= px < W and 0 <= py < H:
@@ -421,7 +644,7 @@ def features_scaled(path, land=None):
         if not k:
             continue
         cx, cy = new_xy(x, y)
-        colour = river if k == "river" else CLIFF
+        colour = line_colour[k]
         for dx, dy in ((1, 0), (0, 1)):                       # each straight link once
             o = lines.get((x + dx, y + dy))
             if o is not None and kind(o) == k:
@@ -459,6 +682,16 @@ def features_scaled(path, land=None):
                         break                                 # the next pixel is sea: this one touches it
                     px, py = px + dx, py + dy
                     paint(px, py, colour)
+        if k == "bridge" and land is not None and not land.get(new_xy(x, y), True):
+            links = sum(1 for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                        if kind(lines.get((x + a, y + b), (0, 0, 0))) == "bridge")
+            if links <= 1:                                    # a bridge's end on the water: on to the land beside it
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < w and 0 <= ny < h and kind(lines.get((nx, ny), (0, 0, 0))) != "bridge" \
+                            and land.get(new_xy(nx, ny), False):
+                        for s_ in range(1, FACTOR + 1):
+                            paint(cx + dx * s_, cy + dy * s_, BRIDGE)
     for (x, y), c in lines.items():                           # every feature's own colour on its middle
         paint(*new_xy(x, y), c)
     return _write(data, W, H, step, raw), drawn
@@ -524,36 +757,47 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
     camp = os.path.dirname(mod.campaign_file(campaign, "descr_strat.txt"))
     colours = [v["colour"] for v in mod.regions(campaign).values()]
     from .terrain import SEA
-    say("the coast (map_regions)...")
-    coast = coast_mask(regions_path, colours)              # the regions' land, made bigger with a smooth coast
     hpath = os.path.join(base, "map_heights.tga")
-    say("the heights' coast...")
-    hmask = heights_mask(hpath) if os.path.isfile(hpath) else None
+    if not os.path.isfile(hpath):
+        hpath = None
+    lands = land_colours(regions_path, colours, hpath)   # the regions' colours and any other land colour
+    say("the coast (map_regions)...")
+    coast = coast_mask(regions_path, lands)              # the regions' land, made bigger with a smooth coast
     keep_land = ()
     feats = os.path.join(base, "map_features.tga")
     if os.path.isfile(feats):
-        say("rivers and cliffs (map_features)...")
+        say("rivers, cliffs and land bridges (map_features)...")
         data, rivers = features_scaled(feats, coast)
         plan.binary(feats, data)
-        plan.note(None, "map_features.tga made 3 x bigger (rivers as staircases, mouths on the new coast)")
+        plan.note(None, "map_features.tga made 3 x bigger (rivers, cliffs and land bridges as unbroken lines, river "
+                        "mouths on the new coast)")
         keep_land = {p for p in rivers if not coast.get(p, True)}
+    say("map_regions.tga...")
+    info = {}
+    plan.binary(regions_path, regions_scaled(regions_path, lands, coast, keep_land, info))
+    plan.note(None, "map_regions.tga made 3 x bigger (with a smooth coast; every town with its own region round it, "
+                    "every port on a coastal land tile touching the sea and its region)")
+    for (x, y), spot, why in info.get("moved_ports", []):
+        warn.append("the port at %d, %d: %s (now at %d, %d)" % (x, y, why, spot[0], spot[1]))
+    hmask = None
+    if hpath:
+        say("the heights' coast...")
+        hmask = heights_from_tiles(info["land"], _agreement(regions_path, hpath, lands), heights_mask(hpath))
     for name, kind in BASE_PICTURES.items():
         p = os.path.join(base, name)
-        if not os.path.isfile(p) or name == "map_features.tga":
+        if not os.path.isfile(p) or name in ("map_features.tga", "map_regions.tga"):
             continue
         say("%s..." % name)
-        if name == "map_regions.tga":
-            data = regions_scaled(p, colours, coast, keep_land)
-            note = "with a smooth coast"
-        elif name == "map_heights.tga":
+        if name == "map_heights.tga":
             data = smooth_scaled(p, kind, sea=True, mask=hmask)       # the relief smooth, no steps
             note = "smooth, with a smooth coast"
         elif name == "map_ground_types.tga" and hmask is not None:
             data = ground_scaled(p, hmask, SEA)
-            note = "the sea ground under the heights' new coast, the land's patches with natural edges"
+            note = "every tile the ground of the old tile it lies in, the sea ground under the heights' new coast, " \
+                   "natural edges"
         elif name == "map_climates.tga":
             data = climates_scaled(p)
-            note = "with natural edges"
+            note = "every tile the climate of the old tile it lies in, natural edges"
         elif name == "map_roughness.tga":
             data = smooth_scaled(p, kind)
             note = "smooth"
