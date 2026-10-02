@@ -2008,6 +2008,15 @@ building smith
         self.assertIn("last land", T.coast_problem(cmap, (2, 0), False, standing, {}, {"B_R": 1}, {}))
         self.assertIn("rub it out", T.coast_problem(cmap, (0, 3), False, standing, {(0, 3): (0, 0, 255)}, counts, {}))
         self.assertEqual(T.nearest_region(cmap, (3, 0)), "B_R")
+        class Pic:                                # an open sea with a 5 x 5 pixel island at shore height
+            width = height = 11
+
+            def get(self, x, y):
+                return (2, 2, 2) if 3 <= x <= 7 and 3 <= y <= 7 else (0, 0, 253)
+        rise = T.shore_rise(Pic(), [(x, y) for x in range(3, 8) for y in range(3, 8)])
+        self.assertNotIn((3, 5), rise)                                  # the shore stays low
+        self.assertEqual(rise[(4, 5)], (8, 8, 8))                       # one in: like vanilla's coasts
+        self.assertEqual(rise[(5, 5)], (12, 12, 12))                    # the middle higher - no flat island
         imp = (64, 64, 64)                       # impassable land: Medieval II, Rome only with REX
         self.assertIn(imp, T.ground_brushes("medieval2")[0])
         self.assertIn(imp, T.ground_brushes("rome", "REX.exe")[0])

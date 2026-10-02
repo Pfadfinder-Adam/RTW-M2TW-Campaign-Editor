@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- **Land and sea: new land rises from the shore** (a tester: a new coast flickered in the game) - it was all set at
+  the shore's height and lay flat on the water; now it climbs inland as both games' own coasts do (measured on the
+  vanilla maps: 2, 8, 12, 14, then 16 grey steps from the sea), also where land is painted tile by tile.
 - **The Unit and Building editors no longer lag** (a tester): a big building (Medieval II barracks, 316 lines) took
   2.3 s to show after every pick or added line - now 0.02 s: the block's lines are made only when unfolded, and the
   look's colours are worked out once instead of 50 000 times per window.

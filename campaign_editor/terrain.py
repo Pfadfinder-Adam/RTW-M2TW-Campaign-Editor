@@ -337,6 +337,25 @@ def hgt_patched(path, img, changes, step, absolute=None):
 SHALLOW_SEA, NEW_LAND_GROUND = (196, 0, 0), (96, 160, 64)
 DEEPER_SEA = {(64, 0, 0), (128, 0, 0)}                  # ocean, deep sea: deeper than the shallow sea
 SEA_DEPTH, COAST_LAND = 253, 2                      # vanilla's usual sea blue; a low shore (about 60 m)
+# new land rises from the shore inland as both vanillas' coasts do (median grey by pixels from the sea, measured on
+# RTW and M2TW: 2, 8, 12-14, 14-16 ...) - a new island left at the shore's height everywhere lay flat on the water
+# and flickered in the game (a report: 'z fighting')
+SHORE_RISE = {1: 2, 2: 8, 3: 12, 4: 14}
+INLAND = 16
+
+
+def _from_sea(heights, px, py, new_land, reach=5):
+    """Pixels from (px, py) to the nearest sea pixel of the heights picture (Manhattan, up to reach; new_land:
+    pixels being made land count as land), or reach + 1 when none is that near."""
+    for d in range(1, reach + 1):
+        for a in range(-d, d + 1):
+            b = d - abs(a)
+            for q in {(px + a, py + b), (px + a, py - b)}:
+                if q in new_land or not (0 <= q[0] < heights.width and 0 <= q[1] < heights.height):
+                    continue
+                if not is_land_height(heights.get(*q)):
+                    return d
+    return reach + 1
 
 
 def sea_colour(regions_img, region_colours):
@@ -437,6 +456,7 @@ def coast_pixels(cmap, xy, to_land, region_colour, heights, sea):
                         vals.append(c[0])
                     elif not to_land and not is_land_height(c):
                         vals.append(c[2])
+        block = {(px, py) for px in range(2 * x, 2 * x + 3) for py in range(2 * y, 2 * y + 3)}
         for px in range(2 * x, 2 * x + 3):
             for py in range(2 * y, 2 * y + 3):
                 if not (0 <= px < heights.width and 0 <= py < heights.height):
@@ -444,10 +464,28 @@ def coast_pixels(cmap, xy, to_land, region_colour, heights, sea):
                 c = heights.get(px, py)
                 if to_land and not is_land_height(c):
                     v = max(1, min(int(sum(vals) / len(vals)) if vals else COAST_LAND, 12))
+                    v = max(v, SHORE_RISE.get(_from_sea(heights, px, py, block), INLAND))   # rises from the shore
                     out["heights"][(px, py)] = (v, v, v)
                 elif not to_land and is_land_height(c):
                     v = int(sum(vals) / len(vals)) if vals else SEA_DEPTH
                     out["heights"][(px, py)] = (0, 0, max(1, v))
+    return out
+
+
+def shore_rise(heights, pixels):
+    """{(px, py): (v, v, v)} raising the land pixels among `pixels` (the ones the land brush made) to the height
+    their distance from the sea asks (SHORE_RISE) - a land made tile by tile otherwise keeps the shore's height
+    where it is inland now. Never lowers."""
+    out = {}
+    for p in pixels:
+        if not (0 <= p[0] < heights.width and 0 <= p[1] < heights.height):
+            continue
+        c = heights.get(*p)
+        if not is_land_height(c):
+            continue
+        want = SHORE_RISE.get(_from_sea(heights, p[0], p[1], ()), INLAND)
+        if c[0] < want:
+            out[p] = (want, want, want)
     return out
 
 
@@ -544,4 +582,4 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
 
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "ground_brushes", "FEATURE_BRUSHES", "paint_problem",
            "river_warnings", "river_shapes", "bridge_warnings", "feature_brushes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray", "max_land_height", "hgt_patched",
-           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "min_sea_height", "hgt_value", "apply"]
+           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "shore_rise", "min_sea_height", "hgt_value", "apply"]

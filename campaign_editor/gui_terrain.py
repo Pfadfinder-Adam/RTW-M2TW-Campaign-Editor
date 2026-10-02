@@ -345,6 +345,12 @@ class TerrainEditor(ttk.Frame):
             else:
                 self.coast[t] = "land" if to_land else "sea"
             took.append((t, GROUND_LOOK.get(px["ground"][(2 * t[0] + 1, 2 * t[1] + 1)], (0, 0, 0))))
+        if took and to_land and heights is not None:      # land made tile by tile: what is inland now rises
+            for p, c in T.shore_rise(heights, [p for p in self.cpx["heights"]]).items():
+                self.cbase.setdefault(("heights", p), heights.get(*p))
+                self.cpx["heights"][p] = c
+                heights.set(p[0], p[1], c)
+                self.cmap.set_height(p[0], p[1], c[0])
         if took:
             self.cmap.__dict__.pop("_backgrounds", None)
             self.cmap._hpil = None
