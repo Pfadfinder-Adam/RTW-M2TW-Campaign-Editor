@@ -123,11 +123,32 @@ def flood(im, xy, tolerance, fill=None):
     return n
 
 
+def clear_background(im, tolerance=30):
+    """A picture with a plain background (a white or one-coloured square round the symbol, its four corners alike
+    and solid) made clear there - flooded from the corners, like the magic wand clicked on each (changed in place).
+    -> the number of pixels cleared (0 when the picture already has a clear background or none to tell)."""
+    w, h = im.size
+    if w < 4 or h < 4:
+        return 0
+    px = im.load()
+    corners = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
+    cols = [px[c] for c in corners]
+    if any(c[3] < 250 for c in cols):
+        return 0
+    ref = cols[0]
+    if any(max(abs(c[i] - ref[i]) for i in range(3)) > tolerance for c in cols):
+        return 0
+    n = 0
+    for c in corners:
+        if px[c][3]:
+            n += flood(im, c, tolerance)
+    return n if n < w * h * 0.97 else 0
+
+
 def to_source(state, src_size, xy, size=MASTER):
     """A point of the master picture -> the same point of the source picture (for the wand / bucket clicks), or
     None when it lies outside the source."""
     import math
-    from .emblem import footprint
     k = state.get("scale") or 1.0
     ang = math.radians(state.get("angle") or 0)
     # the master's centre is the (rotated, scaled, cropped) source's centre moved by dx, dy

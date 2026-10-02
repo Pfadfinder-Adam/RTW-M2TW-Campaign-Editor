@@ -115,9 +115,29 @@ def cloth_mask(blank):
     return m.point(lambda v: 255 if v == 128 else 0)
 
 
-def dye(blank, colour):
-    """The blank banner's cloth (cloth_mask) in colour, its folds kept; the trim, the stars and the pole as they
-    are."""
+# the cloth's patterns (a tester: 'tricolours - vertical, horizontal, diagonal, any'): name -> (how many colours,
+# which colour a point (u, v) of a banner takes; u across, v down, both 0..1 within that banner)
+PATTERNS = {
+    "plain": (1, lambda u, v: 0),
+    "two stripes, upright": (2, lambda u, v: int(u * 2)),
+    "three stripes, upright (tricolour)": (3, lambda u, v: int(u * 3)),
+    "two stripes, across": (2, lambda u, v: int(v * 2)),
+    "three stripes, across": (3, lambda u, v: int(v * 3)),
+    "halves, slanting /": (2, lambda u, v: 0 if u + v < 1 else 1),
+    "halves, slanting \\": (2, lambda u, v: 0 if u > v else 1),
+    "three bands, slanting": (3, lambda u, v: min(2, int((u + v) * 1.5))),
+    "quarters": (2, lambda u, v: (u >= 0.5) ^ (v >= 0.5)),
+    "a cross": (2, lambda u, v: 1 if abs(u - 0.5) < 0.1 or abs(v - 0.4) < 0.08 else 0),
+    "a slanting cross": (2, lambda u, v: 1 if abs(u - v) < 0.1 or abs(u + v - 1) < 0.1 else 0),
+    "a border": (2, lambda u, v: 1 if min(u, 1 - u, v, 1 - v) < 0.1 else 0),
+    "a stripe in the middle, upright": (2, lambda u, v: 1 if abs(u - 0.5) < 0.17 else 0),
+    "a stripe in the middle, across": (2, lambda u, v: 1 if abs(v - 0.5) < 0.12 else 0),
+}
+
+
+def dye(blank, colour, pattern="plain"):
+    """The blank banner's cloth (cloth_mask) in the colour(s) - one colour, or a list for a pattern of PATTERNS laid
+    on each banner on its own - its folds kept; the trim, the stars and the pole as they are."""
     out = blank.copy()
     w, h = out.size
     px = out.load()
@@ -125,21 +145,34 @@ def dye(blank, colour):
     cloth = [px[x, y] for y in range(0, h, 3) for x in range(0, w, 3) if mp[x, y]]
     lums = sorted(0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2] for p in cloth) or [200]
     base = max(1.0, lums[len(lums) * 3 // 4])                          # the cloth's own light
+    colours = [colour] if isinstance(colour[0], int) else list(colour)
+    n, which = PATTERNS.get(pattern, PATTERNS["plain"])
+    boxes = banner_boxes(blank) if n > 1 else []
     for y in range(h):
         for x in range(w):
-            if mp[x, y]:
-                r, g, b, a = px[x, y]
-                k = (0.299 * r + 0.587 * g + 0.114 * b) / base
-                px[x, y] = tuple(min(255, int(c * k)) for c in colour[:3]) + (a,)
+            if not mp[x, y]:
+                continue
+            i = 0
+            for x0, y0, x1, y1 in boxes:
+                if x0 <= x < x1:
+                    i = which((x - x0) / max(1, x1 - x0), min(0.999, (y - y0) / max(1, y1 - y0)))
+                    break
+            c = colours[min(int(i), len(colours) - 1)]
+            r, g, b, a = px[x, y]
+            k = (0.299 * r + 0.587 * g + 0.114 * b) / base
+            px[x, y] = tuple(min(255, int(v * k)) for v in c[:3]) + (a,)
     return out
 
 
-def paint(blank, colour, symbol, boxes=None, strength=1.0):
-    """The new banner texture: blank dyed in colour, symbol (RGBA, a clear background) in each box, shaded by the
-    cloth's folds; strength < 1 for the allies' faint symbol."""
+def paint(blank, colour, symbol, boxes=None, strength=1.0, pattern="plain"):
+    """The new banner texture: blank dyed in colour (one, or a list for the pattern), symbol (RGBA, a clear
+    background; None = no symbol) in each box, shaded by the cloth's folds; strength < 1 for the allies' faint
+    symbol."""
     from PIL import Image, ImageChops, ImageStat
     from .emblem import footprint
-    out = dye(blank.convert("RGBA"), colour)
+    out = dye(blank.convert("RGBA"), colour, pattern)
+    if symbol is None:
+        return out
     sym = symbol.convert("RGBA")
     fb = footprint(sym)
     if fb:

@@ -363,10 +363,12 @@ class ArtEditor(ttk.Frame):
         if not blanks:
             return blanks, None
         own = next((p for p in pics if E.is_banner(p) and p["link"][1] == "standard_texture"), None)
-        colour = a.colours.get("primary") or faction_colours(a.mod).get(src_faction, (None, None))[0] \
-            or (200, 200, 200)
+        fc = faction_colours(a.mod).get(src_faction, (None, None))
+        first = a.colours.get("primary") or fc[0] or (200, 200, 200)
+        second = a.colours.get("secondary") or fc[1] or (240, 240, 240)
         kind = B.best_template(blanks, E._old(own) if own else None)
-        return blanks, {"kind": kind, "colour": tuple(colour[:3]), "boxes": None}
+        return blanks, {"kind": kind, "colours": [tuple(first[:3]), tuple(second[:3]), (240, 240, 240)],
+                        "pattern": "plain", "boxes": None}
 
     def _emblem_made(self, master, pics, src, src_faction, new, symbol=None, banner=None):
         from . import emblem as E

@@ -3065,6 +3065,22 @@ building smith
         self.assertEqual(f.size, (64, 64))
         self.assertEqual(f.getpixel((2, 2))[3], 0)
         self.assertGreater(f.getpixel((32, 40))[1], 100)                # the bare symbol, no disc or ground
+        # a tricolour upright on each banner, no symbol: three colours across each banner's own width
+        tri = E.build(sym, pics, sym, {"blank": blank, "colours": [(200, 0, 0), (0, 200, 0), (0, 0, 200)],
+                                       "pattern": "three stripes, upright (tricolour)", "no_symbol": True})
+        own = tri[pics[0]["rel"]]
+        for x, want in ((120, 0), (182, 1), (245, 2)):
+            px = own.getpixel((x, 60))
+            self.assertEqual(max(range(3), key=lambda i: px[i]), want)
+        self.assertEqual(max(range(3), key=lambda i: own.getpixel((8, 60))[i]), 0)   # the other banner too
+        # a symbol picture on a white square: the square cleared from its corners, the symbol kept
+        from faction_tool import emblem_edit as EE
+        sq = Image.new("RGBA", (50, 50), (255, 255, 255, 255))
+        ImageDraw.Draw(sq).ellipse((10, 10, 40, 40), fill=(200, 0, 0, 255))
+        self.assertGreater(EE.clear_background(sq), 500)
+        self.assertEqual(sq.getpixel((1, 1))[3], 0)
+        self.assertEqual(sq.getpixel((25, 25)), (200, 0, 0, 255))
+        self.assertEqual(EE.clear_background(sq), 0)                    # already clear: nothing more
 
     def test_buildings_and_garrisons_for_many_towns(self):
         import random

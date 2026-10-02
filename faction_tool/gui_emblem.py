@@ -20,12 +20,17 @@ class EmblemFitter(tk.Toplevel):
         self.transient(master.winfo_toplevel())
         self.src0 = src.convert("RGBA")
         self.src = self.src0.copy()
+        # a plain background (a white square) goes at once - else it shows on the flags and banners as a square
+        self.cleared = EE.clear_background(self.src)
         self.frame, self.colours, self.on_done = frame, colours, on_done
         k, dx, dy = EE.auto_place(self.src)
         self.state = {"scale": k, "dx": dx, "dy": dy, "angle": 0.0, "shape": "old" if frame is not None else "circle",
                       "frame": frame, "ground": None}
         self.undo = []
         self._build()
+        if self.cleared:
+            self.lbl.configure(text="Its plain background was cleared (%d pixels) - Start over brings it back." %
+                                    self.cleared)
         self.redraw()
 
     def _build(self):
@@ -159,6 +164,7 @@ class EmblemFitter(tk.Toplevel):
     def _reset(self):
         self._remember()
         self.src = self.src0.copy()
+        self.lbl.configure(text="")
         self._refit()
 
     # ---- the mouse ----
