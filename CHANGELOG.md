@@ -10,8 +10,12 @@
   in the ground where they were deeper (ocean / deep sea).
 - **Map: what you place rides under the mouse** (a tester: only a white square showed) - a resource, fort,
   watchtower, wonder or agent shows its own sign, framed green where it may go and red where not.
-- **Map: unticking Pick towns unpicks every town** (a tester); switching Edit resources / Edit forts off drops the
-  picked sign, hiding the legend puts its picked tool down.
+- **Map: unticking Pick towns unpicks every town** (a tester) - the same rule everywhere: switching Edit resources
+  or Edit regions off drops what was picked or waiting for a click, hiding the legend puts its picked tool down.
+- **Map: no "Edit forts, towers & wonders" switch any more** - forts, watchtowers and wonders are always moved with
+  the right drag, placed from the legend (a wonder: right click, Put a wonder here) and deleted with the right click;
+  their battlements keep the owner's colour.
+- **Map: resource letters readable on every colour** - black on bright colours, white on dark ones.
 - **Map: the map's size stands under the map, bottom left** (a tester: over the map it seemed to float).
 - **Wonders on the Map (Rome)**: a double click on a wonder (or the right click's "about it") opens its window as the
   game shows it - picture, title, what it does, short and long description - with **View it in 3D** (its campaign-map

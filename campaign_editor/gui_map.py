@@ -62,7 +62,9 @@ class MapView(ttk.Frame):
         self.v_ports = tk.BooleanVar(value=True)
         self.v_chars = tk.BooleanVar(value=True)
         self.v_res = tk.BooleanVar(value=False)
-        self.v_forts = tk.BooleanVar(value=False)       # Edit forts: forts and watchtowers picked, moved, placed
+        # forts, watchtowers and wonders: always picked, moved (right drag) and deleted (right click) on the Map; new
+        # ones come from the legend (fort, watchtower) or the right click (a wonder) - no mode of their own (the user)
+        self.v_forts = tk.BooleanVar(value=True)
         self.v_dip = tk.BooleanVar(value=False)
         self.v_rel = tk.BooleanVar(value=False)         # religion colours (Medieval II)
         self.v_regions = tk.BooleanVar(value=False)
@@ -118,8 +120,6 @@ class MapView(ttk.Frame):
         ttk.Checkbutton(lbar, text="Edit regions", variable=self.v_regions,
                         command=self._regions_toggled).pack(side="left", padx=(12, 4))
         ttk.Checkbutton(lbar, text="Edit resources", variable=self.v_res, command=relayer).pack(side="left", padx=4)
-        ttk.Checkbutton(lbar, text="Edit forts, towers & wonders", variable=self.v_forts, command=relayer).pack(
-            side="left", padx=4)
         # Pick towns: the ground only, a click picks / unpicks a town (yellow), a right click acts on them all
         self.v_pick = tk.BooleanVar(value=False)
         self.picked, self.on_pick_menu, self._before_pick = set(), None, None
@@ -446,7 +446,7 @@ class MapView(ttk.Frame):
                 lambda x, yy: self._fort_icon(lc, x, yy + 2, 5, "#%02x%02x%02x" % self.LEGEND_RED, (), 2),
                 "watchtower")
             if any(fo.kind == "landmark" for fo in self.forts):
-                row("a wonder (Edit forts: drag, add)",
+                row("a wonder (right drag moves it; right click on land: Put a wonder here)",
                     lambda x, yy: self._wonder_icon(lc, x, yy, 8, "", ()))
             head("Characters")
             keep = self.draggable
@@ -994,12 +994,18 @@ class MapView(ttk.Frame):
         r, g, b = colorsys.hsv_to_rgb(h, 0.65, 0.85)
         return "#%02x%02x%02x" % (int(r * 255), int(g * 255), int(b * 255))
 
+    @staticmethod
+    def text_on(fill):
+        """Black letters on a bright colour, white on a dark one (by how bright the eye sees it)."""
+        r, g, b = (int(fill[i:i + 2], 16) for i in (1, 3, 5))
+        return "black" if 0.299 * r + 0.587 * g + 0.114 * b >= 140 else "white"
+
     def _forts(self, cw, ch):
         """A fort: a small brown tower with battlements in the owner's colour (a watchtower: thinner)."""
         c = self.canvas
         editing = {r["id"] for r in self.resources} if self._marks_on() else set()
         for fo in self.forts:
-            if "f%d" % fo.line in editing:              # Edit forts draws it (movable)
+            if "f%d" % fo.line in editing:              # drawn as a movable sign by the resources' code
                 continue
             sx, sy = self.to_screen(*fo.xy)
             if not (-20 < sx < cw + 20 and -20 < sy < ch + 20):
@@ -1054,7 +1060,8 @@ class MapView(ttk.Frame):
                 continue
             if res["kind"] in ("fort", "watchtower"):          # a fort keeps its tower, picked: a yellow frame
                 w = max(2.0, min(self.z * (0.28 if res["kind"] == "watchtower" else 0.42), 12))
-                self._fort_icon(c, sx, sy, w, "#222222", tags, 1)
+                col = self.colours.get(res.get("owner")) if res.get("owner") else None   # battlements: the owner's
+                self._fort_icon(c, sx, sy, w, "#%02x%02x%02x" % tuple(col) if col else "#222222", tags, 2 if col else 1)
                 if sel:
                     c.create_rectangle(sx - w - 3, sy - w * 1.3 - 3, sx + w + 3, sy + w + 3, outline="#ffd400",
                                        width=3, tags=tags)
@@ -1072,13 +1079,11 @@ class MapView(ttk.Frame):
             c.create_rectangle(sx - r, sy - r, sx + r, sy + r, fill=fill,
                                outline="#ffd400" if sel else "black", width=3 if sel else 1, tags=tags)
             if r >= 5:
-                dark = self.res_colour(res["kind"]) in ("#5a5f66", "#6f7488", "#7a1010", "#7a4b21", "#222222",
-                                                        "#8a1f5a", "#7a2ea0", "#6b5337", "#5c3317")
-                c.create_text(sx, sy, text=res["kind"][:2].capitalize(), fill="white" if dark else "black",
+                c.create_text(sx, sy, text=res["kind"][:2].capitalize(), fill=self.text_on(fill),
                               font=("", max(6, int(r * 0.8)), "bold"), tags=tags)
 
     def _marks_on(self):
-        """Edit resources or Edit forts: their markers are drawn to be picked, moved and placed."""
+        """Edit resources (or the forts, always): their markers are drawn to be picked, moved and placed."""
         return self.v_res.get() or self.v_forts.get()
 
     def _fort_line_under(self, sx, sy):
@@ -1194,9 +1199,9 @@ class MapView(ttk.Frame):
             c.create_rectangle(cx - rr - 3, cy - rr - 3, cx + rr + 3, cy + rr + 3, outline=edge, width=2, tags=tags)
         elif kind == "resource":
             rr = max(5, min(self.z * 0.42, 14))
-            c.create_rectangle(cx - rr, cy - rr, cx + rr, cy + rr, fill=self.res_colour(g.get("type", "")),
-                               outline=edge, width=2, tags=tags)
-            c.create_text(cx, cy, text=(g.get("type") or "")[:2].capitalize(), fill="white",
+            fill = self.res_colour(g.get("type", ""))
+            c.create_rectangle(cx - rr, cy - rr, cx + rr, cy + rr, fill=fill, outline=edge, width=2, tags=tags)
+            c.create_text(cx, cy, text=(g.get("type") or "")[:2].capitalize(), fill=self.text_on(fill),
                           font=("", max(6, int(rr * 0.8)), "bold"), tags=tags)
         elif g.get("char"):                              # an agent: its own sign (spy, priest...)
             self._draw_char({"id": "ghost", "faction": g.get("faction") or "slave", "kind": g["char"],

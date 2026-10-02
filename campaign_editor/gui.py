@@ -663,7 +663,7 @@ class App(tk.Tk):
         ttk.Label(rb, text="left drag paints, right click picks a region, right drag moves the map",
                   foreground="#666").pack(side="left", padx=10)
         flow(rb)
-        # Edit resources and Edit forts: a bar each (type, Place new, Delete picked) with its how-to under it
+        # Edit resources: a bar (type, Place new, Delete picked) with its how-to under it
         self.res_bar = ttk.Frame(tab, padding=(0, 0, 0, 4))
         xb = ttk.Frame(self.res_bar)
         xb.pack(fill="x")
@@ -679,26 +679,8 @@ class App(tk.Tk):
         self._how(self.res_bar, "New: pick the resource above, press Place new, then click a land tile on the map.  "
                                 "Move: drag a resource with the right mouse button.  Remove: click it, then Delete "
                                 "picked.  A region's resources are the ones on its land.")
-        self.fort_bar = ttk.Frame(tab, padding=(0, 0, 0, 4))
-        fb = ttk.Frame(self.fort_bar)
-        fb.pack(fill="x")
-        ttk.Label(fb, text="Fort / watchtower / wonder", font=("", 9, "bold")).pack(side="left")
         from .forts import KINDS as FORT_KINDS
-        self.v_fort_type = tk.StringVar(value=FORT_KINDS[0])
-        self.cb_fort_type = ttk.Combobox(fb, textvariable=self.v_fort_type, width=22, state="readonly",
-                                         values=FORT_KINDS)
-        self.cb_fort_type.pack(side="left", padx=4)
-        ttk.Button(fb, text="Place new", command=lambda: self.res_place_new(self._fort_kind(self.v_fort_type.get()))).pack(
-            side="left", padx=2)
-        ttk.Button(fb, text="Delete picked", command=self.res_delete).pack(side="left", padx=2)
-        flow(fb)
-        self._how(self.fort_bar, "New: pick fort, watchtower or a wonder (Rome), press Place new, then click a land "
-                                 "tile on the map (a fort copies the line of the nearest one the campaign has).  "
-                                 "Move: drag one with the right mouse button.  Remove: click it, then Delete picked.")
-        self.lbl_fort_new = ttk.Label(self.fort_bar, text="", foreground="#b05a00", justify="left")
-        self.lbl_fort_new.pack(fill="x", anchor="w")
-        self.fort_bar.bind("<Configure>", lambda e: self.lbl_fort_new.configure(wraplength=max(200, e.width - 8)),
-                           add="+")
+        self.v_fort_type = tk.StringVar(value=FORT_KINDS[0])   # forts: no bar - the legend and the right click
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
         self.map_view.on_menu = self.map_menu
         self.map_view.on_wonder = lambda t: __import__("campaign_editor.gui_wonders", fromlist=["show"]).show(self, self.mod, t)
@@ -1751,6 +1733,9 @@ class App(tk.Tk):
             self.region_bar.pack(fill="x", before=self.map_view)
         else:
             self.region_bar.pack_forget()
+            if self._region_point:                      # Edit regions off: a town / port waiting for a click is
+                self._region_point, self._town_auto = None, False      # dropped too (the Pick towns rule)
+                self.map_view.set_tool(None)
             # the political colours show the painted land too (the map as it will be); a new
             # region's land, town and port show in its own colour until Apply
             new = {r["name"]: tuple(r["colour"]) for r in self.new_regions}
@@ -2493,13 +2478,14 @@ class App(tk.Tk):
         from .resources import problem, types
         mv = self.map_view
         res_on, forts_on = mv.v_res.get(), mv.v_forts.get()
-        for bar, on in ((self.res_bar, res_on), (self.fort_bar, forts_on)):
-            if on:
-                bar.pack(fill="x", before=mv)
-            else:
-                bar.pack_forget()
+        if res_on:
+            self.res_bar.pack(fill="x", before=mv)
+        else:
+            self.res_bar.pack_forget()
+        if not res_on and self._res_sel and self._res_sel[:1] in ("r", "n"):
+            self._res_sel = None                        # Edit resources off: no resource stays picked (a tester)
         if not (res_on or forts_on):
-            self._res_placing = self._res_sel = None     # both edit modes off: nothing stays picked (a tester)
+            self._res_placing = self._res_sel = None
             return {}
         kinds = list(types(self.mod))
         self.cb_res_type["values"] = kinds
@@ -2516,21 +2502,11 @@ class App(tk.Tk):
         camp = self.v_campaign.get()
         file_forts = self.strat.forts if self.strat else []
         if forts_on:
-            shown += [{"id": "f%d" % fo.line, "kind": fo.kind, "type": fo.type,
+            shown += [{"id": "f%d" % fo.line, "kind": fo.kind, "type": fo.type, "owner": fo.owner,
                        "xy": tuple(self.fort_moves.get(fo.line, fo.xy))}
                       for fo in file_forts if fo.line not in self.fort_removed]
             shown += [{"id": "g%d" % i, "kind": a["kind"], "type": a.get("type", ""), "xy": tuple(a["xy"])}
                       for i, a in enumerate(self.fort_added)]
-            wonders = ["wonder: %s" % t for t in FT.landmark_types(self.mod)]       # Rome's descr_sm_landmarks
-            self.cb_fort_type["values"] = list(FT.KINDS) + wonders
-            # a new one copies a line of its kind the campaign has: say at once which kinds cannot be placed
-            have = {fo.kind for fo in file_forts if fo.line not in self.fort_removed}
-            missing = [k for k in FT.KINDS if k not in have]
-            self.lbl_fort_new.configure(text="" if not missing else (
-                "This campaign has no %s line yet, so a new %s cannot be placed here: the line differs by game "
-                "and mod and is copied from one the campaign already has (vanilla Rome and Medieval II have "
-                "none). Moving and removing work for the ones on the map." % (
-                    " or ".join(missing), " / ".join(missing))))
 
         def is_fort(rid):
             return rid[:1] in ("f", "g")
