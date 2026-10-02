@@ -473,11 +473,14 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None):
                 return _mode(cols)
         return None
     fill, towns, ports = {}, [], []              # an old town / port tile: the region's colour round it
+    from .moddata import town_colours            # the town's own region - the one the editor and the game see
+    owner = town_colours(at, w, h, [(x, y) for y in range(h) for x in range(w) if at(x, y) == CITY], plain)
     for y in range(h):
         for x in range(w):
             c = at(x, y)
             if c == CITY:
-                fill[(x, y)] = _mode(around(x, y, N8, lambda q: q in plain)) or nearest_land(x, y) or c
+                fill[(x, y)] = owner.get((x, y)) or _mode(around(x, y, N8, lambda q: q in plain)) or \
+                    nearest_land(x, y) or c
                 towns.append((x, y))
             elif c == PORT:                       # the region it serves: its land on a side first
                 fill[(x, y)] = _mode(around(x, y, N4, lambda q: q in plain)) or \

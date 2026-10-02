@@ -300,17 +300,8 @@ class ModData:
         regions = self.regions(campaign)
         by_colour = {v["colour"]: k for k, v in regions.items()}
         img = self.region_map(campaign)
-        tiles = {}
-        for x, y in img.find((0, 0, 0)):
-            votes = {}
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < img.width and 0 <= ny < img.height:
-                    r = by_colour.get(img.get(nx, ny))
-                    if r:
-                        votes[r] = votes.get(r, 0) + 1
-            if votes:
-                tiles[max(votes, key=votes.get)] = (x, y)
+        owners = town_colours(img.get, img.width, img.height, img.find((0, 0, 0)), set(by_colour))
+        tiles = {by_colour[c]: xy for xy, c in owners.items()}
         self._cache[key] = tiles
         return tiles
 
@@ -457,6 +448,32 @@ class ModData:
 
 
 RE_NAME_HEAD = re.compile(r"\s*faction\s*:\s*(.+)")
+
+
+def town_colours(get, w, h, points, lands):
+    """{(x, y): land colour} for the town pixels `points` of a map_regions picture: each to the colour most of its
+    8 neighbours have - but one town per region: a town on its region's edge, touching a neighbour more than its
+    own land, went to the neighbour and took its town away (a tester's Erebor was never drawn, and the bigger map
+    painted it over). The surest pixels are given first, each to its best colour still without a town."""
+    seen = []
+    for x, y in points:
+        votes = {}
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < w and 0 <= ny < h:
+                c = get(nx, ny)
+                if c in lands:
+                    votes[c] = votes.get(c, 0) + 1
+        if votes:
+            seen.append(((x, y), sorted(votes.items(), key=lambda kv: (-kv[1], kv[0]))))
+    seen.sort(key=lambda t: (-(t[1][0][1] - (t[1][1][1] if len(t[1]) > 1 else 0)), t[0][1], t[0][0]))
+    out, taken = {}, set()
+    for xy, ranked in seen:
+        c = next((c for c, _ in ranked if c not in taken), None)
+        if c is not None:
+            out[xy] = c
+            taken.add(c)
+    return out
 
 
 def pool_in(texts, faction):

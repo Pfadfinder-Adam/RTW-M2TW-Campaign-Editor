@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Changed
+- **A town on its region's edge stays its region's** (a tester's Erebor, Divide and Conquer): a town pixel that
+  touches a neighbour's land more than its own went to the neighbour - the town was not drawn, and the bigger map
+  painted its block in the neighbour's colour. Now every region keeps one town, the surest pixels given first (the
+  same on the Map and in the bigger map; vanilla maps unchanged).
 - **Rome in 3D put together right** (a tester): the parts that hang on a bone - weapons, shields, helmet crests, the
   pieces of a ballista, onager or ram - were placed by numbers that are no place in the model, so crests floated
   off helmets, spears lay on the ground and engines fell apart; now each sits on its bone. The **T pose** (arms out)

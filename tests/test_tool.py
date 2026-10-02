@@ -3179,6 +3179,19 @@ building smith
         self.assertEqual(sq.getpixel((25, 25)), (200, 0, 0, 255))
         self.assertEqual(EE.clear_background(sq), 0)                    # already clear: nothing more
 
+    def test_a_town_on_its_regions_edge_stays_its_own(self):
+        """A town pixel touching a neighbour's land more than its own (a tester's Erebor) stays its region's town:
+        each region has one town, the surest pixels are given first."""
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        red, blue, black = (255, 0, 0), (0, 0, 255), (0, 0, 0)
+        # A's town in A's middle; B's town at B's edge, five of its eight neighbours red
+        px = [[red, red, red, red, red],
+              [red, black, red, red, red],
+              [red, red, red, black, red],
+              [blue, blue, blue, blue, blue]]
+        write_tga(os.path.join(camp, "map_regions.tga"), 5, 4, px)
+        self.assertEqual(ModData(self.root).city_tiles("test"), {"A_R": (1, 1), "B_R": (3, 2)})
+
     def test_faction_without_names_borrows_a_kins(self):
         """A faction with no name lists (brought from another game - a report: 'no name in empire_east's name list
         for a captain') gets a copy of its culture's kin's section, so captains and new characters can be named."""
