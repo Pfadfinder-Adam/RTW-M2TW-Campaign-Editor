@@ -95,7 +95,7 @@ def later_factions(mod, campaign):
 def apply(plan, campaign, changes):
     """changes = {'edit': {id: {'date': text, 'position': [x, y] or None}}, 'remove': [ids],
     'new': [{'kind', 'name', 'date', 'position', 'title', 'body'}]}; texts of new / changed events: 'texts'
-    {KEY: text}."""
+    {KEY: text}; 'pictures' {event name: picture file} - its scroll picture for every culture."""
     from .strtables import write_texts
     mod = plan.mod
     path = path_of(mod, campaign)
@@ -163,6 +163,84 @@ def apply(plan, campaign, changes):
                 texts["%s_%s" % (name.upper(), part.upper())] = ev[part]
         plan.note(f, "new event %s (%s, %s)" % (name, ev.get("kind") or "historic", ev["date"].strip()))
     write_texts(plan, "historic_events.txt", texts)
+    for name, src in sorted((changes.get("pictures") or {}).items()):
+        set_picture(plan, name, src)
+
+
+# what each kind does in the game (both games' engines; the strength of the random disasters in descr_disasters.txt)
+WHAT = {
+    "historic": "A message only: the scroll opens on that date with its title, picture and text; nothing else "
+                "happens in the game (a campaign script may react to it by its name).",
+    "plague": "A plague breaks out in the town nearest the place: its people fall ill and die over the turns, its "
+              "growth and order drop, and armies, agents and traders carry it on to other towns. Without a place "
+              "it strikes a town of the engine's choosing.",
+    "volcano": "The volcano at the place erupts: buildings in the region nearest it are damaged or destroyed and "
+               "people die (the map shows the eruption).",
+    "earthquake": "An earthquake around the place: buildings of the town nearest it are damaged or destroyed and "
+                  "people die.",
+    "flood": "A flood around the place: buildings and farmland of the nearest town are damaged, people die.",
+    "storm": "A storm at sea around the place: fleets there lose ships and men.",
+    "horde": "A horde rises (Medieval II: the Mongols / Timurids) - with the faction's own script.",
+    "dustbowl": "A dust storm (Medieval II): the farms around the place yield less.",
+    "locusts": "Locusts (Medieval II): the farms around the place yield less.",
+}
+
+
+def what_it_does(kind):
+    return WHAT.get(kind, "The engine's own %s event (what it does is the game's - not described here)." % kind)
+
+
+def picture_name(name, kind):
+    """The eventpics picture the game shows on the scroll: a historic event its own (ui/<culture>/eventpics/<name>.tga
+    - each culture's folder; none: no picture), a disaster the shared disaster_<kind>.tga."""
+    return name if kind == "historic" else "disaster_%s" % kind
+
+
+def event_cultures(mod):
+    """[culture folder] of ui/ that hold eventpics (the mod's own, else the game's)."""
+    from .campaignrules import game_data
+    out = []
+    for data in (mod.data, game_data(mod)):
+        ui = os.path.join(data, "ui") if data else None
+        if ui and os.path.isdir(ui):
+            for c in sorted(os.listdir(ui)):
+                if os.path.isdir(os.path.join(ui, c, "eventpics")) and c not in out:
+                    out.append(c)
+    return out
+
+
+def picture_files(mod, name, kind):
+    """{culture: picture file on disk or None} of an event (the mod's own, else the game's copy)."""
+    from .campaignrules import game_data
+    from .clone import picture_file
+    pic = picture_name(name, kind)
+    out = {}
+    for c in event_cultures(mod):
+        rel = "ui/%s/eventpics/%s.tga" % (c, pic)
+        got = None
+        for data in (mod.data, game_data(mod)):
+            if data and not got:
+                got = picture_file(data, rel)
+        out[c] = got[1] if got else None
+    return out
+
+
+def set_picture(plan, name, src, size=None):
+    """The picture players see on a historic event's scroll: src (any picture) as ui/<culture>/eventpics/<name>.tga
+    in every culture folder of the mod (the game picks the player's culture), sized like the game's own (Rome
+    360 x 160, Medieval II 367 x 148) unless size is given."""
+    from .editors import tga_bytes
+    mod = plan.mod
+    if size is None:
+        size = (360, 160) if _rome(mod) else (367, 148)
+    data = tga_bytes(src, size)
+    cultures = event_cultures(mod)
+    if not cultures:
+        raise ValueError("no ui/<culture>/eventpics folders in this mod or its game")
+    for c in cultures:
+        plan.binary(os.path.join(mod.data, "ui", c, "eventpics", "%s.tga" % name), data)
+    plan.notes.append(("ui/<culture>/eventpics/%s.tga" % name, "the event's picture for %d culture(s): %s" % (
+        len(cultures), ", ".join(cultures))))
 
 
 def _comment(text):

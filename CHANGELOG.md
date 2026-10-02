@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Changed
+- **Events: the picture players see and what the event does** (a tester) - the scroll's picture (a historic event
+  its own `ui/<culture>/eventpics/<event>.tga`, a plague / volcano / earthquake its kind's `disaster_<kind>.tga`),
+  **Picture...** puts your own in for every culture at the game's size, and each kind says in plain words what it
+  does (a plague spreads from the nearest town, a volcano or earthquake damages buildings and kills people...).
 - **Campaign rules: the REX / M2EX engine settings** (a tester: on Rome the window was nearly empty) -
   `descr_ex.txt` (ages and the family, bribery, hordes, camera, max factions, battle visuals...) and `descr_caps_ex.txt`
   (feature switches: recruitment slots per town, sprite format, trade fleets...), grouped by the file's own headings,

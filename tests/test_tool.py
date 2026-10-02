@@ -4194,9 +4194,28 @@ building smith
         self.assertIn("{BOOM_TITLE}\tBoom!", plan.files[mod.text_file("historic_events.txt")].texts())
         with self.assertRaises(ValueError):
             EV.apply(Plan(mod, "e", "e", {}), "test", {"edit": {"news": {"date": "soon"}}})
+        self.assertIn("plague", EV.what_it_does("plague").lower())
+        self.assertEqual(EV.picture_name("news", "historic"), "news")                    # its own picture
+        self.assertEqual(EV.picture_name("plague_in_x", "plague"), "disaster_plague")    # shared by its kind
         bdir = plan.apply()
         restore(ModData(self.root), bdir)
         self.assertEqual(tree_hash(os.path.join(self.root, "data")), before)
+        try:
+            from PIL import Image
+        except ImportError:
+            return
+        for c in ("roman", "greek"):
+            os.makedirs(os.path.join(self.root, "data", "ui", c, "eventpics"), exist_ok=True)
+        src = os.path.join(self.root, "pic.png")
+        Image.new("RGB", (50, 20), (9, 9, 9)).save(src)
+        mod = ModData(self.root)
+        self.assertEqual(EV.picture_files(mod, "news", "historic"), {"greek": None, "roman": None})
+        plan = Plan(mod, "e", "e", {})
+        EV.apply(plan, "test", {"pictures": {"news": src}})
+        plan.apply()
+        got = EV.picture_files(ModData(self.root), "news", "historic")
+        self.assertTrue(all(got.values()))
+        self.assertEqual(Image.open(got["roman"]).size, (360, 160))                      # Rome's own size
 
     def test_rome_pak_read(self):
         """Rome's data/packs/*.pak: the name table, the end offsets, the files one after another - a file not loose

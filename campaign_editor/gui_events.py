@@ -19,9 +19,10 @@ class EventsWindow(tk.Toplevel):
         self.app, self.mod = app, app.mod
         self.campaign = app.v_campaign.get()
         self.title("%s - %s" % (TITLE, self.campaign))
-        self.geometry("1050x680")
+        self.geometry("1100x760")
         self.transient(app)
         self.edits, self.removed, self.new, self.texts = {}, [], [], {}
+        self.pictures = {}                   # {event name: picture file} - its scroll picture, every culture
         from .limits import game_kind
         self.rome = game_kind(self.mod) != "medieval2"
         top = ttk.Frame(self, padding=8)
@@ -97,7 +98,7 @@ class EventsWindow(tk.Toplevel):
             self.tv.selection_set(cur)
             self.tv.see(cur)
         self.show()
-        n = len(self.edits) + len(self.removed) + len(self.new) + len(self.texts)
+        n = len(self.edits) + len(self.removed) + len(self.new) + len(self.texts) + len(self.pictures)
         self.lbl.configure(text="%d change(s) - Preview, then Write it in." % n if n else "Nothing changed yet.")
 
     # ---- the form ----
@@ -125,18 +126,21 @@ class EventsWindow(tk.Toplevel):
         v_x, v_y = tk.StringVar(value=str(pos[0]) if pos else ""), tk.StringVar(value=str(pos[1]) if pos else "")
         ttk.Entry(r, textvariable=v_x, width=6).pack(side="left")
         ttk.Entry(r, textvariable=v_y, width=6).pack(side="left", padx=4)
-        ttk.Label(r, text="empty: no place (a message only)", foreground="#555").pack(side="left")
         ttk.Button(r, text="Show on the map", command=lambda: self.show_on_map(v_x.get(), v_y.get())).pack(
             side="left", padx=6)
         ttk.Label(self.form, text="Title players see").pack(anchor="w", pady=(8, 0))
         v_title = tk.StringVar(value=self.text(key + "_TITLE"))
         ttk.Entry(self.form, textvariable=v_title, width=70).pack(fill="x")
         ttk.Label(self.form, text="Text players see").pack(anchor="w", pady=(8, 0))
-        t = tk.Text(self.form, height=8, width=70, wrap="word")
+        t = tk.Text(self.form, height=6, width=60, wrap="word")
         t.insert("1.0", self.text(key + "_BODY"))
         t.pack(fill="both", expand=True)
         if e.get("movie"):
             ttk.Label(self.form, text="movie: %s" % e["movie"], foreground="#555").pack(anchor="w")
+        self._picture_part(e)
+        ttk.Label(self.form, text="What it does in the game", font=("", 9, "bold")).pack(anchor="w", pady=(8, 0))
+        ttk.Label(self.form, text=EV.what_it_does(e["kind"]), foreground="#555", wraplength=480,
+                  justify="left").pack(anchor="w")
 
         def keep(*_):
             ch = {}
@@ -165,11 +169,60 @@ class EventsWindow(tk.Toplevel):
                     self.texts.pop(k, None)
                 else:
                     self.texts[k] = value
-            n = len(self.edits) + len(self.removed) + len(self.new) + len(self.texts)
+            n = len(self.edits) + len(self.removed) + len(self.new) + len(self.texts) + len(self.pictures)
             self.lbl.configure(text="%d change(s) - Preview, then Write it in." % n if n else "Nothing changed yet.")
         for v in (v_date, v_x, v_y, v_title):
             v.trace_add("write", keep)
         t.bind("<KeyRelease>", keep)
+
+    def _picture_part(self, e):
+        """The picture players see on the scroll (the first culture's, the others counted) and Picture... to put
+        one's own in (a historic event: its own, written for every culture; a disaster: shared by its kind)."""
+        name, kind = e["name"], e["kind"]
+        row = ttk.Frame(self.form)
+        row.pack(fill="x", pady=(8, 0))
+        pic = tk.Label(row)
+        pic.pack(side="left")
+        side = ttk.Frame(row)
+        side.pack(side="left", fill="x", padx=8, anchor="n")
+        files = EV.picture_files(self.mod, name, kind)
+        mine = self.pictures.get(name)
+        shown = mine or next((p for p in files.values() if p), None)
+        have = [c for c, p in files.items() if p]
+        if mine:
+            what = "your picture - written for every culture with Write it in"
+        elif shown:
+            what = "%s.tga - %s" % (EV.picture_name(name, kind), ", ".join(have))
+        else:
+            what = "no picture (ui/<culture>/eventpics/%s.tga is not there): the scroll shows none" % name
+        ttk.Label(side, text="Picture players see", font=("", 9, "bold")).pack(anchor="w")
+        ttk.Label(side, text=what, foreground="#555", wraplength=300, justify="left").pack(anchor="w")
+        if kind == "historic":
+            ttk.Button(side, text="Picture...", command=lambda: self.pick_picture(name)).pack(anchor="w", pady=4)
+        else:
+            ttk.Label(side, text="every %s event shows this one (disaster_%s.tga)" % (kind, kind),
+                      foreground="#555").pack(anchor="w")
+        if shown:
+            try:
+                from PIL import Image, ImageTk
+                with Image.open(shown) as im:
+                    im = im.convert("RGB")
+                    im.thumbnail((240, 110))
+                    self._ph = ImageTk.PhotoImage(im)
+                pic.configure(image=self._ph)
+            except Exception:
+                pic.configure(text="(cannot be shown)")
+
+    def pick_picture(self, name):
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(parent=self, title="The picture for %s" % name, filetypes=[
+            ("Pictures", "*.png *.jpg *.jpeg *.tga *.bmp *.dds"), ("All files", "*.*")])
+        if not path:
+            return
+        self.pictures[name] = path
+        self.show()
+        n = len(self.edits) + len(self.removed) + len(self.new) + len(self.texts) + len(self.pictures)
+        self.lbl.configure(text="%d change(s) - Preview, then Write it in." % n)
 
     def show_on_map(self, x, y):
         if not (x.strip().lstrip("-").isdigit() and y.strip().lstrip("-").isdigit()):
@@ -223,7 +276,8 @@ class EventsWindow(tk.Toplevel):
             n["body"] = self.texts.get(x["name"] + "_BODY")
             new.append(n)
         texts = {k: v for k, v in self.texts.items() if not any(k.startswith(x["name"] + "_") for x in self.new)}
-        EV.apply(plan, self.campaign, {"edit": self.edits, "remove": self.removed, "new": new, "texts": texts})
+        EV.apply(plan, self.campaign, {"edit": self.edits, "remove": self.removed, "new": new, "texts": texts,
+                                       "pictures": self.pictures})
         return plan
 
     def preview(self):
@@ -258,7 +312,7 @@ class EventsWindow(tk.Toplevel):
         log.write("Events changed (backup %s)\n%s" % (bdir, plan.report()))
         self.app.load()
         self.mod = self.app.mod
-        self.edits, self.removed, self.new, self.texts = {}, [], [], {}
+        self.edits, self.removed, self.new, self.texts, self.pictures = {}, [], [], {}, {}
         self.reload()
         self.app.status.set("Events written (backup %s)." % bdir)
 
