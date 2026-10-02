@@ -2885,21 +2885,21 @@ class App(tk.Tk):
             if not self.load_clicked():
                 self.v_path.set(was)
 
-    def unwritten(self):
-        """Plain lines for the changes not written yet on the mod loaded now: each editor's, and the faction
-        tabs' (any step Undo could take back)."""
+    def unwritten(self, editors=True):
+        """Plain lines for the changes not written yet on the mod loaded now: each editor's (unless editors is
+        False - the same mod loaded again keeps them), and the faction tabs' (any step Undo could take back)."""
         if not self.mod:
             return []
-        out = [label for key, label in self.pending_parts() if key != "faction"]
+        out = [label for key, label in self.pending_parts() if key != "faction"] if editors else []
         if self.undo_stack:
             out.append("%s: %d step(s)" % ("Edit faction" if self.editing() else "New faction / the map",
                                            len(self.undo_stack)))
         return out
 
-    def may_drop(self, what):
+    def may_drop(self, what, editors=True):
         """True when nothing waits for Apply, or the user lets the waiting changes go before `what` (loading
         another mod, another campaign) - they were made on the files loaded now and cannot follow."""
-        waiting = self.unwritten()
+        waiting = self.unwritten(editors)
         if not waiting:
             return True
         return messagebox.askyesno(APP, "%s?\n\nThese changes are not written yet and would be dropped:\n%s\n\n"
@@ -2908,11 +2908,20 @@ class App(tk.Tk):
 
     def load_clicked(self):
         """Load (the button, F5, Browse...): the mod in the data folder box - after asking when changes made on the
-        files loaded now would be dropped. True when it was loaded."""
-        if self.mod and not self.may_drop("Load %s" % (self.v_path.get().strip() or "the mod")):
-            if self.mod:
+        files loaded now would be dropped (the same mod again keeps the editors' changes: only the faction tabs'
+        go). True when it was loaded."""
+        if self.mod:
+            from .moddata import find_data_dir
+            try:
+                target = find_data_dir(self.v_path.get().strip())
+            except Exception:
+                target = None
+            same = bool(target) and os.path.normcase(os.path.abspath(target)) == \
+                os.path.normcase(os.path.abspath(self.mod.data))
+            what = "Load %s again" % self.mod.data if same else "Load %s" % (self.v_path.get().strip() or "the mod")
+            if not self.may_drop(what, editors=not same):
                 self.v_path.set(self.mod.data)
-            return False
+                return False
         self.load()
         return True
 
