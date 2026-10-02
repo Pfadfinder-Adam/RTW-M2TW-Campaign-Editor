@@ -63,18 +63,14 @@ class FamilyEditor(ttk.Frame):
             "children below. Click a card or a row to edit that person. Names come from the faction's name lists "
             "(the game crashes on a name it has no string for); a renamed person is renamed on the tree too.")
                   ).pack(fill="x", pady=(2, 6))
-        # the Character editor: people | tree side by side; beside the Faction tab's form (narrower): the tree on
-        # top at full width, the people under it - the same parts either way
-        panes = ttk.Panedwindow(self, orient="horizontal" if standalone else "vertical")
+        # people | tree side by side, in the Character editor and on the Faction tab alike
+        # (a tester: the tree on the right in Edit faction too - on top it left too little room)
+        panes = ttk.Panedwindow(self, orient="horizontal")
         panes.pack(fill="both", expand=True)
         left = ttk.Frame(panes)
         right = ttk.LabelFrame(panes, text="Family tree", padding=2) if not standalone else ttk.Frame(panes)
-        if standalone:
-            panes.add(left, weight=2)
-            panes.add(right, weight=5)
-        else:
-            panes.add(right, weight=2)
-            panes.add(left, weight=3)
+        panes.add(left, weight=2)
+        panes.add(right, weight=5 if standalone else 3)
 
         # the people
         cols = (("name", "name", 140), ("kind", "who", 140), ("age", "age", 40), ("where", "where", 80))
@@ -84,21 +80,14 @@ class FamilyEditor(ttk.Frame):
             self.tv.column(cid, width=w, stretch=cid == "name")
         self.tv.tag_configure("changed", background="#d9e6ff", foreground="#000000")
         self.tv.tag_configure("new", background="#d9f2d0", foreground="#000000")
-        if standalone:
-            self.tv.pack(fill="x")
-        else:                                    # under the tree: the people list and the person side by side
-            self.tv.configure(height=12)
-            self.tv.pack(side="left", fill="y", padx=(0, 6))
+        self.tv.pack(fill="x")
         self.tv.bind("<<TreeviewSelect>>", lambda e: self._picked_row())
 
         # the person's form
         # the form scrolls when the window is lower than it (the portrait, traits and ancillaries stay reachable)
         from .gui_util import ScrollFrame
         box = ttk.LabelFrame(left, text="Person", padding=4)
-        if standalone:
-            box.pack(fill="both", expand=True, pady=(6, 0))
-        else:
-            box.pack(side="left", fill="both", expand=True)
+        box.pack(fill="both", expand=True, pady=(6, 0))
         sf = ScrollFrame(box)
         sf.pack(fill="both", expand=True)
         form = sf.inner
@@ -122,6 +111,7 @@ class FamilyEditor(ttk.Frame):
         self.lbl_who.pack(fill="x", pady=(2, 4))
         fb = ttk.Frame(form)
         fb.pack(fill="x", pady=(0, 4))
+        ttk.Button(fb, text="New person...", command=self.new_person).pack(side="left", padx=(0, 4))
         ttk.Button(fb, text="Give a wife...", command=self.add_wife).pack(side="left")
         ttk.Button(fb, text="Add a child...", command=self.add_child).pack(side="left", padx=4)
         ttk.Button(fb, text="Add a relative...", command=self.add_relative).pack(side="left")
@@ -1000,6 +990,24 @@ class FamilyEditor(ttk.Frame):
         c = next(c for c in t if c[0] == father)
         c[2].append(got[0])
         self.changed()
+
+    def new_person(self):
+        """Someone new from the name lists, tied to no one yet (a tester: 'where is the button to add a person from
+        nothing, to say later who he is'): he waits under 'Not on the tree' until a couple takes him as a child
+        (Add a child...) or a man as his wife (Give a wife...)."""
+        if not self.fam:
+            return
+        sex = "female" if messagebox.askyesno("New person", "A woman? (No = a man)", parent=self) else "male"
+        got = self._ask_person("New person of %s" % self.faction, sex, 16 if sex == "female" else self._manhood())
+        if not got:
+            return
+        self._before()
+        self.st.setdefault("new", []).append({"name": got[0], "sex": sex, "age": got[1]})
+        self.changed()
+        st = self.app.status if hasattr(self.app, "status") else None
+        if st:
+            st.set("%s is new and not on the tree yet: pick a married man and Add a child... (or a man and Give a "
+                   "wife...) and choose %s there." % (got[0], got[0]))
 
     RELATIONS = (("son", "son"), ("daughter", "daughter"), ("wife", "wife"), ("husband", "husband"),
                  ("brother", "brother"), ("sister", "sister"), ("parents", "father and mother (died before the start)"),

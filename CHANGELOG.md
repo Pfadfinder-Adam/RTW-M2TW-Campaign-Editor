@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- **People and family: New person...** (a tester asked for a person made from nothing) - someone new tied to no one,
+  then put on the tree with Add a child... / Give a wife...; Preview warns while a new person is on no tree. On the
+  Faction tab the tree now stands on the right of the list and the person (it was on top, too cramped - a tester).
 - **Character panel: a click on the pips sets the attribute** (a tester's wish): the traits are fitted to it - his own
   trait moved to the level that fits, else a trait giving that attribute alone added; both games.
 - **Traits and retinue window: the labels whole** ("Points it needs (Threshold)" was cut) and the descriptions in the

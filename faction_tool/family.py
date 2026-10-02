@@ -457,6 +457,11 @@ def apply(plan, f, faction, opts):
         raise ValueError("family tree of %s: %s" % (faction, "; ".join(bad)))
     for w in age_warnings(tree, after):
         plan.warn(f, w)
+    tied = {x for a, b, ks in tree for x in [a, b] + list(ks)}
+    for n in opts.get("new") or []:
+        if n["name"] not in tied:
+            plan.warn(f, "%s: %s is new and on no family tree - written as a record no one is related to; tie them "
+                         "on (Add a child... / Give a wife...) or leave them out" % (faction, n["name"]))
     for w in limit_warnings(plan.mod, tree, changes, people, renames, fam["tree"]):
         plan.warn(f, w)
 
