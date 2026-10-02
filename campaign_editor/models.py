@@ -209,6 +209,75 @@ def unit_mount(mod, lines):
     return kind, (model[0][0] if model and model[0] else None)
 
 
+def chariot_of(mod, lines):
+    """A Rome chariot or scorpion cart the unit rides (descr_mount.txt class chariot / scorpion_cart - no 'model'
+    line, its own lods): {'type', 'class', 'info' (a ModelInfo of the chariot: its lod .cas files), 'horse' (the
+    horse_type's model name or None), 'horses' [(x, z)], 'riders' [(x, y, z)]} or None."""
+    from .packs import _block_lines, _values, type_blocks
+    mounts = _values(lines, "mount")
+    if not mounts or not mounts[0] or not mounts[0][0]:
+        return None
+    kind = mounts[0][0]
+    path = _ci(mod.data, "descr_mount.txt")
+    if not path:
+        return None
+    f = mod.load(path)
+    blocks = type_blocks(f)
+    span = next((sp for name, sp in blocks.items() if name.lower() == kind.lower()), None)
+    if not span:
+        return None
+    bl = _block_lines(f, span)
+    cls = (_values(bl, "class") or [[""]])[0][0].lower()
+    if cls not in ("chariot", "scorpion_cart"):
+        return None
+
+    def nums(v):
+        out = []
+        for t in " ".join(v).replace(",", " ").split():
+            try:
+                out.append(float(t))
+            except ValueError:
+                pass
+        return out
+    info = ModelInfo(kind)
+    info.meshes = ["data/models_unit/%s" % v[0].rstrip(",") for v in _values(bl, "lod") if v and v[0]]
+    horse = None
+    ht = _values(bl, "horse_type")
+    if ht and ht[0]:
+        hspan = next((sp for name, sp in blocks.items() if name.lower() == " ".join(ht[0]).lower()), None)
+        hm = _values(_block_lines(f, hspan), "model") if hspan else None
+        horse = hm[0][0] if hm and hm[0] else None
+    return {"type": kind, "class": cls, "info": info, "horse": horse,
+            "horses": [tuple(nums(v)[:2]) for v in _values(bl, "horse_offset") if len(nums(v)) >= 2],
+            "riders": [tuple(nums(v)[:3]) for v in _values(bl, "rider_offset") if len(nums(v)) >= 3]}
+
+
+def engine_of(mod, lines):
+    """The siege engine the unit's crew works (Rome EDU `engine <type>`, descr_engines.txt): a ModelInfo of its
+    'normal' models (engine_model lines, closest first), or None."""
+    from .packs import _values
+    eng = _values(lines, "engine")
+    if not eng or not eng[0] or not eng[0][0]:
+        return None
+    kind = eng[0][0]
+    path = _ci(mod.data, "descr_engines.txt")
+    if not path:
+        return None
+    info, cur, group = None, None, None
+    for line in mod.load(path).texts():
+        t = line.split(";")[0].replace(",", " ").split()
+        if not t:
+            continue
+        if t[0] == "type":
+            cur, group = (t[1] if len(t) > 1 else None), None
+        elif t[0] == "engine_model_group":
+            group = t[1] if len(t) > 1 else None
+        elif t[0] == "engine_model" and cur and cur.lower() == kind.lower() and group in (None, "normal"):
+            info = info or ModelInfo(kind)
+            info.meshes.append(t[1])
+    return info
+
+
 def is_ship(lines):
     """A ship (category ship): the game fights at sea by auto-resolve - no battle model, no voice; its soldier and
     voice lines are only what the file's form asks for."""

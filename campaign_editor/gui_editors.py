@@ -817,6 +817,13 @@ class RecordEditor(ttk.Frame):
         kind, mmodel = MO.unit_mount(self.mod, lines)
         minfo = cat.get((mmodel or "").lower()) if kind else None
         mount = (minfo, kind) if minfo is not None else None
+        chariot = MO.chariot_of(self.mod, lines)          # Rome: a chariot / scorpion cart has lods, no model line
+        if chariot:
+            chariot["horse_info"] = cat.get((chariot["horse"] or "").lower())
+            minfo = chariot["info"]
+            mount = (minfo, kind, chariot)
+            mmodel = ", ".join(m.split("/")[-1] for m in minfo.meshes[:1]) or None
+        engine = MO.engine_of(self.mod, lines)
         for r, (key, idx, model) in enumerate(slots):
             info = cat.get(model.lower())
             tex = None
@@ -869,6 +876,16 @@ class RecordEditor(ttk.Frame):
                 ttk.Button(bar, text="View in 3D...", command=lambda i=info: self.view_model(i)).pack(side="left")
                 ttk.Button(bar, text="Save its files...", command=lambda i=info: self.save_model_files(i)).pack(
                     side="left", padx=4)
+        # the siege engine its crew works (Rome: descr_engines.txt) - its own model, shown in 3D
+        if engine is not None:
+            r = len(slots) + (1 if kind else 0)
+            cell = ttk.Frame(box)
+            cell.grid(row=r, column=1, sticky="nw", padx=6)
+            ttk.Label(cell, text="Siege engine: %s" % engine.name, font=("", 9, "bold")).pack(anchor="w")
+            ttk.Label(cell, foreground="#555", justify="left", wraplength=300, text="its models %s (descr_engines.txt)"
+                      % ", ".join(m.split("/")[-1] for m in engine.meshes[:2])).pack(anchor="w")
+            ttk.Button(cell, text="View in 3D...", command=lambda i=engine: self.view_model(i)).pack(
+                anchor="w", pady=(2, 0))
 
     def save_model_files(self, info):
         """The model's files (meshes, textures) copied into a folder the user picks, in their data/ folders - a

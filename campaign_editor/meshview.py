@@ -329,14 +329,20 @@ def _qmul(a, b):
             aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz)
 
 
-def read_cas(data):
+POSES = ("t", "frame")                              # Rome: the T pose (the skeleton at rest), the file's first frame
+
+
+def read_cas(data, pose="t"):
     """A Mesh from a Rome .cas file's bytes (worked out on the 807 vanilla unit, mount and animal models, versions
     2.22 to 3.2 in the first 4 bytes as a float). The file: a header (the bone count, then each bone's parent),
     the animation's frame count and times, one record per bone ('Scene Root', bone_pelvis ... - frame counts and
     offsets into the rotations and positions after the records), the bones' places at rest (from the parent), then
     the parts - weapons and shields (each with the bone it hangs on and its place), then the body parts (each vertex
-    tied to one bone, its point given from that bone). The model is put together in the first frame's pose (the
-    arms out, as the files keep it); u v over the one texture of the unit."""
+    tied to one bone, its point given from that bone). The parts that hang on one bone (weapons, shields, crests,
+    the pieces of a siege engine) keep their points from that bone too - their 7 floats are not a place in the
+    model (read as one, a crest floated off the helmet and a ballista fell apart: a report). pose 't': the
+    skeleton at rest, every bone unturned - the T pose, arms out (the user's wish: the same for every model);
+    'frame': the file's first animation frame (how the man stands). u v over the one texture of the unit."""
     if len(data) < 60:
         raise MeshError("not a Rome model (too short)")
     root = data.find(b"Scene Root\x00")
@@ -372,7 +378,7 @@ def read_cas(data):
     rest = [struct.unpack_from("<3f", data, rest_at + 12 * i) for i in range(nb)]
     rot, where = [], []
     for i, (nq, npos, qo, po) in enumerate(bones):
-        q = struct.unpack_from("<4f", data, base + qo) if nq else (0.0, 0.0, 0.0, 1.0)
+        q = struct.unpack_from("<4f", data, base + qo) if nq and pose == "frame" else (0.0, 0.0, 0.0, 1.0)
         t = struct.unpack_from("<3f", data, base + po) if npos else rest[i]
         par = parents[i] if i and parents[i] < i else None
         if par is None:
@@ -392,13 +398,9 @@ def read_cas(data):
         name, bone, xf, vb, pos, tris, uv, end = got
         first = len(positions)
         for k, v in enumerate(pos):
-            if xf:                                  # a weapon / shield: its own place in the model
-                o = _qrot(xf[:4], v)
-                positions.append((o[0] + xf[4], o[1] + xf[5], o[2] + xf[6]))
-            else:
-                b = vb[k] if vb else bone
-                o = _qrot(rot[b], v)
-                positions.append(tuple(where[b][j] + o[j] for j in range(3)))
+            b = vb[k] if vb else bone                # every point from its bone (a weapon: the one it hangs on)
+            o = _qrot(rot[b], v)
+            positions.append(tuple(where[b][j] + o[j] for j in range(3)))
         uvs.extend(uv)
         groups.append(Group(name, "", tuple(first + t for t in tris), bool(xf)))
         p = end
@@ -409,21 +411,30 @@ def read_cas(data):
     # the texture the file itself names (textures\x.tga, from models_unit): the game's pick when the model's
     # descr_model_battle block has no texture line (the female peasants)
     for hit in re.finditer(rb"[ -~]{1,120}?\.tga\x00", data[-400:]):
-        m.texture_ref = "data/models_unit/" + hit.group()[:-1].decode("latin-1").replace("\\", "/")
+        m.texture_name = hit.group()[:-1].decode("latin-1").replace("\\", "/")
+        m.texture_ref = "data/models_unit/" + m.texture_name
     return m
 
 
 _CACHE = {}
 
 
-def read_file(path):
-    """read() of a file (.mesh or Rome's .cas), kept while the file is unchanged."""
-    key = os.path.normcase(os.path.abspath(path))
+def read_file(path, pose="t"):
+    """read() of a file (.mesh or Rome's .cas, in that pose), kept while the file is unchanged. A .cas names its
+    texture beside itself: textures/x.tga of its own folder (models_unit, models_engine, models_strat ...)."""
+    key = (os.path.normcase(os.path.abspath(path)), pose)
     stamp = os.path.getmtime(path)
     if key not in _CACHE or _CACHE[key][0] != stamp:
         with open(path, "rb") as fh:
             data = fh.read()
-        _CACHE[key] = (stamp, read_cas(data) if path.lower().endswith(".cas") else read(data))
+        if path.lower().endswith(".cas"):
+            m = read_cas(data, pose)
+            folder = os.path.basename(os.path.dirname(path))
+            if getattr(m, "texture_name", None) and folder:
+                m.texture_ref = "data/%s/%s" % (folder, m.texture_name)
+        else:
+            m = read(data)
+        _CACHE[key] = (stamp, m)
         while len(_CACHE) > 24:
             _CACHE.pop(next(iter(_CACHE)))
     return _CACHE[key][1]
@@ -486,6 +497,42 @@ def combine(rider, rider_groups, mount, mount_groups, mount_one=None):
     out = Mesh(groups, pos, ru + mu)
     out.texture_ref = rider.texture_ref
     return out
+
+
+def assemble(pieces):
+    """One Mesh put together from pieces [(mesh, groups, (dx, dy, dz), picture number, one texture)]: each piece
+    moved by its offset, its groups taking that picture of render's (0 / 1: the man, 2 / 3, 4 / 5 ...: more)."""
+    pos, uvs, groups = [], [], []
+    for mesh, gs, (dx, dy, dz), pic, one in pieces:
+        n = len(pos)
+        pos.extend((x + dx, y + dy, z + dz) for x, y, z in mesh.positions)
+        uvs.extend(mesh.uvs or [(0.0, 0.0)] * mesh.count)
+        for g in gs:
+            h = Group(g.name, g.material, [i + n for i in g.tris], g.attachment)
+            h.pic, h.one = pic, one
+            groups.append(h)
+    out = Mesh(groups, pos, uvs)
+    out.one_texture = True
+    return out
+
+
+def chariot(crew, crew_groups, car, horse, horses, riders):
+    """A Rome chariot as the game sets it: the car (picture 2) on the ground, its horses (picture 4) at the
+    horse_offset places (x, z: in front of it), its crew (the man, picture 0) at the rider_offset places (x, y, z
+    from the car's root) - the game's own numbers from descr_mount.txt."""
+    cg = car.shown(0, True)
+    wheels = [g for g in cg if "wheel" in g.name.lower()] or cg
+    ground = -min(car.positions[i][1] for g in wheels for i in g.tris)
+    pieces = [(car, cg, (0.0, ground, 0.0), 2, True)]
+    if horse is not None:
+        hg = horse.shown(0, True)
+        hy = -min(horse.positions[i][1] for g in hg for i in g.tris)
+        for x, z in horses:
+            pieces.append((horse, hg, (x, hy, z), 4, True))
+    cy = -min(crew.positions[i][1] for g in crew_groups for i in g.tris)
+    for x, y, z in riders:
+        pieces.append((crew, crew_groups, (x, ground + y + cy - 0.0, z), 0, crew.one_texture))
+    return assemble(pieces)
 
 
 def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, attach=None, groups=None,
@@ -557,7 +604,7 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
     draw = ImageDraw.Draw(img)
     if not textured:
         for _, pts, shade, half, src in tris:
-            get = getters[half]
+            get = getters.get(half)
             col = PLAIN
             if get and src:
                 mu, mv = sum(q[0] for q in src) / 3, sum(q[1] for q in src) / 3
@@ -569,7 +616,7 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
         light = Image.new("L", (W, H), 255)
         ldraw = ImageDraw.Draw(light)
         for _, pts, shade, half, src in tris:
-            pic = pics[half]
+            pic = pics.get(half)
             x0, y0 = int(min(p[0] for p in pts)), int(min(p[1] for p in pts))
             x1, y1 = int(max(p[0] for p in pts)) + 2, int(max(p[1] for p in pts)) + 2
             data = None

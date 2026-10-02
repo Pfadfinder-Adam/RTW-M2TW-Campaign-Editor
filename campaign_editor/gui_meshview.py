@@ -9,14 +9,18 @@ from . import meshview as MV
 from . import models as MO
 
 SIZE = (420, 520)
+POSE_WORDS = ("T pose (arms out)", "standing (the file's first frame)")
 
 
 class ModelViewer(tk.Toplevel):
     def __init__(self, parent, mod, info, factions=(), mount=None, title="Battle model in 3D"):
-        """mount: (its ModelInfo, mount type) - the unit's horse, camel ...: shown standing beside the rider."""
+        """mount: (its ModelInfo, mount type[, chariot]) - the unit's horse, camel ...: shown standing beside the
+        rider; a Rome chariot (models.chariot_of, with 'horse_info'): the car, its horses and the crew put together
+        as the game sets them."""
         super().__init__(parent)
         self.mod, self.info, self.mount = mod, info, mount
-        self.mount_mesh = None
+        self.mount_mesh = self.horse_mesh = None
+        self.chariot = mount[2] if mount and len(mount) > 2 else None
         self.title("%s - %s" % (title, info.name))
         self.yaw, self.pitch, self.zoom, self.look = 35.0, 8.0, 1.0, 0
         self._drag, self._tex, self._photo, self.mesh = None, {}, None, None
@@ -42,12 +46,19 @@ class ModelViewer(tk.Toplevel):
                           values=[self._lod_name(i) for i in range(len(self.lods))])
         cl.pack(anchor="w")
         cl.bind("<<ComboboxSelected>>", lambda e: self.load())
+        self.v_pose = tk.StringVar(value=POSE_WORDS[0])
+        if any(m.lower().endswith(".cas") for m in self.lods):        # Rome: the T pose, or as the file stands
+            ttk.Label(side, text="Pose").pack(anchor="w", pady=(8, 0))
+            cp = ttk.Combobox(side, textvariable=self.v_pose, values=POSE_WORDS, state="readonly", width=22)
+            cp.pack(anchor="w")
+            cp.bind("<<ComboboxSelected>>", lambda e: self.load())
         self.v_weapons = tk.BooleanVar(value=True)
         ttk.Checkbutton(side, text="Weapons and shield", variable=self.v_weapons,
                         command=self.draw).pack(anchor="w", pady=(8, 0))
         self.v_mount = tk.BooleanVar(value=bool(mount))
         if mount:
-            ttk.Checkbutton(side, text="Its mount beside him (%s)" % mount[1], variable=self.v_mount,
+            ttk.Checkbutton(side, text=("On its chariot (%s)" if self.chariot else "Its mount beside him (%s)")
+                            % mount[1], variable=self.v_mount,
                             command=self.draw).pack(anchor="w")
         self.b_look = ttk.Button(side, text="Another man", command=self.next_look)
         self.b_look.pack(anchor="w", pady=(8, 0))
@@ -56,7 +67,8 @@ class ModelViewer(tk.Toplevel):
         self.info_lbl = ttk.Label(side, foreground="#555", justify="left", wraplength=230)
         self.info_lbl.pack(anchor="w", pady=(10, 0))
         ttk.Label(side, foreground="#555", justify="left", wraplength=230, text=(
-            "Drag to turn it, mouse wheel to zoom. Shown as it stands in the files (arms out). Medieval II: the "
+            "Drag to turn it, mouse wheel to zoom. Medieval II: as it stands in the files (arms out); Rome: the T "
+            "pose, or as the file stands (Pose) - a chariot with its horses and crew, a siege engine whole. Medieval II: the "
             "game gives each man one of the model's heads, arms, bodies ... - 'Another man' shows the next mix; "
             "the weapons and shield take the attachment texture. Rome: one texture for the man and his "
             "weapons.")).pack(anchor="w", pady=(10, 0))
@@ -84,7 +96,7 @@ class ModelViewer(tk.Toplevel):
             msg = "the mesh file is not in this mod or the game: %s" % rel
         else:
             try:
-                self.mesh = MV.read_file(path)
+                self.mesh = MV.read_file(path, self._pose())
                 msg = None
             except Exception as e:
                 msg = "cannot read %s: %s" % (rel, e)
@@ -95,15 +107,26 @@ class ModelViewer(tk.Toplevel):
             ms = self.mount[0].meshes
             mp = MV.mesh_path(self.mod, ms[min(i, len(ms) - 1)]) if ms else None
             try:
-                self.mount_mesh = MV.read_file(mp) if mp else None
+                self.mount_mesh = MV.read_file(mp, self._pose()) if mp else None
             except Exception:
                 self.mount_mesh = None
+            self.horse_mesh = None
+            hi = (self.chariot or {}).get("horse_info")
+            if hi is not None and hi.meshes:
+                hp = MV.mesh_path(self.mod, hi.meshes[min(i, len(hi.meshes) - 1)])
+                try:
+                    self.horse_mesh = MV.read_file(hp, self._pose()) if hp else None
+                except Exception:
+                    self.horse_mesh = None
         if msg:
             self.canvas.delete("all")
             self.canvas.create_text(SIZE[0] // 2, SIZE[1] // 2, text=msg, fill="#ddd", width=SIZE[0] - 40)
             self.info_lbl.configure(text="")
             return
         self.draw()
+
+    def _pose(self):
+        return MV.POSES[POSE_WORDS.index(self.v_pose.get())] if self.v_pose.get() in POSE_WORDS else "t"
 
     def _texture(self, table):
         rel = table.get(self.v_fac.get()) or table.get("") or next(iter(table.values()), None)
@@ -121,7 +144,16 @@ class ModelViewer(tk.Toplevel):
             tex = self._texture({"": self.mesh.texture_ref})
         mesh, more = self.mesh, None
         riding = self.mount and self.v_mount.get() and self.mount_mesh is not None
-        if riding:
+        if riding and self.chariot:                     # Rome: the car, its horses and the crew in their places
+            ch = self.chariot
+            mesh = MV.chariot(self.mesh, groups, self.mount_mesh, self.horse_mesh, ch["horses"], ch["riders"])
+            groups = mesh.groups
+            hi = ch.get("horse_info")
+            more = {2: self._texture({"": self.mount_mesh.texture_ref}) if self.mount_mesh.texture_ref else None,
+                    4: (self._texture(hi.textures) if hi is not None and hi.textures else
+                        self._texture({"": self.horse_mesh.texture_ref})
+                        if self.horse_mesh is not None and self.horse_mesh.texture_ref else None)}
+        elif riding:
             mi = self.mount[0]
             mesh = MV.combine(self.mesh, groups, self.mount_mesh, self.mount_mesh.shown(0, True),
                               mount_one=True if not mi.attach else None)

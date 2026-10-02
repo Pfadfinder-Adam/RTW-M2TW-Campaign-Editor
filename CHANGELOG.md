@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Changed
+- **Rome in 3D put together right** (a tester): the parts that hang on a bone - weapons, shields, helmet crests, the
+  pieces of a ballista, onager or ram - were placed by numbers that are no place in the model, so crests floated
+  off helmets, spears lay on the ground and engines fell apart; now each sits on its bone. The **T pose** (arms out)
+  is the default for every Rome model, **Pose** shows it as the file stands. A **chariot** unit stands on its chariot
+  with its horses and crew where `descr_mount.txt` puts them; a **siege engine** unit shows its engine
+  (`descr_engines.txt`) whole, with its texture (a model's texture is looked for beside it - `models_engine` too).
+  Checked on all 948 vanilla Rome unit, mount and engine models (the 52 the reader does not know yet are the same as
+  before: ladders, towers, some engine variants).
 - **Land and sea: new land rises from the shore** (a tester: a new coast flickered in the game) - it was all set at
   the shore's height and lay flat on the water; now it climbs inland as both games' own coasts do (measured on the
   vanilla maps: 2, 8, 12, 14, then 16 grey steps from the sea), also where land is painted tile by tile.

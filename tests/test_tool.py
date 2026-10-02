@@ -3560,8 +3560,8 @@ building smith
 
     def test_read_and_draw_a_rome_cas(self):
         """A Rome .cas laid out as the vanilla ones (3.05): header with the bone count and parents, frame times, bone
-        records, rest places, a shield with its own place and a body whose points hang on a bone. Read back, put
-        together in the first frame's pose, the texture the file names, drawn in one texture."""
+        records, rest places, a shield hanging on a bone and a body whose points hang on a bone. Read back, put
+        together in the T pose (the skeleton at rest), the texture the file names, drawn in one texture."""
         import math
         import struct
         from campaign_editor import meshview as MV
@@ -3596,8 +3596,8 @@ building smith
                          [("shield", True, 12), ("Body_400", False, 12)])
         self.assertTrue(m.one_texture)
         self.assertEqual(m.texture_ref, "data/models_unit/textures/unit_x.tga")
-        for got, want in zip(m.positions[7], (2.1, 0.1, 0.1)):              # the shield at its own place
-            self.assertAlmostEqual(got, want, places=5)
+        for got, want in zip(m.positions[7], (0.1, 1.1, 0.1)):              # the shield from the bone it hangs on
+            self.assertAlmostEqual(got, want, places=5)                     # (its 7 floats are no place: a report)
         for got, want in zip(m.positions[15], (0.1, 1.1, 0.1)):             # the body on the pelvis, 1 up
             self.assertAlmostEqual(got, want, places=5)
         self.assertEqual(len(m.shown(weapons=False)), 1)                     # the shield hidden
