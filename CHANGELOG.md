@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- **REX / M2EX: no faction limit** (the author: they have none) - every new faction raises `max_factions` in the
+  mod's own `descr_ex.txt` by itself, written with the faction (Preview says so), no question asked; the status line
+  no longer says "Full" under an engine. Only the original exes still stop at 21 / 31.
 - **A town on its region's edge stays its region's** (a tester's Erebor, Divide and Conquer): a town pixel that
   touches a neighbour's land more than its own went to the neighbour - the town was not drawn, and the bigger map
   painted its block in the neighbour's colour. Now every region keeps one town, the surest pixels given first (the

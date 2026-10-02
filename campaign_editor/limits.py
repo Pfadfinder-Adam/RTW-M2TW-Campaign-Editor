@@ -198,13 +198,16 @@ def faction_limit(mod):
 
 
 def describe(limit, count):
-    where = ("max_factions in %s" % os.path.basename(limit["file"])) if limit["written"] else \
-        ("%s's default" % limit["engine"][:-4] if limit["engine"] else "the game's limit")
-    return "%d of %d factions (slave included; %s)" % (count, limit["max"], where)
+    if limit["engine"]:                             # no limit: max_factions follows the factions on Apply
+        return "%d factions (slave included; no limit with %s - max_factions is raised with Apply when needed)" % (
+            count, limit["engine"][:-4])
+    return "%d of %d factions (slave included; the game's limit)" % (count, limit["max"])
 
 
-def check(plan, count, allow_raise=False):
-    """Refuse a faction count over the limit, or with allow_raise write a higher max_factions (REX / M2EX)."""
+def check(plan, count, allow_raise=True):
+    """Refuse a faction count over the original exe's limit; under REX / M2EX (no faction limit of their own -
+    the user: 'raise the cap by itself every time a faction is added') max_factions is raised in the same plan,
+    without a question. allow_raise=False only to see the old refusal."""
     limit = faction_limit(plan.mod)
     if count <= limit["max"]:
         return limit

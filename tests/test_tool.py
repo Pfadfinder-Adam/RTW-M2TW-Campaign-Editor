@@ -1658,9 +1658,9 @@ building smith
 
     def test_faction_limit(self):
         """REX / M2EX read max_factions from data/descr_ex.txt: over it the game closes at start ("Too many
-        factions described here, maximum is(21)" - the user's nabataea). The new faction is refused, or with
-        the user's yes max_factions is raised (backup, Restore); the original exe cannot be raised."""
-        from campaign_editor.limits import LimitError, faction_limit
+        factions described here, maximum is(21)" - the user's nabataea). They have no limit of their own: a new
+        faction raises max_factions in the same plan, unasked (backup, Restore); the original exe cannot be raised."""
+        from campaign_editor.limits import faction_limit
         start = {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}}
         mod = ModData(self.root)
         self.assertFalse(faction_limit(mod)["known"])            # no exe beside the data: warned only
@@ -1680,10 +1680,8 @@ building smith
         before = tree_hash(self.root)
         mod = ModData(self.root)
         self.assertEqual(faction_limit(mod)["max"], 2)
-        with self.assertRaises(LimitError) as e:
-            build(mod, "test", "alpha", "beta", start)
-        self.assertTrue(e.exception.can_raise)
-        plan = build(mod, "test", "alpha", "beta", dict(start, raise_faction_limit=True))
+        plan = build(mod, "test", "alpha", "beta", start)          # raised by itself, no question (the user)
+        self.assertTrue(any("max_factions 2 -> 3" in n for _, n in plan.notes))
         plan.apply()
         with open(os.path.join(d, "descr_ex.txt")) as fh:
             self.assertIn("max_factions 3", fh.read())

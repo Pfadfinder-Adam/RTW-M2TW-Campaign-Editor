@@ -208,4 +208,4 @@ def validate(plan, campaign):
                 plan.warn(ch, "character type '%s' lists %d factions, more than the %d factions" % (k, v, count))
     plan.faction_count = count
     from .limits import check as check_limit
-    check_limit(plan, count, allow_raise=bool(plan.opts.get("raise_faction_limit")))
+    check_limit(plan, count)                       # REX / M2EX: max_factions raised in the same plan

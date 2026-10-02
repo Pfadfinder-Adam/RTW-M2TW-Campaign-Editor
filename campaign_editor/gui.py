@@ -306,7 +306,6 @@ class App(tk.Tk):
         self.chosen = []
         self.garrisons = {}             # region -> [unit type] picked by hand
         self.field = []                 # [{kind, name, age, units, xy}] armies/agents/fleets to place
-        self._limit_raise = None        # the mod whose max_factions the user agreed to raise
         self.removed_existing = []      # Edit: [{name, from}] characters taken off the map
         self.place_moves = {}           # {('city' | 'port', region): (x, y)} towns and ports moved on the map
         # the Map's changes for any faction (not only the one made or edited): towns given {region: new owner},
@@ -3184,11 +3183,10 @@ class App(tk.Tk):
             log.write("Engine: " + engine_report(self.mod))
         except Exception as e:
             log.write("Engine: not checked (%s)" % e)
-        full = len(names) + 1 >= lim["max"] and lim["known"]
+        full = len(names) + 1 >= lim["max"] and lim["known"] and not lim["engine"]
         self.status.set("%s%s, %d campaign(s).%s" % (
             "%s found - " % lim["engine"][:-4] if lim["engine"] else "", describe(lim, len(names) + 1), len(camps),
-                        (" Full: a new faction needs a higher max_factions (asked on Preview)." if lim["engine"]
-                         else " Full: the original exe takes no new faction.") if full else ""))
+                        " Full: the original exe takes no new faction (REX / M2EX take any number)." if full else ""))
         if not getattr(self, "_fix_queued", False):
             self._fix_queued = True
             self.after_idle(self.offer_fixes)
@@ -4520,18 +4518,8 @@ class App(tk.Tk):
             return edit_faction(ModData(self.mod.data), self.v_campaign.get(), faction, opts)
         template, name, opts = self.gather()
         # a fresh read, so a previous preview's edits never leak in
-        from .limits import LimitError
-        if self._limit_raise == self.mod.data:
-            opts["raise_faction_limit"] = True
-        try:
-            return build(ModData(self.mod.data), self.v_campaign.get(), template, name, opts)
-        except LimitError as e:
-            if not e.can_raise or not messagebox.askyesno(APP, "%s\n\nRaise it now? (written with the faction and "
-                                                               "its backup; Restore takes it back)" % e):
-                raise
-            self._limit_raise = self.mod.data         # asked once per mod: Preview and Apply both use it
-            opts["raise_faction_limit"] = True
-            return build(ModData(self.mod.data), self.v_campaign.get(), template, name, opts)
+        # REX / M2EX: max_factions follows the factions by itself (written in the same plan, said in Preview)
+        return build(ModData(self.mod.data), self.v_campaign.get(), template, name, opts)
 
     def events_window(self):
         """Tools > Events and later factions...: the campaign's descr_events.txt."""
