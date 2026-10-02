@@ -40,6 +40,17 @@ RIVERY = {(0, 0, 255), (0, 255, 255), (255, 255, 255)}
 VOLCANO, LAND_BRIDGE = (255, 0, 0), (0, 255, 0)
 
 
+IMPASSABLE_LAND, IMPASSABLE_SEA = (64, 64, 64), (128, 128, 128)
+
+
+def ground_brushes(game, engine=None):
+    """(land, sea) ground colours the Terrain editor paints: impassable land / sea (no army walks or sails there)
+    on Medieval II (its vanilla map is full of them) and on Rome only with REX (REX names the ground types
+    IMPASSABLE_LAND / IMPASSABLE_SEA, the original RomeTW.exe does not - not tried in the game yet)."""
+    extra = game == "medieval2" or bool(engine and engine.lower().startswith("rex"))
+    return (LAND_BRUSHES + ([IMPASSABLE_LAND] if extra else []), SEA_BRUSHES + ([IMPASSABLE_SEA] if extra else []))
+
+
 def feature_brushes(game):
     """The marks the Terrain editor paints for game ('rome' | 'medieval2'): land bridges only on Medieval II
     (vanilla Rome's map has none, whether its engine reads them is not known)."""
@@ -324,6 +335,7 @@ def hgt_patched(path, img, changes, step, absolute=None):
 # or a sea ground) - so the coast brush changes all of them together, tile by tile: its regions pixel, and the 3 x 3
 # block of ground and heights round its middle (2x..2x+2, 2y..2y+2).
 SHALLOW_SEA, NEW_LAND_GROUND = (196, 0, 0), (96, 160, 64)
+DEEPER_SEA = {(64, 0, 0), (128, 0, 0)}                  # ocean, deep sea: deeper than the shallow sea
 SEA_DEPTH, COAST_LAND = 253, 2                      # vanilla's usual sea blue; a low shore (about 60 m)
 
 
@@ -386,7 +398,8 @@ def coast_pixels(cmap, xy, to_land, region_colour, heights, sea):
     {(px, py): colour}, 'heights': {(px, py): (r, g, b)}}. heights: map_heights.tga (or None); sea: the sea's
     colour in map_regions. New land: the ground most of its land neighbours have (else medium fertility), low
     heights (its land neighbours' if any, at least 1 - black may be read as sea); new sea: shallow sea, its sea
-    neighbours' depth (else vanilla's 253)."""
+    neighbours' depth (else vanilla's 253). New land also gets a shallow-sea ring: the 8 sea tiles round it that are
+    deeper (ocean / deep sea) turn shallow sea in the ground (a tester: an island stands in shallows, as in nature)."""
     x, y = xy
     out = {"regions": {xy: region_colour if to_land else sea}, "ground": {}, "heights": {}}
     from collections import Counter
@@ -400,6 +413,17 @@ def coast_pixels(cmap, xy, to_land, region_colour, heights, sea):
     ground = (near.most_common(1)[0][0] if near else NEW_LAND_GROUND) if to_land else SHALLOW_SEA
     if ground in SEA and to_land:
         ground = NEW_LAND_GROUND
+    g = cmap.ground
+    if to_land and g is not None:
+        for a in (-1, 0, 1):
+            for b in (-1, 0, 1):
+                nx, ny = x + a, y + b
+                if not (a or b) or not (0 <= nx < cmap.w and 0 <= ny < cmap.h) or not cmap.is_sea(nx, ny):
+                    continue
+                for px in range(2 * nx, 2 * nx + 3):
+                    for py in range(2 * ny, 2 * ny + 3):
+                        if 0 <= px < g.width and 0 <= py < g.height and g.get(px, py) in DEEPER_SEA:
+                            out["ground"][(px, py)] = SHALLOW_SEA
     for px in range(2 * x, 2 * x + 3):
         for py in range(2 * y, 2 * y + 3):
             out["ground"][(px, py)] = ground
@@ -518,6 +542,6 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
         plan.delete(os.path.join(folder, "map.rwm"), "the game builds the map again from the changed pictures")
 
 
-__all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "FEATURE_BRUSHES", "paint_problem",
+__all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "ground_brushes", "FEATURE_BRUSHES", "paint_problem",
            "river_warnings", "river_shapes", "bridge_warnings", "feature_brushes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray", "max_land_height", "hgt_patched",
            "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "min_sea_height", "hgt_value", "apply"]

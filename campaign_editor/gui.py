@@ -2499,7 +2499,7 @@ class App(tk.Tk):
             else:
                 bar.pack_forget()
         if not (res_on or forts_on):
-            self._res_placing = None
+            self._res_placing = self._res_sel = None     # both edit modes off: nothing stays picked (a tester)
             return {}
         kinds = list(types(self.mod))
         self.cb_res_type["values"] = kinds
@@ -2616,6 +2616,23 @@ class App(tk.Tk):
                 self.show_map()
                 return None
             kw["on_place"] = place
+
+            def placing_why(xy):                        # the same checks as place(), nothing written
+                if kind.startswith(FT.LANDMARK + ":") or kind in FT.KINDS:
+                    why = FT.problem(self.mod, camp, xy, taken(None, True))
+                    if not why and kind in FT.KINDS:
+                        alive = [fo for fo in file_forts if fo.line not in self.fort_removed]
+                        if FT.example(alive, kind, xy) is None:
+                            why = FT.town_problem(self.mod, camp, xy, self.strat)
+                    return why
+                return problem(self.mod, camp, xy, taken())
+            # held in the hand under the mouse: the sign itself, not a bare tile frame (a tester)
+            if kind.startswith(FT.LANDMARK + ":"):
+                kw["ghost"] = {"kind": "landmark", "type": kind.split(":", 1)[1], "check": placing_why}
+            elif kind in FT.KINDS:
+                kw["ghost"] = {"kind": kind, "check": placing_why}
+            else:
+                kw["ghost"] = {"kind": "resource", "type": kind, "check": placing_why}
         return kw
 
     @staticmethod
@@ -2897,7 +2914,8 @@ class App(tk.Tk):
                 add_at(self, kind, tuple(xy), preset)
                 return None
             region_kw["on_place"] = add_click
-            region_kw["ghost"] = {"kind": kind if kind != "agent" else "agent", "check": add_why}
+            region_kw["ghost"] = {"kind": kind if kind != "agent" else "agent", "check": add_why,
+                                  "char": preset if kind == "agent" else None}
         if getattr(self, "_port_tool", False) and self._cmap:
             def port_why(xy):
                 region = self._cmap.region_at(*xy)

@@ -1986,9 +1986,9 @@ building smith
         red, blue, black, sea = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233)
         write_tga(os.path.join(camp, "map_regions.tga"), 4, 4, [[red, red, blue, sea], [red, black, blue, sea],
                                                                  [red, red, black, sea], [red, red, blue, sea]])
-        green, shallow = (96, 160, 64), (196, 0, 0)
+        green, shallow, ocean = (96, 160, 64), (196, 0, 0), (64, 0, 0)
         write_tga(os.path.join(camp, "map_ground_types.tga"), 9, 9,
-                  [[shallow if x >= 6 else green for x in range(9)] for y in range(9)])
+                  [[(ocean if y >= 3 else shallow) if x >= 6 else green for x in range(9)] for y in range(9)])
         write_tga(os.path.join(camp, "map_heights.tga"), 9, 9,
                   [[(0, 0, 250) if x >= 6 else (20, 20, 20) for x in range(9)] for y in range(9)])
         with open(os.path.join(camp, "map_heights.hgt"), "wb") as fh:
@@ -2008,6 +2008,10 @@ building smith
         self.assertIn("last land", T.coast_problem(cmap, (2, 0), False, standing, {}, {"B_R": 1}, {}))
         self.assertIn("rub it out", T.coast_problem(cmap, (0, 3), False, standing, {(0, 3): (0, 0, 255)}, counts, {}))
         self.assertEqual(T.nearest_region(cmap, (3, 0)), "B_R")
+        imp = (64, 64, 64)                       # impassable land: Medieval II, Rome only with REX
+        self.assertIn(imp, T.ground_brushes("medieval2")[0])
+        self.assertIn(imp, T.ground_brushes("rome", "REX.exe")[0])
+        self.assertNotIn(imp, T.ground_brushes("rome")[0])
         reg = mod.region_map("test")
         self.assertEqual(T.sea_colour(reg, [red, blue]), sea)
         heights = mod._optional_map("test", "map_heights.tga")
@@ -2015,6 +2019,9 @@ building smith
         water = T.coast_pixels(cmap, (0, 0), False, None, heights, sea)
         self.assertEqual(land["regions"], {(3, 0): blue})
         self.assertEqual(land["ground"][(7, 1)], green)                      # like its land neighbours
+        self.assertEqual((land["ground"][(7, 3)], land["ground"][(7, 4)]), (shallow, shallow))  # shallows round it
+        self.assertNotIn((7, 5), land["ground"])                                # the next tile down stays ocean
+        self.assertNotIn((4, 3), land["ground"])                                # land round it untouched
         self.assertTrue(all(c[0] == c[1] == c[2] and c[0] >= 1 for c in land["heights"].values()))
         self.assertEqual(water["ground"][(1, 1)], shallow)
         self.assertTrue(all(c[0] == 0 and c[2] > 0 for c in water["heights"].values()))

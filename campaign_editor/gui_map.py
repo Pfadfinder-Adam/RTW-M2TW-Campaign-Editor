@@ -186,8 +186,12 @@ class MapView(ttk.Frame):
         lc.tag_bind("tool", "<Leave>", lambda e: lc.configure(cursor=""))
         if self.v_legend.get():
             self.legend.pack(side="right", fill="y")
-        self.readout = ttk.Label(self, text="", anchor="w")
-        self.readout.pack(fill="x")
+        row = ttk.Frame(self)                            # under the map: its size (fixed, left), then the tile read
+        row.pack(fill="x")
+        self.size_label = ttk.Label(row, text="", anchor="w", font=("", 9, "bold"))
+        self.size_label.pack(side="left", padx=(0, 12))
+        self.readout = ttk.Label(row, text="", anchor="w")
+        self.readout.pack(side="left", fill="x", expand=True)
         self.z, self.ox, self.oy = 2, 0.0, 0.0           # zoom; top-left corner in top-down tile units
         self._photo = None
         self._pending = None
@@ -319,6 +323,9 @@ class MapView(ttk.Frame):
             self.v_borders.set(borders)
             self.v_chars.set(chars)
             self._mode_changed(redraw=False)
+        if not self.v_pick.get() and self.picked:        # Pick towns off: every town unpicked (a tester)
+            self.picked = set()
+            self.readout.configure(text="Pick towns off - no town picked")
         self._relayer()
 
     def toggle_pick(self, region):
@@ -363,6 +370,10 @@ class MapView(ttk.Frame):
             self._draw_legend()
         else:
             self.legend.pack_forget()
+            if self.tool:                                # the legend hidden: its picked tool is put down too
+                self.set_tool(None)
+                if self.on_tool:
+                    self.on_tool(None)
 
     LEGEND_RED = (190, 40, 40)
 
@@ -806,17 +817,14 @@ class MapView(ttk.Frame):
                 c.create_text(sx + r + 2, sy, text=name, anchor="w", fill="white", font=font)
         if self.v_chars.get() and self.z >= 4 and not self.region_mode:
             self._characters(cw, ch, size)
-        self._size_badge(ch)
+        self._size_badge()
 
-    def _size_badge(self, ch):
-        """The map's real size, bottom left over the map: tiles (= map_regions.tga pixels) and the 2x+1 pictures."""
-        c = self.canvas
+    def _size_badge(self):
+        """The map's real size, under the map at its bottom left (never over the map, never moving): tiles
+        (= map_regions.tga pixels) and the 2x+1 pictures."""
         w, h = self.cmap.w, self.cmap.h
-        text = "Map %d x %d tiles (map_regions.tga) - heights %d x %d px" % (w, h, 2 * w + 1, 2 * h + 1)
-        t = c.create_text(8, ch - 8, text=text, anchor="sw", fill="white", font=("", 9, "bold"), tags=("badge",))
-        x0, y0, x1, y1 = c.bbox(t)
-        c.create_rectangle(x0 - 4, y0 - 2, x1 + 4, y1 + 2, fill="#202020", outline="#808080", tags=("badge",))
-        c.tag_raise(t)
+        self.size_label.configure(text="Map %d x %d tiles (map_regions.tga) - heights %d x %d px"
+                                  % (w, h, 2 * w + 1, 2 * h + 1))
 
     def _anchor(self, sx, sy, r, tags):
         """An anchor inside the port's circle: ring, shank, stock and flukes."""
@@ -1176,6 +1184,26 @@ class MapView(ttk.Frame):
             c.create_line(cx - h * 0.3, cy + h * 0.5, cx - h * 0.3, cy - h * 0.5, fill=edge, width=2, tags=tags)
             c.create_polygon(cx - h * 0.3, cy - h * 0.5, cx + h * 0.4, cy - h * 0.25, cx - h * 0.3, cy,
                              fill=edge, stipple="gray50", outline=edge, tags=tags)
+        elif kind in ("fort", "watchtower"):            # held in the hand: the sign itself, framed green / red
+            w = max(4.0, min(self.z * (0.28 if kind == "watchtower" else 0.42), 12))
+            self._fort_icon(c, cx, cy, w, "#222222", tags, 1)
+            c.create_rectangle(cx - w - 3, cy - w * 1.3 - 3, cx + w + 3, cy + w + 3, outline=edge, width=2, tags=tags)
+        elif kind == "landmark":
+            rr = max(5, min(self.z * 0.45, 13))
+            self._wonder_icon(c, cx, cy, rr, g.get("type", ""), tags, False)
+            c.create_rectangle(cx - rr - 3, cy - rr - 3, cx + rr + 3, cy + rr + 3, outline=edge, width=2, tags=tags)
+        elif kind == "resource":
+            rr = max(5, min(self.z * 0.42, 14))
+            c.create_rectangle(cx - rr, cy - rr, cx + rr, cy + rr, fill=self.res_colour(g.get("type", "")),
+                               outline=edge, width=2, tags=tags)
+            c.create_text(cx, cy, text=(g.get("type") or "")[:2].capitalize(), fill="white",
+                          font=("", max(6, int(rr * 0.8)), "bold"), tags=tags)
+        elif g.get("char"):                              # an agent: its own sign (spy, priest...)
+            self._draw_char({"id": "ghost", "faction": g.get("faction") or "slave", "kind": g["char"],
+                             "army": False, "name": ""}, cx, cy, max(14, min(self.z * 0.9, 40)))
+            for item in c.find_withtag("char:ghost"):
+                c.addtag_withtag("ghost", item)
+            c.create_oval(cx - r, cy - r, cx + r, cy + r, outline=edge, width=2, tags=tags)
         else:
             c.create_oval(cx - r * 0.6, cy - r * 0.6, cx + r * 0.6, cy + r * 0.6, fill=edge, stipple="gray50",
                           outline=edge, width=2, tags=tags)

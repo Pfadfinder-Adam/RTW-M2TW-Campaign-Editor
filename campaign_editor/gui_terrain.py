@@ -463,12 +463,16 @@ class TerrainEditor(ttk.Frame):
             w.destroy()
         what = self.v_what.get()
         if what == "ground":
-            items = [("land", T.LAND_BRUSHES, T.GROUND), ("sea", T.SEA_BRUSHES, T.GROUND)]
+            from .limits import engine_of, game_kind
+            land, sea = T.ground_brushes(game_kind(self.mod) if self.mod else None,
+                                         engine_of(self.mod) if self.mod else None)
+            items = [("land", land, T.GROUND), ("sea", sea, T.GROUND)]
             self.hint.configure(text=(
                 "Left drag paints the picked ground, right click picks a tile's own, right drag moves the map. "
                 "A tile's ground decides movement, farming and what may stand there; land stays land and sea stays "
-                "sea here - to turn sea into land or land into sea, use 'Land and sea' above. Mountains, high mountains and dense "
-                "forest are refused under towns, ports and characters (the game refuses them there). "
+                "sea here - to turn sea into land or land into sea, use 'Land and sea' above. Mountains, high mountains, dense "
+                "forest and impassable land / sea are refused under towns, ports and characters (the game refuses them "
+                "there); impassable: no army walks or sails there (Medieval II; Rome with REX only). "
                 "On Apply: map_ground_types.tga written, map.rwm deleted - the game builds its map again."))
         elif what == "climate":
             found = T.climates(self.mod) if self.mod else []
