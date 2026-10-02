@@ -452,6 +452,9 @@ class TerrainEditor(ttk.Frame):
 
     def reset(self):
         self._undo, self._redo = [], []
+        if self.mod is None:                    # no mod loaded yet: nothing painted, nothing to put back
+            self.app.status.set("Terrain: load a mod first.")
+            return
         self._restore_to({}, {}, {}, {}, {}, None)
         self.app.status.set("Terrain: nothing painted.")
 

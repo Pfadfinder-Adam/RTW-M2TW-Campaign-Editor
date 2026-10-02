@@ -24,6 +24,13 @@
 - **A battle_models.modeldb with models after its count is read** (a tester: "modeldb: 1585 characters left after
   872 models" stopped a new faction): models added by hand while the count at the top stayed as it was are kept
   exactly as they are, and Preview / Check mod say which ones the game never reads and which count would read them.
+- **Changes waiting for Apply are never written into another mod, and never dropped without asking**: loading
+  another mod (Load, F5, Browse, the Mod list) or opening another campaign now asks first when changes wait (the
+  editors' and the faction tabs'); every editor then reads the new mod. Before, an editor's changes stayed bound to
+  the mod they were made on, and Apply on the new mod wrote them into the old one's files.
+- **A template that does not play in the open campaign** (Medieval II's saxons outside the Norman prologue) is
+  said plainly, with the campaign it plays in.
+- **Terrain editor / win conditions**: two buttons that raised an error before a mod was loaded.
 - **Map: no more errors after switching tools while a new region's town waited for its click** (34 errors in one
   report: a fort placed in between, then every mouse move). The map forgets the old click and says so.
 - **Buildings tab: the buttons above the list work before a town is picked** ('BuildingsEditor' has no

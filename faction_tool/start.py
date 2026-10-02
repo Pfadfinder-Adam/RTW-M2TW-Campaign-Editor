@@ -178,7 +178,17 @@ def build_start(plan, campaign, start):
         raise ValueError("descr_strat.txt already has a faction block for %s" % new)
     tb = s.faction(t)
     if not tb:
-        raise ValueError("template %s has no block in this campaign's descr_strat.txt" % t)
+        where = []
+        for camp in mod.campaigns():
+            try:
+                if camp != campaign and Strat(mod.load(mod.campaign_file(camp, "descr_strat.txt"))).faction(t):
+                    where.append(camp)
+            except Exception:
+                pass
+        raise ValueError("%s does not play in the campaign %s (descr_strat.txt has no block for it), so it cannot be "
+                         "the template here - pick a faction of this campaign%s" % (
+                             t, campaign, ", or open the campaign it plays in (%s) at the top" % ", ".join(where)
+                             if where else ""))
     head_lines = []                                # the template's header lines but faction / denari (read now,
     for i in range(tb.start + 1, tb.end):         # before any line of the file moves)
         tk = tokens(strip_comment(f.text(i)))

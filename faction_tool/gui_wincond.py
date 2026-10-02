@@ -189,6 +189,8 @@ class VictoryBox(ttk.LabelFrame):
             self._changed()
 
     def _goal(self, part):
+        if self.cond is None:                     # no faction read yet (no mod loaded)
+            return
         back = {v: k for k, v in GOAL_WORDS.items()}
         g = back.get(self.rows[part]["goal"].get(), "")
         goals = [g] if g else []

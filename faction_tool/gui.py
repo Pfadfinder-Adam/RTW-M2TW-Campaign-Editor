@@ -365,7 +365,7 @@ class App(tk.Tk):
         self.v_path = tk.StringVar()
         ttk.Entry(top, textvariable=self.v_path, width=8).pack(side="left", fill="x", expand=True, padx=6)
         ttk.Button(top, text="Browse...", command=self.browse).pack(side="left")
-        ttk.Button(top, text="Load", command=self.load).pack(side="left", padx=4)
+        ttk.Button(top, text="Load", command=self.load_clicked).pack(side="left", padx=4)
         ttk.Button(top, text="New mod folder...", command=self.new_mod).pack(side="left", padx=4)
         ttk.Label(top, text="Campaign").pack(side="left", padx=(12, 2))
         self.v_campaign = tk.StringVar()
@@ -1478,7 +1478,7 @@ class App(tk.Tk):
         self.bind_all("<Control-p>", lambda e: self.preview())
         self.bind_all("<Control-s>", lambda e: self.create())
         self.bind_all("<F1>", lambda e: self.show_help())
-        self.bind_all("<F5>", lambda e: self.load())
+        self.bind_all("<F5>", lambda e: self.load_clicked())
         for i in range(5):
             self.bind_all("<Control-Key-%d>" % (i + 1), lambda e, i=i: self.nb.select(i))
 
@@ -2880,8 +2880,41 @@ class App(tk.Tk):
         d = filedialog.askdirectory(title="The mod's data folder",
                                     initialdir=log.exe_game() or settings.get("game") or "")
         if d:
+            was = self.v_path.get()
             self.v_path.set(d)
-            self.load()
+            if not self.load_clicked():
+                self.v_path.set(was)
+
+    def unwritten(self):
+        """Plain lines for the changes not written yet on the mod loaded now: each editor's, and the faction
+        tabs' (any step Undo could take back)."""
+        if not self.mod:
+            return []
+        out = [label for key, label in self.pending_parts() if key != "faction"]
+        if self.undo_stack:
+            out.append("%s: %d step(s)" % ("Edit faction" if self.editing() else "New faction / the map",
+                                           len(self.undo_stack)))
+        return out
+
+    def may_drop(self, what):
+        """True when nothing waits for Apply, or the user lets the waiting changes go before `what` (loading
+        another mod, another campaign) - they were made on the files loaded now and cannot follow."""
+        waiting = self.unwritten()
+        if not waiting:
+            return True
+        return messagebox.askyesno(APP, "%s?\n\nThese changes are not written yet and would be dropped:\n%s\n\n"
+                                        "Yes = drop them. No = stay (Apply writes them first)."
+                                   % (what, "\n".join("- " + w for w in waiting)))
+
+    def load_clicked(self):
+        """Load (the button, F5, Browse...): the mod in the data folder box - after asking when changes made on the
+        files loaded now would be dropped. True when it was loaded."""
+        if self.mod and not self.may_drop("Load %s" % (self.v_path.get().strip() or "the mod")):
+            if self.mod:
+                self.v_path.set(self.mod.data)
+            return False
+        self.load()
+        return True
 
     def load_last(self):
         """At start: the mod loaded last time, if its folder is still there."""
@@ -2931,14 +2964,17 @@ class App(tk.Tk):
     def mod_picked(self):
         d = next((d for label, d in self._mods if label == self.v_modpick.get()), None)
         if d and (not self.mod or os.path.abspath(d) != os.path.abspath(self.mod.data)):
-            if self.undo_stack and not messagebox.askyesno(
-                    APP, "Load %s? The changes not written yet are dropped." % self.v_modpick.get()):
+            if not self.may_drop("Load %s" % self.v_modpick.get()):
                 self.fill_mods(settings.get("game"))
                 return
             self.v_path.set(d)
             self.load()
 
     def campaign_picked(self):
+        was = getattr(self, "_campaign_now", None)
+        if was and was != self.v_campaign.get() and not self.may_drop("Open the campaign %s" % self.v_campaign.get()):
+            self.v_campaign.set(was)
+            return
         if self.mod:
             camps = settings.get("campaigns") or {}
             camps[self.mod.data] = self.v_campaign.get()
@@ -2958,6 +2994,7 @@ class App(tk.Tk):
         return self._shown
 
     def load(self):
+        before = self.mod.data if self.mod else None
         try:
             self.mod = ModData(self.v_path.get())
             self._units_for = self._edb_for = None
@@ -3005,7 +3042,12 @@ class App(tk.Tk):
             self._fix_queued = True
             self.after_idle(self.offer_fixes)
         # after Apply the editors read the files again; changes waiting in one whose file
-        # was not written stay
+        # was not written stay. Another mod: every editor reads the new one (what waited was made on the old
+        # mod's files - left bound to them, Apply wrote it into the old mod)
+        if before and os.path.normcase(os.path.abspath(before)) != os.path.normcase(os.path.abspath(self.mod.data)):
+            for ed in self.editors.values():
+                if ed.mod is not None:
+                    ed.rebind(self.mod)
         ed = self.editor()
         if ed is not None:
             self._rebind(ed)
@@ -3187,6 +3229,7 @@ class App(tk.Tk):
 
     def load_campaign(self):
         c = self.v_campaign.get()
+        self._campaign_now = c
         if not self.mod or not c:
             return
         try:
@@ -4141,10 +4184,13 @@ class App(tk.Tk):
         editors first (their changes sit on the file's lines as read), then the faction
         tabs (built from the files as the editors leave them)."""
         out = []
+        here = os.path.normcase(os.path.abspath(self.mod.data)) if self.mod else None
         for key, name in (("units", "Unit editor"), ("buildings", "Building editor"),
                           ("characters", "Character editor"), ("terrain", "Terrain editor")):
             ed = self.editors.get(key)
-            if ed is not None and ed.mod is not None and ed.dirty():
+            # only an editor on the mod loaded now: one left on another mod's files never writes into them
+            if ed is not None and ed.mod is not None and ed.dirty() and \
+                    os.path.normcase(os.path.abspath(ed.mod.data)) == here:
                 out.append((key, "%s: %d change(s)" % (name, ed.pending())))
         if self.faction_pending():
             out.append(("faction", self._faction_label()))
