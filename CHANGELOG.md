@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Changed
+- **Recolour leaves the white banner a fleeing unit shows and the rebels' banner alone** (found in a tester's log: it
+  made the faction its own recoloured copy of standard_routing / standard_slave).
 - **Add-ons go where REX loads them** (a tester's HLR report): into the game's `script/modules` - a mod with a script
   plugin of its own (manifest.nut + main.nut, as HLR has) loads no modules from its own folder, so an add-on put
   there never ran. An add-on whose code is already pasted into the mod's own scripts is refused (it would run
