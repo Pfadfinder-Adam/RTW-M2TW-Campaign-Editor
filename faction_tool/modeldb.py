@@ -313,15 +313,15 @@ def load(path):
 
 def text_source(mod):
     """True when the game reads descr_model_battle.txt instead (M2EX `model_battle_source text`)."""
+    from .limits import ex_file
     from .textio import strip_comment, tokens
-    for d in (mod.data,):
-        p = _ci(d, "descr_caps_ex.txt")
-        if p:
-            with open(p, "rb") as fh:
-                for line in fh.read().decode("latin-1").splitlines():
-                    t = tokens(strip_comment(line))
-                    if t[:1] == ["model_battle_source"] and len(t) > 1:
-                        return t[1].lower() == "text"
+    p = ex_file(mod, "descr_caps_ex.txt")
+    if p:
+        with open(p, "rb") as fh:
+            for line in fh.read().decode("latin-1").splitlines():
+                t = tokens(strip_comment(line))
+                if t[:1] == ["model_battle_source"] and len(t) > 1:
+                    return t[1].lower() == "text"
     return False
 
 

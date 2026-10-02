@@ -26,8 +26,8 @@ FLAG, LOGO, SMALL = "symbol:flag", "symbol:logo", "symbol:small_logo"
 SHEETS = {LOGO: ("strat3.sd.xml", "logo_index", "FACTION_LOGO_%s", "faction_logo_%s.tga", 52),
           SMALL: ("shared2.sd.xml", "small_logo_index", "SMALL_FACTION_LOGO_%s", "faction_logo_small_%s.tga", 32)}
 # Medieval II: the same lines and sprite names on ui/strategy.sd.xml (68 x 76) and ui/shared.sd.xml (32 x 32); M2EX
-# reads the xml sheets with 'sprite_format xml' in descr_caps_ex.txt ("v7 .sd.xml with runtime atlas packing"),
-# vanilla medieval2.exe only the binary ui/*.sd (strings of both exes, 2026-10-01)
+# reads the xml sheets with 'sprite_format xml' in the mod's own descr_caps_ex.txt ("v7 .sd.xml with runtime atlas
+# packing"), vanilla medieval2.exe only the binary ui/*.sd (strings of both exes, 2026-10-01)
 SHEETS_M2 = {LOGO: ("strategy.sd.xml", "logo_index", "FACTION_LOGO_%s", "faction_logo_%s.tga", (68, 76)),
              SMALL: ("shared.sd.xml", "small_logo_index", "SMALL_FACTION_LOGO_%s", "faction_logo_small_%s.tga", 32)}
 
@@ -366,8 +366,10 @@ def own_flag(plan, faction, im=None):
 # The faction logos (REX sprite sheets)
 # ---------------------------------------------------------------------------
 def sprite_mode(mod):
-    """'xml' when REX packs the .sd.xml sheets (sprites can be added), else 'sd' (binary .rsd)."""
-    p = _ci(mod.data, "descr_caps_ex.txt") or (_ci(_game_data(mod), "descr_caps_ex.txt") if _game_data(mod) else None)
+    """'xml' when REX packs the .sd.xml sheets (sprites can be added), else 'sd' (binary .rsd) - from the mod's own
+    descr_caps_ex.txt; a mod without one runs on the engine's default, sd (limits.ex_file)."""
+    from .limits import ex_file
+    p = ex_file(mod, "descr_caps_ex.txt")
     if not p:
         return "sd"
     for line in TextFile.load(p).texts():
@@ -532,7 +534,7 @@ def give_own(plan, faction):
         if not logo_of(plan, faction, LOGO):
             return                                   # no logo line at all: nothing shared to say
         plan.warn(None, "%s: its faction logos stay %s's - the game reads the binary sprite sheets; with %s, "
-                        "'sprite_format xml' in descr_caps_ex.txt lets a faction have logos of its own"
+                        "'sprite_format xml' in the mod's own descr_caps_ex.txt lets a faction have logos of its own"
                   % (faction, plan.template, ENGINE[rome(plan.mod)]))
         return
     for which in (LOGO, SMALL):
@@ -560,7 +562,7 @@ def entries(mod, faction):
         note = "sprite %s on %s" % (lg["name"], sp["page"])
         if not xml:
             note += " - cannot be replaced: the game reads the binary sprite sheets (%s with 'sprite_format xml' " \
-                    "needed)" % ENGINE[rome(mod)]
+                    "in the mod's own descr_caps_ex.txt needed)" % ENGINE[rome(mod)]
         elif not lg["own"]:
             note += " - shared sheet: Replace gives %s a page of its own" % faction
         out.append({"path": sp["page_path"], "rel": which, "label": LABELS[which][0], "where": LABELS[which][1],
@@ -577,5 +579,5 @@ def write(plan, faction, which, src):
         own_flag(plan, faction, im)
     elif own_logo(plan, faction, which, im) is None:
         raise ValueError("%s: the %s cannot be replaced here - the game reads the binary sprite sheets; "
-                         "%s with 'sprite_format xml' in descr_caps_ex.txt can take it"
+                         "%s with 'sprite_format xml' in the mod's own descr_caps_ex.txt can take it"
                          % (faction, LABELS[which][0], ENGINE[rome(plan.mod)]))

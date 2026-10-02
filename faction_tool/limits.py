@@ -2,8 +2,8 @@
 
 The original exes stop at a fixed number (slave included): Rome 21, Medieval II 31. REX and M2EX read
 `max_factions` from data/descr_ex.txt ("Maximum number of factions (default in M2: 31, RTW: 21) /
-Increase to support more factions in mods") - the mod's own copy, else the game's data (REX falls back
-to it). Over the limit the game closes at start: "Too many factions described here, maximum is(21).
+Increase to support more factions in mods") - the mod's own copy only (see ex_file). Over the limit the game
+closes at start: "Too many factions described here, maximum is(21).
 The rest will be ignored" (REX faction_db.cpp(564), the user's nabataea, 2026-09-29)."""
 
 import os
@@ -99,22 +99,25 @@ def manhood_age(mod):
     return 16
 
 
+def ex_file(mod, name):
+    """The engine's own settings file (descr_ex.txt, descr_caps_ex.txt, ...) the engine reads for this mod: the
+    mod's own copy, else None - the engine's built-in defaults. A mod never takes the game's data copy: both
+    engines' descr_caps_ex.txt say "Mods that don't ship this file get safe defaults" (each option marked "default
+    for mods"), REX ships separate copies for bi/ and alexander/, M2EX one in each Kingdoms mod, and modders
+    (Klerski, 2026-10-01) found the same. For the game's own data the mod's copy is that copy."""
+    return _ci(mod.data, name)
+
+
 def ex_setting(mod, key):
-    """A number setting the engine reads from descr_ex.txt (the mod's copy, else the game's data),
-    else the game's default; None when the tool knows no default for this game."""
-    from .newmod import game_of
+    """A number setting the engine reads from the mod's descr_ex.txt, else the engine's default; None when the
+    tool knows no default for this game."""
     kind = game_kind(mod)
     default = FAMILY_DEFAULTS.get(key)
     if kind == "medieval2" and key == "max_num_children":
         default = None
-    game = game_of(mod.data)
-    game_data = _ci(game, "data") if game else None
-    for folder in (mod.data, game_data):
-        p = _ci(folder, "descr_ex.txt") if folder else None
-        if p:
-            value = _setting(p, key)[1]
-            return value if value is not None else default     # the file the engine reads decides
-    return default
+    p = ex_file(mod, "descr_ex.txt")
+    value = _setting(p, key)[1] if p else None
+    return value if value is not None else default
 
 
 RE_ENGINE = re.compile(r"^(rex|m2ex)[^\\/]*\.(exe|xdb)$", re.I)
@@ -162,7 +165,7 @@ def engine_report(mod):
     how = "found in %s" % game if engine_files(game) else "taken as installed (its descr_ex.txt is there, its exe " \
         "was not seen in %s)" % game
     own = "the mod's own %s" % os.path.basename(lim["file"]) if lim.get("own") else \
-        ("the game's data/descr_ex.txt (the mod has none of its own)" if lim["written"] else "its defaults")
+        "its built-in defaults - the mod has no descr_ex.txt of its own, and a mod never takes the game's copy"
     return "%s %s - max_factions %d (from %s)" % (engine[:-4], how, lim["max"], own)
 
 
@@ -184,20 +187,13 @@ def faction_limit(mod):
            "known": known, "own": False}
     if not engine:
         return out
-    game_data = _ci(game, "data") if game else None
-    for folder in (mod.data, game_data):
-        p = _ci(folder, "descr_ex.txt") if folder else None
-        if not p:
-            continue
+    p = ex_file(mod, "descr_ex.txt")
+    out["file"] = p or os.path.join(mod.data, "descr_ex.txt")
+    out["own"] = bool(p)
+    if p:
         line, value = _setting(p)
-        out["file"] = p
-        out["own"] = folder == mod.data
-        if value is not None:
+        if value is not None:                   # no line: the engine's default holds
             out.update(max=value, line=line, written=True)
-            return out
-        break                                   # the file the engine reads has no line: the default holds
-    if out["file"] is None:
-        out["file"] = os.path.join(mod.data, "descr_ex.txt")
     return out
 
 
@@ -236,23 +232,9 @@ def check(plan, count, allow_raise=False):
 
 
 def raise_limit(plan, limit, count):
-    """max_factions set to count in the descr_ex.txt the engine reads (a line added when missing; the
-    file made in the mod's data when there is none) - with the plan's backup like any change."""
-    path = limit["file"]
-    own = os.path.join(plan.mod.data, "descr_ex.txt")
-    if path and os.path.isfile(path) and not limit.get("own") and \
-            os.path.normcase(os.path.abspath(path)) != os.path.normcase(os.path.abspath(own)):
-        # the game's copy: the mod gets its own (M2EX's Kingdoms mods each carry their _ex files; the game's
-        # data is never changed for one mod) - the game's file copied, then the line raised in the copy
-        with open(path, "rb") as fh:
-            plan.binary(own, re.sub(rb"(?m)^(\s*max_factions\s+)\d+", lambda m: m.group(1) + str(count).encode(),
-                                    fh.read(), count=1) if limit["line"] is not None else fh.read() +
-                        ("\r\nmax_factions %d\r\n" % count).encode("latin-1"))
-        plan.note(None, "max_factions %d -> %d in %s, a copy of the game's %s for this mod (%s reads it; over it "
-                        "the game closes at start)" % (limit["max"], count, plan.mod.rel(own), plan.mod.rel(path),
-                                                       limit["engine"][:-4]))
-        return
-    path = own if not path else path
+    """max_factions set to count in the mod's descr_ex.txt (a line added when missing; the file made with that
+    line alone when the mod has none - the game's copy is never read for a mod, ex_file) - with the plan's backup."""
+    path = limit["file"] or os.path.join(plan.mod.data, "descr_ex.txt")     # always the mod's own (ex_file)
     if os.path.isfile(path):
         f = plan.edit(path)
         if limit["line"] is not None:
@@ -262,7 +244,9 @@ def raise_limit(plan, limit, count):
             f.insert(len(f), ["", "; Maximum number of factions - raised by the campaign editor for a new faction",
                               "max_factions %d" % count])
     else:
-        plan.binary(path, ("; Extended settings (REX / M2EX)\r\n; Maximum number of factions - set by the "
-                           "campaign editor for a new faction\r\nmax_factions %d\r\n" % count).encode("latin-1"))
+        # only the one line: every other setting stays the engine's default, as the mod ran before
+        plan.binary(path, ("; Extended settings (REX / M2EX) - lines here override the engine's defaults\r\n"
+                           "; Maximum number of factions - set by the campaign editor for a new faction\r\n"
+                           "max_factions %d\r\n" % count).encode("latin-1"))
     plan.note(None, "max_factions %d -> %d in %s (%s reads it; over it the game closes at start)"
               % (limit["max"], count, plan.mod.rel(path), limit["engine"][:-4]))

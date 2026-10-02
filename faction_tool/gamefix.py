@@ -22,7 +22,8 @@ def _vegetation_maps(mod):
 def problems(mod):
     """[{'id', 'why', 'file', 'line', 'new'}] - what would stop the game and can be put right."""
     out = []
-    caps = _ci(mod.data, "descr_caps_ex.txt")
+    from .limits import ex_file
+    caps = ex_file(mod, "descr_caps_ex.txt")
     if caps:
         f = mod.load(caps)
         for i in range(len(f)):
@@ -41,12 +42,12 @@ def problems(mod):
         from .limits import engine_of
         name = engine_of(mod)[:-4]
         out.append({"id": "engine_files", "names": missing,
-                    "why": "This mod has no %s of its own, though %s lies in the game's data. %s reads its "
-                           "settings (the faction limit, sprites, models, AI...) from the mod's own data folder - "
-                           "modders find that a mod without them runs on %s's built-in defaults, not on the game's "
-                           "settings. The fix: the game's copies go into the mod (they can be changed there "
-                           "for this mod alone)." % (", ".join(missing), "it" if len(missing) == 1 else "they",
-                                                     name, name)})
+                    "why": "This mod has no %s of its own, though %s in the game's data. %s reads its "
+                           "settings (the faction limit, sprites, models, AI...) only from the mod's own data "
+                           "folder - its descr_caps_ex.txt says \"Mods that don't ship this file get safe defaults\", "
+                           "so this mod runs on %s's built-in defaults, not on the game's settings. The fix: the "
+                           "game's copies go into the mod (they can be changed there for this mod alone)."
+                           % (", ".join(missing), "it lies" if len(missing) == 1 else "they lie", name, name)})
     old = _old_culture_module(mod)
     if old:
         out.append({"id": "old_culture_names", "file": old[0], "table": old[1],

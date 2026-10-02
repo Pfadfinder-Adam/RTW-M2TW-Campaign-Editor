@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+- **A mod's engine settings come from the mod's own files only**: REX and M2EX read `descr_ex.txt` /
+  `descr_caps_ex.txt` from the mod's data folder - a mod without them runs on the engine's built-in defaults (their
+  own words: "Mods that don't ship this file get safe defaults"), not on the game's copy. The tool read the game's
+  copy for such a mod, so it could show the wrong faction limit, ancillary / children limits and age of manhood,
+  and take sprite sheets as xml (faction logos written that the game would not read). Now it reads what the engine
+  reads; raising the faction limit in a mod without its own `descr_ex.txt` makes one with that line alone (every
+  other setting stays as the mod ran before). Load still offers to copy the game's engine files into the mod.
+
 ## 0.29.1 - 2026-10-01
 
 ### Added

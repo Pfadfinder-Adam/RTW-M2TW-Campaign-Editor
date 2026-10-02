@@ -521,9 +521,10 @@ building smith
         self.assertEqual(ex_setting(mod, "max_num_ancillaries"), 8)       # no descr_ex.txt: the game's default
         self.assertEqual(ex_setting(mod, "max_num_children"), 4)
         write(os.path.join(game, "data", "descr_ex.txt"), "max_num_ancillaries 16\nmax_num_children 6\n")
-        self.assertEqual(ex_setting(mod, "max_num_ancillaries"), 16)      # REX falls back to the game's
+        self.assertEqual(ex_setting(mod, "max_num_ancillaries"), 8)       # a mod never takes the game's copy
         write(os.path.join(hlr, "data", "descr_ex.txt"), "; the mod's own\nmax_factions 31\n")
         self.assertEqual(ex_setting(mod, "max_num_children"), 4)          # the mod's file decides: default
+        self.assertEqual(ex_setting(ModData(os.path.join(game, "data")), "max_num_ancillaries"), 16)  # the game
         tree = [["Boris", "Anna", ["A", "B", "C", "D", "E"]]]
         w = limit_warnings(mod, tree, {"k": {"ancillaries": ["a%d" % i for i in range(9)]}}, {})
         self.assertEqual(len(w), 3, w)                                    # 9 ancillaries; Boris and Anna 5 kids
@@ -2479,12 +2480,14 @@ building smith
 
     def test_engine_found_in_the_game_folder_and_the_limit_raised_in_the_mod(self):
         # M2EX copied over the game's root (any case), the mod in mods/<mod>/data: the engine is seen, the
-        # game's descr_ex.txt is read, and a raise goes into the mod's own copy - the game's file untouched
+        # game's descr_ex.txt is NOT read for the mod (engines read a mod's own _ex files only - "Mods that don't
+        # ship this file get safe defaults"), and a raise makes the mod's own file - the game's file untouched
         from faction_tool import limits
         game = os.path.join(self.root, "game")
         os.makedirs(os.path.join(game, "mods"))
         write(os.path.join(game, "medieval2.exe"), "x")
-        write(os.path.join(game, "data", "descr_ex.txt"), "; Extended settings\nmax_factions 31\nrolloff 1\n")
+        write(os.path.join(game, "data", "descr_ex.txt"), "; Extended settings\nmax_factions 50\nrolloff 1\n")
+        write(os.path.join(game, "data", "descr_sm_factions.txt"), SM)
         write(os.path.join(game, "data", "descr_religions.txt"), "religions\n{\n}\n")
         shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "mods", "m", "data"))
         mod = ModData(os.path.join(game, "mods", "m", "data"))
@@ -2497,16 +2500,19 @@ building smith
         write(os.path.join(game, "m2ex.EXE"), "x")
         self.assertEqual(limits.engine_of(mod), "M2EX.exe")
         lim = limits.faction_limit(mod)
-        self.assertEqual((lim["max"], lim["own"]), (31, False))
-        self.assertIn("the mod has none of its own", limits.engine_report(mod))
+        self.assertEqual((lim["max"], lim["own"], lim["written"]), (31, False, False))   # M2EX's default, not 50
+        self.assertIn("built-in defaults", limits.engine_report(mod))
+        self.assertEqual(limits.faction_limit(ModData(os.path.join(game, "data")))["max"], 50)  # the game itself
         plan = Plan(mod, "a", "b", {})
         limits.raise_limit(plan, lim, 40)
         plan.apply()
         own = os.path.join(game, "mods", "m", "data", "descr_ex.txt")
         with open(own, "rb") as fh:
-            self.assertIn(b"max_factions 40", fh.read())
+            text = fh.read()
+        self.assertIn(b"max_factions 40", text)
+        self.assertNotIn(b"rolloff", text)                          # only the line meant: the rest stays default
         with open(os.path.join(game, "data", "descr_ex.txt"), "rb") as fh:
-            self.assertIn(b"max_factions 31", fh.read())
+            self.assertIn(b"max_factions 50", fh.read())
         lim = limits.faction_limit(ModData(mod.data))
         self.assertEqual((lim["max"], lim["own"]), (40, True))
         restore(ModData(mod.data), backups(ModData(mod.data))[0])
@@ -2534,6 +2540,32 @@ building smith
         self.assertEqual(gamefix.missing_engine_files(ModData(mod.data)), [])
         restore(ModData(mod.data), backups(ModData(mod.data))[0])
         self.assertFalse(os.path.exists(os.path.join(mod.data, "descr_ex.txt")))
+
+    def test_engine_settings_come_from_the_mods_own_files_only(self):
+        """REX / M2EX read a mod's descr_ex.txt / descr_caps_ex.txt from the mod alone ("Mods that don't ship this
+        file get safe defaults"): the game's data copy says nothing about a mod's sprites or battle models."""
+        from faction_tool import gamefix, limits, modeldb, symbols
+        game = os.path.join(self.root, "game")
+        write(os.path.join(game, "medieval2.exe"), "x")
+        write(os.path.join(game, "M2EX.exe"), "x")
+        write(os.path.join(game, "data", "descr_religions.txt"), "x\n")
+        write(os.path.join(game, "data", "descr_caps_ex.txt"),
+              "sprite_format  xml\nmodel_battle_source  text\nvegetation_source  text\n")
+        write(os.path.join(game, "data", "descr_sm_factions.txt"), SM)
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "mods", "m", "data"))
+        mod = ModData(os.path.join(game, "mods", "m", "data"))
+        self.assertIsNone(limits.ex_file(mod, "descr_caps_ex.txt"))
+        self.assertEqual(symbols.sprite_mode(mod), "sd")               # the engine's default for mods
+        self.assertFalse(modeldb.text_source(mod))
+        self.assertNotIn("vegetation_source", [p["id"] for p in gamefix.problems(mod)])
+        self.assertIn("descr_caps_ex.txt", [n for p in gamefix.problems(mod) if p["id"] == "engine_files"
+                                            for n in p["names"]])
+        gd = ModData(os.path.join(game, "data"))
+        self.assertEqual(symbols.sprite_mode(gd), "xml")                # the game's own campaign reads it
+        self.assertTrue(modeldb.text_source(gd))
+        write(os.path.join(mod.data, "descr_caps_ex.txt"), "sprite_format  xml\n")
+        self.assertEqual(symbols.sprite_mode(mod), "xml")
+        self.assertFalse(modeldb.text_source(mod))                      # not in the mod's file: default modeldb
 
     def test_recolour_faction_pictures(self):
         """A unit card in the faction's red / yellow next to another faction's blue / white copy: the red and yellow
