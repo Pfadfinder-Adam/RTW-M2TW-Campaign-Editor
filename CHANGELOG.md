@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Changed
+- **Garrisons fit the town** (the author): drawn garrisons in *Buildings and garrisons for many towns* hold only the
+  units the town's own buildings recruit for its owner - no catapult in a village without a siege workshop, no heavy
+  infantry where there are no barracks; a town that recruits none of them gets the cheapest units (peasants, levy
+  spearmen). A box turns it off (then anything the owner recruits somewhere). Both games.
 - **A town's own window** (a tester: "click a town and get its window straight away"): a double click on a town on the
   Map (or the right click's *This town...*) opens it - owner (hand it to another faction), city or castle (Medieval II),
   level, population and buildings (add, raise, take out, checked as the game checks them), the garrison shown;

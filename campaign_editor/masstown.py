@@ -207,6 +207,41 @@ def garrison_pool(mod, faction, siege=False):
     return [(u.type, u.upkeep) for u in picked]
 
 
+def recruitable_here(mod, town):
+    """{unit type} the town's own buildings recruit for its owner (both games: recruit / recruit_pool lines of the
+    exact building levels the town holds, their factions list letting the owner in; the rebels: any line)."""
+    from .roster import covers, factions_in, recruit_lines
+    edb = mod.file("edb")
+    if not edb:
+        return set()
+    f = mod.load(edb)
+    have = set((c, l) for c, l in town["buildings"])
+    owner, culture = town["owner"], town.get("culture")
+    out = set()
+    for i, unit, chain, level in recruit_lines(f):
+        if (chain, level) in have and (owner == "slave" or covers(factions_in(f.text(i)), owner, culture)):
+            out.add(unit)
+    return out
+
+
+CHEAPEST_KINDS = 2              # a town that recruits nothing: its garrison is drawn from the 2 cheapest unit types
+
+
+def town_pool(mod, town, pool):
+    """The part of pool [(type, upkeep)] the town itself could raise (the user, 2026-10-03: 'no catapult in a village
+    without a siege workshop, no heavy infantry where there are no barracks'): the units its buildings recruit;
+    a town that recruits none of them gets the cheapest units of the pool (peasants, levy spearmen) - the base
+    every town has. (pool unchanged when empty)"""
+    if not pool:
+        return pool
+    here = recruitable_here(mod, town)
+    got = [(t, u) for t, u in pool if t in here]
+    if got:
+        return got
+    prices = sorted(set(u for _, u in pool))[:CHEAPEST_KINDS]
+    return [(t, u) for t, u in pool if u in prices]
+
+
 def rebel_pool(mod, campaign, region, near=3, siege=False):
     """[(unit type, upkeep)] for a rebel town: the units of the rebel armies nearest to it (its own garrison
     first) - the rebels' starting armies are local troops, so a Greek town gets Greek rebels, not anyone the
@@ -289,5 +324,6 @@ def apply(plan, campaign, opts):
     return plan
 
 
-__all__ = ["towns", "building_fit", "town_fit", "random_garrison", "garrison_pool", "rebel_pool", "apply", "known_buildings", "is_core",
+__all__ = ["towns", "building_fit", "town_fit", "random_garrison", "garrison_pool", "rebel_pool", "town_pool",
+           "recruitable_here", "apply", "known_buildings", "is_core",
            "MAX_UNITS", "SETTLEMENT_LEVELS"]

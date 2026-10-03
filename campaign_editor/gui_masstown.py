@@ -231,6 +231,7 @@ class MassTownWindow(tk.Toplevel):
         f = ttk.Frame(nb, padding=8)
         self.v_lo, self.v_hi, self.v_cap = tk.StringVar(value="2"), tk.StringVar(value="6"), tk.StringVar(value="500")
         self.v_siege, self.v_gmode = tk.BooleanVar(value=False), tk.StringVar(value="add")
+        self.v_here = tk.BooleanVar(value=True)            # only what the town's own buildings recruit
         row = ttk.Frame(f)
         row.pack(fill="x")
         ttk.Label(row, text="Units per town: from").pack(side="left")
@@ -254,6 +255,14 @@ class MassTownWindow(tk.Toplevel):
                         variable=self.v_gmode, command=self.fill_chosen).pack(side="left", padx=(12, 0))
         ttk.Checkbutton(row, text="siege engines too", variable=self.v_siege,
                         command=lambda: (self.pools.clear(), self.draw())).pack(side="left", padx=(12, 0))
+        row = ttk.Frame(f)
+        row.pack(fill="x", pady=(6, 0))
+        ttk.Checkbutton(row, text="only units the town's own buildings recruit", variable=self.v_here,
+                        command=self.draw).pack(side="left")
+        hint(row, "On: a town gets only the units its own buildings recruit for its owner - no catapult in a village "
+                  "without a siege workshop, no heavy infantry where there are no barracks. A town that recruits "
+                  "none of them gets the cheapest units (peasants, levy spearmen): the base every town has. Off: "
+                  "anything its owner recruits somewhere.", width=480).pack(side="left", padx=4)
         row = ttk.Frame(f)
         row.pack(fill="x", pady=(6, 0))
         tip(ttk.Button(row, text="Draw the garrisons", command=self.draw), "Pick the units for every chosen town "
@@ -377,6 +386,11 @@ class MassTownWindow(tk.Toplevel):
                                M.garrison_pool(self.mod, t["owner"], siege=self.v_siege.get()))
         return self.pools[key]
 
+    def _town_pool(self, t):
+        """_pool narrowed to what the town's own buildings recruit (masstown.town_pool) when that box is ticked."""
+        pool = self._pool(t)
+        return M.town_pool(self.mod, t, pool) if self.v_here.get() else pool
+
     def _numbers(self):
         try:
             lo, hi = int(self.v_lo.get()), int(self.v_hi.get())
@@ -401,7 +415,7 @@ class MassTownWindow(tk.Toplevel):
             messagebox.showwarning(TITLE, str(e), parent=self)
             return
         self.nb.select(1)
-        self.garrisons = {r: M.random_garrison(self._pool(self.by[r]), lo, hi, cap, self.rng)
+        self.garrisons = {r: M.random_garrison(self._town_pool(self.by[r]), lo, hi, cap, self.rng)
                           for r in self.chosen}
         self.fill_chosen()
         self.status.configure(text="garrisons drawn - Preview, or Write it")

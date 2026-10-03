@@ -3129,6 +3129,27 @@ building smith
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
         self.assertEqual(before, after)
 
+    def test_garrison_only_what_the_town_recruits(self):
+        """A drawn garrison holds only what the town's own buildings recruit for its owner (the user: no catapult in
+        a village without a siege workshop); a town recruiting none of the pool gets the cheapest units."""
+        from campaign_editor import masstown as MT
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels militia_barracks\n    {\n"
+              "        militia_barracks requires factions { alpha, }\n        {\n            capability\n            {\n"
+              "                recruit \"alpha spear\" 0 requires factions { alpha, }\n"
+              "                recruit \"beta spear\" 0 requires factions { beta, }\n"
+              "            }\n            construction 1\n            cost 100\n            settlement_min town\n"
+              "            upgrades\n            {\n            }\n        }\n    }\n}\n")
+        mod = ModData(self.root)
+        pool = [("alpha spear", 100), ("catapult", 300), ("peasants", 50), ("levy", 60), ("knights", 200)]
+        town = {"owner": "alpha", "culture": "eastern", "buildings": [("barracks", "militia_barracks")]}
+        self.assertEqual(MT.recruitable_here(mod, town), {"alpha spear"})
+        self.assertEqual(MT.town_pool(mod, town, pool), [("alpha spear", 100)])
+        bare = dict(town, buildings=[])
+        self.assertEqual(MT.town_pool(mod, bare, pool), [("peasants", 50), ("levy", 60)])
+        self.assertEqual(MT.town_pool(mod, bare, []), [])
+
     def test_new_faction_keeps_the_templates_ai_label_and_purse(self):
         """Medieval II: the template's block header (ai_label - the campaign AI's rule set, denari_kings_purse - its
         money every turn) comes along to the new faction; the treasury is the one picked."""
