@@ -13,6 +13,20 @@ from . import terrain as T
 NEAREST = "(the nearest region)"
 
 
+
+class _FeatureLookup:
+    """map_features read tile by tile where asked ({(x, y): colour}.get), black for an empty tile or off the picture."""
+
+    def __init__(self, img):
+        self.img = img
+
+    def get(self, xy, default=None):
+        f = self.img
+        if f is None or not (0 <= xy[0] < f.width and 0 <= xy[1] < f.height):
+            return default
+        c = f.get(*xy)
+        return default if c == (0, 0, 0) else c
+
 class TerrainEditor(ttk.Frame):
     kind = "terrain"
 
@@ -300,8 +314,9 @@ class TerrainEditor(ttk.Frame):
         if not hasattr(self, "_sea"):
             self._sea = T.sea_colour(reg_img, [v["colour"] for v in self.cmap.info.values()])
         heights = self._img("map_heights.tga")
-        feats = self._features_now()
-        counts = self._region_tiles()
+        feats = _FeatureLookup(self._img("map_features.tga"))   # read where asked - a whole-map scan per mouse
+        counts = self._region_tiles()                           # move made the brush lag (worse on big maps)
+        changed = set()
         took, why = [], None
         from .mapdata import GROUND_LOOK
         for t in tiles:
@@ -332,6 +347,8 @@ class TerrainEditor(ttk.Frame):
                     else:
                         self.cpx[name][p] = c
                     img.set(p[0], p[1], c)
+                    if name == "heights":
+                        changed.add(p)
                     if name == "heights" and self.cmap is not None:
                         if c[0] == c[1] == c[2]:
                             self.cmap.set_height(p[0], p[1], c[0])
@@ -346,7 +363,12 @@ class TerrainEditor(ttk.Frame):
                 self.coast[t] = "land" if to_land else "sea"
             took.append((t, GROUND_LOOK.get(px["ground"][(2 * t[0] + 1, 2 * t[1] + 1)], (0, 0, 0))))
         if took and to_land and heights is not None:      # land made tile by tile: what is inland now rises
-            for p, c in T.shore_rise(heights, [p for p in self.cpx["heights"]]).items():
+            # only the land near this move can be further from the sea now (_from_sea looks 5 pixels out) - all the
+            # stroke's pixels each move made it slower the longer it went on
+            reach = 6
+            near = {(p[0] + a, p[1] + b) for p in changed for a in range(-reach, reach + 1)
+                    for b in range(-reach, reach + 1)}
+            for p, c in T.shore_rise(heights, [p for p in near if p in self.cpx["heights"]]).items():
                 self.cbase.setdefault(("heights", p), heights.get(*p))
                 self.cpx["heights"][p] = c
                 heights.set(p[0], p[1], c)

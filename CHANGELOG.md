@@ -322,6 +322,9 @@
   river's last tiles in the sea, the land was kept under the river, so a sandbar stood out into the sea at each mouth
   (`map_ground_types.tga`, `map_regions.tga` and the heights). The river now stops at the new coast, its end touching
   the sea; no river is left on the sea.
+- **Terrain editor > Land and sea lagged while painting**: each move of the mouse read the whole of
+  `map_features.tga` again and re-checked every tile of the stroke so far - about 7 x faster now (35 ms -> 5 ms a move on
+  the Medieval II map), and no slower as a stroke goes on.
 - **Make the campaign map 3 x bigger: the beach was a band 3 tiles wide.** The beach ground type now stays one
   tile wide along the new coast, as in both games' own maps (a beach tile away from the sea takes the land round it;
   a coastal tile where the old coast had a beach becomes beach).
