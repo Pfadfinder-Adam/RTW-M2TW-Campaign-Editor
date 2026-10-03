@@ -192,6 +192,46 @@ class Strat:
         return out
 
 
+# The faction block's header lines in the order the games read them (every vanilla descr_strat.txt of both games:
+# faction, superfaction / ai_label, dead_until_resurrected, re_emergent, denari, denari_kings_purse, then the towns);
+# out of order the game drops the faction's towns at the start ('Faction Destroyed' on turn 1 - the editor's own
+# test mod, 2026-10-03)
+HEADER_RANK = {"superfaction": 0, "ai_label": 0, "dead_until_resurrected": 1, "re_emergent": 2, "denari": 3,
+               "denari_kings_purse": 4}
+
+
+def header_rank(text):
+    t = tokens(strip_comment(text))
+    return HEADER_RANK.get(t[0], 0) if t else 0
+
+
+def ordered_header(lines):
+    """The header lines (text, after the 'faction' line) in the games' order; lines of one rank keep theirs."""
+    return [x for _, _, x in sorted((header_rank(x), i, x) for i, x in enumerate(lines))]
+
+
+HEADER_STOP = ("settlement", "character", "character_record", "relative", "army", "navy", "fleet")
+
+
+def headers_out_of_order(f):
+    """[(faction, [line numbers of its header lines])] of the faction blocks of a descr_strat.txt (TextFile) whose
+    header lines are not in the games' order (ordered_header puts them right)."""
+    out = []
+    for fb in Strat(f).factions:
+        idx = []
+        for i in range(fb.start + 1, fb.end):
+            t = tokens(strip_comment(f.text(i)))
+            if not t:
+                continue
+            if t[0] in HEADER_STOP or t[0].startswith("{"):
+                break
+            idx.append(i)
+        ranks = [header_rank(f.text(i)) for i in idx]
+        if ranks != sorted(ranks):
+            out.append((fb.name, idx))
+    return out
+
+
 def characters_after_tree(s):
     """Factions whose block has a character line after its character_record /
     relative lines - the game crashes on that (a hard-won rule)."""

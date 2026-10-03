@@ -72,6 +72,10 @@ def check_mod(mod, campaign, deep=False, progress=None):
     for n in in_strat:
         if n not in names:
             bad("descr_strat.txt has a block for '%s', which descr_sm_factions.txt does not know" % n)
+    from .strat import headers_out_of_order
+    for n, _ in headers_out_of_order(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))):
+        bad("%s: its first lines in descr_strat.txt are out of the games' order (denari before superfaction / "
+            "ai_label...) - the game starts it without its towns; Load offers to put them in order" % n)
     no_culture = [n for n, c in facs if not c]
     if no_culture:
         bad("no culture line for: %s" % ", ".join(no_culture))
@@ -338,10 +342,16 @@ def win_condition_problems(mod, campaign, regions, factions):
     if not p:
         return []
     out, known = [], set(factions)
+    from .packs import game_kind
+    m2 = game_kind(mod) == "medieval2"
     for i, line in enumerate(mod.load(p).texts()):
         t = tokens(line.split(";")[0])
         if t[:1] == ["short_campaign"]:
             t = t[1:]
+            if m2 and t[:1] != ["hold_regions"]:
+                out.append("descr_win_conditions.txt line %d: 'short_campaign %s' - Medieval II wants hold_regions "
+                           "right after short_campaign (even an empty list) and reads no further: every faction after "
+                           "it has no victory conditions; Load offers to put it right" % (i + 1, " ".join(t)))
         if t[:1] == ["hold_regions"]:
             for r in t[1:]:
                 if r not in regions:

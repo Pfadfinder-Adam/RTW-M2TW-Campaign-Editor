@@ -729,10 +729,11 @@ def s_banner(c, mod):
     return edit(mod, c.campaign, c.new, {"art": art})
 
 
-@step("Recolour all its pictures: {new} from {template}'s colours to its own", "cards and textures in green / yellow")
+@step("Recolour all its pictures (every one Recolour finds): {new} from {template}'s colours to its own",
+      "cards, unit and battle textures, shields, banners, figures, symbols in green / yellow")
 def s_recolour(c, mod):
     from . import recolour as R
-    items = [it for it in R.targets(mod, c.campaign, c.new) if not isinstance(it, str) and not it.get("skip")][:40]
+    items = [it for it in R.targets(mod, c.campaign, c.new) if not isinstance(it, str) and not it.get("skip")]
     if not items:
         raise Skip("nothing to recolour")
     src = R.guess_source(mod, c.new, items, R.faction_colours(mod))[0]

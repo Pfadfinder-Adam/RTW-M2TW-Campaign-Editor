@@ -463,13 +463,37 @@ def copy_unit(plan, src_type, new_type, new_dict, recruit=True, texts=None, owne
         while i < len(e.raw):
             text = e.text(i)
             if (recruit_of(text) or ("", ""))[1] == src_type:
-                e.insert(i + 1, [text.replace(q, '"%s"' % new_type, 1)])
+                e.insert(i + 1, [_owners_only(text.replace(q, '"%s"' % new_type, 1), owners, mod)])
                 n += 1
                 i += 2
                 continue
             i += 1
         if n:
             plan.note(e, "%s recruited where %s is (%d line(s))" % (new_type, src_type, n))
+
+
+def _owners_only(text, owners, mod):
+    """A recruit line copied for a new unit, its factions list narrowed to the unit's owners (factions, or cultures
+    standing for theirs): the game stops on a line letting in a faction the unit's ownership does not ('Settlement
+    recruitment availability included unit ... but the faction is spain and the unit ownership does not allow
+    this'). A list keeps the names it shares with the owners, else gets the owners; a line with no list gets one."""
+    if not owners:
+        return text
+    from .roster import factions_in, with_factions
+    now = factions_in(text)
+    cultures = {}
+    for fac, _ in mod.factions():
+        try:
+            cultures.setdefault(mod.culture(fac), set()).add(fac)
+        except Exception:
+            pass
+    own = set(owners) | {f for o in owners for f in cultures.get(o, ())}
+    if now is None:
+        code, sep, comment = text.partition(";")
+        return "%s requires factions { %s}%s%s" % (code.rstrip(), "".join("%s, " % n for n in owners),
+                                                   (" " + sep) if sep else "", comment)
+    keep = [n for n in now if n in own or n in owners]
+    return with_factions(text, keep or list(owners))
 
 
 def renamed_chain_lines(src_lines, src_chain, new_chain, level_names):

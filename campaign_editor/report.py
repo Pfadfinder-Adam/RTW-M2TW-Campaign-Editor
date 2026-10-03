@@ -70,17 +70,50 @@ def scrub(text, words=()):
     return text
 
 
+HEAD_CAP = 512 * 1024           # a long log's start: the game reading the mod's files (where load errors are)
+MIDDLE_CAP = 256 * 1024         # ... its errors and warnings from the part left out
+IMPORTANT = re.compile(rb"\[(?:error|fatal|warning|critical)\]|\bERROR\b|\bWARNING\b|ASSERT|[Ee]xception|crash")
+
+
 def _read_tail(path, cap=TEXT_CAP):
-    """A text file's newest cap bytes as text (a cut start is said so)."""
+    """A log as text, at most about cap bytes: all of it when small; else its start (HEAD_CAP - the game reading the
+    mod's files at the start of the campaign is where a mod's mistakes show), the error and warning lines of the
+    middle left out (MIDDLE_CAP, each kind once with how many times) and its newest part. What was cut is said."""
     size = os.path.getsize(path)
     with open(path, "rb") as fh:
-        if size > cap:
-            fh.seek(size - cap)
-        data = fh.read()
-    text = data.decode("utf-8", errors="replace")
-    if size > cap:
-        text = "[... the first %d KB left out - only the newest part is sent ...]\n" % ((size - cap) // 1024) + \
-            text.split("\n", 1)[-1]
+        if size <= cap:
+            return fh.read().decode("utf-8", errors="replace")
+        head_cap, middle_cap = min(HEAD_CAP, cap // 3), min(MIDDLE_CAP, cap // 6)
+        head = fh.read(head_cap)
+        head = head[:head.rfind(b"\n") + 1] or head
+        tail_size = max(cap - head_cap - middle_cap, cap // 4)
+        tail_at = max(len(head), size - tail_size)
+        fh.seek(len(head))
+        seen, order, kept = {}, [], 0
+        left = tail_at - len(head)
+        while left > 0:
+            line = fh.readline(min(left, 1 << 20))
+            if not line:
+                break
+            left -= len(line)
+            if IMPORTANT.search(line):
+                key = re.sub(rb"^[\d:.]+\s*", b"", line.strip())[:300]   # the same message at another time once
+                if key in seen:
+                    seen[key] += 1
+                elif kept < middle_cap:
+                    seen[key] = 1
+                    order.append(key)
+                    kept += len(key) + 1
+        fh.seek(tail_at)
+        tail = fh.read()
+    tail = tail.split(b"\n", 1)[-1] if tail_at > len(head) else tail
+    middle = b"\n".join(k + (b"  (x%d)" % seen[k] if seen[k] > 1 else b"") for k in order)
+    cut = (tail_at - len(head)) // 1024
+    text = head.decode("utf-8", errors="replace")
+    text += "\n[... %d KB in the middle left out - its %d error / warning line(s) kept below, each once ...]\n" % (
+        cut, len(order))
+    text += middle.decode("utf-8", errors="replace")
+    text += "\n[... the newest part ...]\n" + tail.decode("utf-8", errors="replace")
     return text
 
 

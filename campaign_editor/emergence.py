@@ -217,7 +217,13 @@ def set_dead(plan, campaign, faction, dead, re_emergent=False):
     for i in reversed(gone):
         f.delete(i, i + 1)
     if dead:
-        f.insert(fb.start + 1, ["dead_until_resurrected"] + (["re_emergent"] if re_emergent else []))
+        # after superfaction / ai_label, before denari - the games' own order (strat.HEADER_RANK)
+        from .strat import header_rank
+        at = fb.start + 1
+        while at < fb.end and tokens(strip_comment(f.text(at)))[:1] and header_rank(f.text(at)) < 1 and \
+                tokens(strip_comment(f.text(at)))[0] in ("superfaction", "ai_label"):
+            at += 1
+        f.insert(at, ["dead_until_resurrected"] + (["re_emergent"] if re_emergent else []))
     plan.note(f, "%s: %s" % (faction, ("starts dead%s" % (", may come back after it dies" if re_emergent else ""))
                              if dead else "starts alive"))
 

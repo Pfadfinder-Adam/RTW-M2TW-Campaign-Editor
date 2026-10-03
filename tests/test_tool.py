@@ -3305,6 +3305,84 @@ building smith
         self.assertGreater(sel.getpixel((2, 20))[3], 0)                                 # the glow round it
         self.assertGreater(sel.getpixel((2, 20))[0], sel.getpixel((2, 20))[2])          # gold, as the old one
 
+    def test_new_faction_header_lines_in_the_games_order(self):
+        """A clone's first lines follow the template's in the games' order (every vanilla descr_strat: superfaction /
+        ai_label, dead_until_resurrected, re_emergent, denari, denari_kings_purse) - 0.29.1 put denari first and the
+        games then started the new faction without its towns ('Faction Destroyed' on turn 1, the test mod in both
+        games). A faction made dead later goes after ai_label too; a mod already written so is found by Check mod
+        files and put right by Load's set-up fix (only those lines move)."""
+        from campaign_editor import gamefix
+        from campaign_editor.check import check_mod
+        from campaign_editor.strat import headers_out_of_order
+        d = os.path.join(self.root, "data")
+        sp = os.path.join(d, "world", "maps", "campaign", "test", "descr_strat.txt")
+        with open(sp) as fh:
+            text = fh.read()
+        self.assertIn("faction\talpha, balanced smith\n", text)
+        text = text.replace("faction\talpha, balanced smith\n",
+                            "faction\talpha, balanced smith\nsuperfaction slave\nai_label\tcatholic\n", 1)
+        with open(sp, "w") as fh:
+            fh.write(text)
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"},
+                                                              "denari": 777}})
+        s = Strat(plan.files[sp])
+        fb = s.faction("beta")
+        head = [l.strip() for l in s.lines[fb.start + 1:fb.end] if l.strip() and not l.startswith(";")][:3]
+        self.assertEqual([h.split()[0] for h in head], ["superfaction", "ai_label", "denari"])
+        self.assertEqual(headers_out_of_order(plan.files[sp]), [])
+        later = build(ModData(self.root), "test", "alpha", "gamma", {"start": {
+            "way": "event", "date": "5 summer", "region": "B_R", "re_emergent": True, "regions": [], "leader": None}})
+        s = Strat(later.files[sp])
+        fb = s.faction("gamma")
+        head = [l.strip().split()[0] for l in s.lines[fb.start + 1:fb.end] if l.strip() and not l.startswith(";")]
+        self.assertEqual(head[:5], ["superfaction", "ai_label", "dead_until_resurrected", "re_emergent", "denari"])
+        plan.apply()
+        # a mod written by 0.29.1 / 0.29.2: denari first - found and put right
+        with open(sp) as fh:
+            text = fh.read()
+        broken = text.replace("faction\tbeta, balanced smith\nsuperfaction slave\nai_label\tcatholic\ndenari\t777",
+                              "faction\tbeta, balanced smith\ndenari\t777\nsuperfaction slave\nai_label\tcatholic", 1)
+        self.assertNotEqual(broken, text)
+        with open(sp, "w") as fh:
+            fh.write(broken)
+        mod = ModData(self.root)
+        self.assertIn("beta: its first lines", check_mod(mod, "test"))
+        found = [p for p in gamefix.problems(mod) if p["id"] == "faction_header"]
+        self.assertEqual([n for n, _ in found[0]["blocks"]], ["beta"])
+        gamefix.fix_plan(mod, found).apply()
+        with open(sp) as fh:
+            self.assertEqual(fh.read(), text)
+
+    def test_medieval2_victory_parts_start_with_hold_regions(self):
+        """Medieval II reads a victory block's parts in a fixed order starting with hold_regions (all 20 vanilla
+        blocks: 'short_campaign hold_regions ;Jerusalem_Province'): written with an empty list it stays
+        'short_campaign hold_regions' with take_regions below - 0.29.2 wrote 'short_campaign take_regions 20', the
+        game stopped reading there and the player's faction had no victory conditions (the test mod). Check mod
+        files finds such a line on Medieval II, Load puts it right."""
+        from campaign_editor import gamefix, wincond
+        cond = {"long": dict(wincond._empty(), hold=["A_R"], take=45),
+                "short": dict(wincond._empty(), take=20, outlive=["slave"])}
+        got = wincond.lines("alpha", cond, True)
+        self.assertEqual(got, ["alpha", "hold_regions A_R", "take_regions 45", "short_campaign hold_regions",
+                               "take_regions 20", "outlive slave"])
+        self.assertEqual(wincond.lines("alpha", cond, False)[3], "short_campaign take_regions 20")   # Rome as before
+        d = os.path.join(self.root, "data")
+        os.makedirs(os.path.join(d, "unit_models"))                     # a Medieval II mod
+        wp = os.path.join(d, "world", "maps", "campaign", "test", "descr_win_conditions.txt")
+        with open(wp, "w") as fh:
+            fh.write("alpha\nhold_regions A_R\ntake_regions 45\nshort_campaign take_regions 20\noutlive slave\n\n"
+                     "slave\nhold_regions A_R\ntake_regions 5\nshort_campaign take_regions 2\noutlive alpha\n")
+        mod = ModData(self.root)
+        found = [p for p in gamefix.problems(mod) if p["id"] == "short_campaign"]
+        self.assertEqual([p["line"] for p in found], [3, 9])
+        gamefix.fix_plan(mod, found).apply()
+        with open(wp) as fh:
+            self.assertEqual(fh.read(), "alpha\nhold_regions A_R\ntake_regions 45\nshort_campaign hold_regions\n"
+                                        "take_regions 20\noutlive slave\n\nslave\nhold_regions A_R\ntake_regions 5\n"
+                                        "short_campaign hold_regions\ntake_regions 2\noutlive alpha\n")
+        self.assertEqual([p for p in gamefix.problems(ModData(self.root)) if p["id"] == "short_campaign"], [])
+
     def test_author_test_mod_steps_and_report(self):
         """Tools > Test mod (selftest.py): every step names what it does and what to look at in the game, both
         written with the factions it picked; the report says each step's status, its files, notes and new problems.
@@ -5349,6 +5427,21 @@ building smith
         self.assertNotIn("Bob", texts["system.log.txt"])
         # a big log: only its newest part
         self.assertIn("left out", report._read_tail(os.path.join(game, "system.log.txt"), cap=20))
+        # ... and its start (the game reading the mod's files: load errors are there) and the errors of the middle,
+        # each once with how many times - a test mod's report came with only the last turns' AI chatter
+        big = os.path.join(game, "big.log")
+        with open(big, "w") as fh:
+            fh.write("10:00:00.000 [data.invalid] [error] descr_strat.txt line 3031: unknown faction\n")
+            for k in range(3000):
+                fh.write("10:00:01.%03d [ai.agents] [info] thinking %d\n" % (k % 1000, k))
+                if k % 500 == 0:
+                    fh.write("10:00:02.%03d [core.assert] [fatal] ERROR: settlement.cpp(4326)\n" % (k % 1000))
+            fh.write("10:00:09.000 [game] [info] the newest line\n")
+        got = report._read_tail(big, cap=30000)
+        self.assertIn("unknown faction", got)                          # the start
+        self.assertRegex(got, r"settlement\.cpp\(4326\)  \(x5\)")       # the middle's errors, once, counted
+        self.assertIn("the newest line", got)                          # the end
+        self.assertLess(len(got), 40000)
         data = report.build_zip(list(texts.items()), "it crashed at C:\\Users\\Bob\\x", "disc#1",
                                 {"editor": "0.19.2"}, words=["Bob"])
         z = zipfile.ZipFile(io.BytesIO(data))

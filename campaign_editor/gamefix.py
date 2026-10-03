@@ -7,7 +7,7 @@ import re
 
 from .moddata import _ci
 from .plan import Plan
-from .textio import strip_comment
+from .textio import strip_comment, tokens
 
 
 def _vegetation_maps(mod):
@@ -48,6 +48,34 @@ def problems(mod):
                            "so this mod runs on %s's built-in defaults, not on the game's settings. The fix: the "
                            "game's copies go into the mod (they can be changed there for this mod alone)."
                            % (", ".join(missing), "it lies" if len(missing) == 1 else "they lie", name, name)})
+    from .strat import headers_out_of_order
+    for camp in mod.campaigns():
+        sp = mod.campaign_file(camp, "descr_strat.txt")
+        bad = headers_out_of_order(mod.load(sp)) if sp else []
+        if bad:
+            out.append({"id": "faction_header", "file": sp, "blocks": bad,
+                        "why": "%s's descr_strat.txt: the first lines of %s are out of the games' order (denari "
+                               "before superfaction / ai_label, or dead_until_resurrected after them) - the game then "
+                               "starts the faction without its towns and it is destroyed on the first turn. Versions "
+                               "0.29.1 and 0.29.2 of this tool wrote new factions so. The fix: the lines put in the "
+                               "games' order (superfaction / ai_label, dead_until_resurrected, re_emergent, denari, "
+                               "denari_kings_purse), nothing else changed."
+                               % (camp, ", ".join(n for n, _ in bad))})
+    from .packs import game_kind
+    if game_kind(mod) == "medieval2":
+        for camp in mod.campaigns():
+            wp = mod.campaign_file(camp, "descr_win_conditions.txt")
+            f = mod.load(wp) if wp else None
+            for i in range(len(f) if f else 0):
+                t = tokens(strip_comment(f.text(i)))
+                if t[:1] == ["short_campaign"] and t[1:2] != ["hold_regions"]:
+                    out.append({"id": "short_campaign", "file": wp, "line": i,
+                                "why": "%s's descr_win_conditions.txt line %d: '%s' - Medieval II wants hold_regions "
+                                       "right after short_campaign (all its own files have it, even with an empty "
+                                       "list) and stops reading there, so every faction after it has no victory "
+                                       "conditions ('No win condition has been set'). Version 0.29.2 of this tool "
+                                       "wrote it so. The fix: 'short_campaign hold_regions' and the rest on the next "
+                                       "line." % (camp, i + 1, f.text(i).strip())})
     old = _old_culture_module(mod)
     if old:
         out.append({"id": "old_culture_names", "file": old[0], "table": old[1],
@@ -100,6 +128,8 @@ def missing_engine_files(mod):
 def fix_plan(mod, found):
     """A Plan that puts the problems found right."""
     plan = Plan(mod, "setup", "setup_fix")
+    # lines inserted (short_campaign) move the lines below them: the lowest of a file first
+    found = sorted(found, key=lambda p: -p["line"] if p["id"] == "short_campaign" else 0)
     for p in found:
         if p["id"] == "engine_files":
             from .newmod import game_of
@@ -108,6 +138,23 @@ def fix_plan(mod, found):
                 with open(os.path.join(gdata, n), "rb") as fh:
                     plan.binary(os.path.join(mod.data, n), fh.read())
                 plan.note(None, "%s copied from the game's data into the mod" % n)
+            continue
+        if p["id"] == "short_campaign":
+            f = plan.edit(p["file"])
+            text = f.text(p["line"])
+            rest = text.split("short_campaign", 1)[1].strip()
+            f.set(p["line"], "short_campaign hold_regions")
+            f.insert(p["line"] + 1, [rest])
+            plan.note(f, "line %d: short_campaign hold_regions + '%s' on its own line" % (p["line"] + 1, rest))
+            continue
+        if p["id"] == "faction_header":
+            from .strat import ordered_header
+            f = plan.edit(p["file"])
+            for name, idx in p["blocks"]:
+                texts = ordered_header([f.text(i) for i in idx])
+                for i, t in zip(idx, texts):
+                    f.set(i, t)
+            plan.note(f, "faction header lines put in the games' order: %s" % ", ".join(n for n, _ in p["blocks"]))
             continue
         if p["id"] == "old_culture_names":
             from . import culturenames as CN

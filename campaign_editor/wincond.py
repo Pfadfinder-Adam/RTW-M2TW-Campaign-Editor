@@ -108,8 +108,12 @@ def lines(faction, cond, medieval):
         c = cond[part]
         body = []
         body += list(c["goals"]) if not medieval else []
-        if c["hold"]:
-            body.append("hold_regions " + " ".join(c["hold"]))
+        # Medieval II reads each part in a fixed order that starts with hold_regions, even an empty one (all 20
+        # vanilla blocks: 'short_campaign hold_regions ;Jerusalem_Province' with the list commented out); a part
+        # starting with take_regions ('short_campaign take_regions 20') stops the reading there and every faction
+        # after it has no victory conditions ('No win condition has been set for this campaign', faction_scrolls.cpp)
+        if c["hold"] or medieval:
+            body.append(("hold_regions " + " ".join(c["hold"])).rstrip())
         if c["take"] is not None:
             body.append("take_regions %d" % c["take"])
         if c["outlive"]:

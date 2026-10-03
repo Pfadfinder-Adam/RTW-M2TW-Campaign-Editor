@@ -227,6 +227,22 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **A new faction lost its towns on the first turn** (the editor's own test mod, both games: "Faction Destroyed"
+  at once). Since 0.29.1 a clone's first lines in `descr_strat.txt` had `denari` before the template's
+  `superfaction` (Rome) / `ai_label` (Medieval II) - the games read those lines in a fixed order and then start the
+  faction without its towns. They are now written in the games' own order (superfaction / ai_label,
+  dead_until_resurrected, re_emergent, denari, denari_kings_purse), also for a faction that appears later and one
+  made dead later. A mod already written so is found by Check mod files, and Load offers to put it right.
+- **Medieval II victory conditions**: a part with no regions to hold was written `short_campaign take_regions 20`;
+  Medieval II wants `hold_regions` right after `short_campaign` (even an empty list - all its own files have it) and
+  stopped reading the file there, so every faction after it had no victory conditions ("No win condition has been
+  set"). Written right now; Check mod files finds an old one, Load puts it right.
+- **New unit step by step**: the recruit lines copied from the old unit kept the old unit's factions, so towns of
+  factions the new unit does not belong to offered it ("...but the faction is spain and the unit ownership does not
+  allow this"). They now name only the unit's owners.
+- **Bug reports send the start of a long game log too**: a big `system.log.txt` came with only its last 1.5 MB (the
+  last turns' AI notes), while the game's complaints about a mod's files come when it starts the campaign. A report
+  now holds the log's start, every error and warning line of the middle (each once, with how many times) and its end.
 - **Medieval II `.texture` pictures written right by Replace**: a picture replaced on the Art tab (a shared battle
   banner's own copy above all) was written as a TGA inside the `.texture` file; it now keeps the file's 48-byte head
   and the DDS inside it, in its size and compression, as Recolour already did.

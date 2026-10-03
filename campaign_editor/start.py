@@ -469,12 +469,12 @@ def build_start(plan, campaign, start):
 
     header = tokens(tb.header)
     ai = start.get("ai") or " ".join(header[2:]) or "balanced smith"
-    block = [f.make(";#######################################################################################>"),
-             f.make("faction\t%s, %s" % (new, ai)),
-             f.make("denari\t%d" % int(start.get("denari", 5000)))]
     # the template's other header lines come along (M2TW: ai_label - the campaign AI's rule set in
-    # descr_campaign_ai_db.xml, 'default' when missing; denari_kings_purse - its money every turn)
-    block.extend(f.make(t_) for t_ in head_lines)
+    # descr_campaign_ai_db.xml, 'default' when missing; denari_kings_purse - its money every turn), in the games' order
+    from .strat import ordered_header
+    block = [f.make(";#######################################################################################>"),
+             f.make("faction\t%s, %s" % (new, ai))] + \
+        [f.make(t_) for t_ in ordered_header(["denari\t%d" % int(start.get("denari", 5000))] + head_lines)]
     block.append(f.make(""))
     for b in moved_blocks:
         block.extend(b)
@@ -579,9 +579,10 @@ def _later_start(plan, f, s, tb, start, head_lines):
     way = start["way"]
     ai = start.get("ai") or " ".join(tokens(tb.header)[2:]) or "balanced smith"
     dead = ["dead_until_resurrected"] + (["re_emergent"] if start.get("re_emergent") else [])
+    from .strat import ordered_header
     block = [f.make(";#######################################################################################>"),
-             f.make("faction\t%s, %s" % (new, ai))] + [f.make(x) for x in dead] + \
-        [f.make("denari\t%d" % int(start.get("denari", 5000)))] + [f.make(x) for x in head_lines] + \
+             f.make("faction\t%s, %s" % (new, ai))] + \
+        [f.make(x) for x in ordered_header(dead + ["denari\t%d" % int(start.get("denari", 5000))] + head_lines)] + \
         [f.make(";#######################################################################################<"),
          f.make("")]
     slave = s.faction("slave")
