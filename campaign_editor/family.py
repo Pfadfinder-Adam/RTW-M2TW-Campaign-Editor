@@ -346,8 +346,10 @@ def default_record_age(sex, most=MAX_RECORD_AGE):
 def limit_warnings(mod, tree, changes, people, renames=None, old_tree=None):
     """Ancillaries and children over what the game takes (limits.ex_setting: REX's descr_ex.txt
     max_num_ancillaries / max_num_children, else the original game's 8 / 4)."""
-    from .limits import ex_setting
+    from .limits import engine_of, ex_setting
     out = []
+    if engine_of(mod):                  # REX / M2EX: no limit - apply() rewrites the line instead (limits.raise_setting)
+        return out
     most = ex_setting(mod, "max_num_ancillaries")
     for key, ch in (changes or {}).items():
         ancs = ch.get("ancillaries")
@@ -370,6 +372,25 @@ def limit_warnings(mod, tree, changes, people, renames=None, old_tree=None):
             out.append("%s: %d children - the game takes at most %d (max_num_children in descr_ex.txt)"
                        % (parent, len(ks), most))
     return out
+
+
+def _engine_settings(plan, tree, changes):
+    """REX / M2EX: max_num_ancillaries / max_num_children in the mod's descr_ex.txt raised to what this edit needs."""
+    from .limits import engine_of, ex_setting, raise_setting
+    if not engine_of(plan.mod):
+        return
+    ancs = max((len(ch.get("ancillaries") or []) for ch in (changes or {}).values()), default=0)
+    if ancs and ancs > (ex_setting(plan.mod, "max_num_ancillaries") or 0):
+        raise_setting(plan, "max_num_ancillaries", ancs)
+    kids = {}
+    for father, wife, ks in tree or []:
+        for parent in (father, wife):
+            if parent:
+                kids.setdefault(parent, set()).update(ks)
+    most = max((len(k) for k in kids.values()), default=0)
+    have = ex_setting(plan.mod, "max_num_children")
+    if have is not None and most > have:
+        raise_setting(plan, "max_num_children", most)
 
 
 def apply(plan, f, faction, opts):
@@ -473,6 +494,7 @@ def apply(plan, f, faction, opts):
                          "on (Add a person... > daughter or wife of someone) or leave her out" % (faction, n["name"]))
     for w in limit_warnings(plan.mod, tree, changes, people, renames, fam["tree"]):
         plan.warn(f, w)
+    _engine_settings(plan, tree, changes)
 
     # the lines, from the bottom up so earlier indices stay right
     texts = f.texts()

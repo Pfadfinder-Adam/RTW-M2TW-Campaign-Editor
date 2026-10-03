@@ -129,6 +129,8 @@ class Plan:
 
     # ---- disk ----
     def apply(self):
+        from .limits import keep_up
+        keep_up(self)                       # REX / M2EX: max_factions follows the factions, silently (limits.py)
         # every path this run touches lies in the mod's or its game's folder (guard.py) - checked before anything
         from . import guard
         guard.check(list(self.changed_files()) + [dst for _, dst in self.copies], guard.roots_of(self.mod))

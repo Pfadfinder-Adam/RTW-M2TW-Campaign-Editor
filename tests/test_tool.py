@@ -540,7 +540,21 @@ building smith
         self.assertEqual(ex_setting(mod, "max_num_children"), 4)          # the mod's file decides: default
         self.assertEqual(ex_setting(ModData(os.path.join(game, "data")), "max_num_ancillaries"), 16)  # the game
         tree = [["Boris", "Anna", ["A", "B", "C", "D", "E"]]]
-        w = limit_warnings(mod, tree, {"k": {"ancillaries": ["a%d" % i for i in range(9)]}}, {})
+        changes = {"k": {"ancillaries": ["a%d" % i for i in range(9)]}}
+        # REX beside the game (the user, 2026-10-03): no warning - the lines are rewritten to fit instead
+        self.assertEqual(limit_warnings(mod, tree, changes, {}), [])
+        from campaign_editor.family import _engine_settings
+        plan = Plan(mod, "x", "y", {})
+        _engine_settings(plan, tree, changes)
+        text = "\n".join(plan.files[os.path.join(hlr, "data", "descr_ex.txt")].texts())
+        self.assertIn("max_num_ancillaries 9", text)
+        self.assertIn("max_num_children 5", text)
+        self.assertIn("max_factions 31", text)                           # the mod's own lines kept
+        os.remove(os.path.join(game, "REX.exe"))
+        os.remove(os.path.join(hlr, "data", "descr_ex.txt"))
+        os.remove(os.path.join(game, "data", "descr_ex.txt"))
+        mod = ModData(hlr)                                               # the original exe: warned as before
+        w = limit_warnings(mod, tree, changes, {})
         self.assertEqual(len(w), 3, w)                                    # 9 ancillaries; Boris and Anna 5 kids
         self.assertEqual(limit_warnings(mod, tree, {}, {}, old_tree=tree), [])   # nothing added: no warning
 
@@ -741,8 +755,11 @@ building smith
         many = {"R%d" % i: {} for i in range(750)}                       # HLR's 750 regions
         got = engine_limits(mod, "test", many, [], [], img)
         self.assertIn("REX beside the game", got[0][0])
-        self.assertTrue(any("HLR runs 750 regions" in m for m, _ in got))
+        self.assertIn("LIMITS: none", got[0][0])                         # the user's rule: no limit at all
         self.assertFalse(any(fault for _, fault in got))
+        from campaign_editor.limits import lifted
+        for key in ("regions", "chains", "levels", "hidden_resources", "cultures", "anything"):
+            self.assertTrue(lifted(mod, key))
         os.remove(os.path.join(game, "REX.exe"))
         got = engine_limits(ModData(hlr), "test", many, [], [], img)
         self.assertTrue(any(fault and "regions" in m for m, fault in got))   # the original exe stops at 200
@@ -895,6 +912,30 @@ building smith
         write(os.path.join(hlr, "Start_mod.bat"), "cd ..\\.\nstart REX.exe -nm -show_err -mod:HLR -multirun\n")
         write(os.path.join(hlr, "data", "sounds", "HLR.idx"), "sounds")
         return game, hlr
+
+    def test_engine_max_factions_follows_on_every_write(self):
+        """REX beside the game (the user, 2026-10-03: 'no limit errors at all - just rewrite the line'): a mod whose
+        max_factions is lower than its factions is put right by ANY write, silently (a note, no warning); without
+        REX nothing is touched."""
+        game, hlr = self._game()
+        ex = os.path.join(hlr, "data", "descr_ex.txt")
+        write(ex, "; mine\nmax_factions 1\n")
+        mod = ModData(hlr)
+        plan = Plan(mod, "x", "y", {})
+        p = os.path.join(hlr, "data", "export_descr_unit.txt")
+        f = plan.edit(p)
+        f.set(0, f.text(0) + " ")
+        plan.apply()
+        self.assertIn("max_factions 2", open(ex).read())                # alpha + slave
+        self.assertEqual(plan.warnings, [])
+        os.remove(os.path.join(game, "REX.exe"))
+        write(ex, "max_factions 1\n")
+        os.rename(ex, ex + ".off")                                       # no descr_ex: no engine at all
+        plan = Plan(ModData(hlr), "x", "y", {})
+        f = plan.edit(p)
+        f.set(0, f.text(0) + " ")
+        plan.apply()
+        self.assertFalse(os.path.exists(ex))
 
     def test_new_mod_on_a_mod_leaves_the_base_untouched(self):
         game, hlr = self._game()

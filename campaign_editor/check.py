@@ -305,6 +305,15 @@ def engine_limits(mod, campaign, regions, units, blds, img):
               "chains": len(blds), "levels": max((len(b.levels) for b in blds), default=0),
               "hidden_resources": len(hidden_resources(mod))}
     exe = "Rome" if kind == "rome" else "Medieval II"
+    if engine:                  # the user's rule: REX / M2EX = no limits at all - no fault, no warning, no count
+        out = [("LIMITS: none - %s beside the game (factions, regions, religions, cultures, units, buildings: no "
+                "limit; max_factions follows the factions on every Apply)" % engine[:-4], False)]
+        from .gamefix import missing_engine_files
+        missing = missing_engine_files(mod)
+        if missing:
+            out.append(("    the mod has no %s of its own (the game's data has) - %s may run it on its built-in "
+                        "defaults; Load offers to copy them in" % (", ".join(missing), engine[:-4]), False))
+        return out
     out = [("LIMITS (%s)" % ("%s beside the game - it lifts some of the original %s exe's limits" % (engine[:-4], exe)
                              if engine else "the original %s exe: no REX / M2EX found beside the game" % exe), False)]
     nfac = len(mod.factions())

@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Changed
+- **REX / M2EX: no limits at all** (the author, after the same faction-limit error came back once more): with REX or
+  M2EX beside the game the editor never refuses or warns for a number - factions, regions, religions, cultures,
+  units, buildings, children, retinue. Check mod files says "LIMITS: none"; every write raises `max_factions` in
+  the mod's own `descr_ex.txt` when the mod has more factions than it (a tester's mod ran 32 factions under 31 and
+  crashed in the faction panel), and the family editor raises `max_num_children` / `max_num_ancillaries` instead of
+  warning. Without an engine the original exes' limits stay as before.
 - **Testers' reports of 2026-10-03**: a window opens once - Settings, Help, Report, every Tools window and the
   Events / rules / traits / pack / bring / portrait windows come to the front when opened again instead of a new
   copy each press; a new window no longer shows at the top left for a moment before it jumps to the middle; the

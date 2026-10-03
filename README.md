@@ -15,7 +15,7 @@ preview of every change and a backup you can always go back to. Version **0.29.2
 
 > [!IMPORTANT]
 > - **Download only from this repository's [Releases](../../releases) page** - never a copy from another site or a chat.
-> - **Close the game before writing**, and keep REX / M2EX beside it: the original exes' limits apply only without them.
+> - **Close the game before writing**, and keep REX / M2EX beside it: with them the editor knows no limits at all (no refusal, no warning - their setting lines are rewritten to fit); the original exes' limits apply only without them.
 > - **Nothing is lost:** every change is shown first (Preview) and written with a backup; **Restore** gives the files
 >   back byte for byte. Undo / Redo work in the window.
 > - **Something wrong?** **Report a bug / Suggest** (bottom right) sends the logs in one click - see [below](#something-went-wrong).
@@ -330,7 +330,7 @@ The Windows `.exe` is the window only. Use Python for the command line.
 
 ## Known limits
 
-- **Faction count.** The game stops at a set number of factions, `slave` included: plain Rome 21, Medieval II 31. REX and M2EX read it from `max_factions` in `descr_ex.txt` (REX ships 21, M2EX 31). A mod reads only its **own** `data/descr_ex.txt` (and `descr_caps_ex.txt`) - without one the engine's built-in defaults hold, not the game's copy - so the tool raises `max_factions` in the mod's own file by itself with every new faction (REX and M2EX have no faction limit of their own) and offers on Load to copy the game's engine files into a mod that lacks them. Only the original exes stop at 21 / 31; over it the game closes at start ("Too many factions described here, maximum is(21)").
+- **Faction count.** The game stops at a set number of factions, `slave` included: plain Rome 21, Medieval II 31. REX and M2EX read it from `max_factions` in `descr_ex.txt` (REX ships 21, M2EX 31). A mod reads only its **own** `data/descr_ex.txt` (and `descr_caps_ex.txt`) - without one the engine's built-in defaults hold, not the game's copy - so the tool raises `max_factions` in the mod's own file by itself with every new faction and with any write that finds it too low (REX and M2EX have no faction limit of their own) and offers on Load to copy the game's engine files into a mod that lacks them. Only the original exes stop at 21 / 31; over it the game closes at start ("Too many factions described here, maximum is(21)").
 - **Art.** A new faction starts with copies of its template's pictures under its own name (banners, logos, symbols, cards) - replace them on the **Art** tab; the tool does not draw art.
 - **Strings.** Copied strings keep the template's text apart from the names ("the wicked Seleucids..."). Edit them in `data/text` if you care.
 - **Character names.** A leader, heir or family member takes names from the faction's name list (the game crashes on a name without a string); a faction's own names go in with **Name list...**.

@@ -170,9 +170,14 @@ def engine_report(mod):
 
 
 def lifted(mod, key):
-    """Why the original exe's limit `key` does not hold for this mod (the engine lifts it), or None."""
+    """Why the original exe's limit `key` does not hold for this mod, or None. THE USER'S RULE (2026-10-03, after the
+    same limit error again and again): with REX / M2EX beside the game EVERY limit is lifted - factions, regions,
+    religions, cultures, units, chains, levels, hidden resources, anything - no error, no warning; a setting line
+    (max_factions) is simply rewritten to fit (keep_up)."""
     engine = engine_of(mod)
-    return ENGINE_LIFTS.get(engine, {}).get(key) if engine else None
+    if not engine:
+        return None
+    return ENGINE_LIFTS.get(engine, {}).get(key) or "no limit with %s" % engine[:-4]
 
 
 def faction_limit(mod):
@@ -210,6 +215,9 @@ def check(plan, count, allow_raise=True):
     without a question. allow_raise=False only to see the old refusal."""
     limit = faction_limit(plan.mod)
     if count <= limit["max"]:
+        return limit
+    if limit["engine"] and allow_raise:             # REX / M2EX: no limit - the line follows, nothing said
+        raise_limit(plan, limit, count)
         return limit
     if not limit["known"]:                          # no game exe beside the data: which engine runs it is unknown
         plan.warn(None, "%d factions (slave included) - over %d, the limit of the original %s exe; REX / M2EX "
@@ -251,5 +259,58 @@ def raise_limit(plan, limit, count):
         plan.binary(path, ("; Extended settings (REX / M2EX) - lines here override the engine's defaults\r\n"
                            "; Maximum number of factions - set by the campaign editor for a new faction\r\n"
                            "max_factions %d\r\n" % count).encode("latin-1"))
-    plan.note(None, "max_factions %d -> %d in %s (%s reads it; over it the game closes at start)"
+    plan.note(None, "max_factions %d -> %d in %s (%s has no faction limit; the line follows the factions)"
               % (limit["max"], count, plan.mod.rel(path), limit["engine"][:-4]))
+
+
+def raise_setting(plan, key, value):
+    """A number line of the mod's descr_ex.txt (max_num_children, max_num_ancillaries, ...) raised to value under
+    REX / M2EX - rewritten in place, added when missing, the file made when the mod has none; nothing said but a
+    note (the user's rule: with an engine nothing is a limit). Returns True when written."""
+    if not engine_of(plan.mod):
+        return False
+    path = ex_file(plan.mod, "descr_ex.txt") or os.path.join(plan.mod.data, "descr_ex.txt")
+    if os.path.isfile(path):
+        f = plan.edit(path)
+        at = next((i for i, l in enumerate(f.texts()) if re.match(r"\s*%s\s+\d+" % re.escape(key), l)), None)
+        if at is not None:
+            old = int(re.match(r"\s*%s\s+(\d+)" % re.escape(key), f.text(at)).group(1))
+            if old >= value:
+                return False
+            f.set(at, re.sub(r"(%s\s+)\d+" % re.escape(key), r"\g<1>%d" % value, f.text(at), count=1))
+        else:
+            f.insert(len(f), ["%s %d" % (key, value)])
+    else:
+        plan.binary(path, ("; Extended settings (REX / M2EX) - lines here override the engine's defaults\r\n"
+                           "%s %d\r\n" % (key, value)).encode("latin-1"))
+    plan.note(None, "%s %d in %s (no limit with %s; the line follows)" % (key, value, plan.mod.rel(path),
+                                                                        engine_of(plan.mod)[:-4]))
+    return True
+
+
+def keep_up(plan):
+    """Every write under REX / M2EX: max_factions in the mod's descr_ex.txt is raised to the faction count the plan
+    leaves (descr_sm_factions as edited, else on disk) - a mod whose line is too low (set by hand, an older editor)
+    is put right by any Apply, without a word to the modder. No engine: nothing (the original exe's limit holds)."""
+    try:
+        if not engine_of(plan.mod):
+            return
+        sm = plan.mod.file("sm_factions")
+        if not sm:
+            return
+        f = plan.files.get(sm) or plan.mod.load(sm)
+        from .textio import tokens
+        count = sum(1 for l in f.texts() if tokens(l)[:1] == ["faction"])
+        limit = faction_limit(plan.mod)
+        if limit["file"] and limit["file"] in plan.files:
+            line, value = None, None
+            for i, l in enumerate(plan.files[limit["file"]].texts()):
+                m = re.match(r"\s*max_factions\s+(\d+)", l)
+                if m:
+                    line, value = i, int(m.group(1))
+            if value is not None:
+                limit.update(max=value, line=line, written=True)
+        if count > limit["max"]:
+            raise_limit(plan, limit, count)
+    except Exception:
+        pass                                        # never stops a write
