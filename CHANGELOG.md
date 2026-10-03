@@ -234,6 +234,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **The logs folder grew to tens of MB** (the author: 61 MB): on every close the session folder took a whole copy
+  of the game's `system.log.txt` (which can grow to 60 MB). It now keeps what a report would send (the log's start,
+  the middle's errors once each, its end), no second copy of a game log that has not changed since, and the oldest
+  sessions go when the folder is over 40 MB.
 - **Recolour left a new faction's men in its template's colours in battle** (the author's test mod, both games):
   a battle texture the faction wears with others (a clone wears its template's) or that only the game's data holds
   (a mod in `mods/`) was skipped. The faction now gets its own copy in the mod, recoloured, and the model's line

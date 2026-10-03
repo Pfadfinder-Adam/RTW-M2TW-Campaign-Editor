@@ -1805,6 +1805,18 @@ building smith
                 self.assertEqual([l.split("  ", 1)[-1] for l in fh.read().splitlines()], ["new entry"])
             with open(os.path.join(out, "game_system.log.txt")) as fh:
                 self.assertEqual(fh.read(), "game log\n")
+            # the next session keeps no second copy of an unchanged game log (the author: logs grew to 61 MB),
+            # and a big one is kept as a report sends it (its start, errors, end), not whole
+            log._session_start = (0, "2099-01-01_00-00-00")
+            out2 = log.save_session(home)
+            self.assertFalse(os.path.exists(os.path.join(out2, "game_system.log.txt")))
+            game_log = os.path.join(home, "system.log.txt")
+            with open(game_log, "w") as fh:
+                fh.write("start\n" + "x" * 80 + "\n" * 1 + ("10:00 [ai] [info] thinking\n" * 120000) + "end\n")
+            log._session_start = (0, "2099-01-02_00-00-00")
+            out3 = log.save_session(home)
+            kept = os.path.getsize(os.path.join(out3, "game_system.log.txt"))
+            self.assertLess(kept, os.path.getsize(game_log) // 2)
         finally:
             log._candidates, log._home, log._path, settings._data, log._session_start = saved
 

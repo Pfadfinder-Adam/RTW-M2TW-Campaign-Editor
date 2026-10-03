@@ -25,6 +25,7 @@ SETTINGS_NAME = SHORT + "_settings.json"
 SESSIONS = "sessions"
 GAME_LOG = "game_system.log.txt"                 # the game's own system.log.txt as a session keeps it
 KEEP_SESSIONS = 30
+SESSIONS_CAP = 40 * 1024 * 1024                  # the sessions folder at most (a game's log can grow to 60 MB)
 APPDATA_NAME = "RTW-M2TW-Campaign-Editor"
 
 FOLDER = "RTW-M2TW-Campaign-Editor-files"      # 0.9.2 - 0.28: the tool's folder beside the exe
@@ -170,16 +171,57 @@ def save_session(game=None, mod_dir=None):
                 fh.seek(offset if offset <= size else 0)            # the log moved to .old meanwhile: all of it
                 with open(os.path.join(out, LOG_NAME), "wb") as o:
                     o.write(fh.read())
-        for i, f in enumerate(report.game_logs(game, mod_dir, keep=2) if game else []):
-            # named as the GAME's: a tester read its errors in the session folder as the editor's own
-            shutil.copyfile(f, os.path.join(out, GAME_LOG if i == 0 else "game_system.log.%d.txt" % i))
         root = os.path.join(logs, SESSIONS)
+        seen = _seen_game_logs(root)
+        for i, f in enumerate(report.game_logs(game, mod_dir, keep=2) if game else []):
+            # named as the GAME's: a tester read its errors in the session folder as the editor's own. Only what a
+            # report would send (its start, the middle's errors once each, its end - the author: the logs grew to
+            # 61 MB), and not again when the game's log has not changed since a session kept it
+            mark = "%s|%d|%d" % (os.path.abspath(f), os.path.getsize(f), int(os.path.getmtime(f)))
+            if mark in seen:
+                continue
+            name = GAME_LOG if i == 0 else "game_system.log.%d.txt" % i
+            with open(os.path.join(out, name), "w", encoding="utf-8") as o:
+                o.write(report._read_tail(f))
+            with open(os.path.join(out, "game_logs_kept.txt"), "a", encoding="utf-8") as o:
+                o.write(mark + "\n")
         olds = sorted(n for n in os.listdir(root) if os.path.isdir(os.path.join(root, n)))
         for n in olds[:-KEEP_SESSIONS]:
             shutil.rmtree(os.path.join(root, n), ignore_errors=True)
+        _cap_sessions(root, out)
         return out
     except Exception:
         return None
+
+
+def _seen_game_logs(root):
+    """The game's logs the sessions already keep: 'path|size|mtime' lines of their game_logs_kept.txt."""
+    out = set()
+    try:
+        for n in os.listdir(root):
+            p = os.path.join(root, n, "game_logs_kept.txt")
+            if os.path.isfile(p):
+                with open(p, encoding="utf-8", errors="replace") as fh:
+                    out |= {l.strip() for l in fh if l.strip()}
+    except OSError:
+        pass
+    return out
+
+
+def _cap_sessions(root, keep):
+    """The oldest sessions go while the folder is over SESSIONS_CAP (the newest one, keep, always stays)."""
+    import shutil
+    sizes = []
+    for n in sorted(os.listdir(root)):
+        d = os.path.join(root, n)
+        if os.path.isdir(d):
+            sizes.append((d, sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(d) for f in fs)))
+    total = sum(sz for _, sz in sizes)
+    for d, sz in sizes:
+        if total <= SESSIONS_CAP or os.path.normcase(d) == os.path.normcase(keep):
+            continue
+        shutil.rmtree(d, ignore_errors=True)
+        total -= sz
 
 
 def write(text):
