@@ -141,6 +141,12 @@ def check_mod(mod, campaign, deep=False, progress=None):
         bad(msg)
     for msg in slaves_problems(mod, regions):
         bad(msg)
+    from .emergence import problems as later_problems       # emergent / shadow / split-off factions
+    faults, notes = later_problems(mod, campaign)
+    for msg in faults:
+        bad(msg)
+    for msg in notes:
+        say("    note: " + msg)
     ring = town_ring_problems(mod, campaign)
     serious = [m for s_, m in ring if s_]
     for m in serious[:8]:

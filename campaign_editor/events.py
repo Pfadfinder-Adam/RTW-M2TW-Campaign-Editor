@@ -26,7 +26,7 @@ def path_of(mod, campaign):
 
 
 def read(f):
-    """[{'id', 'kind', 'name', 'date', 'position': (x, y) or None, 'movie', 'span': (a, b), 'lines': {word: line}}]
+    """[{'id', 'kind', 'name', 'date', 'position': (x, y) or None, 'region', 'movie', 'span': (a, b), 'lines': {word: line}}]
     in the file's order (b is past the event's last line that is not blank or a comment); id = the name, or name#2
     for its second use."""
     out, cur = [], None
@@ -39,7 +39,7 @@ def read(f):
         if word == "event":
             t = rest.split()
             cur = {"kind": t[0] if t else "", "name": t[1] if len(t) > 1 else "", "date": "", "position": None,
-                   "movie": "", "span": (i, i + 1), "lines": {"event": i}}
+                   "region": "", "movie": "", "span": (i, i + 1), "lines": {"event": i}}
             out.append(cur)
             continue
         if cur is None:
@@ -53,6 +53,8 @@ def read(f):
             cur["position"] = (int(nums[0]), int(nums[1])) if len(nums) >= 2 else None
         elif word == "movie":
             cur["movie"] = rest
+        elif word == "region":                  # a region instead of a position (both games' comments)
+            cur["region"] = rest.split()[0] if rest else ""
     seen = {}
     for e in out:                       # one name may be used twice (vanilla Rome: plague_in_italy): name, name#2
         seen[e["name"]] = seen.get(e["name"], 0) + 1

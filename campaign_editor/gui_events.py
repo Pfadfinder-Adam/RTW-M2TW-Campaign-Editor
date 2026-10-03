@@ -1,6 +1,6 @@
 """Tools > Events and later factions: the campaign's events (descr_events.txt) - their date, place, the title and
 text players see; new ones, removed ones; Show on the map. Below them, the factions that appear later in the
-campaign (descr_strat's dead_until_resurrected, woken by the campaign script) - shown, not changed. Preview /
+campaign (emergence.py: by an event, a faction's shadow, split off in a revolt) - shown and changed. Preview /
 Write it in, with a backup like every write."""
 
 import tkinter as tk
@@ -55,12 +55,25 @@ class EventsWindow(tk.Toplevel):
         self.form.pack(side="left", fill="both", expand=True, padx=(10, 0))
         later = ttk.LabelFrame(top, text="Factions that appear later in the campaign", padding=6)
         later.pack(fill="x")
-        rows = EV.later_factions(self.mod, self.campaign)
+        from . import emergence as EM
         ShortHint(later, foreground="#555", justify="left", wraplength=1000, text=(
-            "\n".join("%s - dead at the start (dead_until_resurrected in descr_strat.txt); %s" % (
-                f, ("woken by the campaign script: " + "; ".join(lines)) if lines else
-                "no line of the campaign script wakes it (it may never appear)") for f, lines in rows)
-            if rows else "None in this campaign: every faction is there from the start.")).pack(anchor="w")
+            "Factions that start dead and come in later: by an event, as the shadow of a faction (its civil war) "
+            "or splitting off a faction in a revolt. " + EM.HOW)).pack(anchor="w")
+        lt = ttk.Frame(later)
+        lt.pack(fill="x")
+        self.ltv = ttk.Treeview(lt, columns=("faction", "how", "back", "when"), show="headings", height=5,
+                                selectmode="browse")
+        for c, t, w in (("faction", "faction", 160), ("how", "comes in", 300), ("back", "may come back", 110),
+                        ("when", "event / campaign script", 420)):
+            self.ltv.heading(c, text=t)
+            self.ltv.column(c, width=w, stretch=c == "when")
+        self.ltv.pack(side="left", fill="x", expand=True)
+        self.ltv.bind("<Double-1>", lambda e: self.change_later())
+        lb = ttk.Frame(lt)
+        lb.pack(side="left", fill="y", padx=(6, 0))
+        ttk.Button(lb, text="Change...", command=self.change_later).pack(fill="x")
+        ttk.Button(lb, text="Another faction...", command=lambda: self.change_later(new=True)).pack(fill="x", pady=4)
+        self.later = {}                      # {faction: {'way', 'of', 're_emergent', 'date', 'region'}} not written yet
         bar = ttk.Frame(top)
         bar.pack(fill="x", pady=(6, 0))
         self.lbl = ttk.Label(bar, text="", foreground="#555")
@@ -70,6 +83,103 @@ class EventsWindow(tk.Toplevel):
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
         self.reload()
 
+    # ---- factions that appear later ----
+    def fill_later(self):
+        from . import emergence as EM
+        self.ltv.delete(*self.ltv.get_children())
+        rows = {r["faction"]: r for r in EM.later_rows(self.mod, self.campaign)}
+        for fac, ch in self.later.items():
+            rows[fac] = dict(faction=fac, way=ch["way"], of=ch.get("of"), re_emergent=ch.get("re_emergent"),
+                             event={"date": ch.get("date"), "region": ch.get("region")} if ch["way"] == "event"
+                             else None, script=[], changed=True)
+        for fac, r in rows.items():
+            ev = r.get("event")
+            when = ("event: %s%s" % (ev.get("date") or "", " in %s" % ev["region"] if ev.get("region") else
+                                     " at %s, %s" % ev["position"] if ev.get("position") else "")) if ev else \
+                ("script: " + "; ".join(r.get("script") or [])) if r.get("script") else \
+                ("no event - the engine's own events only" if r["way"] == "event" else "")
+            if r["way"] != "map":
+                how = EM.describe(r["way"], r.get("of"), short=True)
+            elif r.get("changed"):
+                how = "on the map from the start (no longer later)"
+            else:
+                how = "dead at the start (no way in named)"
+            self.ltv.insert("", "end", iid=fac, values=(fac + (" *" if r.get("changed") else ""), how,
+                                                        "yes" if r.get("re_emergent") else "", when))
+
+    def change_later(self, new=False):
+        """A faction's way into the campaign: on the map, by an event, shadow, split-off (written with Write it in)."""
+        from . import emergence as EM
+        from .gui import WAY_KEYS, WAY_LABELS
+        from .gui_util import FactionBox
+        sel = self.ltv.selection()
+        if not new and not sel:
+            messagebox.showinfo(TITLE, "Pick a faction in the list first (or Another faction...).", parent=self)
+            return
+        facs = [n for n, _ in self.mod.factions() if n != "slave"]
+        fac0 = sel[0] if sel and not new else ""
+        tie = EM.ties(self.mod)
+        st = EM.strat_state(self.mod, self.campaign).get(fac0, {})
+        way0, of0 = EM.way_of(self.mod, fac0, tie) if fac0 else ("event", None)
+        ev0 = EM.emergent_events(self.mod, self.campaign).get(fac0) or {}
+        ch = self.later.get(fac0) or {"way": way0 if (way0 != "map" or not st.get("dead")) else "event", "of": of0,
+                                      "re_emergent": st.get("re_emergent", True), "date": ev0.get("date") or "",
+                                      "region": ev0.get("region") or ""}
+        w = tk.Toplevel(self)
+        w.title("How a faction comes into the campaign")
+        w.transient(self)
+        fr = ttk.Frame(w, padding=10)
+        fr.pack(fill="both", expand=True)
+        v_fac, v_way = tk.StringVar(value=fac0), tk.StringVar(value=WAY_LABELS[WAY_KEYS.index(ch["way"])])
+        v_of, v_date, v_reg = tk.StringVar(value=ch.get("of") or ""), tk.StringVar(value=ch.get("date") or ""), \
+            tk.StringVar(value=ch.get("region") or "")
+        v_back = tk.BooleanVar(value=bool(ch.get("re_emergent")))
+        ttk.Label(fr, text="Faction").grid(row=0, column=0, sticky="w", pady=2)
+        cb = FactionBox(fr, v_fac, state="readonly" if new else "disabled", width=30)
+        cb["values"] = facs
+        cb.grid(row=0, column=1, sticky="w")
+        ttk.Label(fr, text="Comes in").grid(row=1, column=0, sticky="w", pady=2)
+        ttk.Combobox(fr, textvariable=v_way, values=WAY_LABELS, state="readonly", width=48).grid(row=1, column=1,
+                                                                                                  sticky="w")
+        ttk.Label(fr, text="of (shadow / splits off)").grid(row=2, column=0, sticky="w", pady=2)
+        cbo = FactionBox(fr, v_of, state="readonly", width=30)
+        cbo["values"] = facs
+        cbo.grid(row=2, column=1, sticky="w")
+        ttk.Label(fr, text="event date").grid(row=3, column=0, sticky="w", pady=2)
+        ttk.Entry(fr, textvariable=v_date, width=14).grid(row=3, column=1, sticky="w")
+        ttk.Label(fr, text="event region").grid(row=4, column=0, sticky="w", pady=2)
+        ttk.Combobox(fr, textvariable=v_reg, values=sorted(self.mod.regions(self.campaign)), state="readonly",
+                     width=30).grid(row=4, column=1, sticky="w")
+        ttk.Checkbutton(fr, text="may come back after it dies (re_emergent)", variable=v_back).grid(
+            row=5, column=1, sticky="w", pady=2)
+        ttk.Label(fr, foreground="#666", wraplength=460, justify="left", text=(
+            "A faction that comes in later must hold no towns and no characters (give them away first). The date is "
+            "%s. Written with Write it in below." % ("years from the start and optionally summer or winter" if
+                                                     self.rome else "a turn, or two turns"))).grid(
+            row=6, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        def ok():
+            fac = v_fac.get()
+            way = WAY_KEYS[WAY_LABELS.index(v_way.get())]
+            if not fac:
+                messagebox.showerror(TITLE, "Pick the faction.", parent=w)
+                return
+            got = {"way": way, "of": v_of.get() or None, "re_emergent": v_back.get(), "date": v_date.get().strip(),
+                   "region": v_reg.get() or None}
+            try:                                     # refused now, not at Write: the same checks on a throw-away plan
+                EM.apply(Plan(self.mod, "later", fac, {}), self.campaign, fac, **got)
+            except Exception as e:
+                messagebox.showerror(TITLE, str(e), parent=w)
+                return
+            self.later[fac] = got
+            w.destroy()
+            self.fill_later()
+            self.lbl.configure(text="%s: changed - Preview / Write it in" % fac)
+        bb = ttk.Frame(fr)
+        bb.grid(row=7, column=0, columnspan=2, sticky="e", pady=(8, 0))
+        ttk.Button(bb, text="Cancel", command=w.destroy).pack(side="right")
+        ttk.Button(bb, text="OK", command=ok).pack(side="right", padx=4)
+
     # ---- reading ----
     def reload(self):
         from .strtables import strings
@@ -77,6 +187,7 @@ class EventsWindow(tk.Toplevel):
         self.events = EV.read(self.mod.load(path)) if path else []
         self.shown = strings(self.mod, "historic_events.txt")
         self.fill()
+        self.fill_later()
 
     def text(self, key):
         return self.texts[key] if key in self.texts else self.shown.get(key.upper(), "")
@@ -278,6 +389,9 @@ class EventsWindow(tk.Toplevel):
         texts = {k: v for k, v in self.texts.items() if not any(k.startswith(x["name"] + "_") for x in self.new)}
         EV.apply(plan, self.campaign, {"edit": self.edits, "remove": self.removed, "new": new, "texts": texts,
                                        "pictures": self.pictures})
+        from . import emergence as EM
+        for fac, ch in sorted(self.later.items()):
+            EM.apply(plan, self.campaign, fac, **ch)
         return plan
 
     def preview(self):
@@ -313,6 +427,7 @@ class EventsWindow(tk.Toplevel):
         self.app.load()
         self.mod = self.app.mod
         self.edits, self.removed, self.new, self.texts, self.pictures = {}, [], [], {}, {}
+        self.later = {}
         self.reload()
         self.app.status.set("Events written (backup %s)." % bdir)
 

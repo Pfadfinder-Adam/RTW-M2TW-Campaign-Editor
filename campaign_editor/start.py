@@ -4,6 +4,7 @@ characters and diplomacy."""
 import re
 from types import SimpleNamespace
 
+from .emergence import DEAD_WORDS
 from .strat import FEMALE_KINDS, Strat, RE_XY, character_line, first_names, village_block
 from .textio import strip_comment, tokens
 
@@ -169,7 +170,9 @@ def build_start(plan, campaign, start):
         'heir': {...} or None,
         'army': [unit lines] or None (template leader's army),
         'denari': 5000, 'ai': 'balanced smith' or None,
-        'playable': True, 'diplomacy': 'neutral' | 'template'}"""
+        'playable': True, 'diplomacy': 'neutral' | 'template',
+        'way': 'map' | 'event' | 'shadow' | 'revolt' (emergence.py; not 'map': no towns, no leader, starts dead),
+        'of': the faction it shadows / splits off, 're_emergent': may come back, 'date' / 'region': its event}"""
     mod, t, new = plan.mod, plan.template, plan.new
     path = mod.campaign_file(campaign, "descr_strat.txt")
     f = plan.edit(path)
@@ -197,8 +200,10 @@ def build_start(plan, campaign, start):
         if tk[0] in ("settlement", "character", "character_record", "relative", "army", "navy", "fleet") or \
                 tk[0].startswith("{"):
             break
-        if tk[0] != "denari":
+        if tk[0] != "denari" and tk[0] not in DEAD_WORDS:      # dead at the start: the new faction's own choice
             head_lines.append(f.text(i).rstrip("\r"))
+    if start.get("way", "map") != "map":
+        return _later_start(plan, f, s, tb, start, head_lines)
     from .regionedit import plan_land
     tiles, own = plan_land(plan, campaign)          # new regions of the same Apply count as regions
     new_regions = {r["name"] for r in (plan.opts.get("regions") or {}).get("new") or []}
@@ -520,7 +525,13 @@ def build_start(plan, campaign, start):
     plan.note(f, "faction block for %s: %d settlement(s), capital %s, leader %s"
               % (new, len(moved_blocks), capital, start["leader"]["name"]))
 
-    # ---- lists and diplomacy (indices from a fresh scan) ----
+    _lists_and_diplomacy(plan, f, start)
+
+
+def _lists_and_diplomacy(plan, f, start):
+    """The new faction into the playable / nonplayable list (after the template) and its diplomacy (indices from a
+    fresh scan)."""
+    t, new = plan.template, plan.new
     s = Strat(f)
     lst = s.playable if start.get("playable", True) else s.nonplayable
     if lst:
@@ -556,6 +567,36 @@ def build_start(plan, campaign, start):
             plan.note(f, "%d %s line(s) for %s" % (len(add[kind]), kind, new))
     else:                                 # neutral to all, the rebels' enemy as every faction of the game is
         set_relations(plan, f, new, rebels(s, new))
+
+
+def _later_start(plan, f, s, tb, start, head_lines):
+    """A new faction that appears later (start['way'] 'event' | 'shadow' | 'revolt', start['of'] its partner,
+    start['re_emergent'], start['date'] / start['region'] of the event): its descr_strat block starts dead - no
+    towns, no characters, only its money - it goes on the nonplayable list, and descr_sm_factions / descr_events get
+    their lines (emergence.py)."""
+    from . import emergence
+    t, new, campaign = plan.template, plan.new, plan.campaign
+    way = start["way"]
+    ai = start.get("ai") or " ".join(tokens(tb.header)[2:]) or "balanced smith"
+    dead = ["dead_until_resurrected"] + (["re_emergent"] if start.get("re_emergent") else [])
+    block = [f.make(";#######################################################################################>"),
+             f.make("faction\t%s, %s" % (new, ai))] + [f.make(x) for x in dead] + \
+        [f.make("denari\t%d" % int(start.get("denari", 5000)))] + [f.make(x) for x in head_lines] + \
+        [f.make(";#######################################################################################<"),
+         f.make("")]
+    slave = s.faction("slave")
+    at = slave.start if slave else s.factions[-1].end
+    while at > 0 and f.text(at - 1).lstrip().startswith(";") and not f.text(at - 1).rstrip().endswith("<"):
+        at -= 1
+    f.insert_raw(at, block)
+    plan.note(f, "faction block for %s: %s - no towns, no characters" % (new, emergence.describe(way, start.get("of"))))
+    if start.get("playable"):
+        plan.note(f, "%s goes on the nonplayable list: it starts dead (the games' own later factions are all "
+                     "nonplayable)" % new)
+    _lists_and_diplomacy(plan, f, dict(start, playable=False))
+    emergence.set_way(plan, new, way, start.get("of"))
+    if way == "event":
+        emergence.set_event(plan, campaign, new, start.get("date"), start.get("region"))
 
 
 # ---------------------------------------------------------------------------

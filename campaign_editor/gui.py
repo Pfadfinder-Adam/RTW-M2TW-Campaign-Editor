@@ -178,6 +178,10 @@ messagebox.showerror = _logged_error
 AI_ECONOMY = ("balanced", "bureaucrat", "comfortable", "craftsman", "fortified", "religious", "sailor", "trader")
 AI_MILITARY = ("caesar", "genghis", "henry", "mao", "napoleon", "smith", "stalin")
 AI_CHOICES = ["%s %s" % (e, m) for e in AI_ECONOMY for m in AI_MILITARY]
+# New faction: how it comes into the campaign (emergence.WAYS in this order)
+WAY_LABELS = ("on the map from the start", "later, by an event (a date and a region)",
+              "later, as the shadow of a faction (its civil war)", "later, splitting off a faction in a revolt")
+WAY_KEYS = ("map", "event", "shadow", "revolt")
 
 
 def colour_look(rgb):
@@ -531,6 +535,43 @@ class App(tk.Tk):
             b.pack(side="left")
         field("Diplomacy", df)
         self.dip_row = [df, lf.grid_slaves(row=row - 1, column=0)[0]]
+        # how it comes into the campaign: on the map from the start, or later (emergent / shadow / split-off -
+        # emergence.py); later = no towns, no leader, dead at the start
+        from .emergence import HOW
+        self.v_way = tk.StringVar(value=WAY_LABELS[0])
+        self.v_way_of, self.v_way_date, self.v_way_region = tk.StringVar(), tk.StringVar(), tk.StringVar()
+        self.v_way_back = tk.BooleanVar(value=True)
+        wf = ttk.Frame(lf)
+        self.cb_way = ttk.Combobox(wf, textvariable=self.v_way, state="readonly", values=WAY_LABELS, width=FIELD_W - 6)
+        self.cb_way.pack(side="left")
+        self.cb_way.bind("<<ComboboxSelected>>", lambda e: self.way_changed())
+        from .gui_util import hint
+        hint(wf, HOW, width=560).pack(side="left")
+        field("Comes into the campaign", wf)
+        self.way_row = [wf, lf.grid_slaves(row=row - 1, column=0)[0]]
+        self.way_more = ttk.Frame(lf)
+        self.way_more.grid(row=row, column=1, sticky="w", padx=4)
+        row += 1
+        self.way_parts = {}
+        p = ttk.Frame(self.way_more)
+        ttk.Label(p, text="date").pack(side="left")
+        ttk.Entry(p, textvariable=self.v_way_date, width=10).pack(side="left", padx=(2, 6))
+        ttk.Label(p, text="region").pack(side="left")
+        self.cb_way_region = ttk.Combobox(p, textvariable=self.v_way_region, state="readonly", width=22)
+        self.cb_way_region.pack(side="left", padx=2)
+        self.way_parts["event"] = p
+        p = ttk.Frame(self.way_more)
+        self.l_way_of = ttk.Label(p, text="of")
+        self.l_way_of.pack(side="left")
+        self.cb_way_of = FactionBox(p, self.v_way_of, state="readonly", width=24)
+        self.cb_way_of.pack(side="left", padx=2)
+        self.way_parts["of"] = p
+        self.chk_way_back = ttk.Checkbutton(self.way_more, text="may come back after it dies (re_emergent)",
+                                            variable=self.v_way_back)
+        self.l_way_note = ttk.Label(self.way_more, foreground="#666", wraplength=330, justify="left", text=(
+            "It starts dead: no towns, no leader, only its money (towns, armies and the leader above are not "
+            "used); nonplayable."))
+        self.way_changed()
         ttk.Label(texts, text="Tooltip\n(faction icon)").grid(row=0, column=0, sticky="nw", padx=4)
         self.t_descr = tk.Text(texts, width=34, height=2, wrap="word")
         self.t_descr.grid(row=0, column=1, sticky="we", padx=4, pady=2)
@@ -1296,11 +1337,14 @@ class App(tk.Tk):
             for w in ws:
                 w.grid_remove()
         # cloning-only options are hidden in Edit (diplomacy gets its own editor later)
-        for w in [self.chk_triggers, self.chk_art] + self.dip_row:
+        for w in [self.chk_triggers, self.chk_art] + self.dip_row + self.way_row:
             if edit:
                 w.grid_remove()
             else:
                 w.grid()
+        if edit:
+            self.v_way.set(WAY_LABELS[0])          # Edit: the way in is changed in Tools > Events and later factions
+        self.way_changed()
         if edit:
             for w in self.give_row:
                 w.grid()
@@ -3207,6 +3251,35 @@ class App(tk.Tk):
         from .limits import game_kind
         return bool(self.mod) and game_kind(self.mod) == "medieval2"
 
+    def way(self):
+        """'map' | 'event' | 'shadow' | 'revolt' - how the new faction comes into the campaign."""
+        v = self.v_way.get()
+        return WAY_KEYS[WAY_LABELS.index(v)] if v in WAY_LABELS else "map"
+
+    def way_changed(self):
+        """Show the parts the picked way needs (date + region / the faction / may come back)."""
+        way = self.way()
+        for w in self.way_more.winfo_children():
+            w.pack_forget()
+        if way == "map" or self.editing():
+            return
+        if way == "event":
+            self.way_parts["event"].pack(anchor="w")
+            if self.mod and not self.cb_way_region["values"]:
+                try:
+                    self.cb_way_region["values"] = sorted(self.mod.regions(self.v_campaign.get()))
+                except Exception:
+                    pass
+            if not self.v_way_date.get().strip():
+                self.v_way_date.set("10 summer" if not self._m2() else "20")
+        else:
+            self.l_way_of.configure(text="the shadow of" if way == "shadow" else "splits off")
+            self.way_parts["of"].pack(anchor="w")
+            if self.mod:
+                self.cb_way_of["values"] = [n for n, _ in self.mod.factions() if n != "slave"]
+        self.chk_way_back.pack(anchor="w")
+        self.l_way_note.pack(anchor="w")
+
     def _game_rows(self):
         """The faction form shows only what the loaded game has: Rome's short name and icon tooltip are hidden on
         Medieval II (its texts have neither)."""
@@ -3386,6 +3459,7 @@ class App(tk.Tk):
             self.strat = Strat(self.mod.load(self.mod.campaign_file(c, "descr_strat.txt")))
             self.regions = self.mod.regions(c)
             self.mod.city_tiles(c)
+            self.cb_way_region["values"] = sorted(self.regions)
         except Exception as e:
             messagebox.showerror(APP, "Could not read the campaign: %s" % e)
             return
@@ -4313,8 +4387,14 @@ class App(tk.Tk):
             name = (first + " " + v[prefix + "_last"]).strip()
             return {"name": name, "age": int(v[prefix + "_age"] or 30)}
         leader = who("leader")
-        if not leader:
+        way = self.way()
+        if not leader and way == "map":
             raise ValueError("the faction needs a leader - pick a first name")
+        if way == "event" and not self.v_way_region.get():
+            raise ValueError("pick the region where it rises (Comes into the campaign)")
+        if way in ("shadow", "revolt") and not self.v_way_of.get():
+            raise ValueError("pick the faction it %s (Comes into the campaign)" % (
+                "is the shadow of" if way == "shadow" else "splits off"))
         opts = {
             "display_name": v["display_name"], "short_name": v["short_name"], "adjective": v["adjective"],
             "description": self.t_descr.get("1.0", "end").strip(),
@@ -4322,7 +4402,9 @@ class App(tk.Tk):
             "religion": (v.get("religion") or None) if self._m2() else None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "copy_triggers": self.v_triggers.get(), "copy_art": self.v_art.get(),
-            "start": {"regions": list(self.chosen), "capital": v["capital"], "leader": leader,
+            "start": {"regions": list(self.chosen) if way == "map" else [], "capital": v["capital"], "leader": leader,
+                      "way": way, "of": self.v_way_of.get() or None, "re_emergent": self.v_way_back.get(),
+                      "date": self.v_way_date.get().strip(), "region": self.v_way_region.get() or None,
                       "heir": who("heir"), "denari": int(v["denari"] or 0), "ai": v["ai"] or None,
                       "playable": self.v_playable.get(), "diplomacy": self.v_dip.get(),
                       "army_mode": self.v_army.get(), "garrison": self.v_garrison.get(),

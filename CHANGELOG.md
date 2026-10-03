@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Changed
+- **Factions that appear later** (a tester, REX): a new faction can come into the campaign later instead of starting
+  on the map - *by an event* (a date and a region: `emergent_faction` in `descr_events.txt`), *as the shadow of a
+  faction* (the side that splits off it in a civil war: `shadowing` / `shadowed_by`) or *splitting off a faction in a
+  revolt* (`spawned_by` / `spawns_on_revolt`) - New faction > *Comes into the campaign*. It starts dead
+  (`dead_until_resurrected`, optionally `re_emergent` - may come back after it dies), with no towns or characters,
+  nonplayable. **Tools > Events and later factions** now lists every such faction and changes how one comes in.
+  **Check mod files** finds a shadow / split-off pair written on one side only, an emergence event for a faction
+  that is not dead at the start, and a dead faction holding towns. A clone of such a faction (Ostrogoths, the
+  empires' rebels) starts plain and alive. Both games (Barbarian Invasion, REX and Medieval II read these words).
 - **A town straight from the Map** (a tester): a double click on a town (or the right click's *Edit this town...*)
   opens its owner in Edit faction with the town picked on the Buildings tab - level, population, city or castle,
   buildings.

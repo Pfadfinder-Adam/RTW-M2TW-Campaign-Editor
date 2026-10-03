@@ -3003,6 +3003,71 @@ building smith
         self.assertEqual(len(_same_length_name("#banner_symbol_england", "england", "pisa")), 22)
         self.assertEqual(len(_same_length_name("#banner_symbol_milan", "milan", "papal_states")), 20)
 
+    def test_factions_that_appear_later_emergent_shadow_split(self):
+        """A new faction that appears later starts dead (no towns, no characters, only money), nonplayable; the
+        header words of descr_sm_factions go in pairs; an event brings an emergent one in; a template's own dead
+        words / ties never come along to a faction that starts on the map; Check finds broken pairs; Restore byte
+        for byte."""
+        from campaign_editor import emergence as E
+        before = tree_hash(self.root)
+        d = os.path.join(self.root, "data")
+        camp = os.path.join(d, "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "descr_events.txt"), "; events\n\nevent\thistoric\tfirst\ndate\t2\n")
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "slavs", {"start": {
+            "way": "event", "date": "5 summer", "region": "B_R", "re_emergent": True, "denari": 2000,
+            "regions": [], "leader": None, "playable": True}})
+        sp = mod.campaign_file("test", "descr_strat.txt")
+        s = Strat(plan.files[sp])
+        fb = s.faction("slavs")
+        self.assertEqual((fb.settlements, fb.characters), ([], []))
+        head = [l.strip() for l in s.lines[fb.start:fb.end] if l.strip() and not l.startswith(";")]
+        self.assertEqual(head[:4], ["faction\tslavs, balanced smith", "dead_until_resurrected", "re_emergent",
+                                    "denari\t2000"])
+        self.assertIn("slavs", [n for _, n in s.nonplayable["items"]])
+        self.assertNotIn("slavs", [n for _, n in s.playable["items"]])
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual(E.way_of(mod, "slavs"), ("event", None))
+        ev = E.emergent_events(mod, "test")["slavs"]
+        self.assertEqual((ev["date"], ev["region"]), ("5 summer", "B_R"))
+        self.assertEqual(E.problems(mod, "test"), ([], []))
+        # the shadow of alpha: both header lines; a clone of the dead faction starts plain and alive
+        plan = Plan(mod, "later", "alpha", {})
+        E.apply(plan, "test", "slavs", "shadow", of="alpha", re_emergent=True)
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual(E.way_of(mod, "slavs"), ("shadow", "alpha"))
+        self.assertEqual(E.ties(mod)["alpha"], {"shadowed_by": "slavs"})
+        self.assertNotIn("slavs", E.emergent_events(mod, "test"))
+        self.assertEqual(E.problems(mod, "test"), ([], []))
+        with self.assertRaises(ValueError):           # one shadow per faction
+            E.set_way(Plan(mod, "x", "y", {}), "slave", "shadow", "alpha")
+        plan = build(mod, "test", "slavs", "venedi", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        s = Strat(plan.files[sp])
+        txt = "\n".join(s.lines[s.faction("venedi").start:s.faction("venedi").end])
+        self.assertNotIn("dead_until_resurrected", txt)
+        sm = "\n".join(plan.files[mod.file("sm_factions")].texts())
+        self.assertIn("faction\t\tvenedi\n", sm + "\n")
+        # broken pair: Check says so; making it a faction on the map again takes every word away
+        smf = mod.file("sm_factions")
+        with open(smf, encoding="latin-1", newline="") as fh:
+            write(smf, fh.read().replace("\r\n", "\n").replace(", shadowed_by slavs", ""))
+        mod = ModData(self.root)
+        self.assertTrue(any("go in pairs" in x for x in E.problems(mod, "test")[0]))
+        plan = Plan(mod, "later", "slavs", {})
+        E.apply(plan, "test", "slavs", "map")
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual(E.later_rows(mod, "test"), [])
+        for b in backups(mod):
+            restore(mod, b)
+        write(smf, SM)
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
+        before["data/world/maps/campaign/test/descr_events.txt"] = after.get(
+            "data/world/maps/campaign/test/descr_events.txt")
+        self.assertEqual(before, after)
+
     def test_new_faction_keeps_the_templates_ai_label_and_purse(self):
         """Medieval II: the template's block header (ai_label - the campaign AI's rule set, denari_kings_purse - its
         money every turn) comes along to the new faction; the treasury is the one picked."""
