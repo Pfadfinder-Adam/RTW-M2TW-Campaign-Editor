@@ -7,7 +7,7 @@ Writes only descr_strat.txt, through a Plan (Preview, backup, Restore)."""
 
 import re
 
-from .buildings import (available, castles_allowed, ranks_ok, read_buildings, set_buildings, settlement_info,
+from .buildings import (available, castles_allowed, population_of, ranks_ok, read_buildings, set_buildings, settlement_info,
                         settlement_kind, SETTLEMENT_LEVELS)
 from .start import MAX_UNITS, _has_army, _units, unit_name
 from .strat import Strat
@@ -22,7 +22,8 @@ def known_buildings(mod):
 
 def towns(mod, campaign):
     """[{'region', 'name', 'owner', 'level', 'kind' ('city' | 'castle', None in a game without castles),
-    'buildings' [(chain, level)], 'units' (in the army on the town), 'upkeep', 'port'}] in descr_strat's order."""
+    'buildings' [(chain, level)], 'units' (in the army on the town), 'upkeep', 'port', 'unit_names', 'population',
+    'army' (its leader's name)}] in descr_strat's order."""
     from .mapedit import ports
     from .start import unit_upkeep
     f = mod.load(mod.campaign_file(campaign, "descr_strat.txt"))
@@ -49,7 +50,8 @@ def towns(mod, campaign):
                         "owner": fb.name, "culture": _culture(mod, fb.name), "level": level,
                         "kind": settlement_kind(lines) if castles else None, "buildings": items,
                         "units": len(units), "upkeep": sum(upkeep.get(u, 0) for u in units),
-                        "port": st.region in port})
+                        "port": st.region in port, "unit_names": units, "population": population_of(lines),
+                        "army": army.name if army else None})
     return out
 
 
@@ -235,11 +237,23 @@ def rebel_pool(mod, campaign, region, near=3, siege=False):
 def apply(plan, campaign, opts):
     """opts: 'build' {region: (chain, level)} | 'remove' {region: chain} (the towns' buildings, checked as the
     window showed them), 'garrisons' {region: [unit type]}, 'add_units' (the units join the army in the town
-    instead of replacing it), 'towns' {region: {'kind': 'city' | 'castle' | None, 'level': level or None}}."""
-    from .edit import _garrisons
+    instead of replacing it), 'towns' {region: {'kind': 'city' | 'castle' | None, 'level': level or None}},
+    'population' {region: number}, 'owners' {region: faction} (the town handed over - edit.map_changes, the one
+    place towns change hands)."""
+    from .buildings import resize
+    from .edit import _garrisons, map_changes
     f = plan.edit(plan.mod.campaign_file(campaign, "descr_strat.txt"))
     if opts.get("towns"):
         _town_changes(plan, f, campaign, opts["towns"])
+    for region, pop in sorted((opts.get("population") or {}).items()):
+        st = next((x for fb in Strat(f).factions for x in fb.settlements if x.region == region), None)
+        if st is None:
+            raise ValueError("%s has no town in descr_strat.txt" % region)
+        pop = int(pop)
+        if pop < 1:
+            raise ValueError("%s: the population is a whole number above 0" % region)
+        f.raw[st.start:st.end] = resize(f.raw[st.start:st.end], f.make, population=pop)
+        plan.note(f, "%s: population %d" % (region, pop))
     s = Strat(f)
     where = {st.region: st for fb in s.factions for st in fb.settlements}
     jobs = [(r, x, None) for r, x in (opts.get("build") or {}).items()] + \
@@ -270,6 +284,8 @@ def apply(plan, campaign, opts):
         by_owner.setdefault(st.owner, {})[region] = list(types)
     for owner, got in by_owner.items():
         _garrisons(plan, f, Strat(f), campaign, faction=owner, picked=got, add=bool(opts.get("add_units")))
+    if opts.get("owners"):                          # last: the block moves with what was just written into it
+        map_changes(plan, campaign, {"owners": dict(opts["owners"])})
     return plan
 
 

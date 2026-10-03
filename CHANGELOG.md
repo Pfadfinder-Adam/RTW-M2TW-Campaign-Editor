@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Changed
+- **A town's own window** (a tester: "click a town and get its window straight away"): a double click on a town on the
+  Map (or the right click's *This town...*) opens it - owner (hand it to another faction), city or castle (Medieval II),
+  level, population and buildings (add, raise, take out, checked as the game checks them), the garrison shown;
+  Preview and Write it in with a backup. Both games. The old jump to Edit faction stays as a button and a menu item.
 - **REX / M2EX: no limits at all** (the author, after the same faction-limit error came back once more): with REX or
   M2EX beside the game the editor never refuses or warns for a number - factions, regions, religions, cultures,
   units, buildings, children, retinue. Check mod files says "LIMITS: none"; every write raises `max_factions` in

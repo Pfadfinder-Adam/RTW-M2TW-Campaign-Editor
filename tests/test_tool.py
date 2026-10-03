@@ -3109,6 +3109,26 @@ building smith
             "data/world/maps/campaign/test/descr_events.txt")
         self.assertEqual(before, after)
 
+    def test_one_town_population_and_owner(self):
+        """The town window's writes (masstown.apply): the population line, the town handed to another faction (the
+        whole block moves, edit.map_changes); towns() reads the population and the garrison's units; Restore exact."""
+        from campaign_editor import masstown as MT
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        t = next(x for x in MT.towns(mod, "test") if x["region"] == "B_R")
+        self.assertEqual((t["population"], t["owner"], t["unit_names"]), (800, "slave", ["rebel spear"]))
+        plan = Plan(mod, "town", "B_R", {})
+        MT.apply(plan, "test", {"population": {"B_R": 1500}, "owners": {"B_R": "alpha"}})
+        with self.assertRaises(ValueError):
+            MT.apply(Plan(mod, "town", "B_R", {}), "test", {"population": {"B_R": 0}})
+        plan.apply()
+        mod = ModData(self.root)
+        t = next(x for x in MT.towns(mod, "test") if x["region"] == "B_R")
+        self.assertEqual((t["population"], t["owner"]), (1500, "alpha"))
+        restore(mod, backups(mod)[0])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
+        self.assertEqual(before, after)
+
     def test_new_faction_keeps_the_templates_ai_label_and_purse(self):
         """Medieval II: the template's block header (ai_label - the campaign AI's rule set, denari_kings_purse - its
         money every turn) comes along to the new faction; the treasury is the one picked."""
