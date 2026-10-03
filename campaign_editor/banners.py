@@ -318,13 +318,3 @@ def scale_box(box, factor, banner):
     nw, nh = max(MIN_SYMBOL, int(round(w * k))), max(MIN_SYMBOL, int(round(h * k)))
     cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
     return place_box((0, 0, nw, nh), cx, cy, banner)
-
-
-def which_banner(banners, box):
-    """The number of the banner a drawn box is on: the smallest one holding its middle, else (Rome's banners stand
-    side by side) the one across from it, or None."""
-    cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
-    hit = [i for i, b in enumerate(banners) if b[0] <= cx < b[2] and b[1] <= cy < b[3]]
-    if hit:
-        return min(hit, key=lambda i: (banners[i][2] - banners[i][0]) * (banners[i][3] - banners[i][1]))
-    return next((i for i, b in enumerate(banners) if b[0] <= cx < b[2]), None)

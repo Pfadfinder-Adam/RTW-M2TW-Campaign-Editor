@@ -305,11 +305,6 @@ class BringWindow(StepWindow):
     def s_links(self):
         if self.kind == "unit":
             return self._unit_places()
-            rows = [("%s / %s" % k, k, "%s / %s" % v if v else NOWHERE) for k, v in self.recruit_map.items()]
-            units_at = {}
-            for r in self.man.get("recruit", []):
-                units_at.setdefault((r["chain"], r["level"]), []).append(r["unit"])
-            choices = [NOWHERE] + levels
         else:
             self._note("The units these buildings recruit. Each one goes to a unit of THIS mod: the same one when this "
                        "mod has it; otherwise pick one, or '%s'. To bring a unit this mod lacks, bring it first with "

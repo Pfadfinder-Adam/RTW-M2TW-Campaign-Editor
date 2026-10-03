@@ -3497,8 +3497,8 @@ building smith
         self.assertEqual(cloth.getpixel((50, 90)), 0)
         self.assertEqual(cloth.getpixel((50, 40)), 255)
         self.assertEqual(len(panels), 2)
-        self.assertEqual(B.which_banner(panels, (40, 30, 60, 50)), panels.index(next(p for p in panels if p[0] < 50)))
-        self.assertIsNone(B.which_banner(panels, (90, 2, 100, 3)))
+        self.assertEqual(B.banner_at(panels, 50, 40), panels.index(next(p for p in panels if p[0] < 50)))
+        self.assertIsNone(B.banner_at(panels, 95, 2))
         # Rome's banners take the drawing the same way, and make() without one is the dyed banner as before
         blank = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         ImageDraw.Draw(blank).rectangle((4, 4, 59, 40), fill=(220, 220, 220, 255))
