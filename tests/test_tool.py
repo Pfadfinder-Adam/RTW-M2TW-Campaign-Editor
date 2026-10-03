@@ -3641,6 +3641,48 @@ building smith
                                "menu/symbols/FE_buttons_24/symbol24_ce_test.tga"])
         shutil.rmtree(os.path.dirname(data))
 
+    def test_recolour_gives_a_shared_battle_texture_a_copy_of_its_own(self):
+        """A clone wears its template's battle textures (and a mod in mods/ the game's): Recolour skipped them, so a
+        new faction's men stayed in the template's colours in battle (the author's test mod, both games). The
+        faction now gets its own copy in the mod and its model line points at it; the template's stays."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import recolour as RC, models as M
+        d = os.path.join(self.root, "data")
+        tex = os.path.join(d, "models_unit", "textures")
+        os.makedirs(tex, exist_ok=True)
+        im = Image.new("RGB", (32, 32), (200, 20, 20))
+        for x in range(32):
+            im.putpixel((x, 0), (90, 90, 90))
+        im.save(os.path.join(tex, "spearman_alpha.tga"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\tspearman\nskeleton\tfs_spearman\nindiv_range\t40\n"
+              "texture\t\talpha, data/models_unit/textures/spearman_alpha.tga\n"
+              "texture\t\tbeta, data/models_unit/textures/spearman_alpha.tga\n"
+              "model_flexi\tdata/models_unit/spearman.cas, max\n\n")
+        mod = ModData(self.root)
+        items = [t for t in RC.targets(mod, "test", "beta") if t["group"] == "unit textures"]
+        self.assertEqual(len(items), 1)
+        self.assertTrue(items[0]["own_tex"] and not items[0]["skip"])
+        with open(os.path.join(tex, "spearman_alpha.tga"), "rb") as fh:
+            before = fh.read()
+        plan = Plan(mod, "recolour", "beta", {})
+        RC.plan_recolour(plan, items, ((200, 20, 20), None), ((20, 160, 40), None))
+        plan.apply()
+        mod = ModData(self.root)
+        info = M.catalogue(mod)["spearman"]
+        self.assertEqual(info.textures["beta"], "data/models_unit/textures/spearman_beta.tga")
+        self.assertEqual(info.textures["alpha"], "data/models_unit/textures/spearman_alpha.tga")
+        with open(os.path.join(tex, "spearman_alpha.tga"), "rb") as fh:
+            self.assertEqual(fh.read(), before)
+        own = Image.open(os.path.join(tex, "spearman_beta.tga")).convert("RGB")
+        self.assertGreater(own.getpixel((5, 5))[1], own.getpixel((5, 5))[0])       # green now
+        self.assertEqual(own.getpixel((5, 0)), (90, 90, 90))                       # the grey kept
+        restore(mod, backups(mod)[0])
+        self.assertFalse(os.path.exists(os.path.join(tex, "spearman_beta.tga")))
+
     def test_banner_symbol_dragged_snapped_and_sized(self):
         """The Banner window moves the symbol with the mouse: its middle snaps to the banner's own grid (quarters,
         eighths, sixteenths) or goes freely, it stays on its banner, the wheel sizes it round its middle."""

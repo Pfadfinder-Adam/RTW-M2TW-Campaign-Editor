@@ -431,6 +431,74 @@ def _give_textures(plan, info, factions):
                 m.name, ", ".join(added), "" if src == dst else " (a copy of the game's modeldb, now the mod's own)")))
 
 
+def own_texture_ref(ref, faction, wearers=()):
+    """The name of a faction's own copy of a battle texture it shares (or that only the game's data holds): the
+    word naming a wearer swapped for the faction (roman_hastati_julii -> roman_hastati_ce_test, the last such word),
+    else _<faction> added before the extension; the folder stays."""
+    ref = ref.replace("\\", "/")
+    folder, base = ref.rsplit("/", 1) if "/" in ref else ("", ref)
+    stem, dot, ext = base.partition(".")
+
+    def word(w):
+        return r"(?i)(?:^|(?<=[^a-z0-9]))%s(?=$|[^a-z0-9])" % re.escape(w)
+    if re.search(word(faction), stem):
+        return ref                                     # already named after it (a copy only the game's data holds)
+    keys = [w for w in wearers] + [part for w in wearers for part in w.lower().split("_") if len(part) >= 4]
+    for k in keys:
+        hits = list(re.finditer(word(k), stem))
+        if hits:
+            h = hits[-1]
+            stem = stem[:h.start()] + faction + stem[h.end():]
+            break
+    else:
+        stem = "%s_%s" % (stem, faction)
+    return (folder + "/" if folder else "") + stem + dot + ext
+
+
+def _same_folder(old, ref):
+    """ref's file name in old's folder, written as old writes it (data/... in Rome's text, none in the modeldb)."""
+    old = old.replace("\\", "/")
+    return (old.rsplit("/", 1)[0] + "/" if "/" in old else "") + ref.replace("\\", "/").rsplit("/", 1)[-1]
+
+
+def set_faction_texture(plan, info, faction, ref, kind="texture"):
+    """The faction's texture (kind 'texture') or weapons / shields texture ('attach', Medieval II's modeldb) of a
+    battle model pointed at ref, in every place the model is: descr_model_battle.txt (its 'texture <faction>, ...'
+    line, made from the model's other line when it has none) and the modeldb."""
+    from . import modeldb as MDB
+    from .packs import _block_lines, _owner_textures, _values, type_blocks
+    mod = plan.mod
+    if kind == "texture" and "text" in info.where:
+        path = _ci(mod.data, TEXT_FILE)
+        f = plan.edit(path)
+        blocks = type_blocks(f)
+        name = next((k for k in blocks if k.lower() == info.name.lower()), None)
+        if name:
+            a, b = blocks[name]
+            now = _block_lines(f, (a, b))
+            got, _ = _owner_textures(now, [faction])
+            out = []
+            for line in got:
+                v = _values([line], "texture")[0] if strip_comment(line).split(None, 1)[:1] == ["texture"] else None
+                if v and len(v) > 1 and v[0] == faction:
+                    line = line.replace(v[1], _same_folder(v[1], ref), 1)
+                out.append(line)
+            f.raw[a:a + len(now)] = [f.make(x) for x in out]
+            plan.note(f, "model %s: %s's texture -> %s" % (name, faction, ref))
+    if "modeldb" in info.where:
+        src, dst = MDB.find(mod)
+        db = MDB._db_in_plan(plan, src, dst)
+        m = db.model(info.name)
+        if m is not None:
+            MDB.give_owners(m, [faction])
+            for r in getattr(m, "textures" if kind == "texture" else "attach"):
+                if r[0] == faction:
+                    r[1] = _same_folder(r[1], ref)
+            plan.binary(dst, db.dump().encode("latin-1"))
+            plan.notes.append((mod.rel(dst), "battle model %s: %s's %s -> %s" % (
+                m.name, faction, "texture" if kind == "texture" else "weapons texture", ref)))
+
+
 __all__ = ["SEATS", "ModelInfo", "source", "catalogue", "skeleton_seats", "unit_lines", "unit_slots",
            "mount_classes", "unit_seat", "fit_problems", "texture_image", "replace"]
 

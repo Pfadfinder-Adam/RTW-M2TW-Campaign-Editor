@@ -234,6 +234,11 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Recolour left a new faction's men in its template's colours in battle** (the author's test mod, both games):
+  a battle texture the faction wears with others (a clone wears its template's) or that only the game's data holds
+  (a mod in `mods/`) was skipped. The faction now gets its own copy in the mod, recoloured, and the model's line
+  for it points at the copy (`descr_model_battle.txt` and the modeldb; Medieval II's weapons and shields too); the
+  template's and the game's files stay as they are.
 - **A town's population the game cannot take at the start** (the author's test mod on Rome: the rebels' towns
   stood empty and every faction was neutral): each settlement level holds a range of people at the start (a village
   400 - 1500, a town up to 3500, a large town 9000, a city 18000...; Medieval II castles their own; read from

@@ -433,14 +433,18 @@ def targets(mod, campaign, faction):
     names = [n for n, _ in mod.factions()]
     out, seen = [], set()
 
-    def add(path, group, label, others=(), crop=None, skip=None, of=(), own=None, alike=True):
+    def add(path, group, label, others=(), crop=None, skip=None, of=(), own=None, alike=True, own_tex=None):
         k = (os.path.normcase(os.path.abspath(path)), crop)
         if k in seen:
+            if own_tex:                                  # one texture worn by several models: all of them follow
+                prev = next((o for o in out if (os.path.normcase(os.path.abspath(o["path"])), o["crop"]) == k), None)
+                if prev is not None and prev.get("own_tex"):
+                    prev["own_tex"]["models"] += own_tex["models"]
             return
         seen.add(k)
         out.append({"path": path, "rel": mod.rel(path), "group": group, "label": label, "others": list(others),
                     "of": list(of), "crop": crop, "skip": skip, "own": own, "faction": faction,
-                    "alike": alike})
+                    "alike": alike, "own_tex": own_tex})
     for sub, label in (("units", "unit card"), ("unit_info", "unit info picture")):
         d = _ci(_ci(mod.data, "ui") or "", sub) if _ci(mod.data, "ui") else None
         own = _ci(d, faction) if d else None
@@ -468,11 +472,13 @@ def targets(mod, campaign, faction):
         if not got:
             continue
         inside = os.path.normcase(os.path.abspath(got[1])).startswith(os.path.normcase(os.path.abspath(mod.data)))
-        skip = ("worn by %s too - recolouring it would change them as well" % ", ".join(wearers[:4])) if wearers else \
-            (None if inside else "the game's own file (not in this mod) - copy the model into the mod first")
+        # worn by other factions too (a clone wears its template's), or only in the game's data: the faction gets a
+        # copy of its own in the mod and its model line points at it - the others' and the game's stay as they are
+        own_tex = _own_texture(mod, info, faction, rel, got, wearers, "texture") if wearers or not inside else None
         others = [(on_disk(mod, r)[1], colours[f]) for f, r in info.textures.items()
                   if f != faction and f in colours and r.lower() != rel.lower() and on_disk(mod, r)]
-        add(got[1], "unit textures", "battle texture of %s" % info.name, others[:6], skip=skip)
+        label = "battle texture of %s" % info.name + (" - gets a copy of its own" if own_tex else "")
+        add(got[1], "unit textures", label, others[:6], own_tex=own_tex)
     # Medieval II: the weapons and shields texture beside it (a kite shield carries the faction's arms)
     for name, info in sorted(cat.items()):
         rel = getattr(info, "attach", {}).get(faction)
@@ -481,11 +487,11 @@ def targets(mod, campaign, faction):
             continue
         wearers = sorted(f for f, r in info.attach.items() if f != faction and r.lower() == rel.lower())
         inside = os.path.normcase(os.path.abspath(got[1])).startswith(os.path.normcase(os.path.abspath(mod.data)))
-        skip = ("worn by %s too - recolouring it would change them as well" % ", ".join(wearers[:4])) if wearers else \
-            (None if inside else "the game's own file (not in this mod) - copy the model into the mod first")
+        own_tex = _own_texture(mod, info, faction, rel, got, wearers, "attach") if wearers or not inside else None
         others = [(on_disk(mod, r)[1], colours[f]) for f, r in info.attach.items()
                   if f != faction and f in colours and r.lower() != rel.lower() and on_disk(mod, r)]
-        add(got[1], "unit textures", "weapons and shields of %s" % info.name, others[:6], skip=skip)
+        label = "weapons and shields of %s" % info.name + (" - gets a copy of its own" if own_tex else "")
+        add(got[1], "unit textures", label, others[:6], own_tex=own_tex)
     # the Art tab's pictures
     try:
         from .factionart import faction_pictures
@@ -532,6 +538,20 @@ def targets(mod, campaign, faction):
             out[-1]["share_out"] = out_x
     _more_targets(mod, faction, names, colours, add)
     return out
+
+
+def _own_texture(mod, info, faction, rel, got, wearers, kind):
+    """Where the faction's own copy of a battle texture goes: {'model', 'kind', 'ref' (as the model names it),
+    'path' (in the mod's data, the file's own extension kept: x.tga -> x.tga.dds on Rome)}."""
+    from .clone import disk_tail
+    from .models import own_texture_ref
+    ref = own_texture_ref(rel, faction, wearers)
+    # beside the original as it lies on disk (got[0]: its data-relative path in the disk's own letter case), in the
+    # mod's own data even when the original is the game's
+    folder = os.path.dirname(got[0].replace("\\", "/"))
+    name = ref.replace("\\", "/").rsplit("/", 1)[-1] + disk_tail(rel, got[1])
+    return {"models": [(info.name, kind)], "ref": ref,
+            "path": os.path.join(mod.data, *[p for p in folder.split("/") if p], name)}
 
 
 def _texture_file(mod, rel):
@@ -594,6 +614,7 @@ def plan_recolour(plan, items, source, target):
     from PIL import Image
     done = []
     sheets = {}
+    cat = None
     for it in items:
         if it.get("skip"):
             done.append((it, it["skip"]))
@@ -615,7 +636,17 @@ def plan_recolour(plan, items, source, target):
                     except Exception:
                         pass
                 new, share = recolour(im, source, target, others, edits=it.get("edits"), plain=it.get("alike", True))
-                if share > 0 and it.get("own"):
+                if share > 0 and it.get("own_tex"):
+                    # the faction's own copy in the mod, its model line pointed at it (both games, text + modeldb)
+                    from .models import catalogue, set_faction_texture
+                    o = it["own_tex"]
+                    if cat is None:
+                        cat = catalogue(plan.mod)
+                    plan.binary(o["path"], picture_bytes(new, it["path"]))
+                    for model, kind in o["models"]:
+                        if model.lower() in cat:
+                            set_faction_texture(plan, cat[model.lower()], it["faction"], o["ref"], kind)
+                elif share > 0 and it.get("own"):
                     import tempfile
                     from .factionart import write_art
                     tmp = os.path.join(tempfile.mkdtemp(prefix="recolour_"), "own.png")
