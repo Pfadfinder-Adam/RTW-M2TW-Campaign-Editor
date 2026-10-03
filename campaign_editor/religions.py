@@ -9,7 +9,7 @@ A religion lives in several places that must agree:
   * descr_regions.txt          every region's `religions { ... }` line names it (0 % until set; each line
                               must add up to 100) - in the base map and every campaign's own copy;
   * map.rwm                    removed, so the game rebuilds it.
-Optional: factions that follow it (descr_sm_factions `religion`). The engine takes at most 9 religions
+Optional: factions that follow it (descr_sm_factions `religion`). The engine takes at most 10 religions (heretic included)
 (5 in vanilla). Temples, priests, traits and religion-gated mercenaries of the template religion are not
 copied; Preview says how many lines name it, so one knows what else could follow."""
 

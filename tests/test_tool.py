@@ -784,7 +784,7 @@ building smith
         self.assertFalse(FM.record_age_problems(son, None, manhood_age(mod)))
 
     def test_religion_limit_only_on_the_original_exe(self):
-        """The original exe takes 9 religions; with REX / M2EX beside the game a 10th is not refused (their
+        """The original exe takes 10 religions; with REX / M2EX beside the game an 11th is not refused (their
         README: religions uncapped) - the tool must not hold modders on REX to vanilla's limits."""
         from campaign_editor import religions as RL
         from campaign_editor.limits import lifted
