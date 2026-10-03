@@ -13,7 +13,7 @@
   also takes the weapons-and-shields texture of the faction's battle models (`unit_models/AttachmentSets/Final
   Kite_<faction>_diff.texture` and the like - the kite shields carry the faction's arms); one worn by other factions
   too is left alone with the reason, as the unit textures are. The battle banners' 3D models (`data/banners/*.mesh`,
-  a part with no material) are now read.
+  a part with no material) are now read. The carroccio of Milan and Venice (`siege_engines/textures/great_bell_tower_<faction>.texture`) is recoloured too.
 - **Your contact remembered for every report** (a tester): the report window says it plainly - with *remember it*
   ticked (the default) the contact you give fills in every next report by itself (also in Settings > Reports);
   unticked, it is forgotten.

@@ -2979,6 +2979,15 @@ building smith
         mod = ModData(self.root)
         R.faction_colours = lambda m: cols                     # the mini mod's factions have no colour lines
         try:
+            # Medieval II's siege engine of its own (the carroccio), not its normal map nor another faction's
+            sd = os.path.join(d, "siege_engines", "textures")
+            os.makedirs(sd)
+            for n in ("great_bell_tower_alpha.texture", "great_bell_tower_alpha_normal.texture",
+                      "great_bell_tower_slave.texture"):
+                open(os.path.join(sd, n), "wb").close()
+            engines = [os.path.basename(it["path"]) for it in R.targets(mod, "test", "alpha")
+                       if it["label"].startswith("siege engine")]
+            self.assertEqual(engines, ["great_bell_tower_alpha.texture"])
             items = [it for it in R.targets(mod, "test", "alpha") if it["path"].endswith("#spear.tga")]
             self.assertEqual(len(items), 1)
             self.assertEqual(len(items[0]["others"]), 1)

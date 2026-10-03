@@ -572,6 +572,15 @@ def _more_targets(mod, faction, names, colours, add):
             others = [(os.path.join(d, f + "_" + rest), colours[f]) for f in names
                       if f != faction and f in colours and os.path.isfile(os.path.join(d, f + "_" + rest))]
             add(os.path.join(d, n), "unit sprites (far away)", "sprite %s" % rest, others[:6])
+    # Medieval II's own siege engines named after the faction (the carroccio: siege_engines/textures/
+    # great_bell_tower_milan.texture); the normal / bump maps beside them are no pictures to recolour
+    d = _ci(_ci(mod.data, "siege_engines") or "", "textures") if _ci(mod.data, "siege_engines") else None
+    if d:
+        tail = "_" + faction.lower() + ".texture"
+        for n in sorted(os.listdir(d)):
+            low = n.lower()
+            if low.endswith(tail) and not low[:-len(tail)].endswith(("_normal", "_bump")):
+                add(os.path.join(d, n), "unit textures", "siege engine %s" % n[:-8], ())
     # the faction symbol's texture, its towns' flag in battle, battle banners: found where the Art tab finds them
     from .factionart import extra_pictures
     for e in extra_pictures(mod, faction):
