@@ -2922,6 +2922,39 @@ building smith
         src = [s_ for s_, d_ in plan.copies if d_.endswith("symbol48_beta.tga")]
         self.assertEqual(src, [os.path.join(d, "menu", "symbols", "FE_buttons_48", "symbol48_alpha.tga")])
 
+    def test_recolour_black_coat_dull_cloak_and_faces(self):
+        """A faction in black (the Holy Roman Empire) gets its black coat recoloured where the other factions' copies
+        of the card wear other colours; a face stays; a cloak painted duller and darker than the faction's colour
+        is taken whole, not in patches; on a symbol (other factions' symbols are other drawings) black is left."""
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from campaign_editor import recolour as R
+
+        def card(coat, cloak):
+            im = Image.new("RGB", (60, 60), (90, 90, 90))       # the coat and cloak a third of it
+            d = ImageDraw.Draw(im)
+            d.rectangle([4, 4, 18, 30], fill=coat)          # the coat in the faction's first colour
+            d.rectangle([22, 4, 36, 30], fill=cloak)        # a cloak in its second colour
+            d.rectangle([12, 32, 28, 38], fill=(205, 150, 120))   # a face
+            return im
+        hre = ((0, 0, 0), (40, 110, 30))                      # black and a green the cloak is painted duller in
+        mine = card((15, 15, 15), (70, 100, 55))
+        mine.paste((25, 40, 20), (22, 18, 37, 31))           # the cloak's shaded half: dark
+        others = [(card((30, 60, 160), (150, 40, 40)), ((30, 60, 160), (150, 40, 40))),
+                  (card((200, 170, 20), (40, 40, 150)), ((200, 170, 20), (40, 40, 150))),
+                  (card((160, 20, 20), (220, 220, 220)), ((160, 20, 20), (220, 220, 220)))]
+        new, share = R.recolour(mine, hre, ((200, 0, 0), (0, 0, 200)), others)
+        coat, face = new.getpixel((10, 15)), new.getpixel((20, 35))
+        self.assertTrue(coat[0] > 2 * coat[1] and coat[0] > 2 * coat[2] and coat[0] > 8, coat)
+        self.assertEqual(face, (205, 150, 120))
+        for xy in ((28, 8), (28, 25)):                        # the light and the shaded half of the cloak
+            px = new.getpixel(xy)
+            self.assertTrue(px[2] > px[1] and px[2] > px[0], (xy, px))
+        same, _ = R.recolour(mine, hre, ((200, 0, 0), (0, 0, 200)), others, plain=False)
+        self.assertEqual(same.getpixel((10, 15)), (15, 15, 15))
+
     def test_recolour_faction_pictures(self):
         """A unit card in the faction's red / yellow next to another faction's blue / white copy: the red and yellow
         parts take the new colours, the brown horse (near red, but the same in both copies and duller) stays;

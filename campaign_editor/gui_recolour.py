@@ -230,7 +230,8 @@ class RecolourWindow(tk.Toplevel):
                         others.append((R.read_picture(p), c))
                     except Exception:
                         pass
-            new, share = R.recolour(im, self.source, self.target, others, edits=self.edits.get(key))
+            new, share = R.recolour(im, self.source, self.target, others, edits=self.edits.get(key),
+                                    plain=it.get("alike", True))
             self._cache[key] = (im, new, share)
         return self._cache[key]
 

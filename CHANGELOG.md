@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Changed
+- **Recolour more exact** (the author: "check every picture it recolours and give me the accuracy"): 64 pictures of
+  five Medieval II factions recoloured and looked at one by one - before 49 good / 12 small faults / 3 bad, now 59 /
+  5 / 0. Black and white faction colours (the Holy Roman Empire, Saxons, Timurids, the white of France, Denmark,
+  Milan, Scotland, Poland, the Papacy...) now change on unit cards and battle textures (they never changed before);
+  a cloak painted duller than the faction's colour or in deep shade is no longer recoloured in patches; faces, hands
+  and hair are no longer taken for a red or yellow coat.
 - **Medieval II shields recoloured** (the author: "every picture of Medieval II"): *Recolour a faction's pictures* now
   also takes the weapons-and-shields texture of the faction's battle models (`unit_models/AttachmentSets/Final
   Kite_<faction>_diff.texture` and the like - the kite shields carry the faction's arms); one worn by other factions
