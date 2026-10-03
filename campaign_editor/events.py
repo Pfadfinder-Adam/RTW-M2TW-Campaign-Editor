@@ -160,6 +160,11 @@ def apply(plan, campaign, changes):
             lines.append("position\t%d, %d" % tuple(ev["position"]))
         f.insert(len(f.raw) - (1 if f.raw and not f.text(len(f.raw) - 1).strip() else 0), lines)
         have.add(name.lower())
+        if (ev.get("kind") or "historic") == "historic":
+            # the game shows a historic event's title and body on its scroll and stops on a missing one
+            # ("ASSERT FAILED: event_manager.cpp: description_string" - the author's test mod, both games)
+            ev = dict(ev, body=ev.get("body") or ev.get("text") or ev.get("title") or name.replace("_", " "),
+                      title=ev.get("title") or name.replace("_", " "))
         for part in ("title", "body"):
             if ev.get(part):
                 texts["%s_%s" % (name.upper(), part.upper())] = ev[part]

@@ -4874,6 +4874,10 @@ building smith
         self.assertEqual(sum(1 for l in t if l.startswith("event")), 3)              # one gone, one new
         self.assertIn("event\tvolcano\tboom", t)
         self.assertIn("{BOOM_TITLE}\tBoom!", plan.files[mod.text_file("historic_events.txt")].texts())
+        # a historic event always gets its body - the game stops without one (event_manager: description_string)
+        quiet = Plan(mod, "e", "e", {})
+        EV.apply(quiet, "test", {"new": [{"kind": "historic", "name": "hush", "date": "31", "title": "Hush"}]})
+        self.assertIn("{HUSH_BODY}\tHush", quiet.files[mod.text_file("historic_events.txt")].texts())
         with self.assertRaises(ValueError):
             EV.apply(Plan(mod, "e", "e", {}), "test", {"edit": {"news": {"date": "soon"}}})
         self.assertIn("plague", EV.what_it_does("plague").lower())

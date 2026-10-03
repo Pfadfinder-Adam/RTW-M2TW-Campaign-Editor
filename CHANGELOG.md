@@ -234,6 +234,8 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **A historic event without its text stopped the game** ("event_manager: description_string", the author's test
+  mod, both games): a historic event now always gets its scroll's title and text (its name when none is given).
 - **Medieval II: a fifth child broke the campaign's start** (the author's test mod: France's Philip has four):
   `descr_campaign_db.xml` allows `max_number_of_children` (4 in vanilla) and the game stops reading
   `descr_strat.txt` at a family with more. Adding a child now raises the number in the same write (the game's copy

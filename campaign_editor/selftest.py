@@ -636,7 +636,7 @@ def s_events(c, mod):
     plan = Plan(mod, "e", "e", {})
     EV.apply(plan, c.campaign, {"new": [
         {"kind": "historic", "name": "ce_test_news", "date": "2" if c.m2 else "2 summer", "position": [x, y],
-         "title": "Test news", "text": "The test mod's event."},
+         "title": "Test news", "body": "The test mod's event."},
         {"kind": "earthquake", "name": "ce_test_quake", "date": "4" if c.m2 else "4 winter", "position": [x, y]}]})
     return plan
 
