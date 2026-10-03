@@ -33,6 +33,10 @@ from .units import faction_units, read_units
 VERSION = "0.29.2"
 KOFI = "https://ko-fi.com/pfadfinder"
 APP = "RTW & M2TW Campaign Editor"
+# Tools > the author's stress test (selftest.py) - said plainly that modders do not need it
+TEST_MOD_LABEL = "Test mod - every feature (for the author, a stress test)..."
+TEST_MOD_HINT = ("For the author: a script that does everything the editor can do, to stress-test the editor and "
+                 "then try it all in the game. You do not need it.")
 
 HELP = """RTW & M2TW Campaign Editor - how to use it
 
@@ -801,6 +805,10 @@ class App(tk.Tk):
         menu.add_command(label="Save logs (zip)...", command=self.once("save_logs", self.save_logs))
         menu.add_command(label="Report a bug...", command=self.once("report", self.send_report))
         menu.add_command(label="Suggest an idea...", command=self.once("suggest", lambda: self.send_report(kind="suggestion")))
+        menu.add_separator()
+        menu.add_command(label=TEST_MOD_LABEL, command=self.once("test_mod", self.test_mod))
+        # a menu entry has no hover box: the status line says what it is while the mouse is on it
+        menu.bind("<<MenuSelect>>", lambda e, m=menu: self._menu_hint(m))
         tools["menu"] = menu
         tools.pack(side="right")
         self.status = tk.StringVar(value="Pick the Mod, or Browse... to its data folder (for example ...\\HLR\\data) "
@@ -4905,6 +4913,63 @@ class App(tk.Tk):
             text += "\n\nStart a NEW campaign to see the changes."
             self.show_text("Done" if not failed else "Written in part", text)
             self.load()
+
+    def _menu_hint(self, menu):
+        try:
+            label = menu.entrycget("active", "label")
+        except tk.TclError:
+            return
+        if label == TEST_MOD_LABEL:
+            self.status.set(TEST_MOD_HINT)
+
+    def test_mod(self):
+        """The author's stress test (selftest.py): a new mod folder beside the loaded mod with every feature of the
+        editor applied, one write each, and its report; optionally a second one with the map 3 x bigger."""
+        if not self.mod:
+            messagebox.showinfo(APP, "Load a mod (or the plain game) first - the test mod is made from it.")
+            return
+        from . import selftest
+        from .newmod import mod_target
+        where = os.path.dirname(mod_target(self.mod.data, selftest.NAME))
+        go = messagebox.askyesnocancel(APP, TEST_MOD_HINT + "\n\n"
+                                       "It makes a NEW mod folder %s (or %s_2...) in\n%s\nfrom the loaded mod, and "
+                                       "applies every feature of the editor to it, step by step (a minute or two). "
+                                       "The loaded mod is not changed.\n\n"
+                                       "Also make a second copy, %s_x3, with the campaign map 3 x bigger?\n"
+                                       "Yes = both, No = only %s" % (selftest.NAME, selftest.NAME, where,
+                                                                     selftest.NAME, selftest.NAME))
+        if go is None:
+            return
+        result, data, campaign = {}, self.mod.data, self.v_campaign.get()
+
+        def work():
+            try:
+                result["data"], result["results"], result["text"] = selftest.run(
+                    data, campaign, progress=lambda m: result.__setitem__("step", m))
+                if go:
+                    xdata, warn = selftest.run_x3(result["data"], campaign,
+                                                  progress=lambda m: result.__setitem__("step", m))
+                    result["text"] += "\nThe 3 x bigger map: %s\n%s" % (
+                        os.path.dirname(xdata), "\n".join("    note: " + w for w in warn[:10]))
+            except Exception as e:
+                result["text"] = "The test mod stopped: %s\n\n%s" % (e, traceback.format_exc())
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+
+        def wait():
+            if th.is_alive():
+                self.status.set("Making the test mod... %s" % result.get("step", ""))
+                self.after(300, wait)
+                return
+            log.write("Test mod\n" + result["text"])
+            folder = os.path.dirname(result["data"]) if result.get("data") else None
+            fine = sum(1 for r in result.get("results", []) if r["status"] in ("OK", "SKIPPED") and not r["new_problems"])
+            self.status.set("Test mod: %d of %d steps fine - %s" % (fine, len(result.get("results", [])),
+                                                                     folder or "stopped"))
+            from .gui_settings import open_folder
+            self.show_text("Test mod - every feature (for the author)", result["text"], wrap="word",
+                           extra=[("Open the mod's folder", lambda: open_folder(folder))] if folder else ())
+        wait()
 
     def check(self):
         """Read every file the tool uses and report; the deep check also rehearses the

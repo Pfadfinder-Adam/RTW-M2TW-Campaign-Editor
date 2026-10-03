@@ -3305,6 +3305,29 @@ building smith
         self.assertGreater(sel.getpixel((2, 20))[3], 0)                                 # the glow round it
         self.assertGreater(sel.getpixel((2, 20))[0], sel.getpixel((2, 20))[2])          # gold, as the old one
 
+    def test_author_test_mod_steps_and_report(self):
+        """Tools > Test mod (selftest.py): every step names what it does and what to look at in the game, both
+        written with the factions it picked; the report says each step's status, its files, notes and new problems.
+        (The whole run is tried on both games' real files by check-scripts/testmod.py.)"""
+        from campaign_editor import selftest as ST
+        names = {"template": "alpha", "edited": "beta", "other": "gamma", "new": "ce_test", "later": "ce_test_later",
+                 "addon": "Sack Settlement (REX)"}
+        self.assertGreaterEqual(len(ST.STEPS), 30)
+        for title, see, fn in ST.STEPS:
+            self.assertTrue(title.format(**names) and callable(fn))
+            see.format(**names)
+        with self.assertRaises(ValueError):                 # the mini-mod has two factions, the test needs three
+            ST.Ctx(os.path.join(self.root, "data"), "test", self.root)
+        text = ST.report("/x/CE_Test/data", "test", names, [
+            {"step": "One", "see": "look", "status": "OK", "files": ["a.txt"], "warnings": ["a note"],
+             "new_problems": []},
+            {"step": "Two", "see": "", "status": "FAILED", "files": [], "warnings": [], "new_problems": ["broken"],
+             "error": "ValueError: no"}])
+        self.assertIn("1 of 2 steps fine", text)
+        self.assertIn(" 1. [OK] One", text)
+        self.assertIn("NEW PROBLEM in Check mod files: broken", text)
+        self.assertIn("ValueError: no", text)
+
     def test_medieval2_white_banner_from_the_faction_sheets(self):
         """Medieval II has no white banner: the template is the per-pixel median of the mod's faction banner
         sheets (each faction's heraldry elsewhere, so it vanishes; the folds every sheet shares stay; what is

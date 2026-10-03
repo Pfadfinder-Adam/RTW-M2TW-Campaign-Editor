@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- **Tools > Test mod - every feature (for the author)**: a stress test of the editor itself, not something a modder
+  needs - it makes a new mod folder `CE_Test` beside the loaded mod (the loaded one is not changed) and applies every
+  feature to it, one write each (a new faction and one that comes later, faction edits, armies, diplomacy, victory,
+  resources, forts and wonders, towns, the map, a new region, renames, terrain, land and sea, family, traits,
+  religions, roster, figures, a new unit and building, a battle model, a unit voice, events, campaign rules, an
+  add-on, every kind of picture), with Check mod files after each step and a report of what to look at in the game;
+  optionally a second copy `CE_Test_x3` with the map 3 x bigger. Then the mod is started in the game and its log
+  sent with Report a bug. Both games.
 - **Banner... on the Art tab, both games** (the author: "I could not find where banners are made"): the faction's
   battle banners made new from a white banner - no emblem needed first. The cloth dyed in a pattern of up to three
   colours (plain, a tricolour upright, across or slanting, quarters, a cross, a border...), a symbol on it if you
