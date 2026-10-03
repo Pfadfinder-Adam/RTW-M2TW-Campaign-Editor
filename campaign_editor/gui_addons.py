@@ -13,7 +13,8 @@ from .plan import Plan
 
 # the line each built-in add-on writes into the game's log once it runs
 LOADED = {"sack_settlement": "'[SACK] Sack Settlement module loaded'.",
-          "raze_settlement": "'[RAZE] Raze Settlement module loaded'."}
+          "raze_settlement": "'[RAZE] Raze Settlement module loaded'.",
+          "avoid_growth": "'[GROWTH] Avoid Growth module loaded'."}
 
 
 class AddonsPanel(ttk.Frame):
@@ -283,12 +284,12 @@ class AddonsPanel(ttk.Frame):
             try:
                 return int(str(raw).strip())
             except ValueError:
-                return -1
+                return str(raw)                     # not a number: check() says so
         if s.kind == "float":
             try:
                 return float(str(raw).strip().replace(",", "."))
             except ValueError:
-                return -1.0
+                return str(raw)
         if s.kind in ("list", "set"):
             return [x.strip() for x in str(raw).split(",") if x.strip()]
         return raw

@@ -3375,6 +3375,33 @@ building smith
         with open(entry, "rb") as f:
             self.assertEqual(f.read(), own)
 
+    def test_avoid_growth_addon_for_both_games(self):
+        """Avoid Growth: one script for REX and M2EX (the same engine scripts); the game's own tick pieces, the
+        ceilings kept in the saved game (persistent), held on every settlement turn; its settings written and read
+        back, a move left (below 0) allowed for the tick's place; put into the game's script/modules and taken out."""
+        from campaign_editor import addons as A
+        a = A.by_key("avoid_growth")
+        self.assertTrue(a.fits("rome") and a.fits("medieval2"))
+        text = a.template()
+        for part in ('"CHECKBOX_BG"', '"TICK_GADGET"', "root.persistent", '"SettlementTurnStart"', "settlementScroll",
+                     "rawdelete"):
+            self.assertIn(part, text)
+        self.assertNotIn("delete ", text.replace("rawdelete", ""))         # the engines forbid 'delete'
+        got = A.read_settings(a, text)
+        self.assertEqual(A.render(a, text, got), text)
+        new = dict(got, AG_OFFSET_X=-12, AG_LABEL="Stay small", AG_SHOW_CAP=False)
+        self.assertEqual(A.read_settings(a, A.render(a, text, new)), new)
+        self.assertFalse(A.check(a, new))
+        self.assertTrue(A.check(a, dict(got, AG_OFFSET_Y="up")))
+        mod = ModData(self.root)
+        plan = Plan(mod, "addon", "growth", {})
+        dst = A.plan_install(plan, a, new, mod)
+        self.assertEqual(dst, os.path.join(self.root, "script", "modules", "avoid_growth.nut"))
+        bdir = plan.apply()
+        self.assertEqual(A.installed(mod, a)["AG_OFFSET_X"], -12)
+        restore(mod, bdir)
+        self.assertIsNone(A.installed(mod, a))
+
     def test_faction_emblem_one_picture_everywhere(self):
         """One emblem picture -> every emblem picture in its own size; mouse over brighter, greyed out grey, selected
         with a glow round the new shape - by the amounts the old pictures show."""

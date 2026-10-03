@@ -26,10 +26,11 @@ class Setting:
     kind: 'bool', 'int', 'float', 'text', 'choice' (choices = [(value, label)]), 'list' (Squirrel array of strings),
     'set' (Squirrel table of names = true, written one per line)."""
 
-    def __init__(self, var, kind, label, help, choices=None, when=None):
+    def __init__(self, var, kind, label, help, choices=None, when=None, signed=False):
         self.var, self.kind, self.label, self.help = var, kind, label, help
         self.choices = choices or []
         self.when = when            # (other var, [values]) - shown only then
+        self.signed = signed        # an 'int' that may be below 0 (a move left / up)
 
 
 WHO = [("player", "Only the player (the human)"),
@@ -125,6 +126,23 @@ ADDONS = [
           "M2EX (Medieval II: Total War) - its own scripts (script/main.nut) load every .nut of the game's "
           "script/modules, whatever mod runs. Vanilla Medieval II runs no scripts - the add-on then does nothing.",
           picks={"RAZE_KEEP_CHAINS": "chains", "RAZE_DEFAULT_REBEL_UNITS": "units", "RAZE_FACTIONS": "factions"}),
+    Addon("avoid_growth", "Avoid Growth", "both", "avoid_growth.nut",
+          "A tick box on the settlement scroll of each of your towns, drawn with the game's own box and tick. Tick "
+          "it and the people the town has now become its ceiling: it never grows past it, still loses people the "
+          "usual way (recruiting, battles, plague) and grows back - but only up to the ceiling. A border town stays "
+          "the village, town or city it is: put it on auto-manage and forget it. Untick to let it grow again. The "
+          "ceilings are kept in the saved game; a town lost to another faction drops its tick. Console: "
+          "sq ::avoid_growth_list().",
+          [Setting("AG_ENABLED", "bool", "Avoid Growth on", "off keeps the file but does nothing"),
+           Setting("AG_LABEL", "text", "Words beside the tick", "what the scroll says"),
+           Setting("AG_TIP", "text", "Tooltip", "shown when the mouse is over it"),
+           Setting("AG_SHOW_CAP", "bool", "Show the ceiling", "'(at most 5000)' beside the words while ticked"),
+           Setting("AG_OFFSET_X", "int", "Move the tick right", "in the game's 1024 x 768 units; below 0 = left",
+                   signed=True),
+           Setting("AG_OFFSET_Y", "int", "Move the tick down", "below 0 = up", signed=True)],
+          "REX (Rome: Total War) or M2EX (Medieval II: Total War) - their own scripts (script/main.nut) load every "
+          ".nut of the game's script/modules, whatever mod runs. The original exes run no scripts - the add-on then "
+          "does nothing."),
     Addon("player_diplomacy", "Player Diplomacy", "rome", "player_diplomacy.nut",
           "The computer's factions stop attacking you when it makes no sense: after a ceasefire they keep the peace "
           "for some turns (a war they declare in that time is undone), your client kingdoms never plan to invade "
@@ -474,8 +492,8 @@ def check(addon, values, mod=None):
         v = values.get(s.var)
         if v is None:
             continue
-        if s.kind == "int" and (not isinstance(v, int) or v < 0):
-            out.append("%s: a whole number, 0 or more" % s.label)
+        if s.kind == "int" and (not isinstance(v, int) or isinstance(v, bool) or (v < 0 and not s.signed)):
+            out.append("%s: a whole number%s" % (s.label, "" if s.signed else ", 0 or more"))
         if s.kind == "float" and (not isinstance(v, (int, float)) or v < 0):
             out.append("%s: a number, 0 or more (like 3.0)" % s.label)
         if s.kind == "set" and any(not name.match(x) for x in v):

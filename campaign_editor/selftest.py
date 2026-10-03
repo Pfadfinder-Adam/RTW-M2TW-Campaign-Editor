@@ -1122,6 +1122,19 @@ def s_addon_diplomacy(c, mod):
     return plan
 
 
+@step("Add-on: Avoid Growth installed (REX / M2EX)",
+      "the settlement scroll of your town has the game's own tick 'Avoid Growth': tick it, end a few turns - the town "
+      "never grows past the people it had; recruit there - it shrinks, then grows back up to that ceiling")
+def s_addon_growth(c, mod):
+    from . import addons as AD
+    a = next((x for x in AD.library() if x.key == "avoid_growth"), None)
+    if a is None:
+        raise Skip("the add-on is not in the library")
+    plan = Plan(mod, "addon", "avoid_growth", {})
+    AD.plan_install(plan, a, AD.read_settings(a, a.template()), mod)
+    return plan
+
+
 @step("Events: a plague, a flood and a storm on turns 6-8; one of the game's events moved a turn later, another "
       "taken out", "the plague on turn 6, the flood on turn 7, the storm on turn 8")
 def s_events_more(c, mod):
@@ -1337,7 +1350,7 @@ COVERAGE = {
     "Campaign rules": ["s_rules", "s_rules_all"],
     "Campaign start (descr_strat.txt)": ["s_campaign_start"],
     "Engine settings (REX / M2EX)": ["s_engine_rules"],
-    "Add-ons": ["s_addon", "s_addon_diplomacy"],
+    "Add-ons": ["s_addon", "s_addon_diplomacy", "s_addon_growth"],
     "Art: replace a picture": ["s_art", "s_art_all"],
     "Faction emblem": ["s_emblem"],
     "Banner...": ["s_banner"],

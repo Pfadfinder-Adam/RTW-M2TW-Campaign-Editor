@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+- **Add-on: Avoid Growth** (Rome + REX, Medieval II + M2EX - one script for both): a tick box on the settlement
+  scroll of each of your towns, drawn with the game's own box and tick, under the population figures. Ticked, the
+  people the town has become its ceiling: it never grows past it, still loses people the usual way (recruiting,
+  battles, plague) and grows back up to the ceiling. Border towns stay the village, town or city they are - put
+  them on auto-manage and forget them. The ceilings are kept in the saved game; a town lost to another faction
+  drops its tick. The words, the tooltip and the tick's place are settings. The test mod puts it in too.
 - **Unit editor: the REX / M2EX attributes of their newest builds** - immune_arrows, immune_fire,
   resistance_projectiles, enduring_fortitude, life_steal, hardy_N, strong_against_armour, ignores_armour - offered
   with their effect like the older ones.
@@ -12,7 +18,7 @@
   and end date, `timescale` (years a turn), how seldom brigands and pirates appear, REX / M2EX's leader persona odds,
   and the switches as on / off (night battles, date as turns, Marian reforms, rebelling generals, gladiator
   uprisings). The test mod changes them too.
-- **Test mod: every campaign rule changed** (step 55 of 57): each value of every settings file - the campaign's
+- **Test mod: every campaign rule changed** (one step of 58): each value of every settings file - the campaign's
   start, descr_campaign_db, the towns' growth / order / income, diplomacy offers, recruitment, unit sizes and the
   REX / M2EX engine settings and switches (548 values in Medieval II, 162 in Rome) - changed to one the game takes:
   numbers a step (a maximum or limit up, a minimum and anything else down, so the campaign's towns and families
