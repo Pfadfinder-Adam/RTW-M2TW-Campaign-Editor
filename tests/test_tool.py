@@ -3576,6 +3576,22 @@ building smith
                                    longer_names(names, "empire_east_rebels")))
         self.assertFalse(_token_hit("symbol128_ce_test_later.tga", "ce_test", longer_names(names, "ce_test")))
         self.assertTrue(_token_hit("symbol128_ce_test.tga", "ce_test", longer_names(names, "ce_test")))
+        # ... and the Art tab's list (Faction emblem and Recolour read it) on a mod with both factions
+        try:
+            from PIL import Image
+        except ImportError:
+            return
+        from campaign_editor import factionart as FA
+        data = os.path.join(tempfile.mkdtemp(), "data")
+        os.makedirs(os.path.join(data, "menu", "symbols", "FE_buttons_24"))
+        os.makedirs(os.path.join(data, "world", "maps", "campaign", "imperial_campaign"))
+        with open(os.path.join(data, "descr_sm_factions.txt"), "w") as fh:
+            fh.write("faction ce_test\nculture roman\nfaction ce_test_later\nculture roman\n")
+        for n in ("symbol24_ce_test.tga", "symbol24_ce_test_later.tga"):
+            Image.new("RGBA", (24, 24)).save(os.path.join(data, "menu", "symbols", "FE_buttons_24", n))
+        got = [e["rel"] for e in FA.faction_pictures(ModData(data), "imperial_campaign", "ce_test")]
+        self.assertEqual(got, ["menu/symbols/FE_buttons_24/symbol24_ce_test.tga"])
+        shutil.rmtree(os.path.dirname(data))
 
     def test_banner_symbol_dragged_snapped_and_sized(self):
         """The Banner window moves the symbol with the mouse: its middle snaps to the banner's own grid (quarters,

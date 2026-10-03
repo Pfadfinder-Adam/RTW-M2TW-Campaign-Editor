@@ -535,7 +535,7 @@ def _in_mod(mod, data, path):
 def art_files(plan, campaign):
     t, new = plan.template, plan.new
     mod = plan.mod
-    longer = longer_names([n for _, n in mod.factions()] + [new], t)
+    longer = longer_names([n for n, _ in mod.factions()] + [new], t)
     found, taken = [], set()                   # taken: data-relative places a copy goes to (the mod's copy wins)
 
     def add(src, dst):

@@ -111,7 +111,7 @@ def faction_pictures(mod, campaign, faction):
         seen[n] = e
         out.append(e)
         return e
-    longer = longer_names([n for _, n in mod.factions()], faction)     # their files are not this faction's
+    longer = longer_names([n for n, _ in mod.factions()], faction)     # their files are not this faction's
     roots = [os.path.join(mod.data, r) for r in ART_ROOTS] + [mod.campaign_dir(campaign)]
     for root in roots:
         if not os.path.isdir(root):
