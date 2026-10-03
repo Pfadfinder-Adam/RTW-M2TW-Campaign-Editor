@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- **Your contact remembered for every report** (a tester): the report window says it plainly - with *remember it*
+  ticked (the default) the contact you give fills in every next report by itself (also in Settings > Reports);
+  unticked, it is forgotten.
 - **Rebel garrisons as the game makes them** (the author): a rebel town's drawn garrison comes from its region's rebel
   type in `descr_rebel_factions.txt` (what the game raises there in a revolt) instead of the nearest rebel armies; a
   new box draws as many units as the game gives a town of that level (the mod's own towns measured; vanilla's rebel

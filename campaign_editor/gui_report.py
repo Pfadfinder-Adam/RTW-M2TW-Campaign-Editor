@@ -55,8 +55,14 @@ def open_report(app, message="", kind="bug"):
     v_hide = tk.StringVar(value=settings.get("report_hide", ""))
     ttk.Label(grid, text="Contact for questions (optional)").grid(row=0, column=0, sticky="w")
     ttk.Entry(grid, textvariable=v_contact, width=40).grid(row=0, column=1, sticky="w", padx=6)
-    ttk.Label(grid, text="only if you want an answer", foreground="#666").grid(
-        row=1, column=1, sticky="w", padx=6)
+    # remembered for every next report (a tester: 'save our contact so each report fills it in') - also in Settings
+    v_keep = tk.BooleanVar(value=settings.get("report_contact_keep", True) is not False)
+    keep_row = ttk.Frame(grid)
+    keep_row.grid(row=1, column=1, sticky="w", padx=6)
+    ttk.Checkbutton(keep_row, text="remember it - every next report fills it in by itself", variable=v_keep).pack(
+        side="left")
+    ttk.Label(keep_row, text="(only if you want an answer; also in Settings)", foreground="#666").pack(
+        side="left", padx=4)
     ttk.Label(grid, text="Hide also these words").grid(row=2, column=0, sticky="w", pady=(4, 0))
     ttk.Entry(grid, textvariable=v_hide, width=40).grid(row=2, column=1, sticky="w", padx=6, pady=(4, 0))
     ttk.Label(grid, text="a comma between them: your nick in the game, your real name...", foreground="#666").grid(
@@ -150,7 +156,8 @@ def open_report(app, message="", kind="bug"):
         return texts, info, msg, hide, data
 
     def remember():
-        settings.put("report_contact", v_contact.get().strip())
+        settings.put("report_contact_keep", bool(v_keep.get()))
+        settings.put("report_contact", v_contact.get().strip() if v_keep.get() else "")
         settings.put("report_hide", v_hide.get().strip())
 
     def show():
