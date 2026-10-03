@@ -3561,6 +3561,25 @@ building smith
                  if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
+    def test_banner_symbol_dragged_snapped_and_sized(self):
+        """The Banner window moves the symbol with the mouse: its middle snaps to the banner's own grid (quarters,
+        eighths, sixteenths) or goes freely, it stays on its banner, the wheel sizes it round its middle."""
+        from campaign_editor import banners as B
+        ban = (0, 0, 100, 200)
+        box = (10, 10, 40, 40)
+        self.assertEqual(B.place_box(box, 51, 77, ban, 4), (35, 85, 65, 115))    # middle on (50, 100)
+        self.assertEqual(B.place_box(box, 51, 77, ban, 0), (36, 62, 66, 92))     # freely
+        self.assertEqual(B.place_box(box, 99, 199, ban), (70, 170, 100, 200))    # kept on the banner
+        self.assertEqual(B.scale_box(box, 2, ban)[2:], (60, 60))                 # bigger, still on it
+        small = B.scale_box(box, 0.01, ban)
+        self.assertEqual(small[2] - small[0], B.MIN_SYMBOL)
+        self.assertEqual(B.scale_box((0, 0, 90, 90), 5, ban)[2], 100)            # never wider than the banner
+        self.assertEqual(B.banner_at([ban, (20, 20, 40, 40)], 30, 30), 1)        # the smallest under the point
+        self.assertIsNone(B.banner_at([ban], 150, 10))
+        self.assertEqual(B.grid_lines(ban, 4), ([25.0, 50.0, 75.0], [50.0, 100.0, 150.0]))
+        self.assertEqual(B.grid_lines(ban, 0), ([], []))
+        self.assertEqual(list(B.GRIDS.values()), [0, 4, 8, 16])
+
     def test_symbol_painted_on_the_battle_banners(self):
         """The battle banners made from the game's blank white banner: the cloth dyed in the faction's colour, the
         symbol on it (faint on the allies' banner), the trim, stars and pole as they were; the flag symbol on the

@@ -2,7 +2,8 @@
 banners (Roman, barbarian, eastern); Medieval II (banners_m2.py): the white template taken from the mod's own banner
 sheets, every banner and pennant of the sheet a panel of its own. Then the cloth's pattern (plain, stripes - a
 tricolour upright, across or slanting - quarters, a cross, a border...) and its colours, the symbol on or off (any
-picture, its plain background cleared), and where the symbol goes - a box drawn on a banner. Or the player's own
+picture, its plain background cleared), and where the symbol goes - dragged with the left mouse button (snapped to
+a grid of the banner if one is picked), the wheel over it makes it bigger or smaller. Or the player's own
 drawing: the template saved to draw on in any program, the drawing put back in. Rome shows the allies' banner beside
 it (the symbol faint), Medieval II the banner in 3D on its mesh."""
 
@@ -41,13 +42,16 @@ class BannerWindow(tk.Toplevel):
             "The banners are made from the game's own blank white banner (the one a fleeing unit's banner turns "
             "into - it stays as it is): its cloth dyed in a pattern of your colours - plain, a tricolour upright, "
             "across or slanting, quarters, a cross, a border - and the symbol painted on it with the cloth's folds. "
-            "Draw a box on a banner to put the symbol there. Right: the allies' banner, the symbol faint like the "
+            "Drag the symbol with the left mouse button (a click on another banner puts it there); the wheel over it "
+            "makes it bigger or smaller; Snap lays a grid on each banner. Right: the allies' banner, the symbol faint like the "
             "game's own." if rome else
             "Medieval II has no white banner, so the white template is taken from the mod's own banner pictures: "
             "every faction's picture holds the same banners in the same places, so what they all share (the cloth's "
             "folds, the tooth edges, the poles) stays and each faction's heraldry goes. Its cloth is dyed in a "
             "pattern of your colours on each banner and pennant on its own, the symbol painted on with the folds. "
-            "Draw a box on a banner to put the symbol there. Right: the banner in 3D as the game hangs it.")).pack(
+            "Drag the symbol with the left mouse button (a click on another banner or pennant puts it there); the wheel "
+            "over it makes it bigger or smaller; Snap lays a grid on each banner. Right: the banner in 3D as the game "
+            "hangs it.")).pack(
             anchor="w")
         from PIL import Image, ImageTk
         self._thumbs = []
@@ -88,6 +92,14 @@ class BannerWindow(tk.Toplevel):
         ttk.Button(row2, text="Symbol picture...", command=self._pick_symbol).pack(side="left", padx=4)
         ttk.Button(row2, text="Undo", command=self._undo).pack(side="left", padx=(12, 0))
         ttk.Button(row2, text="Symbol back in the middle", command=self._reset).pack(side="left", padx=4)
+        from . import settings as _settings
+        ttk.Label(row2, text="Snap").pack(side="left", padx=(12, 0))
+        grids = list(B.GRIDS)
+        self.v_grid = tk.StringVar(value=_settings.get("banner_grid") if _settings.get("banner_grid") in B.GRIDS
+                                   else grids[0])
+        cg = ttk.Combobox(row2, textvariable=self.v_grid, values=grids, state="readonly", width=28)
+        cg.pack(side="left", padx=4)
+        cg.bind("<<ComboboxSelected>>", lambda e: (_settings.put("banner_grid", self.v_grid.get()), self.redraw()))
         row3 = ttk.Frame(frm)
         row3.pack(anchor="w", pady=(6, 0))
         from .gui_util import tip
@@ -106,7 +118,7 @@ class BannerWindow(tk.Toplevel):
         w, h = self.kit.blank(self.s).size
         k = self._k()
         self.cv = tk.Canvas(body, width=round(w * k), height=round(h * k), highlightthickness=1,
-                            highlightbackground="#999", cursor="crosshair")
+                            highlightbackground="#999", cursor="fleur")
         self.cv.pack(side="left")
         side = ttk.Frame(body)
         side.pack(side="left", anchor="n", padx=8)
@@ -131,6 +143,9 @@ class BannerWindow(tk.Toplevel):
         self.cv.bind("<ButtonPress-1>", self._press)
         self.cv.bind("<B1-Motion>", self._drag)
         self.cv.bind("<ButtonRelease-1>", self._release)
+        self.cv.bind("<MouseWheel>", lambda e: self._wheel(e, 1 if e.delta > 0 else -1))
+        self.cv.bind("<Button-4>", lambda e: self._wheel(e, 1))
+        self.cv.bind("<Button-5>", lambda e: self._wheel(e, -1))
 
     def blank(self):
         return self.kit.blank(self.s)
@@ -242,38 +257,81 @@ class BannerWindow(tk.Toplevel):
             return
         self._set("drawing", src)
 
-    # ---- the mouse: a box on a banner ----
+    # ---- the mouse: the symbol dragged, the wheel sizes it, a grid to snap to ----
     def _xy(self, e):
         k = self._k()
-        return int(e.x / k), int(e.y / k)
+        return e.x / k, e.y / k
+
+    def _cells(self):
+        return B.GRIDS.get(self.v_grid.get(), 0)
+
+    def _movable(self):
+        return self.symbol is not None and not self.s.get("no_symbol")
+
+    def _box_at(self, x, y):
+        """The number of the symbol under the point, else of the banner under it, or None."""
+        boxes = self.boxes()
+        on = [i for i, b in enumerate(boxes) if b[0] <= x < b[2] and b[1] <= y < b[3]]
+        if on:
+            return min(on, key=lambda i: (boxes[i][2] - boxes[i][0]) * (boxes[i][3] - boxes[i][1]))
+        return B.banner_at(self.kit.banners(self.s), x, y)
 
     def _press(self, e):
-        self._from = self._xy(e)
+        self._grab = None
+        if not self._movable():
+            return
+        x, y = self._xy(e)
+        i = self._box_at(x, y)
+        boxes, banners = list(self.boxes()), self.kit.banners(self.s)
+        if i is None or i >= len(boxes) or i >= len(banners):
+            return
+        b = boxes[i]
+        inside = b[0] <= x < b[2] and b[1] <= y < b[3]
+        # grabbed where it was held; a click on the banner beside it brings its middle to the click
+        off = ((b[0] + b[2]) / 2 - x, (b[1] + b[3]) / 2 - y) if inside else (0, 0)
+        self._grab = {"i": i, "off": off, "box": b, "start": b}
+        from PIL import Image, ImageTk
+        k = self._k()
+        size = (max(1, round((b[2] - b[0]) * k)), max(1, round((b[3] - b[1]) * k)))
+        self._ghost = ImageTk.PhotoImage(self.symbol.convert("RGBA").resize(size, Image.LANCZOS))
+        self._drag(e)
 
     def _drag(self, e):
-        if not getattr(self, "_from", None):
+        g = getattr(self, "_grab", None)
+        if not g:
             return
-        k = self._k()
         x, y = self._xy(e)
-        self.cv.delete("newbox")
-        self.cv.create_rectangle(self._from[0] * k, self._from[1] * k, x * k, y * k, outline="#ffd400", width=2,
-                                 tags="newbox")
+        banner = self.kit.banners(self.s)[g["i"]]
+        g["box"] = B.place_box(g["start"], x + g["off"][0], y + g["off"][1], banner, self._cells())
+        k, b = self._k(), g["box"]
+        self.cv.delete("ghost")
+        self.cv.create_image(b[0] * k, b[1] * k, image=self._ghost, anchor="nw", tags="ghost")
+        self.cv.create_rectangle(b[0] * k, b[1] * k, b[2] * k, b[3] * k, outline="#ffd400", width=2, tags="ghost")
 
     def _release(self, e):
-        start, self._from = getattr(self, "_from", None), None
-        if not start:
-            return
-        x, y = self._xy(e)
-        box = (min(start[0], x), min(start[1], y), max(start[0], x), max(start[1], y))
-        if box[2] - box[0] < 4 or box[3] - box[1] < 4:
-            return
-        which = B.which_banner(self.kit.banners(self.s), box)
-        if which is None:
-            self.redraw()
+        g, self._grab = getattr(self, "_grab", None), None
+        if not g or g["box"] == g["start"]:
+            self.cv.delete("ghost")
             return
         self._remember()
         boxes = list(self.boxes())
-        boxes[which] = box
+        boxes[g["i"]] = g["box"]
+        self.s["boxes"] = boxes
+        self.redraw()
+
+    def _wheel(self, e, step):
+        if not self._movable():
+            return
+        x, y = self._xy(e)
+        i = self._box_at(x, y)
+        boxes, banners = list(self.boxes()), self.kit.banners(self.s)
+        if i is None or i >= len(boxes) or i >= len(banners):
+            return
+        import time
+        if time.time() - getattr(self, "_wheel_at", 0) > 0.8:      # one Undo step for a turn of the wheel
+            self._remember()
+        self._wheel_at = time.time()
+        boxes[i] = B.scale_box(boxes[i], 1.1 if step > 0 else 1 / 1.1, banners[i])
         self.s["boxes"] = boxes
         self.redraw()
 
@@ -306,7 +364,15 @@ class BannerWindow(tk.Toplevel):
             views.append(ph)
             self.cv2.create_image(0, 0, image=ph, anchor="nw")
         self._ph = views
-        for b in (self.boxes() if self.symbol is not None and not self.s.get("no_symbol") else []):
+        cells = self._cells()
+        if cells and self._movable():
+            for ban in self.kit.banners(self.s):              # the grid of each banner, faint
+                xs, ys = B.grid_lines(ban, cells)
+                for gx in xs:
+                    self.cv.create_line(gx * k, ban[1] * k, gx * k, ban[3] * k, fill="#7fd0ff", dash=(2, 4))
+                for gy in ys:
+                    self.cv.create_line(ban[0] * k, gy * k, ban[2] * k, gy * k, fill="#7fd0ff", dash=(2, 4))
+        for b in (self.boxes() if self._movable() else []):
             self.cv.create_rectangle(b[0] * k, b[1] * k, b[2] * k, b[3] * k, outline="#ffd400", dash=(4, 3))
 
     def _done(self):

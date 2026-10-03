@@ -272,6 +272,54 @@ class Kit:
         return template_picture(self.blank(s))
 
 
+# snapping the symbol: its middle goes to the lines of a grid laid over its own banner (a part of the banner's
+# width / height), so it lands on the middle, a quarter, an eighth... - 0 = no grid, moved freely
+GRIDS = {"No grid - move it freely": 0, "Grid: big cells (quarters)": 4, "Grid: medium cells (eighths)": 8,
+         "Grid: small cells (sixteenths)": 16}
+MIN_SYMBOL = 8
+
+
+def banner_at(banners, x, y):
+    """The number of the banner under a point (the smallest holding it), or None."""
+    hit = [i for i, b in enumerate(banners) if b[0] <= x < b[2] and b[1] <= y < b[3]]
+    return min(hit, key=lambda i: (banners[i][2] - banners[i][0]) * (banners[i][3] - banners[i][1])) if hit else None
+
+
+def grid_lines(banner, cells):
+    """([x...], [y...]) of a banner's grid lines (inside it), [] without a grid."""
+    if not cells:
+        return [], []
+    x0, y0, x1, y1 = banner
+    return ([x0 + (x1 - x0) * i / cells for i in range(1, cells)],
+            [y0 + (y1 - y0) * i / cells for i in range(1, cells)])
+
+
+def place_box(box, cx, cy, banner, cells=0):
+    """The symbol's box (same size) with its middle at (cx, cy) - snapped to the banner's grid when cells - and kept
+    on the banner as far as its size lets it."""
+    w, h = box[2] - box[0], box[3] - box[1]
+    x0, y0, x1, y1 = banner
+    if cells:
+        sx, sy = (x1 - x0) / cells, (y1 - y0) / cells
+        cx = x0 + round((cx - x0) / sx) * sx
+        cy = y0 + round((cy - y0) / sy) * sy
+    left = min(max(cx - w / 2, x0), max(x0, x1 - w)) if w <= x1 - x0 else cx - w / 2
+    top = min(max(cy - h / 2, y0), max(y0, y1 - h)) if h <= y1 - y0 else cy - h / 2
+    left, top = int(round(left)), int(round(top))
+    return (left, top, left + w, top + h)
+
+
+def scale_box(box, factor, banner):
+    """The symbol's box made bigger / smaller round its middle (never under MIN_SYMBOL, never wider or taller than
+    its banner)."""
+    w, h = box[2] - box[0], box[3] - box[1]
+    k = max(MIN_SYMBOL / max(1, min(w, h)), min(factor, (banner[2] - banner[0]) / max(1, w),
+                                                 (banner[3] - banner[1]) / max(1, h)))
+    nw, nh = max(MIN_SYMBOL, int(round(w * k))), max(MIN_SYMBOL, int(round(h * k)))
+    cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+    return place_box((0, 0, nw, nh), cx, cy, banner)
+
+
 def which_banner(banners, box):
     """The number of the banner a drawn box is on: the smallest one holding its middle, else (Rome's banners stand
     side by side) the one across from it, or None."""

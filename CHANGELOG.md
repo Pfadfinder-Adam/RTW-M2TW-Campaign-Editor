@@ -20,7 +20,8 @@
 - **Banner... on the Art tab, both games** (the author: "I could not find where banners are made"): the faction's
   battle banners made new from a white banner - no emblem needed first. The cloth dyed in a pattern of up to three
   colours (plain, a tricolour upright, across or slanting, quarters, a cross, a border...), a symbol on it if you
-  like (**Symbol picture...**, its plain background cleared), a box drawn on a banner puts it there. **Save the
+  like (**Symbol picture...**, its plain background cleared), dragged into place with the left mouse button
+  (**Snap**: a grid of three cell sizes on each banner, or freely; the wheel makes it bigger or smaller). **Save the
   template...** gives the white banner as a PNG of the game's size with each banner outlined, to paint in any
   program; **Put in my own drawing...** takes it back. *Rome*: the game's blank white banners (Roman, barbarian,
   eastern), the own and the allies' banner. *Medieval II*: the game has no white banner, so a white template is
