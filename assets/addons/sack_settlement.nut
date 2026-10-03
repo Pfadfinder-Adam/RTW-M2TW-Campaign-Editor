@@ -9,8 +9,10 @@
 // appears under Occupy / Enslave / Exterminate. It presses the engine's own
 // Exterminate (native loot, sounds and events all run), waits for the scroll to
 // close, then:
-//   1. demolishes every building except the kept chains (core, walls, roads),
-//   2. drops the population to the level minimum and pays a sack reward,
+//   1. demolishes every building except the kept chains (walls and roads by
+//      default; the governor's core chain always stays),
+//   2. drops the population to RAZE_PEOPLE_LEFT (600 at least - a town cannot be
+//      wiped out) and pays a sack reward,
 //   3. hands the ruins to the rebels (changeOwner - the army steps outside),
 //   4. lets the engine raise its own rebel garrison (give_settlement slave), from
 //      the region's rebel_type in the mod's descr_rebel_factions.txt.
@@ -198,7 +200,9 @@ local RAZE_GIVE_TO_REBELS = true     // false = the ruins stay yours
 local RAZE_REBEL_GARRISON = true     // false = rebels get the town without an army
 local RAZE_GOLD_PER_BUILDING = 300   // denarii per demolished building
 local RAZE_GOLD_PER_CITIZEN = 1      // denarii per inhabitant removed by the raze
-local RAZE_KEEP_CHAINS = {           // chains that are never demolished
+local RAZE_PEOPLE_LEFT = 600         // inhabitants left in the ruins (600 at least)
+local RAZE_MIN_PEOPLE = 600          // the floor: a town is never emptied below this
+local RAZE_KEEP_CHAINS = {           // chains that are never demolished (core_* always stays anyway)
     core_building = true,            // governor's building = settlement tier
     defenses = true,                 // walls: pallisade .. epic stone wall
     hinterland_roads = true,         // roads, paved roads, highways
@@ -507,7 +511,9 @@ function raze_settlement_in_region(region_id, faction_name) {
                 continue
             }
             local chain = building.chainName
-            if (chain != null && !(chain in RAZE_KEEP_CHAINS)) {
+            // the governor's chain (core_building, Medieval II's core_castle_building) always stays, whatever the
+            // settings say: without it the town can never be built up again
+            if (chain != null && !(chain in RAZE_KEEP_CHAINS) && chain.indexof("core") != 0) {
                 chains.append(chain)
             }
         }
@@ -518,7 +524,7 @@ function raze_settlement_in_region(region_id, faction_name) {
             destroyed++
         }
     }
-    // Population: cut to the level minimum. Only the people the raze actually
+    // Population: cut to RAZE_PEOPLE_LEFT. Only the people the raze actually
     // removes are paid for; those left behind stay in the town (with the rebels).
     local before = 0
     try {
@@ -526,11 +532,15 @@ function raze_settlement_in_region(region_id, faction_name) {
         before = p == null ? 0 : p
     } catch (err) {
     }
-    try {
-        // The engine clamps this to the level minimum.
-        settlement.population = 1
-    } catch (err) {
-        raze_log("population write failed: " + err)
+    // Never fewer than RAZE_MIN_PEOPLE (a town cannot be wiped off the map), never raised; the engine clamps to
+    // the level's own minimum too.
+    local keep = RAZE_PEOPLE_LEFT > RAZE_MIN_PEOPLE ? RAZE_PEOPLE_LEFT : RAZE_MIN_PEOPLE
+    if (before > keep) {
+        try {
+            settlement.population = keep
+        } catch (err) {
+            raze_log("population write failed: " + err)
+        }
     }
     local after = before
     try {

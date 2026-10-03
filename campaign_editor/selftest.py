@@ -1160,6 +1160,106 @@ def s_engine_rules(c, mod):
     raise Skip("no descr_ex.txt (no REX / M2EX)")
 
 
+# every campaign rule changed (s_rules_all): what is left as it is, and why
+BYTE_TOPS = (127, 255, 32767, 65535)            # the most a byte / a short holds: a limit there is not raised
+RULES_LEFT = {
+    "start_date": "the events and the campaign script count from it",
+    "disable_console": "the console stays on - add-ons are looked at through it",
+    "faction_unlock": "'earned' would hide the test's new factions from the faction list",
+    "portrait_pool": "'isolated' takes the game's portraits away from a mod with none of its own",
+    "sprite_format": "names the files the engine loads - another value needs other files",
+    "marian_reforms_disabled": "kept with its pair marian_reforms_activated",
+}
+
+
+def rule_changed(rule, now=None):
+    """(the new text of a campaign rule, None) - a value of its own kind the game takes, every number moved a step
+    the same way so their order holds (a level's minimum stays under its maximum) - or (None, why it is left)."""
+    import re
+    v, key = rule.value.strip(), rule.key
+    if key in RULES_LEFT:
+        return None, RULES_LEFT[key]
+    if key.endswith("_source"):
+        return None, "names the files the engine loads - another value needs other files"
+    # a range only widens: a maximum or limit goes up, a minimum (and any other number) down - so the towns, families
+    # and armies the campaign already has still fit (a village's max 1500 -> 1499 lost a town of 1500 people; the
+    # children's max 5 -> 4 a family of five)
+    words = set(re.split(r"[_\s.]+", key.lower()))
+    up = bool(words & {"max", "maximum", "limit", "cap"})
+    if rule.kind in ("int", "uint"):
+        n = int(v)
+        if up and n not in BYTE_TOPS:
+            return str(n + 1), None
+        return str(n - 1 if n > 0 else n + 1 if n < 0 else 1), None
+    if rule.kind == "float":
+        x = float(v)
+        y = (x * 1.05 if up else x * 0.95) if x else 0.05
+        text = ("%.10f" % y).rstrip("0")             # plain decimals, as the files write them (0.000095, 95.0)
+        return text + "0" if text.endswith(".") else text, None
+    if rule.kind == "bool":
+        return ({"true": "false", "false": "true"}.get(v), None) if v in ("true", "false") else \
+            (None, "not true / false")
+    if rule.kind == "flag":
+        if key == "marian_reforms_activated" and (now or {}).get("marian_reforms_disabled") == "on":
+            return None, "the Marian reforms are switched off in this campaign"
+        return ("off" if v == "on" else "on"), None
+    if rule.kind == "date":
+        m = re.fullmatch(r"(-?\d+)(.*)", v)
+        return (str(int(m.group(1)) + 2) + m.group(2), None) if m else (None, "not a date")
+    if rule.kind == "words":
+        nums = v.split()
+        if not all(re.fullmatch(r"-?\d+", x) for x in nums):
+            return None, "words the engine reads as they are"
+        n = [int(x) for x in nums]
+        if key == "random_persona_weights":            # odds that make 100 together: one moved from the biggest
+            big = n.index(max(n))
+            low = n.index(min(n))
+            if big != low:
+                n[big] -= 1
+                n[low] += 1
+        else:                                          # a colour (0 - 255 each) or other numbers
+            n = [x - 1 if x > 0 else x + 1 for x in n]
+        return " ".join(str(x) for x in n), None
+    if rule.kind == "string" and rule.note:            # an engine switch: another of the values its comment names
+        names = re.findall(r"^\s*([a-z_]+)\s*[=:]\s", rule.note, re.M)
+        other = next((x for x in names if x != v), None)
+        if other is None and v in ("enabled", "disabled"):
+            other = "disabled" if v == "enabled" else "enabled"
+        if other:
+            return other, None
+    return None, "a name (a settlement level, a file) the game must know - left as it is"
+
+
+@step("Campaign rules - every one: each value of every settings file changed (numbers a step, switches turned, "
+      "the engines' options) - the game must read them all",
+      "the campaign starts and plays; Campaign rules shows the new values")
+def s_rules_all(c, mod):
+    from . import campaignrules as CR
+    plan = Plan(mod, "rules", "rules_all", {})
+    changed, files, left = 0, 0, {}
+    for name, title, own, base in CR.files(mod, c.campaign):
+        rules = CR.read(own or base, medieval2=c.m2)
+        now = {r.key: r.value for r in rules}
+        ch = {}
+        for r in rules:
+            new, why = rule_changed(r, now)
+            if new is not None and new != r.value and CR.check(r, new) is None:
+                ch[r] = new
+            else:
+                left.setdefault(why or "no other value", []).append(r.key)
+        if ch:
+            CR.apply(plan, name, ch, own, base)
+            changed += len(ch)
+            files += 1
+    if not changed:
+        raise Skip("no campaign settings file")
+    plan.warn(None, "%d rules changed in %d files" % (changed, files))
+    for why, keys in sorted(left.items(), key=lambda x: -len(x[1])):
+        plan.warn(None, "left as they are (%s): %s" % (why, ", ".join(sorted(set(keys))[:8]) +
+                                                       (" ..." if len(set(keys)) > 8 else "")))
+    return plan
+
+
 @step("Roster: a unit taken away from {edited}", "the unit no longer in {edited}'s recruitment list")
 def s_roster_take(c, mod):
     from . import roster as R
@@ -1234,7 +1334,7 @@ COVERAGE = {
     "Unit packs export / import": ["s_unit_pack"],
     "Check and install a pack": ["s_modpack"],
     "Events": ["s_events", "s_events_more"],
-    "Campaign rules": ["s_rules"],
+    "Campaign rules": ["s_rules", "s_rules_all"],
     "Campaign start (descr_strat.txt)": ["s_campaign_start"],
     "Engine settings (REX / M2EX)": ["s_engine_rules"],
     "Add-ons": ["s_addon", "s_addon_diplomacy"],

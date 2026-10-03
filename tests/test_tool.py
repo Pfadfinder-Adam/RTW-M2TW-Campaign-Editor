@@ -3332,10 +3332,14 @@ building smith
         edb = os.path.join(self.root, "data", "export_descr_buildings.txt")
         write(edb, "building core_building\n{\n}\nbuilding core_castle_building\n{\n}\n"
                    "building hinterland_roads\n{\n}\nbuilding hinterland_castle_roads\n{\n}\n")
-        # both governor's chains must stay
-        self.assertTrue(any("core_castle_building" in x for x in
-                            A.check(a, dict(got, RAZE_KEEP_CHAINS=["core_building"]), mod)))
         self.assertFalse(A.check(a, got, mod))
+        # a town is never emptied: 600 people at least (the script's floor is the editor's)
+        self.assertEqual(got["RAZE_PEOPLE_LEFT"], A.MIN_PEOPLE)
+        self.assertIn("local RAZE_MIN_PEOPLE = %d" % A.MIN_PEOPLE, text)
+        self.assertTrue(any("600 at least" in x for x in A.check(a, dict(got, RAZE_PEOPLE_LEFT=100), mod)))
+        # the governor's chains stay whatever the list says: the script itself never tears down core_*
+        self.assertFalse(A.check(a, dict(got, RAZE_KEEP_CHAINS=["hinterland_roads"]), mod))
+        self.assertIn('chain.indexof("core") != 0', text)
         folder = os.path.join(self.root, "eopData", "eopScripts")
         entry = os.path.join(folder, "luaPluginScript.lua")
         own = b"-- the mod's own\r\nfunction onPluginLoad() end\r\n"
@@ -3346,7 +3350,7 @@ building smith
             f.write(entry_before)
         old = os.path.join(folder, "raze_settlement.lua")
         write(old, "-- Raze Settlement, the older Lua\n")
-        vals = dict(got, RAZE_WHO="list", RAZE_FACTIONS=["alpha"], RAZE_GOLD_PER_BUILDING=500, RAZE_PEOPLE_LEFT=300)
+        vals = dict(got, RAZE_WHO="list", RAZE_FACTIONS=["alpha"], RAZE_GOLD_PER_BUILDING=500, RAZE_PEOPLE_LEFT=900)
         plan = Plan(mod, "addon", "raze", {})
         dst = A.plan_install(plan, a, vals, mod)
         self.assertEqual(dst, os.path.join(self.root, "script", "modules", "raze_settlement.nut"))
@@ -3354,7 +3358,7 @@ building smith
         new = open(dst).read()
         self.assertIn('local RAZE_FACTIONS = ["alpha"]', new)
         self.assertIn("local RAZE_GOLD_PER_BUILDING = 500", new)
-        self.assertEqual(A.installed(mod, a)["RAZE_PEOPLE_LEFT"], 300)
+        self.assertEqual(A.installed(mod, a)["RAZE_PEOPLE_LEFT"], 900)
         self.assertFalse(os.path.exists(old))
         with open(entry, "rb") as f:
             self.assertEqual(f.read(), own)
@@ -4508,6 +4512,8 @@ building smith
         got = AD.read_settings(a, text)
         self.assertEqual(got["RAZE_WHO"], "player")
         self.assertEqual(got["RAZE_KEEP_CHAINS"], ["core_building", "defenses", "hinterland_roads"])
+        self.assertEqual(got["RAZE_PEOPLE_LEFT"], AD.MIN_PEOPLE)
+        self.assertIn('chain.indexof("core") != 0', text)
         self.assertEqual(AD.render(a, text, got), text)
         new = dict(got, RAZE_WHO="homeless", RAZE_GOLD_PER_BUILDING=500, RAZE_KEEP_CHAINS=["core_building"])
         self.assertEqual(AD.read_settings(a, AD.render(a, text, new)), new)

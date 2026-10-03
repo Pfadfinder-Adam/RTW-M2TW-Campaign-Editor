@@ -12,6 +12,12 @@
   and end date, `timescale` (years a turn), how seldom brigands and pirates appear, REX / M2EX's leader persona odds,
   and the switches as on / off (night battles, date as turns, Marian reforms, rebelling generals, gladiator
   uprisings). The test mod changes them too.
+- **Test mod: every campaign rule changed** (step 55 of 57): each value of every settings file - the campaign's
+  start, descr_campaign_db, the towns' growth / order / income, diplomacy offers, recruitment, unit sizes and the
+  REX / M2EX engine settings and switches (548 values in Medieval II, 162 in Rome) - changed to one the game takes:
+  numbers a step (a maximum or limit up, a minimum and anything else down, so the campaign's towns and families
+  still fit), switches turned, an engine option to another it names. Left as they are, with the reason in the
+  report: the start date, the switches that name files the engine loads, the console switch and the faction unlock.
 - **Test mod: every feature and every option** (56 steps): besides one step per feature it now tries their
   variants too - a faction that splits off another in a revolt (all five engines read it), alliances and wars at
   the start, city / castle and level for many towns, garrisons the game's way, a line of a unit and of a building
@@ -53,6 +59,11 @@
   cavalry, missile, general). A sheet shared with another faction becomes the faction's own copy.
 
 ### Changed
+- **Sack Settlement (both games): the governor's building always stays, 600 people at least**: the core chain is
+  never torn down, listed among the kept chains or not (without it the town could never be built up again); walls
+  and roads stay by default and can be taken out. The ruins keep 600 people by default and never fewer (Rome's
+  add-on gets the setting too). Any building standing in the town is torn down the same way, also one added in
+  the editor or brought from another mod.
 - **Sack Settlement for Medieval II (M2EX) is a button of the game's own kind**: the Medieval II add-on is now the
   same kind of script as Rome's Sack Settlement - M2EX runs the same scripts as REX (squi) - so its 4th button on
   the capture scroll is made of the scroll's own text-button pieces, as wide and as far apart as Occupy / Sack /

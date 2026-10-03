@@ -40,6 +40,14 @@ WHO = [("player", "Only the player (the human)"),
        ("list", "Only the factions I pick")]
 
 
+# Sack / Raze Settlement: the people a sacked town keeps at least (the scripts' RAZE_MIN_PEOPLE; the games' own level
+# minimum is 400 - a town is never emptied), and what the kept chains mean (the scripts never tear down core_*)
+MIN_PEOPLE = 600
+KEEP_HELP = ("the governor's chain (core) always stays, listed or not - without it the town can never be built up "
+             "again; %s by default, take them out if you like. Any building of the mod is read in the game, also "
+             "one added or brought from another mod")
+
+
 class Addon:
     """game: 'rome', 'medieval2' or 'both'; path: the script of an add-on someone added (else a built-in one in
     assets/addons); picks {var: 'chains' | 'units' | 'factions'}: settings picked from the mod's own names."""
@@ -78,8 +86,9 @@ ADDONS = [
                    "rebel type (descr_rebel_factions.txt)"),
            Setting("RAZE_GOLD_PER_BUILDING", "int", "Money per building torn down", "added to the extermination's"),
            Setting("RAZE_GOLD_PER_CITIZEN", "int", "Money per inhabitant", "for each person the sack removes"),
-           Setting("RAZE_KEEP_CHAINS", "set", "Building chains never torn down", "the governor's building (core) "
-                   "must stay; walls and roads by default - use this mod's chain names"),
+           Setting("RAZE_PEOPLE_LEFT", "int", "People left in the ruins", "%d at least - a town cannot be wiped "
+                   "off the map" % MIN_PEOPLE),
+           Setting("RAZE_KEEP_CHAINS", "set", "Building chains never torn down", KEEP_HELP % "walls and roads"),
            Setting("RAZE_DEFAULT_REBEL_UNITS", "list", "Rebel units if the game raises none", "unit types of this "
                    "mod's export_descr_unit.txt; empty = none"),
            Setting("RAZE_BUTTON", "bool", "The 4th button", "off: Exterminate asks Yes / No to sack instead"),
@@ -104,10 +113,10 @@ ADDONS = [
                    "rebel type (descr_rebel_factions.txt)"),
            Setting("RAZE_GOLD_PER_BUILDING", "int", "Money per building torn down", "added to the extermination's"),
            Setting("RAZE_GOLD_PER_CITIZEN", "int", "Money per inhabitant", "for each person the raze removes"),
-           Setting("RAZE_PEOPLE_LEFT", "int", "People left in the ruins", "0 = as few as the town's level allows "
-                   "(never fewer than that)"),
-           Setting("RAZE_KEEP_CHAINS", "set", "Building chains never torn down", "the core chains (walls are their "
-                   "levels in Medieval II) must stay; roads by default - use this mod's chain names"),
+           Setting("RAZE_PEOPLE_LEFT", "int", "People left in the ruins", "%d at least - a town cannot be wiped "
+                   "off the map" % MIN_PEOPLE),
+           Setting("RAZE_KEEP_CHAINS", "set", "Building chains never torn down", KEEP_HELP % "roads (the walls are "
+                   "levels of the core chains in Medieval II)"),
            Setting("RAZE_DEFAULT_REBEL_UNITS", "list", "Rebel units if the game raises none", "unit types of this "
                    "mod's export_descr_unit.txt; empty = none"),
            Setting("RAZE_BUTTON", "bool", "The 4th button", "off: Exterminate asks Yes / No to raze instead"),
@@ -460,14 +469,6 @@ def check(addon, values, mod=None):
                     out.append("%s: %s not in this mod's %s" % (
                         next(s.label for s in addon.settings if s.var == var), ", ".join(wrong),
                         "export_descr_buildings.txt" if what == "chains" else "export_descr_unit.txt"))
-        chains = mod_names(mod, "chains")
-        if "RAZE_KEEP_CHAINS" in values and chains:
-            # every governor's chain: Medieval II has two (core_building for cities, core_castle_building)
-            kept = {x.lower() for x in values["RAZE_KEEP_CHAINS"]}
-            lost = [c for c in chains if c.lower().startswith("core") and c.lower() not in kept]
-            if lost:
-                out.append("Building chains never torn down: keep the governor's chain (%s) - the game breaks "
-                           "without it" % ", ".join(lost))
     name = re.compile(r"^[A-Za-z_][\w]*$")
     for s in addon.settings:
         v = values.get(s.var)
@@ -481,6 +482,8 @@ def check(addon, values, mod=None):
             out.append("%s: names of letters, digits and _" % s.label)
         if s.kind == "choice" and v not in [c for c, _ in s.choices]:
             out.append("%s: pick one of the list" % s.label)
+    if isinstance(values.get("RAZE_PEOPLE_LEFT"), int) and values["RAZE_PEOPLE_LEFT"] < MIN_PEOPLE:
+        out.append("People left in the ruins: %d at least - a town cannot be wiped off the map" % MIN_PEOPLE)
     if values.get("RAZE_WHO") == "list" and not values.get("RAZE_FACTIONS"):
         out.append("%s: pick at least one faction" % next(
             (s.label for s in addon.settings if s.var == "RAZE_WHO"), "Who may"))
