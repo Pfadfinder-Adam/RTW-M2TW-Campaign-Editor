@@ -167,6 +167,9 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 
 **Every report really arrives**: each one - bug or idea - lands in the author's private inbox as its own numbered
 entry with the logs attached, and is read. The search box on the Units & armies tab came from one of them.
+**And the answer comes back**: the author's reply to your report shows up in the editor itself - the report window's
+tab **Answers to my reports** (the Report button says "(1 new)" when one came) - and **Send the answer** replies with
+more words or a screenshot, to the same report. No account needed.
 
 <img src="docs/images/reports.png" width="700" alt="Reports and ideas sent from the editor, each with its number">
 
@@ -349,7 +352,7 @@ free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 - Only builds made by this repository's GitHub Actions release workflow from its own source are signed.
 - Committers and reviewers: [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew). Approver (every signing request): [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew).
 
-Privacy: this program transfers nothing to other networked systems unless you press **Send** in *Report a bug / Suggest* (then only what that window shows). It reads and writes only the game or mod folder you load and its own files beside the exe (`CampaignEditor_settings.json`, `CampaignEditor_logs`, `CampaignEditor_addons`) (see [SECURITY.md](SECURITY.md)).
+Privacy: this program transfers nothing to other networked systems unless you press **Send** in *Report a bug / Suggest* (then only what that window shows); after that it asks, by the reports' numbers only, for the author's answers to them (on start every few hours - off in Settings > Reports). It reads and writes only the game or mod folder you load and its own files beside the exe (`CampaignEditor_settings.json`, `CampaignEditor_logs`, `CampaignEditor_addons`) (see [SECURITY.md](SECURITY.md)).
 
 ## License
 

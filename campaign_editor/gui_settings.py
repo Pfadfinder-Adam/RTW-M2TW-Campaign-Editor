@@ -136,12 +136,19 @@ class SettingsWindow(tk.Toplevel):
 
     def _report(self, body):
         lf, row = self._box(body, "Reports (Report a bug / Suggest)", "Filled in for you in the report window. "
-                                                                      "Nothing is sent without your click there.")
+                                                                      "A report is sent only with your click there; "
+                                                                      "answers are looked for only for the reports "
+                                                                      "you sent.")
         ttk.Label(row, text="Your contact (Discord name / e-mail, optional)").pack(side="left")
         self.v_contact = tk.StringVar(value=settings.get("report_contact", "") or "")
         e = ttk.Entry(lf, textvariable=self.v_contact, width=40)
         e.pack(anchor="w", pady=(2, 0))
         self.v_contact.trace_add("write", lambda *a: settings.put("report_contact", self.v_contact.get().strip()))
+        self.v_answers = tk.BooleanVar(value=settings.get("reports_check", True) is not False)
+        ttk.Checkbutton(lf, variable=self.v_answers, text="Look for the author's answers to my reports when the editor "
+                        "starts (every few hours; asks only by the reports' numbers)",
+                        command=lambda: settings.put("reports_check", bool(self.v_answers.get()))).pack(
+            anchor="w", pady=(6, 0))
 
     def _fixes(self, body):
         _, row = self._box(body, "Set-up questions on Load", "When a mod is loaded the tool looks for set-up "

@@ -5509,6 +5509,74 @@ building smith
             srv.shutdown()
             srv.server_close()
 
+    def test_answers_to_my_reports(self):
+        """The reporter cannot see the private reports repo: the editor keeps the numbers it sent (and finds older
+        ones in its log), asks the relay for the author's answers, marks what is new until read, and sends the
+        reporter's answer (with a zip of new pictures) to the same report."""
+        import base64
+        import http.server
+        import json
+        import threading
+        from campaign_editor import report, settings
+        saved = (settings._data, settings._path)
+        tmp = tempfile.mkdtemp()
+        settings._data, settings._path = {}, (lambda: os.path.join(tmp, "s.json"))
+        calls = []
+
+        class Relay(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                calls.append((self.path, body))
+                if self.path == "/answers":
+                    out = {"answers": {"R-20261003-ABCDEF": {"issue": 7, "state": "open", "reason": "",
+                                                             "messages": [{"from": "author", "text": "Which picture?",
+                                                                           "at": "2026-10-03T10:00:00Z"}]}}}
+                elif self.path == "/reply":
+                    out = {"ok": True}
+                else:
+                    out = {"id": "R-20261003-ABCDEF", "issue": 7}
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps(out).encode())
+
+            def log_message(self, *a):
+                pass
+        srv = http.server.HTTPServer(("127.0.0.1", 0), Relay)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            settings.put("report_url", "http://127.0.0.1:%d/" % srv.server_port)
+            zipdata = report.build_zip([], "x")
+            rid, issue = report.send(zipdata, "Bug: x", "", {"editor": "t"}, full=True)
+            self.assertEqual((rid, issue), ("R-20261003-ABCDEF", 7))
+            report.remember_sent(rid, issue, "bug", "Bug: x")
+            # an older report only in the log is found too; the same number is not doubled
+            rows = report.sent_reports(["12:00 Report sent: R-20261001-0A1B2C (40 KB)",
+                                        "Report sent: R-20261003-ABCDEF (1 KB)"])
+            self.assertEqual([r["id"] for r in rows], ["R-20261003-ABCDEF", "R-20261001-0A1B2C"])
+            self.assertEqual(rows[0]["issue"], 7)
+            got = report.answers(rows, "t")
+            self.assertEqual(calls[-1][0], "/answers")
+            self.assertEqual(calls[-1][1]["reports"][0], {"id": rid, "issue": 7})
+            self.assertEqual(got[rid]["messages"][0]["text"], "Which picture?")
+            # new until it was shown; a later answer or a closing is new again
+            self.assertEqual(report.news(got, settings.get("reports_seen")), [rid])
+            report.mark_seen(got, [rid])
+            self.assertEqual(report.news(got, settings.get("reports_seen")), [])
+            got[rid]["state"], got[rid]["reason"] = "closed", "completed"
+            self.assertEqual(report.news(got, settings.get("reports_seen")), [rid])
+            self.assertEqual(report.state_words(got[rid]), "closed - fixed / done")
+            self.assertEqual(report.state_words(None), "no answer yet")
+            # the reporter's answer goes to the same report, with its files
+            report.send_reply(rid, 7, "the unit cards of England", zipdata, "t")
+            path, body = calls[-1]
+            self.assertEqual((path, body["id"], body["issue"]), ("/reply", rid, 7))
+            self.assertEqual(base64.b64decode(body["zip"]), zipdata)
+        finally:
+            srv.shutdown()
+            srv.server_close()
+            settings._data, settings._path = saved
+            shutil.rmtree(tmp, ignore_errors=True)
+
     # ---- 0.5.0: roster, lines added / removed, renames, mod list, file origins ----
     RICH_EDB = """building barracks
 {

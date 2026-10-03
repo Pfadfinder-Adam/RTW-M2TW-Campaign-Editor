@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+- **Answers to my reports** (testers on Discord: "I'd definitely use it"): the author's answer to a report now comes
+  back to the editor - the report window's new tab **Answers to my reports** lists the reports sent from this
+  editor with their state (open / fixed / not planned) and the talk so far, and **Send the answer** replies (with a
+  screenshot or the newest logs if you like) to the same report. The editor looks for answers when it starts (every
+  few hours, by the reports' numbers only - off in Settings > Reports) and the Report button says "(1 new)" when one
+  came. Reports sent with older versions are found in the editor's log.
 - **Tools > Test mod - every feature (for the author)**: a stress test of the editor itself, not something a modder
   needs - it makes a new mod folder `CE_Test` beside the loaded mod (the loaded one is not changed) and applies every
   feature to it, one write each (a new faction and one that comes later, faction edits, armies, diplomacy, victory,

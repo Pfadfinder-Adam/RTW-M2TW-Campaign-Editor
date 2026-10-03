@@ -292,32 +292,29 @@ def ssl_context():
     return ctx
 
 
-def send(data, message="", contact="", info=None, timeout=60):
-    """The zip to the relay; the report's number it answers (like R-20260930-7F3A). Raises RuntimeError in plain
-    words when it did not go."""
+def _post(path, payload, version="", timeout=60, what="the report service"):
+    """One JSON POST to the relay (path '' = a new report, 'answers', 'reply'); its JSON answer. RuntimeError in
+    plain words when it did not go."""
     import urllib.error
     import urllib.request
     where = url()
     if not where:
         raise RuntimeError("the report service is not set up in this version yet - save the zip instead and send "
                            "it on Discord or GitHub")
-    if len(data) > ZIP_CAP:
-        raise RuntimeError("the report is %d KB, over the %d KB the service takes - leave a picture or a log out"
-                           % (len(data) // 1024, ZIP_CAP // 1024))
-    body = json.dumps({"message": message[:4000], "contact": contact[:200], "info": info or {},
-                       "zip": base64.b64encode(data).decode("ascii")}).encode("utf-8")
+    if path:
+        where = where.rstrip("/") + "/" + path
+    body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(where, data=body, method="POST", headers={
-        "Content-Type": "application/json", "User-Agent": "RTW-M2TW-Campaign-Editor/%s" % (info or {}).get(
-            "editor", "")})
+        "Content-Type": "application/json", "User-Agent": "RTW-M2TW-Campaign-Editor/%s" % version})
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as r:
-            answer = json.loads(r.read().decode("utf-8") or "{}")
+            return json.loads(r.read().decode("utf-8") or "{}")
     except urllib.error.HTTPError as e:
         try:
             why = json.loads(e.read().decode("utf-8")).get("error") or e.reason
         except Exception:
             why = e.reason
-        raise RuntimeError("the report service said no (%s): %s" % (e.code, why))
+        raise RuntimeError("%s said no (%s): %s" % (what, e.code, why))
     except (urllib.error.URLError, OSError, ValueError) as e:
         why = getattr(e, "reason", e)
         if "SSL" in str(why) or "CERTIFICATE" in str(why).upper():
@@ -325,6 +322,115 @@ def send(data, message="", contact="", info=None, timeout=60):
                                "(%s) - often an antivirus that checks web traffic. Save the zip instead and send "
                                "it on Discord or GitHub." % why)
         raise RuntimeError("could not reach the report service (%s) - is the internet on?" % why)
+
+
+def send(data, message="", contact="", info=None, timeout=60, full=False):
+    """The zip to the relay; the report's number it answers (like R-20260930-7F3A), with full=True (number, issue)
+    - the issue lets the editor ask for answers later. Raises RuntimeError in plain words when it did not go."""
+    if len(data) > ZIP_CAP:
+        raise RuntimeError("the report is %d KB, over the %d KB the service takes - leave a picture or a log out"
+                           % (len(data) // 1024, ZIP_CAP // 1024))
+    answer = _post("", {"message": message[:4000], "contact": contact[:200], "info": info or {},
+                        "zip": base64.b64encode(data).decode("ascii")}, (info or {}).get("editor", ""), timeout)
     if not answer.get("id"):
         raise RuntimeError("the report service gave no report number: %s" % answer.get("error", answer))
+    if full:
+        return answer["id"], int(answer.get("issue") or 0)
     return answer["id"]
+
+
+# --- answers to my reports: the editor keeps the numbers it sent; the relay gives back the author's comments on them
+# (the reporter cannot see the private reports repo). The number is random and known only to the sender.
+RE_SENT = re.compile(r"Report sent: (R-\d{8}-[0-9A-F]{6})")
+RE_ID = re.compile(r"^R-\d{8}-[0-9A-F]{6}$")
+CHECK_EVERY = 3 * 3600          # seconds between the checks on start
+KEEP_SENT = 30                  # the relay answers 30 numbers at a time
+
+
+def remember_sent(rid, issue=0, kind="bug", title=""):
+    """A sent report into the settings list (newest first) - Answers to my reports asks for these."""
+    import time
+    from . import settings
+    rows = [r for r in (settings.get("reports_sent") or []) if isinstance(r, dict) and r.get("id") != rid]
+    rows.insert(0, {"id": rid, "issue": int(issue or 0), "kind": kind, "title": (title or "")[:120],
+                    "at": time.strftime("%Y-%m-%d %H:%M")})
+    settings.put("reports_sent", rows[:KEEP_SENT])
+
+
+def sent_reports(log_texts=None):
+    """Every report this editor sent: the settings list, plus numbers in the log ('Report sent: R-...') from versions
+    before the list was kept. [{id, issue, kind, title, at}], newest first."""
+    from . import settings
+    rows = [dict(r) for r in (settings.get("reports_sent") or []) if isinstance(r, dict) and RE_ID.match(
+        str(r.get("id", "")))]
+    have = {r["id"] for r in rows}
+    if log_texts is None:
+        log_texts = []
+        d = log.logs_dir()
+        for name in (log.LOG_NAME, log.LOG_NAME + ".old"):
+            try:
+                with open(os.path.join(d, name), encoding="utf-8", errors="replace") as fh:
+                    log_texts.append(fh.read())
+            except (OSError, TypeError):
+                pass
+    for text in log_texts:
+        for m in RE_SENT.finditer(text):
+            if m.group(1) not in have:
+                have.add(m.group(1))
+                rows.append({"id": m.group(1), "issue": 0, "kind": "", "title": "", "at": m.group(1)[2:10]})
+    return rows[:KEEP_SENT]
+
+
+def answers(rows, version="", timeout=30):
+    """The relay's answers for the reports: {id: {issue, state ('open' / 'closed'), reason ('completed' /
+    'not_planned' / ''), messages [{from 'author' | 'you', text, at}]}}. Raises RuntimeError like send."""
+    got = _post("answers", {"reports": [{"id": r["id"], "issue": int(r.get("issue") or 0)} for r in rows]},
+                version, timeout)
+    out = got.get("answers") or {}
+    return out if isinstance(out, dict) else {}
+
+
+def send_reply(rid, issue, message, data=None, version="", timeout=60):
+    """The reporter's answer to the author, a comment on the same report (data: a zip of new pictures / logs)."""
+    payload = {"id": rid, "issue": int(issue or 0), "message": message[:4000]}
+    if data:
+        if len(data) > ZIP_CAP:
+            raise RuntimeError("the files are %d KB, over the %d KB the service takes" % (len(data) // 1024,
+                                                                                       ZIP_CAP // 1024))
+        payload["zip"] = base64.b64encode(data).decode("ascii")
+    got = _post("reply", payload, version, timeout)
+    if not got.get("ok"):
+        raise RuntimeError("the report service did not take the reply: %s" % got.get("error", got))
+
+
+def state_words(a):
+    """A report's state in plain words."""
+    if not a:
+        return "no answer yet"
+    if a.get("state") == "closed":
+        return "closed - not planned" if a.get("reason") == "not_planned" else "closed - fixed / done"
+    return "open"
+
+
+def news(all_answers, seen):
+    """The reports with something new since they were last looked at: more author messages than seen, or the state
+    changed. seen = {id: {'n': author messages, 'state': 'open|closed reason'}} (settings 'reports_seen')."""
+    out = []
+    for rid, a in (all_answers or {}).items():
+        n = sum(1 for m in a.get("messages", []) if m.get("from") == "author")
+        st = "%s %s" % (a.get("state", ""), a.get("reason", ""))
+        old = (seen or {}).get(rid) or {}
+        if n > old.get("n", 0) or (old and st != old.get("state")) or (not old and a.get("state") == "closed"):
+            out.append(rid)
+    return out
+
+
+def mark_seen(all_answers, ids=None):
+    """Remember what was shown, so it is no longer 'new'."""
+    from . import settings
+    seen = dict(settings.get("reports_seen") or {})
+    for rid, a in (all_answers or {}).items():
+        if ids is None or rid in ids:
+            seen[rid] = {"n": sum(1 for m in a.get("messages", []) if m.get("from") == "author"),
+                         "state": "%s %s" % (a.get("state", ""), a.get("reason", ""))}
+    settings.put("reports_seen", seen)

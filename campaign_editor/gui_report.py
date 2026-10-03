@@ -13,7 +13,8 @@ from . import log, report, settings
 APP = "RTW & M2TW Campaign Editor"
 
 
-def open_report(app, message="", kind="bug"):
+def open_report(app, message="", kind="bug", tab=None):
+    """tab 'answers' opens on Answers to my reports (the Report button does when one came)."""
     game = mod_dir = None
     if app.mod:
         from .newmod import game_of
@@ -25,8 +26,10 @@ def open_report(app, message="", kind="bug"):
     w = tk.Toplevel(app)
     w.title("Report a bug or suggest an idea")
     w.transient(app)
-    frm = ttk.Frame(w, padding=10)
-    frm.pack(fill="both", expand=True)
+    nb = ttk.Notebook(w)
+    nb.pack(fill="both", expand=True)
+    frm = ttk.Frame(nb, padding=10)
+    nb.add(frm, text="Send a report or an idea")
     ttk.Label(frm, justify="left", wraplength=620, text=(
         "Sends a problem or an idea to the editor's author - no account needed. A problem takes the logs along, "
         "with anything that could tell who you are cut out. 'Show what is sent' shows it all. "
@@ -204,8 +207,9 @@ def open_report(app, message="", kind="bug"):
 
         def work():
             try:
-                result["id"] = report.send(data, ("Idea: " if info["kind"] == "suggestion" else "Bug: ") +
-                                           report.scrub(msg, hide), v_contact.get().strip(), info)
+                result["id"], result["issue"] = report.send(
+                    data, ("Idea: " if info["kind"] == "suggestion" else "Bug: ") + report.scrub(msg, hide),
+                    v_contact.get().strip(), info, full=True)
             except Exception as e:           # RuntimeError in plain words; anything else still shown
                 result["error"] = str(e)
         th = threading.Thread(target=work, daemon=True)
@@ -218,9 +222,12 @@ def open_report(app, message="", kind="bug"):
             b_send.configure(state="normal")
             if "id" in result:
                 log.write("Report sent: %s (%d KB)" % (result["id"], len(data) // 1024))
+                report.remember_sent(result["id"], result.get("issue"), info["kind"],
+                                     report.scrub(msg, hide).split("\n")[0])
                 lbl_state.configure(text="Sent: %s" % result["id"])
-                messagebox.showinfo(APP, "Sent - thank you! Your report's number is %s.\n\nWrite it on Discord "
-                                         "if you want to talk about it." % result["id"], parent=w)
+                messagebox.showinfo(APP, "Sent - thank you! Your report's number is %s.\n\nThe author's answer "
+                                         "comes to this window, tab 'Answers to my reports' - the Report button "
+                                         "shows when one came." % result["id"], parent=w)
                 w.destroy()
             else:
                 log.write("Report not sent: %s" % result["error"])
@@ -242,6 +249,12 @@ def open_report(app, message="", kind="bug"):
     if not report.url():
         lbl_state.configure(text="The report service is not set up in this version yet - Save as zip works.",
                             foreground="#a60")
+    from .gui_answers import build_tab, show_count
+    tab_answers, _check = build_tab(app, nb, w)
+    n = show_count(app)
+    nb.add(tab_answers, text="Answers to my reports" + (" (%d new)" % n if n else ""))
+    if tab == "answers" or (tab is None and n and not message):
+        nb.select(tab_answers)
     return w
 
 

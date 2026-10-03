@@ -14,3 +14,12 @@ namespace_id = "1001"
   [ratelimits.simple]
   limit = 3
   period = 60
+
+# 10 answer checks a minute from one address
+[[ratelimits]]
+name = "ANSWER_LIMIT"
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60

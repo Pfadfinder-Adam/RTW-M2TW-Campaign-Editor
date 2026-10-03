@@ -151,7 +151,9 @@ ADD-ONS
   taken - it is torn down to its walls and roads, you get a reward, the rebels get the ruins.
   Who may sack: only the player, everyone, hordes (factions without a town), picked factions.
   Report a bug / Suggest: a problem (with the logs, your names cut out - Show what is sent) or an idea, a few
-    words and screenshots go to the author in one click, no account needed. Log / Save logs (zip): the same zip to send yourself.
+    words and screenshots go to the author in one click, no account needed. The author's answer comes back
+    to its tab Answers to my reports ("(1 new)" on the button) - reply there with Send the answer.
+    Log / Save logs (zip): the same zip to send yourself.
 
 KEYS
   Ctrl+Z undo, Ctrl+Y redo    Ctrl+P preview    Ctrl+S apply    F5 load again    F1 this help
@@ -778,7 +780,8 @@ class App(tk.Tk):
                   font=("", 9, "bold"), padx=10).pack(side="right", padx=(8, 0))
         ttk.Button(bar, text="Help", command=self.once("show_help", self.show_help)).pack(side="right", padx=(6, 0))
         ttk.Button(bar, text="\u2699 Settings", command=self.once("settings_window", self.settings_window)).pack(side="right", padx=(6, 0))
-        ttk.Button(bar, text="Report a bug / Suggest", command=self.once("report", self.send_report)).pack(side="right", padx=(6, 0))
+        self.b_report = ttk.Button(bar, text="Report a bug / Suggest", command=self.once("report", self.send_report))
+        self.b_report.pack(side="right", padx=(6, 0))
         tools = ttk.Menubutton(bar, text="Tools")
         menu = tk.Menu(tools, tearoff=False)
         menu.add_command(label="Check mod files (what the game would stumble on)", command=self.once("check", self.check))
@@ -820,6 +823,15 @@ class App(tk.Tk):
         self.update_actions()
         self.after(50, self.load_last)
         self.after(700, self.offer_move)
+        self.after(4000, self.check_report_answers)
+
+    def check_report_answers(self):
+        """The author's answers to the reports this editor sent (gui_answers) - quietly, every few hours."""
+        from .gui_answers import check_on_start
+        try:
+            check_on_start(self)
+        except Exception as e:
+            log.write("Answers to my reports not checked: %s" % e)
 
     def offer_move(self, force=False):
         """Once per version, when the exe lies outside every game folder (the Downloads folder, the desktop): offer to
