@@ -1135,11 +1135,14 @@ def s_addon_growth(c, mod):
     return plan
 
 
-@step("Module builder: two modules made of blocks put in (REX / M2EX) - money and a message on turn 2, loot for "
-      "every town taken",
+@step("Module builder: three modules made of blocks put in (REX / M2EX) - money and a message on turn 2, loot for "
+      "every town taken, and one of the engines' own lines (an engine event, a game condition, a remembered number, "
+      "a console and a campaign-script command)",
       "on turn 2 (the first turn after, if it was missed) your treasury gets 1000 denarii and the game's message "
-      "scroll 'The Module builder works' shows; take a town: 1500 denarii of loot; the game's log has "
-      "[CE_TEST_MODULE] and [LOOT_FOR_TAKING_A_TOWN] lines")
+      "scroll 'The Module builder works' shows; take a town: 1500 denarii of loot; at the end of your first turn each "
+      "of your towns gives 10 denarii once; the game's log has [CE_TEST_MODULE], [LOOT_FOR_TAKING_A_TOWN] and "
+      "[CE_TEST_ENGINE_LINES] lines ('the number ce_seen_<town> is now 1', 'add_money ...', "
+      "'set_event_counter ...')")
 def s_module(c, mod):
     import tempfile
     from . import addons as AD, modbuilder as MB
@@ -1151,9 +1154,17 @@ def s_module(c, mod):
                                  body="CE_Test: a module made of blocks (no code) gave you 1000 denarii."),
                          MB.item("do", "log", text="{faction}: the test module acted on turn {turn}")],
                  "settings": {"dos.0.amount": "Money given"}})
+    lines = MB.new_recipe("CE Test engine lines")
+    lines.update({"when": "ev:SettlementTurnEnd",
+                  "ifs": [MB.item("if", "game", line="FactionIsLocal"),
+                          MB.item("if", "counter", name="ce_seen_{town}", op="<", v=1)],
+                  "dos": [MB.item("do", "counter_add", v=1, name="ce_seen_{town}"),
+                          MB.item("do", "console", text="add_money {faction} 10"),
+                          MB.item("do", "script", text="set_event_counter ce_test_engine_lines 1"),
+                          MB.item("do", "log", text="{town}: counted once, 10 denarii")]})
     plan = Plan(mod, "addon", "ce_test_module", {})
     with tempfile.TemporaryDirectory() as d:          # the editor's own add-ons list is left as it is
-        for r in (test, MB.fit_to_mod(MB.example("Loot for taking a town"), mod)):
+        for r in (test, MB.fit_to_mod(MB.example("Loot for taking a town"), mod), lines):
             bad = MB.problems(r, mod)
             if bad:
                 raise ValueError("; ".join(bad))
