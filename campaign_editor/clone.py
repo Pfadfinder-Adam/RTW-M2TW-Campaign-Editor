@@ -621,7 +621,7 @@ def picture_links(mod, load=None):
         cur = None
         for i in range(len(f)):
             t = tokens(f.text(i))
-            if len(t) == 2 and t[0] == "faction":
+            if len(t) >= 2 and t[0] == "faction":         # header words may follow (shadowing, spawned_on_event)
                 cur = t[1]
             elif cur and len(t) >= 2 and t[0] in fields:
                 out.append({"faction": cur, "key": key, "path": path, "line": i, "field": t[0], "ref": t[1]})

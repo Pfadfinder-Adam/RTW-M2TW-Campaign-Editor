@@ -3586,11 +3586,18 @@ building smith
         os.makedirs(os.path.join(data, "menu", "symbols", "FE_buttons_24"))
         os.makedirs(os.path.join(data, "world", "maps", "campaign", "imperial_campaign"))
         with open(os.path.join(data, "descr_sm_factions.txt"), "w") as fh:
-            fh.write("faction ce_test\nculture roman\nfaction ce_test_later\nculture roman\n")
+            # the later faction's header carries more words: its loading logo line is still its own
+            fh.write("faction ce_test\nculture roman\nloading_logo loading_screen/symbols/symbol128_ce_test.tga\n"
+                     "faction ce_test_later, shadowing ce_test\nculture roman\n"
+                     "loading_logo loading_screen/symbols/symbol128_ce_test_later.tga\n")
         for n in ("symbol24_ce_test.tga", "symbol24_ce_test_later.tga"):
             Image.new("RGBA", (24, 24)).save(os.path.join(data, "menu", "symbols", "FE_buttons_24", n))
-        got = [e["rel"] for e in FA.faction_pictures(ModData(data), "imperial_campaign", "ce_test")]
-        self.assertEqual(got, ["menu/symbols/FE_buttons_24/symbol24_ce_test.tga"])
+        os.makedirs(os.path.join(data, "loading_screen", "symbols"))
+        for n in ("symbol128_ce_test.tga", "symbol128_ce_test_later.tga"):
+            Image.new("RGBA", (128, 128)).save(os.path.join(data, "loading_screen", "symbols", n))
+        got = sorted(e["rel"] for e in FA.faction_pictures(ModData(data), "imperial_campaign", "ce_test"))
+        self.assertEqual(got, ["loading_screen/symbols/symbol128_ce_test.tga",
+                               "menu/symbols/FE_buttons_24/symbol24_ce_test.tga"])
         shutil.rmtree(os.path.dirname(data))
 
     def test_banner_symbol_dragged_snapped_and_sized(self):
