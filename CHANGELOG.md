@@ -20,6 +20,17 @@
   mod's `text/custom_messages.txt`), **Share...** as a zip; a saved module opens in the builder again (Add-ons >
   Change it in the Module builder...). The test mod puts two in (money and a message on turn 2, loot for every town
   taken).
+- **Module builder: every command and condition of the engines.** Besides the plain blocks, an IF line can be **any
+  condition** of the engines' own list (299 both engines have - `FactionType`, `Trait`, `I_TurnNumber`...; checked
+  against what just happened) and a DO line **any console command** (142 both have - `kill_character`, `add_money`,
+  `create_unit`...) or **any campaign-script command** (198 - `set_event_counter`, `give_settlement`...). **Pick...**
+  lists them with a search: the form of the line, a sample, where it works, what a condition needs from the event; the
+  engine's own description when the game has its `documentation` folder (the engines write it with the console
+  command `dump_docudemon`). A module for one game gets that engine's whole list (REX 154 / M2EX 259 console
+  commands). A line is checked before anything is written: a name the engines lack, the wrong letter case, a block of
+  campaign_script.txt, a battle-only command, a condition needing what the event does not bring. What an event
+  brings comes from the engines' own lists too: REX's town taken has no old owner and REX has no 'town grows' event -
+  the builder says so for a module of both games.
 - **Add-on: Avoid Growth** (Rome + REX, Medieval II + M2EX - one script for both): a tick box on the settlement
   scroll of each of your towns, drawn with the game's own box and tick, under the population figures. Ticked, the
   people the town has become its ceiling: it never grows past it, still loses people the usual way (recruiting,

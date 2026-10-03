@@ -3475,6 +3475,75 @@ building smith
         for title in ready:
             MB.script(MB.fit_to_mod(MB.example(title), mod))
 
+    def test_module_builder_takes_every_line_of_the_engines(self):
+        """The engines' own lists (dump_docudemon) read: console usages split at the first ':' outside <> / [],
+        docudemon blocks with their fields; the catalogue the editor carries has both engines (a module for both games
+        offers what both have); a game's documentation folder adds the descriptions. A module line is checked by the
+        list: an unknown name, the wrong letter case, a block of campaign_script.txt, a console command of battles, a
+        condition needing what the event does not bring - in plain words; good lines become the engines' calls."""
+        from campaign_editor import enginedocs as ED, modbuilder as MB
+        con = ED.parse("console", "## listing ##\r\n\r\ngive_trait\r\n  Availability: campaign\r\n  Usage: give_trait "
+                                  "<charactername> <trait name> <opt:level>: gives a trait\r\n\r\nfire\r\n  "
+                                  "Availability: battle\r\n  Usage: fire : shoots\r\n")
+        self.assertEqual([(e.name, e.params, e.desc, e.runnable()) for e in con],
+                         [("give_trait", "<charactername> <trait name> <opt:level>", "gives a trait", True),
+                          ("fire", "", "shoots", False)])
+        cond = ED.parse("conditions", "intro\n---------------------------------------------------\nIdentifier:"
+                                      "              SettlementName\nTrigger requirements:    settlement\nParameters:"
+                                      "              settlement name\nSample use:              SettlementName Rome\n"
+                                      "Description:             For scripting\nBattle or Strat:         Either\n"
+                                      "Implemented:             Yes\n---------------------------------------------------\n")
+        self.assertEqual((cond[0].name, cond[0].needs, cond[0].sample, cond[0].where), (
+            "SettlementName", ["settlement"], "SettlementName Rome", "Either"))
+        b = ED.builtin()
+        for engine in ED.ENGINES:
+            self.assertGreater(len(b[engine]["console"]), 100)
+            self.assertGreater(len(b[engine]["conditions"]), 250)
+        both = ED.catalogue("both")
+        self.assertTrue(all(n in b["rex"]["console"] and n in b["m2ex"]["console"] for n in both["console"]))
+        self.assertIn("kill_character", both["console"])
+        # what an event brings, by the engines' own lists: REX's town taken has no old owner, REX has no
+        # SettlementUpgraded at all
+        town_taken, grows = MB.EVENT["town_taken"], MB.EVENT["town_grows"]
+        self.assertEqual(MB.event_subjects(town_taken, "both"), ("faction", "settlement", "character"))
+        self.assertEqual(MB.event_subjects(town_taken, "medieval2"), ("faction", "settlement", "character", "target"))
+        self.assertIsNone(MB.event_subjects(grows, "both"))
+        self.assertEqual(MB.event_subjects(grows, "medieval2"), ("faction", "settlement"))
+        g = MB.new_recipe("Grow")
+        g.update(when="town_grows", dos=[MB.item("do", "money", amount=10)])
+        self.assertIn("make the module for Medieval II only", MB.problems(g)[0])
+        self.assertEqual(MB.problems(dict(g, game="medieval2")), [])
+        old = dict(g, when="town_taken", dos=[MB.item("do", "money", amount=10, to="old")])
+        self.assertTrue(any("has no old owner" in x for x in MB.problems(old)))
+        self.assertEqual(MB.problems(dict(old, game="medieval2")), [])
+        # the game's own documentation: its descriptions
+        doc = os.path.join(self.root, "documentation")
+        write(os.path.join(doc, "console_commands.txt"), "kill_character\n  Availability: campaign\n  Usage: "
+                                                         "kill_character <character_name> : kills a character\n")
+        mod = ModData(self.root)
+        self.assertEqual(ED.doc_dir(mod), doc)
+        self.assertEqual(ED.catalogue("both", mod)["console"]["kill_character"].desc, "kills a character")
+        r = MB.new_recipe("Lines")
+        r.update(when="faction_turn", ifs=[MB.item("if", "game", line="not I_TurnNumber < 3")],
+                 dos=[MB.item("do", "console", text='kill_character "{general}" Battle'),
+                      MB.item("do", "script", text="set_event_counter mb_seen 1")])
+        self.assertEqual(MB.problems(r), [])
+        text = MB.script(r)
+        self.assertIn('mb_condition(mb_fill("not I_TurnNumber < 3", c))', text)
+        self.assertIn('mb_script_line(mb_fill("set_event_counter mb_seen 1", c))', text)
+        self.assertIn("::game.evaluateCondition(line)", text)
+        self.assertIn("::game.runScriptCommand(verb, rest)", text)
+
+        def why(kind, line, when="faction_turn"):
+            return MB.line_problems(kind, line, dict(r, when=when), MB.EVENT[when])
+        self.assertIn("not one of the console commands", why("cmd:console", "no_such_thing 1")[0])
+        self.assertIn("write it add_money", why("cmd:console", "Add_money 5")[0])
+        self.assertIn("flow of campaign_script.txt", why("cmd:commands", "if I_TurnNumber > 3")[0])
+        self.assertIn("only in battle", why("cmd:console", "force_battle_victory")[0])
+        self.assertIn("needs settlement", why("cond", "SettlementName London")[0])
+        self.assertEqual(why("cond", "SettlementName London", "town_taken"), [])
+        self.assertEqual(why("cond", "not FactionType england"), [])
+
     def test_faction_emblem_one_picture_everywhere(self):
         """One emblem picture -> every emblem picture in its own size; mouse over brighter, greyed out grey, selected
         with a glow round the new shape - by the amounts the old pictures show."""

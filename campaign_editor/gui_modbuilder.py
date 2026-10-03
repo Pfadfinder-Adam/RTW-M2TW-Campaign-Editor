@@ -150,11 +150,16 @@ class ModuleBuilder(tk.Toplevel):
     def _top_changed(self):
         if self._quiet:
             return
+        game = next((k for k, l in GAMES if l == self.v_game.get()), "both")
+        other_game = game != self.recipe.get("game")
         self.recipe["title"] = self.v_title.get()
-        self.recipe["game"] = next((k for k, l in GAMES if l == self.v_game.get()), "both")
+        self.recipe["game"] = game
         self.recipe["once"] = bool(self.v_once.get())
         self.changed = True
-        self.refresh()
+        if other_game:
+            self.rebuild()                       # what the event brings and the engines' lists follow the game
+        else:
+            self.refresh()
 
     # ---- the blocks ----
     def names_of(self, what):
@@ -192,9 +197,15 @@ class ModuleBuilder(tk.Toplevel):
         if ev:
             wrapping(tk.Label(f, text=ev.help[0].upper() + ev.help[1:] + ".", bg=c, fg="#444", justify="left",
                               anchor="w"), padx=18)
-            wrapping(tk.Label(f, bg=c, fg="#444", justify="left", anchor="w", text="It brings along: " + ", ".join(
-                MB.SUBJECT_WORDS[s] for s in ev.subjects) + " - the conditions and actions below work on them."),
-                padx=18, pady=(0, 6))
+            brings = MB.event_subjects(ev, self.recipe.get("game", "both"), self.mod)
+            if brings is None:
+                wrapping(tk.Label(f, bg=c, fg="#b00", justify="left", anchor="w", text=(
+                    "%s has no such event - see the line at the bottom." % MB.GAME_ENGINES.get(
+                        self.recipe.get("game", "both")))), padx=18, pady=(0, 6))
+            else:
+                wrapping(tk.Label(f, bg=c, fg="#444", justify="left", anchor="w", text="It brings along: " + (
+                    ", ".join(MB.SUBJECT_WORDS[s] for s in brings) or "nothing") +
+                    " - the conditions and actions below work on them."), padx=18, pady=(0, 6))
 
     def _block(self, inner, group):
         f, c = self._frame(inner, group)
@@ -210,12 +221,12 @@ class ModuleBuilder(tk.Toplevel):
             row.pack(anchor="w", padx=18, pady=2, fill="x")
             pv = tk.StringVar(value=part.label if part else it.get("k"))
             pcb = ttk.Combobox(row, textvariable=pv, values=[p.label for p in parts], state="readonly",
-                               width=max(len(p.label) for p in parts) - 10)
+                               width=max(len(p.label) for p in parts) + 1)
             pcb.pack(side="left")
             pcb.bind("<<ComboboxSelected>>", lambda e, g=group, n=i, v=pv: self.change_part(g, n, v.get()))
             wide = []
             for name, kind, label, _ in (part.fields if part else []):
-                if kind in WIDE or kind.startswith("names:"):
+                if kind in WIDE or kind.startswith(("names:", "cmd:")) or kind == "cond":
                     wide.append((name, kind, label))      # on a line of its own below: no text cut at the edge
                 else:
                     self._field(row, c, group, i, it, part, name, kind, label)
@@ -270,13 +281,45 @@ class ModuleBuilder(tk.Toplevel):
         sub.pack(anchor="w", fill="x", padx=(46, 18), pady=(0, 3))
         tk.Label(sub, text=label, bg=c, fg="#1e1e1e", width=8, anchor="e").pack(side="left", padx=(0, 4))
         names = kind.startswith("names:")
+        line = kind == "cond" or kind.startswith("cmd:")
         now = ", ".join(it.get(name) or []) if names else str(it.get(name) or "")
-        box = GrowingText(sub, now, lambda text: self.set_value(group, i, name, kind, text),
-                          least=2 if kind == "long" else 1)
+        about = None
+        if line:                                      # what the engines say of the command / condition typed
+            about = tk.Label(f, bg=c, fg="#444", justify="left", anchor="w")
+            wrapping(about, padx=(46 + 8 * 8, 18), pady=(0, 3))
+
+        def changed(text):
+            self.set_value(group, i, name, kind, text)
+            if about is not None:
+                about.configure(text=self.about_line(kind, text))
+        box = GrowingText(sub, now, changed, least=2 if kind == "long" else 1)
         if names:
             ttk.Button(sub, text="Pick...", command=lambda: self.pick_many(kind.split(":")[1], box)).pack(
                 side="right", padx=(4, 0))
+        if line:
+            ttk.Button(sub, text="Pick...", command=lambda: EnginePicker(
+                self, MB.LINE_KIND[kind], lambda e: box.set(e.line()))).pack(side="right", padx=(4, 0))
+            about.configure(text=self.about_line(kind, now))
+            about.pack_forget()
+            about.pack(fill="x", anchor="w", padx=(46 + 8 * 8, 18), pady=(0, 3), after=sub)
         box.pack(side="left", fill="x", expand=True)
+
+    def catalogue(self):
+        from . import enginedocs as ED
+        return ED.catalogue(self.recipe.get("game", "both"), self.mod)
+
+    def about_line(self, kind, text):
+        """One line under a command / condition box: its form and the engine's words, or what is wrong with it."""
+        from . import enginedocs as ED
+        name = ED.first_word(text)
+        if not name:
+            return "Pick... lists every one the engines have (%s)." % MB.GAME_ENGINES.get(
+                self.recipe.get("game", "both"), "")
+        e = self.catalogue()[MB.LINE_KIND[kind]].get(name)
+        if e is None:
+            return "%s is not in the engines' list - Pick... shows every one" % name
+        words = "%s %s" % (e.name, e.params) if e.params else e.name
+        return words + (" - " + e.desc if e.desc else "")
 
     def _settings(self, inner):
         f = ttk.LabelFrame(inner, text=" What the player may change later (on the Add-ons page) ", padding=6)
@@ -384,7 +427,7 @@ class ModuleBuilder(tk.Toplevel):
 
     def add_menu(self, button, group):
         ev = MB.EVENT.get(self.recipe.get("when"))
-        have = set(ev.subjects) if ev else set()
+        have = set(MB.event_subjects(ev, self.recipe.get("game", "both"), self.mod) or ev.subjects) if ev else set()
         m = tk.Menu(self, tearoff=False)
         for p in (MB.CONDITIONS if group == "ifs" else MB.ACTIONS):
             lack = [MB.SUBJECT_WORDS[n] for n in p.needs if n not in have]
@@ -641,3 +684,128 @@ class GrowingText(tk.Text):
         except (tk.TclError, TypeError, IndexError):
             return
         self.configure(height=max(self.least, min(5, n or 1)))
+
+
+class EnginePicker(tk.Toplevel):
+    """Every console command / campaign-script command / condition / event the module's engines have, with a search:
+    the form, a sample, where it works, what it needs or brings, the engine's own words when the game has its
+    documentation folder. on_pick(entry) when Use it is pressed (or a double click)."""
+
+    def __init__(self, builder, what, on_pick):
+        from . import enginedocs as ED
+        super().__init__(builder)
+        self.builder, self.what, self.on_pick, self.ED = builder, what, on_pick, ED
+        game = builder.recipe.get("game", "both")
+        cat = ED.catalogue(game, builder.mod)
+        self.entries = list(cat[what].values())
+        self.event = cat["events"].get(getattr(MB.EVENT.get(builder.recipe.get("when")), "engine", None))
+        self.title("Pick one of the %s - %s" % (ED.KIND_WORDS[what], MB.GAME_ENGINES.get(game, game)))
+        self.geometry("1000x620")
+        self.transient(builder)
+        top = ttk.Frame(self, padding=8)
+        top.pack(fill="x")
+        ttk.Label(top, text="Find").pack(side="left")
+        self.v_find = tk.StringVar()
+        e = ttk.Entry(top, textvariable=self.v_find, width=30)
+        e.pack(side="left", padx=6)
+        e.focus_set()
+        ticks = ttk.Frame(self, padding=(8, 0, 8, 6))           # a line of their own: nothing cut at the edge
+        ticks.pack(fill="x")
+        self.v_usable = tk.BooleanVar(value=True)
+        ttk.Checkbutton(ticks, variable=self.v_usable, text="only what a module can use on the campaign map").pack(
+            anchor="w")
+        self.v_fits = tk.BooleanVar(value=what == "conditions" and self.event is not None)
+        if what == "conditions" and self.event is not None:
+            ttk.Checkbutton(ticks, variable=self.v_fits, text="only what fits '%s'" % MB.EVENT[
+                builder.recipe["when"]].label).pack(anchor="w")
+        body = ttk.Frame(self, padding=(8, 0))
+        body.pack(fill="both", expand=True)
+        left = ttk.Frame(body)
+        left.pack(side="left", fill="y")
+        self.lb = tk.Listbox(left, width=max(30, min(48, max([len(x.name) for x in self.entries] + [10]) + 2)),
+                             exportselection=False)
+        sb = ttk.Scrollbar(left, orient="vertical", command=self.lb.yview)
+        self.lb.configure(yscrollcommand=sb.set)
+        self.lb.pack(side="left", fill="y", expand=True)
+        sb.pack(side="left", fill="y")
+        self.info = tk.Text(body, wrap="word", font="TkDefaultFont", relief="flat", padx=10, pady=6, height=10)
+        self.info.pack(side="left", fill="both", expand=True, padx=(8, 0))
+        self.info.tag_configure("head", font=("", 12, "bold"))
+        self.info.tag_configure("bad", foreground="#b00")
+        self.info.tag_configure("dim", foreground="#666")
+        low = ttk.Frame(self, padding=8)
+        low.pack(fill="x")
+        self.lbl = ttk.Label(low, foreground="#555")
+        self.lbl.pack(side="left")
+        ttk.Button(low, text="Cancel", command=self.destroy).pack(side="right")
+        ttk.Button(low, text="Use it", command=self.use).pack(side="right", padx=6)
+        self.lb.bind("<<ListboxSelect>>", lambda ev: self.show())
+        self.lb.bind("<Double-1>", lambda ev: self.use())
+        for v in (self.v_find, self.v_usable, self.v_fits):
+            v.trace_add("write", lambda *a: self.fill())
+        self.fill()
+
+    def fill(self):
+        ED = self.ED
+        got = ED.search(self.entries, self.v_find.get())
+        if self.v_usable.get():
+            got = [e for e in got if e.runnable()]
+        if self.v_fits.get():
+            got = [e for e in got if not ED.missing(e, self.event)]
+        self.shown = got
+        self.lb.delete(0, "end")
+        for e in got:
+            self.lb.insert("end", e.name)
+        self.lbl.configure(text="%d of %d %s" % (len(got), len(self.entries), ED.KIND_WORDS[self.what]))
+        if got:
+            self.lb.selection_set(0)
+        self.show()
+
+    def picked(self):
+        sel = self.lb.curselection()
+        return self.shown[sel[0]] if sel and sel[0] < len(self.shown) else None
+
+    def show(self):
+        ED = self.ED
+        e = self.picked()
+        t = self.info
+        t.configure(state="normal")
+        t.delete("1.0", "end")
+        if e is None:
+            t.insert("end", "Nothing found - change the words in Find, or untick the boxes above.", "dim")
+            t.configure(state="disabled")
+            return
+        t.insert("end", e.name + "\n", "head")
+        if e.params:
+            t.insert("end", "Parameters: %s\n" % e.params)
+        if e.sample and e.sample != e.name:
+            t.insert("end", "Written like: %s\n" % e.sample)
+        if e.where:
+            t.insert("end", "Works in: %s\n" % e.where)
+        if self.what == "conditions":
+            t.insert("end", "Needs from what happened: %s\n" % (", ".join(e.needs) or "nothing - it fits every event"))
+            miss = ED.missing(e, self.event)
+            if miss:
+                t.insert("end", "'%s' does not bring %s\n" % (MB.EVENT[self.builder.recipe["when"]].label,
+                                                              " and ".join(miss)), "bad")
+        if self.what == "events":
+            t.insert("end", "Brings along: %s\n" % (", ".join(e.needs) or "nothing"))
+        t.insert("end", "Engines: %s\n" % " and ".join(ED.ENGINE_WORDS[x] for x in e.engines))
+        if not e.works:
+            t.insert("end", "The engine marks it not implemented: it does nothing.\n", "bad")
+        elif not e.runnable():
+            t.insert("end", "A module cannot use it on the campaign map (a battle or editor command, or a block "
+                            "like if ... end_if).\n", "bad")
+        t.insert("end", "\n")
+        if e.desc:
+            t.insert("end", e.desc + "\n")
+        else:
+            t.insert("end", "No description here: " + ED.DUMP_HOW + "\n", "dim")
+        t.configure(state="disabled")
+
+    def use(self):
+        e = self.picked()
+        if e is None:
+            return
+        self.on_pick(e)
+        self.destroy()

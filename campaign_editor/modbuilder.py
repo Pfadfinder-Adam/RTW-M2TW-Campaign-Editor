@@ -66,7 +66,8 @@ class Part:
     """One condition or action: its key, plain label, the subjects it needs and its fields.
     fields: [(name, kind, label, default)] - kind: 'int', 'signed', 'percent', 'text', 'long' (a longer text),
     'op', 'turn_op', 'who', 'to', 'stance', 'names:<what>' (a list from the mod: factions, towns, units, chains,
-    levels, traits, ancillaries) or 'name:<what>' (one name)."""
+    levels, traits, ancillaries), 'name:<what>' (one name), 'cond' (a condition line of the engines' list) or
+    'cmd:console' / 'cmd:commands' (a console / campaign-script command line of the engines' list)."""
 
     def __init__(self, key, label, needs, fields, help=""):
         self.key, self.label, self.needs, self.fields, self.help = key, label, needs, fields, help
@@ -86,6 +87,10 @@ CONDITIONS = [
          "a building chain of export_descr_buildings.txt"),
     Part("old_owner", "the old owner is", (T,), [("v", "who", "", "computer"),
                                                  ("names", "names:factions", "factions", [])]),
+    Part("game", "a game condition (any of the engine's)", (), [("line", "cond", "condition", "")],
+         "any condition of the engines' own list (Pick... shows them all), checked against what just happened - "
+         "like I_TurnNumber > 5, FactionType england, SettlementName London, Trait GoodCommander > 0; 'not' in "
+         "front turns it round; {town} {faction} {owner} {general} {turn} {people} are filled in"),
 ]
 CONDITION = {c.key: c for c in CONDITIONS}
 
@@ -116,8 +121,12 @@ ACTIONS = [
          "the game's own event scroll, to the player"),
     Part("log", "write a line in the game's log", (), [("text", "text", "", "")],
          "{town} {faction} {owner} {general} {turn} {people} are filled in"),
-    Part("console", "run a console command (for experts)", (), [("text", "text", "", "")],
-         "like the game's console: add_money egypt 500 - {town} {faction} {owner} {general} {turn} are filled in"),
+    Part("console", "run a console command (for experts)", (), [("text", "cmd:console", "command", "")],
+         "any command of the game's console (Pick... shows them all), like add_money egypt 500 or kill_character "
+         "\"{general}\" Battle - {town} {faction} {owner} {general} {turn} {people} are filled in"),
+    Part("script", "run a campaign-script command (for experts)", (), [("text", "cmd:commands", "command", "")],
+         "any one-line command of campaign_script.txt (Pick... shows them all), like give_trait or "
+         "set_event_counter - {town} {faction} {owner} {general} {turn} {people} are filled in"),
 ]
 ACTION = {a.key: a for a in ACTIONS}
 PLACEHOLDERS = ("town", "faction", "owner", "general", "turn", "people")
@@ -234,6 +243,8 @@ def condition_words(it):
         return "the town is the faction's capital"
     if k == "has_chain":
         return "the town has a %s building" % (it.get("v") or "(no chain picked)")
+    if k == "game":
+        return "the game's condition '%s' holds" % (it.get("line") or "(none written)")
     return k
 
 
@@ -272,6 +283,8 @@ def action_words(it):
         return "the game's log gets the line '%s'" % it["text"]
     if k == "console":
         return "the console runs '%s'" % it["text"]
+    if k == "script":
+        return "the campaign script runs '%s'" % it["text"]
     return k
 
 
@@ -330,7 +343,15 @@ def problems(recipe, mod=None, names=None):
         return out
     if not recipe.get("dos"):
         out.append("DO: add at least one action")
-    have = set(ev.subjects)
+    game = recipe.get("game", "both")
+    brings = event_subjects(ev, game, mod)
+    if brings is None:
+        only = [g for g in ("rome", "medieval2") if event_subjects(ev, g, mod) is not None]
+        out.append("WHEN: '%s' is not an event of %s%s" % (
+            ev.label, GAME_ENGINES.get(game, game), " - make the module for %s only, or pick another" % (
+                "Rome" if only == ["rome"] else "Medieval II") if len(only) == 1 else ""))
+        brings = ev.subjects
+    have = set(brings)
     names_cache = {}
 
     def known(what):
@@ -359,9 +380,16 @@ def problems(recipe, mod=None, names=None):
                         out.append("%s %d (%s): %s is 0 or more" % (word, n, part.label, what))
                     elif kind == "percent" and not 1 <= v <= 100:
                         out.append("%s %d (%s): a share from 1 to 100" % (word, n, part.label))
-                if kind in ("text", "long") and part.key in ("message", "log", "console") and \
+                if kind in ("text", "long") and part.key in ("message", "log") and \
                         not str(v or "").strip() and (part.key != "message" or name == "title"):
                     out.append("%s %d (%s): write the %s" % (word, n, part.label, label or "text"))
+                if kind == "cond" or kind.startswith("cmd:"):
+                    if not str(v or "").strip():
+                        out.append("%s %d (%s): write the %s - or Pick... one" % (word, n, part.label,
+                                                                                   label or "line"))
+                    else:
+                        out += ["%s %d (%s): %s" % (word, n, part.label, x)
+                                for x in line_problems(kind, str(v), recipe, ev, mod)]
                 if kind == "to" and v == "old" and T not in have:
                     out.append("%s %d (%s): '%s' has no old owner" % (word, n, part.label, ev.label))
                 if kind.startswith("name:"):
@@ -384,6 +412,60 @@ def problems(recipe, mod=None, names=None):
         if field_kind(recipe, path) not in SETTABLE:
             out.append("a setting points at nothing (%s) - tick it again" % path)
     return out
+
+
+LINE_KIND = {"cond": "conditions", "cmd:console": "console", "cmd:commands": "commands"}
+
+
+def event_subjects(ev, game="both", mod=None):
+    """What the event brings along for a module of game ('both': what BOTH engines' payloads carry - REX's town
+    taken has no old owner, its unit trained no unit), by the engines' own event list; None when the engine(s) have no
+    such event (REX has no SettlementUpgraded). Without the editor's list: the event's own subjects."""
+    from . import enginedocs as ED
+    events = ED.catalogue(game, mod)["events"]
+    if not events:
+        return ev.subjects
+    e = events.get(ev.engine)
+    if e is None:
+        return None
+    got = set(ED.subjects_of(e))
+    return tuple(x for x in ev.subjects if x in got)
+GAME_ENGINES = {"both": "REX and M2EX (both must have it)", "rome": "REX", "medieval2": "M2EX"}
+
+
+def line_problems(kind, line, recipe, ev=None, mod=None):
+    """[plain words] wrong with a condition / command line by the engines' own list: a name neither engine has (for a
+    module of both games: one engine lacks), one the engine marks not implemented, a console command of battles only,
+    a block command (if ... end_if), a condition of battles only or one needing what the event does not bring. Its
+    parameters are not checked here (the engine says in the game's log when it cannot read them)."""
+    from . import enginedocs as ED
+    what = LINE_KIND[kind]
+    game = recipe.get("game", "both")
+    cat = ED.catalogue(game, mod)
+    have = cat[what]
+    if not have:                                      # the editor's list is missing: nothing to check against
+        return []
+    name = ED.first_word(line)
+    e = have.get(name)
+    if e is None:
+        low = {k.lower(): k for k in have}
+        if name.lower() in low:
+            return ["write it %s (the engines tell the letters apart)" % low[name.lower()]]
+        return ["%s is not one of the %s of %s" % (name, ED.KIND_WORDS[what], GAME_ENGINES.get(game, game))]
+    if not e.works:
+        return ["the engine marks %s as not implemented - it would do nothing" % name]
+    if not e.runnable():
+        if what == "console":
+            return ["%s works only in %s, not on the campaign map" % (name, e.where or "battles")]
+        if what == "commands":
+            return ["%s belongs to the flow of campaign_script.txt (a block, a jump or a wait) - a module does "
+                    "that itself: its IF lines, and each event that fires" % name]
+        return ["%s is checked only in battle" % name]
+    if what == "conditions" and ev is not None:
+        miss = ED.missing(e, cat["events"].get(ev.engine))
+        if miss:
+            return ["%s needs %s, which '%s' does not bring" % (name, " and ".join(miss), ev.label)]
+    return []
 
 
 def _faction_field_unused(part, it, name):
@@ -520,6 +602,8 @@ def _cond_code(it, i, val):
         return "mb_is_capital(c.settlement, c.faction)"
     if k == "has_chain":
         return "mb_has_chain(c.settlement, %s)" % _sq(it["v"])
+    if k == "game":
+        return "mb_condition(mb_fill(%s, c))" % _sq(it["line"].strip())
     raise ValueError("unknown condition %s" % k)
 
 
@@ -557,6 +641,8 @@ def _act_code(it, i, val, key, msg):
         return ["mb_log(mb_fill(%s, c))" % v("text")]
     if k == "console":
         return ["mb_console_line(mb_fill(%s, c))" % v("text")]
+    if k == "script":
+        return ["mb_script_line(mb_fill(%s, c))" % v("text")]
     raise ValueError("unknown action %s" % k)
 
 
@@ -767,6 +853,38 @@ local function mb_console_line(line) {
         }
     }
     return mb_console(verb, rest)
+}
+
+// One condition line of the engines' own list (campaign_script's), checked against the event that fired.
+local function mb_condition(line) {
+    try {
+        return ::game.evaluateCondition(line) == true
+    } catch (err) {
+        mb_log("condition '" + line + "' could not be checked: " + err)
+    }
+    return false
+}
+
+// One campaign-script command (one line) through the engine's own parser; what it did goes to the log.
+local function mb_script_line(line) {
+    local verb = line
+    local rest = ""
+    foreach (i, ch in line) {
+        if (ch == ' ') {
+            verb = line.slice(0, i)
+            rest = line.slice(i + 1)
+            break
+        }
+    }
+    local ran = false
+    try {
+        ran = ::game.runScriptCommand(verb, rest)
+    } catch (err) {
+        mb_log(line + " failed: " + err)
+        return false
+    }
+    mb_log(line + (ran == false ? " - the engine did not run it (check the line)" : ""))
+    return ran != false
 }
 
 local function mb_add_money(f, n) {
