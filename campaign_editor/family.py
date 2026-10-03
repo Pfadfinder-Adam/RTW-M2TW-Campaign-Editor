@@ -374,9 +374,44 @@ def limit_warnings(mod, tree, changes, people, renames=None, old_tree=None):
     return out
 
 
+def _campaign_db_children(plan, tree):
+    """Medieval II: descr_campaign_db.xml <max_number_of_children> (4 in vanilla) raised to the most children one
+    parent has in this tree - a fifth child made the game stop reading descr_strat.txt at the family's relative
+    line (the author's test mod: France's Philip has four). The game's copy goes into the mod with the change."""
+    import os
+    from .campaignrules import apply as apply_rules, game_data, read
+    from .moddata import _ci
+    kids = {}
+    for father, wife, ks in tree or []:
+        for parent in (father, wife):
+            if parent:
+                kids.setdefault(parent, set()).update(ks)
+    most = max((len(k) for k in kids.values()), default=0)
+    name = "descr_campaign_db.xml"
+    own = _ci(plan.mod.data, name)
+    game = game_data(plan.mod)
+    base = _ci(game, name) if game else None
+    path = own or base
+    if not most or not path:
+        return
+    f = plan.edit(own) if own else None
+    rule = next((r for r in read(path, f) if r.key == "max_number_of_children"), None)
+    try:
+        have = int(rule.value) if rule else None
+    except ValueError:
+        have = None
+    if have is not None and most > have:
+        apply_rules(plan, name, {rule: str(most)}, own, base)
+        plan.note(None, "a parent has %d children: %s max_number_of_children %d -> %d (the game stops reading "
+                        "descr_strat.txt at a family with more)" % (most, os.path.basename(path), have, most))
+
+
 def _engine_settings(plan, tree, changes):
-    """REX / M2EX: max_num_ancillaries / max_num_children in the mod's descr_ex.txt raised to what this edit needs."""
-    from .limits import engine_of, ex_setting, raise_setting
+    """REX / M2EX: max_num_ancillaries / max_num_children in the mod's descr_ex.txt raised to what this edit needs;
+    Medieval II (any exe): the children limit of descr_campaign_db.xml."""
+    from .limits import engine_of, ex_setting, game_kind, raise_setting
+    if game_kind(plan.mod) == "medieval2":
+        _campaign_db_children(plan, tree)
     if not engine_of(plan.mod):
         return
     ancs = max((len(ch.get("ancillaries") or []) for ch in (changes or {}).values()), default=0)

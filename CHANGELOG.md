@@ -234,6 +234,12 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Medieval II: a fifth child broke the campaign's start** (the author's test mod: France's Philip has four):
+  `descr_campaign_db.xml` allows `max_number_of_children` (4 in vanilla) and the game stops reading
+  `descr_strat.txt` at a family with more. Adding a child now raises the number in the same write (the game's copy
+  goes into the mod), and Check mod files names a family over it.
+- **Reports: the middle of a long game log kept each error's first line only** - the game writes what went wrong on
+  the next line ("Script Error ... at line 3071" / "Population of 2600 is too high for a village"); both are kept.
 - **The logs folder grew to tens of MB** (the author: 61 MB): on every close the session folder took a whole copy
   of the game's `system.log.txt` (which can grow to 60 MB). It now keeps what a report would send (the log's start,
   the middle's errors once each, its end), no second copy of a game log that has not changed since, and the oldest

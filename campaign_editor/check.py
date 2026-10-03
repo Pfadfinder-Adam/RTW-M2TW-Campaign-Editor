@@ -86,6 +86,26 @@ def check_mod(mod, campaign, deep=False, progress=None):
             if why:
                 bad("%s (%s): %s - the game stops reading descr_strat.txt there (towns, armies and diplomacy after "
                     "it are lost); set the population or the level on the Settlements tab" % (st.region, fb.name, why))
+    from .limits import game_kind
+    if game_kind(mod) == "medieval2":
+        from .campaignrules import game_data, read as read_rules
+        from .moddata import _ci
+        from . import family as FM
+        gd = game_data(mod)
+        cdb = _ci(mod.data, "descr_campaign_db.xml") or (_ci(gd, "descr_campaign_db.xml") if gd else None)
+        rule = next((r for r in read_rules(cdb) if r.key == "max_number_of_children"), None) if cdb else None
+        most_allowed = int(rule.value) if rule is not None and str(rule.value).isdigit() else None
+        if most_allowed is not None:
+            for fb in s.factions:
+                try:
+                    tree = FM.read(strat_f, fb.name)["tree"]
+                except Exception:
+                    continue
+                for father, wife, kids in tree:
+                    if len(kids) > most_allowed:
+                        bad("%s: %s has %d children, descr_campaign_db.xml max_number_of_children is %d - the game "
+                            "stops reading descr_strat.txt at that family's relative line; raise the number (Tools > "
+                            "Campaign rules) or take a child out" % (fb.name, father, len(kids), most_allowed))
     no_culture = [n for n, c in facs if not c]
     if no_culture:
         bad("no culture line for: %s" % ", ".join(no_culture))

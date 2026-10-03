@@ -91,13 +91,26 @@ def _read_tail(path, cap=TEXT_CAP):
         fh.seek(len(head))
         seen, order, kept = {}, [], 0
         left = tail_at - len(head)
-        while left > 0:
-            line = fh.readline(min(left, 1 << 20))
-            if not line:
-                break
-            left -= len(line)
+        pending = None
+        while left > 0 or pending is not None:
+            if pending is not None:
+                line, pending = pending, None
+            else:
+                line = fh.readline(min(left, 1 << 20))
+                if not line:
+                    break
+                left -= len(line)
             if IMPORTANT.search(line):
                 key = re.sub(rb"^[\d:.]+\s*", b"", line.strip())[:300]   # the same message at another time once
+                # the game writes what went wrong on the next line ("Script Error in ... line 702" / "Population of
+                # 2600 is too high for a village") - kept with it, else the middle's errors said nothing
+                if left > 0:
+                    nxt = fh.readline(min(left, 1 << 20))
+                    left -= len(nxt)
+                    if nxt.strip() and not re.match(rb"^\d\d:\d\d:\d\d", nxt) and not nxt.lstrip().startswith(b"at "):
+                        key = key + b"  |  " + nxt.strip()[:300]
+                    elif nxt:
+                        pending = nxt
                 if key in seen:
                     seen[key] += 1
                 elif kept < middle_cap:

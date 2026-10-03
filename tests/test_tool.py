@@ -3695,6 +3695,22 @@ building smith
         restore(mod, backups(mod)[0])
         self.assertFalse(os.path.exists(os.path.join(tex, "spearman_beta.tga")))
 
+    def test_medieval2_children_limit_raised_with_the_family(self):
+        """Medieval II: descr_campaign_db.xml <max_number_of_children> (4 in vanilla) - a fifth child made the game
+        stop reading descr_strat.txt at the family's relative line (the author's test mod: France's Philip). A tree
+        that needs more raises it in the same write; one within it leaves the file alone."""
+        from campaign_editor import family as FM
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_campaign_db.xml"), "<campaign_db>\n  <family_tree>\n"
+              "    <max_number_of_children uint=\"4\"/>\n  </family_tree>\n</campaign_db>\n")
+        mod = ModData(self.root)
+        plan = Plan(mod, "family", "alpha", {})
+        FM._campaign_db_children(plan, [["Philip", "Bertrada", ["A", "B", "C", "D"]]])
+        self.assertEqual(plan.changed_files(), [])
+        FM._campaign_db_children(plan, [["Philip", "Bertrada", ["A", "B", "C", "D", "E"]]])
+        f = plan.edit(os.path.join(d, "descr_campaign_db.xml"))
+        self.assertIn('<max_number_of_children uint="5"/>', "\n".join(f.texts()))
+
     def test_banner_symbol_dragged_snapped_and_sized(self):
         """The Banner window moves the symbol with the mouse: its middle snaps to the banner's own grid (quarters,
         eighths, sixteenths) or goes freely, it stays on its banner, the wheel sizes it round its middle."""
@@ -5618,10 +5634,14 @@ building smith
                 fh.write("10:00:01.%03d [ai.agents] [info] thinking %d\n" % (k % 1000, k))
                 if k % 500 == 0:
                     fh.write("10:00:02.%03d [core.assert] [fatal] ERROR: settlement.cpp(4326)\n" % (k % 1000))
+                if k == 1700:          # the game's words come on the next line - kept with the error
+                    fh.write("10:00:03.000 [script.err] [error] Script Error in descr_strat.txt, at line 3071\n"
+                             "Population of 2600 is too high for a village - max is 1500\n")
             fh.write("10:00:09.000 [game] [info] the newest line\n")
         got = report._read_tail(big, cap=30000)
         self.assertIn("unknown faction", got)                          # the start
         self.assertRegex(got, r"settlement\.cpp\(4326\)  \(x5\)")       # the middle's errors, once, counted
+        self.assertIn("at line 3071  |  Population of 2600 is too high for a village", got)
         self.assertIn("the newest line", got)                          # the end
         self.assertLess(len(got), 40000)
         data = report.build_zip(list(texts.items()), "it crashed at C:\\Users\\Bob\\x", "disc#1",
