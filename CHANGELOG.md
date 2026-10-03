@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **Test mod**: a faction that splits off another in a revolt (the third way a faction comes later - all five
+  engines, Rome, BI, REX, Medieval II and M2EX, read it); the events fall on turns 2 and 4.
 - **The mod at a glance in the log**: every Load writes a short picture of the mod into the editor's log - the game
   and engine, its campaigns, factions and cultures, regions and who holds the towns, the map's size, how many units
   and building chains, and which of its files are its own. A report then shows what the mod is, without any of its
@@ -238,6 +240,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **New events never came in the game (Rome)**: a new event was written at the end of `descr_events.txt`, after
+  events of later years - the games read the events as a queue in date order, so it never fired. New events now go
+  in date order (both games). The Events window shows beside each date the turn and the year it means (from the
+  campaign's start date and timescale), and Medieval II's date is said right: years from the start, not a turn.
 - **A historic event without its text stopped the game** ("event_manager: description_string", the author's test
   mod, both games): a historic event now always gets its scroll's title and text (its name when none is given).
 - **Medieval II: a fifth child broke the campaign's start** (the author's test mod: France's Philip has four):

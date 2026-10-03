@@ -33,7 +33,7 @@ class EventsWindow(tk.Toplevel):
             "place. The date is %s. The title and text players see are in historic_events.txt. Preview, then "
             "Write it in (a backup first, Tools > Restore undoes it)." % (
                 "years from the start and optionally summer or winter, like '14 winter'" if self.rome else
-                "a turn, or two turns - the game picks one between them, like '210 220'"))).pack(fill="x")
+                "years from the start, or two - the game picks one between them, like '210 220'"))).pack(fill="x")
         body = ttk.Frame(top)
         body.pack(fill="both", expand=True, pady=6)
         left = ttk.Frame(body)
@@ -147,7 +147,10 @@ class EventsWindow(tk.Toplevel):
         cbo["values"] = facs
         cbo.grid(row=2, column=1, sticky="w")
         ttk.Label(fr, text="event date").grid(row=3, column=0, sticky="w", pady=2)
-        ttk.Entry(fr, textvariable=v_date, width=14).grid(row=3, column=1, sticky="w")
+        dr = ttk.Frame(fr)
+        dr.grid(row=3, column=1, sticky="w")
+        ttk.Entry(dr, textvariable=v_date, width=14).pack(side="left")
+        self._when(dr, v_date)
         ttk.Label(fr, text="event region").grid(row=4, column=0, sticky="w", pady=2)
         ttk.Combobox(fr, textvariable=v_reg, values=sorted(self.mod.regions(self.campaign)), state="readonly",
                      width=30).grid(row=4, column=1, sticky="w")
@@ -156,7 +159,7 @@ class EventsWindow(tk.Toplevel):
         ttk.Label(fr, foreground="#666", wraplength=460, justify="left", text=(
             "A faction that comes in later must hold no towns and no characters (give them away first). The date is "
             "%s. Written with Write it in below." % ("years from the start and optionally summer or winter" if
-                                                     self.rome else "a turn, or two turns"))).grid(
+                                                     self.rome else "years from the start, or two"))).grid(
             row=6, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         def ok():
@@ -229,8 +232,9 @@ class EventsWindow(tk.Toplevel):
         ttk.Label(r, text="Date", width=14).pack(side="left")
         v_date = tk.StringVar(value=e["date"])
         ttk.Entry(r, textvariable=v_date, width=14).pack(side="left")
-        ttk.Label(r, text="  years [summer|winter]" if self.rome else "  turn [turn]", foreground="#555").pack(
+        ttk.Label(r, text="  years [summer|winter]" if self.rome else "  years [years]", foreground="#555").pack(
             side="left")
+        self._when(r, v_date)
         r = ttk.Frame(self.form)
         r.pack(fill="x", pady=2)
         ttk.Label(r, text="Place (x, y)", width=14).pack(side="left")
@@ -364,9 +368,21 @@ class EventsWindow(tk.Toplevel):
                                       parent=self)
         if not kind:
             return
-        self.new.append({"kind": kind.strip(), "name": name, "date": "1" if not self.rome else "1 summer",
+        self.new.append({"kind": kind.strip(), "name": name, "date": EV.turn_date(self.mod, self.campaign, 2),
                          "position": None})
         self.fill(name)
+
+    def _when(self, parent, var):
+        """A label beside a date: the turn and the year it means (start_date / timescale of descr_strat.txt)."""
+        lbl = ttk.Label(parent, foreground="#555")
+        lbl.pack(side="left", padx=6)
+
+        def show(*_):
+            w = EV.when(self.mod, self.campaign, var.get().strip())
+            lbl.configure(text=("= " + w) if w else "")
+        var.trace_add("write", show)
+        show()
+        return lbl
 
     def remove(self):
         name = (self.tv.selection() or [None])[0]

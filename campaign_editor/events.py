@@ -1,8 +1,8 @@
 """The campaign's events (world/maps/campaign/<campaign>/descr_events.txt), both games:
 
     event   plague      plague_in_macedonia         (kind, then the name: the key of its texts)
-    date    14 winter                               (Rome: years from the start and a season; Medieval II: a
-    position    138, 67                              turn, or two turns - a random one between them)
+    date    14 winter                               (Rome: years from the start and a season; Medieval II: years
+    position    138, 67                              from the start, or two - a random one between them)
     movie   event/gunpowder_invented.bik            (optional)
 
 Kinds seen in the games' files: historic (a message only), plague, volcano, earthquake; the engines know more
@@ -63,7 +63,7 @@ def read(f):
 
 
 def date_problem(date, rome):
-    """None, or why the game would not read the date: Rome 'years [season]', Medieval II 'turn [turn]'."""
+    """None, or why the game would not read the date: Rome 'years [season]', Medieval II 'years [years]'."""
     t = (date or "").split()
     if not t or not t[0].isdigit():
         return "a date starts with a number (%s)" % ("years from the start" if rome else "the turn")
@@ -71,8 +71,78 @@ def date_problem(date, rome):
         if len(t) > 2 or (len(t) == 2 and t[1] not in ("summer", "winter")):
             return "Rome's date is years from the start and optionally summer or winter, like '14 winter'"
     elif len(t) > 2 or (len(t) == 2 and not t[1].isdigit()):
-        return "Medieval II's date is a turn, or two turns (a random one between them), like '120' or '210 220'"
+        return "Medieval II's date is years from the start, or two numbers (a random year between them), like '120' or '210 220'"
     return None
+
+
+def date_key(date, rome):
+    """A number to sort dates by (the earliest first): Rome years x 2 (+1 for winter), Medieval II the first year.
+    Both games read descr_events.txt as a queue in date order - an event put after a later one never fires (the
+    author's test mod: Rome's events written at the file's end never came)."""
+    t = (date or "").split()
+    if not t or not t[0].isdigit():
+        return None
+    return int(t[0]) * 2 + (1 if rome and len(t) > 1 and t[1] == "winter" else 0) if rome else int(t[0])
+
+
+def calendar(mod, campaign):
+    """(start year, start season, years per turn) of the campaign from descr_strat.txt: start_date '-270 summer' /
+    '1080 summer', timescale (Medieval II; Rome's turn is half a year unless the file says otherwise)."""
+    rome = _rome(mod)
+    year, season, scale = (-270 if rome else 1080), "summer", (0.5 if rome else 2.0)
+    try:
+        f = mod.load(mod.campaign_file(campaign, "descr_strat.txt"))
+    except Exception:
+        return year, season, scale
+    for l in f.texts():
+        t = tokens(l)
+        if t[:1] == ["start_date"] and len(t) > 1:
+            try:
+                year = int(t[1])
+            except ValueError:
+                pass
+            season = t[2] if len(t) > 2 else season
+        elif t[:1] == ["timescale"] and len(t) > 1:
+            try:
+                scale = float(t[1]) or scale
+            except ValueError:
+                pass
+        elif t[:1] == ["faction"]:
+            break
+    return year, season, scale
+
+
+def year_words(year):
+    return "%d BC" % -year if year < 0 else ("%d AD" % year if year < 1000 else str(year))
+
+
+def when(mod, campaign, date):
+    """'turn 4, 269 BC winter' - the turn and the year a date of descr_events.txt means ('' when not a date)."""
+    rome = _rome(mod)
+    if date_problem(date, rome):
+        return ""
+    start, season, scale = calendar(mod, campaign)
+    out = []
+    for part in ([date] if rome else date.split()[:2]):
+        t = part.split()
+        years = int(t[0])
+        if rome:
+            half = years * 2 + (1 if len(t) > 1 and t[1] == "winter" else 0) + (1 if season == "winter" else 0)
+            turn = int(round(half * 0.5 / scale)) + 1
+            out.append("turn %d, %s %s" % (turn, year_words(start + half // 2), "winter" if half % 2 else "summer"))
+        else:
+            turn = int(years / scale) + 1
+            out.append("turn %d, year %s" % (turn, year_words(start + years)))
+    return " to ".join(out)
+
+
+def turn_date(mod, campaign, turn):
+    """The date text of descr_events.txt for a turn (1 = the first): Rome 'years season', Medieval II 'years'."""
+    start, season, scale = calendar(mod, campaign)
+    if _rome(mod):
+        half = int(round((turn - 1) * scale * 2)) + (1 if season == "winter" else 0)
+        return "%d %s" % (half // 2, "winter" if half % 2 else "summer")
+    return str(int(round((turn - 1) * scale)))
 
 
 def later_factions(mod, campaign):
@@ -158,7 +228,16 @@ def apply(plan, campaign, changes):
         lines = ["", "event\t%s\t%s" % (ev.get("kind") or "historic", name), "date\t%s" % ev["date"].strip()]
         if ev.get("position"):
             lines.append("position\t%d, %d" % tuple(ev["position"]))
-        f.insert(len(f.raw) - (1 if f.raw and not f.text(len(f.raw) - 1).strip() else 0), lines)
+        # in date order: the games read the events as a queue (date_key)
+        key = date_key(ev["date"], rome)
+        later = [e for e in read(f) if date_key(e["date"], rome) is not None and date_key(e["date"], rome) > key]
+        if later:
+            at = later[0]["span"][0]
+            while at > 0 and f.text(at - 1).lstrip().startswith(";"):
+                at -= 1                                 # the comment lines right above the later event stay on it
+            f.insert(at, lines[1:] + [""])
+        else:
+            f.insert(len(f.raw) - (1 if f.raw and not f.text(len(f.raw) - 1).strip() else 0), lines)
         have.add(name.lower())
         if (ev.get("kind") or "historic") == "historic":
             # the game shows a historic event's title and body on its scroll and stops on a missing one

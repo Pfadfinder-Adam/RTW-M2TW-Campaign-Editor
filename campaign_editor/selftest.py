@@ -43,6 +43,11 @@ class Ctx:
         taken = {n.lower() for n, _ in mod.factions()}
         self.new = _free_name("ce_test", taken)
         self.later = _free_name("ce_test_later", taken | {self.new})
+        self.split = _free_name("ce_test_split", taken | {self.new, self.later})
+        # a faction of another culture than the template: its units and buildings are surely not the clone's
+        cult = dict(mod.factions())
+        self.foreign = next((n for n, cu in mod.factions() if n != "slave" and cu != cult.get(self.template) and
+                             n not in (self.new, self.later, self.split)), self.other)
         self.logo = None
 
     def mod(self):
@@ -175,9 +180,10 @@ def s_new_faction(c, mod):
       "{later} is not on the map at the start")
 def s_later(c, mod):
     from .build import build
+    from .events import turn_date
     return build(mod, c.campaign, c.edited, c.later, {
         "display_name": "Rising Test", "short_name": "Rising", "adjective": "Rising", "raise_faction_limit": True,
-        "start": {"way": "event", "date": "20" if c.m2 else "20 summer", "region": towns_of(c, mod, c.edited)[0],
+        "start": {"way": "event", "date": turn_date(mod, c.campaign, 6), "region": towns_of(c, mod, c.edited)[0],
                   "re_emergent": True, "denari": 3000, "regions": [], "leader": None, "playable": False}})
 
 
@@ -188,6 +194,16 @@ def s_later_way(c, mod):
     plan = Plan(mod, "later", c.later, {})
     E.apply(plan, c.campaign, c.later, "shadow", of=c.edited, re_emergent=True)
     return plan
+
+
+@step("A faction that splits off {other} in a revolt: a clone of {other}, dead at the start",
+      "{split} is not on the map at the start; when towns of {other} revolt they go to {split}")
+def s_split(c, mod):
+    from .build import build
+    return build(mod, c.campaign, c.other, c.split, {
+        "display_name": "Split Test", "short_name": "Split", "adjective": "Splitting", "raise_faction_limit": True,
+        "start": {"way": "revolt", "of": c.other, "denari": 2000, "regions": [], "leader": None,
+                  "playable": False}})
 
 
 @step("Edit faction {edited}: names, description, colours, money, a garrison, a rebel town taken",
@@ -545,6 +561,24 @@ def s_roster(c, mod):
     return edit(mod, c.campaign, c.edited, {"roster": ch})
 
 
+@step("Units and buildings of another faction moved over: {new} gets units and building levels of {foreign}",
+      "{new} recruits {foreign}'s units in its towns (with cards of its own) and builds {foreign}'s buildings")
+def s_roster_other(c, mod):
+    from . import roster as R
+    from .edit import edit
+    theirs, mine = R.roster(mod, c.foreign), R.roster(mod, c.new)
+    has = {u["type"] for u in mine["units"] if u["has"]}
+    units = [u["type"] for u in sorted(theirs["units"], key=lambda u: u["category"] not in ("infantry", "cavalry"))
+             if u["has"] and u["type"] not in has and u["recruit_any"]][:3]
+    has_b = {(b["chain"], b["level"]) for b in mine["buildings"] if b["has"]}
+    blds = [(b["chain"], b["level"]) for b in theirs["buildings"] if b["has"] and (b["chain"], b["level"]) not in has_b]
+    ch = {"unit:" + u: True for u in units}
+    ch.update({"building:%s:%s" % b: True for b in blds[:2]})
+    if not ch:
+        raise Skip("%s has every unit and building of %s already" % (c.new, c.foreign))
+    return edit(mod, c.campaign, c.new, {"roster": ch})
+
+
 @step("Campaign-map figures: {edited}'s agent shown by another model", "its agent's figure on the campaign map")
 def s_figures(c, mod):
     from . import stratmodels as SM
@@ -627,7 +661,8 @@ def s_voice(c, mod):
     return plan
 
 
-@step("Events: a historic message and an earthquake near {edited}'s capital", "the event scrolls on turn 2 and 4")
+@step("Events: a historic message and an earthquake near {edited}'s capital",
+      "the message scrolls on turn 2, the earthquake on turn 4")
 def s_events(c, mod):
     from . import events as EV
     if not EV.path_of(mod, c.campaign):
@@ -635,9 +670,10 @@ def s_events(c, mod):
     x, y = mod.city_tiles(c.campaign)[towns_of(c, mod, c.edited)[0]]
     plan = Plan(mod, "e", "e", {})
     EV.apply(plan, c.campaign, {"new": [
-        {"kind": "historic", "name": "ce_test_news", "date": "2" if c.m2 else "2 summer", "position": [x, y],
+        {"kind": "historic", "name": "ce_test_news", "date": EV.turn_date(mod, c.campaign, 2), "position": [x, y],
          "title": "Test news", "body": "The test mod's event."},
-        {"kind": "earthquake", "name": "ce_test_quake", "date": "4" if c.m2 else "4 winter", "position": [x, y]}]})
+        {"kind": "earthquake", "name": "ce_test_quake", "date": EV.turn_date(mod, c.campaign, 4),
+         "position": [x, y]}]})
     return plan
 
 
@@ -782,6 +818,7 @@ def run(data, campaign, progress=None, make=True):
     os.makedirs(work, exist_ok=True)
     c = Ctx(data, campaign, work)
     names = {"template": c.template, "edited": c.edited, "other": c.other, "new": c.new, "later": c.later,
+             "split": c.split, "foreign": c.foreign,
              "addon": "Raze Settlement (M2EX)" if c.m2 else "Sack Settlement (REX)"}
     before = problems(ModData(data), campaign)
     results = []
@@ -838,7 +875,8 @@ def report(data, campaign, names, results):
     ok = sum(1 for r in results if r["status"] == "OK" and not r["new_problems"])
     out = ["The editor's test mod - every feature, one step each", "",
            "Mod: %s" % os.path.dirname(data), "Campaign: %s" % campaign,
-           "Factions: clone %(template)s -> %(new)s, edited %(edited)s, later %(later)s, other %(other)s" % names,
+           "Factions: clone %(template)s -> %(new)s, edited %(edited)s, later %(later)s, split %(split)s, "
+           "units moved from %(foreign)s, other %(other)s" % names,
            "%d of %d steps fine (written, no new problem in Check mod files)" % (ok, len(results)), "",
            "Start the mod in the game (its Start .bat), play a few turns and a battle, look at what each step says, "
            "then send Report a bug with the game's log ticked.", ""]

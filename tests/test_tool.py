@@ -3467,6 +3467,7 @@ building smith
         (The whole run is tried on both games' real files by check-scripts/testmod.py.)"""
         from campaign_editor import selftest as ST
         names = {"template": "alpha", "edited": "beta", "other": "gamma", "new": "ce_test", "later": "ce_test_later",
+                 "split": "ce_test_split", "foreign": "delta",
                  "addon": "Sack Settlement (REX)"}
         self.assertGreaterEqual(len(ST.STEPS), 30)
         for title, see, fn in ST.STEPS:
@@ -4921,6 +4922,15 @@ building smith
         quiet = Plan(mod, "e", "e", {})
         EV.apply(quiet, "test", {"new": [{"kind": "historic", "name": "hush", "date": "31", "title": "Hush"}]})
         self.assertIn("{HUSH_BODY}\tHush", quiet.files[mod.text_file("historic_events.txt")].texts())
+        # a new event goes in date order - the games read the events as a queue (the author's Rome test mod: events
+        # written at the end, after later ones, never came); the turn and year a date means
+        early = Plan(mod, "e", "e", {})
+        EV.apply(early, "test", {"new": [{"kind": "historic", "name": "first", "date": "0 winter", "title": "F"},
+                                         {"kind": "earthquake", "name": "shake", "date": "15 summer"}]})
+        names = [e["name"] for e in EV.read(early.files[EV.path_of(mod, "test")])]
+        self.assertEqual(names, ["first", "plague_in_x", "news", "shake", "plague_in_x"])
+        self.assertEqual(EV.date_key("1 winter", True), 3)
+        self.assertEqual(EV.date_key("210 220", False), 210)
         with self.assertRaises(ValueError):
             EV.apply(Plan(mod, "e", "e", {}), "test", {"edit": {"news": {"date": "soon"}}})
         self.assertIn("plague", EV.what_it_does("plague").lower())
