@@ -51,6 +51,29 @@ EVENTS = [
     Event("comes_of_age", "a son comes of age", "CharacterComesOfAge", (F, C), "the general is the young man"),
 ]
 EVENT = {e.key: e for e in EVENTS}
+ENGINE_EVENT = "ev:"                 # a recipe's WHEN 'ev:<Name>': any event of the engines' own list
+
+
+def event_of(when, game="both", mod=None):
+    """The Event a recipe's WHEN names: one of the plain ones above, or 'ev:<Name>' - any event of the engines' own
+    list, what it brings read from its exports. None when it names nothing."""
+    if when in EVENT:
+        return EVENT[when]
+    if not isinstance(when, str) or not when.startswith(ENGINE_EVENT) or len(when) <= len(ENGINE_EVENT):
+        return None
+    name = when[len(ENGINE_EVENT):]
+    from . import enginedocs as ED
+    e = None
+    for g in (game, "medieval2", "rome"):
+        e = ED.catalogue(g, mod)["events"].get(name)
+        if e is not None:
+            break
+    if e is None:
+        return Event(when, "%s (an engine event)" % name, name, (), "an event neither engine's list knows")
+    brings = ", ".join(e.needs) or "nothing"
+    return Event(when, "%s (an engine event)" % name, name, ED.subjects_of(e),
+                 (e.desc.rstrip(".") + " - " if e.desc else "") + "one of the engines' own events (it brings: %s)"
+                 % brings)
 
 # faction picks: who a condition asks about / who an action gives to
 WHO_IS = [("player", "the player"), ("computer", "a computer faction"), ("these", "one of these factions")]
@@ -87,6 +110,11 @@ CONDITIONS = [
          "a building chain of export_descr_buildings.txt"),
     Part("old_owner", "the old owner is", (T,), [("v", "who", "", "computer"),
                                                  ("names", "names:factions", "factions", [])]),
+    Part("counter", "a remembered number", (), [("name", "counter", "named", "my_count"), ("op", "op", "", ">="),
+                                                ("v", "signed", "", 1)],
+         "a number the module keeps between turns (DO 'remember a number' / 'add to a remembered number' set it) - "
+         "0 until set; the engines keep it as an event counter, so campaign_script's I_EventCounter reads it too; "
+         "{faction} {town} in its name make one number per faction / town"),
     Part("game", "a game condition (any of the engine's)", (), [("line", "cond", "condition", "")],
          "any condition of the engines' own list (Pick... shows them all), checked against what just happened - "
          "like I_TurnNumber > 5, FactionType england, SettlementName London, Trait GoodCommander > 0; 'not' in "
@@ -117,6 +145,11 @@ ACTIONS = [
     Part("trait", "give the general a trait", (C,), [("trait", "name:traits", "trait", ""),
                                                      ("level", "int", "level", 1)]),
     Part("ancillary", "give the general a retinue member", (C,), [("anc", "name:ancillaries", "", "")]),
+    Part("counter_set", "remember a number", (), [("v", "signed", "", 0), ("name", "counter", "named", "my_count")],
+         "kept between turns and in the saved game; IF 'a remembered number' reads it"),
+    Part("counter_add", "add to a remembered number", (), [("v", "signed", "", 1),
+                                                          ("name", "counter", "named", "my_count")],
+         "below 0 takes away; a number never set starts at 0"),
     Part("message", "show a message", (), [("title", "text", "title", ""), ("body", "long", "text", "")],
          "the game's own event scroll, to the player"),
     Part("log", "write a line in the game's log", (), [("text", "text", "", "")],
@@ -200,7 +233,8 @@ def settable(recipe):
                 continue
             for name, kind, label, _ in part.fields:
                 if kind in SETTABLE:
-                    out.append(("%s.%d.%s" % (group, i, name), "%s - %s" % (part.label, label or name)))
+                    out.append(("%s.%d.%s" % (group, i, name), "%s - %s" % (part.label, label) if label else
+                                part.label))
     return out
 
 
@@ -245,6 +279,8 @@ def condition_words(it):
         return "the town has a %s building" % (it.get("v") or "(no chain picked)")
     if k == "game":
         return "the game's condition '%s' holds" % (it.get("line") or "(none written)")
+    if k == "counter":
+        return "the number '%s' %s %s" % (it.get("name") or "?", dict(OPS).get(it.get("op"), it.get("op")), it.get("v"))
     return k
 
 
@@ -285,12 +321,19 @@ def action_words(it):
         return "the console runs '%s'" % it["text"]
     if k == "script":
         return "the campaign script runs '%s'" % it["text"]
+    if k == "counter_set":
+        return "the number '%s' becomes %s" % (it.get("name") or "?", it.get("v"))
+    if k == "counter_add":
+        n = it.get("v")
+        neg = isinstance(n, int) and n < 0
+        return "the number '%s' %s by %s" % (it.get("name") or "?", "goes down" if neg else "goes up",
+                                             abs(n) if isinstance(n, int) else n)
     return k
 
 
 def plain_words(recipe):
     """The whole module in one sentence or two."""
-    ev = EVENT.get(recipe.get("when"))
+    ev = event_of(recipe.get("when"), recipe.get("game", "both"))
     head = "When %s" % (ev.label if ev else "(nothing picked)")
     ifs = [condition_words(i) for i in recipe.get("ifs", [])]
     dos = [action_words(a) for a in recipe.get("dos", [])]
@@ -342,7 +385,7 @@ def problems(recipe, mod=None, names=None):
         out.append("give the module a name")
     elif key_of(title) in BUILT_IN:
         out.append("'%s' is the name of a built-in add-on - pick another" % title)
-    ev = EVENT.get(recipe.get("when"))
+    ev = event_of(recipe.get("when"), recipe.get("game", "both"), mod)
     if ev is None:
         out.append("WHEN: pick what happens")
         return out
@@ -388,6 +431,9 @@ def problems(recipe, mod=None, names=None):
                 if kind in ("text", "long") and part.key in ("message", "log") and \
                         not str(v or "").strip() and (part.key != "message" or name == "title"):
                     out.append("%s %d (%s): write the %s" % (word, n, part.label, label or "text"))
+                if kind == "counter" and not RE_COUNTER.match(str(v or "")):
+                    out.append("%s %d (%s): name the number with letters, digits and _ (and {faction}, {town} ...)"
+                               % (word, n, part.label))
                 if kind == "cond" or kind.startswith("cmd:"):
                     if not str(v or "").strip():
                         out.append("%s %d (%s): write the %s - or Pick... one" % (word, n, part.label,
@@ -420,6 +466,7 @@ def problems(recipe, mod=None, names=None):
 
 
 LINE_KIND = {"cond": "conditions", "cmd:console": "console", "cmd:commands": "commands"}
+RE_COUNTER = re.compile(r"^(?:[A-Za-z0-9_]|\{(?:%s)\})+$" % "|".join(PLACEHOLDERS))
 
 
 def event_subjects(ev, game="both", mod=None):
@@ -508,7 +555,7 @@ def script(recipe):
         raise ValueError("; ".join(bad))
     title = recipe["title"].strip()
     key = key_of(title)
-    ev = EVENT[recipe["when"]]
+    ev = event_of(recipe["when"], recipe.get("game", "both"))
     sv = setting_vars(recipe)
     words = plain_words(recipe)
 
@@ -609,6 +656,8 @@ def _cond_code(it, i, val):
         return "mb_has_chain(c.settlement, %s)" % _sq(it["v"])
     if k == "game":
         return "mb_condition(mb_fill(%s, c))" % _sq(it["line"].strip())
+    if k == "counter":
+        return "mb_cmp(mb_counter(mb_fill(%s, c)), %s, %s)" % (_sq(it["name"]), _sq(it["op"]), v("v"))
     raise ValueError("unknown condition %s" % k)
 
 
@@ -648,6 +697,11 @@ def _act_code(it, i, val, key, msg):
         return ["mb_console_line(mb_fill(%s, c))" % v("text")]
     if k == "script":
         return ["mb_script_line(mb_fill(%s, c))" % v("text")]
+    if k == "counter_set":
+        return ["mb_set_counter(mb_fill(%s, c), %s)" % (_sq(it["name"]), v("v"))]
+    if k == "counter_add":
+        return ["mb_set_counter(mb_fill(%s, c), mb_counter(mb_fill(%s, c)) + %s)" % (_sq(it["name"]), _sq(it["name"]),
+                                                                                      v("v"))]
     raise ValueError("unknown action %s" % k)
 
 
@@ -1070,6 +1124,30 @@ local function mb_done() {
 
 local function mb_mark_done() {
     mb_store().done <- true
+}
+
+// A number kept between turns: the engines' own event counters (campaign_script's I_EventCounter reads them), and
+// a copy in the module's table of the saved game for an engine that has none.
+local function mb_counter(name) {
+    try {
+        local v = ::game.eventCounter(name)
+        if (v != null) {
+            return v
+        }
+    } catch (err) {
+    }
+    local t = mb_store()
+    return ("n_" + name) in t ? t["n_" + name] : 0
+}
+
+local function mb_set_counter(name, v) {
+    try {
+        ::game.setEventCounter(name, v)
+    } catch (err) {
+        mb_log("setEventCounter(" + name + ") failed: " + err)
+    }
+    mb_store()["n_" + name] <- v
+    mb_log("the number " + name + " is now " + v)
 }
 
 local function mb_listen(name, handler) {

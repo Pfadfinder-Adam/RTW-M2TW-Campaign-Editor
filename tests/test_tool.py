@@ -3558,6 +3558,26 @@ building smith
         self.assertEqual(ED.compose(both["console"]["add_money"], ["", "500"]), "add_money 500")
         self.assertEqual(ED.split_line('kill_character "Gaius Julius" Battle'), ["kill_character", "Gaius Julius",
                                                                                   "Battle"])
+        # any event of the engines as WHEN; numbers kept between turns
+        ev = MB.event_of("ev:SettlementTurnEnd")
+        self.assertEqual((ev.engine, ev.subjects), ("SettlementTurnEnd", ("faction", "settlement")))
+        self.assertIsNone(MB.event_of("ev:"))
+        self.assertIsNone(MB.event_of("no such thing"))
+        only_m2 = next(n for n in ED.builtin()["m2ex"]["events"] if n not in ED.builtin()["rex"]["events"])
+        n = MB.new_recipe("Count")
+        n.update(when="ev:SettlementTurnEnd", ifs=[MB.item("if", "counter", name="seen_{town}", op="<", v=3)],
+                 dos=[MB.item("do", "counter_add", v=1, name="seen_{town}"),
+                      MB.item("do", "counter_set", v=0, name="reset")])
+        self.assertEqual(MB.problems(n), [])
+        self.assertIn("the number 'seen_{town}' is below 3", MB.plain_words(n))
+        text = MB.script(n)
+        self.assertIn('mb_listen("SettlementTurnEnd", mb_run)', text)
+        self.assertIn('mb_set_counter(mb_fill("seen_{town}", c), mb_counter(mb_fill("seen_{town}", c)) + 1)', text)
+        self.assertIn("::game.setEventCounter(name, v)", text)
+        self.assertTrue(any("name the number" in x for x in MB.problems(dict(
+            n, dos=[MB.item("do", "counter_set", v=1, name="two words")]))))
+        self.assertTrue(any("make the module for Medieval II only" in x for x in MB.problems(dict(
+            n, when="ev:" + only_m2, ifs=[], dos=[MB.item("do", "counter_set", v=1, name="x")]))))
 
     def test_faction_emblem_one_picture_everywhere(self):
         """One emblem picture -> every emblem picture in its own size; mouse over brighter, greyed out grey, selected

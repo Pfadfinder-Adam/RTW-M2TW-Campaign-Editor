@@ -33,6 +33,12 @@
   campaign_script.txt, a battle-only command, a condition needing what the event does not bring. What an event
   brings comes from the engines' own lists too: REX's town taken has no old owner and REX has no 'town grows' event -
   the builder says so for a module of both games.
+- **Module builder: any event, and numbers kept between turns.** WHEN can be **any event** of the engines' own list
+  (**More events...**: 139 both engines have, REX 167 / M2EX 221 for a module of one game), with what it brings
+  read from the engine. New blocks: IF **a remembered number** (is below / above / ... a value), DO **remember a
+  number** and **add to a remembered number** - kept between turns and in the saved game, as the engines' own event
+  counters (campaign_script's `I_EventCounter` reads them too); `{faction}` or `{town}` in its name keeps one number
+  per faction or town.
 - **Add-on: Avoid Growth** (Rome + REX, Medieval II + M2EX - one script for both): a tick box on the settlement
   scroll of each of your towns, drawn with the game's own box and tick, under the population figures. Ticked, the
   people the town has become its ceiling: it never grows past it, still loses people the usual way (recruiting,

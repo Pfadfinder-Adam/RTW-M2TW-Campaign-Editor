@@ -189,11 +189,16 @@ class ModuleBuilder(tk.Toplevel):
         f, c = self._frame(inner, "when")
         row = tk.Frame(f, bg=c)
         row.pack(anchor="w", padx=18, pady=(0, 2))
-        ev = MB.EVENT.get(self.recipe.get("when"))
+        ev = self.event()
         v = tk.StringVar(value=ev.label if ev else "")
-        cb = ttk.Combobox(row, textvariable=v, values=[e.label for e in MB.EVENTS], state="readonly", width=40)
+        labels = [e.label for e in MB.EVENTS] + ([ev.label] if ev and ev.key not in MB.EVENT else [])
+        cb = ttk.Combobox(row, textvariable=v, values=labels, state="readonly",
+                          width=max(len(x) for x in labels) + 1)
         cb.pack(side="left")
         cb.bind("<<ComboboxSelected>>", lambda e: self.set_when(v.get()))
+        cur = ev.engine if ev and ev.key not in MB.EVENT else ""
+        ttk.Button(row, text="More events... (every one of the engines)", command=lambda: EnginePicker(
+            self, "events", self.set_engine_event, current=cur)).pack(side="left", padx=8)
         if ev:
             wrapping(tk.Label(f, text=ev.help[0].upper() + ev.help[1:] + ".", bg=c, fg="#444", justify="left",
                               anchor="w"), padx=18)
@@ -226,7 +231,7 @@ class ModuleBuilder(tk.Toplevel):
             pcb.bind("<<ComboboxSelected>>", lambda e, g=group, n=i, v=pv: self.change_part(g, n, v.get()))
             wide = []
             for name, kind, label, _ in (part.fields if part else []):
-                if kind in WIDE or kind.startswith(("names:", "cmd:")) or kind == "cond":
+                if kind in WIDE or kind.startswith(("names:", "cmd:")) or kind in ("cond", "counter"):
                     wide.append((name, kind, label))      # on a line of its own below: no text cut at the edge
                 else:
                     self._field(row, c, group, i, it, part, name, kind, label)
@@ -360,8 +365,25 @@ class ModuleBuilder(tk.Toplevel):
             e.configure(state="normal" if on.get() else "disabled")
 
     # ---- changes ----
+    def event(self):
+        """The Event the WHEN names (a plain one or any engine event), or None."""
+        return MB.event_of(self.recipe.get("when"), self.recipe.get("game", "both"), self.mod)
+
     def set_when(self, label):
-        self.recipe["when"] = next(e.key for e in MB.EVENTS if e.label == label)
+        key = next((e.key for e in MB.EVENTS if e.label == label), None)
+        if key is None:                              # the engine event already picked
+            return
+        self.recipe["when"] = key
+        self.changed = True
+        self.rebuild()
+
+    def set_engine_event(self, name):
+        """WHEN = any event of the engines' own list (More events...)."""
+        name = name.strip()
+        if not name:
+            return
+        plain = next((e.key for e in MB.EVENTS if e.engine == name), None)
+        self.recipe["when"] = plain or MB.ENGINE_EVENT + name
         self.changed = True
         self.rebuild()
 
@@ -426,7 +448,7 @@ class ModuleBuilder(tk.Toplevel):
         return it
 
     def add_menu(self, button, group):
-        ev = MB.EVENT.get(self.recipe.get("when"))
+        ev = self.event()
         have = set(MB.event_subjects(ev, self.recipe.get("game", "both"), self.mod) or ev.subjects) if ev else set()
         m = tk.Menu(self, tearoff=False)
         for p in (MB.CONDITIONS if group == "ifs" else MB.ACTIONS):
@@ -704,7 +726,8 @@ class EnginePicker(tk.Toplevel):
         game = builder.recipe.get("game", "both")
         cat = ED.catalogue(game, builder.mod)
         self.entries = list(cat[what].values())
-        self.event = cat["events"].get(getattr(MB.EVENT.get(builder.recipe.get("when")), "engine", None))
+        self.when = builder.event()
+        self.event = cat["events"].get(getattr(self.when, "engine", None))
         self.title("Pick one of the %s - %s" % (ED.KIND_WORDS[what], MB.GAME_ENGINES.get(game, game)))
         self.geometry("1060x720")
         self.transient(builder)
@@ -727,8 +750,8 @@ class EnginePicker(tk.Toplevel):
             anchor="w")
         self.v_fits = tk.BooleanVar(value=what == "conditions" and self.event is not None)
         if what == "conditions" and self.event is not None:
-            ttk.Checkbutton(ticks, variable=self.v_fits, text="only what fits '%s'" % MB.EVENT[
-                builder.recipe["when"]].label).pack(anchor="w")
+            ttk.Checkbutton(ticks, variable=self.v_fits, text="only what fits '%s'" % self.when.label).pack(
+                anchor="w")
         body = ttk.Frame(self, padding=(8, 0))
         body.pack(fill="both", expand=True)
         left = ttk.Frame(body)
@@ -746,7 +769,7 @@ class EnginePicker(tk.Toplevel):
         self.info.tag_configure("head", font=("", 12, "bold"))
         self.info.tag_configure("bad", foreground="#b00")
         self.info.tag_configure("dim", foreground="#666")
-        self.form = ttk.LabelFrame(right, text=" Its parameters ", padding=6)
+        self.form = ttk.LabelFrame(right, text=" Its parameters " if what != "events" else " ", padding=6)
         self.form.pack(fill="x", pady=(6, 0))
         self.lbl_line = wrapping(ttk.Label(right, foreground="#1d3b6a", font=("", 10), justify="left"), pady=(6, 0))
         low = ttk.Frame(self, padding=8)
@@ -808,8 +831,7 @@ class EnginePicker(tk.Toplevel):
             t.insert("end", "Needs from what happened: %s\n" % (", ".join(e.needs) or "nothing - it fits every event"))
             miss = ED.missing(e, self.event)
             if miss:
-                t.insert("end", "'%s' does not bring %s\n" % (MB.EVENT[self.builder.recipe["when"]].label,
-                                                              " and ".join(miss)), "bad")
+                t.insert("end", "'%s' does not bring %s\n" % (self.when.label, " and ".join(miss)), "bad")
         if self.what == "events":
             t.insert("end", "Brings along: %s\n" % (", ".join(e.needs) or "nothing"))
         t.insert("end", "Engines: %s\n" % " and ".join(ED.ENGINE_WORDS[x] for x in e.engines))
@@ -845,6 +867,12 @@ class EnginePicker(tk.Toplevel):
             w.destroy()
         self.fields = []
         if e is None:
+            self.lbl_line.configure(text="")
+            return
+        if self.what == "events":
+            ttk.Label(self.form, foreground="#555", wraplength=520, justify="left", text=(
+                "Use it: the module acts each time this happens; the conditions and actions work on what it brings "
+                "along.")).grid(row=0, column=0, sticky="w")
             self.lbl_line.configure(text="")
             return
         params = self.ED.params_of(e)
