@@ -107,7 +107,6 @@ def lines(faction, cond, medieval):
     for part in ("long", "short"):
         c = cond[part]
         body = []
-        body += list(c["goals"]) if not medieval else []
         # Medieval II reads each part in a fixed order that starts with hold_regions, even an empty one (all 20
         # vanilla blocks: 'short_campaign hold_regions ;Jerusalem_Province' with the list commented out); a part
         # starting with take_regions ('short_campaign take_regions 20') stops the reading there and every faction
@@ -116,6 +115,10 @@ def lines(faction, cond, medieval):
             body.append(("hold_regions " + " ".join(c["hold"])).rstrip())
         if c["take"] is not None:
             body.append("take_regions %d" % c["take"])
+        # Rome's goals (imperator / take_rome) after the regions, as Barbarian Invasion writes hold_regions /
+        # take_regions first - 'imperator' before them stopped Rome reading the file ('descr_win_conditions.txt:
+        # stopped parsing before EOF', a tester's test mod)
+        body += list(c["goals"]) if not medieval else []
         if c["outlive"]:
             word = c.get("outlive_word") or ("outlive" if medieval else "outlive_factions")
             if word == "outlive_factions":

@@ -163,6 +163,25 @@ local function scroll_open()
     return el ~= nil and (try(function() return el.xSize end) or 0) > 0
 end
 
+local function screen_scale()
+    -- the screen's size from whatever the ImGui binding offers; (1, 1) when it offers nothing
+    local W, H
+    local io = try(function() return ImGui.GetIO() end)
+    if io ~= nil then
+        W = try(function() return io.DisplaySize.x end)
+        H = try(function() return io.DisplaySize.y end)
+    end
+    if not W or W <= 0 then
+        local vp = try(function() return ImGui.GetMainViewport() end)
+        if vp ~= nil then
+            W = try(function() return vp.Size.x end)
+            H = try(function() return vp.Size.y end)
+        end
+    end
+    if not W or not H or W <= 0 or H <= 0 then return 1, 1 end
+    return W / 1024, H / 768
+end
+
 local function draw_button()
     if not RAZE_BUTTON or captured == nil or not allowed(captured.faction) then return end
     local ext = element("loot_settlement_extermintate_button")       -- the game's own spelling
@@ -173,16 +192,42 @@ local function draw_button()
     if w == nil or w <= 0 then return end
     local step = h + 4
     if sack ~= nil and sack.yPos ~= nil then step = math.abs(ext.yPos - sack.yPos) end
-    ImGui.SetNextWindowPos(x, y + step)
+    -- the game's UI coordinates are for a 1024 x 768 screen and the engine multiplies them by width / 1024 and
+    -- height / 768 (M2EX's own words); ImGui draws in screen pixels (a tester's 1600 x 900: the button stood at
+    -- 432, 505 instead of under Exterminate at 662, 537 - exactly the unscaled numbers + ImGui's 8 px padding)
+    local sx, sy = screen_scale()
+    ImGui.SetNextWindowPos(x * sx, (y + step) * sy)
     ImGui.SetNextWindowBgAlpha(0.0)
     local flags = ImGuiWindowFlags.NoDecoration + ImGuiWindowFlags.NoMove + ImGuiWindowFlags.NoSavedSettings
+    local padded = ImGuiStyleVar ~= nil and pcall(function() ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, 0, 0) end)
     ImGui.Begin("##raze_settlement", true, flags)
+    if padded then pcall(function() ImGui.PopStyleVar(1) end) end
+    w, h = w * sx, h * sy
+    -- dressed like the scroll's own buttons: parchment, dark brown letters, a brown rim (each call guarded - a
+    -- binding the engine lacks leaves the plain button, never no button)
+    local colours, vars = 0, 0
+    local function colour(which, r, g, b, a)
+        if pcall(function() ImGui.PushStyleColor(which, r, g, b, a) end) then colours = colours + 1 end
+    end
+    if ImGuiCol ~= nil then
+        colour(ImGuiCol.Button, 0.87, 0.80, 0.66, 1.0)
+        colour(ImGuiCol.ButtonHovered, 0.93, 0.87, 0.73, 1.0)
+        colour(ImGuiCol.ButtonActive, 0.78, 0.70, 0.55, 1.0)
+        colour(ImGuiCol.Text, 0.18, 0.11, 0.05, 1.0)
+        colour(ImGuiCol.Border, 0.45, 0.32, 0.18, 1.0)
+    end
+    if ImGuiStyleVar ~= nil then
+        if pcall(function() ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 1.5) end) then vars = vars + 1 end
+        if pcall(function() ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 3.0) end) then vars = vars + 1 end
+    end
     if ImGui.Button(RAZE_BUTTON_LABEL, w, h) then
         pressed = true
     end
     if ImGui.IsItemHovered() then
         ImGui.SetTooltip(RAZE_BUTTON_TIP)
     end
+    if vars > 0 then pcall(function() ImGui.PopStyleVar(vars) end) end
+    if colours > 0 then pcall(function() ImGui.PopStyleColor(colours) end) end
     ImGui.End()
     if pressed then
         pressed = false

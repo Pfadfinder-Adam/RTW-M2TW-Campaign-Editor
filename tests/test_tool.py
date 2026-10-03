@@ -2370,7 +2370,7 @@ building smith
         plan = edit(mod, "test", "alpha", {"victory": cond})
         body = plan.files[path].raw
         out = "\n".join(body)
-        self.assertIn("alpha\r\ntake_rome\r\nhold_regions A_R\r\nshort_campaign take_regions 1\r\n"
+        self.assertIn("alpha\r\nhold_regions A_R\r\ntake_rome\r\nshort_campaign take_regions 1\r\n"
                       "outlive_factions\r\nslave\r\n\r\nbeta\r\nhold_regions A_R\r\ntake_regions 2\r\n", out)
         cond["long"]["hold"] = ["Nowhere"]
         with self.assertRaises(ValueError):
@@ -4359,10 +4359,36 @@ building smith
         self.assertGreater(len(labels), 30)
         self.assertEqual([t for t in labels if ST.ui_entry(t) is None], [])
 
+    def test_dds_written_with_the_games_own_header(self):
+        """A compressed DDS (Rome .tga.dds, the DDS inside a Medieval II .texture) keeps the top level's byte size
+        in its header (DDSD_LINEARSIZE): Pillow wrote a row pitch there (4108 for 1024 x 1024 DXT5) and Medieval II
+        read the data by it - recoloured units turned to grey stripes in battle. A picture replacing a file of the same
+        size, format and mipmaps takes that file's header byte for byte."""
+        try:
+            from PIL import Image
+        except ImportError:
+            return
+        from campaign_editor.factionart import image_dds
+        im = Image.new("RGBA", (64, 32), (10, 200, 30, 255))
+        data = image_dds(im)
+        self.assertEqual(data[:4], b"DDS ")
+        old = os.path.join(self.root, "old.dds")
+        im.save(old, format="DDS", pixel_format="DXT5")
+        new = image_dds(Image.new("RGBA", (64, 32), (200, 10, 30, 255)), old)
+        self.assertEqual(int.from_bytes(new[20:24], "little"), 16 * 8 * 16)        # 16 x 8 blocks of 16 bytes
+        self.assertTrue(int.from_bytes(new[8:12], "little") & 0x80000)
+        with open(old, "rb") as fh:
+            head = bytearray(fh.read(128))
+        head[20:24] = (16 * 8 * 16).to_bytes(4, "little")
+        with open(old, "r+b") as fh:
+            fh.write(bytes(head))
+        self.assertEqual(image_dds(im, old)[:128], bytes(head))                     # its own header kept
+
     def test_campaign_start_in_campaign_rules(self):
         """Campaign rules: the top of the campaign's descr_strat.txt - start / end date, timescale, spawn values as
         values, switch lines (night_battles_enabled ...) as on / off; a switch turned off loses its line, one turned
-        on gets a line after the top's last; a bad date refused; the rest of the file byte for byte; Restore exact."""
+        on gets a line in its place in the engines' order (before the spawn values - after them Rome's campaign did
+        not load: 'Script Error in descr_strat.txt'); a bad date refused; the rest of the file byte for byte; Restore exact."""
         from campaign_editor import campaignrules as CR
         from campaign_editor.plan import Plan
         mod = ModData(self.root)
@@ -4392,8 +4418,8 @@ building smith
             got = fh.read().decode()
         self.assertEqual(got, (top.replace("-270 summer", "-200 winter").replace("14 summer ;", "20 winter ;")
                                .replace("night_battles_enabled\n", "")
-                               .replace("brigand_spawn_value 10\n", "brigand_spawn_value 10\n"
-                                        "gladiator_uprising_disabled\n")) + old.decode())
+                               .replace("brigand_spawn_value 10\n", "gladiator_uprising_disabled\n"
+                                        "brigand_spawn_value 10\n")) + old.decode())
         restore(ModData(self.root), bdir)
         self.assertEqual(tree_hash(os.path.join(self.root, "data")), before)
 

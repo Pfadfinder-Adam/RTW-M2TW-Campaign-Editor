@@ -1,8 +1,8 @@
 """Unit attributes the engine knows (export_descr_unit.txt), with their effect in plain
 words, so the Unit editor can offer them even when no unit of the mod uses one yet.
 
-REX (the 64-bit engine for Rome: Total War, also Medieval II) added these; the list is
-REX's own. A word goes on one line of the unit:
+REX (the 64-bit engine for Rome: Total War) and M2EX (Medieval II's) added these; the list is
+the engines' own (their builds of 2026-10-03 added the last group). A word goes on one line of the unit:
 'attributes', 'stat_mental', 'stat_ground' or 'stat_pri_attr' / 'stat_sec_attr'."""
 
 REX = "REX"
@@ -38,6 +38,19 @@ ATTRIBUTES = [
     # weapons
     ("sp", "stat_pri_attr", "shield piercing: halves the shield of the unit it hits"),
     ("sp", "stat_sec_attr", "shield piercing: halves the shield of the unit it hits"),
+    # REX and M2EX builds of 2026-10-03 (the engines' own descriptions)
+    ("immune_arrows", "attributes", "arrows and bolts cause no damage or impact reaction (REX / M2EX)"),
+    ("immune_fire", "attributes", "fire attacks and fiery effects cause no damage or impact reaction (REX / M2EX)"),
+    ("resistance_projectiles", "attributes", "+10 armour against arrows and bolts (REX / M2EX)"),
+    ("enduring_fortitude", "attributes", "each soldier loses at most 1 hit point a battle-second (REX / M2EX)"),
+    ("life_steal", "attributes", "a soldier gets back 1 lost hit point per enemy killed, up to his starting health "
+                                 "(REX / M2EX)"),
+    ("hardy_1", "attributes", "tires more slowly: hardy_0 to hardy_123 = fatigue points taken off per update "
+                              "(REX / M2EX; type another number in the line)"),
+    ("strong_against_armour", "stat_pri_attr", "strong against armoured units (REX / M2EX)"),
+    ("strong_against_armour", "stat_sec_attr", "strong against armoured units (REX / M2EX)"),
+    ("ignores_armour", "stat_pri_attr", "the attack ignores the target's armour (REX / M2EX)"),
+    ("ignores_armour", "stat_sec_attr", "the attack ignores the target's armour (REX / M2EX)"),
 ]
 
 # keys a unit may get although no unit of the mod has one yet: {key: (example value, effect)}

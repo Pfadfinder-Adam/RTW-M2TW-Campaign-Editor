@@ -108,10 +108,17 @@ class RecordEditor(ttk.Frame):
                             "Changed fields turn yellow, lines to add green, lines to remove red (x on the left); "
                             "Preview, then Apply writes them (with a backup).",
                   foreground="#555", wraplength=900, justify="left").pack(side="left", padx=8)
-        self._lines_open = bool(settings.get("editor_lines_open", False))
-        box = self._lines_box = ttk.Frame(right)
-        if self._lines_open:
-            box.pack(fill="both", expand=True)
+        # a window of their own, like the family tree's (a tester: folded open in the editor they still left too
+        # little room): opened by the button, closed by its own close box; the editor keeps its whole height
+        self._lines_open = False
+        top = self._lines_win = tk.Toplevel(self)
+        top.withdraw()
+        top.geometry("980x680")
+        top.protocol("WM_DELETE_WINDOW", self.toggle_lines)
+        # another work picked (the editor hidden): its lines window goes too
+        self.bind("<Unmap>", lambda e: self.toggle_lines() if e.widget is self and self._lines_open else None, "+")
+        box = self._lines_box = ttk.Frame(top, padding=6)
+        box.pack(fill="both", expand=True)
         self._lines_label()
         canvas = tk.Canvas(box, highlightthickness=0)
         sb = ttk.Scrollbar(box, orient="vertical", command=canvas.yview)
@@ -140,19 +147,23 @@ class RecordEditor(ttk.Frame):
 
     def _lines_label(self):
         n = len(getattr(self, "fields", None) or ()) if self.current else 0
-        self.b_lines.configure(text="%s  Every line of the block%s" % (
-            "\u25be" if self._lines_open else "\u25b8", " (%d)" % n if n else ""))
+        self.b_lines.configure(text="Every line of the block%s%s" % (
+            " (%d)" % n if n else "", " - open" if self._lines_open else "..."))
+        if self._lines_open:
+            cur = self.current[0] if isinstance(self.current, tuple) else (self.current or "")
+            self._lines_win.title("Every line of %s %s" % (self.kind, cur))
 
     def toggle_lines(self):
-        """Show or fold away the block's lines (kept for the next start)."""
+        """Open the block's lines in their own window, or close it."""
         self._lines_open = not self._lines_open
+        w = self._lines_win
         if self._lines_open:
-            self._lines_box.pack(fill="both", expand=True)
+            w.deiconify()
+            w.lift()
             if getattr(self, "_lines_stale", False) and self.current:
-                self.show()                      # the rows were not made while folded away
+                self.show()                      # the rows were not made while it was closed
         else:
-            self._lines_box.pack_forget()
-        settings.put("editor_lines_open", self._lines_open)
+            w.withdraw()
         self._lines_label()
 
     # ---- data ----

@@ -76,6 +76,9 @@ def check_mod(mod, campaign, deep=False, progress=None):
     for n, _ in headers_out_of_order(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))):
         bad("%s: its first lines in descr_strat.txt are out of the games' order (denari before superfaction / "
             "ai_label...) - the game starts it without its towns; Load offers to put them in order" % n)
+    from .campaignrules import strat_order_problems
+    for why in strat_order_problems(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))):
+        bad(why)
     from .buildings import pop_problem, population_of, settlement_info, settlement_kind
     strat_f = mod.load(mod.campaign_file(campaign, "descr_strat.txt"))
     for fb in s.factions:

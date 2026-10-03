@@ -808,13 +808,32 @@ def image_dds(im, like=None):
         if lw == 1 and lh == 1:
             break
     head = bytearray(levels[0][:128])
+    if fmt:
+        # the top level's size in bytes, as the format means it (DDSD_LINEARSIZE): Pillow wrote a row pitch there
+        # (4108 for a 1024 x 1024 DXT5) and Medieval II read the texture's data by it - the units of a recoloured
+        # texture turned to grey stripes in battle (a tester's test mod)
+        block = 8 if fmt == "DXT1" else 16
+        size = max(1, (w + 3) // 4) * max(1, (h + 3) // 4) * block
+        head[20:24] = size.to_bytes(4, "little")
+        flags = int.from_bytes(head[8:12], "little")
+        head[8:12] = ((flags & ~0x8) | 0x80000).to_bytes(4, "little")
     if len(levels) > 1:
         put = lambda k, v: head.__setitem__(slice(k, k + 4), v.to_bytes(4, "little"))
         get = lambda k: int.from_bytes(head[k:k + 4], "little")
         put(8, get(8) | 0x20000)                       # DDSD_MIPMAPCOUNT
         put(28, len(levels))
         put(108, get(108) | 0x400008)                  # DDSCAPS_COMPLEX | DDSCAPS_MIPMAP
-    return bytes(head) + b"".join(lv[128:] for lv in levels)
+    data = b"".join(lv[128:] for lv in levels)
+    if like and info and fmt and like.lower().endswith(".dds") and (info[0], info[1]) == (w, h) and \
+            info[3] == len(levels):
+        # the same size, format and mipmaps as the file it replaces: its own header, byte for byte
+        with open(like, "rb") as fh:
+            old = fh.read(128)
+        if old[:4] == b"DDS " and len(old) == 128 and old[84:88] == head[84:88]:
+            size = head[20:24]
+            head = bytearray(old)
+            head[20:24] = size                     # the byte size as the format means it, whatever the old said
+    return bytes(head) + data
 
 
 def colour_on_map(mod, campaign, faction, regions):

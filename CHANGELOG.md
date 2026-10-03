@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Unit editor: the REX / M2EX attributes of their newest builds** - immune_arrows, immune_fire,
+  resistance_projectiles, enduring_fortitude, life_steal, hardy_N, strong_against_armour, ignores_armour - offered
+  with their effect like the older ones.
+- **Unit and Building editors: Every line of the block opens in a window of its own** (like the family tree), so the
+  pictures, model and voice keep the editor's whole height.
 - **Campaign rules: the campaign's start** (both games): the top of the loaded campaign's `descr_strat.txt` - start
   and end date, `timescale` (years a turn), how seldom brigands and pirates appear, REX / M2EX's leader persona odds,
   and the switches as on / off (night battles, date as turns, Marian reforms, rebelling generals, gladiator
@@ -249,6 +254,21 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Rome's campaign did not load after Campaign rules > The campaign switched a line on** (back to the menu: "Script
+  Error in descr_strat.txt, at line 47"): a switch (rebelling generals, night battles...) was written at the end of the
+  file's top, after the brigand / pirate values - both engines read those lines in a fixed order. A switch now goes
+  in its place, and Check mod files names a top line out of order.
+- **Rome's victory conditions**: the regions to hold and to take are written before the faction's goal (imperator /
+  take_rome), as Barbarian Invasion writes them ("descr_win_conditions.txt: stopped parsing before EOF").
+- **Medieval II units turned to grey stripes in battle after Recolour** (and any picture written into a compressed
+  texture): the DDS header held a wrong size of the top level and the game read the texture by it. A texture now
+  keeps the original's header; the size is the one the format means.
+- **Units given to a faction (Roster, a new unit, Bring) stayed in another faction's colours in battle**: their
+  battle model had no texture of the faction, so the game dressed them in another's. Recolour now gives the faction
+  its own copy, made from an owner's texture and recoloured from that owner's colours; a card copied from another
+  faction is recoloured from that faction's colours.
+- **Raze Settlement (Medieval II + M2EX)**: the button stands under Exterminate at any screen size (the game's UI
+  places are for 1024 x 768 and were not scaled) and looks like the scroll's own buttons.
 - **New events never came in the game (Rome)**: a new event was written at the end of `descr_events.txt`, after
   events of later years - the games read the events as a queue in date order, so it never fired. New events now go
   in date order (both games). The Events window shows beside each date the turn and the year it means (from the

@@ -192,6 +192,11 @@ STRAT_KEYS = {
     "random_persona_weights": "odds a faction's leader is loyal / steadfast / neutral / opportunist / treacherous "
                               "(REX / M2EX)",
 }
+# the order the top's lines come in (Medieval II's vanilla file holds them all in it; RomeTW / REX read the same
+# words in the same order - a switch after the spawn values stopped Rome's campaign from loading)
+STRAT_ORDER = ["start_date", "end_date", "timescale", "marian_reforms_disabled", "marian_reforms_activated",
+               "rebelling_characters_active", "gladiator_uprising_disabled", "night_battles_enabled",
+               "show_date_as_turns", "brigand_spawn_value", "pirate_spawn_value"]
 STRAT_END = re.compile(r"^\s*(resource|faction|settlement|landmark|region|core_attitudes|faction_relationships)\b")
 
 
@@ -231,6 +236,25 @@ def read_strat(path, f, medieval2=True):
     return rules
 
 
+def strat_order_problems(f):
+    """[why] for the top of a loaded descr_strat.txt: a known word after one the engines read later (the game stops
+    there: 'Script Error in descr_strat.txt, at line N')."""
+    out, seen = [], []
+    for i, text in enumerate(f.texts()):
+        code = text.split(";", 1)[0]
+        if STRAT_END.match(code):
+            break
+        word = code.split()[:1]
+        if word and word[0] in STRAT_ORDER:
+            later = [w for w in seen if STRAT_ORDER.index(w) > STRAT_ORDER.index(word[0])]
+            if later:
+                out.append("descr_strat.txt line %d: %s comes after %s - the game reads the top in a fixed order and "
+                           "stops there (the campaign does not load); Campaign rules > The campaign writes it in its "
+                           "place" % (i + 1, word[0], later[-1]))
+            seen.append(word[0])
+    return out
+
+
 def _apply_strat(f, changes):
     """Switches turned off lose their line, turned on get one after the last line of the top; values in place."""
     for rule, new in changes.items():
@@ -243,14 +267,21 @@ def _apply_strat(f, changes):
         if rule.kind == "flag" and new == "off" and rule.line is not None:
             f.delete(rule.line, rule.line + 1)
     on = [r.key for r, new in changes.items() if r.kind == "flag" and new == "on" and r.line is None]
-    if on:
-        last = 0
+    for key in sorted(on, key=STRAT_ORDER.index):
+        # in its place: both engines read the top in a fixed order and stop on a word out of it ('Script Error in
+        # descr_strat.txt, at line 47' - rebelling_characters_active written after pirate_spawn_value, Rome + REX)
+        at, last = None, 0
         for i, text in enumerate(f.texts()):
-            if STRAT_END.match(text.split(";", 1)[0]):
+            code = text.split(";", 1)[0]
+            if STRAT_END.match(code):
                 break
-            if text.split(";", 1)[0].strip():
-                last = i
-        f.insert(last + 1, on)
+            word = code.split()[:1]
+            if not word:
+                continue
+            last = i
+            if at is None and word[0] in STRAT_ORDER and STRAT_ORDER.index(word[0]) > STRAT_ORDER.index(key):
+                at = i
+        f.insert(at if at is not None else last + 1, [key])
 
 
 def read(path, f=None, medieval2=True):

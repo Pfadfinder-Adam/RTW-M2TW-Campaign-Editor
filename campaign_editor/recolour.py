@@ -433,7 +433,8 @@ def targets(mod, campaign, faction):
     names = [n for n, _ in mod.factions()]
     out, seen = [], set()
 
-    def add(path, group, label, others=(), crop=None, skip=None, of=(), own=None, alike=True, own_tex=None):
+    def add(path, group, label, others=(), crop=None, skip=None, of=(), own=None, alike=True, own_tex=None,
+            source=None):
         k = (os.path.normcase(os.path.abspath(path)), crop)
         if k in seen:
             if own_tex:                                  # one texture worn by several models: all of them follow
@@ -444,7 +445,7 @@ def targets(mod, campaign, faction):
         seen.add(k)
         out.append({"path": path, "rel": mod.rel(path), "group": group, "label": label, "others": list(others),
                     "of": list(of), "crop": crop, "skip": skip, "own": own, "faction": faction,
-                    "alike": alike, "own_tex": own_tex})
+                    "alike": alike, "own_tex": own_tex, "source": source})
     for sub, label in (("units", "unit card"), ("unit_info", "unit info picture")):
         d = _ci(_ci(mod.data, "ui") or "", sub) if _ci(mod.data, "ui") else None
         own = _ci(d, faction) if d else None
@@ -455,7 +456,7 @@ def targets(mod, campaign, faction):
                 p = os.path.join(own, n)
                 fs = [f for f in names if f != faction and f in colours and os.path.isfile(os.path.join(d, f, n))]
                 add(p, "unit cards", "%s %s" % (label, n), [(os.path.join(d, f, n), colours[f]) for f in fs],
-                    of=fs)
+                    of=fs, source=_copied_from(p, [(os.path.join(d, f, n), f) for f in fs], colours))
     # battle textures: the model's texture for this faction; a file other factions wear too is left alone
     try:
         from .models import catalogue
@@ -479,6 +480,18 @@ def targets(mod, campaign, faction):
                   if f != faction and f in colours and r.lower() != rel.lower() and on_disk(mod, r)]
         label = "battle texture of %s" % info.name + (" - gets a copy of its own" if own_tex else "")
         add(got[1], "unit textures", label, others[:6], own_tex=own_tex)
+    # a unit the faction was given (Roster, a new unit, Bring...) whose model has no texture line of the faction:
+    # the game dresses it in another faction's texture (the mercenaries' or the first) - the faction gets its own
+    # copy, made from an owner's texture and recoloured from that owner's colours (a tester: the units given by the
+    # Roster stayed brown in battle while their cards were recoloured)
+    for info, src_f in _worn_without_line(mod, faction, cat):
+        rel = info.textures[src_f]
+        got = on_disk(mod, rel)
+        if not got:
+            continue
+        own_tex = _own_texture(mod, info, faction, rel, got, [src_f], "texture")
+        add(got[1], "unit textures", "battle texture of %s - %s's, gets a copy of its own" % (info.name, src_f),
+            [], own_tex=own_tex, source=colours.get(src_f))
     # Medieval II: the weapons and shields texture beside it (a kite shield carries the faction's arms)
     for name, info in sorted(cat.items()):
         rel = getattr(info, "attach", {}).get(faction)
@@ -537,6 +550,55 @@ def targets(mod, campaign, faction):
         if out_x is not None:
             out[-1]["share_out"] = out_x
     _more_targets(mod, faction, names, colours, add)
+    return out
+
+
+def _copied_from(path, copies, colours):
+    """The colours of the faction whose copy this picture is (byte for byte), or None: a card the faction got from
+    another faction (Roster, a new unit made from another's) carries that faction's colours, not the template's."""
+    try:
+        with open(path, "rb") as fh:
+            mine = fh.read()
+    except OSError:
+        return None
+    for p, f in copies:
+        try:
+            with open(p, "rb") as fh:
+                if fh.read() == mine:
+                    return colours.get(f)
+        except OSError:
+            continue
+    return None
+
+
+def _worn_without_line(mod, faction, cat):
+    """[(model info, the faction whose texture it is made from)] of the battle models the faction's units wear that
+    have per-faction texture lines but none of the faction: the texture of an owner of the unit, else the
+    mercenaries', else the first."""
+    from .models import unit_lines, unit_slots
+    from .roster import _find_unit, ownership, roster
+    from .units import owner_factions
+    out, seen = [], set()
+    try:
+        units = [u["type"] for u in roster(mod, faction)["units"] if u["has"]]
+        edu = mod.load(mod.file("edu"))
+    except Exception:
+        return out
+    for u in units:
+        lines = unit_lines(mod, u) or []
+        for _, _, model in unit_slots(lines):
+            info = cat.get(model.lower())
+            if info is None or info.name.lower() in seen or faction in info.textures or \
+                    not [f for f in info.textures if f]:
+                continue
+            seen.add(info.name.lower())
+            try:
+                owners = owner_factions(mod, ownership(edu, _find_unit(edu, u)))
+            except Exception:
+                owners = []
+            src = next((f for f in owners if f in info.textures and f != faction), None) or \
+                ("merc" if "merc" in info.textures else next(f for f in info.textures if f))
+            out.append((info, src))
     return out
 
 
@@ -624,7 +686,7 @@ def plan_recolour(plan, items, source, target):
                 sheet = sheets.get(it["path"]) or read_picture(it["path"])
                 x, y, w, h = it["crop"]
                 part = sheet.crop((x, y, x + w, y + h))
-                new, share = recolour(part, source, target, edits=it.get("edits"))
+                new, share = recolour(part, it.get("source") or source, target, edits=it.get("edits"))
                 sheet.paste(new, (x, y))
                 sheets[it["path"]] = sheet
             else:
@@ -635,7 +697,8 @@ def plan_recolour(plan, items, source, target):
                         others.append((read_picture(p), c))
                     except Exception:
                         pass
-                new, share = recolour(im, source, target, others, edits=it.get("edits"), plain=it.get("alike", True))
+                new, share = recolour(im, it.get("source") or source, target, others, edits=it.get("edits"),
+                                      plain=it.get("alike", True))
                 if share > 0 and it.get("own_tex"):
                     # the faction's own copy in the mod, its model line pointed at it (both games, text + modeldb)
                     from .models import catalogue, set_faction_texture
