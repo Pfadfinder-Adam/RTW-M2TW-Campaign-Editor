@@ -3282,6 +3282,15 @@ class App(tk.Tk):
             log.write("Engine: " + engine_report(self.mod))
         except Exception as e:
             log.write("Engine: not checked (%s)" % e)
+        def glance(mod=self.mod, campaign=self.v_campaign.get() or None):
+            # the mod's picture for the log - every report then shows what it is (in the background: a big mod's
+            # folder walk must not hold the window)
+            try:
+                from .check import mod_summary
+                log.write(mod_summary(mod, campaign))
+            except Exception as e:
+                log.write("Mod at a glance: not read (%s)" % e)
+        threading.Thread(target=glance, daemon=True).start()
         full = len(names) + 1 >= lim["max"] and lim["known"] and not lim["engine"]
         self.status.set("%s%s, %d campaign(s).%s" % (
             "%s found - " % lim["engine"][:-4] if lim["engine"] else "", describe(lim, len(names) + 1), len(camps),

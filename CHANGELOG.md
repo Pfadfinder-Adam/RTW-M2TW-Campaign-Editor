@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **The mod at a glance in the log**: every Load writes a short picture of the mod into the editor's log - the game
+  and engine, its campaigns, factions and cultures, regions and who holds the towns, the map's size, how many units
+  and building chains, and which of its files are its own. A report then shows what the mod is, without any of its
+  files. (Check mod files' result already goes into the log.)
 - **Answers to my reports** (testers on Discord: "I'd definitely use it"): the author's answer to a report now comes
   back to the editor - the report window's new tab **Answers to my reports** lists the reports sent from this
   editor with their state (open / fixed / not planned) and the talk so far, and **Send the answer** replies (with a

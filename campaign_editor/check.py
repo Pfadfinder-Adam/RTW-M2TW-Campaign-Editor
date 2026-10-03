@@ -527,3 +527,53 @@ def _file_checks(plan, mod, campaign, fac, what, fails):
         msgs.append("internal: braces do not balance (%+d)" % depth)
     for m in msgs:
         fails.append((fac, "%s: %s" % (what, m)))
+
+
+def mod_summary(mod, campaign=None):
+    """A short picture of the mod for the log (so every report shows what the mod is - the author's idea): the game
+    and engine, its campaigns, factions and cultures, regions and who holds the towns, how many units and building
+    chains, the map's size, and which of its files are its own (the rest the game's). No game files, just counts and
+    names; never raises (a part that cannot be read says so)."""
+    import collections
+    out = []
+
+    def part(title, fn):
+        try:
+            out.append("    %-11s %s" % (title, fn()))
+        except Exception as e:
+            out.append("    %-11s (not read: %s)" % (title, e))
+    from .limits import engine_of, game_kind
+    out.append("Mod at a glance: %s" % mod.data)
+    part("game", lambda: "%s, engine %s" % (game_kind(mod), engine_of(mod) or "none (the original exe)"))
+    camps = mod.campaigns()
+    campaign = campaign or ("imperial_campaign" if "imperial_campaign" in camps else (camps[0] if camps else None))
+    part("campaigns", lambda: ", ".join(camps) or "none")
+    facs = mod.factions()
+    part("factions", lambda: "%d: %s" % (len(facs), ", ".join(n for n, _ in facs)))
+    part("cultures", lambda: ", ".join(sorted({c for _, c in facs if c})))
+    if campaign:
+        def towns():
+            s = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
+            held = collections.Counter(s.owners().values())
+            return "%d regions; towns held: %s" % (len(mod.regions(campaign)), ", ".join(
+                "%s %d" % (k, v) for k, v in held.most_common()))
+        part("regions", towns)
+        part("map", lambda: "%d x %d tiles" % (mod.region_map(campaign).width, mod.region_map(campaign).height))
+    def count(key, word):
+        p = mod.file(key)
+        if not p:
+            return "none"
+        n = sum(1 for l in mod.load(p).texts() if l.split()[:1] == [word])
+        own = os.path.normcase(os.path.abspath(p)).startswith(os.path.normcase(os.path.abspath(mod.data)))
+        return "%d (%s)" % (n, "its own file" if own else "the game's file")
+    part("units", lambda: count("edu", "type"))
+    part("buildings", lambda: count("edb", "building"))
+    def own_files():
+        tops = collections.Counter()
+        for dp, dn, fs in os.walk(mod.data):
+            dn[:] = [d for d in dn if not d.startswith("CampaignEditor_")]
+            rel = os.path.relpath(dp, mod.data).replace("\\", "/")
+            tops[rel.split("/")[0] if rel != "." else "(data root)"] += len(fs)
+        return "%d: %s" % (sum(tops.values()), ", ".join("%s %d" % kv for kv in tops.most_common(12)))
+    part("own files", own_files)
+    return "\n".join(out)

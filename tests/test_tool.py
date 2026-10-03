@@ -3711,6 +3711,16 @@ building smith
         f = plan.edit(os.path.join(d, "descr_campaign_db.xml"))
         self.assertIn('<max_number_of_children uint="5"/>', "\n".join(f.texts()))
 
+    def test_mod_at_a_glance_for_the_log(self):
+        """Every Load writes a short picture of the mod into the log (the author's idea: every report then shows
+        what the mod is - its factions, towns, files - without any game file)."""
+        from campaign_editor.check import mod_summary
+        text = mod_summary(ModData(self.root), "test")
+        self.assertIn("Mod at a glance", text)
+        for word in ("factions", "regions", "units", "buildings", "own files", "alpha"):
+            self.assertIn(word, text)
+        self.assertNotIn("not read", text.split("own files")[0].split("map")[0])
+
     def test_banner_symbol_dragged_snapped_and_sized(self):
         """The Banner window moves the symbol with the mouse: its middle snaps to the banner's own grid (quarters,
         eighths, sixteenths) or goes freely, it stays on its banner, the wheel sizes it round its middle."""
