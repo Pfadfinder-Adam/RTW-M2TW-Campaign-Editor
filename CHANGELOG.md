@@ -322,6 +322,9 @@
   river's last tiles in the sea, the land was kept under the river, so a sandbar stood out into the sea at each mouth
   (`map_ground_types.tga`, `map_regions.tga` and the heights). The river now stops at the new coast, its end touching
   the sea; no river is left on the sea.
+- **Make the campaign map 3 x bigger: the beach was a band 3 tiles wide.** The beach ground type now stays one
+  tile wide along the new coast, as in both games' own maps (a beach tile away from the sea takes the land round it;
+  a coastal tile where the old coast had a beach becomes beach).
 - **Add-ons: an empty header line** (`// @signed` with nothing after it) took the next line as its value - a setting
   then showed its variable's name instead of its words.
 - **Rome's campaign did not load after Campaign rules > The campaign switched a line on** (back to the menu: "Script

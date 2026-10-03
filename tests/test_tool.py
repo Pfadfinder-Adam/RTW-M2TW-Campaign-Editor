@@ -2452,6 +2452,29 @@ building smith
         self.assertEqual(on, drawn)
         self.assertEqual(max(x for x, y in on), 7)                      # the end on the last land, the sea beside it
 
+    def test_bigger_map_beach_one_tile_wide(self):
+        """The beach stays one tile wide along the new coast, as in both games' own maps (a tester's DaC x3: grown
+        3 x it was a wide band of sand)."""
+        from campaign_editor import upscale
+        from campaign_editor.tga import read_tga
+        sea, beach, farm = (196, 0, 0), (255, 255, 255), (0, 128, 0)
+        kind = lambda x: sea if x < 2 else (beach if x < 4 else farm)      # points: tile 0 sea, 1 beach, 2-3 farm
+        path = os.path.join(self.root, "ground.tga")
+        write_tga(path, 9, 9, [[kind(x) for x in range(9)] for y in range(9)])
+        wet = upscale.Mask(25, 25)                       # the heights' sea mask: True = sea
+        for X in range(25):
+            for Y in range(25):
+                wet[(X, Y)] = X < 6                      # new tiles 0-2 sea, 3 on is land
+        data = upscale.ground_scaled(path, wet, {sea})
+        with open(path, "wb") as fh:
+            fh.write(data)
+        g = read_tga(path)
+        tiles = [g.get(2 * t + 1, 13) for t in range(12)]
+        self.assertEqual(tiles[:3], [sea] * 3)
+        self.assertEqual(tiles[3], beach)                                    # the tile on the sea
+        self.assertNotIn(beach, tiles[4:])                                   # none further in
+        self.assertFalse([X for X in range(9, 25) if g.get(X, 13) == beach])  # nor the points between
+
     def test_map_made_three_times_bigger(self):
         """Every tile a 3 x 3 block: towns and characters in their blocks' middles, rivers 1 pixel wide (a corner
         link a staircase), descr_terrain's size x 3 and its heights x 3, map_heights.hgt at the new size (3 x higher),

@@ -283,7 +283,7 @@ def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0):
     return struct.pack("<II", W, H) + struct.pack("<%df" % (W * H), *out)
 
 
-def kinds_scaled(path, mask=None, sea_colours=(), rounds=2):
+def kinds_scaled(path, mask=None, sea_colours=(), rounds=2, shore=()):
     """A picture of kinds on the heights' grid (map_ground_types, map_climates; 2W+1 x 2H+1, a tile = the point at
     its middle and the 8 round it) made 3 x bigger BY TILES - a tester's DaC map lost its forests: 8 of every 9 new
     tiles took their kind from the old picture's in-between points (Mirkwood: dense forest middles, wilderness
@@ -324,6 +324,9 @@ def kinds_scaled(path, mask=None, sea_colours=(), rounds=2):
             types[TY * TW + TX] = c
     if rounds:
         _round_tiles(types, TW, TH, keep=is_sea)
+    shore = set(shore) if mask is not None else set()
+    if shore:
+        _thin_shore(types, TW, TH, ow, oh, old, is_sea, shore)
     raw = _blank(W, H, step, (0, 0, 0))
     near = lambda j: int(j / FACTOR + 0.5)            # the old point nearest a new one (as _index('corners'))
     for Y in range(H):
@@ -340,6 +343,8 @@ def kinds_scaled(path, mask=None, sea_colours=(), rounds=2):
                 c = at(min(near(X), w - 1), min(near(Y), h - 1))
                 if c not in round_:
                     c = round_[0]
+                if c in shore and any(k not in shore for k in round_):   # the beach no wider than its tiles
+                    c = next(k for k in round_ if k not in shore)
             _put(raw, W, H, step, top_down, X, Y, c)
     return _write(data, W, H, step, raw)
 
@@ -378,10 +383,57 @@ def _round_tiles(types, TW, TH, keep=lambda c: False, rounds=2):
                 types[i] = pal[b]
 
 
+BEACH = (255, 255, 255)        # map_ground_types: the beach - one tile along the sea in both games' own maps
+
+
+def _thin_shore(types, TW, TH, ow, oh, old, is_sea, shore):
+    """A shore kind (the beach) one tile wide along the new coast, as the games' own maps draw it (vanilla M2TW: 502
+    beach tiles on the sea, 1 inland; Rome 571 / 9) - grown 3 x it was a band 3 tiles wide (a tester's DaC x3). A
+    shore tile that touches no sea takes the land kind round it; a land tile on the sea where the old coast had that
+    shore takes it. Works on new tiles (types, TW x TH); old(x, y) = an old tile's kind (ow x oh)."""
+    N8 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1))
+    at = lambda x, y: types[y * TW + x]
+
+    def on_sea(x, y):
+        return any(0 <= x + a < TW and 0 <= y + b < TH and is_sea(at(x + a, y + b)) for a, b in N8)
+
+    def old_shore(x, y):                                  # an old shore tile on the sea
+        return old(x, y) in shore and any(0 <= x + a < ow and 0 <= y + b < oh and is_sea(old(x + a, y + b))
+                                          for a, b in N8)
+    first = list(types)
+    for y in range(TH):
+        for x in range(TW):
+            c = first[y * TW + x]
+            if c not in shore or on_sea(x, y):
+                continue
+            pick = None
+            for r in range(1, 5):                         # the land kind round it, nearest ring first
+                ring = [first[b * TW + a] for a in range(max(0, x - r), min(TW, x + r + 1))
+                        for b in range(max(0, y - r), min(TH, y + r + 1))
+                        if max(abs(a - x), abs(b - y)) == r]
+                ring = [k for k in ring if k not in shore and not is_sea(k)]
+                if ring:
+                    pick = max(sorted(set(ring)), key=ring.count)
+                    break
+            types[y * TW + x] = pick or (0, 0, 0)
+    second = list(types)
+    for y in range(TH):
+        for x in range(TW):
+            c = second[y * TW + x]
+            if c in shore or is_sea(c) or not on_sea(x, y):
+                continue
+            ox, oy = min(x // FACTOR, ow - 1), min(y // FACTOR, oh - 1)
+            near = [(a, b) for a in range(max(0, ox - 1), min(ow, ox + 2)) for b in range(max(0, oy - 1), min(oh, oy + 2))
+                    if old_shore(a, b)]
+            if near:
+                a, b = min(near, key=lambda q: abs(q[0] * FACTOR + 1 - x) + abs(q[1] * FACTOR + 1 - y))
+                types[y * TW + x] = old(a, b)
+
+
 def ground_scaled(path, mask, sea_colours):
     """map_ground_types made bigger by tiles (kinds_scaled): sea or land as the heights' new coast (mask) says, the
-    sea ground under the heights' sea as in the games' own maps."""
-    return kinds_scaled(path, mask, sea_colours)
+    sea ground under the heights' sea as in the games' own maps, the beach one tile wide along the new coast."""
+    return kinds_scaled(path, mask, sea_colours, shore=(BEACH,))
 
 
 def climates_scaled(path):

@@ -67,6 +67,7 @@ unit's texture (vanilla-style uniforms), so a new faction's troops wear its own 
   (or keep the old heights - a choice in the window). The sea ground types follow the heights' new coast.
 - **Rivers**: 1 pixel wide (the game crashes on a 2-pixel river), through the block centres, a diagonal step as a
   staircase; a river mouth runs on to the new coast and stops there (no land is left under a river in the sea). Cliffs and Medieval II's land bridges stay unbroken lines too.
+- **Beach one tile wide** along the new coast, as in the games' own maps.
 - **Ground and climates by tile**: every new tile gets the ground type and climate of the old tile it lies in (a
   forest stays a forest), with natural edges where two kinds meet.
 - **Pictures**: `map_trade_routes`, fog, roughness, disasters and radar maps scaled with exact colours.
