@@ -3,7 +3,6 @@
 ## Unreleased
 
 ### Changed
-- **Medieval II's religion limit is 10 with the heretics** (TWC's hardcoded-limits pages; was 9) - only on the original exe; with M2EX there is none.
 - **REX / M2EX: no limits at all** (the author, after the same faction-limit error came back once more): with REX or
   M2EX beside the game the editor never refuses or warns for a number - factions, regions, religions, cultures,
   units, buildings, children, retinue. Check mod files says "LIMITS: none"; every write raises `max_factions` in

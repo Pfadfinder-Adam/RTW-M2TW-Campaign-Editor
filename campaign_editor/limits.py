@@ -73,7 +73,7 @@ _LIFTS = {
 }
 ENGINE_LIFTS = {"REX.exe": dict(_LIFTS), "M2EX.exe": dict(_LIFTS)}
 # The original exes' fixed numbers the tool refuses beyond when no REX / M2EX runs the game.
-MAX_RELIGIONS = 10                  # M2TW: 10 including heretic (TWC "Religion/Culture Hardcoded limit"); BI beliefs the same
+MAX_RELIGIONS = 9
 LIMIT_WORDS = {"regions": "regions (the sea counts as one)", "map_size": "map_regions.tga width / height",
 "units": "units in export_descr_unit.txt",
                "chains": "building chains", "levels": "levels in one building chain",
