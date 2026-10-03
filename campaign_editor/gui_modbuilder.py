@@ -22,6 +22,7 @@ GAMES = [("both", "both games (REX and M2EX)"), ("rome", "Rome: Total War (REX)"
          ("medieval2", "Medieval II (M2EX)")]
 CHOICES = {"op": MB.OPS, "turn_op": MB.TURN_OPS, "who": MB.WHO_IS, "to": MB.TO, "stance": MB.STANCES}
 NUMBERS = ("int", "signed", "percent")
+WIDE = ("text", "long")
 EMPTY = "Empty - make your own"
 MINE = "--- my modules ---"
 HOW = ("A module is a small script the engine runs during the campaign: WHEN something happens, IF the conditions "
@@ -79,10 +80,8 @@ class ModuleBuilder(tk.Toplevel):
         low.pack(fill="x")
         pl = ttk.LabelFrame(low, text=" In plain words ", padding=6)
         pl.pack(fill="x")
-        self.lbl_plain = ttk.Label(pl, wraplength=1150, justify="left", foreground="#1d3b6a", font=("", 10))
-        self.lbl_plain.pack(anchor="w")
-        self.lbl_bad = ttk.Label(low, wraplength=1180, justify="left")
-        self.lbl_bad.pack(anchor="w", pady=(4, 0))
+        self.lbl_plain = wrapping(ttk.Label(pl, justify="left", foreground="#1d3b6a", font=("", 10)))
+        self.lbl_bad = wrapping(ttk.Label(low, justify="left"), pady=(4, 0))
         bar = ttk.Frame(low)
         bar.pack(fill="x", pady=(6, 0))
         ttk.Button(bar, text="Show the script", command=self.show_script).pack(side="left")
@@ -99,6 +98,8 @@ class ModuleBuilder(tk.Toplevel):
     def fill_list(self):
         self.entries = []
         self.lb.delete(0, "end")
+        titles = [r["title"] for r in MB.EXAMPLES] + [r.get("title") or a.title for a, r in MB.my_modules()]
+        self.lb.configure(width=max([36] + [len(t) + 2 for t in titles]))
         for r in MB.EXAMPLES:
             self.entries.append(("ex", r))
             self.lb.insert("end", r["title"])
@@ -189,11 +190,11 @@ class ModuleBuilder(tk.Toplevel):
         cb.pack(side="left")
         cb.bind("<<ComboboxSelected>>", lambda e: self.set_when(v.get()))
         if ev:
-            tk.Label(f, text=ev.help[0].upper() + ev.help[1:] + ".", bg=c, fg="#444", wraplength=820,
-                     justify="left").pack(anchor="w", padx=18)
-            tk.Label(f, bg=c, fg="#444", text="It brings along: " + ", ".join(
-                MB.SUBJECT_WORDS[s] for s in ev.subjects) + " - the conditions and actions below work on them.").pack(
-                anchor="w", padx=18, pady=(0, 6))
+            wrapping(tk.Label(f, text=ev.help[0].upper() + ev.help[1:] + ".", bg=c, fg="#444", justify="left",
+                              anchor="w"), padx=18)
+            wrapping(tk.Label(f, bg=c, fg="#444", justify="left", anchor="w", text="It brings along: " + ", ".join(
+                MB.SUBJECT_WORDS[s] for s in ev.subjects) + " - the conditions and actions below work on them."),
+                padx=18, pady=(0, 6))
 
     def _block(self, inner, group):
         f, c = self._frame(inner, group)
@@ -212,12 +213,19 @@ class ModuleBuilder(tk.Toplevel):
                                width=max(len(p.label) for p in parts) - 10)
             pcb.pack(side="left")
             pcb.bind("<<ComboboxSelected>>", lambda e, g=group, n=i, v=pv: self.change_part(g, n, v.get()))
+            wide = []
             for name, kind, label, _ in (part.fields if part else []):
-                self._field(row, c, group, i, it, part, name, kind, label)
+                if kind in WIDE or kind.startswith("names:"):
+                    wide.append((name, kind, label))      # on a line of its own below: no text cut at the edge
+                else:
+                    self._field(row, c, group, i, it, part, name, kind, label)
             tk.Button(row, text="x", relief="flat", bg=c, fg="#a00", activebackground=c, cursor="hand2",
                       command=lambda g=group, n=i: self.remove(g, n)).pack(side="left", padx=6)
             if part and part.help:
                 hint(row, part.help).pack(side="left")
+            for name, kind, label in wide:
+                if self._shown(part, it, name, kind):
+                    self._wide_field(f, c, group, i, it, name, kind, label)
         add = tk.Button(f, text=ADD[group], relief="groove", bg=c, activebackground=c, cursor="hand2")
         add.configure(command=lambda b=add, g=group: self.add_menu(b, g))
         add.pack(anchor="w", padx=18, pady=(4, 6))
@@ -236,9 +244,9 @@ class ModuleBuilder(tk.Toplevel):
         before = bool(label) and kind not in NUMBERS
         if before:
             tk.Label(row, text=label, bg=c, fg="#1e1e1e").pack(side="left", padx=(6, 2))
-        if kind in NUMBERS or kind in ("text", "long"):
+        if kind in NUMBERS:
             v = tk.StringVar(value="" if it.get(name) is None else str(it.get(name)))
-            ttk.Entry(row, textvariable=v, width={"text": 24, "long": 36}.get(kind, 8)).pack(side="left", padx=2)
+            ttk.Entry(row, textvariable=v, width=8).pack(side="left", padx=2)
             v.trace_add("write", lambda *a: self.set_value(group, i, name, kind, v.get()))
         elif kind in CHOICES:
             pairs = CHOICES[kind]
@@ -252,14 +260,23 @@ class ModuleBuilder(tk.Toplevel):
             v = tk.StringVar(value=it.get(name) or "")
             ttk.Combobox(row, textvariable=v, values=self.names_of(what), width=28).pack(side="left", padx=2)
             v.trace_add("write", lambda *a: self.set_value(group, i, name, kind, v.get()))
-        elif kind.startswith("names:"):
-            what = kind.split(":")[1]
-            v = tk.StringVar(value=", ".join(it.get(name) or []))
-            ttk.Entry(row, textvariable=v, width=34).pack(side="left", padx=2)
-            v.trace_add("write", lambda *a: self.set_value(group, i, name, kind, v.get()))
-            ttk.Button(row, text="Pick...", command=lambda: self.pick_many(what, v)).pack(side="left", padx=2)
         if label and not before:
             tk.Label(row, text=label, bg=c, fg="#1e1e1e").pack(side="left", padx=(2, 6))
+
+    def _wide_field(self, f, c, group, i, it, name, kind, label):
+        """A text or a list of names on a line of its own under its row, in a box as wide as the block that grows
+        with what is typed (one line of words: Enter adds none)."""
+        sub = tk.Frame(f, bg=c)
+        sub.pack(anchor="w", fill="x", padx=(46, 18), pady=(0, 3))
+        tk.Label(sub, text=label, bg=c, fg="#1e1e1e", width=8, anchor="e").pack(side="left", padx=(0, 4))
+        names = kind.startswith("names:")
+        now = ", ".join(it.get(name) or []) if names else str(it.get(name) or "")
+        box = GrowingText(sub, now, lambda text: self.set_value(group, i, name, kind, text),
+                          least=2 if kind == "long" else 1)
+        if names:
+            ttk.Button(sub, text="Pick...", command=lambda: self.pick_many(kind.split(":")[1], box)).pack(
+                side="right", padx=(4, 0))
+        box.pack(side="left", fill="x", expand=True)
 
     def _settings(self, inner):
         f = ttk.LabelFrame(inner, text=" What the player may change later (on the Add-ons page) ", padding=6)
@@ -278,7 +295,7 @@ class ModuleBuilder(tk.Toplevel):
             on = tk.BooleanVar(value=path in have)
             lab = tk.StringVar(value=have.get(path) or words[0].upper() + words[1:])
             ttk.Checkbutton(r, variable=on, text=words, width=58).pack(side="left")
-            e = ttk.Entry(r, textvariable=lab, width=34)
+            e = ttk.Entry(r, textvariable=lab, width=max(34, min(60, len(lab.get()) + 4)))
             e.pack(side="left", padx=8)
 
             def toggled(p=path, on=on, lab=lab, e=e):
@@ -577,3 +594,50 @@ def open_builder(app, recipe=None):
     if recipe is not None:
         w.load(recipe, ask=True)
     return w
+
+
+def wrapping(label, **pack):
+    """A label packed across its parent whose words wrap at its own width - never cut at the window's edge."""
+    label.pack(fill="x", anchor="w", **pack)
+    label.bind("<Configure>", lambda e: label.configure(wraplength=max(60, e.width - 8)), add="+")
+    return label
+
+
+class GrowingText(tk.Text):
+    """A box for one line of words that wraps them and grows (up to 5 lines) instead of hiding what does not fit;
+    on_change(text) on every change. get() / set() like a StringVar (pick_many fills it)."""
+
+    def __init__(self, master, text, on_change, least=1):
+        super().__init__(master, height=least, width=40, wrap="word", font="TkDefaultFont", relief="solid", bd=1,
+                         undo=True, highlightthickness=0)
+        self.least, self.on_change = least, on_change
+        self.insert("1.0", text)
+        self.edit_modified(False)
+        self.bind("<<Modified>>", self._changed)
+        self.bind("<Return>", lambda e: "break")
+        self.bind("<KP_Enter>", lambda e: "break")
+        self.bind("<Configure>", lambda e: self._fit())
+
+    def get(self, *a):
+        if a:
+            return super().get(*a)
+        return super().get("1.0", "end-1c").replace("\n", " ")
+
+    def set(self, text):
+        self.delete("1.0", "end")
+        self.insert("1.0", text)
+
+    def _changed(self, e=None):
+        if not self.edit_modified():
+            return
+        self.edit_modified(False)
+        self.on_change(self.get())
+        self._fit()
+
+    def _fit(self):
+        try:
+            n = self.count("1.0", "end", "displaylines")
+            n = n[0] if isinstance(n, tuple) else n
+        except (tk.TclError, TypeError, IndexError):
+            return
+        self.configure(height=max(self.least, min(5, n or 1)))
