@@ -38,10 +38,6 @@ WHO = [("player", "Only the player (the human)"),
        ("player_and_homeless", "The player, and computer factions without a town (hordes)"),
        ("ai", "Only the computer's factions"),
        ("list", "Only the factions I pick")]
-WHO_M2 = [("player", "Only the player (the human)"),
-          ("everyone", "Everyone - the player and every computer faction"),
-          ("ai", "Only the computer's factions"),
-          ("list", "Only the factions I pick")]
 
 
 class Addon:
@@ -67,7 +63,7 @@ class Addon:
 
 
 ADDONS = [
-    Addon("sack_settlement", "Sack Settlement", "rome", "sack_settlement.nut",
+    Addon("sack_settlement", "Sack Settlement (Rome)", "rome", "sack_settlement.nut",
           "A 4th choice on the capture scroll, under Occupy / Enslave / Exterminate: Sack Settlement. The town is "
           "exterminated the game's own way, every building but the kept ones is torn down, you get a reward, and "
           "the ruins go to the rebels (with a rebel garrison the game raises itself) - land you do not want to hold "
@@ -91,30 +87,35 @@ ADDONS = [
            Setting("RAZE_BUTTON_TIP", "text", "Button tooltip", "shown when the mouse is over it")],
           "REX (Rome: Total War). Vanilla Rome has no scripts - the add-on then does nothing.",
           picks={"RAZE_KEEP_CHAINS": "chains", "RAZE_DEFAULT_REBEL_UNITS": "units", "RAZE_FACTIONS": "factions"}),
-    Addon("raze_settlement", "Raze Settlement", "medieval2", "raze_settlement.lua",
-          "A 4th choice on the capture scroll, under Occupy / Sack / Exterminate: Raze Settlement. The town is "
-          "exterminated the game's own way, every building but the kept ones is torn down, most people are gone, "
-          "you get a reward, and the ruins go to the rebels with a fresh rebel garrison M2EX raises itself - the "
-          "Medieval II brother of Rome's Sack Settlement. The computer's factions allowed below raze when they "
-          "exterminate.",
+    Addon("raze_settlement", "Sack Settlement (Medieval II)", "medieval2", "raze_settlement.nut",
+          "A 4th choice on the capture scroll, under Occupy / Sack / Exterminate - its button says Raze Settlement "
+          "(the game's own second button is already called Sack Settlement; change the words below), drawn from the "
+          "game's own button pieces like the three above it. The town is exterminated the game's own way, "
+          "every building but the kept ones is torn down, most people are gone, you get a reward, and the ruins go "
+          "to the rebels with a fresh rebel garrison M2EX raises itself - the Medieval II brother of Rome's Sack "
+          "Settlement, the same script engine. The computer's factions allowed below raze when they exterminate.",
           [Setting("RAZE_ENABLED", "bool", "Razing on", "off keeps the file but does nothing"),
            Setting("RAZE_WHO", "choice", "Who may raze", "the player picks it on the capture scroll; a computer "
-                   "faction allowed here razes whenever it exterminates a town", WHO_M2),
+                   "faction allowed here razes whenever it exterminates a town", WHO),
            Setting("RAZE_FACTIONS", "list", "The factions", "for 'Only the factions I pick'",
                    when=("RAZE_WHO", ["list"])),
            Setting("RAZE_GIVE_TO_REBELS", "bool", "Ruins go to the rebels", "off: the razed town stays yours"),
+           Setting("RAZE_REBEL_GARRISON", "bool", "Rebels get a garrison", "the game raises it from the region's "
+                   "rebel type (descr_rebel_factions.txt)"),
            Setting("RAZE_GOLD_PER_BUILDING", "int", "Money per building torn down", "added to the extermination's"),
            Setting("RAZE_GOLD_PER_CITIZEN", "int", "Money per inhabitant", "for each person the raze removes"),
-           Setting("RAZE_PEOPLE_LEFT", "int", "People left in the ruins", "the rest are gone"),
-           Setting("RAZE_KEEP_CHAINS", "set", "Building chains never torn down", "the core chain (walls are its "
+           Setting("RAZE_PEOPLE_LEFT", "int", "People left in the ruins", "0 = as few as the town's level allows "
+                   "(never fewer than that)"),
+           Setting("RAZE_KEEP_CHAINS", "set", "Building chains never torn down", "the core chains (walls are their "
                    "levels in Medieval II) must stay; roads by default - use this mod's chain names"),
-           Setting("RAZE_BUTTON", "bool", "The 4th button", "off: no button - Exterminate razes for the factions "
-                   "allowed above"),
+           Setting("RAZE_DEFAULT_REBEL_UNITS", "list", "Rebel units if the game raises none", "unit types of this "
+                   "mod's export_descr_unit.txt; empty = none"),
+           Setting("RAZE_BUTTON", "bool", "The 4th button", "off: Exterminate asks Yes / No to raze instead"),
            Setting("RAZE_BUTTON_LABEL", "text", "Button text", "the words on the button"),
            Setting("RAZE_BUTTON_TIP", "text", "Button tooltip", "shown when the mouse is over it")],
-          "M2EX (Medieval II: Total War) - it runs the mod's eopData/eopScripts/luaPluginScript.lua. Vanilla "
-          "Medieval II runs no scripts - the add-on then does nothing.",
-          picks={"RAZE_KEEP_CHAINS": "chains", "RAZE_FACTIONS": "factions"}),
+          "M2EX (Medieval II: Total War) - its own scripts (script/main.nut) load every .nut of the game's "
+          "script/modules, whatever mod runs. Vanilla Medieval II runs no scripts - the add-on then does nothing.",
+          picks={"RAZE_KEEP_CHAINS": "chains", "RAZE_DEFAULT_REBEL_UNITS": "units", "RAZE_FACTIONS": "factions"}),
     Addon("player_diplomacy", "Player Diplomacy", "rome", "player_diplomacy.nut",
           "The computer's factions stop attacking you when it makes no sense: after a ceasefire they keep the peace "
           "for some turns (a war they declare in that time is undone), your client kingdoms never plan to invade "
@@ -337,11 +338,6 @@ def share(addon, out, values=None):
 # ---------------------------------------------------------------------------
 # The script's setting lines
 # ---------------------------------------------------------------------------
-def _lua(text):
-    """A Lua script (comments '--') rather than Squirrel ('//')."""
-    return bool(re.search(r"^\s*--", text, re.M)) and not re.search(r"^\s*//", text, re.M)
-
-
 def _span(text, var):
     """(start, end) of the value of 'local VAR = value' (a { } or [ ] value may run over lines), or None."""
     m = re.search(r"^local\s+%s\s*=\s*" % re.escape(var), text, re.M)
@@ -407,7 +403,7 @@ def _quote(v):
     return '"%s"' % str(v).replace("\\", "\\\\").replace('"', '\\"')
 
 
-def _render(s, v, old, lua=False):
+def _render(s, v, old):
     if s.kind == "bool":
         return "true" if v else "false"
     if s.kind == "int":
@@ -415,8 +411,7 @@ def _render(s, v, old, lua=False):
     if s.kind == "float":
         return repr(float(v))                      # 3.0, never 3 (Squirrel would make it a whole number)
     if s.kind == "list":
-        inner = ", ".join(_quote(x) for x in v)
-        return "{" + inner + "}" if lua else "[" + inner + "]"
+        return "[" + ", ".join(_quote(x) for x in v) + "]"
     if s.kind == "set":
         indent = re.search(r"\n([ \t]+)\S", old)
         ind = indent.group(1) if indent else "    "
@@ -441,15 +436,12 @@ def mod_names(mod, what):
     return []
 
 
-PICKS = {"RAZE_KEEP_CHAINS": "chains", "RAZE_DEFAULT_REBEL_UNITS": "units"}      # Sack Settlement's (addon.picks)
-
-
 def check(addon, values, mod=None):
     """[problem] with the chosen values (empty = fine). With the mod, names are checked against its files: a kept
     chain or a rebel unit the mod does not have would do nothing (the governor's chain would then be torn down);
     and the add-on's own code already pasted into the mod's scripts is refused (it would run twice)."""
     out = []
-    if mod is not None and not addon.file.lower().endswith(".lua"):
+    if mod is not None:
         dup = already_in_scripts(mod, addon)
         if dup:
             out.append("this mod's own %s already holds the %s code - it would run twice (two buttons); take it out "
@@ -470,10 +462,12 @@ def check(addon, values, mod=None):
                         "export_descr_buildings.txt" if what == "chains" else "export_descr_unit.txt"))
         chains = mod_names(mod, "chains")
         if "RAZE_KEEP_CHAINS" in values and chains:
-            core = [c for c in chains if c.lower().startswith("core")]
-            if core and not {c.lower() for c in core} & {x.lower() for x in values["RAZE_KEEP_CHAINS"]}:
+            # every governor's chain: Medieval II has two (core_building for cities, core_castle_building)
+            kept = {x.lower() for x in values["RAZE_KEEP_CHAINS"]}
+            lost = [c for c in chains if c.lower().startswith("core") and c.lower() not in kept]
+            if lost:
                 out.append("Building chains never torn down: keep the governor's chain (%s) - the game breaks "
-                           "without it" % ", ".join(core))
+                           "without it" % ", ".join(lost))
     name = re.compile(r"^[A-Za-z_][\w]*$")
     for s in addon.settings:
         v = values.get(s.var)
@@ -488,7 +482,8 @@ def check(addon, values, mod=None):
         if s.kind == "choice" and v not in [c for c, _ in s.choices]:
             out.append("%s: pick one of the list" % s.label)
     if values.get("RAZE_WHO") == "list" and not values.get("RAZE_FACTIONS"):
-        out.append("Who may sack: pick at least one faction")
+        out.append("%s: pick at least one faction" % next(
+            (s.label for s in addon.settings if s.var == "RAZE_WHO"), "Who may"))
     return out
 
 
@@ -501,18 +496,20 @@ def render(addon, text, values):
         sp = _span(text, s.var)
         if not sp:
             raise ValueError("the add-on's script has no %s line" % s.var)
-        text = text[:sp[0]] + _render(s, values[s.var], text[sp[0]:sp[1]], _lua(text)) + text[sp[1]:]
+        text = text[:sp[0]] + _render(s, values[s.var], text[sp[0]:sp[1]]) + text[sp[1]:]
     return text
 
 
 # ---------------------------------------------------------------------------
 # Where it goes
 # ---------------------------------------------------------------------------
-EOP_DIR = ("eopData", "eopScripts")
-EOP_ENTRY = "luaPluginScript.lua"
-LOADER = ('do local ok, err = pcall(function() local base = (M2TWEOP and M2TWEOP.getModPath and '
-          'M2TWEOP.getModPath()) or "." dofile(base .. "/eopData/eopScripts/%s") end) if not ok then '
-          'print("[ADDON] %s not loaded: " .. tostring(err)) end end  -- added by RTW & M2TW Campaign Editor: %s')
+# Up to 0.29.2 the Medieval II Raze Settlement was an EOP-style Lua script in the mod's eopData/eopScripts, loaded by a
+# line in luaPluginScript.lua; the native .nut replaces it, and putting it in (or taking it out) takes the Lua copy and
+# its line out too - both would draw a button.
+OLD_LUA = {"raze_settlement": "raze_settlement.lua"}
+OLD_LUA_DIR = ("eopData", "eopScripts")
+OLD_LUA_ENTRY = "luaPluginScript.lua"
+OLD_LUA_MARK = b"added by RTW & M2TW Campaign Editor: "
 
 
 def loads_modules(folder):
@@ -534,11 +531,8 @@ def target(mod, addon):
     """Where the add-on goes: <game>/script/modules/<file> - REX's own scripts (script/main.nut, the squi plugin)
     require every .nut there for whatever mod runs (a tester's HLR has a script plugin of its own whose main.nut
     loads no modules: an add-on in the mod's script/modules never ran). The mod's own script/modules only when the
-    mod's main.nut loads them, or the game folder is not known. A Lua add-on (M2EX's EOP-compatible Lua) goes to
-    <mod folder>/eopData/eopScripts/<file>, loaded by a line in that folder's luaPluginScript.lua."""
+    mod's main.nut loads them, or the game folder is not known. M2EX's script/main.nut does the same for Medieval II."""
     root = os.path.dirname(os.path.abspath(mod.data))
-    if addon.file.lower().endswith(".lua"):
-        return os.path.join(root, *EOP_DIR, addon.file)
     game = None
     try:
         from .newmod import game_of
@@ -614,39 +608,36 @@ def plan_install(plan, addon, values, mod=None):
     text = render(addon, addon.template(), values)
     dst = target(plan.mod, addon)
     plan.binary(dst, text.encode("utf-8"))
-    if dst.lower().endswith(".lua"):
-        _hook_lua(plan, addon, dst, on=True)
+    _old_lua(plan, mod or plan.mod, addon)
     plan.note(None, "%s %s: %s" % ("updated" if os.path.isfile(dst) else "put in", addon.title,
                                    os.path.relpath(dst, os.path.dirname(os.path.abspath(plan.mod.data)))))
     return dst
 
 
-def plan_remove(plan, addon):
+def plan_remove(plan, addon, mod=None):
     dst = target(plan.mod, addon)
     plan.delete(dst, "the %s add-on taken out" % addon.title)
-    if dst.lower().endswith(".lua"):
-        _hook_lua(plan, addon, dst, on=False)
+    _old_lua(plan, mod or plan.mod, addon)
     return dst
 
 
-def _hook_lua(plan, addon, dst, on):
-    """The line in luaPluginScript.lua that loads a Lua add-on: added at the end (after the mod's own handlers, which
-    the add-on then wraps), or taken out. The file is made when the mod has none."""
-    entry = os.path.join(os.path.dirname(dst), EOP_ENTRY)
-    if entry in plan.binaries:
-        text = plan.binaries[entry].decode("utf-8", "replace")
-    elif os.path.isfile(entry):
-        with open(entry, "rb") as fh:
-            text = fh.read().decode("utf-8", "replace")
-    else:
-        if not on:
-            return
-        text = "-- luaPluginScript.lua: M2EX runs this file of the mod (EOP-compatible Lua)\n"
-    mark = "added by RTW & M2TW Campaign Editor: %s" % addon.file
-    lines = [l for l in text.splitlines() if mark not in l]
-    if on:
-        lines.append(LOADER % (addon.file, addon.title, addon.file))
-    new = "\n".join(lines) + "\n"
-    if new != text:
-        plan.binary(entry, new.encode("utf-8"))
-        plan.note(None, "%s: %s %s" % (EOP_ENTRY, "loads" if on else "no longer loads", addon.file))
+def _old_lua(plan, mod, addon):
+    """An older version's Lua copy of the add-on in the mod (OLD_LUA) deleted, and its loader line taken out of
+    luaPluginScript.lua - every other byte of that file kept."""
+    old = OLD_LUA.get(addon.key)
+    if not old:
+        return
+    folder = os.path.join(os.path.dirname(os.path.abspath(mod.data)), *OLD_LUA_DIR)
+    lua = _ci(folder, old) if os.path.isdir(folder) else None
+    if lua:
+        plan.delete(lua, "the older Lua %s - the native script replaces it" % addon.title)
+    entry = _ci(folder, OLD_LUA_ENTRY) if os.path.isdir(folder) else None
+    if not entry:
+        return
+    with open(entry, "rb") as fh:
+        data = fh.read()
+    lines = data.split(b"\n")
+    keep = [l for l in lines if (OLD_LUA_MARK + old.encode()) not in l]
+    if len(keep) != len(lines):
+        plan.binary(entry, b"\n".join(keep))
+        plan.note(None, "%s: no longer loads the older Lua %s" % (OLD_LUA_ENTRY, old))

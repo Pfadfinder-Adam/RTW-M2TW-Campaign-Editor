@@ -53,6 +53,17 @@
   cavalry, missile, general). A sheet shared with another faction becomes the faction's own copy.
 
 ### Changed
+- **Sack Settlement for Medieval II (M2EX) is a button of the game's own kind**: the Medieval II add-on is now the
+  same kind of script as Rome's Sack Settlement - M2EX runs the same scripts as REX (squi) - so its 4th button on
+  the capture scroll is made of the scroll's own text-button pieces, as wide and as far apart as Occupy / Sack /
+  Exterminate, in the game's font. It goes into the game's `script/modules`, where M2EX loads it for every mod.
+  With it come the Rome add-on's options: who may raze includes hordes, rebel units if the game raises none, and
+  with the 4th button off Exterminate asks Yes / No; the castles' roads are kept by default and you pick how many
+  people stay in the ruins. The older Lua copy (`eopData/eopScripts/raze_settlement.lua` and its line in
+  `luaPluginScript.lua`) is taken out when the new one is put in or taken out, so the scroll never shows two
+  buttons. In the Add-ons list the two are **Sack Settlement (Rome)** and **Sack Settlement (Medieval II)**; in
+  Medieval II the button itself says Raze Settlement, since the game's own second button is already Sack
+  Settlement (the words are a setting).
 - **Recolour more exact**: 64 pictures of
   five Medieval II factions recoloured and looked at one by one - before 49 good / 12 small faults / 3 bad, now 59 /
   5 / 0. Black and white faction colours (the Holy Roman Empire, Saxons, Timurids, the white of France, Denmark,

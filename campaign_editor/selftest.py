@@ -1337,7 +1337,7 @@ def run(data, campaign, progress=None, make=True):
     c = Ctx(data, campaign, work)
     names = {"template": c.template, "edited": c.edited, "other": c.other, "new": c.new, "later": c.later,
              "split": c.split, "foreign": c.foreign,
-             "addon": "Raze Settlement (M2EX)" if c.m2 else "Sack Settlement (REX)"}
+             "addon": "Sack Settlement (Medieval II, M2EX)" if c.m2 else "Sack Settlement (Rome, REX)"}
     before = problems(ModData(data), campaign)
     results = []
     for n, (title, see, fn) in enumerate(STEPS, 1):

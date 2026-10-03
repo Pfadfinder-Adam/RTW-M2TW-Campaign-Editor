@@ -11,6 +11,11 @@ from .gui_util import ScrollFrame
 from .plan import Plan
 
 
+# the line each built-in add-on writes into the game's log once it runs
+LOADED = {"sack_settlement": "'[SACK] Sack Settlement module loaded'.",
+          "raze_settlement": "'[RAZE] Raze Settlement module loaded'."}
+
+
 class AddonsPanel(ttk.Frame):
     kind = "add-ons"
 
@@ -189,9 +194,8 @@ class AddonsPanel(ttk.Frame):
             ttk.Button(bar, text="Take it out", command=self.remove).pack(side="left")
         ttk.Label(inner, foreground="#555", wraplength=760, justify="left", text=(
             "Every write makes a backup first (Tools > Restore a backup undoes it). Then start the campaign: the "
-            "game log (system.log.txt) says " + ("'[SACK] Sack Settlement module loaded'." if a.key ==
-                                                "sack_settlement" else "that the module %s was loaded (or why "
-                                                "not)." % os.path.splitext(a.file)[0]))).grid(
+            "game log (system.log.txt) says " + (LOADED[a.key] if a.key in LOADED else "that the module %s was "
+                                                "loaded (or why not)." % os.path.splitext(a.file)[0]))).grid(
             row=r + 1, column=0, columnspan=3, sticky="w", pady=(8, 0))
         inner.columnconfigure(2, weight=1)
 
@@ -298,7 +302,7 @@ class AddonsPanel(ttk.Frame):
         mod = AD.plan_mod(self.mod, a)
         plan = Plan(mod, "addon", a.key, {})
         if remove:
-            AD.plan_remove(plan, a)
+            AD.plan_remove(plan, a, self.mod)
         else:
             AD.plan_install(plan, a, self.values(), self.mod)
         return plan

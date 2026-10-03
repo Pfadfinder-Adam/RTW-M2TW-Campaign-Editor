@@ -3307,35 +3307,69 @@ building smith
         self.assertEqual(sum(1 for l in head if l.startswith("denari\t")), 1)
         self.assertTrue(any("seldom sends its leader" in n for _, n in plan.notes))
 
-    def test_raze_settlement_lua_addon_for_medieval2(self):
-        """The Medieval II add-on is Lua (M2EX's EOP-compatible scripts): settings written as Lua ({} lists), the file
-        in eopData/eopScripts, one loader line in luaPluginScript.lua (a mod's own lines kept), taken out again."""
+    def test_raze_settlement_native_addon_for_medieval2(self):
+        """The Medieval II add-on is a Squirrel module like Rome's Sack (M2EX runs the same squi scripts): settings
+        written as Squirrel ([] lists), the file in script/modules; an older version's Lua copy in the mod's
+        eopData/eopScripts and its loader line are taken out (the mod's own lines kept, byte for byte), so the
+        capture scroll never shows two buttons; Restore gives everything back."""
         from campaign_editor import addons as A
-        a = next(x for x in A.library() if x.file == "raze_settlement.lua")
+        a = A.by_key("raze_settlement")
+        self.assertEqual(a.file, "raze_settlement.nut")
         self.assertTrue(a.fits("medieval2"))
         self.assertFalse(a.fits("rome"))
+        self.assertFalse(any(x.file.lower().endswith(".lua") for x in A.library()))
+        text = a.template()
+        got = A.read_settings(a, text)
+        self.assertEqual(got["RAZE_WHO"], "player")
+        self.assertEqual(got["RAZE_KEEP_CHAINS"],
+                         ["core_building", "core_castle_building", "hinterland_roads", "hinterland_castle_roads"])
+        self.assertEqual(A.render(a, text, got), text)
+        # the script is the Sack's engine code with Medieval II's names: Sack is the scroll's middle button there
+        self.assertIn('"loot_settlement_sack_button"', text)
+        self.assertNotIn("loot_settlement_enslave_button", text)
+        self.assertIn('local PREFIX = "[RAZE] "', text)
         mod = ModData(self.root)
-        entry = os.path.join(self.root, "eopData", "eopScripts", "luaPluginScript.lua")
-        write(entry, "-- the mod's own\nfunction onPluginLoad() end\n")
-        vals = A.read_settings(a, a.template())
-        vals.update(RAZE_WHO="list", RAZE_FACTIONS=["alpha"], RAZE_GOLD_PER_BUILDING=500, RAZE_KEEP_CHAINS=[])
+        edb = os.path.join(self.root, "data", "export_descr_buildings.txt")
+        write(edb, "building core_building\n{\n}\nbuilding core_castle_building\n{\n}\n"
+                   "building hinterland_roads\n{\n}\nbuilding hinterland_castle_roads\n{\n}\n")
+        # both governor's chains must stay
+        self.assertTrue(any("core_castle_building" in x for x in
+                            A.check(a, dict(got, RAZE_KEEP_CHAINS=["core_building"]), mod)))
+        self.assertFalse(A.check(a, got, mod))
+        folder = os.path.join(self.root, "eopData", "eopScripts")
+        entry = os.path.join(folder, "luaPluginScript.lua")
+        own = b"-- the mod's own\r\nfunction onPluginLoad() end\r\n"
+        entry_before = own + b'do dofile("x/raze_settlement.lua") end  -- added by RTW & M2TW Campaign Editor: ' \
+            b'raze_settlement.lua\n'
+        os.makedirs(folder, exist_ok=True)
+        with open(entry, "wb") as f:
+            f.write(entry_before)
+        old = os.path.join(folder, "raze_settlement.lua")
+        write(old, "-- Raze Settlement, the older Lua\n")
+        vals = dict(got, RAZE_WHO="list", RAZE_FACTIONS=["alpha"], RAZE_GOLD_PER_BUILDING=500, RAZE_PEOPLE_LEFT=300)
         plan = Plan(mod, "addon", "raze", {})
-        dst = A.plan_install(plan, a, vals)
-        plan.apply()
-        self.assertEqual(dst, os.path.join(self.root, "eopData", "eopScripts", "raze_settlement.lua"))
-        text = open(dst).read()
-        self.assertIn('local RAZE_FACTIONS = {"alpha"}', text)
-        self.assertIn("local RAZE_GOLD_PER_BUILDING = 500", text)
-        self.assertEqual(A.installed(mod, a)["RAZE_WHO"], "list")
-        lua = open(entry).read()
-        self.assertIn("function onPluginLoad() end", lua)
-        self.assertEqual(sum(1 for l in lua.splitlines() if "raze_settlement.lua" in l), 1)
+        dst = A.plan_install(plan, a, vals, mod)
+        self.assertEqual(dst, os.path.join(self.root, "script", "modules", "raze_settlement.nut"))
+        bdir = plan.apply()
+        new = open(dst).read()
+        self.assertIn('local RAZE_FACTIONS = ["alpha"]', new)
+        self.assertIn("local RAZE_GOLD_PER_BUILDING = 500", new)
+        self.assertEqual(A.installed(mod, a)["RAZE_PEOPLE_LEFT"], 300)
+        self.assertFalse(os.path.exists(old))
+        with open(entry, "rb") as f:
+            self.assertEqual(f.read(), own)
+        restore(mod, bdir)
+        self.assertTrue(os.path.exists(old))
+        with open(entry, "rb") as f:
+            self.assertEqual(f.read(), entry_before)
+        self.assertIsNone(A.installed(mod, a))
+        # taking it out takes the older Lua out too
         p2 = Plan(mod, "addon", "raze_off", {})
-        A.plan_remove(p2, a)
+        A.plan_remove(p2, a, mod)
         p2.apply()
-        self.assertFalse(os.path.exists(dst))
-        self.assertNotIn("raze_settlement", open(entry).read())
-        self.assertIn("function onPluginLoad() end", open(entry).read())
+        self.assertFalse(os.path.exists(old))
+        with open(entry, "rb") as f:
+            self.assertEqual(f.read(), own)
 
     def test_faction_emblem_one_picture_everywhere(self):
         """One emblem picture -> every emblem picture in its own size; mouse over brighter, greyed out grey, selected
@@ -3468,7 +3502,7 @@ building smith
         from campaign_editor import selftest as ST
         names = {"template": "alpha", "edited": "beta", "other": "gamma", "new": "ce_test", "later": "ce_test_later",
                  "split": "ce_test_split", "foreign": "delta",
-                 "addon": "Sack Settlement (REX)"}
+                 "addon": "Sack Settlement (Rome, REX)"}
         self.assertGreaterEqual(len(ST.STEPS), 30)
         for title, see, fn in ST.STEPS:
             self.assertTrue(title.format(**names) and callable(fn))
