@@ -1012,11 +1012,11 @@ class MapView(ttk.Frame):
             if not (-20 < sx < cw + 20 and -20 < sy < ch + 20):
                 continue
             if fo.kind == "landmark":
-                self._wonder_icon(c, sx, sy, max(2.5, min(self.z * 0.45, 13)), fo.type, ("fort", "fort:%d" % fo.line))
+                self._wonder_icon(c, sx, sy, max(2.5, min(self.z * 0.45, 40)), fo.type, ("fort", "fort:%d" % fo.line))
                 continue
             col = self.colours.get(fo.owner) if fo.owner else None
             edge = "#%02x%02x%02x" % tuple(col) if col else "#222222"
-            w = max(2.0, min(self.z * (0.28 if fo.kind == "watchtower" else 0.42), 12))
+            w = max(2.0, min(self.z * (0.28 if fo.kind == "watchtower" else 0.42), 36))
             self._fort_icon(c, sx, sy, w, edge, ("fort", "fort:%d" % fo.line), 2 if col else 1)
 
     @staticmethod
@@ -1057,10 +1057,10 @@ class MapView(ttk.Frame):
             tags = ("res", "res:%s" % res["id"])
             sel = res["id"] == self.res_sel
             if res["kind"] == "landmark":
-                self._wonder_icon(c, sx, sy, max(2.5, min(self.z * 0.45, 13)), res.get("type", ""), tags, sel)
+                self._wonder_icon(c, sx, sy, max(2.5, min(self.z * 0.45, 40)), res.get("type", ""), tags, sel)
                 continue
             if res["kind"] in ("fort", "watchtower"):          # a fort keeps its tower, picked: a yellow frame
-                w = max(2.0, min(self.z * (0.28 if res["kind"] == "watchtower" else 0.42), 12))
+                w = max(2.0, min(self.z * (0.28 if res["kind"] == "watchtower" else 0.42), 36))
                 col = self.colours.get(res.get("owner")) if res.get("owner") else None   # battlements: the owner's
                 self._fort_icon(c, sx, sy, w, "#%02x%02x%02x" % tuple(col) if col else "#222222", tags, 2 if col else 1)
                 if sel:
@@ -1073,7 +1073,7 @@ class MapView(ttk.Frame):
                 c.create_rectangle(sx - r, sy - r, sx + r, sy + r, fill=fill, outline="#ffd400" if sel else "",
                                    tags=tags)
                 continue
-            r = min(self.z * 0.42, 14)
+            r = min(self.z * 0.42, 40)                 # grows with the tile (a tester: it looked to shrink)
             if (x, y) in towns:                        # beside the town, at the tile's corner
                 sx, sy = sx + self.z * 0.35, sy - self.z * 0.35
                 r *= 0.6
@@ -1195,15 +1195,15 @@ class MapView(ttk.Frame):
             c.create_polygon(cx - h * 0.3, cy - h * 0.5, cx + h * 0.4, cy - h * 0.25, cx - h * 0.3, cy,
                              fill=edge, stipple="gray50", outline=edge, tags=tags)
         elif kind in ("fort", "watchtower"):            # held in the hand: the sign itself, framed green / red
-            w = max(4.0, min(self.z * (0.28 if kind == "watchtower" else 0.42), 12))
+            w = max(4.0, min(self.z * (0.28 if kind == "watchtower" else 0.42), 36))
             self._fort_icon(c, cx, cy, w, "#222222", tags, 1)
             c.create_rectangle(cx - w - 3, cy - w * 1.3 - 3, cx + w + 3, cy + w + 3, outline=edge, width=2, tags=tags)
         elif kind == "landmark":
-            rr = max(5, min(self.z * 0.45, 13))
+            rr = max(5, min(self.z * 0.45, 40))
             self._wonder_icon(c, cx, cy, rr, g.get("type", ""), tags, False)
             c.create_rectangle(cx - rr - 3, cy - rr - 3, cx + rr + 3, cy + rr + 3, outline=edge, width=2, tags=tags)
         elif kind == "resource":
-            rr = max(5, min(self.z * 0.42, 14))
+            rr = max(5, min(self.z * 0.42, 40))
             fill = self.res_colour(g.get("type", ""))
             c.create_rectangle(cx - rr, cy - rr, cx + rr, cy + rr, fill=fill, outline=edge, width=2, tags=tags)
             c.create_text(cx, cy, text=(g.get("type") or "")[:2].capitalize(), fill=self.text_on(fill),

@@ -772,35 +772,35 @@ class App(tk.Tk):
         tk.Button(bar, text="\u2615  Support on Ko-fi", command=self.support, bg="#ff5e5b", fg="white",
                   activebackground="#e14b48", activeforeground="white", relief="flat", cursor="hand2",
                   font=("", 9, "bold"), padx=10).pack(side="right", padx=(8, 0))
-        ttk.Button(bar, text="Help", command=self.show_help).pack(side="right", padx=(6, 0))
-        ttk.Button(bar, text="\u2699 Settings", command=self.settings_window).pack(side="right", padx=(6, 0))
-        ttk.Button(bar, text="Report a bug / Suggest", command=self.send_report).pack(side="right", padx=(6, 0))
+        ttk.Button(bar, text="Help", command=self.once("show_help", self.show_help)).pack(side="right", padx=(6, 0))
+        ttk.Button(bar, text="\u2699 Settings", command=self.once("settings_window", self.settings_window)).pack(side="right", padx=(6, 0))
+        ttk.Button(bar, text="Report a bug / Suggest", command=self.once("report", self.send_report)).pack(side="right", padx=(6, 0))
         tools = ttk.Menubutton(bar, text="Tools")
         menu = tk.Menu(tools, tearoff=False)
-        menu.add_command(label="Check mod files (what the game would stumble on)", command=self.check)
+        menu.add_command(label="Check mod files (what the game would stumble on)", command=self.once("check", self.check))
         menu.add_command(label="The game's log in plain words (what went wrong in the game)...",
-                         command=self.game_log_window)
-        menu.add_command(label="Settlement names by culture (every town)...", command=self.culture_names_table)
-        menu.add_command(label="Buildings and garrisons for many towns...", command=lambda: self.mass_towns())
+                         command=self.once("game_log_window", self.game_log_window))
+        menu.add_command(label="Settlement names by culture (every town)...", command=self.once("culture_names_table", self.culture_names_table))
+        menu.add_command(label="Buildings and garrisons for many towns...", command=self.once("mass_towns", lambda: self.mass_towns()))
         menu.add_command(label="Recolour a faction's pictures (cards, textures, symbols)...",
-                         command=lambda: self.recolour_window())
-        menu.add_command(label="Make the campaign map 3 x bigger (alpha)...", command=self.upscale_map)
-        menu.add_command(label="Check and install a pack...", command=self.install_pack)
+                         command=self.once("recolour_window", lambda: self.recolour_window()))
+        menu.add_command(label="Make the campaign map 3 x bigger (alpha)...", command=self.once("upscale_map", self.upscale_map))
+        menu.add_command(label="Check and install a pack...", command=self.once("install_pack", self.install_pack))
         menu.add_command(label="Campaign rules (ages, agents, towns, diplomacy, unit sizes)...",
-                         command=self.campaign_rules)
+                         command=self.once("campaign_rules", self.campaign_rules))
         menu.add_command(label="Traits and retinue (what they give, their names, new ones)...",
-                         command=self.traits_window)
+                         command=self.once("traits_window", self.traits_window))
         menu.add_command(label="Events and later factions (plagues, volcanoes, historic messages)...",
-                         command=self.events_window)
-        menu.add_command(label="New religion... (Medieval II)", command=lambda: self.religions_from_menu(True))
-        menu.add_command(label="Religions of a region... (Medieval II)", command=lambda: self.religions_from_menu(False))
+                         command=self.once("events_window", self.events_window))
+        menu.add_command(label="New religion... (Medieval II)", command=self.once("religions_from_menu_True", lambda: self.religions_from_menu(True)))
+        menu.add_command(label="Religions of a region... (Medieval II)", command=self.once("religions_from_menu_False", lambda: self.religions_from_menu(False)))
         menu.add_command(label="Restore a backup...", command=self.restore)
         menu.add_separator()
-        menu.add_command(label="Game manifest...", command=self.game_manifest)
-        menu.add_command(label="Log", command=self.show_log)
-        menu.add_command(label="Save logs (zip)...", command=self.save_logs)
-        menu.add_command(label="Report a bug...", command=self.send_report)
-        menu.add_command(label="Suggest an idea...", command=lambda: self.send_report(kind="suggestion"))
+        menu.add_command(label="Game manifest...", command=self.once("game_manifest", self.game_manifest))
+        menu.add_command(label="Log", command=self.once("show_log", self.show_log))
+        menu.add_command(label="Save logs (zip)...", command=self.once("save_logs", self.save_logs))
+        menu.add_command(label="Report a bug...", command=self.once("report", self.send_report))
+        menu.add_command(label="Suggest an idea...", command=self.once("suggest", lambda: self.send_report(kind="suggestion")))
         tools["menu"] = menu
         tools.pack(side="right")
         self.status = tk.StringVar(value="Pick the Mod, or Browse... to its data folder (for example ...\\HLR\\data) "
@@ -1712,6 +1712,28 @@ class App(tk.Tk):
                 self.game_log_window(p)
         self.show_text("The game's log in plain words", "Written %s.\n\n" % report._age(path) + text,
                        extra=[("Open another log...", other)], wrap="word")
+
+    def once(self, key, fn):
+        """A button / menu command whose window opens once: pressed again while that window is open, it comes to
+        the front instead of a second copy (a tester: Settings opened again and again). Any window the command
+        makes is found by itself (the new windows after it ran) - one place for every such button."""
+        def run(*a, **kw):
+            open_ = [w for w in self._once.get(key, []) if w.winfo_exists() and w.winfo_ismapped()]
+            if open_:
+                for w in open_:
+                    w.deiconify()
+                    w.lift()
+                w = open_[-1]
+                w.focus_force()
+                return None
+            before = {str(w) for w in self.winfo_children()}
+            out = fn(*a, **kw)
+            self._once[key] = [w for w in self.winfo_children() if str(w) not in before and
+                               isinstance(w, tk.Toplevel) and not w.wm_overrideredirect()]
+            return out
+        if not hasattr(self, "_once"):
+            self._once = {}
+        return run
 
     def settings_window(self):
         """Everything the tool keeps between starts, in one window."""

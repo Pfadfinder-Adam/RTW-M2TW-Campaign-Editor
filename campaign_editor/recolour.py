@@ -198,19 +198,23 @@ def guess_source(mod, faction, items, colours=None):
     from PIL import ImageChops, ImageStat
     colours = colours or faction_colours(mod)
     votes, looked = {}, 0
-    for it in [x for x in items if not isinstance(x, str) and x.get("of")][:40]:
+    # a few cards are enough; the factions that matched before are tried first and a card stops at its first
+    # match (40 cards x every faction's copy made the window slow to open on Medieval II - a tester)
+    for it in [x for x in items if not isinstance(x, str) and x.get("of")][:12]:
         try:
             im = read_picture(it["path"]).convert("RGB")
         except Exception:
             continue
         looked += 1
-        for (p, _), f in zip(it["others"], it["of"]):
+        pairs = sorted(zip(it["others"], it["of"]), key=lambda pf: -votes.get(pf[1], 0))
+        for (p, _), f in pairs:
             try:
                 o = read_picture(p).convert("RGB")
             except Exception:
                 continue
             if o.size == im.size and max(ImageStat.Stat(ImageChops.difference(im, o)).mean) < 2.0:
                 votes[f] = votes.get(f, 0) + 1
+                break
     if votes:
         f, n = max(votes.items(), key=lambda kv: kv[1])
         if n >= max(2, looked * 0.3) and f in colours and colours[f] != colours.get(faction):

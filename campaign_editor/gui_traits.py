@@ -7,13 +7,14 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from .gui_util import ShortHint
+from .gui_util import one_window, ShortHint
 from . import traitsedit as TE
 from .plan import Plan
 
 TITLE = "Traits and retinue"
 
 
+@one_window
 class TraitsWindow(tk.Toplevel):
     def __init__(self, app, pick=None):
         super().__init__(app)

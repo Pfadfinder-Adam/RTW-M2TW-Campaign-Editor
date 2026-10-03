@@ -939,6 +939,14 @@ def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
     the originals kept unless he asks; a new faction keeps the template's copy)."""
     mod = plan.mod
     for rel, pick in sorted((plan.opts.get("art") or {}).items()):
+        if isinstance(pick, dict) and pick.get("extra"):    # a picture shared with others: its own copy first
+            x = next((e for e in extra_pictures(mod, faction) if [e["kind"], e["ref"]] == list(pick["extra"])), None)
+            if x is None:
+                plan.warn(None, "%s: the shared picture %s is no longer there - not replaced" % (faction, rel))
+                continue
+            dst = share_out(plan, x, faction)
+            replace_picture(plan, art_source(pick), dst, x["path"])
+            continue
         if rel.startswith("symbol:"):
             from .symbols import write
             write(plan, faction, rel, art_source(pick))

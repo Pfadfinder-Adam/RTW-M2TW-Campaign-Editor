@@ -6,13 +6,14 @@ Write it in, with a backup like every write."""
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
-from .gui_util import ShortHint
+from .gui_util import one_window, ShortHint
 from . import events as EV
 from .plan import Plan
 
 TITLE = "Events and later factions"
 
 
+@one_window
 class EventsWindow(tk.Toplevel):
     def __init__(self, app):
         super().__init__(app)

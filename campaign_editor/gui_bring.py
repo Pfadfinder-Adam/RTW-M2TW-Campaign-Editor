@@ -13,13 +13,14 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import packs
 from .editors import building_blocks
-from .gui_util import StepWindow
+from .gui_util import one_window, StepWindow
 from .moddata import ModData
 
 NOWHERE = "(not recruited there)"
 LEAVE_OUT = "(leave the line out)"
 
 
+@one_window
 class BringWindow(StepWindow):
     def __init__(self, editor):
         super().__init__(editor)

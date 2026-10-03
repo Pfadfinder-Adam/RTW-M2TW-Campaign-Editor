@@ -122,6 +122,8 @@ def recolour(w, force=False):
     if root is None:
         return
     key = str(w)
+    if key in _state.get("keep", ()):
+        return
     if not force and _state["done"].get(key) == _state["dark"]:
         return
     _state["done"][key] = _state["dark"]
@@ -146,6 +148,13 @@ def recolour(w, force=False):
                 w.configure(**{opt: new})
             except tk.TclError:
                 pass
+
+
+def leave_alone(*widgets):
+    """Widgets that keep their own colours in every look (the yellow hover box: dark text on light yellow - the
+    dark look once turned its text light, white on yellow, a tester's report)."""
+    for w in widgets:
+        _state.setdefault("keep", set()).add(str(w))
 
 
 def _walk(w):

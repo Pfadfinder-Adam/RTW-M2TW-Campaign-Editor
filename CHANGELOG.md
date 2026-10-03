@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Changed
+- **Testers' reports of 2026-10-03**: a window opens once - Settings, Help, Report, every Tools window and the
+  Events / rules / traits / pack / bring / portrait windows come to the front when opened again instead of a new
+  copy each press; a new window no longer shows at the top left for a moment before it jumps to the middle; the
+  yellow hover texts keep dark text in the dark look (they were white on yellow); resource, fort, watchtower and
+  wonder signs grow with the tile when zoomed in (they stopped at a small size); a battle banner or other picture
+  shared with other factions now has **Replace (its own copy)...** and **Save a copy...** on the Art tab (Edit
+  faction: the faction gets a copy of its own and its line points at it, the others keep theirs); the Recolour
+  window opens much faster on Medieval II (it compared 40 unit cards with every faction's copy to guess where the
+  colours came from); New army / agent for the rebels showed its 'Rebels of' row twice.
 - **Factions that appear later** (a tester, REX): a new faction can come into the campaign later instead of starting
   on the map - *by an event* (a date and a region: `emergent_faction` in `descr_events.txt`), *as the shadow of a
   faction* (the side that splits off it in a civil war: `shadowing` / `shadowed_by`) or *splitting off a faction in a

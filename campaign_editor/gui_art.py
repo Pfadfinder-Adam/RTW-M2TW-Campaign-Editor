@@ -199,6 +199,19 @@ class ArtEditor(ttk.Frame):
             bar.grid(row=3, column=1, sticky="w", padx=6)
             link = p.get("link") if target != p["rel"] else None
             if p.get("locked"):
+                # shared with other factions: Replace gives this faction a copy of its own (Edit faction - a new
+                # faction's lines are not written yet); Save a copy always (a tester: no buttons on some)
+                if p.get("extra") and (not new or new == src_faction):
+                    ttk.Button(bar, text="Replace (its own copy)...", command=lambda t=target, s=p["size"],
+                               l=p["label"], x=p["extra"]: self.replace(t, s, l, extra=[x["kind"], x["ref"]])).pack(
+                        side="left")
+                if os.path.isfile(p["path"]):
+                    from .gui_util import save_copy
+                    ttk.Button(bar, text="Save a copy...", command=lambda n=p["path"], l=p["label"]:
+                               save_copy(self, n, l)).pack(side="left", padx=4)
+                if pick:
+                    ttk.Button(bar, text="Keep the current one", command=lambda t=target: self.unreplace(t)).pack(
+                        side="left", padx=4)
                 continue
             ttk.Button(bar, text="Replace...", command=lambda t=target, s=p["size"], l=p["label"], k=link:
                        self.replace(t, s, l, k)).pack(side="left")
@@ -297,7 +310,7 @@ class ArtEditor(ttk.Frame):
             return "needs %d x %d, DDS %s (with its mipmaps)" % size
         return "needs %d x %d, %d-bit TGA" % size
 
-    def replace(self, target, size, label, link=None):
+    def replace(self, target, size, label, link=None, extra=None):
         src = filedialog.askopenfilename(title=label, filetypes=[
             ("Pictures", "*.tga *.png *.jpg *.jpeg *.bmp *.dds"), ("All files", "*.*")])
         if not src:
@@ -315,7 +328,8 @@ class ArtEditor(ttk.Frame):
                                                                              tuple(size[:2]) + tuple(size[:2]))):
                 return
         self.app.remember()
-        self.app.art_replace[target] = {"src": src, "link": link} if link else src
+        self.app.art_replace[target] = {"src": src, "extra": extra} if extra else \
+            {"src": src, "link": link} if link else src
         self.app.status.set("%s: %s - Preview, then Apply." % (label, os.path.basename(src)))
         self.load()
 

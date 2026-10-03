@@ -257,6 +257,38 @@ def flow(frame):
     frame.after_idle(reflow)
 
 
+def one_window(cls):
+    """Class decorator: a window of which one copy is open at a time - made again while it is open, the open one
+    comes to the front (a tester: Settings opened again and again; checked for every tool window)."""
+    plain_init = cls.__init__
+
+    def __new__(c, *a, **kw):
+        w = c.__dict__.get("_open_one")
+        try:
+            if w is not None and w.winfo_exists():
+                w._reused = True
+                return w
+        except tk.TclError:
+            pass
+        return tk.Toplevel.__new__(c)
+
+    def __init__(self, *a, **kw):
+        if self.__dict__.pop("_reused", False):
+            try:
+                self.deiconify()
+                self.lift()
+                self.focus_force()
+            except tk.TclError:
+                pass
+            return
+        plain_init(self, *a, **kw)
+        type(self)._open_one = self
+
+    cls.__new__ = __new__
+    cls.__init__ = __init__
+    return cls
+
+
 class Tip:
     """A text shown beside a widget while the mouse rests on it - the long explanations live here instead of
     in labels, so the window keeps its room (and longer words of other languages still fit)."""
@@ -293,8 +325,11 @@ def popup_text(widget, text, width=420):
     below, moved left at the right edge). -> the box (a Toplevel)."""
     tw = tk.Toplevel(widget)
     tw.wm_overrideredirect(True)
-    tk.Label(tw, text=text, justify="left", background="#ffffe0", foreground="#1e1e1e", relief="solid",
-             borderwidth=1, wraplength=width, padx=6, pady=4).pack()
+    lbl = tk.Label(tw, text=text, justify="left", background="#ffffe0", foreground="#1e1e1e", relief="solid",
+                   borderwidth=1, wraplength=width, padx=6, pady=4)
+    from .theme import leave_alone
+    leave_alone(tw, lbl)
+    lbl.pack()
     tw.update_idletasks()
     w, h = tw.winfo_reqwidth(), tw.winfo_reqheight()
     sw, sh = widget.winfo_screenwidth(), widget.winfo_screenheight()
@@ -314,6 +349,12 @@ def install_window_helpers(root):
     - an entry or drop-down whose text is longer than the box shows it whole when the mouse rests on it."""
     import tkinter.font as tkfont
 
+    def seen(w):
+        try:
+            w.attributes("-alpha", 1.0)
+        except tk.TclError:
+            pass
+
     def centre(ev):
         w = ev.widget
         if not isinstance(w, tk.Toplevel) or getattr(w, "_centred", False):
@@ -326,9 +367,26 @@ def install_window_helpers(root):
             ww, wh = max(w.winfo_width(), w.winfo_reqwidth()), max(w.winfo_height(), w.winfo_reqheight())
             sw, sh = w.winfo_screenwidth(), w.winfo_screenheight()
             w.wm_geometry("+%d+%d" % (max(0, (sw - ww) // 2), max(0, (sh - wh) // 2 - 20)))
+            w.update_idletasks()
         except tk.TclError:
             pass
+        finally:
+            seen(w)
     root.bind_class("Toplevel", "<Map>", centre, add="+")
+    # a new window is see-through until it stands in the middle: it no longer shows at the top left for a moment
+    # and then jumps (a tester's report); shown in any case after a moment
+    if not getattr(tk.Toplevel, "_hidden_until_centred", False):
+        plain_init = tk.Toplevel.__init__
+
+        def init(self, *a, **kw):
+            plain_init(self, *a, **kw)
+            try:
+                self.attributes("-alpha", 0.0)
+                self.after(800, lambda: self.winfo_exists() and seen(self))
+            except tk.TclError:
+                pass
+        tk.Toplevel.__init__ = init
+        tk.Toplevel._hidden_until_centred = True
 
     def widen(ev):
         cb = ev.widget

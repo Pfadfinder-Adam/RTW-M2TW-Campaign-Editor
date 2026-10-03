@@ -98,11 +98,13 @@ def add_at(app, kind, xy, preset=None, faction=None):
 
     def refresh(*_):
         fac = v_fac.get()
+        first_sub = next((n for n in facs if n != "slave"), "")
+        if fac == "slave" and not v_sub.get() and first_sub:   # setting it calls refresh again (the row was made twice)
+            v_sub.set(first_sub)
+            return
         for x in sub_row.winfo_children():
             x.destroy()
         if fac == "slave":                       # a rebel: whose look, and the list his name comes from
-            if not v_sub.get():
-                v_sub.set(next((n for n in facs if n != "slave"), ""))
             ttk.Label(sub_row, text="Rebels of").pack(side="left")
             FactionBox(sub_row, v_sub, [n for n in facs if n != "slave"], app.shown_names(), state="readonly",
                        width=24).pack(side="left", padx=6)

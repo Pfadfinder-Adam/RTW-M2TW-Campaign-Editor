@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 from . import log, settings
-from .gui_util import hint
+from .gui_util import one_window, hint
 
 LANGUAGES_PLANNED = "Spanish, French, German, Italian, Russian and Turkish are planned."
 
@@ -31,6 +31,7 @@ def open_folder(path):
         return False
 
 
+@one_window
 class SettingsWindow(tk.Toplevel):
     def __init__(self, app):
         super().__init__(app)

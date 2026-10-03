@@ -5,7 +5,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from .gui_util import ShortHint
+from .gui_util import one_window, ShortHint
 from . import modpack as MP
 
 WORDS = {"install": "put in", "keep": "keep this mod's", "merge": "only its changes", "skip": "-"}
@@ -42,6 +42,7 @@ def open_pack(app):
     PackWindow(app, path, files, left, entries)
 
 
+@one_window
 class PackWindow(tk.Toplevel):
     def __init__(self, app, path, files, left, entries):
         super().__init__(app)

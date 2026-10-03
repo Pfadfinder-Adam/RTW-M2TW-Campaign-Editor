@@ -12,7 +12,7 @@ import hashlib
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
-from .gui_util import ShortHint
+from .gui_util import one_window, ShortHint
 from . import family as FM
 
 CARD_W, CARD_H, GAP, ROW = 150, 66, 16, 110
@@ -1284,6 +1284,7 @@ class _PersonDialog(simpledialog.Dialog):
         self.result = ((self.v1.get().strip() + " " + self.v2.get().strip()).strip(), int(self.va.get()))
 
 
+@one_window
 class PortraitLibrary(tk.Toplevel):
     """The game's portraits of a culture, as the game gives them to characters, and new ones added
     (Add portraits...: any PNG / JPG / TGA, made the size and depth of the culture's own, with its card,

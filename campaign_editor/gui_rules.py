@@ -4,7 +4,7 @@ beside a changed one, Preview, Write it in (backup, Restore undoes it)."""
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from .gui_util import ShortHint
+from .gui_util import one_window, ShortHint
 from . import campaignrules as CR
 from .gui_util import ScrollFrame
 from .plan import Plan
@@ -13,6 +13,7 @@ CHANGED = "#fff3b0"
 BAD = "#f4b6b6"
 
 
+@one_window
 class RulesWindow(tk.Toplevel):
     def __init__(self, app):
         super().__init__(app)
