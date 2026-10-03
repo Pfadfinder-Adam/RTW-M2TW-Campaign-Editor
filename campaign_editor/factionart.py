@@ -14,6 +14,7 @@ import colorsys
 import os
 import re
 
+from .clone import longer_names
 from .clone import (ART_ROOTS, _token_hit, disk_tail, link_users, own_picture_ref, picture_file, picture_links,
                     set_picture_ref)
 from .editors import tga_info
@@ -110,6 +111,7 @@ def faction_pictures(mod, campaign, faction):
         seen[n] = e
         out.append(e)
         return e
+    longer = longer_names([n for _, n in mod.factions()], faction)     # their files are not this faction's
     roots = [os.path.join(mod.data, r) for r in ART_ROOTS] + [mod.campaign_dir(campaign)]
     for root in roots:
         if not os.path.isdir(root):
@@ -127,7 +129,7 @@ def faction_pictures(mod, campaign, faction):
                                 add(os.path.join(sp, n))
             dirnames[:] = [d for d in dirnames if d.lower() != faction]
             for n in filenames:
-                if n.lower().endswith(PICTURE_EXT) and _token_hit(n, faction):
+                if n.lower().endswith(PICTURE_EXT) and _token_hit(n, faction, longer):
                     add(os.path.join(dirpath, n))
     # pictures the faction's lines name by path (banners, loading logo): 'link' = [file key, field],
     # 'ref' = the path as written, 'shared' = the other factions naming the same file
@@ -367,7 +369,11 @@ def picture_target(e, owner, new):
     if e.get("link"):
         if not e.get("shared") and owner == new:
             return rel                                    # already its own
-        ref = own_picture_ref(e["ref"], owner, new)
+        # the picture is named after the faction it was made for (a clone still pointing at its template's packed
+        # logo: symbol128_england -> symbol128_ce_test, not symbol128_england_ce_test)
+        named = next((f for f in e.get("shared") or () if re.search(
+            r"(?i)(^|[^a-z0-9])%s(?=$|[^a-z0-9])" % re.escape(f), os.path.basename(e["ref"]))), owner)
+        ref = own_picture_ref(e["ref"], named, new)
         ref = ref[5:] if ref.lower().startswith("data/") else ref
         return ref + disk_tail(e["ref"], rel)
     if not new or new == owner:

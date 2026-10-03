@@ -234,6 +234,14 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **A faction's pictures were taken for another's when one name holds the other** (`empire_east` /
+  `empire_east_rebels`; the test mod's `ce_test` / `ce_test_later`): Faction emblem, Recolour and the Art tab wrote
+  over the other faction's `symbol24_...` / `symbol128_...` pictures, and a new faction made from `empire_east`
+  copied `empire_east_rebels`' pictures as its own. A file naming the longer faction is that faction's now.
+- **A Medieval II faction's loading-screen logo after its emblem** (the author's test mod): a new faction made
+  from a template whose logo it shares (England and the Normans share one in vanilla) got its emblem copy named
+  `symbol128_england_<new>`; it is named after the new faction now (`symbol128_<new>`). Making such a faction also
+  says that it shows the shared logo until it gets its own (Art tab, Faction emblem...).
 - **The bigger map (x3) moves the places in the campaign's scripts too** (a tester's game on Divide and Conquer:
   the armies the script spawns stood out in the clouds, at their old places). Every campaign-map place in
   `campaign_script.txt` (and the script `descr_strat.txt` names) goes to the middle of its 3 x 3 block, as in

@@ -492,12 +492,21 @@ def text_strings(plan):
 ART_ROOTS = ("ui", "menu", "loading_screen")
 
 
-def _token_hit(name, t):
+def _token_hit(name, t, longer=()):
     """Whether a file name names the faction t as a whole word: map_gauls, symbol24_gauls_roll,
-    romans_julii_logo (names with _ inside match as a whole: symbol24_romans_julii_grey)."""
+    romans_julii_logo (names with _ inside match as a whole: symbol24_romans_julii_grey). longer = names of other
+    factions holding t (longer_names): a file naming one of them is theirs (symbol24_empire_east_rebels is not
+    empire_east's, symbol128_ce_test_later not ce_test's)."""
     stem = os.path.splitext(name)[0].lower()
-    return t in re.split(r"[^a-z0-9]+", stem) or stem == t or stem.endswith("_" + t) or \
+    hit = t in re.split(r"[^a-z0-9]+", stem) or stem == t or stem.endswith("_" + t) or \
         stem.startswith(t + "_") or ("_" + t + "_") in stem
+    return hit and not any(_token_hit(name, o) for o in longer)
+
+
+def longer_names(names, t):
+    """The other factions' names that hold the faction t as a part (empire_east -> empire_east_rebels)."""
+    t = t.lower()
+    return [n.lower() for n in names if n.lower() != t and _token_hit(n, t)]
 
 
 def renamed(name, t, new):
@@ -526,6 +535,7 @@ def _in_mod(mod, data, path):
 def art_files(plan, campaign):
     t, new = plan.template, plan.new
     mod = plan.mod
+    longer = longer_names([n for _, n in mod.factions()] + [new], t)
     found, taken = [], set()                   # taken: data-relative places a copy goes to (the mod's copy wins)
 
     def add(src, dst):
@@ -560,7 +570,7 @@ def art_files(plan, campaign):
                                     add(sf, os.path.join(dst, os.path.relpath(sf, src)))
                         dirnames.remove(d)
                 for n in filenames:
-                    if not n.lower().endswith((".tga", ".dds", ".png", ".bmp")) or not _token_hit(n, t):
+                    if not n.lower().endswith((".tga", ".dds", ".png", ".bmp")) or not _token_hit(n, t, longer):
                         continue
                     here = _in_mod(mod, data, dirpath)
                     if not from_mod and os.path.isdir(here) and _ci(here, n):
@@ -694,12 +704,21 @@ def own_pictures(plan):
     used = {m for fg in figures(mod, t, plan.edit) for m in fg["models"]}     # a figure the template shows
     count = 0
     for l in links:
+        if l["faction"] == new and l["field"] == "loading_logo" and users.get(
+                l["ref"].replace("\\", "/").lower(), {t}) != {t}:
+            plan.note(None, "%s's loading-screen logo (%s) is shared with %s, so %s shows it too for now - give it "
+                            "its own on the Art tab (Faction emblem...)" % (t, l["ref"], ", ".join(sorted(
+                                users[l["ref"].replace("\\", "/").lower()] - {t})), new))
         if l["faction"] != new or users.get(l["ref"].replace("\\", "/").lower()) != {t}:
             continue
         if l["key"] == "model_strat" and l["field"].split(":", 1)[1] not in used:
             continue                                    # a model none of its characters uses (M2TW's Rome leftovers)
         got = next((g for g in (picture_file(d, l["ref"]) for d in data_roots(mod)) if g), None)
         if not got:
+            if l["key"] != "model_strat":
+                plan.note(None, "%s's %s (%s) is not a loose file (packed in the game?), so %s shows %s's for now - "
+                                "give it its own on the Art tab (Faction emblem... / Replace...)" % (
+                                    t, l["field"].replace("_", " "), l["ref"], new, t))
             continue
         ref = own_picture_ref(l["ref"], t, new)
         # the copy beside the template's picture - in the mod's own data even when the game's data holds that one

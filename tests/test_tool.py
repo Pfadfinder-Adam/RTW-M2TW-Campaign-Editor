@@ -3561,6 +3561,22 @@ building smith
                  if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
+    def test_a_factions_pictures_are_not_a_longer_named_factions(self):
+        """A faction whose name another faction's name holds (empire_east / empire_east_rebels, the test mod's
+        ce_test / ce_test_later): the other's pictures are not its own - its emblem wrote over ce_test_later's
+        symbol128 / symbol24 pictures, a clone of empire_east copied empire_east_rebels' as its own."""
+        from campaign_editor.clone import _token_hit, longer_names
+        names = ["empire_east", "empire_east_rebels", "ce_test", "ce_test_later", "romans_julii"]
+        self.assertEqual(longer_names(names, "empire_east"), ["empire_east_rebels"])
+        self.assertEqual(longer_names(names, "romans_julii"), [])
+        east = longer_names(names, "empire_east")
+        self.assertTrue(_token_hit("symbol24_empire_east_grey.tga", "empire_east", east))
+        self.assertFalse(_token_hit("symbol24_empire_east_rebels_grey.tga", "empire_east", east))
+        self.assertTrue(_token_hit("symbol24_empire_east_rebels_grey.tga", "empire_east_rebels",
+                                   longer_names(names, "empire_east_rebels")))
+        self.assertFalse(_token_hit("symbol128_ce_test_later.tga", "ce_test", longer_names(names, "ce_test")))
+        self.assertTrue(_token_hit("symbol128_ce_test.tga", "ce_test", longer_names(names, "ce_test")))
+
     def test_banner_symbol_dragged_snapped_and_sized(self):
         """The Banner window moves the symbol with the mouse: its middle snaps to the banner's own grid (quarters,
         eighths, sixteenths) or goes freely, it stays on its banner, the wheel sizes it round its middle."""
@@ -5231,6 +5247,11 @@ building smith
                          "models/textures/standard_epirus.tga")
         self.assertEqual(FA.own_picture_ref("models/textures/standard_greek_rebels.tga", "macedon", "epirus"),
                          "models/textures/standard_greek_rebels_epirus.tga")
+        # a clone still naming its template's logo (packed in the game, so not copied): its own copy is named
+        # after it, not '<template>_<new>' (the author's M2TW test mod made symbol128_england_ce_test)
+        packed = {"link": ["sm_factions", "loading_logo"], "ref": "loading_screen/symbols/symbol128_england.tga",
+                  "rel": "loading_screen/symbols/symbol128_england.tga", "shared": ["england"]}
+        self.assertEqual(FA.picture_target(packed, "ce_test", "ce_test"), "loading_screen/symbols/symbol128_ce_test.tga")
         before = tree_hash(self.root)
         mod = ModData(self.root)
         plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
