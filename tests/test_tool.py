@@ -2428,6 +2428,30 @@ building smith
         self.assertEqual(len(got), 1)
         self.assertIn("'alpha general' has no 'slave'", got[0])
 
+    def test_bigger_map_rivers_stop_at_the_new_coast(self):
+        """A river whose last tiles the smoother coast puts in the sea stops at the coast: none of it on the sea, its
+        end touching the sea (a tester's DaC x3: land kept under such rivers stood off every mouth as a sandbar)."""
+        from campaign_editor import upscale
+        from campaign_editor.tga import read_tga
+        river, black = (0, 0, 255), (0, 0, 0)
+        px = [[black] * 4 for _ in range(4)]
+        for x in range(4):
+            px[1][x] = river                                  # a river along y 1, west to east
+        path = os.path.join(self.root, "feat.tga")
+        write_tga(path, 4, 4, px)
+        land = upscale.Mask(12, 12)
+        for X in range(12):
+            for Y in range(12):
+                land[(X, Y)] = X < 8                          # the new coast cuts the last tile and a bit
+        data, drawn = upscale.features_scaled(path, land)
+        with open(path, "wb") as fh:
+            fh.write(data)
+        f = read_tga(path)
+        on = {(x, y) for x in range(12) for y in range(12) if f.get(x, y) != black}
+        self.assertTrue(on and all(land[p] for p in on))                 # nothing on the sea
+        self.assertEqual(on, drawn)
+        self.assertEqual(max(x for x, y in on), 7)                      # the end on the last land, the sea beside it
+
     def test_map_made_three_times_bigger(self):
         """Every tile a 3 x 3 block: towns and characters in their blocks' middles, rivers 1 pixel wide (a corner
         link a staircase), descr_terrain's size x 3 and its heights x 3, map_heights.hgt at the new size (3 x higher),

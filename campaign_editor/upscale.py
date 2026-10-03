@@ -624,7 +624,8 @@ def heights_from_tiles(land, agree, own):
 def features_scaled(path, land=None):
     """map_features x3: black, rivers drawn as 1-pixel lines from block middle to block middle - a corner link a
     staircase (one step across, one up, ...: always side by side, never a corner-only step the game stops a river
-    at); a river that met the sea runs on to the new, smoother coast (land: coast_mask); cliffs and Medieval II's
+    at); a river that met the sea runs on to the new, smoother coast (land: coast_mask) and stops there - none of it
+    on the new sea; cliffs and Medieval II's
     land bridges drawn as lines the same way (a bridge only on its middles left the water between them: a tester's
     DaC map), a bridge that ended on the water carried on to the land beside it; every other feature on its block's
     middle pixel. -> (bytes, the river pixels)."""
@@ -647,7 +648,7 @@ def features_scaled(path, land=None):
     def paint(px, py, c):
         if 0 <= px < W and 0 <= py < H:
             _put(raw, W, H, step, top_down, px, py, c)
-            if c == river:
+            if c in RIVERY:
                 drawn.add((px, py))
 
     for (x, y), c in lines.items():
@@ -705,6 +706,10 @@ def features_scaled(path, land=None):
                             paint(cx + dx * s_, cy + dy * s_, BRIDGE)
     for (x, y), c in lines.items():                           # every feature's own colour on its middle
         paint(*new_xy(x, y), c)
+    if land is not None:                                      # a river ends where the new coast begins: land kept
+        for p in [p for p in drawn if not land.get(p, True)]: # under it stood in the sea as a sandbar (a tester's
+            _put(raw, W, H, step, top_down, p[0], p[1], (0, 0, 0))   # DaC: a strip of beach off every river mouth)
+            drawn.discard(p)
     return _write(data, W, H, step, raw), drawn
 
 
@@ -890,11 +895,10 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
     feats = os.path.join(base, "map_features.tga")
     if os.path.isfile(feats):
         say("rivers, cliffs and land bridges (map_features)...")
-        data, rivers = features_scaled(feats, coast)
+        data, _ = features_scaled(feats, coast)           # rivers stop at the new coast: no land kept under them
         plan.binary(feats, data)
         plan.note(None, "map_features.tga made 3 x bigger (rivers, cliffs and land bridges as unbroken lines, river "
                         "mouths on the new coast)")
-        keep_land = {p for p in rivers if not coast.get(p, True)}
     say("map_regions.tga...")
     info = {}
     plan.binary(regions_path, regions_scaled(regions_path, lands, coast, keep_land, info))

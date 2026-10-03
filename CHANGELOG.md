@@ -318,6 +318,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Make the campaign map 3 x bigger: a strip of beach off every river mouth.** Where the smoother new coast put a
+  river's last tiles in the sea, the land was kept under the river, so a sandbar stood out into the sea at each mouth
+  (`map_ground_types.tga`, `map_regions.tga` and the heights). The river now stops at the new coast, its end touching
+  the sea; no river is left on the sea.
 - **Add-ons: an empty header line** (`// @signed` with nothing after it) took the next line as its value - a setting
   then showed its variable's name instead of its words.
 - **Rome's campaign did not load after Campaign rules > The campaign switched a line on** (back to the menu: "Script
