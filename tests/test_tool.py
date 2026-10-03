@@ -3713,6 +3713,12 @@ building smith
         self.assertEqual([g.name for g in m.shown()], ["Head", "Attachments3"])
         with self.assertRaises(MV.MeshError):
             MV.read(b"\x16\x00\x00\x00not a mesh at all.........")
+        # a battle banner (data/banners/*.mesh): one part 'GenMesh' with no material and 1 byte of class info
+        head = data[:data.index(text("Head"))]
+        streams = data[data.index(bytes.fromhex("0600010044000000")):]
+        banner = MV.read(head + text("GenMesh") + b"\x00\x00\x00\x00" + b"\x00" + tri(faces) + streams)
+        self.assertEqual([(g.name, g.material, len(g.tris) // 3) for g in banner.groups], [("GenMesh", "", 12)])
+        self.assertEqual(banner.positions[7], (1.0, 1.0, 1.0))
         try:
             from PIL import Image
         except ImportError:

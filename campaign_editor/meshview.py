@@ -129,18 +129,27 @@ def _string(d, p):
     return b.decode("latin-1"), p + 4 + n
 
 
-def _groups(d):
+def _empty(d, p):
+    """An empty string (length 0) at p -> ('', p + 4), else None."""
+    if p + 4 <= len(d) and struct.unpack_from("<I", d, p)[0] == 0:
+        return "", p + 4
+    return None
+
+
+def _groups(d, empty=False):
     out = []
     p, window, attach = 32, 240, False
     while p < len(d):
         found = None
         for q in range(p, min(p + window, len(d))):
             a = _string(d, q)
-            b = a and _string(d, a[1])
+            b = a and (_string(d, a[1]) or (empty and _empty(d, a[1])))
             if not b:
                 continue
             best = None
-            for skip in (0, 2):                     # 2 bytes of class info after the first part's material
+            # 2 bytes of class info after the first part's material; a part with no material (the battle
+            # banners' 'GenMesh') has 1
+            for skip in ((0, 2) if b[0] else (0, 1, 2)):
                 r = b[1] + skip
                 if r + 4 > len(d):
                     continue
@@ -206,6 +215,8 @@ def read(data):
     if data[4:4 + len(HEADER)] != HEADER:
         raise MeshError("not a Medieval II mesh (no serialization::archive header)")
     groups, end = _groups(data)
+    if not groups:                  # a part with no material (the battle banners) - only when nothing else reads
+        groups, end = _groups(data, empty=True)
     if not groups:
         raise MeshError("no parts found in the mesh")
     count = max(max(g.tris) for g in groups) + 1

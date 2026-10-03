@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Changed
+- **Medieval II shields recoloured** (the author: "every picture of Medieval II"): *Recolour a faction's pictures* now
+  also takes the weapons-and-shields texture of the faction's battle models (`unit_models/AttachmentSets/Final
+  Kite_<faction>_diff.texture` and the like - the kite shields carry the faction's arms); one worn by other factions
+  too is left alone with the reason, as the unit textures are. The battle banners' 3D models (`data/banners/*.mesh`,
+  a part with no material) are now read.
 - **Your contact remembered for every report** (a tester): the report window says it plainly - with *remember it*
   ticked (the default) the contact you give fills in every next report by itself (also in Settings > Reports);
   unticked, it is forgotten.

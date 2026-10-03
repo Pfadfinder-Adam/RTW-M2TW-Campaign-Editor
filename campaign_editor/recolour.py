@@ -341,6 +341,19 @@ def targets(mod, campaign, faction):
         others = [(on_disk(mod, r)[1], colours[f]) for f, r in info.textures.items()
                   if f != faction and f in colours and r.lower() != rel.lower() and on_disk(mod, r)]
         add(got[1], "unit textures", "battle texture of %s" % info.name, others[:6], skip=skip)
+    # Medieval II: the weapons and shields texture beside it (a kite shield carries the faction's arms)
+    for name, info in sorted(cat.items()):
+        rel = getattr(info, "attach", {}).get(faction)
+        got = on_disk(mod, rel) if rel else None
+        if not got:
+            continue
+        wearers = sorted(f for f, r in info.attach.items() if f != faction and r.lower() == rel.lower())
+        inside = os.path.normcase(os.path.abspath(got[1])).startswith(os.path.normcase(os.path.abspath(mod.data)))
+        skip = ("worn by %s too - recolouring it would change them as well" % ", ".join(wearers[:4])) if wearers else \
+            (None if inside else "the game's own file (not in this mod) - copy the model into the mod first")
+        others = [(on_disk(mod, r)[1], colours[f]) for f, r in info.attach.items()
+                  if f != faction and f in colours and r.lower() != rel.lower() and on_disk(mod, r)]
+        add(got[1], "unit textures", "weapons and shields of %s" % info.name, others[:6], skip=skip)
     # the Art tab's pictures
     try:
         from .factionart import faction_pictures
