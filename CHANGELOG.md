@@ -3,6 +3,23 @@
 ## Unreleased
 
 ### Added
+- **Module builder: your own add-on made of blocks, no code** (Rome + REX, Medieval II + M2EX - one script for both):
+  Tools > Module builder... or Add-ons > New module (no code).... **WHEN** something happens (a faction's or a town's
+  turn starts, a general takes a town, a building is finished, a unit is trained, a battle ends, a town riots, rebels
+  or grows, a faction is destroyed or gets a new leader, a son comes of age), **IF** conditions hold (who the faction
+  is, its money or number of towns, the turn, a chance, the town's people, which town, the capital, a building it
+  has, who lost the town), **DO** actions (money given or taken, people added, taken or capped, a building built or a
+  chain torn down - never the governor's -, new units, the town given away, war, peace or an alliance, a trait or a
+  retinue member for the general, the game's own message scroll, a line in the game's log, any console command). The
+  names are picked from the mod's own files; a sentence says in plain words what the module will do, and what is
+  missing (an action that needs a town on an event that brings none, a name the mod lacks) is said before anything
+  is written. Any number or text can be made a setting the player changes later on the Add-ons page. Nine examples
+  to start from: help when broke, loot for taking a town, plague in big cities, a free unit when a barracks is
+  built, gold for holding the capital, a message on turn 10, rebellion punished, a trait for the conqueror, Avoid
+  Growth for chosen towns. **Save to my add-ons**, **Put it in the game** (a backup first; its messages go into the
+  mod's `text/custom_messages.txt`), **Share...** as a zip; a saved module opens in the builder again (Add-ons >
+  Change it in the Module builder...). The test mod puts two in (money and a message on turn 2, loot for every town
+  taken).
 - **Add-on: Avoid Growth** (Rome + REX, Medieval II + M2EX - one script for both): a tick box on the settlement
   scroll of each of your towns, drawn with the game's own box and tick, under the population figures. Ticked, the
   people the town has become its ceiling: it never grows past it, still loses people the usual way (recruiting,
@@ -18,7 +35,7 @@
   and end date, `timescale` (years a turn), how seldom brigands and pirates appear, REX / M2EX's leader persona odds,
   and the switches as on / off (night battles, date as turns, Marian reforms, rebelling generals, gladiator
   uprisings). The test mod changes them too.
-- **Test mod: every campaign rule changed** (one step of 58): each value of every settings file - the campaign's
+- **Test mod: every campaign rule changed** (one step): each value of every settings file - the campaign's
   start, descr_campaign_db, the towns' growth / order / income, diplomacy offers, recruitment, unit sizes and the
   REX / M2EX engine settings and switches (548 values in Medieval II, 162 in Rome) - changed to one the game takes:
   numbers a step (a maximum or limit up, a minimum and anything else down, so the campaign's towns and families
@@ -282,6 +299,8 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Add-ons: an empty header line** (`// @signed` with nothing after it) took the next line as its value - a setting
+  then showed its variable's name instead of its words.
 - **Rome's campaign did not load after Campaign rules > The campaign switched a line on** (back to the menu: "Script
   Error in descr_strat.txt, at line 47"): a switch (rebelling generals, night battles...) was written at the end of the
   file's top, after the brigand / pirate values - both engines read those lines in a fixed order. A switch now goes

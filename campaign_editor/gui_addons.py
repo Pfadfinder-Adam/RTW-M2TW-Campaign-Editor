@@ -32,7 +32,7 @@ class AddonsPanel(ttk.Frame):
         self.lb.bind("<<ListboxSelect>>", lambda e: self.show())
         ttk.Label(side, text="scripts that add something\nnew to the game", foreground="#666").pack(anchor="w")
         for text, cmd in (("Add an add-on...", self.add), ("Share...", self.share),
-                          ("Remove from the list", self.drop)):
+                          ("Remove from the list", self.drop), ("New module (no code)...", self.builder)):
             ttk.Button(side, text=text, command=cmd).pack(fill="x", pady=(4, 0))
         ttk.Label(side, foreground="#666", justify="left", wraplength=190, text=(
             "Add an add-on: anyone's REX / M2EX script (.nut) or a zip with one - its settings are found by "
@@ -122,6 +122,22 @@ class AddonsPanel(ttk.Frame):
         messagebox.showinfo("Share", "Saved %s - give it to others: Add-ons > Add an add-on... takes it." % out,
                             parent=self)
 
+    def builder(self, recipe=None):
+        """The Module builder: a new add-on made of blocks, or a builder-made one opened again."""
+        from .gui_modbuilder import open_builder
+        open_builder(self.app, recipe)
+
+    @staticmethod
+    def recipe_of(a):
+        """The Module builder's recipe of an add-on someone added, or None."""
+        if not a.own:
+            return None
+        from . import modbuilder as MB
+        try:
+            return MB.recipe_of(a.template())
+        except OSError:
+            return None
+
     def drop(self):
         a = self.addon()
         if not a.own:
@@ -193,6 +209,10 @@ class AddonsPanel(ttk.Frame):
             side="left", padx=6)
         if now is not None:
             ttk.Button(bar, text="Take it out", command=self.remove).pack(side="left")
+        recipe = self.recipe_of(a)
+        if recipe is not None:
+            ttk.Button(bar, text="Change it in the Module builder...",
+                       command=lambda: self.builder(recipe)).pack(side="left", padx=6)
         ttk.Label(inner, foreground="#555", wraplength=760, justify="left", text=(
             "Every write makes a backup first (Tools > Restore a backup undoes it). Then start the campaign: the "
             "game log (system.log.txt) says " + (LOADED[a.key] if a.key in LOADED else "that the module %s was "

@@ -3402,6 +3402,79 @@ building smith
         restore(mod, bdir)
         self.assertIsNone(A.installed(mod, a))
 
+    def test_module_builder(self):
+        """The Module builder: a recipe of WHEN / IF / DO blocks -> a REX / M2EX script that is an ordinary add-on
+        (its settings and their words found by from_script, money below 0 allowed, the recipe read back out of it, no
+        names left in the engine's root table); its problems in plain words (a block the event brings nothing for, a
+        name the mod lacks, a built-in add-on's name, a number that is none); kept in the add-ons list, never over an
+        add-on the builder did not make; put in, its message goes into the mod's text/custom_messages.txt (the
+        games' encoding) and Restore takes both back; the examples fit any mod."""
+        import codecs
+        import re as _re
+        from unittest import mock
+        from campaign_editor import addons as AD, modbuilder as MB
+        mod = ModData(self.root)
+        r = MB.example("Help when broke")
+        self.assertTrue(MB.plain_words(r).startswith(
+            "When a faction's turn starts, if the faction is the player and its money is below 0: the faction gets "
+            "3000 denarii"))
+        text = MB.script(r)
+        self.assertEqual(MB.recipe_of(text), r)
+        for part in ('"FactionTurnStart"', "mb_add_money", "display_message", "help_when_broke_msg1",
+                     'local PREFIX = "[HELP_WHEN_BROKE] "'):
+            self.assertIn(part, text)
+        self.assertNotIn("delete ", text.replace("rawdelete", ""))         # the engines forbid 'delete'
+        self.assertFalse(_re.search(r"^\s*function\s", text, _re.M))      # local functions only
+        self.assertFalse(_re.search(r"^\s*::\w+\s*<-", text, _re.M))
+        lib = os.path.join(self.root, "addons")
+        with mock.patch.object(AD, "library_dir", return_value=lib):
+            a = MB.save(r)
+            self.assertEqual((a.key, a.title, a.game, a.own), ("help_when_broke", "Help when broke", "both", True))
+            kinds = {s.var: (s.kind, s.label, s.signed) for s in a.settings}
+            self.assertEqual(kinds, {"MB_ON": ("bool", "Module on", False),
+                                     "MB_ONCE": ("bool", "Only once in a campaign", False),
+                                     "MB_AMOUNT_OF_THE_LOAN": ("int", "Amount of the loan", True)})
+            values = AD.read_settings(a, a.template())
+            self.assertEqual(values["MB_AMOUNT_OF_THE_LOAN"], 3000)
+            self.assertEqual(AD.check(a, dict(values, MB_AMOUNT_OF_THE_LOAN=-500)), [])   # a debt is allowed
+            self.assertEqual([x[1]["title"] for x in MB.my_modules()], ["Help when broke"])
+            with open(os.path.join(lib, "border_tolls.nut"), "w") as fh:
+                fh.write("local TOLL = 1\n")
+            with self.assertRaises(ValueError):                         # someone's own add-on is never overwritten
+                MB.save(dict(r, title="Border Tolls"))
+            plan = Plan(mod, "addon", a.key, {})
+            AD.plan_install(plan, a, dict(values, MB_AMOUNT_OF_THE_LOAN=2500), mod)
+            bdir = plan.apply()
+        dst = os.path.join(self.root, "script", "modules", "help_when_broke.nut")
+        with open(dst, encoding="utf-8") as fh:
+            self.assertIn("local MB_AMOUNT_OF_THE_LOAN = 2500", fh.read())
+        msgs = os.path.join(self.root, "data", "text", "custom_messages.txt")
+        with open(msgs, "rb") as fh:
+            raw = fh.read()
+        self.assertTrue(raw.startswith(codecs.BOM_UTF16_LE))                # like the mod's other string tables
+        words = raw[2:].decode("utf-16-le")
+        self.assertIn("{help_when_broke_msg1}\tA loan", words)
+        self.assertIn("{help_when_broke_msg1_body}\tThe treasury was empty", words)
+        restore(mod, bdir)
+        self.assertFalse(os.path.exists(dst) or os.path.exists(msgs))
+        # problems in plain words
+        bad = dict(r, dos=[MB.item("do", "people", amount=500)])
+        self.assertTrue(any("brings no town" in p for p in MB.problems(bad)))
+        self.assertTrue(any("built-in" in p for p in MB.problems(dict(r, title="Sack Settlement"))))
+        odd = dict(r, ifs=[MB.item("if", "money", op="<", v="lots")])
+        self.assertTrue(any("whole number" in p for p in MB.problems(odd)))
+        unit = MB.new_recipe("Free spears")
+        unit.update(when="town_turn", dos=[MB.item("do", "units", unit="no such unit", count=1)])
+        self.assertEqual(MB.problems(unit), [])                             # no mod: names not checked
+        self.assertEqual(MB.problems(unit, mod), ["DO 1 (new units in the town): no such unit is not in this mod"])
+        with self.assertRaises(ValueError):
+            MB.script(bad)
+        # the examples, made for this mod: all but the two whose names it lacks (a building chain, a trait) are ready
+        ready = [x["title"] for x in MB.EXAMPLES if not MB.problems(MB.fit_to_mod(x, mod), mod)]
+        self.assertEqual(len(ready), len(MB.EXAMPLES) - 2)
+        for title in ready:
+            MB.script(MB.fit_to_mod(MB.example(title), mod))
+
     def test_faction_emblem_one_picture_everywhere(self):
         """One emblem picture -> every emblem picture in its own size; mouse over brighter, greyed out grey, selected
         with a glow round the new shape - by the amounts the old pictures show."""

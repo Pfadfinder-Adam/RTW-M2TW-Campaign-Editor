@@ -1135,6 +1135,37 @@ def s_addon_growth(c, mod):
     return plan
 
 
+@step("Module builder: two modules made of blocks put in (REX / M2EX) - money and a message on turn 2, loot for "
+      "every town taken",
+      "on turn 2 (the first turn after, if it was missed) your treasury gets 1000 denarii and the game's message "
+      "scroll 'The Module builder works' shows; take a town: 1500 denarii of loot; the game's log has "
+      "[CE_TEST_MODULE] and [LOOT_FOR_TAKING_A_TOWN] lines")
+def s_module(c, mod):
+    import tempfile
+    from . import addons as AD, modbuilder as MB
+    test = MB.new_recipe("CE Test module")
+    test.update({"when": "faction_turn", "once": True,
+                 "ifs": [MB.item("if", "who", v="player"), MB.item("if", "turn", op=">=", v=2)],
+                 "dos": [MB.item("do", "money", amount=1000, to="this"),
+                         MB.item("do", "message", title="The Module builder works",
+                                 body="CE_Test: a module made of blocks (no code) gave you 1000 denarii."),
+                         MB.item("do", "log", text="{faction}: the test module acted on turn {turn}")],
+                 "settings": {"dos.0.amount": "Money given"}})
+    plan = Plan(mod, "addon", "ce_test_module", {})
+    with tempfile.TemporaryDirectory() as d:          # the editor's own add-ons list is left as it is
+        for r in (test, MB.fit_to_mod(MB.example("Loot for taking a town"), mod)):
+            bad = MB.problems(r, mod)
+            if bad:
+                raise ValueError("; ".join(bad))
+            text = MB.script(r)
+            p = os.path.join(d, MB.key_of(r["title"]) + ".nut")
+            with open(p, "w", encoding="utf-8") as fh:
+                fh.write(text)
+            a = AD.from_script(text, os.path.basename(p), p)
+            AD.plan_install(plan, a, AD.read_settings(a, text), mod)
+    return plan
+
+
 @step("Events: a plague, a flood and a storm on turns 6-8; one of the game's events moved a turn later, another "
       "taken out", "the plague on turn 6, the flood on turn 7, the storm on turn 8")
 def s_events_more(c, mod):
@@ -1351,6 +1382,7 @@ COVERAGE = {
     "Campaign start (descr_strat.txt)": ["s_campaign_start"],
     "Engine settings (REX / M2EX)": ["s_engine_rules"],
     "Add-ons": ["s_addon", "s_addon_diplomacy", "s_addon_growth"],
+    "Module builder": ["s_module"],
     "Art: replace a picture": ["s_art", "s_art_all"],
     "Faction emblem": ["s_emblem"],
     "Banner...": ["s_banner"],
@@ -1384,6 +1416,7 @@ UI = {
     "Make the campaign map 3 x bigger": "Make the campaign map 3 x bigger",
     "Check and install a pack": "Check and install a pack", "Campaign rules": "Campaign rules",
     "Traits and retinue": "Traits and retinue: a new trait", "Events and later factions": "Events",
+    "Module builder": "Module builder",
     "New religion": "Religions (Medieval II)", "Religions of a region": "Religions (Medieval II)",
     "Restore a backup": "Restore a backup", "Game manifest": "Settings, Help, the log, Save logs, Game manifest",
     "Log": "Settings, Help, the log, Save logs, Game manifest",

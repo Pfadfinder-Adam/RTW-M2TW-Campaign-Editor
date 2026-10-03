@@ -64,6 +64,8 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   change the campaign's rules ... Tools > Campaign rules... (ages, agents, towns, diplomacy, unit sizes)
   add a religion ................ Tools > New religion... (Medieval II; Rome has no religions)
   add Sack Settlement ........... Add-ons (Rome + REX): who may sack, reward, what stays standing
+  make your own script, no code . Tools > Module builder... (REX / M2EX): WHEN something happens, IF ...,
+                                  DO ... - picked from lists; nine examples to start from
   rename a region or its town ... Edit region... (Map, or Rename... beside the towns list): the names
                                   players see and the names in the files (changed everywhere)
   make a copy of the mod to work on  New mod folder... (the base mod stays untouched)
@@ -799,6 +801,8 @@ class App(tk.Tk):
                          command=self.once("traits_window", self.traits_window))
         menu.add_command(label="Events and later factions (plagues, volcanoes, historic messages)...",
                          command=self.once("events_window", self.events_window))
+        menu.add_command(label="Module builder (a new add-on made of blocks, no code)...",
+                         command=self.once("module_builder", self.module_builder))
         menu.add_command(label="New religion... (Medieval II)", command=self.once("religions_from_menu_True", lambda: self.religions_from_menu(True)))
         menu.add_command(label="Religions of a region... (Medieval II)", command=self.once("religions_from_menu_False", lambda: self.religions_from_menu(False)))
         menu.add_command(label="Restore a backup...", command=self.restore)
@@ -4713,6 +4717,11 @@ class App(tk.Tk):
         """Tools > Traits and retinue... (also in the Character editor): the traits and ancillaries themselves."""
         from .gui_traits import open_traits
         open_traits(self)
+
+    def module_builder(self):
+        """Tools > Module builder...: a new REX / M2EX add-on made of WHEN / IF / DO blocks (Add-ons has it too)."""
+        from .gui_modbuilder import open_builder
+        open_builder(self)
 
     def campaign_rules(self):
         """Tools > Campaign rules...: the campaign's settings files as plain values."""

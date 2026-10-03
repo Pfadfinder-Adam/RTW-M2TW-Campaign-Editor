@@ -173,7 +173,7 @@ def by_key(key):
 # Anyone's add-on: its settings read from the script itself
 # ---------------------------------------------------------------------------
 RE_LOCAL = re.compile(r"^local\s+([A-Z][A-Z0-9_]*)\s*=", re.M)
-RE_TAG = re.compile(r"^//\s*@(\w+)\s*(.*?)\s*$", re.M)
+RE_TAG = re.compile(r"^//[ \t]*@(\w+)[ \t]*(.*?)[ \t]*$", re.M)      # one line each (an empty tag took the next line)
 NAME_KINDS = ("chains", "units", "factions")
 SCRIPT_CAP = 1 << 20
 
@@ -224,7 +224,7 @@ def from_script(text, file, path=None):
     lines (// @title ..., // @game rome|medieval2|both, // @summary ..., // @needs ..., // @settings A, B,
     // @pick VAR chains|units|factions, // @label VAR words), its settings from the UPPER_CASE `local NAME = value`
     lines at the top level (true / false, a whole number, "text", ["a", "b"], { a = true }) - or only those
-    @settings names."""
+    @settings names; // @signed A, B: whole numbers that may be below 0 (the Module builder's money given or taken)."""
     tags = {}
     picks, labels = {}, {}
     for m in RE_TAG.finditer(text):
@@ -236,6 +236,7 @@ def from_script(text, file, path=None):
         else:
             tags.setdefault(key, val)
     only = [x.strip() for x in tags.get("settings", "").split(",") if x.strip()]
+    signed = {x.strip() for x in tags.get("signed", "").split(",") if x.strip()}
     settings = []
     for m in RE_LOCAL.finditer(text):
         var = m.group(1)
@@ -248,7 +249,7 @@ def from_script(text, file, path=None):
         if kind is None:
             continue
         label = labels.get(var) or var.replace("_", " ").strip().capitalize()
-        settings.append(Setting(var, kind, label, _help(text, m.start(), sp[1])))
+        settings.append(Setting(var, kind, label, _help(text, m.start(), sp[1]), signed=var in signed))
     stem = os.path.splitext(os.path.basename(file))[0]
     first = next((l.strip("/ \t=-") for l in text.splitlines()[:12]
                   if l.strip().startswith("//") and l.strip("/ \t=-") and "@" not in l[:4]), "")
@@ -626,10 +627,15 @@ def plan_install(plan, addon, values, mod=None):
     problems = check(addon, values, mod)
     if problems:
         raise ValueError("; ".join(problems))
-    text = render(addon, addon.template(), values)
+    template = addon.template()
+    text = render(addon, template, values)
     dst = target(plan.mod, addon)
     plan.binary(dst, text.encode("utf-8"))
     _old_lua(plan, mod or plan.mod, addon)
+    from . import modbuilder as MB
+    recipe = MB.recipe_of(template)
+    if recipe is not None:                      # a module of the Module builder: its messages into the mod's texts
+        MB.plan_messages(plan, mod or plan.mod, recipe, values)
     plan.note(None, "%s %s: %s" % ("updated" if os.path.isfile(dst) else "put in", addon.title,
                                    os.path.relpath(dst, os.path.dirname(os.path.abspath(plan.mod.data)))))
     return dst
