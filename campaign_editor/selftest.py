@@ -690,6 +690,29 @@ def s_rules(c, mod):
     raise Skip("no settings file")
 
 
+@step("Campaign start (descr_strat.txt's top): brigands and pirates rarer, rebelling generals switched",
+      "fewer brigands and pirates; generals of low loyalty may rebel (or no longer, if they could)")
+def s_campaign_start(c, mod):
+    from . import campaignrules as CR
+    got = [x for x in CR.files(mod, c.campaign) if x[0] == "descr_strat.txt"]
+    if not got or not got[0][2]:
+        raise Skip("the campaign's descr_strat.txt is not in the mod")
+    name, _, own, base = got[0]
+    rules = {r.key: r for r in CR.read(own, medieval2=c.m2)}
+    ch = {}
+    for key, value in (("brigand_spawn_value", "40"), ("pirate_spawn_value", "40")):
+        if key in rules:
+            ch[rules[key]] = value
+    flag = rules.get("rebelling_characters_active")
+    if flag is not None:
+        ch[flag] = "off" if flag.value == "on" else "on"
+    if not ch:
+        raise Skip("no values at the top of descr_strat.txt")
+    plan = Plan(mod, "rules", "campaign_start", {})
+    CR.apply(plan, name, ch, own, base)
+    return plan
+
+
 @step("Add-on: {addon} installed", "after taking a town the capture scroll offers the extra choice")
 def s_addon(c, mod):
     from . import addons as AD

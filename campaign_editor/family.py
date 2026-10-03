@@ -377,7 +377,7 @@ def limit_warnings(mod, tree, changes, people, renames=None, old_tree=None):
 def _campaign_db_children(plan, tree):
     """Medieval II: descr_campaign_db.xml <max_number_of_children> (4 in vanilla) raised to the most children one
     parent has in this tree - a fifth child made the game stop reading descr_strat.txt at the family's relative
-    line (the author's test mod: France's Philip has four). The game's copy goes into the mod with the change."""
+    line (a tester's test mod: France's Philip has four). The game's copy goes into the mod with the change."""
     import os
     from .campaignrules import apply as apply_rules, game_data, read
     from .moddata import _ci

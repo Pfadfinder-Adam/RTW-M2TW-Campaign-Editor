@@ -234,7 +234,7 @@ def hidden_words(files, extra=()):
     return words
 
 
-# what was sent already (the author: "if the program has sent this log, it does not send it again"): a finished log
+# what was sent already (a tester: "if the program has sent this log, it does not send it again"): a finished log
 # (the game's, a crash report, the editor's older log) by its path, size and time; the editor's own growing log by
 # how far it was sent - the next report carries only what came after.
 def _mark(f):

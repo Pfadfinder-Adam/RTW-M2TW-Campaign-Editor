@@ -314,7 +314,7 @@ def apply_regions(plan, campaign, painted, new_regions):
 
 def _slave_resources(plan, campaign, painted, colours, new_regions=()):
     """Rome gives every region a 'resource slaves' on the map (103 of 103 in vanilla) and stops at a region without
-    one ("could not find slave resource in <region>, every region must have one" - the author's test mod's new
+    one ("could not find slave resource in <region>, every region must have one" - a tester's test mod's new
     region). After the regions changed, a region left without one gets it on a free land tile of its own. A game
     whose regions do not all carry one (Medieval II: 2 in the whole map) is left alone."""
     from . import resources as R

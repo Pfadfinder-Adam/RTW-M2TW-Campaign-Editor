@@ -76,7 +76,7 @@ def open_report(app, message="", kind="bug", tab=None):
     ticks = []
     for f, name, what in files:
         sent = report.already_sent(f)
-        # the logs go along (an idea too) - untick to leave out; one already sent unchanged stays out (the author)
+        # the logs go along (an idea too) - untick to leave out; one already sent unchanged stays out (a tester's wish)
         v = tk.BooleanVar(value=not sent)
         ticks.append((v, (f, name, what)))
         ttk.Checkbutton(box, variable=v, text="%s - %s (%d KB)%s" % (

@@ -530,7 +530,7 @@ def _file_checks(plan, mod, campaign, fac, what, fails):
 
 
 def mod_summary(mod, campaign=None):
-    """A short picture of the mod for the log (so every report shows what the mod is - the author's idea): the game
+    """A short picture of the mod for the log (so every report shows what the mod is - a tester's idea): the game
     and engine, its campaigns, factions and cultures, regions and who holds the towns, how many units and building
     chains, the map's size, and which of its files are its own (the rest the game's). No game files, just counts and
     names; never raises (a part that cannot be read says so)."""

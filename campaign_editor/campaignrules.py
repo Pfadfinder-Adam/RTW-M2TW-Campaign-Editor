@@ -173,9 +173,91 @@ def read_ex(path, f):
     return rules
 
 
-def read(path, f=None):
+# descr_strat.txt's top: the campaign's dates and switches (both games; the exes know every one of these words)
+STRAT_SECTION = "campaign start"
+STRAT_FLAGS = (
+    ("night_battles_enabled", "battles may be fought at night"),
+    ("show_date_as_turns", "the campaign shows the turn instead of the year (Medieval II)"),
+    ("marian_reforms_disabled", "the Marian reforms never happen (Rome; Medieval II's file carries it too)"),
+    ("marian_reforms_activated", "the Marian reforms have already happened at the start (Rome)"),
+    ("rebelling_characters_active", "generals of low loyalty may rebel"),
+    ("gladiator_uprising_disabled", "no gladiator uprisings (Rome)"),
+)
+STRAT_KEYS = {
+    "start_date": "the year and season the campaign starts (a minus = BC)",
+    "end_date": "the year and season the long campaign ends",
+    "timescale": "years one turn takes (Medieval II and REX; Rome's own turn is half a year)",
+    "brigand_spawn_value": "how seldom brigands appear on land (bigger = fewer)",
+    "pirate_spawn_value": "how seldom pirates appear at sea (bigger = fewer)",
+    "random_persona_weights": "odds a faction's leader is loyal / steadfast / neutral / opportunist / treacherous "
+                              "(REX / M2EX)",
+}
+STRAT_END = re.compile(r"^\s*(resource|faction|settlement|landmark|region|core_attitudes|faction_relationships)\b")
+
+
+def read_strat(path, f, medieval2=True):
+    """[Rule] of descr_strat.txt's top (until the resources): 'key value' lines (start_date, end_date, timescale,
+    spawn values...) and the switch lines (night_battles_enabled ...) as on / off - a missing switch is offered as
+    off (line None) and written in when turned on."""
+    rules, in_list, have = [], False, set()
+    for i, text in enumerate(f.texts()):
+        code = text.split(";", 1)[0]
+        if STRAT_END.match(code):
+            break
+        t = code.split()
+        if not t:
+            continue
+        if t[0] in ("playable", "unlockable", "nonplayable"):
+            in_list = True
+            continue
+        if in_list:
+            in_list = t[0] != "end"
+            continue
+        if t[0] == "campaign":
+            continue
+        if len(t) == 1:
+            m = re.search(re.escape(t[0]), text)
+            rules.append(Rule(path, STRAT_SECTION, t[0], "switch", "on", "flag", i, m.start(), m.end()))
+            have.add(t[0])
+            continue
+        m = re.match(r"(\s*\S+\s+)([^;]*?)\s*(;.*)?$", text)
+        value = m.group(2)
+        kind = "date" if t[0] in ("start_date", "end_date") else (
+            _kind("", value) if len(t) == 2 else "words")
+        rules.append(Rule(path, STRAT_SECTION, t[0], "value", value, kind, i, m.start(2), m.start(2) + len(value)))
+    for key, _ in STRAT_FLAGS:
+        if key not in have and (medieval2 or key != "show_date_as_turns"):     # RomeTW / REX do not know it
+            rules.append(Rule(path, STRAT_SECTION, key, "switch", "off", "flag", None, 0, 0))
+    return rules
+
+
+def _apply_strat(f, changes):
+    """Switches turned off lose their line, turned on get one after the last line of the top; values in place."""
+    for rule, new in changes.items():
+        if rule.kind != "flag":
+            text = f.text(rule.line)
+            if text[rule.start:rule.end] != rule.value:
+                raise ValueError("descr_strat.txt changed on disk since it was read - load again")
+            f.set(rule.line, text[:rule.start] + new.strip() + text[rule.end:])
+    for rule, new in sorted(changes.items(), key=lambda x: -(x[0].line or -1)):
+        if rule.kind == "flag" and new == "off" and rule.line is not None:
+            f.delete(rule.line, rule.line + 1)
+    on = [r.key for r, new in changes.items() if r.kind == "flag" and new == "on" and r.line is None]
+    if on:
+        last = 0
+        for i, text in enumerate(f.texts()):
+            if STRAT_END.match(text.split(";", 1)[0]):
+                break
+            if text.split(";", 1)[0].strip():
+                last = i
+        f.insert(last + 1, on)
+
+
+def read(path, f=None, medieval2=True):
     f = f or TextFile.load(path)
     low = os.path.basename(path).lower()
+    if low == "descr_strat.txt":
+        return read_strat(path, f, medieval2)
     if low in ("descr_ex.txt", "descr_caps_ex.txt"):
         return read_ex(path, f)
     return read_unit_sizes(path, f) if low.endswith(".txt") else read_xml(path, f)
@@ -191,10 +273,17 @@ def game_data(mod):
         return None
 
 
-def files(mod):
-    """[(file name, title, the mod's path or None, the game's path or None)] of the settings files there are."""
+def files(mod, campaign=None):
+    """[(file name, title, the mod's path or None, the game's path or None)] of the settings files there are; with a
+    campaign also its descr_strat.txt (the top: dates, turns, switches)."""
     game = game_data(mod)
     out = []
+    if campaign:
+        own = _ci(mod.campaign_dir(campaign), "descr_strat.txt") if os.path.isdir(mod.campaign_dir(campaign)) else None
+        gdir = os.path.join(game, "world", "maps", "campaign", campaign) if game else None
+        base = _ci(gdir, "descr_strat.txt") if gdir and os.path.isdir(gdir) else None
+        if own or base:
+            out.append(("descr_strat.txt", "The campaign %s" % campaign, own, base))
     for name, title in FILES:
         own = _ci(mod.data, name)
         base = _ci(game, name) if game else None
@@ -218,6 +307,11 @@ def check(rule, text):
         return None if re.fullmatch(r"-?\d+(\.\d*)?|-?\.\d+", t) else "a number (like 1.5)"
     if rule.kind == "bool":
         return None if t in ("true", "false") else "true or false"
+    if rule.kind == "flag":
+        return None if t in ("on", "off") else "on or off"
+    if rule.kind == "date":
+        return None if re.fullmatch(r"-?\d+( summer| winter)?", " ".join(t.split())) else \
+            "a year (a minus = BC) and summer or winter, like '1080 summer'"
     if rule.kind == "words":
         return None if not re.search(r"[\"'<>;]", t) else "words or numbers, no quotes or ';'"
     return None if not re.search(r"[\"'<>\s]", t) else "one word, no quotes"
@@ -231,6 +325,17 @@ def apply(plan, name, changes, own, base):
         f = plan.edit(own)
     else:
         f = TextFile.load(base)
+    if name.lower() == "descr_strat.txt":
+        for rule, new in changes.items():
+            why = check(rule, new)
+            if why:
+                raise ValueError("%s / %s: '%s' - must be %s" % (rule.section, rule.key, new, why))
+        if not own:
+            raise ValueError("the campaign's descr_strat.txt is not in the mod")
+        _apply_strat(f, {r: " ".join(n.split()) for r, n in changes.items()})
+        for rule, new in changes.items():
+            plan.note(f, "%s / %s: %s -> %s" % (rule.section, rule.key, rule.value, new.strip()))
+        return
     for rule, new in sorted(changes.items(), key=lambda x: (x[0].line, -x[0].start)):
         why = check(rule, new)
         if why:
@@ -249,6 +354,7 @@ def apply(plan, name, changes, own, base):
 # Plain words
 # ---------------------------------------------------------------------------
 SECTIONS = {
+    STRAT_SECTION: "the top of the campaign's descr_strat.txt: when it starts and ends, how long a turn is, switches",
     "settings": "the file's settings",
     "demeanours": "how a faction's mood (its attitude) moves its answers to offers",
     "recruitment":"how many units a town trains at once and how recruit pools refill and drain",
@@ -370,6 +476,8 @@ def explain(rule):
     """A plain sentence for a value (the key's own words where known; an engine setting: the file's own comment)."""
     if getattr(rule, "note", None):
         return rule.note
+    if rule.section == STRAT_SECTION:
+        return STRAT_KEYS.get(rule.key) or dict(STRAT_FLAGS).get(rule.key) or rule.key.replace("_", " ")
     words = KEYS.get(rule.key)
     last = rule.section.split(" / ")[-1]
     m = re.match(r"(SPF|SOF|SIF)_(.+)", last)

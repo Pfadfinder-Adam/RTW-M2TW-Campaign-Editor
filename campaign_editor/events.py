@@ -78,7 +78,7 @@ def date_problem(date, rome):
 def date_key(date, rome):
     """A number to sort dates by (the earliest first): Rome years x 2 (+1 for winter), Medieval II the first year.
     Both games read descr_events.txt as a queue in date order - an event put after a later one never fires (the
-    author's test mod: Rome's events written at the file's end never came)."""
+    a tester's test mod: Rome's events written at the file's end never came)."""
     t = (date or "").split()
     if not t or not t[0].isdigit():
         return None
@@ -241,7 +241,7 @@ def apply(plan, campaign, changes):
         have.add(name.lower())
         if (ev.get("kind") or "historic") == "historic":
             # the game shows a historic event's title and body on its scroll and stops on a missing one
-            # ("ASSERT FAILED: event_manager.cpp: description_string" - the author's test mod, both games)
+            # ("ASSERT FAILED: event_manager.cpp: description_string" - a tester's test mod, both games)
             ev = dict(ev, body=ev.get("body") or ev.get("text") or ev.get("title") or name.replace("_", " "),
                       title=ev.get("title") or name.replace("_", " "))
         for part in ("title", "body"):

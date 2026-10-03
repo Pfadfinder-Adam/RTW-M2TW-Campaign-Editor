@@ -28,7 +28,8 @@ class RulesWindow(tk.Toplevel):
         frm = ttk.Frame(self, padding=8)
         frm.pack(fill="both", expand=True)
         ShortHint(frm, wraplength=1060, justify="left", text=(
-            "The rules of the whole campaign, from this mod's settings files. Pick a group on the left (or Find), "
+            "The rules of the whole campaign, from this mod's settings files and the top of the campaign's "
+            "descr_strat.txt (start and end date, years a turn, switches). Pick a group on the left (or Find), "
             "change a value, then Preview and Write it in - a backup is made first and Restore undoes it. A value "
             "that differs from the game's own shows the game's beside it, with Reset.")).pack(anchor="w")
         bar = ttk.Frame(frm)
@@ -63,12 +64,15 @@ class RulesWindow(tk.Toplevel):
         self.show()
 
     def _read(self):
-        for name, title, own, base in CR.files(self.mod):
-            rules = CR.read(own or base)
+        from .limits import game_kind
+        m2 = game_kind(self.mod) == "medieval2"
+        campaign = self.app.v_campaign.get() if hasattr(self.app, "v_campaign") else None
+        for name, title, own, base in CR.files(self.mod, campaign):
+            rules = CR.read(own or base, medieval2=m2)
             game = {}
             if own and base:
                 try:
-                    game = {r.ident: r.value for r in CR.read(base)}
+                    game = {r.ident: r.value for r in CR.read(base, medieval2=m2)}
                 except Exception:
                     game = {}
             self.files[name] = (own, base, game)
@@ -127,7 +131,12 @@ class RulesWindow(tk.Toplevel):
         ttk.Label(inner, text=("%s: %s" % (rule.section.split(" / ")[0], rule.key) if q else rule.key)).grid(
             row=r, column=0, sticky="w", padx=(12, 6))
         v = tk.StringVar(value=self.changes.get(rule, rule.value))
-        e = tk.Entry(inner, textvariable=v, width=14)
+        if rule.kind == "flag":                         # a switch line of descr_strat.txt: on / off
+            e = tk.Spinbox(inner, textvariable=v, values=("off", "on"), width=12, state="readonly",
+                           readonlybackground="white")
+            v.set(self.changes.get(rule, rule.value))
+        else:
+            e = tk.Entry(inner, textvariable=v, width=14)
         e.grid(row=r, column=1, sticky="w")
         hint = CR.explain(rule)
         game = self._game(rule)
@@ -143,7 +152,8 @@ class RulesWindow(tk.Toplevel):
                 self.changes.pop(rule, None)
             else:
                 self.changes[rule] = now
-            e.configure(background=BAD if why else CHANGED if now != rule.value else "white")
+            colour = BAD if why else CHANGED if now != rule.value else "white"
+            e.configure(**({"readonlybackground": colour} if rule.kind == "flag" else {"background": colour}))
             self._status(why and "%s: %s must be %s" % (rule.key, now or "(empty)", why))
         v.trace_add("write", paint)
         if game is not None and game != rule.value:

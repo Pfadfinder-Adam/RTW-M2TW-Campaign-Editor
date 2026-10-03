@@ -306,7 +306,7 @@ def sized(plan, f, region, raw, picked, size, known):
     pop = population_of(texts)
     want, want_pop = (size or {}).get("level"), (size or {}).get("population")
     if (size or {}).get("level_follows") and want_pop is not None and not want:
-        # the level grows (or shrinks) to hold the people, the governor's building with it (the author's wish)
+        # the level grows (or shrinks) to hold the people, the governor's building with it (a tester's wish)
         fits = level_for_population(want_pop, settlement_kind(texts) == "castle", plan.mod)
         if fits and fits != level and pop_problem(want_pop, level, settlement_kind(texts) == "castle", plan.mod):
             want = fits

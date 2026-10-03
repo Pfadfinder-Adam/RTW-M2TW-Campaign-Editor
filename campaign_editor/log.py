@@ -175,7 +175,7 @@ def save_session(game=None, mod_dir=None):
         seen = _seen_game_logs(root)
         for i, f in enumerate(report.game_logs(game, mod_dir, keep=2) if game else []):
             # named as the GAME's: a tester read its errors in the session folder as the editor's own. Only what a
-            # report would send (its start, the middle's errors once each, its end - the author: the logs grew to
+            # report would send (its start, the middle's errors once each, its end - a tester: the logs grew to
             # 61 MB), and not again when the game's log has not changed since a session kept it
             mark = "%s|%d|%d" % (os.path.abspath(f), os.path.getsize(f), int(os.path.getmtime(f)))
             if mark in seen:

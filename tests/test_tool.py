@@ -1806,7 +1806,7 @@ building smith
                 self.assertEqual([l.split("  ", 1)[-1] for l in fh.read().splitlines()], ["new entry"])
             with open(os.path.join(out, "game_system.log.txt")) as fh:
                 self.assertEqual(fh.read(), "game log\n")
-            # the next session keeps no second copy of an unchanged game log (the author: logs grew to 61 MB),
+            # the next session keeps no second copy of an unchanged game log (a tester: logs grew to 61 MB),
             # and a big one is kept as a report sends it (its start, errors, end), not whole
             log._session_start = (0, "2099-01-01_00-00-00")
             out2 = log.save_session(home)
@@ -2624,7 +2624,7 @@ building smith
     def test_new_region_gets_its_slaves_resource_in_rome(self):
         """Rome: every region carries a 'resource slaves' (the enslaved people go there); a new region without one
         stops the game ("could not find slave resource in CE Newland(97), every region must have one" - the
-        author's test mod). A game whose regions do not all carry one is left alone."""
+        a tester's test mod). A game whose regions do not all carry one is left alone."""
         from campaign_editor import resources as R
         from campaign_editor.edit import edit
         mod = ModData(self.root)
@@ -3226,7 +3226,7 @@ building smith
         MT.apply(plan, "test", {"population": {"B_R": 1500}, "owners": {"B_R": "alpha"}})
         with self.assertRaises(ValueError):
             MT.apply(Plan(mod, "town", "B_R", {}), "test", {"population": {"B_R": 0}})
-        # more people than the level holds: the game stops reading descr_strat there (the author's test mod lost the
+        # more people than the level holds: the game stops reading descr_strat there (a tester's test mod lost the
         # rebels' garrisons and the diplomacy) - cut to the level's range with a warning, or the level follows
         from campaign_editor.buildings import pop_range, level_for_population
         level = t.get("level") or "town"
@@ -3657,7 +3657,7 @@ building smith
 
     def test_recolour_gives_a_shared_battle_texture_a_copy_of_its_own(self):
         """A clone wears its template's battle textures (and a mod in mods/ the game's): Recolour skipped them, so a
-        new faction's men stayed in the template's colours in battle (the author's test mod, both games). The
+        new faction's men stayed in the template's colours in battle (a tester's test mod, both games). The
         faction now gets its own copy in the mod and its model line points at it; the template's stays."""
         try:
             from PIL import Image
@@ -3699,7 +3699,7 @@ building smith
 
     def test_medieval2_children_limit_raised_with_the_family(self):
         """Medieval II: descr_campaign_db.xml <max_number_of_children> (4 in vanilla) - a fifth child made the game
-        stop reading descr_strat.txt at the family's relative line (the author's test mod: France's Philip). A tree
+        stop reading descr_strat.txt at the family's relative line (a tester's test mod: France's Philip). A tree
         that needs more raises it in the same write; one within it leaves the file alone."""
         from campaign_editor import family as FM
         d = os.path.join(self.root, "data")
@@ -4339,6 +4339,44 @@ building smith
         with open(path, newline="") as fh:
             self.assertEqual(fh.read(), text.replace("age_of_manhood 16", "age_of_manhood 14").replace(
                 "60 200 255", "1 2 3"))
+
+    def test_campaign_start_in_campaign_rules(self):
+        """Campaign rules: the top of the campaign's descr_strat.txt - start / end date, timescale, spawn values as
+        values, switch lines (night_battles_enabled ...) as on / off; a switch turned off loses its line, one turned
+        on gets a line after the top's last; a bad date refused; the rest of the file byte for byte; Restore exact."""
+        from campaign_editor import campaignrules as CR
+        from campaign_editor.plan import Plan
+        mod = ModData(self.root)
+        path = mod.campaign_file("test", "descr_strat.txt")
+        old = b"resource\tiron, 1, 1\n\nfaction\talpha, balanced smith\ndenari 100\n"
+        top = ("campaign\ttest\nplayable\n\talpha\nend\nnonplayable\n\tslave\nend\n\nstart_date\t-270 summer\n"
+               "end_date\t14 summer ; the end\nnight_battles_enabled\nbrigand_spawn_value 10\n\n")
+        with open(path, "wb") as fh:
+            fh.write(top.encode() + old)
+        before = tree_hash(os.path.join(self.root, "data"))
+        self.assertIn(("descr_strat.txt", "The campaign test", path, None), CR.files(mod, "test"))
+        rules = {r.key: r for r in CR.read(path, medieval2=False)}
+        self.assertEqual(rules["start_date"].value, "-270 summer")
+        self.assertEqual(rules["night_battles_enabled"].value, "on")
+        self.assertEqual(rules["gladiator_uprising_disabled"].value, "off")
+        self.assertNotIn("show_date_as_turns", rules)                       # RomeTW / REX do not know it
+        self.assertNotIn("alpha", rules)                                    # the faction lists are not values
+        self.assertIsNotNone(CR.check(rules["start_date"], "soon"))
+        self.assertIsNone(CR.check(rules["start_date"], "-200 winter"))
+        self.assertIsNotNone(CR.check(rules["night_battles_enabled"], "yes"))
+        plan = Plan(mod, "rules", "rules", {})
+        CR.apply(plan, "descr_strat.txt", {rules["start_date"]: "-200 winter", rules["end_date"]: "20 winter",
+                                           rules["night_battles_enabled"]: "off",
+                                           rules["gladiator_uprising_disabled"]: "on"}, path, None)
+        bdir = plan.apply()
+        with open(path, "rb") as fh:
+            got = fh.read().decode()
+        self.assertEqual(got, (top.replace("-270 summer", "-200 winter").replace("14 summer ;", "20 winter ;")
+                               .replace("night_battles_enabled\n", "")
+                               .replace("brigand_spawn_value 10\n", "brigand_spawn_value 10\n"
+                                        "gladiator_uprising_disabled\n")) + old.decode())
+        restore(ModData(self.root), bdir)
+        self.assertEqual(tree_hash(os.path.join(self.root, "data")), before)
 
     def test_campaign_rules_and_addons(self):
         """Campaign rules: values of the settings files read with their section (M2EX's unquoted bool=false too),
