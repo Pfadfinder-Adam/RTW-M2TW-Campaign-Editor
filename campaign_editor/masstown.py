@@ -334,6 +334,24 @@ def apply(plan, campaign, opts):
     from .buildings import resize
     from .edit import _garrisons, map_changes
     f = plan.edit(plan.mod.campaign_file(campaign, "descr_strat.txt"))
+    if opts.get("level_follows") and opts.get("population"):
+        # 'the level follows the population': a town the people do not fit grows (or shrinks) to the level that
+        # holds them, its governor's building with it - instead of the population being cut to the level
+        from .buildings import level_for_population, pop_problem
+        towns = dict(opts.get("towns") or {})
+        for st in (x for fb in Strat(f).factions for x in fb.settlements):
+            pop = (opts["population"] or {}).get(st.region)
+            if pop is None or (towns.get(st.region) or {}).get("level"):
+                continue
+            lines = [l.rstrip("\r\n") for l in f.texts()[st.start:st.end]]
+            castle = settlement_kind(lines) == "castle"
+            level = settlement_info(lines)[0]
+            fits = level_for_population(int(pop), castle, plan.mod)
+            if fits and fits != level and pop_problem(int(pop), level, castle, plan.mod):
+                towns[st.region] = dict(towns.get(st.region) or {}, level=fits)
+                plan.note(f, "%s: %d people do not fit a %s - the town becomes a %s" % (st.region, int(pop), level,
+                                                                                       fits))
+        opts = dict(opts, towns=towns)
     if opts.get("towns"):
         _town_changes(plan, f, campaign, opts["towns"])
     for region, pop in sorted((opts.get("population") or {}).items()):
@@ -343,6 +361,9 @@ def apply(plan, campaign, opts):
         pop = int(pop)
         if pop < 1:
             raise ValueError("%s: the population is a whole number above 0" % region)
+        from .buildings import fit_population
+        lines = [l.rstrip("\r\n") for l in f.texts()[st.start:st.end]]
+        pop = fit_population(plan, f, region, pop, settlement_info(lines)[0], settlement_kind(lines) == "castle")
         f.raw[st.start:st.end] = resize(f.raw[st.start:st.end], f.make, population=pop)
         plan.note(f, "%s: population %d" % (region, pop))
     s = Strat(f)

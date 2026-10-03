@@ -281,7 +281,7 @@ function raze_on_turn_start(e) {
     if (homeless) {
         raze_homeless[name] <- true
     } else if (name in raze_homeless) {
-        delete raze_homeless[name]
+        raze_homeless.rawdelete(name)
     }
 }
 

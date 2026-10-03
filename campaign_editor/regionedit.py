@@ -215,6 +215,7 @@ def apply_regions(plan, campaign, painted, new_regions):
     for w in warns:
         plan.warnings.append((mod.rel(path), w))
     if not new_regions:
+        _slave_resources(plan, campaign, painted, colours)
         return
     # descr_regions.txt
     dr = plan.edit(mod.campaign_file(campaign, "descr_regions.txt"))
@@ -308,6 +309,53 @@ def apply_regions(plan, campaign, painted, new_regions):
             next((i + 1 for i in range(fb.start, fb.end) if sf.text(i).split()[:1] == ["denari"]), fb.start + 1)
         sf.raw[at:at] = [sf.make(l) for l in block]
         plan.note(sf, "%s: a %s of %s" % (r["name"], level, own))
+    _slave_resources(plan, campaign, painted, colours, new_regions)
+
+
+def _slave_resources(plan, campaign, painted, colours, new_regions=()):
+    """Rome gives every region a 'resource slaves' on the map (103 of 103 in vanilla) and stops at a region without
+    one ("could not find slave resource in <region>, every region must have one" - the author's test mod's new
+    region). After the regions changed, a region left without one gets it on a free land tile of its own. A game
+    whose regions do not all carry one (Medieval II: 2 in the whole map) is left alone."""
+    from . import resources as R
+    mod = plan.mod
+    sf = plan.edit(mod.campaign_file(campaign, "descr_strat.txt"))
+    have = R.read(sf)
+    slaves = [r for r in have if r.kind == "slaves"]
+    regions = mod.regions(campaign)
+    if len(slaves) < 0.9 * len(regions):
+        return
+    img = mod.region_map(campaign)                    # game tiles: x, y from the bottom (tga.Image.get)
+    by_colour = {tuple(c): name for name, c in colours.items()}
+
+    def region_at(xy):
+        if xy in painted:
+            return painted[xy]
+        return by_colour.get(tuple(img.get(xy[0], xy[1])))
+    with_slaves = {region_at(tuple(r.xy)) for r in slaves if 0 <= r.xy[0] < img.width and 0 <= r.xy[1] < img.height}
+    taken = {tuple(r.xy) for r in have}
+    towns = {tuple(r["city"]) for r in new_regions} | {tuple(r["port"]) for r in new_regions if r.get("port")}
+    wanting = [n for n in list(regions) + [r["name"] for r in new_regions] if n not in with_slaves]
+    if not wanting:
+        return
+    tiles = {}
+    for xy, r in painted.items():
+        tiles.setdefault(r, []).append(xy)
+    for name in wanting:
+        cells = tiles.get(name)
+        if not cells:
+            c = tuple(colours.get(name) or ())
+            cells = [tuple(p) for p in img.find(c) if tuple(p) not in painted] if c else []
+        cells = [xy for xy in cells if xy not in towns and not R.problem(mod, campaign, xy, taken)]
+        if not cells:
+            plan.warn(sf, "%s has no free land tile for its slaves resource - Rome needs one in every region" % name)
+            continue
+        cx = sum(x for x, _ in cells) / len(cells)
+        cy = sum(y for _, y in cells) / len(cells)
+        xy = min(cells, key=lambda p: ((p[0] - cx) ** 2 + (p[1] - cy) ** 2, p))
+        R.apply(plan, campaign, {"added": [{"type": "slaves", "xy": xy}]})
+        taken.add(xy)
+        plan.note(sf, "%s: a slaves resource at %d, %d (Rome needs one in every region)" % (name, xy[0], xy[1]))
 
 
 def _grown_block(plan, block, level, region, sf):

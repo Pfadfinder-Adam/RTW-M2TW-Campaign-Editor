@@ -76,6 +76,16 @@ def check_mod(mod, campaign, deep=False, progress=None):
     for n, _ in headers_out_of_order(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))):
         bad("%s: its first lines in descr_strat.txt are out of the games' order (denari before superfaction / "
             "ai_label...) - the game starts it without its towns; Load offers to put them in order" % n)
+    from .buildings import pop_problem, population_of, settlement_info, settlement_kind
+    strat_f = mod.load(mod.campaign_file(campaign, "descr_strat.txt"))
+    for fb in s.factions:
+        for st in fb.settlements:
+            lines = [l.rstrip("\r\n") for l in strat_f.texts()[st.start:st.end]]
+            why = pop_problem(population_of(lines), settlement_info(lines)[0], settlement_kind(lines) == "castle",
+                              mod)
+            if why:
+                bad("%s (%s): %s - the game stops reading descr_strat.txt there (towns, armies and diplomacy after "
+                    "it are lost); set the population or the level on the Settlements tab" % (st.region, fb.name, why))
     no_culture = [n for n, c in facs if not c]
     if no_culture:
         bad("no culture line for: %s" % ", ".join(no_culture))

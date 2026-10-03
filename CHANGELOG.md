@@ -234,6 +234,20 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **A town's population the game cannot take at the start** (the author's test mod on Rome: the rebels' towns
+  stood empty and every faction was neutral): each settlement level holds a range of people at the start (a village
+  400 - 1500, a town up to 3500, a large town 9000, a city 18000...; Medieval II castles their own; read from
+  `descr_settlement_mechanics.xml` when the mod or the game has it), and outside it the game stops reading
+  `descr_strat.txt` - every town, army and diplomacy line after it is lost. The town window and the Settlements
+  tab now have **the level follows the population** (ticked: the town grows or shrinks to the level that holds the
+  people, its governor's building with it; unticked: the population is cut to the level's range, with a warning),
+  a level change keeps the population inside the new level's range, and **Check mod files** names a town outside
+  its range in the game's own words.
+- **Rome: a new region gets its slaves resource** (the enslaved people of a town go there): the game stops at a
+  region without one ("could not find slave resource in ..., every region must have one"); a region left without
+  one after the map is painted gets one on a free tile of its own. Medieval II is left as it is.
+- **Sack Settlement (REX) under the REX build of October 3**: it used Squirrel's `delete`, which that REX forbids
+  ("Usage of 'delete' operator is forbidden") - it uses `rawdelete` now. Install the add-on again to update it.
 - **A faction's pictures were taken for another's when one name holds the other** (`empire_east` /
   `empire_east_rebels`; the test mod's `ce_test` / `ce_test_later`): Faction emblem, Recolour and the Art tab wrote
   over the other faction's `symbol24_...` / `symbol128_...` pictures, and a new faction made from `empire_east`

@@ -80,9 +80,18 @@ class TownWindow(tk.Toplevel):
         self.v_pop = tk.StringVar(value=str(town.get("population") or ""))
         ttk.Label(top, text="Population").grid(row=row, column=0, sticky="w")
         ttk.Entry(top, textvariable=self.v_pop, width=10).grid(row=row, column=1, sticky="w", padx=4, pady=2)
-        ttk.Label(top, foreground="#666", wraplength=420, justify="left",
-                  text="people at the start (vanilla grows a level at 400 / 2000 / 6000 / 12000 / 24000)").grid(
+        from . import settings as _settings
+        self.v_follow = tk.BooleanVar(value=_settings.get("level_follows_population", True) is not False)
+        ttk.Checkbutton(top, variable=self.v_follow, text="the level follows the population (grows with its "
+                        "governor's building when the people do not fit)",
+                        command=lambda: _settings.put("level_follows_population", bool(self.v_follow.get()))).grid(
             row=row, column=2, sticky="w", padx=8)
+        row += 1
+        ttk.Label(top, foreground="#666", wraplength=520, justify="left",
+                  text="Each level holds a range of people at the start (a village 400 - 1500, a town up to 3500, a "
+                       "large town 9000, a city 18000...): outside it the game stops reading the campaign file. "
+                       "Unticked, the population is cut to the level's range.").grid(
+            row=row, column=1, columnspan=2, sticky="w", padx=4)
 
         mid = ttk.LabelFrame(b, text="Buildings", padding=8)
         mid.pack(fill="both", expand=True, pady=6)
@@ -199,6 +208,7 @@ class TownWindow(tk.Toplevel):
             if not pop.isdigit() or int(pop) < 1:
                 raise ValueError("The population is a whole number above 0.")
             opts["population"] = {r: int(pop)}
+            opts["level_follows"] = bool(self.v_follow.get())
         if self.v_owner.get() and self.v_owner.get() != t["owner"]:
             opts["owners"] = {r: self.v_owner.get()}
         return opts

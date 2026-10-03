@@ -300,12 +300,13 @@ def s_forts(c, mod):
     return edit(mod, c.campaign, c.edited, {"resources": {"forts": ch}})
 
 
-@step("Town window: a rebel town given to {new}, its population set to 2600", "the town is {new}'s")
+@step("Town window: a rebel town given to {new}, its population set to 2600 (the level follows the people)",
+      "the town is {new}'s, big enough for 2600 people")
 def s_town(c, mod):
     from . import masstown as MT
     region = towns_of(c, mod, "slave")[-1]
     plan = Plan(mod, "town", region, {})
-    MT.apply(plan, c.campaign, {"population": {region: 2600}, "owners": {region: c.new}})
+    MT.apply(plan, c.campaign, {"population": {region: 2600}, "owners": {region: c.new}, "level_follows": True})
     return plan
 
 

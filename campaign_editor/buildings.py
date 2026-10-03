@@ -133,7 +133,104 @@ def settlement_info(lines):
 
 
 # the population at which the game grows a settlement to each level (vanilla)
-POP_MIN = {"village": 0, "town": 400, "large_town": 2000, "city": 6000, "large_city": 12000, "huge_city": 24000}
+POP_MIN = {"village": 400, "town": 400, "large_town": 2000, "city": 6000, "large_city": 12000, "huge_city": 24000}
+
+
+# the population each level holds (min, max): the game stops reading descr_strat.txt at a town outside it ("Population
+# of 2600 is too high for a village - max is 1500" - and the towns, armies and diplomacy after it are lost). Read from
+# descr_settlement_mechanics.xml <population_levels> when the mod or the game has it (M2TW, REX), else vanilla.
+POP_RANGE = {"village": (400, 1500), "town": (400, 3500), "large_town": (400, 9000), "city": (400, 18000),
+             "large_city": (400, 36000), "huge_city": (400, 72000)}
+# Medieval II castles use the city level words in descr_strat.txt but hold their own (motte and bailey = village...)
+CASTLE_OF = {"village": "moot_and_bailey", "town": "wooden_castle", "large_town": "castle", "city": "fortress",
+             "large_city": "citadel"}
+CASTLE_RANGE = {"moot_and_bailey": (400, 1500), "wooden_castle": (400, 3500), "castle": (400, 9000),
+                "fortress": (400, 13500), "citadel": (400, 18000)}
+
+
+def population_levels(mod):
+    """{level: (min, max)} of descr_settlement_mechanics.xml (the mod's, else the game's), or {} without one."""
+    import os
+    from .moddata import _ci
+    if mod is None:
+        return {}
+    roots = [mod.data]
+    try:
+        from .newmod import game_of
+        game = game_of(mod.data)
+        if game:
+            roots.append(os.path.join(game, "data"))
+    except Exception:
+        pass
+    for root in roots:
+        p = _ci(root, "descr_settlement_mechanics.xml") if os.path.isdir(root) else None
+        if not p:
+            continue
+        try:
+            with open(p, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        out = {}
+        for m in re.finditer(r"<level\b([^>]*)/?>", text):
+            a = dict(re.findall(r'(\w+)\s*=\s*"([^"]*)"', m.group(1)))
+            try:
+                if a.get("name") and "max" in a:
+                    out[a["name"].lower()] = (int(a.get("min", 0) or 0), int(a["max"]))
+            except ValueError:
+                pass
+        if out:
+            return out
+    return {}
+
+
+def pop_range(level, castle=False, mod=None):
+    """(min, max) population a settlement of this level holds (castle: a Medieval II castle), or None unknown."""
+    level = (level or "").lower()
+    key = CASTLE_OF.get(level, level) if castle else level
+    got = population_levels(mod).get(key)
+    if got:
+        return got
+    return (CASTLE_RANGE if castle else POP_RANGE).get(key) or POP_RANGE.get(level)
+
+
+def pop_problem(population, level, castle=False, mod=None):
+    """The game's own words when the population does not fit the level, else None."""
+    r = pop_range(level, castle, mod)
+    if r is None or population is None:
+        return None
+    what = CASTLE_OF.get(level, level) if castle else level
+    if population > r[1]:
+        return "Population of %d is too high for a %s - max is %d" % (population, what.replace("_", " "), r[1])
+    if population < r[0]:
+        return "Population of %d is too low for a %s - min is %d" % (population, what.replace("_", " "), r[0])
+    return None
+
+
+def level_for_population(population, castle=False, mod=None):
+    """The smallest settlement level whose range holds the population (the town grows to fit), or None (above every
+    level: the top level is the nearest)."""
+    for level in SETTLEMENT_LEVELS:
+        r = pop_range(level, castle, mod)
+        if castle and level not in CASTLE_OF:
+            continue
+        if r and r[0] <= population <= r[1]:
+            return level
+    return None
+
+
+def fit_population(plan, f, region, population, level, castle=False):
+    """population moved into the level's range (min, max) with a warning in the game's words - a town outside it
+    makes the game stop reading descr_strat.txt there."""
+    why = pop_problem(population, level, castle, plan.mod if plan is not None else None)
+    if not why:
+        return population
+    lo, hi = pop_range(level, castle, plan.mod if plan is not None else None)
+    fitted = min(max(population, lo), hi)
+    if plan is not None:
+        plan.warn(f, "%s: %s (the game would stop reading descr_strat.txt there) - written as %d" % (
+            region, why, fitted))
+    return fitted
 
 
 def population_of(lines):
@@ -208,6 +305,11 @@ def sized(plan, f, region, raw, picked, size, known):
     level, _ = settlement_info(texts)
     pop = population_of(texts)
     want, want_pop = (size or {}).get("level"), (size or {}).get("population")
+    if (size or {}).get("level_follows") and want_pop is not None and not want:
+        # the level grows (or shrinks) to hold the people, the governor's building with it (the author's wish)
+        fits = level_for_population(want_pop, settlement_kind(texts) == "castle", plan.mod)
+        if fits and fits != level and pop_problem(want_pop, level, settlement_kind(texts) == "castle", plan.mod):
+            want = fits
     need = core_need(picked or [], known)
     new = want or level
     if need and need != new:
@@ -223,6 +325,11 @@ def sized(plan, f, region, raw, picked, size, known):
         plan.note(f, "%s: level %s -> %s" % (region, level, want))
     if want_pop is None and new != level and pop is not None and pop < POP_MIN.get(new, 0):
         want_pop = POP_MIN[new]
+    castle = settlement_kind(texts) == "castle"
+    if want_pop is not None:
+        want_pop = fit_population(plan, f, region, want_pop, new, castle)
+    elif new != level and pop is not None and pop_problem(pop, new, castle, plan.mod):
+        want_pop = min(max(pop, pop_range(new, castle, plan.mod)[0]), pop_range(new, castle, plan.mod)[1])
     if want_pop is not None and want_pop != pop:
         plan.note(f, "%s: population %s -> %d" % (region, pop, want_pop))
     if new == level and want_pop in (None, pop):

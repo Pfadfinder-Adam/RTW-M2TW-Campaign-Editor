@@ -992,6 +992,15 @@ class App(tk.Tk):
         e = ttk.Entry(bar, textvariable=self.v_pop, width=8)
         e.pack(side="left", padx=(4, 12))
         e.bind("<KeyRelease>", lambda ev: self.size_changed())
+        from .gui_util import hint
+        self.v_follow_pop = tk.BooleanVar(value=settings.get("level_follows_population", True) is not False)
+        hint(ttk.Checkbutton(bar, text="level follows", variable=self.v_follow_pop,
+                             command=lambda: (settings.put("level_follows_population", bool(self.v_follow_pop.get())),
+                                              self.size_changed())),
+             "Ticked: a population the level cannot hold makes the town grow (or shrink) to the level that holds it, "
+             "its governor's building with it. Unticked: the population is cut to the level's range. Each level "
+             "holds a range of people at the start (a village 400 - 1500, a town up to 3500, a large town 9000, a "
+             "city 18000...) - outside it the game stops reading the campaign file.").pack(side="left", padx=(0, 12))
         self.lbl_size = ttk.Label(bar, text="", foreground="#666")
         self.lbl_size.pack(side="left", fill="x", expand=True)
         self.buildings_editor = BuildingsEditor(right, self.pictures)
@@ -1044,6 +1053,7 @@ class App(tk.Tk):
                 self.sizes[region].pop("level")
                 if self.sizes[region].get("population", 0) < POP_MIN.get(self._grown_level(picked, hand), 0):
                     self.sizes[region].pop("population", None)     # too small for the grown level
+                    self.sizes[region].pop("level_follows", None)
                 if not self.sizes[region]:
                     self.sizes.pop(region)
             # show what a bigger governor's building does to the settlement (unless set by hand)
@@ -1177,6 +1187,8 @@ class App(tk.Tk):
             size["level"] = level
         if pop.isdigit() and int(pop) != pop_now:
             size["population"] = int(pop)
+            if self.v_follow_pop.get():
+                size["level_follows"] = True
         if size:
             self.sizes[region] = size
         else:

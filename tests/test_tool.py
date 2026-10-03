@@ -2608,6 +2608,32 @@ building smith
         restore(m2, bdir)
         self.assertNotIn("N_R", ModData(self.root).regions("test"))
 
+    def test_new_region_gets_its_slaves_resource_in_rome(self):
+        """Rome: every region carries a 'resource slaves' (the enslaved people go there); a new region without one
+        stops the game ("could not find slave resource in CE Newland(97), every region must have one" - the
+        author's test mod). A game whose regions do not all carry one is left alone."""
+        from campaign_editor import resources as R
+        from campaign_editor.edit import edit
+        mod = ModData(self.root)
+        img = mod.region_map("test")
+        seed = Plan(mod, "res", "", {})
+        added = []
+        for name, info in mod.regions("test").items():
+            cells = [tuple(p) for p in img.find(tuple(info["colour"])) if tuple(p) not in ((0, 3), (1, 3), (0, 2))]
+            added.append({"type": "slaves", "xy": cells[0]})
+        R.apply(seed, "test", {"added": added})
+        seed.apply()
+        mod = ModData(self.root)
+        new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
+               "city": (0, 3), "owner": "alpha", "level": "village"}
+        painted = {(0, 3): "N_R", (1, 3): "N_R", (0, 2): "N_R"}
+        plan = edit(mod, "test", "alpha", {"regions": {"painted": painted, "new": [new]}})
+        sf = plan.edit(mod.campaign_file("test", "descr_strat.txt"))
+        slaves = [r for r in R.read(sf) if r.kind == "slaves"]
+        self.assertEqual(len(slaves), len(added) + 1)
+        self.assertTrue(any(tuple(r.xy) in painted and tuple(r.xy) != (0, 3) for r in slaves))
+        restore(mod, backups(mod)[0])
+
     def test_new_faction_starts_in_a_new_region_one_apply(self):
         """A region made on the Map and picked as the new faction's start town: map, region and
         faction written by one Apply (the region first, as a rebel village the faction takes);
@@ -3187,6 +3213,21 @@ building smith
         MT.apply(plan, "test", {"population": {"B_R": 1500}, "owners": {"B_R": "alpha"}})
         with self.assertRaises(ValueError):
             MT.apply(Plan(mod, "town", "B_R", {}), "test", {"population": {"B_R": 0}})
+        # more people than the level holds: the game stops reading descr_strat there (the author's test mod lost the
+        # rebels' garrisons and the diplomacy) - cut to the level's range with a warning, or the level follows
+        from campaign_editor.buildings import pop_range, level_for_population
+        level = t.get("level") or "town"
+        hi = pop_range(level)[1]
+        cut = Plan(mod, "town", "B_R", {})
+        MT.apply(cut, "test", {"population": {"B_R": hi + 1000}})
+        self.assertTrue(any("too high for a" in w[1] for w in cut.warnings), cut.warnings)
+        self.assertIn("population %d" % hi, "\n".join(cut.edit(mod.campaign_file("test", "descr_strat.txt")).texts()))
+        grow = Plan(mod, "town", "B_R", {})
+        MT.apply(grow, "test", {"population": {"B_R": hi + 1000}, "level_follows": True})
+        text = "\n".join(grow.edit(mod.campaign_file("test", "descr_strat.txt")).texts())
+        self.assertIn("level %s" % level_for_population(hi + 1000), text)
+        self.assertIn("population %d" % (hi + 1000), text)
+        self.assertFalse(any("too high" in w[1] for w in grow.warnings))
         plan.apply()
         mod = ModData(self.root)
         t = next(x for x in MT.towns(mod, "test") if x["region"] == "B_R")
