@@ -232,6 +232,7 @@ class MassTownWindow(tk.Toplevel):
         self.v_lo, self.v_hi, self.v_cap = tk.StringVar(value="2"), tk.StringVar(value="6"), tk.StringVar(value="500")
         self.v_siege, self.v_gmode = tk.BooleanVar(value=False), tk.StringVar(value="add")
         self.v_here = tk.BooleanVar(value=True)            # only what the town's own buildings recruit
+        self.v_gamesize = tk.BooleanVar(value=False)       # units per town as the game's own towns of that level
         row = ttk.Frame(f)
         row.pack(fill="x")
         ttk.Label(row, text="Units per town: from").pack(side="left")
@@ -259,6 +260,12 @@ class MassTownWindow(tk.Toplevel):
         row.pack(fill="x", pady=(6, 0))
         ttk.Checkbutton(row, text="only units the town's own buildings recruit", variable=self.v_here,
                         command=self.draw).pack(side="left")
+        ttk.Checkbutton(row, text="as many units as the game gives such a town", variable=self.v_gamesize,
+                        command=self.draw).pack(side="left", padx=(12, 0))
+        hint(row, "On: the number of units follows the town's level the way the mod's own towns of that owner have "
+                  "them at the start (the middle value per level; vanilla's rebel towns: Medieval II village 5, "
+                  "town 4, large town 7, city 6 - Rome 3, 3, 4, 4). The 'from - to' numbers above are not used then; "
+                  "the upkeep limit still is.", width=480).pack(side="left", padx=4)
         hint(row, "On: a town gets only the units its own buildings recruit for its owner - no catapult in a village "
                   "without a siege workshop, no heavy infantry where there are no barracks. A town that recruits "
                   "none of them gets the cheapest units (peasants, levy spearmen): the base every town has. Off: "
@@ -415,8 +422,16 @@ class MassTownWindow(tk.Toplevel):
             messagebox.showwarning(TITLE, str(e), parent=self)
             return
         self.nb.select(1)
-        self.garrisons = {r: M.random_garrison(self._town_pool(self.by[r]), lo, hi, cap, self.rng)
-                          for r in self.chosen}
+        sizes = {}
+        self.garrisons = {}
+        for r in self.chosen:
+            t = self.by[r]
+            a, b = lo, hi
+            if self.v_gamesize.get():
+                if t["owner"] not in sizes:
+                    sizes[t["owner"]] = M.level_sizes(self.mod, self.camp, t["owner"])
+                a = b = max(1, min(M.MAX_UNITS, sizes[t["owner"]].get(t["level"], lo)))
+            self.garrisons[r] = M.random_garrison(self._town_pool(t), a, b, cap, self.rng)
         self.fill_chosen()
         self.status.configure(text="garrisons drawn - Preview, or Write it")
 

@@ -363,14 +363,11 @@ def rebel_problems(mod, units):
     p = _data_file(mod, "descr_rebel_factions.txt")
     if not p:
         return []
+    from .masstown import rebel_types
     owners = {u.type: set(u.ownership) for u in units}
-    out, cur = [], None
-    for line in mod.load(p).texts():
-        t = line.split(";")[0].strip()
-        if t.startswith("rebel_type"):
-            cur = t.split(None, 1)[1].strip() if len(t.split()) > 1 else None
-        elif t.startswith("unit") and cur:
-            u = t[4:].strip()
+    out = []
+    for cur, names in rebel_types(mod).items():
+        for u in names:
             if u not in owners:
                 out.append("descr_rebel_factions.txt, %s: unit '%s' is not in export_descr_unit.txt" % (cur, u))
             elif "slave" not in owners[u]:

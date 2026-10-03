@@ -3150,6 +3150,21 @@ building smith
         self.assertEqual(MT.town_pool(mod, bare, pool), [("peasants", 50), ("levy", 60)])
         self.assertEqual(MT.town_pool(mod, bare, []), [])
 
+    def test_rebel_towns_draw_from_their_rebel_type(self):
+        """A rebel town's garrison pool is its region's rebel type (descr_rebel_factions - what the game raises there),
+        the nearest rebel armies only without one; units per town by level as the mod's own towns have them."""
+        from campaign_editor import masstown as MT
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_rebel_factions.txt"),
+              "rebel_type\t\tRebels\ncategory\t\tpeasant_revolt\nchance\t\t\t10\nunit\t\t\trebel spear\n"
+              "unit\t\t\tno such unit\n")
+        mod = ModData(self.root)
+        self.assertEqual(MT.rebel_types(mod), {"Rebels": ["rebel spear", "no such unit"]})
+        self.assertEqual([t for t, _ in MT.rebel_pool(mod, "test", "B_R")], ["rebel spear"])
+        sizes = MT.level_sizes(mod, "test")
+        self.assertEqual(sizes["town"], 1)                               # B_R: a town held by 1 rebel unit
+        self.assertEqual(sizes["city"], MT.VANILLA_SIZES["rome"]["city"])    # no rebel city: vanilla's median
+
     def test_new_faction_keeps_the_templates_ai_label_and_purse(self):
         """Medieval II: the template's block header (ai_label - the campaign AI's rule set, denari_kings_purse - its
         money every turn) comes along to the new faction; the treasury is the one picked."""

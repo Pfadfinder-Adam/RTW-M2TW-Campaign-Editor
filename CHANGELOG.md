@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Changed
+- **Rebel garrisons as the game makes them** (the author): a rebel town's drawn garrison comes from its region's rebel
+  type in `descr_rebel_factions.txt` (what the game raises there in a revolt) instead of the nearest rebel armies; a
+  new box draws as many units as the game gives a town of that level (the mod's own towns measured; vanilla's rebel
+  towns: Medieval II village 5 / town 4 / large town 7 / city 6, Rome 3 / 3 / 4 / 4). Rome's `//` comments in that
+  file are read right.
 - **Garrisons fit the town** (the author): drawn garrisons in *Buildings and garrisons for many towns* hold only the
   units the town's own buildings recruit for its owner - no catapult in a village without a siege workshop, no heavy
   infantry where there are no barracks; a town that recruits none of them gets the cheapest units (peasants, levy

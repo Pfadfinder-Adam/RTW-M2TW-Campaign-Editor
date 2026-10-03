@@ -242,10 +242,66 @@ def town_pool(mod, town, pool):
     return [(t, u) for t, u in pool if u in prices]
 
 
+def rebel_types(mod):
+    """{rebel type: [unit names]} of descr_rebel_factions.txt (the units the game raises for a revolt of that type;
+    a region names its type in descr_regions.txt) - the one reader (Check mod files uses it too)."""
+    from .moddata import _ci
+    p = _ci(mod.data, "descr_rebel_factions.txt")
+    out, cur = {}, None
+    for line in mod.load(p).texts() if p else []:
+        t = line.split(";")[0].split("//")[0].strip()              # Rome comments with // too
+        if t.startswith("rebel_type"):
+            cur = t.split()[1] if len(t.split()) > 1 else None
+            if cur:
+                out.setdefault(cur, [])
+        elif t.startswith("unit") and cur and t[4:5] in (" ", "\t"):
+            out[cur].append(t[4:].strip())
+    return out
+
+
+# vanilla's own rebel garrisons, units per town by level (median - modding_knowledge.md 'Rebel garrisons'); a mod's
+# own rebel towns are measured first (level_sizes)
+VANILLA_SIZES = {"medieval2": {"village": 5, "town": 4, "large_town": 7, "city": 6, "large_city": 8, "huge_city": 9},
+                 "rome": {"village": 3, "town": 3, "large_town": 4, "city": 4, "large_city": 5, "huge_city": 6}}
+
+
+def level_sizes(mod, campaign, owner="slave"):
+    """{settlement level: units} the game itself gives such towns: the median of this mod's own towns of owner by
+    level (the rebels' starting garrisons), a level the mod has none of from vanilla's measured medians."""
+    import statistics
+    from .limits import game_kind
+    by = {}
+    for t in towns(mod, campaign):
+        if t["owner"] == owner and t["units"]:
+            by.setdefault(t["level"], []).append(t["units"])
+    out = dict(VANILLA_SIZES["medieval2" if game_kind(mod) == "medieval2" else "rome"])
+    for level, ns in by.items():
+        out[level] = int(round(statistics.median(ns)))
+    return out
+
+
 def rebel_pool(mod, campaign, region, near=3, siege=False):
-    """[(unit type, upkeep)] for a rebel town: the units of the rebel armies nearest to it (its own garrison
-    first) - the rebels' starting armies are local troops, so a Greek town gets Greek rebels, not anyone the
-    rebels may own; garrison_pool when the rebels have no army."""
+    """[(unit type, upkeep)] for a rebel town: the units of its region's rebel type (descr_regions names it,
+    descr_rebel_factions lists them - what the game itself raises there); without one, the units of the rebel
+    armies nearest to it (local troops, so a Greek town gets Greek rebels); garrison_pool when neither."""
+    from .units import read_units
+    edu = mod.file("edu")
+    known = {u.type.lower(): u for u in read_units(mod.load(edu))} if edu else {}
+    kind = (mod.regions(campaign).get(region) or {}).get("rebels")
+    got = []
+    for name in rebel_types(mod).get(kind, []):
+        u = known.get(name.lower())
+        if u and not u.general and u.category != "ship" and (siege or u.category not in ("siege", "handler")) and \
+                u.type not in [x for x, _ in got]:
+            got.append((u.type, u.upkeep))
+    if got:
+        return got
+    return nearest_rebels(mod, campaign, region, near, siege)
+
+
+def nearest_rebels(mod, campaign, region, near=3, siege=False):
+    """[(unit type, upkeep)] of the rebel armies nearest to the town (its own garrison first; the armies are
+    copied as a list of types, never moved); garrison_pool when the rebels have no army."""
     from .units import read_units
     f = mod.load(mod.campaign_file(campaign, "descr_strat.txt"))
     s = Strat(f)
@@ -325,5 +381,5 @@ def apply(plan, campaign, opts):
 
 
 __all__ = ["towns", "building_fit", "town_fit", "random_garrison", "garrison_pool", "rebel_pool", "town_pool",
-           "recruitable_here", "apply", "known_buildings", "is_core",
+           "recruitable_here", "rebel_types", "level_sizes", "nearest_rebels", "VANILLA_SIZES", "apply", "known_buildings", "is_core",
            "MAX_UNITS", "SETTLEMENT_LEVELS"]
