@@ -26,7 +26,9 @@
   `create_unit`...) or **any campaign-script command** (198 - `set_event_counter`, `give_settlement`...). **Pick...**
   lists them with a search: the form of the line, a sample, where it works, what a condition needs from the event; the
   engine's own description when the game has its `documentation` folder (the engines write it with the console
-  command `dump_docudemon`). A module for one game gets that engine's whole list (REX 154 / M2EX 259 console
+  command `dump_docudemon`) - and its parameters as fields: factions, towns, regions, units, characters, traits,
+  retinue members, buildings picked from the mod (the event's own `{faction}`, `{town}`, `{general}` first), the
+  comparison and the choices from a list, the line put together below; a line already there is read back into them. A module for one game gets that engine's whole list (REX 154 / M2EX 259 console
   commands). A line is checked before anything is written: a name the engines lack, the wrong letter case, a block of
   campaign_script.txt, a battle-only command, a condition needing what the event does not bring. What an event
   brings comes from the engines' own lists too: REX's town taken has no old owner and REX has no 'town grows' event -

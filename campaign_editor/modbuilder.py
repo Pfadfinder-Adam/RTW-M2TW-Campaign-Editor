@@ -304,8 +304,8 @@ def plain_words(recipe):
 # Problems
 # ---------------------------------------------------------------------------
 def mod_names(mod, what):
-    """The names of the mod a field picks from: factions, towns (settlement names), units, chains, levels, traits,
-    ancillaries. [] when the file is not there."""
+    """The names of the mod a field picks from: factions, towns (settlement names), regions, units, chains, levels,
+    traits, ancillaries, characters (the named ones of the campaign's start). [] when the file is not there."""
     from . import addons as AD
     try:
         if what in ("factions", "units", "chains"):
@@ -313,10 +313,15 @@ def mod_names(mod, what):
         if what == "levels":
             from .buildings import read_buildings
             return [lv.name for b in read_buildings(mod.load(mod.file("edb"))) for lv in b.levels]
-        if what == "towns":
+        if what in ("towns", "regions"):
             from .masstown import towns
             camp = next(iter(mod.campaigns()), None)
-            return [t["name"] for t in towns(mod, camp)] if camp else []
+            return [t["name" if what == "towns" else "region"] for t in towns(mod, camp)] if camp else []
+        if what == "characters":                     # the named characters of the campaign's start
+            from .strat import Strat
+            camp = next(iter(mod.campaigns()), None)
+            s = Strat(mod.load(mod.campaign_file(camp, "descr_strat.txt"))) if camp else None
+            return [ch.name for fb in (s.factions if s else []) for ch in fb.characters if ch.named and ch.name]
         if what in ("traits", "ancillaries"):
             from . import traitsedit as TE
             kind = "trait" if what == "traits" else "ancillary"

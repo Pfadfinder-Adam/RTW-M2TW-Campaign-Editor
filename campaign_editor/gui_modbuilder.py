@@ -298,7 +298,7 @@ class ModuleBuilder(tk.Toplevel):
                 side="right", padx=(4, 0))
         if line:
             ttk.Button(sub, text="Pick...", command=lambda: EnginePicker(
-                self, MB.LINE_KIND[kind], lambda e: box.set(e.line()))).pack(side="right", padx=(4, 0))
+                self, MB.LINE_KIND[kind], box.set, current=box.get())).pack(side="right", padx=(4, 0))
             about.configure(text=self.about_line(kind, now))
             about.pack_forget()
             about.pack(fill="x", anchor="w", padx=(46 + 8 * 8, 18), pady=(0, 3), after=sub)
@@ -689,9 +689,15 @@ class GrowingText(tk.Text):
 class EnginePicker(tk.Toplevel):
     """Every console command / campaign-script command / condition / event the module's engines have, with a search:
     the form, a sample, where it works, what it needs or brings, the engine's own words when the game has its
-    documentation folder. on_pick(entry) when Use it is pressed (or a double click)."""
+    documentation folder - and its parameters as fields (factions, towns, units, traits ... of the mod, the event's own
+    {faction} / {town} / {general} first), the line put together below them. on_pick(line) on Use it (or a double
+    click); current: the line there now - its command picked and its words put in the fields."""
 
-    def __init__(self, builder, what, on_pick):
+    # what a parameter field offers before the mod's names: the event's own, filled in when the module acts
+    PLACEHOLDERS = {"factions": ["{faction}", "{owner}"], "towns": ["{town}"], "regions": [],
+                    "characters": ["{general}"]}
+
+    def __init__(self, builder, what, on_pick, current=""):
         from . import enginedocs as ED
         super().__init__(builder)
         self.builder, self.what, self.on_pick, self.ED = builder, what, on_pick, ED
@@ -700,8 +706,13 @@ class EnginePicker(tk.Toplevel):
         self.entries = list(cat[what].values())
         self.event = cat["events"].get(getattr(MB.EVENT.get(builder.recipe.get("when")), "engine", None))
         self.title("Pick one of the %s - %s" % (ED.KIND_WORDS[what], MB.GAME_ENGINES.get(game, game)))
-        self.geometry("1000x620")
+        self.geometry("1060x720")
         self.transient(builder)
+        words = ED.split_line(current)
+        self.v_not = tk.BooleanVar(value=bool(words) and words[0] == "not")
+        if words and words[0] == "not":
+            words = words[1:]
+        self.start = (words[0], words[1:]) if words else (None, [])
         top = ttk.Frame(self, padding=8)
         top.pack(fill="x")
         ttk.Label(top, text="Find").pack(side="left")
@@ -728,21 +739,28 @@ class EnginePicker(tk.Toplevel):
         self.lb.configure(yscrollcommand=sb.set)
         self.lb.pack(side="left", fill="y", expand=True)
         sb.pack(side="left", fill="y")
-        self.info = tk.Text(body, wrap="word", font="TkDefaultFont", relief="flat", padx=10, pady=6, height=10)
-        self.info.pack(side="left", fill="both", expand=True, padx=(8, 0))
+        right = ttk.Frame(body)
+        right.pack(side="left", fill="both", expand=True, padx=(8, 0))
+        self.info = tk.Text(right, wrap="word", font="TkDefaultFont", relief="flat", padx=10, pady=6, height=9)
+        self.info.pack(fill="both", expand=True)
         self.info.tag_configure("head", font=("", 12, "bold"))
         self.info.tag_configure("bad", foreground="#b00")
         self.info.tag_configure("dim", foreground="#666")
+        self.form = ttk.LabelFrame(right, text=" Its parameters ", padding=6)
+        self.form.pack(fill="x", pady=(6, 0))
+        self.lbl_line = wrapping(ttk.Label(right, foreground="#1d3b6a", font=("", 10), justify="left"), pady=(6, 0))
         low = ttk.Frame(self, padding=8)
         low.pack(fill="x")
         self.lbl = ttk.Label(low, foreground="#555")
         self.lbl.pack(side="left")
         ttk.Button(low, text="Cancel", command=self.destroy).pack(side="right")
         ttk.Button(low, text="Use it", command=self.use).pack(side="right", padx=6)
+        self.fields = []
         self.lb.bind("<<ListboxSelect>>", lambda ev: self.show())
         self.lb.bind("<Double-1>", lambda ev: self.use())
         for v in (self.v_find, self.v_usable, self.v_fits):
             v.trace_add("write", lambda *a: self.fill())
+        self.v_not.trace_add("write", lambda *a: self.put_line())
         self.fill()
 
     def fill(self):
@@ -757,8 +775,11 @@ class EnginePicker(tk.Toplevel):
         for e in got:
             self.lb.insert("end", e.name)
         self.lbl.configure(text="%d of %d %s" % (len(got), len(self.entries), ED.KIND_WORDS[self.what]))
+        names = [e.name for e in got]
+        at = names.index(self.start[0]) if self.start[0] in names else 0
         if got:
-            self.lb.selection_set(0)
+            self.lb.selection_set(at)
+            self.lb.see(at)
         self.show()
 
     def picked(self):
@@ -771,6 +792,7 @@ class EnginePicker(tk.Toplevel):
         t = self.info
         t.configure(state="normal")
         t.delete("1.0", "end")
+        self._form(e)
         if e is None:
             t.insert("end", "Nothing found - change the words in Find, or untick the boxes above.", "dim")
             t.configure(state="disabled")
@@ -794,8 +816,8 @@ class EnginePicker(tk.Toplevel):
         if not e.works:
             t.insert("end", "The engine marks it not implemented: it does nothing.\n", "bad")
         elif not e.runnable():
-            t.insert("end", "A module cannot use it on the campaign map (a battle or editor command, or a block "
-                            "like if ... end_if).\n", "bad")
+            t.insert("end", "A module cannot use it on the campaign map (a battle or editor command, or the flow of "
+                            "campaign_script.txt: blocks, jumps, waits).\n", "bad")
         t.insert("end", "\n")
         if e.desc:
             t.insert("end", e.desc + "\n")
@@ -803,9 +825,79 @@ class EnginePicker(tk.Toplevel):
             t.insert("end", "No description here: " + ED.DUMP_HOW + "\n", "dim")
         t.configure(state="disabled")
 
+    def _offer(self, p):
+        """What a parameter's field lists: the event's own words first, then the mod's names (or its choices)."""
+        if p.kind == "logic":
+            return list(self.ED.LOGIC)
+        if p.kind == "choice":
+            return list(p.choices)
+        out = []
+        for k in p.kind.split("|"):
+            out += self.PLACEHOLDERS.get(k, [])
+        for k in p.kind.split("|"):
+            if k in ("factions", "towns", "regions", "characters", "units", "traits", "ancillaries", "levels",
+                     "chains"):
+                out += self.builder.names_of(k)
+        return out
+
+    def _form(self, e):
+        for w in self.form.winfo_children():
+            w.destroy()
+        self.fields = []
+        if e is None:
+            self.lbl_line.configure(text="")
+            return
+        params = self.ED.params_of(e)
+        given = self.start[1] if e.name == self.start[0] else []
+        # a command picked anew: its sample's comparison, choices and numbers go in; the names are the mod's to pick
+        sample = self.ED.split_line(e.sample)[1:] if not given and e.sample else []
+        if not params:
+            ttk.Label(self.form, foreground="#666", text="none - the line is its name%s" % (
+                " (the rest, if the engine wants more, may be typed in the box after Use it)" if e.params else "")).grid(
+                row=0, column=0, sticky="w")
+        for n, p in enumerate(params):
+            ttk.Label(self.form, text=p.label + (" (may be left empty)" if p.optional else "")).grid(
+                row=n, column=0, sticky="w", padx=(0, 8), pady=1)
+            v = tk.StringVar(value=given[n] if n < len(given) else "")
+            if not given and n < len(sample) and p.kind in ("logic", "choice", "number") and \
+                    (p.kind != "number" or sample[n].lstrip("-").replace(".", "", 1).isdigit()) and \
+                    (p.kind != "logic" or sample[n] in self.ED.LOGIC) and (p.kind != "choice" or sample[n] in p.choices):
+                v.set(sample[n])
+            if n == len(params) - 1 and len(given) > len(params):    # extra words (a name with spaces) go last
+                v.set(" ".join(given[n:]))
+            offer = self._offer(p)
+            if offer:
+                w = ttk.Combobox(self.form, textvariable=v, values=offer, width=40,
+                                 state="readonly" if p.kind in ("logic", "choice") else "normal")
+                if p.kind in ("logic", "choice") and not v.get() and not p.optional:
+                    v.set(offer[0])
+            else:
+                w = ttk.Entry(self.form, textvariable=v, width=42)
+            w.grid(row=n, column=1, sticky="w", pady=1)
+            v.trace_add("write", lambda *a: self.put_line())
+            self.fields.append(v)
+        if self.what == "conditions":
+            ttk.Checkbutton(self.form, variable=self.v_not, text="not - it holds when this is NOT true").grid(
+                row=len(params) + 1, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self.form.columnconfigure(1, weight=1)
+        self.put_line()
+
+    def line(self):
+        e = self.picked()
+        if e is None:
+            return ""
+        return self.ED.compose(e, [v.get() for v in self.fields], self.v_not.get())
+
+    def put_line(self):
+        self.lbl_line.configure(text="The line: " + self.line() if self.picked() else "")
+
     def use(self):
         e = self.picked()
         if e is None:
             return
-        self.on_pick(e)
+        empty = [p.label for p, v in zip(self.ED.params_of(e), self.fields) if not p.optional and not v.get().strip()]
+        if empty:
+            messagebox.showinfo(TITLE, "Fill in first: %s." % ", ".join(empty), parent=self)
+            return
+        self.on_pick(self.line())
         self.destroy()

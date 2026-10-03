@@ -324,3 +324,104 @@ def first_word(line):
     if words and words[0] == "not":
         words = words[1:]
     return words[0] if words else ""
+
+
+# ---------------------------------------------------------------------------
+# The parameters of a line, as fields
+# ---------------------------------------------------------------------------
+class Param:
+    """One parameter: its words, what fills it ('factions', 'towns', 'regions', 'units', 'characters', 'traits',
+    'ancillaries', 'levels', 'chains', 'logic', 'choice' with choices, 'number', 'text') and whether it may be left
+    out."""
+    __slots__ = ("label", "kind", "optional", "choices")
+
+    def __init__(self, label, kind="text", optional=False, choices=()):
+        self.label, self.kind, self.optional, self.choices = label, kind, optional, list(choices)
+
+
+# the words of a parameter -> what fills it (the first that fits)
+PARAM_KINDS = (("logic token", "logic"), ("logic_token", "logic"), ("character type", "text"),
+               ("character_type", "text"), ("trait", "traits"), ("ancillar", "ancillaries"),
+               ("settlement/character", "towns|characters"), ("counter", "text"),
+               ("faction", "factions"), ("settlement", "towns"), ("town", "towns"), ("city", "towns"),
+               ("region", "regions"), ("unit", "units"), ("character", "characters"), ("general", "characters"),
+               ("chain", "chains"), ("building", "levels"), ("amount", "number"), ("number", "number"),
+               ("level", "number"), ("value", "number"), ("turn", "number"), ("percent", "number"),
+               ("count", "number"), ("how_many", "number"), ("money", "number"), ("year", "number"))
+LOGIC = ["<", "<=", "=", ">=", ">", "!="]
+NOT_CHOICES = {"exp/armour/weapon"}             # three numbers, not one of three words
+
+
+def _param(text, optional=False):
+    t = text.strip().strip(",").strip()
+    if t.lower().startswith("opt:"):
+        t, optional = t[4:].strip(), True
+    if "(optional" in t.lower() or "optional" == t.lower().split(" ")[0]:
+        optional = True
+    t = re.sub(r"\s*\([^)]*\)", "", t).strip()
+    low = t.lower()
+    alts = [a.strip() for a in re.split(r"[/|]", t)]
+    if len(alts) > 1 and all(re.fullmatch(r"[a-z]+", a) for a in alts) and t not in NOT_CHOICES and \
+            not any(k in low for k, _ in PARAM_KINDS[:18]):
+        return Param(t, "choice", optional, alts)
+    kind = next((v for k, v in PARAM_KINDS if k in low), "text")
+    return Param(t, kind, optional)
+
+
+def params_of(entry):
+    """[Param] of a command / condition, read from its parameters in the engine's words: console '<a> <opt:b>
+    [<c>]', the campaign script's 'faction, character' (or 'region_name|region_id value unit_name'). Events have
+    none."""
+    text = (entry.params or "").split("   (REX:")[0].strip()
+    if not text or text.lower() in ("none", "-"):
+        return []
+    if entry.kind == "console" or "<" in text:
+        out = []
+        for m in re.finditer(r"\[\s*<([^>]*)>\s*\]|<([^>]*)>|\[([^\]]*)\]", text):
+            if m.group(1) is not None:
+                out.append(_param(m.group(1), True))
+            elif m.group(2) is not None:
+                out.append(_param(m.group(2)))
+            else:
+                out.append(_param(m.group(3), True))
+        return out
+    text = re.sub(r"\([^)]*\)", lambda m: " (optional)" if "optional" in m.group().lower() else "", text)
+    parts = [p for p in text.split(",") if p.strip()]
+    if len(parts) == 1 and " " in parts[0].strip() and all("_" in w or "|" in w for w in parts[0].split()
+                                                           if w not in ("value",)):
+        parts = parts[0].split()
+    return [_param(p) for p in parts]
+
+
+def split_line(line):
+    """The words of a line, "quoted words" kept together (quotes dropped), commas between words dropped."""
+    out, cur, quote = [], "", False
+    for ch in line or "":
+        if ch == '"':
+            quote = not quote
+            continue
+        if not quote and (ch.isspace() or ch == ","):
+            if cur:
+                out.append(cur)
+                cur = ""
+            continue
+        cur += ch
+    if cur:
+        out.append(cur)
+    return out
+
+
+def compose(entry, values, negate=False):
+    """The line of an entry with these parameter values (in order; empty ones at the end left out): console values
+    with spaces in quotes, campaign-script lines parted as its sample parts them (', ' or a space)."""
+    vals = [str(v).strip() for v in values]
+    while vals and not vals[-1]:
+        vals.pop()
+    sample = entry.sample or ""
+    comma = entry.kind == "commands" and re.match(r"^\S+\s+[^,]+,\s", sample) is not None
+    if entry.kind == "console":                  # a name of several words in quotes ({general}, {town} may be)
+        vals = ['"%s"' % v if (" " in v or v in ("{general}", "{town}")) and not v.startswith('"') else v
+                for v in vals]
+    body = (", " if comma else " ").join(v for v in vals if v)
+    line = entry.name + (" " + body if body else "")
+    return ("not " + line) if negate and entry.kind == "conditions" else line

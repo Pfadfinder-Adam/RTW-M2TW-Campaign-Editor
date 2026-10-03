@@ -3543,6 +3543,21 @@ building smith
         self.assertIn("needs settlement", why("cond", "SettlementName London")[0])
         self.assertEqual(why("cond", "SettlementName London", "town_taken"), [])
         self.assertEqual(why("cond", "not FactionType england"), [])
+        # the parameters as fields, and the line put back together
+        kinds = lambda kind, name: [(p.kind, p.optional) for p in ED.params_of(both[kind][name])]
+        self.assertEqual(kinds("console", "kill_character"), [("characters", False), ("text", True)])
+        self.assertEqual(kinds("console", "diplomatic_stance"), [("factions", False), ("factions", False),
+                                                                 ("choice", False)])
+        self.assertEqual(kinds("console", "create_unit")[:2], [("towns|characters", False), ("units", False)])
+        self.assertEqual(kinds("conditions", "Trait"), [("traits", False), ("logic", False), ("number", False)])
+        self.assertEqual(kinds("commands", "give_settlement"), [("factions", False), ("towns", False)])
+        self.assertEqual(ED.compose(both["console"]["kill_character"], ["{general}", "Battle"]),
+                         'kill_character "{general}" Battle')
+        self.assertEqual(ED.compose(both["conditions"]["Trait"], ["GoodCommander", ">=", "2"], True),
+                         "not Trait GoodCommander >= 2")
+        self.assertEqual(ED.compose(both["console"]["add_money"], ["", "500"]), "add_money 500")
+        self.assertEqual(ED.split_line('kill_character "Gaius Julius" Battle'), ["kill_character", "Gaius Julius",
+                                                                                  "Battle"])
 
     def test_faction_emblem_one_picture_everywhere(self):
         """One emblem picture -> every emblem picture in its own size; mouse over brighter, greyed out grey, selected
