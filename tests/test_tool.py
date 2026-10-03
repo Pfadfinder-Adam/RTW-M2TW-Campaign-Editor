@@ -4340,6 +4340,25 @@ building smith
             self.assertEqual(fh.read(), text.replace("age_of_manhood 16", "age_of_manhood 14").replace(
                 "60 200 255", "1 2 3"))
 
+    def test_test_mod_covers_every_feature(self):
+        """The test mod covers the whole editor: every work button, tab and Tools entry of the window names a feature
+        of selftest.COVERAGE, every feature names steps that exist (or says why none - the run does it, or it only
+        shows), every step serves a feature. A new button or Tools entry without its step fails here."""
+        import re as _re
+        import campaign_editor
+        from campaign_editor import selftest as ST
+        self.assertEqual(ST.coverage_problems(), [])
+        with open(os.path.join(os.path.dirname(campaign_editor.__file__), "gui.py"), encoding="utf-8") as fh:
+            src = fh.read()                                   # read as text: the test job has no tkinter
+        tools = src[src.index('tools = ttk.Menubutton'):src.index('tools["menu"] = menu')]
+        labels = _re.findall(r'add_command\(label="([^"]+)"', tools)
+        labels += _re.findall(r'^TEST_MOD_LABEL = "([^"]+)"', src, _re.M)
+        works = src[src.index("WORK_TITLES = {"):]
+        labels += _re.findall(r'"\w+": "([^"]+)"', works[:works.index("}")])
+        labels += [t.strip() for t in _re.findall(r'self\.nb\.add\(\w+, text="([^"]+)"\)', src)]
+        self.assertGreater(len(labels), 30)
+        self.assertEqual([t for t in labels if ST.ui_entry(t) is None], [])
+
     def test_campaign_start_in_campaign_rules(self):
         """Campaign rules: the top of the campaign's descr_strat.txt - start / end date, timescale, spawn values as
         values, switch lines (night_battles_enabled ...) as on / off; a switch turned off loses its line, one turned

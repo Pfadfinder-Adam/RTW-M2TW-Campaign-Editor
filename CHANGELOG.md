@@ -7,8 +7,15 @@
   and end date, `timescale` (years a turn), how seldom brigands and pirates appear, REX / M2EX's leader persona odds,
   and the switches as on / off (night battles, date as turns, Marian reforms, rebelling generals, gladiator
   uprisings). The test mod changes them too.
-- **Test mod**: a faction that splits off another in a revolt (the third way a faction comes later - all five
-  engines, Rome, BI, REX, Medieval II and M2EX, read it); the events fall on turns 2 and 4.
+- **Test mod: every feature and every option** (56 steps): besides one step per feature it now tries their
+  variants too - a faction that splits off another in a revolt (all five engines read it), alliances and wars at
+  the start, city / castle and level for many towns, garrisons the game's way, a line of a unit and of a building
+  changed, a character's traits and retinue, a daughter and a man tied to no family, a port moved, a region's
+  rebels / farming / shown names, a character moved and one deleted, cliffs / volcanoes / climates, Bring from
+  another mod, unit packs, Check and install a pack, both add-ons, plagues / floods / storms and a game event moved
+  and taken out, the engine settings, a unit taken away, every picture of a faction. The report ends with every
+  feature of the editor and the step that tried it; the editor's own tests fail when a work button, tab or Tools
+  entry has no step. The events fall on turns 2 and 4.
 - **The mod at a glance in the log**: every Load writes a short picture of the mod into the editor's log - the game
   and engine, its campaigns, factions and cultures, regions and who holds the towns, the map's size, how many units
   and building chains, and which of its files are its own. A report then shows what the mod is, without any of its
