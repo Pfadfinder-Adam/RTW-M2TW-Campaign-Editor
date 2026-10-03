@@ -246,6 +246,9 @@
   goes into the mod), and Check mod files names a family over it.
 - **Reports: the middle of a long game log kept each error's first line only** - the game writes what went wrong on
   the next line ("Script Error ... at line 3071" / "Population of 2600 is too high for a village"); both are kept.
+- **A report no longer sends again what it sent** (the author): a log sent before and not changed since (the game's
+  `system.log.txt`, a crash report, the editor's older log) is left out - unticked, "already sent with R-..." - and
+  the editor's own log goes only from where the last report left off.
 - **The logs folder grew to tens of MB** (the author: 61 MB): on every close the session folder took a whole copy
   of the game's `system.log.txt` (which can grow to 60 MB). It now keeps what a report would send (the log's start,
   the middle's errors once each, its end), no second copy of a game log that has not changed since, and the oldest

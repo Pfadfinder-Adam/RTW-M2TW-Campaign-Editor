@@ -7,6 +7,7 @@ import shutil
 import struct
 import sys
 import tempfile
+import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -3720,6 +3721,38 @@ building smith
         for word in ("factions", "regions", "units", "buildings", "own files", "alpha"):
             self.assertIn(word, text)
         self.assertNotIn("not read", text.split("own files")[0].split("map")[0])
+
+    def test_report_leaves_out_logs_it_sent_already(self):
+        """The author: a log the program has sent is not sent again - a finished log (the game's) sent unchanged is
+        left out (unticked, 'already sent with R-...'), the editor's own log goes only from where the last report
+        left off."""
+        from campaign_editor import report, settings, log
+        saved = (settings._data, settings._path, log._path)
+        tmp = tempfile.mkdtemp()
+        settings._data, settings._path = {}, (lambda: os.path.join(tmp, "s.json"))
+        try:
+            ed = os.path.join(tmp, "CampaignEditor.log")
+            game = os.path.join(tmp, "system.log.txt")
+            write(ed, "old line\n")
+            write(game, "game log\n")
+            log._path = ed
+            files = [(ed, "CampaignEditor.log", "the editor's log"), (game, "system.log.txt", "the game's log")]
+            self.assertIsNone(report.already_sent(game))
+            report.remember_sent_logs(files, "R-20261003-AAAAAA")
+            self.assertEqual(report.already_sent(game), "R-20261003-AAAAAA")
+            with open(ed, "a") as fh:
+                fh.write("new line\n")
+            text = dict(report.contents(files[:1], []))["CampaignEditor.log"]
+            self.assertIn("new line", text)
+            self.assertNotIn("old line", text)
+            self.assertIn("R-20261003-AAAAAA", text)
+            with open(game, "a") as fh:                       # the game wrote more: it goes again
+                fh.write("more\n")
+            os.utime(game, (time.time() + 5, time.time() + 5))
+            self.assertIsNone(report.already_sent(game))
+        finally:
+            settings._data, settings._path, log._path = saved
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def test_banner_symbol_dragged_snapped_and_sized(self):
         """The Banner window moves the symbol with the mouse: its middle snaps to the banner's own grid (quarters,

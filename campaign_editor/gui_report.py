@@ -75,10 +75,13 @@ def open_report(app, message="", kind="bug", tab=None):
     box.pack(fill="x", pady=(10, 0))
     ticks = []
     for f, name, what in files:
-        v = tk.BooleanVar(value=True)              # the logs always go along (an idea too) - untick to leave out
+        sent = report.already_sent(f)
+        # the logs go along (an idea too) - untick to leave out; one already sent unchanged stays out (the author)
+        v = tk.BooleanVar(value=not sent)
         ticks.append((v, (f, name, what)))
-        ttk.Checkbutton(box, variable=v, text="%s - %s (%d KB)" % (name, what, os.path.getsize(f) // 1024)).pack(
-            anchor="w")
+        ttk.Checkbutton(box, variable=v, text="%s - %s (%d KB)%s" % (
+            name, what, os.path.getsize(f) // 1024, " - already sent with %s, not changed since" % sent if sent
+            else "")).pack(anchor="w")
     if not any(n.endswith("system.log.txt") for _, n, _ in files):
         row = ttk.Frame(box)
         row.pack(anchor="w", fill="x")
@@ -224,6 +227,7 @@ def open_report(app, message="", kind="bug", tab=None):
                 log.write("Report sent: %s (%d KB)" % (result["id"], len(data) // 1024))
                 report.remember_sent(result["id"], result.get("issue"), info["kind"],
                                      report.scrub(msg, hide).split("\n")[0])
+                report.remember_sent_logs([fl for v, fl in ticks if v.get()], result["id"])
                 lbl_state.configure(text="Sent: %s" % result["id"])
                 messagebox.showinfo(APP, "Sent - thank you! Your report's number is %s.\n\nThe author's answer "
                                          "comes to this window, tab 'Answers to my reports' - the Report button "

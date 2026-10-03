@@ -234,12 +234,65 @@ def hidden_words(files, extra=()):
     return words
 
 
+# what was sent already (the author: "if the program has sent this log, it does not send it again"): a finished log
+# (the game's, a crash report, the editor's older log) by its path, size and time; the editor's own growing log by
+# how far it was sent - the next report carries only what came after.
+def _mark(f):
+    return "%s|%d|%d" % (os.path.normcase(os.path.abspath(f)), os.path.getsize(f), int(os.path.getmtime(f)))
+
+
+def already_sent(f):
+    """The report number a log went with already (unchanged since), or None."""
+    from . import settings
+    try:
+        return (settings.get("reports_sent_logs") or {}).get(_mark(f))
+    except OSError:
+        return None
+
+
+def remember_sent_logs(files, rid):
+    """After a report went: its finished logs and how far the editor's log was sent."""
+    from . import settings
+    marks = dict(settings.get("reports_sent_logs") or {})
+    for f, name, _ in files:
+        try:
+            if os.path.normcase(os.path.abspath(f)) == os.path.normcase(os.path.abspath(log.path() or "")):
+                settings.put("reports_log_sent_upto", {"path": os.path.abspath(f), "offset": os.path.getsize(f),
+                                                      "rid": rid})
+            else:
+                marks[_mark(f)] = rid
+        except OSError:
+            pass
+    settings.put("reports_sent_logs", dict(list(marks.items())[-200:]))
+
+
+def _editor_log_part(f):
+    """The editor's log from where the last report left off (with a line saying so), or None for all of it."""
+    from . import settings
+    upto = settings.get("reports_log_sent_upto") or {}
+    try:
+        if os.path.normcase(upto.get("path") or "") != os.path.normcase(os.path.abspath(f)):
+            return None
+        off = int(upto.get("offset") or 0)
+        if not 0 < off <= os.path.getsize(f):
+            return None                          # the log moved to .old meanwhile: all of it
+        with open(f, "rb") as fh:
+            fh.seek(off)
+            new = fh.read()
+        return "[... the log before this went with report %s ...]\n" % upto.get("rid", "?") + \
+            new.decode("utf-8", errors="replace")
+    except (OSError, ValueError):
+        return None
+
+
 def contents(files, words):
-    """[(name in the zip, scrubbed text)] of the picked logs."""
+    """[(name in the zip, scrubbed text)] of the picked logs (the editor's own log from where the last report left
+    off)."""
     out = []
     for f, name, _ in files:
         try:
-            out.append((name, scrub(_read_tail(f), words)))
+            part = _editor_log_part(f) if os.path.basename(f) == log.LOG_NAME else None
+            out.append((name, scrub(part if part is not None else _read_tail(f), words)))
         except OSError as e:
             out.append((name + ".error.txt", "could not read it: %s" % scrub(str(e), words)))
     return out
