@@ -27,8 +27,12 @@ What it writes (Preview lists it; one backup, Restore gives everything back):
   min_sea_height): the land is 3 x wider, so its hills and mountains must be 3 x higher to keep their slopes;
 - descr_strat.txt: every character's x / y, every resource, fort, watchtower and wonder (Rome's landmarks);
 - descr_events.txt: every 'position x, y';
+- the campaign's scripts (campaign_script.txt and the file descr_strat names after 'script'): every command and
+  condition the engines take campaign-map tiles in (SCRIPT_TILES: spawned characters, camera, reveal, move /
+  reposition, forts and resources by console_command, 'near a tile' distances, 'in a rectangle' sizes); battle
+  positions in the same scripts are left alone; the trait / ancillary triggers too when the mod has this one campaign;
 - map.rwm removed (the game builds it again).
-Not moved (warned): coordinates inside campaign_script.txt and other scripts - they take many forms.
+Warned, not moved: script lines with 'x, y'-like numbers outside the known commands, and Lua / Squirrel scripts.
 The faction-select pictures (map_<faction>.tga, map_FE) and water_surface keep their size."""
 
 import os
@@ -711,6 +715,118 @@ RE_FORT = re.compile(r"^(\s*(?:fort|watchtower|landmark)\s+(?:[A-Za-z_]\w*\s+)?)
 RE_POSITION = re.compile(r"^(\s*position\s+)(-?\d+)(\s*,\s*)(-?\d+)")
 RE_SCRIPT_XY = re.compile(r"\b\d+\s*,\s*\d+\b")
 
+# Script commands and conditions that name campaign-map tiles (REX's and M2EX's docudemon and console lists, 2026-10-03)
+# and what their numbers are: xy = a tile; xyr = a tile and a radius in tiles; area = two corners; dxy = a distance in
+# tiles, then a tile; rect = a corner, then [width height]. Everything else in a script - battle positions (unit_*,
+# camera bookmarks, point_at_location, label_location ...), money, turns - is left as it is.
+SCRIPT_TILES = {
+    "move_strat_camera": "xy", "snap_strat_camera": "xy", "point_at_strat_position": "xy", "reveal_tile": "xy",
+    "move": "xy", "reposition_character": "xy", "move_character": "xy", "go_to_pos": "xy",
+    "create_fort": "xy", "destroy_fort": "xy", "rename_fort": "xy", "create_resource": "xy", "remove_resource": "xy",
+    "reveal_radius": "xyr", "reveal_area": "area",
+    "I_CharacterTypeNearTile": "dxy", "I_CharacterNameNearTile": "dxy", "I_FactionNearTile": "dxy",
+    "IsPositionInRect": "rect",
+}
+NEEDS = {"xy": 2, "xyr": 3, "area": 4, "dxy": 3, "rect": 2}
+RE_SCRIPT_CMD = re.compile(r"(?<![\w.])(%s)(?![\w.])" % "|".join(sorted(SCRIPT_TILES, key=len, reverse=True)), re.I)
+RE_SCRIPT_STOP = re.compile(r"(?<![\w.])(?:and|or)(?![\w.])", re.I)
+RE_INT = re.compile(r"(?<![\w.-])-?\d+(?![\w.])")
+# lines of battle commands: their numbers are places on a battle map, not tiles
+RE_BATTLE = re.compile(r"(?<![\w.])(?:unit_\w+|I_Unit\w*|\w*camera_bookmark\w*|camera_\w+|point_at_location|"
+                       r"point_at_unit\w*|label_location|battle_\w+|show_battle_\w+|area_effect|ui_indicator|"
+                       r"ai_gta_\w+|add_road_point)(?![\w.])", re.I)
+
+
+def _script_values(kind, nums):
+    """The new values for a command's numbers (as many as it takes). A tile goes to its block's middle; a distance d
+    or a radius becomes 3d + 1 (anywhere on the blocks of the tiles that were within d - 'distance 0' = the whole
+    block of the old tile); a rectangle's size x 3 (a character in a block's middle is inside exactly when he was
+    before); an area's corners take in their whole blocks."""
+    if kind == "xy":
+        return list(new_xy(nums[0], nums[1]))
+    if kind == "xyr":
+        return list(new_xy(nums[0], nums[1])) + [nums[2] * FACTOR + FACTOR // 2]
+    if kind == "dxy":
+        return [nums[0] * FACTOR + FACTOR // 2] + list(new_xy(nums[1], nums[2]))
+    if kind == "area":
+        x1, y1, x2, y2 = nums[:4]
+        lo = lambda a, b: FACTOR * a if a <= b else FACTOR * a + FACTOR - 1
+        return [lo(x1, x2), lo(y1, y2), lo(x2, x1), lo(y2, y1)]
+    out = list(new_xy(nums[0], nums[1]))                          # rect: a corner, then width / height
+    return out + [v * FACTOR for v in nums[2:4]]
+
+
+def move_script_line(text):
+    """One script line with its campaign-map tiles moved to their blocks (a spawned character's 'x N, y M' too);
+    (the new text, how many places moved, places a known command wanted but could not be read)."""
+    code, sep, comment = text.partition(";")
+    moved = missing = 0
+    def char_xy(m):
+        x, y = new_xy(int(m.group(2)), int(m.group(4)))
+        return "%s%d%s%d" % (m.group(1), x, m.group(3), y)
+    code, n = RE_CHAR_XY.subn(char_xy, code)
+    moved += n
+    cmds = list(RE_SCRIPT_CMD.finditer(code))
+    edits = []
+    for k, m in enumerate(cmds):
+        kind = SCRIPT_TILES[next(c for c in SCRIPT_TILES if c.lower() == m.group(1).lower())]
+        end = cmds[k + 1].start() if k + 1 < len(cmds) else len(code)
+        stop = RE_SCRIPT_STOP.search(code, m.end(), end)
+        if stop:
+            end = stop.start()
+        ints = list(RE_INT.finditer(code, m.end(), end))[:4 if kind == "rect" else NEEDS[kind]]
+        if len(ints) < NEEDS[kind]:
+            missing += 1
+            continue
+        new = _script_values(kind, [int(i.group()) for i in ints])
+        edits += [(i.start(), i.end(), str(v)) for i, v in zip(ints, new)]
+        moved += 1
+    for a, b, v in sorted(edits, reverse=True):
+        code = code[:a] + v + code[b:]
+    return code + sep + comment, moved, missing
+
+
+def script_files(mod, campaign):
+    """The campaign's script files: the ones descr_strat names after its 'script' line, and campaign_script.txt."""
+    from .moddata import _ci
+    from .textio import strip_comment, tokens
+    camp = mod.campaign_dir(campaign)
+    names = []
+    sp = mod.campaign_file(campaign, "descr_strat.txt")
+    if sp:
+        texts = mod.load(sp).texts()
+        for i, t in enumerate(texts):
+            if tokens(strip_comment(t))[:1] == ["script"]:
+                for t2 in texts[i + 1:]:
+                    t2 = strip_comment(t2).strip()
+                    if t2:
+                        names.append(t2)
+                        break
+    names.append("campaign_script.txt")
+    out = []
+    for n in names:
+        p = _ci(camp, n.replace("\\", "/"))
+        if p and os.path.isfile(p) and p not in out:
+            out.append(p)
+    return out
+
+
+def move_script(f):
+    """Every campaign-map tile in a script file moved; (places moved, [line numbers left to check by hand]): lines a
+    known command could not be read on, and lines holding 'x, y'-like numbers outside any known command and outside
+    the battle commands."""
+    moved, check = 0, []
+    for i in range(len(f.raw)):
+        text = f.text(i)
+        new, n, missing = move_script_line(text)
+        if n:
+            f.raw[i] = f.make(new)
+            moved += n
+        code = text.split(";")[0]
+        if missing or (not n and RE_SCRIPT_XY.search(code) and not RE_BATTLE.search(code)):
+            check.append(i + 1)
+    return moved, check
+
 
 def _move_line(text, patterns):
     code, sep, comment = text.partition(";")
@@ -846,15 +962,50 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
         p = os.path.join(base, name)
         if os.path.isfile(p):
             plan.delete(p, "the game builds it again from the bigger pictures")
-    for script in ("campaign_script.txt",):
-        p = os.path.join(camp, script)
-        if os.path.isfile(p):
-            with open(p, encoding="latin-1") as fh:
-                hits = sum(1 for l in fh if RE_SCRIPT_XY.search(l.split(";")[0]))
-            if hits:
-                warn.append("%s: %d line(s) hold numbers like 'x, y' - coordinates in scripts are NOT moved "
-                            "(multiply them by 3 and add 1 by hand); a coordinate on water or off the map crashes "
-                            "the game" % (script, hits))
+    for p in script_files(mod, campaign):
+        f = plan.edit(p)
+        n, check = move_script(f)
+        if n:
+            plan.note(f, "%d place(s) on the campaign map moved (spawned characters, camera, reveal, move, forts, "
+                         "resources, 'near a tile' and 'in a rectangle' conditions; battle positions left as they are)"
+                         % n)
+        if check:
+            warn.append("%s: line(s) %s hold numbers that may be map tiles the editor does not know - check them by "
+                        "hand (a tile x, y becomes 3x+1, 3y+1); a place on water or off the map can crash the game"
+                        % (os.path.basename(p), ", ".join(str(k) for k in check[:12])
+                           + (" ..." if len(check) > 12 else "")))
+    # trigger files serve every campaign of the mod: moved only when the mod has this one campaign
+    one = mod.campaigns() == [campaign]
+    for key in ("traits", "ancillaries"):
+        p = mod.file(key)
+        if not p:
+            continue
+        with open(p, encoding="latin-1") as fh:
+            hits = sum(1 for l in fh if RE_SCRIPT_CMD.search(l.split(";")[0]))
+        if not hits:
+            continue
+        if one:
+            f = plan.edit(p)
+            n, _ = move_script(f)
+            plan.note(f, "%d 'near a tile' / 'in a rectangle' condition(s) moved" % n)
+        else:
+            warn.append("%s: %d condition(s) name map tiles - not moved, the file serves the mod's other campaigns "
+                        "too (a tile x, y becomes 3x+1, 3y+1 on this campaign's map)" % (os.path.basename(p), hits))
+    root = os.path.dirname(os.path.abspath(mod.data))
+    for sub, ext in ((("eopData", "eopScripts"), ".lua"), (("script",), ".nut")):
+        d = os.path.join(root, *sub)
+        if not os.path.isdir(d):
+            continue
+        hits = []
+        for dirpath, _dirs, files in os.walk(d):
+            for name in files:
+                if name.lower().endswith(ext):
+                    with open(os.path.join(dirpath, name), encoding="latin-1") as fh:
+                        if any(RE_SCRIPT_XY.search(l) for l in fh):
+                            hits.append(name)
+        if hits:
+            warn.append("%s: %s - Lua / Squirrel scripts are not changed; if they place things on the map by x, y, "
+                        "make those 3x+1, 3y+1 by hand" % ("/".join(sub), ", ".join(sorted(hits)[:8])))
     from .limits import HARD_LIMITS, game_kind, lifted
     from .tga import read_tga
     img = read_tga(regions_path)

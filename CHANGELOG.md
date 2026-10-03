@@ -227,6 +227,17 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **The bigger map (x3) moves the places in the campaign's scripts too** (a tester's game on Divide and Conquer:
+  the armies the script spawns stood out in the clouds, at their old places). Every campaign-map place in
+  `campaign_script.txt` (and the script `descr_strat.txt` names) goes to the middle of its 3 x 3 block, as in
+  `descr_strat.txt`: spawned armies and characters (`x N, y M`), `reposition_character`, `move`,
+  `move_strat_camera` / `snap_strat_camera`, `point_at_strat_position`, `reveal_tile` / `reveal_area` /
+  `reveal_radius`, `console_command move_character` / `create_fort` / `create_resource`..., and the conditions
+  `I_CharacterTypeNearTile`, `I_CharacterNameNearTile`, `I_FactionNearTile` (the distance grows with the map) and
+  `IsPositionInRect`. Battle positions in the same scripts (prologue battles, camera bookmarks, unit orders) stay
+  as they are. The trait / ancillary triggers follow when the mod has this one campaign. Lines it cannot read
+  for sure, and Lua / Squirrel scripts, are listed to check by hand. Vanilla Medieval II's Mongol and Timurid
+  invasions (224 places) and both prologues are moved whole.
 - **A new faction lost its towns on the first turn** (the editor's own test mod, both games: "Faction Destroyed"
   at once). Since 0.29.1 a clone's first lines in `descr_strat.txt` had `denari` before the template's
   `superfaction` (Rome) / `ai_label` (Medieval II) - the games read those lines in a fixed order and then start the

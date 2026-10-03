@@ -8,10 +8,11 @@ preview of every change and a backup you can always go back to. Version **0.29.2
 [![Wiki](https://img.shields.io/badge/Guide-Wiki-2b6cb0?style=for-the-badge)](../../wiki)
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/pfadfinder)
 [![YouTube - Pfadfinder](https://img.shields.io/badge/YouTube-Pfadfinder-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ)
+[![Discord](https://img.shields.io/badge/Discord-join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/uqA9MEn4Z)
 
 **[⬇ Download](../../releases)** · **[📖 Wiki - step by step](../../wiki)** · **[🗺️ Roadmap](ROADMAP.md)** ·
 **[📝 Changelog](CHANGELOG.md)** · **[🐞 Something went wrong?](#something-went-wrong)** · **[☕ Support](#-why-support-it)** ·
-**[🔒 Security](SECURITY.md)** · **[⚖️ License](#license)**
+**[💬 Discord](https://discord.gg/uqA9MEn4Z)** · **[🔒 Security](SECURITY.md)** · **[⚖️ License](#license)**
 
 > [!IMPORTANT]
 > - **Download only from this repository's [Releases](../../releases) page** - never a copy from another site or a chat.
@@ -74,7 +75,8 @@ unit's texture (vanilla-style uniforms), so a new faction's troops wear its own 
 
 <img src="docs/images/bigger_map_coast.png" width="700" alt="The coast of Italy made 3 x bigger: before (squares), after (smooth)">
 
-Not converted: coordinates inside scripts (counted and listed). Without REX / M2EX the original exes stop at
+Scripts follow too: every campaign-map place in the campaign's scripts (spawned armies and characters, `reposition_character`, `move`, the camera, `reveal_tile`, forts and resources made by `console_command`, 'near a tile' and 'in a rectangle' conditions) goes to its block; battle positions in the same scripts stay. Lines the editor cannot read for sure, and Lua / Squirrel scripts, are listed to check by hand.
+Without REX / M2EX the original exes stop at
 510 tiles - the tool warns. Checked on both vanilla campaigns (103 / 112 towns, 177 / 216 characters, 75 / 77 ports
 in place, no river on the sea, every river end at the sea, a river or the map's edge as in the original). The first
 alpha (0.24-0.27) left the old `map_heights.hgt` in place and kept the heights - flat, square-coasted maps; make the
@@ -265,7 +267,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **Victory:** the **Faction** tab's **Victory** block shows what the player must do to win the long and the short campaign (`descr_win_conditions.txt`): regions to **Hold**, how many to **Take**, factions to **Outlive**, and in Rome the Senate's **Goal** (be emperor / take Rome). Pick regions and factions from a list; a region or faction that does not exist is refused (the game crashes on it). A new faction starts from its template's conditions.
 
-**Make the campaign map 3 x bigger (alpha):** **Tools > Make the campaign map 3 x bigger** turns every tile into a 3 x 3 block, for room between the towns for new regions and factions. The coast is drawn smooth (not in squares), the heights and `map_heights.hgt` (the game's own copy of them) are made at the new size, and the hills, mountains and sea floor 3 x higher so the slopes stay as they were (a choice in the window). Towns, armies, agents, resources, forts and event positions keep their places in the middle of their blocks, ports stay on their region's shore, rivers stay 1 pixel wide (the game crashes on a 2-pixel river), every picture of the map grows with exact colours, `descr_terrain.txt` gets the new size and `map.rwm` is removed (the game builds it again). The window lists every file first; one backup, Restore gives it all back. Coordinates in scripts are not moved (a count is shown). Past 510 tiles the original exes need REX / M2EX.
+**Make the campaign map 3 x bigger (alpha):** **Tools > Make the campaign map 3 x bigger** turns every tile into a 3 x 3 block, for room between the towns for new regions and factions. The coast is drawn smooth (not in squares), the heights and `map_heights.hgt` (the game's own copy of them) are made at the new size, and the hills, mountains and sea floor 3 x higher so the slopes stay as they were (a choice in the window). Towns, armies, agents, resources, forts and event positions keep their places in the middle of their blocks, ports stay on their region's shore, rivers stay 1 pixel wide (the game crashes on a 2-pixel river), every picture of the map grows with exact colours, `descr_terrain.txt` gets the new size and `map.rwm` is removed (the game builds it again). The window lists every file first; one backup, Restore gives it all back. The campaign's scripts follow: spawned armies, moved characters, the camera, revealed tiles and 'near a tile' conditions go to their blocks (battle positions stay; lines it cannot read for sure are listed). Past 510 tiles the original exes need REX / M2EX.
 
 **The game's log in plain words** (Tools): the game's newest `system.log.txt` for this mod read and explained - a crash first, errors grouped, what each means and what to do, and for a Script Error the mod's line as it reads now. With a report, it is the quickest way to the cause of a crash.
 

@@ -2436,12 +2436,36 @@ building smith
             fh.write(struct.pack("<II", 9, 9) + struct.pack("<81f", *[(-24.5 if x < 3 else 1502.3)
                                                                      for y in range(9) for x in range(9)]))
         write(os.path.join(camp, "map.rwm"), "cache")
+        # the campaign's script: campaign-map places move with the map (a tester's DaC: scripted armies stood in the
+        # clouds at their old places), battle positions in the same script stay
+        write(os.path.join(camp, "campaign_script.txt"),
+              "script\n\tspawn_army\n\t\tfaction romans_julii\n"
+              "\t\tcharacter\tGaius, named character, age 30, x 1, y 2, family\n"
+              "\t\tunit\t\troman generals guard cavalry early\texp 1 armour 0 weapon_lvl 0\n\tend\n"
+              "\tsnap_strat_camera 2, 1\t\t\t; the camera 2, 1\n"
+              "\treposition_character Gaius Julius, 0, 3\n"
+              "\tif I_CharacterTypeNearTile romans_julii named_character, 0 1, 1 and I_TurnNumber > 2\n"
+              "\t\treveal_area 0, 0, 1, 2\n\tend_if\n"
+              "\tunit_order_move cohort1 100 60 run\n"
+              "\tset_camera_bookmark 1, 100, 0, 100, 100, 0, 0\n"
+              "\tset_counter ghost 3, 4\n"
+              "end_script\n")
         before = tree_hash(self.root)
         mod = ModData(self.root)
         tiles = mod.city_tiles("test")
         plan = Plan(mod, "map", "map_x3", {})
-        upscale.plan_upscale(plan, "test")
+        warn = upscale.plan_upscale(plan, "test")
         bdir = plan.apply()
+        script = open(os.path.join(camp, "campaign_script.txt")).read().splitlines()
+        self.assertIn("x 4, y 7, family", script[3])                                    # spawned: (1, 2)
+        self.assertEqual(script[6], "\tsnap_strat_camera 7, 4\t\t\t; the camera 2, 1")    # comment as it was
+        self.assertEqual(script[7], "\treposition_character Gaius Julius, 1, 10")
+        self.assertEqual(script[8], "\tif I_CharacterTypeNearTile romans_julii named_character, 1 4, 4 "
+                                    "and I_TurnNumber > 2")                            # distance 0 = its block
+        self.assertEqual(script[9], "\t\treveal_area 0, 0, 5, 8")                         # whole blocks
+        self.assertEqual(script[11:13], ["\tunit_order_move cohort1 100 60 run",          # battle places stay
+                                         "\tset_camera_bookmark 1, 100, 0, 100, 100, 0, 0"])
+        self.assertTrue(any("campaign_script.txt: line(s) 14 " in w for w in warn))      # not known: by hand
         mod = ModData(self.root)
         self.assertEqual({r: xy for r, xy in mod.city_tiles("test").items()},
                          {r: upscale.new_xy(*xy) for r, xy in tiles.items()})
