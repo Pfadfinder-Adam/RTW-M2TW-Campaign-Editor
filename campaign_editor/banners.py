@@ -168,24 +168,32 @@ def paint(blank, colour, symbol, boxes=None, strength=1.0, pattern="plain"):
     """The new banner texture: blank dyed in colour (one, or a list for the pattern), symbol (RGBA, a clear
     background; None = no symbol) in each box, shaded by the cloth's folds; strength < 1 for the allies' faint
     symbol."""
-    from PIL import Image, ImageChops, ImageStat
-    from .emblem import footprint
     out = dye(blank.convert("RGBA"), colour, pattern)
     if symbol is None:
         return out
+    keep = out.split()[3]
+    put_symbol(out, blank.convert("L"), symbol, boxes if boxes is not None else symbol_boxes(blank), strength)
+    out.putalpha(keep)                                    # the banner's own outline stays
+    return out
+
+
+def put_symbol(out, light, symbol, boxes, strength=1.0):
+    """symbol (RGBA, a clear background) fitted into each box of out (RGBA, changed in place), shaded by the
+    cloth's light under it ('L' of out's size: its folds); strength < 1 = faint. Rome's and Medieval II's banners."""
+    from PIL import Image, ImageChops, ImageStat
+    from .emblem import footprint
     sym = symbol.convert("RGBA")
     fb = footprint(sym)
     if fb:
         sym = sym.crop((fb[0], fb[1], fb[0] + fb[2], fb[1] + fb[3]))
-    keep = out.split()[3]
-    for bx0, by0, bx1, by1 in (boxes if boxes is not None else symbol_boxes(blank)):
+    for bx0, by0, bx1, by1 in boxes:
         bw, bh = bx1 - bx0, by1 - by0
         if bw < 2 or bh < 2:
             continue
         k = min(bw / sym.size[0], bh / sym.size[1])
         s = sym.resize((max(1, round(sym.size[0] * k)), max(1, round(sym.size[1] * k))), Image.LANCZOS)
         at = (bx0 + (bw - s.size[0]) // 2, by0 + (bh - s.size[1]) // 2)
-        under = blank.convert("RGBA").crop((at[0], at[1], at[0] + s.size[0], at[1] + s.size[1])).convert("L")
+        under = light.crop((at[0], at[1], at[0] + s.size[0], at[1] + s.size[1]))
         base = max(1.0, ImageStat.Stat(under).mean[0])
         shade = under.point(lambda v: min(255, int(255 * min(1.6, max(0.4, v / base)) / 1.6)))
         r, g, b, a = s.split()
@@ -196,5 +204,79 @@ def paint(blank, colour, symbol, boxes=None, strength=1.0, pattern="plain"):
         layer = Image.new("RGBA", out.size, (0, 0, 0, 0))
         layer.paste(s, at)                                 # (a mask too would square the alpha)
         out.alpha_composite(layer)
-    out.putalpha(keep)                                    # the banner's own outline stays
     return out
+
+
+def own_drawing(path, size):
+    """A banner drawn in any program (on the saved template) as an RGBA picture of the banner texture's size."""
+    from PIL import Image
+    from .recolour import read_picture
+    im = read_picture(path).convert("RGBA")
+    return im if im.size == tuple(size) else im.resize(tuple(size), Image.LANCZOS)
+
+
+def make(blank, s, symbol=None, strength=1.0):
+    """A banner texture from the window's settings s ({'colours', 'pattern', 'boxes', 'no_symbol', 'drawing'}):
+    the blank dyed in the pattern, or the player's own drawing ('drawing': a picture file) in its place; the
+    symbol on it unless 'no_symbol'; the blank's outline kept."""
+    sym = None if s.get("no_symbol") else symbol
+    boxes = s.get("boxes")
+    if not s.get("drawing"):
+        return paint(blank, s.get("colours") or s.get("colour") or (200, 200, 200), sym, boxes, strength,
+                     s.get("pattern") or "plain")
+    out = own_drawing(s["drawing"], blank.size)
+    keep = blank.convert("RGBA").getchannel("A")
+    if sym is not None:
+        put_symbol(out, blank.convert("L"), sym, boxes if boxes is not None else symbol_boxes(blank), strength)
+    out.putalpha(keep)
+    return out
+
+
+def template_picture(blank):
+    """The blank banner to draw on in any program: each banner's outline marked in thin red (on the see-through
+    part, where the game shows nothing)."""
+    from PIL import ImageDraw
+    im = blank.convert("RGBA").copy()
+    dr = ImageDraw.Draw(im)
+    for x0, y0, x1, y1 in banner_boxes(im):
+        dr.rectangle((x0 - 1, y0 - 1, x1, y1), outline=(220, 30, 30, 255))
+    return im
+
+
+class Kit:
+    """What the banner window works with, for Rome: the blank banners (shapes), where banners and symbols are, the
+    banner made from the settings; the second view = the allies' banner (the symbol faint)."""
+    game = "Rome"
+    side_label = "the allies' banner"
+
+    def __init__(self, blanks):
+        self.shapes = dict(blanks)
+
+    def blank(self, s):
+        return self.shapes.get(s.get("kind")) or next(iter(self.shapes.values()))
+
+    def banners(self, s):
+        return banner_boxes(self.blank(s))
+
+    def symbol_boxes(self, s):
+        return s.get("boxes") or symbol_boxes(self.blank(s))
+
+    def make(self, s, symbol=None, strength=1.0):
+        return make(self.blank(s), s, symbol, strength)
+
+    def side(self, s, symbol=None, size=None):
+        im = self.make(s, symbol, ALLY_STRENGTH)
+        return im.resize(size) if size else im
+
+    def template(self, s):
+        return template_picture(self.blank(s))
+
+
+def which_banner(banners, box):
+    """The number of the banner a drawn box is on: the smallest one holding its middle, else (Rome's banners stand
+    side by side) the one across from it, or None."""
+    cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+    hit = [i for i, b in enumerate(banners) if b[0] <= cx < b[2] and b[1] <= cy < b[3]]
+    if hit:
+        return min(hit, key=lambda i: (banners[i][2] - banners[i][0]) * (banners[i][3] - banners[i][1]))
+    return next((i for i, b in enumerate(banners) if b[0] <= cx < b[2]), None)

@@ -148,11 +148,10 @@ def build(src, pics, symbol=None, banner=None):
     out = {}
     for p in pics:
         if is_banner(p):
-            if banner and banner.get("blank") is not None and (banner.get("colours") or banner.get("colour")):
-                out[p["rel"]] = B.paint(banner["blank"], banner.get("colours") or banner["colour"],
-                                        None if banner.get("no_symbol") else symbol, banner.get("boxes"),
-                                        B.ALLY_STRENGTH if p["link"][1] == "ally_texture" else 1.0,
-                                        banner.get("pattern") or "plain")
+            if banner and banner.get("blank") is not None and (banner.get("colours") or banner.get("colour") or
+                                                                banner.get("drawing")):
+                out[p["rel"]] = B.make(banner["blank"], banner, banner.get("symbol") or symbol,
+                                       B.ALLY_STRENGTH if p["link"][1] == "ally_texture" else 1.0)
             continue
         if any(p["label"].startswith(k) for k in SYMBOL_KINDS):
             old = olds.get(p["rel"])

@@ -332,16 +332,19 @@ def picture_info(path):
     low = path.lower()
     if low.endswith(".tga"):
         return tga_info(path)
-    if low.endswith(".dds"):
+    if low.endswith((".dds", ".texture")):
         got = dds_info(path)
         return got[:3] if got else None
     return None
 
 
 def dds_info(path):
-    """(width, height, format, mipmap levels) from a DDS header, or None."""
+    """(width, height, format, mipmap levels) from a DDS header (a Medieval II .texture: the DDS after its 48
+    bytes), or None."""
     try:
         with open(path, "rb") as fh:
+            if path.lower().endswith(".texture"):
+                fh.seek(48)
             h = fh.read(128)
     except OSError:
         return None
@@ -762,8 +765,14 @@ def replace_picture(plan, src, target, like=None):
     size = info[:2] if info else None
     if size and im.size != tuple(size):
         im = im.resize(tuple(size), Image.LANCZOS)
-    dds = target.lower().endswith(".dds")
-    plan.binary(target, image_dds(im, like) if dds else image_tga(im, like))
+    dds = target.lower().endswith((".dds", ".texture"))
+    if target.lower().endswith(".texture"):
+        if not (like and like.lower().endswith(".texture")):
+            raise ValueError("%s: a Medieval II .texture is written only over one (its 48-byte head)" % target)
+        from .recolour import picture_bytes
+        plan.binary(target, picture_bytes(im.convert("RGBA"), like))
+    else:
+        plan.binary(target, image_dds(im, like) if dds else image_tga(im, like))
     what = ""
     if info:
         what = " (%d x %d, %s)" % (info[0], info[1], ("DDS " + info[2]) if dds else "%d-bit" % info[2])

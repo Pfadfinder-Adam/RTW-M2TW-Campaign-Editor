@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+- **Banner... on the Art tab, both games** (the author: "I could not find where banners are made"): the faction's
+  battle banners made new from a white banner - no emblem needed first. The cloth dyed in a pattern of up to three
+  colours (plain, a tricolour upright, across or slanting, quarters, a cross, a border...), a symbol on it if you
+  like (**Symbol picture...**, its plain background cleared), a box drawn on a banner puts it there. **Save the
+  template...** gives the white banner as a PNG of the game's size with each banner outlined, to paint in any
+  program; **Put in my own drawing...** takes it back. *Rome*: the game's blank white banners (Roman, barbarian,
+  eastern), the own and the allies' banner. *Medieval II*: the game has no white banner, so a white template is
+  taken from the mod's own banner pictures (`banners/textures/faction_banner_*.texture` - every faction's holds the
+  same banners in the same places, so what they share stays and each one's heraldry goes); every banner and
+  pennant of the sheet is dyed on its own, and the window shows the banner in 3D on its model (infantry, spear,
+  cavalry, missile, general). A sheet shared with another faction becomes the faction's own copy.
+
 ### Changed
 - **Recolour more exact** (the author: "check every picture it recolours and give me the accuracy"): 64 pictures of
   five Medieval II factions recoloured and looked at one by one - before 49 good / 12 small faults / 3 bad, now 59 /
@@ -206,6 +219,9 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Medieval II `.texture` pictures written right by Replace**: a picture replaced on the Art tab (a shared battle
+  banner's own copy above all) was written as a TGA inside the `.texture` file; it now keeps the file's 48-byte head
+  and the DDS inside it, in its size and compression, as Recolour already did.
 - **Recolour keeps a bright colour of its own** (found by a tester: an emblem's gold wolf and laurel on red turned
   red): the edge growth past the colour test takes only a dull or dark rim, never a clean bright colour next to it.
 - **Recolour makes its 'to' colours the faction's own too** (found by a tester: after a recolour the faction's

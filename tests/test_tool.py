@@ -3305,6 +3305,137 @@ building smith
         self.assertGreater(sel.getpixel((2, 20))[3], 0)                                 # the glow round it
         self.assertGreater(sel.getpixel((2, 20))[0], sel.getpixel((2, 20))[2])          # gold, as the old one
 
+    def test_medieval2_white_banner_from_the_faction_sheets(self):
+        """Medieval II has no white banner: the template is the per-pixel median of the mod's faction banner
+        sheets (each faction's heraldry elsewhere, so it vanishes; the folds every sheet shares stay; what is
+        alike in them all - the pole - kept in its colour); then dyed in a pattern per panel, the symbol on it, or
+        the player's drawing in its place. The pole every banner mesh shows is no cloth."""
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            self.skipTest("Pillow")
+        import math
+        from campaign_editor import banners as B
+        from campaign_editor import banners_m2 as M
+        W, H = 192, 96
+        heraldry = [(200, 30, 30), (30, 60, 200), (40, 160, 40), (220, 200, 40), (120, 40, 140)]
+        sheets = []
+        for k, col in enumerate(heraldry):
+            im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            px = im.load()
+            for y in range(H):
+                for x in range(W):
+                    if y >= 84:
+                        px[x, y] = (120, 80, 40, 255)                         # the pole: alike in every sheet
+                    elif (8 <= x < 88 and 4 <= y < 80) or (104 <= x < 184 and 4 <= y < 60):
+                        fold = 0.8 + 0.2 * math.sin(x / 5.0)                   # the folds every sheet shares
+                        c = col if not (20 + 12 * k <= x < 30 + 12 * k) else (250, 250, 250)   # a stripe of its own
+                        px[x, y] = tuple(int(v * fold) for v in c) + (255,)
+            sheets.append(im)
+        sheet = M.make_sheet(sheets)
+        self.assertEqual(sheet.count, 5)
+        self.assertEqual(sorted(sheet.panels), [(8, 0, 88, 80), (104, 0, 184, 64)])
+        r, g, b, a = sheet.blank.getpixel((50, 40))
+        self.assertTrue(r == g == b and r > 120)                               # white, the heraldry gone
+        self.assertEqual(sheet.blank.getpixel((50, 90)), (120, 80, 40, 255))  # the pole kept as it is
+        self.assertLess(sheet.shade.getpixel((47, 40)), sheet.shade.getpixel((39, 40)))   # the folds kept
+        self.assertEqual(sheet.blank.getpixel((96, 30))[3], 0)                 # the gap stays clear
+        made = M.paint(sheet, [(200, 0, 0), (0, 0, 200)], None, None, "two stripes, upright")
+        self.assertGreater(made.getpixel((20, 40))[0], 120)                    # left half of a panel red
+        self.assertGreater(made.getpixel((80, 40))[2], 120)                    # right half blue
+        self.assertGreater(made.getpixel((110, 30))[0], 120)                   # each panel on its own
+        self.assertEqual(made.getpixel((50, 90)), (120, 80, 40, 255))
+        sym = Image.new("RGBA", (20, 20), (0, 0, 0, 0))
+        ImageDraw.Draw(sym).rectangle((0, 0, 19, 19), fill=(20, 200, 40, 255))
+        kit = M.Kit(sheet)
+        own = kit.make({"colours": [(200, 0, 0)], "pattern": "plain"}, sym)
+        bx = M.symbol_boxes(sheet)[0]
+        r, g, b, a = own.getpixel(((bx[0] + bx[2]) // 2, (bx[1] + bx[3]) // 2))
+        self.assertGreater(g, r)                                               # the symbol on the cloth
+        self.assertEqual(kit.make({"colours": [(200, 0, 0)], "no_symbol": True}, sym).getpixel(
+            ((bx[0] + bx[2]) // 2, (bx[1] + bx[3]) // 2))[1], 0)
+        self.assertEqual(kit.template({}).getpixel((8, 0)), (220, 30, 30, 255))    # panels outlined to draw on
+        d = tempfile.mkdtemp()
+        drawn = os.path.join(d, "mine.png")
+        Image.new("RGBA", (W // 2, H // 2), (10, 20, 230, 255)).save(drawn)
+        mine = kit.make({"drawing": drawn, "no_symbol": True})
+        self.assertEqual(mine.size, (W, H))
+        self.assertEqual(mine.getpixel((50, 40))[:3], (10, 20, 230))
+        self.assertEqual(mine.getpixel((96, 30))[3], 0)                        # the sheet's outline kept
+        # the meshes: what one mesh alone shows is cloth; the pole both hang on is not
+        a_mask = Image.new("L", (W, H), 0)
+        ImageDraw.Draw(a_mask).rectangle((8, 4, 87, 95), fill=255)
+        b_mask = Image.new("L", (W, H), 0)
+        ImageDraw.Draw(b_mask).rectangle((104, 4, 183, 59), fill=255)
+        ImageDraw.Draw(b_mask).rectangle((8, 84, 183, 95), fill=255)
+        cloth, panels = M.own_cloth([a_mask, b_mask], Image.new("L", (W, H), 0), (W, H))
+        self.assertEqual(cloth.getpixel((50, 90)), 0)
+        self.assertEqual(cloth.getpixel((50, 40)), 255)
+        self.assertEqual(len(panels), 2)
+        self.assertEqual(B.which_banner(panels, (40, 30, 60, 50)), panels.index(next(p for p in panels if p[0] < 50)))
+        self.assertIsNone(B.which_banner(panels, (90, 2, 100, 3)))
+        # Rome's banners take the drawing the same way, and make() without one is the dyed banner as before
+        blank = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        ImageDraw.Draw(blank).rectangle((4, 4, 59, 40), fill=(220, 220, 220, 255))
+        s = {"colours": [(30, 60, 200)], "pattern": "plain", "no_symbol": True}
+        self.assertEqual(B.make(blank, s).tobytes(), B.paint(blank, [(30, 60, 200)], None).tobytes())
+        r = B.make(blank, dict(s, drawing=drawn))
+        self.assertEqual(r.getpixel((20, 20))[:3], (10, 20, 230))
+        self.assertEqual(r.getpixel((20, 50))[3], 0)
+
+    def test_medieval2_banner_sheet_written_as_its_own_texture(self):
+        """A Medieval II banner sheet shared by two factions, replaced for one (the Banner... window, Replace (its
+        own copy)): the faction gets a .texture of its own - the 48-byte head kept, the DDS inside of the old size -
+        and its descr_banners_new.xml line pointed at it; the other faction's untouched; Restore byte for byte."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        import io
+        from campaign_editor import factionart as FA
+        from campaign_editor.edit import edit
+        from campaign_editor.recolour import read_picture
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_banners_new.xml"),
+              '<BannerDB>\n   <FactionBanners>\n      <Banner Name="main_spear" MainMesh="data\\banners\\x.mesh">\n'
+              '         <Textures>\n'
+              '            <Texture Faction="Alpha" DiffuseMap="banners\\textures\\Faction_banner_alpha.texture"/>\n'
+              '            <Texture Faction="Slave" DiffuseMap="banners\\textures\\Faction_banner_alpha.texture"/>\n'
+              '         </Textures>\n      </Banner>\n   </FactionBanners>\n</BannerDB>\n')
+        buf = io.BytesIO()
+        Image.new("RGBA", (64, 32), (200, 30, 30, 255)).save(buf, format="DDS")
+        tex = os.path.join(d, "banners", "textures", "Faction_banner_alpha.texture")
+        os.makedirs(os.path.dirname(tex))
+        head = bytes(range(48))
+        with open(tex, "wb") as fh:
+            fh.write(head + buf.getvalue())
+        self.assertEqual(FA.picture_info(tex)[:2], (64, 32))
+        mod = ModData(self.root)
+        x = next(e for e in FA.extra_pictures(mod, "slave") if e["kind"] == "banner")
+        png = os.path.join(self.root, "new.png")
+        Image.new("RGBA", (32, 16), (20, 40, 220, 255)).save(png)
+        before = tree_hash(self.root)
+        plan = edit(mod, "test", "slave", {"art": {"banners/textures/Faction_banner_alpha.texture": {
+            "src": png, "extra": [x["kind"], x["ref"]]}}})
+        plan.apply()
+        own = os.path.join(d, "banners", "textures", "Faction_banner_slave.texture")
+        with open(own, "rb") as fh:
+            raw = fh.read()
+        self.assertEqual(raw[:48], head)
+        self.assertEqual(raw[48:52], b"DDS ")
+        im = read_picture(own)
+        self.assertEqual(im.size, (64, 32))
+        self.assertGreater(im.getpixel((10, 10))[2], 150)
+        self.assertGreater(read_picture(tex).getpixel((10, 10))[0], 150)      # Alpha's own untouched
+        with open(os.path.join(d, "descr_banners_new.xml"), encoding="latin-1") as fh:
+            xml = fh.read()
+        self.assertIn('Faction="Slave" DiffuseMap="banners\\textures\\Faction_banner_slave.texture"', xml)
+        self.assertIn('Faction="Alpha" DiffuseMap="banners\\textures\\Faction_banner_alpha.texture"', xml)
+        restore(ModData(self.root), backups(ModData(self.root))[0])
+        after = {k: v for k, v in tree_hash(self.root).items()
+                 if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
+        self.assertEqual(before, after)
+
     def test_symbol_painted_on_the_battle_banners(self):
         """The battle banners made from the game's blank white banner: the cloth dyed in the faction's colour, the
         symbol on it (faint on the allies' banner), the trim, stars and pole as they were; the flag symbol on the

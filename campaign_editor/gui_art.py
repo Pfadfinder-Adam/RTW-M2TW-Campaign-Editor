@@ -69,6 +69,11 @@ class ArtEditor(ttk.Frame):
             "Unit cards, battle textures, symbols, banners, captain cards: moved from the colours they carry now "
             "(a template's, for a cloned faction) to the faction's own - light and shade kept, faces and metal "
             "untouched. Before / after shown; written with a backup.").pack(side="left")
+        tip(ttk.Button(btns, text="Banner...", command=self.banner_window),
+            "The faction's battle banners made new from a white banner: the cloth dyed in a pattern of your "
+            "colours (plain, stripes, a cross, quarters...), a symbol on it if you like, or your own drawing on the "
+            "saved template. Rome: the game's blank white banners; Medieval II: a white template taken from the "
+            "mod's own banner pictures, seen in 3D. Written on Apply with a backup.").pack(side="left", padx=(6, 0))
         box = ttk.Frame(self)
         box.pack(fill="both", expand=True)
         canvas = self.canvas = tk.Canvas(box, highlightthickness=0)
@@ -306,6 +311,8 @@ class ArtEditor(ttk.Frame):
             return "as the file it replaces"
         if target.startswith("symbol:") and isinstance(size[2], str):
             return "needs %d x %d (kept in the sheet's DDS %s)" % size
+        if target.lower().endswith(".texture"):
+            return "needs %d x %d, Medieval II texture (DDS %s inside)" % size
         if target.lower().endswith(".dds"):
             return "needs %d x %d, DDS %s (with its mipmaps)" % size
         return "needs %d x %d, %d-bit TGA" % size
@@ -450,6 +457,95 @@ class ArtEditor(ttk.Frame):
         bar.pack(fill="x")
         ttk.Button(bar, text="Use it (%d pictures)" % len(paths), command=use).pack(side="left")
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="right")
+
+    def banner_window(self):
+        """The faction's battle banners from a white banner (gui_banners.BannerWindow), both games: Rome's own and
+        allies' banners (descr_banners.txt) from the blank routing banners; Medieval II's banner sheet
+        (descr_banners_new.xml) from the white template of the mod's sheets - a sheet shared with other factions
+        becomes the faction's own copy (Replace (its own copy))."""
+        a = self.app
+        src_faction, new = self._names()
+        if not a.mod or not src_faction:
+            messagebox.showinfo("Banner", "Load a mod and pick the faction first.")
+            return
+        pics = FA.faction_pictures(a.mod, a.v_campaign.get(), src_faction)
+        from . import banners_m2 as M
+        m2 = [p for p in pics if (p.get("extra") or {}).get("kind") == "banner" and M.faction_sheet(p["path"])]
+        if m2:
+            return self._banner_m2(m2, src_faction, new)
+        from . import emblem as E
+        rome = [p for p in pics if E.is_banner(p) and not p.get("locked")]
+        if not rome:
+            messagebox.showinfo("Banner", "%s has no battle banner pictures of its own in this mod "
+                                          "(descr_banners.txt / descr_banners_new.xml)." % src_faction)
+            return
+        blanks, first = self._banner_settings(rome, src_faction)
+        if not blanks:
+            messagebox.showinfo("Banner", "The mod has no blank white banner (models/textures/standard_routing*"
+                                          ".tga.dds) to make the banners from.")
+            return
+        from . import banners as B
+        from .gui_banners import BannerWindow
+
+        def done(got):
+            out = {p["rel"]: B.make(blanks[got.get("kind") or first["kind"]], got, got.get("symbol"),
+                                    B.ALLY_STRENGTH if p["link"][1] == "ally_texture" else 1.0) for p in rome}
+            self._banners_made(rome, out, src_faction, new)
+        BannerWindow(self, blanks, None, first, done, title="Battle banners - %s" % (new or src_faction))
+
+    def _banner_m2(self, pics, src_faction, new):
+        a = self.app
+        from . import banners_m2 as M
+        from .recolour import faction_colours, read_picture
+        a.status.set("Making the white banner from the mod's banner pictures...")
+        self.update_idletasks()
+        sheet = M.sheet_blank(a.mod)
+        a.status.set("")
+        if sheet is None:
+            messagebox.showinfo("Banner", "No faction banner pictures (banners/textures/faction_banner_*) were "
+                                          "found to make the white banner from.")
+            return
+        if any(p.get("locked") for p in pics) and new and new != src_faction:
+            messagebox.showinfo("Banner", "%s's banner picture is shared with other factions. Apply the new "
+                                          "faction first, then Edit faction > Art > Banner... gives it a banner "
+                                          "of its own." % src_faction)
+            return
+        try:
+            alpha = read_picture(pics[0]["path"]).getchannel("A")
+        except Exception:
+            alpha = None
+        fc = faction_colours(a.mod).get(src_faction, (None, None))
+        first = a.colours.get("primary") or fc[0] or (200, 200, 200)
+        second = a.colours.get("secondary") or fc[1] or (240, 240, 240)
+        kit = M.Kit(sheet, M.meshes(a.mod), alpha)
+        from .gui_banners import BannerWindow
+
+        def done(got):
+            im = kit.make(got, got.get("symbol"))
+            self._banners_made(pics, {p["rel"]: im for p in pics}, src_faction, new)
+        BannerWindow(self, kit, None, {"colours": [tuple(first[:3]), tuple(second[:3]), (240, 240, 240)],
+                                       "pattern": "plain", "no_symbol": True},
+                     done, title="Battle banners - %s" % (new or src_faction))
+
+    def _banners_made(self, pics, made, src_faction, new):
+        """The made banner pictures put on the Art tab as picks (written on Apply): a shared Medieval II sheet as
+        'its own copy' (factionart.share_out), the rest under the faction's name."""
+        import tempfile
+        from . import emblem as E
+        a = self.app
+        paths = E.save_all(made, tempfile.mkdtemp(prefix="banner_"))
+        a.remember()
+        for p in pics:
+            if p["rel"] not in paths:
+                continue
+            x = p.get("extra")
+            if p.get("locked") and x:
+                a.art_replace[FA.picture_target(p, src_faction, src_faction)] = {
+                    "src": paths[p["rel"]], "extra": [x["kind"], x["ref"]]}
+            else:
+                a.art_replace[FA.picture_target(p, src_faction, new or src_faction)] = paths[p["rel"]]
+        a.status.set("Battle banners: %d picture(s) made - Preview, then Apply." % len(paths))
+        self.load()
 
     def revert(self, target, orig, link=None):
         """The picture as it was before the tool first changed it (a pending change, written on Apply)."""
