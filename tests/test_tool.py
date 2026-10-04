@@ -6243,6 +6243,36 @@ building smith
             srv.shutdown()
             srv.server_close()
 
+    def test_no_internet_or_a_silent_service_never_hangs(self):
+        """No internet, or a report service that takes the call and never answers: the editor gives up after its
+        time and says it in plain words (the window runs these in a thread, so it never freezes)."""
+        import socket
+        from campaign_editor import report, settings
+        saved = (settings._data, settings._path)
+        tmp = tempfile.mkdtemp()
+        settings._data, settings._path = {}, (lambda: os.path.join(tmp, "s.json"))
+        silent = socket.socket()
+        silent.bind(("127.0.0.1", 0))
+        silent.listen(5)                                      # takes the call, never answers
+        closed = socket.socket()
+        closed.bind(("127.0.0.1", 0))
+        port_closed = closed.getsockname()[1]
+        closed.close()                                        # nobody there: like no internet
+        try:
+            settings.put("report_url", "http://127.0.0.1:%d/" % silent.getsockname()[1])
+            t = time.time()
+            with self.assertRaises(RuntimeError) as e:
+                report.answers([{"id": "R-1", "issue": 1}], timeout=1)
+            self.assertLess(time.time() - t, 10)
+            self.assertIn("could not reach the report service", str(e.exception))
+            settings.put("report_url", "http://127.0.0.1:%d/" % port_closed)
+            with self.assertRaises(RuntimeError) as e:
+                report.send_reply("R-1", 1, "hello", timeout=1)
+            self.assertIn("is the internet on?", str(e.exception))
+        finally:
+            silent.close()
+            settings._data, settings._path = saved
+
     def test_answers_to_my_reports(self):
         """The reporter cannot see the private reports repo: the editor keeps the numbers it sent (and finds older
         ones in its log), asks the relay for the author's answers, marks what is new until read, and sends the
