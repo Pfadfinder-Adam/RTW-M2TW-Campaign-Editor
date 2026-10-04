@@ -12,6 +12,10 @@
   keeps his bodyguard), delete a character, a new army / agent / fleet for any faction; resources, forts, wonders and
   regions as on the Map tab. Preview, then Apply changes writes them (a backup first). Box selection and deleting a
   town with its region come next.
+- **Test mod: the later factions are seen at once.** The test factions wear colours no faction of the game wears
+  (each told apart from the others); the faction that comes by an event rises on turn 2 next to the test faction's
+  capital; a faction splits off the test faction when its far town - left without a garrison on purpose - revolts;
+  the new region's town gets a garrison. The step texts name the towns.
 - **Test mod**: a shadow of the test faction (ce_test_shadow) of its own; the faction that comes by an event now
   comes in on turn 2 (was 6), so it can be tried at once; the Map editor's step.
 - **What every number of a unit's line means** (Unit editor > Every line of the block, both games): the **?** beside

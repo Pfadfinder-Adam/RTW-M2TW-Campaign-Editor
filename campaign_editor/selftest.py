@@ -50,10 +50,53 @@ class Ctx:
         self.foreign = next((n for n, cu in mod.factions() if n != "slave" and cu != cult.get(self.template) and
                              n not in (self.new, self.later, self.split, self.shadow)), self.other)
         self.logo = None
+        self.colours = test_colours(mod, [self.new, self.shadow, self.later, self.split])
+        self.said = {}                       # what the steps picked, for the texts: {'near': town, 'far': town}
 
     def mod(self):
         from .moddata import ModData
         return ModData(self.data)
+
+
+# colours to pick the test factions' from: the ones farthest from every faction of the game, so each test faction is
+# told apart at once on the map and in battle (and Recolour shows what it did)
+CANDIDATES = [(255, 0, 255), (0, 255, 255), (255, 140, 0), (128, 255, 0), (255, 105, 180), (0, 0, 0),
+              (64, 224, 208), (255, 255, 255), (139, 69, 19), (128, 128, 128), (0, 255, 128), (255, 255, 0),
+              (75, 0, 130), (0, 128, 128)]
+
+
+def test_colours(mod, factions):
+    """{faction: (primary, secondary)}: for each test faction the candidate primary farthest from every colour the
+    game's factions wear (and from those already given), with the candidate secondary that stands out most on it."""
+    from .recolour import faction_colours
+    worn = [c for pair in faction_colours(mod).values() for c in pair if c]
+
+    def d2(c, w):
+        return sum((a - b) ** 2 for a, b in zip(c, w))
+
+    def far(c, used):
+        # far from the game's colours; one within 200 of a test faction's own is out - they must not look alike
+        if any(d2(c, u) < 200 ** 2 for u in used):
+            return -1
+        return min([d2(c, w) for w in worn] or [0])
+    out, used = {}, []
+    for f in factions:
+        p = max((c for c in CANDIDATES if c not in used), key=lambda c: far(c, used))
+        used.append(p)
+        s = max((c for c in CANDIDATES if c not in used), key=lambda c: d2(c, p))
+        out[f] = (p, s)
+    return out
+
+
+class _Names(dict):
+    """The factions' names for a step's text, and what the steps picked ({near}, {far}); not picked yet: '...'."""
+
+    def __init__(self, names, said):
+        super().__init__(names)
+        self.update(said)
+
+    def __missing__(self, key):
+        return "..."
 
 
 def _is_m2(mod):
@@ -124,7 +167,8 @@ def logo(c):
     if c.logo is None:
         from PIL import Image, ImageDraw
         im = Image.new("RGBA", (LOGO_SIZE, LOGO_SIZE), (0, 0, 0, 0))
-        ImageDraw.Draw(im).ellipse((20, 20, 236, 236), fill=(40, 140, 60, 255), outline=(240, 220, 40, 255),
+        p, s = c.colours[c.new]
+        ImageDraw.Draw(im).ellipse((20, 20, 236, 236), fill=p + (255,), outline=s + (255,),
                                    width=12)
         c.logo = os.path.join(c.work, "ce_test_logo.png")
         im.save(c.logo)
@@ -173,7 +217,7 @@ def s_new_faction(c, mod):
     return build(mod, c.campaign, c.template, c.new, {
         "display_name": "Test Kingdom", "short_name": "Testland", "adjective": "Testish",
         "description": "A faction made by the editor's test mod.",
-        "primary_colour": (40, 140, 60), "secondary_colour": (240, 220, 40), "raise_faction_limit": True,
+        "primary_colour": c.colours[c.new][0], "secondary_colour": c.colours[c.new][1], "raise_faction_limit": True,
         "start": {"regions": regions, "leader": {"name": names[0], "age": 40}, "characters": chars}})
 
 
@@ -184,20 +228,35 @@ def s_later(c, mod):
     from .events import turn_date
     return build(mod, c.campaign, c.edited, c.later, {
         "display_name": "Rising Test", "short_name": "Rising", "adjective": "Rising", "raise_faction_limit": True,
+        "primary_colour": c.colours[c.later][0], "secondary_colour": c.colours[c.later][1],
         "start": {"way": "event", "date": turn_date(mod, c.campaign, 3), "region": towns_of(c, mod, c.edited)[0],
                   "re_emergent": True, "denari": 3000, "regions": [], "leader": None, "playable": False}})
 
 
-@step("...its event moved: turn 2, in another town of {edited} (it comes in at once, to be tested on the first turns)",
-      "{later} comes in on turn 2 in {edited}'s town")
+@step("...its event moved: turn 2, in the region next to {new}'s capital (it comes in at once, beside the test "
+      "faction, to be seen on the first turns)",
+      "{later} comes in on turn 2 in {near}, beside {new}'s capital, in its own colours")
 def s_later_way(c, mod):
     from . import emergence as E
     from .events import turn_date
-    towns = towns_of(c, mod, c.edited)
     plan = Plan(mod, "later", c.later, {})
     E.apply(plan, c.campaign, c.later, "event", re_emergent=True, date=turn_date(mod, c.campaign, 2),
-            region=towns[1] if len(towns) > 1 else towns[0])
+            region=near_capital(c, mod))
+    c.said["near"] = near_capital(c, mod)
     return plan
+
+
+def near_capital(c, mod):
+    """The town nearest {new}'s capital that is not {new}'s own (where the faction that comes later rises), else
+    a town of {edited}."""
+    tiles = mod.city_tiles(c.campaign)
+    mine = [tiles[r] for r in towns_of(c, mod, c.new) if tiles.get(r)]
+    owners = _strat(mod, c.campaign).owners()
+    others = [r for r, o in owners.items() if o != c.new and tiles.get(r)]
+    if not mine or not others:
+        return towns_of(c, mod, c.edited)[0]
+    cx, cy = mine[0]
+    return min(others, key=lambda r: abs(tiles[r][0] - cx) + abs(tiles[r][1] - cy))
 
 
 @step("A shadow of {new}: a clone of {template}, dead at the start, may come back",
@@ -207,17 +266,20 @@ def s_shadow(c, mod):
     from .build import build
     return build(mod, c.campaign, c.template, c.shadow, {
         "display_name": "Shadow Test", "short_name": "Shadow", "adjective": "Shadowy", "raise_faction_limit": True,
+        "primary_colour": c.colours[c.shadow][0], "secondary_colour": c.colours[c.shadow][1],
         "start": {"way": "shadow", "of": c.new, "re_emergent": True, "denari": 2000, "regions": [], "leader": None,
                   "playable": False}})
 
 
-@step("A faction that splits off {other} in a revolt: a clone of {other}, dead at the start",
-      "{split} is not on the map at the start; when towns of {other} revolt they go to {split}")
+@step("A faction that splits off {new} in a revolt: a clone of {template}, dead at the start",
+      "{split} is not on the map at the start; {new}'s far town (the Town window step's) is left without a "
+      "garrison - when it revolts it goes to {split}, in its own colours")
 def s_split(c, mod):
     from .build import build
-    return build(mod, c.campaign, c.other, c.split, {
+    return build(mod, c.campaign, c.template, c.split, {
         "display_name": "Split Test", "short_name": "Split", "adjective": "Splitting", "raise_faction_limit": True,
-        "start": {"way": "revolt", "of": c.other, "denari": 2000, "regions": [], "leader": None,
+        "primary_colour": c.colours[c.split][0], "secondary_colour": c.colours[c.split][1],
+        "start": {"way": "revolt", "of": c.new, "denari": 2000, "regions": [], "leader": None,
                   "playable": False}})
 
 
@@ -332,10 +394,12 @@ def s_forts(c, mod):
 
 
 @step("Town window: a rebel town given to {new}, its population set to 2600 (the level follows the people)",
-      "the town is {new}'s, big enough for 2600 people")
+      "{far} is {new}'s, big enough for 2600 people - with NO garrison on purpose, far from {new}'s capital: when it "
+      "revolts, {split} (splits off {new}) takes it")
 def s_town(c, mod):
     from . import masstown as MT
     region = towns_of(c, mod, "slave")[-1]
+    c.said["far"] = region
     plan = Plan(mod, "town", region, {})
     MT.apply(plan, c.campaign, {"population": {region: 2600}, "owners": {region: c.new}, "level_follows": True})
     return plan
@@ -421,6 +485,21 @@ def s_region(c, mod):
                     continue
                 return edit(mod, c.campaign, c.new, {"regions": {"painted": painted, "new": [new]}})
     raise Skip("no 5 x 5 block of one rebel region far from its town")
+
+
+@step("...the new town CE_Newtown gets a garrison of {new}'s own units (it stood empty)",
+      "CE_Newtown holds an army of {new}")
+def s_region_garrison(c, mod):
+    from . import masstown as MT
+    town = next((t for t in MT.towns(mod, c.campaign) if t["region"] == "CE_Newland"), None)
+    if town is None:
+        raise Skip("no CE_Newland (the step before was skipped)")
+    units = MT.random_garrison(MT.town_pool(mod, town, MT.garrison_pool(mod, c.new)), 2, 3, None, c.rng)
+    if not units:
+        raise Skip("no unit %s may have there" % c.new)
+    plan = Plan(mod, "towns", "CE_Newland", {})
+    MT.apply(plan, c.campaign, {"garrisons": {"CE_Newland": units}})
+    return plan
 
 
 @step("Rename a rebel region and its town everywhere", "the new names on the map and in the lists")
@@ -778,7 +857,8 @@ def s_banner(c, mod):
     from .edit import edit
     pics = FA.faction_pictures(mod, c.campaign, c.new)
     sym = Image.open(logo(c)).convert("RGBA")
-    s = {"colours": [(40, 140, 60), (240, 220, 40), (240, 240, 240)], "pattern": "three stripes, upright (tricolour)"}
+    s = {"colours": [c.colours[c.new][0], c.colours[c.new][1], (240, 240, 240)],
+         "pattern": "three stripes, upright (tricolour)"}
     if c.m2:
         from . import banners_m2 as BM
         ps = [p for p in pics if (p.get("extra") or {}).get("kind") == "banner" and BM.faction_sheet(p["path"])]
@@ -812,7 +892,7 @@ def s_recolour(c, mod):
         raise Skip("nothing to recolour")
     src = R.guess_source(mod, c.new, items, R.faction_colours(mod))[0]
     plan = Plan(mod, "recolour", c.new, {})
-    R.plan_recolour(plan, items, src, ((40, 140, 60), (240, 220, 40)))
+    R.plan_recolour(plan, items, src, c.colours[c.new])
     return plan
 
 
@@ -1408,7 +1488,7 @@ COVERAGE = {
     "Map: a port moved": ["s_port"],
     "Map: a character moved, one deleted": ["s_move_delete"],
     "Map editor: any faction's army moved, its units": ["s_map_any"],
-    "New region": ["s_region"],
+    "New region": ["s_region", "s_region_garrison"],
     "Rename a region and its town everywhere": ["s_rename"],
     "Edit region: rebels, resources, farming, names players see": ["s_region_props"],
     "Settlement names by culture": ["s_culture_names"],
@@ -1545,8 +1625,8 @@ def run(data, campaign, progress=None, make=True):
              "addon": "Sack Settlement (Medieval II, M2EX)" if c.m2 else "Sack Settlement (Rome, REX)"}
     before = problems(ModData(data), campaign)
     results = []
-    for n, (title, see, fn) in enumerate(STEPS, 1):
-        title, see = title.format(**names), see.format(**names)
+    for n, (title, see_raw, fn) in enumerate(STEPS, 1):
+        title, see = title.format(**names), see_raw.format_map(_Names(names, c.said))
         say("test mod: step %d of %d - %s" % (n, len(STEPS), title))
         rec = {"step": title, "see": see, "files": [], "warnings": [], "fn": fn.__name__}
         t = time.time()
@@ -1570,6 +1650,7 @@ def run(data, campaign, progress=None, make=True):
             now = problems(ModData(data), campaign)
         except Exception as e:
             now = ["Check mod files itself failed: %s" % e]
+        rec["see"] = see_raw.format_map(_Names(names, c.said))     # a town a step picked, named after it ran
         rec["new_problems"] = [p for p in now if p not in before]
         before = now
         rec["seconds"] = round(time.time() - t, 1)

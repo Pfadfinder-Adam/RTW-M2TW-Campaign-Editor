@@ -4045,7 +4045,7 @@ building smith
         self.assertGreaterEqual(len(ST.STEPS), 30)
         for title, see, fn in ST.STEPS:
             self.assertTrue(title.format(**names) and callable(fn))
-            see.format(**names)
+            see.format_map(ST._Names(names, {"near": "Town A", "far": "Town B"}))    # towns the steps pick
         with self.assertRaises(ValueError):                 # the mini-mod has two factions, the test needs three
             ST.Ctx(os.path.join(self.root, "data"), "test", self.root)
         text = ST.report("/x/CE_Test/data", "test", names, [
