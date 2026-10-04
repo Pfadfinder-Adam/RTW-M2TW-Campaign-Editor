@@ -2990,10 +2990,10 @@ class App(tk.Tk):
 
             def out_stop():
                 self._taking_out = None
-                self.status.set("The army stays in its town.")
+                self.status.set("It stays in its town.")
                 self.show_map()
             region_kw["on_place"] = out_click
-            region_kw["ghost"] = {"kind": "army", "check": out_why}
+            region_kw["ghost"] = {"kind": "army" if self._map_chars[out].get("army") else "agent", "check": out_why}
             self.map_view.on_place_stop = out_stop
         else:
             self.map_view.on_place_stop = None
@@ -4272,11 +4272,17 @@ class App(tk.Tk):
             items.append(("This town...  (double click)", lambda: self.town_window(region)))
             txy = tuple(self.place_moves.get(("city", region)) or self._cmap.cities.get(region) or ()) \
                 if self._cmap else ()
+            agents = []
             for acid, ach in (getattr(self, "_map_chars", None) or {}).items():
-                if ach.get("army") and tuple(ach.get("xy") or ()) == txy and \
-                        acid in getattr(self.map_view, "draggable", ()):
+                if tuple(ach.get("xy") or ()) != txy or acid not in getattr(self.map_view, "draggable", ()):
+                    continue
+                if ach.get("army"):
                     items.append(("Take the army out: %s (%s) - then click a free tile" % (ach["name"], ach["faction"]),
                                   lambda acid=acid: self.take_out(acid)))
+                else:                                   # agents in the town: a list, each by name (what he is)
+                    agents.append(("%s (%s)" % (ach["name"], ach["kind"]), lambda acid=acid: self.take_out(acid)))
+            if agents:
+                items.append(("Take an agent out - then click a free tile", sorted(agents, key=lambda a: a[0])))
             items.append(("Edit this town in Edit faction (garrison, characters)", lambda: self.open_town(region)))
             if self.field_faction() and not self.map_only():
                 items.append(("Take out of my towns" if mine else "Add to my towns", lambda: self.map_city(region)))
@@ -4574,15 +4580,15 @@ class App(tk.Tk):
                             % (ch["kind"], ch["name"], ch["faction"]))
 
     def take_out(self, cid):
-        """An army leaves its town (the roof flag is part of the town's sign and is not dragged - report #104): it
-        hangs under the mouse until a free tile is clicked (green where it may stand, red with why where not); Esc
-        or a right click stops."""
+        """An army or an agent leaves its town (the roof flag is part of the town's sign and is not dragged - report
+        #104): it hangs under the mouse until a free tile is clicked (green where it may stand, red with why where
+        not); Esc or a right click stops."""
         ch = (getattr(self, "_map_chars", None) or {}).get(cid)
         if not ch:
             return
         self._taking_out = cid
-        self.status.set("%s (%s): click a free tile for the army - Esc or a right click stops." % (
-            ch["name"], ch["faction"]))
+        self.status.set("%s (%s, %s): click a free tile for %s - Esc or a right click stops." % (
+            ch["name"], ch["kind"], ch["faction"], "the army" if ch.get("army") else "him"))
         self.show_map()
 
     def fort_window(self, fo):

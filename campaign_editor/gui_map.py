@@ -541,7 +541,7 @@ class MapView(ttk.Frame):
             if not getattr(self, "everyone", False):          # the Map editor: no faction is 'yours'
                 row("one of your towns", town(red, "#ffd400", 3))
             row("rebel village (no town yet)", town("", "black", 1, hollow=True))
-            row("an army in it: a flag on its roof", lambda x, yy: self._roof_flag(x - 3, yy + 8, 13, "__legend__", ()))
+            row("an army in it: a flag on its roof", lambda x, yy: self._roof_flag(x - 6, yy + 5, 13, "__legend__", ()))
             row("a port (click the coast)", port, "port")
             row("a fort (top: its owner's colour)",
                 lambda x, yy: self._fort_icon(lc, x, yy + 2, 7, "#%02x%02x%02x" % self.LEGEND_RED, (), 2), "fort")
@@ -1038,7 +1038,7 @@ class MapView(ttk.Frame):
                 # army is there (the user's choice, report #104)
                 if (x, y) not in flags:
                     flags.add((x, y))
-                    self._roof_flag(sx, sy - size / 2, max(tile * 0.6, 6), ch_["faction"],
+                    self._roof_flag(sx + size / 2, sy - size / 2, max(tile * 0.6, 6), ch_["faction"],
                                     ("city", "city:" + town_of.get((x, y), "")))
                 continue
             elif (x, y) in busy:                       # ...an agent or a ship stands small beside the town /
@@ -1052,16 +1052,17 @@ class MapView(ttk.Frame):
                 sx += n * one * 0.5
             self._draw_char(ch_, sx, sy, one)
 
-    def _roof_flag(self, sx, roof, h, faction, tags):
-        """The flag on a town's roof: a pole and a square cloth in the army's colour with a triangle cut into its
-        right edge (a swallowtail), a thin black edge - nothing yellow (report #104)."""
+    def _roof_flag(self, cx, cy, h, faction, tags):
+        """An army's flag on a town's sign: the cloth's lower left corner on the sign's upper right corner (cx, cy),
+        its pole only along the cloth's left edge; a square cloth in the army's colour with a triangle cut into its
+        right edge, a thin black edge - nothing yellow (the user's choice, report #104)."""
         c = self.canvas
         rgb = REBELS if faction == "slave" else self.colours.get(faction, REBELS)
-        px, top = sx, roof - h * 1.1
-        c.create_line(px, roof, px, top, fill="black", width=2, tags=tags)
         w, ch = h * 0.8, h * 0.6
-        c.create_polygon(px, top, px + w, top, px + w * 0.7, top + ch / 2, px + w, top + ch, px, top + ch,
+        top = cy - ch
+        c.create_polygon(cx, top, cx + w, top, cx + w * 0.7, top + ch / 2, cx + w, cy, cx, cy,
                          fill="#%02x%02x%02x" % rgb, outline="black", width=1, tags=tags)
+        c.create_line(cx, cy, cx, top - h * 0.12, fill="black", width=2, tags=tags)
 
     def _draw_char(self, ch_, sx, sy, size):
         c = self.canvas
