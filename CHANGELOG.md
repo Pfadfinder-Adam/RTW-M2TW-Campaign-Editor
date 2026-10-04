@@ -316,6 +316,8 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Check mod files / moving a port (Medieval II): a port beside a town is a warning, not a fault** - vanilla
+  Medieval II's own norman_prologue has two (Marseille, Venice) and plays.
 - **Buildings and garrisons for many towns / Settlement names by culture: an error when the window was closed** while
   a filter was being changed ("invalid command name ...treeview") - the lists are no longer filled once the window
   is gone.

@@ -1159,7 +1159,7 @@ building smith
         errors, _ = region_problems(mod, "test", {(2, 1): "B_R"}, [])
         self.assertTrue(any("Medieval II crashes" in e for e in errors))
         got = ring_problems(mod, "test", owner_of(mod, "test"), towns, ports)
-        self.assertEqual([s_ for s_, _ in got], [True])
+        self.assertEqual([s_ for s_, _ in got], [False])          # a warning: vanilla's norman_prologue has two
         self.assertIn("port of B_R stands next to the town of B_R", got[0][1])
         # Check mod sees a town already against another region
         px[1][2], px[1][1] = K, R                  # A's town moved to 2,1 beside B's land

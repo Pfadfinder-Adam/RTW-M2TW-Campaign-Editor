@@ -118,8 +118,8 @@ def ports(mod, campaign):
 # ---------------------------------------------------------------------------
 # The ring round a town (the M2EX Campaign Map Builder's rule, measured on the vanilla maps 2026-09-30):
 # the 8 tiles round a town are its own region or sea - never another region (0 towns in vanilla Rome and
-# Medieval II; HLR has 6 under REX) - and on Medieval II no port stands inside a town's 3 x 3 (vanilla M2TW 0;
-# vanilla Rome 1, HLR 104 - so Rome is not held to it).
+# Medieval II; HLR has 6 under REX) - and on Medieval II a port inside a town's 3 x 3 is warned about (vanilla M2TW's
+# imperial campaign 0, but its norman_prologue 2 and it plays - so a warning, never a refusal; Rome 1, HLR 104).
 # ---------------------------------------------------------------------------
 def ring(xy):
     x, y = xy
@@ -166,7 +166,7 @@ def owner_of(mod, campaign, moved=None, painted=None, towns=None, port_tiles=Non
 def ring_problems(mod, campaign, owner, towns, port_tiles, touched=None):
     """[(serious, message)] for towns {region: xy} and ports {region: xy} on the map owner (owner_of) gives:
     another region in a town's ring (serious on Medieval II, a warning on Rome), a port in a town's ring
-    (Medieval II only). touched = (tiles, regions): only problems this edit makes - a ring tile or port among
+    (Medieval II only, a warning). touched = (tiles, regions): only problems this edit makes - a ring tile or port among
     the tiles, or a town / port of the regions (None: every problem, for Check mod)."""
     from .limits import game_kind
     m2 = game_kind(mod) == "medieval2"
@@ -187,8 +187,11 @@ def ring_problems(mod, campaign, owner, towns, port_tiles, touched=None):
             for n in near:
                 pr = port_at.get(n)
                 if pr and (touched is None or mine or pr in regs or n in tiles):
-                    out.append((True, "the port of %s stands next to the town of %s - Medieval II takes no port "
-                                      "inside a town's 3 x 3" % (pr, r)))
+                    # a warning, not a fault: vanilla M2TW's own norman_prologue has two (Marseille, Venice) and
+                    # plays - only its imperial campaign never does it
+                    out.append((False, "the port of %s stands next to the town of %s - vanilla Medieval II's grand "
+                                       "campaign never puts a port inside a town's 3 x 3 (its prologue does)"
+                                       % (pr, r)))
     return out
 
 
