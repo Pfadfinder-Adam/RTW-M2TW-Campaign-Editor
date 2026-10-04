@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Select on the Map: a box round many things at once, as in a strategy game** (both games; replaces Pick towns):
+  tick **Select**, choose in **what...** the kinds (towns, armies, agents, fleets, resources, forts), drag a box with
+  the left button (Shift adds) or click things; a right click gives the towns to another faction, adds a building
+  or garrisons to them all, or takes the characters, resources and forts off the map (a leader, heir or family man
+  stays, named). One Undo takes the job back; the right button drags the map meanwhile.
 - **The town window has the Buildings and Garrison editors of the main window** (both games, any owner, the Map
   editor too): a double click on a town opens its owner, level and population with the Buildings tab's editor (the
   game's pictures, a level per chain); **Garrison** switches the same window to the Units & armies card picker

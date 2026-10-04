@@ -1,5 +1,5 @@
 """Regions picked on the campaign map (a tester: lists of regions are picked faster on the map): the map in a window
-of its own in 'Pick towns' mode - only the ground, a click on a town picks its region (yellow), again unpicks it."""
+of its own in 'Select' mode - only the ground, a click on a town picks its region (yellow), again unpicks it."""
 
 import tkinter as tk
 from tkinter import messagebox, ttk

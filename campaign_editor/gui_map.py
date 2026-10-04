@@ -41,6 +41,11 @@ def view_of(base, box, size, resample, field=(0, 0, 0)):
     return out
 
 
+# what the box selects, and whether each is ticked at first
+SELECT_KINDS = (("towns", True), ("armies", True), ("agents", True), ("fleets", True), ("resources", False),
+                ("forts", False))
+
+
 class MapView(ttk.Frame):
     def __init__(self, master, status=None, on_layers=None):
         super().__init__(master)
@@ -117,14 +122,26 @@ class MapView(ttk.Frame):
         ttk.Checkbutton(lbar, text="Edit regions", variable=self.v_regions,
                         command=self._regions_toggled).pack(side="left", padx=(12, 4))
         ttk.Checkbutton(lbar, text="Edit resources", variable=self.v_res, command=relayer).pack(side="left", padx=4)
-        # Pick towns: the ground only, a click picks / unpicks a town (yellow), a right click acts on them all
+        # Select (as in a strategy game): drag a box with the left button - everything of the ticked kinds inside is
+        # selected (Shift adds to it), a click selects / unselects one thing, a right click acts on them all; the
+        # right button drags the map meanwhile. Towns picked show yellow on the ground alone.
         self.v_pick = tk.BooleanVar(value=False)
         self.picked, self.on_pick_menu, self._before_pick = set(), None, None
+        self.sel_chars, self.sel_res, self._box = set(), set(), None
+        self.v_sel = {k: tk.BooleanVar(value=on) for k, on in SELECT_KINDS}
         from .gui_util import tip
-        tip(ttk.Checkbutton(lbar, text="Pick towns", variable=self.v_pick, command=self._pick_toggled),
-            "Pick towns for one job: the map shows the ground only, a click on a town picks it (yellow) or "
-            "unpicks it, a right click: add a building to all picked towns, give them garrisons, pick every "
-            "town of an owner.").pack(side="left", padx=4)
+        tip(ttk.Checkbutton(lbar, text="Select", variable=self.v_pick, command=self._pick_toggled),
+            "Select things on the map, as in a strategy game: drag a box with the left button - everything of the "
+            "kinds ticked in 'what...' inside it is selected (hold Shift to add to it); a click selects or "
+            "unselects one; a right click acts on them all (a building, garrisons or another owner for the towns, "
+            "the characters or resources taken off the map). The right button drags the map meanwhile.").pack(
+            side="left", padx=(4, 0))
+        mb = ttk.Menubutton(lbar, text="what...")
+        menu = tk.Menu(mb, tearoff=0)
+        for k, _ in SELECT_KINDS:
+            menu.add_checkbutton(label=k, variable=self.v_sel[k], command=self._sel_kinds_changed)
+        mb["menu"] = menu
+        mb.pack(side="left", padx=(2, 4))
         self.lbl_layers = ttk.Label(lbar, text="", foreground="#666")
         self.lbl_layers.pack(side="left", padx=8)
         for v in (self.v_pol, self.v_borders, self.v_names, self.v_ports, self.v_chars, self.v_res, self.v_dip,
@@ -303,45 +320,126 @@ class MapView(ttk.Frame):
         self.lbl_layers.configure(text="shown: " + (", ".join(on) or "the ground only"))
 
     def _pick_toggled(self):
-        """Pick towns on: the political colours, borders and characters go (the ground only) and come back after."""
+        """Select on: the political colours and borders go (picked towns show yellow on the ground), the characters,
+        resources and forts show as their kinds are ticked; all comes back as it was after."""
         if self.v_pick.get():
             if self.v_regions.get():
                 self.v_regions.set(False)
                 self._regions_toggled()
-            self._before_pick = (self.v_mode.get(), self.v_borders.get(), self.v_chars.get())
+            self._before_pick = (self.v_mode.get(), self.v_borders.get(), self.v_chars.get(), self.v_res.get(),
+                                 self.v_forts.get())
             self.v_mode.set("none")
             self.v_borders.set(False)
-            self.v_chars.set(False)
+            self._show_sel_kinds()
             self._mode_changed(redraw=False)
-            self.readout.configure(text="Pick towns: click towns to pick them (yellow), then a right click")
+            self.readout.configure(text="Select: drag a box with the left button (Shift adds), or click things; "
+                                        "then a right click")
         elif self._before_pick:
-            mode, borders, chars = self._before_pick
+            mode, borders, chars, res, forts = self._before_pick
             self._before_pick = None
             self.v_mode.set(mode)
             self.v_borders.set(borders)
             self.v_chars.set(chars)
+            self.v_res.set(res)
+            self.v_forts.set(forts)
             self._mode_changed(redraw=False)
-        if not self.v_pick.get() and self.picked:        # Pick towns off: every town unpicked (a tester)
-            self.picked = set()
-            self.readout.configure(text="Pick towns off - no town picked")
+        if not self.v_pick.get() and (self.picked or self.sel_chars or self.sel_res):   # off: nothing stays picked
+            self.picked, self.sel_chars, self.sel_res = set(), set(), set()
+            self.readout.configure(text="Select off - nothing selected")
         self._relayer()
+
+    def _show_sel_kinds(self):
+        """The layers the ticked kinds need: characters, resources, forts."""
+        self.v_chars.set(any(self.v_sel[k].get() for k in ("armies", "agents", "fleets")))
+        self.v_res.set(self.v_sel["resources"].get())
+        self.v_forts.set(self.v_sel["forts"].get() or bool(self._before_pick and self._before_pick[4]))
+
+    def _sel_kinds_changed(self):
+        """A kind unticked: what of it was selected is dropped; in Select its layer follows."""
+        if not self.v_sel["towns"].get():
+            self.picked = set()
+        self.sel_chars = {c for c in self.sel_chars if self._char_kind(c) and self.v_sel[self._char_kind(c)].get()}
+        self.sel_res = {r for r in self.sel_res if self.v_sel["forts" if r[:1] in ("f", "g") else "resources"].get()}
+        if self.v_pick.get():
+            self._show_sel_kinds()
+            self._relayer()
+        self._picked_changed()
+
+    def _char_kind(self, cid):
+        """'armies' / 'agents' / 'fleets' of a character's id (None: not one on the map)."""
+        ch_ = next((c for c in self.chars if c["id"] == cid), None)
+        if ch_ is None:
+            return None
+        if ch_["kind"] in ("admiral", "fleet"):
+            return "fleets"
+        return "armies" if ch_.get("army") else "agents"
+
+    def select_box(self, a, b, add=False):
+        """Everything of the ticked kinds whose tile lies between screen points a and b (a box dragged with the
+        left button); add: kept with what was selected before (Shift)."""
+        (x0, y0), (x1, y1) = self.to_tile(*a), self.to_tile(*b)
+        lo_x, hi_x, lo_y, hi_y = min(x0, x1), max(x0, x1), min(y0, y1), max(y0, y1)
+
+        def inside(xy):
+            return lo_x <= xy[0] <= hi_x and lo_y <= xy[1] <= hi_y
+        if not add:
+            self.picked, self.sel_chars, self.sel_res = set(), set(), set()
+        if self.v_sel["towns"].get() and self.cmap:
+            self.picked |= {r for r, xy in self.cmap.cities.items()
+                            if r in self.owners and inside(self.places.get(("city", r), xy))}
+        for c in self.chars:
+            k = self._char_kind(c["id"])
+            if k and self.v_sel[k].get() and c.get("xy") and inside(tuple(c["xy"])):
+                self.sel_chars.add(c["id"])
+        for r in self.resources:
+            kind = "forts" if r["id"][:1] in ("f", "g") else "resources"
+            if self.v_sel[kind].get() and inside(tuple(r["xy"])):
+                self.sel_res.add(r["id"])
+        self._picked_changed()
+
+    def _click_select(self, sx, sy):
+        """A click in Select (no box): the character, resource / fort or town under it selected or unselected."""
+        cid = self._char_under(sx, sy)
+        if cid is not None and self._char_kind(cid) and self.v_sel[self._char_kind(cid)].get():
+            self.sel_chars ^= {cid}
+            return self._picked_changed()
+        rid = self._res_under(sx, sy)
+        if rid is not None and self.v_sel["forts" if rid[:1] in ("f", "g") else "resources"].get():
+            self.sel_res ^= {rid}
+            return self._picked_changed()
+        town = self._town_under(sx, sy)
+        if town and self.v_sel["towns"].get():
+            self.toggle_pick(town[0])
+
+    def selected_count(self):
+        return len(self.picked) + len(self.sel_chars) + len(self.sel_res)
+
+    def _sel_marks(self):
+        """A yellow frame round each selected character, resource and fort."""
+        c = self.canvas
+        for tag in ["char:%s" % x for x in self.sel_chars] + ["res:%s" % x for x in self.sel_res]:
+            box = c.bbox(tag)
+            if box:
+                c.create_rectangle(box[0] - 2, box[1] - 2, box[2] + 2, box[3] + 2, outline="#ffd400", width=2,
+                                   tags=("selmark",))
 
     def toggle_pick(self, region):
         self.picked ^= {region}
         self._picked_changed()
 
     def pick_many(self, regions):
-        """Pick these towns too (None: unpick all)."""
+        """Pick these towns too (None: unpick all - the characters and resources selected too)."""
         if regions is None:
-            self.picked = set()
+            self.picked, self.sel_chars, self.sel_res = set(), set(), set()
         else:
             self.picked |= set(regions)
         self._picked_changed()
 
     def _picked_changed(self):
         self.render()
-        self.readout.configure(text="%d town(s) picked - a right click: a building or garrisons for them all"
-                               % len(self.picked))
+        self.readout.configure(text="selected: %d town(s), %d character(s), %d resource(s) / fort(s) - a right "
+                                    "click acts on them all" % (len(self.picked), len(self.sel_chars),
+                                                                len(self.sel_res)))
 
     def _regions_toggled(self):
         """Regions mode colours the land by region: the political colours and the
@@ -647,6 +745,8 @@ class MapView(ttk.Frame):
         if self.v_grid.get() and self.z >= 10:
             self._grid(cw, ch)
         self._markers(cw, ch)
+        if self.v_pick.get() and (self.sel_chars or self.sel_res):
+            self._sel_marks()
         key = (tuple(sorted({r["kind"] for r in self.resources})), self.v_res.get(), self.v_forts.get(),
                tuple(self.tint_legend) if self.tint is not None else None, tuple(sorted(self.tools)), self.tool,
                tuple(self.res_types))
@@ -1436,6 +1536,14 @@ class MapView(ttk.Frame):
     def _press(self, e, icons=False):
         # a right click that does not move opens the menu of what can be done there (see _release)
         self._menu_press = (e.x, e.y) if getattr(e, "num", None) == 3 and not self.region_mode else None
+        if self.v_pick.get() and self.cmap and not self.region_mode and not self.on_place:
+            if not icons:                                 # Select: the left button draws a box (Shift adds)
+                self._box = [e.x, e.y, False, bool(getattr(e, "state", 0) & 0x1)]
+                return
+            cid = self._char_under(e.x, e.y)
+            if cid is None or cid not in self.draggable:  # the right button on nothing drags the map
+                self._drag = (e.x, e.y, self.ox, self.oy, False)
+                return
         if self.region_mode and self.cmap:
             if not icons and not self.on_place:           # left: paint
                 if getattr(self, "on_stroke", None):
@@ -1500,6 +1608,14 @@ class MapView(ttk.Frame):
         c.itemconfigure("bg", image=self._photo)
 
     def _move(self, e):
+        if self._box:
+            x0, y0, moved, add = self._box
+            if moved or abs(e.x - x0) + abs(e.y - y0) > 3:
+                self._box[2] = True
+                self.canvas.delete("selbox")
+                self.canvas.create_rectangle(x0, y0, e.x, e.y, outline="#ffd400", dash=(4, 3), width=2,
+                                             tags=("selbox",))
+            return
         if self._spray:
             self._spray = (e.x, e.y)
             return
@@ -1563,6 +1679,15 @@ class MapView(ttk.Frame):
                 self._pending = self.after(15, self._pan)
 
     def _release(self, e):
+        if self._box:
+            x0, y0, moved, add = self._box
+            self._box = None
+            self.canvas.delete("selbox")
+            if moved:
+                self.select_box((x0, y0), (e.x, e.y), add=add)
+            else:
+                self._click_select(e.x, e.y)
+            return
         if self._spray:
             self._spray = None
             self.render()
@@ -1648,10 +1773,8 @@ class MapView(ttk.Frame):
             self.place_at(self.to_tile(e.x, e.y))
             return
         hit = self.canvas.find_overlapping(e.x - 2, e.y - 2, e.x + 2, e.y + 2)
-        if self.v_pick.get():
-            town = self._town_under(e.x, e.y)
-            if town:
-                self.toggle_pick(town[0])
+        if self.v_pick.get():                           # (a double click's second press comes here)
+            self._click_select(e.x, e.y)
             return
         for item in reversed(hit):
             for tag in self.canvas.gettags(item):

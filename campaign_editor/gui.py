@@ -54,7 +54,7 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   change the campaign map ....... Map tab (move towns and ports, paint regions, resources)
                                   and the Terrain editor (ground, rivers, climates, heights)
   a building / garrisons in many  Many towns... (top row), or the Map:
-    towns at once ............... Pick towns, click towns (yellow), right click
+    towns at once ............... Select, drag a box (left button), right click
   change a unit or a building ... Unit editor / Building editor
   make a new unit or building ... Unit / Building editor: New unit (New building) step by step...
   change a unit's look .......... Unit editor: Battle model - View in 3D..., Replace model...
@@ -977,7 +977,7 @@ class App(tk.Tk):
         from .gui_util import tip
         tip(ttk.Button(side, text="Many towns at once...", command=lambda: self.mass_towns()),
             "Add a building to many towns of any owner at once (or take one out), or give them garrisons - "
-            "towns picked by owner, level, city / castle. Also on the Map: 'Pick towns', then a right click.").pack(
+            "towns picked by owner, level, city / castle. Also on the Map: 'Select', a box, then a right click.").pack(
             side="bottom", anchor="w", pady=(4, 2))
         self.lb_build = tk.Listbox(side, width=30, height=12, exportselection=False)
         self.lb_build.pack(fill="both", expand=True)
@@ -2937,7 +2937,7 @@ class App(tk.Tk):
                 ulines = [l for l in lines if tokens(l)[:1] == ["unit"]]
                 chars.append({"id": cid, "faction": fb.name, "name": c.name, "kind": c.kind, "xy": xy,
                               "army": army, "units": len(ulines), "unit_names": [unit_name(l) for l in ulines],
-                              "from": c.xy, "named": bool(c.named)})
+                              "from": c.xy, "named": bool(c.named), "role": c.role})
                 if army:
                     armies_at.add(xy)
         from .start import KINDS
@@ -4165,10 +4165,25 @@ class App(tk.Tk):
             messagebox.showerror(APP, "Could not read the pictures: %s" % e)
 
     def pick_menu(self, picked, region):
-        """The Map's right-click menu while 'Pick towns' is on."""
+        """The Map's right-click menu while 'Select' is on: for the selected towns, characters, resources and forts."""
         mv = self.map_view
         n = len(picked)
         items = []
+        nc, nr = len(mv.sel_chars), len(mv.sel_res)
+        if n:
+            from .gui_mapadd import factions_here
+            names = self.shown_names()
+            items.append(("Give the %d selected town(s) to" % n,
+                          [(("%s - %s" % (f, names[f]) if names.get(f) else f), lambda f=f: self.give_towns(picked, f))
+                           for f in factions_here(self)]))
+        if nc:
+            items.append(("Delete the %d selected character(s) from the map (armies too)" % nc,
+                          lambda: self.delete_selected_chars(set(mv.sel_chars))))
+        if nr:
+            items.append(("Delete the %d selected resource(s) / fort(s) from the map" % nr,
+                          lambda: self.delete_selected_res(set(mv.sel_res))))
+        if n or nc or nr:
+            items.append((None, None))
         if region:
             town = self._cmap.info.get(region, {}).get("settlement", region) if self._cmap else region
             owner = mv.owners.get(region)
@@ -4184,8 +4199,78 @@ class App(tk.Tk):
                       (lambda: self.mass_towns(sorted(picked), "garrison")) if n else None))
         items.append(("City / castle and level for the %d picked town(s)..." % n,
                       (lambda: self.mass_towns(sorted(picked), "town")) if n else None))
-        items.append(("Unpick all", (lambda: mv.pick_many(None)) if n else None))
+        items.append(("Unselect all", (lambda: mv.pick_many(None)) if n or nc or nr else None))
         return items
+
+    def give_towns(self, regions, faction):
+        """The selected towns go to faction with the next Apply (one Undo step)."""
+        from .gui_mapadd import give_town
+        self.remember()
+        keep, self.remember = self.remember, lambda: None          # one Undo step for all of them
+        try:
+            for r in sorted(regions):
+                give_town(self, r, faction)
+        finally:
+            self.remember = keep
+        self.status.set("%d town(s) go to %s with the next Apply - Preview first; Undo brings them back."
+                        % (len(regions), faction))
+
+    def delete_selected_chars(self, cids):
+        """The selected characters off the map with the next Apply: another faction's (or any in the Map editor)
+        as one line each, the ones placed here and not written yet simply dropped. The edited faction's own are
+        left (Units & armies takes them off)."""
+        self.remember()
+        chars = getattr(self, "_map_chars", None) or {}
+        gone, kept = 0, 0
+        for cid in sorted((c for c in cids if str(c).startswith("map:")), key=lambda c: -int(str(c).split(":")[2])):
+            _, fac, k = str(cid).split(":")
+            if int(k) < len(self.map_chars.get(fac, [])):
+                self.map_chars[fac].pop(int(k))
+                gone += 1
+        me = self.field_faction() if not self.map_only() else None
+        needed = []                                  # a leader / heir, a man on the family tree: Apply refuses them
+
+        def on_tree(ch):
+            fb = self.strat.faction(ch["faction"]) if self.strat and ch.get("named") else None
+            return bool(fb) and any(tokens(t)[:1] == ["relative"] and ch["name"] in t
+                                    for t in self.strat.lines[fb.start:fb.end])
+        for cid in cids:
+            if str(cid).startswith(("map:", "new:")):
+                kept += str(cid).startswith("new:")
+                continue
+            ch = chars.get(cid)
+            if not ch or (me and ch["faction"] == me):
+                kept += 1
+                continue
+            if ch.get("role") or on_tree(ch):
+                needed.append("%s (%s's %s)" % (ch["name"], ch["faction"], ch.get("role") or "family"))
+                continue
+            self.map_moves.pop(cid, None)
+            self.map_units.pop(cid, None)
+            self.map_removed.setdefault(ch["faction"], []).append({"name": ch["name"], "from": list(ch["from"])})
+            gone += 1
+        self.map_view.sel_chars = set()
+        self.status.set("%d character(s) go with the next Apply%s%s - Preview first; Undo brings them back." % (
+            gone, " (%d of the faction you edit left: take them off on Units & armies)" % kept if kept else "",
+            "; left on the map, the faction needs them: %s%s" % (", ".join(needed[:4]), " ..." if len(needed) > 4
+                                                                 else "") if needed else ""))
+        self._mark_work()
+        self.show_map()
+
+    def delete_selected_res(self, rids):
+        """The selected resources, forts, watchtowers and wonders off the map (the added ones last first, their
+        numbers do not shift)."""
+        self.remember()
+        keep, self.remember = self.remember, lambda: None
+        try:
+            for rid in sorted(rids, key=lambda r: (r[:1] not in ("g", "n"), -int(r[1:]))):
+                self._res_sel = rid
+                self.res_delete()
+        finally:
+            self.remember = keep
+        self.map_view.sel_res = set()
+        self.status.set("%d resource(s) / fort(s) go with the next Apply - Preview first; Undo brings them back."
+                        % len(rids))
 
     def town_window(self, region):
         """The town's own window (gui_town): owner, city / castle, level, population, buildings."""
