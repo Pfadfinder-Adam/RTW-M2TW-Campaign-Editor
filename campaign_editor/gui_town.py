@@ -1,6 +1,7 @@
 """A town's own window, straight from the Map (a double click on a town, or the right click's 'This town...'), both
-games: its owner (hand it to another faction), city or castle (Medieval II), level, population, its buildings (add,
-raise, take out - checked the way the game would) and the garrison it holds (shown; changed in Edit faction).
+games, any owner (the Map editor too): its owner (hand it to another faction), city or castle (Medieval II), level,
+population, and - switched in the same window - its buildings (the Buildings tab's own editor: the pictures, a click
+builds a level) and its garrison (the Units & armies tab's card picker; a named character keeps his bodyguard).
 Preview / Write it in with a backup like every write; the writing is masstown.apply - the same one place the 'many
 towns at once' window uses, so one town and many follow the same rules."""
 
@@ -19,8 +20,8 @@ class TownWindow(tk.Toplevel):
         super().__init__(app)
         self.app = app
         self.transient(app)
-        self.geometry("880x680")
-        self.minsize(640, 520)
+        self.geometry("980x860")
+        self.minsize(720, 600)
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.body = ttk.Frame(self, padding=10)
         self.body.pack(fill="both", expand=True)
@@ -42,14 +43,13 @@ class TownWindow(tk.Toplevel):
             return
         self.town = town
         self.known = MT.known_buildings(self.mod)
-        self.build, self.remove = {}, set()                 # {chain: level} to add / raise; chains to take out
         self.title("%s - %s (%s)" % (TITLE, town["name"], region))
         b = self.body
         ShortHint(b, text=(
             "This town as the campaign starts: its owner, its size and its buildings. Changes are checked the way the "
             "game checks them (a level the town is too small for, a castle-only building in a city, one temple per "
-            "town...). Preview shows every line, Write it in makes a backup first - Tools > Restore undoes it. The "
-            "garrison and the characters in the town are changed in Edit faction (the button below).")).pack(
+            "town...). Buildings and Garrison switch this window between the two (as the Buildings and Units & armies "
+            "tabs look). Preview shows every line, Write it in makes a backup first - Tools > Restore undoes it.")).pack(
             fill="x", pady=(0, 6))
         top = ttk.LabelFrame(b, text="%s  (%s)" % (town["name"], region), padding=8)
         top.pack(fill="x")
@@ -82,114 +82,121 @@ class TownWindow(tk.Toplevel):
         ttk.Entry(top, textvariable=self.v_pop, width=10).grid(row=row, column=1, sticky="w", padx=4, pady=2)
         from . import settings as _settings
         self.v_follow = tk.BooleanVar(value=_settings.get("level_follows_population", True) is not False)
-        ttk.Checkbutton(top, variable=self.v_follow, text="the level follows the population (grows with its "
-                        "governor's building when the people do not fit)",
+        ttk.Checkbutton(top, variable=self.v_follow, text="the level follows the population",
                         command=lambda: _settings.put("level_follows_population", bool(self.v_follow.get()))).grid(
             row=row, column=2, sticky="w", padx=8)
         row += 1
         ttk.Label(top, foreground="#666", wraplength=520, justify="left",
                   text="Each level holds a range of people at the start (a village 400 - 1500, a town up to 3500, a "
                        "large town 9000, a city 18000...): outside it the game stops reading the campaign file. "
-                       "Unticked, the population is cut to the level's range.").grid(
+                       "Ticked, the town grows with its governor's building when the people do not fit; unticked, "
+                       "the population is cut to the level's range.").grid(
             row=row, column=1, columnspan=2, sticky="w", padx=4)
 
-        mid = ttk.LabelFrame(b, text="Buildings", padding=8)
-        mid.pack(fill="both", expand=True, pady=6)
-        self.tv = ttk.Treeview(mid, columns=("chain", "level", "what"), show="headings", height=9,
-                               selectmode="browse")
-        for c, t, w in (("chain", "building", 200), ("level", "level", 180), ("what", "", 260)):
-            self.tv.heading(c, text=t)
-            self.tv.column(c, width=w, stretch=c == "what")
-        self.tv.pack(fill="both", expand=True)
-        add = ttk.Frame(mid)
-        add.pack(fill="x", pady=(6, 0))
-        chains = sorted(c for c in self.known if not MT.is_core(c))
-        self.v_chain, self.v_blevel = tk.StringVar(), tk.StringVar()
-        cb = ttk.Combobox(add, textvariable=self.v_chain, values=chains, width=28)
-        cb.pack(side="left")
-        cb.bind("<<ComboboxSelected>>", lambda e: self._levels())
-        self.cb_blevel = ttk.Combobox(add, textvariable=self.v_blevel, state="readonly", width=24)
-        self.cb_blevel.pack(side="left", padx=4)
-        ttk.Button(add, text="Add / raise", command=self.add_building).pack(side="left")
-        ttk.Button(add, text="Take out", command=self.take_out).pack(side="left", padx=4)
-        self.lbl_why = ttk.Label(mid, foreground="#a33", text="", wraplength=680)
-        self.lbl_why.pack(anchor="w")
-
-        gar = ttk.LabelFrame(b, text="Garrison", padding=8)
-        gar.pack(fill="x")
-        units = town.get("unit_names") or []
-        ttk.Label(gar, wraplength=680, justify="left", text=(
-            "%s holds the town with %d unit(s): %s" % (town.get("army") or "An army", len(units), ", ".join(units))
-            if units else "No army in the town.")).pack(anchor="w")
+        # the town's buildings and its garrison in ONE window, switched by the two buttons - each looks exactly as
+        # its tab of the main window (Buildings; Units & armies), and nothing jumps to the main window
+        sw = ttk.Frame(b)
+        sw.pack(fill="x", pady=(6, 0))
+        self.v_view = tk.StringVar(value="buildings")
+        for key, text in (("buildings", "Buildings"), ("garrison", "Garrison")):
+            ttk.Radiobutton(sw, text=text, value=key, variable=self.v_view, style="Toolbutton",
+                            command=self.show_view).pack(side="left", padx=(0, 4))
+        self.lbl_view = ttk.Label(sw, foreground="#666", text="")
+        self.lbl_view.pack(side="left", padx=8)
+        self.views = ttk.Frame(b)
+        self.views.pack(fill="both", expand=True, pady=6)
+        from .gui_buildings import BuildingsEditor
+        from .gui_garrison import GarrisonEditor
+        self.bed = BuildingsEditor(self.views, self.app.pictures)
+        self.ged = GarrisonEditor(self.views, pictures=self.app.pictures)
+        self.picked = None                                  # the buildings as picked here, None = as the file has
+        self.garrison = None                                # the garrison as picked here, None = as it stands
+        self.load_buildings()
+        self.load_garrison()
+        self.v_owner.trace_add("write", lambda *a: self._owner_changed())
+        self.v_level.trace_add("write", lambda *a: self.v_level.get() and self.bed.buildings is not None and
+                               self.bed.set_level(self.v_level.get()))
         bar = ttk.Frame(b)
-        bar.pack(fill="x", pady=(8, 0))
-        ttk.Button(bar, text="Garrison and characters in Edit faction...", command=self.to_edit).pack(side="left")
+        bar.pack(side="bottom", fill="x", pady=(4, 0), before=self.views)
+        self.lbl_why = ttk.Label(b, foreground="#a33", text="", wraplength=760, justify="left")
+        self.lbl_why.pack(side="bottom", anchor="w", before=self.views)
         ttk.Button(bar, text="Close", command=self.close).pack(side="right")
         ttk.Button(bar, text="Write it in", command=self.write).pack(side="right", padx=4)
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
-        self.fill()
+        self.show_view()
 
-    def fill(self):
-        self.tv.delete(*self.tv.get_children())
-        have = dict(self.town["buildings"])
-        for chain, level in self.town["buildings"]:
-            what = "goes" if chain in self.remove else \
-                ("-> %s" % self.build[chain]) if chain in self.build else \
-                ("follows the level" if MT.is_core(chain) else "")
-            self.tv.insert("", "end", iid=chain, values=(chain, level, what))
-        for chain, level in self.build.items():
-            if chain not in have:
-                self.tv.insert("", "end", iid=chain, values=(chain, level, "new"))
-
-    def _levels(self):
-        b = self.known.get(self.v_chain.get())
-        names = [l.name for l in b.levels] if b else []
-        self.cb_blevel["values"] = names
-        self.v_blevel.set(names[0] if names else "")
-
-    def _as_now(self):
-        """The town as it will be with the kind / level picked (a building is checked against the new size)."""
-        t = dict(self.town)
-        if self.v_kind.get() and t.get("kind") is not None:
-            t["kind"] = self.v_kind.get()
-        t["level"] = self.v_level.get() or t["level"]
-        t["owner"] = self.v_owner.get() or t["owner"]
-        t["buildings"] = [(c, self.build.get(c, l)) for c, l in t["buildings"] if c not in self.remove] + \
-            [(c, l) for c, l in self.build.items() if c not in dict(t["buildings"])]
-        return t
-
-    def add_building(self):
-        chain, level = self.v_chain.get().strip(), self.v_blevel.get()
-        if not chain or not level:
-            self.lbl_why.configure(text="Pick a building and its level.")
-            return
-        town = self._as_now()
-        town["buildings"] = [(c, l) for c, l in town["buildings"] if not (c == chain and chain in self.build)]
-        what, why = MT.building_fit(self.known, town, chain, level, mode="set")
-        if what == "skip":
-            self.lbl_why.configure(text="%s %s: %s" % (chain, level, why))
-            return
-        self.remove.discard(chain)
-        self.build[chain] = level
-        self.lbl_why.configure(text="")
-        self.fill()
-
-    def take_out(self):
-        sel = self.tv.selection()
-        if not sel:
-            self.lbl_why.configure(text="Pick a building in the list.")
-            return
-        chain = sel[0]
-        if MT.is_core(chain):
-            self.lbl_why.configure(text="The governor's building follows the town's level - change the level instead.")
-            return
-        if chain in self.build and chain not in dict(self.town["buildings"]):
-            self.build.pop(chain)
+    # ---- the two views ----
+    def show_view(self):
+        for w in (self.bed, self.ged):
+            w.pack_forget()
+        if self.v_view.get() == "garrison":
+            self.ged.pack(fill="both", expand=True)
+            t = self.town
+            self.lbl_view.configure(text=("the army in the town: %s%s" % (t.get("army") or "a captain",
+                                    " (his bodyguard stays)" if t.get("army_named") else "")) if t.get("army")
+                                    else "nobody holds the town: units picked here get a captain")
         else:
-            self.build.pop(chain, None)
-            self.remove.add(chain)
-        self.lbl_why.configure(text="")
-        self.fill()
+            self.bed.pack(fill="both", expand=True)
+            self.lbl_view.configure(text="click a level to build it; the governor's building follows the level")
+
+    def _owner(self):
+        return self.v_owner.get() or self.town["owner"]
+
+    def load_buildings(self):
+        from .buildings import BuildingPictures, castles_allowed, read_buildings
+        if getattr(self.app, "_edb_for", None) == self.mod.data and getattr(self.app, "_edb", None) is not None:
+            edb, bpics = self.app._edb, self.app._bpics
+        else:
+            edb = read_buildings(self.mod.load(self.mod.file("edb"))) if self.mod.file("edb") else []
+            bpics = BuildingPictures(self.mod)
+        self.edb = edb
+        t, owner = self.town, self._owner()
+        castles = castles_allowed(self.mod, self.known)
+
+        def changed(picked):
+            self.picked = None if picked is None else [tuple(x) for x in picked]
+            core = next(((c, lv) for c, lv in (picked or []) if MT.is_core(c)), None)
+            have = next(((c, lv) for c, lv in t["buildings"] if MT.is_core(c)), None)
+            if core and core != have and core[1] not in (None, "-"):     # a governor's building picked: its level
+                from .buildings import core_settlement
+                b = self.known.get(core[0])
+                lvl = core_settlement(b, core[1]) if b else None
+                if lvl:
+                    self.v_level.set(lvl)
+            self.lbl_why.configure(text="")
+        self.bed.load(self.region, self.v_level.get() or t["level"], edb, t["buildings"], self.picked,
+                      self.mod.culture(owner), owner, owner, bpics, changed,
+                      kind=(self.v_kind.get() or t.get("kind") or "city") if castles else None,
+                      on_kind=lambda k: self.v_kind.set(k))
+
+    def load_garrison(self):
+        from .units import faction_units
+        t, owner = self.town, self._owner()
+        named = t.get("army_named")
+        now = list(t.get("unit_names") or [])
+        now = now[1:] if named else now                    # without the bodyguard
+        units = faction_units(self.mod, owner, mercs=True)
+        units = self.app._with_types(units, now) if hasattr(self.app, "_with_types") else units
+
+        def changed(types):
+            if getattr(self.ged, "cleared", False):            # 'Automatic': back to the town as it stands
+                self.garrison = None
+                self.after_idle(self.load_garrison)
+            else:
+                self.garrison = list(types)
+            self.lbl_why.configure(text="")
+        def suggest():                                  # the units the town's owner trains, under a sensible upkeep
+            import random
+            pool = MT.town_pool(self.mod, t, MT.garrison_pool(self.mod, owner))
+            return MT.random_garrison(pool, 3, 6, 2000, random.Random())
+        self.ged.load(self.mod, owner, "%s (%s)" % (t["name"], self.region), units,
+                      self.garrison if self.garrison is not None else now, changed, auto=suggest,
+                      held=(t.get("army_role") or True) if named else False, unchanged=self.garrison is None)
+
+    def _owner_changed(self):
+        """Another owner: the buildings it may build and the units it may have are its own."""
+        self.load_buildings()
+        self.load_garrison()
 
     # ---- writing ----
     def changes(self):
@@ -213,10 +220,32 @@ class TownWindow(tk.Toplevel):
             opts["owners"] = {r: self.v_owner.get()}
         return opts
 
+    def building_changes(self):
+        """([(chain, level)] to build or raise, [chain] to take out) - the editor's pick against the town's own
+        buildings; the governor's building is left to the level (it follows it)."""
+        if self.picked is None:
+            return [], []
+        own = dict(self.town["buildings"])
+        want = {c: lv for c, lv in self.picked if lv not in (None, "-", "")}
+        builds = [(c, lv) for c, lv in want.items() if own.get(c) != lv and not MT.is_core(c)]
+        removes = sorted(c for c in own if c not in want and not MT.is_core(c))
+        return builds, removes
+
     def _plan(self):
         opts = self.changes()
         plan = Plan(self.mod, "town", self.region, {})
-        builds = list(self.build.items())
+        builds, removes = self.building_changes()
+        for chain, lv in builds:                      # checked the way the game checks it (size, kind, one temple)
+            town = dict(self.town, level=self.v_level.get() or self.town["level"])
+            if self.v_kind.get() and town.get("kind") is not None:
+                town["kind"] = self.v_kind.get()
+            town["buildings"] = [(c, l) for c, l in town["buildings"] if c != chain]
+            what, why = MT.building_fit(self.known, town, chain, lv, mode="set")
+            if what == "skip":
+                raise ValueError("%s %s: %s" % (chain, lv, why))
+        self.remove = set(removes)
+        if self.garrison is not None:
+            opts["garrisons"] = {self.region: list(self.garrison)}
         base = {k: v for k, v in opts.items() if k not in ("build", "owners")}
         if base or builds or self.remove:
             first = dict(base)
@@ -266,11 +295,6 @@ class TownWindow(tk.Toplevel):
         self.app.load()
         self.app.status.set("%s written (backup %s)." % (self.town["name"], bdir))
         self.load(self.region)
-
-    def to_edit(self):
-        region = self.region
-        self.close()
-        self.app.open_town(region)
 
     def close(self):
         if getattr(self.app, "_town_window", None) is self:

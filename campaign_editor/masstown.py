@@ -51,7 +51,10 @@ def towns(mod, campaign):
                         "kind": settlement_kind(lines) if castles else None, "buildings": items,
                         "units": len(units), "upkeep": sum(upkeep.get(u, 0) for u in units),
                         "port": st.region in port, "unit_names": units, "population": population_of(lines),
-                        "army": army.name if army else None})
+                        "army": army.name if army else None,
+                        # a named character holds it: his first unit is his bodyguard (kept by any garrison change)
+                        "army_named": bool(army and army.named), "army_role": (army.role or "general") if army and
+                        army.named else None})
     return out
 
 

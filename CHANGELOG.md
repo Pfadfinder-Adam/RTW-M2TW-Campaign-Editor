@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **The town window has the Buildings and Garrison editors of the main window** (both games, any owner, the Map
+  editor too): a double click on a town opens its owner, level and population with the Buildings tab's editor (the
+  game's pictures, a level per chain); **Garrison** switches the same window to the Units & armies card picker
+  (**Suggest**, a named character keeps his bodyguard). Written with Preview and a backup - nothing jumps to the
+  main window any more.
 - **More of the engines' unit words explained** (Unit editor, the ? beside a unit's line): stun_immune, unstoppable,
   is_knockdown_immune (Rome with REX, Medieval II with M2EX), fearless (Rome with REX), unique_unit (Medieval II
   with M2EX), hp_damage_N (damage per hit) and hardy_N with its number - the words the engines' unit readers take.
