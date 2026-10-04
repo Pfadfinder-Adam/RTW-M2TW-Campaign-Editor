@@ -2803,7 +2803,16 @@ building smith
         f = read_tga(os.path.join(camp, "map_features.tga"))
         self.assertEqual((f.width, f.height), (12, 12))
         rivers = {(x, y) for x in range(12) for y in range(12) if f.get(x, y) == river}
-        self.assertTrue({(1, 1), (2, 1), (3, 1), (4, 1), (7, 4)} <= rivers)
+        self.assertTrue({(1, 1), (7, 4)} <= rivers)                    # its two ends in their blocks' middles
+        self.assertTrue(all((x // 3, y // 3) in {(0, 0), (1, 0), (2, 1), (2, 0), (1, 1)} for x, y in rivers))
+        seen, todo = {(1, 1)}, [(1, 1)]                                # (natural rivers: the bend's point moved)
+        while todo:
+            x, y = todo.pop()
+            for q in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if q in rivers and q not in seen:
+                    seen.add(q)
+                    todo.append(q)
+        self.assertEqual(seen, rivers)                                 # one unbroken river, side by side only
         self.assertFalse(any({(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)} <= rivers
                              for x in range(11) for y in range(11)))                     # never 2 x 2
         self.assertIn("width  12", open(os.path.join(camp, "descr_terrain.txt")).read())

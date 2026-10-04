@@ -872,6 +872,8 @@ def features_scaled(path, land=None, natural=False):
                     paint(px, py, colour)
         ends = sum(1 for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1))
                    if kind(lines.get((x + a, y + b), (0, 0, 0))) == "river")
+        if natural and k == "river":                          # a real end only (a corner link is a link too)
+            ends = 1 if (x, y) in river_ends else 2
         if k == "river" and land is not None and ends <= 1:  # a river's end: on to the new coast / the edge
             for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                 nx, ny = x + dx, y + dy
