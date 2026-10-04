@@ -118,6 +118,9 @@ class CultureNamesTable:
         return out
 
     def fill(self):
+        tv = getattr(self, "tv", None)
+        if tv is None or not tv.winfo_exists():         # a filter's variable written as the window closes
+            return
         cult = self.v_cult.get()
         key = CN.DEFAULT if cult == "every other" else (None if cult == "(all)" else cult)
         show, oc, q = self.v_show.get(), self.v_owner.get(), self.v_q.get().lower().strip()

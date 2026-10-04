@@ -316,6 +316,9 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Buildings and garrisons for many towns / Settlement names by culture: an error when the window was closed** while
+  a filter was being changed ("invalid command name ...treeview") - the lists are no longer filled once the window
+  is gone.
 - **Banner... (Medieval II): the symbol stays on the cloth**: on a pennant whose cloth is not a rectangle (the
   L-shaped small infantry pennant), across the slit of the cavalry banner and on the triangle, the symbol ran past the
   cloth's edge - it now goes on the biggest square of cloth nearest its usual place (still dragged anywhere by hand).

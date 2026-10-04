@@ -295,7 +295,9 @@ class MassTownWindow(tk.Toplevel):
         return "%d unit(s), upkeep %d" % (t["units"], t["upkeep"]) if t["units"] else "none"
 
     def fill_all(self):
-        tv = self.t_all
+        tv = getattr(self, "t_all", None)
+        if tv is None or not tv.winfo_exists():         # a filter's variable written as the window closes
+            return
         tv.delete(*tv.get_children(""))
         n = 0
         for t in self._shown():
