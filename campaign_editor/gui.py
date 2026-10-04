@@ -3426,6 +3426,8 @@ class App(tk.Tk):
             log.write("setup check failed: %s" % e)
             return
         declined = settings.get("fixes_declined") or {}
+        if not isinstance(declined.get(self.mod.data, []), list):      # another version's form
+            declined = dict(declined, **{self.mod.data: []})
         found = [p for p in found if p["id"] not in declined.get(self.mod.data, [])]
         if not found:
             return
@@ -5173,7 +5175,12 @@ class App(tk.Tk):
                     "Undo %d changes, from the newest back to\n%s?" % (n, backup_label(b)))
             if not messagebox.askyesno(APP, text + "\nFiles are put back as they were before it."):
                 return
-            ms = restore_to(self.mod, b)
+            try:
+                ms = restore_to(self.mod, b)
+            except (ValueError, OSError) as e:
+                log.write("Restore stopped: %s" % e)
+                messagebox.showerror(APP, "%s" % e, parent=w)
+                return
             back = sum(len(m["modified"]) for m in ms)
             gone = sum(len(m["created"]) for m in ms)
             log.write("Restored %d backup(s) down to %s: %d file(s) back, %d copied item(s) removed"

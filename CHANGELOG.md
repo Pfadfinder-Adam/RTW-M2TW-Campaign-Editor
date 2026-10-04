@@ -316,6 +316,16 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **The mouse wheel**: a window closed while the mouse was over its list left the wheel pointing at it, and the next
+  turn of the wheel anywhere could raise an error; on a touchpad or a precise mouse the lists of pictures, buildings,
+  diplomacy, editors, the family tree and the garrisons did not scroll at all (a small turn counted as none). One
+  handler now serves the whole window: the area under the mouse scrolls, one step per turn, a list that scrolls
+  itself keeps the wheel, the map keeps its zoom.
+- **Going back to an older version**: settings, backups, a mod folder's mark, Module builder modules and report marks
+  written by a newer version no longer stop this one - a setting of another kind reads as not set, a backup whose
+  record this version cannot read is listed and refused in plain words before anything is put back (Undo back to an
+  older backup checks every one first), a module made with blocks this version does not know says what it cannot
+  read.
 - **Medieval II small pennants yellow / white in the game after Banner...**: each small pennant (infantry, spear,
   cavalry, missile) has four looks on the banner picture - the game shows the other three on other units - and only
   the first was dyed; the rest kept the template's grey mix. All four now get the banner's design (found where the

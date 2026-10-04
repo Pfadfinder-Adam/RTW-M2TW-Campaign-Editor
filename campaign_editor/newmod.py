@@ -80,6 +80,8 @@ def marker(mod_dir):
                 got = json.load(f)
         except (OSError, ValueError):
             continue
+        if not isinstance(got, dict):                 # another version's mark: not one this version reads
+            continue
         if name != MARKER and not os.path.exists(os.path.join(mod_dir, MARKER)):
             try:
                 os.replace(p, os.path.join(mod_dir, MARKER))

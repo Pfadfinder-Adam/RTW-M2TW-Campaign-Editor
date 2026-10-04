@@ -1821,6 +1821,97 @@ building smith
         finally:
             log._candidates, log._home, log._path, settings._data, log._session_start = saved
 
+    def test_files_from_a_newer_version_do_not_break_this_one(self):
+        """Going back to this version after a newer one: whatever the newer one wrote is read without an error -
+        settings of other kinds (or a file that is no settings dict) read as not there, a backup whose record has
+        another form is listed and refused in plain words with nothing changed, a mod folder's mark of another form
+        is no mark, a Module builder module made with blocks this version does not know is listed and says what
+        it cannot read, reports' 'seen' marks of another form count as unseen."""
+        import json
+        from unittest import mock
+        from campaign_editor import log, settings, newmod, report, modbuilder as MB, addons as AD
+        from campaign_editor.plan import backups, backup_label, restore
+        home = tempfile.mkdtemp()
+        sp = os.path.join(home, log.SETTINGS_NAME)
+        with mock.patch.object(log, "home", return_value=home):
+            for text in ("[1, 2, 3]", "not json", '"a string"'):
+                with open(sp, "w") as fh:
+                    fh.write(text)
+                settings._data = None
+                self.assertEqual(settings.get("games", []), [])
+                self.assertIsNone(settings.get("game"))
+            with open(sp, "w") as fh:
+                json.dump({"game": {"path": "C:/x"}, "games": "C:/x", "campaigns": ["a"], "map_look": "tiles",
+                           "editor_list_width_unit": "wide", "reports_check": "yes", "map_legend": 0,
+                           "future_key": {"anything": 1}, "theme": "dark"}, fh)
+            settings._data = None
+            self.assertIsNone(settings.get("game"))
+            self.assertEqual(settings.get("games") or [], [])
+            self.assertEqual(settings.get("campaigns") or {}, {})
+            self.assertEqual(settings.get("map_look") or {}, {})
+            self.assertIsNone(settings.get("editor_list_width_unit"))
+            self.assertTrue(settings.get("reports_check", True))
+            self.assertEqual(settings.get("map_legend", True), 0)                # a bool kept as 0 / 1 is fine
+            self.assertEqual(settings.get("theme"), "dark")
+            self.assertEqual(settings.get("future_key"), {"anything": 1})      # unknown to this version: as it is
+            self.assertEqual(settings.get("future_key", []), [])              # ... unless asked for another kind
+        settings._data = None
+        # a backup with another record
+        mod = ModData(self.root)
+        root = os.path.dirname(mod.data)
+        bdir = os.path.join(root, "CampaignEditor_backups", "20991231_235959_future")
+        os.makedirs(bdir)
+        with open(os.path.join(bdir, "manifest.json"), "w") as fh:
+            json.dump({"files": [{"path": "data/descr_strat.txt", "was": "x"}], "editor": "9.9"}, fh)
+        self.assertIn(bdir, backups(mod))
+        self.assertTrue(backup_label(bdir).startswith("2099-12-31 23:59:59"))
+        def snap():
+            out = {}
+            for dp, _, fs in os.walk(mod.data):
+                for n in fs:
+                    with open(os.path.join(dp, n), "rb") as fh:
+                        out[os.path.join(dp, n)] = fh.read()
+            return out
+        before = snap()
+        with self.assertRaises(ValueError) as ctx:
+            restore(mod, bdir)
+        self.assertIn("another version", str(ctx.exception))
+        self.assertTrue(os.path.isdir(bdir))
+        self.assertEqual(before, snap())
+        from campaign_editor.plan import restore_to
+        with self.assertRaises(ValueError):           # undo back to an older one: refused before anything changes
+            restore_to(mod, backups(mod)[-1])
+        self.assertEqual(before, snap())
+        with open(os.path.join(bdir, "manifest.json"), "w") as fh:
+            json.dump([1, 2], fh)
+        self.assertTrue(backup_label(bdir).startswith("2099-12-31"))
+        # the mod folder's mark
+        with open(os.path.join(root, newmod.MARKER), "w") as fh:
+            json.dump(["base", "(game)"], fh)
+        self.assertIsNone(newmod.marker(root))
+        self.assertEqual(newmod.slim(mod.data), 0)
+        # a Module builder module from a newer version
+        future = MB.new_recipe("From the future")
+        future.update(v=99, when="ev:SomethingNew", ifs=[{"k": "future_cond", "x": 1}],
+                      dos=[{"k": "future_act", "y": [1, 2]}], settings={"dos.0.y": "Y"})
+        text = "// @title From the future\n// @recipe %s\nlocal MB_ON = true\n" % json.dumps(future)
+        lib = os.path.join(self.root, "lib")
+        os.makedirs(lib)
+        with open(os.path.join(lib, "from_the_future.nut"), "w") as fh:
+            fh.write(text)
+        with mock.patch.object(AD, "library_dir", return_value=lib):
+            mine = MB.my_modules()
+        self.assertEqual([r["title"] for _, r in mine], ["From the future"])
+        bad = MB.problems(mine[0][1])
+        self.assertTrue(any("unknown (future_cond)" in x for x in bad) and any("unknown (future_act)" in x for x in bad))
+        self.assertIn("future_act", MB.plain_words(mine[0][1]))
+        with self.assertRaises(ValueError):
+            MB.script(mine[0][1])
+        # reports seen in another form
+        answers = {"R-1": {"state": "open", "messages": [{"from": "author", "text": "hi"}]}}
+        self.assertEqual(report.news(answers, {"R-1": 3}), ["R-1"])
+        self.assertEqual(report.news(answers, {"R-1": {"n": "two"}}), ["R-1"])
+
     def test_older_versions_files_beside_a_mod_still_work(self):
         """A new version put over an old one: the older names beside a mod are still read - the ignore list, the
         mod folder's mark, the backups - and take today's names when they are written again."""

@@ -486,6 +486,8 @@ def news(all_answers, seen):
         n = sum(1 for m in a.get("messages", []) if m.get("from") == "author")
         st = "%s %s" % (a.get("state", ""), a.get("reason", ""))
         old = (seen or {}).get(rid) or {}
+        if not isinstance(old, dict) or not isinstance(old.get("n", 0), int):    # another version's form
+            old = {}
         if n > old.get("n", 0) or (old and st != old.get("state")) or (not old and a.get("state") == "closed"):
             out.append(rid)
     return out

@@ -268,10 +268,12 @@ def backup_label(bdir):
             m = json.load(f)
     except (OSError, ValueError):
         return "%s  %s" % (when, n[16:])
+    if not isinstance(m, dict):                   # another version's record
+        return "%s  %s" % (when, n[16:])
     what = m.get("faction") or n[16:]
     if m.get("template") and m.get("template") != what:
         what += " (from %s)" % m["template"]
-    k = len(m.get("modified", [])) + len(m.get("created", []))
+    k = sum(len(m.get(x)) for x in ("modified", "created") if isinstance(m.get(x), list))
     return "%s  %s  - %d file%s" % (when, what, k, "" if k == 1 else "s")
 
 
@@ -283,14 +285,32 @@ def restore_to(mod, bdir):
     key = os.path.normcase(os.path.abspath(bdir))
     if key not in norm:
         raise ValueError("no such backup: %s" % bdir)
-    return [restore(mod, b) for b in order[:norm.index(key) + 1]]
+    todo = order[:norm.index(key) + 1]
+    for b in todo:                       # every record read first: one this version cannot read stops it all
+        read_manifest(b)
+    return [restore(mod, b) for b in todo]
+
+
+def read_manifest(bdir):
+    """A backup's record ({'modified': [...], 'created': [...], ...}); ValueError in plain words when it is not one
+    this version reads (made by another version of the editor)."""
+    with open(os.path.join(bdir, "manifest.json"), encoding="utf-8") as f:
+        try:
+            manifest = json.load(f)
+        except ValueError:
+            manifest = None
+    if not (isinstance(manifest, dict) and all(isinstance(manifest.get(k), list) and all(
+            isinstance(x, str) for x in manifest[k]) for k in ("modified", "created"))):
+        raise ValueError("%s was made by another version of the editor and keeps its list of files in a form this "
+                         "version does not read - restore it with that version. Nothing was changed."
+                         % os.path.basename(bdir))
+    return manifest
 
 
 def restore(mod, bdir):
     """Put every file of a backup back and remove what that run created."""
     root = os.path.dirname(mod.data)
-    with open(os.path.join(bdir, "manifest.json"), encoding="utf-8") as f:
-        manifest = json.load(f)
+    manifest = read_manifest(bdir)
     # a backup names its files relative to the mod's folder; one that points outside it (a crafted manifest,
     # '../') is refused before anything is put back or removed
     from . import guard
