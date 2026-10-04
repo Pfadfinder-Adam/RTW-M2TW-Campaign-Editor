@@ -6264,6 +6264,36 @@ building smith
             srv.shutdown()
             srv.server_close()
 
+    def test_a_deleted_tcl_command_name_never_comes_back(self):
+        """A call the window scheduled ('after') on a part that is closed before it runs must not run another
+        function that got the same Tcl name (Python reuses addresses): "<lambda>() missing 1 required positional
+        argument: 'e'" in the click test. With a running number in every name, buttons, bindings, scheduled calls and
+        clean-up work as before and a stale call finds nothing."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display (CI): the window is not tested here
+            self.skipTest("no window: %s" % e)
+        from campaign_editor.gui_util import unique_tcl_names
+        unique_tcl_names()
+        try:
+            hits, names = [], set()
+            for _ in range(200):                      # many short-lived parts, each with a callback
+                w = tk.Label(root)
+                w.bind("<Configure>", lambda e: hits.append("wrong"))
+                w.after(10, lambda: hits.append("stale"))
+                names.update(w._tclCommands or [])
+                w.destroy()
+            self.assertEqual(len(names), 400)         # no name given twice
+            b = tk.Button(root, command=lambda: hits.append("button"))
+            b.invoke()
+            root.after(60, root.quit)
+            root.mainloop()
+            self.assertEqual(hits, ["button"])        # the stale calls ran nothing, nothing ran in their place
+            self.assertFalse(set(root.tk.call("info", "commands", "ce*")) & names)
+        finally:
+            root.destroy()
+
     def test_no_internet_or_a_silent_service_never_hangs(self):
         """No internet, or a report service that takes the call and never answers: the editor gives up after its
         time and says it in plain words (the window runs these in a thread, so it never freezes)."""

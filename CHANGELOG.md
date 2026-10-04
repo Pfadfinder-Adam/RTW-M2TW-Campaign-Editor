@@ -324,6 +324,9 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **A rare "missing 1 required positional argument" error after closing a window**: a delayed step of a window
+  closed before it ran could, much later, call a new handler that happened to get the same inner name. Every such
+  name is now used only once, so a step left over from a closed window does nothing.
 - **Rome: Preview froze on a big mod and could add a slaves resource to every region** - a mod that keeps
   each region's slaves on the town's own tile (like Barbarian Empires / HLR) was read as having none, and the
   check read every region again for every tile (minutes on 750 regions). A slaves resource on the town's tile

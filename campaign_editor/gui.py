@@ -307,6 +307,8 @@ def assets_dir():
 
 class App(tk.Tk):
     def __init__(self):
+        from .gui_util import unique_tcl_names
+        unique_tcl_names()                        # before the first callback is registered
         super().__init__()
         self.title("%s %s" % (APP, VERSION))
         self._set_icon()

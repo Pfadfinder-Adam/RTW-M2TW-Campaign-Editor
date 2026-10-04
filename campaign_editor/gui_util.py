@@ -3,6 +3,7 @@
 A packed widget gets its space in packing order: when a window is too small, the widgets packed last lose it
 first. So buttons are packed first and long hint labels last, and a form taller than the window scrolls."""
 
+import itertools
 import os
 import tkinter as tk
 from tkinter import ttk
@@ -16,6 +17,33 @@ def first(*widgets):
         slaves = w.master.pack_slaves()
         if slaves and slaves[0] is not w:
             w.pack_configure(before=slaves[0])
+
+
+# ---------------------------------------------------------------------------
+# Tcl command names that never come back
+# ---------------------------------------------------------------------------
+_TCL_SERIAL = itertools.count(1)
+
+
+def unique_tcl_names():
+    """tkinter names the Tcl command of every Python callback after the address of a wrapper object; once the command
+    is deleted (its widget gone) Python reuses the address and a new callback can get the old name - a stale reference
+    (a call already scheduled, an option of a widget being torn down) then runs the wrong function ("<lambda>()
+    missing 1 required positional argument: 'e'", once in thousands of clicks of the click test). A running number
+    in every name keeps a deleted command's name from coming back: a stale reference just finds no command."""
+    if getattr(tk.Misc, "_ce_unique_names", False):
+        return
+    real = tk.Misc._register
+
+    def _register(self, func, subst=None, needcleanup=1):
+        name = real(self, func, subst, needcleanup)
+        new = "ce%d_%s" % (next(_TCL_SERIAL), name)
+        self.tk.call("rename", name, new)
+        if needcleanup and self._tclCommands and self._tclCommands[-1] == name:
+            self._tclCommands[-1] = new
+        return new
+    tk.Misc._register = tk.Misc.register = _register
+    tk.Misc._ce_unique_names = True
 
 
 # ---------------------------------------------------------------------------
