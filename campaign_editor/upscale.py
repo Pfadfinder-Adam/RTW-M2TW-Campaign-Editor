@@ -629,6 +629,13 @@ def _agreement(regions_path, heights_path, lands):
         if not (0 <= x < w and 0 <= y < h) or 2 * x + 1 >= hw or 2 * y + 1 >= hh:
             return False
         return (rat(x, y) in lands) == (not sea(2 * x + 1, 2 * y + 1))
+
+    def in_water(x, y):
+        """The old tile and every tile round it are water in the heights (a sea tile inside a mod's navigable river,
+        whose banks map_regions calls land - a tester's DaC)."""
+        return all(sea(min(max(2 * (x + a) + 1, 0), hw - 1), min(max(2 * (y + b) + 1, 0), hh - 1))
+                   for a in (-1, 0, 1) for b in (-1, 0, 1))
+    agree.in_water = in_water
     return agree
 
 
@@ -637,7 +644,9 @@ def heights_from_tiles(land, agree, own):
     tile's middle point is sea exactly when its tile is - as in both games' own maps -, a point between tiles is sea
     when every tile round it is; where those tiles differ, or where the old map_regions and map_heights did not agree
     about the old tile (agree(x, y) False - a mod's own mismatch, kept as it was), the heights' own smooth coast (own)
-    decides. -> Mask of the points (6W+1 x 6H+1)."""
+    decides; so does it where the new map_regions made land of an old tile the heights hold under water all round
+    (agree.in_water: a sea tile inside a mod's navigable river - the land the smooth coast gave it from the river's
+    'land' banks rose as islands in the game, a tester's DaC x3). -> Mask of the points (6W+1 x 6H+1)."""
     TW, TH = land.W, land.H
     PW, PH = 2 * TW + 1, 2 * TH + 1
     out = Mask(PW, PH)
@@ -662,8 +671,9 @@ def heights_from_tiles(land, agree, own):
                     k = (a // FACTOR, b // FACTOR)
                     g = ok_old.get(k)
                     if g is None:
-                        g = ok_old[k] = agree(*k)
-                    fine = fine and g
+                        wet = getattr(agree, "in_water", None)
+                        g = ok_old[k] = (agree(*k), bool(wet(*k)) if wet else False)
+                    fine = fine and g[0] and not (v and g[1])
             if same and fine and first is not None:
                 sea = not first
             else:

@@ -2640,6 +2640,28 @@ building smith
         self.assertEqual(on, drawn)
         self.assertEqual(max(x for x, y in on), 7)                      # the end on the last land, the sea beside it
 
+    def test_bigger_map_no_islands_in_a_navigable_river(self):
+        """A tester's DaC x3 (Medieval II with M2EX): small islands inside a navigable river - a river map_regions
+        calls the province's land and the heights call water, with a sea tile here and there. The smooth coast gave
+        the 8 pixels round such a sea tile the province (land), and the heights followed map_regions there because
+        the old tile agreed (sea in both): a ring of land rose in the water. Inside water all round the heights keep
+        their own coast: no land there."""
+        from campaign_editor import upscale
+        P, S, LAND, WATER = (200, 40, 40), (41, 140, 233), (60, 60, 60), (0, 0, 120)
+        regions = [[S if (x, y) == (2, 2) else P for x in range(5)] for y in range(5)]
+        rpath = os.path.join(self.root, "regions.tga")
+        write_tga(rpath, 5, 5, regions)
+        heights = [[WATER if 3 <= x <= 7 else LAND for x in range(11)] for y in range(11)]   # tiles 1-3 water
+        hpath = os.path.join(self.root, "heights.tga")
+        write_tga(hpath, 11, 11, heights)
+        info = {}
+        upscale.regions_scaled(rpath, {P}, None, (), info)
+        agree = upscale._agreement(rpath, hpath, {P})
+        wet = upscale.heights_from_tiles(info["land"], agree, upscale.heights_mask(hpath))
+        ring = [(2 * X + 1, 2 * Y + 1) for X in range(6, 9) for Y in range(6, 9)]     # the old sea tile's new 3 x 3
+        self.assertTrue(all(wet[p] for p in ring), [p for p in ring if not wet[p]])
+        self.assertFalse(wet[(1, 1)])                                   # the bank (heights land) stays land
+
     def test_bigger_map_beach_one_tile_wide(self):
         """The beach stays one tile wide along the new coast, as in both games' own maps (a tester's DaC x3: grown
         3 x it was a wide band of sand)."""

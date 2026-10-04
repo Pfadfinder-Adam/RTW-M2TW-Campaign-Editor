@@ -361,6 +361,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Bigger map x3: no islands in a navigable river.** A river that map_regions gives to a province while the heights
+  hold it under water (a mod's navigable river), with a sea tile here and there, came out with small islands round
+  those tiles. Inside water all round, the new heights now keep their own coast. The games' own maps come out the
+  same as before.
 - **A family's children are written oldest first** (both games, as every vanilla family is): a new son put after a
   younger child made Medieval II complain "... is supposed to be younger than ...". **Check mod files** names a
   wrong order.
