@@ -150,6 +150,24 @@ def _utf8(data):
     return True
 
 
+_PARSED = {}
+
+
+def parsed_once(fn, f):
+    """fn(f) for a loaded TextFile, kept while the file's text stays the same (the town window read the whole
+    buildings and units files three times each time it opened); a few files only, the newest kept."""
+    key = (fn.__module__, fn.__name__, id(f))
+    sig = hash("\n".join(f.raw))
+    got = _PARSED.get(key)
+    if got is not None and got[0] == sig:
+        return got[1]
+    out = fn(f)
+    if len(_PARSED) > 16:
+        _PARSED.clear()
+    _PARSED[key] = (sig, out)
+    return out
+
+
 class TextFile:
     def __init__(self, path, raw_lines, encoding, bom):
         self.path = path

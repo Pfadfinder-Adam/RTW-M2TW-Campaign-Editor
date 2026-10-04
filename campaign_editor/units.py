@@ -50,7 +50,12 @@ def _ints(text):
 
 
 def read_units(edu):
-    """[Unit] from a loaded export_descr_unit TextFile, in file order."""
+    """[Unit] from a loaded export_descr_unit TextFile, in file order (read once while its text stays the same)."""
+    from .textio import parsed_once
+    return parsed_once(_read_units, edu)
+
+
+def _read_units(edu):
     units, cur = [], None
     for l in edu.texts():
         code = strip_comment(l)

@@ -75,6 +75,14 @@ def _lum(rgb):
     return 0.2126 * ch(rgb[0]) + 0.7152 * ch(rgb[1]) + 0.0722 * ch(rgb[2])
 
 
+def on_colour(fill):
+    """'black' or 'white' for a letter or a picture drawn on the colour fill ('#rrggbb' or (r, g, b)): whichever
+    stands out more - the one rule for every coloured sign (map signs, colour buttons)."""
+    if isinstance(fill, str):
+        fill = tuple(int(fill[i:i + 2], 16) for i in (1, 3, 5))
+    return "black" if contrast(fill[:3], (0, 0, 0)) >= contrast(fill[:3], (255, 255, 255)) else "white"
+
+
 def contrast(a, b):
     """WCAG contrast ratio of two (r, g, b): 1 (none) .. 21 (black on white); text wants 4.5."""
     la, lb = _lum(a), _lum(b)

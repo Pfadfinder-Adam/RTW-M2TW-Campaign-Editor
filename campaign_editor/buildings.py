@@ -58,7 +58,12 @@ def other_temple(chains, chain):
 
 
 def read_buildings(edb):
-    """[Building] from a loaded export_descr_buildings TextFile."""
+    """[Building] from a loaded export_descr_buildings TextFile (read once while its text stays the same)."""
+    from .textio import parsed_once
+    return parsed_once(_read_buildings, edb)
+
+
+def _read_buildings(edb):
     out, cur, names, pending = [], None, [], None
     depth = 0
     for l in edb.texts():

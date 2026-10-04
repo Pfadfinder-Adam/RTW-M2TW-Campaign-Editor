@@ -16,20 +16,30 @@ def template_display(mod, template, campaign=None):
     adjective - from the tables this campaign reads (not another campaign's)."""
     T = template.upper()
     found = {}
+    from .textio import parsed_once
     for path in mod.campaign_text_files(campaign):
-        f = mod.load(path)
-        for line in f.texts():
-            m = re.match(r"\s*\{([A-Za-z0-9_]+)\}\s*(.*)$", line)
-            if not m:
-                continue
-            key, val = m.group(1).upper(), m.group(2).strip()
-            if key == T and "display_name" not in found:
-                found["display_name"] = val
-            elif key == "ST_" + T and "short_name" not in found:
-                found["short_name"] = val
-            elif key == "EMT_%s_SPY" % T and "adjective" not in found and val.endswith(" Spy"):
-                found["adjective"] = val[:-4].strip()
+        keys = parsed_once(_text_keys, mod.load(path))         # each table read once, then looked up
+        val = keys.get(T)
+        if val is not None and "display_name" not in found:
+            found["display_name"] = val
+        val = keys.get("ST_" + T)
+        if val is not None and "short_name" not in found:
+            found["short_name"] = val
+        val = keys.get("EMT_%s_SPY" % T)
+        if val is not None and "adjective" not in found and val.endswith(" Spy"):
+            found["adjective"] = val[:-4].strip()
     return found
+
+
+def _text_keys(f):
+    """{KEY in capitals: its text} of a string table, the first line of each key."""
+    out = {}
+    rx = re.compile(r"\s*\{([A-Za-z0-9_]+)\}\s*(.*)$")
+    for line in f.texts():
+        m = rx.match(line)
+        if m:
+            out.setdefault(m.group(1).upper(), m.group(2).strip())
+    return out
 
 
 def display_names(mod, campaign=None):

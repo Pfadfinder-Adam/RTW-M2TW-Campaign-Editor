@@ -1927,6 +1927,20 @@ building smith
                 self.assertIsNotNone(text, fd.key)
                 self.assertNotIn("do not name", text, (fd.key, fd.value))
 
+    def test_signs_letters_stand_out_on_any_colour(self):
+        """A letter or picture on a coloured sign (a town's hall, an agent's sign, a resource's letters, a colour
+        button): black on a bright colour, white on a dark one - Egypt's white disc hid its agents' white signs."""
+        try:
+            from campaign_editor import theme
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        for fill, want in (("#ffffff", "black"), ((255, 255, 128), "black"), ("#f2c200", "black"),
+                           ("#5a5f66", "white"), ((30, 30, 30), "white"), ((200, 40, 40), "white")):
+            self.assertEqual(theme.on_colour(fill), want, fill)
+            ink = (0, 0, 0) if want == "black" else (255, 255, 255)
+            rgb = fill if isinstance(fill, tuple) else tuple(int(fill[i:i + 2], 16) for i in (1, 3, 5))
+            self.assertGreaterEqual(theme.contrast(rgb, ink), 4.5)
+
     def test_text_is_readable_on_its_ground_in_either_look(self):
         """The dark look showed light text on the Module builder's light IF block, dark red / dark blue on its dark
         grey: theme.readable makes any text colour readable (4.5:1) on the ground it stands on, keeping its hue."""

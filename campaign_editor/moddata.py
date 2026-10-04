@@ -262,7 +262,17 @@ class ModData:
     # ---- factions ----
     def factions(self):
         """[(name, culture)] in descr_sm_factions.txt order."""
+        return list(self._factions_table())
+
+    def _factions_table(self):
+        """descr_sm_factions.txt read once while it stays the same (the town window asked a culture 113 times, each
+        reading the whole file again - half its opening time): kept with the file's text, read again when it
+        differs."""
         f = self.load(self.file("sm_factions"))
+        sig = hash("\n".join(f.raw))
+        got = self._cache.get(("factions_table", id(f)))
+        if got and got[0] == sig:
+            return got[1]
         out = []
         cur = None
         for line in f.texts():
@@ -272,18 +282,15 @@ class ModData:
                 out.append(cur)
             elif len(t) >= 2 and t[0] == "culture" and cur is not None and cur[1] is None:
                 cur[1] = t[1]
-        return [tuple(x) for x in out]
+        table = tuple(tuple(x) for x in out)
+        self._cache[("factions_table", id(f))] = (sig, table, {n: c for n, c in reversed(table)})
+        return table
 
     def culture(self, faction):
         """The faction's culture from descr_sm_factions.txt, or None."""
-        cur = None
-        for l in self.load(self.file("sm_factions")).texts():
-            t = tokens(l)
-            if t[:1] == ["faction"] and len(t) > 1:
-                cur = t[1]
-            elif t[:1] == ["culture"] and len(t) > 1 and cur == faction:
-                return t[1]
-        return None
+        self._factions_table()
+        f = self.load(self.file("sm_factions"))
+        return self._cache[("factions_table", id(f))][2].get(faction)
 
     def name_pool(self, faction):
         """descr_names.txt pools: {'characters': [...], 'surnames': [...], 'women': [...]}.

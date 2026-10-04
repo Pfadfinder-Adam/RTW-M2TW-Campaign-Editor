@@ -588,7 +588,8 @@ class MapView(ttk.Frame):
                 for k in kinds:
                     def d(x, yy, k=k):
                         lc.create_rectangle(x - 9, yy - 9, x + 9, yy + 9, fill=self.res_colour(k), outline="black")
-                        lc.create_text(x, yy, text=k[:2].capitalize(), font=("", 8, "bold"))
+                        lc.create_text(x, yy, text=k[:2].capitalize(), font=("", 8, "bold"),
+                                       fill=self.text_on(self.res_colour(k)))
                     row(k, d, "res:" + k)
             lc.configure(scrollregion=(0, 0, 250, y[0] + 10))
         finally:
@@ -925,8 +926,9 @@ class MapView(ttk.Frame):
                 self._hall(sx, sy, size / 2, rgb, ("city", "city:" + region))
             if self.v_names.get() and (self.z >= 4 or mine):
                 name = self.labels.get(region) or cm.info.get(region, {}).get("settlement", region)
-                c.create_text(sx + r + 3, sy + 1, text=name, anchor="w", fill="black", font=font)   # shadow
-                c.create_text(sx + r + 2, sy, text=name, anchor="w", fill="white", font=font)
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1)):     # a black edge all round: white
+                    c.create_text(sx + r + 2 + dx, sy + dy, text=name, anchor="w", fill="black", font=font)
+                c.create_text(sx + r + 2, sy, text=name, anchor="w", fill="white", font=font)   # reads on any land
         if self.v_chars.get() and self.z >= 4 and not self.region_mode:
             self._characters(cw, ch, size)
         self._size_badge()
@@ -953,7 +955,7 @@ class MapView(ttk.Frame):
         """A town hall inside the town's square: roof, three columns, steps -
         light on a dark owner colour, dark on a light one."""
         c = self.canvas
-        ink = "#202020" if sum(rgb) > 420 else "#f4f0e0"
+        ink = "#202020" if self.text_on(rgb) == "black" else "#f4f0e0"
         # roof (pediment) and the beam under it
         c.create_polygon(sx - r * 0.8, sy - r * 0.38, sx, sy - r * 0.82, sx + r * 0.8, sy - r * 0.38,
                          fill=ink, outline="", tags=tags)
@@ -969,8 +971,9 @@ class MapView(ttk.Frame):
                     "princess": "Q", "inquisitor": "I", "heretic": "H", "witch": "W"}
 
     def _glyph(self, k, sx, sy, r, tags):
-        """A white sign for an agent kind inside its disc (r = the disc's radius)."""
-        c, ink = self.canvas, "white"
+        """An agent kind's sign inside its disc (r = the disc's radius): white on a dark faction colour, black on a
+        bright one."""
+        c, ink = self.canvas, self.text_on(getattr(self, "_fill_of_disc", "#000000"))
         w = max(1, int(r / 4))
         if k == "spy":                                  # an eye
             c.create_oval(sx - r * 0.7, sy - r * 0.38, sx + r * 0.7, sy + r * 0.38, outline=ink, width=w, tags=tags)
@@ -1132,9 +1135,10 @@ class MapView(ttk.Frame):
 
     @staticmethod
     def text_on(fill):
-        """Black letters on a bright colour, white on a dark one (by how bright the eye sees it)."""
-        r, g, b = (int(fill[i:i + 2], 16) for i in (1, 3, 5))
-        return "black" if 0.299 * r + 0.587 * g + 0.114 * b >= 140 else "white"
+        """Black on a bright colour, white on a dark one (theme.on_colour - the one rule for every sign's letter or
+        picture: a town's hall, an agent's sign, a resource's letters; Egypt's white disc hid its agents' signs)."""
+        from .theme import on_colour
+        return on_colour(fill)
 
     def _forts(self, cw, ch):
         """A fort: a small brown tower with battlements in the owner's colour (a watchtower: thinner)."""

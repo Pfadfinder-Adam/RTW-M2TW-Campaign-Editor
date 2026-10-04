@@ -386,6 +386,16 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Signs read on any colour** (both games): a town's hall, an agent's sign and a resource's letters are black on a
+  bright colour and white on a dark one, on the map and in its legend (Egypt's white discs hid their agents' white
+  signs); town names have a black edge all round, so they read on light land too; the colour buttons follow the
+  same rule.
+- **Faster windows with town and unit cards**: the faction list, the buildings and the units files are read once
+  while they stay the same (the town window read them again and again), and the faction's names come from a table
+  read once - the town window, the Buildings and Units & armies tabs open up to twice as fast.
+- **Test mod: the test religion is told apart at once** (Medieval II): its own symbol (a magenta disc with a yellow
+  star) and its own temples - Christianity's church chain copied as the Test Faith's (shrine to great cathedral),
+  built by the test faction.
 - **The town window gives the room to the buildings** (both games): the town's name once at the top, the
   explanations behind a **?**, Buildings and Garrison as clear tabs, the bottom bar only as tall as its buttons, the
   window no taller than the screen, and the building chains fill the window's width in as many columns as fit (also

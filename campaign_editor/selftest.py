@@ -627,20 +627,78 @@ def s_traits(c, mod):
     return plan
 
 
-@step("Religions (Medieval II): a new religion in every file, a region's shares changed",
-      "'Test Faith' in the region's religion bar")
+FAITH_LEVELS = ("shrine", "temple", "abbey", "cathedral", "great_cathedral")
+
+
+def faith_symbol(path):
+    """The test religion's own symbol, made here so it is told apart at once in the game: a bright magenta disc
+    with a yellow star (False without Pillow - the template's symbol is copied then)."""
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        return False
+    import math
+    im = Image.new("RGB", (64, 64), (40, 0, 40))
+    d = ImageDraw.Draw(im)
+    d.ellipse((2, 2, 61, 61), fill=(230, 0, 200), outline=(255, 255, 255), width=4)
+    pts = [(32 + (26 if k % 2 == 0 else 11) * math.sin(math.pi * k / 5),
+            32 - (26 if k % 2 == 0 else 11) * math.cos(math.pi * k / 5)) for k in range(10)]
+    d.polygon(pts, fill=(255, 230, 0))
+    im.save(path)
+    return True
+
+
+@step("Religions (Medieval II): a new religion 'Test Faith' in every file, with its own symbol (a magenta disc, a "
+      "yellow star) and its own temples (Christianity's church chain copied: ce_faith_shrine ... great_cathedral), "
+      "{new} follows it, a region's shares changed",
+      "'Test Faith' with the magenta star in the region's religion bar and in {new}'s faction details; {new}'s "
+      "towns can build the Test Faith shrine")
 def s_religion(c, mod):
+    import tempfile
     from . import religions as RL
     from .regionedit import apply_opts
     names = RL.names(mod)
     if not names:
         raise Skip("Rome has no religions (BI's beliefs are not written here)")
-    spec = {"name": "ce_faith", "shown": "Test Faith", "pip_from": names[0], "picture": None, "factions": [c.new]}
-    region = (towns_of(c, mod, c.new) or towns_of(c, mod, c.edited))[0]
     plan = Plan(mod, None, "religion")
-    apply_opts(plan, c.campaign, {"new_religions": [spec],
-                                  "religions": {region: dict({n: 0 for n in names}, **{names[0]: 60, "ce_faith": 40})}})
+    with tempfile.TemporaryDirectory() as d:
+        pic = os.path.join(d, "ce_faith.png")
+        spec = {"name": "ce_faith", "shown": "Test Faith", "pip_from": names[0],
+                "picture": pic if faith_symbol(pic) else None, "factions": [c.new]}
+        region = (towns_of(c, mod, c.new) or towns_of(c, mod, c.edited))[0]
+        apply_opts(plan, c.campaign, {"new_religions": [spec], "religions": {
+            region: dict({n: 0 for n in names}, **{names[0]: 60, "ce_faith": 40})}})
+    faith_temples(plan, c.new)
     return plan
+
+
+def faith_temples(plan, faction):
+    """The test religion's temples: a copy of the template religion's town temple chain (temple_catholic in
+    Medieval II) under temple_ce_faith, its levels ce_faith_*, its 'religion' line naming ce_faith, no conversion to
+    the castle chain, built by `faction` only, named 'Test Faith ...'."""
+    from .editors import building_blocks, copy_building, fields
+    from .textio import strip_comment
+    f = plan.edit(plan.mod.file("edb"))
+    src = next((b for b in building_blocks(f) if b[0] == "temple_catholic"), None)
+    if src is None:
+        plan.warn(f, "no temple_catholic chain - the test religion gets no temples of its own")
+        return
+    levels = next((fd.value.split() for fd in fields(f, src[1], src[2]) if fd.key == "levels"), [])
+    names = {old: "ce_faith_" + FAITH_LEVELS[min(i, len(FAITH_LEVELS) - 1)] + ("" if i < len(FAITH_LEVELS) else
+                                                                                   "_%d" % i)
+             for i, old in enumerate(levels)}
+    texts = {new: {"name": "Test Faith " + new[9:].replace("_", " "),
+                   "desc": "A temple of the editor's test religion - built here, the religion works.",
+                   "desc_short": "Test Faith temple"} for new in names.values()}
+    copy_building(plan, "temple_catholic", "temple_ce_faith", names, texts=texts, factions=[faction])
+    b = next(b for b in building_blocks(f) if b[0] == "temple_ce_faith")
+    for i in range(b[2] - 1, b[1] - 1, -1):
+        t = strip_comment(f.text(i)).split()
+        if t[:2] == ["religion", "catholic"]:
+            f.set(i, f.text(i).replace("catholic", "ce_faith", 1))
+        elif t[:1] == ["convert_to"] and len(t) == 2:
+            f.delete(i, i + 1)        # no conversion into the Christian castle chain (nor its levels' 'convert_to N')
+    plan.note(f, "temple_ce_faith: the Test Faith's temples (a copy of temple_catholic)")
 
 
 @step("Roster: {edited} gets a unit and a building level it lacked", "the unit in its recruitment list")

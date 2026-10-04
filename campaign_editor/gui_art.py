@@ -9,6 +9,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from .gui_util import ShortHint
 from . import factionart as FA
+from .theme import on_colour
 
 # The campaign-select map part is put away for now (the user, 2026-10-01): the code stays for a later release;
 # True shows it again. While False the originals stay and nothing is drawn (gui.App.select_map_opts).
@@ -606,7 +607,7 @@ class ArtEditor(ttk.Frame):
         if not self.v_open.get():
             return                                  # closed: nothing drawn (on Medieval II the first draw takes a while)
         col = self.colour()
-        self.b_colour.configure(bg="#%02x%02x%02x" % col, fg="white" if sum(col) < 380 else "black")
+        self.b_colour.configure(bg="#%02x%02x%02x" % col, fg=on_colour(col))
         if not a.mod:
             return
         finding = ("select_frame", a.v_campaign.get()) not in a.mod._cache
