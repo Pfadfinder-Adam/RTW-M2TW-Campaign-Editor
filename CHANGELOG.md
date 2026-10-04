@@ -316,6 +316,9 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Banner... (Medieval II): the symbol stays on the cloth**: on a pennant whose cloth is not a rectangle (the
+  L-shaped small infantry pennant), across the slit of the cavalry banner and on the triangle, the symbol ran past the
+  cloth's edge - it now goes on the biggest square of cloth nearest its usual place (still dragged anywhere by hand).
 - **No text cut at a window's edge** (every window checked on both games): the Events window's Change... / Another
   faction... buttons, the Campaign rules' explanations, the Units & armies town name and unit count, the Unit and
   Building editors' buttons (they wrap to a second row now), the Buildings tab's population line and its 'show levels

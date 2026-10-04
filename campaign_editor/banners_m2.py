@@ -277,14 +277,63 @@ def sheet_blank(mod):
 # Painting
 # ---------------------------------------------------------------------------
 def symbol_boxes(sheet):
-    """Where the symbol goes on each panel: a square across most of its width, in its upper middle (as Rome's)."""
+    """Where the symbol goes on each panel: a square across most of its width, in its upper middle (as Rome's),
+    kept inside the cloth itself - a pennant whose cloth is not a rectangle (Medieval II's L-shaped mini_infantry)
+    had the symbol run past its edge: there the biggest square of cloth nearest that place is taken instead."""
     out = []
     for x0, y0, x1, y1 in sheet.panels:
         bw, bh = x1 - x0, y1 - y0
         side = min(int(bw * 0.6), int(bh * 0.5))
         cx, cy = (x0 + x1) // 2, y0 + int(bh * 0.42)
-        out.append((cx - side // 2, cy - side // 2, cx - side // 2 + side, cy - side // 2 + side))
+        box = (cx - side // 2, cy - side // 2, cx - side // 2 + side, cy - side // 2 + side)
+        cloth = getattr(sheet, "cloth", None)
+        if cloth is not None and not _all_cloth(cloth, box):
+            box = _square_in_cloth(cloth, (x0, y0, x1, y1), (cx, cy), side) or box
+        out.append(box)
     return out
+
+
+def _all_cloth(cloth, box, step=4):
+    """True when nearly every point of box (checked every step px) is cloth."""
+    x0, y0, x1, y1 = box
+    pts = [(x, y) for x in range(x0, x1, step) for y in range(y0, y1, step)]
+    if not pts:
+        return True
+    w, h = cloth.size
+    inside = sum(1 for x, y in pts if 0 <= x < w and 0 <= y < h and cloth.getpixel((x, y)) > 128)
+    return inside >= 0.97 * len(pts)
+
+
+def _square_in_cloth(cloth, panel, centre, most, k=4):
+    """The biggest square of cloth inside the panel (no bigger than `most`), shrunk a little so the symbol keeps
+    off the edge, nearest the centre the symbol would have had; None when there is no cloth."""
+    from PIL import Image
+    x0, y0, x1, y1 = panel
+    sw, sh = max(1, (x1 - x0) // k), max(1, (y1 - y0) // k)
+    small = cloth.crop(panel).resize((sw, sh), Image.BOX)
+    on = [[small.getpixel((x, y)) >= 200 for x in range(sw)] for y in range(sh)]
+    size = [[0] * sw for _ in range(sh)]           # the side of the biggest square ending at (x, y)
+    best = 0
+    for y in range(sh):
+        for x in range(sw):
+            if on[y][x]:
+                size[y][x] = 1 if not x or not y else 1 + min(size[y - 1][x], size[y][x - 1], size[y - 1][x - 1])
+                best = max(best, size[y][x])
+    if not best:
+        return None
+    n = min(best, max(1, most // k))
+    pick = None
+    for y in range(sh):
+        for x in range(sw):
+            if size[y][x] >= n:
+                mx = x0 + (x - n + 1 + n / 2.0) * k
+                my = y0 + (y - n + 1 + n / 2.0) * k
+                d = (mx - centre[0]) ** 2 + (my - centre[1]) ** 2
+                if pick is None or d < pick[0]:
+                    pick = (d, mx, my)
+    side = int(n * k * 0.85)
+    _, mx, my = pick
+    return (int(mx - side / 2), int(my - side / 2), int(mx - side / 2) + side, int(my - side / 2) + side)
 
 
 def _colour_layer(sheet, colours, pattern):

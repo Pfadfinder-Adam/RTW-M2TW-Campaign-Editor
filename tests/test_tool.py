@@ -3774,6 +3774,25 @@ building smith
         self.assertIn("NEW PROBLEM in Check mod files: broken", text)
         self.assertIn("ValueError: no", text)
 
+    def test_medieval2_banner_symbol_stays_on_the_cloth(self):
+        """A pennant whose cloth is no rectangle (Medieval II's L-shaped mini_infantry): the symbol's place is a
+        square of cloth, not the middle of the box round it (it ran past the cloth's edge)."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import banners_m2 as M
+        cloth = Image.new("L", (128, 96), 0)
+        cloth.paste(255, (0, 0, 128, 30))                  # the long top streamer
+        cloth.paste(255, (0, 0, 50, 96))                   # the part down the pole
+        blank = Image.new("RGBA", cloth.size, (210, 210, 210, 255))
+        sheet = M.Sheet(blank, cloth, cloth, [(0, 0, 128, 96)], 1)
+        (x0, y0, x1, y1), = M.symbol_boxes(sheet)
+        self.assertTrue(x1 - x0 >= 20 and x1 - x0 == y1 - y0)
+        self.assertTrue(all(cloth.getpixel((x, y)) == 255 for x in range(x0, x1) for y in range(y0, y1)))
+        full = M.Sheet(blank, cloth, Image.new("L", cloth.size, 255), [(0, 0, 128, 96)], 1)
+        self.assertEqual(M.symbol_boxes(full), [(40, 16, 88, 64)])       # a whole rectangle: as before
+
     def test_medieval2_white_banner_from_the_faction_sheets(self):
         """Medieval II has no white banner: the template is the per-pixel median of the mod's faction banner
         sheets (each faction's heraldry elsewhere, so it vanishes; the folds every sheet shares stay; what is
