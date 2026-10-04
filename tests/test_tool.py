@@ -4536,6 +4536,157 @@ building smith
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
         self.assertEqual(after, before)
 
+    def test_scripts_in_the_game_listed_switched_set_deleted(self):
+        """Add-ons > Scripts in the game: every script in the game's script/modules (the engine requires each .nut
+        there) - turned off as x.nut.off and on again, its settings written in its own lines, deleted - each with
+        a backup, Restore byte for byte."""
+        from campaign_editor import scriptmods as SCR
+        game = os.path.join(self.root, "game")
+        write(os.path.join(game, "medieval2.exe"), "x")
+        write(os.path.join(game, "data", "descr_sm_factions.txt"), SM)
+        write(os.path.join(game, "script", "main.nut"), "foreach (n in ::scripting.listModules(\"modules\")) {}\n")
+        mods = os.path.join(game, "script", "modules")
+        write(os.path.join(mods, "tolls.nut"), "// Border Tolls - a toll at every border\n"
+              "local TOLL_ON = true\nlocal TOLL_GOLD = 100   // money per crossing\nfunction go() {}\n")
+        write(os.path.join(mods, "old.nut.off"), "// Old thing - kept, not run\nlocal OLD_X = 1\n")
+        write(os.path.join(mods, "eop.lua"), "-- an older Lua file\n")
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "mods", "m", "data"))
+        before = tree_hash(game)
+        mod = ModData(os.path.join(game, "mods", "m", "data"))
+        self.assertEqual(os.path.normcase(SCR.folders(mod)[0][0]), os.path.normcase(mods))
+        got = {s.file: s for s in SCR.scripts(mod)}
+        self.assertEqual(sorted(got), ["eop.lua", "old.nut", "tolls.nut"])
+        t = got["tolls.nut"]
+        self.assertTrue(t.on and not got["old.nut"].on and got["eop.lua"].lua)
+        self.assertEqual(t.title, "Border Tolls")
+        self.assertEqual(t.values, {"TOLL_ON": True, "TOLL_GOLD": 100})
+        plan = Plan(t.plan_mod(), "scripts", "tolls", {})
+        SCR.plan_switch(plan, t, False)                                   # off: the same bytes as tolls.nut.off
+        plan.apply()
+        self.assertFalse(os.path.exists(os.path.join(mods, "tolls.nut")))
+        self.assertTrue(os.path.exists(os.path.join(mods, "tolls.nut.off")))
+        t = {s.file: s for s in SCR.scripts(mod)}["tolls.nut"]
+        plan = Plan(t.plan_mod(), "scripts", "tolls", {})
+        SCR.plan_switch(plan, t, True)
+        plan.apply()
+        t = {s.file: s for s in SCR.scripts(mod)}["tolls.nut"]
+        plan = Plan(t.plan_mod(), "scripts", "tolls", {})
+        self.assertTrue(SCR.plan_settings(plan, t, {"TOLL_ON": True, "TOLL_GOLD": 250}))
+        plan.apply()
+        with open(os.path.join(mods, "tolls.nut")) as fh:
+            self.assertIn("local TOLL_GOLD = 250   // money per crossing", fh.read())
+        with self.assertRaises(ValueError):                             # a whole number, 0 or more
+            SCR.plan_settings(Plan(t.plan_mod(), "scripts", "tolls", {}), t, {"TOLL_GOLD": -5})
+        old = {s.file: s for s in SCR.scripts(mod)}["old.nut"]
+        plan = Plan(old.plan_mod(), "scripts", "old", {})
+        SCR.plan_delete(plan, old)
+        plan.apply()
+        self.assertFalse(os.path.exists(os.path.join(mods, "old.nut.off")))
+        gm = ModData(os.path.join(game, "data"))
+        restore_to(gm, backups(gm)[-1])
+        after = {k: v for k, v in tree_hash(game).items() if "CampaignEditor_backups" not in k}
+        self.assertEqual(after, before)
+
+    def test_rome_faction_destroyed_picture_for_every_faction(self):
+        """Rome: descr_event_images.txt's 'faction_defeated' switch has one case per faction (21 in vanilla); a
+        faction past the last case crashed the game when it was destroyed (message_builder_objects.cpp(763), a
+        tester's Rome + REX test mod). A new faction adds its case; Check says it; Load fixes an older mod."""
+        from campaign_editor import check as CK, eventimages as EI, gamefix as GF
+        images = os.path.join(self.root, "data", "descr_event_images.txt")
+        case = "\t\t\tcase %d\n\t\t\t{\n\t\t\t\tmovie\t\t center 320 240\tdata/fmv/lose/f%d_eliminated.wmv\n\t\t\t}\n"
+        write(images, "faction_defeated\n\ticon\tdiplomacy\n\tformat\n\t{\n\t\ttitle center verdana black\n"
+              "\t\tswitch\n\t\t{\n" + "".join(case % (i, i) for i in range(2)) + "\t\t}\n\t}\n\n"
+              "faction_defeated_by_player\n\ticon\tdiplomacy\n\tformat use faction_defeated\n")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertEqual((EI.cases(mod), EI.faction_count(mod)), (2, 2))
+        self.assertIsNone(EI.problem(mod))
+        plan = build(mod, "test", "alpha", "beta", {
+            "display_name": "Betan League", "short_name": "Beta", "adjective": "Betan",
+            "start": {"regions": ["B_R"], "leader": {"name": "Boris Alphid", "age": 35}, "denari": 500}})
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual((EI.cases(mod), EI.faction_count(mod)), (3, 3))
+        with open(images) as fh:
+            text = fh.read()
+        self.assertIn("case 2\n\t\t\t{\n\t\t\t\tmovie\t\t center 320 240\tdata/fmv/lose/f1_eliminated.wmv", text)
+        self.assertTrue(text.endswith("format use faction_defeated\n"))
+        restore_to(mod, backups(mod)[-1])
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "CampaignEditor_backups" not in k}, before)
+        # an older mod with more factions than cases: Check says it, Load offers the fix
+        with open(images) as fh:
+            write(images, fh.read().replace(case % (1, 1), ""))
+        mod = ModData(self.root)
+        self.assertIn("crashes when faction 2", EI.problem(mod))
+        self.assertIn("faction destroyed", CK.check_mod(mod, "test"))
+        found = [p for p in GF.problems(mod) if p["id"] == "faction_defeated"]
+        self.assertEqual(len(found), 1)
+        GF.fix_plan(mod, found).apply()
+        self.assertEqual(EI.cases(ModData(self.root)), 2)
+
+    def test_backup_of_a_game_folder_file_stays_in_the_backup(self):
+        """A mod's write that changes a file of the game's folder beside it (an add-on updated in the game's
+        script/modules): its backup copy is kept inside the backup's folder ('..' -> '_up'), and Restore takes it
+        from there - it was copied outside and Restore refused it (the test mod's 'Scripts in the game' step)."""
+        from campaign_editor.plan import stored
+        game = os.path.join(self.root, "game")
+        write(os.path.join(game, "medieval2.exe"), "x")
+        nut = os.path.join(game, "script", "modules", "x.nut")
+        write(nut, "local X_ON = true\n")
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "mods", "m", "data"))
+        mod = ModData(os.path.join(game, "mods", "m", "data"))
+        plan = Plan(mod, "scripts", "x", {})
+        plan.binary(nut, b"local X_ON = false\n")
+        bdir = plan.apply()
+        self.assertTrue(os.path.isfile(os.path.join(bdir, stored("../../script/modules/x.nut"))))
+        self.assertTrue(os.path.realpath(os.path.join(bdir, stored("../../script/modules/x.nut"))).startswith(
+            os.path.realpath(bdir) + os.sep))
+        restore_to(mod, bdir)
+        with open(nut) as fh:
+            self.assertEqual(fh.read(), "local X_ON = true\n")
+
+    def test_scripts_the_test_mod_put_in_are_found_and_taken_out(self):
+        """The test mod puts its add-ons into the GAME's script/modules: thrown away with its folder, they stayed
+        there. Each carries scriptmods.TEST_MARK at its end (older ones: a ce_test_ name); Scripts in the game finds
+        them and takes them all out in one write - anyone else's script stays, Restore gives them back."""
+        from campaign_editor import addons as AD, scriptmods as SCR
+        game = os.path.join(self.root, "game")
+        write(os.path.join(game, "medieval2.exe"), "x")
+        write(os.path.join(game, "data", "descr_sm_factions.txt"), SM)
+        write(os.path.join(game, "script", "main.nut"), "foreach (n in ::scripting.listModules(\"modules\")) {}\n")
+        mods = os.path.join(game, "script", "modules")
+        write(os.path.join(mods, "tolls.nut"), "// Border Tolls - a toll at every border\nlocal TOLL_GOLD = 100\n")
+        write(os.path.join(mods, "ce_test_engine_lines.nut.off"), "// CE Test engine lines\nfunction go() {}\n")
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "mods", "m", "data"))
+        mod = ModData(os.path.join(game, "mods", "m", "data"))
+        src = os.path.join(self.root, "growth_like.nut")
+        write(src, "// @title Growth like\nlocal GL_ON = true\nfunction go() {}\n")
+        with open(src) as fh:
+            text = fh.read()
+        a = AD.from_script(text, "growth_like.nut", src)
+        before = tree_hash(game)
+        plan = Plan(mod, "addon", "growth_like", {})
+        dst = AD.plan_install(plan, a, AD.read_settings(a, text), mod, mark=SCR.TEST_MARK)
+        plan.apply()
+        with open(dst) as fh:
+            got = fh.read()
+        self.assertTrue(got.startswith(text) and got.endswith(SCR.TEST_MARK + "\n"))
+        s = {x.file: x for x in SCR.scripts(mod)}["growth_like.nut"]
+        self.assertEqual(s.values, {"GL_ON": True})                        # the mark changes no setting
+        self.assertEqual(sorted(x.file for x in SCR.test_scripts(mod)), ["ce_test_engine_lines.nut",
+                                                                          "growth_like.nut"])
+        self.assertEqual(s.kind, "put in by the test mod")
+        items = SCR.test_scripts(mod)
+        plan = Plan(items[0].plan_mod(), "scripts", "test_mod_scripts", {})
+        self.assertEqual(SCR.plan_take_out_test(plan, items), 2)
+        plan.apply()
+        self.assertEqual([x.file for x in SCR.scripts(mod)], ["tolls.nut"])
+        gm = ModData(os.path.join(game, "data"))
+        restore_to(gm, backups(gm)[-1])
+        self.assertEqual(sorted(x.file for x in SCR.test_scripts(mod)), ["ce_test_engine_lines.nut",
+                                                                          "growth_like.nut"])
+        self.assertTrue(set(before) <= set(tree_hash(game)))
+
     def test_medieval2_children_limit_raised_with_the_family(self):
         """Medieval II: descr_campaign_db.xml <max_number_of_children> (4 in vanilla) - a fifth child made the game
         stop reading descr_strat.txt at the family's relative line (a tester's test mod: France's Philip). A tree

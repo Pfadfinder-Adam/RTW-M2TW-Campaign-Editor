@@ -72,6 +72,10 @@ def check_mod(mod, campaign, deep=False, progress=None):
     for n in in_strat:
         if n not in names:
             bad("descr_strat.txt has a block for '%s', which descr_sm_factions.txt does not know" % n)
+    from .eventimages import problem as defeated_problem
+    why = defeated_problem(mod, len(names))
+    if why:
+        bad(why + "; Load offers to put it right")
     from .strat import headers_out_of_order
     for n, _ in headers_out_of_order(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))):
         bad("%s: its first lines in descr_strat.txt are out of the games' order (denari before superfaction / "

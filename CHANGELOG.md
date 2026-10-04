@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **Add-ons > Scripts in the game...** (Rome with REX, Medieval II with M2EX): every script the engine runs from the
+  game's `script/modules` - the editor's add-ons, Module builder modules, ones you added, anyone's - with what each
+  is and whether it runs. Pick one to change its settings in its own lines, turn it off (renamed `.nut.off`, kept,
+  not run) and on again, delete it, see its code or open its folder; every change asks first and makes a backup. The
+  test mod's scripts now carry a mark at their end: they stay in the game's folder when the test mod is thrown away,
+  and **Take out every script the test mod put in** removes them with one press (older ones are found by their
+  `ce_test_` names). The test mod tries it (the words beside Avoid Growth's tick).
 - **Map editor: delete a town with its region** (both games): right click a town > **Delete this town with its
   region...**. Its land, town and port pixels go to the neighbour it shares the longest border with (or the one you
   pick), its block of descr_regions.txt and its settlement in descr_strat.txt go (the owner's next town is its
@@ -379,6 +386,17 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Rome: a new faction no longer crashes the game when it is destroyed.** Rome's message 'faction destroyed'
+  (descr_event_images.txt) has one picture per faction - 21 in the game; a faction past the last one crashed the game
+  the moment it was destroyed (message_builder_objects.cpp(763), 'a switch message object with a value higher than
+  its number of conditions'). Every write that adds a faction now gives the message a picture for each (the game's
+  copy put into the mod when it has none); Check mod files says it, and Load offers to put an older mod right.
+- **Restore of a change to a file in the game's folder** (an add-on updated in the game's `script/modules`): its
+  backup copy was kept outside the backup and Restore refused it; it is kept inside now, and older backups still
+  restore.
+- **Bring from another mod: the list of 'The units they recruit' scrolls** (step 5 for buildings; it was cut off
+  with no way down), and the mouse wheel over a list box scrolls the page instead of changing the box - in every
+  window.
 - **Bigger map (x3)... has a window that leads the way**: the map's size now and after, the heights as one choice,
   a **Make the map 3 x bigger** button, the work's progress in the window, and when it is done **Put the old map
   back** (one press undoes it). The long list of changes (it looked like a log, and the buttons that wrote the map

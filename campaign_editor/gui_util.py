@@ -527,6 +527,14 @@ def install_window_helpers(root):
         cb.after(1, later)
     root.bind_class("TCombobox", "<Button-1>", widen, add="+")
 
+    # the wheel over a closed list box scrolls the page it sits in and never changes the value: a column of boxes
+    # (the Bring window's 'The units they recruit') turned each box it passed and the page never moved (report #109)
+    def box_wheel(e):
+        _route(e)
+        return "break"
+    for seq in WHEEL_KEYS:
+        root.bind_class("TCombobox", seq, box_wheel)
+
     state = {"job": None, "win": None}
 
     def hide(ev=None):

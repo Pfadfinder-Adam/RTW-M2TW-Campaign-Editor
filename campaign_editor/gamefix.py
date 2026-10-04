@@ -61,6 +61,12 @@ def problems(mod):
                                "games' order (superfaction / ai_label, dead_until_resurrected, re_emergent, denari, "
                                "denari_kings_purse), nothing else changed."
                                % (camp, ", ".join(n for n, _ in bad))})
+    from . import eventimages
+    why = eventimages.problem(mod)
+    if why:
+        out.append({"id": "faction_defeated", "line": 0,
+                    "why": why[0].upper() + why[1:] + ". Versions up to 0.29.2 of this tool left it so. The fix: a "
+                           "case for every faction (a new one shows the film of the last), nothing else changed."})
     from .packs import game_kind
     if game_kind(mod) == "medieval2":
         for camp in mod.campaigns():
@@ -155,6 +161,10 @@ def fix_plan(mod, found):
                 for i, t in zip(idx, texts):
                     f.set(i, t)
             plan.note(f, "faction header lines put in the games' order: %s" % ", ".join(n for n, _ in p["blocks"]))
+            continue
+        if p["id"] == "faction_defeated":
+            from . import eventimages
+            eventimages.keep_up(plan)
             continue
         if p["id"] == "old_culture_names":
             from . import culturenames as CN

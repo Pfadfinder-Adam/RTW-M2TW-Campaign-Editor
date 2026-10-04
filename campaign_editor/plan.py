@@ -131,6 +131,10 @@ class Plan:
     def apply(self):
         from .limits import keep_up
         keep_up(self)                       # REX / M2EX: max_factions follows the factions, silently (limits.py)
+        sm = self.mod.file("sm_factions")
+        if sm and sm in self.files:         # Rome: a 'faction destroyed' picture for every faction (eventimages.py)
+            from . import eventimages
+            eventimages.keep_up(self)
         # every path this run touches lies in the mod's or its game's folder (guard.py) - checked before anything
         from . import guard
         guard.check(list(self.changed_files()) + [dst for _, dst in self.copies], guard.roots_of(self.mod))
@@ -154,7 +158,7 @@ class Plan:
                 if path not in self.originals and not os.path.exists(path):
                     created.append(rel.replace("\\", "/"))     # a new picture: Restore removes it
                     continue
-                dst = os.path.join(bdir, rel)
+                dst = os.path.join(bdir, stored(rel))
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
                 if path in self.originals:
                     with open(dst, "wb") as out:
@@ -223,7 +227,7 @@ def _roll_back(root, bdir, manifest, done, made):
             if rel in modified:
                 if os.path.exists(path):
                     remove_file(path)
-                shutil.copy2(os.path.join(bdir, rel), path)
+                shutil.copy2(os.path.join(bdir, stored(rel)), path)
             elif os.path.exists(path):
                 remove_file(path)
         except Exception:
@@ -287,6 +291,22 @@ def backup_label(bdir):
     return "%s  %s  - %d file%s" % (when, what, k, "" if k == 1 else "s")
 
 
+def stored(rel):
+    """Where a backup keeps its copy of a file, inside the backup's folder: the file's path from the mod's folder,
+    each '..' (a file of the game's folder beside the mod - an add-on in the game's script/modules) kept as '_up'.
+    Before, '../script/modules/x.nut' was copied OUT of the backup's folder and Restore refused it."""
+    return os.path.join(*["_up" if x == ".." else x for x in rel.replace("\\", "/").split("/")])
+
+
+def _copy_of(bdir, rel):
+    """The backup's copy of rel: stored(rel); a backup of an older version kept a '..' file outside its folder,
+    within the backups folder (CampaignEditor_backups/script/modules/x.nut) - read from there."""
+    p = os.path.join(bdir, stored(rel))
+    if os.path.exists(p) or ".." not in rel.replace("\\", "/").split("/"):
+        return p
+    return os.path.normpath(os.path.join(bdir, rel))
+
+
 def restore_to(mod, bdir):
     """Undo bdir and every newer backup, newest first (backups undo each other in
     order), so the files are as they were before bdir's run. Returns the manifests."""
@@ -326,14 +346,14 @@ def restore(mod, bdir):
     from . import guard
     guard.check([os.path.join(root, rel) for rel in manifest.get("modified", []) + manifest.get("created", [])],
                 guard.roots_of(mod), "restore")
-    guard.check([os.path.join(bdir, rel) for rel in manifest.get("modified", [])], [bdir], "restore")
+    guard.check([_copy_of(bdir, rel) for rel in manifest.get("modified", [])], [os.path.dirname(bdir)], "restore")
     p = root
     try:
         for rel in manifest["modified"]:
             p = os.path.join(root, rel)
             if os.path.exists(p):
                 remove_file(p)                  # never write through a hard link (a read-only one too)
-            shutil.copy2(os.path.join(bdir, rel), p)
+            shutil.copy2(_copy_of(bdir, rel), p)
         for rel in manifest["created"]:
             p = os.path.join(root, rel)
             if os.path.isdir(p):

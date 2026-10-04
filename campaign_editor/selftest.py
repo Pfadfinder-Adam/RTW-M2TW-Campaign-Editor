@@ -13,6 +13,7 @@ import random
 import time
 import traceback
 
+from . import scriptmods as SM
 from .plan import Plan
 
 NAME = "CE_Test"
@@ -819,7 +820,7 @@ def s_addon(c, mod):
     if a is None:
         raise Skip("the add-on is not in the library")
     plan = Plan(mod, "addon", key, {})
-    AD.plan_install(plan, a, AD.read_settings(a, a.template()), mod)
+    AD.plan_install(plan, a, AD.read_settings(a, a.template()), mod, mark=SM.TEST_MARK)
     return plan
 
 
@@ -1239,7 +1240,7 @@ def s_addon_diplomacy(c, mod):
     if a is None:
         raise Skip("the add-on is not in the library")
     plan = Plan(mod, "addon", "player_diplomacy", {})
-    AD.plan_install(plan, a, AD.read_settings(a, a.template()), mod)
+    AD.plan_install(plan, a, AD.read_settings(a, a.template()), mod, mark=SM.TEST_MARK)
     return plan
 
 
@@ -1252,7 +1253,7 @@ def s_addon_growth(c, mod):
     if a is None:
         raise Skip("the add-on is not in the library")
     plan = Plan(mod, "addon", "avoid_growth", {})
-    AD.plan_install(plan, a, AD.read_settings(a, a.template()), mod)
+    AD.plan_install(plan, a, AD.read_settings(a, a.template()), mod, mark=SM.TEST_MARK)
     return plan
 
 
@@ -1294,7 +1295,7 @@ def s_module(c, mod):
             with open(p, "w", encoding="utf-8") as fh:
                 fh.write(text)
             a = AD.from_script(text, os.path.basename(p), p)
-            AD.plan_install(plan, a, AD.read_settings(a, text), mod)
+            AD.plan_install(plan, a, AD.read_settings(a, text), mod, mark=SM.TEST_MARK)
     return plan
 
 
@@ -1483,6 +1484,22 @@ def s_delete_region(c, mod):
     raise Skip("no rebel town that can go (each is named by a campaign script, an event or is an island)")
 
 
+
+@step("Scripts in the game: the words beside Avoid Growth's tick changed in the script the test mod put in "
+      "(REX / M2EX)",
+      "the settlement scroll's tick says '{label}'; afterwards Add-ons > Scripts in the game... lists every script the "
+      "test mod put into the game's script/modules and takes them all out with one press")
+def s_scripts(c, mod):
+    s = next((x for x in SM.scripts(mod) if x.test and x.file.lower() == "avoid_growth.nut"), None)
+    if s is None:
+        raise Skip("Avoid Growth is not in the game's script/modules (its step did not write)")
+    c.said["label"] = "Avoid Growth (CE_Test)"
+    values = dict(s.values, AG_LABEL=c.said["label"])
+    plan = Plan(mod, "scripts", "avoid_growth", {})
+    if not SM.plan_settings(plan, s, values):
+        raise Skip("the words were already set")
+    return plan
+
 # ---------------------------------------------------------------------------
 # coverage: every feature of the editor and the steps that try it - a feature tried by the run itself or one that
 # only shows (writes nothing) says so. tests.test_tool checks that every work button, tab and Tools entry of the
@@ -1541,6 +1558,7 @@ COVERAGE = {
     "Engine settings (REX / M2EX)": ["s_engine_rules"],
     "Add-ons": ["s_addon", "s_addon_diplomacy", "s_addon_growth"],
     "Module builder": ["s_module"],
+    "Scripts in the game (script/modules: settings, off / on, delete, the test mod's taken out)": ["s_scripts"],
     "Art: replace a picture": ["s_art", "s_art_all"],
     "Faction emblem": ["s_emblem"],
     "Banner...": ["s_banner"],
@@ -1707,7 +1725,10 @@ def report(data, campaign, names, results):
            "units moved from %(foreign)s, other %(other)s" % names,
            "%d of %d steps fine (written, no new problem in Check mod files)" % (ok, len(results)), "",
            "Start the mod in the game (its Start .bat), play a few turns and a battle, look at what each step says, "
-           "then send Report a bug with the game's log ticked.", ""]
+           "then send Report a bug with the game's log ticked.",
+           "Its add-ons and modules go into the GAME's script/modules (the engine runs them from there), not into "
+           "CE_Test: when you throw the test mod away, Add-ons > Scripts in the game... takes them out with one "
+           "press.", ""]
     for n, r in enumerate(results, 1):
         out.append("%2d. [%s] %s" % (n, r["status"], r["step"]))
         if r.get("error"):

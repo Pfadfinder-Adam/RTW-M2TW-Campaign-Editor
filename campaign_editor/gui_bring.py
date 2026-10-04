@@ -13,7 +13,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import packs
 from .editors import building_blocks
-from .gui_util import one_window, StepWindow
+from .gui_util import one_window, ScrollFrame, StepWindow
 from .moddata import ModData
 
 NOWHERE = "(not recruited there)"
@@ -318,8 +318,9 @@ class BringWindow(StepWindow):
                                                      else "these buildings recruit no units"))
             self._collect = None
             return
-        frm = ttk.Frame(self.body)
-        frm.pack(fill="both", expand=True)
+        sf = ScrollFrame(self.body)                 # a long list scrolls (wheel and bar) - report #109
+        sf.pack(fill="both", expand=True)
+        frm = sf.inner
         vs = []
         for i, (label, key, cur) in enumerate(rows):
             extra = (" (%s)" % ", ".join(units_at.get(key, []))) if units_at.get(key) else ""
@@ -355,16 +356,9 @@ class BringWindow(StepWindow):
             self._note("Nothing to set here.")
             self._collect = None
             return
-        outer = ttk.Frame(self.body)
-        outer.pack(fill="both", expand=True)
-        canvas = tk.Canvas(outer, highlightthickness=0)
-        sb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
-        frm = ttk.Frame(canvas)
-        canvas.create_window(0, 0, anchor="nw", window=frm)
-        frm.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.configure(yscrollcommand=sb.set)
-        canvas.pack(side="left", fill="both", expand=True)
-        sb.pack(side="left", fill="y")
+        sf = ScrollFrame(self.body)                 # wheel and bar
+        sf.pack(fill="both", expand=True)
+        frm = sf.inner
         vs = []
         for i, unit in enumerate(units):
             mine = places.get(unit, [])

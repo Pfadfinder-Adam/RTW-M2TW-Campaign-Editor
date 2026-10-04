@@ -626,12 +626,17 @@ def installed(mod, addon):
         return read_settings(addon, f.read().decode("utf-8", "replace"))
 
 
-def plan_install(plan, addon, values, mod=None):
+def plan_install(plan, addon, values, mod=None, mark=None):
+    """The add-on put into the script/modules folder the engine runs (target). mark: one comment line written at
+    its end (the test mod's scriptmods.TEST_MARK, so Scripts in the game can find and take out what it put in)."""
     problems = check(addon, values, mod)
     if problems:
         raise ValueError("; ".join(problems))
     template = addon.template()
     text = render(addon, template, values)
+    if mark:
+        nl = "\r\n" if "\r\n" in text else "\n"
+        text = text + ("" if text.endswith("\n") else nl) + mark + nl
     dst = target(plan.mod, addon)
     plan.binary(dst, text.encode("utf-8"))
     _old_lua(plan, mod or plan.mod, addon)
