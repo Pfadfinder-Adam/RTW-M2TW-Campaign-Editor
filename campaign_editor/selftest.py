@@ -1256,6 +1256,10 @@ def s_engine_rules(c, mod):
 BYTE_TOPS = (127, 255, 32767, 65535)            # the most a byte / a short holds: a limit there is not raised
 RULES_LEFT = {
     "start_date": "the events and the campaign script count from it",
+    # a tester in Medieval II: the years jumped +2 / +3 a turn (2.00 -> 1.90) and the turn counter showed the year
+    "timescale": "the test's events are put on turns by it (turn 2, 4...), and a part of a year makes the years jump "
+                 "unevenly",
+    "show_date_as_turns": "the turn counter keeps showing turns, as the game has it",
     "disable_console": "the console stays on - add-ons are looked at through it",
     "faction_unlock": "'earned' would hide the test's new factions from the faction list",
     "portrait_pool": "'isolated' takes the game's portraits away from a mod with none of its own",

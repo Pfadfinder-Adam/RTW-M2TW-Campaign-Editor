@@ -239,11 +239,15 @@ def apply(plan, campaign, changes):
         else:
             f.insert(len(f.raw) - (1 if f.raw and not f.text(len(f.raw) - 1).strip() else 0), lines)
         have.add(name.lower())
-        if (ev.get("kind") or "historic") == "historic":
+        kind = ev.get("kind") or "historic"
+        if kind == "historic":
             # the game shows a historic event's title and body on its scroll and stops on a missing one
             # ("ASSERT FAILED: event_manager.cpp: description_string" - a tester's test mod, both games)
             ev = dict(ev, body=ev.get("body") or ev.get("text") or ev.get("title") or name.replace("_", " "),
                       title=ev.get("title") or name.replace("_", " "))
+        else:                                   # a disaster's scroll shows its own title and text too (Medieval II)
+            title, body = DEFAULT_TEXT.get(kind, (name.replace("_", " "), name.replace("_", " ")))
+            ev = dict(ev, title=ev.get("title") or title, body=ev.get("body") or ev.get("text") or body)
         for part in ("title", "body"):
             if ev.get(part):
                 texts["%s_%s" % (name.upper(), part.upper())] = ev[part]
@@ -269,6 +273,22 @@ WHAT = {
     "horde": "A horde rises (Medieval II: the Mongols / Timurids) - with the faction's own script.",
     "dustbowl": "A dust storm (Medieval II): the farms around the place yield less.",
     "locusts": "Locusts (Medieval II): the farms around the place yield less.",
+}
+
+
+# the title and text a new event shows when none is given: Medieval II opens a scroll for a disaster too, with the
+# event's own <NAME>_TITLE / _BODY (vanilla earthquake_in_silicia has them) - without them it showed the bare name
+# (a tester's test mod: 'ce_test_plague' as title and text)
+DEFAULT_TEXT = {
+    "plague": ("Plague", "A plague has broken out. The people fall ill and die, and travellers carry it on to other "
+                         "towns."),
+    "volcano": ("A volcano erupts", "The volcano has erupted: buildings nearby are damaged and people have died."),
+    "earthquake": ("Earthquake", "An earthquake has struck: buildings are damaged and people have died."),
+    "flood": ("Floods", "Floods have struck: buildings and farmland are damaged and people have died."),
+    "storm": ("Storm at sea", "A great storm has struck the fleets at sea."),
+    "horde": ("A horde rises", "A great horde is on the move."),
+    "dustbowl": ("Dust storms", "Dust storms ruin the farms: the harvests will be poor."),
+    "locusts": ("Locusts", "Swarms of locusts ruin the farms: the harvests will be poor."),
 }
 
 

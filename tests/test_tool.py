@@ -5529,6 +5529,15 @@ building smith
         quiet = Plan(mod, "e", "e", {})
         EV.apply(quiet, "test", {"new": [{"kind": "historic", "name": "hush", "date": "31", "title": "Hush"}]})
         self.assertIn("{HUSH_BODY}\tHush", quiet.files[mod.text_file("historic_events.txt")].texts())
+        # a disaster too: Medieval II opens a scroll for it with its own title and text (the test mod's
+        # 'ce_test_plague' showed its bare name as both)
+        sick = Plan(mod, "e", "e", {})
+        EV.apply(sick, "test", {"new": [{"kind": "plague", "name": "ce_test_plague", "date": "32"}]})
+        texts = sick.files[mod.text_file("historic_events.txt")].texts()
+        self.assertIn("{CE_TEST_PLAGUE_TITLE}\tPlague", texts)
+        self.assertTrue(any(l.startswith("{CE_TEST_PLAGUE_BODY}\tA plague has broken out") for l in texts))
+        self.assertIn("{BOOM_BODY}\tThe volcano has erupted: buildings nearby are damaged and people have died.",
+                      plan.files[mod.text_file("historic_events.txt")].texts())
         # a new event goes in date order - the games read the events as a queue (the author's Rome test mod: events
         # written at the end, after later ones, never came); the turn and year a date means
         early = Plan(mod, "e", "e", {})
