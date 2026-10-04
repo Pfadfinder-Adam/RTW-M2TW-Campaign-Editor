@@ -332,6 +332,7 @@ python campaign_editor.py restore --data PATH
 python campaign_editor.py scan gaetulii --data PATH    # every mention of a faction in the whole mod
 python campaign_editor.py newmod HLR_Saba --data PATH  # a separate mod folder built on PATH's mod
 python campaign_editor.py slim --data NEWMOD\data        # plain-game mods: keep only the changed files
+python campaign_editor.py selfcheck report.txt          # the editor checks itself (the exe: RTW-M2TW-Campaign-Editor.exe selfcheck report.txt)
 ```
 
 **Where a faction is named** (in **Check mod files** when a faction is picked; on the command line `scan`) reads every text file of the mod (not only `data`) and lists where the faction is named: places the tool does **not** handle (check these by hand), places it does, files and folders named after the faction, and files the faction's models, textures and unit cards point at that do not exist. It tells every file apart - the game's own (unchanged), changed by the mod, REX's, or the mod's own - from the game manifests that come inside the tool (a manifest made on your PC with **Game manifest...** wins). It writes nothing. Folders and files you want it to skip go in `CampaignEditor_ignore.txt` next to `data` (button **Ignore list...** in the Check mod files window; one rule per line: `folder/`, `name/` for that folder name anywhere, or a mask like `*.bak`). The list only affects the scan.

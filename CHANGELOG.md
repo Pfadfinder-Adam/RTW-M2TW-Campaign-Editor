@@ -99,6 +99,11 @@
   same banners in the same places, so what they share stays and each one's heraldry goes); every banner and
   pennant of the sheet is dyed on its own, and the window shows the banner in 3D on its model (infantry, spear,
   cavalry, missile, general). A sheet shared with another faction becomes the faction's own copy.
+- **The exe checks itself before it is handed out**: `RTW-M2TW-Campaign-Editor.exe selfcheck [report.txt]` imports
+  every part of the editor, reads every file that travels inside the exe (the game manifests, the engines'
+  catalogue, the built-in add-ons, the icons), loads a tiny made-up mod, runs Check mod files on it, writes a new
+  faction and restores every byte. The download page builds run it: an exe with a part or a file missing is never
+  handed out. Every part of the editor now goes into the exe, also those opened only from a button.
 
 ### Changed
 - **Sack Settlement (both games): the governor's building always stays, 600 people at least**: the core chain is

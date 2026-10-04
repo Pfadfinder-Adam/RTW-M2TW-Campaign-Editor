@@ -47,7 +47,8 @@ EXAMPLE = {
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="campaign_editor", description="Add a new faction to a Rome: Total War mod.")
-    ap.add_argument("command", choices=["new", "list", "towns", "names", "restore", "example", "scan", "newmod", "slim", "manifest"])
+    ap.add_argument("command", choices=["new", "list", "towns", "names", "restore", "example", "scan", "newmod", "slim",
+                                        "manifest", "selfcheck"])
     ap.add_argument("arg", nargs="?")
     ap.add_argument("--data", help="the mod's data folder (or the mod folder)")
     ap.add_argument("--campaign", default="imperial_campaign")
@@ -56,6 +57,9 @@ def main(argv=None):
     ap.add_argument("--copy-all", action="store_true", help="newmod: copy every file instead of hard links")
     a = ap.parse_intermixed_args(argv)
 
+    if a.command == "selfcheck":                  # selfcheck [report file]: the editor checks itself (CI runs the exe)
+        from .selfcheck import main as selfcheck
+        return selfcheck(a.arg)
     if a.command == "example":
         print(json.dumps(EXAMPLE, indent=2))
         return 0
