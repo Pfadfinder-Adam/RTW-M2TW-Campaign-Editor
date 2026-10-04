@@ -7,8 +7,8 @@ Only the latest release gets fixes. Please update to it before reporting a probl
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.20.x (latest) | :white_check_mark: |
-| < 0.20   | :x:                |
+| 0.29.x (latest) | :white_check_mark: |
+| < 0.29   | :x:                |
 
 ## Where to get it
 
@@ -22,7 +22,8 @@ editor's Preview show what a pack would write before you apply it.
 RTW & M2TW Campaign Editor only reads and writes the game or mod folder you load, plus its own files
 next to the exe (`CampaignEditor_settings.json`, `CampaignEditor_logs` with the log and the saved sessions,
 `CampaignEditor_addons` with add-ons you added) and files you pick in a save
-dialog. The code enforces it: every write to the game goes through one guard that refuses a path outside the mod's
+dialog. Started outside the game's folder, it offers (with a question) to copy itself into the game folder you pick,
+with its settings, and to make a desktop shortcut (Windows) - nothing of that without a yes. The code enforces it: every write to the game goes through one guard that refuses a path outside the mod's
 or the game's folder (a `../`, another drive, a link that leads out - whatever a pack, add-on zip or backup names),
 before anything is written, and logs it. Every write is shown first and backed up (`CampaignEditor_backups`), and
 Restore undoes it (a backup that names files outside is refused too). It needs no internet connection; it sends

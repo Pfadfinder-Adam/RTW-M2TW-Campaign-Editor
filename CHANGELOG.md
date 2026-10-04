@@ -60,7 +60,7 @@
   numbers a step (a maximum or limit up, a minimum and anything else down, so the campaign's towns and families
   still fit), switches turned, an engine option to another it names. Left as they are, with the reason in the
   report: the start date, the switches that name files the engine loads, the console switch and the faction unlock.
-- **Test mod: every feature and every option** (56 steps): besides one step per feature it now tries their
+- **Test mod: every feature and every option** (59 steps): besides one step per feature it now tries their
   variants too - a faction that splits off another in a revolt (all five engines read it), alliances and wars at
   the start, city / castle and level for many towns, garrisons the game's way, a line of a unit and of a building
   changed, a character's traits and retinue, a daughter and a man tied to no family, a port moved, a region's
@@ -149,7 +149,8 @@
   units, buildings, children, retinue. Check mod files says "LIMITS: none"; every write raises `max_factions` in
   the mod's own `descr_ex.txt` when the mod has more factions than it (a mod ran 32 factions under 31 and
   crashed in the faction panel), and the family editor raises `max_num_children` / `max_num_ancillaries` instead of
-  warning. Without an engine the original exes' limits stay as before.
+  warning. A new faction raises `max_factions` with it, no question asked, and the status line no longer says "Full"
+  under an engine. Without an engine the original exes' limits stay as before (21 / 31 factions).
 - **Testers' reports of 2026-10-03**: a window opens once - Settings, Help, Report, every Tools window and the
   Events / rules / traits / pack / bring / portrait windows come to the front when opened again instead of a new
   copy each press; a new window no longer shows at the top left for a moment before it jumps to the middle; the
@@ -168,15 +169,12 @@
   **Check mod files** finds a shadow / split-off pair written on one side only, an emergence event for a faction
   that is not dead at the start, and a dead faction holding towns. A clone of such a faction (Ostrogoths, the
   empires' rebels) starts plain and alive. Both games (Barbarian Invasion, REX and Medieval II read these words).
-- **A town straight from the Map**: a double click on a town (or the right click's *Edit this town...*)
+- **A town straight from the Map**: the right click's *Edit this town...* (and a button in the town's own window)
   opens its owner in Edit faction with the town picked on the Buildings tab - level, population, city or castle,
-  buildings.
+  buildings. (A double click opens the town's own window, above.)
 - **Many towns made city / castle and of another level at once**: a third tab in *Buildings and garrisons
   for many towns* (also on the Map's Pick towns menu) - city <-> castle with the buildings converted the game's way
   (Medieval II), a new level with its governor's building and population; towns of any owner, a backup first.
-- **REX / M2EX: no faction limit** - every new faction raises `max_factions` in the
-  mod's own `descr_ex.txt` by itself, written with the faction (Preview says so), no question asked; the status line
-  no longer says "Full" under an engine. Only the original exes still stop at 21 / 31.
 - **A town on its region's edge stays its region's** (a tester's Erebor, Divide and Conquer): a town pixel that
   touches a neighbour's land more than its own went to the neighbour - the town was not drawn, and the bigger map
   painted its block in the neighbour's colour. Now every region keeps one town, the surest pixels given first (the
@@ -343,8 +341,6 @@
   battle model had no texture of the faction, so the game dressed them in another's. Recolour now gives the faction
   its own copy, made from an owner's texture and recoloured from that owner's colours; a card copied from another
   faction is recoloured from that faction's colours.
-- **Raze Settlement (Medieval II + M2EX)**: the button stands under Exterminate at any screen size (the game's UI
-  places are for 1024 x 768 and were not scaled) and looks like the scroll's own buttons.
 - **New events never came in the game (Rome)**: a new event was written at the end of `descr_events.txt`, after
   events of later years - the games read the events as a queue in date order, so it never fired. New events now go
   in date order (both games). The Events window shows beside each date the turn and the year it means (from the
