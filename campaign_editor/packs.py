@@ -556,7 +556,20 @@ def _owner_textures(lines, facs):
     new = [re.sub(r"(texture\s+)%s(\s*,)" % re.escape(src_f), lambda m, f=f: m.group(1) + f + m.group(2), src,
                   count=1) for f in add]
     at = tex[-1][0] + 1
-    return lines[:at] + new + lines[at:], add
+    lines = lines[:at] + new + lines[at:]
+    # Medieval II: the weapons / shields texture of the same faction too - the figure takes half its picture from
+    # it (no line = men like bare skeletons in battle)
+    att = [(i, l) for i, l in enumerate(lines) if strip_comment(l).split(None, 1)[:1] == ["texture_attachments"]
+           and len(_values([l], "texture_attachments")[0]) > 1]
+    if att:
+        have_a = {_values([l], "texture_attachments")[0][0] for _, l in att}
+        src_a = next((l for _, l in att if _values([l], "texture_attachments")[0][0] == src_f), att[0][1])
+        f_a = _values([src_a], "texture_attachments")[0][0]
+        more = [re.sub(r"(texture_attachments\s+)%s(\s*,)" % re.escape(f_a),
+                       lambda m, f=f: m.group(1) + f + m.group(2), src_a, count=1) for f in add if f not in have_a]
+        at = att[-1][0] + 1
+        lines = lines[:at] + more + lines[at:]
+    return lines, add
 
 
 def _put(plan, rel, data):

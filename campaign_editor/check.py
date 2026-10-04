@@ -142,6 +142,11 @@ def check_mod(mod, campaign, deep=False, progress=None):
     md = _modeldb_report(mod)
     if md:
         (bad if md[0] else say)(md[1])
+    lacking = weapons_texture_problems(mod)
+    if lacking:
+        bad("%d battle model(s) give a faction its texture but no weapons texture (texture_attachments) line, e.g. %s "
+            "- in Medieval II its men look like bare skeletons in battle; vanilla gives every faction both"
+            % (len(lacking), ", ".join("%s (%s)" % (m, ", ".join(fs[:3])) for m, fs in lacking[:3])))
 
     # ---- map ----
     step("map...")
@@ -278,6 +283,27 @@ def check_mod(mod, campaign, deep=False, progress=None):
         say("No problems found.")
     say("(%.1f s)" % (time.time() - t0))
     return "\n".join(out)
+
+
+def weapons_texture_problems(mod):
+    """[(model, [factions])] of descr_model_battle.txt (Medieval II): a faction with a 'texture' line but no
+    'texture_attachments' line in a model that has them (vanilla: none of 690)."""
+    from .models import TEXT_FILE
+    from .moddata import _ci
+    from .packs import _block_lines, _values, type_blocks
+    path = _ci(mod.data, TEXT_FILE)
+    if not path:
+        return []
+    f = mod.load(path)
+    out = []
+    for name, span in type_blocks(f).items():
+        lines = _block_lines(f, span)
+        att = {v[0] for v in _values(lines, "texture_attachments") if len(v) > 1}
+        if att:
+            gone = sorted({v[0] for v in _values(lines, "texture") if len(v) > 1 and "/" not in v[0]} - att)
+            if gone:
+                out.append((name, gone))
+    return out
 
 
 def _modeldb_report(mod):

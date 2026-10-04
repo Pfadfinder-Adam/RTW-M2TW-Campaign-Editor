@@ -101,6 +101,9 @@ def _text_models(mod):
                 m.textures.setdefault(v[0], v[1])
             elif v and v[0]:
                 m.textures.setdefault("", v[0])                 # one texture for everyone
+        for v in _values(lines, "texture_attachments"):         # Medieval II: weapons / shields, per faction
+            if len(v) > 1 and "/" not in v[0]:
+                m.attach.setdefault(v[0], v[1])
         m.meshes = [v[0] for line in lines                  # in the file's order: closest first
                     for key in ("mesh", "model_flexi", "model_flexi_m", "model_flexi_c")
                     for v in _values([line], key) if v and v[0]]
@@ -152,7 +155,7 @@ def catalogue(mod):
             m.where |= o.where
             if o.exact and not m.exact:
                 m.seats, m.exact = set(o.seats), True
-            for f, t in o.attach.items():            # the weapons / shields textures live in the modeldb only
+            for f, t in o.attach.items():            # weapons / shields textures the read file lacks
                 m.attach.setdefault(f, t)
     return read
 
@@ -468,7 +471,8 @@ def set_faction_texture(plan, info, faction, ref, kind="texture"):
     from . import modeldb as MDB
     from .packs import _block_lines, _owner_textures, _values, type_blocks
     mod = plan.mod
-    if kind == "texture" and "text" in info.where:
+    key = "texture" if kind == "texture" else "texture_attachments"
+    if "text" in info.where:
         path = _ci(mod.data, TEXT_FILE)
         f = plan.edit(path)
         blocks = type_blocks(f)
@@ -479,12 +483,13 @@ def set_faction_texture(plan, info, faction, ref, kind="texture"):
             got, _ = _owner_textures(now, [faction])
             out = []
             for line in got:
-                v = _values([line], "texture")[0] if strip_comment(line).split(None, 1)[:1] == ["texture"] else None
+                v = _values([line], key)[0] if strip_comment(line).split(None, 1)[:1] == [key] else None
                 if v and len(v) > 1 and v[0] == faction:
                     line = line.replace(v[1], _same_folder(v[1], ref), 1)
                 out.append(line)
             f.raw[a:a + len(now)] = [f.make(x) for x in out]
-            plan.note(f, "model %s: %s's texture -> %s" % (name, faction, ref))
+            plan.note(f, "model %s: %s's %s -> %s" % (name, faction, "texture" if kind == "texture" else
+                                                      "weapons texture", ref))
     if "modeldb" in info.where:
         src, dst = MDB.find(mod)
         db = MDB._db_in_plan(plan, src, dst)

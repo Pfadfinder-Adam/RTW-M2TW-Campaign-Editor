@@ -705,6 +705,35 @@ building smith
         self.assertEqual(units, ["alpha general", "rebel spear"])
         self.assertTrue(any("rebel spear" in m for _, m in plan.warnings))
 
+    def test_new_faction_gets_the_weapons_texture_line_too(self):
+        """A tester in Medieval II (with M2EX, which reads descr_model_battle.txt): the test faction's men looked like
+        bare skeletons in battle - their model lines had 'texture ce_test, ...' but no 'texture_attachments ce_test,
+        ...', and a figure takes half its picture from that weapons / shields texture. The clone, a model given to
+        a new owner and the catalogue all carry the line now."""
+        from campaign_editor import models, packs
+        dmb = os.path.join(self.root, "data", "descr_model_battle.txt")
+        write(dmb, "type\tspear\nskeleton\tMTW2_Spear\n"
+                   "texture\talpha, unit_models/_Units/A/textures/a_alpha.texture, unit_models/_Units/A/textures/n.texture\n"
+                   "texture_attachments\talpha, unit_models/AttachmentSets/Final Kite_alpha_diff.texture, "
+                   "unit_models/AttachmentSets/Final Kite_alpha_norm.texture\n\n")
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        text = "\n".join(plan.files[dmb].texts())
+        self.assertIn("texture_attachments\tbeta, unit_models/AttachmentSets/Final Kite_alpha_diff.texture", text)
+        self.assertIn("texture\tbeta, unit_models/_Units/A/textures/a_alpha.texture", text)
+        lines, added = packs._owner_textures(["type spear", "texture alpha, a.texture",
+                                              "texture_attachments alpha, k.texture, kn.texture"], ["gamma"])
+        self.assertEqual(added, ["gamma"])
+        self.assertIn("texture_attachments gamma, k.texture, kn.texture", lines)
+        self.assertEqual(models._text_models(mod)["spear"].attach,
+                         {"alpha": "unit_models/AttachmentSets/Final Kite_alpha_diff.texture"})
+        from campaign_editor.check import weapons_texture_problems
+        self.assertEqual(weapons_texture_problems(mod), [])
+        with open(dmb) as fh:
+            write(dmb, fh.read() + "type\tsword\ntexture\talpha, s.texture\ntexture\tbeta, s.texture\n"
+                                    "texture_attachments\talpha, k.texture, kn.texture\n")
+        self.assertEqual(weapons_texture_problems(ModData(self.root)), [("sword", ["beta"])])
+
     def test_scan_sorts_mentions(self):
         write(os.path.join(self.root, "script", "war.nut"), "local f = \"alpha\";\nlocal alphabet = 1;\n")
         write(os.path.join(self.root, "data", "descr_model_strat.txt"),

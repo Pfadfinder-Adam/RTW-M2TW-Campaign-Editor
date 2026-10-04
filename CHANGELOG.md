@@ -357,6 +357,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Medieval II (with M2EX): a new faction's men looked like bare skeletons in battle.** M2EX reads the models from
+  descr_model_battle.txt, where the new faction got its `texture` line but not its `texture_attachments` line (the
+  weapons and shields picture a figure takes half its look from). A new faction, a model given to a new owner and
+  Recolour now write that line too, and **Check mod files** names a model where a faction lacks it.
 - **A village grown to a town gets its governor's building** (Rome with REX; the town window, Many towns): the game
   stopped on the town - "has not been given a core building". **Check mod files** now names such a town too.
 - **A son off the map is written one year under the age of manhood** (15 with the usual 16): the game refuses a
