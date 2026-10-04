@@ -31,7 +31,7 @@ def run(window=True):
         lines.append("FAIL  %s: %s" % (what, err))
 
     _modules(ok, fail, window)
-    _bundled(ok, fail, window)
+    _bundled(ok, fail)
     _tiny_mod(ok, fail)
     lines.append("")
     lines.append("SELF-CHECK %s (%d problem%s)" % ("PASSED" if not bad else "FAILED", len(bad),
@@ -64,7 +64,7 @@ def _modules(ok, fail, window):
                                       if lacking else ""))
 
 
-def _bundled(ok, fail, window):
+def _bundled(ok, fail):
     from .scan import reference_dir
     for name in REFERENCE:
         p = os.path.join(reference_dir(), name)
@@ -86,8 +86,8 @@ def _bundled(ok, fail, window):
         ok("the engines' catalogue (%s)" % ", ".join("%s %d" % kv for kv in counts.items()))
     except Exception as e:                                  # noqa: BLE001
         fail("the engines' catalogue", e)
+    from . import addons as AD
     try:
-        from . import addons as AD
         for a in AD.ADDONS:
             text = a.template()
             if not text.strip() or AD.from_script(text, a.file) is None:
@@ -95,15 +95,14 @@ def _bundled(ok, fail, window):
         ok("%d built-in add-ons" % len(AD.ADDONS))
     except Exception as e:                                  # noqa: BLE001
         fail("the built-in add-ons", e)
-    if window:
-        try:
-            from .gui import assets_dir
-            icons = [n for n in os.listdir(assets_dir()) if n.lower().startswith("icon") and n.endswith(".png")]
-            if not icons:
-                raise ValueError("no icon_*.png in %s" % assets_dir())
-            ok("%d icons" % len(icons))
-        except Exception as e:                              # noqa: BLE001
-            fail("the window's icons", e)
+    try:
+        folder = os.path.dirname(AD.assets_dir())          # assets/ (the add-ons are assets/addons)
+        icons = [n for n in os.listdir(folder) if n.lower().startswith("icon") and n.endswith(".png")]
+        if not icons:
+            raise ValueError("no icon_*.png in %s" % folder)
+        ok("%d icons" % len(icons))
+    except Exception as e:                                  # noqa: BLE001
+        fail("the window's icons", e)
 
 
 def _tiny_mod(ok, fail):

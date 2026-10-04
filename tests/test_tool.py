@@ -1767,12 +1767,14 @@ building smith
         from io import StringIO
         old, sys.stdout = sys.stdout, StringIO()
         try:
-            code = selfcheck.main(out)
+            code = selfcheck.main(out)                      # tkinter as this Python has it (CI: yes, Pillow: no)
         finally:
             sys.stdout = old
-        self.assertEqual(code, 0)
         with open(out, encoding="utf-8") as fh:
-            self.assertIn("SELF-CHECK PASSED", fh.read())
+            report_text = fh.read()
+        self.assertEqual(code, 0, report_text)
+        self.assertIn("SELF-CHECK PASSED", report_text)
+        self.assertIn("icons", report_text)
 
     def test_older_versions_files_beside_a_mod_still_work(self):
         """A new version put over an old one: the older names beside a mod are still read - the ignore list, the
