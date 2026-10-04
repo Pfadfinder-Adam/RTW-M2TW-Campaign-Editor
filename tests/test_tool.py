@@ -2995,6 +2995,65 @@ building smith
         finally:
             os.chmod(victim, stat.S_IREAD | stat.S_IWRITE)
 
+    def test_no_rights_disk_full_and_restore_half_way_in_plain_words(self):
+        """Windows' corner cases: the mod's folder takes no writes (the backup cannot be made), the disk fills half
+        way, a path longer than Windows takes, a file held by the game while Restore runs - each said in plain
+        words with what to do, nothing changed or lost, and Restore can be run again."""
+        import errno
+        from unittest import mock
+        from campaign_editor import plan as plan_mod, textio
+        before = tree_hash(self.root)
+        opts = {"display_name": "Betan League", "short_name": "Beta", "adjective": "Betan",
+                "start": {"regions": ["B_R"], "leader": {"name": "Boris Alphid", "age": 35}, "denari": 500}}
+        # no rights: the backup folder cannot be made
+        real_makedirs = plan_mod.os.makedirs
+
+        def no_rights(p, *a, **k):
+            if plan_mod.BACKUP_DIR in p:
+                raise PermissionError(13, "Access is denied", p)
+            return real_makedirs(p, *a, **k)
+        with mock.patch.object(plan_mod.os, "makedirs", side_effect=no_rights):
+            with self.assertRaises(textio.WriteError) as got:
+                build(ModData(self.root), "test", "alpha", "beta", opts).apply()
+        self.assertIn("the system refused", str(got.exception))
+        self.assertIn("the backup is made before any file is written", str(got.exception))
+        self.assertEqual(tree_hash(self.root), before)
+        # the disk fills half way: what was written goes back
+        plan = build(ModData(self.root), "test", "alpha", "beta", opts)
+        victim, real = plan.changed_files()[2], textio.os.replace
+
+        def full(src, dst):
+            if os.path.normcase(dst) == os.path.normcase(victim):
+                raise OSError(errno.ENOSPC, "No space left on device", dst)
+            return real(src, dst)
+        with mock.patch.object(textio.os, "replace", side_effect=full):
+            with self.assertRaises(textio.WriteError) as got:
+                plan.apply()
+        self.assertIn("the disk is full", str(got.exception))
+        self.assertIn("Nothing was changed", str(got.exception))
+        self.assertEqual(tree_hash(self.root), before)
+        self.assertIn("too long", textio.plain("x.txt", OSError(errno.ENAMETOOLONG, "File name too long")))
+        self.assertIsNone(textio.plain("x.txt", OSError(errno.EIO, "I/O error")))   # not one we can explain
+        # Restore meets a file held by the game: it stops, keeps the backup whole, and runs again later
+        bdir = build(ModData(self.root), "test", "alpha", "beta", opts).apply()
+        real_copy = plan_mod.shutil.copy2
+        held = {"n": 0}
+
+        def busy(src, dst, *a, **k):
+            held["n"] += 1
+            if held["n"] == 2:
+                raise PermissionError(13, "The process cannot access the file", dst)
+            return real_copy(src, dst, *a, **k)
+        with mock.patch.object(plan_mod.shutil, "copy2", side_effect=busy):
+            with self.assertRaises(textio.WriteError) as got:
+                restore(ModData(self.root), bdir)
+        self.assertIn("Restore stopped half way", str(got.exception))
+        self.assertIn("then Restore again", str(got.exception))
+        self.assertTrue(os.path.isdir(bdir))                              # still there, not marked restored
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith(plan_mod.BACKUP_DIR)},
+                         before)                                         # the mod's files as before, byte for byte
+
     def test_clone_takes_the_templates_pictures_from_the_games_data(self):
         """A mod that keeps the game's own pictures (its folder holds what it changed): the template's faction
         buttons, unit cards and banner lie in the game's data. The new faction gets copies in the MOD (a tester's

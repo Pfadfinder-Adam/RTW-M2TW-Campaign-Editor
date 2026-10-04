@@ -324,6 +324,11 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **A file the system will not write is said in plain words everywhere, with what to do**: a mod folder
+  that takes no writes (the backup cannot be made - nothing is changed), a full disk, a path longer than
+  Windows takes (260 characters), a file held by the game or another program. Before, outside the main
+  window such a refusal showed as "Something went wrong" with an offer to send a bug report. Restore that
+  meets a file held by the game stops, keeps the backup whole and can simply be run again.
 - **The bigger map (x3) no longer warns about the engines' own scripts**: REX's and M2EX's interface
   scripts (`script/core`, `script/ui`) and the add-ons that come with the editor were listed as "place things
   on the map by x, y - make those 3x+1 by hand" because they hold screen places and colours. Only a script that

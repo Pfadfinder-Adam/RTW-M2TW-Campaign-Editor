@@ -6,7 +6,7 @@ import json
 import os
 import shutil
 
-from .textio import TextFile, WriteError, make_writable, readonly, refused, remove_file, replace_file
+from .textio import TextFile, WriteError, make_writable, plain, readonly, refused, remove_file, replace_file
 
 BACKUP_DIR = "CampaignEditor_backups"
 OLD_BACKUP_DIR = "faction_tool_backups"           # up to 0.28: still listed, Restore works on both
@@ -141,25 +141,33 @@ class Plan:
         while os.path.exists(bdir) or os.path.exists(bdir + "_restored"):   # two writes in one second
             k += 1
             bdir = os.path.join(root, BACKUP_DIR, "%s_%s_%d" % (stamp, self.new, k))
-        os.makedirs(bdir)
         # copied_from {created: its source}: what a copied picture was before it was replaced (Art's
         # "Back to the original"); Restore does not need it
         manifest = {"faction": self.new, "template": self.template, "modified": [], "created": [], "copied_from": {}}
         created = []
         changed = self.changed_files()
-        for path in changed:
-            rel = os.path.relpath(path, root)
-            if path not in self.originals and not os.path.exists(path):
-                created.append(rel.replace("\\", "/"))     # a new picture: Restore removes it
-                continue
-            dst = os.path.join(bdir, rel)
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            if path in self.originals:
-                with open(dst, "wb") as out:
-                    out.write(self.originals[path])
-            else:                               # a picture or a removed file: back up what is on disk
-                shutil.copy2(path, dst)
-            manifest["modified"].append(rel.replace("\\", "/"))
+        dst = bdir
+        try:
+            os.makedirs(bdir)
+            for path in changed:
+                rel = os.path.relpath(path, root)
+                if path not in self.originals and not os.path.exists(path):
+                    created.append(rel.replace("\\", "/"))     # a new picture: Restore removes it
+                    continue
+                dst = os.path.join(bdir, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                if path in self.originals:
+                    with open(dst, "wb") as out:
+                        out.write(self.originals[path])
+                else:                               # a picture or a removed file: back up what is on disk
+                    shutil.copy2(path, dst)
+                manifest["modified"].append(rel.replace("\\", "/"))
+        except OSError as e:                        # the backup itself could not be made: no rights, disk full...
+            shutil.rmtree(bdir, ignore_errors=True)
+            if os.path.isdir(os.path.dirname(bdir)) and not os.listdir(os.path.dirname(bdir)):
+                os.rmdir(os.path.dirname(bdir))
+            raise WriteError("%s\n\nNothing was changed: the backup is made before any file is written, and it "
+                             "could not be made." % (plain(dst, e) or "%s: %s" % (type(e).__name__, e))) from e
         made, done = [], []
         try:
             for src, dst in self.copies:
@@ -192,7 +200,9 @@ class Plan:
             # one file refused (read-only, held by the game...): the files written before it go back, so the mod
             # is never left half changed - all of this run or none of it
             left = _roll_back(root, bdir, manifest, done, made)
-            why = str(e) if isinstance(e, WriteError) else "%s: %s" % (type(e).__name__, e)
+            why = str(e) if isinstance(e, WriteError) else \
+                (isinstance(e, OSError) and plain(getattr(e, "filename", None) or root, e)) or \
+                "%s: %s" % (type(e).__name__, e)
             if left:
                 raise WriteError("%s\n\n%d file(s) written before it could not be put back (%s) - use Restore on "
                                  "the backup %s." % (why, len(left), ", ".join(left[:5]), bdir)) from e
@@ -317,22 +327,31 @@ def restore(mod, bdir):
     guard.check([os.path.join(root, rel) for rel in manifest.get("modified", []) + manifest.get("created", [])],
                 guard.roots_of(mod), "restore")
     guard.check([os.path.join(bdir, rel) for rel in manifest.get("modified", [])], [bdir], "restore")
-    for rel in manifest["modified"]:
-        dst = os.path.join(root, rel)
-        if os.path.exists(dst):
-            remove_file(dst)                # never write through a hard link (a read-only one too)
-        shutil.copy2(os.path.join(bdir, rel), dst)
-    for rel in manifest["created"]:
-        p = os.path.join(root, rel)
-        if os.path.isdir(p):
-            shutil.rmtree(p)
-        elif os.path.exists(p):
-            remove_file(p)
-        # folders the run made for its new files (ui/custom_portraits/<name>/) go when left empty
-        d = os.path.dirname(p)
-        while os.path.abspath(d).startswith(os.path.abspath(mod.data) + os.sep) and os.path.isdir(d) \
-                and not os.listdir(d):
-            os.rmdir(d)
-            d = os.path.dirname(d)
-    shutil.move(bdir, bdir + "_restored")
+    p = root
+    try:
+        for rel in manifest["modified"]:
+            p = os.path.join(root, rel)
+            if os.path.exists(p):
+                remove_file(p)                  # never write through a hard link (a read-only one too)
+            shutil.copy2(os.path.join(bdir, rel), p)
+        for rel in manifest["created"]:
+            p = os.path.join(root, rel)
+            if os.path.isdir(p):
+                shutil.rmtree(p)
+            elif os.path.exists(p):
+                remove_file(p)
+            # folders the run made for its new files (ui/custom_portraits/<name>/) go when left empty
+            d = os.path.dirname(p)
+            while os.path.abspath(d).startswith(os.path.abspath(mod.data) + os.sep) and os.path.isdir(d) \
+                    and not os.listdir(d):
+                os.rmdir(d)
+                d = os.path.dirname(d)
+        p = bdir
+        shutil.move(bdir, bdir + "_restored")
+    except OSError as e:                        # a file held by the game, the disk full...: the backup stays whole
+        words = str(e) if isinstance(e, WriteError) else plain(getattr(e, "filename", None) or p, e) or \
+            "%s: %s" % (type(e).__name__, e)
+        raise WriteError("%s\n\nRestore stopped half way; the backup %s is kept whole - Restore it again once the "
+                         "file is free (the files already put back are put back again, nothing is lost)."
+                         % (words.replace("then Apply again", "then Restore again"), os.path.basename(bdir))) from e
     return manifest

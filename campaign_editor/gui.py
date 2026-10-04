@@ -5131,6 +5131,11 @@ class App(tk.Tk):
     def report_callback_exception(self, exc, val, tb):
         """A crash inside the window: logged with its traceback and shown, never silent."""
         text = "".join(traceback.format_exception(exc, val, tb))
+        from .textio import WriteError
+        if isinstance(val, WriteError):           # the system refused a file (held, read-only, disk full): no bug
+            log.write("Writing refused\n" + text)
+            messagebox.showerror(APP, str(val))
+            return
         log.write("ERROR (unexpected)\n" + text)
         if messagebox.askyesno(APP, "Something went wrong: %s\n\nThe details are in the log. Send a report to the "
                                     "author now (the logs, with your names cut out - you see it before it goes)?"

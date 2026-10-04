@@ -59,6 +59,34 @@ def refused(path, err):
         where, getattr(err, "strerror", None) or err, "; or ".join(tips))
 
 
+WIN_DISK_FULL = (112, 39)               # ERROR_DISK_FULL, ERROR_HANDLE_DISK_FULL
+WIN_TOO_LONG = (206,)                    # ERROR_FILENAME_EXCED_RANGE
+WIN_REFUSED = (5, 32, 33)                # access denied, in use by another program, locked
+WIN_MAX_PATH = 259
+
+
+def plain(path, err):
+    """Plain words for a file the system would not write, or None when the error is not one of those known: refused
+    (read-only, held by a program, no rights), the disk full, a path longer than Windows takes."""
+    import errno
+    code, win = getattr(err, "errno", None), getattr(err, "winerror", None)
+    where = os.path.abspath(path)
+    if code == errno.ENOSPC or win in WIN_DISK_FULL:
+        drive = os.path.splitdrive(where)[0] or os.path.dirname(where)
+        return ("%s could not be written - the disk is full (%s). Free some room on %s, then Apply again."
+                % (where, getattr(err, "strerror", None) or err, drive))
+    too_long = ("%s could not be written - the path is too long for the system (%d characters; Windows takes 260). "
+                "Move the game or the mod into a shorter folder (like C:\\Games), then Apply again."
+                % (where, len(where)))
+    if code == errno.ENAMETOOLONG or win in WIN_TOO_LONG:
+        return too_long
+    if isinstance(err, PermissionError) or win in WIN_REFUSED or code in (errno.EACCES, errno.EPERM):
+        return refused(path, err)
+    if os.name == "nt" and len(where) > WIN_MAX_PATH:  # long paths off: Windows says 'path not found' (WinError 3)
+        return too_long
+    return None
+
+
 def _retrying(do, path):
     """Run do() (a replace or a remove of path); when the system refuses: take the read-only mark off and try again,
     and wait a little for a program that holds the file for a moment (about 2.5 s in all). Raises WriteError."""
@@ -90,8 +118,13 @@ def replace_file(path, data):
         with open(tmp, "wb") as f:
             f.write(data)
         _retrying(lambda: os.replace(tmp, path), path)
-    except PermissionError as e:                  # the temp file itself refused: the folder takes no writes
-        raise WriteError(refused(path, e)) from e
+    except WriteError:
+        raise
+    except OSError as e:                          # the temp file itself refused (no rights, disk full, path too long)
+        words = plain(path, e)
+        if words is None:
+            raise
+        raise WriteError(words) from e
     finally:
         if os.path.exists(tmp):
             try:
