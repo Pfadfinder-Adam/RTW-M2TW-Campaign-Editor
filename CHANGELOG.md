@@ -324,6 +324,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Load on a mod that holds only the files it changes** (REX `-mod:`, Medieval II `mods/<name>`: the game
+  reads the rest from its own `data`) said only "no descr_sm_factions.txt"; it now says what such a mod is, where
+  the game takes the other files from and what to do (load the game's data, or make the mod whole with New mod
+  folder...).
 - **The mouse wheel**: a window closed while the mouse was over its list left the wheel pointing at it, and the next
   turn of the wheel anywhere could raise an error; on a touchpad or a precise mouse the lists of pictures, buildings,
   diplomacy, editors, the family tree and the garrisons did not scroll at all (a small turn counted as none). One

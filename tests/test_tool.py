@@ -1776,6 +1776,22 @@ building smith
         self.assertIn("SELF-CHECK PASSED", report_text)
         self.assertIn("icons", report_text)
 
+    def test_a_mod_with_only_its_changed_files_is_explained(self):
+        """REX -mod: and Medieval II mods/<name> may hold only the files they change (the game reads the rest from
+        its own data): Load says so in plain words and what to do, instead of 'no descr_sm_factions.txt'."""
+        from campaign_editor.moddata import find_data_dir
+        for thin in (os.path.join(self.root, "Thin", "data"), os.path.join(self.root, "mods", "thin", "data")):
+            os.makedirs(os.path.join(thin, "text"))
+            with self.assertRaises(FileNotFoundError) as e:
+                ModData(os.path.dirname(thin))
+            self.assertIn("holds only the files this mod changes", str(e.exception))
+            self.assertIn(os.path.join(self.root, "data"), str(e.exception))
+        empty = os.path.join(self.root, "Empty")
+        os.makedirs(empty)
+        with self.assertRaises(FileNotFoundError) as e:
+            find_data_dir(empty)
+        self.assertIn("no descr_sm_factions.txt", str(e.exception))
+
     def test_older_versions_files_beside_a_mod_still_work(self):
         """A new version put over an old one: the older names beside a mod are still read - the ignore list, the
         mod folder's mark, the backups - and take today's names when they are written again."""

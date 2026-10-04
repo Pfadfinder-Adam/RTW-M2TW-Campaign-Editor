@@ -13,7 +13,29 @@ def find_data_dir(path):
     for cand in (path, os.path.join(path, "data"), os.path.join(path, "Data")):
         if os.path.isfile(os.path.join(cand, "descr_sm_factions.txt")):
             return cand
+    game = _game_above(path)
+    if game:
+        raise FileNotFoundError(
+            "%s holds only the files this mod changes - the game takes the rest (descr_sm_factions.txt and the "
+            "others) from %s. The editor needs one data folder with every file: load the game's own data folder, "
+            "or make the mod whole - New mod folder... on the game, then copy this mod's files into the new folder."
+            % (path, os.path.join(game, "data")))
     raise FileNotFoundError("no descr_sm_factions.txt in %s or its data folder" % path)
+
+
+def _game_above(path):
+    """The game folder a mod folder sits in when that mod holds only what it changes (REX -mod:, Medieval II
+    mods/<name> - the game reads the rest from its own data folder), or None."""
+    data = next((c for c in (os.path.join(path, "data"), os.path.join(path, "Data"), path)
+                 if os.path.isdir(os.path.join(c, "text")) or os.path.isdir(os.path.join(c, "world"))), None)
+    if not data:
+        return None
+    up = os.path.dirname(data)
+    for _ in range(3):                                   # <game>/<mod>/data, <game>/mods/<mod>/data
+        up = os.path.dirname(up)
+        if os.path.isfile(os.path.join(up, "data", "descr_sm_factions.txt")):
+            return up
+    return None
 
 
 def _ci(folder, name):
