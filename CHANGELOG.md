@@ -354,6 +354,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **A new disaster event (plague, flood, storm, earthquake...) has its title and text**: Medieval II shows a scroll
+  for disasters too and showed the event's bare name there.
+- **Test mod: the 'every campaign rule' step leaves the timescale and the turn display as they are** - it changed
+  them, so the years jumped two or three a turn and the turn counter showed the year.
 - **Text that could not be read in the dark look**: light text on the Module builder's light IF block, dark red and
   dark blue lines (Not ready yet, In plain words) on the dark grey, light names on light ground swatches in the
   Terrain editor. Every text colour is now fitted to the ground it stands on (at least 4.5 : 1, the colour kept) - in
