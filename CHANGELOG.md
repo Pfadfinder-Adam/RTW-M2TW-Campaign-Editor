@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- **Map editor** (the first button of the top row, both games): the campaign map alone, no faction to pick - every
+  faction's things alike. Drag any faction's towns, ports, armies, agents and fleets (right button); right click: give
+  a town to any faction, **Its units...** for any army or fleet (the card picker in a window of its own; a general
+  keeps his bodyguard), delete a character, a new army / agent / fleet for any faction; resources, forts, wonders and
+  regions as on the Map tab. Preview, then Apply changes writes them (a backup first). Box selection and deleting a
+  town with its region come next.
+- **Test mod**: a shadow of the test faction (ce_test_shadow) of its own; the faction that comes by an event now
+  comes in on turn 2 (was 6), so it can be tried at once; the Map editor's step.
 - **What every number of a unit's line means** (Unit editor > Every line of the block, both games): the **?** beside
   each line names its values one by one for what is typed there now - stat_pri's "13, 3, pilum, 35, 2, thrown, ..."
   reads attack 13, charge bonus 3, the missile pilum, range 35 m, 2 per man...; the words of attributes and of the

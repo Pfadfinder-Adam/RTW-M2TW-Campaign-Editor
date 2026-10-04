@@ -3886,7 +3886,7 @@ building smith
         (The whole run is tried on both games' real files by check-scripts/testmod.py.)"""
         from campaign_editor import selftest as ST
         names = {"template": "alpha", "edited": "beta", "other": "gamma", "new": "ce_test", "later": "ce_test_later",
-                 "split": "ce_test_split", "foreign": "delta",
+                 "split": "ce_test_split", "shadow": "ce_test_shadow", "foreign": "delta",
                  "addon": "Sack Settlement (Rome, REX)"}
         self.assertGreaterEqual(len(ST.STEPS), 30)
         for title, see, fn in ST.STEPS:
@@ -4596,6 +4596,40 @@ building smith
             with self.assertRaises(ValueError):
                 map_changes(Plan(mod, "map", "map", {}), "test",
                             {"remove": {lead.owner: [{"name": lead.name, "from": list(lead.xy)}]}})
+
+    def test_map_editor_moves_and_arms_any_faction(self):
+        """The Map editor (no faction picked): any faction's character dragged elsewhere and any army's units
+        changed, written together - units found where the army stands, then the move; a named general keeps his
+        bodyguard; Restore puts every byte back."""
+        from campaign_editor.edit import map_changes
+        from campaign_editor.textio import tokens
+        mod = ModData(self.root)
+        before = tree_hash(self.root)
+        strat = mod.campaign_file("test", "descr_strat.txt")
+        taken = set(mod.city_tiles("test").values()) | {(1, 1), (2, 2)}
+        to = mod.free_tile("test", "A_R", taken)
+        self.assertIsNotNone(to)
+        plan = Plan(mod, "map", "map", {})
+        map_changes(plan, "test", {
+            "army_units": {"slave": [{"name": "Grog", "from": (2, 2), "units": ["rebel spear", "rebel spear"]}],
+                           "alpha": [{"name": "Aaron Alphid", "from": (1, 1), "units": ["alpha general"]}]},
+            "moves": {"slave": [{"name": "Grog", "from": (2, 2), "to": to}]}})
+        s = Strat(plan.files[strat])
+        grog = next(c for c in s.faction("slave").characters if c.name == "Grog")
+        self.assertEqual(tuple(grog.xy), tuple(to))
+        self.assertEqual([tokens(l)[1:3] for l in s.lines[grog.start:grog.end] if tokens(l)[:1] == ["unit"]],
+                         [["rebel", "spear"]] * 2)
+        aaron = next(c for c in s.faction("alpha").characters if c.name == "Aaron Alphid")
+        units = [l for l in s.lines[aaron.start:aaron.end] if tokens(l)[:1] == ["unit"]]
+        self.assertEqual(len(units), 2)                              # his bodyguard + the one given
+        with self.assertRaises(ValueError):                         # an army without units is refused
+            map_changes(Plan(mod, "map", "map", {}), "test",
+                        {"army_units": {"slave": [{"name": "Grog", "from": (2, 2), "units": []}]}})
+        with self.assertRaises(ValueError):                         # a tile he cannot stand on
+            map_changes(Plan(mod, "map", "map", {}), "test",
+                        {"moves": {"slave": [{"name": "Grog", "from": (2, 2), "to": (1, 1)}]}})
+        restore(ModData(self.root), plan.apply())
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
     def test_map_changes_for_any_faction(self):
         # a tester: what is put on the Map should not depend on the faction picked elsewhere - a town given to any

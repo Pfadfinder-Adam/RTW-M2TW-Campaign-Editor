@@ -44,10 +44,11 @@ class Ctx:
         self.new = _free_name("ce_test", taken)
         self.later = _free_name("ce_test_later", taken | {self.new})
         self.split = _free_name("ce_test_split", taken | {self.new, self.later})
+        self.shadow = _free_name("ce_test_shadow", taken | {self.new, self.later, self.split})
         # a faction of another culture than the template: its units and buildings are surely not the clone's
         cult = dict(mod.factions())
         self.foreign = next((n for n, cu in mod.factions() if n != "slave" and cu != cult.get(self.template) and
-                             n not in (self.new, self.later, self.split)), self.other)
+                             n not in (self.new, self.later, self.split, self.shadow)), self.other)
         self.logo = None
 
     def mod(self):
@@ -176,24 +177,38 @@ def s_new_faction(c, mod):
         "start": {"regions": regions, "leader": {"name": names[0], "age": 40}, "characters": chars}})
 
 
-@step("A faction that comes later: a clone of {edited}, dead at the start, woken by an event in {edited}'s town",
-      "{later} is not on the map at the start")
+@step("A faction that comes later: a clone of {edited}, dead at the start, woken by an event in {edited}'s town "
+      "on turn 3", "{later} is not on the map at the start")
 def s_later(c, mod):
     from .build import build
     from .events import turn_date
     return build(mod, c.campaign, c.edited, c.later, {
         "display_name": "Rising Test", "short_name": "Rising", "adjective": "Rising", "raise_faction_limit": True,
-        "start": {"way": "event", "date": turn_date(mod, c.campaign, 6), "region": towns_of(c, mod, c.edited)[0],
+        "start": {"way": "event", "date": turn_date(mod, c.campaign, 3), "region": towns_of(c, mod, c.edited)[0],
                   "re_emergent": True, "denari": 3000, "regions": [], "leader": None, "playable": False}})
 
 
-@step("...its way changed to: the shadow of {edited}, may come back",
-      "when {edited} has a revolt, {later} takes the rebel towns")
+@step("...its event moved: turn 2, in another town of {edited} (it comes in at once, to be tested on the first turns)",
+      "{later} comes in on turn 2 in {edited}'s town")
 def s_later_way(c, mod):
     from . import emergence as E
+    from .events import turn_date
+    towns = towns_of(c, mod, c.edited)
     plan = Plan(mod, "later", c.later, {})
-    E.apply(plan, c.campaign, c.later, "shadow", of=c.edited, re_emergent=True)
+    E.apply(plan, c.campaign, c.later, "event", re_emergent=True, date=turn_date(mod, c.campaign, 2),
+            region=towns[1] if len(towns) > 1 else towns[0])
     return plan
+
+
+@step("A shadow of {new}: a clone of {template}, dead at the start, may come back",
+      "{shadow} is not on the map at the start; when {new} has a revolt (a civil war), {shadow} takes the rebel "
+      "towns")
+def s_shadow(c, mod):
+    from .build import build
+    return build(mod, c.campaign, c.template, c.shadow, {
+        "display_name": "Shadow Test", "short_name": "Shadow", "adjective": "Shadowy", "raise_faction_limit": True,
+        "start": {"way": "shadow", "of": c.new, "re_emergent": True, "denari": 2000, "regions": [], "leader": None,
+                  "playable": False}})
 
 
 @step("A faction that splits off {other} in a revolt: a clone of {other}, dead at the start",
@@ -1019,6 +1034,29 @@ def s_move_delete(c, mod):
     return plans
 
 
+@step("Map editor (no faction picked): an army of {other} moved and its units changed",
+      "{other}'s army on its new tile with a unit more")
+def s_map_any(c, mod):
+    from .edit import map_changes
+    from .start import unit_name
+    from .textio import tokens
+    s = _strat(mod, c.campaign)
+    towns = set(mod.city_tiles(c.campaign).values())
+    army = next((ch for ch in s.faction(c.other).characters if ch.xy and tuple(ch.xy) not in towns and
+                 any(tokens(l)[:1] == ["unit"] for l in s.lines[ch.start:ch.end])), None)
+    if army is None:
+        raise Skip("%s has no army outside its towns" % c.other)
+    to = free_land(c, mod, army.xy, army.kind, True)
+    if not to:
+        raise Skip("no free tile next to %s's army" % c.other)
+    now = [unit_name(l) for l in s.lines[army.start:army.end] if tokens(l)[:1] == ["unit"]]
+    units = (now[1:] if army.named else now) + now[-1:]
+    plan = Plan(mod, "map", "map", {})
+    map_changes(plan, c.campaign, {"army_units": {c.other: [{"name": army.name, "from": army.xy, "units": units}]},
+                                   "moves": {c.other: [{"name": army.name, "from": army.xy, "to": to}]}})
+    return plan
+
+
 @step("Terrain editor: a cliff and a volcano painted, a climate changed near {edited}'s capital",
       "the cliff and the volcano near the capital; the other climate's look")
 def s_features(c, mod):
@@ -1351,8 +1389,8 @@ COVERAGE = {
     "Armies, agents and fleets placed by hand": ["s_chars", "s_map"],
     "Diplomacy: feelings": ["s_diplomacy"],
     "Diplomacy: alliances and wars at the start": ["s_alliance"],
-    "Factions that come later: by an event": ["s_later"],
-    "Factions that come later: a shadow (civil war)": ["s_later_way"],
+    "Factions that come later: by an event": ["s_later", "s_later_way"],
+    "Factions that come later: a shadow (civil war)": ["s_shadow"],
     "Factions that come later: splitting off in a revolt": ["s_split"],
     "Resources on the map": ["s_resources"],
     "Forts, watchtowers, wonders (Rome)": ["s_forts"],
@@ -1363,6 +1401,7 @@ COVERAGE = {
     "Map: a town moved": ["s_move_town"],
     "Map: a port moved": ["s_port"],
     "Map: a character moved, one deleted": ["s_move_delete"],
+    "Map editor: any faction's army moved, its units": ["s_map_any"],
     "New region": ["s_region"],
     "Rename a region and its town everywhere": ["s_rename"],
     "Edit region: rebels, resources, farming, names players see": ["s_region_props"],
@@ -1415,7 +1454,7 @@ UI = {
     "Terrain editor": "Terrain editor: ground and heights", "Add-ons": "Add-ons",
     "Religions": "Religions (Medieval II)",
     "Faction": "Edit faction (names, colours, money, towns, garrisons)",
-    "Map": "Map: a town moved", "Diplomacy": "Diplomacy: feelings", "Art": "Art: replace a picture",
+    "Map": "Map: a town moved", "Map editor": "Map editor: any faction's army moved, its units", "Diplomacy": "Diplomacy: feelings", "Art": "Art: replace a picture",
     "Roster": "Roster: give", "Settlements": "Edit region: rebels, resources, farming, names players see",
     "Units & armies": "Armies, agents and fleets placed by hand",
     "Buildings": "Many towns: a building, random garrisons",
@@ -1496,7 +1535,7 @@ def run(data, campaign, progress=None, make=True):
     os.makedirs(work, exist_ok=True)
     c = Ctx(data, campaign, work)
     names = {"template": c.template, "edited": c.edited, "other": c.other, "new": c.new, "later": c.later,
-             "split": c.split, "foreign": c.foreign,
+             "split": c.split, "shadow": c.shadow, "foreign": c.foreign,
              "addon": "Sack Settlement (Medieval II, M2EX)" if c.m2 else "Sack Settlement (Rome, REX)"}
     before = problems(ModData(data), campaign)
     results = []
@@ -1554,6 +1593,7 @@ def report(data, campaign, names, results):
     out = ["The editor's test mod - every feature, one step each", "",
            "Mod: %s" % os.path.dirname(data), "Campaign: %s" % campaign,
            "Factions: clone %(template)s -> %(new)s, edited %(edited)s, later %(later)s, split %(split)s, "
+           "shadow of %(new)s %(shadow)s, "
            "units moved from %(foreign)s, other %(other)s" % names,
            "%d of %d steps fine (written, no new problem in Check mod files)" % (ok, len(results)), "",
            "Start the mod in the game (its Start .bat), play a few turns and a battle, look at what each step says, "

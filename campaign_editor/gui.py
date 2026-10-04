@@ -325,6 +325,7 @@ class App(tk.Tk):
         # the Map's changes for any faction (not only the one made or edited): towns given {region: new owner},
         # armies / agents / fleets placed {faction: [character dicts]} - written with the next Apply
         self.map_owners, self.map_chars, self.map_removed = {}, {}, {}
+        self.map_moves, self.map_units = {}, {}          # the Map editor: any faction's characters moved, units
         self.dip_set = {}               # {(kind, from, to): value or None} picked on the Diplomacy tab ('me' = the faction)
         self.region_paint = {}          # {(x, y): region} tiles painted to another region (Regions mode)
         self.region_edits = {}          # {region: {creator, rebels, resources, triumph, farming}} of regions there are
@@ -1213,7 +1214,27 @@ class App(tk.Tk):
         return self.nb.tab(cur, "text").strip() if cur else ""
 
     def select_tab(self, name):
+        if self.map_work() and name != "Map":
+            return                                  # the Map editor shows the map alone (a hidden tab would come back)
         self.nb.select([self.nb.tab(t, "text").strip() for t in self.nb.tabs()].index(name))
+
+    MAP_EDITOR_HINT = ("Map editor: drag any faction's towns, ports, armies, agents and fleets (right button); right "
+                       "click for more - give a town, an army's units, delete, new ones. Preview, then Apply changes "
+                       "(a backup first).")
+
+    def map_work(self):
+        """The Map editor: the map alone, no faction picked - every faction's things alike."""
+        return getattr(self, "v_mode", None) is not None and self.v_mode.get() == "map"
+
+    def _map_tab_only(self, on):
+        """The Map editor shows the Map tab alone; New / Edit faction all the tabs again."""
+        for t in self.nb.tabs():
+            if self.nb.tab(t, "text").strip() == "Map":
+                continue
+            if on:
+                self.nb.hide(t)
+            elif self.nb.tab(t, "state") == "hidden":
+                self.nb.add(t)
 
     def tab_opened(self):
         """A town tab with nothing selected opens the capital."""
@@ -1260,10 +1281,12 @@ class App(tk.Tk):
         ("towns", "Many towns...", "mass_towns", "buildings and garrisons for many towns at once"),
         ("bigger", "Bigger map (x3)...", "upscale_map", "make the campaign map 3 x bigger (alpha)"),
     ]
-    WORK_TITLES = {"new": "New faction", "edit": "Edit faction", "units": "Unit editor",
+    WORK_TITLES = {"map": "Map editor", "new": "New faction", "edit": "Edit faction", "units": "Unit editor",
                    "buildings": "Building editor", "characters": "Character editor",
                    "terrain": "Terrain editor", "addons": "Add-ons", "religions": "Religions"}
-    WORK_HINTS = {"religions": "the game's religions and each region's shares (Medieval II)", "addons": "ready-made scripts that add something new to the game (Sack Settlement...)","new": "make a new faction from a template", "edit": "change a faction that is in the game",
+    WORK_HINTS = {"map": "the campaign map alone, no faction to pick: drag any faction's towns, ports, armies, agents and "
+                         "fleets, give towns to anyone, change any army's units, resources, forts, regions",
+                  "religions": "the game's religions and each region's shares (Medieval II)", "addons": "ready-made scripts that add something new to the game (Sack Settlement...)","new": "make a new faction from a template", "edit": "change a faction that is in the game",
                   "units": "every line of a unit in export_descr_unit.txt, its card and picture",
                   "buildings": "every line of a building chain in export_descr_buildings.txt, its pictures",
                   "characters": "any faction's characters: names, ages, traits, ancillaries, portraits, family tree",
@@ -1275,18 +1298,23 @@ class App(tk.Tk):
         w = self.v_work.get()
         if w in self.work_buttons:
             self.work_row.show(self.work_buttons[w])
-        if w in ("new", "edit"):
+        if w in ("map", "new", "edit"):
             for ed in self.editors.values():
                 ed.pack_forget()
-            if self.v_mode.get() != w and self.undo_stack and not messagebox.askyesno(
-                    APP, "Switch to %s? The changes not written yet (towns, garrisons, map, diplomacy...) "
-                         "are dropped." % ("Edit faction" if w == "edit" else "New faction")):
+            if self.v_mode.get() != w and self.undo_stack and self.v_mode.get() != "map" and not messagebox.askyesno(
+                    APP, "Switch to %s? The faction's changes not written yet (its towns, garrisons, diplomacy...) "
+                         "are dropped; the map's changes stay." % self.WORK_TITLES[w]):
                 self.v_work.set(self.v_mode.get())         # stay where the work is
                 return
+            self._map_tab_only(w == "map")
             self.nb.pack(fill="both", expand=True, padx=6, pady=3, after=self.bottom_bar)
             if self.v_mode.get() != w:
                 self.v_mode.set(w)
                 self.mode_changed()
+            if w == "map":
+                self.select_tab("Map")
+                self.show_map()
+                self.status.set(self.MAP_EDITOR_HINT)       # reading the map clears the status line
             self.update_actions()
             return
         self.nb.pack_forget()
@@ -1424,7 +1452,8 @@ class App(tk.Tk):
             self.template_changed()
         if self.tab_name() == "Faction" and self._family_open:
             self.family_editor.load()
-        self.status.set("Edit: pick the faction to change; untouched fields stay as they are." if edit else
+        self.status.set(self.MAP_EDITOR_HINT if self.map_work() else
+                        "Edit: pick the faction to change; untouched fields stay as they are." if edit else
                         "New: pick the template to copy.")
 
     def load_existing(self):
@@ -1511,7 +1540,7 @@ class App(tk.Tk):
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "place_moves", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions", "new_religions", "region_edits",
                  "culture_names", "name_list", "res_moves", "res_removed", "res_added", "region_tags", "fort_moves", "fort_removed", "fort_added", "art_replace", "sel_map", "figures", "roster_set",
-                 "family_set", "map_owners", "map_chars", "map_removed")
+                 "family_set", "map_owners", "map_chars", "map_removed", "map_moves", "map_units")
 
     def snapshot(self):
         st = {k: copy.deepcopy(getattr(self, k)) for k in self.UNDO_KEYS}
@@ -1642,7 +1671,7 @@ class App(tk.Tk):
         self.bind_all("<F1>", lambda e: self.show_help())
         self.bind_all("<F5>", lambda e: self.load_clicked())
         for i in range(5):
-            self.bind_all("<Control-Key-%d>" % (i + 1), lambda e, i=i: self.nb.select(i))
+            self.bind_all("<Control-Key-%d>" % (i + 1), lambda e, i=i: None if self.map_work() else self.nb.select(i))
 
     def support(self):
         """The Ko-fi page in the browser: donations keep the work on the tool going."""
@@ -2859,8 +2888,11 @@ class App(tk.Tk):
             self.status.set("")
         owners = self.town_owners()
         colours = dict(self._colours_all)
-        me = self.v["template"].get().strip() if self.editing() else (self.v["name"].get().strip().lower() or "(new)")
-        dip_view = self.map_view.v_dip.get() and self.v["template"].get().strip()
+        if self.map_work():                  # no faction of its own: every faction alike
+            me = ""
+        else:
+            me = self.v["template"].get().strip() if self.editing() else (self.v["name"].get().strip().lower() or "(new)")
+        dip_view = self.map_view.v_dip.get() and self.v["template"].get().strip() and not self.map_work()
         if dip_view:                         # every owner in the colour of how the faction stands towards it
             _, base = self.diplomacy_base()
             from .diplomacy import kinds
@@ -2870,7 +2902,9 @@ class App(tk.Tk):
                 start = pick(("faction_relationships", "me", other))     # an alliance / a war shows first
                 v = start if isinstance(start, str) else pick((feeling, "me", other))
                 colours[other] = tuple(int(dip_colour(v)[i:i + 2], 16) for i in (1, 3, 5))
-        if not self.editing():
+        if self.map_work():
+            pass
+        elif not self.editing():
             template = self.v["template"].get().strip()
             colours[me] = tuple(self.colours["primary"] or colours.get(template, (255, 215, 0)))
         elif self.colours["primary"]:
@@ -2898,11 +2932,12 @@ class App(tk.Tk):
                 lines = self.strat.lines[c.start:c.end]
                 army = any(tokens(l)[:1] == ["army"] for l in lines)
                 cid = "%s:%d" % (fb.name, i)
-                xy = self.char_moves.get(cid, town_moves.get(c.xy) or fleet_moves.get(c.start) or c.xy)
+                xy = self.map_moves.get(cid) or self.char_moves.get(
+                    cid, town_moves.get(c.xy) or fleet_moves.get(c.start) or c.xy)
                 ulines = [l for l in lines if tokens(l)[:1] == ["unit"]]
                 chars.append({"id": cid, "faction": fb.name, "name": c.name, "kind": c.kind, "xy": xy,
                               "army": army, "units": len(ulines), "unit_names": [unit_name(l) for l in ulines],
-                              "from": c.xy})
+                              "from": c.xy, "named": bool(c.named)})
                 if army:
                     armies_at.add(xy)
         from .start import KINDS
@@ -2923,7 +2958,10 @@ class App(tk.Tk):
                               "unit_names": list(fc["units"]), "from": None})
                 if army:
                     armies_at.add(tuple(fc["xy"]))
-        mine = [ch["id"] for ch in chars if (self.editing() and ch["faction"] == me) or ch["id"].startswith("new:")]
+        if self.map_work():                  # the Map editor moves every faction's characters
+            mine = [ch["id"] for ch in chars]
+        else:
+            mine = [ch["id"] for ch in chars if (self.editing() and ch["faction"] == me) or ch["id"].startswith("new:")]
         self._map_chars = {ch["id"]: ch for ch in chars}
 
         def check(cid, xy):
@@ -2937,6 +2975,21 @@ class App(tk.Tk):
             if cid.startswith("new:"):
                 self.field[int(cid[4:])]["xy"] = xy
                 self.refresh_field()
+                self.show_map()
+                return
+            if cid.startswith("map:"):                 # placed on the map, not written yet
+                fac, i = cid[4:].rsplit(":", 1)
+                self.map_chars[fac][int(i)]["xy"] = tuple(xy)
+                self.status.set("%s moved to %d, %d - Preview, then Apply changes." % (ch["name"], xy[0], xy[1]))
+                self.show_map()
+                return
+            if self.map_work():                        # another faction's character: the Map editor's own list
+                if tuple(xy) == tuple(ch["from"]):
+                    self.map_moves.pop(cid, None)
+                else:
+                    self.map_moves[cid] = tuple(xy)
+                self.status.set("%s (%s) to %d, %d - %d character(s) moved; Preview, then Apply changes." % (
+                    ch["name"], ch["faction"], xy[0], xy[1], len(self.map_moves)))
                 self.show_map()
                 return
             if xy == ch["from"]:
@@ -2987,7 +3040,7 @@ class App(tk.Tk):
                 self.place_moves[(what, region)] = xy
             self.status.set("%s of %s to %d, %d - %d town(s)/port(s) moved; Preview, then %s." % (
                 "Town" if what == "city" else "Port", region, xy[0], xy[1], len(self.place_moves),
-                "Apply changes" if self.editing() else "Create faction"))
+                "Apply changes" if self.editing() or self.map_only() else "Create faction"))
             self.show_map()
         region_kw = self._region_view(place)
         if getattr(self, "_map_add", None) and self._cmap:
@@ -3045,7 +3098,8 @@ class App(tk.Tk):
         self.map_view.res_types = list(_res_types(self.mod))
         if self.map_view.v_rel.get():                # Religion colours: each region in its main religion's colour
             region_kw["tint"], region_kw["tint_legend"] = self.religion_tint()
-        self.map_view.load(self._cmap, owners, colours, me, self.chosen, on_city=self.map_city, chars=chars,
+        self.map_view.load(self._cmap, owners, colours, me, self.chosen,
+                           on_city=None if self.map_work() else self.map_city, chars=chars,
                            labels=self._map_labels,
                            draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols,
                            on_place=on_place,
@@ -3558,6 +3612,7 @@ class App(tk.Tk):
         self.editing_now, self.char_moves = None, {}
         self.place_moves = {}
         self.map_owners, self.map_chars, self.map_removed = {}, {}, {}
+        self.map_moves, self.map_units = {}, {}          # the Map editor: any faction's characters moved, units
         self.dip_set.clear()
         self.region_paint, self.new_regions, self._region_point = {}, [], None
         self.region_edits = {}
@@ -3830,7 +3885,7 @@ class App(tk.Tk):
     def _victory_changed(self):
         if self.victory.changed():
             self.status.set("Victory conditions changed - Preview, then %s." % (
-                "Apply changes" if self.editing() else "Create faction"))
+                "Apply changes" if self.editing() or self.map_only() else "Create faction"))
         self._mark_work()
 
     def pick_colour(self, which):
@@ -3944,7 +3999,7 @@ class App(tk.Tk):
         self.map_view.centre_on(tuple(xy))
 
     def field_faction(self):
-        return self.v["template"].get().strip()
+        return "" if self.map_work() else self.v["template"].get().strip()
 
     def add_field(self, kind, preset=None, then_place=False, at=None):
         """A small form: kind (agents), name from the faction's name list, age. preset: the agent picked;
@@ -4226,9 +4281,16 @@ class App(tk.Tk):
         if cid is not None and ":" in str(cid) and not str(cid).startswith(("map:", "new:")):
             ch = (getattr(self, "_map_chars", None) or {}).get(cid)
             mine = self.field_faction() and not self.map_only() and ch and ch["faction"] == self.field_faction()
+            if ch and not mine and ch.get("army"):
+                if items:
+                    items.append((None, None))
+                items.append(("Its units...  (%s %s of %s)" % (ch["kind"], ch["name"], ch["faction"]),
+                              lambda cid=cid: self.army_units_window(cid)))
             if ch and not mine:
-                def delete_char(ch=ch):
+                def delete_char(ch=ch, cid=cid):
                     self.remember()
+                    self.map_moves.pop(cid, None)           # nothing else of him is written
+                    self.map_units.pop(cid, None)
                     self.map_removed.setdefault(ch["faction"], []).append({"name": ch["name"],
                                                                             "from": list(ch["from"])})
                     self.status.set("%s %s of %s goes with the next Apply%s - Preview first; Undo brings him back."
@@ -4254,6 +4316,8 @@ class App(tk.Tk):
             c = (self.map_chars.get(fac) or [None] * (k + 1))[k]
             if c:
                 items.append(("%s %s of %s (written with the next Apply)" % (c["kind"], c["name"], fac), None))
+                if c["kind"] in ("army", "fleet"):
+                    items.append(("Its units...", lambda cid=cid: self.army_units_window(cid)))
                 items.append(("Take it out", drop))
         if cid is not None:
             i = next((k for k, c in enumerate(self.field)
@@ -4434,6 +4498,50 @@ class App(tk.Tk):
         self.garrison_editor.load(self.mod, template, region, units, self.garrisons.get(region, []),
                                   changed, auto=auto, held=held)
 
+    def army_units_window(self, cid):
+        """Any faction's army or fleet on the map (the Map editor, or another faction's from Edit faction): its units
+        in the card picker, in a window of its own; written with the next Apply (a named general keeps his
+        bodyguard)."""
+        ch = (getattr(self, "_map_chars", None) or {}).get(cid)
+        if not ch or not self.mod:
+            return
+        fac, fleet = ch["faction"], ch["kind"] == "admiral" or ch["kind"] == "fleet"
+        entry = None
+        if str(cid).startswith("map:"):
+            _, f, k = str(cid).split(":")
+            entry = self.map_chars[f][int(k)]
+            current, named = list(entry["units"]), False
+        else:
+            named = bool(ch.get("named"))
+            start = ch["unit_names"][1:] if named else ch["unit_names"]
+            current = list(self.map_units.get(cid, start))
+        units = self._with_types(faction_units(self.mod, fac, ships=fleet, mercs=True), current)
+        top = tk.Toplevel(self)
+        top.title("%s %s of %s - units" % (ch["kind"], ch["name"], fac))
+        top.geometry("940x640")
+        top.transient(self)
+        ed = GarrisonEditor(top, pictures=self.pictures)
+        ed.pack(fill="both", expand=True, padx=6, pady=(6, 0))
+        if fleet:
+            ed.v_whose.set("own + mercenaries")            # many mods mark every ship a mercenary
+
+        def changed(types):
+            self.remember()
+            if entry is not None:
+                entry["units"] = list(types)
+            elif list(types) == list(start):
+                self.map_units.pop(cid, None)
+            else:
+                self.map_units[cid] = list(types)
+            self.status.set("%s %s of %s: %d unit(s)%s - Preview, then Apply changes." % (
+                ch["kind"], ch["name"], fac, len(types), " + his bodyguard" if named else ""))
+            self._mark_work()
+            self.show_map()
+        ed.load(self.mod, fac, "%s %s of %s" % (ch["kind"], ch["name"], fac), units, current, changed,
+                held=named, unchanged=entry is None and cid not in self.map_units)
+        ttk.Button(top, text="Close", command=top.destroy).pack(anchor="e", padx=6, pady=6)
+        return top
+
     def _with_types(self, units, types):
         """The roster plus any unit these types name that it lacks (another faction's,
         a mercenary): a garrison as it stands must show whole."""
@@ -4548,7 +4656,10 @@ class App(tk.Tk):
         return [{"what": w, "region": r, "to": xy} for (w, r), xy in self.place_moves.items()]
 
     def map_only(self):
-        """New faction mode with no faction named yet: the buttons write the map's changes alone."""
+        """The Map editor, or New faction mode with no faction named yet: the buttons write the map's changes
+        alone."""
+        if self.map_work():
+            return True
         return not self.editing() and not (self.v["template"].get().strip() and self.v["name"].get().strip())
 
     def update_actions(self):
@@ -4610,13 +4721,27 @@ class App(tk.Tk):
         gone = {f: list(cs) for f, cs in self.map_removed.items() if cs}
         if gone:
             out["remove"] = gone
+        # the Map editor: any faction's characters moved, any army's units (found by name and where it stands)
+        for key, store in (("moves", self.map_moves), ("army_units", self.map_units)):
+            per = {}
+            for cid, val in store.items():
+                fac, i = cid.rsplit(":", 1)
+                fb = self.strat.faction(fac) if self.strat else None
+                if fb is None or int(i) >= len(fb.characters):
+                    continue
+                c = fb.characters[int(i)]
+                item = {"name": c.name, "from": tuple(c.xy)}
+                item.update({"to": tuple(val)} if key == "moves" else {"units": list(val)})
+                per.setdefault(fac, []).append(item)
+            if per:
+                out[key] = per
         return out
 
     def _faction_label(self):
         if self.editing():
             return "Edit faction %s" % self.v["template"].get().strip()
         if self.map_only():
-            return "Map changes"
+            return "Map editor" if self.map_work() else "Map changes"
         return "New faction %s (from %s)" % (self.v["name"].get().strip(), self.v["template"].get().strip())
 
     def _faction_state(self):
@@ -4672,6 +4797,10 @@ class App(tk.Tk):
             if not places and not regions and not res and self._map_changes():
                 return Plan(ModData(self.mod.data), "map", "map", {})
             if not places and not regions and not res:
+                if self.map_work():
+                    raise ValueError("Nothing to write yet: drag a town, an army, an agent or a fleet, give a town to "
+                                     "another faction, change an army's units, paint regions or move resources on "
+                                     "the map first.")
                 picked = self.v["template"].get().strip()
                 if picked:                  # a faction picked in New faction mode: most likely meant to be edited
                     raise ValueError(

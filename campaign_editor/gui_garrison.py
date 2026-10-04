@@ -100,7 +100,9 @@ class GarrisonEditor(ttk.Frame):
         self.by_type = {u.type: u for u in units}
         self.garrison = [t for t in current if t in self.by_type]
         self.on_change, self.auto, self.held = on_change, auto, held
-        self.title.configure(text="%s%s" % (region, " - the %s's town" % held if held else ""))
+        # held: the name of whoever holds the town (a garrison), or True for a general's own army (his bodyguard
+        # stays - no town to name; it read "the True's town")
+        self.title.configure(text="%s%s" % (region, " - the %s's town" % held if isinstance(held, str) and held else ""))
         self.cb_cat["values"] = ["all"] + sorted({u.category for u in units if u.category})
         self.fill_roster()
         self.fill_chosen()

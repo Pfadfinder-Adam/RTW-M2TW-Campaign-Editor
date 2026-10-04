@@ -466,12 +466,13 @@ def first_units(mod, campaign, faction, kind, xy):
 
 
 def map_changes(plan, campaign, changes):
-    """What the Map changed for factions other than the one being made or edited (or with none picked):
-    changes = {'owners': {region: new owner}, 'characters': {faction: [character dicts as start.extra_characters
-    takes them]}, 'remove': {faction: [{'name', 'from': (x, y)}]}} - written into the plan's descr_strat.txt like
-    the edited faction's own changes. A removed character goes with his whole block (his army or fleet too); a
-    member of the family tree is refused (the relative lines name him)."""
-    if not changes or not (changes.get("owners") or changes.get("characters") or changes.get("remove")):
+    """What the Map changed for factions other than the one being made or edited (or with none picked - the Map
+    editor): changes = {'owners': {region: new owner}, 'characters': {faction: [character dicts as
+    start.extra_characters takes them]}, 'remove': {faction: [{'name', 'from': (x, y)}]}, 'moves': {faction:
+    [{'name', 'from', 'to'}]}, 'army_units': {faction: [{'name', 'from', 'units'}]}} - written into the plan's
+    descr_strat.txt like the edited faction's own changes. A removed character goes with his whole block (his army
+    or fleet too); a member of the family tree is refused (the relative lines name him)."""
+    if not changes or not any(changes.get(k) for k in ("owners", "characters", "remove", "moves", "army_units")):
         return
     from .start import extra_characters
     f = plan.edit(plan.mod.campaign_file(campaign, "descr_strat.txt"))
@@ -497,6 +498,14 @@ def map_changes(plan, campaign, changes):
     for start, end, note in sorted(gone, reverse=True):
         del f.raw[start:end]
         plan.note(f, note)
+    # units first (found where they stand in the file), then the moves, before towns change hands (moving a town's
+    # owner moves the characters standing in it)
+    for fac, items in (changes.get("army_units") or {}).items():
+        if items:
+            _army_edits(plan, f, fac, units=items, remove=[])
+    for fac, items in (changes.get("moves") or {}).items():
+        if items:
+            _moves(plan, f, campaign, fac, items)
     if changes.get("owners"):
         now = _owners_now(plan.mod, campaign, f)
         moves = [(r, now.get(r), to) for r, to in changes["owners"].items() if now.get(r) != to]
@@ -514,24 +523,30 @@ def map_changes(plan, campaign, changes):
         f.raw[at:at] = lines
 
 
-def _army_edits(plan, f):
+def _army_edits(plan, f, faction=None, units=None, remove=None):
     """Characters already on the map: opts['army_units'] = [{'name', 'from', 'units'}]
     replaces an army's or fleet's units (a named character keeps his bodyguard);
     opts['remove'] = [{'name', 'from'}] takes out agents, captains and admirals
-    (never a family member - the family tree names them)."""
+    (never a family member - the family tree names them). faction / units / remove: another faction's (the Map
+    editor), in place of the edited faction's opts."""
+    faction = faction or plan.new
+    if units is None and remove is None:
+        units, remove = plan.opts.get("army_units"), plan.opts.get("remove")
     s = Strat(f)
-    fb = s.faction(plan.new)
+    fb = s.faction(faction)
+    if fb is None:
+        raise ValueError("%s has no faction block in descr_strat.txt" % faction)
     jobs = []
-    for m in plan.opts.get("army_units") or []:
+    for m in units or []:
         jobs.append(("units", m))
-    for m in plan.opts.get("remove") or []:
+    for m in remove or []:
         jobs.append(("remove", m))
     found = []
     for what, m in jobs:
         src = tuple(m["from"])
         c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
         if c is None:
-            raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], plan.new))
+            raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], faction))
         if what == "remove" and c.named:
             raise ValueError("%s is a member of the family - the tool does not remove those" % c.name)
         found.append((c, what, m))
@@ -556,17 +571,21 @@ def _army_edits(plan, f):
         plan.note(f, "%s (%s): %d unit(s)%s" % (c.name, c.kind, len(lines), " + his bodyguard" if keep else ""))
 
 
-def _moves(plan, f, campaign):
+def _moves(plan, f, campaign, faction=None, moves=None):
     """opts['moves'] = [{'name', 'from': (x, y), 'to': (x, y)}]: characters of
-    the faction moved on the map, checked like the window checks them."""
+    the faction moved on the map, checked like the window checks them (faction / moves: another faction's, the
+    Map editor)."""
+    faction = faction or plan.new
     s = Strat(f)
-    fb = s.faction(plan.new)
+    fb = s.faction(faction)
+    if fb is None:
+        raise ValueError("%s has no faction block in descr_strat.txt" % faction)
     armies_at = {c.xy for x in s.factions for c in x.characters if c.xy and _has_army(s.lines[c.start:c.end])}
-    for m in plan.opts["moves"]:
+    for m in plan.opts["moves"] if moves is None else moves:
         src, dst = tuple(m["from"]), tuple(m["to"])
         c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
         if c is None:
-            raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], plan.new))
+            raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], faction))
         army = _has_army(s.lines[c.start:c.end])
         why = plan.mod.tile_problem(campaign, dst, c.kind, army, armies_at - {src})
         if why:
