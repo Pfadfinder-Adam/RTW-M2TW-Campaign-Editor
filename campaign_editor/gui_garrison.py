@@ -122,9 +122,8 @@ class GarrisonEditor(ttk.Frame):
         inner.canvas = canvas
         inner.cols = 0
         canvas.bind("<Configure>", lambda e: self._reflow(inner), add="+")
-        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>",
-                    lambda ev: canvas.yview_scroll(int(-ev.delta / 120), "units")))
-        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+        from .gui_util import scroll_y, wheel
+        wheel(canvas, scroll_y(canvas))
         return inner
 
     def _card(self, parent, unit, command):

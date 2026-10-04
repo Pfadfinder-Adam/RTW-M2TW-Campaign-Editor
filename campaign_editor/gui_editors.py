@@ -130,9 +130,8 @@ class RecordEditor(ttk.Frame):
         canvas.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
-        canvas.bind("<Enter>", lambda ev: canvas.bind_all("<MouseWheel>",
-                    lambda x: canvas.yview_scroll(int(-x.delta / 120), "units")))
-        canvas.bind("<Leave>", lambda ev: canvas.unbind_all("<MouseWheel>"))
+        from .gui_util import scroll_y, wheel
+        wheel(canvas, scroll_y(canvas))
         self._photos = []
 
     def _sash_to(self, x):

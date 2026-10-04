@@ -51,9 +51,8 @@ class BuildingsEditor(ttk.Frame):
         canvas.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
-        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>",
-                    lambda ev: canvas.yview_scroll(int(-ev.delta / 120), "units")))
-        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+        from .gui_util import scroll_y, wheel
+        wheel(canvas, scroll_y(canvas))
         self.canvas = canvas
         self._width = 0
         canvas.bind("<Configure>", self._resized, add="+")

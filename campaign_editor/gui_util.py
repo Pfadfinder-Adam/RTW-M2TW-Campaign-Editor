@@ -18,6 +18,82 @@ def first(*widgets):
             w.pack_configure(before=slaves[0])
 
 
+# ---------------------------------------------------------------------------
+# The mouse wheel: one handler for the whole application
+# ---------------------------------------------------------------------------
+_WHEEL = {}                        # {widget path: fn(step) -> True when it scrolled}
+_WHEEL_ON = set()                  # the Tk interpreters the handler is bound in
+WHEEL_KEYS = ("<MouseWheel>", "<Button-4>", "<Button-5>")
+SELF_SCROLLING = ("Listbox", "Text", "Treeview")
+
+
+def wheel(widget, fn):
+    """The mouse wheel over widget (or anything inside it) calls fn(step): step -1 = up / back, 1 = down / on;
+    fn returns True when it scrolled, else the wheel goes on to the next such widget outside it.
+    One handler for the whole application finds the nearest one under the mouse - each window used to bind the wheel
+    for everyone on <Enter> and drop it on <Leave>, and a window closed under the mouse left the wheel pointing at a
+    widget that was gone. A widget with a wheel of its own (the map's zoom) and a list or text that can scroll itself
+    keep theirs. Every wheel turn is one step, however small (a touchpad's): the old int(-delta / 120) made 0."""
+    key = str(widget)
+    _WHEEL[key] = fn
+    widget.bind("<Destroy>", lambda e: _WHEEL.pop(key, None) if str(e.widget) == key else None, add="+")
+    interp = id(widget.tk)
+    if interp not in _WHEEL_ON:
+        _WHEEL_ON.add(interp)
+        for seq in WHEEL_KEYS:
+            widget.bind_all(seq, _route, add="+")
+    return widget
+
+
+def scroll_y(canvas):
+    """A wheel fn for a canvas (or any widget with yview) that scrolls up and down when there is more to see."""
+    def fn(step):
+        if tuple(canvas.yview()) == (0.0, 1.0):
+            return False
+        canvas.yview_scroll(step, "units")
+        return True
+    return fn
+
+
+def _step(e):
+    if getattr(e, "num", None) == 4:
+        return -1
+    if getattr(e, "num", None) == 5:
+        return 1
+    d = getattr(e, "delta", 0) or 0
+    return 0 if not d else (-1 if d > 0 else 1)
+
+
+def _route(e):
+    step = _step(e)
+    if not step:
+        return None
+    root = e.widget if not isinstance(e.widget, str) else tk._default_root
+    try:
+        w = root.winfo_containing(e.x_root, e.y_root)
+    except (KeyError, tk.TclError, AttributeError):       # an open Combobox list ('popdown') is no tkinter widget
+        return None
+    if w is None:
+        return None
+    try:
+        if any(w.bind(seq) for seq in WHEEL_KEYS):
+            return None                                   # its own wheel (a zoom) did it
+        if w.winfo_class() in SELF_SCROLLING and tuple(w.yview()) != (0.0, 1.0):
+            return None                                   # the list scrolls itself
+    except (tk.TclError, AttributeError):
+        pass
+    while w is not None:
+        fn = _WHEEL.get(str(w))
+        if fn is not None:
+            try:
+                if w.winfo_exists() and fn(step):
+                    return "break"
+            except tk.TclError:
+                _WHEEL.pop(str(w), None)
+        w = getattr(w, "master", None)
+    return None
+
+
 class ScrollFrame(ttk.Frame):
     """A frame whose contents (built in .inner) scroll up and down when the window is lower than they are.
     The inner frame is as wide as the visible area, so rows still fill the width; its height is what its
@@ -33,8 +109,7 @@ class ScrollFrame(ttk.Frame):
         self._win = self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda e: self._resize())
         self.canvas.bind("<Configure>", lambda e: self._resize())
-        self.bind("<Enter>", lambda e: self._wheel(True))
-        self.bind("<Leave>", lambda e: self._wheel(self._inside(e)))
+        wheel(self, lambda step: bool(self.bar.winfo_ismapped()) and scroll_y(self.canvas)(step))
 
     def _resize(self):
         # the contents keep the height they ask for (a fixed height would not follow them when they grow)
@@ -49,25 +124,6 @@ class ScrollFrame(ttk.Frame):
             self.bar.pack(side="right", fill="y", before=self.canvas)
         self.bar.set(lo, hi)
 
-    def _wheel(self, on):
-        if on:
-            self.bind_all("<MouseWheel>", self._on_wheel)
-            self.bind_all("<Button-4>", lambda e: self.canvas.yview_scroll(-1, "units"))
-            self.bind_all("<Button-5>", lambda e: self.canvas.yview_scroll(1, "units"))
-        else:
-            for ev in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
-                self.unbind_all(ev)
-
-    def _inside(self, e):
-        try:
-            w = self.winfo_containing(e.x_root, e.y_root)
-        except KeyError:        # an open Combobox list ('popdown') is not a tkinter widget
-            return False
-        return w is not None and str(w).startswith(str(self))
-
-    def _on_wheel(self, e):
-        if self.bar.winfo_ismapped() and self._inside(e):
-            self.canvas.yview_scroll(-1 if e.delta > 0 else 1, "units")
 
 
 class HScroll(ttk.Frame):
@@ -85,8 +141,7 @@ class HScroll(ttk.Frame):
         self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda e: self._resize())
         self.canvas.bind("<Configure>", lambda e: self._resize())
-        self.bind("<Enter>", lambda e: self._wheel(True))
-        self.bind("<Leave>", lambda e: self._wheel(False))
+        wheel(self, lambda step: bool(self.back.winfo_ismapped()) and (self.step(step) or True))
 
     def _resize(self):
         w, h = self.inner.winfo_reqwidth(), self.inner.winfo_reqheight()
@@ -115,15 +170,6 @@ class HScroll(ttk.Frame):
         elif x1 > hi:
             self.canvas.xview_moveto(x1 - (hi - lo))
 
-    def _wheel(self, on):
-        if on and self.back.winfo_ismapped():
-            self.bind_all("<MouseWheel>", lambda e: self.step(-1 if e.delta > 0 else 1))
-            self.bind_all("<Shift-MouseWheel>", lambda e: self.step(-1 if e.delta > 0 else 1))
-            self.bind_all("<Button-4>", lambda e: self.step(-1))
-            self.bind_all("<Button-5>", lambda e: self.step(1))
-        else:
-            for ev in ("<MouseWheel>", "<Shift-MouseWheel>", "<Button-4>", "<Button-5>"):
-                self.unbind_all(ev)
 
 
 PICTURE_EXT = (".tga", ".dds", ".png", ".jpg", ".jpeg", ".bmp")

@@ -218,9 +218,8 @@ class FamilyEditor(ttk.Frame):
         self.cv.pack(fill="both", expand=True)
         self.cv.bind("<ButtonPress-3>", lambda e: self.cv.scan_mark(e.x, e.y))
         self.cv.bind("<B3-Motion>", lambda e: self.cv.scan_dragto(e.x, e.y, gain=1))
-        self.cv.bind("<Enter>", lambda e: self.cv.bind_all("<MouseWheel>", lambda x: self.cv.yview_scroll(
-            int(-x.delta / 120), "units")))
-        self.cv.bind("<Leave>", lambda e: self.cv.unbind_all("<MouseWheel>"))
+        from .gui_util import scroll_y, wheel
+        wheel(self.cv, scroll_y(self.cv))
 
     def _view_changed(self):
         """Character / Family tree on the right of the Character editor."""
@@ -1342,9 +1341,8 @@ class PortraitLibrary(tk.Toplevel):
         self.cv.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         self.cv.pack(side="left", fill="both", expand=True)
-        self.cv.bind("<Enter>", lambda e: self.cv.bind_all("<MouseWheel>", lambda x: self.cv.yview_scroll(
-            int(-x.delta / 120), "units")))
-        self.cv.bind("<Leave>", lambda e: self.cv.unbind_all("<MouseWheel>"))
+        from .gui_util import scroll_y, wheel
+        wheel(self.cv, scroll_y(self.cv))
         # the grid follows the window's width: laid out again when it changes (the first show() ran
         # before the canvas had its width and put every portrait in one column - the user's report)
         self._cols = 0
