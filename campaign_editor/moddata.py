@@ -432,6 +432,13 @@ class ModData:
                 return what
         return None
 
+    def region_colours(self, campaign):
+        """{colour: region} of descr_regions.txt as loaded (read once - is_sea asks it for every tile)."""
+        key = ("colours", campaign)
+        if key not in self._cache:
+            self._cache[key] = {v["colour"]: k for k, v in self.regions(campaign).items()}
+        return self._cache[key]
+
     def is_sea(self, campaign, xy):
         """Sea: a map_regions pixel that is no region, city or port."""
         img = self.region_map(campaign)
@@ -441,7 +448,7 @@ class ModData:
         px = img.get(x, y)
         if px in ((0, 0, 0), (255, 255, 255)):
             return False
-        return px not in {v["colour"] for v in self.regions(campaign).values()}
+        return px not in self.region_colours(campaign)
 
     def tile_problem(self, campaign, xy, kind, army, armies_at=()):
         """Why a character of this kind may not start on tile xy, or None.

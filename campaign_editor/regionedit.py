@@ -327,11 +327,20 @@ def _slave_resources(plan, campaign, painted, colours, new_regions=()):
         return
     img = mod.region_map(campaign)                    # game tiles: x, y from the bottom (tga.Image.get)
     by_colour = {tuple(c): name for name, c in colours.items()}
+    town_of = {tuple(xy): name for name, xy in mod.city_tiles(campaign).items()}
 
     def region_at(xy):
         if xy in painted:
             return painted[xy]
-        return by_colour.get(tuple(img.get(xy[0], xy[1])))
+        px = tuple(img.get(xy[0], xy[1]))
+        if px in ((0, 0, 0), (255, 255, 255)):       # a town's (HLR keeps its slaves there) or a port's tile
+            if xy in town_of:
+                return town_of[xy]
+            near = [by_colour.get(tuple(img.get(x, y))) for x in (xy[0] - 1, xy[0], xy[0] + 1)
+                    for y in (xy[1] - 1, xy[1], xy[1] + 1) if 0 <= x < img.width and 0 <= y < img.height]
+            near = [n for n in near if n]
+            return max(set(near), key=near.count) if near else None
+        return by_colour.get(px)
     with_slaves = {region_at(tuple(r.xy)) for r in slaves if 0 <= r.xy[0] < img.width and 0 <= r.xy[1] < img.height}
     taken = {tuple(r.xy) for r in have}
     towns = {tuple(r["city"]) for r in new_regions} | {tuple(r["port"]) for r in new_regions if r.get("port")}

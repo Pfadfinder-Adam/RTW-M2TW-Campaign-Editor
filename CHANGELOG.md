@@ -324,6 +324,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Rome: Preview froze on a big mod and could add a slaves resource to every region** - a mod that keeps
+  each region's slaves on the town's own tile (like Barbarian Empires / HLR) was read as having none, and the
+  check read every region again for every tile (minutes on 750 regions). A slaves resource on the town's tile
+  now counts for its region, and the check takes a moment.
 - **A file the system will not write is said in plain words everywhere, with what to do**: a mod folder
   that takes no writes (the backup cannot be made - nothing is changed), a full disk, a path longer than
   Windows takes (260 characters), a file held by the game or another program. Before, outside the main

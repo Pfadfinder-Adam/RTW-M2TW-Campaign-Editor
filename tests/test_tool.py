@@ -2690,6 +2690,27 @@ building smith
         self.assertTrue(any(tuple(r.xy) in painted and tuple(r.xy) != (0, 3) for r in slaves))
         restore(mod, backups(mod)[0])
 
+    def test_slaves_on_the_town_tile_count_for_its_region(self):
+        """HLR keeps every region's slaves resource on the town's own tile (a black pixel of map_regions): those
+        regions have theirs - none is added - and the check reads descr_regions once, not for every tile (on HLR's
+        750 regions Preview of a new faction froze for many minutes)."""
+        from unittest import mock
+        from campaign_editor import regionedit, resources as R
+        mod = ModData(self.root)
+        towns = mod.city_tiles("test")
+        seed = Plan(mod, "res", "", {})
+        R.apply(seed, "test", {"added": [{"type": "slaves", "xy": xy} for xy in towns.values()]})
+        seed.apply()
+        mod = ModData(self.root)
+        plan = Plan(mod, "probe", "", {})
+        colours = {k: v["colour"] for k, v in mod.regions("test").items()}
+        with mock.patch.object(ModData, "regions", autospec=True, side_effect=ModData.regions) as reads:
+            regionedit._slave_resources(plan, "test", {}, colours, [])
+        self.assertLessEqual(reads.call_count, 3)
+        sf = plan.files[mod.campaign_file("test", "descr_strat.txt")]
+        self.assertEqual(len([r for r in R.read(sf) if r.kind == "slaves"]), len(towns))
+        restore(mod, backups(mod)[0])
+
     def test_new_faction_starts_in_a_new_region_one_apply(self):
         """A region made on the Map and picked as the new faction's start town: map, region and
         faction written by one Apply (the region first, as a rebel village the faction takes);
