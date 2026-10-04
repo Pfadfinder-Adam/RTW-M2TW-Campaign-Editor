@@ -4841,6 +4841,8 @@ building smith
         labels += _re.findall(r'^TEST_MOD_LABEL = "([^"]+)"', src, _re.M)
         works = src[src.index("WORK_TITLES = {"):]
         labels += _re.findall(r'"\w+": "([^"]+)"', works[:works.index("}")])
+        buttons = src[src.index("WINDOW_BUTTONS = ["):]                  # the work bar's window buttons
+        labels += _re.findall(r'\("\w+", "([^"]+)"', buttons[:buttons.index("\n    ]")])
         labels += [t.strip() for t in _re.findall(r'self\.nb\.add\(\w+, text="([^"]+)"\)', src)]
         self.assertGreater(len(labels), 30)
         self.assertEqual([t for t in labels if ST.ui_entry(t) is None], [])

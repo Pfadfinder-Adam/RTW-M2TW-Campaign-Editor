@@ -1427,6 +1427,10 @@ UI = {
     "Check and install a pack": "Check and install a pack", "Campaign rules": "Campaign rules",
     "Traits and retinue": "Traits and retinue: a new trait", "Events and later factions": "Events",
     "Module builder": "Module builder",
+    # the work bar's window buttons (once Tools entries)
+    "Events": "Events", "Recolour": "Recolour a faction's pictures",
+    "Culture names": "Settlement names by culture", "Many towns": "Many towns: a building, random garrisons",
+    "Bigger map": "Make the campaign map 3 x bigger",
     "New religion": "Religions (Medieval II)", "Religions of a region": "Religions (Medieval II)",
     "Restore a backup": "Restore a backup", "Game manifest": "Settings, Help, the log, Save logs, Game manifest",
     "Log": "Settings, Help, the log, Save logs, Game manifest",

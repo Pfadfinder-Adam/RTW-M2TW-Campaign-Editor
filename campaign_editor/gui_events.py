@@ -1,4 +1,4 @@
-"""Tools > Events and later factions: the campaign's events (descr_events.txt) - their date, place, the title and
+"""Events... (top row): the campaign's events (descr_events.txt) - their date, place, the title and
 text players see; new ones, removed ones; Show on the map. Below them, the factions that appear later in the
 campaign (emergence.py: by an event, a faction's shadow, split off in a revolt) - shown and changed. Preview /
 Write it in, with a backup like every write."""

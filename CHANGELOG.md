@@ -114,6 +114,11 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **The tools with a window of their own are buttons on the top row**, beside the works: Campaign rules, Events,
+  Traits and retinue, Module builder, Recolour, Culture names, Many towns, Bigger map (x3) - one press away instead
+  of in Tools (New religion and the region's shares are the Religions work's own buttons). Tools keeps the checks,
+  the logs, packs, Restore and reports. The row scrolls when the window is narrower: drag it sideways with the left
+  button (a click is still a click), the wheel or the arrows.
 - **Map: an army in a town shows as a flag on the town's roof** (several side by side); a town with no army has no
   flag. Agents and ships still stand beside the town. The port's anchor now grows under the mouse like the towns and
   the characters.

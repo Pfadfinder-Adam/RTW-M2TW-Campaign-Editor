@@ -1,4 +1,4 @@
-"""The Module builder window (Tools > Module builder..., Add-ons > New module (no code)...): a new add-on put together
+"""The Module builder window (Module builder... in the top row, Add-ons > New module (no code)...): a new add-on put together
 from blocks - WHEN something happens, IF conditions hold, DO actions - each picked from lists in plain words, with the
 mod's own names to pick from. The sentence below says what it will do; any number or text may be made a setting the
 player changes later on the Add-ons page. Show the script / Check it / Save to my add-ons / Put it in the game (a

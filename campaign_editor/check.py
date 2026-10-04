@@ -107,8 +107,8 @@ def check_mod(mod, campaign, deep=False, progress=None):
                 for father, wife, kids in tree:
                     if len(kids) > most_allowed:
                         bad("%s: %s has %d children, descr_campaign_db.xml max_number_of_children is %d - the game "
-                            "stops reading descr_strat.txt at that family's relative line; raise the number (Tools > "
-                            "Campaign rules) or take a child out" % (fb.name, father, len(kids), most_allowed))
+                            "stops reading descr_strat.txt at that family's relative line; raise the number (Campaign rules... "
+                            "at the top) or take a child out" % (fb.name, father, len(kids), most_allowed))
     no_culture = [n for n, c in facs if not c]
     if no_culture:
         bad("no culture line for: %s" % ", ".join(no_culture))

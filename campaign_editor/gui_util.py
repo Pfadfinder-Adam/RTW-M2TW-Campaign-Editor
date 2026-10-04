@@ -156,20 +156,57 @@ class ScrollFrame(ttk.Frame):
 
 class HScroll(ttk.Frame):
     """A row (built in .inner) that scrolls left and right when the window is narrower than it: arrows at its
-    ends then, and the mouse wheel over it. Nothing in the row is ever cut off for good."""
+    ends then, the mouse wheel over it, and a press dragged sideways (the row follows the mouse smoothly; a click
+    without a drag is a click). Nothing in the row is ever cut off for good."""
     STEP = 60
+    DRAG = 6                                     # pixels the mouse moves before a press is a drag, not a click
 
     def __init__(self, parent, **kw):
         super().__init__(parent, **kw)
         self.back = ttk.Button(self, text="\u25c0", width=2, command=lambda: self.step(-1))
         self.fore = ttk.Button(self, text="\u25b6", width=2, command=lambda: self.step(1))
-        self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0, xscrollincrement=self.STEP)
+        self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0, xscrollincrement=0)
         self.canvas.pack(side="left", fill="x", expand=True)
         self.inner = ttk.Frame(self.canvas)
         self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda e: self._resize())
         self.canvas.bind("<Configure>", lambda e: self._resize())
         wheel(self, lambda step: bool(self.back.winfo_ismapped()) and (self.step(step) or True))
+        self._drag = None
+        for w in (self.canvas, self.inner):
+            self.grab(w)
+
+    def grab(self, w):
+        """w (in the row) takes the drag: pressed and moved sideways, the row scrolls with the mouse; a button
+        released without a drag is clicked as usual (its own press / release are replaced, so a drag that ends on
+        it never clicks it)."""
+        w.bind("<ButtonPress-1>", lambda e: self._down(e, w))
+        w.bind("<B1-Motion>", self._move)
+        w.bind("<ButtonRelease-1>", lambda e: self._up(e, w))
+
+    def _down(self, e, w):
+        self._drag = {"x": e.x_root, "moved": False, "w": w}
+        self.canvas.scan_mark(e.x_root, 0)
+        return "break"
+
+    def _move(self, e):
+        d = self._drag
+        if not d:
+            return "break"
+        if not d["moved"] and abs(e.x_root - d["x"]) < self.DRAG:
+            return "break"
+        d["moved"] = True
+        if self.back.winfo_ismapped():                 # only a row wider than the window moves
+            self.canvas.scan_dragto(e.x_root, 0, gain=1)
+        return "break"
+
+    def _up(self, e, w):
+        d, self._drag = self._drag, None
+        if d and not d["moved"] and d["w"] is w and hasattr(w, "invoke"):
+            x, y = e.x_root - w.winfo_rootx(), e.y_root - w.winfo_rooty()
+            if 0 <= x < w.winfo_width() and 0 <= y < w.winfo_height():
+                w.invoke()
+        return "break"
 
     def _resize(self):
         w, h = self.inner.winfo_reqwidth(), self.inner.winfo_reqheight()
@@ -185,7 +222,8 @@ class HScroll(ttk.Frame):
             self.canvas.xview_moveto(0)
 
     def step(self, d):
-        self.canvas.xview_scroll(d, "units")
+        total = max(self.inner.winfo_reqwidth(), 1)
+        self.canvas.xview_moveto(self.canvas.xview()[0] + d * self.STEP / float(total))
 
     def show(self, widget):
         """Scroll so that widget (in .inner) is in sight."""

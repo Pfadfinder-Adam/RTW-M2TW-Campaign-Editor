@@ -1,4 +1,4 @@
-"""Tools > Campaign rules...: the campaign's settings files as plain values with an explanation, the game's own value
+"""Campaign rules... (top row): the campaign's settings files as plain values with an explanation, the game's own value
 beside a changed one, Preview, Write it in (backup, Restore undoes it)."""
 
 import tkinter as tk

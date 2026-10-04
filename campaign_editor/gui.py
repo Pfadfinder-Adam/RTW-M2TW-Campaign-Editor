@@ -53,7 +53,7 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
                                   armies, agents, fleets), Map (click towns, drag characters)
   change the campaign map ....... Map tab (move towns and ports, paint regions, resources)
                                   and the Terrain editor (ground, rivers, climates, heights)
-  a building / garrisons in many  Tools > Buildings and garrisons for many towns..., or the Map:
+  a building / garrisons in many  Many towns... (top row), or the Map:
     towns at once ............... Pick towns, click towns (yellow), right click
   change a unit or a building ... Unit editor / Building editor
   make a new unit or building ... Unit / Building editor: New unit (New building) step by step...
@@ -61,10 +61,10 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   hear a unit, give it a voice .. Unit editor: Voice in battle - Play, Put in my own...
   edit characters and families .. Character editor (or the Faction tab in Edit faction)
   put in a mod made by others ... Tools > Check and install a pack...
-  change the campaign's rules ... Tools > Campaign rules... (ages, agents, towns, diplomacy, unit sizes)
-  add a religion ................ Tools > New religion... (Medieval II; Rome has no religions)
+  change the campaign's rules ... Campaign rules... (top row): ages, agents, towns, diplomacy, unit sizes
+  add a religion ................ Religions > New religion... (Medieval II; Rome has no religions)
   add Sack Settlement ........... Add-ons (Rome + REX): who may sack, reward, what stays standing
-  make your own script, no code . Tools > Module builder... (REX / M2EX): WHEN something happens, IF ...,
+  make your own script, no code . Module builder... (top row; REX / M2EX): WHEN something happens, IF ...,
                                   DO ... - picked from lists; nine examples to start from
   rename a region or its town ... Edit region... (Map, or Rename... beside the towns list): the names
                                   players see and the names in the files (changed everywhere)
@@ -414,8 +414,18 @@ class App(tk.Tk):
                                command=self.work_changed, padx=16, pady=5, font=("", 10, "bold"),
                                selectcolor="#cfe3ff", relief="raised", offrelief="groove", cursor="hand2")
             b.pack(side="left", padx=(0, 4))
+            self.work_row.grab(b)
             self.work_buttons[val] = b
             tip(b, self.WORK_HINTS.get(val, ""))         # what each work is: shown on hover, takes no room
+        # the tools with a window of their own, beside the works (they were in Tools: a tester wanted them in
+        # sight, one press away); the row scrolls when the window is narrower - drag it with the left button
+        ttk.Separator(self.work_row.inner, orient="vertical").pack(side="left", fill="y", padx=(4, 8), pady=4)
+        for key, text, method, hint_text in self.WINDOW_BUTTONS:
+            b = tk.Button(self.work_row.inner, text=text, padx=12, pady=5, font=("", 10), relief="groove",
+                          cursor="hand2", command=self.once(method, lambda m=method: getattr(self, m)()))
+            b.pack(side="left", padx=(0, 4))
+            self.work_row.grab(b)
+            tip(b, hint_text)
         tip(self.b_theme, "light or dark window")
         self.work_row.pack_configure(expand=False)
         # under them only a warning that needs to be seen (New faction with a faction picked), on a line of its own
@@ -794,22 +804,7 @@ class App(tk.Tk):
         menu.add_command(label="Check mod files (what the game would stumble on)", command=self.once("check", self.check))
         menu.add_command(label="The game's log in plain words (what went wrong in the game)...",
                          command=self.once("game_log_window", self.game_log_window))
-        menu.add_command(label="Settlement names by culture (every town)...", command=self.once("culture_names_table", self.culture_names_table))
-        menu.add_command(label="Buildings and garrisons for many towns...", command=self.once("mass_towns", lambda: self.mass_towns()))
-        menu.add_command(label="Recolour a faction's pictures (cards, textures, symbols)...",
-                         command=self.once("recolour_window", lambda: self.recolour_window()))
-        menu.add_command(label="Make the campaign map 3 x bigger (alpha)...", command=self.once("upscale_map", self.upscale_map))
         menu.add_command(label="Check and install a pack...", command=self.once("install_pack", self.install_pack))
-        menu.add_command(label="Campaign rules (ages, agents, towns, diplomacy, unit sizes)...",
-                         command=self.once("campaign_rules", self.campaign_rules))
-        menu.add_command(label="Traits and retinue (what they give, their names, new ones)...",
-                         command=self.once("traits_window", self.traits_window))
-        menu.add_command(label="Events and later factions (plagues, volcanoes, historic messages)...",
-                         command=self.once("events_window", self.events_window))
-        menu.add_command(label="Module builder (a new add-on made of blocks, no code)...",
-                         command=self.once("module_builder", self.module_builder))
-        menu.add_command(label="New religion... (Medieval II)", command=self.once("religions_from_menu_True", lambda: self.religions_from_menu(True)))
-        menu.add_command(label="Religions of a region... (Medieval II)", command=self.once("religions_from_menu_False", lambda: self.religions_from_menu(False)))
         menu.add_command(label="Restore a backup...", command=self.restore)
         menu.add_separator()
         menu.add_command(label="Game manifest...", command=self.once("game_manifest", self.game_manifest))
@@ -1252,6 +1247,19 @@ class App(tk.Tk):
             self.lb_build.selection_set(self.chosen.index(capital) if capital in self.chosen else 0)
             self.load_buildings()
 
+    # the tools that open a window of their own, on the work bar after the works: (key, button, App method, hover)
+    WINDOW_BUTTONS = [
+        ("rules", "Campaign rules...", "campaign_rules", "ages, agents, towns, diplomacy, unit sizes - every rule of "
+                                                         "the campaign"),
+        ("events", "Events...", "events_window", "events and later factions: plagues, volcanoes, historic messages"),
+        ("traits", "Traits and retinue...", "traits_window", "what they give, their names, new ones"),
+        ("builder", "Module builder...", "module_builder", "a new add-on made of blocks, no code (REX / M2EX)"),
+        ("recolour", "Recolour...", "recolour_window", "a faction's pictures in its colours: cards, textures, "
+                                                       "symbols"),
+        ("culture", "Culture names...", "culture_names_table", "settlement names by culture, every town"),
+        ("towns", "Many towns...", "mass_towns", "buildings and garrisons for many towns at once"),
+        ("bigger", "Bigger map (x3)...", "upscale_map", "make the campaign map 3 x bigger (alpha)"),
+    ]
     WORK_TITLES = {"new": "New faction", "edit": "Edit faction", "units": "Unit editor",
                    "buildings": "Building editor", "characters": "Character editor",
                    "terrain": "Terrain editor", "addons": "Add-ons", "religions": "Religions"}
@@ -1386,7 +1394,7 @@ class App(tk.Tk):
             else:
                 w.grid()
         if edit:
-            self.v_way.set(WAY_LABELS[0])          # Edit: the way in is changed in Tools > Events and later factions
+            self.v_way.set(WAY_LABELS[0])          # Edit: the way in is changed in Events... (top row)
         self.way_changed()
         if edit:
             for w in self.give_row:
@@ -1643,7 +1651,7 @@ class App(tk.Tk):
         self.status.set("Thank you! %s opened in your browser." % KOFI)
 
     def upscale_map(self):
-        """Tools > Make the campaign map 3 x bigger: every file of the map at once, shown first, with a backup."""
+        """Bigger map (x3)... (top row): every file of the map at once, shown first, with a backup."""
         if not self.mod:
             messagebox.showinfo(APP, "Load a mod first.")
             return
@@ -2365,7 +2373,7 @@ class App(tk.Tk):
             side="left", padx=(16, 0))
 
     def religions_from_menu(self, new):
-        """Tools > New religion / Religions of a region: the same dialogs as on the Map (Edit regions), reached
+        """New religion / Religions of a region (once Tools entries, now the Religions work's own buttons): the same dialogs as on the Map (Edit regions), reached
         without knowing where they live - the Map is opened with Edit regions on, so the shares can be painted
         region by region afterwards."""
         if not self.mod:
@@ -4704,22 +4712,22 @@ class App(tk.Tk):
         return build(ModData(self.mod.data), self.v_campaign.get(), template, name, opts)
 
     def events_window(self):
-        """Tools > Events and later factions...: the campaign's descr_events.txt."""
+        """Events... (top row): the campaign's descr_events.txt."""
         from .gui_events import open_events
         open_events(self)
 
     def traits_window(self):
-        """Tools > Traits and retinue... (also in the Character editor): the traits and ancillaries themselves."""
+        """Traits and retinue... (top row; also in the Character editor): the traits and ancillaries themselves."""
         from .gui_traits import open_traits
         open_traits(self)
 
     def module_builder(self):
-        """Tools > Module builder...: a new REX / M2EX add-on made of WHEN / IF / DO blocks (Add-ons has it too)."""
+        """Module builder... (top row): a new REX / M2EX add-on made of WHEN / IF / DO blocks (Add-ons has it too)."""
         from .gui_modbuilder import open_builder
         open_builder(self)
 
     def campaign_rules(self):
-        """Tools > Campaign rules...: the campaign's settings files as plain values."""
+        """Campaign rules... (top row): the campaign's settings files as plain values."""
         from .gui_rules import open_rules
         open_rules(self)
 
