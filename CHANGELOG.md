@@ -361,6 +361,9 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **A family's children are written oldest first** (both games, as every vanilla family is): a new son put after a
+  younger child made Medieval II complain "... is supposed to be younger than ...". **Check mod files** names a
+  wrong order.
 - **Avoid Growth looks like the game's own ticks**: the small box and tick of the settlement scroll
   (PLAIN_CHECKBOX_BG / _TICK, as Auto-manage, Construction and Recruitment), their small grey-brown font, and in
   Medieval II it stands in their row, right of Recruitment (it sat over the income lines). Just the words "Avoid

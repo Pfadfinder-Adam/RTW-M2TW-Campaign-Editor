@@ -1444,6 +1444,37 @@ building smith
         said = "\n".join(m for _, m in p.notes)
         self.assertIn("captain Cyrus", said)
 
+    def test_children_are_written_oldest_first(self):
+        """A tester in Medieval II (with M2EX): 'Children of King Philip: Adenin (age 3) is supposed to be younger
+        than Henry (age 1)' - a new son was put after a younger child. Both games want each couple's children oldest
+        first (vanilla: every couple); the editor writes them so and Check mod files names a wrong order."""
+        from campaign_editor import family
+        from campaign_editor.check import check_mod
+        from campaign_editor.edit import edit
+        self.assertEqual(family.oldest_first([["F", "W", ["Henry", "X", "Adenin"]]], {"Henry": "1", "Adenin": "3"}),
+                         [["F", "W", ["Adenin", "X", "Henry"]]])
+        mod = ModData(self.root)
+        path = mod.campaign_file("test", "descr_strat.txt")
+        with open(path) as fh:
+            text = fh.read()
+        text = text.replace("weapon_lvl 0\n;#####<", "weapon_lvl 0\n\ncharacter_record\t\tAnna, \tfemale, command 0, "
+                            "influence 0, management 0, subterfuge 0, age 30, alive, never_a_leader\n"
+                            "relative \tAaron Alphid, \tAnna,\t\tend\n;#####<", 1)
+        with open(path, "w") as fh:
+            fh.write(text)
+        plan = edit(ModData(self.root), "test", "alpha", {"family": {
+            "new": [{"name": "Boris", "sex": "male", "age": 1}, {"name": "Aaron", "sex": "male", "age": 3}],
+            "tree": [["Aaron Alphid", "Anna", ["Boris", "Aaron"]]]}})          # the mini mod's names
+        rel = next(l for l in plan.files[path].texts() if l.startswith("relative"))
+        self.assertLess(rel.index("Aaron,\t"), rel.index("Boris,\t"))
+        plan.apply()
+        self.assertNotIn("is written before the older", check_mod(ModData(self.root), "test"))
+        with open(path) as fh:
+            text = fh.read()
+        with open(path, "w") as fh:
+            fh.write(text.replace("Aaron,\tBoris", "Boris,\tAaron"))
+        self.assertIn("Boris is written before the older Aaron", check_mod(ModData(self.root), "test"))
+
     def test_family_edit_and_restore(self):
         """Family tab: traits, ages, a renamed leader followed on the tree, a new wife and child
         (records in the file's own form, the tree after them), then Restore byte for byte."""

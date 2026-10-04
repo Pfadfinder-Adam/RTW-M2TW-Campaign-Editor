@@ -273,6 +273,30 @@ def ordered(tree):
     return out
 
 
+def oldest_first(tree, ages):
+    """The couples with each one's children oldest first, as the games want them (vanilla: every couple of both
+    games; a younger child before an older one: 'Children of King Philip: Adenin (age 3) is supposed to be younger
+    than Henry (age 1)'). Children of no known age keep their place after the known ones' order is set."""
+    out = []
+    for father, wife, kids in tree:
+        known = [k for k in kids if str(ages.get(k, "")).isdigit()]
+        by_age = iter(sorted(known, key=lambda k: -int(ages[k])))
+        out.append([father, wife, [next(by_age) if k in known else k for k in kids]])
+    return out
+
+
+def children_order_problems(fam):
+    """[(father, younger, older)]: a child written before an older brother or sister."""
+    ages = {p.name: p.age for p in fam["people"]}
+    out = []
+    for father, _, kids in fam["tree"]:
+        known = [k for k in kids if str(ages.get(k, "")).isdigit()]
+        for a, b in zip(known, known[1:]):
+            if int(ages[a]) < int(ages[b]):
+                out.append((father, a, b))
+    return out
+
+
 def relative_line(father, wife, kids):
     return "relative \t%s, \t%s,\t\t%s" % (father, wife, "".join("%s,\t" % k for k in kids) + "end")
 
@@ -589,7 +613,9 @@ def apply(plan, f, faction, opts):
         plan.note(f, "%s: %s (%s, age %s%s) added off the map" % (
             faction, n["name"], n.get("sex", "male"), age_of(n), ", died before the start" if n.get("dead") else ""))
     old_tree = [_parse_relative(f.text(i)) for i in rels]
-    want = ordered(tree)
+    ages = {p.name: p.age for p in fam2["people"]}
+    ages.update({n["name"]: age_of(n) for n in opts.get("new") or []})
+    want = oldest_first(ordered(tree), ages)
     if want == old_tree and not new_lines:
         if generals:
             _generals(plan, f, faction, generals)

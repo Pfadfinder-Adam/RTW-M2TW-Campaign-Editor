@@ -89,7 +89,15 @@ def check_mod(mod, campaign, deep=False, progress=None):
             if why:
                 bad("%s (%s): %s - the game stops reading descr_strat.txt there (towns, armies and diplomacy after "
                     "it are lost); set the population or the level on the Settlements tab" % (st.region, fb.name, why))
-    from .family import records_too_old
+    from .family import children_order_problems, read as read_family, records_too_old
+    for fb in s.factions:                           # children oldest first, as the games want them
+        try:
+            wrong = children_order_problems(read_family(strat_f, fb.name))
+        except Exception:
+            continue
+        for father, younger, older in wrong[:3]:
+            bad("%s: %s's children - %s is written before the older %s; the game wants them oldest first ('... is "
+                "supposed to be younger than ...')" % (fb.name, father, younger, older))
     from .limits import manhood_age
     manhood = manhood_age(mod)
     for name, age in records_too_old(strat_f.texts(), manhood):     # a living man off the map must be a boy
