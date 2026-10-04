@@ -394,6 +394,11 @@
 - **Map editor: nothing looks selected any more** - every faction's towns and characters were drawn with the yellow
   edge of 'yours' (yellow only marks what is selected now); the map is drawn sharp, tile by tile, at rest as while
   it is dragged; 'landmark' (Rome's wonders, which have their own sign) is gone from the resources list.
+- **The army flag on a town's roof is part of the town's sign** (both games): one flag says an army is in the town -
+  a square cloth in the army's colour with a triangle cut into its right edge, no yellow lines; it grows with the
+  town under the mouse and is never dragged by mistake. **Take the army out** (right click on the town) hangs the
+  army under the mouse until a free tile is clicked (green where it may stand, red with why where not; Esc or a
+  right click stops).
 - **A double click on an army or a fleet opens its units; on a fort, the army in it** (both games, the Map editor
   and Edit faction); an empty fort or an agent says what can be done.
 - **Rome: a new faction no longer crashes the game when it is destroyed.** Rome's message 'faction destroyed'

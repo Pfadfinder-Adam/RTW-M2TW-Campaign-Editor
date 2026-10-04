@@ -248,6 +248,9 @@ class MapView(ttk.Frame):
         self.on_wonder = None                            # (type) -> the wonder's window
         self.on_town = None                              # (region) -> the town's own page (a double click)
         self.on_char_double = None                       # (char id) -> its units' window (a double click)
+        self.on_place_stop = None                        # () -> what hangs under the mouse is dropped (Esc / right)
+        self.canvas.winfo_toplevel().bind("<Escape>", lambda e: self.on_place and self.on_place_stop and
+                                          self.on_place_stop(), add="+")
         self.on_fort_double = None                       # (Fort) -> its garrison's window (a double click)
         c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
         self._hot = None                                # the marker under the mouse, drawn bigger
@@ -538,6 +541,7 @@ class MapView(ttk.Frame):
             if not getattr(self, "everyone", False):          # the Map editor: no faction is 'yours'
                 row("one of your towns", town(red, "#ffd400", 3))
             row("rebel village (no town yet)", town("", "black", 1, hollow=True))
+            row("an army in it: a flag on its roof", lambda x, yy: self._roof_flag(x - 3, yy + 8, 13, "__legend__", ()))
             row("a port (click the coast)", port, "port")
             row("a fort (top: its owner's colour)",
                 lambda x, yy: self._fort_icon(lc, x, yy + 2, 7, "#%02x%02x%02x" % self.LEGEND_RED, (), 2), "fort")
@@ -1020,7 +1024,8 @@ class MapView(ttk.Frame):
         towns = {self.places.get(("city", r), xy) for r, xy in cm.cities.items()}
         busy = towns | {self.places.get(("port", r), xy) for r, xy in cm.ports.items()}
         tile = max(self.z * 0.9, 6)                    # a character fills its tile...
-        seen, flags = {}, {}
+        town_of = {self.places.get(("city", r), xy): r for r, xy in cm.cities.items()}
+        seen, flags = {}, set()
         for ch_ in sorted(self.chars, key=lambda c: not c["army"]):     # the garrison first
             x, y = ch_["xy"]
             sx, sy = self.to_screen(x, y)
@@ -1028,13 +1033,14 @@ class MapView(ttk.Frame):
                 continue
             one = tile
             if (x, y) in towns and ch_["kind"] in ("general", "named character"):
-                # an army in a town: its flag stands on the town's roof (a tester's wish) - no army, no flag;
-                # more than one side by side
-                n = flags.get((x, y), 0)
-                flags[(x, y)] = n + 1
-                one = max(tile * 0.6, 6)
-                sx += one * 0.3 + n * one * 0.75       # the pole on the roof's middle (the flag waves right)
-                sy -= size / 2 + one * 0.5             # its foot on the roof
+                # an army in a town: ONE flag on the town's roof, part of the town's sign (it grows with it and is
+                # never dragged - the army leaves by the right click's 'Take the army out'); it only says that an
+                # army is there (the user's choice, report #104)
+                if (x, y) not in flags:
+                    flags.add((x, y))
+                    self._roof_flag(sx, sy - size / 2, max(tile * 0.6, 6), ch_["faction"],
+                                    ("city", "city:" + town_of.get((x, y), "")))
+                continue
             elif (x, y) in busy:                       # ...an agent or a ship stands small beside the town /
                 n = seen.get((x, y), 0)                # port, to its left (the name is on the right), in a row
                 seen[(x, y)] = n + 1
@@ -1045,6 +1051,17 @@ class MapView(ttk.Frame):
                 seen[(x, y)] = n + 1
                 sx += n * one * 0.5
             self._draw_char(ch_, sx, sy, one)
+
+    def _roof_flag(self, sx, roof, h, faction, tags):
+        """The flag on a town's roof: a pole and a square cloth in the army's colour with a triangle cut into its
+        right edge (a swallowtail), a thin black edge - nothing yellow (report #104)."""
+        c = self.canvas
+        rgb = REBELS if faction == "slave" else self.colours.get(faction, REBELS)
+        px, top = sx, roof - h * 1.1
+        c.create_line(px, roof, px, top, fill="black", width=2, tags=tags)
+        w, ch = h * 0.8, h * 0.6
+        c.create_polygon(px, top, px + w, top, px + w * 0.7, top + ch / 2, px + w, top + ch, px, top + ch,
+                         fill="#%02x%02x%02x" % rgb, outline="black", width=1, tags=tags)
 
     def _draw_char(self, ch_, sx, sy, size):
         c = self.canvas
@@ -1713,6 +1730,10 @@ class MapView(ttk.Frame):
             self.render()
             return
         mp, self._menu_press = self._menu_press, None
+        if mp and getattr(e, "num", None) == 3 and abs(e.x - mp[0]) + abs(e.y - mp[1]) <= 3 \
+                and self.on_place and self.on_place_stop:    # a right click stops what hangs under the mouse
+            self.on_place_stop()
+            return
         if mp and getattr(e, "num", None) == 3 and abs(e.x - mp[0]) + abs(e.y - mp[1]) <= 3 \
                 and self.on_menu and self.cmap:
             self._cdrag = self._rdrag = self._pdrag = None
