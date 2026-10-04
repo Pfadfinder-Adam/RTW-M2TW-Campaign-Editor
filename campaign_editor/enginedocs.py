@@ -152,7 +152,7 @@ def read_dir(folder):
 
 def facts(rex_dir, m2ex_dir):
     """The catalogue the editor carries: {'made': ..., 'rex': {kind: [facts]}, 'm2ex': ...} - no descriptions."""
-    out = {"made": "facts of REX's and M2EX's own documentation (dump_docudemon), builds of 2026-10-03; the "
+    out = {"made": "facts of REX's and M2EX's own documentation (dump_docudemon), builds of 2026-10-04; the "
                    "descriptions are read from the game's documentation folder"}
     for engine, folder in (("rex", rex_dir), ("m2ex", m2ex_dir)):
         docs = read_dir(folder) or {}
@@ -350,6 +350,7 @@ PARAM_KINDS = (("logic token", "logic"), ("logic_token", "logic"), ("character t
                ("count", "number"), ("how_many", "number"), ("money", "number"), ("year", "number"))
 LOGIC = ["<", "<=", "=", ">=", ">", "!="]
 NOT_CHOICES = {"exp/armour/weapon"}             # three numbers, not one of three words
+PLACEHOLDER = ("_name", "_id", "_type")         # event_message_name | all: a name or the word all
 
 
 def _param(text, optional=False):
@@ -361,7 +362,8 @@ def _param(text, optional=False):
     t = re.sub(r"\s*\([^)]*\)", "", t).strip()
     low = t.lower()
     alts = [a.strip() for a in re.split(r"[/|]", t)]
-    if len(alts) > 1 and all(re.fullmatch(r"[a-z]+", a) for a in alts) and t not in NOT_CHOICES and \
+    if len(alts) > 1 and all(re.fullmatch(r"[a-z]+(_[a-z]+)*", a) and not a.endswith(PLACEHOLDER) for a in alts) and \
+            t not in NOT_CHOICES and \
             not any(k in low for k, _ in PARAM_KINDS[:18]):
         return Param(t, "choice", optional, alts)
     kind = next((v for k, v in PARAM_KINDS if k in low), "text")

@@ -3550,6 +3550,9 @@ building smith
         self.assertEqual(kinds("console", "kill_character"), [("characters", False), ("text", True)])
         self.assertEqual(kinds("console", "diplomatic_stance"), [("factions", False), ("factions", False),
                                                                  ("choice", False)])
+        m2_stance = ED.params_of(b["m2ex"]["console"]["diplomatic_stance"])[2]     # M2EX of 2026-10-04
+        self.assertEqual((m2_stance.kind, m2_stance.choices[-2:]), ("choice", ["protectorate_of", "client_of"]))
+        self.assertEqual(ED.params_of(b["m2ex"]["console"]["test_message"])[0].kind, "text")   # a name | all
         self.assertEqual(kinds("console", "create_unit")[:2], [("towns|characters", False), ("units", False)])
         self.assertEqual(kinds("conditions", "Trait"), [("traits", False), ("logic", False), ("number", False)])
         self.assertEqual(kinds("commands", "give_settlement"), [("factions", False), ("towns", False)])

@@ -104,6 +104,9 @@
   catalogue, the built-in add-ons, the icons), loads a tiny made-up mod, runs Check mod files on it, writes a new
   faction and restores every byte. The download page builds run it: an exe with a part or a file missing is never
   handed out. Every part of the editor now goes into the exe, also those opened only from a button.
+- **Module builder: the engines' builds of 2026-10-04** - the console command `diplomatic_stance` (REX and M2EX)
+  now also makes one faction the protectorate (`protectorate_of`) or client (`client_of`) of another; the
+  builder offers all five stances in its list.
 
 ### Changed
 - **Sack Settlement (both games): the governor's building always stays, 600 people at least**: the core chain is

@@ -14,7 +14,7 @@
   manifest is REX's; vanilla's original of a replaced one is in the game manifest.
 
 - `engine_catalogue.json.gz` - what REX and M2EX offer a script, from the documentation the engines write
-  themselves (console command `dump_docudemon`, builds of 2026-10-03): every console command, campaign-script
+  themselves (console command `dump_docudemon`, builds of 2026-10-04): every console command, campaign-script
   command, condition and event of each engine with its parameters, a sample line, where it works, what a condition
   needs from the event and what an event brings (`{"rex"|"m2ex": {kind: [[name, params, sample, where, needs,
   implemented]]}}`). No descriptions: the Module builder reads those from the game's own `documentation` folder.
