@@ -329,10 +329,9 @@ class ModuleBuilder(tk.Toplevel):
     def _settings(self, inner):
         f = ttk.LabelFrame(inner, text=" What the player may change later (on the Add-ons page) ", padding=6)
         f.pack(fill="x", pady=(6, 2), padx=2)
-        ttk.Label(f, foreground="#555", wraplength=860, justify="left", text=(
+        wrapping(ttk.Label(f, foreground="#555", justify="left", text=(
             "Tick a value to make it a setting: the player changes it on the Add-ons page, no script touched. The words "
-            "beside it are what the page shows. 'Module on' and 'Only once in a campaign' are always there.")).pack(
-            anchor="w")
+            "beside it are what the page shows. 'Module on' and 'Only once in a campaign' are always there.")))
         have = self.recipe.setdefault("settings", {})
         rows = MB.settable(self.recipe)
         if not rows:

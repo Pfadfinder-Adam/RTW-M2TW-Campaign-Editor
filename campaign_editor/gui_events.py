@@ -62,18 +62,18 @@ class EventsWindow(tk.Toplevel):
             "or splitting off a faction in a revolt. " + EM.HOW)).pack(anchor="w")
         lt = ttk.Frame(later)
         lt.pack(fill="x")
-        self.ltv = ttk.Treeview(lt, columns=("faction", "how", "back", "when"), show="headings", height=5,
-                                selectmode="browse")
-        for c, t, w in (("faction", "faction", 160), ("how", "comes in", 300), ("back", "may come back", 110),
-                        ("when", "event / campaign script", 420)):
-            self.ltv.heading(c, text=t)
-            self.ltv.column(c, width=w, stretch=c == "when")
-        self.ltv.pack(side="left", fill="x", expand=True)
-        self.ltv.bind("<Double-1>", lambda e: self.change_later())
-        lb = ttk.Frame(lt)
-        lb.pack(side="left", fill="y", padx=(6, 0))
+        lb = ttk.Frame(lt)                   # the buttons first: the list takes what is left, the buttons stay whole
+        lb.pack(side="right", fill="y", padx=(6, 0))
         ttk.Button(lb, text="Change...", command=self.change_later).pack(fill="x")
         ttk.Button(lb, text="Another faction...", command=lambda: self.change_later(new=True)).pack(fill="x", pady=4)
+        self.ltv = ttk.Treeview(lt, columns=("faction", "how", "back", "when"), show="headings", height=5,
+                                selectmode="browse")
+        for c, t, w in (("faction", "faction", 140), ("how", "comes in", 260), ("back", "may come back", 130),
+                        ("when", "event / campaign script", 360)):
+            self.ltv.heading(c, text=t)
+            self.ltv.column(c, width=w, minwidth=w if c == "back" else 60, stretch=c == "when")
+        self.ltv.pack(side="left", fill="x", expand=True)
+        self.ltv.bind("<Double-1>", lambda e: self.change_later())
         self.later = {}                      # {faction: {'way', 'of', 're_emergent', 'date', 'region'}} not written yet
         bar = ttk.Frame(top)
         bar.pack(fill="x", pady=(6, 0))

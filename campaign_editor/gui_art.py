@@ -55,8 +55,10 @@ class ArtEditor(ttk.Frame):
         self.fig_box.pack(fill="x", pady=(6, 0))
         self.pics_note = ttk.Label(self, text="Every picture of the faction. Replace... takes a PNG, JPG, TGA or DDS and makes it the "
                              "size and format the game's own has (a DDS stays a DDS); Preview, then Apply writes it (with a backup).",
-                  foreground="#555")
-        self.pics_note.pack(anchor="w", pady=(8, 2))
+                  foreground="#555", justify="left")
+        self.pics_note.pack(fill="x", anchor="w", pady=(8, 2))
+        self.pics_note.bind("<Configure>", lambda e: self.pics_note.configure(wraplength=max(120, e.width - 4)),
+                            add="+")
         from .gui_util import tip
         btns = ttk.Frame(self)
         btns.pack(anchor="w", pady=(0, 4))

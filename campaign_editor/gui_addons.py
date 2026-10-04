@@ -185,7 +185,8 @@ class AddonsPanel(ttk.Frame):
             w = self._widget(inner, s, values.get(s.var))
             w.grid(row=r, column=1, sticky="w", pady=2)
             hint = ttk.Label(inner, text=s.help, foreground="#666", wraplength=260, justify="left")
-            hint.grid(row=r, column=2, sticky="w", padx=6)
+            hint.grid(row=r, column=2, sticky="we", padx=6)
+            hint.bind("<Configure>", lambda e, h=hint: h.configure(wraplength=max(120, e.width - 4)), add="+")
             rows[s.var] = (lbl, w, hint, r)
             r += 1
 

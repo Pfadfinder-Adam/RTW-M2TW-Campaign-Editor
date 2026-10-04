@@ -73,24 +73,26 @@ class RecordEditor(ttk.Frame):
         head.pack(fill="x")
         self.title = ttk.Label(head, text="Load a mod, then pick one on the left", font=("", 11, "bold"))
         self.title.pack(side="left")
-        ttk.Button(head, text="Undo all changes here", command=self.reset).pack(side="right")
-        ttk.Button(head, text="New %s step by step..." % ("unit" if kind == "unit" else "building"),
-                   command=self.copy_dialog).pack(side="right", padx=6)
-        ttk.Button(head, text="Add line...", command=self.add_dialog).pack(side="right")
-        b = ttk.Button(head, text="Bring from another mod...", command=self.bring_dialog)
-        b.pack(side="right", padx=(0, 6))
-        from .gui_util import tip
+        # the buttons on a row of their own that wraps (gui_util.flow): on a narrow window the last one was cut
+        tools = ttk.Frame(right)
+        tools.pack(fill="x", pady=(2, 0))
+        if kind == "unit":
+            # packs: units taken out with everything they need, and put into another mod
+            ttk.Button(tools, text="Export pack...", command=self.export_pack).pack(side="left", padx=(0, 4))
+            ttk.Button(tools, text="Import pack...", command=self.import_pack).pack(side="left", padx=(0, 12))
+        b = ttk.Button(tools, text="Bring from another mod...", command=self.bring_dialog)
+        b.pack(side="left", padx=(0, 6))
+        from .gui_util import flow, tip
         tip(b, "Copy %s from another mod of the same game into this one, step by step: pick the mod, tick what "
                 "to bring, names, who has it, %s, then Preview and write (one backup; Restore undoes it)." % (
                     "units (with their models, textures, cards and texts)" if kind == "unit" else
                     "building chains (with their levels, texts and pictures)",
                     "where they are recruited" if kind == "unit" else "the units they recruit"))
-        if kind == "unit":
-            # packs: units taken out with everything they need, and put into another mod
-            ttk.Button(head, text="Import pack...", command=self.import_pack).pack(side="right", padx=(0, 12))
-            ttk.Button(head, text="Export pack...", command=self.export_pack).pack(side="right", padx=4)
-        from .gui_util import first
-        first(*head.pack_slaves()[1:][::-1])       # the buttons keep their room; the title is the one cut
+        ttk.Button(tools, text="Add line...", command=self.add_dialog).pack(side="left")
+        ttk.Button(tools, text="New %s step by step..." % ("unit" if kind == "unit" else "building"),
+                   command=self.copy_dialog).pack(side="left", padx=6)
+        ttk.Button(tools, text="Undo all changes here", command=self.reset).pack(side="left")
+        flow(tools)
         self.copy_ops = []                   # [(source, new name, details)] written on Apply
         self.pics = ttk.LabelFrame(right, text="Pictures", padding=6)
         self.pics.pack(fill="x", pady=(6, 6))

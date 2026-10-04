@@ -72,6 +72,17 @@ class FamilyEditor(ttk.Frame):
         panes.add(left, weight=2)
         panes.add(right, weight=5 if standalone else 3)
 
+        def room(_=None):                    # the people's side as wide as its rows ask (its buttons were cut)
+            try:
+                sf = getattr(self, "_person_sf", None)
+                need = max(left.winfo_reqwidth(), (sf.inner.winfo_reqwidth() + 40) if sf else 0)
+                have = panes.sashpos(0)
+                if 1 < have < need:
+                    panes.sashpos(0, min(need, max(have, panes.winfo_width() - 320)))
+            except tk.TclError:
+                pass
+        panes.bind("<Map>", lambda e: self.after(150, room), add="+")
+
         # the people
         cols = (("name", "name", 140), ("kind", "who", 140), ("age", "age", 40), ("where", "where", 80))
         self.tv = ttk.Treeview(left, columns=[c[0] for c in cols], show="headings", height=7, selectmode="browse")
@@ -90,6 +101,7 @@ class FamilyEditor(ttk.Frame):
         box.pack(fill="both", expand=True, pady=(6, 0))
         sf = ScrollFrame(box)
         sf.pack(fill="both", expand=True)
+        self._person_sf = sf
         form = sf.inner
         self.form = box                           # its title names the person
         r = ttk.Frame(form)
@@ -186,8 +198,10 @@ class FamilyEditor(ttk.Frame):
                                command=self._view_changed, padx=16, pady=4, font=("", 10, "bold"),
                                selectcolor="#cfe3ff", relief="raised", offrelief="groove", cursor="hand2").pack(
                     side="left", padx=(0, 4))
-            ttk.Label(sw, text="the picked person as the game shows him - or the whole family",
-                      foreground="#555").pack(side="left", padx=8)
+            hint = ttk.Label(sw, text="the picked person as the game shows him - or the whole family",
+                             foreground="#555", justify="left")
+            hint.pack(side="left", padx=8, fill="x", expand=True)
+            hint.bind("<Configure>", lambda e: hint.configure(wraplength=max(80, e.width - 4)), add="+")
             self.panel = CharacterPanel(right, on_pip=self.set_attribute)
             self.panel.pack(fill="both", expand=True)
             tree_box = ttk.Frame(right)

@@ -316,6 +316,12 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **No text cut at a window's edge** (every window checked on both games): the Events window's Change... / Another
+  faction... buttons, the Campaign rules' explanations, the Units & armies town name and unit count, the Unit and
+  Building editors' buttons (they wrap to a second row now), the Buildings tab's population line and its 'show levels
+  too big' tick (on a line of its own), the Add-ons explanations, the Art tab's note, the Character editor's Set name /
+  age and Remove buttons, the one-line hints with a '?' and the New faction warning beside the work buttons (on a line
+  of its own) - they wrap now.
 - **Medieval II battle banners from Banner... had no poles and were cut** in the game (the test mod in the game):
   the new sheet took its see-through parts from the faction's current sheet - once that sheet had been replaced by
   another picture, its alpha went with it, and the poles and much of the cloth turned see-through. The banner now

@@ -140,8 +140,9 @@ class RulesWindow(tk.Toplevel):
         e.grid(row=r, column=1, sticky="w")
         hint = CR.explain(rule)
         game = self._game(rule)
-        ttk.Label(inner, text=hint, foreground="#555", wraplength=360, justify="left").grid(
-            row=r, column=2, sticky="w", padx=6)
+        hl = ttk.Label(inner, text=hint, foreground="#555", wraplength=360, justify="left")
+        hl.grid(row=r, column=2, sticky="we", padx=6)
+        hl.bind("<Configure>", lambda e: hl.configure(wraplength=max(120, e.width - 4)), add="+")   # never cut
         cell = ttk.Frame(inner)
         cell.grid(row=r, column=3, sticky="w")
 

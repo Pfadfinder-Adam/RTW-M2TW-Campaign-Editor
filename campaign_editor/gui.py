@@ -417,10 +417,12 @@ class App(tk.Tk):
             tip(b, self.WORK_HINTS.get(val, ""))         # what each work is: shown on hover, takes no room
         tip(self.b_theme, "light or dark window")
         self.work_row.pack_configure(expand=False)
-        # beside them only a warning that needs to be seen (New faction with a faction picked); cut first when narrow
-        self.lbl_work = ttk.Label(work, text="", foreground="#555")
-        self.lbl_work.pack(side="left", padx=10)
-        tip(self.lbl_work, lambda: self.lbl_work.cget("text"))
+        # under them only a warning that needs to be seen (New faction with a faction picked), on a line of its own
+        # that wraps - beside the work buttons it was cut to a few letters in a narrow window
+        self._work_frame = work
+        self.lbl_work = ttk.Label(self, text="", foreground="#555", justify="left")
+        self.lbl_work.bind("<Configure>", lambda e: self.lbl_work.configure(wraplength=max(120, e.width - 4)),
+                           add="+")
         self._theme_label()
         self.editors = {}
 
@@ -1005,8 +1007,10 @@ class App(tk.Tk):
              "its governor's building with it. Unticked: the population is cut to the level's range. Each level "
              "holds a range of people at the start (a village 400 - 1500, a town up to 3500, a large town 9000, a "
              "city 18000...) - outside it the game stops reading the campaign file.").pack(side="left", padx=(0, 12))
-        self.lbl_size = ttk.Label(bar, text="", foreground="#666")
+        self.lbl_size = ttk.Label(bar, text="", foreground="#666", justify="left")
         self.lbl_size.pack(side="left", fill="x", expand=True)
+        self.lbl_size.bind("<Configure>", lambda e: self.lbl_size.configure(wraplength=max(120, e.width - 4)),
+                           add="+")
         self.buildings_editor = BuildingsEditor(right, self.pictures)
         self.buildings_editor.pack(fill="both", expand=True)
 
@@ -4572,6 +4576,10 @@ class App(tk.Tk):
                 hint = ("%s = template of a NEW faction. To change %s itself: Edit faction" % (picked, picked)
                         if picked else "")
             self.lbl_work.configure(text=hint)
+            if hint and not self.lbl_work.winfo_manager():
+                self.lbl_work.pack(fill="x", padx=16, after=self._work_frame)
+            elif not hint and self.lbl_work.winfo_manager():
+                self.lbl_work.pack_forget()
 
     def make_plan(self):
         ed = self.editor()

@@ -494,12 +494,28 @@ class ShortHint(ttk.Frame):
         Tip(self.lbl, lambda: self.full, width=560)
         if text:
             self.configure(text=text)
+        master.bind("<Configure>", self._fit, add="+")      # the line wraps instead of running past the edge
+
+    def _fit(self, _=None):
+        """Wrap the shown sentence at the room the parent gives it (none when it fits on one line)."""
+        try:
+            from tkinter import font as tkfont
+            avail = self.master.winfo_width() - (self.q.winfo_reqwidth() if self.q.winfo_manager() else 0) - 28
+            if avail < 80:
+                return
+            f = tkfont.Font(font=self.lbl.cget("font") or "TkDefaultFont")
+            want = avail if f.measure(self.lbl.cget("text")) > avail else 0
+            if int(str(self.lbl.cget("wraplength")).strip() or 0) != want:
+                self.lbl.configure(wraplength=want, justify="left")
+        except Exception:
+            pass
 
     def configure(self, cnf=None, **kw):
         if "text" in kw:
             self.full = kw.pop("text") or ""
             short = first_sentence(self.full)
             self.lbl.configure(text=short)
+            self.after_idle(self._fit)
             if short.strip() == self.full.strip():
                 self.q.pack_forget()
             elif not self.q.winfo_ismapped():

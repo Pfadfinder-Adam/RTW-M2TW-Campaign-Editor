@@ -51,11 +51,13 @@ class GarrisonEditor(ttk.Frame):
         self.on_change = self.auto = None
         self.held = False
 
+        # the town's name on a line of its own that wraps (it was cut in a narrow window), the choices below it
+        self.title = ttk.Label(self, text="Pick a town on the left", font=("", 10, "bold"), justify="left")
+        self.title.pack(fill="x", anchor="w")
+        self.title.bind("<Configure>", lambda e: self.title.configure(wraplength=max(120, e.width - 4)), add="+")
         top = ttk.Frame(self, padding=(0, 0, 0, 4))
         top.pack(fill="x")
-        self.title = ttk.Label(top, text="Pick a town on the left", font=("", 10, "bold"))
-        self.title.pack(side="left")
-        ttk.Label(top, text="   Show").pack(side="left")
+        ttk.Label(top, text="Show").pack(side="left")
         self.v_cat = tk.StringVar(value="all")
         self.cb_cat = ttk.Combobox(top, textvariable=self.v_cat, values=["all"], state="readonly", width=12)
         self.cb_cat.pack(side="left", padx=4)
@@ -68,11 +70,7 @@ class GarrisonEditor(ttk.Frame):
         cb.bind("<<ComboboxSelected>>", lambda e: self.fill_roster())
         self.v_gen = tk.BooleanVar(value=False)
         ttk.Checkbutton(top, text="general's units", variable=self.v_gen, command=self.fill_roster).pack(side="left")
-        # the choices keep their room at the right; the town's name is the one cut in a narrow window
         from .gui_util import first
-        for w in top.pack_slaves()[1:]:
-            w.pack_configure(side="right")
-            first(w)
 
         self.info = ttk.Label(self, text="", anchor="w", foreground="#444")
         self.info.pack(fill="x")
@@ -87,8 +85,9 @@ class GarrisonEditor(ttk.Frame):
 
         bar = ttk.Frame(self, padding=(0, 4, 0, 0))
         bar.pack(fill="x")
-        self.total = ttk.Label(bar, text="", font=("", 10, "bold"))
-        self.total.pack(side="left")
+        self.total = ttk.Label(bar, text="", font=("", 10, "bold"), justify="left")
+        self.total.pack(side="left", fill="x", expand=True)
+        self.total.bind("<Configure>", lambda e: self.total.configure(wraplength=max(120, e.width - 4)), add="+")
         ttk.Button(bar, text="Automatic", command=self.clear).pack(side="right", padx=4)
         b = ttk.Button(bar, text="Suggest", command=self.suggest)
         b.pack(side="right", padx=4)

@@ -21,8 +21,10 @@ class BuildingsEditor(ttk.Frame):
         self.title = ttk.Label(top, text="Pick a town on the left", font=("", 10, "bold"))
         self.title.pack(side="left")
         self.v_all = tk.BooleanVar(value=False)
-        ttk.Checkbutton(top, text="show levels too big for the settlement", variable=self.v_all,
-                        command=self.redraw).pack(side="left", padx=12)
+        # on a line of its own under the town's row: beside the name it was cut in a narrow window
+        under = ttk.Frame(self)
+        ttk.Checkbutton(under, text="show levels too big for the settlement", variable=self.v_all,
+                        command=self.redraw).pack(side="left")
         self.b_keep = ttk.Button(top, text="Keep the town's own", command=self.reset)
         self.b_keep.pack(side="right")
         from .gui_util import first
@@ -37,6 +39,7 @@ class BuildingsEditor(ttk.Frame):
         self.cb_kind.bind("<<ComboboxSelected>>", lambda e: self.on_kind and self.on_kind(self.v_kind.get()))
         self.kind = None
         self.on_kind = None
+        under.pack(fill="x")
         self.info = ttk.Label(self, text="", anchor="w", foreground="#444")
         self.info.pack(fill="x")
 
