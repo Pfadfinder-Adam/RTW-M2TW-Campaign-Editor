@@ -5,7 +5,6 @@ Plan as a new faction, so preview, backup and restore work alike."""
 import re
 
 from .build import template_display, validate
-from .buildings import settlement_info
 from .clone import FE_NAMES, description_key, entry_end
 from .plan import Plan
 from .start import MAX_UNITS, _has_army, _units, unit_name
@@ -200,7 +199,6 @@ def _texts(plan, now, campaign):
         if "regions_and_settlement_names" in path.lower() or "rebel_faction_descr" in path.lower():
             continue
         f = None
-        n = 0
         texts = plan.mod.load(path).texts()
         edits = []                                  # (start, end, new lines)
         i = 0
@@ -270,7 +268,7 @@ def set_faction_colours(plan, faction, primary=None, secondary=None):
             for key in ("primary", "secondary"):
                 rgb = want.get(key + "_colour")
                 if rgb and re.match(r'\s*"%s"\s*:\s*\[' % key, line):
-                    j.set(i, re.sub(r"\[[^\]]*\]", "[ %d, %d, %d ]" % tuple(rgb), line, 1))
+                    j.set(i, re.sub(r"\[[^\]]*\]", "[ %d, %d, %d ]" % tuple(rgb), line, count=1))
             depth += line.count("{") - line.count("}")
             if "{" in line or depth:
                 inside = 2
@@ -291,7 +289,7 @@ def _strat(plan, campaign, now):
     if o.get("denari") not in (None, "") and str(o["denari"]) != str(now.get("denari")):
         for i in range(fb.start, fb.end):
             if tokens(f.text(i))[:1] == ["denari"]:
-                f.set(i, re.sub(r"(denari\s+)\S+", r"\g<1>%d" % int(o["denari"]), f.text(i), 1))
+                f.set(i, re.sub(r"(denari\s+)\S+", r"\g<1>%d" % int(o["denari"]), f.text(i), count=1))
                 plan.note(f, "denari set to %d" % int(o["denari"]))
                 break
     if o.get("playable") is not None and bool(o["playable"]) != now.get("playable"):
@@ -398,7 +396,7 @@ def move_towns(plan, f, campaign, moves, fac=None, taking=()):
                     plan.note(f, "%s: the rebel garrison of %s leaves" % (r, c.name))
                 else:
                     chunk = list(f.raw[c.start:c.end])
-                    chunk[0] = re.sub(r"(character\s*,?\s*)sub_faction\s+\S+\s*,\s*", r"\1", chunk[0], 1)
+                    chunk[0] = re.sub(r"(character\s*,?\s*)sub_faction\s+\S+\s*,\s*", r"\1", chunk[0], count=1)
                     to_add[new]["chars"].append(chunk)
                     plan.note(f, "%s: captain %s and his garrison go over to %s" % (r, c.name, new))
                 continue
@@ -608,7 +606,7 @@ def _people(plan, f, now):
             rename_in_tree(f, plan.new, have["name"], name)     # the tree names him too
         line = line.replace(have["name"], name, 1)
         if age:
-            line = re.sub(r"\bage\s+\d+", "age %d" % int(age), line, 1)
+            line = re.sub(r"\bage\s+\d+", "age %d" % int(age), line, count=1)
         f.set(c.start, line)
         plan.note(f, "%s: %s, age %s" % (role, name, age))
 

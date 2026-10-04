@@ -1,0 +1,17 @@
+# Ruff (docs.astral.sh/ruff) - the code check CI runs before the tests: only rules that point at real mistakes
+# (a name never defined or never used, a syntax error, a call the language does not have, a file left open - on
+# Windows an open file blocks the next write - and the likely bugs of flake8-bugbear), never style.
+# Run it locally: `pip install ruff`, then `ruff check` in the repository's folder.
+target-version = "py38"
+
+[lint]
+select = ["F", "E9", "PLE", "B", "SIM115"]
+ignore = [
+    "B007",   # a loop variable not used in the loop body - naming only
+    "B008",   # a call in a default argument - used on purpose to take a value now for a background thread
+    "B023",   # a function made in a loop uses the loop's variable - ours run inside the same turn of the loop
+    "B904",   # raise inside except without 'from' - the message says what happened
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["SIM115"]   # the tests read small files once on Linux; the editor's own code closes every file

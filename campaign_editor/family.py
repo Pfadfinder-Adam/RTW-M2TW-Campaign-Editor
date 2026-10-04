@@ -689,14 +689,14 @@ def _person(plan, f, texts, p, ch, faction):
     else:
         line = f.text(p.line)
         if name != p.name:
-            line = re.sub(r"(character_record\s*)" + re.escape(p.name), lambda m: m.group(1) + name, line, 1)
+            line = re.sub(r"(character_record\s*)" + re.escape(p.name), lambda m: m.group(1) + name, line, count=1)
             said.append("renamed %s" % name)
         if age is not None and age != p.age:
             line = RE_AGE.sub("age %d" % int(age), line, 1)
             said.append("age %d" % int(age))
         sex = ch.get("sex")
         if sex and sex != p.sex:
-            line = re.sub(r"\b%s\b" % p.sex, sex, line, 1)
+            line = re.sub(r"\b%s\b" % p.sex, sex, line, count=1)
             said.append(sex)
         if line != f.text(p.line):
             f.set(p.line, line)

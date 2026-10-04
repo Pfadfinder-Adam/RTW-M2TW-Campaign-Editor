@@ -20,7 +20,7 @@ import io
 import os
 import re
 
-from .moddata import _ci, ci_path
+from .moddata import _ci
 from .textio import strip_comment
 
 SEATS = ("none", "horse", "camel", "elephant", "chariot")

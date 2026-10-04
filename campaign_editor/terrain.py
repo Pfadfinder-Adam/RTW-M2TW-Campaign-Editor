@@ -209,7 +209,7 @@ def climates(mod):
     path = _ci(mod.data, "descr_climates.txt")
     if not path:
         return []
-    out, cur, heat = [], None, None
+    out, cur = [], None
     for l in mod.load(path).texts():
         t = strip_comment(l).split()
         if len(t) == 2 and t[0] == "climate":
@@ -303,7 +303,8 @@ def max_land_height(mod, campaign):
     import re
     path = mod.campaign_file(campaign, "descr_terrain.txt")
     if path:
-        m = re.search(r"max_land_height\s+(-?[\d.]+)", open(path, encoding="latin-1").read())
+        with open(path, encoding="latin-1") as fh:
+            m = re.search(r"max_land_height\s+(-?[\d.]+)", fh.read())
         if m:
             return float(m.group(1))
     return 7511.272
@@ -494,7 +495,8 @@ def min_sea_height(mod, campaign):
     import re
     path = mod.campaign_file(campaign, "descr_terrain.txt")
     if path:
-        m = re.search(r"min_sea_height\s+(-?[\d.]+)", open(path, encoding="latin-1").read())
+        with open(path, encoding="latin-1") as fh:
+            m = re.search(r"min_sea_height\s+(-?[\d.]+)", fh.read())
         if m:
             return float(m.group(1))
     return -3122.256

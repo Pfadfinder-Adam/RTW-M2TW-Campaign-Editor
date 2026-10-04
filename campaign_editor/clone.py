@@ -118,7 +118,7 @@ def sm_factions_json(plan):
         if rgb:
             for n, l in enumerate(block):
                 if re.match(r'\s*"%s"\s*:\s*\[' % key, l):
-                    block[n] = re.sub(r"\[[^\]]*\]", "[ %d, %d, %d ]" % tuple(rgb), l, 1)
+                    block[n] = re.sub(r"\[[^\]]*\]", "[ %d, %d, %d ]" % tuple(rgb), l, count=1)
     if not block[-1].rstrip().endswith(","):
         block[-1] = block[-1].rstrip() + ","
     target = entry("slave")
@@ -361,7 +361,7 @@ def triggers(plan, key):
             text = raw.rstrip("\r")
             cr = "\r" if raw.endswith("\r") else ""
             if tokens(text)[:1] == ["Trigger"]:
-                text = re.sub(r"(Trigger\s+)(\S+)", lambda m: m.group(1) + m.group(2) + "_" + new, text, 1)
+                text = re.sub(r"(Trigger\s+)(\S+)", lambda m: m.group(1) + m.group(2) + "_" + new, text, count=1)
             else:
                 text = re.sub(r"(\bFactionType\s+)%s\b" % re.escape(t), r"\g<1>" + new, text)
             copy.append(text + cr)

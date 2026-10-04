@@ -7,6 +7,16 @@ from tkinter import messagebox, ttk
 from . import wonders as W
 
 
+def view_3d(parent, mod, kind):
+    """The wonder's campaign-map model in the 3D viewer (the window, the map's menu)."""
+    from .gui_meshview import ModelViewer
+    mi = W.model_info(mod, kind)
+    if mi is None:
+        messagebox.showinfo("Wonder", "%s names no model (item) in descr_sm_landmarks.txt." % kind, parent=parent)
+        return
+    ModelViewer(parent, mod, mi, title="Wonder on the campaign map, in 3D")
+
+
 def show(parent, mod, kind):
     w_info = W.info(mod, kind)
     w = tk.Toplevel(parent)
@@ -40,15 +50,7 @@ def show(parent, mod, kind):
         ttk.Label(side, text=w_info["short"], wraplength=380, justify="left").pack(anchor="w", pady=(6, 0))
     bb = ttk.Frame(side)
     bb.pack(anchor="w", pady=(10, 0))
-
-    def view():
-        from .gui_meshview import ModelViewer
-        mi = W.model_info(mod, kind)
-        if mi is None:
-            messagebox.showinfo("Wonder", "%s names no model (item) in descr_sm_landmarks.txt." % kind, parent=w)
-            return
-        ModelViewer(w, mod, mi, title="Wonder on the campaign map, in 3D")
-    ttk.Button(bb, text="View in 3D", command=view).pack(side="left")
+    ttk.Button(bb, text="View in 3D", command=lambda: view_3d(w, mod, kind)).pack(side="left")
     if w_info["long"]:
         t = tk.Text(frm, height=10, width=80, wrap="word", font="TkDefaultFont")
         t.insert("1.0", w_info["long"])

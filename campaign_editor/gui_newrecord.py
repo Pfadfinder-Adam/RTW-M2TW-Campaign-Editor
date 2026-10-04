@@ -7,7 +7,7 @@ editor's other changes (editors.copy_unit / copy_building)."""
 
 import os
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, ttk
 
 from . import editors as E
 from .gui_util import StepWindow

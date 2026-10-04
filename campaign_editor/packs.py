@@ -21,14 +21,13 @@ gets a new one, a model type that exists with other content is added under a new
 file that exists with other bytes is kept (and said). Same game only (Rome to Rome - HLR and
 REX included -, Medieval II to Medieval II)."""
 
-import io
 import json
 import os
 import re
 import zipfile
 
 from .moddata import _ci, ci_path
-from .textio import TextFile, strip_comment, tokens
+from .textio import strip_comment, tokens
 
 PACK_VERSION = 1
 FILE_EXT = (".cas", ".tga", ".dds", ".spr", ".mesh", ".texture", ".ms3d", ".png", ".bmp")

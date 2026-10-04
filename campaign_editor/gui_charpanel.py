@@ -6,7 +6,6 @@ import math
 import tkinter as tk
 from tkinter import ttk
 
-from . import charpanel as CP
 
 PARCHMENT, INK, MUTED, GOLD = "#efe6d2", "#2b2118", "#6b5a45", "#b08d3c"
 PIP = {"Command": "#c9a227", "Chivalry": "#3d6fb8", "Dread": "#8a1f1f", "Loyalty": "#3f7f3f",

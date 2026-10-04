@@ -71,7 +71,7 @@ def sm_values(f, key):
 
 def _set_value(f, i, value):
     text = f.text(i)
-    f.set(i, re.sub(r"^(\s*\S+\s+)(\S+)", lambda m: m.group(1) + str(value), text, 1))
+    f.set(i, re.sub(r"^(\s*\S+\s+)(\S+)", lambda m: m.group(1) + str(value), text, count=1))
 
 
 def rome(mod):
@@ -294,7 +294,7 @@ def _new_faction_sheet(plan, why):
             elif in_fac and t[:1] == ["symbols"]:
                 at = i
         pattern = texts[at] if at is not None and tokens(strip_comment(texts[at]))[:1] == ["symbols"] else None
-        new_line = re.sub(r"(symbols\s+)\S+", lambda m: m.group(1) + rel, pattern, 1) if pattern \
+        new_line = re.sub(r"(symbols\s+)\S+", lambda m: m.group(1) + rel, pattern, count=1) if pattern \
             else "symbols\t\t\t\t" + rel
         f.raw[at + 1:at + 1] = [f.make(new_line)]
         data = f.dump()

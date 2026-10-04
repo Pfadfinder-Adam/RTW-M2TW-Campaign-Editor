@@ -138,7 +138,6 @@ def apply(plan, campaign, changes):
         # where every resource will lie, to refuse two on one tile
         final = [moved.get(r.index, r.xy) for r in now if r.index not in removed] + \
             [tuple(a["xy"]) for a in added]
-        tiles = mod.city_tiles(campaign)
         by_colour = {v["colour"]: k for k, v in mod.regions(campaign).items()}
         img = mod.region_map(campaign)
 

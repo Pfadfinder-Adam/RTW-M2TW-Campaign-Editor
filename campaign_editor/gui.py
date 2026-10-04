@@ -4190,23 +4190,14 @@ class App(tk.Tk):
             what = next((m for m in mark if m.get("id") == rid), None)
             name = (what or {}).get("kind", "this")
             if name == "landmark" and (what or {}).get("type") and not getattr(self.map_view, "menu_fort", None):
-                from .gui_wonders import show as show_wonder
+                from .gui_wonders import show as show_wonder, view_3d
                 wt = what["type"]
                 name = "wonder %s" % wt
                 if items:
                     items.append((None, None))
                 items.append(("About this wonder...  (as the game shows it)",
                               lambda wt=wt: show_wonder(self, self.mod, wt)))
-
-                def view3d(wt=wt):
-                    from . import wonders as W
-                    from .gui_meshview import ModelViewer
-                    mi = W.model_info(self.mod, wt)
-                    if mi is None:
-                        messagebox.showinfo(APP, "%s names no model in descr_sm_landmarks.txt" % wt)
-                        return
-                    ModelViewer(self, self.mod, mi, title="Wonder on the campaign map, in 3D")
-                items.append(("View it in 3D", view3d))
+                items.append(("View it in 3D", lambda wt=wt: view_3d(self, self.mod, wt)))
 
             def delete_mark(rid=rid):
                 self._res_sel = rid
@@ -4217,21 +4208,12 @@ class App(tk.Tk):
         fl = getattr(self.map_view, "menu_fort", None)
         fo = next((x for x in (self.strat.forts if self.strat else []) if x.line == fl), None) if fl is not None else None
         if fo is not None and fo.kind == "landmark":     # a wonder (drawn on every map): its window and its model
-            from .gui_wonders import show as show_wonder
+            from .gui_wonders import show as show_wonder, view_3d
             if items:
                 items.append((None, None))
             items.append(("Wonder %s: about it...  (as the game shows it)" % fo.type,
                           lambda t=fo.type: show_wonder(self, self.mod, t)))
-
-            def view3d(t=fo.type):
-                from . import wonders as W
-                from .gui_meshview import ModelViewer
-                mi = W.model_info(self.mod, t)
-                if mi is None:
-                    messagebox.showinfo(APP, "%s names no model in descr_sm_landmarks.txt" % t)
-                    return
-                ModelViewer(self, self.mod, mi, title="Wonder on the campaign map, in 3D")
-            items.append(("View it in 3D", view3d))
+            items.append(("View it in 3D", lambda t=fo.type: view_3d(self, self.mod, t)))
         if cid is not None and ":" in str(cid) and not str(cid).startswith(("map:", "new:")):
             ch = (getattr(self, "_map_chars", None) or {}).get(cid)
             mine = self.field_faction() and not self.map_only() and ch and ch["faction"] == self.field_faction()

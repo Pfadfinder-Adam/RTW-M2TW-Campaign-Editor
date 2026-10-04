@@ -109,6 +109,10 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **The code is checked before every build**: CI runs Ruff (`ruff.toml`: a name never defined or never used, a file
+  left open, the likely bugs flake8-bugbear knows) before the tests. A first full check with Ruff and Pylint found
+  no crash; unused imports and dead code went out, and the wonder's 3D view has one handler for its window and the
+  map's menu.
 - **Sack Settlement (both games): the governor's building always stays, 600 people at least**: the core chain is
   never torn down, listed among the kept chains or not (without it the town could never be built up again); walls
   and roads stay by default and can be taken out. The ruins keep 600 people by default and never fewer (Rome's
@@ -324,6 +328,9 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **A few files read in passing were left open until Python tidied up** (the factions' symbols and the banners for
+  the Art tab, the town flags in battle, the heights of the map, Medieval II's age of manhood); on Windows an open
+  file can stop the next write to it. They are closed at once now.
 - **A rare "missing 1 required positional argument" error after closing a window**: a delayed step of a window
   closed before it ran could, much later, call a new handler that happened to get the same inner name. Every such
   name is now used only once, so a step left over from a closed window does nothing.

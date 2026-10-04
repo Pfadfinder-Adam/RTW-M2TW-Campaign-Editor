@@ -15,9 +15,7 @@ For every file of the pack's data folder:
 Choices: 'install', 'keep' (the mod's own stays), 'merge' (text only: only its changes)."""
 
 import difflib
-import io
 import os
-import re
 import struct
 import zipfile
 

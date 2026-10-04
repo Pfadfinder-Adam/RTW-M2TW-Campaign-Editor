@@ -322,7 +322,7 @@ def _factions(plan, religion, factions):
         if t[:1] == ["faction"] and len(t) > 1:
             cur = t[1].rstrip(",")
         elif t[:1] == ["religion"] and cur in factions:
-            f.set(i, re.sub(r"(religion\s+)\S+", r"\g<1>%s" % religion, f.text(i), 1))
+            f.set(i, re.sub(r"(religion\s+)\S+", r"\g<1>%s" % religion, f.text(i), count=1))
             plan.note(f, "%s now follows %s" % (cur, religion))
 
 

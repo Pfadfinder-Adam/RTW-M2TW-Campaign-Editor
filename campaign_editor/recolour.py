@@ -99,7 +99,7 @@ def masks(im, source, others=(), plain=True):
     source = (primary, secondary); a source colour without a hue gives an empty mask. others: [(the same picture in
     another faction's colours, that faction's (primary, secondary))] - a pixel counts only where it differs from
     every other copy whose faction does not wear a colour like it (Denmark's red says nothing about England's red)."""
-    from PIL import Image, ImageChops
+    from PIL import ImageChops
     rgb = im.convert("RGB")
     H, S, V = rgb.convert("HSV").split()
     lit = V.point(lambda v: 255 if v >= VAL_MIN * 255 else 0)
@@ -296,7 +296,7 @@ def recolour(im, source, target, others=(), edits=None, plain=True):
     target colours, alpha kept. edits: the hand touch-ups {'p': mask, 's': mask, 'keep': mask} ('L', the picture's
     size) - painted as the new primary / secondary, or kept as they were. plain: black / white / grey faction colours
     are looked for too (only when the other copies are the same drawing - unit cards and textures, not symbols)."""
-    from PIL import Image, ImageChops
+    from PIL import ImageChops
     ms = masks(im, source, others, plain)
     if edits:
         keep = edits.get("keep")
@@ -673,7 +673,6 @@ def _more_targets(mod, faction, names, colours, add):
 def plan_recolour(plan, items, source, target):
     """Write every item (from targets()) recoloured from source to target colours into the plan (backup, Restore).
     Returns [(item, share changed or the reason it was left)]."""
-    from PIL import Image
     done = []
     sheets = {}
     cat = None

@@ -14,7 +14,7 @@ def _set_xy(text, xy):
 
 
 def _strip_sub_faction(text):
-    return re.sub(r"(character\s*,?\s*)sub_faction\s+\S+\s*,\s*", r"\1", text, 1)
+    return re.sub(r"(character\s*,?\s*)sub_faction\s+\S+\s*,\s*", r"\1", text, count=1)
 
 
 def default_army(strat, template):
@@ -575,7 +575,7 @@ def _later_start(plan, f, s, tb, start, head_lines):
     towns, no characters, only its money - it goes on the nonplayable list, and descr_sm_factions / descr_events get
     their lines (emergence.py)."""
     from . import emergence
-    t, new, campaign = plan.template, plan.new, plan.campaign
+    new, campaign = plan.new, plan.campaign
     way = start["way"]
     ai = start.get("ai") or " ".join(tokens(tb.header)[2:]) or "balanced smith"
     dead = ["dead_until_resurrected"] + (["re_emergent"] if start.get("re_emergent") else [])

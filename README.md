@@ -189,6 +189,8 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
   **Linux:** the window needs tkinter and Pillow's Tk part, which many distributions ship apart from Python -
   Debian / Ubuntu / Mint: `sudo apt install python3-tk python3-pil python3-pil.imagetk`, then
   `python3 campaign_editor.py` (Fedora: `python3-tkinter python3-pillow-tk`; Arch: `tk python-pillow`).
+  **Changing the code:** `python -m unittest discover -s tests` and `ruff check` (`pip install ruff`; the rules are
+  in `ruff.toml`) - CI runs both before it builds the exe.
 
 ## Using it
 

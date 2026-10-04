@@ -909,7 +909,7 @@ class MapView(ttk.Frame):
                           font=("", max(6, int(r)), "bold"), tags=tags)
 
     def _characters(self, cw, ch, size):
-        c, cm = self.canvas, self.cmap
+        cm = self.cmap
         busy = {self.places.get(("city", r), xy) for r, xy in cm.cities.items()} | \
             {self.places.get(("port", r), xy) for r, xy in cm.ports.items()}
         tile = max(self.z * 0.9, 6)                    # a character fills its tile...

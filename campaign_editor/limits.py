@@ -94,7 +94,8 @@ def manhood_age(mod):
     for folder in (mod.data, _ci(game, "data") if game else None):
         p = _ci(folder, "descr_campaign_db.xml") if folder else None
         if p:
-            m = re.search(r"<age_of_manhood\s+(?:uint|int|float)=\"(\d+)", open(p, encoding="latin-1").read())
+            with open(p, encoding="latin-1") as fh:
+                m = re.search(r"<age_of_manhood\s+(?:uint|int|float)=\"(\d+)", fh.read())
             return int(m.group(1)) if m else 16
     return 16
 

@@ -3,7 +3,6 @@ level's name and description as players see them, its threshold and effects; an 
 picture, the cultures it is barred from and its effects. A new one is made as a copy of the picked one (written
 at once, then edited like the others). Changes wait for Preview / Write it in, with a backup like every write."""
 
-import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 

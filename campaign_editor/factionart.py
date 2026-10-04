@@ -186,12 +186,13 @@ def extra_pictures(mod, faction):
     sm = _ci(mod.data, "descr_sm_factions.txt")
     symbols, cur = {}, None
     if sm:
-        for line in open(sm, encoding="latin-1"):
-            t = line.split(";")[0].split()
-            if len(t) >= 2 and t[0] == "faction":
-                cur = t[1].strip(",")
-            elif len(t) >= 2 and t[0] == "symbol" and cur:
-                symbols.setdefault(t[1].lower(), [t[1], set()])[1].add(cur)
+        with open(sm, encoding="latin-1") as fh:
+            for line in fh:
+                t = line.split(";")[0].split()
+                if len(t) >= 2 and t[0] == "faction":
+                    cur = t[1].strip(",")
+                elif len(t) >= 2 and t[0] == "symbol" and cur:
+                    symbols.setdefault(t[1].lower(), [t[1], set()])[1].add(cur)
     for ref, users in symbols.values():
         if faction not in users:
             continue
@@ -211,10 +212,11 @@ def extra_pictures(mod, faction):
     bb = _ci(mod.data, "descr_building_battle.txt")
     if bb:
         whose = {}
-        for line in open(bb, encoding="latin-1"):
-            t = line.split(";")[0].split()
-            if len(t) == 2 and t[1].lower().endswith(".tga") and t[1].startswith("#"):
-                whose.setdefault(t[1].lower(), set()).add(t[0])
+        with open(bb, encoding="latin-1") as fh:
+            for line in fh:
+                t = line.split(";")[0].split()
+                if len(t) == 2 and t[1].lower().endswith(".tga") and t[1].startswith("#"):
+                    whose.setdefault(t[1].lower(), set()).add(t[0])
         for tex, fs in sorted(whose.items()):
             if faction in fs:
                 p = texture("models_building/textures/" + tex)
@@ -225,7 +227,9 @@ def extra_pictures(mod, faction):
     xml = _ci(mod.data, "descr_banners_new.xml")
     if xml:
         whose, refs = {}, {}
-        for m in re.finditer(r'Faction="([^"]+)"[^>]*?DiffuseMap="([^"]+)"', open(xml, encoding="latin-1").read()):
+        with open(xml, encoding="latin-1") as fh:
+            banners = fh.read()
+        for m in re.finditer(r'Faction="([^"]+)"[^>]*?DiffuseMap="([^"]+)"', banners):
             k = m.group(2).replace("\\", "/").lower()
             whose.setdefault(k, set()).add(m.group(1).lower())
             refs.setdefault(k, m.group(2))

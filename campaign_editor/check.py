@@ -10,7 +10,7 @@ import os
 import time
 import traceback
 
-from .buildings import is_temple, read_buildings, settlement_info
+from .buildings import is_temple, read_buildings
 from .strat import Strat, characters_after_tree
 from .textio import tokens
 from .units import read_units

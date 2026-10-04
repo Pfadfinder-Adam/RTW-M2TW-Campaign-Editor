@@ -18,6 +18,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # the code check (ruff.toml): names never defined or never used, files left open, likely bugs - before the tests
+      - run: pip install ruff==0.15.20
+      - run: ruff check --output-format github
       - run: python -m unittest discover -s tests -v
 
   windows-exe:

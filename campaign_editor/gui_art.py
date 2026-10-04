@@ -136,7 +136,7 @@ class ArtEditor(ttk.Frame):
         return a.v["template"].get().strip(), (a.v["name"].get().strip().lower() or None)
 
     def _thumb(self, parent, path, box=(72, 72), crop=None):
-        from PIL import Image, ImageTk
+        from PIL import ImageTk
         try:
             from .recolour import read_picture       # .tga, .dds, Medieval II's .texture
             im = read_picture(path).convert("RGBA")

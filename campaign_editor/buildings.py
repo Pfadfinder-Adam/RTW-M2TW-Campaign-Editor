@@ -289,9 +289,9 @@ def resize(raw, make, level=None, population=None):
         code = strip_comment(l)
         t = tokens(l)
         if depth == 1 and t[:1] == ["level"] and level:
-            out[i] = make(re.sub(r"(level\s+)\S+", r"\g<1>" + level, l.rstrip("\r\n"), 1))
+            out[i] = make(re.sub(r"(level\s+)\S+", r"\g<1>" + level, l.rstrip("\r\n"), count=1))
         elif depth == 1 and t[:1] == ["population"] and population is not None:
-            out[i] = make(re.sub(r"(population\s+)\S+", r"\g<1>%d" % population, l.rstrip("\r\n"), 1))
+            out[i] = make(re.sub(r"(population\s+)\S+", r"\g<1>%d" % population, l.rstrip("\r\n"), count=1))
         depth += code.count("{") - code.count("}")
     return out
 

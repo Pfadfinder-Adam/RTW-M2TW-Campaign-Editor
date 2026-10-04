@@ -47,7 +47,7 @@ def target_problem(folder, exe=None):
         return "the editor lies in that folder already"
     probe = os.path.join(folder, ".CampaignEditor_probe")
     try:
-        with open(probe, "w") as fh:
+        with open(probe, "w", encoding="utf-8") as fh:
             fh.write("x")
         os.remove(probe)
     except OSError:

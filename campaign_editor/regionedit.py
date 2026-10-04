@@ -18,7 +18,7 @@ tiles can change hands, never a town or port pixel."""
 import os
 import re
 
-from .mapedit import CITY, PORT, ports
+from .mapedit import CITY, PORT
 from .moddata import religions_line
 from .strat import Strat, village_block
 from .tga import patched
