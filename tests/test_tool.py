@@ -3302,6 +3302,50 @@ building smith
         same, _ = R.recolour(mine, hre, ((200, 0, 0), (0, 0, 200)), others, plain=False)
         self.assertEqual(same.getpixel((10, 15)), (15, 15, 15))
 
+    def test_recolour_gives_the_faction_its_own_far_away_sprites(self):
+        """A tester: the recoloured test faction's men were green up close but kept the template's colours far away
+        - its model lines named the template's sprite. Recolour gives it its own .spr (copied: it holds no names)
+        and pages under its name, recoloured, and points its line at them (Rome's model_sprite here; Medieval II's
+        texture line's fourth value the same way)."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import recolour as R
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\tspear\nskeleton\tfs_spearman\n"
+              "texture\talpha, data/models_unit/textures/spear_alpha.tga\n"
+              "texture\tbeta, data/models_unit/textures/spear_alpha.tga\n"
+              "model_sprite\talpha, 60.0, data/sprites/alpha_spear_sprite.spr\n"
+              "model_sprite\tbeta, 60.0, data/sprites/alpha_spear_sprite.spr\n\n")
+        os.makedirs(os.path.join(d, "sprites"), exist_ok=True)
+        with open(os.path.join(d, "sprites", "alpha_spear_sprite.spr"), "wb") as fh:
+            fh.write(b"\xad\xad\xbf\xde spr")
+        im = Image.new("RGBA", (16, 8), (200, 10, 10, 255))
+        im.save(os.path.join(d, "sprites", "alpha_spear_sprite_000.tga"))
+        os.makedirs(os.path.join(d, "models_unit", "textures"), exist_ok=True)
+        im.save(os.path.join(d, "models_unit", "textures", "spear_alpha.tga"))
+        cols = {"alpha": ((215, 0, 0), (255, 210, 0)), "beta": ((215, 0, 0), (255, 210, 0))}
+        old = R.faction_colours
+        R.faction_colours = lambda m: cols
+        try:
+            mod = ModData(self.root)
+            items = [it for it in R.targets(mod, "test", "beta") if it.get("own_sprite")]
+            self.assertEqual([os.path.basename(it["own_sprite"]["page"]) for it in items],
+                             ["beta_spear_sprite_000.tga"])
+            plan = Plan(mod, "recolour", "beta", {})
+            R.plan_recolour(plan, items, ((215, 0, 0), (255, 210, 0)), ((0, 160, 60), (240, 240, 0)))
+        finally:
+            R.faction_colours = old
+        sprites = os.path.join(d, "sprites")
+        self.assertEqual(plan.binaries[os.path.join(sprites, "beta_spear_sprite.spr")], b"\xad\xad\xbf\xde spr")
+        self.assertIn(os.path.join(sprites, "beta_spear_sprite_000.tga"), plan.binaries)
+        text = "\n".join(plan.files[os.path.join(d, "descr_model_battle.txt")].texts())
+        self.assertIn("model_sprite\tbeta, 60.0, data/sprites/beta_spear_sprite.spr", text)
+        self.assertIn("model_sprite\talpha, 60.0, data/sprites/alpha_spear_sprite.spr", text)  # the template's stays
+
     def test_recolour_faction_pictures(self):
         """A unit card in the faction's red / yellow next to another faction's blue / white copy: the red and yellow
         parts take the new colours, the brown horse (near red, but the same in both copies and duller) stays;

@@ -434,7 +434,7 @@ def targets(mod, campaign, faction):
     out, seen = [], set()
 
     def add(path, group, label, others=(), crop=None, skip=None, of=(), own=None, alike=True, own_tex=None,
-            source=None):
+            source=None, own_sprite=None):
         k = (os.path.normcase(os.path.abspath(path)), crop)
         if k in seen:
             if own_tex:                                  # one texture worn by several models: all of them follow
@@ -445,7 +445,7 @@ def targets(mod, campaign, faction):
         seen.add(k)
         out.append({"path": path, "rel": mod.rel(path), "group": group, "label": label, "others": list(others),
                     "of": list(of), "crop": crop, "skip": skip, "own": own, "faction": faction,
-                    "alike": alike, "own_tex": own_tex, "source": source})
+                    "alike": alike, "own_tex": own_tex, "source": source, "own_sprite": own_sprite})
     for sub, label in (("units", "unit card"), ("unit_info", "unit info picture")):
         d = _ci(_ci(mod.data, "ui") or "", sub) if _ci(mod.data, "ui") else None
         own = _ci(d, faction) if d else None
@@ -505,6 +505,39 @@ def targets(mod, campaign, faction):
                   if f != faction and f in colours and r.lower() != rel.lower() and on_disk(mod, r)]
         label = "weapons and shields of %s" % info.name + (" - gets a copy of its own" if own_tex else "")
         add(got[1], "unit textures", label, others[:6], own_tex=own_tex)
+    # the far-away sprite a model names for the faction (Medieval II: the texture line's fourth value; Rome: its
+    # model_sprite line) - a clone names its template's (england_...spr), so the faction gets its own .spr and pages
+    # (<faction>_..._sprite_000.texture / .tga.dds ...) and the line points at them
+    sprites = {}
+    for name, info in sorted(cat.items()):
+        rel = getattr(info, "sprites", {}).get(faction)
+        if not rel or not info.textures.get(faction):
+            continue
+        from .models import own_sprite_ref
+        wearers = sorted(f for f, r in info.sprites.items() if f != faction and r.lower() == rel.lower())
+        ref = own_sprite_ref(rel, faction, wearers or [f for f in names if rel.replace("\\", "/").rsplit("/", 1)[-1]
+                                                       .lower().startswith(f.lower() + "_")])
+        if ref == rel:
+            continue                                    # its own already: found by its name below
+        if ref in sprites:
+            sprites[ref]["models"].append(info.name)
+            continue
+        got = on_disk(mod, rel)
+        if not got:
+            continue
+        folder = os.path.dirname(got[0].replace("\\", "/"))     # beside the original as it lies on disk, in the mod
+        spr = {"models": [info.name], "ref": ref, "src": got[1],
+               "path": os.path.join(mod.data, *[x for x in folder.split("/") if x], os.path.basename(ref))}
+        sprites[ref] = spr
+        stem = os.path.basename(got[1])[:-4]
+        folder = os.path.dirname(got[1])
+        new_stem = os.path.basename(ref)[:-4]
+        for n in sorted(os.listdir(folder)):
+            m = re.fullmatch(re.escape(stem) + r"(_\d+\.(?:texture|tga\.dds|dds|tga))", n, re.I)
+            if m:
+                page = dict(spr, page=os.path.join(os.path.dirname(spr["path"]), new_stem + m.group(1)))
+                add(os.path.join(folder, n), "unit sprites (far away)",
+                    "far-away sprite of %s - gets a copy of its own" % info.name, own_sprite=page)
     # the Art tab's pictures
     try:
         from .factionart import faction_pictures
@@ -708,6 +741,21 @@ def plan_recolour(plan, items, source, target):
                     for model, kind in o["models"]:
                         if model.lower() in cat:
                             set_faction_texture(plan, cat[model.lower()], it["faction"], o["ref"], kind)
+                elif it.get("own_sprite"):
+                    # the faction's own far-away sprite: every page under the new name (recoloured, or as it was
+                    # when it holds none of the colours - the game wants them all), the .spr copied once (it holds
+                    # no names), every model's line pointed at it
+                    from .models import catalogue, set_faction_sprite
+                    o = it["own_sprite"]
+                    if cat is None:
+                        cat = catalogue(plan.mod)
+                    plan.binary(o["page"], picture_bytes(new, it["path"]))
+                    if o["path"] not in plan.binaries:
+                        with open(o["src"], "rb") as fh:
+                            plan.binary(o["path"], fh.read())
+                        for model in o["models"]:
+                            if model.lower() in cat:
+                                set_faction_sprite(plan, cat[model.lower()], it["faction"], o["ref"])
                 elif share > 0 and it.get("own"):
                     import tempfile
                     from .factionart import write_art

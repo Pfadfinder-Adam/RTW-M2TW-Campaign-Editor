@@ -301,7 +301,8 @@ def edb_factions(plan):
 def texture_lines(plan, key):
     """descr_model_battle / descr_model_strat: 'texture <faction>, path' lines - and Medieval II's
     'texture_attachments <faction>, ...' (weapons / shields; a model's figure takes half its picture from it - without
-    the line the new faction's men look like bare skeletons in battle)."""
+    the line the new faction's men look like bare skeletons in battle) and Rome's 'model_sprite <faction>, ...' (the
+    far-away sprite; Recolour then gives the faction its own)."""
     path = plan.mod.file(key)
     if not path:
         return
@@ -311,8 +312,8 @@ def texture_lines(plan, key):
     i = 0
     while i < len(f):
         tk = tokens(f.text(i))
-        if len(tk) >= 3 and tk[0] in ("texture", "texture_attachments", "model_flexi_m", "model_flexi") \
-                and tk[1] == t:
+        if len(tk) >= 3 and tk[0] in ("texture", "texture_attachments", "model_flexi_m", "model_flexi",
+                                     "model_sprite") and tk[1] == t:
             f.insert_raw(i + 1, [_replace_word(f.raw[i], t, new)])
             n += 1
             i += 2

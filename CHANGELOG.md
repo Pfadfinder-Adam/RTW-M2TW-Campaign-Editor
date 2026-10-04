@@ -357,6 +357,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Recolour now reaches the far-away sprites of a new faction** (both games): a new faction's models named its
+  template's sprites, so its men kept the template's colours at a distance. The faction gets its own sprite (the
+  .spr and its pages under its own name, recoloured) and its model lines point at it (Medieval II: the texture
+  line's sprite; Rome: its `model_sprite` line, which a new faction now gets too).
 - **Medieval II (with M2EX): a new faction's men looked like bare skeletons in battle.** M2EX reads the models from
   descr_model_battle.txt, where the new faction got its `texture` line but not its `texture_attachments` line (the
   weapons and shields picture a figure takes half its look from). A new faction, a model given to a new owner and

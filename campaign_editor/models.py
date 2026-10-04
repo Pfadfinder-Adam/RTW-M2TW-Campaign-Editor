@@ -39,6 +39,7 @@ class ModelInfo:
         self.where = set()
         self.textures = {}
         self.attach = {}                # Medieval II: {faction: the weapons and shields texture}
+        self.sprites = {}               # Medieval II: {faction: its far-away sprite (unit_sprites/....spr)}
         self.meshes = []
         self.skeletons = []
         self.seats = set()
@@ -99,8 +100,13 @@ def _text_models(mod):
         for v in _values(lines, "texture"):
             if len(v) > 1 and "/" not in v[0]:
                 m.textures.setdefault(v[0], v[1])
+                if len(v) > 3 and v[3].lower().endswith(".spr"):
+                    m.sprites.setdefault(v[0], v[3])
             elif v and v[0]:
                 m.textures.setdefault("", v[0])                 # one texture for everyone
+        for v in _values(lines, "model_sprite"):                # Rome: model_sprite <faction>, distance, file
+            if len(v) > 2 and "/" not in v[0] and v[2].lower().endswith(".spr"):
+                m.sprites.setdefault(v[0], v[2])
         for v in _values(lines, "texture_attachments"):         # Medieval II: weapons / shields, per faction
             if len(v) > 1 and "/" not in v[0]:
                 m.attach.setdefault(v[0], v[1])
@@ -129,6 +135,8 @@ def _modeldb_models(mod):
         m.exact = True
         for r in dm.textures:
             m.textures.setdefault(r[0], r[1])
+            if len(r) > 3 and str(r[3]).lower().endswith(".spr"):
+                m.sprites.setdefault(r[0], r[3])
         for r in dm.attach:
             m.attach.setdefault(r[0], r[1])
         m.meshes = [mesh for mesh, _ in dm.lods]
@@ -157,6 +165,8 @@ def catalogue(mod):
                 m.seats, m.exact = set(o.seats), True
             for f, t in o.attach.items():            # weapons / shields textures the read file lacks
                 m.attach.setdefault(f, t)
+            for f, t in o.sprites.items():
+                m.sprites.setdefault(f, t)
     return read
 
 
@@ -502,6 +512,53 @@ def set_faction_texture(plan, info, faction, ref, kind="texture"):
             plan.binary(dst, db.dump().encode("latin-1"))
             plan.notes.append((mod.rel(dst), "battle model %s: %s's %s -> %s" % (
                 m.name, faction, "texture" if kind == "texture" else "weapons texture", ref)))
+
+
+def own_sprite_ref(ref, faction, wearers=()):
+    """The faction's own copy of a far-away sprite it shares: unit_sprites/england_x_sprite.spr ->
+    unit_sprites/<faction>_x_sprite.spr (the wearer's name at the front swapped; else the faction put in front).
+    The game finds the pictures by the .spr's name + _000, _001... - the .spr holds no names."""
+    ref = ref.replace("\\", "/")
+    folder, base = ref.rsplit("/", 1) if "/" in ref else ("", ref)
+    if base.lower().startswith(faction.lower() + "_"):
+        return ref
+    for w in sorted(wearers, key=len, reverse=True):
+        if base.lower().startswith(w.lower() + "_"):
+            base = base[len(w) + 1:]
+            break
+    return (folder + "/" if folder else "") + "%s_%s" % (faction, base)
+
+
+def set_faction_sprite(plan, info, faction, ref):
+    """The faction's far-away sprite of a battle model pointed at ref: Medieval II's fourth value of its
+    'texture <faction>, ...' line in descr_model_battle.txt and its modeldb entry; Rome's 'model_sprite <faction>,
+    distance, file' line."""
+    from . import modeldb as MDB
+    from .packs import _block_lines, _values, type_blocks
+    mod = plan.mod
+    if "text" in info.where:
+        f = plan.edit(_ci(mod.data, TEXT_FILE))
+        blocks = type_blocks(f)
+        name = next((k for k in blocks if k.lower() == info.name.lower()), None)
+        if name:
+            a, b = blocks[name]
+            now = _block_lines(f, (a, b))
+            for i, line in enumerate(now):
+                key = (strip_comment(line).split(None, 1) or [""])[0]
+                v = _values([line], key)[0] if key in ("texture", "model_sprite") else None
+                at = 3 if key == "texture" else 2               # Rome: model_sprite <faction>, distance, file
+                if v and len(v) > at and v[0] == faction and v[at].lower().endswith(".spr") and v[at] != ref:
+                    f.raw[a + i] = f.make(line.replace(v[at], ref, 1))
+    if "modeldb" in info.where:
+        src, dst = MDB.find(mod)
+        db = MDB._db_in_plan(plan, src, dst)
+        m = db.model(info.name)
+        if m is not None:
+            for r in m.textures:
+                if r[0] == faction and len(r) > 3:
+                    r[3] = ref
+            plan.binary(dst, db.dump().encode("latin-1"))
+    plan.notes.append((ref, "battle model %s: %s's far-away sprite -> its own" % (info.name, faction)))
 
 
 __all__ = ["SEATS", "ModelInfo", "source", "catalogue", "skeleton_seats", "unit_lines", "unit_slots",
