@@ -1755,6 +1755,37 @@ building smith
         self.assertEqual(report.news(answers, {"R-1": 3}), ["R-1"])
         self.assertEqual(report.news(answers, {"R-1": {"n": "two"}}), ["R-1"])
 
+    def test_every_value_of_a_unit_line_is_explained(self):
+        """A modder: 'we can edit every line but do not know what those numbers with commas mean'. edufields names
+        each value of a unit's line (both games, the games' own notes), for what is typed there now."""
+        from campaign_editor import edufields as EF
+        rome = EF.explain("stat_pri", "13, 3, pilum, 35, 2, thrown, blade, piercing, spear, 25 ,1")
+        self.assertIn("2. charge bonus = 3", rome)
+        self.assertIn("3. missile = pilum", rome)
+        self.assertIn("10. attack delay = 25", rome)
+        m2 = EF.explain("stat_pri", "9, 3, arrow, 120, 30, missile, missile_mechanical, piercing, none, "
+                                    "musket_shot_set, 25, 1", True)
+        self.assertIn("10. fire effect = musket_shot_set", m2)                 # Medieval II's optional effect
+        self.assertIn("11. attack delay = 25", m2)
+        self.assertEqual(EF.explain("stat_sec", "no"), "stat_sec: no weapon.")
+        cost = EF.explain("stat_cost", "1, 520, 150, 100, 120, 0, 4, 130", True)
+        self.assertIn("7. custom battle: units = 4", cost)
+        words = EF.explain("stat_pri_attr", "prec, thrown ap")                 # Rome's own file: a space too
+        self.assertIn("- ap: armour piercing", words)
+        mental = EF.explain("stat_mental", "8, normal, trained, lock_morale, expendable", True)
+        self.assertIn("- lock_morale: never routs", mental)
+        self.assertIn("- expendable:", mental)                                  # REX / M2EX's own word
+        self.assertIsNone(EF.explain("no_such_line", "1"))
+        # every line of every unit in a mod: a meaning for each value, none left unnamed
+        mod = ModData(self.root)
+        from campaign_editor import editors as E
+        f = mod.load(mod.file("edu"))
+        for name, a, b in E.unit_blocks(f):
+            for fd in E.fields(f, a, b):
+                text = EF.explain(fd.key, fd.value)
+                self.assertIsNotNone(text, fd.key)
+                self.assertNotIn("do not name", text, (fd.key, fd.value))
+
     def test_text_is_readable_on_its_ground_in_either_look(self):
         """The dark look showed light text on the Module builder's light IF block, dark red / dark blue on its dark
         grey: theme.readable makes any text colour readable (4.5:1) on the ground it stands on, keeping its hue."""

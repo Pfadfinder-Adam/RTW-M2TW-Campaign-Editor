@@ -108,7 +108,8 @@ class RecordEditor(ttk.Frame):
         self.b_lines.pack(side="left")
         ShortHint(bar, text="Every line of the block: the key on the left, what follows it on the right. "
                             "Changed fields turn yellow, lines to add green, lines to remove red (x on the left); "
-                            "Preview, then Apply writes them (with a backup).",
+                            "Preview, then Apply writes them (with a backup). A unit's line: the ? on its right says "
+                            "what each value means, from the game's own notes.",
                   foreground="#555", wraplength=900, justify="left").pack(side="left", padx=8)
         # a window of their own, like the family tree's (a tester: folded open in the editor they still left too
         # little room): opened by the button, closed by its own close box; the editor keeps its whole height
@@ -336,12 +337,21 @@ class RecordEditor(ttk.Frame):
                             row=row, column=0, padx=(0, 4))
                     row += 1
                 pending.remove((at, n, lines))
+        from . import edufields as EF
+        from .limits import game_kind
+        m2 = game_kind(self.mod) == "medieval2"
         for fd in self.fields:
             added_rows(fd.line)
             gone = fd.line in self.removes
-            ttk.Label(self.form, text="    " * fd.depth + fd.key, font=("", 9, "bold", "overstrike") if gone else
-                      ("", 9, "bold")).grid(row=row, column=1, sticky="w", padx=(0, 8))
             v = tk.StringVar(value=self.changes.get(fd.line, fd.value))
+            head = ttk.Frame(self.form)
+            head.grid(row=row, column=1, sticky="w", padx=(0, 8))
+            ttk.Label(head, text="    " * fd.depth + fd.key, font=("", 9, "bold", "overstrike") if gone else
+                      ("", 9, "bold")).pack(side="left")
+            if self.kind == "unit" and EF.explain(fd.key, v.get(), m2):
+                # what each value means, for what is typed there now (a modder: 'we can edit every line but do
+                # not know what the numbers mean')
+                hint(head, lambda fd=fd, v=v: EF.explain(fd.key, v.get(), m2), width=640).pack(side="left")
             e = tk.Entry(self.form, textvariable=v, width=90,
                          background=REMOVED if gone else CHANGED if fd.line in self.changes else theme.field(),
                          foreground="#000000" if gone or fd.line in self.changes else theme.palette()["fg"])

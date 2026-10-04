@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **What every number of a unit's line means** (Unit editor > Every line of the block, both games): the **?** beside
+  each line names its values one by one for what is typed there now - stat_pri's "13, 3, pilum, 35, 2, thrown, ..."
+  reads attack 13, charge bonus 3, the missile pilum, range 35 m, 2 per man...; the words of attributes and of the
+  weapons explained too (the game's own, and REX's / M2EX's). Taken from the notes the games write at the top of
+  export_descr_unit.txt; the few values they leave out are marked so.
 - **Module builder: your own add-on made of blocks, no code** (Rome + REX, Medieval II + M2EX - one script for both):
   Tools > Module builder... or Add-ons > New module (no code).... **WHEN** something happens (a faction's or a town's
   turn starts, a general takes a town, a building is finished, a unit is trained, a battle ends, a town riots, rebels
