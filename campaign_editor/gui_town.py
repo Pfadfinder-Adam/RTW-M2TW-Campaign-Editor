@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import masstown as MT
-from .gui_util import FactionBox, ShortHint
+from .gui_util import FactionBox, hint
 from .plan import Plan
 
 TITLE = "Town"
@@ -20,10 +20,11 @@ class TownWindow(tk.Toplevel):
         super().__init__(app)
         self.app = app
         self.transient(app)
-        self.geometry("980x860")
-        self.minsize(720, 600)
+        # as tall as the screen lets it be (a 900-pixel screen kept the buttons under the taskbar)
+        self.geometry("980x%d" % max(560, min(860, self.winfo_screenheight() - 110)))
+        self.minsize(720, 520)
         self.protocol("WM_DELETE_WINDOW", self.close)
-        self.body = ttk.Frame(self, padding=10)
+        self.body = ttk.Frame(self, padding=(10, 6, 10, 6))
         self.body.pack(fill="both", expand=True)
         self.load(region)
 
@@ -45,13 +46,18 @@ class TownWindow(tk.Toplevel):
         self.known = MT.known_buildings(self.mod)
         self.title("%s - %s (%s)" % (TITLE, town["name"], region))
         b = self.body
-        ShortHint(b, text=(
-            "This town as the campaign starts: its owner, its size and its buildings. Changes are checked the way the "
-            "game checks them (a level the town is too small for, a castle-only building in a city, one temple per "
-            "town...). Buildings and Garrison switch this window between the two (as the Buildings and Units & armies "
-            "tabs look). Preview shows every line, Write it in makes a backup first - Tools > Restore undoes it.")).pack(
-            fill="x", pady=(0, 6))
-        top = ttk.LabelFrame(b, text="%s  (%s)" % (town["name"], region), padding=8)
+        # the town's name once (the title of the box); every explanation behind a '?' - the room is for the buildings
+        head = ttk.Frame(b)
+        head.pack(fill="x", pady=(0, 2))
+        ttk.Label(head, text="%s  (%s)" % (town["name"], region), font=("", 11, "bold")).pack(side="left")
+        hint(head, "This town as the campaign starts: its owner, its size and its buildings. Changes are checked the "
+                   "way the game checks them (a level the town is too small for, a castle-only building in a city, "
+                   "one temple per town...). Buildings and Garrison switch this window between the two (as the "
+                   "Buildings and Units & armies tabs look). Preview shows every line, Write it in makes a backup "
+                   "first - Tools > Restore undoes it.", width=520).pack(side="left")
+        self.lbl_view = ttk.Label(head, foreground="#666", text="")
+        self.lbl_view.pack(side="left", padx=10)
+        top = ttk.Frame(b, padding=(0, 2))
         top.pack(fill="x")
         shown = self.app.shown_names() if hasattr(self.app, "shown_names") else {}
         facs = [n for n, _ in self.mod.factions()]
@@ -82,33 +88,30 @@ class TownWindow(tk.Toplevel):
         ttk.Entry(top, textvariable=self.v_pop, width=10).grid(row=row, column=1, sticky="w", padx=4, pady=2)
         from . import settings as _settings
         self.v_follow = tk.BooleanVar(value=_settings.get("level_follows_population", True) is not False)
-        ttk.Checkbutton(top, variable=self.v_follow, text="the level follows the population",
-                        command=lambda: _settings.put("level_follows_population", bool(self.v_follow.get()))).grid(
-            row=row, column=2, sticky="w", padx=8)
-        row += 1
-        ttk.Label(top, foreground="#666", wraplength=520, justify="left",
-                  text="Each level holds a range of people at the start (a village 400 - 1500, a town up to 3500, a "
-                       "large town 9000, a city 18000...): outside it the game stops reading the campaign file. "
-                       "Ticked, the town grows with its governor's building when the people do not fit; unticked, "
-                       "the population is cut to the level's range.").grid(
-            row=row, column=1, columnspan=2, sticky="w", padx=4)
+        follow = ttk.Frame(top)
+        follow.grid(row=row, column=2, sticky="w", padx=8)
+        ttk.Checkbutton(follow, variable=self.v_follow, text="the level follows the population",
+                        command=lambda: _settings.put("level_follows_population", bool(self.v_follow.get()))).pack(
+            side="left")
+        hint(follow, "Each level holds a range of people at the start (a village 400 - 1500, a town up to 3500, a "
+                     "large town 9000, a city 18000...): outside it the game stops reading the campaign file. "
+                     "Ticked, the town grows with its governor's building when the people do not fit; unticked, "
+                     "the population is cut to the level's range.", width=480).pack(side="left")
 
         # the town's buildings and its garrison in ONE window, switched by the two buttons - each looks exactly as
         # its tab of the main window (Buildings; Units & armies), and nothing jumps to the main window
-        sw = ttk.Frame(b)
-        sw.pack(fill="x", pady=(6, 0))
+        # two tabs as clear as the main window's (the flat buttons were hardly seen in the dark look)
         self.v_view = tk.StringVar(value="buildings")
-        for key, text in (("buildings", "Buildings"), ("garrison", "Garrison")):
-            ttk.Radiobutton(sw, text=text, value=key, variable=self.v_view, style="Toolbutton",
-                            command=self.show_view).pack(side="left", padx=(0, 4))
-        self.lbl_view = ttk.Label(sw, foreground="#666", text="")
-        self.lbl_view.pack(side="left", padx=8)
-        self.views = ttk.Frame(b)
-        self.views.pack(fill="both", expand=True, pady=6)
+        self.views = ttk.Notebook(b)
+        self.views.pack(fill="both", expand=True, pady=(4, 2))
         from .gui_buildings import BuildingsEditor
         from .gui_garrison import GarrisonEditor
         self.bed = BuildingsEditor(self.views, self.app.pictures)
         self.ged = GarrisonEditor(self.views, pictures=self.app.pictures)
+        self.bed.title.pack_forget()                        # the town's name and level are shown above already
+        self.views.add(self.bed, text="  Buildings  ")
+        self.views.add(self.ged, text="  Garrison  ")
+        self.views.bind("<<NotebookTabChanged>>", lambda e: self._tab_changed())
         self.picked = None                                  # the buildings as picked here, None = as the file has
         self.garrison = None                                # the garrison as picked here, None = as it stands
         self.load_buildings()
@@ -116,27 +119,29 @@ class TownWindow(tk.Toplevel):
         self.v_owner.trace_add("write", lambda *a: self._owner_changed())
         self.v_level.trace_add("write", lambda *a: self.v_level.get() and self.bed.buildings is not None and
                                self.bed.set_level(self.v_level.get()))
-        bar = ttk.Frame(b)
-        bar.pack(side="bottom", fill="x", pady=(4, 0), before=self.views)
-        self.lbl_why = ttk.Label(b, foreground="#a33", text="", wraplength=760, justify="left")
-        self.lbl_why.pack(side="bottom", anchor="w", before=self.views)
+        bar = ttk.Frame(b)                                  # only as tall as its buttons
+        bar.pack(side="bottom", fill="x", before=self.views)
+        self.lbl_why = ttk.Label(bar, foreground="#a33", text="", wraplength=600, justify="left")
+        self.lbl_why.pack(side="left", fill="x", expand=True)
         ttk.Button(bar, text="Close", command=self.close).pack(side="right")
         ttk.Button(bar, text="Write it in", command=self.write).pack(side="right", padx=4)
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
         self.show_view()
 
     # ---- the two views ----
-    def show_view(self):
-        for w in (self.bed, self.ged):
-            w.pack_forget()
+    def _tab_changed(self):
+        self.v_view.set("garrison" if self.views.select() == str(self.ged) else "buildings")
+        self.show_view(select=False)
+
+    def show_view(self, select=True):
+        if select:
+            self.views.select(self.ged if self.v_view.get() == "garrison" else self.bed)
         if self.v_view.get() == "garrison":
-            self.ged.pack(fill="both", expand=True)
             t = self.town
             self.lbl_view.configure(text=("the army in the town: %s%s" % (t.get("army") or "a captain",
                                     " (his bodyguard stays)" if t.get("army_named") else "")) if t.get("army")
                                     else "nobody holds the town: units picked here get a captain")
         else:
-            self.bed.pack(fill="both", expand=True)
             self.lbl_view.configure(text="click a level to build it; the governor's building follows the level")
 
     def _owner(self):
@@ -262,7 +267,19 @@ class TownWindow(tk.Toplevel):
             MT.apply(plan, self.campaign, {"owners": opts["owners"]})
         return plan
 
+    def _fresh(self):
+        """The main window read the mod again (an Apply there): this window's town is read again too, so a write
+        never builds on files as they were before - True when it was (the modder looks again, then writes)."""
+        if self.app.mod is self.mod:
+            return False
+        self.load(self.region)
+        messagebox.showinfo(TITLE, "The mod was written and read again in the main window - this town is shown "
+                                   "as the files hold it now. Pick your changes again, then Write it in.", parent=self)
+        return True
+
     def preview(self):
+        if self._fresh():
+            return
         try:
             plan = self._plan()
         except Exception as e:
@@ -274,6 +291,8 @@ class TownWindow(tk.Toplevel):
         self.app.show_text("%s - preview (nothing written)" % self.town["name"], plan.report())
 
     def write(self):
+        if self._fresh():
+            return
         try:
             plan = self._plan()
         except Exception as e:
@@ -282,9 +301,13 @@ class TownWindow(tk.Toplevel):
         if not plan.changed_files():
             messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
             return
-        if self.app.pending_parts():
-            messagebox.showerror(TITLE, "Other changes of the window wait for Apply - Apply (or undo) them first: the "
-                                        "mod is read again after this write.", parent=self)
+        waiting = self.app.pending_parts()
+        if waiting:                                     # say WHAT waits: the bare refusal left the modder guessing
+            messagebox.showerror(TITLE, "Not written yet. The main window holds changes not applied:\n\n%s\n\n"
+                                        "Apply them (Apply changes, bottom left of the main window) or Undo them first: "
+                                        "this write reads the mod again afterwards, and they would be lost. After an "
+                                        "Apply this window shows the town as written - make your changes here again."
+                                 % "\n".join("- " + label for _, label in waiting), parent=self)
             return
         if not messagebox.askyesno(TITLE, "%s\n\nWrite it? A backup is made first (Tools > Restore undoes it)."
                                    % plan.report()[:1500], parent=self):

@@ -292,9 +292,12 @@ def delete_town(app, region, parent):
 
     def write():
         p = plan()
-        if not p or not messagebox.askyesno(APP, "%s\n\nDelete %s and its region %s now (%d file(s))? A backup is "
-                                                 "made first (Tools > Restore undoes it)." % (
-                                                     p.report(), town, region, len(p.changed_files())), parent=w):
+        into = near[labels.index(v_into.get())][0] if p else None
+        if not p or not messagebox.askyesno(APP, "%s\n\nDelete %s and its region %s now (%d file(s))? Every tile of "
+                                                 "it becomes %s's - no land is left without a region (the game wants "
+                                                 "each tile in one). A backup is made first (Tools > Restore undoes "
+                                                 "it)." % (p.report(), town, region, len(p.changed_files()), into),
+                                            parent=w):
             return
         bdir = p.apply()
         log.write("Deleted %s with its region %s (backup %s)\n%s" % (town, region, bdir, p.report()))

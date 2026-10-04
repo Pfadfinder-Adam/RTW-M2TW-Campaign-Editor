@@ -247,6 +247,8 @@ class MapView(ttk.Frame):
         c.bind("<Double-Button-1>", self._double)          # a wonder opens its window, as in the game
         self.on_wonder = None                            # (type) -> the wonder's window
         self.on_town = None                              # (region) -> the town's own page (a double click)
+        self.on_char_double = None                       # (char id) -> its units' window (a double click)
+        self.on_fort_double = None                       # (Fort) -> its garrison's window (a double click)
         c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
         self._hot = None                                # the marker under the mouse, drawn bigger
         self._hot_k = 1.0                               # ... by how much now
@@ -533,7 +535,8 @@ class MapView(ttk.Frame):
             head("Towns and ports")
             red = "#%02x%02x%02x" % self.LEGEND_RED
             row("a town (its owner's colour)", town(red, "black", 1), "town")
-            row("one of your towns", town(red, "#ffd400", 3))
+            if not getattr(self, "everyone", False):          # the Map editor: no faction is 'yours'
+                row("one of your towns", town(red, "#ffd400", 3))
             row("rebel village (no town yet)", town("", "black", 1, hollow=True))
             row("a port (click the coast)", port, "port")
             row("a fort (top: its owner's colour)",
@@ -542,13 +545,14 @@ class MapView(ttk.Frame):
                 lambda x, yy: self._fort_icon(lc, x, yy + 2, 5, "#%02x%02x%02x" % self.LEGEND_RED, (), 2),
                 "watchtower")
             if any(fo.kind == "landmark" for fo in self.forts):
-                row("a wonder (right drag moves it; right click on land: Put a wonder here)",
+                row("a wonder (landmark): right drag",
                     lambda x, yy: self._wonder_icon(lc, x, yy, 8, "", ()))
             head("Characters")
             keep = self.draggable
             self.draggable = set(keep) | {"legend_mine"}
             row("a general / an army", char("general", army=True), "army")
-            row("yours: drag it (right button)", char("general", army=True, mine=True))
+            if not getattr(self, "everyone", False):
+                row("yours: drag it (right button)", char("general", army=True, mine=True))
             row("a fleet (admiral)", char("admiral", army=True), "fleet")
             for k, label in (("spy", "spy"), ("assassin", "assassin"), ("diplomat", "diplomat"),
                              ("merchant", "merchant"), ("priest", "priest"), ("princess", "princess"),
@@ -571,7 +575,10 @@ class MapView(ttk.Frame):
                 x - 8, yy - 8, x + 8, yy + 8, outline="#30ff60", width=2))
             row("drop here: refused (why below)", lambda x, yy: lc.create_rectangle(
                 x - 8, yy - 8, x + 8, yy + 8, outline="#ff3030", width=2))
-            kinds = sorted(({r["kind"] for r in self.resources} | set(self.res_types)) - {"fort", "watchtower"})
+            # forts, watchtowers and Rome's wonders (landmark lines) have rows of their own above - 'landmark' among
+            # the resources meant nothing to a modder (report #103)
+            kinds = sorted(({r["kind"] for r in self.resources} | set(self.res_types)) - {"fort", "watchtower",
+                                                                                         "landmark"})
             if kinds or self.v_res.get():
                 head("Resources (first letters)")
                 for k in kinds:
@@ -590,12 +597,15 @@ class MapView(ttk.Frame):
              region_mode=False, paint_overlay=None, on_paint=None, on_pick=None, brush=1, region_points=(),
              region_painted=None, region_colours=None, borders=True, ghost=None, locked=None,
              resources=None, check_res=None, on_res_move=None, on_res_click=None, res_sel=None, new_land=None,
-             plain=False, labels=None, forts=None, tint=None, tint_legend=None):
+             plain=False, labels=None, forts=None, tint=None, tint_legend=None, everyone=False):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
+        everyone: the Map editor - every faction's things may be moved, none is 'yours' (no yellow edge: a map of
+        yellow rings and flags looked as if all of it were selected - reports #99 #101);
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
         first = self.cmap is None or self.cmap is not cmap
         self.cmap, self.owners, self.colours = cmap, dict(owners), colours
+        self.everyone = bool(everyone)
         # a colour mode's own land colours {region: rgb} (religion), drawn in place of the owners'
         self.tint, self.tint_legend = (dict(tint) if tint else None), list(tint_legend or [])
         self.faction, self.chosen, self.on_city = faction, set(chosen), on_city
@@ -736,9 +746,9 @@ class MapView(ttk.Frame):
         vw, vh = cw / self.z, ch / self.z
         box = (self.ox, self.oy, self.ox + vw, self.oy + vh)
         base = self._base()                                           # 2 px per tile, colours laid on once
-        # while the map is dragged the quick resize, the smooth one when it stops; sharp tiles up close
-        quick = self._drag is not None and self._drag[4]
-        pic = view_of(base, box, (cw, ch), Image.NEAREST if quick or self.z >= 12 else Image.BILINEAR, self._field())
+        # sharp tiles always, still or dragged: the smoothed picture at rest looked blurred beside the sharp one while
+        # dragging (report #100) - the map is by tiles, as the game's files are
+        pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field())
         self._photo = ImageTk.PhotoImage(pic)
         c.create_image(0, 0, anchor="nw", image=self._photo, tags=("bg",))
         self._drawn_at = (self.ox, self.oy)
@@ -896,7 +906,7 @@ class MapView(ttk.Frame):
                 continue
             owner = self.owners.get(region)
             rgb = REBELS if owner in (None, "slave") else self.colours.get(owner, REBELS)
-            mine = region in self.chosen
+            mine = region in self.chosen and not getattr(self, "everyone", False)
             picking = self.v_pick.get()
             if picking:                                  # Pick towns: the picked ones yellow, the ring is theirs
                 mine = region in self.picked
@@ -1040,7 +1050,7 @@ class MapView(ttk.Frame):
         c = self.canvas
         rgb = REBELS if ch_["faction"] == "slave" else self.colours.get(ch_["faction"], REBELS)
         fill = "#%02x%02x%02x" % rgb
-        mine = ch_["id"] in self.draggable
+        mine = ch_["id"] in self.draggable and not getattr(self, "everyone", False)
         edge = "#ffd400" if mine else "black"
         tags = ("char", "char:%s" % ch_["id"])
         k = ch_["kind"]
@@ -1210,10 +1220,16 @@ class MapView(ttk.Frame):
         if town and self.on_town and not self.v_pick.get():
             self.on_town(town[0])                        # a town: straight to its own window (a tester)
             return
+        cid = self._char_under(e.x, e.y)
+        if cid and self.on_char_double and not self.v_pick.get():
+            self.on_char_double(cid)                     # an army / fleet: its units (reports #102 #104)
+            return
         line = self._fort_line_under(e.x, e.y)
         fo = next((f for f in (self.forts or []) if f.line == line), None) if line is not None else None
         if fo is not None and fo.kind == "landmark" and self.on_wonder:
             self.on_wonder(fo.type)
+        elif fo is not None and self.on_fort_double:
+            self.on_fort_double(fo)                      # a fort: the army that holds it
 
     def _res_under(self, sx, sy):
         if not self._marks_on():
@@ -1603,7 +1619,7 @@ class MapView(ttk.Frame):
             return self.render()
         cw, ch = c.winfo_width(), c.winfo_height()
         box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
-        pic = view_of(self._base(), box, (cw, ch), Image.NEAREST if self.z >= 12 else Image.BILINEAR, self._field())
+        pic = view_of(self._base(), box, (cw, ch), Image.NEAREST, self._field())
         self._photo = ImageTk.PhotoImage(pic)
         c.itemconfigure("bg", image=self._photo)
 

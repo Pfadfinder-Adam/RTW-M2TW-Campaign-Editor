@@ -746,6 +746,8 @@ class App(tk.Tk):
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
         self.map_view.on_menu = self.map_menu
         self.map_view.on_town = self.town_window          # a double click: the town's own window
+        self.map_view.on_char_double = self.char_window   # ... an army or fleet: its units
+        self.map_view.on_fort_double = self.fort_window   # ... a fort: the army in it
         self.map_view.on_wonder = lambda t: __import__("campaign_editor.gui_wonders", fromlist=["show"]).show(self, self.mod, t)
         self.map_view.on_pick_menu = self.pick_menu
         self.map_view.on_tool = self.map_tool
@@ -3029,7 +3031,8 @@ class App(tk.Tk):
                            draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols,
                            on_place=on_place,
                            places=self.place_moves, check_place=check_place, on_place_move=place_moved,
-                           locked=self._locked_hint, forts=self.strat.forts if self.strat else [], **region_kw)
+                           locked=self._locked_hint, forts=self.strat.forts if self.strat else [],
+                           everyone=self.map_work(), **region_kw)
 
     RELIGION_COLOURS = {"catholic": (214, 170, 60), "orthodox": (70, 110, 190), "islam": (60, 150, 70),
                         "pagan": (140, 95, 50), "heretic": (140, 40, 140)}
@@ -4510,6 +4513,42 @@ class App(tk.Tk):
             return
         self.garrison_editor.load(self.mod, template, region, units, self.garrisons.get(region, []),
                                   changed, auto=auto, held=held)
+
+    def char_window(self, cid):
+        """A double click on a character on the Map: an army or fleet opens its units (any faction's in a window of
+        its own; the faction's own in Edit faction opens Units & armies); an agent says what to do."""
+        i = next((k for k, c in enumerate(self.field)
+                  if cid == "new:%d" % k or (c.get("existing") and c.get("cid") == cid)), None)
+        if i is not None and not self.map_only():
+            self.select_tab("Units & armies")
+            self.lb_field.v_find.set("")
+            self.lb_units.selection_clear(0, "end")
+            self.lb_field.selection_set(i)
+            self.load_field()
+            return
+        ch = (getattr(self, "_map_chars", None) or {}).get(cid)
+        if str(cid).startswith("map:"):
+            _, fac, k = str(cid).split(":")
+            c = (self.map_chars.get(fac) or [None] * (int(k) + 1))[int(k)]
+            if c and c["kind"] in ("army", "fleet"):
+                self.army_units_window(cid)
+            return
+        if ch and ch.get("army"):
+            self.army_units_window(cid)
+        elif ch:
+            self.status.set("%s %s of %s: an agent has no units - right click for what can be done with him."
+                            % (ch["kind"], ch["name"], ch["faction"]))
+
+    def fort_window(self, fo):
+        """A double click on a fort: the army standing in it (its garrison) opens; an empty fort says how to man it -
+        a fort has no buildings (report #102)."""
+        chars = getattr(self, "_map_chars", None) or {}
+        at = [cid for cid, ch in chars.items() if ch.get("army") and tuple(ch.get("xy") or ()) == tuple(fo.xy)]
+        if at:
+            self.char_window(at[0])
+            return
+        self.status.set("This %s at %d, %d is empty: drag an army onto it (right button) - its units are the "
+                        "garrison; a fort has no buildings." % (fo.kind, fo.xy[0], fo.xy[1]))
 
     def army_units_window(self, cid):
         """Any faction's army or fleet on the map (the Map editor, or another faction's from Edit faction): its units

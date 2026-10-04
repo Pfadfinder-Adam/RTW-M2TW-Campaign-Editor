@@ -47,14 +47,14 @@ class BuildingsEditor(ttk.Frame):
         sb = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
         self.inner = ttk.Frame(canvas)
         self.inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=self.inner, anchor="nw")
+        self._win = canvas.create_window((0, 0), window=self.inner, anchor="nw")
         canvas.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
         from .gui_util import scroll_y, wheel
         wheel(canvas, scroll_y(canvas))
         self.canvas = canvas
-        self._width = 0
+        self._rows, self._cols, self._cell = [], 0, 300
         canvas.bind("<Configure>", self._resized, add="+")
         self.bpics = None
         self.roster = {}                  # {(chain, level): give?} from the Roster tab
@@ -64,9 +64,8 @@ class BuildingsEditor(ttk.Frame):
         self.region = self.town_level = self.culture = self.faction = self.template = None
 
     def _resized(self, e):
-        if abs(e.width - self._width) > 40 and getattr(self, "buildings", None) is not None:
-            self._width = e.width
-            self.redraw()
+        if getattr(self, "buildings", None) is not None:
+            self._regrid(e.width)
 
     def load(self, region, town_level, buildings, own, picked, culture, faction, template, bpics, on_change,
              kind=None, on_kind=None):
@@ -132,11 +131,27 @@ class BuildingsEditor(ttk.Frame):
             w.destroy()
         rows = [self._row(b, levels) for b, levels in self.chains()]
         self.update_idletasks()
-        cell = max((r.winfo_reqwidth() for r in rows), default=300) + 8
-        cols = max(1, (self.canvas.winfo_width() - 4) // cell)
-        for i, r in enumerate(rows):
-            r.grid(row=i // cols, column=i % cols, sticky="nw", padx=4, pady=3)
+        self._cell = max((r.winfo_reqwidth() for r in rows), default=300) + 8
+        self._rows, self._cols = rows, 0
+        self._regrid(self.canvas.winfo_width())
+        # the width the canvas really gets is known once the window is laid out (a town window's first draw saw a
+        # narrower one and kept 2 columns in a wide window): laid out again then, and on every resize
+        self.after_idle(lambda: self.canvas.winfo_exists() and self._regrid(self.canvas.winfo_width()))
         self._summary()
+
+    def _regrid(self, width):
+        """The chains in as many columns as the width holds - only moved, never built again."""
+        rows = [r for r in getattr(self, "_rows", []) if r.winfo_exists()]
+        if width > 1:                                       # the chains fill the width: no empty strip at the right
+            self.canvas.itemconfigure(self._win, width=width)
+        cols = max(1, (width - 4) // getattr(self, "_cell", 300)) if width > 1 else 1
+        if not rows or cols == self._cols:
+            return
+        for c in range(max(cols, self._cols)):
+            self.inner.columnconfigure(c, weight=1 if c < cols else 0, uniform="chain" if c < cols else "")
+        self._cols = cols
+        for i, r in enumerate(rows):
+            r.grid(row=i // cols, column=i % cols, sticky="nwe", padx=4, pady=3)
 
     def _row(self, b, levels):
         f = ttk.Frame(self.inner, relief="groove", padding=3)
@@ -159,7 +174,8 @@ class BuildingsEditor(ttk.Frame):
         ttk.Label(f, text=b.name, font=("", 9, "bold")).grid(row=0, column=1, sticky="w", padx=4)
         v = tk.StringVar(value=now or NONE)
         cb = ttk.Combobox(f, textvariable=v, values=names, state="readonly", width=22)
-        cb.grid(row=1, column=1, sticky="w", padx=4)
+        cb.grid(row=1, column=1, sticky="we", padx=4)
+        f.columnconfigure(1, weight=1)                      # a wider column gives the level's box the room
         cb.bind("<<ComboboxSelected>>", lambda e: self.pick(b.name, v.get()))
         lv = b.level(now) if now else None
         need = ("the governor's building of a %s" % core_settlement(b, lv.name)) if lv and core else \

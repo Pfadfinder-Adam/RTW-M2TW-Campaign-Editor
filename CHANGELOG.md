@@ -386,6 +386,16 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **The town window gives the room to the buildings** (both games): the town's name once at the top, the
+  explanations behind a **?**, Buildings and Garrison as clear tabs, the bottom bar only as tall as its buttons, the
+  window no taller than the screen, and the building chains fill the window's width in as many columns as fit (also
+  on the Buildings tab). When the main window holds changes not applied, Write it in says which ones instead of a
+  bare refusal; after an Apply there the town is read again before anything is written.
+- **Map editor: nothing looks selected any more** - every faction's towns and characters were drawn with the yellow
+  edge of 'yours' (yellow only marks what is selected now); the map is drawn sharp, tile by tile, at rest as while
+  it is dragged; 'landmark' (Rome's wonders, which have their own sign) is gone from the resources list.
+- **A double click on an army or a fleet opens its units; on a fort, the army in it** (both games, the Map editor
+  and Edit faction); an empty fort or an agent says what can be done.
 - **Rome: a new faction no longer crashes the game when it is destroyed.** Rome's message 'faction destroyed'
   (descr_event_images.txt) has one picture per faction - 21 in the game; a faction past the last one crashed the game
   the moment it was destroyed (message_builder_objects.cpp(763), 'a switch message object with a value higher than
