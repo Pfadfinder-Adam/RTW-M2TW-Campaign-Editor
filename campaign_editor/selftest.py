@@ -766,12 +766,11 @@ def s_banner(c, mod):
     s = {"colours": [(40, 140, 60), (240, 220, 40), (240, 240, 240)], "pattern": "three stripes, upright (tricolour)"}
     if c.m2:
         from . import banners_m2 as BM
-        from .recolour import read_picture
         ps = [p for p in pics if (p.get("extra") or {}).get("kind") == "banner" and BM.faction_sheet(p["path"])]
         sheet = BM.sheet_blank(mod)
         if not ps or sheet is None:
             raise Skip("no banner sheet")
-        kit = BM.Kit(sheet, BM.meshes(mod), read_picture(ps[0]["path"]).getchannel("A"))
+        kit = BM.Kit(sheet, BM.meshes(mod))
         made = {p["rel"]: kit.make(s, sym) for p in ps}
     else:
         ps = [p for p in pics if E.is_banner(p) and not p.get("locked")]

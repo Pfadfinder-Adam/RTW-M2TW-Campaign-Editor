@@ -496,7 +496,7 @@ class ArtEditor(ttk.Frame):
     def _banner_m2(self, pics, src_faction, new):
         a = self.app
         from . import banners_m2 as M
-        from .recolour import faction_colours, read_picture
+        from .recolour import faction_colours
         a.status.set("Making the white banner from the mod's banner pictures...")
         self.update_idletasks()
         sheet = M.sheet_blank(a.mod)
@@ -510,14 +510,10 @@ class ArtEditor(ttk.Frame):
                                           "faction first, then Edit faction > Art > Banner... gives it a banner "
                                           "of its own." % src_faction)
             return
-        try:
-            alpha = read_picture(pics[0]["path"]).getchannel("A")
-        except Exception:
-            alpha = None
         fc = faction_colours(a.mod).get(src_faction, (None, None))
         first = a.colours.get("primary") or fc[0] or (200, 200, 200)
         second = a.colours.get("secondary") or fc[1] or (240, 240, 240)
-        kit = M.Kit(sheet, M.meshes(a.mod), alpha)
+        kit = M.Kit(sheet, M.meshes(a.mod))
         from .gui_banners import BannerWindow
 
         def done(got):

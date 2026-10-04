@@ -316,6 +316,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Medieval II battle banners from Banner... had no poles and were cut** in the game (the test mod in the game):
+  the new sheet took its see-through parts from the faction's current sheet - once that sheet had been replaced by
+  another picture, its alpha went with it, and the poles and much of the cloth turned see-through. The banner now
+  takes them from the white template, which every faction sheet of the mod shares.
 - **Make the campaign map 3 x bigger: a strip of beach off every river mouth.** Where the smoother new coast put a
   river's last tiles in the sea, the land was kept under the river, so a sandbar stood out into the sea at each mouth
   (`map_ground_types.tga`, `map_regions.tga` and the heights). The river now stops at the new coast, its end touching

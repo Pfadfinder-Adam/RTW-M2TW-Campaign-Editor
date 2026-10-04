@@ -3818,6 +3818,10 @@ building smith
         ImageDraw.Draw(sym).rectangle((0, 0, 19, 19), fill=(20, 200, 40, 255))
         kit = M.Kit(sheet)
         own = kit.make({"colours": [(200, 0, 0)], "pattern": "plain"}, sym)
+        # see-through only where the template is (the faction's own sheet, once replaced by another picture, gave
+        # its alpha to the new banner and the poles went see-through in the game - a tester's test mod)
+        self.assertEqual(own.getchannel("A").tobytes(), sheet.blank.getchannel("A").tobytes())
+        self.assertEqual(own.getpixel((50, 90))[3], 255)                       # the pole stays solid
         bx = M.symbol_boxes(sheet)[0]
         r, g, b, a = own.getpixel(((bx[0] + bx[2]) // 2, (bx[1] + bx[3]) // 2))
         self.assertGreater(g, r)                                               # the symbol on the cloth

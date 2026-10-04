@@ -308,10 +308,12 @@ def _colour_layer(sheet, colours, pattern):
     return layer
 
 
-def paint(sheet, colours, symbol=None, boxes=None, pattern="plain", alpha=None, strength=1.0):
+def paint(sheet, colours, symbol=None, boxes=None, pattern="plain", strength=1.0):
     """A faction's banner sheet from the white template: the cloth dyed (one colour, or a list for a pattern of
     banners.PATTERNS on each panel), its folds kept; the symbol (RGBA, clear background; None = none) in each box,
-    shaded by the cloth; alpha: the faction's old sheet's alpha ('L'), kept (else the template's)."""
+    shaded by the cloth. The see-through parts are the template's: what every sheet of the mod shares (the cloth's
+    edges, the pole, the fittings) - a faction's own sheet may hold a replaced picture's alpha, and with it the poles
+    went see-through in the game (a tester's test mod)."""
     from PIL import Image, ImageChops
     from .banners import put_symbol
     colours = [colours] if isinstance(colours[0], int) else list(colours)
@@ -322,7 +324,7 @@ def paint(sheet, colours, symbol=None, boxes=None, pattern="plain", alpha=None, 
     out.paste(dyed, (0, 0), sheet.cloth)
     if symbol is not None:
         put_symbol(out, sheet.shade, symbol, boxes if boxes is not None else symbol_boxes(sheet), strength)
-    out.putalpha(alpha if alpha is not None and alpha.size == out.size else sheet.blank.getchannel("A"))
+    out.putalpha(sheet.blank.getchannel("A"))
     return out
 
 
@@ -351,19 +353,19 @@ def look_3d(mesh_file, picture, size=(220, 300)):
         return None
 
 
-def make(sheet, s, symbol=None, alpha=None, strength=1.0):
+def make(sheet, s, symbol=None, strength=1.0):
     """A faction's sheet from the window's settings s (as banners.make): dyed in the pattern, or the player's own
-    drawing in its place; the symbol unless 'no_symbol'; alpha: the faction's old sheet's, kept."""
+    drawing in its place; the symbol unless 'no_symbol'; the template's see-through parts (paint)."""
     from .banners import own_drawing, put_symbol
     sym = None if s.get("no_symbol") else symbol
     boxes = s.get("boxes") or symbol_boxes(sheet)
     if not s.get("drawing"):
-        return paint(sheet, s.get("colours") or [(200, 200, 200)], sym, boxes, s.get("pattern") or "plain", alpha,
+        return paint(sheet, s.get("colours") or [(200, 200, 200)], sym, boxes, s.get("pattern") or "plain",
                      strength)
     out = own_drawing(s["drawing"], sheet.size)
     if sym is not None:
         put_symbol(out, sheet.shade, sym, boxes, strength)
-    out.putalpha(alpha if alpha is not None and alpha.size == out.size else sheet.blank.getchannel("A"))
+    out.putalpha(sheet.blank.getchannel("A"))
     return out
 
 
@@ -373,8 +375,8 @@ class Kit:
     game = "Medieval II"
     side_label = "in the game (3D)"
 
-    def __init__(self, sheet, mesh_files=(), alpha=None):
-        self.sheet, self.alpha = sheet, alpha
+    def __init__(self, sheet, mesh_files=()):
+        self.sheet = sheet
         self.meshes = {os.path.splitext(os.path.basename(p))[0]: p for p in mesh_files
                        if os.path.basename(p).lower().startswith("main_")}
         self.mesh = "main_infantry" if "main_infantry" in self.meshes else next(iter(self.meshes), None)
@@ -390,7 +392,7 @@ class Kit:
         return s.get("boxes") or symbol_boxes(self.sheet)
 
     def make(self, s, symbol=None, strength=1.0):
-        return make(self.sheet, s, symbol, self.alpha, strength)
+        return make(self.sheet, s, symbol, strength)
 
     def side(self, s, symbol=None, size=(220, 300)):
         if not self.mesh:
