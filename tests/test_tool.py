@@ -3711,13 +3711,18 @@ building smith
         a = A.by_key("avoid_growth")
         self.assertTrue(a.fits("rome") and a.fits("medieval2"))
         text = a.template()
-        for part in ('"CHECKBOX_BG"', '"TICK_GADGET"', "root.persistent", '"SettlementTurnStart"', "settlementScroll",
-                     "rawdelete"):
+        for part in ('"PLAIN_CHECKBOX_BG"', '"PLAIN_CHECKBOX_TICK"', '"CHECKBOX_BG"', '"TICK_GADGET"',
+                     '"verdana_sml"', '"BEVEL_TL"', "AG_M2_ROW", "root.persistent", '"SettlementTurnStart"',
+                     "settlementScroll", "rawdelete"):
             self.assertIn(part, text)
+        # the game's small tick pieces first (the scroll's own Auto-manage / Construction / Recruitment ticks)
+        self.assertLess(text.index('"PLAIN_CHECKBOX_BG"'), text.index('["CHECKBOX_BG"'))
         self.assertNotIn("delete ", text.replace("rawdelete", ""))         # the engines forbid 'delete'
         got = A.read_settings(a, text)
         self.assertEqual(A.render(a, text, got), text)
-        new = dict(got, AG_OFFSET_X=-12, AG_LABEL="Stay small", AG_SHOW_CAP=False)
+        self.assertFalse(got["AG_SHOW_CAP"])                               # the ceiling goes in the tooltip
+        self.assertIn("{cap}", got["AG_TIP_ON"])
+        new = dict(got, AG_OFFSET_X=-12, AG_LABEL="Stay small", AG_SHOW_CAP=True, AG_TIP_ON="Max {cap}")
         self.assertEqual(A.read_settings(a, A.render(a, text, new)), new)
         self.assertFalse(A.check(a, new))
         self.assertTrue(A.check(a, dict(got, AG_OFFSET_Y="up")))

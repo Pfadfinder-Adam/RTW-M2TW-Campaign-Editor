@@ -127,7 +127,8 @@ ADDONS = [
           "script/modules, whatever mod runs. Vanilla Medieval II runs no scripts - the add-on then does nothing.",
           picks={"RAZE_KEEP_CHAINS": "chains", "RAZE_DEFAULT_REBEL_UNITS": "units", "RAZE_FACTIONS": "factions"}),
     Addon("avoid_growth", "Avoid Growth", "both", "avoid_growth.nut",
-          "A tick box on the settlement scroll of each of your towns, drawn with the game's own box and tick. Tick "
+          "A tick box on the settlement scroll of each of your towns, drawn with the game's own small box and tick "
+          "(in Medieval II in the row of its own ticks, right of Recruitment). Tick "
           "it and the people the town has now become its ceiling: it never grows past it, still loses people the "
           "usual way (recruiting, battles, plague) and grows back - but only up to the ceiling. A border town stays "
           "the village, town or city it is: put it on auto-manage and forget it. Untick to let it grow again. The "
@@ -135,8 +136,10 @@ ADDONS = [
           "sq ::avoid_growth_list().",
           [Setting("AG_ENABLED", "bool", "Avoid Growth on", "off keeps the file but does nothing"),
            Setting("AG_LABEL", "text", "Words beside the tick", "what the scroll says"),
-           Setting("AG_TIP", "text", "Tooltip", "shown when the mouse is over it"),
-           Setting("AG_SHOW_CAP", "bool", "Show the ceiling", "'(at most 5000)' beside the words while ticked"),
+           Setting("AG_TIP", "text", "Tooltip", "shown when the mouse is over it, unticked"),
+           Setting("AG_TIP_ON", "text", "Tooltip while ticked", "{cap} = the ceiling (the people it keeps at most)"),
+           Setting("AG_SHOW_CAP", "bool", "Show the ceiling beside the words too",
+                   "'(at most 5000)' beside the words while ticked - the tooltip says it anyway"),
            Setting("AG_OFFSET_X", "int", "Move the tick right", "in the game's 1024 x 768 units; below 0 = left",
                    signed=True),
            Setting("AG_OFFSET_Y", "int", "Move the tick down", "below 0 = up", signed=True)],

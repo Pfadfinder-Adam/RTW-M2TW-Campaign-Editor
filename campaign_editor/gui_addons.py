@@ -216,8 +216,10 @@ class AddonsPanel(ttk.Frame):
                        command=lambda: self.builder(recipe)).pack(side="left", padx=6)
         ttk.Label(inner, foreground="#555", wraplength=760, justify="left", text=(
             "Every write makes a backup first (Tools > Restore a backup undoes it). Then start the campaign: the "
-            "game log (system.log.txt) says " + (LOADED[a.key] if a.key in LOADED else "that the module %s was "
-                                                "loaded (or why not)." % os.path.splitext(a.file)[0]))).grid(
+            "script console says " + (LOADED[a.key] if a.key in LOADED else "that the module %s was "
+                                      "loaded (or why not)." % os.path.splitext(a.file)[0]) +
+            " (Rome with REX writes it into system.log.txt too; Medieval II with M2EX only while the game starts up)."
+        )).grid(
             row=r + 1, column=0, columnspan=3, sticky="w", pady=(8, 0))
         inner.columnconfigure(2, weight=1)
 

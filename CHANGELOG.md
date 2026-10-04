@@ -361,6 +361,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Avoid Growth looks like the game's own ticks**: the small box and tick of the settlement scroll
+  (PLAIN_CHECKBOX_BG / _TICK, as Auto-manage, Construction and Recruitment), their small grey-brown font, and in
+  Medieval II it stands in their row, right of Recruitment (it sat over the income lines). Just the words "Avoid
+  Growth" beside it; the tooltip is short and says the ceiling while ticked.
 - **Recolour now reaches the far-away sprites of a new faction** (both games): a new faction's models named its
   template's sprites, so its men kept the template's colours at a distance. The faction gets its own sprite (the
   .spr and its pages under its own name, recoloured) and its model lines point at it (Medieval II: the texture

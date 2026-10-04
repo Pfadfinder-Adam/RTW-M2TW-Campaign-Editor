@@ -8,8 +8,10 @@
 // folder once the campaign map is up, whatever mod is running.
 //
 // What it does: the settlement scroll of each of your towns gets a tick box
-// "Avoid Growth", drawn with the game's own box and tick (CHECKBOX_BG,
-// TICK_GADGET - the same pieces as its other ticks). Tick it and the people the
+// "Avoid Growth", drawn with the game's own small box and tick (PLAIN_CHECKBOX_BG,
+// PLAIN_CHECKBOX_TICK - the pieces of its Auto-manage / Construction /
+// Recruitment ticks; in Medieval II it stands in their row, right of
+// Recruitment). Tick it and the people the
 // town has right now become its CEILING:
 //   - it never grows past the ceiling,
 //   - it still loses people the usual way (recruiting, battles, plague, hunger),
@@ -31,17 +33,26 @@ function ag_log(message) {
 
 local AG_ENABLED = true
 local AG_LABEL = "Avoid Growth"
-local AG_TIP = "The town keeps at most the people it has now: it may shrink (recruiting, battles, plague) and grows back, but never past that"
-local AG_SHOW_CAP = true             // the ceiling shown beside the words ("at most 5000")
+local AG_TIP = "Keep the town at the size it has now"
+local AG_TIP_ON = "At most {cap} people - it grows back up to that"   // {cap} = the ceiling
+local AG_SHOW_CAP = false            // the ceiling shown beside the words too ("at most 5000")
 local AG_OFFSET_X = 0                // move the tick right (+) or left (-), in the game's 1024 x 768 units
 local AG_OFFSET_Y = 0                // move the tick down (+) or up (-)
-// The words in the first of these game fonts the game has (both games name them alike).
-local AG_FACES = ["tnr_med", "font_14", "verdana"]
-local AG_INK = [0, 0, 0, 255]
+// The words in the first of these game fonts the game has (both games name them alike) - the small one the
+// scroll's own tick labels use, in their grey-brown ink.
+local AG_FACES = ["verdana_sml", "tnr_sml", "verdana"]
+local AG_INK = [96, 82, 62, 255]
 local AG_KEY = "avoid_growth"        // this add-on's place in the saved game (persistent.avoid_growth)
-local AG_BOX = 24                    // CHECKBOX_BG's own size, 1024 x 768 units
-local AG_TICK = 27                   // TICK_GADGET's own size
-local AG_GAP = 6
+// The game's own tick pieces, the first found: [box, tick, their size in 1024 x 768 units]
+local AG_SPRITES = [
+    ["PLAIN_CHECKBOX_BG", "PLAIN_CHECKBOX_TICK", 18],    // the scroll's own small ticks (both games)
+    ["CHECKBOX_BG", "TICK_GADGET", 24],
+]
+local AG_GAP = 4
+// Medieval II's settlement scroll: the row of its own ticks (Auto-manage, Construction, Recruitment) - the free
+// place right of Recruitment, from the bottom-left of settlement_details_population_stats (measured on the game's
+// scroll at 1600 x 900): the box's top-left 448 units right and 59 below.
+local AG_M2_ROW = [448, 59]
 // Where the tick goes: the first of these parts of the settlement scroll that is open, and where beside it.
 local AG_ANCHORS = [
     ["settlement_details_population_stats", "below"],
@@ -301,19 +312,29 @@ function ag_scale(ui) {
     return 1.0
 }
 
+function ag_sprite(ui, name) {
+    local t = null
+    try {
+        t = ui.loadSprite(name, ui.PAGE_SHARED)
+    } catch (err) {
+    }
+    return t != null && t.img != 0 ? t : null
+}
+
+// The game's own tick pieces: { box, tick, size } - the first pair the game has; none: a plain box.
 function ag_load_art(ui) {
     if (ag_art == null) {
-        ag_art = {}
-        foreach (key, name in { box = "CHECKBOX_BG", tick = "TICK_GADGET" }) {
-            local t = null
-            try {
-                t = ui.loadSprite(name, ui.PAGE_SHARED)
-            } catch (err) {
+        ag_art = { box = null, tick = null, size = AG_SPRITES[0][2], m2 = ag_sprite(ui, "BEVEL_TL") != null }
+        foreach (pair in AG_SPRITES) {
+            local b = ag_sprite(ui, pair[0])
+            local t = ag_sprite(ui, pair[1])
+            if (b != null && t != null) {
+                ag_art = { box = b, tick = t, size = pair[2], m2 = ag_art.m2 }
+                break
             }
-            ag_art[key] <- t != null && t.img != 0 ? t : null
         }
-        if (ag_art.box == null || ag_art.tick == null) {
-            ag_log("CHECKBOX_BG / TICK_GADGET not found - the tick is drawn as a plain box")
+        if (ag_art.box == null) {
+            ag_log("the game's tick pieces not found - the tick is drawn as a plain box")
         }
     }
     return ag_art
@@ -339,12 +360,17 @@ function ag_face(ui) {
     return ag_font
 }
 
-// [x, y] of the tick box (physical px), from the first open anchor, or null.
-function ag_place(box) {
+// [x, y] of the tick box (physical px), from the first open anchor, or null. m2: Medieval II's scroll (its tick
+// row is known: the box goes right of Recruitment); k: screen px per 1024 x 768 unit.
+function ag_place(box, m2, k) {
     foreach (a in AG_ANCHORS) {
         local r = ag_rect(ag_game_element(a[0]))
         if (r == null) {
             continue
+        }
+        if (m2 && a[0] == "settlement_details_population_stats") {
+            return [r[0] + (AG_M2_ROW[0] * k + 0.5).tointeger(), r[1] + r[3] + (AG_M2_ROW[1] * k + 0.5).tointeger(),
+                    a[0] + " (Medieval II tick row)"]
         }
         if (a[1] == "below") {
             return [r[0], r[1] + r[3] + box / 4, a[0]]
@@ -352,6 +378,12 @@ function ag_place(box) {
         return [r[0] + box * 2, r[1] + r[3] - box * 3, a[0]]      // inside the scroll, above its bottom edge
     }
     return null
+}
+
+// The tooltip's words with the ceiling put in for {cap}.
+function ag_fill(text, cap) {
+    local at = text.indexof("{cap}")
+    return at == null ? text : text.slice(0, at) + cap + text.slice(at + 5)
 }
 
 function ag_draw() {
@@ -364,9 +396,10 @@ function ag_draw() {
         return
     }
     local k = ag_scale(ui)
-    local box = (AG_BOX * k + 0.5).tointeger()
-    local tick = (AG_TICK * k + 0.5).tointeger()
-    local at = ag_place(box)
+    local art = ag_load_art(ui)
+    local box = (art.size * k + 0.5).tointeger()
+    local tick = box
+    local at = ag_place(box, art.m2, k)
     if (at == null) {
         return
     }
@@ -384,7 +417,6 @@ function ag_draw() {
     local name = ag_name(s)
     local store = ag_store()
     local on = name != null && name in store
-    local art = ag_load_art(ui)
     if (art.box != null) {
         ui.image(art.box.img, box, box, x, y)
     } else {
@@ -417,7 +449,7 @@ function ag_draw() {
     if (hit != null) {
         try {
             ui.tooltipAt(x, y, w, box)
-            ui.tooltip(0, AG_TIP)
+            ui.tooltip(0, on ? ag_fill(AG_TIP_ON, store[name].cap) : AG_TIP)
         } catch (err) {
         }
         if (hit.clicked && ag_click == null) {
