@@ -1281,7 +1281,9 @@ def rule_changed(rule, now=None):
     # and armies the campaign already has still fit (a village's max 1500 -> 1499 lost a town of 1500 people; the
     # children's max 5 -> 4 a family of five)
     words = set(re.split(r"[_\s.]+", key.lower()))
-    up = bool(words & {"max", "maximum", "limit", "cap"})
+    # the age of manhood too: lower, the campaign's 15-year-old sons off the map are men the game refuses (a tester in
+    # Rome with REX: 'Ahmose is a live male of age > 15 and so must be created as a named character')
+    up = bool(words & {"max", "maximum", "limit", "cap", "manhood"})
     if rule.kind in ("int", "uint"):
         n = int(v)
         if up and n not in BYTE_TOPS:

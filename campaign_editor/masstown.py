@@ -134,7 +134,7 @@ def town_fit(known, town, kind=None, level=None):
 def _town_changes(plan, f, campaign, towns_opts):
     """{region: {'kind', 'level'}} written into descr_strat (f): the kind with buildings.with_kind, the level with
     the governor's building at the level's own and the population raised to the level's threshold."""
-    from .buildings import castle_fits, core_level_for, sized, with_kind
+    from .buildings import castle_fits, core_chain, core_level_for, sized, with_kind
     known = known_buildings(plan.mod)
     s = Strat(f)
     where = {st.region: st for fb in s.factions for st in fb.settlements}
@@ -164,6 +164,13 @@ def _town_changes(plan, f, campaign, towns_opts):
                     out.append((c, fit.name))
                 continue
             out.append((c, lv))
+        if not any(is_core(c) for c, _ in out):     # a village grown: it gets the governor's building it now needs
+            core = core_chain(known, settlement_kind([l.rstrip("\r") for l in raw]) or "city")
+            fit = core_level_for(core, new_level) if core is not None else None
+            if fit is not None:
+                out.insert(0, (core.name, fit.name))
+                plan.note(f, "%s: a %s needs a governor's building - %s %s given" % (region, new_level, core.name,
+                                                                                    fit.name))
         raw, got_level = sized(plan, f, region, raw, out, size, known)
         raw = set_buildings(raw, out, f.make)
         f.raw[start:start + (end - start)] = raw

@@ -51,6 +51,16 @@ ATTRIBUTES = [
     ("strong_against_armour", "stat_sec_attr", "strong against armoured units (REX / M2EX)"),
     ("ignores_armour", "stat_pri_attr", "the attack ignores the target's armour (REX / M2EX)"),
     ("ignores_armour", "stat_sec_attr", "the attack ignores the target's armour (REX / M2EX)"),
+    # read from REX.exe / M2EX.exe (the words their unit reader takes) and a modder's EDU header notes
+    ("stun_immune", "attributes", "is never knocked back (REX / M2EX)"),
+    ("unstoppable", "attributes", "is never knocked back nor thrown by a cavalry charge (REX / M2EX)"),
+    ("is_knockdown_immune", "attributes", "its men are never knocked down in melee (REX / M2EX)"),
+    ("fearless", "attributes", "ignores fear: its morale stays high (REX)"),
+    ("unique_unit", "attributes", "only one of it may exist at a time (M2EX)"),
+    ("hp_damage_2", "stat_pri_attr", "each hit takes this many hit points: hp_damage_2 = 2 (REX / M2EX; type "
+                                     "another number in the line)"),
+    ("hp_damage_2", "stat_sec_attr", "each hit takes this many hit points: hp_damage_2 = 2 (REX / M2EX; type "
+                                     "another number in the line)"),
 ]
 
 # keys a unit may get although no unit of the mod has one yet: {key: (example value, effect)}

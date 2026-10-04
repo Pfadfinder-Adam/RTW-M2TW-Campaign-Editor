@@ -157,6 +157,10 @@ def _word(w, key):
     w = (w.split() or [""])[0]                 # general_unit_upgrade "event": the word, then what it names
     if w.startswith("spear_bonus_"):
         return "attack bonus against cavalry: +%s" % w[len("spear_bonus_"):]
+    if w.startswith("hp_damage_"):
+        return "each hit takes %s hit points (REX / M2EX)" % w[len("hp_damage_"):]
+    if w.startswith("hardy_") and w[len("hardy_"):].isdigit():
+        return "tires more slowly: %s fatigue points taken off per update (REX / M2EX)" % w[len("hardy_"):]
     if w in WORDS:
         return WORDS[w]
     for word, line, effect in unitattrs.ATTRIBUTES:

@@ -348,6 +348,23 @@ def check(rule, text):
     return None if not re.search(r"[\"'<>\s]", t) else "one word, no quotes"
 
 
+def _manhood_fits(mod, manhood):
+    """A lower age of manhood must not turn a living man off the map (a character_record) of the campaigns into one
+    the game refuses - said in plain words, nothing written."""
+    from .family import records_too_old
+    for campaign in mod.campaigns():
+        p = mod.campaign_file(campaign, "descr_strat.txt")
+        if not p or not os.path.exists(p):
+            continue
+        old = records_too_old(mod.load(p).texts(), manhood)
+        if old:
+            raise ValueError("age of manhood %d: %s %s off the map (character_record) at %d - the game stops on a "
+                             "living man off the map of that age or older. Keep it at %d or more, or make them "
+                             "younger first (Family tree)" % (
+                                 manhood, ", ".join(n for n, _ in old[:4]), "is" if len(old) == 1 else "are",
+                                 max(a for _, a in old), max(a for _, a in old) + 1))
+
+
 def apply(plan, name, changes, own, base):
     """Write {Rule: new text} of one file: the mod's own file edited in place; a mod without it gets the game's
     file with the changes (the game reads the mod's one first)."""
@@ -371,6 +388,8 @@ def apply(plan, name, changes, own, base):
         why = check(rule, new)
         if why:
             raise ValueError("%s / %s: '%s' - must be %s" % (rule.section, rule.key, new, why))
+        if rule.key == "age_of_manhood":
+            _manhood_fits(plan.mod, int(new.strip()))
         text = f.text(rule.line)
         if text[rule.start:rule.end] != rule.value:
             raise ValueError("%s changed on disk since it was read - load again" % name)

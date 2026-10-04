@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **More of the engines' unit words explained** (Unit editor, the ? beside a unit's line): stun_immune, unstoppable,
+  is_knockdown_immune (Rome with REX, Medieval II with M2EX), fearless (Rome with REX), unique_unit (Medieval II
+  with M2EX), hp_damage_N (damage per hit) and hardy_N with its number - the words the engines' unit readers take.
 - **Map editor** (the first button of the top row, both games): the campaign map alone, no faction to pick - every
   faction's things alike. Drag any faction's towns, ports, armies, agents and fleets (right button); right click: give
   a town to any faction, **Its units...** for any army or fleet (the card picker in a window of its own; a general
@@ -354,6 +357,13 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **A village grown to a town gets its governor's building** (Rome with REX; the town window, Many towns): the game
+  stopped on the town - "has not been given a core building". **Check mod files** now names such a town too.
+- **A son off the map is written one year under the age of manhood** (15 with the usual 16): the game refuses a
+  living man off the map (a character record) AT that age, not only above it. **Check mod files** names such a
+  record, and **Campaign rules** will not lower the age of manhood under a son the campaign already has. The test
+  mod's 'every campaign rule' step now raises that age instead of lowering it (Rome with REX stopped on a
+  15-year-old son of Egypt).
 - **A new disaster event (plague, flood, storm, earthquake...) has its title and text**: Medieval II shows a scroll
   for disasters too and showed the event's bare name there.
 - **Test mod: the 'every campaign rule' step leaves the timescale and the turn display as they are** - it changed

@@ -10,7 +10,7 @@ import os
 import time
 import traceback
 
-from .buildings import is_temple, read_buildings
+from .buildings import core_chain, core_level_for, is_temple, read_buildings
 from .strat import Strat, characters_after_tree
 from .textio import tokens
 from .units import read_units
@@ -89,6 +89,13 @@ def check_mod(mod, campaign, deep=False, progress=None):
             if why:
                 bad("%s (%s): %s - the game stops reading descr_strat.txt there (towns, armies and diplomacy after "
                     "it are lost); set the population or the level on the Settlements tab" % (st.region, fb.name, why))
+    from .family import records_too_old
+    from .limits import manhood_age
+    manhood = manhood_age(mod)
+    for name, age in records_too_old(strat_f.texts(), manhood):     # a living man off the map must be a boy
+        bad("%s: a living man off the map (character_record) of %d, the mod's age of manhood is %d - the game "
+            "stops: 'is a live male of age > ... and so must be created as a named character'; make him %d or "
+            "younger (Family tree), or raise the age of manhood (Campaign rules)" % (name, age, manhood, manhood - 1))
     from .limits import game_kind
     if game_kind(mod) == "medieval2":
         from .campaignrules import game_data, read as read_rules
@@ -225,6 +232,12 @@ def check_mod(mod, campaign, deep=False, progress=None):
             if len(temples) > 1:
                 bad("%s holds %d temples (%s) - the game stops: 'Settlement specified with multiple temple "
                     "buildings'; keep one" % (st.region, len(temples), ", ".join(temples)))
+            lines = s.lines[st.start:st.end]
+            core = core_chain(chains, settlement_kind(lines) or "city")
+            want = core_level_for(core, settlement_info(lines)[0]) if core is not None else None
+            if want is not None and not any(c.lower().startswith("core") for c, _ in bs):
+                bad("%s (%s): a %s without its governor's building (%s %s) - the game stops: 'has not been given a "
+                    "core building'" % (st.region, fb.name, settlement_info(lines)[0], core.name, want.name))
             for chain, level in bs:
                 b = chains.get(chain)
                 if not b or not b.level(level):

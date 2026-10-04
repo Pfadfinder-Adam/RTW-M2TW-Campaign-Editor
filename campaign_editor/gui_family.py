@@ -264,11 +264,12 @@ class FamilyEditor(ttk.Frame):
         return self.app.v_campaign.get()
 
     def _manhood(self):
-        """The mod's age of manhood (REX descr_ex.txt / M2TW descr_campaign_db.xml, else 16)."""
+        """The oldest a living man off the map may be: one under the mod's age of manhood (REX descr_ex.txt / M2TW
+        descr_campaign_db.xml, else 16)."""
         from .limits import manhood_age
         mod = self.mod if self.standalone else self.app.mod
         try:
-            return manhood_age(mod) if mod else FM.MAX_RECORD_AGE
+            return manhood_age(mod) - 1 if mod else FM.MAX_RECORD_AGE
         except Exception:
             return FM.MAX_RECORD_AGE
 
@@ -888,8 +889,8 @@ class FamilyEditor(ttk.Frame):
         most = self._manhood()
         if sex == "male" and not dead and not on_map and a not in (None, "") and int(a) > most:
             messagebox.showerror("Family", "A new son is written off the map, and the game crashes on a living man "
-                                 "off the map older than %d (this mod's age of manhood). Give him an age of %d or "
-                                 "less - he comes of age in the game by himself." % (most, most))
+                                 "off the map of %d or older (this mod's age of manhood). Give him an age of %d or "
+                                 "less - he comes of age in the game by himself." % (most + 1, most))
             return None
         return name, a
 

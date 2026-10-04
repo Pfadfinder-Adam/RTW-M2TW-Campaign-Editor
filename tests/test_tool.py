@@ -613,19 +613,23 @@ building smith
             self.assertIn(key, ENGINE_LIFTS["M2EX.exe"])
 
     def test_record_age_follows_the_mods_age_of_manhood(self):
-        """A living son off the map may be as old as the mod's age of manhood - REX's descr_ex.txt setting
-        (default 16), not a fixed 16."""
+        """A living son off the map must be younger than the mod's age of manhood - REX's descr_ex.txt setting
+        (default 16), not a fixed 16. At the age itself the game refuses him (REX, age_of_manhood 15, vanilla's
+        15-year-old Ahmose: 'is a live male of age > 15 and so must be created as a named character')."""
         from campaign_editor import family as FM
         from campaign_editor.limits import manhood_age
         game, hlr = self._game()
         mod = ModData(hlr)
         self.assertEqual(manhood_age(mod), 16)
         son = [{"source": "record", "sex": "male", "age": 17, "name": "Boy", "key": "record:Boy#0"}]
-        self.assertTrue(FM.record_age_problems(son, None, manhood_age(mod)))
+        self.assertTrue(FM.record_age_problems(son, None, manhood_age(mod) - 1))
+        at = [dict(son[0], age=16)]
+        self.assertTrue(FM.record_age_problems(at, None, manhood_age(mod) - 1))
+        self.assertFalse(FM.record_age_problems([dict(son[0], age=15)], None, manhood_age(mod) - 1))
         write(os.path.join(hlr, "data", "descr_ex.txt"), "; REX\nage_of_manhood 18\n")
         mod = ModData(hlr)
         self.assertEqual(manhood_age(mod), 18)
-        self.assertFalse(FM.record_age_problems(son, None, manhood_age(mod)))
+        self.assertFalse(FM.record_age_problems(son, None, manhood_age(mod) - 1))
 
     def test_religion_limit_only_on_the_original_exe(self):
         """The original exe takes 9 religions; with REX / M2EX beside the game a 10th is not refused (their
@@ -1010,6 +1014,79 @@ building smith
         mod = ModData(self.root)
         self.assertTrue(town_ring_problems(mod, "test")[0][0])
 
+    def test_a_grown_village_gets_its_governors_building(self):
+        """A tester in Rome with REX: the test mod's town window grew a rebel village to a town (2600 people) and the
+        game stopped: 'Settlement(Lepcis Magna) ... has not been given a core building ... should have a level 0 core
+        building'. A village has none, so the governor's building of the new level is added - Rome's core chain
+        names neither city nor castle. Check mod files says it of a town written by hand; and the age of manhood is
+        not lowered under a living son off the map ('Ahmose is a live male of age > 15 ...')."""
+        from campaign_editor import masstown as MT
+        from campaign_editor.campaignrules import _manhood_fits
+        from campaign_editor.check import check_mod
+        from campaign_editor.buildings import settlement_info
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        red, blue, green, black = (255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 0, 0)
+        px = [[red, red, blue, blue, green, green],
+              [red, black, blue, blue, green, black],
+              [red, red, black, blue, green, green],
+              [red, red, blue, blue, green, green]]
+        write_tga(os.path.join(camp, "map_regions.tga"), 6, 4, px)
+        write(os.path.join(camp, "descr_regions.txt"),
+              REGIONS + "C_R\n\tCtown\n\tslave\n\tRebels\n\t0 255 0\n\tnone\n\t5\n\t1\n")
+        village = "settlement\n{\n\tlevel village\n\tregion C_R\n\tpopulation 400\n}\n\n"
+        write(os.path.join(camp, "descr_strat.txt"), STRAT.replace(";;\tBtown", village + ";;\tBtown"))
+        write(os.path.join(self.root, "data", "export_descr_buildings.txt"), """building core_building
+{
+    levels governors_house governors_villa
+    {
+        governors_house requires factions { alpha, }
+        {
+            construction 1
+            cost 100
+            settlement_min town
+            upgrades
+            {
+                governors_villa
+            }
+        }
+        governors_villa requires factions { alpha, }
+        {
+            construction 2
+            cost 900
+            settlement_min large_town
+            upgrades
+            {
+            }
+        }
+    }
+    plugins
+    {
+    }
+}
+""")
+        mod = ModData(self.root)
+        path = mod.campaign_file("test", "descr_strat.txt")
+        plan = Plan(mod, "towns", "towns", {})
+        MT.apply(plan, "test", {"towns": {"C_R": {"level": "town"}}})
+        st = next(x for fb in Strat(plan.files[path]).factions for x in fb.settlements if x.region == "C_R")
+        self.assertEqual(settlement_info(Strat(plan.files[path]).lines[st.start:st.end]),
+                         ("town", [("core_building", "governors_house")]))
+        # written by hand without it: Check mod files names it
+        write(path, STRAT.replace(";;\tBtown", village.replace("village", "town") + ";;\tBtown"))
+        self.assertIn("C_R (slave): a town without its governor's building", check_mod(ModData(self.root), "test"))
+        # a son of 15 off the map: the age of manhood stays above him
+        write(path, STRAT.replace(";;\tBtown", village + ";;\tBtown") + "character_record\t\tAhmose, \tmale, "
+              "command 0, influence 0, management 0, subterfuge 0, age 15, alive, never_a_leader\n")
+        mod = ModData(self.root)
+        self.assertNotIn("Ahmose", check_mod(mod, "test"))                       # 15 under 16: fine
+        with self.assertRaises(ValueError):
+            _manhood_fits(mod, 15)
+        _manhood_fits(mod, 16)
+        with open(path) as fh:
+            write(path, fh.read().replace("age 15, alive", "age 16, alive"))
+        self.assertIn("Ahmose: a living man off the map (character_record) of 16", check_mod(ModData(self.root),
+                                                                                              "test"))
+
     def test_garrisons_by_hand(self):
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         # a third, empty rebel town C_R (green) to the right of the map
@@ -1377,10 +1454,10 @@ building smith
                      "tree": [["Aaron Alphid", "Anna", ["Aaron"]]]}):
             with self.assertRaises(ValueError):
                 edit(ModData(self.root), "test", "alpha", {"family": bad})
-        # no age given: a son is written at 16, a daughter at 20
+        # no age given: a son is written at 15 (one under the age of manhood - the game refuses 16), a daughter at 20
         p1 = edit(ModData(self.root), "test", "alpha", {"family": {"new": [{"name": "Aaron", "sex": "male"}],
                                                                    "tree": [["Aaron Alphid", "Anna", ["Aaron"]]]}})
-        self.assertTrue(any("Aaron, " in l and "age 16," in l for l in Strat(p1.files[path]).lines))
+        self.assertTrue(any("Aaron, " in l and "age 15," in l for l in Strat(p1.files[path]).lines))
         # a new man tied to no one is no error: he goes on the map as a general (with an army) in the first town
         pg = edit(ModData(self.root), "test", "alpha", {"family": {"new": [{"name": "Aaron", "sex": "male",
                                                                             "age": 25}]}})
@@ -1775,6 +1852,10 @@ building smith
         mental = EF.explain("stat_mental", "8, normal, trained, lock_morale, expendable", True)
         self.assertIn("- lock_morale: never routs", mental)
         self.assertIn("- expendable:", mental)                                  # REX / M2EX's own word
+        engine = EF.explain("attributes", "sea_faring, stun_immune, unstoppable, is_knockdown_immune, hardy_40")
+        self.assertIn("- stun_immune: is never knocked back", engine)            # words REX.exe / M2EX.exe read
+        self.assertIn("- hardy_40: tires more slowly: 40 fatigue points", engine)
+        self.assertIn("- hp_damage_3: each hit takes 3 hit points", EF.explain("stat_pri_attr", "ap, hp_damage_3"))
         self.assertIsNone(EF.explain("no_such_line", "1"))
         # every line of every unit in a mod: a meaning for each value, none left unnamed
         mod = ModData(self.root)

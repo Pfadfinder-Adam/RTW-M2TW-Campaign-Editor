@@ -365,9 +365,14 @@ def castles_allowed(mod, known):
 
 
 def core_chain(known, kind):
-    """The governor's chain of a city or of a castle (core_building / core_castle_building)."""
+    """The governor's chain of a city or of a castle (core_building / core_castle_building); Rome's levels say
+    neither, its one core chain is the city's."""
     cores = [b for n, b in known.items() if n.lower().startswith("core") and b.levels]
-    return next((b for b in cores if any(l.kind == kind for l in b.levels)), None)
+    got = next((b for b in cores if any(l.kind == kind for l in b.levels)), None)
+    if got is None and kind != "castle":            # Rome: one core chain, its levels marked neither city nor castle
+        got = next((b for b in cores if all(l.kind is None for l in b.levels) and "castle" not in b.name.lower()),
+                   None)
+    return got
 
 
 def kind_problem(known, kind, level):
