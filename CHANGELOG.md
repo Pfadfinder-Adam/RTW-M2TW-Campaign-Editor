@@ -109,6 +109,11 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **The campaign map is always drawn tile by tile**: one square = one tile, as the game and every brush work with
+  it. The switch for the old blurred "detailed picture" (Layers and Settings) is gone - it hid where a tile ends.
+- **Module builder**: picking an example after changing the module asks in plain words whether to drop your
+  unsaved changes (No keeps working on yours); an example looked at and left as it is still goes without a question.
+  In the dark look the WHEN / IF / DO blocks keep their colours as dark tints.
 - **The code is checked before every build**: CI runs Ruff (`ruff.toml`: a name never defined or never used, a file
   left open, the likely bugs flake8-bugbear knows) before the tests. A first full check with Ruff and Pylint found
   no crash; unused imports and dead code went out, and the wonder's 3D view has one handler for its window and the
@@ -328,6 +333,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Text that could not be read in the dark look**: light text on the Module builder's light IF block, dark red and
+  dark blue lines (Not ready yet, In plain words) on the dark grey, light names on light ground swatches in the
+  Terrain editor. Every text colour is now fitted to the ground it stands on (at least 4.5 : 1, the colour kept) - in
+  both looks, also for lines coloured later (status lines, lists, the Preview).
 - **A few files read in passing were left open until Python tidied up** (the factions' symbols and the banners for
   the Art tab, the town flags in battle, the heights of the map, Medieval II's age of manhood); on Windows an open
   file can stop the next write to it. They are closed at once now.

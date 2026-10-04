@@ -131,39 +131,29 @@ class CampaignMap:
         return dict(ports(self.mod, self.campaign))
 
     # ---- pictures (top-down, as Pillow draws them) ----
-    def background(self, tiles=False, relief=False, rivers=False):
+    def background(self, relief=False, rivers=False):
         """The map drawn from map_ground_types.tga - each tile's terrain type, the
         information that matters here (the game's painted radar map is left alone
-        by choice). Returned at 2 px per tile. tiles: every tile one square in the
-        colour of the ground at its middle (what the tool checks); relief: shaded
-        from map_heights.tga; rivers: map_features.tga's rivers, fords and cliffs."""
+        by choice). Returned at 2 px per tile, every tile one square in the colour
+        of the ground at its middle (what the tool checks and every brush paints);
+        relief: shaded from map_heights.tga; rivers: map_features.tga's rivers,
+        fords and cliffs."""
         if getattr(self, "show_heights", False):
             return self.heights_view()                  # the Terrain editor's Heights mode: map_heights itself
         climates = bool(getattr(self, "show_climates", False))
-        key = (bool(tiles), bool(relief), bool(rivers), climates)
+        key = (bool(relief), bool(rivers), climates)
         cache = self.__dict__.setdefault("_backgrounds", {})
         if key not in cache:
-            size = (2 * self.w, 2 * self.h)
-            if tiles:
-                # everything worked out per tile, then blown up: each square one colour, nothing
-                # bleeds into the next tile (the grid and the picture agree)
-                im = self._tiles()
-                if climates:
-                    im = self._climates(im)
-                if relief:
-                    im = self._relief(im)
-                if rivers:
-                    im = self._rivers(im, True)
-                im = im.resize(size, Image.NEAREST)
-            else:
-                im = self._drawn().resize(size, Image.BILINEAR)
-                if climates:
-                    im = self._climates(im)
-                if relief:
-                    im = self._relief(im)
-                if rivers:
-                    im = self._rivers(im, False)
-            cache[key] = im
+            # everything worked out per tile, then blown up: each square one colour, nothing
+            # bleeds into the next tile (the grid and the picture agree)
+            im = self._tiles()
+            if climates:
+                im = self._climates(im)
+            if relief:
+                im = self._relief(im)
+            if rivers:
+                im = self._rivers(im)
+            cache[key] = im.resize((2 * self.w, 2 * self.h), Image.NEAREST)
         return cache[key]
 
     def _tiles(self):
@@ -271,7 +261,7 @@ class CampaignMap:
     FEATURE_LOOK = {(0, 0, 255): (50, 105, 200), (0, 255, 255): (140, 210, 235), (255, 255, 255): (235, 240, 255),
                     (255, 255, 0): (190, 160, 60), (255, 0, 0): (200, 40, 30), (0, 255, 0): (60, 170, 60)}
 
-    def _rivers(self, im, tiles):
+    def _rivers(self, im):
         """map_features.tga's non-black tiles drawn over the ground, each kind in its colour."""
         f = self._pil("map_features.tga")
         if f is None or f.size != (self.w, self.h):
@@ -279,18 +269,7 @@ class CampaignMap:
         over = recolour(f, self.FEATURE_LOOK, (50, 105, 200))
         mask = f.convert("L").point(lambda v: 255 if v else 0)
         over, mask = over.resize(im.size, Image.NEAREST), mask.resize(im.size, Image.NEAREST)
-        if not tiles:
-            mask = mask.point(lambda v: 190 if v else 0)          # the terrain shows a little through
         return Image.composite(over, im, mask)
-
-    def _drawn(self):
-        g = self.ground
-        if g is None:
-            im = Image.new("RGB", (self.w, self.h))
-            im.putdata([(60, 95, 140) if self.region_at(x, self.h - 1 - y) is None else (170, 160, 110)
-                        for y in range(self.h) for x in range(self.w)])
-            return im
-        return recolour(Image.frombytes("RGB", (g.width, g.height), g.rgb_top_down()), GROUND_LOOK, (150, 150, 150))
 
     def _labels(self):
         """([(label image, [region per label])], border mask), made once: each

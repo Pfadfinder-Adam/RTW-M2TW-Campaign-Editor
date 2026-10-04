@@ -74,19 +74,17 @@ class MapView(ttk.Frame):
         # the legend is a palette too: a click on a sign picks it as a tool (the next click on the map makes one);
         # tools {key: True} the window offers, tool = the picked one, on_tool(key or None) tells the window
         self.tools, self.tool, self.on_tool, self.res_types = {}, None, None, []
-        # how the ground is drawn (kept between starts): tile by tile, relief, rivers, the tile grid up close
+        # how the ground is drawn (kept between starts): relief, rivers, the tile grid up close. The ground itself is
+        # always one colour per tile - what the game and every brush work with (the blurred 'detailed picture' of
+        # older versions hid where a tile ends; an older settings file's "ground" is not read)
         from . import settings
         look = settings.get("map_look") or {}
-        # one colour per tile unless the detailed picture was picked ("ground"; 0.6.0 kept a "tiles" flag
-        # that defaulted to off - not read, so everyone starts on tiles)
-        self.v_tiles = tk.BooleanVar(value=look.get("ground", "tiles") != "detailed")
         self.v_relief = tk.BooleanVar(value=bool(look.get("relief", True)))
         self.v_rivers = tk.BooleanVar(value=bool(look.get("rivers", True)))
         self.v_grid = tk.BooleanVar(value=bool(look.get("grid", True)))
 
         def look_changed():
-            settings.put("map_look", {"ground": "tiles" if self.v_tiles.get() else "detailed",
-                                      "relief": self.v_relief.get(),
+            settings.put("map_look", {"relief": self.v_relief.get(),
                                       "rivers": self.v_rivers.get(), "grid": self.v_grid.get()})
             self.render()
         relayer = lambda: self.on_layers() if self.on_layers else self.render()
@@ -103,8 +101,7 @@ class MapView(ttk.Frame):
                                 ("Characters", self.v_chars, self.render), ("Resources", self.v_res, relayer)):
             lm.add_checkbutton(label=label, variable=var, command=cmd)
         lm.add_separator()
-        for label, var in (("Ground by tiles: one colour per tile (off = detailed picture)", self.v_tiles),
-                           ("Relief (map_heights)", self.v_relief),
+        for label, var in (("Relief (map_heights)", self.v_relief),
                            ("Rivers, fords, cliffs (map_features)", self.v_rivers),
                            ("Tile grid when zoomed in", self.v_grid)):
             lm.add_checkbutton(label=label, variable=var, command=look_changed)
@@ -679,7 +676,7 @@ class MapView(ttk.Frame):
     def _base(self):
         """The background with the political colours laid on, at 2 px per tile,
         made again only when the colours change - moving the map only crops it."""
-        bg = self.cmap.background(self.v_tiles.get(), self.v_relief.get(), self.v_rivers.get())
+        bg = self.cmap.background(self.v_relief.get(), self.v_rivers.get())
         if getattr(self, "plain", False):
             return bg
         land = () if self.region_mode else tuple(sorted(self.new_land.items()))

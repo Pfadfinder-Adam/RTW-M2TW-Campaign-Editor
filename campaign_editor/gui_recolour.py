@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import colorchooser, messagebox, ttk
 
 from . import recolour as R
+from . import theme
 from .gui_util import ShortHint, hint
 
 TITLE = "Recolour the faction's pictures"
@@ -88,7 +89,7 @@ class RecolourWindow(tk.Toplevel):
         sb.pack(side="left", fill="y")
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.show())
         self.tree.bind("<Button-1>", self._click, add="+")
-        self.tree.tag_configure("skip", foreground="#888")
+        self.tree.tag_configure("skip", foreground=theme.ink("#888", "field"))
         panes.add(left, weight=1)
         right = ttk.Frame(panes, padding=(8, 0, 0, 0))
         self.lbl_pic = ttk.Label(right, text="", foreground="#333", wraplength=520, justify="left")

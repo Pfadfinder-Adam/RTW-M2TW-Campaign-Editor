@@ -10,7 +10,7 @@ import traceback
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
-from . import log, settings
+from . import log, settings, theme
 from .build import build, template_display
 from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need, core_settlement, population_of, rank,
                         castles_allowed, convert, kind_problem, read_buildings, settlement_info, settlement_kind)
@@ -232,8 +232,8 @@ class FieldTable(ttk.Frame):
         self.tv.configure(yscrollcommand=sb.set)
         self.tv.pack(side="left", fill="both", expand=True)
         sb.pack(side="left", fill="y")
-        self.tv.tag_configure("new", foreground="#0050c0")
-        self.tv.tag_configure("changed", foreground="#a05000")
+        self.tv.tag_configure("new", foreground=theme.ink("#0050c0", "field"))
+        self.tv.tag_configure("changed", foreground=theme.ink("#a05000", "field"))
         self.rows, self.sort = [], None          # [values], (column, reverse)
         self.finds = {}                          # id(row) -> more text the Search matches (unit names)
 
@@ -368,7 +368,6 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ layout
 
     def _build(self):
-        from . import theme
         theme.apply(self)                          # light or dark, as last chosen
         from .gui_util import install_window_helpers
         install_window_helpers(self)               # windows centred, wide drop-downs, long field texts on hover
@@ -781,9 +780,11 @@ class App(tk.Tk):
         self.b_create.pack(side="left", padx=6)
         ttk.Button(bar, text="Undo", width=6, command=self.undo).pack(side="left", padx=(12, 0))
         ttk.Button(bar, text="Redo", width=6, command=self.redo).pack(side="left", padx=4)
-        tk.Button(bar, text="\u2615  Support on Ko-fi", command=self.support, bg="#ff5e5b", fg="white",
-                  activebackground="#e14b48", activeforeground="white", relief="flat", cursor="hand2",
-                  font=("", 9, "bold"), padx=10).pack(side="right", padx=(8, 0))
+        kofi = tk.Button(bar, text="\u2615  Support on Ko-fi", command=self.support, bg="#ff5e5b", fg="white",
+                         activebackground="#e14b48", activeforeground="white", relief="flat", cursor="hand2",
+                         font=("", 9, "bold"), padx=10)
+        kofi.pack(side="right", padx=(8, 0))
+        theme.leave_alone(kofi)                  # Ko-fi's own look: white bold text on its coral, in either look
         ttk.Button(bar, text="Help", command=self.once("show_help", self.show_help)).pack(side="right", padx=(6, 0))
         ttk.Button(bar, text="\u2699 Settings", command=self.once("settings_window", self.settings_window)).pack(side="right", padx=(6, 0))
         self.b_report = ttk.Button(bar, text="Report a bug / Suggest", command=self.once("report", self.send_report))

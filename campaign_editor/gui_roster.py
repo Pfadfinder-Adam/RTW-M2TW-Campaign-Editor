@@ -8,6 +8,7 @@ from tkinter import ttk
 
 from .gui_util import ShortHint
 from . import roster as R
+from . import theme
 
 HAS = {"own": "yes", "culture": "yes (culture)", "all": "yes (everyone)", None: "no"}
 
@@ -69,7 +70,7 @@ class RosterEditor(ttk.Frame):
         tv.pack(fill="both", expand=True)
         tv.tag_configure("give", background="#d9f2d0", foreground="#000000")
         tv.tag_configure("take", background="#f4c7c3", foreground="#000000")
-        tv.tag_configure("no", foreground="#888")
+        tv.tag_configure("no", foreground=theme.ink("#888", "field"))
         tv.bind("<Double-1>", lambda e, tv=tv: self.toggle(tv))
         return tv
 

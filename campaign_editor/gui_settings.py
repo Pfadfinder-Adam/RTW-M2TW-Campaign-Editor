@@ -120,14 +120,14 @@ class SettingsWindow(tk.Toplevel):
         if mv is None:
             ttk.Label(row, text="(the map is not open yet)").pack(side="left")
             return
-        for var, text in ((mv.v_tiles, "one colour per tile"), (mv.v_relief, "relief"), (mv.v_rivers, "rivers"),
+        for var, text in ((mv.v_relief, "relief"), (mv.v_rivers, "rivers"),
                           (mv.v_grid, "tile grid up close")):
             ttk.Checkbutton(row, text=text, variable=var, command=self._map_look).pack(side="left", padx=(0, 8))
         ttk.Checkbutton(row, text="legend", variable=mv.v_legend, command=mv._legend_toggled).pack(side="left")
 
     def _map_look(self):
         mv = self.app.map_view
-        settings.put("map_look", {"ground": "tiles" if mv.v_tiles.get() else "detailed", "relief": mv.v_relief.get(),
+        settings.put("map_look", {"relief": mv.v_relief.get(),
                                   "rivers": mv.v_rivers.get(), "grid": mv.v_grid.get()})
         try:
             mv.render()

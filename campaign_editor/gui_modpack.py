@@ -7,6 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .gui_util import one_window, ShortHint
 from . import modpack as MP
+from . import theme
 
 WORDS = {"install": "put in", "keep": "keep this mod's", "merge": "only its changes", "skip": "-"}
 STATE = {"new": "new", "same": "same as the mod's", "replaces": "replaces the mod's"}
@@ -79,8 +80,8 @@ class PackWindow(tk.Toplevel):
         self.tree.column("state", width=150, stretch=False)
         self.tree.column("choice", width=120, stretch=False)
         self.tree.column("notes", width=500)
-        self.tree.tag_configure("serious", foreground="#b00")
-        self.tree.tag_configure("note", foreground="#b60")
+        self.tree.tag_configure("serious", foreground=theme.ink("#b00", "field"))
+        self.tree.tag_configure("note", foreground=theme.ink("#b60", "field"))
         sb = ttk.Scrollbar(box, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=sb.set)
         self.tree.pack(side="left", fill="both", expand=True)

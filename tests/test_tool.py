@@ -902,7 +902,7 @@ building smith
         px = [[hills if (x, y) == (3, 5) else sea for x in range(9)] for y in range(9)]     # bottom-up
         write_tga(os.path.join(camp, "map_ground_types.tga"), 9, 9, px)
         cm = CampaignMap(ModData(os.path.join(self.root, "data")), "test")
-        im = cm.background(tiles=True)
+        im = cm.background()
         self.assertEqual(im.size, (8, 8))
         # tile (1, 2) is the 2x2 block at column 2, row (4 - 1 - 2) * 2 top-down
         self.assertEqual({im.getpixel((2 + dx, 2 + dy)) for dx in (0, 1) for dy in (0, 1)}, {GROUND_LOOK[hills]})
@@ -1754,6 +1754,26 @@ building smith
         answers = {"R-1": {"state": "open", "messages": [{"from": "author", "text": "hi"}]}}
         self.assertEqual(report.news(answers, {"R-1": 3}), ["R-1"])
         self.assertEqual(report.news(answers, {"R-1": {"n": "two"}}), ["R-1"])
+
+    def test_text_is_readable_on_its_ground_in_either_look(self):
+        """The dark look showed light text on the Module builder's light IF block, dark red / dark blue on its dark
+        grey: theme.readable makes any text colour readable (4.5:1) on the ground it stands on, keeping its hue."""
+        try:
+            from campaign_editor import theme
+        except ImportError as e:                      # a Python without tkinter: the window's look is not here
+            self.skipTest("no tkinter: %s" % e)
+        rgb = lambda h: tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
+        dark_grey, cream = rgb(theme.DARK["bg"]), rgb("#f7efd6")
+        for text, ground in (("#bb0000", dark_grey), ("#1d3b6a", dark_grey), ("#e3e3e3", cream),
+                             ("#a9adb3", cream), ("#000000", rgb("#233c69")), ("#999999", (255, 255, 255))):
+            fixed = theme.readable(rgb(text), ground)
+            self.assertIsNotNone(fixed, text)
+            self.assertGreaterEqual(theme.contrast(rgb(fixed), ground), theme.READABLE, (text, fixed))
+        red = rgb(theme.readable(rgb("#bb0000"), dark_grey))
+        self.assertTrue(red[0] > red[1] and red[0] > red[2])            # still red, only lighter
+        self.assertIsNone(theme.readable(rgb(theme.DARK["fg"]), dark_grey))     # what reads stays as it is
+        self.assertIsNone(theme.readable(rgb(theme.LIGHT["fg"]), cream))
+        self.assertEqual(theme.ink("#b00"), "#b00")                     # no window yet: the colour as given
 
     def test_the_editor_checks_itself(self):
         """`campaign_editor.py selfcheck` (CI runs it on the built exe): modules, bundled files, the tiny mod."""

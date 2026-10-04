@@ -67,7 +67,65 @@ def _hex(rgb):
     return "#%02x%02x%02x" % rgb
 
 
-def _translate(root, opt, value, bg_orig):
+def _lum(rgb):
+    """Relative luminance (WCAG) of an (r, g, b) of 0..255."""
+    def ch(v):
+        v /= 255.0
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * ch(rgb[0]) + 0.7152 * ch(rgb[1]) + 0.0722 * ch(rgb[2])
+
+
+def contrast(a, b):
+    """WCAG contrast ratio of two (r, g, b): 1 (none) .. 21 (black on white); text wants 4.5."""
+    la, lb = _lum(a), _lum(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+READABLE = 4.5
+
+
+def readable(rgb, bg):
+    """The text colour rgb, or the nearest colour of the same hue that reads on bg (4.5:1): darker on a light
+    ground, lighter on a dark one. None when rgb reads already."""
+    if contrast(rgb, bg) >= READABLE:
+        return None
+    to = (0, 0, 0) if contrast((0, 0, 0), bg) >= contrast((255, 255, 255), bg) else (255, 255, 255)
+    for k in range(1, 21):
+        t = k / 20.0
+        c = tuple(int(round(v + (w - v) * t)) for v, w in zip(rgb, to))
+        if contrast(c, bg) >= READABLE:
+            return _hex(c)
+    return _hex(to)
+
+
+def ink(colour, ground="bg"):
+    """A text colour the window sets itself after a widget is made (a status line's red, a list's grey, a tag's
+    blue): the same colour, made readable on the look's ground - 'bg' for labels, 'field' for lists, trees and
+    text boxes (the dark look once showed dark red and dark blue on its dark grey)."""
+    root = _state["root"]
+    if root is None or not colour:
+        return colour
+    rgb, bg = _rgb(root, colour), _rgb(root, palette()[ground])
+    if rgb is None or bg is None:
+        return colour
+    return readable(rgb, bg) or colour
+
+
+def _translate(root, opt, value, bg_orig, bg_now=None):
+    """The look's colour for a colour the window set, or None to keep it. Text (foreground) is always made
+    readable on bg_now - the background the widget has in this look (a palette colour, or a colour that means
+    something, like the Module builder's IF block or a ground type's swatch)."""
+    new = _translate_one(root, opt, value, bg_orig)
+    if opt not in ("foreground", "activeforeground"):
+        return new
+    fg = _rgb(root, new or value) if (new or value) else None
+    bg = _rgb(root, bg_now) if bg_now else None
+    if fg is None or bg is None:
+        return new
+    return readable(fg, bg) or new
+
+
+def _translate_one(root, opt, value, bg_orig):
     """The dark palette's colour for a light one, or None to keep it."""
     if not value:
         return None
@@ -141,8 +199,16 @@ def recolour(w, force=False):
             except tk.TclError:
                 pass
     bg = now.get("background")
+    if is_ttk:                                   # a ttk widget's ground is its style's
+        try:
+            st = ttk.Style(root)
+            bg_now = st.lookup(str(w.cget("style") or cls), "background") or st.lookup(".", "background")
+        except tk.TclError:
+            bg_now = None
+    else:
+        bg_now = (_translate(root, "background", bg, bg) or bg) if bg else None
     for opt, value in now.items():
-        new = _translate(root, opt, value, bg)
+        new = _translate(root, opt, value, bg, bg_now)
         if new is not None and new != value:
             try:
                 w.configure(**{opt: new})

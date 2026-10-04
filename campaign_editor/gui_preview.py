@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from . import editors as E
+from . import theme
 from .effects import level_words, requires_words
 from .textio import strip_comment
 
@@ -76,7 +77,7 @@ class _Base(ttk.Frame):
         self.text.pack(side="left", fill="both", expand=True)
         sb.pack(side="left", fill="y")
         self.text.tag_configure("h", font=("", 9, "bold"))
-        self.text.tag_configure("dim", foreground="#777")
+        self.text.tag_configure("dim", foreground=theme.ink("#777", "field"))
 
     def _pic(self, path, box, label):
         f = ttk.Frame(self.pics)

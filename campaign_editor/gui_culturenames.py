@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from . import culturenames as CN
+from . import theme
 
 EMPTY = "-"
 
@@ -74,8 +75,8 @@ class CultureNamesTable:
         xs.grid(row=1, column=0, sticky="ew")
         box.rowconfigure(0, weight=1)
         box.columnconfigure(0, weight=1)
-        self.tv.tag_configure("changed", foreground="#1a6fd0")
-        self.tv.tag_configure("foreign", foreground="#999")
+        self.tv.tag_configure("changed", foreground=theme.ink("#1a6fd0", "field"))
+        self.tv.tag_configure("foreign", foreground=theme.ink("#999", "field"))
         self.tv.bind("<Double-1>", self.dbl)
         low = ttk.Frame(frm)
         low.pack(fill="x", pady=(6, 0))
@@ -233,7 +234,7 @@ class CultureNamesTable:
             names.pop(culture, None)
         bad = CN.problems(self.app.mod, {town: names}) if names else []
         if bad:
-            self.l_count.configure(text="; ".join(bad), foreground="#a33")
+            self.l_count.configure(text="; ".join(bad), foreground=theme.ink("#a33"))
             return
         self.l_count.configure(foreground="")
         self.app.remember()

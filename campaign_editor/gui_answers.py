@@ -11,7 +11,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from . import log, report, settings
+from . import log, report, settings, theme
 
 APP = "RTW & M2TW Campaign Editor"
 REPORT_BUTTON = "Report a bug / Suggest"
@@ -286,7 +286,7 @@ def build_tab(app, nb, w):
     b_reply.configure(command=send_reply)
 
     if not report.url():
-        lbl_state.configure(text="The report service is not set up in this version.", foreground="#a60")
+        lbl_state.configure(text="The report service is not set up in this version.", foreground=theme.ink("#a60"))
         b_check.configure(state="disabled")
     fill()
     return frm, check

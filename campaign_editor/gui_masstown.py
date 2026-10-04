@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import masstown as M
+from . import theme
 from .gui_util import ShortHint, hint, tip
 
 ANY = "(any)"
@@ -133,8 +134,8 @@ class MassTownWindow(tk.Toplevel):
         t.configure(yscrollcommand=sb.set)
         t.pack(side="left", fill="both", expand=True)
         sb.pack(side="left", fill="y")
-        t.tag_configure("skip", foreground="#888")
-        t.tag_configure("do", foreground="#106010")
+        t.tag_configure("skip", foreground=theme.ink("#888", "field"))
+        t.tag_configure("do", foreground=theme.ink("#106010", "field"))
         return t
 
     def _sort(self, t, col):

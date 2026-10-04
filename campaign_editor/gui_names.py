@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import namelists as NL
+from . import theme
 
 STEPS = (
     ("characters", "Step 1 of 3 - men's names",
@@ -103,7 +104,7 @@ class NameListWizard:
         msg = "%d name(s)" % len(names)
         if bad:
             msg += " - not taken by the game: " + ", ".join(bad[:6]) + ("..." if len(bad) > 6 else "")
-        self.l_count.configure(text=msg, foreground="#a33" if bad else "")
+        self.l_count.configure(text=msg, foreground=theme.ink("#a33") if bad else "")
 
     def copy_from(self, add=False):
         f = self.v_from.get()

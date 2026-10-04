@@ -10,11 +10,15 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import addons as AD
 from . import modbuilder as MB
+from . import theme
 from .gui_util import ScrollFrame, hint, one_window
 from .plan import Plan
 
 TITLE = "Module builder"
+# the blocks' colours, light and dark look (the dark ones kept as they are by the theme: a tint that means a block;
+# the texts in them are made readable by the theme)
 COLOURS = {"when": "#dfe9f7", "ifs": "#f7efd6", "dos": "#e2f2df"}
+COLOURS_DARK = {"when": "#25334a", "ifs": "#43391f", "dos": "#243f29"}
 HEADS = {"when": "WHEN  (what happens in the game)", "ifs": "IF  (only when all of this is true)",
          "dos": "DO  (what the module does, in this order)"}
 ADD = {"ifs": "+ another condition...", "dos": "+ another action..."}
@@ -109,7 +113,7 @@ class ModuleBuilder(tk.Toplevel):
         if mine:
             self.entries.append(("sep", None))
             self.lb.insert("end", MINE)
-            self.lb.itemconfigure("end", foreground="#888")
+            self.lb.itemconfigure("end", foreground=theme.ink("#888", "field"))
             for a, r in mine:
                 self.entries.append(("mine", r))
                 self.lb.insert("end", r.get("title") or a.title)
@@ -122,8 +126,12 @@ class ModuleBuilder(tk.Toplevel):
         if kind == "sep":
             return
         name = r["title"] if r else EMPTY
-        if self.changed and not messagebox.askyesno(TITLE, "Start from '%s'?\n\nWhat is in the builder now is replaced "
-                                                           "(it is not saved)." % name, parent=self):
+        # asked only when the module there now was changed by hand (an example looked at and left as it is goes
+        # without a word); a tester did not see what 'Start from ...?' asked
+        if self.changed and not messagebox.askyesno(
+                TITLE, "Put the example '%s' in the builder?\n\nThe module you are making now has changes that are not "
+                       "saved - they are lost (Save to my add-ons keeps them). No = keep working on yours." % name,
+                parent=self):
             return
         if kind == "ex":
             r = MB.fit_to_mod(r, self.mod) if self.mod is not None else copy.deepcopy(r)
@@ -134,7 +142,8 @@ class ModuleBuilder(tk.Toplevel):
     def load(self, recipe, fresh=False, ask=False):
         """The recipe into the window (a copy); ask: say first that the one there now is replaced."""
         if ask and self.changed and not messagebox.askyesno(
-                TITLE, "Open '%s'?\n\nWhat is in the builder now is replaced (it is not saved)." % recipe.get("title"),
+                TITLE, "Open '%s' in the builder?\n\nThe module you are making now has changes that are not saved - "
+                       "they are lost (Save to my add-ons keeps them). No = keep working on yours." % recipe.get("title"),
                 parent=self):
             return
         self.recipe = copy.deepcopy(recipe)
@@ -179,7 +188,7 @@ class ModuleBuilder(tk.Toplevel):
         self.refresh()
 
     def _frame(self, inner, key):
-        c = COLOURS[key]
+        c = (COLOURS_DARK if theme.dark() else COLOURS)[key]
         f = tk.Frame(inner, bg=c, bd=1, relief="solid")
         f.pack(fill="x", pady=4, padx=2)
         tk.Label(f, text=HEADS[key], bg=c, fg="#1e1e1e", font=("", 11, "bold")).pack(anchor="w", padx=8, pady=(4, 2))
@@ -530,10 +539,10 @@ class ModuleBuilder(tk.Toplevel):
         self.lbl_plain.configure(text=MB.plain_words(self.recipe))
         bad = self.problems()
         if bad:
-            self.lbl_bad.configure(foreground="#b00", text="Not ready yet: " + "; ".join(bad[:4]) + (
+            self.lbl_bad.configure(foreground=theme.ink("#b00"), text="Not ready yet: " + "; ".join(bad[:4]) + (
                 " ... (%d more - Check it lists them)" % (len(bad) - 4) if len(bad) > 4 else ""))
         else:
-            self.lbl_bad.configure(foreground="#2a7a1f", text="Ready: nothing missing. Check it, then Save to my "
+            self.lbl_bad.configure(foreground=theme.ink("#2a7a1f"), text="Ready: nothing missing. Check it, then Save to my "
                                                               "add-ons or Put it in the game.")
 
     def show_script(self):
@@ -766,8 +775,8 @@ class EnginePicker(tk.Toplevel):
         self.info = tk.Text(right, wrap="word", font="TkDefaultFont", relief="flat", padx=10, pady=6, height=9)
         self.info.pack(fill="both", expand=True)
         self.info.tag_configure("head", font=("", 12, "bold"))
-        self.info.tag_configure("bad", foreground="#b00")
-        self.info.tag_configure("dim", foreground="#666")
+        self.info.tag_configure("bad", foreground=theme.ink("#b00", "field"))
+        self.info.tag_configure("dim", foreground=theme.ink("#666", "field"))
         self.form = ttk.LabelFrame(right, text=" Its parameters " if what != "events" else " ", padding=6)
         self.form.pack(fill="x", pady=(6, 0))
         self.lbl_line = wrapping(ttk.Label(right, foreground="#1d3b6a", font=("", 10), justify="left"), pady=(6, 0))
