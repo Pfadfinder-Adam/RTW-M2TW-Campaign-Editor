@@ -379,6 +379,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Bigger map (x3)... has a window that leads the way**: the map's size now and after, the heights as one choice,
+  a **Make the map 3 x bigger** button, the work's progress in the window, and when it is done **Put the old map
+  back** (one press undoes it). The long list of changes (it looked like a log, and the buttons that wrote the map
+  sat under it) is behind **Show every change...**.
 - **Recolour: two battle textures never share one copy's name** (both games). Two textures that differ only in the
   wearer's word (`EN_Peasant_Padded_england` and `EN_Peasant_Padded_france`) both became
   `EN_Peasant_Padded_<faction>`, and the copy written last dressed the other's models too: a new faction's

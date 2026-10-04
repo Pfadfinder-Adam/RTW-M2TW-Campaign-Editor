@@ -1680,85 +1680,10 @@ class App(tk.Tk):
         self.status.set("Thank you! %s opened in your browser." % KOFI)
 
     def upscale_map(self):
-        """Bigger map (x3)... (top row): every file of the map at once, shown first, with a backup."""
-        if not self.mod:
-            messagebox.showinfo(APP, "Load a mod first.")
-            return
-        if self.pending_parts():
-            messagebox.showwarning(APP, "There are changes not written yet (%s). Apply or undo them first - the "
-                                        "bigger map is built from the files as they are."
-                                   % ", ".join(l for _, l in self.pending_parts()))
-            return
-        from .upscale import plan_upscale
-        camp = self.v_campaign.get()
-
-        def make(vertical):
-            p = Plan(ModData(self.mod.data), "map", "map_x3", {})
-            self.config(cursor="watch")
-
-            def step(text):                          # a big map takes half a minute: say what is being done
-                self.status.set("Making the map 3 x bigger: %s" % text)
-                self.update_idletasks()
-            try:
-                plan_upscale(p, camp, vertical=vertical, progress=step)
-            finally:
-                self.config(cursor="")
-            self.status.set("The bigger map is ready to look at - nothing written yet.")
-            return p
-        try:
-            plan = make(3)
-        except Exception as e:
-            log.write("upscale failed: %s" % e)
-            messagebox.showerror(APP, "The map could not be made bigger: %s" % e)
-            return
-        intro = ("NOTHING IS WRITTEN YET - this is the preview. Press 'Write it' at the bottom of this window to make "
-                 "the map bigger.\n\n"
-                 "MAKE THE CAMPAIGN MAP 3 x BIGGER (alpha) - campaign %s\n\n"
-                 "Every tile becomes a 3 x 3 block; towns, ports, armies, agents, resources and forts keep their "
-                 "places in the middle of their blocks. The coast is drawn smooth (not in 3 x 3 squares), rivers "
-                 "stay 1 pixel wide and run on to the new coast, and the relief is smooth.\n\n"
-                 "HEIGHTS: the land gets 3 x wider, so with the same heights every mountain would be a third as "
-                 "steep - a hillock. 'Write it - hills 3 x higher' makes the hills, mountains and the sea floor 3 x "
-                 "higher too, so they look as they did; 'Write it - heights as they are' keeps the old heights (a "
-                 "flatter world). Both make a backup first.\n\n"
-                 "Nothing is written until you press one of them; a backup is made first and Tools > Restore a "
-                 "backup gives every file back.\n\n" % camp)
-        holder = {}
-
-        def write_it(vertical=3):
-            nonlocal plan
-            try:
-                if vertical != 3:
-                    plan = make(vertical)
-                bdir = plan.apply()
-            except Exception as e:
-                messagebox.showerror(APP, "Not written: %s" % e, parent=holder["w"])
-                return
-            log.write("Map made 3 x bigger (backup %s)\n%s" % (bdir, plan.report()))
-            def size_now():
-                try:
-                    from .moddata import ModData as _M
-                    img = _M(self.mod.data).region_map(camp)
-                    return img.width, img.height
-                except Exception:
-                    return None
-            holder["w"].destroy()
-            self.load()
-            now = size_now()
-            was = (now[0] // 3, now[1] // 3) if now else None
-            size = ("\n\nThe map: %d x %d tiles -> %d x %d tiles (the badge at the bottom left of the Map tab)."
-                    % (was + now)) if was and now else ""
-            self.status.set("The map is 3 x bigger now%s - written (backup %s)." % (
-                " (%d x %d tiles)" % now if now else "", bdir))
-            messagebox.showinfo(APP, "The map is 3 x bigger now.%s\n\nStart the game and look - the game builds "
-                                     "map.rwm again on the first start (it takes a while).\n\nBackup: %s"
-                                % (size, bdir))
-
-        self.show_text("PREVIEW - nothing written yet: press 'Write it' below - Make the map 3 x bigger",
-                       intro + plan.report(),
-                       extra=[("Write it - hills 3 x higher (they look as before)", write_it),
-                              ("Write it - heights as they are (flatter)", lambda: write_it(1))])
-        holder["w"] = [c for c in self.winfo_children() if c.winfo_class() == "Toplevel"][-1]
+        """Bigger map (x3)... (top row): one window - what happens, the heights, its progress, a backup, and the old
+        map back with one button (gui_upscale)."""
+        from .gui_upscale import open_upscale
+        return open_upscale(self)
 
     def game_log_window(self, path=None):
         """Tools > The game's log in plain words: the newest system.log.txt of this mod (else of the game folder)
