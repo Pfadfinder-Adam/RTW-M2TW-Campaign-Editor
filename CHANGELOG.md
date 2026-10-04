@@ -324,6 +324,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **The bigger map (x3) no longer warns about the engines' own scripts**: REX's and M2EX's interface
+  scripts (`script/core`, `script/ui`) and the add-ons that come with the editor were listed as "place things
+  on the map by x, y - make those 3x+1 by hand" because they hold screen places and colours. Only a script that
+  puts something on the map by tile (a tile command with its numbers, a teleport / spawn / tile call) is named.
 - **Load on a mod that holds only the files it changes** (REX `-mod:`, Medieval II `mods/<name>`: the game
   reads the rest from its own `data`) said only "no descr_sm_factions.txt"; it now says what such a mod is, where
   the game takes the other files from and what to do (load the game's data, or make the mod whole with New mod

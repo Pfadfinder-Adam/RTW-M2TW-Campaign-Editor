@@ -76,7 +76,7 @@ texture (vanilla-style uniforms), so a new faction's troops wear its own colour 
 
 <img src="docs/images/bigger_map_coast.png" width="700" alt="The coast of Italy made 3 x bigger: before (squares), after (smooth)">
 
-Scripts follow too: every campaign-map place in the campaign's scripts (spawned armies and characters, `reposition_character`, `move`, the camera, `reveal_tile`, forts and resources made by `console_command`, 'near a tile' and 'in a rectangle' conditions) goes to its block; battle positions in the same scripts stay. Lines the editor cannot read for sure, and Lua / Squirrel scripts, are listed to check by hand.
+Scripts follow too: every campaign-map place in the campaign's scripts (spawned armies and characters, `reposition_character`, `move`, the camera, `reveal_tile`, forts and resources made by `console_command`, 'near a tile' and 'in a rectangle' conditions) goes to its block; battle positions in the same scripts stay. Lines the editor cannot read for sure, and Lua / Squirrel scripts that place things by tile (not the engines' own interface scripts), are listed to check by hand.
 Without REX / M2EX the original exes stop at
 510 tiles - the tool warns. Checked on both vanilla campaigns (103 / 112 towns, 177 / 216 characters, 75 / 77 ports
 in place, no river on the sea, every river end at the sea, a river or the map's edge as in the original). The first

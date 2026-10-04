@@ -2399,6 +2399,31 @@ building smith
         self.assertEqual(len(got), 1)
         self.assertIn("'alpha general' has no 'slave'", got[0])
 
+    def test_bigger_map_names_only_scripts_that_place_things_by_tile(self):
+        """x3 warns about Lua / Squirrel scripts it does not change - only those that put something on the map by
+        tile number: not the engines' own interface (script/core, script/ui: screen places), not a colour, a comment
+        or the add-ons that come with the editor."""
+        from campaign_editor.upscale import code_names_tiles, code_with_tiles
+        game = os.path.join(self.root, "game")
+        write(os.path.join(game, "script", "ui", "campaign", "hud.nut"), "pane.setPosition(10, 20)\n"
+              'runScriptCommand("move", "x 1, 2")\n')
+        write(os.path.join(game, "script", "main.nut"), "character.teleport(1, 2)\n")
+        write(os.path.join(game, "script", "modules", "colours.nut"),
+              "local c = [255, 0, 0]\nlocal X = 0  // move the tick right, the game's 1024 x 768 screen\n")
+        write(os.path.join(game, "script", "modules", "forts.nut"),
+              'game.runConsoleCommand("create_fort", "120 85 romans_julii roman 0 1")\n')
+        write(os.path.join(game, "script", "modules", "jump.nut"), "character.teleport(120, 85)\n")
+        write(os.path.join(game, "eopData", "eopScripts", "a.lua"), "M2TWEOP.callConsole('move_character', 'G 1 2')\n")
+        self.assertEqual(code_with_tiles(game), [("eopData/eopScripts", ["a.lua"]), ("script", ["forts.nut",
+                                                                                               "jump.nut"])])
+        self.assertTrue(code_names_tiles("local t = stratMap.getTile(120, 85)"))
+        self.assertFalse(code_names_tiles("if (hostile(3, 4)) {}"))
+        for name in os.listdir(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets",
+                                            "addons")):
+            shutil.copy(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "addons",
+                                     name), os.path.join(game, "script", "modules", name))
+        self.assertEqual(code_with_tiles(game)[1], ("script", ["forts.nut", "jump.nut"]))
+
     def test_bigger_map_rivers_stop_at_the_new_coast(self):
         """A river whose last tiles the smoother coast puts in the sea stops at the coast: none of it on the sea, its
         end touching the sea (a tester's DaC x3: land kept under such rivers stood off every mouth as a sandbar)."""
