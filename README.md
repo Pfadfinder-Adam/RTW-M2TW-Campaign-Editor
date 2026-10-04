@@ -65,8 +65,8 @@ texture (vanilla-style uniforms), so a new faction's troops wear its own colour 
   at the new size too. The hills, mountains and sea floor are made **3 x higher** (`max_land_height`,
   `min_sea_height` in `descr_terrain.txt`): the land is 3 x wider, so the slopes stay as steep as they were
   (or keep the old heights - a choice in the window). The sea ground types follow the heights' new coast.
-- **Rivers**: 1 pixel wide (the game crashes on a 2-pixel river), through the block centres, a diagonal step as a
-  staircase; a river mouth runs on to the new coast and stops there (no land is left under a river in the sea). Cliffs and Medieval II's land bridges stay unbroken lines too.
+- **Rivers**: 1 pixel wide (the game crashes on a 2-pixel river), drawn the way rivers run - bends rounded, gentle
+  meanders on straight runs (never twice the same, the same map always alike), side by side pixels only; a river mouth runs on to the new coast and stops there (no land is left under a river in the sea). Cliffs and Medieval II's land bridges stay unbroken lines too.
 - **Beach one tile wide** along the new coast, as in the games' own maps.
 - **Ground and climates by tile**: every new tile gets the ground type and climate of the old tile it lies in (a
   forest stays a forest), with natural edges where two kinds meet.

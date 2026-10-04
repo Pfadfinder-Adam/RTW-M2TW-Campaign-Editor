@@ -1132,10 +1132,11 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
     feats = os.path.join(base, "map_features.tga")
     if os.path.isfile(feats):
         say("rivers, cliffs and land bridges (map_features)...")
-        data, _ = features_scaled(feats, coast)           # rivers stop at the new coast: no land kept under them
+        data, _ = features_scaled(feats, coast, natural=True)   # natural rivers (bends cut, meanders), stopping
+        #                                                   at the new coast: no land kept under them
         plan.binary(feats, data)
-        plan.note(None, "map_features.tga made 3 x bigger (rivers, cliffs and land bridges as unbroken lines, river "
-                        "mouths on the new coast)")
+        plan.note(None, "map_features.tga made 3 x bigger (rivers drawn naturally - bends rounded, gentle meanders, "
+                        "one pixel wide -, cliffs and land bridges as unbroken lines, river mouths on the new coast)")
     say("map_regions.tga...")
     info = {}
     plan.binary(regions_path, regions_scaled(regions_path, lands, coast, keep_land, info))

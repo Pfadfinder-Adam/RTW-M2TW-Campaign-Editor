@@ -154,6 +154,9 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **Bigger map (x3): rivers drawn the way rivers run** - a bend is rounded instead of a right angle, a long straight
+  run swings gently (a meander about every four old tiles, never twice the same, the same map always alike); still one
+  pixel wide everywhere, as many rivers, sources and mouths as before, none on the sea, fords kept on the river.
 - **The tools with a window of their own are buttons on the top row**, beside the works: Campaign rules, Events,
   Traits and retinue, Module builder, Recolour, Culture names, Many towns, Bigger map (x3) - one press away instead
   of in Tools (New religion and the region's shares are the Religions work's own buttons). Tools keeps the checks,
