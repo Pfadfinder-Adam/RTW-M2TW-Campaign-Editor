@@ -120,7 +120,10 @@ def _strat(mod, campaign):
 # ---------------------------------------------------------------------------
 # helpers on the campaign
 def towns_of(c, mod, faction):
-    return [r for r, o in _strat(mod, c.campaign).owners().items() if o == faction]
+    """The towns {faction} holds now; for the rebels, never the region the faction that comes later rises in (no
+    other step may take it - an emergent faction must rise in a rebel region)."""
+    keep = c.said.get("near") if faction == "slave" else None
+    return [r for r, o in _strat(mod, c.campaign).owners().items() if o == faction and r != keep]
 
 
 def near_rebels(c, mod, faction, n=2):
@@ -221,42 +224,43 @@ def s_new_faction(c, mod):
         "start": {"regions": regions, "leader": {"name": names[0], "age": 40}, "characters": chars}})
 
 
-@step("A faction that comes later: a clone of {edited}, dead at the start, woken by an event in {edited}'s town "
-      "on turn 3", "{later} is not on the map at the start")
+@step("A faction that comes later: a clone of {edited}, dead at the start, woken by an event on turn 3 in a rebel "
+      "region beside {new}'s capital", "{later} is not on the map at the start")
 def s_later(c, mod):
     from .build import build
     from .events import turn_date
     return build(mod, c.campaign, c.edited, c.later, {
         "display_name": "Rising Test", "short_name": "Rising", "adjective": "Rising", "raise_faction_limit": True,
         "primary_colour": c.colours[c.later][0], "secondary_colour": c.colours[c.later][1],
-        "start": {"way": "event", "date": turn_date(mod, c.campaign, 3), "region": towns_of(c, mod, c.edited)[0],
-                  "re_emergent": True, "denari": 3000, "regions": [], "leader": None, "playable": False}})
+        "start": {"way": "event", "date": turn_date(mod, c.campaign, 3), "region": near_capital(c, mod),
+                  "denari": 3000, "regions": [], "leader": None, "playable": False}})
 
 
-@step("...its event moved: turn 2, in the region next to {new}'s capital (it comes in at once, beside the test "
-      "faction, to be seen on the first turns)",
+@step("...its event moved to turn 2, in the rebel region next to {new}'s capital (it comes in at once, beside "
+      "the test faction, to be seen on the first turns)",
       "{later} comes in on turn 2 in {near}, beside {new}'s capital, in its own colours")
 def s_later_way(c, mod):
     from . import emergence as E
     from .events import turn_date
     plan = Plan(mod, "later", c.later, {})
-    E.apply(plan, c.campaign, c.later, "event", re_emergent=True, date=turn_date(mod, c.campaign, 2),
-            region=near_capital(c, mod))
-    c.said["near"] = near_capital(c, mod)
+    E.apply(plan, c.campaign, c.later, "event", date=turn_date(mod, c.campaign, 2), region=near_capital(c, mod))
     return plan
 
 
 def near_capital(c, mod):
-    """The town nearest {new}'s capital that is not {new}'s own (where the faction that comes later rises), else
-    a town of {edited}."""
+    """The REBEL town nearest {new}'s capital, where the faction that comes later rises (the games' own: Barbarian
+    Invasion's slavs rise in a rebel region; in a faction's region Rome with REX killed it as the campaign loaded).
+    Picked once and kept in c.said["near"]; towns_of(.., "slave") leaves it out, so no later step takes it."""
+    if c.said.get("near"):
+        return c.said["near"]
     tiles = mod.city_tiles(c.campaign)
     mine = [tiles[r] for r in towns_of(c, mod, c.new) if tiles.get(r)]
-    owners = _strat(mod, c.campaign).owners()
-    others = [r for r, o in owners.items() if o != c.new and tiles.get(r)]
-    if not mine or not others:
-        return towns_of(c, mod, c.edited)[0]
-    cx, cy = mine[0]
-    return min(others, key=lambda r: abs(tiles[r][0] - cx) + abs(tiles[r][1] - cy))
+    rebels = [r for r in towns_of(c, mod, "slave") if tiles.get(r)]
+    if not rebels:
+        raise Skip("no rebel town left for the faction that comes later")
+    cx, cy = mine[0] if mine else tiles[rebels[0]]
+    c.said["near"] = min(rebels, key=lambda r: abs(tiles[r][0] - cx) + abs(tiles[r][1] - cy))
+    return c.said["near"]
 
 
 @step("A shadow of {new}: a clone of {template}, dead at the start, may come back",

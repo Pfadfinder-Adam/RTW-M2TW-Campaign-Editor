@@ -63,8 +63,12 @@ class RecordEditor(ttk.Frame):
         self.lb.bind("<<ListboxSelect>>", lambda ev: self.show())
         self.lbl_count = ttk.Label(side, text="", foreground="#666")
         self.lbl_count.pack(anchor="w")
-        right = ttk.Frame(pane, padding=(6, 0, 0, 0))
-        pane.add(right, weight=1)
+        # the editor's side scrolls up and down: what does not fit the window is never out of reach (a tester: the
+        # voices were cut at the bottom, no scroll bar)
+        from .gui_util import ScrollFrame
+        scroll = ScrollFrame(pane, padding=(6, 0, 0, 0))
+        pane.add(scroll, weight=1)
+        right = scroll.inner
         w0 = settings.get("editor_list_width_" + kind)
         if isinstance(w0, int) and w0 > 80:
             self.after(50, lambda: self._sash_to(w0))
@@ -767,9 +771,34 @@ class RecordEditor(ttk.Frame):
             if have and not pending:
                 ttk.Button(bb, text="Save a copy...", command=lambda h=have, l=label: save_copy(
                     self, h, "the %s" % l.lower())).pack(side="left", padx=4)
-        # the battle model and the voice beside the two pictures (below them the panel would stay half empty)
+        # the battle model beside the two pictures; the voice a third column when the window is wide enough (a
+        # tester: the voices were cut at the bottom while the right half stood empty), else under the model
         self._unit_models(0, 1)
         self._unit_voice(1, 1)
+        if not getattr(self, "_voice_bound", False):          # once: the pictures frame lives as long as the editor
+            self.pics.bind("<Configure>", lambda e: self._place_voice(), add="+")
+            self._voice_bound = True
+        self.after_idle(self._place_voice)
+
+    def _place_voice(self):
+        if not self.pics.winfo_exists():                      # the editor closed before the idle call came
+            return
+        voice = next((w for w in self.pics.grid_slaves() if isinstance(w, ttk.LabelFrame)
+                      and str(w.cget("text")).startswith("Voice")), None)
+        model = next((w for w in self.pics.grid_slaves() if isinstance(w, ttk.LabelFrame)
+                      and str(w.cget("text")).startswith("Battle model")), None)
+        if voice is None or model is None:
+            return
+        cols = [w for w in self.pics.grid_slaves(column=0)]
+        need = max([w.winfo_reqwidth() for w in cols] or [0]) + model.winfo_reqwidth() + voice.winfo_reqwidth() + 40
+        wide = self.pics.winfo_width() >= need
+        at = voice.grid_info()
+        if wide and int(at.get("column", 1)) != 2:
+            voice.grid(row=0, column=2, rowspan=2, sticky="nwe", pady=(4, 0), padx=(12, 0))
+            model.grid(rowspan=2)
+        elif not wide and int(at.get("column", 1)) != 1:
+            voice.grid(row=1, column=1, rowspan=1, sticky="nwe", pady=(4, 0), padx=(12, 0))
+            model.grid(rowspan=1)
 
     # ---- battle models ----
     def _model_catalogue(self, mod=None):

@@ -10,7 +10,7 @@ import traceback
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
-from . import log, settings, theme
+from . import emergence as EM, log, settings, theme
 from .build import build, template_display
 from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need, core_settlement, population_of, rank,
                         castles_allowed, convert, kind_problem, read_buildings, settlement_info, settlement_kind)
@@ -578,7 +578,7 @@ class App(tk.Tk):
         p = ttk.Frame(self.way_more)
         ttk.Label(p, text="date").pack(side="left")
         ttk.Entry(p, textvariable=self.v_way_date, width=10).pack(side="left", padx=(2, 6))
-        ttk.Label(p, text="region").pack(side="left")
+        ttk.Label(p, text="in the rebel region").pack(side="left")
         self.cb_way_region = ttk.Combobox(p, textvariable=self.v_way_region, state="readonly", width=22)
         self.cb_way_region.pack(side="left", padx=2)
         self.way_parts["event"] = p
@@ -3403,7 +3403,7 @@ class App(tk.Tk):
             self.way_parts["event"].pack(anchor="w")
             if self.mod and not self.cb_way_region["values"]:
                 try:
-                    self.cb_way_region["values"] = sorted(self.mod.regions(self.v_campaign.get()))
+                    self.cb_way_region["values"] = EM.rising_regions(self.mod, self.v_campaign.get())
                 except Exception:
                     pass
             if not self.v_way_date.get().strip():
@@ -3597,7 +3597,7 @@ class App(tk.Tk):
             self.strat = Strat(self.mod.load(self.mod.campaign_file(c, "descr_strat.txt")))
             self.regions = self.mod.regions(c)
             self.mod.city_tiles(c)
-            self.cb_way_region["values"] = sorted(self.regions)
+            self.cb_way_region["values"] = EM.rising_regions(self.mod, c)
         except Exception as e:
             messagebox.showerror(APP, "Could not read the campaign: %s" % e)
             return

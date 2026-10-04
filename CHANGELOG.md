@@ -371,6 +371,15 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **A faction that comes in by an event rises in a rebel region** (both games). Rome (with REX) crashed as the
+  campaign loaded when such a faction's region belonged to another faction: "Faction(...) is about to be killed off
+  because it has no capital and cannot convert to a horde", then the defeat message failed. The games' own example
+  (Barbarian Invasion's slavs) rises where the rebels hold the land. New faction and Events and later factions now
+  offer only the rebels' regions and refuse another faction's, and **Check mod files** names such an event. It also
+  notes a faction that comes by an event marked "may come back" (re_emergent): the games' own are not.
+- **The Unit and Building editors' right side scrolls** when the window is lower than its contents (the voices were
+  cut at the bottom with no scroll bar). In a wide window the unit's voice stands in a third column beside the
+  pictures and the battle model.
 - **Bigger map x3: no islands in a navigable river.** A river that map_regions gives to a province while the heights
   hold it under water (a mod's navigable river), with a sea tile here and there, came out with small islands round
   those tiles. Inside water all round, the new heights now keep their own coast. The games' own maps come out the

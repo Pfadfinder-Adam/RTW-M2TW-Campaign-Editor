@@ -151,8 +151,8 @@ class EventsWindow(tk.Toplevel):
         dr.grid(row=3, column=1, sticky="w")
         ttk.Entry(dr, textvariable=v_date, width=14).pack(side="left")
         self._when(dr, v_date)
-        ttk.Label(fr, text="event region").grid(row=4, column=0, sticky="w", pady=2)
-        ttk.Combobox(fr, textvariable=v_reg, values=sorted(self.mod.regions(self.campaign)), state="readonly",
+        ttk.Label(fr, text="event region (a rebel one)").grid(row=4, column=0, sticky="w", pady=2)
+        ttk.Combobox(fr, textvariable=v_reg, values=EM.rising_regions(self.mod, self.campaign), state="readonly",
                      width=30).grid(row=4, column=1, sticky="w")
         ttk.Checkbutton(fr, text="may come back after it dies (re_emergent)", variable=v_back).grid(
             row=5, column=1, sticky="w", pady=2)

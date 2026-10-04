@@ -242,6 +242,14 @@ def set_event(plan, campaign, faction, date=None, region=None, remove=False):
         raise ValueError("%s: %s" % (faction, why))
     if region and region not in mod.regions(campaign):
         raise ValueError("%s is not a region of this campaign" % region)
+    if region:
+        from .strat import Strat
+        held = Strat(plan.edit(mod.campaign_file(campaign, "descr_strat.txt"))).owners().get(region)
+        if held not in (None, "slave"):
+            raise ValueError("%s is held by %s at the start - a faction that comes by an event must rise in a region "
+                             "the rebels hold (as Barbarian Invasion's slavs); in a faction's region the game kills it "
+                             "as the campaign loads and crashes. Pick a rebel region (or give %s to the rebels "
+                             "first)." % (region, held, region))
     lines = ["", "event\temergent_faction\t%s" % faction, "date\t%s" % (date or "").strip()]
     if region:
         lines.append("region\t%s" % region)
@@ -265,6 +273,13 @@ def set_event(plan, campaign, faction, date=None, region=None, remove=False):
     end = len(f.raw) - (1 if f.raw and not f.text(len(f.raw) - 1).strip() else 0)
     f.insert(end, lines)
     plan.note(f, "%s rises %s%s" % (faction, date.strip(), " in %s" % region if region else ""))
+
+
+def rising_regions(mod, campaign):
+    """The regions a faction that comes by an event may rise in: the ones the rebels hold at the start."""
+    from .strat import Strat
+    owners = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))).owners()
+    return sorted(r for r, o in owners.items() if o == "slave")
 
 
 def apply(plan, campaign, faction, way, of=None, re_emergent=False, date=None, region=None):
@@ -308,7 +323,19 @@ def problems(mod, campaign):
         if way == "event" and fac not in evs and not script.get(fac):
             notes.append("%s appears by an event, but no emergent_faction event of descr_events.txt (nor the "
                          "campaign script) names it - only the engine's own events can bring it in" % fac)
+    from .strat import Strat
+    owners = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))).owners()
     for fac, e in evs.items():
+        reg = e.get("region")
+        if reg and owners.get(reg) not in (None, "slave"):
+            # BI's own: slavs rise in Locus_Barbaricum, a rebel region. Rome with REX, a faction's region: the faction
+            # was killed as the campaign loaded ('has no capital and cannot convert to a horde') and the game crashed
+            faults.append("descr_events.txt: %s rises in %s, a town of %s - a faction comes in where the rebels hold "
+                          "the land (the games' own: Barbarian Invasion's slavs in a rebel region); in a faction's "
+                          "region it is killed as the campaign loads and the game crashes" % (fac, reg, owners[reg]))
+        if fac in state and state[fac]["re_emergent"]:
+            notes.append("%s comes by an event and is marked re_emergent - the games' own factions that come by an "
+                         "event (slavs, romano_british) are not; only the shadow and split-off ones are" % fac)
         if fac not in state:
             faults.append("descr_events.txt: event emergent_faction %s - descr_strat.txt has no such faction" % fac)
         elif not state[fac]["dead"]:

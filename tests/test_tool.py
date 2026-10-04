@@ -3558,7 +3558,24 @@ building smith
         self.assertEqual(E.way_of(mod, "slavs"), ("event", None))
         ev = E.emergent_events(mod, "test")["slavs"]
         self.assertEqual((ev["date"], ev["region"]), ("5 summer", "B_R"))
-        self.assertEqual(E.problems(mod, "test"), ([], []))
+        faults, notes = E.problems(mod, "test")
+        self.assertEqual(faults, [])
+        # the games' own factions that come by an event are not re_emergent (BI's slavs, romano_british)
+        self.assertEqual(len(notes), 1)
+        self.assertIn("marked re_emergent", notes[0])
+        # rising in a faction's town: Rome with REX killed it as the campaign loaded and crashed (a tester)
+        evp = os.path.join(camp, "descr_events.txt")
+        with open(evp) as fh:
+            text = fh.read()
+        write(evp, text.replace("region\tB_R", "region\tA_R"))
+        faults, _ = E.problems(ModData(self.root), "test")
+        self.assertTrue(any("rises in A_R, a town of alpha" in f for f in faults), faults)
+        write(evp, text)
+        # the editor offers only the rebels' regions and refuses a faction's own
+        self.assertEqual(E.rising_regions(mod, "test"), ["B_R"])
+        with self.assertRaises(ValueError) as cm:
+            E.apply(Plan(mod, "later", "slavs", {}), "test", "slavs", "event", date="6 summer", region="A_R")
+        self.assertIn("A_R is held by alpha", str(cm.exception))
         # the shadow of alpha: both header lines; a clone of the dead faction starts plain and alive
         plan = Plan(mod, "later", "alpha", {})
         E.apply(plan, "test", "slavs", "shadow", of="alpha", re_emergent=True)
