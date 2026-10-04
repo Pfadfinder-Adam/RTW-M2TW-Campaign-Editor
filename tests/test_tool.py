@@ -2654,6 +2654,48 @@ building smith
         self.assertEqual(on, drawn)
         self.assertEqual(max(x for x, y in on), 7)                      # the end on the last land, the sea beside it
 
+    def test_bigger_map_natural_rivers(self):
+        """x3 rivers drawn the natural way: a bend's point moves into the bend, a straight run swings a pixel to
+        either side by the golden-ratio meander - and still one unbroken river (side by side only), as many ends as
+        before, every pixel inside its old tiles' 3 x 3 blocks (a corner link: the one beside), a ford on the river; the same map, the same river."""
+        from campaign_editor import upscale
+        river, ford, black = (0, 0, 255), (0, 255, 255), (0, 0, 0)
+        n = 14
+        px = [[black] * n for _ in range(n)]
+        for x in range(1, 12):
+            px[2][x] = river                                  # a long straight run west to east...
+        for y in range(3, 9):
+            px[y][11] = river                                 # ...a bend, south...
+        for i in range(1, 5):
+            px[8 + i][11 - i] = river                         # ...then a diagonal of corner links
+        px[2][6] = ford
+        path = os.path.join(self.root, "feat.tga")
+        write_tga(path, n, n, px)
+        old = {(x, y) for y in range(n) for x in range(n) if px[y][x] != black}
+        _, plain = upscale.features_scaled(path)
+        _, nat = upscale.features_scaled(path, natural=True)
+        self.assertEqual(upscale.features_scaled(path, natural=True)[1], nat)            # the same each time
+        self.assertNotEqual(nat, plain)
+        for q in nat:                         # in its old tiles' blocks (a corner link: the block beside it too)
+            bx, by = q[0] // 3, q[1] // 3
+            self.assertTrue((bx, by) in old or any((bx + a, by) in old and (bx, by + b) in old
+                                                   for a in (-1, 1) for b in (-1, 1)), q)
+        seen, todo = {next(iter(nat))}, [next(iter(nat))]
+        while todo:
+            x, y = todo.pop()
+            for q in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if q in nat and q not in seen:
+                    seen.add(q)
+                    todo.append(q)
+        self.assertEqual(seen, nat)                                                     # one unbroken river
+
+        def ends(px):
+            return sum(1 for p in px if sum((p[0] + a, p[1] + b) in px for a, b in ((1, 0), (-1, 0), (0, 1),
+                                                                                        (0, -1))) == 1)
+        self.assertEqual(ends(nat), ends(plain))
+        bend = (11 * 3 + 1, 2 * 3 + 1)                                                  # the corner tile's middle
+        self.assertNotIn(bend, nat)                                                     # cut, not a right angle
+
     def test_bigger_map_no_islands_in_a_navigable_river(self):
         """A tester's DaC x3 (Medieval II with M2EX): small islands inside a navigable river - a river map_regions
         calls the province's land and the heights call water, with a sea tile here and there. The smooth coast gave

@@ -683,7 +683,83 @@ def heights_from_tiles(land, agree, own):
     return out
 
 
-def features_scaled(path, land=None):
+GOLD = (5 ** 0.5 - 1) / 2                                      # 0.618...: the golden ratio's part
+MEANDER = (0, 1, 0, -1)                                        # a bend each way, half a wave apart
+
+
+def _meander(t, row):
+    """A river's sideways offset (-1, 0, 1 pixels) at step t along a straight run, row = the run's other
+    coordinate: a meander (rivers swing every ~12 channel widths - Langbein & Leopold's sine-generated curve) whose
+    phase moves on by 1 or 2 by the Fibonacci word (the golden ratio's 1-D quasi-crystal, girih's cousin) - never the
+    same twice, the same map always the same."""
+    g = 1 - GOLD                                              # 0.382: the share of the longer steps
+    seed = (row * GOLD) % 1.0
+    phase = t + int(t * g + seed)
+    return MEANDER[phase % 4]
+
+
+def _river_offsets(lines, is_river, land, cx_of):
+    """{old river tile: (ox, oy)} - where in its 3 x 3 block a river tile's point lies (0, 0 = the middle): at a bend
+    the point moves one pixel into the bend (the corner cut, as a real river rounds it); on a straight run it swings
+    by _meander; a tile with a ford or a source, a river's end or a fork keeps the middle; never onto the new sea."""
+    river = {p for p, c in lines.items() if is_river(c)}
+
+    def links(p):
+        x, y = p
+        out = [(dx, dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)) if (x + dx, y + dy) in river]
+        for dx, dy in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+            if (x + dx, y + dy) in river and (x + dx, y) not in river and (x, y + dy) not in river:
+                out.append((dx, dy))
+        return out
+    off = {}
+    ends = set()
+    for p in river:
+        ls = links(p)
+        if len(ls) <= 1:
+            ends.add(p)
+        o = (0, 0)
+        if len(ls) == 2 and lines[p] == (0, 0, 255):
+            (a, b), (c, d) = ls
+            sx, sy = a + c, b + d
+            if (sx, sy) != (0, 0):                            # a bend: into it
+                o = (max(-1, min(1, sx)), max(-1, min(1, sy)))
+            elif b == 0:                                      # a straight run along x: swing in y
+                o = (0, _meander(p[0], p[1]))
+            elif a == 0:                                      # along y: swing in x
+                o = (_meander(p[1], p[0]), 0)
+        if o != (0, 0) and land is not None:
+            cx, cy = cx_of(*p)
+            if not land.get((cx + o[0], cy + o[1]), True):
+                o = (0, 0)
+        off[p] = o
+    return off, ends
+
+
+def _line4(a, b):
+    """The pixels from a to b, side by side only (a diagonal move becomes across, then up): a river the game reads
+    as unbroken."""
+    (x, y), (x1, y1) = a, b
+    out = [(x, y)]
+    dx, dy = abs(x1 - x), abs(y1 - y)
+    sx, sy = (1 if x1 > x else -1), (1 if y1 > y else -1)
+    err = dx - dy
+    while (x, y) != (x1, y1):
+        e2 = 2 * err
+        if e2 > -dy and x != x1:
+            err -= dy
+            x += sx
+            out.append((x, y))
+        elif y != y1:
+            err += dx
+            y += sy
+            out.append((x, y))
+        else:
+            x += sx
+            out.append((x, y))
+    return out
+
+
+def features_scaled(path, land=None, natural=False):
     """map_features x3: black, rivers drawn as 1-pixel lines from block middle to block middle - a corner link a
     staircase (one step across, one up, ...: always side by side, never a corner-only step the game stops a river
     at); a river that met the sea runs on to the new, smoother coast (land: coast_mask) and stops there - none of it
@@ -713,18 +789,47 @@ def features_scaled(path, land=None):
             if c in RIVERY:
                 drawn.add((px, py))
 
+    off, river_ends = _river_offsets(lines, lambda c: kind(c) == "river", land, new_xy) if natural else ({}, set())
+    if natural:                                               # rivers through their shifted points (see above)
+        done = set()
+        for p, o in off.items():
+            cx, cy = new_xy(*p)
+            a = (cx + o[0], cy + o[1])
+            for dx, dy in ((1, 0), (0, 1), (1, 1), (1, -1), (-1, 1), (-1, -1), (-1, 0), (0, -1)):
+                q = (p[0] + dx, p[1] + dy)
+                if q not in off or (q, p) in done:
+                    continue
+                if dx and dy and ((p[0] + dx, p[1]) in off or (p[0], p[1] + dy) in off):
+                    continue                                  # a corner with a straight way round it: that way
+                done.add((p, q))
+                qx, qy = new_xy(*q)
+                b = (qx + off[q][0], qy + off[q][1])
+                for px, py in _line4(a, b):
+                    paint(px, py, river)
+            paint(a[0], a[1], river)
+        # where two pieces meet at a moved point a one-pixel spur can stick out: cut every pixel with one neighbour
+        # that is not a river's real end (its source or its mouth stays)
+        for _ in range(4):
+            spurs = [q for q in drawn if (q[0] // FACTOR, q[1] // FACTOR) not in river_ends and
+                     sum((q[0] + a, q[1] + b) in drawn for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1))) <= 1]
+            if not spurs:
+                break
+            for q in spurs:
+                _put(raw, W, H, step, top_down, q[0], q[1], (0, 0, 0))
+                drawn.discard(q)
     for (x, y), c in lines.items():
         k = kind(c)
         if not k:
             continue
         cx, cy = new_xy(x, y)
         colour = line_colour[k]
-        for dx, dy in ((1, 0), (0, 1)):                       # each straight link once
+        straight = () if natural and k == "river" else ((1, 0), (0, 1))     # natural rivers: drawn above
+        for dx, dy in straight:                               # each straight link once
             o = lines.get((x + dx, y + dy))
             if o is not None and kind(o) == k:
                 for s in range(1, FACTOR):
                     paint(cx + dx * s, cy + dy * s, colour)
-        for dx, dy in ((1, 1), (1, -1)):                      # corner links with no straight path between
+        for dx, dy in ((1, 1), (1, -1)) if straight else ():  # corner links with no straight path between
             o = lines.get((x + dx, y + dy))
             if o is None or kind(o) != k:
                 continue
@@ -767,7 +872,15 @@ def features_scaled(path, land=None):
                         for s_ in range(1, FACTOR + 1):
                             paint(cx + dx * s_, cy + dy * s_, BRIDGE)
     for (x, y), c in lines.items():                           # every feature's own colour on its middle
-        paint(*new_xy(x, y), c)
+        if (x, y) in off and c == river:                      # a natural river is drawn already (a moved point
+            continue                                          # whose spur was cut must not come back)
+        o = off.get((x, y), (0, 0))
+        cx, cy = new_xy(x, y)
+        at = (cx + o[0], cy + o[1])
+        if (x, y) in off and at not in drawn:                 # a ford / source whose point was cut as a spur: on the
+            at = next((q for q in ((at[0], at[1] + 1), (at[0], at[1] - 1), (at[0] + 1, at[1]),   # river beside it
+                                   (at[0] - 1, at[1])) if q in drawn), at)
+        paint(at[0], at[1], c)
     if land is not None:                                      # a river ends where the new coast begins: land kept
         for p in [p for p in drawn if not land.get(p, True)]: # under it stood in the sea as a sandbar (a tester's
             _put(raw, W, H, step, top_down, p[0], p[1], (0, 0, 0))   # DaC: a strip of beach off every river mouth)
