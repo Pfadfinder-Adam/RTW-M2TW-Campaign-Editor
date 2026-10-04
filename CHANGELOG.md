@@ -371,6 +371,15 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Recolour: two battle textures never share one copy's name** (both games). Two textures that differ only in the
+  wearer's word (`EN_Peasant_Padded_england` and `EN_Peasant_Padded_france`) both became
+  `EN_Peasant_Padded_<faction>`, and the copy written last dressed the other's models too: a new faction's
+  peasants wore France's blue and white in battle. Each copy now keeps a name of its own (the second one keeps its
+  source's word, `EN_Peasant_Padded_france_<faction>`); the far-away sprites likewise. A battle texture named after
+  another faction than the one in **From the colours of** is recoloured from that faction's colours: the game's own
+  colours when the picture is the game's, even if the mod changed that faction's colours since (France's blue
+  peasants were missed). Colours picked by hand count for every picture. A unit given to the faction gets its own
+  far-away sprite too.
 - **A faction that comes in by an event rises in a rebel region** (both games). Rome (with REX) crashed as the
   campaign loaded when such a faction's region belonged to another faction: "Faction(...) is about to be killed off
   because it has no capital and cannot convert to a horde", then the defeat message failed. The games' own example

@@ -894,9 +894,9 @@ def s_recolour(c, mod):
     items = [it for it in R.targets(mod, c.campaign, c.new) if not isinstance(it, str) and not it.get("skip")]
     if not items:
         raise Skip("nothing to recolour")
-    src = R.guess_source(mod, c.new, items, R.faction_colours(mod))[0]
+    src, src_of = R.guess_source(mod, c.new, items, R.faction_colours(mod))
     plan = Plan(mod, "recolour", c.new, {})
-    R.plan_recolour(plan, items, src, c.colours[c.new])
+    R.plan_recolour(plan, items, src, c.colours[c.new], src_of)
     return plan
 
 

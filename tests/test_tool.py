@@ -4398,7 +4398,7 @@ building smith
         with open(os.path.join(tex, "spearman_alpha.tga"), "rb") as fh:
             before = fh.read()
         plan = Plan(mod, "recolour", "beta", {})
-        RC.plan_recolour(plan, items, ((200, 20, 20), None), ((20, 160, 40), None))
+        RC.plan_recolour(plan, items, ((200, 20, 20), None), ((20, 160, 40), None), "alpha")
         plan.apply()
         mod = ModData(self.root)
         info = M.catalogue(mod)["spearman"]
@@ -4411,6 +4411,79 @@ building smith
         self.assertEqual(own.getpixel((5, 0)), (90, 90, 90))                       # the grey kept
         restore(mod, backups(mod)[0])
         self.assertFalse(os.path.exists(os.path.join(tex, "spearman_beta.tga")))
+
+    def test_recolour_copies_of_two_textures_never_share_a_name(self):
+        """Two battle textures that differ only in the wearer's word (EN_Peasant_Padded_england / _france) both became
+        ..._<faction>: the one written last dressed every model of the other (a tester: the peasants of a new
+        faction wore France's blue in battle). Each copy keeps a name of its own."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import recolour as RC, models as M
+        d = os.path.join(self.root, "data")
+        tex = os.path.join(d, "models_unit", "textures")
+        os.makedirs(tex, exist_ok=True)
+        Image.new("RGB", (32, 32), (200, 20, 20)).save(os.path.join(tex, "peasant_alpha.tga"))
+        im = Image.new("RGB", (32, 32), (200, 20, 20))
+        for x in range(16, 32):
+            for y in range(32):
+                im.putpixel((x, y), (20, 40, 210))
+        im.save(os.path.join(tex, "peasant_gamma.tga"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\tspearman\nskeleton\tfs_spearman\nindiv_range\t40\n"
+              "texture\t\talpha, data/models_unit/textures/peasant_alpha.tga\n"
+              "texture\t\tbeta, data/models_unit/textures/peasant_alpha.tga\n"
+              "model_flexi\tdata/models_unit/spearman.cas, max\n\n"
+              "type\t\tarcher\nskeleton\tfs_archer\nindiv_range\t40\n"
+              "texture\t\tgamma, data/models_unit/textures/peasant_gamma.tga\n"
+              "texture\t\tbeta, data/models_unit/textures/peasant_gamma.tga\n"
+              "model_flexi\tdata/models_unit/archer.cas, max\n\n")
+        mod = ModData(self.root)
+        items = [t for t in RC.targets(mod, "test", "beta") if t["group"] == "unit textures"]
+        refs = sorted(t["own_tex"]["ref"] for t in items)        # the first keeps the plain name, the other its source's
+        self.assertEqual(refs, ["data/models_unit/textures/peasant_alpha_beta.tga",
+                                "data/models_unit/textures/peasant_beta.tga"])
+        # each is painted in the colours of the faction it is named after: gamma's picture is recoloured from
+        # gamma's colours, whatever the window's 'from' (alpha) says; colours picked by hand ('*') count for all
+        self.assertEqual(sorted(t["painted_by"] for t in items), ["alpha", "gamma"])
+        g_item = next(t for t in items if t["painted_by"] == "gamma")
+        self.assertEqual(RC.item_source(dict(g_item, painted=((20, 40, 210), None)), "red", "alpha"),
+                         ((20, 40, 210), None))
+        self.assertEqual(RC.item_source(dict(g_item, painted=((20, 40, 210), None)), "red", "*"), "red")
+        self.assertEqual(RC.item_source(dict(g_item, painted=((20, 40, 210), None)), "red", "gamma"), "red")
+        plan = Plan(mod, "recolour", "beta", {})
+        RC.plan_recolour(plan, items, ((200, 20, 20), None), ((20, 160, 40), None), "alpha")
+        plan.apply()
+        info = M.catalogue(ModData(self.root))
+        self.assertEqual(info["spearman"].textures["beta"], "data/models_unit/textures/peasant_alpha_beta.tga")
+        self.assertEqual(info["archer"].textures["beta"], "data/models_unit/textures/peasant_beta.tga")
+        a = Image.open(os.path.join(tex, "peasant_alpha_beta.tga")).convert("RGB").getpixel((24, 5))
+        g = Image.open(os.path.join(tex, "peasant_beta.tga")).convert("RGB").getpixel((24, 5))
+        self.assertGreater(a[1], a[2])                    # the spearman's copy is alpha's, recoloured green
+        self.assertGreater(g[2], g[1])                    # the archer's keeps gamma's blue half
+        restore(mod, backups(mod)[0])
+
+    def test_recolour_reads_a_game_picture_in_the_games_own_colours(self):
+        """A unit given to the faction wears an owner's texture from the game's own data: it is painted in that
+        owner's colours of the game's descr_sm_factions, not in what the mod made of them since (a tester's test mod
+        gave France purple, so France's blue peasants were not found to recolour)."""
+        from campaign_editor import recolour as RC
+        game = os.path.join(self.root, "game")
+        os.makedirs(os.path.join(game, "mods"))
+        write(os.path.join(game, "medieval2.exe"), "x")
+        write(os.path.join(game, "data", "descr_sm_factions.txt"), SM)
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "mods", "m", "data"))
+        mine = os.path.join(game, "mods", "m", "data", "descr_sm_factions.txt")
+        with open(mine) as fh:
+            text = fh.read()
+        game_cols = RC.faction_colours(ModData(os.path.join(game, "data")))
+        alpha = game_cols["alpha"][0]
+        write(mine, text.replace("red %d, green %d, blue %d" % alpha, "red 150, green 30, blue 160", 1))
+        mod = ModData(os.path.join(game, "mods", "m", "data"))
+        self.assertEqual(RC.faction_colours(mod)["alpha"][0], (150, 30, 160))
+        self.assertEqual(RC._game_colours(mod)["alpha"][0], alpha)
+        self.assertEqual(RC._game_colours(ModData(os.path.join(game, "data"))), {})     # the game itself: none
 
     def test_medieval2_children_limit_raised_with_the_family(self):
         """Medieval II: descr_campaign_db.xml <max_number_of_children> (4 in vanilla) - a fifth child made the game

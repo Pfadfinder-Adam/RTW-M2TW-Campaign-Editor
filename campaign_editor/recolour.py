@@ -434,7 +434,7 @@ def targets(mod, campaign, faction):
     out, seen = [], set()
 
     def add(path, group, label, others=(), crop=None, skip=None, of=(), own=None, alike=True, own_tex=None,
-            source=None, own_sprite=None):
+            source=None, own_sprite=None, painted_in=(None, None)):
         k = (os.path.normcase(os.path.abspath(path)), crop)
         if k in seen:
             if own_tex:                                  # one texture worn by several models: all of them follow
@@ -445,7 +445,8 @@ def targets(mod, campaign, faction):
         seen.add(k)
         out.append({"path": path, "rel": mod.rel(path), "group": group, "label": label, "others": list(others),
                     "of": list(of), "crop": crop, "skip": skip, "own": own, "faction": faction,
-                    "alike": alike, "own_tex": own_tex, "source": source, "own_sprite": own_sprite})
+                    "alike": alike, "own_tex": own_tex, "source": source, "own_sprite": own_sprite,
+                    "painted": painted_in[0], "painted_by": painted_in[1]})
     for sub, label in (("units", "unit card"), ("unit_info", "unit info picture")):
         d = _ci(_ci(mod.data, "ui") or "", sub) if _ci(mod.data, "ui") else None
         own = _ci(d, faction) if d else None
@@ -464,6 +465,31 @@ def targets(mod, campaign, faction):
         cat = catalogue(mod)
     except Exception:
         cat = {}
+    # the names of the faction's own copies: one name, one source picture. Two pictures that differ only in the
+    # wearer's word (EN_Peasant_Padded_england / _france) would both become ..._<faction> and the one written last
+    # would dress every model of the other (a tester: the peasants wore France's blue in battle). The textures the
+    # faction wears now count as taken, their source unknown.
+    taken, game = {}, {}
+
+    def painted(rel, got, wearers):
+        """(colours, wearer) a picture worn by others is painted in: those of the wearer its file is named after
+        (EN_Peasant_Padded_france -> France's; the game's own colours for a picture of the game's data, whatever
+        the mod made of them since), or (None, None)."""
+        stem = rel.replace("\\", "/").rsplit("/", 1)[-1].split(".")[0].lower()
+        named = [w for w in wearers if re.search(r"(?:^|(?<=[^a-z0-9]))%s(?=$|[^a-z0-9])" % re.escape(w.lower()), stem)]
+        if not named:
+            return None, None
+        w = max(named, key=len)
+        if "cols" not in game:
+            game["cols"] = _game_colours(mod)
+        theirs = game["cols"].get(w)
+        if theirs and theirs != colours.get(w) and _games_own(mod, rel, got[1]):     # read only when they differ
+            return theirs, w
+        return colours.get(w), w
+    for info in cat.values():
+        for r in (info.textures.get(faction), getattr(info, "attach", {}).get(faction)):
+            if r:
+                taken.setdefault(r.replace("\\", "/").lower(), None)
     for name, info in sorted(cat.items()):
         rel = info.textures.get(faction)
         if not rel:
@@ -475,23 +501,29 @@ def targets(mod, campaign, faction):
         inside = os.path.normcase(os.path.abspath(got[1])).startswith(os.path.normcase(os.path.abspath(mod.data)))
         # worn by other factions too (a clone wears its template's), or only in the game's data: the faction gets a
         # copy of its own in the mod and its model line points at it - the others' and the game's stay as they are
-        own_tex = _own_texture(mod, info, faction, rel, got, wearers, "texture") if wearers or not inside else None
+        own_tex = _own_texture(mod, info, faction, rel, got, wearers, "texture", taken) \
+            if wearers or not inside else None
         others = [(on_disk(mod, r)[1], colours[f]) for f, r in info.textures.items()
                   if f != faction and f in colours and r.lower() != rel.lower() and on_disk(mod, r)]
         label = "battle texture of %s" % info.name + (" - gets a copy of its own" if own_tex else "")
-        add(got[1], "unit textures", label, others[:6], own_tex=own_tex)
+        add(got[1], "unit textures", label, others[:6], own_tex=own_tex, painted_in=painted(rel, got, wearers))
     # a unit the faction was given (Roster, a new unit, Bring...) whose model has no texture line of the faction:
     # the game dresses it in another faction's texture (the mercenaries' or the first) - the faction gets its own
     # copy, made from an owner's texture and recoloured from that owner's colours (a tester: the units given by the
     # Roster stayed brown in battle while their cards were recoloured)
+    worn = []
     for info, src_f in _worn_without_line(mod, faction, cat):
         rel = info.textures[src_f]
         got = on_disk(mod, rel)
         if not got:
             continue
-        own_tex = _own_texture(mod, info, faction, rel, got, [src_f], "texture")
+        own_tex = _own_texture(mod, info, faction, rel, got, [src_f], "texture", taken)
+        # the colours it is painted in: the owner's (the game's own for a picture of the game's data - a tester's
+        # test mod gave France purple, so France's blue peasants were not found to recolour)
+        source = painted(rel, got, [src_f])[0] or colours.get(src_f)
         add(got[1], "unit textures", "battle texture of %s - %s's, gets a copy of its own" % (info.name, src_f),
-            [], own_tex=own_tex, source=colours.get(src_f))
+            [], own_tex=own_tex, source=source)
+        worn.append((info, src_f, source))
     # Medieval II: the weapons and shields texture beside it (a kite shield carries the faction's arms)
     for name, info in sorted(cat.items()):
         rel = getattr(info, "attach", {}).get(faction)
@@ -500,30 +532,41 @@ def targets(mod, campaign, faction):
             continue
         wearers = sorted(f for f, r in info.attach.items() if f != faction and r.lower() == rel.lower())
         inside = os.path.normcase(os.path.abspath(got[1])).startswith(os.path.normcase(os.path.abspath(mod.data)))
-        own_tex = _own_texture(mod, info, faction, rel, got, wearers, "attach") if wearers or not inside else None
+        own_tex = _own_texture(mod, info, faction, rel, got, wearers, "attach", taken) \
+            if wearers or not inside else None
         others = [(on_disk(mod, r)[1], colours[f]) for f, r in info.attach.items()
                   if f != faction and f in colours and r.lower() != rel.lower() and on_disk(mod, r)]
         label = "weapons and shields of %s" % info.name + (" - gets a copy of its own" if own_tex else "")
-        add(got[1], "unit textures", label, others[:6], own_tex=own_tex)
+        add(got[1], "unit textures", label, others[:6], own_tex=own_tex, painted_in=painted(rel, got, wearers))
     # the far-away sprite a model names for the faction (Medieval II: the texture line's fourth value; Rome: its
     # model_sprite line) - a clone names its template's (england_...spr), so the faction gets its own .spr and pages
     # (<faction>_..._sprite_000.texture / .tga.dds ...) and the line points at them
-    sprites = {}
+    from .models import own_sprite_ref
+    sprites, jobs = {}, []
     for name, info in sorted(cat.items()):
         rel = getattr(info, "sprites", {}).get(faction)
-        if not rel or not info.textures.get(faction):
-            continue
-        from .models import own_sprite_ref
-        wearers = sorted(f for f, r in info.sprites.items() if f != faction and r.lower() == rel.lower())
-        ref = own_sprite_ref(rel, faction, wearers or [f for f in names if rel.replace("\\", "/").rsplit("/", 1)[-1]
-                                                       .lower().startswith(f.lower() + "_")])
+        if rel and info.textures.get(faction):
+            wearers = sorted(f for f, r in info.sprites.items() if f != faction and r.lower() == rel.lower())
+            jobs.append((info, rel, wearers or [f for f in names if rel.replace("\\", "/").rsplit("/", 1)[-1]
+                                                .lower().startswith(f.lower() + "_")], None))
+    # a unit given to the faction (no line of its own yet): the owner's sprite, in the owner's colours, as its texture
+    for info, src_f, source in worn:
+        rel = getattr(info, "sprites", {}).get(src_f)
+        if rel:
+            jobs.append((info, rel, [src_f], source))
+    for info, rel, wearers, source in jobs:
+        ref = own_sprite_ref(rel, faction, wearers)
         if ref == rel:
             continue                                    # its own already: found by its name below
-        if ref in sprites:
-            sprites[ref]["models"].append(info.name)
-            continue
         got = on_disk(mod, rel)
         if not got:
+            continue
+        if ref in sprites and sprites[ref]["src"] != got[1]:
+            # another sprite already has that name (england_x and france_x both -> <faction>_x): this one keeps its
+            # source's word (<faction>_france_x)
+            ref = own_sprite_ref(rel, faction, [])
+        if ref in sprites:
+            sprites[ref]["models"].append(info.name)
             continue
         folder = os.path.dirname(got[0].replace("\\", "/"))     # beside the original as it lies on disk, in the mod
         spr = {"models": [info.name], "ref": ref, "src": got[1],
@@ -537,7 +580,7 @@ def targets(mod, campaign, faction):
             if m:
                 page = dict(spr, page=os.path.join(os.path.dirname(spr["path"]), new_stem + m.group(1)))
                 add(os.path.join(folder, n), "unit sprites (far away)",
-                    "far-away sprite of %s - gets a copy of its own" % info.name, own_sprite=page)
+                    "far-away sprite of %s - gets a copy of its own" % info.name, own_sprite=page, source=source)
     # the Art tab's pictures
     try:
         from .factionart import faction_pictures
@@ -584,6 +627,38 @@ def targets(mod, campaign, faction):
             out[-1]["share_out"] = out_x
     _more_targets(mod, faction, names, colours, add)
     return out
+
+
+def _games_own(mod, rel, path):
+    """True when the picture is the game's own: in the game's data folder, or a byte-for-byte copy of it in the mod
+    (a mod folder made by copying the game's files)."""
+    import types
+    from .campaignrules import game_data
+    from .packs import _on_disk
+    if not os.path.normcase(os.path.abspath(path)).startswith(os.path.normcase(os.path.abspath(mod.data))):
+        return True
+    base = game_data(mod)
+    theirs = _on_disk(types.SimpleNamespace(data=base), rel) if base else None
+    if not theirs:
+        return False
+    try:
+        if os.path.getsize(theirs[1]) != os.path.getsize(path):
+            return False
+        with open(theirs[1], "rb") as a, open(path, "rb") as b:
+            return a.read() == b.read()
+    except OSError:
+        return False
+
+
+def _game_colours(mod):
+    """faction_colours of the game's own data folder (a mod in mods/ keeps only what it changes), or {}."""
+    from .campaignrules import game_data
+    from .moddata import ModData
+    d = game_data(mod)
+    try:
+        return faction_colours(ModData(d)) if d else {}
+    except Exception:
+        return {}
 
 
 def _copied_from(path, copies, colours):
@@ -635,12 +710,26 @@ def _worn_without_line(mod, faction, cat):
     return out
 
 
-def _own_texture(mod, info, faction, rel, got, wearers, kind):
+def _own_texture(mod, info, faction, rel, got, wearers, kind, taken=None):
     """Where the faction's own copy of a battle texture goes: {'model', 'kind', 'ref' (as the model names it),
-    'path' (in the mod's data, the file's own extension kept: x.tga -> x.tga.dds on Rome)}."""
+    'path' (in the mod's data, the file's own extension kept: x.tga -> x.tga.dds on Rome)}. taken: {copy name
+    (lower): the source picture it is made from, or None when unknown} - a name another source holds is not
+    reused: the copy keeps its source's word (x_france -> x_france_<faction>), then a number."""
     from .clone import disk_tail
     from .models import own_texture_ref
     ref = own_texture_ref(rel, faction, wearers)
+    if taken is not None:
+        src = os.path.normcase(os.path.abspath(got[1]))
+        holds = lambda r: r.lower() in taken and taken[r.lower()] != src
+        if holds(ref) and ref.lower() != rel.replace("\\", "/").lower():   # named after it already: its own name
+            ref = own_texture_ref(rel, faction)
+            stem, dot, ext = ref.rpartition("/")[2].partition(".")
+            head = ref[:len(ref) - len(ref.rpartition("/")[2])]
+            n = 2
+            while holds(ref):
+                ref = "%s%s_%d%s%s" % (head, stem, n, dot, ext)
+                n += 1
+        taken[ref.lower()] = src
     # beside the original as it lies on disk (got[0]: its data-relative path in the disk's own letter case), in the
     # mod's own data even when the original is the game's
     folder = os.path.dirname(got[0].replace("\\", "/"))
@@ -703,9 +792,21 @@ def _more_targets(mod, faction, names, colours, add):
             skip=_shared_skip(e["users"], faction), alike=False)
 
 
-def plan_recolour(plan, items, source, target):
+def item_source(it, source, source_of=None):
+    """The colours an item is recoloured from: its own (a card copied from another faction, a unit given to the
+    faction), else - for a picture named after another faction than the one the colours come from (source_of; the
+    window's 'from'; '*' = colours picked by hand, for every picture) - that faction's (EN_Peasant_Padded_france
+    given to a clone of England is France's blue), else source."""
+    if it.get("source"):
+        return it["source"]
+    if it.get("painted") and it.get("painted_by") and source_of != "*" and it["painted_by"] != source_of:
+        return it["painted"]
+    return source
+
+
+def plan_recolour(plan, items, source, target, source_of=None):
     """Write every item (from targets()) recoloured from source to target colours into the plan (backup, Restore).
-    Returns [(item, share changed or the reason it was left)]."""
+    source_of: the faction source is (item_source). Returns [(item, share changed or the reason it was left)]."""
     done = []
     sheets = {}
     cat = None
@@ -718,7 +819,7 @@ def plan_recolour(plan, items, source, target):
                 sheet = sheets.get(it["path"]) or read_picture(it["path"])
                 x, y, w, h = it["crop"]
                 part = sheet.crop((x, y, x + w, y + h))
-                new, share = recolour(part, it.get("source") or source, target, edits=it.get("edits"))
+                new, share = recolour(part, item_source(it, source, source_of), target, edits=it.get("edits"))
                 sheet.paste(new, (x, y))
                 sheets[it["path"]] = sheet
             else:
@@ -729,7 +830,7 @@ def plan_recolour(plan, items, source, target):
                         others.append((read_picture(p), c))
                     except Exception:
                         pass
-                new, share = recolour(im, it.get("source") or source, target, others, edits=it.get("edits"),
+                new, share = recolour(im, item_source(it, source, source_of), target, others, edits=it.get("edits"),
                                       plain=it.get("alike", True))
                 if share > 0 and it.get("own_tex"):
                     # the faction's own copy in the mod, its model line pointed at it (both games, text + modeldb)
@@ -781,4 +882,4 @@ def _words(cols):
     return " / ".join("%d,%d,%d" % c for c in cols if c)
 
 
-__all__ += ["targets", "plan_recolour", "read_picture", "picture_bytes"]
+__all__ += ["targets", "plan_recolour", "item_source", "read_picture", "picture_bytes"]

@@ -161,6 +161,11 @@ class RecolourWindow(tk.Toplevel):
                 self.v_from.set(CUSTOM)
             self._changed()
 
+    def _from_of(self):
+        """The faction the 'from' colours are ('*' when picked by hand: they count for every picture)."""
+        f = self.v_from.get()
+        return "*" if f == CUSTOM else f
+
     def _from_picked(self):
         f = self.v_from.get()
         if f in self.colours:
@@ -231,7 +236,8 @@ class RecolourWindow(tk.Toplevel):
                         others.append((R.read_picture(p), c))
                     except Exception:
                         pass
-            new, share = R.recolour(im, it.get("source") or self.source, self.target, others, edits=self.edits.get(key),
+            new, share = R.recolour(im, R.item_source(it, self.source, self._from_of()), self.target, others,
+                                    edits=self.edits.get(key),
                                     plain=it.get("alike", True))
             self._cache[key] = (im, new, share)
         return self._cache[key]
@@ -336,7 +342,7 @@ class RecolourWindow(tk.Toplevel):
         plan = Plan(self.mod, "recolour", "recolour_%s" % self.faction, {})
         self.status.configure(text="recolouring %d picture(s)..." % len(items))
         self.update_idletasks()
-        done = R.plan_recolour(plan, items, self.source, self.target)
+        done = R.plan_recolour(plan, items, self.source, self.target, self._from_of())
         now = tuple(tuple(c) if c else None for c in self.colours.get(self.faction, (None, None)))
         if self.v_set.get() and tuple(tuple(c) for c in self.target) != now:
             # the pictures and the faction's own colour lines move together (our rule: a change pulls along
