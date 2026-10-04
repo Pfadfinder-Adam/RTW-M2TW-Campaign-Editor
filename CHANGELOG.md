@@ -393,6 +393,8 @@
 - **Faster windows with town and unit cards**: the faction list, the buildings and the units files are read once
   while they stay the same (the town window read them again and again), and the faction's names come from a table
   read once - the town window, the Buildings and Units & armies tabs open up to twice as fast.
+- **Test mod: an experiment** - a copy of the test faction's army stands on its fleet's own sea tile: in the game
+  it either starts aboard (as an army on a town's or a fort's tile is inside it) or the log says the tile is invalid.
 - **Test mod: the test religion is told apart at once** (Medieval II): its own symbol (a magenta disc with a yellow
   star) and its own temples - Christianity's church chain copied as the Test Faith's (shrine to great cathedral),
   built by the test faction.

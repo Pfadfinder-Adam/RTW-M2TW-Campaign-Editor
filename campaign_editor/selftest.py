@@ -1558,6 +1558,36 @@ def s_scripts(c, mod):
         raise Skip("the words were already set")
     return plan
 
+
+@step("Experiment: a copy of {new}'s army put on its fleet's own sea tile in descr_strat.txt (does it start aboard, "
+      "as an army on a town's or a fort's tile is inside it?)",
+      "click {new}'s fleet: the army {aboard} is aboard (the ship's units show it) - or the game's log says "
+      "\"Character '{aboard}' is placed on an invalid tile\" (then an army cannot start at sea)")
+def s_aboard(c, mod):
+    from .start import _set_xy
+    from .textio import strip_comment
+    from .strat import Strat
+    path = mod.campaign_file(c.campaign, "descr_strat.txt")
+    plan = Plan(mod, "aboard", c.new, {})
+    f = plan.edit(path)
+    s = Strat(f)
+    fb = s.faction(c.new)
+    if fb is None:
+        raise Skip("%s is not in descr_strat.txt" % c.new)
+    fleet = next((ch for ch in fb.characters if ch.kind == "admiral" and ch.xy), None)
+    army = next((ch for ch in reversed(fb.characters) if ch.kind in ("general", "named character") and ch.xy
+                 and any(strip_comment(t).split()[:1] == ["unit"] for t in f.texts()[ch.start + 1:ch.end])), None)
+    if fleet is None or army is None:
+        raise Skip("%s has no fleet or no army to copy" % c.new)
+    name = free_names(c, mod, c.new, 6)[-1]
+    lines = f.texts()[army.start:army.end]
+    lines[0] = _set_xy(lines[0].replace(army.name, name, 1), fleet.xy)
+    f.insert(fleet.end, lines)
+    c.said["aboard"] = name
+    plan.note(f, "%s (a copy of %s's army) put on the fleet's tile %d, %d - an experiment" % (
+        name, army.name, fleet.xy[0], fleet.xy[1]))
+    return plan
+
 # ---------------------------------------------------------------------------
 # coverage: every feature of the editor and the steps that try it - a feature tried by the run itself or one that
 # only shows (writes nothing) says so. tests.test_tool checks that every work button, tab and Tools entry of the
@@ -1616,6 +1646,7 @@ COVERAGE = {
     "Engine settings (REX / M2EX)": ["s_engine_rules"],
     "Add-ons": ["s_addon", "s_addon_diplomacy", "s_addon_growth"],
     "Module builder": ["s_module"],
+    "Experiment: an army starting aboard its fleet": ["s_aboard"],
     "Scripts in the game (script/modules: settings, off / on, delete, the test mod's taken out)": ["s_scripts"],
     "Art: replace a picture": ["s_art", "s_art_all"],
     "Faction emblem": ["s_emblem"],
