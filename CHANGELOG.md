@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- **Map editor: delete a town with its region** (both games): right click a town > **Delete this town with its
+  region...**. Its land, town and port pixels go to the neighbour it shares the longest border with (or the one you
+  pick), its block of descr_regions.txt and its settlement in descr_strat.txt go (the owner's next town is its
+  capital; the rebels in the town go with it, a faction's characters there stay in the field), and it leaves the
+  mercenary pools, the win conditions and Medieval II's music lists, in every campaign that shares the map. map.rwm
+  is removed. Refused in plain words: a faction's last town, a region a faction rises in by an event, a town a
+  campaign script names (the lines are listed), an island with no land neighbour. Trait and ancillary conditions
+  that name it are listed (they never fire there again). Preview, a backup, Restore byte for byte.
 - **Select on the Map: a box round many things at once, as in a strategy game** (both games; replaces Pick towns):
   tick **Select**, choose in **what...** the kinds (towns, armies, agents, fleets, resources, forts), drag a box with
   the left button (Shift adds) or click things; a right click gives the towns to another faction, adds a building

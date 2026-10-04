@@ -228,3 +228,83 @@ def rename_in_files(app, region, parent):
     ttk.Button(bar, text="Preview", command=preview).pack(side="left")
     ttk.Button(bar, text="Rename", command=write).pack(side="left", padx=4)
     ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
+
+
+def delete_town(app, region, parent):
+    """Delete a town together with its region (regiondelete: its land to a neighbour, every file that ties them),
+    asked first with the whole list of changes, written with a backup, the mod read again. The Map's right click
+    on a town opens it."""
+    from .plan import Plan
+    from .regiondelete import delete, neighbours, problems
+    campaign = app.v_campaign.get()
+    regions = app.mod.regions(campaign)
+    if region not in regions:
+        messagebox.showerror(APP, "%s is not in the campaign's files yet - Apply the changes first." % region,
+                             parent=parent)
+        return
+    if app.pending_parts():
+        messagebox.showerror(APP, "Other changes wait for Apply. Apply (or undo) them first - a deleted region "
+                                  "would leave them pointing at nothing.", parent=parent)
+        return
+    town = regions[region].get("settlement") or region
+    errors, warns = problems(app.mod, campaign, region)
+    if errors:
+        messagebox.showerror(APP, "%s and its region cannot be deleted:\n\n- %s" % (town, "\n- ".join(errors)),
+                             parent=parent)
+        return
+    near = neighbours(app.mod, campaign, region)
+    w = tk.Toplevel(parent)
+    w.title("Delete %s with its region %s" % (town, region))
+    w.transient(parent)
+    frm = ttk.Frame(w, padding=10)
+    frm.pack(fill="both", expand=True)
+    ttk.Label(frm, justify="left", wraplength=560, text=(
+        "The town and its region go from the campaign in every file that ties them: the region's land (and its "
+        "port) becomes a neighbour's, its block of descr_regions and its settlement of descr_strat go, the rebels "
+        "in the town go with it (a faction's characters there stay, in the field), it leaves the mercenary pools, "
+        "the win conditions and the music lists. map.rwm is removed (the game builds it again). A backup is made "
+        "first; Tools > Restore gives everything back.")).grid(row=0, column=0, columnspan=2, sticky="w")
+    ttk.Label(frm, text="Its land goes to").grid(row=1, column=0, sticky="w", pady=(8, 2))
+    labels = ["%s  (%d tiles of border)" % (r, n) for r, n in near]
+    v_into = tk.StringVar(value=labels[0])
+    ttk.Combobox(frm, textvariable=v_into, values=labels, state="readonly",
+                 width=max(30, max(len(x) for x in labels) + 2)).grid(row=1, column=1, sticky="w", padx=6,
+                                                                       pady=(8, 2))
+    if warns:
+        ttk.Label(frm, justify="left", wraplength=560, foreground="#8a5a00", text=(
+            "Good to know:\n- " + "\n- ".join(warns[:6]) + ("\n..." if len(warns) > 6 else ""))).grid(
+            row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+    def plan():
+        into = near[labels.index(v_into.get())][0]
+        p = Plan(app.mod, "delete", region)
+        try:
+            delete(p, campaign, region, into)
+        except ValueError as e:
+            messagebox.showerror(APP, str(e), parent=w)
+            return None
+        return p
+
+    def preview():
+        p = plan()
+        if p:
+            app.show_text("Delete %s with its region - nothing written yet" % town, p.report())
+
+    def write():
+        p = plan()
+        if not p or not messagebox.askyesno(APP, "%s\n\nDelete %s and its region %s now (%d file(s))? A backup is "
+                                                 "made first (Tools > Restore undoes it)." % (
+                                                     p.report(), town, region, len(p.changed_files())), parent=w):
+            return
+        bdir = p.apply()
+        log.write("Deleted %s with its region %s (backup %s)\n%s" % (town, region, bdir, p.report()))
+        w.destroy()
+        app.load()
+        app.status.set("%s and its region %s deleted (backup %s). Start the game - it builds map.rwm again."
+                       % (town, region, bdir))
+
+    bar = ttk.Frame(frm)
+    bar.grid(row=3, column=0, columnspan=2, sticky="e", pady=(10, 0))
+    ttk.Button(bar, text="Preview", command=preview).pack(side="left")
+    ttk.Button(bar, text="Delete", command=write).pack(side="left", padx=4)
+    ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")

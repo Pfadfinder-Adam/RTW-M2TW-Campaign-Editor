@@ -1465,6 +1465,24 @@ def s_art_all(c, mod):
     return edit(mod, c.campaign, c.later, {"art": {FA.picture_target(p, c.later, c.later): logo(c) for p in pics}})
 
 
+@step("Map editor: a rebel town deleted with its region (its land to a neighbour, every file that ties them)",
+      "{gone} is not on the map any more: its land is {gone_into}'s, its rebels and mercenary pool entries gone")
+def s_delete_region(c, mod):
+    from . import regiondelete as RD
+    keep = {c.said.get("near"), c.said.get("far")}
+    tiles = mod.city_tiles(c.campaign)
+    capital = next((tiles[r] for r in towns_of(c, mod, c.new) if tiles.get(r)), (0, 0))
+    cands = [r for r in towns_of(c, mod, "slave") if r not in keep and tiles.get(r)]
+    # the farthest from the test faction's capital, so nothing of the test faction stands near it
+    for r in sorted(cands, key=lambda r: -(abs(tiles[r][0] - capital[0]) + abs(tiles[r][1] - capital[1]))):
+        if not RD.problems(mod, c.campaign, r)[0]:
+            plan = Plan(mod, "delete", r, {})
+            c.said["gone"] = r
+            c.said["gone_into"] = RD.delete(plan, c.campaign, r)
+            return plan
+    raise Skip("no rebel town that can go (each is named by a campaign script, an event or is an island)")
+
+
 # ---------------------------------------------------------------------------
 # coverage: every feature of the editor and the steps that try it - a feature tried by the run itself or one that
 # only shows (writes nothing) says so. tests.test_tool checks that every work button, tab and Tools entry of the
@@ -1492,6 +1510,7 @@ COVERAGE = {
     "Map: a port moved": ["s_port"],
     "Map: a character moved, one deleted": ["s_move_delete"],
     "Map editor: any faction's army moved, its units": ["s_map_any"],
+    "Map editor: a town deleted with its region": ["s_delete_region"],
     "New region": ["s_region", "s_region_garrison"],
     "Rename a region and its town everywhere": ["s_rename"],
     "Edit region: rebels, resources, farming, names players see": ["s_region_props"],

@@ -4324,6 +4324,9 @@ class App(tk.Tk):
             items.append(("Give this town to", [(("%s - %s" % (f, names[f]) if names.get(f) else f),
                                                  lambda f=f: give_town(self, region, f))
                                                 for f in factions_here(self) if f != owner]))
+            from .gui_settlements import delete_town
+            items.append(("Delete this town with its region...", self.once(
+                "delete_town:%s" % region, lambda: delete_town(self, region, self))))
             if mine:
                 items.append(("Its garrison...  (Units & armies)", lambda: self.show_units(region)))
 
