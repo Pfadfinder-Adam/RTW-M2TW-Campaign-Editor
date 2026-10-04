@@ -2657,7 +2657,8 @@ building smith
     def test_bigger_map_natural_rivers(self):
         """x3 rivers drawn the natural way: a bend's point moves into the bend, a straight run swings a pixel to
         either side by the golden-ratio meander - and still one unbroken river (side by side only), as many ends as
-        before, every pixel inside its old tiles' 3 x 3 blocks (a corner link: the one beside), a ford on the river; the same map, the same river."""
+        before, every pixel inside its old tiles' 3 x 3 blocks (a corner link: the one beside), a ford on the river, never two pixels wide (no 2 x 2
+        square anywhere); the same map, the same river."""
         from campaign_editor import upscale
         river, ford, black = (0, 0, 255), (0, 255, 255), (0, 0, 0)
         n = 14
@@ -2693,6 +2694,8 @@ building smith
             return sum(1 for p in px if sum((p[0] + a, p[1] + b) in px for a, b in ((1, 0), (-1, 0), (0, 1),
                                                                                         (0, -1))) == 1)
         self.assertEqual(ends(nat), ends(plain))
+        self.assertFalse([q for q in nat if (q[0] + 1, q[1]) in nat and (q[0], q[1] + 1) in nat and
+                          (q[0] + 1, q[1] + 1) in nat])                               # never wider than one pixel
         bend = (11 * 3 + 1, 2 * 3 + 1)                                                  # the corner tile's middle
         self.assertNotIn(bend, nat)                                                     # cut, not a right angle
 

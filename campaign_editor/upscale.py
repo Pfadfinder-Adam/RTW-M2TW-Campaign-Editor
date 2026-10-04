@@ -807,6 +807,34 @@ def features_scaled(path, land=None, natural=False):
                 for px, py in _line4(a, b):
                     paint(px, py, river)
             paint(a[0], a[1], river)
+        # a river is ONE pixel wide (the user, 2026-10-04: 'never wider than one tile'): where two pieces meet the
+        # lines can touch in a 2 x 2 square - one pixel of it goes, the one whose neighbours stay joined without it
+        def joined_without(q):
+            near = [(q[0] + a, q[1] + b) for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1)) if (q[0] + a, q[1] + b) in drawn]
+            if len(near) <= 1:
+                return False                                  # an end: kept
+            ring = {(q[0] + a, q[1] + b) for a in (-1, 0, 1) for b in (-1, 0, 1) if (a, b) != (0, 0)} & drawn
+            seen, todo = {near[0]}, [near[0]]
+            while todo:
+                x0, y0 = todo.pop()
+                for r in ((x0 + 1, y0), (x0 - 1, y0), (x0, y0 + 1), (x0, y0 - 1)):
+                    if r in ring and r not in seen:
+                        seen.add(r)
+                        todo.append(r)
+            return all(n_ in seen for n_ in near)
+        for _ in range(8):
+            squares = [(x0, y0) for (x0, y0) in drawn if (x0 + 1, y0) in drawn and (x0, y0 + 1) in drawn and
+                       (x0 + 1, y0 + 1) in drawn]
+            if not squares:
+                break
+            for x0, y0 in sorted(squares):
+                cell = [(x0, y0), (x0 + 1, y0), (x0, y0 + 1), (x0 + 1, y0 + 1)]
+                if not all(q in drawn for q in cell):
+                    continue                                  # a square beside it was thinned already
+                q = next((q for q in cell if joined_without(q)), None)
+                if q is not None:
+                    _put(raw, W, H, step, top_down, q[0], q[1], (0, 0, 0))
+                    drawn.discard(q)
         # where two pieces meet at a moved point a one-pixel spur can stick out: cut every pixel with one neighbour
         # that is not a river's real end (its source or its mouth stays)
         for _ in range(4):
