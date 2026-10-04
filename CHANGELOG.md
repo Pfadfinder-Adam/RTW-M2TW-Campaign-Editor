@@ -109,6 +109,9 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **Map: an army in a town shows as a flag on the town's roof** (several side by side); a town with no army has no
+  flag. Agents and ships still stand beside the town. The port's anchor now grows under the mouse like the towns and
+  the characters.
 - **The campaign map is always drawn tile by tile**: one square = one tile, as the game and every brush work with
   it. The switch for the old blurred "detailed picture" (Layers and Settings) is gone - it hid where a tile ends.
 - **Module builder**: picking an example after changing the module asks in plain words whether to drop your

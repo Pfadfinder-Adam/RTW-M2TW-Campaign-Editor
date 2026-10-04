@@ -907,22 +907,32 @@ class MapView(ttk.Frame):
 
     def _characters(self, cw, ch, size):
         cm = self.cmap
-        busy = {self.places.get(("city", r), xy) for r, xy in cm.cities.items()} | \
-            {self.places.get(("port", r), xy) for r, xy in cm.ports.items()}
+        towns = {self.places.get(("city", r), xy) for r, xy in cm.cities.items()}
+        busy = towns | {self.places.get(("port", r), xy) for r, xy in cm.ports.items()}
         tile = max(self.z * 0.9, 6)                    # a character fills its tile...
-        seen = {}
+        seen, flags = {}, {}
         for ch_ in sorted(self.chars, key=lambda c: not c["army"]):     # the garrison first
             x, y = ch_["xy"]
             sx, sy = self.to_screen(x, y)
             if not (-30 < sx < cw + 30 and -30 < sy < ch + 30):
                 continue
-            n = seen.get((x, y), 0)
-            seen[(x, y)] = n + 1
             one = tile
-            if (x, y) in busy:                         # ...or stands small beside the town / port, to its
-                one = max(tile * 0.6, 6)               # left (the name is on the right), in a row
+            if (x, y) in towns and ch_["kind"] in ("general", "named character"):
+                # an army in a town: its flag stands on the town's roof (a tester's wish) - no army, no flag;
+                # more than one side by side
+                n = flags.get((x, y), 0)
+                flags[(x, y)] = n + 1
+                one = max(tile * 0.6, 6)
+                sx += one * 0.3 + n * one * 0.75       # the pole on the roof's middle (the flag waves right)
+                sy -= size / 2 + one * 0.5             # its foot on the roof
+            elif (x, y) in busy:                       # ...an agent or a ship stands small beside the town /
+                n = seen.get((x, y), 0)                # port, to its left (the name is on the right), in a row
+                seen[(x, y)] = n + 1
+                one = max(tile * 0.6, 6)
                 sx = sx - tile * 0.5 - one * 0.45 - n * one * 0.75
             else:
+                n = seen.get((x, y), 0)
+                seen[(x, y)] = n + 1
                 sx += n * one * 0.5
             self._draw_char(ch_, sx, sy, one)
 
@@ -1137,7 +1147,8 @@ class MapView(ttk.Frame):
         return max(8.0, min(28.0, 34.0 - self.z * 1.2))
 
     def _marker_near(self, sx, sy):
-        """(tag, how near 0..1) of the town or character sign nearest the mouse within its aura, or (None, 0)."""
+        """(tag, how near 0..1) of the town, port or character sign nearest the mouse within its aura, or (None, 0)
+        (a tester: the port's anchor did not grow like the rest)."""
         r = self._aura()
         c = self.canvas
         best = None
@@ -1145,7 +1156,7 @@ class MapView(ttk.Frame):
             hb = c.bbox(self._hot)
         for item in c.find_overlapping(sx - r, sy - r, sx + r, sy + r):
             for tag in c.gettags(item):
-                if not tag.startswith(("char:", "city:")):
+                if not tag.startswith(("char:", "city:", "port:")):
                     continue
                 box = c.bbox(tag)
                 if not box:
