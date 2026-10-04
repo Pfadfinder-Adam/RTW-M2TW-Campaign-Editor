@@ -316,6 +316,13 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Medieval II small pennants yellow / white in the game after Banner...**: each small pennant (infantry, spear,
+  cavalry, missile) has four looks on the banner picture - the game shows the other three on other units - and only
+  the first was dyed; the rest kept the template's grey mix. All four now get the banner's design (found where the
+  picture's see-through shape repeats the first; the saved template outlines them in grey, and your own drawing's
+  first pennant is copied there too). **The cavalry banner's dark seam** through the symbol is gone too: its slit (a
+  line no part of the model shows, dark on every faction's picture) is dyed with the cloth round it, as the game's
+  own pictures have it.
 - **Check mod files / moving a port (Medieval II): a port beside a town is a warning, not a fault** - vanilla
   Medieval II's own norman_prologue has two (Marseille, Venice) and plays.
 - **Buildings and garrisons for many towns / Settlement names by culture: an error when the window was closed** while

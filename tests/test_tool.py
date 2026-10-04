@@ -3793,6 +3793,50 @@ building smith
         full = M.Sheet(blank, cloth, Image.new("L", cloth.size, 255), [(0, 0, 128, 96)], 1)
         self.assertEqual(M.symbol_boxes(full), [(40, 16, 88, 64)])       # a whole rectangle: as before
 
+    def test_medieval2_pennants_every_look_and_no_seam(self):
+        """Medieval II's small pennants have four looks on the sheet (the mesh shows the first; the others a quarter
+        across and half down - the game shows them on other units): every look gets the made design, found where the
+        sheets' see-through shape repeats the first's; a banner's long thin slit (the cavalry banner's, no mesh shows
+        it) is cloth, dyed with the rest - it went through the symbol as a dark seam; an edge's short notches stay."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import banners_m2 as M
+        W, H = 128, 64
+        alpha = Image.new("L", (W, H), 0)
+        for x0, y0 in ((64, 0), (96, 0), (64, 32), (96, 32)):     # one pennant shape, four times
+            alpha.paste(255, (x0 + 2, y0 + 2, x0 + 24, y0 + 20))
+        alpha.paste(255, (0, 0, 60, 64))                          # a big banner on the left
+        cloth = Image.new("L", (W, H), 0)
+        cloth.paste(255, (66, 2, 88, 20))                         # the mesh shows the first look only
+        cloth.paste(255, (4, 4, 56, 60))
+        cloth.paste(0, (20, 30, 56, 33))                          # the slit: 36 long, 3 high, open at the edge
+        for y in range(6, 58, 8):
+            cloth.paste(0, (4, y, 7, y + 4))                      # the hoist's ties: short notches
+        panels = [(4, 4, 56, 60), (66, 2, 88, 20)]
+        mini = Image.new("L", (W, H), 0)
+        mini.paste(255, (66, 2, 88, 20))
+        copies = M.variant_copies(panels, cloth, alpha, [mini])
+        self.assertEqual(sorted(copies), [(1, 0, 32), (1, 32, 0), (1, 32, 32)])
+        self.assertEqual(M.variant_copies(panels, cloth, alpha, []), [])     # not a pennant: no copies
+        filled = M.fill_slits(cloth, panels)
+        self.assertEqual(filled.getpixel((40, 31)), 255)                     # the slit is cloth
+        self.assertEqual(filled.getpixel((5, 8)), 0)                         # a tie stays out
+        blank = Image.merge("RGBA", (Image.new("L", (W, H), 210),) * 3 + (alpha,))
+        for i, dx, dy in copies:
+            x0, y0, x1, y1 = panels[i]
+            filled.paste(filled.crop((x0, y0, x1, y1)), (x0 + dx, y0 + dy))
+        sheet = M.Sheet(blank, Image.new("L", (W, H), 210), filled, panels, 3, copies)
+        made = M.paint(sheet, [(200, 0, 0), (0, 0, 200)], None, None, "two stripes, upright")
+        for dx, dy in ((0, 0), (32, 0), (0, 32), (32, 32)):
+            self.assertEqual(made.getpixel((68 + dx, 10 + dy))[:3], made.getpixel((68, 10))[:3])
+            self.assertEqual(made.getpixel((86 + dx, 10 + dy))[:3], made.getpixel((86, 10))[:3])
+        self.assertGreater(made.getpixel((68, 10))[0], 150)                  # red half ...
+        self.assertGreater(made.getpixel((86, 10))[2], 150)                  # ... blue half, in every look
+        self.assertGreater(made.getpixel((50, 31))[2], 150)                  # the slit dyed like the cloth round it
+        self.assertEqual(M.template_picture(sheet).getpixel((98, 2)), (140, 140, 140, 255))   # looks outlined
+
     def test_medieval2_white_banner_from_the_faction_sheets(self):
         """Medieval II has no white banner: the template is the per-pixel median of the mod's faction banner
         sheets (each faction's heraldry elsewhere, so it vanishes; the folds every sheet shares stay; what is

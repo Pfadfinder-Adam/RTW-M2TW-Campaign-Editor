@@ -10,7 +10,15 @@ measured against its own neighbourhood (the cloth's colour taken out, its folds 
 of all sheets - each faction's heraldry is somewhere else, so it vanishes, while what all sheets share (the tooth
 edges, the holes, the folds) stays. Pixels alike in nearly every sheet (the wood, the glass finials, the trim) are
 kept in their colour. The cloth = what the banner meshes show of the sheet, less those. Pillow alone (the exe has
-no numpy): about a second for 23 sheets, kept per mod while the files are unchanged."""
+no numpy): about a second for 23 sheets, kept per mod while the files are unchanged.
+
+The right half of the sheet holds the small pennants (MiniMesh, 'experience' in the game's own test banner): four
+kinds, each four times - the mesh shows the first, the game moves it a quarter across and half down for the others
+(the vanilla sheets paint all four, France each one differently). Only the first was dyed once: the others stayed the
+template's grey mix, and the pennants came out yellow / white in the game (a tester's test mod). Each other one is
+now a copy of the first - found where the sheets' see-through shape repeats the first's. And the cavalry banner's
+slit (a line no mesh shows, the same dark line on every sheet) went through the symbol as a dark seam: a long thin gap
+inside a banner's cloth is cloth."""
 
 import os
 import re
@@ -21,6 +29,10 @@ SAME_SHARE = 0.70              # ... this share of the sheets is not cloth: kept
 WHITE = 210                    # the template's white (the light 1.0); folds go darker, highlights up to 255
 NOT_FACTIONS = ("ally", "enemy", "test_", "_trans")
 MIN_PANEL = 0.004              # a piece of cloth smaller than this share of the sheet is no panel of its own
+VARIANT_SHIFTS = ((0.25, 0.0), (0.0, 0.5), (0.25, 0.5))   # where the game finds a pennant's other three looks
+SHAPE_ALIKE = 0.90             # a moved pennant is taken when this share of its box is see-through / solid alike
+SLIT_CLOSE = 9                 # a gap in a banner's cloth thinner than this (px) ...
+SLIT_LONG = 32                 # ... and at least this long (and 6 times longer than wide) is a slit: cloth
 _CACHE = {}
 
 
@@ -66,22 +78,28 @@ def sheets(mod):
     return out
 
 
-def meshes(mod):
-    """[path] of the banner meshes that carry the faction sheets (MainMesh / MiniMesh / GeneralMesh /
-    BuildingMesh of every <Banner> whose textures are faction banner sheets) - their u v say where the cloth is."""
+def mesh_refs(mod):
+    """[(kind, path)] of the banner meshes that carry the faction sheets (kind 'Main', 'Mini', 'General',
+    'Building': the attribute of every <Banner> whose textures are faction banner sheets) - their u v say where the
+    cloth is."""
     from .meshview import mesh_path
     _, text = _xml(mod)
     out = []
     for m in re.finditer(r"<Banner\b([^>]*)>(.*?)</Banner>", text, re.S):
         if not any(faction_sheet(r) for r in re.findall(r'DiffuseMap="([^"]+)"', m.group(2))):
             continue
-        for ref in re.findall(r'(?:Main|Mini|General|Building)Mesh="([^"]+)"', m.group(1)):
+        for kind, ref in re.findall(r'(Main|Mini|General|Building)Mesh="([^"]+)"', m.group(1)):
             ref = ref.replace("\\", "/")
             ref = ref[5:] if ref.lower().startswith("data/") else ref
             p = mesh_path(mod, ref)
-            if p and p not in out:
-                out.append(p)
+            if p and all(p != q for _, q in out):
+                out.append((kind, p))
     return out
+
+
+def meshes(mod):
+    """[path] of the banner meshes that carry the faction sheets (mesh_refs)."""
+    return [p for _, p in mesh_refs(mod)]
 
 
 def main_mesh(mod):
@@ -98,8 +116,9 @@ class Sheet:
     colour), shade ('L', the cloth's light, WHITE = 1.0), cloth ('L' mask), panels [(x0, y0, x1, y1)] - each
     piece of cloth one banner or pennant shows."""
 
-    def __init__(self, blank, shade, cloth, panels, count):
+    def __init__(self, blank, shade, cloth, panels, count, copies=()):
         self.blank, self.shade, self.cloth, self.panels, self.count = blank, shade, cloth, panels, count
+        self.copies = list(copies)      # [(panel index, dx, dy)]: a pennant's other looks, copies of the first
 
     @property
     def size(self):
@@ -224,8 +243,80 @@ def panels_of(cloth):
     return [b for _, b in sorted(out, key=lambda t: -t[0])]
 
 
-def make_sheet(pictures, mesh_paths=()):
-    """The white template (Sheet) from the faction sheets (RGBA pictures; those of the first one's size)."""
+def variant_copies(panels, cloth, alpha, small_meshes):
+    """[(panel index, dx, dy)] - the other looks of the small pennants: each panel a MiniMesh shows, moved by
+    VARIANT_SHIFTS, where the moved box is on the sheet, holds no cloth of another banner, and the sheets'
+    see-through shape (alpha) there repeats the first look's."""
+    from PIL import ImageChops
+    w, h = cloth.size
+    solid = alpha.point(lambda v: 255 if v > 128 else 0)
+    taken = cloth.point(lambda v: 255 if v > 128 else 0)
+    out = []
+    for i, (x0, y0, x1, y1) in enumerate(panels):
+        if not any(m.crop((x0, y0, x1, y1)).getbbox() for m in small_meshes):
+            continue
+        src = solid.crop((x0, y0, x1, y1))
+        for fx, fy in VARIANT_SHIFTS:
+            dx, dy = int(round(fx * w)), int(round(fy * h))
+            box = (x0 + dx, y0 + dy, x1 + dx, y1 + dy)
+            if box[2] > w or box[3] > h:
+                continue
+            if taken.crop(box).histogram()[255] > 0.02 * (x1 - x0) * (y1 - y0):
+                continue                      # another banner's cloth there: not this pennant's
+            diff = ImageChops.difference(src, solid.crop(box)).histogram()[255]
+            if diff <= (1 - SHAPE_ALIKE) * (x1 - x0) * (y1 - y0):
+                out.append((i, dx, dy))
+    return out
+
+
+def fill_slits(cloth, panels):
+    """The cloth with the long thin gaps inside each banner filled (the cavalry banner's slit): what a closing of
+    SLIT_CLOSE px adds inside a panel, kept where it forms a line at least SLIT_LONG long and 6 times longer than
+    wide - the notches of an edge (the hoist's ties, a tooth) are short and stay as they are."""
+    from PIL import ImageChops, ImageFilter, ImageOps
+    out = cloth.copy()
+    m = SLIT_CLOSE
+    for box in panels:
+        # an empty margin round the panel: the sheet beyond it is no cloth (else the closing fills the edge too)
+        part = ImageOps.expand(cloth.crop(box).point(lambda v: 255 if v > 128 else 0), border=m, fill=0)
+        closed = part.filter(ImageFilter.MaxFilter(SLIT_CLOSE)).filter(ImageFilter.MinFilter(SLIT_CLOSE))
+        added = ImageChops.subtract(closed, part).crop((m, m, m + box[2] - box[0], m + box[3] - box[1]))
+        for pts in _pieces(added):
+            xs = [p[0] for p in pts]
+            ys = [p[1] for p in pts]
+            long_, short = sorted((max(xs) - min(xs) + 1, max(ys) - min(ys) + 1), reverse=True)
+            if long_ >= SLIT_LONG and long_ >= 6 * short:
+                for x, y in pts:
+                    out.putpixel((box[0] + x, box[1] + y), 255)
+    return out
+
+
+def _pieces(mask):
+    """[[(x, y)]] the joined pieces of a mask's set pixels (4-neighbours)."""
+    w, h = mask.size
+    px = mask.tobytes()
+    seen = bytearray(len(px))
+    out = []
+    for start in range(len(px)):
+        if px[start] < 128 or seen[start]:
+            continue
+        seen[start] = 1
+        stack, pts = [start], []
+        while stack:
+            i = stack.pop()
+            x, y = i % w, i // w
+            pts.append((x, y))
+            for j in (i - 1 if x else -1, i + 1 if x + 1 < w else -1, i - w, i + w):
+                if 0 <= j < len(px) and px[j] >= 128 and not seen[j]:
+                    seen[j] = 1
+                    stack.append(j)
+        out.append(pts)
+    return out
+
+
+def make_sheet(pictures, mesh_paths=(), mini_paths=()):
+    """The white template (Sheet) from the faction sheets (RGBA pictures; those of the first one's size);
+    mini_paths: the MiniMesh meshes (their pennants have three more looks on the sheet)."""
     from PIL import Image, ImageChops
     pics = [p.convert("RGBA") for p in pictures]
     pics = [p for p in pics if p.size == pics[0].size]
@@ -244,12 +335,21 @@ def make_sheet(pictures, mesh_paths=()):
     same = count.point(lambda v: 255 if v >= need else 0) if len(pics) > 2 else Image.new("L", size, 0)
     masks = [m for m in (_mesh_mask(p, size) for p in mesh_paths) if m.getbbox()]
     cloth, panels = own_cloth(masks, same, size)
+    copies = []
     if not panels:                       # no meshes read: whatever is not see-through and not alike everywhere
         cloth = _clean(ImageChops.subtract(bands[3].point(lambda v: 255 if v > 128 else 0), same))
         panels = panels_of(cloth)
+    else:
+        cloth = fill_slits(cloth, panels)
+        small = [m for p, m in zip(mesh_paths, (_mesh_mask(p, size) for p in mesh_paths)) if p in mini_paths]
+        copies = variant_copies(panels, cloth, bands[3], small)
+        for i, dx, dy in copies:         # the other looks are cloth too (white in the template)
+            x0, y0, x1, y1 = panels[i]
+            moved = cloth.crop((x0, y0, x1, y1))
+            cloth.paste(ImageChops.lighter(cloth.crop((x0 + dx, y0 + dy, x1 + dx, y1 + dy)), moved), (x0 + dx, y0 + dy))
     white = Image.merge("RGBA", (shade, shade, shade, bands[3]))
     blank = Image.composite(white, med, cloth)
-    return Sheet(blank, shade, cloth, panels, len(pics))
+    return Sheet(blank, shade, cloth, panels, len(pics), copies)
 
 
 def sheet_blank(mod):
@@ -259,7 +359,8 @@ def sheet_blank(mod):
     paths = sheets(mod)
     if not paths:
         return None
-    ms = meshes(mod)
+    refs = mesh_refs(mod)
+    ms = [p for _, p in refs]
     key = tuple((p, os.path.getmtime(p)) for p in paths + ms)
     if _CACHE.get("key") != key:
         pics = []
@@ -269,7 +370,7 @@ def sheet_blank(mod):
             except Exception:
                 pass
         _CACHE.clear()
-        _CACHE.update(key=key, sheet=make_sheet(pics, ms) if pics else None)
+        _CACHE.update(key=key, sheet=make_sheet(pics, ms, [p for k, p in refs if k == "Mini"]) if pics else None)
     return _CACHE["sheet"]
 
 
@@ -373,18 +474,30 @@ def paint(sheet, colours, symbol=None, boxes=None, pattern="plain", strength=1.0
     out.paste(dyed, (0, 0), sheet.cloth)
     if symbol is not None:
         put_symbol(out, sheet.shade, symbol, boxes if boxes is not None else symbol_boxes(sheet), strength)
+    copy_looks(sheet, out)
     out.putalpha(sheet.blank.getchannel("A"))
     return out
 
 
+def copy_looks(sheet, out):
+    """Each small pennant's other three looks made the same as its first (sheet.copies), in place."""
+    for i, dx, dy in getattr(sheet, "copies", ()):
+        x0, y0, x1, y1 = sheet.panels[i]
+        out.paste(out.crop((x0, y0, x1, y1)), (x0 + dx, y0 + dy), sheet.cloth.crop((x0, y0, x1, y1)))
+
+
 def template_picture(sheet):
     """The white template to draw on in any program: the blank with each panel's outline (thin red lines just
-    outside the cloth do no harm - the game shows only the cloth)."""
+    outside the cloth do no harm - the game shows only the cloth); a small pennant's other looks in grey - the editor
+    copies the first one there."""
     from PIL import ImageDraw
     im = sheet.blank.copy()
     dr = ImageDraw.Draw(im)
     for x0, y0, x1, y1 in sheet.panels:
         dr.rectangle((x0, y0, x1 - 1, y1 - 1), outline=(220, 30, 30, 255))
+    for i, dx, dy in getattr(sheet, "copies", ()):
+        x0, y0, x1, y1 = sheet.panels[i]
+        dr.rectangle((x0 + dx, y0 + dy, x1 + dx - 1, y1 + dy - 1), outline=(140, 140, 140, 255))
     return im
 
 
@@ -414,6 +527,7 @@ def make(sheet, s, symbol=None, strength=1.0):
     out = own_drawing(s["drawing"], sheet.size)
     if sym is not None:
         put_symbol(out, sheet.shade, sym, boxes, strength)
+    copy_looks(sheet, out)
     out.putalpha(sheet.blank.getchannel("A"))
     return out
 
@@ -452,5 +566,5 @@ class Kit:
         return template_picture(self.sheet)
 
 
-__all__ = ["sheets", "meshes", "main_mesh", "Sheet", "make_sheet", "sheet_blank", "panels_of", "symbol_boxes",
+__all__ = ["sheets", "meshes", "mesh_refs", "main_mesh", "variant_copies", "fill_slits", "copy_looks", "Sheet", "make_sheet", "sheet_blank", "panels_of", "symbol_boxes",
            "paint", "template_picture", "look_3d", "faction_sheet", "make", "Kit"]

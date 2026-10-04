@@ -234,9 +234,11 @@ class BannerWindow(tk.Toplevel):
             messagebox.showerror("Save the template", str(e), parent=self)
             return
         w, h = self.blank().size
+        looks = getattr(getattr(self.kit, "sheet", None), "copies", None)
         messagebox.showinfo("Save the template", "Saved %s (%d x %d).\n\nPaint the banners inside the red lines "
-                            "in any program, keep the size, then 'Put in my own drawing'." % (
-                                os.path.basename(dst), w, h), parent=self)
+                            "in any program, keep the size, then 'Put in my own drawing'.%s" % (
+                                os.path.basename(dst), w, h, "\n\nThe grey lines are the small pennants' other "
+                                "looks: the editor copies each first pennant there." if looks else ""), parent=self)
 
     def _drawing(self):
         src = filedialog.askopenfilename(parent=self, title="Your banner picture",
