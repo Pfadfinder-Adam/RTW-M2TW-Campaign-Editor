@@ -14,6 +14,7 @@ import time
 import traceback
 
 from . import scriptmods as SM
+from .textio import strip_comment
 from .plan import Plan
 
 NAME = "CE_Test"
@@ -1588,6 +1589,216 @@ def s_aboard(c, mod):
         name, army.name, fleet.xy[0], fleet.xy[1]))
     return plan
 
+
+# the three ways a modder's own building can stand on the campaign map (rules.md 'Own buildings / models'), each
+# with a model of the game's own copied under a new name so the three look different: (game, route) -> model
+SPECIAL_MODELS = {("rome", "resource"): "resource_lion.cas", ("rome", "engine"): "wonder_pyramids.cas",
+                  ("medieval2", "resource"): "resource_elephants.cas", ("medieval2", "engine"): "volcano_rock.cas"}
+SPECIAL_TYPE = "ce_test_special"
+SPECIAL_ENGINE = "ce_test_special_engine.cas"
+SPECIAL_SCRIPT = "ce_test_special_models.nut"
+
+
+def _special_model(mod, route):
+    from .moddata import _ci
+    from .packs import game_kind
+    name = SPECIAL_MODELS[("rome" if game_kind(mod) != "medieval2" else "medieval2", route)]
+    folder = _ci(mod.data, "models_strat")
+    return _ci(folder, name) if folder else None
+
+
+@step("Own buildings on the map 1/2: a new resource type '%s' with its own model (a copy of one of the game's) - "
+      "new resource types take REX / M2EX" % SPECIAL_TYPE,
+      "nothing to see yet - the next step puts it on the map")
+def s_special_type(c, mod):
+    from .editors import set_text_values
+    from .moddata import _ci
+    from .resources import types
+    from .limits import engine_of
+    if not engine_of(mod):                  # RomeTW.exe / medieval2.exe: 'dont recognise this resource type'
+        raise Skip("a new resource type needs REX or M2EX - the original exe refuses unknown types")
+    if SPECIAL_TYPE in types(mod):
+        raise Skip("there already")
+    src = _special_model(mod, "resource")
+    res = mod.file("resources")
+    if not src or not res:
+        raise Skip("no model to copy or no descr_sm_resources.txt")
+    plan = Plan(mod, "special", SPECIAL_TYPE, {})
+    f = plan.edit(res)
+    cur, block = False, []
+    for t in f.texts():                                 # the elephants' block as the pattern (both games have it)
+        w = strip_comment(t).split()
+        if w[:1] == ["type"]:
+            if cur:
+                break
+            cur = w[1:2] == ["elephants"]
+        if cur and w:
+            block.append(t)
+    if not block:
+        raise Skip("no elephants resource to copy")
+    rel = "data/models_strat/%s.cas" % SPECIAL_TYPE
+    out = []
+    for t in block:
+        w = strip_comment(t).split()
+        if w[:1] == ["type"]:
+            t = t.replace("elephants", SPECIAL_TYPE, 1)
+        elif w[:1] == ["item"] and len(w) > 1:
+            t = t.replace(w[1], rel, 1)
+        elif w[:1] == ["has_mine"]:
+            continue
+        out.append(t)
+    at = len(f.raw) - 1 if f.raw and f.raw[-1] in ("", "\r") else len(f.raw)   # before the file's last line end
+    f.insert(at, [""] + [x for x in out if x.strip()])
+    plan.copy(src, os.path.join(mod.data, "models_strat", SPECIAL_TYPE + ".cas"))
+    strat = _ci(os.path.join(mod.data, "text"), "strat.txt") or mod.text_file("strat.txt")
+    if strat and strat.lower().endswith(".txt"):         # Rome names resources SMT_RESOURCE_<TYPE> in strat.txt
+        set_text_values(plan, strat, {"SMT_RESOURCE_" + SPECIAL_TYPE.upper(): "Test Special Building"})
+    plan.note(f, "%s: a new resource type (a copy of elephants with the model %s)" % (SPECIAL_TYPE,
+                                                                                    os.path.basename(src)))
+    return plan
+
+
+SPECIAL_NUT = r"""// @title CE Test special models
+// @summary The editor's test mod: draws a model of the game's own (copied as %(model)s) beside ce_test's capital
+// @summary at %(x)d, %(y)d - the engine way (REX / M2EX) of putting a building's model on the map. Does nothing in
+// @summary a campaign without the faction ce_test.
+local PREFIX = "[CE_SPECIAL] "
+local MODEL = "data/models_strat/%(model)s"
+local MODEL_ID = 9177
+local AT_X = %(x)d
+local AT_Y = %(y)d
+local done = false
+
+local function log(message) {
+    println(PREFIX + message)
+}
+
+local function get(o, field) {
+    if (o == null) {
+        return null
+    }
+    try {
+        return o[field]
+    } catch (err) {
+    }
+    return null
+}
+
+local function has_test_faction() {
+    local n = 0
+    try {
+        n = ::game.factionCount()
+    } catch (err) {
+        return false
+    }
+    for (local i = 0; i < n; i++) {
+        local f = null
+        try {
+            f = ::game.faction(i)
+        } catch (err) {
+        }
+        if (get(f, "name") == "ce_test") {
+            return true
+        }
+    }
+    return false
+}
+
+// the argument order of models.add / drawAt is not in the engines' strings: each way is tried, the one that works
+// is written to the game's log
+local function try_calls(label, calls) {
+    foreach (i, call in calls) {
+        try {
+            local r = call()
+            log(label + ": way " + i + " worked (answer " + (r == null ? "null" : r.tostring()) + ")")
+            return true
+        } catch (err) {
+            log(label + ": way " + i + " refused: " + err)
+        }
+    }
+    return false
+}
+
+local function draw(...) {
+    if (!has_test_faction()) {
+        return
+    }
+    local models = get(::game, "models")
+    if (models == null) {
+        log("no game.models in this engine - the engine way cannot draw")
+        return
+    }
+    if (!try_calls("models.add", [
+            function() { return models.add(MODEL, MODEL_ID) },
+            function() { return models.add(MODEL_ID, MODEL) },
+            function() { return models.add(MODEL, MODEL_ID, false) }])) {
+        return
+    }
+    try_calls("models.drawAt", [
+        function() { return models.drawAt(MODEL_ID, AT_X, AT_Y) },
+        function() { return models.drawAt(AT_X, AT_Y, MODEL_ID) }])
+    done = true
+}
+
+local function listen(name, handler) {
+    try {
+        ::events.on(name, handler)
+    } catch (err) {
+        log("events.on(" + name + ") failed: " + err)
+    }
+}
+
+listen("FactionTurnStart", function(...) { if (!done) { draw() } })
+listen("GameReloaded", function(...) { done = false; draw() })
+log("module loaded")
+"""
+
+
+@step("Own buildings on the map 2/2: three ways side by side beside {new}'s capital - a wonder of the game's own "
+      "(Rome), the new resource type with its own model, and a model drawn by an engine script (REX / M2EX)",
+      "near {new}'s capital: {special_wonder}a lion / elephants model = the resource way (hover: its name only), "
+      "{special_engine} = the engine way (the log's [CE_SPECIAL] lines say which call worked); the new resource's hover "
+      "text is the copied type's name (Medieval II keeps resource names in its compiled strat.txt.strings.bin)")
+def s_special(c, mod):
+    import types as _types
+    from . import addons as AD, forts as FT, resources as RS
+    from .scriptmods import TEST_MARK
+    from .strat import Strat
+    tiles = mod.city_tiles(c.campaign)
+    cap = next((tiles[r] for r in towns_of(c, mod, c.new) if tiles.get(r)), None)
+    if cap is None:
+        raise Skip("%s has no town" % c.new)
+    path = mod.campaign_file(c.campaign, "descr_strat.txt")
+    f = mod.load(path)
+    used = {r.xy for r in RS.read(f)} | {fo.xy for fo in Strat(f).forts}
+    picked = []
+    for _ in range(3):
+        t = free_land(c, mod, cap, skip=used | set(picked))
+        if t is None:
+            raise Skip("no free land beside %s's capital" % c.new)
+        picked.append(t)
+    plan = Plan(mod, "special", "map", {})
+    wonder = FT.landmark_types(mod)
+    ch = {"added": []}
+    if SPECIAL_TYPE in RS.types(mod):
+        ch["added"].append({"type": SPECIAL_TYPE, "xy": picked[1]})
+    if wonder:
+        t = "statue" if "statue" in wonder else wonder[0]
+        ch["forts"] = {"added": [{"kind": FT.LANDMARK, "type": t, "xy": picked[0]}]}
+        c.said["special_wonder"] = "the %s wonder = the wonder way (double click: the game's window), " % t
+    else:
+        c.said["special_wonder"] = ""
+    RS.apply(plan, c.campaign, ch)
+    src = _special_model(mod, "engine")
+    if src:
+        plan.copy(src, os.path.join(mod.data, "models_strat", SPECIAL_ENGINE))
+        text = SPECIAL_NUT % {"model": SPECIAL_ENGINE, "x": picked[2][0], "y": picked[2][1]} + TEST_MARK + "\n"
+        plan.binary(AD.target(mod, _types.SimpleNamespace(file=SPECIAL_SCRIPT)), text.encode("utf-8"))
+        c.said["special_engine"] = "the %s model at %d, %d" % (os.path.basename(src).rsplit(".", 1)[0], *picked[2])
+    else:
+        c.said["special_engine"] = "(no model to copy)"
+    return plan
+
 # ---------------------------------------------------------------------------
 # coverage: every feature of the editor and the steps that try it - a feature tried by the run itself or one that
 # only shows (writes nothing) says so. tests.test_tool checks that every work button, tab and Tools entry of the
@@ -1647,6 +1858,7 @@ COVERAGE = {
     "Add-ons": ["s_addon", "s_addon_diplomacy", "s_addon_growth"],
     "Module builder": ["s_module"],
     "Experiment: an army starting aboard its fleet": ["s_aboard"],
+    "Own buildings on the map: a wonder, a new resource type, an engine model": ["s_special_type", "s_special"],
     "Scripts in the game (script/modules: settings, off / on, delete, the test mod's taken out)": ["s_scripts"],
     "Art: replace a picture": ["s_art", "s_art_all"],
     "Faction emblem": ["s_emblem"],

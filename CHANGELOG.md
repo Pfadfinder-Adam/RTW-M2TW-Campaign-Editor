@@ -393,6 +393,10 @@
 - **Faster windows with town and unit cards**: the faction list, the buildings and the units files are read once
   while they stay the same (the town window read them again and again), and the faction's names come from a table
   read once - the town window, the Buildings and Units & armies tabs open up to twice as fast.
+- **Test mod: own buildings on the campaign map, three ways side by side** beside the test faction's capital, each
+  with a different model of the game's own copied under a new name: a wonder of the game's own (Rome - its window on
+  a double click), a new resource type with its own model (with REX / M2EX - the original games refuse unknown
+  types), and a model drawn by an engine script (REX / M2EX; the game's log says which call worked).
 - **Test mod: an experiment** - a copy of the test faction's army stands on its fleet's own sea tile: in the game
   it either starts aboard (as an army on a town's or a fort's tile is inside it) or the log says the tile is invalid.
 - **Test mod: the test religion is told apart at once** (Medieval II): its own symbol (a magenta disc with a yellow
