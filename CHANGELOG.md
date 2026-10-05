@@ -444,6 +444,12 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Rome: a faction that comes by an event** now comes as a horde, as Barbarian Invasion's Slavs do: it gets the
+  horde lines and its own units (without them the game left it without a leader and it never came); Check mod
+  files names an event faction without them in both games.
+- **Barbarian Invasion: campaign-map figures recoloured** - the expansion names its pictures from the game's folder
+  (`bi/data/models_strat/...`); they were never found, so a new faction kept its template's figures. Now each gets
+  its own copy in the mod (`data/...`) and Recolour paints it.
 - **Start the game** with M2EX / REX in the game folder starts the extender: a mod's own start script is used only
   when it starts the extender too (one for the plain exe did not start a mod that worked with M2EX's own line).
 - **Bigger map (x3) mountains**: mountain ground only where the new heights stand high - a range's low edge becomes

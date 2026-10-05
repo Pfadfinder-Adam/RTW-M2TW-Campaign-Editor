@@ -285,14 +285,14 @@ def set_dead(plan, campaign, faction, dead, re_emergent=False):
 
 
 def set_horde(plan, faction):
-    """Medieval II: the horde lines a faction that comes by an event needs (HORDE): the Mongols' numbers and up to
-    HORDE_UNITS of its own units (no general's, no ships) as horde_unit, after custom_battle_availability. A block
-    that has horde lines already (a clone of the Mongols) keeps its own."""
-    from .limits import game_kind
+    """Both games: the horde lines a faction that comes by an event needs (HORDE) - Medieval II's Mongols and
+    Barbarian Invasion's Slavs come so; without them the faction has no one to come with ('has no faction leader
+    ... this faction will be toast' in Rome with REX, the test mod's later faction never came; Medieval II asserted
+    on can_horde): the Mongols' numbers and up to HORDE_UNITS of its own units (no general's, no ships) as
+    horde_unit, after custom_battle_availability. RomeTW.exe, RomeTW-BI.exe and REX.exe all know the words. A block
+    that has horde lines already (a clone of the Mongols / Slavs) keeps its own."""
     from .units import read_units
     mod = plan.mod
-    if game_kind(mod) != "medieval2":
-        return
     f = plan.edit(mod.file("sm_factions"))
     heads = [i for i in range(len(f)) if tokens(f.text(i))[:1] == ["faction"]]
     start = next((i for i in heads if len(tokens(f.text(i))) > 1 and tokens(f.text(i))[1] == faction), None)
@@ -315,7 +315,7 @@ def set_horde(plan, faction):
             if k < len(kind) and len(pick) < HORDE_UNITS:
                 pick.append(kind[k].type)
     if not pick:
-        plan.warn(f, "%s comes by an event: Medieval II brings it as a horde, but it owns no unit to make one of - "
+        plan.warn(f, "%s comes by an event: the game brings it as a horde, but it owns no unit to make one of - "
                      "give it units (the Unit editor) or it will not come" % faction)
         return
     at = next((start + k + 1 for k, t in enumerate(block) if t[:1] == ["custom_battle_availability"]), None)
@@ -324,7 +324,7 @@ def set_horde(plan, faction):
         while at > start + 1 and (not f.text(at - 1).strip() or f.text(at - 1).lstrip().startswith(";")):
             at -= 1
     f.insert(at, ["%s\t\t\t\t%s" % kv for kv in HORDE] + ["horde_unit\t\t\t\t\t%s" % n for n in pick])
-    plan.note(f, "%s: horde lines (Medieval II brings a faction that comes by an event as a horde, as the Mongols): "
+    plan.note(f, "%s: horde lines (a faction that comes by an event comes as a horde, as the Mongols / Slavs): "
                  "%s" % (faction, ", ".join(pick)))
 
 
@@ -505,7 +505,7 @@ def problems(mod, campaign):
                       "(Barbarian Invasion never has both on one faction); keep one" % (
                           fac, shadow, split, "its revolting towns go to the shadow, the split-off faction never comes "
                           "(Medieval II with M2EX)" if m2 else "the game crashes at the end of a turn (Rome with REX)"))
-    if m2:                                  # Medieval II brings a faction that comes by an event as a horde
+    if True:                                # both games bring a faction that comes by an event as a horde
         blocks_ = {}
         cur = None
         for line in mod.load(mod.file("sm_factions")).texts():
@@ -518,8 +518,8 @@ def problems(mod, campaign):
         for fac in emergent_events(mod, campaign):
             if fac in blocks_ and not blocks_[fac]:
                 faults.append("descr_sm_factions.txt: %s comes by an event, but its block has no horde lines - "
-                              "Medieval II brings such a faction in as a horde (the Mongols' way) and without them "
-                              "it never comes (New faction / Events and later factions write them)" % fac)
+                              "the game brings such a faction in as a horde (the Mongols' / Slavs' way) and without "
+                              "them it never comes (New faction / Events and later factions write them)" % fac)
     from .wincond import blocks, file_of
     wp = file_of(mod, campaign)
     if wp:

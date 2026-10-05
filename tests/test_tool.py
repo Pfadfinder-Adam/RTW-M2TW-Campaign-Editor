@@ -2653,6 +2653,28 @@ building smith
         upscale._no_islets(sea, W, H, bytearray(W * H))
         self.assertTrue(all(sea.b))
 
+    def test_expansion_picture_paths(self):
+        """Barbarian Invasion names its pictures from the game's folder (bi/data/models_strat/...): found under the
+        expansion's data from a mod folder built on it and from the expansion itself; a mod's copy is written as
+        data/... (the mod's own), the expansion's own lines keep bi/data/ (a tester's BI figures never recoloured)."""
+        from campaign_editor.clone import picture_file, mod_ref
+        game = os.path.join(self.root, "game")
+        pic = os.path.join(game, "bi", "data", "models_strat", "textures", "cap_goths.tga")
+        os.makedirs(os.path.dirname(pic))
+        open(pic, "wb").close()
+        os.makedirs(os.path.join(game, "CE", "data"))
+        ref = "bi/data/models_strat/textures/cap_goths.tga"
+        for data in (os.path.join(game, "CE", "data"), os.path.join(game, "bi", "data"), os.path.join(game, "data")):
+            os.makedirs(data, exist_ok=True)
+            got = picture_file(data, ref)
+            self.assertEqual(got and got[1], pic)
+
+        class M:
+            data = os.path.join(game, "CE", "data")
+        self.assertEqual(mod_ref(M, ref), "data/models_strat/textures/cap_goths.tga")
+        M.data = os.path.join(game, "bi", "data")
+        self.assertEqual(mod_ref(M, ref), ref)
+
     def test_bigger_map_mountains_follow_the_heights(self):
         """x3 ground: a mountain point at its range's edge that stands low steps down by its height - to hills when it
         reaches the old map's hills, else to the flat ground beside it; a high one stays (a tester's Rome x3)."""
@@ -3976,7 +3998,7 @@ building smith
         ev = E.emergent_events(mod, "test")["slavs"]
         self.assertEqual((ev["date"], ev["region"]), ("5 summer", "B_R"))
         faults, notes = E.problems(mod, "test")
-        self.assertEqual(faults, [])
+        self.assertEqual([f for f in faults if "no horde lines" not in f], [])   # the minimod's units have no category
         # the games' own factions that come by an event are not re_emergent (BI's slavs, romano_british)
         self.assertEqual(len(notes), 1)
         self.assertIn("marked re_emergent", notes[0])
@@ -4092,8 +4114,8 @@ building smith
         self.addCleanup(setattr, limits, "game_kind", limits.game_kind)
         limits.game_kind = lambda m: "medieval2"               # the rest as Medieval II
         mod = ModData(self.root)
-        self.assertTrue(any("riders comes by an event, but its block has no horde lines" in f
-                            for f in E.problems(mod, "test")[0]))
+        self.assertFalse(any("riders comes by an event, but its block has no horde lines" in f   # written at the
+                             for f in E.problems(mod, "test")[0]))                            # start (both games)
         plan = Plan(mod, "later", "riders", {})
         E.apply(plan, "test", "riders", "event", date="5", region="B_R")       # Medieval II: years from the start
         block = "\n".join(plan.files[mod.file("sm_factions")].texts()).split("faction\t\triders")[1]

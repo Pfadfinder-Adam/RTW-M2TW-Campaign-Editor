@@ -964,6 +964,12 @@ def write_art(plan, faction, rel, pick):
             ref = rel[:-4]
         if line["ref"].replace("\\", "/").lower().startswith("data/"):
             ref = "data/" + ref
+        else:
+            from .clone import RE_EXPANSION_DATA
+            m = RE_EXPANSION_DATA.match(line["ref"].replace("\\", "/"))
+            if m:                                          # bi/data/...: as the line wrote it, or the mod's data/
+                from .clone import mod_ref
+                ref = mod_ref(mod, m.group(0) + ref)
         if ref.lower() != line["ref"].replace("\\", "/").lower():     # (a new faction's own: the clone did it)
             set_picture_ref(plan.edit(line["path"]), line["line"], line["ref"], ref)
             plan.note(plan.files[line["path"]], "%s's %s now %s (was %s)" % (faction, line["field"], ref, line["ref"]))

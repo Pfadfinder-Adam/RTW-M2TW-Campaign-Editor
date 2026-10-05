@@ -597,11 +597,38 @@ PICTURE_LINKS = (("banners", ("standard_texture", "rebels_texture", "routing_tex
                  ("sm_factions", ("loading_logo",)))
 
 
+RE_EXPANSION_DATA = re.compile(r"^(bi|alexander)/data/", re.I)
+
+
+def mod_ref(mod, ref):
+    """A picture path as a line of `mod` should write it for a copy in the mod's own data: Barbarian Invasion's and
+    Alexander's lines name their pictures from the game's folder (bi/data/models_strat/...), which a mod folder
+    built on them does not reach - its copy is data/... (the mod's own); the expansion's own data keeps the form."""
+    m = RE_EXPANSION_DATA.match(ref.replace("\\", "/"))
+    if not m or os.path.basename(os.path.dirname(os.path.abspath(mod.data))).lower() == m.group(1).lower():
+        return ref
+    return "data/" + ref.replace("\\", "/")[m.end():]
+
+
 def picture_file(data, ref):
     """(path under data as it lies on disk, absolute path) of a picture a line names, or
-    None. Rome writes models/textures/x.tga and keeps x.tga.dds."""
+    None. Rome writes models/textures/x.tga and keeps x.tga.dds; Barbarian Invasion and Alexander name theirs from
+    the game's folder (bi/data/models_strat/...: under the expansion's data - a tester's BI figures were never
+    found, so never recoloured)."""
     from .moddata import _ci
     rel = ref.replace("\\", "/")
+    m = RE_EXPANSION_DATA.match(rel)
+    if m:
+        rel = rel[m.end():]
+        if os.path.basename(os.path.dirname(os.path.abspath(data))).lower() != m.group(1).lower():
+            up = os.path.dirname(os.path.abspath(data))  # the game's data (game/data) or a mod's (game/<mod>/data)
+            exp = next((e for e in (os.path.join(up, m.group(1), "data"),
+                                    os.path.join(os.path.dirname(up), m.group(1), "data")) if os.path.isdir(e)), None)
+            found = picture_file(data, rel)              # the mod's own copy first, else the expansion's
+            if found or not exp:
+                return found
+            got = picture_file(exp, rel)
+            return (got[0], got[1]) if got else None
     rel = rel[5:] if rel.lower().startswith("data/") else rel
     for cand in (rel, rel + ".dds"):
         folder, name = os.path.split(os.path.join(data, *cand.split("/")))
@@ -724,7 +751,7 @@ def own_pictures(plan):
                                 "give it its own on the Art tab (Faction emblem... / Replace...)" % (
                                     t, l["field"].replace("_", " "), l["ref"], new, t))
             continue
-        ref = own_picture_ref(l["ref"], t, new)
+        ref = mod_ref(mod, own_picture_ref(l["ref"], t, new))
         # the copy beside the template's picture - in the mod's own data even when the game's data holds that one
         folder = os.path.join(mod.data, *os.path.dirname(got[0]).split("/")) if os.path.dirname(got[0]) else mod.data
         dst = os.path.join(folder, ref.split("/")[-1] + disk_tail(l["ref"], got[1]))
