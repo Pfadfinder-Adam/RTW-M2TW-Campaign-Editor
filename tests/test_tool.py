@@ -2653,6 +2653,20 @@ building smith
         upscale._no_islets(sea, W, H, bytearray(W * H))
         self.assertTrue(all(sea.b))
 
+    def test_delete_mod_folder_guard(self):
+        """Tools > Delete this mod's folder: only <game>/<mod> or <game>/mods/<mod> - never the game's own data, an
+        expansion's (bi, alexander) or a folder outside a game."""
+        from campaign_editor.newmod import deletable_mod_folder
+        g = os.path.join(self.root, "g")
+        for d in ("data", "bi/data", "HLR/data", "mods/dac/data"):
+            os.makedirs(os.path.join(g, d))
+        open(os.path.join(g, "RomeTW.exe"), "w").close()
+        self.assertEqual(deletable_mod_folder(os.path.join(g, "HLR", "data")), os.path.join(g, "HLR"))
+        self.assertEqual(deletable_mod_folder(os.path.join(g, "mods", "dac", "data")), os.path.join(g, "mods", "dac"))
+        for bad in (os.path.join(g, "data"), os.path.join(g, "bi", "data"), os.path.join(self.root, "x", "data")):
+            with self.assertRaises(ValueError):
+                deletable_mod_folder(bad)
+
     def test_expansion_picture_paths(self):
         """Barbarian Invasion names its pictures from the game's folder (bi/data/models_strat/...): found under the
         expansion's data from a mod folder built on it and from the expansion itself; a mod's copy is written as

@@ -270,3 +270,21 @@ def _same(a, b):
                 return False
             if not x:
                 return True
+
+
+def deletable_mod_folder(data_dir):
+    """The mod folder Tools > Delete this mod... may delete for a loaded data folder: <game>/<mod> (Rome) or
+    <game>/mods/<mod> (Medieval II). ValueError in plain words for the game's own data, an expansion's (bi,
+    alexander) or a folder that is not inside a game - those are never deleted."""
+    data = os.path.abspath(data_dir)
+    folder = os.path.dirname(data)
+    if is_game(folder):
+        raise ValueError("this is the game's own data folder, not a mod - it is never deleted")
+    if os.path.basename(folder).lower() in ("bi", "alexander", "data") or os.path.basename(data).lower() != "data":
+        raise ValueError("%s is the game's own (an expansion), not a mod folder - it is never deleted" % folder)
+    parent = os.path.dirname(folder)
+    game = os.path.dirname(parent) if os.path.basename(parent).lower() == "mods" else parent
+    if not is_game(game):
+        raise ValueError("%s does not lie in a game folder (<game>/<mod> or <game>/mods/<mod>) - not deleted" % folder)
+    return folder
+

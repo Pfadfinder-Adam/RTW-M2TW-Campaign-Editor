@@ -1928,6 +1928,7 @@ COVERAGE = {
     "Report a bug / Suggest, Answers to my reports": "sends to the internet - tried by hand",
     "Start the game (the bottom bar)": "starts the game - tried by hand: start CE_Test with it",
     "Credits": LOOK,
+    "Delete this mod's folder": "deletes for good - tried by hand on a copy (the unit test checks what it refuses)",
     "Test mod": "this run",
 }
 
@@ -1950,7 +1951,7 @@ UI = {
     "Make the campaign map 3 x bigger": "Make the campaign map 3 x bigger",
     "Check and install a pack": "Check and install a pack", "Campaign rules": "Campaign rules",
     "Traits and retinue": "Traits and retinue: a new trait", "Events and later factions": "Events",
-    "Module builder": "Module builder", "Credits": "Credits",
+    "Module builder": "Module builder", "Credits": "Credits", "Delete this mod's folder": "Delete this mod's folder",
     # the work bar's window buttons (once Tools entries)
     "Events": "Events", "Recolour": "Recolour a faction's pictures",
     "Culture names": "Settlement names by culture", "Many towns": "Many towns: a building, random garrisons",

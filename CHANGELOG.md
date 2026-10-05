@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **Delete this mod's folder** (Tools, red): the loaded mod's folder with everything in it, after two questions
+  (the second wants the mod's name typed); never the game's own data or an expansion's.
 - **Lives without towns** (Events > How a faction comes into the campaign, a tick; with REX / M2EX): writes the
   engines' own `can_homeless yes` in the faction's block of descr_sm_factions.txt - the faction stays in the game
   with no town instead of dying or turning into a horde. Greyed out without an engine (the plain games do not know

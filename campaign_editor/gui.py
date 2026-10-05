@@ -826,6 +826,9 @@ class App(tk.Tk):
         menu.add_command(label="Credits (who made it with us)...", command=self.once("credits", self.credits_window))
         menu.add_separator()
         menu.add_command(label=TEST_MOD_LABEL, command=self.once("test_mod", self.test_mod))
+        menu.add_separator()
+        menu.add_command(label="Delete this mod's folder...", command=self.delete_mod,
+                         foreground=theme.ink("#c00000"))       # red: it deletes for good (asked twice)
         # a menu entry has no hover box: the status line says what it is while the mouse is on it
         menu.bind("<<MenuSelect>>", lambda e, m=menu: self._menu_hint(m))
         tools["menu"] = menu
@@ -5294,6 +5297,43 @@ class App(tk.Tk):
             return
         if label == TEST_MOD_LABEL:
             self.status.set(TEST_MOD_HINT)
+
+    def delete_mod(self):
+        """Tools > Delete this mod's folder...: the loaded mod's folder with everything in it, after two questions
+        (the second wants the mod's name typed); never the game's own data or an expansion's. Not undone by
+        Restore - its backups lie in that folder too."""
+        import shutil
+        from tkinter import simpledialog
+        from .newmod import deletable_mod_folder
+        if not self.mod:
+            messagebox.showinfo(APP, "Load the mod to delete first (Mod or Browse..., then Load).", parent=self)
+            return
+        try:
+            folder = deletable_mod_folder(self.mod.data)
+        except ValueError as e:
+            messagebox.showinfo(APP, "Not deleted: %s." % e, parent=self)
+            return
+        name = os.path.basename(folder)
+        if not messagebox.askyesno(APP, "Delete the mod folder\n\n%s\n\nwith everything in it - its files, its "
+                                        "backups, its start script? This cannot be undone: Restore cannot bring it "
+                                        "back. The game itself is not touched." % folder, icon="warning", parent=self):
+            return
+        typed = simpledialog.askstring(APP, "To delete it, type the mod's name: %s" % name, parent=self)
+        if (typed or "").strip() != name:
+            messagebox.showinfo(APP, "Not deleted - the name did not match.", parent=self)
+            return
+        game = game_of(self.mod.data)
+        try:
+            shutil.rmtree(folder)
+        except OSError as e:
+            log.write("Delete the mod %s: not done - %s" % (folder, e))
+            messagebox.showerror(APP, "Not all of it could be deleted (is the game running, or a file open in "
+                                      "another program?) - %s" % e, parent=self)
+            return
+        log.write("Deleted the mod folder %s" % folder)
+        self.v_path.set(os.path.join(game, "data"))
+        self.load()
+        self.status.set("The mod %s was deleted; the game's own data is loaded." % name)
 
     def test_mod(self):
         """The author's stress test (selftest.py): a new mod folder beside the loaded mod with every feature of the
