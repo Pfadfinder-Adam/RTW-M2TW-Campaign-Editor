@@ -481,7 +481,7 @@ def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, 
                         dist[j] = d
                         nxt.append(j)
         ring = nxt
-    for d in range(FACTOR - 1, 0, -1):                   # from the inland side down: a straight slope to the water
+    for d in range(FACTOR - 1, 0, -1):                   # from the inland side down, as the games' own shores fall
         for i in [i for i, k in dist.items() if k == d]:
             if vals[i] is None:
                 continue
@@ -491,7 +491,7 @@ def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, 
                   and vals[b * W + a] is not None]
             if up:
                 ref = sum(up) / len(up)
-                vals[i] = min(vals[i], floor + max(ref - floor, 0.0) * d / (d + 1))
+                vals[i] = min(vals[i], floor + max(ref - floor, 0.0) * SHORE_RAMP.get(d, d / (d + 1)))
     for Y in range(H):                                   # land on the water's edge: clearly above the water
         for X in range(W):
             i = Y * W + X
@@ -505,6 +505,10 @@ def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, 
 
 
 SHORE_GAP = 2          # old grey levels: land touching water never lower (the games' own shores: 1 - 3)
+SHORE_RAMP = {1: 0.3, 2: 0.65}   # by points from the water: the share of the next point inland's rise above the floor
+# (the games' own maps, map_heights.hgt medians 1, 2, 3 points from the water: Medieval II 70 / 232 / 353, Rome
+# 63 / 232 / 401 - the first land point about 0.3 of the second, the second about 0.65 of the third; a straight
+# 1/3, 2/3 slope left the x3 shore twice as high as the games' own: 130 against 70)
 LAKE_BANK = {1: 0.55, 2: 0.35, 3: 0.18, 4: 0.06}         # an inland lake's banks lowered toward it, by points off
 VOLCANO_REACH, VOLCANO_RISE = 8, 0.35                    # a volcano's cone: radius in points, steepness
 

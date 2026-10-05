@@ -3096,6 +3096,34 @@ building smith
         self.assertEqual((W, H), (61, 61))
         self.assertTrue(all((v <= 0) == mask[(i % W, i // W)] or v == 0 for i, v in enumerate(vals)))
 
+    def test_bigger_map_shore_falls_as_the_games_own(self):
+        """x3 heights by the water: one point is as long in the game on any map, so the shore must fall to the
+        water as the games' own maps do (map_heights.hgt medians 1, 2, 3 points from the water: Medieval II 70 / 232 /
+        353) - the first land point about 0.3 of the second, the second about 0.65 of the third. A straight 1/3, 2/3
+        slope left the x3 shore twice as high as the games' own (a tester's DaC x3: 'terrain too tall near the
+        water')."""
+        from campaign_editor import upscale
+        from campaign_editor.tga import read_tga
+        n, SEA = 11, (0, 0, 120)
+        grey = [[SEA if x == 0 else (200, 200, 200) for x in range(n)] for _ in range(n)]
+        hpath = os.path.join(self.root, "plateau.tga")
+        write_tga(hpath, n, n, grey)
+        W = 3 * (n - 1) + 1
+        mask = upscale.Mask(W, W)
+        for Y in range(W):
+            for X in range(3):
+                mask[(X, Y)] = True
+        out = os.path.join(self.root, "plateau3.tga")
+        with open(out, "wb") as fh:
+            fh.write(upscale.smooth_scaled(hpath, "corners", sea=True, mask=mask, natural=True, vertical=3.0))
+        g = read_tga(out)
+        for Y in range(6, W - 6):
+            d1, d2, d3 = (g.get(X, Y)[0] - 1 for X in (3, 4, 5))
+            self.assertLess(d1, d2, Y)
+            self.assertLess(d2, d3, Y)
+            self.assertLessEqual(d1, 0.35 * d2 + 1, Y)
+            self.assertLessEqual(d2, 0.7 * d3 + 1, Y)
+
     def test_bigger_map_no_islets_no_spikes(self):
         """x3 heights' coast: a land point the old heights held inside a navigable river (map_regions calls the
         river land) came out as a small square island; corners of an older coast stuck out as thin wedges lying on
