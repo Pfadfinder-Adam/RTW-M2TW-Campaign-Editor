@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **Building pictures**: a building level given to a faction whose culture has no picture of it gets the picture of a culture that has one (there was only a note to import one); a copied building chain takes another culture's picture where a culture lacks its own.
+- **Map signs**: the dagger's guard thinner; a merchant is a coin with the euro sign, a heretic a lightning bolt.
+- **Credits**: the reporters thanked by the names they signed with; no quotes.
 - **Map signs**: the assassin's dagger upright, its point down; every agent's sign symmetric; a plain army led by a captain carries a rank chevron; the leader marks show on smaller flags too (a town's flag bigger).
 - **Map editor**: a right click or Esc puts back every tool still waiting for its click (armies, fleets, agents, resources, forts, watchtowers, ports, a new region's town); a fort, watchtower or wonder is deleted from the right-click menu too; the legend lists the resources while Layers > Resources is on.
 - **Bigger map (x3)**: a one-tile islet or lake loses one or two corners - no plain 3 x 3 squares -; a cross left at the tip of a one-tile cape is rounded off.

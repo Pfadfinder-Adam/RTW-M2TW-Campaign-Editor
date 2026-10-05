@@ -1,5 +1,5 @@
 """Tools > Credits...: the people the editor owes its shape to - the author, who helped a lot, the testers, the
-supporters, their words (CREDITS.md, the same page as on GitHub)."""
+supporters (CREDITS.md, the same page as on GitHub)."""
 
 import tkinter as tk
 import webbrowser

@@ -3130,8 +3130,8 @@ building smith
         from campaign_editor import credits as CR
         parts = CR.blocks(CR.read())
         heads = [w for k, w in parts if k == "heading"]
-        for want in ("The author", "Helped a lot", "Testers: reports and ideas", "Supporters on Ko-fi",
-                     "In their words", "How to get in"):
+        for want in ("The author", "Helped a lot", "Thank you for the reports", "Supporters on Ko-fi",
+                     "How to get in"):
             self.assertIn(want, heads)
         self.assertEqual(parts[0], ("title", "Credits"))
         self.assertIn('Pfadfinder ("Adam")', " ".join(w for _, w in parts))

@@ -576,16 +576,28 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
         copy_text_entries(plan, path, keys)
     ui = os.path.join(mod.data, "ui")
     if os.path.isdir(ui):
-        for cult in sorted(os.listdir(ui)):
-            folder = os.path.join(ui, cult, "buildings")
-            if not os.path.isdir(folder):
-                continue
-            names = {n.lower(): n for n in os.listdir(folder)}
+        folders = {c: os.path.join(ui, c, "buildings") for c in sorted(os.listdir(ui))
+                   if os.path.isdir(os.path.join(ui, c, "buildings"))}
+        listing = {c: {n.lower(): n for n in os.listdir(f)} for c, f in folders.items()}
+
+        def card(old, tail, cult):
+            """The level's picture for this culture: its own, else one of another culture's - in its folder first
+            (Barbarian Invasion's nomad folder holds barbarian and hun pictures), then in the others' folders."""
+            own = listing[cult].get(("#%s_%s%s" % (cult, old, tail)).lower())
+            if own:
+                return os.path.join(folders[cult], own)
+            for c2 in [cult] + [c for c in folders if c != cult]:
+                for c3 in folders:
+                    n = listing[c2].get(("#%s_%s%s" % (c3, old, tail)).lower())
+                    if n:
+                        return os.path.join(folders[c2], n)
+            return None
+        for cult, folder in folders.items():
             for old, new in level_names.items():
                 for tail in (".tga", "_constructed.tga"):
-                    n = names.get(("#%s_%s%s" % (cult, old, tail)).lower())
-                    if n:
-                        plan.copy(os.path.join(folder, n), os.path.join(folder, "#%s_%s%s" % (cult, new, tail)))
+                    src = card(old, tail, cult)
+                    if src:
+                        plan.copy(src, os.path.join(folder, "#%s_%s%s" % (cult, new, tail)))
     if texts:
         # a level's name and description, and every culture's / faction's own copy of them (<level>_<culture>,
         # <level>_<culture>_desc ...): the game shows the most specific one, so all say the new text

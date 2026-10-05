@@ -399,11 +399,29 @@ def set_level(plan, faction, chain, level, give=True, campaign=None):
         e.set(i, add_faction(text, faction))
         plan.note(e, "%s/%s: %s may build it" % (chain, level, faction))
         # its picture comes from the faction's culture folder (ui/<culture>/buildings)
+        # none there: the picture of a culture that has one is copied in (the building as it is)
         from .buildings import BuildingPictures
-        if culture and os.path.isdir(os.path.join(mod.data, "ui")) and \
-                not BuildingPictures(mod).find(culture, level):
-            plan.warn(e, "%s/%s: no picture for the %s culture (ui/%s/buildings/#%s_%s.tga) - import one in "
-                         "the Building editor" % (chain, level, culture, culture, culture, level))
+        if culture and os.path.isdir(os.path.join(mod.data, "ui")):
+            bp = BuildingPictures(mod)
+            if not bp.find(culture, level):
+                got = None
+                for built in (False, True):
+                    tail = "_constructed.tga" if built else ".tga"
+                    src = next((files.get(("#%s_%s%s" % (c, level, tail)).lower())
+                                for c, files in sorted(bp.index.items())
+                                if files.get(("#%s_%s%s" % (c, level, tail)).lower())), None)
+                    if src:
+                        dst = os.path.join(mod.data, "ui", culture, "buildings",
+                                           "#%s_%s%s" % (culture, level, tail))
+                        plan.copy(src, dst)
+                        got = got or src
+                if got:
+                    plan.note(e, "%s/%s: the %s culture had no picture of it - the one of %s copied in (import "
+                                 "another in the Building editor)" % (chain, level, culture,
+                                                                      os.path.basename(got).split("_")[0][1:]))
+                else:
+                    plan.warn(e, "%s/%s: no picture for the %s culture (ui/%s/buildings/#%s_%s.tga) - import one "
+                                 "in the Building editor" % (chain, level, culture, culture, culture, level))
         return True
     if not now:
         return False

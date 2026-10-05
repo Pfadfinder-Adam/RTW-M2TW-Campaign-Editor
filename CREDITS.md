@@ -1,7 +1,6 @@
 # Credits
 
-**RTW & M2TW Campaign Editor** is a shared project. Every report, idea, test in the game and kind word has left its
-mark on it. Thank you, all of you.
+**RTW & M2TW Campaign Editor** is a shared project. Every report, idea and test in the game has left its mark on it. Thank you, all of you.
 
 ## The author
 
@@ -13,23 +12,22 @@ mark on it. Thank you, all of you.
   sent report after report. Thanks to him many mistakes were found and many new ideas came in: natural rivers,
   coasts and borders among them.
 
-## Testers: reports and ideas
+## Thank you for the reports
 
-Everyone who sent a report or an idea and left a name to call them by. Names are added with each person's
-permission; the list is being gathered.
+Everyone who sent a report or an idea from the editor - each one made it better. By the names they signed with:
+
+- **Ruthron**
+- **wholesome_queen**
+- **doliwaq**
 
 ## Supporters on Ko-fi
 
 Thank you for keeping the work going. Names only, never amounts; the list is being gathered.
 
-## In their words
-
-What people said about the editor - being gathered.
-
 ## How to get in
 
-Send a report or an idea from the editor (**Report a bug / Suggest**) and write your name in *Contact*. With your
-permission, it goes here.
+Send a report or an idea from the editor (**Report a bug / Suggest**) and write your name in *Contact* - your name
+goes on the list above.
 
 ## Made a mod with it?
 

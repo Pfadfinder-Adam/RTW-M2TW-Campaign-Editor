@@ -1057,21 +1057,22 @@ class MapView(ttk.Frame):
         if k == "spy":                                  # an eye
             c.create_oval(sx - r * 0.7, sy - r * 0.38, sx + r * 0.7, sy + r * 0.38, outline=ink, width=w, tags=tags)
             c.create_oval(sx - r * 0.2, sy - r * 0.2, sx + r * 0.2, sy + r * 0.2, fill=ink, outline="", tags=tags)
-        elif k == "assassin":                           # an upright dagger, the point down: pommel, grip, guard,
-            c.create_oval(sx - r * 0.13, sy - r * 0.8, sx + r * 0.13, sy - r * 0.54, fill=ink, outline="",  # blade
+        elif k == "assassin":                           # an upright dagger, the point down: pommel, grip, a short
+            c.create_oval(sx - r * 0.12, sy - r * 0.8, sx + r * 0.12, sy - r * 0.56, fill=ink, outline="",  # thin
+                          tags=tags)                                                                  # guard, blade
+            c.create_line(sx, sy - r * 0.6, sx, sy - r * 0.28, fill=ink, width=w + 1, tags=tags)
+            c.create_line(sx - r * 0.26, sy - r * 0.24, sx + r * 0.26, sy - r * 0.24, fill=ink, width=max(1, w - 1),
                           tags=tags)
-            c.create_line(sx, sy - r * 0.6, sx, sy - r * 0.25, fill=ink, width=w + 1, tags=tags)
-            c.create_line(sx - r * 0.45, sy - r * 0.22, sx + r * 0.45, sy - r * 0.22, fill=ink, width=w + 1, tags=tags)
-            c.create_polygon(sx - r * 0.17, sy - r * 0.15, sx + r * 0.17, sy - r * 0.15, sx, sy + r * 0.8, fill=ink,
+            c.create_polygon(sx - r * 0.15, sy - r * 0.2, sx + r * 0.15, sy - r * 0.2, sx, sy + r * 0.82, fill=ink,
                              outline="", tags=tags)
         elif k == "diplomat":                           # a scroll
             c.create_rectangle(sx - r * 0.5, sy - r * 0.6, sx + r * 0.5, sy + r * 0.6, outline=ink, width=w, tags=tags)
             for dy in (-0.25, 0.05, 0.35):
                 c.create_line(sx - r * 0.3, sy + r * dy, sx + r * 0.3, sy + r * dy, fill=ink, tags=tags)
-        elif k == "merchant":                           # a stack of coins
-            for dy in (0.35, 0.0, -0.35):
-                c.create_oval(sx - r * 0.55, sy + r * (dy - 0.18), sx + r * 0.55, sy + r * (dy + 0.18),
-                              fill=ink, outline="black", tags=tags)
+        elif k == "merchant":                           # a coin with the euro sign on it
+            c.create_oval(sx - r * 0.66, sy - r * 0.66, sx + r * 0.66, sy + r * 0.66, outline=ink, width=w,
+                          tags=tags)
+            c.create_text(sx, sy, text="\u20ac", fill=ink, font=("", max(6, int(r * 0.95)), "bold"), tags=tags)
         elif k == "priest":                             # an open book (no faith's own sign: imams are priests too)
             c.create_polygon(sx - r * 0.7, sy - r * 0.4, sx, sy - r * 0.25, sx, sy + r * 0.55, sx - r * 0.7,
                              sy + r * 0.4, fill=ink, outline="", tags=tags)
@@ -1092,11 +1093,10 @@ class MapView(ttk.Frame):
             c.create_polygon(sx - r * 0.3, sy + r * 0.25, sx, sy - r * 0.75, sx + r * 0.3, sy + r * 0.25,
                              fill=ink, outline="", tags=tags)
             c.create_oval(sx - r * 0.7, sy + r * 0.15, sx + r * 0.7, sy + r * 0.45, fill=ink, outline="", tags=tags)
-        elif k == "heretic":                            # a book torn in two: two halves apart, mirrored
-            for m in (-1, 1):
-                c.create_polygon(sx + m * r * 0.75, sy - r * 0.35, sx + m * r * 0.12, sy - r * 0.22,
-                                 sx + m * r * 0.2, sy + r * 0.1, sx + m * r * 0.08, sy + r * 0.5,
-                                 sx + m * r * 0.75, sy + r * 0.4, fill=ink, outline="", tags=tags)
+        elif k == "heretic":                            # a lightning bolt
+            c.create_polygon(sx + r * 0.2, sy - r * 0.78, sx - r * 0.42, sy + r * 0.08, sx - r * 0.02, sy + r * 0.08,
+                             sx - r * 0.2, sy + r * 0.78, sx + r * 0.42, sy - r * 0.08, sx + r * 0.02, sy - r * 0.08,
+                             fill=ink, outline="", tags=tags)
         else:
             c.create_text(sx, sy, text=self.AGENT_LETTER.get(k, k[:1].upper()), fill=ink,
                           font=("", max(6, int(r)), "bold"), tags=tags)
