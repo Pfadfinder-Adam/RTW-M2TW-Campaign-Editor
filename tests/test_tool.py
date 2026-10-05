@@ -2825,6 +2825,67 @@ building smith
         with open(out, "rb") as fh:
             self.assertEqual(fh.read(), first)          # the same map, the same picture
 
+    def test_start_the_game_with_the_loaded_mod(self):
+        """Start the game: the mod's own start script (Start_<name>.bat first; not an unpacker's .bat), else the
+        engine's start script in the game folder naming it (REX's Barbarian Invasion.bat -bi, M2EX's Teutonic.bat
+        mods/teutonic), else the engine's line (-nm -show_err -mod:<name>, --features.mod=mods/<name>, @<cfg>); the
+        plain game with its exe; no exe or no .cfg said in words; not on Windows: the line to start by hand."""
+        from campaign_editor import launch
+
+        def put(path, text=""):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as fh:
+                fh.write(text)
+
+        def data(root, *parts):
+            d = os.path.join(root, *parts, "data")
+            put(os.path.join(d, "descr_sm_factions.txt"))
+            return d
+        rome = os.path.join(self.root, "rome")
+        put(os.path.join(rome, "REX.exe"))
+        put(os.path.join(rome, "Barbarian Invasion.bat"), 'start "" "%~dp0REX.exe" -bi\r\n')
+        plain = launch.start_line(data(rome))
+        self.assertEqual((os.path.basename(plain["exe"]), plain["args"]), ("REX.exe", []))
+        self.assertEqual(launch.start_line(data(rome, "bi"))["bat"], os.path.join(rome, "Barbarian Invasion.bat"))
+        self.assertEqual(launch.start_line(data(rome, "alexander"))["args"], ["-alx"])
+        hlr = data(rome, "HLR")
+        put(os.path.join(rome, "HLR", "unpack_all.bat"), "unpacker.exe --source=packs\r\n")
+        self.assertEqual(launch.start_line(hlr)["args"], ["-nm", "-show_err", "-mod:HLR"])   # no unpacker's script
+        put(os.path.join(rome, "HLR", "Start_mod.bat"), "cd ..\\.\r\nstart REX.exe -nm -show_err -mod:HLR -multirun\r\n")
+        self.assertEqual(os.path.basename(launch.start_line(hlr)["bat"]), "Start_mod.bat")
+        put(os.path.join(rome, "HLR", "Start_HLR.bat"), "start REX.exe -mod:HLR\r\n")
+        self.assertEqual(os.path.basename(launch.start_line(hlr)["bat"]), "Start_HLR.bat")
+        m2 = os.path.join(self.root, "m2")
+        put(os.path.join(m2, "M2EX.exe"))
+        put(os.path.join(m2, "Teutonic.bat"), 'start "" "%~dp0M2EX.exe" --features.mod=mods/teutonic\r\n')
+        self.assertEqual(launch.start_line(data(m2, "mods", "teutonic"))["bat"], os.path.join(m2, "Teutonic.bat"))
+        dac = launch.start_line(data(m2, "mods", "DaC"))
+        self.assertEqual((os.path.basename(dac["exe"]), dac["args"], dac["cwd"]),
+                         ("M2EX.exe", ["--features.mod=mods/DaC"], m2))
+        old = os.path.join(self.root, "old")
+        put(os.path.join(old, "medieval2.exe"))
+        with self.assertRaises(ValueError):
+            launch.start_line(data(old, "mods", "x"))                 # no script, no x.cfg
+        put(os.path.join(old, "mods", "x", "x.cfg"), "[features]\r\nmod = mods/x\r\n")
+        self.assertEqual(launch.start_line(os.path.join(old, "mods", "x", "data"))["args"], ["@mods\\x\\x.cfg"])
+        bare = os.path.join(self.root, "bare")
+        put(os.path.join(bare, "RomeTW-BI.exe"))
+        with self.assertRaises(ValueError):
+            launch.start_line(data(bare))                             # no RomeTW.exe for the plain game
+        self.assertEqual(os.path.basename(launch.start_line(data(bare, "bi"))["exe"]), "RomeTW-BI.exe")
+        if sys.platform != "win32":
+            with self.assertRaises(OSError) as e:
+                launch.start(launch.start_line(hlr))
+            self.assertIn("Start_HLR.bat", str(e.exception))
+        from unittest import mock
+        with mock.patch.object(launch.sys, "platform", "win32"), mock.patch.object(launch.subprocess, "Popen") as run:
+            launch.start(launch.start_line(hlr))                      # the script, run from its own folder
+            self.assertEqual(run.call_args[0][0], ["cmd", "/c", os.path.join(rome, "HLR", "Start_HLR.bat")])
+            self.assertEqual(run.call_args[1]["cwd"], os.path.join(rome, "HLR"))
+            launch.start(dac)                                         # the engine, from the game folder
+            self.assertEqual(run.call_args[0][0], [os.path.join(m2, "M2EX.exe"), "--features.mod=mods/DaC"])
+            self.assertEqual(run.call_args[1]["cwd"], m2)
+
     def test_bigger_map_says_what_to_look_over(self):
         """Once the map is 3 x bigger the window says what to look over by hand (no rule draws every map 100 %
         right) and adds what the editor could not do itself - short, at most 8 lines of it."""

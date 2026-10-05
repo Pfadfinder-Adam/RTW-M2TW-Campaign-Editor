@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **Start the game** (the green button beside Tools, both games): starts the game with the mod that is loaded - its
+  own start script (New mod folder writes `Start_<name>.bat`; the engines' own scripts in the game folder, such as
+  REX's *Barbarian Invasion.bat* or M2EX's *Teutonic.bat*, are found too), else the line those scripts use
+  (`REX.exe -nm -show_err -mod:<name>`, `-bi` / `-alx` for the expansions, `M2EX.exe --features.mod=mods/<name>`,
+  `medieval2.exe @mods\<name>\<name>.cfg`); the plain game with its own exe. Changes not written yet are named first
+  (the game reads the files on disk). A window too narrow for the bottom row puts its right-hand buttons on a row
+  of their own instead of cutting them off.
 - **Add-ons > Scripts in the game...** (Rome with REX, Medieval II with M2EX): every script the engine runs from the
   game's `script/modules` - the editor's add-ons, Module builder modules, ones you added, anyone's - with what each
   is and whether it runs. Pick one to change its settings in its own lines, turn it off (renamed `.nut.off`, kept,

@@ -156,6 +156,8 @@ ADD-ONS
     words and screenshots go to the author in one click, no account needed. The author's answer comes back
     to its tab Answers to my reports ("(1 new)" on the button) - reply there with Send the answer.
     Log / Save logs (zip): the same zip to send yourself.
+  Start the game (green, beside Tools): the game with the loaded mod - its own start script, else the
+    engine's line (REX -mod:<name>, M2EX --features.mod=mods/<name>). Apply your changes first.
 
 KEYS
   Ctrl+Z undo, Ctrl+Y redo    Ctrl+P preview    Ctrl+S apply    F5 load again    F1 this help
@@ -794,14 +796,18 @@ class App(tk.Tk):
         self.status_line.pack(side="bottom", fill="x", padx=6, pady=(0, 6), before=self.nb)
         # a long message wraps onto a second line instead of running off the window's edge
         self.status_line.bind("<Configure>", lambda e: self.status_line.configure(wraplength=max(e.width - 4, 200)))
-        bar = self.bottom_bar = ttk.Frame(self)
-        bar.pack(side="bottom", fill="x", before=self.nb, **pad)
+        self.bottom_bar = ttk.Frame(self)
+        self.bottom_bar.pack(side="bottom", fill="x", before=self.nb, **pad)
+        # two groups: the writing buttons on the left, the rest on the right - a window too narrow for both puts
+        # the right group on a row of its own under the left one instead of hiding buttons past its edge
+        bar = left_bar = ttk.Frame(self.bottom_bar)
         self.b_preview = ttk.Button(bar, text="Preview changes", command=self.preview)
         self.b_preview.pack(side="left")
         self.b_create = ttk.Button(bar, text="Create faction", command=self.create)
         self.b_create.pack(side="left", padx=6)
         ttk.Button(bar, text="Undo", command=self.undo).pack(side="left", padx=(12, 0))
         ttk.Button(bar, text="Redo", command=self.redo).pack(side="left", padx=4)
+        bar = right_bar = ttk.Frame(self.bottom_bar)
         kofi = tk.Button(bar, text="\u2615  Support on Ko-fi", command=self.support, bg="#ff5e5b", fg="white",
                          activebackground="#e14b48", activeforeground="white", relief="flat", cursor="hand2",
                          font=("", 9, "bold"), padx=10)
@@ -830,6 +836,34 @@ class App(tk.Tk):
         menu.bind("<<MenuSelect>>", lambda e, m=menu: self._menu_hint(m))
         tools["menu"] = menu
         tools.pack(side="right")
+        # the game with the loaded mod, one press away - in sight beside Tools
+        play = tk.Button(bar, text="\u25b6  Start the game", command=self.start_game, bg="#2e7d32", fg="white",
+                         activebackground="#256628", activeforeground="white", relief="flat", cursor="hand2",
+                         font=("", 9, "bold"), padx=10)
+        play.pack(side="right", padx=(0, 8))
+        theme.leave_alone(play)
+        state = {"one_row": None}
+
+        def place_bars(_=None):
+            one_row = self.bottom_bar.winfo_width() >= left_bar.winfo_reqwidth() + right_bar.winfo_reqwidth() + 12 \
+                or self.bottom_bar.winfo_width() <= 1
+            if one_row == state["one_row"]:
+                return
+            state["one_row"] = one_row
+            left_bar.pack_forget()
+            right_bar.pack_forget()
+            if one_row:
+                left_bar.pack(side="left")
+                right_bar.pack(side="right")
+            else:
+                left_bar.pack(side="top", anchor="w")
+                right_bar.pack(side="top", anchor="e", pady=(4, 0))
+        place_bars()
+        self.bottom_bar.bind("<Configure>", place_bars)
+        from .gui_util import tip
+        tip(play, "Starts the game with the mod that is loaded: its own start script (New mod folder writes "
+                  "Start_<name>.bat), else the line the engine's own start scripts use (REX.exe -mod:<name>, "
+                  "M2EX.exe --features.mod=mods/<name>). Apply your changes first - the game reads the files on disk.")
         self.status = tk.StringVar(value="Pick the Mod, or Browse... to its data folder (for example ...\\HLR\\data) "
                                          "and press Load.")
         self.status_line.configure(textvariable=self.status)
@@ -1704,6 +1738,28 @@ class App(tk.Tk):
         self.bind_all("<F5>", lambda e: self.load_clicked())
         for i in range(5):
             self.bind_all("<Control-Key-%d>" % (i + 1), lambda e, i=i: None if self.map_work() else self.nb.select(i))
+
+    def start_game(self):
+        """The bottom bar's Start the game: the game with the loaded mod (launch.start_line - its own start script,
+        else the engine's line)."""
+        from . import launch
+        if not self.mod:
+            messagebox.showinfo(APP, "Load a mod first - the game starts with the mod that is loaded.")
+            return
+        if self.pending_parts() and not messagebox.askyesno(
+                APP, "There are changes not written yet (%s). The game reads the files as they are on disk - "
+                     "start it without these changes?" % ", ".join(label for _, label in self.pending_parts())):
+            return
+        try:
+            how = launch.start_line(self.mod.data)
+            launch.start(how)
+        except (ValueError, OSError) as e:
+            log.write("Start the game: not started - %s" % e)
+            messagebox.showerror(APP, "The game did not start: %s" % e)
+            return
+        log.write("Start the game: %s" % how["words"])
+        self.status.set("The game is starting: %s. Something went wrong in it? Report a bug / Suggest sends the "
+                        "game's log with it." % how["words"])
 
     def support(self):
         """The Ko-fi page in the browser: donations keep the work on the tool going."""

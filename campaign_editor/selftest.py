@@ -1892,6 +1892,7 @@ COVERAGE = {
     "View in 3D, play a sound": LOOK,
     "Settings, Help, the log, Save logs, Game manifest": LOOK,
     "Report a bug / Suggest, Answers to my reports": "sends to the internet - tried by hand",
+    "Start the game (the bottom bar)": "starts the game - tried by hand: start CE_Test with it",
     "Test mod": "this run",
 }
 
