@@ -31,6 +31,16 @@ PARTNER = {"shadowing": "shadowed_by", "spawned_by": "spawns_on_revolt",
            "shadowed_by": "shadowing", "spawns_on_revolt": "spawned_by"}
 OWN_WORD = {"shadow": "shadowing", "revolt": "spawned_by"}       # the way -> the word on the faction's own line
 DEAD_WORDS = ("dead_until_resurrected", "re_emergent")
+# one faction with a shadow AND a faction splitting off it crashes Rome at the end of a turn (REX:
+# SETTLEMENT::get_revolt_type); Barbarian Invasion never has both on one faction
+BOTH_TIES = ("%s already has %s as %s - a faction with both a shadow and a faction splitting off it crashes the "
+             "game at the end of a turn (Barbarian Invasion never has both): pick another faction")
+
+
+def both_ties(mod):
+    """[(faction, shadow, split)] of the factions that carry both shadowed_by and spawns_on_revolt."""
+    return [(fac, t["shadowed_by"], t["spawns_on_revolt"]) for fac, t in ties(mod).items()
+            if t.get("shadowed_by") and t.get("spawns_on_revolt")]
 
 
 def describe(way, of=None, short=False):
@@ -163,6 +173,11 @@ def set_way(plan, faction, way, of=None):
         if has and has != faction:
             raise ValueError("%s already has %s: %s - one per faction" % (
                 of, "a shadow" if way == "shadow" else "a faction splitting off it", has))
+        other = PARTNER[OWN_WORD["revolt" if way == "shadow" else "shadow"]]
+        m = re.search(r",\s*%s\s+([A-Za-z0-9_]+)" % other, strip_comment(line))
+        if m and m.group(1) != faction:
+            raise ValueError(BOTH_TIES % (of, m.group(1), "a shadow" if way == "revolt" else
+                                          "a faction splitting off it"))
 
     if way_of(mod, faction, _ties_in(f)) == (way, of if way in ("shadow", "revolt") else None):
         return                                      # already so: nothing to change
@@ -286,6 +301,9 @@ def apply(plan, campaign, faction, way, of=None, re_emergent=False, date=None, r
     """One faction's way in, in every file: descr_sm_factions (words), descr_strat (dead at the start or alive),
     descr_events (the emergence event for 'event', taken out otherwise)."""
     set_way(plan, faction, way, of)
+    if way == "shadow":
+        from .wincond import drop
+        drop(plan, campaign, faction)
     set_dead(plan, campaign, faction, way != "map", re_emergent and way != "map")
     if way == "event":
         set_event(plan, campaign, faction, date, region)
@@ -310,6 +328,19 @@ def problems(mod, campaign):
             elif (tie[who] or {}).get(PARTNER[word]) != fac:
                 faults.append("descr_sm_factions.txt: %s is '%s %s' but %s's line lacks '%s %s' - the two lines "
                               "go in pairs" % (fac, word, who, who, PARTNER[word], fac))
+    for fac, shadow, split in both_ties(mod):
+        faults.append("descr_sm_factions.txt: %s has a shadow (%s) and a faction splitting off it (%s) - the game "
+                      "crashes at the end of a turn (Barbarian Invasion never has both on one faction); keep one"
+                      % (fac, shadow, split))
+    from .wincond import blocks, file_of
+    wp = file_of(mod, campaign)
+    if wp:
+        listed = blocks(mod.load(wp))
+        for fac, t in tie.items():
+            if t.get("shadowing") and fac in listed:
+                faults.append("descr_win_conditions.txt: %s is a shadow faction - the game does not know it when it "
+                              "reads the file and stops there; Barbarian Invasion lists no shadow (take its block "
+                              "out)" % fac)
     from .events import later_factions
     script = dict(later_factions(mod, campaign))
     for fac, st in state.items():

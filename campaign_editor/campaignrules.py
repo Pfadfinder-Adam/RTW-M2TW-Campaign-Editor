@@ -125,6 +125,13 @@ def read_xml(path, f):
     return rules
 
 
+# Rome with REX (a tester's test mod): the four multipliers changed to 0.475 / 0.95 / 1.9 / 3.8 and the game's
+# options showed no unit size choice any more
+UNIT_SIZE_NOTE = ("How many men a unit has at this choice of the game's options (1.0 = as in export_descr_unit). Change "
+                  "with care: with other numbers than the game's own (0.5, 1, 2, 4) a test in Rome with REX lost the "
+                  "unit size choice in the options.")
+
+
 def read_unit_sizes(path, f):
     """[Rule] of descr_unit_sizes.txt: 'unit_size <text key> <multiplier>' - the multiplier is the value."""
     rules = []
@@ -133,7 +140,7 @@ def read_unit_sizes(path, f):
         m = re.match(r"(\s*unit_size\s+(\S+)\s+)(\S+)", code)
         if m:
             rules.append(Rule(path, "unit sizes (battle options)", m.group(2), "multiplier", m.group(3), "float", i,
-                              m.start(3), m.end(3)))
+                              m.start(3), m.end(3), UNIT_SIZE_NOTE))
     return rules
 
 

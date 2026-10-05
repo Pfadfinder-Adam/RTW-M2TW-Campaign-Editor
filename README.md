@@ -61,6 +61,8 @@ texture (vanilla-style uniforms), so a new faction's troops wear its own colour 
   every port stands on a coastal land tile touching the sea and its region, and a region `descr_regions.txt` does
   not list still counts as land.
 - **Heights**: `map_heights` the natural way - bent with the ground, crags on the mountains (plains stay flat),
+  volcanoes keep their cones, lakes get gentle banks, land touching water stands clearly above it (no flickering
+  wedges on the coasts, no islets in navigable rivers),
   every river in its valley, no slope steeper than the old map's steepest -, with **the same coast as `map_regions`** (every
   tile's middle point is sea exactly when the tile is - as in both games' own maps), and
   **`map_heights.hgt`** - the game's float copy, which it reads instead of the picture and never rebuilds - written

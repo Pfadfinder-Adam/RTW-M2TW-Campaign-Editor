@@ -208,10 +208,21 @@ def _heights_sea(at):
     return sea
 
 
-def heights_mask(path):
-    """map_heights' sea made bigger smoothly (its own coast, which the sea ground types follow): {(X, Y): sea}."""
+def heights_mask(path, natural=False):
+    """map_heights' sea made bigger smoothly (its own coast, which the sea ground types follow): {(X, Y): sea}.
+    natural: bent as the rest of the heights (_bent_corners) - a lake that is water only in the heights (map_regions
+    calls it land: the Dead Sea in Rome) winds too instead of keeping square edges."""
     data, w, h, step, top_down, at = _pixels(path)
-    return _share_mask("corners", w, h, _heights_sea(at))[0]
+    if not natural:
+        return _share_mask("corners", w, h, _heights_sea(at))[0]
+    sea = _heights_sea(at)
+    W, H = len(_weights("corners", w)), len(_weights("corners", h))
+    out = Mask(W, H)
+    for X, Y, pts in _bent_corners(w, h, {}):
+        share = sum(wt for x, y, wt in pts if sea(x, y))
+        if share > 0.5 or (abs(share - 0.5) < 1e-9 and sea(*max(pts, key=lambda p: p[2])[:2])):
+            out.b[Y * W + X] = 1
+    return out
 
 
 def _nearest_kind(pts, want, kind_of, w, h, reach=4):
@@ -360,10 +371,18 @@ def _steepest(w, h, value, is_sea):
     return top
 
 
-def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, steepest=None):
-    """Land heights the way nature makes them (in place; vals in the file's own unit, floor = the lowest land):
+def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, steepest=None, grey=1.0,
+            volcanoes=(), rocky=None):
+    """Land heights the way nature makes them (in place; vals in the file's own unit - grey: one grey level of
+    map_heights in it -, floor = the lowest land):
     - fine relief on mountains: _noise times the old slope (ROUGH; half as much when the heights grow - vertical >
-      1 -, which multiplies the small crags too) - rocky ranges, plains stay flat;
+      1 -, which multiplies the small crags too) - rocky ranges, plains stay flat; on the mountains' own ground
+      (rocky(X, Y): mountains, high mountains) at least a mountain's usual slope and the full ROUGH - a mountain
+      tile is never a flat field in a rock texture (a tester's x3: Etna and Vesuvius stood in wide flat grey plains);
+    - a volcano (volcanoes: new tiles) keeps a cone of its own (VOLCANO_REACH points round it, VOLCANO_RISE of the
+      steepest slope): the game's volcano model is no bigger on the bigger map, its old rise of one tile had grown
+      to three;
+    - an inland lake's banks come down to it gently (LAKE_BANK), no wall with a shadow at the water;
     - rivers carve their valleys: the land along a river (rivers: its new tiles) lowered by CARVE of its height
       above the floor, less further off (VALLEY) - deep in the mountains, hardly at all on a plain;
     - every old point keeps its height (the fine relief fades to nothing at it), round a town (towns: new tiles)
@@ -371,12 +390,21 @@ def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, 
     - no slope steeper than the old map's steepest (steepest: _steepest; a new point's step to its neighbour,
       times vertical - the heights' growth -, against the old step): where the bend (it squeezes a slope), the
       crags or a valley's side would be steeper, all three are made gentler there, step by step, down to the
-      heights neither bent nor roughened (vals.plain)."""
+      heights neither bent nor roughened (vals.plain);
+    - land touching water stands SHORE_GAP grey levels above the floor at least: land lying on the water's level
+      flickers with it in the game (z-fighting - a tester's x3 coasts)."""
     noise = _noise(W, H)
+    _volcano_cones(vals, W, H, mask, volcanoes, steepest, vertical, floor)
     plain = getattr(vals, "plain", None)               # the heights not bent: where a slope is too steep, back to it
     near_river = _rings(_tile_points(rivers), W, H, max(VALLEY)) if rivers else {}
     near_town = _rings(_tile_points(towns), W, H, CALM) if towns else {}
     rough = ROUGH if vertical <= 1 else ROUGH / 2
+    rock_step = 0.0                                      # a mountain's usual slope (the old map's, on its rock)
+    if rocky is not None:
+        steps = sorted(relief[Y * W + X] for Y in range(0, H, 3) for X in range(0, W, 3)
+                       if relief[Y * W + X] and rocky(X, Y))
+        rock_step = steps[len(steps) // 2] if steps else 0.0
+    banks = _rings(_lakes(mask, W, H), W, H, max(LAKE_BANK))
     extra = {}                                           # point: what nature adds to the smooth height
     for Y in range(H):
         for X in range(W):
@@ -386,13 +414,16 @@ def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, 
                 continue
             calm = min(near_town.get((X, Y), CALM), CALM) / CALM
             add = 0.0
-            if noise is not None and relief[i]:
-                dx, dy = min(X % FACTOR, -X % FACTOR), min(Y % FACTOR, -Y % FACTOR)
-                fade = min(1.0, (dx * dx + dy * dy) ** 0.5)          # 0 on an old point
-                add += rough * relief[i] * noise[i] * fade * calm
+            rock = rocky is not None and rocky(X, Y)
+            slope = max(relief[i], rock_step) if rock else relief[i]
+            if noise is not None and slope:
+                add += (ROUGH if rock else rough) * slope * noise[i] * calm
             d = near_river.get((X, Y))
             if d is not None:
                 add -= CARVE * VALLEY[d] * max(v + add - floor, 0.0) * max(calm, 0.25)
+            d = banks.get((X, Y))
+            if d:                                            # an inland lake's bank, down to its shore
+                add -= LAKE_BANK[d] * max(v + add - floor - SHORE_GAP * grey, 0.0)
             base = plain[i] if plain is not None and plain[i] is not None else v
             add = max(v + add, floor) - base                 # the bend, the crags and the valley together
             if add:
@@ -425,11 +456,96 @@ def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, 
                 share[i] = share[i] * 0.5 if share[i] > 0.1 else 0.0
     for i in extra:
         vals[i] = max(height(i), floor)
+    low = floor + SHORE_GAP * grey
+    for Y in range(H):                                   # land on the water's edge: clearly above the water
+        for X in range(W):
+            i = Y * W + X
+            if mask.b[i] or vals[i] is None or vals[i] >= low:
+                continue
+            if any(0 <= a < W and 0 <= b < H and mask.b[b * W + a]
+                   for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1))):
+                vals[i] = low
     if plain is not None:
         vals.plain = None
 
 
-def smooth_scaled(path, kind, sea=False, mask=None, natural=False, rivers=(), towns=(), vertical=1.0):
+SHORE_GAP = 2          # grey levels: land touching water never lower (the games' own shores: median 2)
+LAKE_BANK = {1: 0.55, 2: 0.35, 3: 0.18, 4: 0.06}         # an inland lake's banks lowered toward it, by points off
+VOLCANO_REACH, VOLCANO_RISE = 8, 0.35                    # a volcano's cone: radius in points, steepness
+
+
+def _lakes(mask, W, H):
+    """The water points of inland lakes: water not touching the map's edge, smaller than 1/200 of the map (the
+    seas stay seas)."""
+    seen = bytearray(W * H)
+    out = []
+    for start in range(W * H):
+        if not mask.b[start] or seen[start]:
+            continue
+        piece, st, edge = [], [start], False
+        seen[start] = 1
+        while st:
+            i = st.pop()
+            piece.append(i)
+            X, Y = i % W, i // W
+            edge = edge or X in (0, W - 1) or Y in (0, H - 1)
+            for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1)):
+                if 0 <= a < W and 0 <= b < H:
+                    j = b * W + a
+                    if mask.b[j] and not seen[j]:
+                        seen[j] = 1
+                        st.append(j)
+        if not edge and len(piece) < W * H // 200:
+            out.extend((i % W, i // W) for i in piece)
+    return out
+
+
+def _volcano_cones(vals, W, H, mask, volcanoes, steepest, vertical, floor):
+    """A cone round each volcano (new tiles), raised into vals and vals.plain alike (the slope cap keeps it):
+    VOLCANO_RISE of the steepest step a point, over VOLCANO_REACH points, rounded at its foot."""
+    if not volcanoes or not steepest:
+        return
+    plain = getattr(vals, "plain", None)
+    top = VOLCANO_RISE * steepest / max(vertical, 1e-9) * VOLCANO_REACH
+    for tx, ty in volcanoes:
+        cx, cy = 2 * tx + 1, 2 * ty + 1
+        for Y in range(cy - VOLCANO_REACH, cy + VOLCANO_REACH + 1):
+            for X in range(cx - VOLCANO_REACH, cx + VOLCANO_REACH + 1):
+                if not (0 <= X < W and 0 <= Y < H) or mask.b[Y * W + X]:
+                    continue
+                d = ((X - cx) ** 2 + (Y - cy) ** 2) ** 0.5 / VOLCANO_REACH
+                if d >= 1:
+                    continue
+                up = top * (1 - d) ** 1.6
+                i = Y * W + X
+                for arr in (vals, plain):
+                    if arr is not None and arr[i] is not None:
+                        arr[i] = max(arr[i], floor) + up
+
+
+ROCK = {(98, 65, 65), (196, 128, 128)}                 # map_ground_types: mountains, high mountains (both games)
+
+
+def _rocky(ground_path, w, h):
+    """rocky(X, Y): whether the heights' new point (X, Y) lies on the mountains' own ground - the old
+    map_ground_types (the heights' grid, 2W+1 x 2H+1) read at the same bent place as the heights (_bent_corners), so
+    the rock and the crags stay together. None without the picture."""
+    if not ground_path or not os.path.isfile(ground_path):
+        return None
+    _, gw, gh, _, _, at = _pixels(ground_path)
+    if (gw, gh) != (w, h):
+        return None
+
+    def rocky(X, Y):
+        wx, wy = _warp((X - 1) / 2, (Y - 1) / 2)
+        x = min(max(int((X + 2 * wx) / FACTOR + 0.5), 0), w - 1)
+        y = min(max(int((Y + 2 * wy) / FACTOR + 0.5), 0), h - 1)
+        return at(x, y) in ROCK
+    return rocky
+
+
+def smooth_scaled(path, kind, sea=False, mask=None, natural=False, rivers=(), towns=(), vertical=1.0, ground=None,
+                  volcanoes=()):
     """A height-like picture made bigger SMOOTHLY (no steps): each new point blends the old ones round it. With
     sea=True (map_heights: land grey, its level; the sea blue, its depth) land and sea are blended apart: a point is
     sea or land by mask (heights_mask - a smooth coast), and only old points of that kind are blended."""
@@ -441,7 +557,8 @@ def smooth_scaled(path, kind, sea=False, mask=None, natural=False, rivers=(), to
         value = lambda x, y: float(at(x, y)[2] if is_sea(x, y) else at(x, y)[0])
         vals, relief, W, H = _heights_field(w, h, value, is_sea, mask, natural, towns)
         if natural:
-            _nature(vals, relief, W, H, mask, 1.0, rivers, towns, vertical, _steepest(w, h, value, is_sea))
+            _nature(vals, relief, W, H, mask, 1.0, rivers, towns, vertical, _steepest(w, h, value, is_sea), 1.0,
+                    volcanoes, _rocky(ground, w, h))
         raw = _blank(W, H, step, (0, 0, 0))
         for Y in range(H):
             for X in range(W):
@@ -481,7 +598,7 @@ def smooth_scaled(path, kind, sea=False, mask=None, natural=False, rivers=(), to
     return _write(data, W, H, step, raw)
 
 
-def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0, natural=False, rivers=(), towns=()):
+def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0, natural=False, rivers=(), towns=(), ground=None, volcanoes=()):
     """map_heights.hgt (the game's own float copy of the heights, read INSTEAD of the picture and never made again)
     at the new size: the old floats blended like the picture (land and sea apart, by mask), times `vertical` (the
     heights grow with the land: descr_terrain's max_land_height / min_sea_height are multiplied the same way).
@@ -497,7 +614,11 @@ def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0, natural=False, rivers=(),
     out, relief, W, H = _heights_field(w, h, lambda x, y: vals[y * w + x], is_sea, mask, natural, towns)
     if natural:                                     # the same fine relief and valleys as the picture's
         old = lambda x, y: vals[y * w + x]
-        _nature(out, relief, W, H, mask, 0.0, rivers, towns, vertical, _steepest(w, h, old, is_sea))
+        pairs = [(vals[y * w + x], at(x, y)[0]) for y in range(h) for x in range(w)
+                 if not is_sea(x, y) and at(x, y)[0] > 0]
+        grey = sum(v for v, _ in pairs) / sum(g for _, g in pairs) if pairs else 1.0   # one grey level in floats
+        _nature(out, relief, W, H, mask, 0.0, rivers, towns, vertical, _steepest(w, h, old, is_sea), grey,
+                volcanoes, _rocky(ground, w, h))
     for i, v in enumerate(out):
         v = 0.0 if v is None else v
         v = min(v, 0.0) if mask.b[i] else max(v, 0.0)
@@ -972,6 +1093,7 @@ def heights_from_tiles(land, agree, own):
     TW, TH = land.W, land.H
     PW, PH = 2 * TW + 1, 2 * TH + 1
     out = Mask(PW, PH)
+    fixed = bytearray(PW * PH)                       # tile middles map_regions decided (they stay)
 
     def tiles_of(i, n):
         if i % 2:
@@ -998,11 +1120,84 @@ def heights_from_tiles(land, agree, own):
                     fine = fine and g[0] and not (v and g[1])
             if same and fine and first is not None:
                 sea = not first
+                fixed[J * PW + I] = 1
+            elif fine and not same:                    # between land and sea tiles: the tiles round it decide
+                lands = sum(land.b[b * TW + a] for a in tx for b in ty)    # (the same winding coast - no corner
+                n = len(tx) * len(ty)                                     # of an older coast sticking out)
+                sea = own[(I, J)] if 2 * lands == n else 2 * lands < n
             else:
                 sea = own[(I, J)]
             if sea:
                 out.b[J * PW + I] = 1
+    _no_spikes(out, PW, PH, fixed)
     return out
+
+
+def _no_spikes(mask, W, H, fixed=None):
+    """No lone corner of land in the water or of water on the land: a point between tiles with water on 3 or 4 of
+    its sides becomes water, with land on 3 or 4 becomes land (the tiles' middles stay as map_regions has them). In
+    the game such a corner is a thin triangle lying on the water's level: it flickers (z-fighting), a sand wedge in
+    the sea or a blue one on the land (a tester's x3 coasts). A tile's middle the heights alone decided (fixed not
+    set: a navigable river map_regions calls land) goes too when it stands alone - the small square islands in a
+    tester's DaC rivers."""
+    for _ in range(4):
+        flip = []
+        for Y in range(H):
+            for X in range(W):
+                middle = X % 2 and Y % 2
+                if middle and (fixed is None or fixed[Y * W + X]):
+                    continue                             # a tile's middle as map_regions has it
+                v = mask.b[Y * W + X]
+                sides = [mask.b[b * W + a] for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1))
+                         if 0 <= a < W and 0 <= b < H]
+                other = sum(1 for k in sides if k != v)
+                if len(sides) == 4 and (other == 4 if middle else other >= 3):
+                    flip.append(Y * W + X)
+        if not flip:
+            break
+        for i in flip:
+            mask.b[i] ^= 1
+    _no_islets(mask, W, H, fixed)
+
+
+ISLET = 9              # heights points: land this small in the water, held by no map_regions tile, goes
+
+
+def _no_islets(mask, W, H, fixed):
+    """A piece of land of ISLET points or less standing in the water with no tile middle map_regions decided in
+    it becomes water: the small square islands in a tester's DaC navigable rivers (old land points the heights
+    held inside the river, grown 3 x)."""
+    seen = bytearray(W * H)
+    for start in range(W * H):
+        if mask.b[start] or seen[start]:
+            continue
+        piece, st, held = [], [start], False
+        seen[start] = 1
+        while st and len(piece) <= ISLET:
+            i = st.pop()
+            piece.append(i)
+            held = held or bool(fixed and fixed[i])
+            X, Y = i % W, i // W
+            for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1)):
+                if 0 <= a < W and 0 <= b < H:
+                    j = b * W + a
+                    if not mask.b[j] and not seen[j]:
+                        seen[j] = 1
+                        st.append(j)
+        if st:                                       # bigger than an islet: mark the rest as seen
+            while st:
+                i = st.pop()
+                X, Y = i % W, i // W
+                for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1)):
+                    if 0 <= a < W and 0 <= b < H:
+                        j = b * W + a
+                        if not mask.b[j] and not seen[j]:
+                            seen[j] = 1
+                            st.append(j)
+            continue
+        if not held and len(piece) <= ISLET:
+            for i in piece:
+                mask.b[i] = 1
 
 
 GOLD = (5 ** 0.5 - 1) / 2                                      # 0.618...: the golden ratio's part
@@ -1472,7 +1667,12 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
     hmask = heights_data = None
     if hpath:
         say("the heights' coast...")
-        hmask = heights_from_tiles(info["land"], _agreement(regions_path, hpath, lands), heights_mask(hpath))
+        hmask = heights_from_tiles(info["land"], _agreement(regions_path, hpath, lands), heights_mask(hpath, True))
+    volcanoes = []                                       # their cones stay as steep as they were
+    if os.path.isfile(feats):
+        _, fw, fh, _, _, fat = _pixels(feats)
+        volcanoes = [new_xy(x, y) for y in range(fh) for x in range(fw) if fat(x, y) == (255, 0, 0)]
+    ground_path = os.path.join(base, "map_ground_types.tga")
     for name, kind in BASE_PICTURES.items():
         p = os.path.join(base, name)
         if not os.path.isfile(p) or name in ("map_features.tga", "map_regions.tga"):
@@ -1480,9 +1680,11 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
         say("%s..." % name)
         if name == "map_heights.tga":
             data = smooth_scaled(p, kind, sea=True, mask=hmask, natural=True, rivers=rivers,
-                                 towns=info.get("towns", ()), vertical=vertical)
-            note = "the relief the natural way: bent with the ground, rocky mountains, rivers in their valleys, no " \
-                   "slope steeper than the old map's steepest, the same coast as map_regions"
+                                 towns=info.get("towns", ()), vertical=vertical, ground=ground_path,
+                                 volcanoes=volcanoes)
+            note = "the relief the natural way: bent with the ground, rocky mountains, volcanoes as cones, rivers " \
+                   "in their valleys, lakes with gentle banks, the shore clearly above the water, no slope steeper " \
+                   "than the old map's steepest, the same coast as map_regions"
         elif name == "map_ground_types.tga" and hmask is not None:
             data = ground_scaled(p, hmask, SEA, natural=True)
             note = "every tile the ground of the old tile it lies in, the sea ground under the heights' new coast, " \
@@ -1511,7 +1713,7 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
         warn.append("map_heights.hgt was empty or did not fit map_heights.tga: made again from the new heights")
     elif os.path.isfile(hgt) and hpath and os.path.isfile(hpath):
         plan.binary(hgt, hgt_scaled(hgt, hpath, hmask, vertical, natural=True, rivers=rivers,
-                                    towns=info.get("towns", ())))
+                                    towns=info.get("towns", ()), ground=ground_path, volcanoes=volcanoes))
         plan.note(None, "map_heights.hgt made 3 x bigger%s (the game reads it instead of the picture and never "
                         "makes it again)" % (", the heights x %g" % vertical if vertical != 1 else ""))
     for name, kind in CAMPAIGN_PICTURES.items():

@@ -596,6 +596,9 @@ def _later_start(plan, f, s, tb, start, head_lines):
                      "nonplayable)" % new)
     _lists_and_diplomacy(plan, f, dict(start, playable=False))
     emergence.set_way(plan, new, way, start.get("of"))
+    if way == "shadow":                  # a shadow has no victory conditions (the game stops reading the file)
+        from .wincond import drop
+        drop(plan, campaign, new)
     if way == "event":
         emergence.set_event(plan, campaign, new, start.get("date"), start.get("region"))
 

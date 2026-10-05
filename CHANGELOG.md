@@ -154,6 +154,11 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **The top row scrolls with a bar under it** when the window is narrower than its buttons (it had arrows at its
+  ends: slow through many buttons); the wheel and dragging the row still work.
+- **Avoid Growth (Rome): the tick sits on the free line under Automanage** (it lay over 'Settlement Details').
+- **Campaign rules: Unit sizes say to change them with care** - with other multipliers than the game's own the
+  game's options lost the unit size choice (Rome with REX).
 - **Buttons no wider than their words** - about two spaces from the words to the edge, everywhere (no minimum width
   any more: '+', '-' and 'Fit' were as wide as 'Browse...'); the works and the window buttons on the top row too.
 - **Map: a new town from the legend can stand on another region's land** - it takes its own tile and the 8 round it
@@ -407,6 +412,21 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Rome: the game crashed at the end of a turn when one faction had both a shadow and a faction splitting off
+  it** (`SETTLEMENT::get_revolt_type`). The editor now refuses the second tie on such a faction in plain words
+  (Barbarian Invasion never gives one faction both), and Check mod files finds one already in a mod.
+- **Rome: a shadow faction's victory conditions stopped the game reading `descr_win_conditions.txt`**
+  ('stopped parsing before EOF (unrecognised faction or malformed entry)') - the factions after it had none. A
+  shadow gets no victory conditions now (Barbarian Invasion lists none); Check mod files finds an old one.
+- **Bigger map (x3): no wedges and no flicker on the coasts** - a corner point between land and sea tiles followed
+  an older coast and stuck out as a thin wedge of sand into the sea or of water onto the land, lying on the
+  water's level (it flickered in the game, z-fighting); small square islands stood in navigable rivers. Corners
+  now follow the same winding coast, no point has the other kind on three sides, islets no tile of
+  `map_regions.tga` holds go, and land touching water always stands clearly above it.
+- **Bigger map (x3): volcanoes stood in wide flat fields** - their rise of one tile had grown to three while the
+  game's volcano model stays its size. Each volcano keeps a cone of its own; mountain ground is never a flat
+  field (its crags at least a mountain's usual slope); lakes that are water only in the heights wind with the
+  coast and their banks come down to the water gently, with no wall.
 - **Make the map 3 x bigger stopped on a mod with an empty `map_heights.hgt`** ('unpack_from requires a buffer of
   at least 8 bytes'). An empty or cut `.hgt`, or one that does not fit `map_heights.tga`, is now made again from the
   new heights picture, the way the game converts it, and the window says so.

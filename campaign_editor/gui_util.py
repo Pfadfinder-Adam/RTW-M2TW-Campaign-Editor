@@ -155,23 +155,24 @@ class ScrollFrame(ttk.Frame):
 
 
 class HScroll(ttk.Frame):
-    """A row (built in .inner) that scrolls left and right when the window is narrower than it: arrows at its
-    ends then, the mouse wheel over it, and a press dragged sideways (the row follows the mouse smoothly; a click
-    without a drag is a click). Nothing in the row is ever cut off for good."""
+    """A row (built in .inner) that scrolls left and right when the window is narrower than it: a scrollbar under
+    it then (a tester on a narrow screen: arrows at the ends were slow to get through many buttons - a bar shows
+    where you are and goes anywhere at once), the mouse wheel over it, and a press dragged sideways (the row follows
+    the mouse smoothly; a click without a drag is a click). Nothing in the row is ever cut off for good."""
     STEP = 60
     DRAG = 6                                     # pixels the mouse moves before a press is a drag, not a click
 
     def __init__(self, parent, **kw):
         super().__init__(parent, **kw)
-        self.back = ttk.Button(self, text="\u25c0", command=lambda: self.step(-1))
-        self.fore = ttk.Button(self, text="\u25b6", command=lambda: self.step(1))
         self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0, xscrollincrement=0)
-        self.canvas.pack(side="left", fill="x", expand=True)
+        self.bar = ttk.Scrollbar(self, orient="horizontal", command=self.canvas.xview)
+        self.canvas.configure(xscrollcommand=self.bar.set)
+        self.canvas.pack(side="top", fill="x", expand=True)
         self.inner = ttk.Frame(self.canvas)
         self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda e: self._resize())
         self.canvas.bind("<Configure>", lambda e: self._resize())
-        wheel(self, lambda step: bool(self.back.winfo_ismapped()) and (self.step(step) or True))
+        wheel(self, lambda step: self.wider() and (self.step(step) or True))
         self._drag = None
         for w in (self.canvas, self.inner):
             self.grab(w)
@@ -196,7 +197,7 @@ class HScroll(ttk.Frame):
         if not d["moved"] and abs(e.x_root - d["x"]) < self.DRAG:
             return "break"
         d["moved"] = True
-        if self.back.winfo_ismapped():                 # only a row wider than the window moves
+        if self.wider():                               # only a row wider than the window moves
             self.canvas.scan_dragto(e.x_root, 0, gain=1)
         return "break"
 
@@ -208,17 +209,18 @@ class HScroll(ttk.Frame):
                 w.invoke()
         return "break"
 
+    def wider(self):
+        """Whether the row is wider than the window (the bar is shown)."""
+        return bool(self.bar.winfo_ismapped())
+
     def _resize(self):
         w, h = self.inner.winfo_reqwidth(), self.inner.winfo_reqheight()
         self.canvas.configure(width=w, height=h, scrollregion=(0, 0, w, h))    # asks for the whole row
-        if w > self.canvas.winfo_width() + (self.back.winfo_width() * 2 if self.back.winfo_ismapped() else 0):
-            if not self.back.winfo_ismapped():
-                # packed before the canvas, so the canvas (asking for the whole row) is the one that shrinks
-                self.back.pack(side="left", fill="y", before=self.canvas)
-                self.fore.pack(side="right", fill="y", before=self.canvas)
-        elif self.back.winfo_ismapped():
-            self.back.pack_forget()
-            self.fore.pack_forget()
+        if w > self.canvas.winfo_width():
+            if not self.wider():
+                self.bar.pack(side="top", fill="x", after=self.canvas)
+        elif self.wider():
+            self.bar.pack_forget()
             self.canvas.xview_moveto(0)
 
     def step(self, d):

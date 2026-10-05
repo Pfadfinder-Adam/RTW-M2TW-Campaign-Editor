@@ -172,6 +172,26 @@ def set_conditions(plan, campaign, faction, cond, medieval):
         plan.note(f, "victory conditions of %s added" % faction)
 
 
+def drop(plan, campaign, faction):
+    """Take the faction's block out of descr_win_conditions.txt (with the empty line before it): a shadow faction
+    (`shadowing` in descr_sm_factions) must have none - the game does not know it when it reads the file and stops
+    there ('descr_win_conditions.txt: stopped parsing before EOF (unrecognised faction or malformed entry)');
+    Barbarian Invasion lists no shadow."""
+    p = file_of(plan.mod, campaign)
+    if not p:
+        return
+    f = plan.edit(p)
+    have = blocks(f).get(faction)
+    if not have:
+        return
+    a, b = have
+    if b < len(f.raw) and f.text(b).strip() == "":
+        b += 1                                       # its empty line after it
+    f.delete(a, b)
+    plan.note(f, "victory conditions of %s taken out: a shadow faction has none (the game stops reading the "
+                 "file at it)" % faction)
+
+
 def apply_opts(plan, campaign, faction, cond, opts=None):
     """opts['victory'] = {'long': cond, 'short': cond}: checked against the regions (the campaign's and the run's
     new ones) and factions, then written. A region or faction that does not exist is refused - the game would

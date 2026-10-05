@@ -2811,6 +2811,37 @@ building smith
         self.assertEqual((W, H), (61, 61))
         self.assertTrue(all((v <= 0) == mask[(i % W, i // W)] or v == 0 for i, v in enumerate(vals)))
 
+    def test_bigger_map_no_islets_no_spikes(self):
+        """x3 heights' coast: a land point the old heights held inside a navigable river (map_regions calls the
+        river land) came out as a small square island; corners of an older coast stuck out as thin wedges lying on
+        the water's level (they flicker in the game, z-fighting). Afterwards: no land in the river, no point with
+        the other kind on 3 or 4 sides except the tiles' middles map_regions decided."""
+        from campaign_editor import upscale
+        P, S, LAND, WATER = (200, 40, 40), (41, 140, 233), (60, 60, 60), (0, 0, 120)
+        n = 8
+        regions = [[S if x + y < 4 else P for x in range(n)] for y in range(n)]       # a sea corner, land
+        rpath = os.path.join(self.root, "regions.tga")
+        write_tga(rpath, n, n, regions)
+        hn = 2 * n + 1
+        heights = [[WATER if (x + y < 8 or 9 <= x <= 11) and (x, y) != (10, 10) else LAND for x in range(hn)]
+                   for y in range(hn)]                                                # a river, a land point in it
+        hpath = os.path.join(self.root, "heights.tga")
+        write_tga(hpath, hn, hn, heights)
+        info = {}
+        coast = upscale.coast_mask(rpath, {P}, natural=True)
+        upscale.regions_scaled(rpath, {P}, coast, (), info, natural=True)
+        agree = upscale._agreement(rpath, hpath, {P})
+        wet = upscale.heights_from_tiles(info["land"], agree, upscale.heights_mask(hpath, True))
+        W = wet.W
+        river = [(X, Y) for X in range(29, 32) for Y in range(27, 34)]                # round the old point 10, 10
+        self.assertTrue(all(wet[p] for p in river), [p for p in river if not wet[p]])
+        for X in range(1, W - 1):
+            for Y in range(1, W - 1):
+                if X % 2 and Y % 2:
+                    continue
+                other = sum(1 for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1)) if wet[(X + a, Y + b)] != wet[(X, Y)])
+                self.assertLess(other, 3, (X, Y))
+
     def test_bigger_map_beach_one_tile_wide(self):
         """The beach stays one tile wide along the new coast, as in both games' own maps (a tester's DaC x3: grown
         3 x it was a wide band of sand)."""

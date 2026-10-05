@@ -53,6 +53,9 @@ local AG_GAP = 4
 // place right of Recruitment, from the bottom-left of settlement_details_population_stats (measured on the game's
 // scroll at 1600 x 900): the box's top-left 448 units right and 59 below.
 local AG_M2_ROW = [448, 59]
+// Rome's settlement scroll: the free line under Automanage, from the bottom of own_settlement_governor_info_panel
+// (measured on the game's scroll at 1600 x 900: right under the panel the tick lay over 'Settlement Details').
+local AG_ROME_BELOW = 103
 // Where the tick goes: the first of these parts of the settlement scroll that is open, and where beside it.
 local AG_ANCHORS = [
     ["settlement_details_population_stats", "below"],
@@ -371,6 +374,9 @@ function ag_place(box, m2, k) {
         if (m2 && a[0] == "settlement_details_population_stats") {
             return [r[0] + (AG_M2_ROW[0] * k + 0.5).tointeger(), r[1] + r[3] + (AG_M2_ROW[1] * k + 0.5).tointeger(),
                     a[0] + " (Medieval II tick row)"]
+        }
+        if (!m2 && a[0] == "own_settlement_governor_info_panel") {
+            return [r[0], r[1] + r[3] + (AG_ROME_BELOW * k + 0.5).tointeger(), a[0] + " (Rome: under Automanage)"]
         }
         if (a[1] == "below") {
             return [r[0], r[1] + r[3] + box / 4, a[0]]

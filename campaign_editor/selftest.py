@@ -267,7 +267,7 @@ def near_capital(c, mod):
 
 @step("A shadow of {new}: a clone of {template}, dead at the start, may come back",
       "{shadow} is not on the map at the start; when {new} has a revolt (a civil war), {shadow} takes the rebel "
-      "towns")
+      "towns - {new}'s far town (the Town window step's) is left without a garrison for it")
 def s_shadow(c, mod):
     from .build import build
     return build(mod, c.campaign, c.template, c.shadow, {
@@ -277,15 +277,15 @@ def s_shadow(c, mod):
                   "playable": False}})
 
 
-@step("A faction that splits off {new} in a revolt: a clone of {template}, dead at the start",
-      "{split} is not on the map at the start; {new}'s far town (the Town window step's) is left without a "
-      "garrison - when it revolts it goes to {split}, in its own colours")
+@step("A faction that splits off {template} in a revolt: a clone of {template}, dead at the start",
+      "{split} is not on the map at the start; when towns of {template} revolt they go to {split}, in its own "
+      "colours ({new} has a shadow already - one faction with both crashes the game at the end of a turn)")
 def s_split(c, mod):
     from .build import build
     return build(mod, c.campaign, c.template, c.split, {
         "display_name": "Split Test", "short_name": "Split", "adjective": "Splitting", "raise_faction_limit": True,
         "primary_colour": c.colours[c.split][0], "secondary_colour": c.colours[c.split][1],
-        "start": {"way": "revolt", "of": c.new, "denari": 2000, "regions": [], "leader": None,
+        "start": {"way": "revolt", "of": c.template, "denari": 2000, "regions": [], "leader": None,
                   "playable": False}})
 
 
@@ -401,7 +401,7 @@ def s_forts(c, mod):
 
 @step("Town window: a rebel town given to {new}, its population set to 2600 (the level follows the people)",
       "{far} is {new}'s, big enough for 2600 people - with NO garrison on purpose, far from {new}'s capital: when it "
-      "revolts, {split} (splits off {new}) takes it")
+      "revolts, {shadow} ({new}'s shadow, a civil war) takes it")
 def s_town(c, mod):
     from . import masstown as MT
     region = towns_of(c, mod, "slave")[-1]
@@ -1337,7 +1337,9 @@ def s_module(c, mod):
                  "settings": {"dos.0.amount": "Money given"}})
     lines = MB.new_recipe("CE Test engine lines")
     lines.update({"when": "ev:SettlementTurnEnd",
-                  "ifs": [MB.item("if", "game", line="FactionIsLocal"),
+                  # FactionIsLocal (no parameters, needs the event's faction) logged 'Condition parser doesn't
+                  # recognise this token' in Rome with REX (the module acted all the same) - a line of its own now
+                  "ifs": [MB.item("if", "game", line="I_TurnNumber >= 1"),
                           MB.item("if", "counter", name="ce_seen_{town}", op="<", v=1)],
                   "dos": [MB.item("do", "counter_add", v=1, name="ce_seen_{town}"),
                           MB.item("do", "console", text="add_money {faction} 10"),
@@ -1398,6 +1400,7 @@ def s_engine_rules(c, mod):
 
 # every campaign rule changed (s_rules_all): what is left as it is, and why
 BYTE_TOPS = (127, 255, 32767, 65535)            # the most a byte / a short holds: a limit there is not raised
+UNIT_SIZES_LEFT = "the game's options keep their unit size choice only with these numbers as they are"
 RULES_LEFT = {
     "start_date": "the events and the campaign script count from it",
     # a tester in Medieval II: the years jumped +2 / +3 a turn (2.00 -> 1.90) and the turn counter showed the year
@@ -1419,6 +1422,10 @@ def rule_changed(rule, now=None):
     v, key = rule.value.strip(), rule.key
     if key in RULES_LEFT:
         return None, RULES_LEFT[key]
+    if os.path.basename(rule.path or "").lower() == "descr_unit_sizes.txt":
+        # the user's test mod in Rome with REX: with 0.475 / 0.95 / 1.9 / 3.8 the game's options lost the
+        # unit size choice
+        return None, UNIT_SIZES_LEFT
     if key.endswith("_source"):
         return None, "names the files the engine loads - another value needs other files"
     # a range only widens: a maximum or limit goes up, a minimum (and any other number) down - so the towns, families
@@ -1562,8 +1569,8 @@ def s_scripts(c, mod):
 
 @step("Experiment: a copy of {new}'s army put on its fleet's own sea tile in descr_strat.txt (does it start aboard, "
       "as an army on a town's or a fort's tile is inside it?)",
-      "click {new}'s fleet: the army {aboard} is aboard (the ship's units show it) - or the game's log says "
-      "\"Character '{aboard}' is placed on an invalid tile\" (then an army cannot start at sea)")
+      "{aboard} stands on the water by the fleet; move the fleet and {aboard} is aboard (seen in Rome with REX; "
+      "the game's log says 'invalid tile' for him all the same)")
 def s_aboard(c, mod):
     from .start import _set_xy
     from .textio import strip_comment
