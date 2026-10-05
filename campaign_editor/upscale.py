@@ -423,7 +423,7 @@ def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, 
                 add -= CARVE * VALLEY[d] * max(v + add - floor, 0.0) * max(calm, 0.25)
             d = banks.get((X, Y))
             if d:                                            # an inland lake's bank, down to its shore
-                add -= LAKE_BANK[d] * max(v + add - floor - SHORE_GAP * grey, 0.0)
+                add -= LAKE_BANK[d] * max(v + add - floor - SHORE_GAP * grey / max(vertical, 1.0), 0.0)
             base = plain[i] if plain is not None and plain[i] is not None else v
             add = max(v + add, floor) - base                 # the bend, the crags and the valley together
             if add:
@@ -456,7 +456,42 @@ def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, 
                 share[i] = share[i] * 0.5 if share[i] > 0.1 else 0.0
     for i in extra:
         vals[i] = max(height(i), floor)
-    low = floor + SHORE_GAP * grey
+    # in the OLD map's grey levels: everything is made `vertical` times taller after this (max_land_height x 3, the
+    # .hgt x 3), the slopes kept because the land is as many times wider - but the step from the water to the first
+    # land point is one point wide on both maps, so it would grow into a wall (a tester's DaC x3: 'terrain height
+    # too tall near the water', each tile corner on a diagonal coast a cliff tooth); the games' own shores lie
+    # 1 - 3 grey levels above the water (vanilla: grey 1 the most common)
+    low = floor + SHORE_GAP * grey / max(vertical, 1.0)
+    # the coast comes down to the water over one old point (FACTOR new ones), as the old map's slope from its shore
+    # point to the water did: the land was blended apart from the sea, so the new points by the water kept the old
+    # shore's full height - a step where the old map had a slope (a tester's DaC x3: 'terrain height too tall near
+    # the water'; vanilla x3: the shore median 9 old grey levels against the games' own 3)
+    dist = {}
+    ring = [i for i in range(W * H) if mask.b[i]]
+    seen = bytearray(mask.b)
+    for d in range(1, FACTOR):
+        nxt = []
+        for i in ring:
+            X, Y = i % W, i // W
+            for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1)):
+                if 0 <= a < W and 0 <= b < H:
+                    j = b * W + a
+                    if not seen[j]:
+                        seen[j] = 1
+                        dist[j] = d
+                        nxt.append(j)
+        ring = nxt
+    for d in range(FACTOR - 1, 0, -1):                   # from the inland side down: a straight slope to the water
+        for i in [i for i, k in dist.items() if k == d]:
+            if vals[i] is None:
+                continue
+            X, Y = i % W, i // W
+            up = [vals[b * W + a] for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1))
+                  if 0 <= a < W and 0 <= b < H and not mask.b[b * W + a] and dist.get(b * W + a, FACTOR) > d
+                  and vals[b * W + a] is not None]
+            if up:
+                ref = sum(up) / len(up)
+                vals[i] = min(vals[i], floor + max(ref - floor, 0.0) * d / (d + 1))
     for Y in range(H):                                   # land on the water's edge: clearly above the water
         for X in range(W):
             i = Y * W + X
@@ -469,7 +504,7 @@ def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, 
         vals.plain = None
 
 
-SHORE_GAP = 2          # grey levels: land touching water never lower (the games' own shores: median 2)
+SHORE_GAP = 2          # old grey levels: land touching water never lower (the games' own shores: 1 - 3)
 LAKE_BANK = {1: 0.55, 2: 0.35, 3: 0.18, 4: 0.06}         # an inland lake's banks lowered toward it, by points off
 VOLCANO_REACH, VOLCANO_RISE = 8, 0.35                    # a volcano's cone: radius in points, steepness
 

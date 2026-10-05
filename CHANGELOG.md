@@ -453,6 +453,9 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Bigger map (x3): the coast comes down to the water** - the land by the water kept the old shore's full height,
+  a wall made 3 x taller with the heights (each tile corner on a diagonal coast a cliff tooth); it now slopes down to
+  the water over one old tile, as the old map did.
 - **Medieval II: the game could not start with a faction that lives without towns** - `can_homeless` was written at
   the end of the faction's block, where M2EX stops reading descr_sm_factions.txt (every faction after it was lost,
   the rebels too: 'no faction named slave'); it now goes after the horde numbers, before horde_unit and can_sap, an
