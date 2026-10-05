@@ -436,6 +436,16 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Medieval II: a faction that comes by an event never came** - the game brings such a faction in as a horde (the
+  Mongols' way) and stopped without horde lines ('ASSERT FAILED: faction.cpp: can_horde()'). New faction and Events
+  and later factions now give it the Mongols' horde lines with three foot and three horse units of its own (the
+  cheapest first) and its event's title and text ('Couldn't find title string for historic event'); Check mod files
+  finds one without horde lines.
+- **One faction with a shadow and a faction splitting off it**: in Medieval II (with M2EX) its revolting town went
+  to the shadow and the split-off faction never came (Rome with REX crashed) - refused with the game's own reason.
+  The test mod's split-off faction now leaves another faction, with a town of its own left to revolt.
+- **Test mod: every campaign rule** keeps a share (0 - 1) or a percent (0 - 100) already at its top in its range
+  (M2EX clamped `max_heretics_conversion_modifier` 1.05 and `max_bribe_chance` 105).
 - **Rome: the game crashed at the end of a turn when one faction had both a shadow and a faction splitting off
   it** (`SETTLEMENT::get_revolt_type`). The editor now refuses the second tie on such a faction in plain words
   (Barbarian Invasion never gives one faction both), and Check mod files finds one already in a mod.

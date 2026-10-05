@@ -425,6 +425,32 @@ def s_town(c, mod):
     return plan
 
 
+@step("...a rebel town given to {split_of} with no garrison, far from its capital - to revolt for {split}",
+      "{split_far} is {split_of}'s, big enough for 2600 people, with NO garrison on purpose: when it revolts it goes "
+      "to {split} (a faction with a shadow sends its revolting towns to the shadow instead - Medieval II with M2EX: "
+      "so the split-off faction leaves another faction than the shadow's)")
+def s_split_town(c, mod):
+    from . import emergence as EM
+    from . import masstown as MT
+    if "revolt" not in EM.ways_for(mod):
+        raise Skip(EM.NOT_ROME)
+    if c.split_of == c.new:
+        raise Skip("the split-off faction leaves the test faction here, whose far town (the Town window step) "
+                   "revolts already")
+    tiles = mod.city_tiles(c.campaign)
+    capital = next((tiles[r] for r in towns_of(c, mod, c.split_of) if tiles.get(r)), (0, 0))
+    keep = {c.said.get("near"), c.said.get("far")}
+    cands = [r for r in towns_of(c, mod, "slave") if r not in keep and tiles.get(r)]
+    if not cands:
+        raise Skip("no rebel town left to give %s" % c.split_of)
+    region = max(cands, key=lambda r: abs(tiles[r][0] - capital[0]) + abs(tiles[r][1] - capital[1]))
+    c.said["split_far"] = region
+    plan = Plan(mod, "town", region, {})
+    MT.apply(plan, c.campaign, {"population": {region: 2600}, "owners": {region: c.split_of},
+                                "level_follows": True})
+    return plan
+
+
 @step("Buildings and garrisons for many towns: a building in {edited}'s towns, random garrisons",
       "the building in those towns; the bigger garrisons")
 def s_masstown(c, mod):
@@ -1456,6 +1482,11 @@ def rule_changed(rule, now=None):
         return str(n - 1 if n > 0 else n + 1 if n < 0 else 1), None
     if rule.kind == "float":
         x = float(v)
+        # a share (0 - 1) or a percent (0 - 100) already at its top goes down instead: M2EX clamps it ('attribute
+        # float (1.05) of tag max_heretics_conversion_modifier outside specified range (0, 1)', 'float (105) of tag
+        # max_bribe_chance outside specified range (0, 100)' - a tester's test mod)
+        if up and x in (1.0, 100.0):
+            up = False
         y = (x * 1.05 if up else x * 0.95) if x else 0.05
         text = ("%.10f" % y).rstrip("0")             # plain decimals, as the files write them (0.000095, 95.0)
         return text + "0" if text.endswith(".") else text, None
@@ -1550,7 +1581,7 @@ def s_art_all(c, mod):
       "{gone} is not on the map any more: its land is {gone_into}'s, its rebels and mercenary pool entries gone")
 def s_delete_region(c, mod):
     from . import regiondelete as RD
-    keep = {c.said.get("near"), c.said.get("far")}
+    keep = {c.said.get("near"), c.said.get("far"), c.said.get("split_far")}
     tiles = mod.city_tiles(c.campaign)
     capital = next((tiles[r] for r in towns_of(c, mod, c.new) if tiles.get(r)), (0, 0))
     cands = [r for r in towns_of(c, mod, "slave") if r not in keep and tiles.get(r)]
@@ -1836,7 +1867,7 @@ COVERAGE = {
     "Diplomacy: alliances and wars at the start": ["s_alliance"],
     "Factions that come later: by an event": ["s_later", "s_later_way"],
     "Factions that come later: a shadow (civil war)": ["s_shadow"],
-    "Factions that come later: splitting off in a revolt": ["s_split"],
+    "Factions that come later: splitting off in a revolt": ["s_split", "s_split_town"],
     "Resources on the map": ["s_resources"],
     "Forts, watchtowers, wonders (Rome)": ["s_forts"],
     "Town window: owner and population": ["s_town"],

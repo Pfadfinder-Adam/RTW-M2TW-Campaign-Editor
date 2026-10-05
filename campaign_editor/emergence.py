@@ -33,8 +33,16 @@ OWN_WORD = {"shadow": "shadowing", "revolt": "spawned_by"}       # the way -> th
 DEAD_WORDS = ("dead_until_resurrected", "re_emergent")
 # one faction with a shadow AND a faction splitting off it crashes Rome at the end of a turn (REX:
 # SETTLEMENT::get_revolt_type); Barbarian Invasion never has both on one faction
-BOTH_TIES = ("%s already has %s as %s - a faction with both a shadow and a faction splitting off it crashes the "
-             "game at the end of a turn (Barbarian Invasion never has both): pick another faction")
+BOTH_TIES = ("%s already has %s as %s - one faction takes only one of the two: Rome with REX crashed at the end of a "
+             "turn, and in Medieval II with M2EX its revolting town went to the shadow, the split-off faction never came "
+             "(Barbarian Invasion never has both): pick another faction")
+# Medieval II brings a faction that comes by an event in as a HORDE (the Mongols' and Timurids' way): the engine stops
+# when its descr_sm_factions block has no horde lines - 'ASSERT FAILED: faction.cpp: can_horde()', 'horde.cpp: ...
+# m_horde_unit_resource_ids.empty()' (a tester's game with M2EX: the faction never came). The Mongols' own numbers:
+HORDE = (("horde_min_units", "10"), ("horde_max_units", "20"), ("horde_max_units_reduction_every_horde", "10"),
+         ("horde_unit_per_settlement_population", "250"), ("horde_min_named_characters", "2"),
+         ("horde_max_percent_army_stack", "80"), ("horde_disband_percent_on_settlement_capture", "0"))
+HORDE_UNITS = 6
 
 
 # Shadow and split-off factions are Barbarian Invasion's: plain Rome (also with REX) cannot take them - a test mod
@@ -276,6 +284,64 @@ def set_dead(plan, campaign, faction, dead, re_emergent=False):
                              if dead else "starts alive"))
 
 
+def set_horde(plan, faction):
+    """Medieval II: the horde lines a faction that comes by an event needs (HORDE): the Mongols' numbers and up to
+    HORDE_UNITS of its own units (no general's, no ships) as horde_unit, after custom_battle_availability. A block
+    that has horde lines already (a clone of the Mongols) keeps its own."""
+    from .limits import game_kind
+    from .units import read_units
+    mod = plan.mod
+    if game_kind(mod) != "medieval2":
+        return
+    f = plan.edit(mod.file("sm_factions"))
+    heads = [i for i in range(len(f)) if tokens(f.text(i))[:1] == ["faction"]]
+    start = next((i for i in heads if len(tokens(f.text(i))) > 1 and tokens(f.text(i))[1] == faction), None)
+    if start is None:
+        return
+    end = next((i for i in heads if i > start), len(f))
+    block = [tokens(strip_comment(f.text(i))) for i in range(start, end)]
+    if any(t[:1] and t[0].startswith("horde_") for t in block):
+        return
+    culture = next((t[1] for t in block if len(t) > 1 and t[0] == "culture"), None)
+    edu = mod.file("edu")
+    units = [u for u in read_units(plan.edit(edu))] if edu else []
+    mine = [u for u in units if faction in u.ownership] or [u for u in units if culture and culture in u.ownership]
+    # foot and horse alike, the cheapest of each first (the Mongols' horde: foot archers to heavy lancers)
+    by_kind = [sorted((u for u in mine if u.category == kind and not u.general and not u.mercenary),
+                      key=lambda u: u.price or 0) for kind in ("infantry", "cavalry")]
+    pick = []
+    for k in range(HORDE_UNITS):
+        for kind in by_kind:
+            if k < len(kind) and len(pick) < HORDE_UNITS:
+                pick.append(kind[k].type)
+    if not pick:
+        plan.warn(f, "%s comes by an event: Medieval II brings it as a horde, but it owns no unit to make one of - "
+                     "give it units (the Unit editor) or it will not come" % faction)
+        return
+    at = next((start + k + 1 for k, t in enumerate(block) if t[:1] == ["custom_battle_availability"]), None)
+    if at is None:
+        at = end
+        while at > start + 1 and (not f.text(at - 1).strip() or f.text(at - 1).lstrip().startswith(";")):
+            at -= 1
+    f.insert(at, ["%s\t\t\t\t%s" % kv for kv in HORDE] + ["horde_unit\t\t\t\t\t%s" % n for n in pick])
+    plan.note(f, "%s: horde lines (Medieval II brings a faction that comes by an event as a horde, as the Mongols): "
+                 "%s" % (faction, ", ".join(pick)))
+
+
+def set_event_texts(plan, faction):
+    """The emergence event's title and text in historic_events.txt ({FACTION_TITLE}, {FACTION_BODY}): Medieval II
+    with M2EX asked for them ('Couldn't find title string for historic event ...'); one the mod has stays."""
+    from .build import display_names
+    from .strtables import strings, write_texts
+    have = strings(plan.mod, "historic_events.txt")
+    shown = display_names(plan.mod).get(faction) or faction.replace("_", " ").title()
+    want = {"%s_TITLE" % faction.upper(): "%s rises" % shown,
+            "%s_BODY" % faction.upper(): "A new power has risen: %s." % shown}
+    want = {k: v for k, v in want.items() if not have.get(k)}
+    if want:
+        write_texts(plan, "historic_events.txt", want)
+
+
 def set_event(plan, campaign, faction, date=None, region=None, remove=False):
     """descr_events.txt: the `event emergent_faction <faction>` with its date and region (written, changed or, with
     remove, taken out). The file is made when the campaign has none."""
@@ -306,6 +372,8 @@ def set_event(plan, campaign, faction, date=None, region=None, remove=False):
         plan.binary(path, ("; historical events and when they occur\r\n" + "\r\n".join(lines) + "\r\n")
                     .encode("latin-1"))
         plan.notes.append((mod.rel(path), "new file: %s rises %s" % (faction, date.strip())))
+        set_event_texts(plan, faction)
+        set_horde(plan, faction)
         return
     f = plan.edit(path)
     have = [e for e in EV.read(f) if e["kind"] == "emergent_faction" and e["name"] == faction]
@@ -321,6 +389,8 @@ def set_event(plan, campaign, faction, date=None, region=None, remove=False):
     end = len(f.raw) - (1 if f.raw and not f.text(len(f.raw) - 1).strip() else 0)
     f.insert(end, lines)
     plan.note(f, "%s rises %s%s" % (faction, date.strip(), " in %s" % region if region else ""))
+    set_event_texts(plan, faction)
+    set_horde(plan, faction)
 
 
 def rising_regions(mod, campaign):
@@ -366,10 +436,28 @@ def problems(mod, campaign):
             for word in ("shadowing", "spawned_by"):
                 if t.get(word):
                     faults.append("descr_sm_factions.txt: %s is '%s %s' - %s" % (fac, word, t[word], NOT_ROME))
+    from .limits import game_kind
+    m2 = game_kind(mod) == "medieval2"
     for fac, shadow, split in both_ties(mod):
-        faults.append("descr_sm_factions.txt: %s has a shadow (%s) and a faction splitting off it (%s) - the game "
-                      "crashes at the end of a turn (Barbarian Invasion never has both on one faction); keep one"
-                      % (fac, shadow, split))
+        faults.append("descr_sm_factions.txt: %s has a shadow (%s) and a faction splitting off it (%s) - %s "
+                      "(Barbarian Invasion never has both on one faction); keep one" % (
+                          fac, shadow, split, "its revolting towns go to the shadow, the split-off faction never comes "
+                          "(Medieval II with M2EX)" if m2 else "the game crashes at the end of a turn (Rome with REX)"))
+    if m2:                                  # Medieval II brings a faction that comes by an event as a horde
+        blocks_ = {}
+        cur = None
+        for line in mod.load(mod.file("sm_factions")).texts():
+            t = tokens(strip_comment(line))
+            if t[:1] == ["faction"] and len(t) > 1:
+                cur = t[1].rstrip(",")
+                blocks_[cur] = False
+            elif cur and t[:1] and t[0].startswith("horde_unit"):
+                blocks_[cur] = True
+        for fac in emergent_events(mod, campaign):
+            if fac in blocks_ and not blocks_[fac]:
+                faults.append("descr_sm_factions.txt: %s comes by an event, but its block has no horde lines - "
+                              "Medieval II brings such a faction in as a horde (the Mongols' way) and without them "
+                              "it never comes (New faction / Events and later factions write them)" % fac)
     from .wincond import blocks, file_of
     wp = file_of(mod, campaign)
     if wp:

@@ -3993,6 +3993,66 @@ building smith
             "data/world/maps/campaign/test/descr_events.txt")
         self.assertEqual(before, after)
 
+    def test_medieval2_event_faction_comes_as_a_horde(self):
+        """Medieval II brings a faction that comes by an event in as a HORDE (a tester's game with M2EX: 'ASSERT
+        FAILED: faction.cpp: can_horde()', the faction never came; 'Couldn't find title string for historic event'):
+        its event writes the Mongols' horde lines with its own units (no general's) after custom_battle_availability
+        and the event's title and text; a block with horde lines keeps them; Check finds an event faction without
+        them; one faction with a shadow and a split-off is refused with Medieval II's own reason (the revolting town
+        went to the shadow)."""
+        from campaign_editor import emergence as E, limits
+        from campaign_editor.minimod import EDU
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "dictionary\talpha_general\n", "dictionary\talpha_general\ncategory\tcavalry\nattributes\tsea_faring, "
+            "general_unit\n") + "\ntype\t\talpha spear\ndictionary\talpha_spear\ncategory\tinfantry\nownership\talpha\n"
+            "\ntype\t\talpha horse\ndictionary\talpha_horse\ncategory\tcavalry\nownership\talpha\n")
+        write(os.path.join(d, "text", "historic_events.txt"), "{FIRST_TITLE}\tFirst\n{FIRST_BODY}\tThe first.\n",
+              utf16=True)
+        smf = os.path.join(d, "descr_sm_factions.txt")
+        with open(smf, encoding="latin-1") as fh:
+            sm = fh.read()
+        write(smf, sm.replace("secondary_colour\t\tred 4, green 5, blue 6\n",
+                              "secondary_colour\t\tred 4, green 5, blue 6\ncustom_battle_availability\tyes\n"
+                              "can_sap\tno\n"))
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "riders", {"start": {
+            "way": "event", "date": "5 summer", "region": "B_R", "denari": 2000, "regions": [], "leader": None,
+            "playable": False}})
+        plan.apply()
+        self.addCleanup(setattr, limits, "game_kind", limits.game_kind)
+        limits.game_kind = lambda m: "medieval2"               # the rest as Medieval II
+        mod = ModData(self.root)
+        self.assertTrue(any("riders comes by an event, but its block has no horde lines" in f
+                            for f in E.problems(mod, "test")[0]))
+        plan = Plan(mod, "later", "riders", {})
+        E.apply(plan, "test", "riders", "event", date="5", region="B_R")       # Medieval II: years from the start
+        block = "\n".join(plan.files[mod.file("sm_factions")].texts()).split("faction\t\triders")[1]
+        block = block.split("\nfaction")[0]
+        lines = [x.split()[0] for x in block.splitlines() if x.strip() and not x.startswith(";")]
+        self.assertEqual(lines[lines.index("custom_battle_availability") + 1], "horde_min_units")
+        self.assertIn("horde_unit\t\t\t\t\talpha spear", block)
+        self.assertIn("horde_unit\t\t\t\t\talpha horse", block)
+        self.assertNotIn("alpha general", block)                       # the general's unit is no horde's
+        plan.apply()
+        with open(os.path.join(d, "text", "historic_events.txt"), "rb") as fh:
+            texts = fh.read().decode("utf-16")
+        self.assertIn("{RIDERS_TITLE}", texts)                          # the event's title and text (both games)
+        self.assertIn("{RIDERS_BODY}", texts)
+        mod = ModData(self.root)
+        self.assertFalse([f for f in E.problems(mod, "test")[0] if "horde" in f])
+        plan = Plan(mod, "later", "riders", {})                       # once: the lines it has stay as they are
+        E.set_horde(plan, "riders")
+        self.assertEqual(plan.changed_files(), [])
+        self.addCleanup(setattr, E, "ways_for", E.ways_for)
+        E.ways_for = lambda m: E.WAYS
+        plan = build(mod, "test", "alpha", "shade", {"start": {"way": "shadow", "of": "alpha", "denari": 1,
+                                                                 "regions": [], "leader": None}})
+        plan.apply()
+        with self.assertRaises(ValueError) as cm:
+            E.set_way(Plan(ModData(self.root), "x", "y", {}), "riders", "revolt", "alpha")
+        self.assertIn("went to the shadow", str(cm.exception))
+
     def test_one_town_population_and_owner(self):
         """The town window's writes (masstown.apply): the population line, the town handed to another faction (the
         whole block moves, edit.map_changes); towns() reads the population and the garrison's units; Restore exact."""
