@@ -2859,7 +2859,8 @@ building smith
         self.assertFalse(wet[(1, 1)])                                   # the bank (heights land) stays land
 
     def test_bigger_map_winding_coast_and_borders(self):
-        """x3 the natural way: the coast and the borders between regions wind (not along the 3 x 3 blocks), while
+        """x3 the natural way: the coast runs smooth (the water finds its level - not along the 3 x 3 blocks), the
+        borders between regions wind, while
         every old tile's middle keeps its region or sea, each region stays in as many pieces as before and the
         ground's edges wind too - the same map gives the same picture."""
         from campaign_editor import upscale
@@ -2871,7 +2872,8 @@ building smith
         write_tga(rpath, n, n, old)
         flat = upscale.coast_mask(rpath, {A, B})
         bent = upscale.coast_mask(rpath, {A, B}, natural=True)
-        self.assertNotEqual(bytes(flat.b), bytes(bent.b))
+        edge = [next(X for X in range(flat.W) if bent[(X, Y)]) for Y in range(flat.H)]      # the first land
+        self.assertTrue(all(abs(a - b) <= 2 for a, b in zip(edge, edge[1:])), edge)  # no 3 x 3 steps
         self.assertEqual(bytes(bent.b), bytes(upscale.coast_mask(rpath, {A, B}, natural=True).b))
         out = os.path.join(self.root, "regions3.tga")
         with open(out, "wb") as fh:
@@ -2893,7 +2895,44 @@ building smith
                         st.append(q)
             self.assertEqual(seen, px)                                  # one piece, as before
         border = {X for X in range(W) for Y in range(W) if g.get(X, Y) == A and X + 1 < W and g.get(X + 1, Y) == B}
-        self.assertGreater(len(border), 1)                              # the border bends: not one straight column
+        self.assertEqual(len(border), 1)                    # smooth: a straight border stays one straight line
+        with open(out, "wb") as fh:                         # winding (the modder's other pick): it bends
+            fh.write(upscale.regions_scaled(rpath, {A, B}, upscale.coast_mask(rpath, {A, B}, True, "winding"), (),
+                                            {}, natural=True, edges="winding"))
+        g = read_tga(out)
+        border = {X for X in range(W) for Y in range(W) if g.get(X, Y) == A and X + 1 < W and g.get(X + 1, Y) == B}
+        self.assertGreater(len(border), 1)
+
+    def test_bigger_map_edges_three_ways(self):
+        """x3 lines drawn three ways (the modder picks in the x3 window): smooth, light (1.5 x weaker) and winding.
+        The blur's weights add up to one, every old middle keeps its kind, a one-tile river of sea tiles on a
+        diagonal runs on unbroken in both smooth ways, and the lone middle of a one-tile islet gets a small piece of
+        land round it (no single tile in the water)."""
+        from campaign_editor import upscale
+        for e in ("smooth", "light"):
+            for X, Y, pts in upscale._smooth_sources(5, 5, e):
+                self.assertAlmostEqual(sum(wt for _, _, wt in pts), 1.0, 6)
+        n = 16
+        sea = lambda x, y: x == y or (x, y) == (3, 12)                 # a diagonal river, a one-tile lake
+        islet = lambda x, y: not (x == 12 and y == 3)                   # sea everywhere but one tile
+        for e in ("smooth", "light"):
+            m = upscale._smooth_water(sea, n, n, e)
+            wet = {(X, Y) for X in range(m.W) for Y in range(m.H) if not m[(X, Y)]}
+            start = (1, 1)
+            seen, st = {start}, [start]
+            while st:
+                a, b = st.pop()
+                for q in ((a + 1, b), (a - 1, b), (a, b + 1), (a, b - 1)):
+                    if q in wet and q not in seen and abs(q[0] - q[1]) < 6:
+                        seen.add(q)
+                        st.append(q)
+            self.assertIn((3 * n - 2, 3 * n - 2), seen, e)               # the river runs on to the far corner
+            for x in range(n):
+                for y in range(n):
+                    self.assertEqual(m[(3 * x + 1, 3 * y + 1)], not sea(x, y))
+            m = upscale._smooth_water(islet, n, n, e)
+            c = (3 * 12 + 1, 3 * 3 + 1)
+            self.assertTrue(m[c] and sum(m[(c[0] + a, c[1] + b)] for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1))) >= 2)
 
     def test_bigger_map_borders_stay_on_their_rivers(self):
         """x3 the natural way with the rivers: where a border ran along a river (the river tiles one region's, the
@@ -4197,10 +4236,10 @@ building smith
         self.assertFalse(E.homeless(ModData(self.root), "alpha"))
 
     def test_can_homeless_where_the_engines_read_it(self):
-        """can_homeless goes after the horde numbers and before horde_unit / can_sap (M2EX reads the block's words in
-        its order: at the end, after has_family_tree, the reading stopped - every faction after it was lost, the
-        rebels too: a tester's test mod 'no faction named slave'); an old one at the end moves to its place; Check
-        names one out of place."""
+        """can_homeless goes after the horde numbers and the last horde_unit, right before can_sap (proven in game on
+        Rome, Barbarian Invasion and Medieval II; at the end, after has_family_tree, or before horde_unit the reading
+        stopped - every faction after it was lost, the rebels too: 'Expecting can_sap', 'no faction named slave');
+        an old one out of place moves to its place; Check names one out of place."""
         from campaign_editor import emergence as E, limits as L
         smf = os.path.join(self.root, "data", "descr_sm_factions.txt")
         with open(smf, encoding="latin-1") as fh:
@@ -4219,9 +4258,16 @@ building smith
         with open(smf, encoding="latin-1") as fh:
             words = [l.split()[0] for l in fh.read().splitlines() if l.strip() and not l.startswith(";")]
         k = words.index("can_homeless")
-        self.assertEqual((words[k - 1], words[k + 1]), ("horde_disband_percent_on_settlement_capture", "horde_unit"))
+        self.assertEqual((words[k - 1], words[k + 1]), ("horde_unit", "can_sap"))
         self.assertEqual(words.count("can_homeless"), 1)
-        self.assertFalse(any("can_homeless comes after" in f for f in E.problems(ModData(self.root), "test")[0]))
+        self.assertFalse(any("can_homeless comes" in f for f in E.problems(ModData(self.root), "test")[0]))
+        with open(smf, encoding="latin-1") as fh:                  # before horde_unit: the games stop there too
+            txt = fh.read()
+        lines = txt.split("\n")
+        hl = next(i for i, l in enumerate(lines) if l.startswith("can_homeless"))
+        lines[hl - 1], lines[hl] = lines[hl], lines[hl - 1]          # can_homeless above the horde_unit line
+        write(smf, "\n".join(lines))
+        self.assertTrue(any("can_homeless comes before horde_unit" in f for f in E.problems(ModData(self.root), "test")[0]))
 
     def test_medieval2_event_faction_comes_as_a_horde(self):
         """Medieval II brings a faction that comes by an event in as a HORDE (a tester's game with M2EX: 'ASSERT

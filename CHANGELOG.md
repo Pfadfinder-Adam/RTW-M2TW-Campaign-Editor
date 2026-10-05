@@ -180,6 +180,16 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **Bigger map (x3): pick how the lines are drawn** - the coast, rivers drawn as sea, the borders between regions
+  and the edges of ground and climates: *Smooth* (as water finds its level - no 3 x 3 steps, no beads or breaks in a
+  narrow river; the default), *Smooth, lighter* (1.5 x weaker, closer to the old shapes) or *Winding* (as before).
+  Towns, ports, armies and resources keep their tiles in all three.
+- **Bigger map (x3): no teeth along the shore.** The land by the water now takes the old map's heights by its real
+  distance from the water (a corner step counts as 1.4) and capes stand as low as the old map's capes; one height per
+  ring had made a small tooth at every step of a diagonal coast.
+- **Lives without towns (can_homeless)** is written after the horde's last unit, right before `can_sap` - the place
+  all three games read it (between the horde numbers and the horde's units they stopped with *Expecting can_sap*).
+  Check mod files names it when it stands anywhere else.
 - **Bigger map (x3): the coast as the old map had it.** The first three points on each side of the water's edge take
   the old map's own shore heights (land never higher, the sea at the old depth by the shore, not three times
   deeper), and the next four blend into the bigger map's heights, so the shore lies as in the games' own maps -

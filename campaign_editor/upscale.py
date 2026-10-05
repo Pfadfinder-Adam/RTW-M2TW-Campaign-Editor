@@ -57,6 +57,18 @@ CAMPAIGN_PICTURES = {"disasters.tga": "tiles", "radar_map1.tga": "tiles", "radar
                      "map_radar2.tga": "double"}
 
 
+# How the lines of the bigger map (the coast, the borders between regions, the edges of the ground and the climates)
+# are drawn - the modder picks one in the x3 window (the user: 'let people see what they want'):
+#   winding - every old tile's middle kept, the rest bent by _warp (bays and capes; small steps can stay);
+#   smooth  - as water finds its level: the old map blurred, cut at half (box blurs one after another - about a
+#             bell curve 2 new tiles wide);
+#   light   - the same, 1.5 x weaker (closer to the old shapes).
+EDGES = ("winding", "smooth", "light")
+EDGE_DEFAULT = "smooth"
+EDGE_BLUR = {"smooth": (5, 3, 5), "light": (3, 3, 3)}
+EDGE_WORDS = {"winding": "winding", "smooth": "smooth", "light": "lightly smoothed"}
+WATER_PEAK = {"smooth": 5, "light": 3}   # new tiles: how far a narrow river looks for its own strongest water
+
 def new_xy(x, y):
     return FACTOR * x + FACTOR // 2, FACTOR * y + FACTOR // 2
 
@@ -535,46 +547,117 @@ def _coast_rings(wet, W, H, reach):
     return dist
 
 
+def _touching(wet, i, W, H):
+    """(water on how many of its 4 sides, water on a corner only) of point i - wet(j) True for water."""
+    X, Y = i % W, i // W
+    me = wet(i)
+    side = sum(1 for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1))
+               if 0 <= a < W and 0 <= b < H and wet(b * W + a) != me)
+    corner = side == 0 and any(0 <= a < W and 0 <= b < H and wet(b * W + a) != me
+                               for a, b in ((X + 1, Y + 1), (X + 1, Y - 1), (X - 1, Y + 1), (X - 1, Y - 1)))
+    return side, corner
+
+
 def shore_profile(w, h, value, is_sea):
-    """The old map's own shore: ([land median 1, 2, 3 points from the water], [sea median 1, 2, 3]) in its own units
-    (value(x, y); the sea's as it reads - a depth below 0 for the .hgt). The games' own (Medieval II .hgt): land 70 /
-    232 / 353, the sea -30 all along."""
-    dist = _coast_rings(lambda i: is_sea(i % w, i // w), w, h, SHORE_KEEP)
+    """The old map's own shore, in its own units (value(x, y); the sea's as it reads - a depth below 0 for the
+    .hgt): {'land': [median 1, 2, 3 points from the water], 'sea': [the same], 'side': {water on 1 / 2 / 3 of its 4
+    sides: the median of those first land points}}. The games' own (Medieval II .hgt): land 70 / 232 / 353; the
+    first land point 105 with water on one side, 42 on a cape with water on two, 30 on three; the sea -30 all along."""
+    wet = lambda i: is_sea(i % w, i // w)
+    dist = _coast_rings(wet, w, h, SHORE_KEEP)
     land, sea = [[] for _ in range(SHORE_KEEP)], [[] for _ in range(SHORE_KEEP)]
+    side = {1: [], 2: [], 3: []}
     for i, d in dist.items():
         x, y = i % w, i // w
-        (sea if is_sea(x, y) else land)[d - 1].append(value(x, y))
+        v = value(x, y)
+        if is_sea(x, y):
+            sea[d - 1].append(v)
+            continue
+        land[d - 1].append(v)
+        k = _touching(wet, i, w, h)[0]
+        if d == 1 and k:
+            side[min(k, 3)].append(v)
     med = lambda a: sorted(a)[len(a) // 2] if a else None
-    return [med(a) for a in land], [med(a) for a in sea]
+    return {"land": [med(a) for a in land], "sea": [med(a) for a in sea],
+            "side": {k: med(a) for k, a in side.items()}}
 
 
 def vanilla_shore(get, put, W, H, mask, profile):
-    """The coast exactly as the old map had it, whatever the bigger map did inland (the user, after z-fighting
-    corners on a tester's x3 coasts: 'make the shore fully vanilla, the first three cells, smooth the rest'): the
-    first SHORE_KEEP points on each side of the water's edge take the old map's own shore heights (shore_profile -
-    the land never higher than them, the sea at their depth), the next SHORE_EASE blend back into the bigger map's
-    own heights, so no bump and no step shows. get(i) / put(i, v): a point's height in the old map's units."""
-    land_p, sea_p = profile
+    """The coast as the old map has it, whatever the bigger map did inland (the user, after z-fighting corners on a
+    tester's x3 coasts: 'make the shore fully vanilla, the first three cells, smooth the rest'). Measured on the
+    games' own maps (check-scripts corner.py), not one height per ring - that made a tooth at every step of a
+    diagonal coast (a point of the second ring touching the water by its corner stood 3 x higher than the first
+    ring; a tester's DaC x3):
+    - the sea: the old map's own depth by the shore for SHORE_KEEP points, then blended into the bigger map's;
+    - the land by its real distance from the water (a corner step counts 1.41): the old map's ring heights between,
+      never higher than them; a point with water on 2 or 3 of its sides (a cape) as much lower as the old map has
+      them (42 and 30 against 105 on Medieval II's own map);
+    - the next SHORE_EASE points blend into the bigger map's own heights, so no bump and no step shows.
+    get(i) / put(i, v): a point's height in the old map's units."""
+    land_p, sea_p, side_p = profile["land"], profile["sea"], profile["side"]
     if not any(v is not None for v in land_p + sea_p):
         return
-    dist = _coast_rings(lambda i: mask.b[i], W, H, SHORE_KEEP + SHORE_EASE)
+    first = lambda prof, k: prof[k] if prof[k] is not None else next((p for p in prof if p is not None), None)
+    wet = lambda i: mask.b[i]
+    reach = SHORE_KEEP + SHORE_EASE
+    dist = _coast_rings(wet, W, H, reach)
+    # the land's real distance from the water: 1 beside it, 1.41 by a corner, then steps of 1 / 1.41
+    import heapq
+    real, heap = {}, []
+    for i, d in dist.items():
+        if mask.b[i] or d > 2:
+            continue
+        k, corner = _touching(wet, i, W, H)
+        e = 1.0 if k else (2 ** 0.5 if corner else None)
+        if e is not None:
+            real[i] = e
+            heap.append((e, i))
+    heapq.heapify(heap)
+    while heap:
+        e, i = heapq.heappop(heap)
+        if e > real.get(i, 1e9) or e >= reach:
+            continue
+        X, Y = i % W, i // W
+        for a, b, step in ((1, 0, 1.0), (-1, 0, 1.0), (0, 1, 1.0), (0, -1, 1.0), (1, 1, 1.414), (1, -1, 1.414),
+                           (-1, 1, 1.414), (-1, -1, 1.414)):
+            j = (Y + b) * W + X + a
+            if 0 <= X + a < W and 0 <= Y + b < H and not mask.b[j] and e + step < real.get(j, 1e9):
+                real[j] = e + step
+                heapq.heappush(heap, (e + step, j))
+    rings = [first(land_p, k) for k in range(SHORE_KEEP)]
+    base = side_p.get(1) or rings[0]
+
+    def ring_at(e):                     # the old map's ring heights, between them by the real distance
+        if e <= 1:
+            return rings[0]
+        k = min(int(e), SHORE_KEEP - 1)
+        if k >= SHORE_KEEP - 1:
+            return rings[-1]
+        f = e - k
+        return rings[k - 1] + (rings[k] - rings[k - 1]) * f
     for i, d in dist.items():
         v = get(i)
         if v is None:
             continue
-        sea = mask.b[i]
-        prof = sea_p if sea else land_p
-        k = min(d, SHORE_KEEP) - 1
-        ref = prof[k] if prof[k] is not None else next((p for p in prof if p is not None), None)
-        if ref is None:
+        if mask.b[i]:
+            ref = first(sea_p, min(d, SHORE_KEEP) - 1)
+            if ref is None:
+                continue
+            t = ref if d <= SHORE_KEEP else ref + (v - ref) * (d - SHORE_KEEP) / (SHORE_EASE + 1)
+            put(i, t)
             continue
-        if d <= SHORE_KEEP:
-            t = ref if sea else min(v, ref)
+        e = real.get(i, float(d))
+        if None in rings:
+            continue
+        if e <= SHORE_KEEP:
+            t = ring_at(e)
+            k = _touching(wet, i, W, H)[0] if e <= 1 else 0
+            if k >= 2 and base and side_p.get(min(k, 3)) is not None:    # a cape: as low as the old map's capes
+                t *= side_p[min(k, 3)] / base
         else:
-            t = ref + (v - ref) * (d - SHORE_KEEP) / (SHORE_EASE + 1)
-            if not sea:
-                t = min(v, t)
-        put(i, t)
+            ref = rings[-1]
+            t = ref + (v - ref) * min(e - SHORE_KEEP, SHORE_EASE + 1) / (SHORE_EASE + 1)
+        put(i, min(v, t))
 
 
 SHORE_GAP = 2          # old grey levels: land touching water never lower (the games' own shores: 1 - 3)
@@ -746,7 +829,7 @@ def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0, natural=False, rivers=(),
                 volcanoes, _rocky(ground, w, h))
     for i, v in enumerate(out):
         v = 0.0 if v is None else v
-        v = min(v, 0.0) if mask.b[i] else max(v, 0.0)
+        v = min(v, 0.0) if mask.b[i] else max(v, 0.5 / vertical)   # land never at the water level (0 reads as water)
         out[i] = v * vertical
     if natural:                                     # the coast as the old map had it (the .hgt's own units)
         prof = shore_profile(w, h, lambda x, y: vals[y * w + x], is_sea)
@@ -799,7 +882,7 @@ def _warp(TX, TY):
     return wx, wy
 
 
-def kinds_scaled(path, mask=None, sea_colours=(), rounds=2, shore=(), natural=False):
+def kinds_scaled(path, mask=None, sea_colours=(), rounds=2, shore=(), natural=False, edges=EDGE_DEFAULT):
     """A picture of kinds on the heights' grid (map_ground_types, map_climates; 2W+1 x 2H+1, a tile = the point at
     its middle and the 8 round it) made 3 x bigger BY TILES - a tester's DaC map lost its forests: 8 of every 9 new
     tiles took their kind from the old picture's in-between points (Mirkwood: dense forest middles, wilderness
@@ -820,6 +903,10 @@ def kinds_scaled(path, mask=None, sea_colours=(), rounds=2, shore=(), natural=Fa
     old = lambda x, y: at(2 * x + 1, 2 * y + 1)      # an old tile's kind
     default = {True: (196, 0, 0), False: (0, 0, 0)}  # shallow sea / wilderness when nothing near has the kind
     types = [None] * (TW * TH)
+    smooth = natural and edges in EDGE_BLUR           # the edges drawn the same way as the coast and the borders
+    blur = _smooth_sources(ow, oh, edges) if smooth else None
+    if smooth:
+        rounds = 0                                     # the blur already rounds them
     for TY in range(TH):
         oy = min(TY // FACTOR, oh - 1)
         for TX in range(TW):
@@ -837,7 +924,17 @@ def kinds_scaled(path, mask=None, sea_colours=(), rounds=2, shore=(), natural=Fa
                             if best is None or d < best[0]:
                                 best = (d, k)
                 c = best[1] if best else default[want]
-            if natural and not (TX % FACTOR == FACTOR // 2 and TY % FACTOR == FACTOR // 2):
+            pts = next(blur)[2] if smooth and TX < ow * FACTOR and TY < oh * FACTOR else None
+            if pts is not None:
+                if not is_sea(c):                          # the land kind with the most weight round it
+                    tot = {}
+                    for x, y, wt in pts:
+                        k = old(x, y)
+                        if not is_sea(k):
+                            tot[k] = tot.get(k, 0.0) + wt
+                    if tot:
+                        c = max(tot, key=tot.get)
+            elif natural and not smooth and not (TX % FACTOR == FACTOR // 2 and TY % FACTOR == FACTOR // 2):
                 wx, wy = _warp(TX, TY)                     # natural edges: the kind from a bent place (land kinds
                 sx = min(max(int((TX + 0.5 + wx) / FACTOR), 0), ow - 1)   # only, never across the coast)
                 sy = min(max(int((TY + 0.5 + wy) / FACTOR), 0), oh - 1)
@@ -953,11 +1050,11 @@ def _thin_shore(types, TW, TH, ow, oh, old, is_sea, shore):
                 types[y * TW + x] = old(a, b)
 
 
-def ground_scaled(path, mask, sea_colours, natural=False):
+def ground_scaled(path, mask, sea_colours, natural=False, edges=EDGE_DEFAULT):
     """map_ground_types made bigger by tiles (kinds_scaled): sea or land as the heights' new coast (mask) says, the
     sea ground under the heights' sea as in the games' own maps, the beach one tile wide along the new coast.
     natural: the edges between kinds of ground wind (_warp) instead of following the 3 x 3 blocks."""
-    return kinds_scaled(path, mask, sea_colours, shore=(BEACH,), natural=natural)
+    return kinds_scaled(path, mask, sea_colours, shore=(BEACH,), natural=natural, edges=edges)
 
 
 HILLS, MOUNTAINS, HIGH_MOUNTAINS = (128, 128, 64), (98, 65, 65), (196, 128, 128)
@@ -1025,10 +1122,10 @@ def mountains_by_height(ground, heights, old_ground, old_heights, rounds=3):
     return _write(ground, w, h, step, raw)
 
 
-def climates_scaled(path, natural=False):
+def climates_scaled(path, natural=False, edges=EDGE_DEFAULT):
     """map_climates made bigger by tiles (kinds_scaled): every new tile the climate of the old tile it lies in, the
     edges between climates rounded (natural: winding as well)."""
-    return kinds_scaled(path, natural=natural)
+    return kinds_scaled(path, natural=natural, edges=edges)
 
 
 def _pixels(path):
@@ -1078,20 +1175,145 @@ def land_colours(regions_path, region_colours, heights_path=None):
     return lands
 
 
-def coast_mask(path, lands, natural=False):
+def coast_mask(path, lands, natural=False, edges=EDGE_DEFAULT):
     """map_regions' land made bigger smoothly: Mask of the new tiles (lands: land_colours - towns and ports count as
-    land). natural: the coast winds (bays and capes, _warp) instead of running in steps and 45-degree cuts; every
-    old tile's middle keeps its land or sea."""
+    land). natural: the coast drawn the `edges` way (EDGES: winding - bays and capes, _warp; smooth / light - the
+    water as it finds its own level, _smooth_water: a wide river or a coast drawn in tiles runs as a smooth line,
+    not in 3 x 3 steps); every old tile's middle keeps its land or sea."""
     data, w, h, step, top_down, at = _pixels(path)
     lands = set(lands) | {CITY, PORT}
+    if natural and edges in EDGE_BLUR:
+        return _smooth_water(lambda x, y: at(x, y) not in lands, w, h, edges)
     return _share_mask("tiles", w, h, lambda x, y: at(x, y) in lands, natural)[0]
+
+
+
+
+def _blur_kernel(passes):
+    """The 1-D weights of box blurs one after another, centred: {offset in new tiles: weight}."""
+    k = {0: 1.0}
+    for b in passes:
+        r = b // 2
+        nxt = {}
+        for o, v in k.items():
+            for d in range(-r, b - r):
+                nxt[o + d] = nxt.get(o + d, 0.0) + v / b
+        k = nxt
+    return k
+
+
+def _smooth_sources(w, h, edges):
+    """For each new tile (X, Y): the old tiles round it with their weights in the blur of the old map (each old tile
+    its 3 x 3 block) - the 'smooth' / 'light' way of drawing the lines; an old tile's middle has only its own tile
+    (it never changes)."""
+    k = _blur_kernel(EDGE_BLUR[edges])
+    span = max(abs(o) for o in k) // FACTOR + 2
+    side = []                                         # side[sub][d]: the weight of old tile (own + d) for sub-cell sub
+    for sub in range(FACTOR):
+        row = {}
+        for d in range(-span, span + 1):
+            wt = sum(k.get(d * FACTOR + c - sub, 0.0) for c in range(FACTOR))
+            if wt > 1e-9:
+                row[d] = wt
+        side.append(row)
+    mid = FACTOR // 2
+    for Y in range(h * FACTOR):
+        oy, sy = Y // FACTOR, Y % FACTOR
+        for X in range(w * FACTOR):
+            ox, sx = X // FACTOR, X % FACTOR
+            if sx == mid and sy == mid:
+                yield X, Y, ((ox, oy, 1.0),)
+                continue
+            pts = {}
+            for dy, wy in side[sy].items():
+                y = min(max(oy + dy, 0), h - 1)
+                for dx, wx in side[sx].items():
+                    x = min(max(ox + dx, 0), w - 1)
+                    pts[(x, y)] = pts.get((x, y), 0.0) + wx * wy
+            yield X, Y, tuple((x, y, wt) for (x, y), wt in pts.items())
+
+
+def _pick_most(pts, want, kind_of, colour):
+    """The old point of the wanted kind whose colour has the most weight in all (the smooth ways: a border runs
+    where the blurred regions meet); None when none is."""
+    tot, first = {}, {}
+    for x, y, wt in pts:
+        if kind_of(x, y) == want:
+            c = colour(x, y)
+            tot[c] = tot.get(c, 0.0) + wt
+            first.setdefault(c, (x, y, wt))
+    if not tot:
+        return None
+    return first[max(tot, key=tot.get)]
+
+
+def _box(row, width):
+    """A row averaged over `width` cells round each (the edges repeat)."""
+    r = width // 2
+    n = len(row)
+    pad = [row[0]] * r + row + [row[-1]] * (width - 1 - r)
+    acc = [0.0]
+    for v in pad:
+        acc.append(acc[-1] + v)
+    return [(acc[i + width] - acc[i]) / width for i in range(n)]
+
+
+def _wide_max(row, width):
+    r = width // 2
+    pad = [row[0]] * r + row + [row[-1]] * r
+    return [max(pad[i:i + width]) for i in range(len(row))]
+
+
+def _rows_cols(grid, W, H, fn, arg):
+    rows = [fn(grid[Y * W:(Y + 1) * W], arg) for Y in range(H)]
+    out = [0.0] * (W * H)
+    for X in range(W):
+        col = fn([rows[Y][X] for Y in range(H)], arg)
+        for Y in range(H):
+            out[Y * W + X] = col[Y]
+    return out
+
+
+def _smooth_water(is_sea, w, h, edges=EDGE_DEFAULT):
+    """The new tiles' land (Mask, w*FACTOR x h*FACTOR) the way water finds its level: the old sea (each old tile its
+    3 x 3 block) blurred, a new tile water where more than half of it is - or, beside a narrow river, more than
+    0.55 of the strongest water near it, so a river one tile wide runs on unbroken instead of falling into beads
+    and pools (a tester's DaC x3: the Anduin in steps, beads and breaks; the user chose this look of three shown).
+    Every old tile's middle keeps its land or sea: towns, ports, armies and resources stand where they stood."""
+    W, H = w * FACTOR, h * FACTOR
+    old = [[1.0 if is_sea(x, y) else 0.0 for x in range(w)] for y in range(h)]
+    grid = [old[Y // FACTOR][X // FACTOR] for Y in range(H) for X in range(W)]
+    for b in EDGE_BLUR[edges]:
+        grid = _rows_cols(grid, W, H, _box, b)
+    peak = _rows_cols(grid, W, H, _wide_max, WATER_PEAK[edges])
+    mid = FACTOR // 2
+    out = Mask(W, H)
+    for Y in range(H):
+        for X in range(W):
+            i = Y * W + X
+            if X % FACTOR == mid and Y % FACTOR == mid:
+                land = not old[Y // FACTOR][X // FACTOR]
+            else:
+                land = not grid[i] > min(0.5, 0.55 * peak[i])
+            if land:
+                out.b[i] = 1
+    for oy in range(h):                  # an old tile's middle the blur left alone (a one-tile cape, islet or lake
+        for ox in range(w):              # that holds a town, a port, an army...): the 4 tiles beside it take its kind
+            X, Y = ox * FACTOR + mid, oy * FACTOR + mid      # too, a small round piece instead of a lone tile
+            v = out.b[Y * W + X]
+            side = [(X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1)]
+            if sum(1 for a, b in side if 0 <= a < W and 0 <= b < H and out.b[b * W + a] == v) < 2:
+                for a, b in side:
+                    if 0 <= a < W and 0 <= b < H:
+                        out.b[b * W + a] = v
+    return out
 
 
 def _mode(cols):
     return max(sorted(set(cols)), key=cols.count) if cols else None
 
 
-def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=False, rivers=None):
+def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=False, rivers=None, edges=EDGE_DEFAULT):
     """map_regions x3 with a SMOOTH coast (mask: coast_mask): a land pixel takes the region of the old land tile round
     it with the most weight, a sea pixel the sea's colour; keep_land (pixels under a river) stay land. rivers: (the old
     river tiles - river_tiles -, the new river pixels - features_scaled's) - a border that ran along a river runs
@@ -1104,7 +1326,7 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=Fals
     lands = set(lands) | {CITY, PORT}
     plain = lands - {CITY, PORT}                  # the colours a land pixel takes
     if mask is None:
-        mask = coast_mask(path, lands, natural)
+        mask = coast_mask(path, lands, natural, edges)
     keep_land = set(keep_land)
     N4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
     N8 = N4 + ((1, 1), (1, -1), (-1, 1), (-1, -1))
@@ -1138,9 +1360,10 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=Fals
     land_of = lambda x, y: colour(x, y) in plain
     W, H = w * FACTOR, h * FACTOR
     raw = _blank(W, H, step, (0, 0, 0))
-    for X, Y, pts in _sources("tiles", w, h, natural):     # natural: borders between regions wind as the coast
+    smooth = natural and edges in EDGE_BLUR                # the borders drawn the same way as the coast
+    for X, Y, pts in (_smooth_sources(w, h, edges) if smooth else _sources("tiles", w, h, natural)):
         land = mask[(X, Y)] or (X, Y) in keep_land
-        p = _pick(pts, land, land_of)
+        p = _pick_most(pts, land, land_of, colour) if smooth else _pick(pts, land, land_of)
         if p is None and land:                    # no land tile round it (a river kept on land, a coast corner)
             p = min(((x, y) for x in range(max(0, X // FACTOR - 1), min(w, X // FACTOR + 2))
                      for y in range(max(0, Y // FACTOR - 1), min(h, Y // FACTOR + 2)) if land_of(x, y)),
@@ -2084,10 +2307,11 @@ def look_over(warnings=()):
     return text
 
 
-def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
+def plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEFAULT):
     """Every file of the map made 3 x bigger, in the plan (nothing written until Apply). vertical: how much higher
-    the hills, mountains and sea floor get (3 = in proportion with the wider land; 1 = as high as before). Returns
-    the warnings. progress(text) is told each step (a big map takes a minute or two)."""
+    the hills, mountains and sea floor get (3 = in proportion with the wider land; 1 = as high as before). edges:
+    how the coast, the borders and the edges of ground and climates are drawn (EDGES). Returns the warnings.
+    progress(text) is told each step (a big map takes a minute or two)."""
     say = progress or (lambda text: None)
     mod = plan.mod
     warn = []
@@ -2101,7 +2325,7 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
         hpath = None
     lands = land_colours(regions_path, colours, hpath)   # the regions' colours and any other land colour
     say("the coast (map_regions)...")
-    coast = coast_mask(regions_path, lands, natural=True)  # the regions' land, made bigger with a winding coast
+    coast = coast_mask(regions_path, lands, natural=True, edges=edges)  # the regions' land, the coast drawn `edges`
     keep_land, rivers = (), ()
     feats = os.path.join(base, "map_features.tga")
     if os.path.isfile(feats):
@@ -2115,8 +2339,9 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
     info = {}
     on_rivers = (river_tiles(feats), rivers) if rivers else None      # a border along a river stays on it
     plan.binary(regions_path, regions_scaled(regions_path, lands, coast, keep_land, info, natural=True,
-                                             rivers=on_rivers))
-    plan.note(None, "map_regions.tga made 3 x bigger (a winding coast and winding borders between regions, no 3 x 3 "
+                                             rivers=on_rivers, edges=edges))
+    plan.note(None, "map_regions.tga made 3 x bigger (a " + EDGE_WORDS[edges] + " coast and " + EDGE_WORDS[edges] +
+              " borders between regions, no 3 x 3 "
                     "steps and no lone pixel sticking out, a border that ran along a river still on the river, "
                     "every region in as many pieces as before; every town with its own region round it, every port "
                     "on a coastal land tile touching the sea and its region)")
@@ -2144,15 +2369,15 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
                    "in their valleys, lakes with gentle banks, the shore clearly above the water, no slope steeper " \
                    "than the old map's steepest, the same coast as map_regions"
         elif name == "map_ground_types.tga" and hmask is not None:
-            data = ground_scaled(p, hmask, SEA, natural=True)
+            data = ground_scaled(p, hmask, SEA, natural=True, edges=edges)
             if heights_data and hpath and os.path.isfile(hpath):
                 data = mountains_by_height(data, heights_data, p, hpath)
             note = "every tile the ground of the old tile it lies in, the sea ground under the heights' new coast, " \
-                   "winding edges (no 3 x 3 steps), mountains only where the new heights stand high - a range's low " \
+                   + EDGE_WORDS[edges] + " edges (no 3 x 3 steps), mountains only where the new heights stand high - a range's low " \
                    "edge hills or the ground beside it, by its height"
         elif name == "map_climates.tga":
-            data = climates_scaled(p, natural=True)
-            note = "every tile the climate of the old tile it lies in, winding edges (no 3 x 3 steps)"
+            data = climates_scaled(p, natural=True, edges=edges)
+            note = "every tile the climate of the old tile it lies in, %s edges (no 3 x 3 steps)" % EDGE_WORDS[edges]
         elif name == "map_roughness.tga":
             data = smooth_scaled(p, kind)
             note = "smooth"

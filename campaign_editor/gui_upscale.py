@@ -9,6 +9,12 @@ from tkinter import messagebox, ttk
 from . import log
 
 APP = "RTW & M2TW Campaign Editor"
+EDGES = (
+    ("smooth", "Smooth - as water finds its level: coasts, wide rivers, borders and the edges of ground and climates "
+               "run as smooth lines (no 3 x 3 steps)"),
+    ("light", "Smooth, lighter - the same, 1.5 x weaker: closer to the old shapes"),
+    ("winding", "Winding - bays and capes, every old tile's corner kept (small steps can stay)"),
+)
 HEIGHTS = (
     (3, "Hills 3 x higher - they look as they did (the land is 3 x wider, so this keeps them as steep)"),
     (1, "Heights as they are - a flatter world"),
@@ -63,6 +69,12 @@ def open_upscale(app):
     radios = [ttk.Radiobutton(frm, text=text, variable=v_high, value=val) for val, text in HEIGHTS]
     for r in radios:
         r.pack(anchor="w")
+    ttk.Label(frm, text="The lines (coast, rivers drawn as sea, borders, ground, climates)",
+              font=("", 10, "bold")).pack(anchor="w", pady=(10, 0))
+    v_edges = tk.StringVar(value="smooth")
+    radios += [ttk.Radiobutton(frm, text=text, variable=v_edges, value=val) for val, text in EDGES]
+    for r in radios[len(HEIGHTS):]:
+        r.pack(anchor="w")
     v_state = tk.StringVar(value="")
     state = ttk.Label(frm, textvariable=v_state, justify="left", wraplength=620)
     state.pack(anchor="w", pady=(10, 0))
@@ -71,9 +83,10 @@ def open_upscale(app):
     plans, warns, done = {}, {}, {}
 
     def make_plan():
-        vertical = v_high.get()
-        if vertical in plans:
-            return plans[vertical]
+        vertical, edges = v_high.get(), v_edges.get()
+        key = (vertical, edges)
+        if key in plans:
+            return plans[key]
         p = Plan(ModData(app.mod.data), "map", "map_x3", {})
         w.config(cursor="watch")
         buttons(False)
@@ -82,7 +95,7 @@ def open_upscale(app):
             v_state.set("Working (a big map takes a minute or two): %s" % text)
             w.update()
         try:
-            warns[vertical] = plan_upscale(p, camp, vertical=vertical, progress=step)
+            warns[key] = plan_upscale(p, camp, vertical=vertical, progress=step, edges=edges)
         except Exception as e:
             log.write("upscale failed: %s" % e)
             v_state.set("The map could not be made bigger: %s" % e)
@@ -91,7 +104,7 @@ def open_upscale(app):
             if w.winfo_exists():
                 w.config(cursor="")
                 buttons(True)
-        plans[vertical] = p
+        plans[key] = p
         v_state.set("Ready: %d file(s) will change. Nothing is written yet." % len(p.changed_files()))
         return p
 
@@ -128,7 +141,7 @@ def open_upscale(app):
             r.state(["disabled"])
         ttk.Button(bar, text="Put the old map back", command=undo).pack(side="left")
         ttk.Button(bar, text="Close", command=w.destroy).pack(side="left", padx=(6, 0))
-        messagebox.showinfo(APP, look_over(warns.get(v_high.get(), ())), parent=w)   # look it over yourself
+        messagebox.showinfo(APP, look_over(warns.get((v_high.get(), v_edges.get()), ())), parent=w)   # look it over yourself
 
     def undo():
         bdir = done.get("bdir")

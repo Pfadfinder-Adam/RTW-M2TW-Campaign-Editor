@@ -353,19 +353,21 @@ def _block(f, faction):
     return start, next((i for i in heads if i > start), len(f))
 
 
-# the block's words in the order the engines read them (M2EX.exe's faction_db: a word out of its place stops the
-# reading - a tester's test mod: 'can_homeless' after has_family_tree, and every faction after it was lost: 'no
-# faction named slave in descr_sm_factions.txt', units owned by them 'Invalid ownership type')
+# the block's words in the order the engines read them (M2EX.exe's / REX's faction_db: a word out of its place
+# stops the reading - every faction after it is lost: 'no faction named slave in descr_sm_factions.txt', units owned
+# by them 'Invalid ownership type'). PROVEN in all three games by the in-game tester (2026-10-05, runs 1803 / 1811 /
+# 1838): can_homeless right before can_sap, AFTER the last horde_unit; between the horde numbers and horde_unit
+# the games stop ('Expecting can_sap').
 HOMELESS_AFTER = ("custom_battle_availability", "periods_unavailable_in_custom_battle", "horde_min_units",
                   "horde_max_units", "horde_max_units_reduction_every_horde", "horde_unit_per_settlement_population",
                   "horde_min_named_characters", "horde_max_percent_army_stack",
-                  "horde_disband_percent_on_settlement_capture")
-HOMELESS_BEFORE = ("horde_unit", "can_sap", "prefers_naval_invasions", "can_have_princess", "has_family_tree")
+                  "horde_disband_percent_on_settlement_capture", "horde_unit")
+HOMELESS_BEFORE = ("can_sap", "prefers_naval_invasions", "can_have_princess", "has_family_tree")
 
 
 def homeless_place(f, start, end):
-    """The line can_homeless goes in front of: after the horde numbers (after custom_battle_availability when there
-    are none), before the horde's units and can_sap - where M2EX / REX read it."""
+    """The line can_homeless goes in front of: after the horde numbers and the last horde_unit (after
+    custom_battle_availability when there are none), right before can_sap - where M2EX / REX read it."""
     words = [(i, (tokens(strip_comment(f.text(i)))[:1] or [None])[0]) for i in range(start + 1, end)]
     after = [i for i, w in words if w in HOMELESS_AFTER]
     if after:
@@ -528,11 +530,15 @@ def problems(mod, campaign):
         words = [(i, (tokens(strip_comment(f.text(i)))[:1] or [None])[0]) for i in range(a + 1, b)]
         hl = [i for i, w in words if w == HOMELESS]
         late = [i for i, w in words if w in HOMELESS_BEFORE]
-        if hl and late and late[0] < hl[0]:
-            faults.append("descr_sm_factions.txt line %d: can_homeless comes after %s - the game stops reading the "
+        early = [i for i, w in words if w in HOMELESS_AFTER]
+        wrong = (late[0] if late and hl and late[0] < hl[0] else None) or \
+            (early[-1] if early and hl and early[-1] > hl[0] else None)
+        if wrong is not None:
+            faults.append("descr_sm_factions.txt line %d: can_homeless comes %s %s - the game stops reading the "
                           "file there and loses every faction after it (the rebels too); it goes after the horde "
-                          "numbers, before horde_unit and can_sap (Events > How a faction comes in puts it right)"
-                          % (hl[0] + 1, tokens(f.text(late[0]))[0]))
+                          "numbers and the last horde_unit, right before can_sap (Events > How a faction comes in "
+                          "puts it right)" % (hl[0] + 1, "after" if wrong < hl[0] else "before",
+                                              tokens(f.text(wrong))[0]))
     if not engine_of(mod):
         for i in range(len(f)):
             if tokens(strip_comment(f.text(i)))[:1] == [HOMELESS]:
