@@ -163,6 +163,13 @@
   and the same map always comes out alike. Every old tile's middle keeps its region, land or sea, ground and climate
   (nothing changes under a town, army or resource), every region stays in as many pieces as before, rivers stay on
   the land, the beach one tile wide.
+- **Bigger map (x3): the relief the natural way** - the heights bend with the ground (hills and their ground types
+  stay together), mountains get crags in three sizes as real ones have (plains stay flat; half as strong when the
+  heights grow 3 x, which grows the crags too), and every river carves its valley (deep in the mountains, hardly at
+  all on a plain). No slope comes out steeper than the steepest slope of the old map (where it would, the relief
+  falls back to the plain stretch there); the land round a town stays smooth; land and sea stay where the coast
+  puts them. `map_heights.tga` and `map_heights.hgt` (the copy the game reads) are made the same way. The heights
+  take longer to make (about half a minute on a vanilla map).
 - **The tools with a window of their own are buttons on the top row**, beside the works: Campaign rules, Events,
   Traits and retinue, Module builder, Recolour, Culture names, Many towns, Bigger map (x3) - one press away instead
   of in Tools (New religion and the region's shares are the Religions work's own buttons). Tools keeps the checks,

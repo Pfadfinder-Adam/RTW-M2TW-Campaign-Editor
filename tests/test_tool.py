@@ -2758,6 +2758,59 @@ building smith
         border = {X for X in range(W) for Y in range(W) if g.get(X, Y) == A and X + 1 < W and g.get(X + 1, Y) == B}
         self.assertGreater(len(border), 1)                              # the border bends: not one straight column
 
+    def test_bigger_map_natural_heights(self):
+        """x3 heights the natural way: the sea and land as the mask says, no slope (times the heights' growth)
+        steeper than the old map's steepest, a river's valley lower than the land beside it, the land round a town
+        smooth, and the .hgt the game reads made the same way; the same map, the same heights."""
+        from campaign_editor import upscale
+        import random
+        rnd = random.Random(5)
+        n = 21                                                       # heights points (10 x 10 tiles)
+        SEA = (0, 0, 120)
+        grey = [[(v, v, v) for v in (rnd.randrange(20, 240) for _ in range(n))] for _ in range(n)]
+        for y in range(n):
+            grey[y][0] = SEA                                         # a sea column on the left
+        hpath = os.path.join(self.root, "heights.tga")
+        write_tga(hpath, n, n, grey)
+        mask = upscale.Mask(61, 61)
+        for Y in range(61):
+            for X in range(3):
+                mask[(X, Y)] = True
+        rivers = [(15, Y) for Y in range(5, 25)]
+        towns = [(22, 22)]
+        flat = upscale.smooth_scaled(hpath, "corners", sea=True, mask=mask)
+        nat = upscale.smooth_scaled(hpath, "corners", sea=True, mask=mask, natural=True, rivers=rivers, towns=towns,
+                                    vertical=3.0)
+        self.assertEqual(nat, upscale.smooth_scaled(hpath, "corners", sea=True, mask=mask, natural=True,
+                                                    rivers=rivers, towns=towns, vertical=3.0))
+        self.assertNotEqual(flat, nat)
+        out = os.path.join(self.root, "heights3.tga")
+        with open(out, "wb") as fh:
+            fh.write(nat)
+        from campaign_editor.tga import read_tga
+        g, old = read_tga(out), read_tga(hpath)
+        steep = max(abs(old.get(x + 1, y)[0] - old.get(x, y)[0]) for x in range(1, n - 1) for y in range(n))
+        for X in range(61):
+            for Y in range(61):
+                c = g.get(X, Y)
+                self.assertEqual(c[0] == 0 and c[1] == 0, mask[(X, Y)], (X, Y))
+                if X >= 4 and X + 1 < 61:
+                    self.assertLessEqual(3 * abs(g.get(X + 1, Y)[0] - c[0]), steep + 3, (X, Y))
+        valley = [g.get(31, Y)[0] for Y in range(15, 45)]           # the river's tiles' middles (2X + 1)
+        with open(out, "wb") as fh:
+            fh.write(flat)
+        f = read_tga(out)
+        self.assertLess(sum(valley), sum(f.get(31, Y)[0] for Y in range(15, 45)))   # carved
+        hgt = os.path.join(self.root, "heights.hgt")
+        with open(hgt, "wb") as fh:
+            fh.write(struct.pack("<II", n, n) + struct.pack("<%df" % (n * n), *[
+                (-5.0 if grey[n - 1 - y][x] == SEA else float(grey[n - 1 - y][x][0])) for y in range(n) for x in range(n)]))
+        data = upscale.hgt_scaled(hgt, hpath, mask, 3.0, natural=True, rivers=rivers, towns=towns)
+        W, H = struct.unpack_from("<II", data)
+        vals = struct.unpack_from("<%df" % (W * H), data, 8)
+        self.assertEqual((W, H), (61, 61))
+        self.assertTrue(all((v <= 0) == mask[(i % W, i // W)] or v == 0 for i, v in enumerate(vals)))
+
     def test_bigger_map_beach_one_tile_wide(self):
         """The beach stays one tile wide along the new coast, as in both games' own maps (a tester's DaC x3: grown
         3 x it was a wide band of sand)."""

@@ -17,7 +17,8 @@ What it writes (Preview lists it; one backup, Restore gives everything back):
                   game -, a corner link as a staircase, a river mouth carried on to the new coast; cliffs and land
                   bridges as unbroken lines too, a bridge's end on the water carried on to the land; fords, sources
                   and volcanoes on the middle pixel), map_trade_routes
-    2W+1 x 2H+1   map_heights SMOOTH (blended, land and sea apart) with ONE coast: each tile's middle point sea
+    2W+1 x 2H+1   map_heights the NATURAL way (blended, land and sea apart, bent by _warp as the ground, fractal
+                  crags on mountains, river valleys, no slope steeper than the old map's steepest) with ONE coast: each tile's middle point sea
                   exactly when the new map_regions has sea there (heights_from_tiles), and map_heights.hgt beside it
                   at the new size (the game reads it instead of the picture and never makes it again);
                   map_ground_types and map_climates BY TILES (kinds_scaled: every new tile the kind of the old tile
@@ -1421,11 +1422,11 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
     lands = land_colours(regions_path, colours, hpath)   # the regions' colours and any other land colour
     say("the coast (map_regions)...")
     coast = coast_mask(regions_path, lands, natural=True)  # the regions' land, made bigger with a winding coast
-    keep_land = ()
+    keep_land, rivers = (), ()
     feats = os.path.join(base, "map_features.tga")
     if os.path.isfile(feats):
         say("rivers, cliffs and land bridges (map_features)...")
-        data, _ = features_scaled(feats, coast, natural=True)   # natural rivers (bends cut, meanders), stopping
+        data, rivers = features_scaled(feats, coast, natural=True)   # natural rivers (bends cut, meanders), stopping
         #                                                   at the new coast: no land kept under them
         plan.binary(feats, data)
         plan.note(None, "map_features.tga made 3 x bigger (rivers drawn naturally - bends rounded, gentle meanders, "
@@ -1448,8 +1449,10 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
             continue
         say("%s..." % name)
         if name == "map_heights.tga":
-            data = smooth_scaled(p, kind, sea=True, mask=hmask)       # the relief smooth, no steps
-            note = "smooth, with a smooth coast"
+            data = smooth_scaled(p, kind, sea=True, mask=hmask, natural=True, rivers=rivers,
+                                 towns=info.get("towns", ()), vertical=vertical)
+            note = "the relief the natural way: bent with the ground, rocky mountains, rivers in their valleys, no " \
+                   "slope steeper than the old map's steepest, the same coast as map_regions"
         elif name == "map_ground_types.tga" and hmask is not None:
             data = ground_scaled(p, hmask, SEA, natural=True)
             note = "every tile the ground of the old tile it lies in, the sea ground under the heights' new coast, " \
@@ -1468,7 +1471,8 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
     hgt = os.path.join(base, "map_heights.hgt")
     say("map_heights.hgt...")
     if os.path.isfile(hgt) and os.path.isfile(hpath):
-        plan.binary(hgt, hgt_scaled(hgt, hpath, hmask, vertical))
+        plan.binary(hgt, hgt_scaled(hgt, hpath, hmask, vertical, natural=True, rivers=rivers,
+                                    towns=info.get("towns", ())))
         plan.note(None, "map_heights.hgt made 3 x bigger%s (the game reads it instead of the picture and never "
                         "makes it again)" % (", the heights x %g" % vertical if vertical != 1 else ""))
     for name, kind in CAMPAIGN_PICTURES.items():

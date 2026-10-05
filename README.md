@@ -60,7 +60,8 @@ texture (vanilla-style uniforms), so a new faction's troops wear its own colour 
   value, so nothing changes under a town, army or resource, and every region stays in as many pieces as before. The rules the games' own maps keep are kept: every town has its own region (or sea) all round it,
   every port stands on a coastal land tile touching the sea and its region, and a region `descr_regions.txt` does
   not list still counts as land.
-- **Heights**: `map_heights` interpolated between the old points, with **the same coast as `map_regions`** (every
+- **Heights**: `map_heights` the natural way - bent with the ground, crags on the mountains (plains stay flat),
+  every river in its valley, no slope steeper than the old map's steepest -, with **the same coast as `map_regions`** (every
   tile's middle point is sea exactly when the tile is - as in both games' own maps), and
   **`map_heights.hgt`** - the game's float copy, which it reads instead of the picture and never rebuilds - written
   at the new size too. The hills, mountains and sea floor are made **3 x higher** (`max_land_height`,
