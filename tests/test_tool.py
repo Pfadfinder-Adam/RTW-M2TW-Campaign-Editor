@@ -2719,8 +2719,7 @@ building smith
             fh.write(data)
         at = upscale._pixels(path)[5]
         cl = [(X, Y) for X in range(18) for Y in range(18) if at(X, Y) == C]
-        self.assertTrue(cl)
-        self.assertEqual([p for p in cl if not land[p]], [])
+        self.assertEqual(cl, [])            # the bigger map draws no cliffs (the user's word): none on the water either
 
     def test_bigger_map_fords_over_wide_rivers(self):
         """A mod's wide river painted as sea tiles, crossed by land bridges (map_features green - DaC's fords): after
@@ -2947,9 +2946,9 @@ building smith
             fh.write(out)
         from campaign_editor.tga import read_tga
         g = read_tga(path)
-        self.assertEqual(g.get(10, 5), beach)                         # the beach touching the land stays
-        self.assertEqual(g.get(11, 5), shallow)                       # the second row of beach is shallow sea
-        self.assertEqual(g.get(12, 5), shallow)                       # the sea by the coast is shallow
+        self.assertEqual(g.get(10, 5), shallow)                       # no beach on the bigger map: shallow sea
+        self.assertEqual(g.get(11, 5), shallow)
+        self.assertEqual(g.get(11, 5), shallow)                       # the sea within a tile of the coast is shallow
         self.assertEqual(g.get(20, 15), shallow)                      # the speck of deep water joins the shallows
         self.assertEqual(g.get(28, 2), deep)                          # the open sea stays deep
 

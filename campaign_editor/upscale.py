@@ -1138,12 +1138,9 @@ def shallow_coast(data):
         raw[o], raw[o + 1], raw[o + 2] = c[2], c[1], c[0]
     sea_kinds = set(DEEP_KINDS) | {SHALLOW}
     kind = [get(x, y) for y in range(h) for x in range(w)]
-    wet = sea_kinds | {BEACH, (128, 128, 128)}
-    for y in range(h):                              # the beach one pixel wide, as the rivers (the user's rule): a
-        for x in range(w):                          # beach pixel touching no land is shallow sea
-            if kind[y * w + x] == BEACH and not any(
-                    0 <= x + a < w and 0 <= y + b < h and kind[(y + b) * w + x + a] not in wet
-                    for a in (-1, 0, 1) for b in (-1, 0, 1) if a or b):
+    for y in range(h):                              # no beach on the bigger map (the user: the game drew it as a
+        for x in range(w):                          # zigzag band over the land - the shore looks right without
+            if kind[y * w + x] == BEACH:            # it; the Terrain editor's beach brush puts it where wanted)
                 kind[y * w + x] = SHALLOW
                 put(x, y, SHALLOW)
     water = [k in sea_kinds for k in kind]
@@ -2358,7 +2355,12 @@ def features_scaled(path, land=None, natural=False):
             _put(raw, W, H, step, top_down, p[0], p[1], (0, 0, 0))   # DaC: a strip of beach off every river mouth)
             drawn.discard(p)                                  # - its last pixel the land touching the water: no
         #                                                       river pixel is ever on the water (the user's rule)
-        _cliffs_on_the_coast(raw, W, H, step, top_down, land, drawn)
+    for y in range(H):                                        # no cliffs on the bigger map (the user's word: they
+        for x in range(W):                                    # never sat right on the new coast - the Terrain
+            r = (H - 1 - y) if top_down else y                # editor's cliff brush puts them where wanted)
+            o = (r * W + x) * step
+            if (raw[o + 2], raw[o + 1], raw[o]) == CLIFF:
+                _put(raw, W, H, step, top_down, x, y, (0, 0, 0))
     return _write(data, W, H, step, raw), drawn
 
 
@@ -2624,7 +2626,7 @@ def _plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEF
         #                                                   at the new coast: no land kept under them
         plan.binary(feats, data)
         plan.note(None, "map_features.tga made 3 x bigger (rivers drawn naturally - bends rounded, gentle meanders, "
-                        "one pixel wide -, cliffs and land bridges as unbroken lines, a river's last pixel the land touching the water - none on the water -, cliffs on the coast)")
+                        "one pixel wide -, cliffs and land bridges as unbroken lines, a river's last pixel the land touching the water - none on the water -; no cliffs - paint them with the Terrain editor)")
     say("map_regions.tga...")
     info = {}
     on_rivers = (river_tiles(feats), rivers) if rivers else None      # a border along a river stays on it
@@ -2666,7 +2668,7 @@ def _plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEF
             note = "every tile the ground of the old tile it lies in, the sea ground under the heights' new coast, " \
                    + edge_words(edges) + " edges (no 3 x 3 steps), mountains only where the new heights stand high - a range's low " \
                    "edge hills or the ground beside it, by its height; shallow sea all along the coast, its line to " \
-                   "the deep water smoothed"
+                   "the deep water smoothed; no beach - paint it with the Terrain editor"
         elif name == "map_climates.tga":
             data = climates_scaled(p, natural=True, edges=edges)
             note = "every tile the climate of the old tile it lies in, %s edges (no 3 x 3 steps)" % edge_words(edges)
