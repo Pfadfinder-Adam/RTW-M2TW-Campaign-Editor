@@ -2689,6 +2689,32 @@ building smith
         M.data = os.path.join(game, "bi", "data")
         self.assertEqual(mod_ref(M, ref), ref)
 
+    def test_bigger_map_fords_over_wide_rivers(self):
+        """A mod's wide river painted as sea tiles, crossed by land bridges (map_features green - DaC's fords): after
+        x3 each bridge is still one unbroken line from bank to bank, whatever the winding coast does."""
+        from campaign_editor import upscale
+        B, black = (0, 255, 0), (0, 0, 0)
+        n = 10
+        px = [[black] * n for _ in range(n)]
+        for x in (2, 5, 8):                                 # three fords across rows 4-5 (the river)
+            px[4][x] = px[5][x] = B
+        path = os.path.join(self.root, "feat.tga")
+        write_tga(path, n, n, px)
+        land = upscale.Mask(n * 3, n * 3)
+        for X in range(n * 3):
+            for Y in range(n * 3):
+                land[(X, Y)] = not (12 + (X % 4 == 0) <= Y <= 17 - (X % 5 == 0))   # a wavy two-tile river
+        data, _ = upscale.features_scaled(path, land, natural=True)
+        with open(path, "wb") as fh:
+            fh.write(data)
+        at = upscale._pixels(path)[5]
+        for x in (2, 5, 8):
+            col = [Y for X in range(3 * x, 3 * x + 3) for Y in range(n * 3) if at(X, Y) == B]
+            ys = sorted(set(col))
+            self.assertEqual(ys, list(range(ys[0], ys[-1] + 1)))                        # unbroken
+            xs = [X for X in range(3 * x, 3 * x + 3) if at(X, ys[0]) == B]
+            self.assertTrue(land[(xs[0], ys[0])] and land[(xs[0], ys[-1])], (x, ys))   # bank to bank
+
     def test_bigger_map_mountains_follow_the_heights(self):
         """x3 ground: a mountain point at its range's edge that stands low steps down by its height - to hills when it
         reaches the old map's hills, else to the flat ground beside it; a high one stays (a tester's Rome x3)."""
