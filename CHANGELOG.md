@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **Credits** (Tools > Credits (who made it with us)..., and the [CREDITS.md](CREDITS.md) page beside this one): the
+  author, who helped a lot, the testers who sent reports and ideas, the supporters on Ko-fi and what people said -
+  one page, the same in the editor and on GitHub.
 - **Start the game** (the green button beside Tools, both games): starts the game with the mod that is loaded - its
   own start script (New mod folder writes `Start_<name>.bat`; the engines' own scripts in the game folder, such as
   REX's *Barbarian Invasion.bat* or M2EX's *Teutonic.bat*, are found too), else the line those scripts use
@@ -161,6 +164,7 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **The Tools button is as tall as the buttons beside it and no wider than its word** (menu buttons everywhere).
 - **The Terrain editor is a tab of the Map editor** (Map | Terrain), no longer a work of its own on the top row.
 - **The top row has no arrows any more** when the window is narrower than its buttons: the mouse wheel over it and
   dragging it sideways move it, and it takes no extra line.

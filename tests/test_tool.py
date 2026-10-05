@@ -2825,6 +2825,22 @@ building smith
         with open(out, "rb") as fh:
             self.assertEqual(fh.read(), first)          # the same map, the same picture
 
+    def test_credits_page_and_window_text(self):
+        """CREDITS.md - the page on GitHub and the Tools > Credits... window - names the author and its sections;
+        the window shows it without Markdown marks (bold, italics, links keep their words), a paragraph or item over
+        several lines as one block."""
+        from campaign_editor import credits as CR
+        parts = CR.blocks(CR.read())
+        heads = [w for k, w in parts if k == "heading"]
+        for want in ("The author", "Helped a lot", "Testers: reports and ideas", "Supporters on Ko-fi",
+                     "In their words", "How to get in"):
+            self.assertIn(want, heads)
+        self.assertEqual(parts[0], ("title", "Credits"))
+        self.assertIn('Pfadfinder ("Adam")', " ".join(w for _, w in parts))
+        self.assertFalse([w for _, w in parts if "**" in w or "](" in w])
+        self.assertEqual(CR.blocks("# T\n\n- one\n  two\n> said\n> it\n\nA *b*\nc [d](x)"),
+                         [("title", "T"), ("item", "one two"), ("quote", "said it"), ("text", "A b c d")])
+
     def test_start_the_game_with_the_loaded_mod(self):
         """Start the game: the mod's own start script (Start_<name>.bat first; not an unpacker's .bat), else the
         engine's start script in the game folder naming it (REX's Barbarian Invasion.bat -bi, M2EX's Teutonic.bat

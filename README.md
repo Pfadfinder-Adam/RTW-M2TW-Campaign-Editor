@@ -11,7 +11,7 @@ preview of every change and a backup you can always go back to. Version **0.29.2
 [![Discord](https://img.shields.io/badge/Discord-join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/uqA9MEn4Z)
 
 **[⬇ Download](../../releases)** · **[📖 Wiki - step by step](../../wiki)** · **[🗺️ Roadmap](ROADMAP.md)** ·
-**[📝 Changelog](CHANGELOG.md)** · **[🐞 Something went wrong?](#something-went-wrong)** · **[☕ Support](#-why-support-it)** ·
+**[📝 Changelog](CHANGELOG.md)** · **[🙏 Credits](CREDITS.md)** · **[🐞 Something went wrong?](#something-went-wrong)** · **[☕ Support](#-why-support-it)** ·
 **[💬 Discord](https://discord.gg/uqA9MEn4Z)** · **[🔒 Security](SECURITY.md)** · **[⚖️ License](#license)**
 
 > [!IMPORTANT]

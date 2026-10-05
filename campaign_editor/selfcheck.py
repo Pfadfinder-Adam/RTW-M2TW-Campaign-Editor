@@ -96,6 +96,14 @@ def _bundled(ok, fail):
     except Exception as e:                                  # noqa: BLE001
         fail("the built-in add-ons", e)
     try:
+        from . import credits as CR
+        found = [k for k, _ in CR.blocks(CR.read()) if k == "heading"]
+        if len(found) < 3:
+            raise ValueError("CREDITS.md has %d section(s)" % len(found))
+        ok("the credits (%d sections)" % len(found))
+    except Exception as e:                                  # noqa: BLE001
+        fail("the credits (CREDITS.md)", e)
+    try:
         folder = os.path.dirname(AD.assets_dir())          # assets/ (the add-ons are assets/addons)
         icons = [n for n in os.listdir(folder) if n.lower().startswith("icon") and n.endswith(".png")]
         if not icons:

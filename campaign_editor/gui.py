@@ -830,6 +830,7 @@ class App(tk.Tk):
         menu.add_command(label="Save logs (zip)...", command=self.once("save_logs", self.save_logs))
         menu.add_command(label="Report a bug...", command=self.once("report", self.send_report))
         menu.add_command(label="Suggest an idea...", command=self.once("suggest", lambda: self.send_report(kind="suggestion")))
+        menu.add_command(label="Credits (who made it with us)...", command=self.once("credits", self.credits_window))
         menu.add_separator()
         menu.add_command(label=TEST_MOD_LABEL, command=self.once("test_mod", self.test_mod))
         # a menu entry has no hover box: the status line says what it is while the mouse is on it
@@ -1766,6 +1767,11 @@ class App(tk.Tk):
         import webbrowser
         webbrowser.open(KOFI)
         self.status.set("Thank you! %s opened in your browser." % KOFI)
+
+    def credits_window(self):
+        """Tools > Credits...: the author, who helped, the testers, the supporters (CREDITS.md - gui_credits)."""
+        from .gui_credits import open_credits
+        return open_credits(self)
 
     def upscale_map(self):
         """Bigger map (x3)... (top row): one window - what happens, the heights, its progress, a backup, and the old

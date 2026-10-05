@@ -262,7 +262,7 @@ def _style(root):
     # - which made '+' or 'OK' as wide as 'Browse...')
     st.configure("TButton", background=p["button"], padding=(BUTTON_PADX, 3), width=0)
     st.map("TButton", background=[("pressed", p["accent"]), ("active", p["active"])])
-    st.configure("TMenubutton", background=p["button"])
+    st.configure("TMenubutton", background=p["button"], padding=(BUTTON_PADX, 3), width=0)   # as a button beside it
     st.configure("TEntry", fieldbackground=p["field"], foreground=p["fg"])
     st.configure("TSpinbox", fieldbackground=p["field"], foreground=p["fg"], arrowcolor=p["fg"])
     st.configure("TCombobox", fieldbackground=p["field"], foreground=p["fg"], arrowcolor=p["fg"],

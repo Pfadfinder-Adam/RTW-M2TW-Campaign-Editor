@@ -35,7 +35,7 @@ jobs:
           python-version: "3.12"
       - run: pip install pyinstaller pillow certifi
       # the game manifests go inside the exe: Scan tells game, REX and mod files apart
-      - run: pyinstaller --onefile --windowed --name RTW-M2TW-Campaign-Editor --collect-submodules campaign_editor --add-data "docs/reference/*.json.gz;reference" --add-data "assets/*.png;assets" --add-data "assets/addons/*;assets/addons" --icon assets/icon.ico campaign_editor.py
+      - run: pyinstaller --onefile --windowed --name RTW-M2TW-Campaign-Editor --collect-submodules campaign_editor --add-data "docs/reference/*.json.gz;reference" --add-data "assets/*.png;assets" --add-data "assets/addons/*;assets/addons" --add-data "CREDITS.md;." --icon assets/icon.ico campaign_editor.py
       # the built exe checks itself before it is handed out: every module imports, the bundled files are there,
       # a tiny mod loads, gets a new faction and Restore puts every byte back (campaign_editor/selfcheck.py)
       - name: self-check of the exe
