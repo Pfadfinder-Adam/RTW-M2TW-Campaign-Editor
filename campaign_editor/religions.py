@@ -1,4 +1,13 @@
-"""Medieval II religions: a new one written everywhere the game needs it.
+"""Religions: a new one written everywhere the game needs it - Medieval II's religions and Barbarian Invasion's
+beliefs (Rome's official expansion; plain Rome has neither).
+
+Barbarian Invasion (bi/data, and a mod made from it): descr_beliefs.txt holds 7 lines a belief - its tag, the paths
+of its order / unrest / level pips, and the labels of its name, unrest and order texts (text/expanded_bi.txt).
+A town's beliefs come from its buildings (`religious_belief <tag> <n>` in export_descr_buildings.txt) and its
+characters' traits - there are no region shares; a new belief is written with its pips and texts, and matters once
+a temple carries it (the test mod copies the Christian church chain).
+
+Medieval II:
 
 A religion lives in several places that must agree:
   * descr_religions.txt       its name in the `religions { }` list (the set the engine reads) and its own
@@ -38,11 +47,27 @@ def _block(f, key):
     return None
 
 
-def names(mod):
-    """The religions the engine reads: the names in descr_religions.txt's `religions { }` list."""
-    p = _ci(mod.data, "descr_religions.txt")
+def beliefs_path(mod):
+    """descr_beliefs.txt of a Barbarian Invasion mod (None elsewhere)."""
+    return None if _ci(mod.data, "descr_religions.txt") else _ci(mod.data, "descr_beliefs.txt")
+
+
+def _beliefs(mod):
+    """[(tag, [order pip, unrest pip, level pip], [label, unrest, order])] of descr_beliefs.txt."""
+    p = beliefs_path(mod)
     if not p:
         return []
+    lines = [strip_comment(t).strip() for t in mod.load(p).texts()]
+    lines = [t for t in lines if t and not t.startswith(";")]
+    return [(c[0], c[1:4], c[4:7]) for c in (lines[i:i + 7] for i in range(0, len(lines) - 6, 7))]
+
+
+def names(mod):
+    """The religions the engine reads: the names in descr_religions.txt's `religions { }` list (Medieval II), or
+    descr_beliefs.txt's tags (Barbarian Invasion)."""
+    p = _ci(mod.data, "descr_religions.txt")
+    if not p:
+        return [b[0] for b in _beliefs(mod)]
     f = mod.load(p)
     b = _block(f, "religions")
     if not b:
@@ -188,7 +213,10 @@ def problems(mod, spec, pending=()):
     out = []
     have = names(mod)
     if not have:
-        return ["this game has no descr_religions.txt - religions are Medieval II's (Rome has none)"]
+        return ["this game has no religions - Medieval II's descr_religions.txt or Barbarian Invasion's "
+                "descr_beliefs.txt (plain Rome has neither)"]
+    if beliefs_path(mod):
+        return _belief_problems(mod, spec, pending, have)
     name = (spec.get("name") or "").strip()
     if not RE_NAME.match(name):
         out.append("the name is written in the files: small letters, digits and _ only, a letter first "
@@ -216,10 +244,86 @@ def problems(mod, spec, pending=()):
     return out
 
 
-def _pip_bytes(mod, spec):
+def _belief_file(mod, path):
+    """A belief's pip path as descr_beliefs.txt writes it (data/ui/pips/..., bi/data/...) found in the mod or the
+    game's data, or None."""
+    rel = path.replace("\\", "/")
+    for head in ("bi/data/", "data/"):
+        if rel.lower().startswith(head):
+            rel = rel[len(head):]
+            break
+    return _find_data_file(mod, rel)
+
+
+def _belief_problems(mod, spec, pending, have):
+    out = []
+    name = (spec.get("name") or "").strip()
+    if not RE_NAME.match(name):
+        out.append("the name is written in the files: small letters, digits and _ only, a letter first "
+                   "(e.g. mithraism)")
+    if name in have or name in [p["name"] for p in pending]:
+        out.append("there is a belief called %s already" % name)
+    if not (spec.get("shown") or "").strip():
+        out.append("give it the name players see (e.g. Mithraism)")
+    picture = spec.get("picture")
+    if picture and not os.path.isfile(picture):
+        out.append("the picture %s is not there" % picture)
+    tpl = next((b for b in _beliefs(mod) if b[0] == spec.get("pip_from")), None)
+    if tpl is None:
+        out.append("pick the belief whose pips are copied (%s is not one)" % (spec.get("pip_from") or "none"))
+    else:
+        for pip in tpl[1][:2] + ([] if picture else tpl[1][2:]):
+            if not _belief_file(mod, pip):
+                out.append("%s's pip %s is not in this mod or the game's data" % (tpl[0], pip))
+    return out
+
+
+def _apply_belief(plan, spec):
+    """Barbarian Invasion: the new belief's 7 lines at the end of descr_beliefs.txt, its three pips (the order and
+    unrest pips copied from the template belief, the level pip the picture picked - sized like the template's - or
+    a copy) and its three texts in text/expanded_bi.txt."""
+    mod = plan.mod
+    name, shown = spec["name"].strip(), spec["shown"].strip()
+    tpl = next(b for b in _beliefs(mod) if b[0] == spec["pip_from"])
+    key = name.upper()
+    pips = ["data/ui/pips/pip_religion_%s_positive.tga" % name, "data/ui/pips/pip_religion_%s_negative.tga" % name,
+            "data/ui/pips/pip_religion_%s.tga" % name]
+    f = plan.edit(beliefs_path(mod))
+    at = max((i for i in range(len(f.raw)) if f.text(i).strip()), default=-1) + 1
+    f.insert(at, [""] + [name] + pips + ["%s_LABEL" % key, "%s_UNREST" % key, "%s_ORDER" % key])
+    plan.note(f, "belief %s added (its pips and texts below)" % name)
+    for k, (dst, src) in enumerate(zip(pips, tpl[1])):
+        srcp = _belief_file(mod, src)
+        if k == 2 and spec.get("picture"):
+            data = _pip_bytes(mod, dict(spec, pip_from=None), size_of=srcp)
+        else:
+            with open(srcp, "rb") as fh:
+                data = fh.read()
+        plan.binary(os.path.join(mod.data, *dst[len("data/"):].split("/")), data)
+        plan.notes.append((dst, "%s's %s pip (%s)" % (name, ("order", "unrest", "level")[k], "the picture picked"
+                                                          if k == 2 and spec.get("picture") else
+                                                          "a copy of %s's" % tpl[0])))
+    text = mod.text_file("expanded_bi.txt")
+    lines = ["{%s_LABEL}\t\t\t%s" % (key, shown),
+             "{%s_ORDER}\t\t\t%s is improving public order in this settlement" % (key, shown),
+             "{%s_UNREST}\t\t\t%s is causing unrest in this settlement" % (key, shown)]
+    if text:
+        tf = plan.edit(text)
+        at = max((i for i in range(len(tf.raw)) if tf.text(i).strip()), default=-1) + 1
+        tf.insert(at, lines)
+        plan.note(tf, "{%s_LABEL} %s and its order / unrest texts" % (key, shown))
+    else:
+        plan.warn(None, "no text/expanded_bi.txt found - add %s there" % "; ".join(lines))
+    if spec.get("factions"):
+        plan.warn(None, "Barbarian Invasion's factions have no religion line - %s spreads by the buildings that "
+                        "carry it (religious_belief %s) and by traits" % (name, name))
+    _mentions(plan, spec.get("pip_from"), name)
+
+
+def _pip_bytes(mod, spec, size_of=None):
     """The new symbol as a 24-bit TGA: the picture given, sized like the template's pip, or the
     template's pip copied as it is."""
-    src = _find_data_file(mod, pip_of(mod, spec.get("pip_from") or "") or "")
+    src = size_of or _find_data_file(mod, pip_of(mod, spec.get("pip_from") or "") or "")
     picture = spec.get("picture")
     if not picture:
         with open(src, "rb") as fh:
@@ -259,6 +363,10 @@ def apply(plan, specs):
         if why:
             raise ValueError("new religion %s: %s" % (spec.get("name"), "; ".join(why)))
         done.append(spec)
+    if beliefs_path(mod):
+        for spec in specs:
+            _apply_belief(plan, spec)
+        return
     path = _ci(mod.data, "descr_religions.txt")
     f = plan.edit(path)
     for spec in specs:
@@ -349,4 +457,4 @@ def _mentions(plan, template, name):
                         "%s's" % (name, template, ", ".join(counts), template))
 
 
-__all__ = ["MAX_RELIGIONS", "names", "pip_of", "problems", "apply", "region_files"]
+__all__ = ["MAX_RELIGIONS", "names", "pip_of", "problems", "apply", "region_files", "beliefs_path"]

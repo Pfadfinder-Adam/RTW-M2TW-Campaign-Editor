@@ -2934,6 +2934,44 @@ building smith
             c = (3 * 12 + 1, 3 * 3 + 1)
             self.assertTrue(m[c] and sum(m[(c[0] + a, c[1] + b)] for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1))) >= 2)
 
+    def test_barbarian_invasion_new_belief(self):
+        """Barbarian Invasion has religions of its own (descr_beliefs.txt: a tag, three pips, three text labels a
+        belief): a new one gets its 7 lines, its three pips (copies of the template belief's) and its texts in
+        expanded_bi.txt; Restore gives every file back."""
+        from campaign_editor import religions as RL
+        from campaign_editor.plan import restore
+        d = os.path.join(self.root, "data")
+        lines = []
+        for tag, key in (("christianity", "CHRISTIAN"), ("pagan", "PAGAN")):
+            lines += [tag] + ["data/ui/pips/pip_religion_%s%s.tga" % (tag, x) for x in ("_positive", "_negative", "")] \
+                + ["%s_LABEL" % key, "%s_UNREST" % key, "%s_ORDER" % key]
+        write(os.path.join(d, "descr_beliefs.txt"), "; Belief system descriptor\n;\n" + "\n".join(lines) + "\n")
+        os.makedirs(os.path.join(d, "ui", "pips"), exist_ok=True)
+        for tag in ("christianity", "pagan"):
+            for x in ("_positive", "_negative", ""):
+                with open(os.path.join(d, "ui", "pips", "pip_religion_%s%s.tga" % (tag, x)), "wb") as fh:
+                    fh.write(b"pip " + tag.encode() + x.encode())
+        write(os.path.join(d, "text", "expanded_bi.txt"), "{CHRISTIAN_LABEL}\t\t\tChristianity\n")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertEqual(RL.names(mod), ["christianity", "pagan"])
+        spec = {"name": "mithraism", "shown": "Mithraism", "pip_from": "christianity"}
+        self.assertEqual(RL.problems(mod, spec), [])
+        self.assertTrue(RL.problems(mod, dict(spec, name="pagan")))
+        plan = Plan(mod, None, "religion")
+        RL.apply(plan, [spec])
+        bdir = plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual(RL.names(mod), ["christianity", "pagan", "mithraism"])
+        with open(os.path.join(d, "ui", "pips", "pip_religion_mithraism_negative.tga"), "rb") as fh:
+            self.assertEqual(fh.read(), b"pip christianity_negative")
+        with open(os.path.join(d, "text", "expanded_bi.txt"), encoding="latin-1") as fh:
+            txt = fh.read()
+        self.assertIn("{MITHRAISM_LABEL}", txt)
+        self.assertIn("Mithraism is causing unrest", txt)
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_bigger_map_values_the_modder_turns(self):
         """The x3 window's fields: the smoothing as a number (0 = winding, 1 = smooth, 0.67 = lighter, more =
         rounder), each value kept in its range, and the module's own values back as they were after a run."""

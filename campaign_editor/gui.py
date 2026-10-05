@@ -2616,8 +2616,10 @@ class App(tk.Tk):
         from . import religions as RL
         have = RL.names(self.mod)
         if not have:
-            messagebox.showinfo(APP, "Religions are Medieval II's - this game has no descr_religions.txt.")
+            messagebox.showinfo(APP, "This game has no religions - Medieval II's and Barbarian Invasion's have them "
+                                     "(plain Rome has none).")
             return
+        bi = bool(RL.beliefs_path(self.mod))          # Barbarian Invasion: beliefs, no region shares
         w = tk.Toplevel(self)
         w.title("New religion")
         w.transient(self)
@@ -2629,11 +2631,15 @@ class App(tk.Tk):
         count = ("%d religions in this mod (%s beside the game: no limit)" % (len(have), engine_of(self.mod)[:-4])
                  if lifted(self.mod, "religions") else
                  "%d of %d religions in this mod (the original game's limit)" % (len(have), RL.MAX_RELIGIONS))
-        ttk.Label(frm, text="%s%s. A new one is written to descr_religions.txt, its "
-                            "lookup, text/religions.txt, its symbol (ui/pips) and every region's religions line "
-                            "(0 %% until you set its share with Religions...); map.rwm is removed." % (
-                                count, ", %d waiting" % len(self.new_religions)
-                                if self.new_religions else ""),
+        about = ("Barbarian Invasion: %d beliefs in this mod%s. A new one is written to descr_beliefs.txt, its three "
+                 "pips (ui/pips: the order and unrest pips copied, the level pip your picture) and its texts "
+                 "(expanded_bi.txt). A town follows it through the buildings that carry it (religious_belief) - "
+                 "give a temple chain its name in the Building editor." % (
+                     len(have), ", %d waiting" % len(self.new_religions) if self.new_religions else "")) if bi else (
+            "%s%s. A new one is written to descr_religions.txt, its lookup, text/religions.txt, its symbol (ui/pips) "
+            "and every region's religions line (0 %% until you set its share with Religions...); map.rwm is "
+            "removed." % (count, ", %d waiting" % len(self.new_religions) if self.new_religions else ""))
+        ttk.Label(frm, text=about,
                   wraplength=520, justify="left").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
         ttk.Label(frm, text="Name in the files").grid(row=1, column=0, sticky="w")
         ttk.Entry(frm, textvariable=v["name"], width=24).grid(row=1, column=1, sticky="w")
@@ -2658,7 +2664,10 @@ class App(tk.Tk):
         for n in facs:
             lb.insert("end", faction_label(n, self.shown_names().get(n)))
         lb.grid(row=5, column=1, sticky="w", pady=(6, 0))
-        ttk.Label(frm, text="optional - none keeps every faction's religion", foreground="#666").grid(
+        if bi:                                       # BI's factions have no religion line
+            lb.configure(state="disabled")
+        ttk.Label(frm, text="Barbarian Invasion: a faction follows a belief by its buildings" if bi else
+                  "optional - none keeps every faction's religion", foreground="#666").grid(
             row=5, column=2, sticky="nw", pady=(6, 0))
 
         def ok():

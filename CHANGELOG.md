@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **Religions in Barbarian Invasion** (Rome's expansion and the mods made from it): New religion... writes a new
+  belief - its lines in `descr_beliefs.txt`, its three pips and its texts in `expanded_bi.txt`; a town follows it
+  through the buildings that carry it. The test mod's religion step now runs there too (a belief of its own and a
+  temple chain copied from the Christian churches). Plain Rome has no religions.
 - **Map > New army: Make him a general** (a tick, both games): his army starts with the faction's general's
   bodyguard (the unit marked general_unit, the one its own generals lead), so the game shows him as a general with his
   own name instead of a captain.
@@ -180,6 +184,8 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **Barbarian Invasion takes a shadow and a split-off faction on one faction** (Rome with REX: three real revolts in
+  the game, no crash - the revolting towns go to the shadow); plain Rome and Medieval II still refuse it.
 - **Bigger map (x3): values you turn yourself** - the window has a field for each: hills and mountains (times
   higher), smoothing of the lines (the coast, rivers drawn as sea, the borders, the edges of ground and climates: 1 =
   smooth, as water finds its level - no 3 x 3 steps, no beads or breaks in a narrow river; 0.67 = lighter; 0 =

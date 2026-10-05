@@ -1,4 +1,4 @@
-"""The Religions work (Medieval II): the game's religions and every region's shares in one place - the same state the
+"""The Religions work (Medieval II; Barbarian Invasion's beliefs): the game's religions and every region's shares in one place - the same state the
 Map's Religions... / New religion... dialogs keep (App.region_religions, App.new_religions), written by the bottom
 Apply with the rest of the campaign work. Rome has no religions: the page says so."""
 
@@ -22,7 +22,8 @@ class ReligionsPanel(ttk.Frame):
         self.lbl = ttk.Label(top, foreground="#666")
         self.lbl.pack(side="left", padx=8)
         ShortHint(self, foreground="#666", wraplength=1100, justify="left", text=(
-            "Medieval II: the religions of the game and how many of each region's people follow each (100 in all). "
+            "Medieval II: the religions of the game and how many of each region's people follow each (100 in all); "
+            "Barbarian Invasion: its beliefs (a town follows them by its buildings - no region shares). "
             "A new religion is written everywhere the game needs it; its shares are set region by region. The same "
             "as Religions... / New religion... on the Map - Preview, then Apply changes writes them.")).pack(
             anchor="w", pady=(4, 4))
@@ -81,7 +82,8 @@ class ReligionsPanel(ttk.Frame):
             return
         names = self.names()
         if not names:
-            self.lbl.configure(text="This game has no religions (Rome: the engine has none - they are Medieval II's).")
+            self.lbl.configure(text="This game has no religions (plain Rome has none - Medieval II and Barbarian "
+                                    "Invasion have them).")
             return
         regions = sorted(getattr(self.app, "regions", {}) or {}, key=str.lower)
         largest = {}

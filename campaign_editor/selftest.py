@@ -696,19 +696,27 @@ def faith_symbol(path):
     return True
 
 
-@step("Religions (Medieval II): a new religion 'Test Faith' in every file, with its own symbol (a magenta disc, a "
-      "yellow star) and its own temples (Christianity's church chain copied: ce_faith_shrine ... great_cathedral), "
-      "{new} follows it, a region's shares changed",
-      "'Test Faith' with the magenta star in the region's religion bar and in {new}'s faction details; {new}'s "
-      "towns can build the Test Faith shrine")
+@step("Religions (Medieval II, Barbarian Invasion): a new religion 'Test Faith' in every file, with its own symbol "
+      "(a magenta disc, a yellow star) and its own temples (Christianity's church chain copied: ce_faith_shrine ...); "
+      "Medieval II: {new} follows it, a region's shares changed; Barbarian Invasion: a new belief (its pips and texts)",
+      "'Test Faith' with the magenta star in the region's religion bar (Medieval II) / a town's beliefs once its "
+      "Test Faith shrine stands (Barbarian Invasion); {new}'s towns can build the Test Faith shrine")
 def s_religion(c, mod):
     import tempfile
     from . import religions as RL
     from .regionedit import apply_opts
     names = RL.names(mod)
     if not names:
-        raise Skip("Rome has no religions (BI's beliefs are not written here)")
+        raise Skip("plain Rome has no religions (Barbarian Invasion's beliefs and Medieval II's religions do)")
     plan = Plan(mod, None, "religion")
+    if RL.beliefs_path(mod):                     # Barbarian Invasion: a belief, its pips and texts, its temples
+        with tempfile.TemporaryDirectory() as d:
+            pic = os.path.join(d, "ce_faith.png")
+            spec = {"name": "ce_faith", "shown": "Test Faith", "picture": pic if faith_symbol(pic) else None,
+                    "pip_from": "christianity" if "christianity" in names else names[0]}
+            apply_opts(plan, c.campaign, {"new_religions": [spec]})
+        faith_temples(plan, c.new)
+        return plan
     with tempfile.TemporaryDirectory() as d:
         pic = os.path.join(d, "ce_faith.png")
         spec = {"name": "ce_faith", "shown": "Test Faith", "pip_from": names[0],
@@ -727,9 +735,13 @@ def faith_temples(plan, faction):
     from .editors import building_blocks, copy_building, fields
     from .textio import strip_comment
     f = plan.edit(plan.mod.file("edb"))
-    src = next((b for b in building_blocks(f) if b[0] == "temple_catholic"), None)
+    chain, faith = ("temple_catholic", "catholic")       # Medieval II; Barbarian Invasion: the Christian churches
+    if not any(b[0] == chain for b in building_blocks(f)):
+        chain, faith = ("temple_church_christianity", "christianity")
+    src = next((b for b in building_blocks(f) if b[0] == chain), None)
     if src is None:
-        plan.warn(f, "no temple_catholic chain - the test religion gets no temples of its own")
+        plan.warn(f, "no temple_catholic / temple_church_christianity chain - the test religion gets no temples of "
+                     "its own")
         return
     levels = next((fd.value.split() for fd in fields(f, src[1], src[2]) if fd.key == "levels"), [])
     names = {old: "ce_faith_" + FAITH_LEVELS[min(i, len(FAITH_LEVELS) - 1)] + ("" if i < len(FAITH_LEVELS) else
@@ -738,15 +750,15 @@ def faith_temples(plan, faction):
     texts = {new: {"name": "Test Faith " + new[9:].replace("_", " "),
                    "desc": "A temple of the editor's test religion - built here, the religion works.",
                    "desc_short": "Test Faith temple"} for new in names.values()}
-    copy_building(plan, "temple_catholic", "temple_ce_faith", names, texts=texts, factions=[faction])
+    copy_building(plan, chain, "temple_ce_faith", names, texts=texts, factions=[faction])
     b = next(b for b in building_blocks(f) if b[0] == "temple_ce_faith")
     for i in range(b[2] - 1, b[1] - 1, -1):
         t = strip_comment(f.text(i)).split()
-        if t[:2] == ["religion", "catholic"]:
-            f.set(i, f.text(i).replace("catholic", "ce_faith", 1))
+        if t[:2] in (["religion", faith], ["religious_belief", faith]):
+            f.set(i, f.text(i).replace(faith, "ce_faith", 1))
         elif t[:1] == ["convert_to"] and len(t) == 2:
             f.delete(i, i + 1)        # no conversion into the Christian castle chain (nor its levels' 'convert_to N')
-    plan.note(f, "temple_ce_faith: the Test Faith's temples (a copy of temple_catholic)")
+    plan.note(f, "temple_ce_faith: the Test Faith's temples (a copy of %s)" % chain)
 
 
 @step("Roster: {edited} gets a unit and a building level it lacked", "the unit in its recruitment list")
@@ -1901,7 +1913,7 @@ COVERAGE = {
     "Family: a daughter, a man tied to no one": ["s_family_more"],
     "Character editor: traits and retinue of a character": ["s_character"],
     "Traits and retinue: a new trait": ["s_traits"],
-    "Religions (Medieval II)": ["s_religion"],
+    "Religions (Medieval II, Barbarian Invasion)": ["s_religion"],
     "Roster: give": ["s_roster", "s_roster_other"],
     "Roster: take away": ["s_roster_take"],
     "Campaign-map figures": ["s_figures"],
@@ -1946,7 +1958,7 @@ UI = {
     "Unit editor": "Unit editor: lines", "Building editor": "Building editor: lines",
     "Character editor": "Character editor: traits and retinue of a character",
     "Terrain editor": "Terrain editor: ground and heights", "Add-ons": "Add-ons",
-    "Religions": "Religions (Medieval II)",
+    "Religions": "Religions (Medieval II, Barbarian Invasion)",
     "Faction": "Edit faction (names, colours, money, towns, garrisons)",
     "Map": "Map: a town moved", "Map editor": "Map editor: any faction's army moved, its units", "Diplomacy": "Diplomacy: feelings", "Art": "Art: replace a picture",
     "Roster": "Roster: give", "Settlements": "Edit region: rebels, resources, farming, names players see",
@@ -1964,7 +1976,7 @@ UI = {
     "Events": "Events", "Recolour": "Recolour a faction's pictures",
     "Culture names": "Settlement names by culture", "Many towns": "Many towns: a building, random garrisons",
     "Bigger map": "Make the campaign map 3 x bigger",
-    "New religion": "Religions (Medieval II)", "Religions of a region": "Religions (Medieval II)",
+    "New religion": "Religions (Medieval II, Barbarian Invasion)", "Religions of a region": "Religions (Medieval II, Barbarian Invasion)",
     "Restore a backup": "Restore a backup", "Game manifest": "Settings, Help, the log, Save logs, Game manifest",
     "Log": "Settings, Help, the log, Save logs, Game manifest",
     "Save logs": "Settings, Help, the log, Save logs, Game manifest",

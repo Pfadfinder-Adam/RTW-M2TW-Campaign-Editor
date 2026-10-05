@@ -31,8 +31,9 @@ PARTNER = {"shadowing": "shadowed_by", "spawned_by": "spawns_on_revolt",
            "shadowed_by": "shadowing", "spawns_on_revolt": "spawned_by"}
 OWN_WORD = {"shadow": "shadowing", "revolt": "spawned_by"}       # the way -> the word on the faction's own line
 DEAD_WORDS = ("dead_until_resurrected", "re_emergent")
-# one faction with a shadow AND a faction splitting off it crashes Rome at the end of a turn (REX:
-# SETTLEMENT::get_revolt_type); Barbarian Invasion never has both on one faction
+# one faction with a shadow AND a faction splitting off it crashes plain Rome at the end of a turn (REX:
+# SETTLEMENT::get_revolt_type); Barbarian Invasion with REX takes both (the in-game tester, run 1934: three real
+# revolts, no crash - the towns went to the shadow), so only plain Rome and Medieval II refuse it
 BOTH_TIES = ("%s already has %s as %s - one faction takes only one of the two: Rome with REX crashed at the end of a "
              "turn, and in Medieval II with M2EX its revolting town went to the shadow, the split-off faction never came "
              "(Barbarian Invasion never has both): pick another faction")
@@ -53,12 +54,17 @@ NOT_ROME = ("only Barbarian Invasion (and Medieval II) take a shadow or a factio
             "Rome, also with REX, crashes at the end of a turn with one")
 
 
+def _ci_file(folder, name):
+    from .moddata import _ci
+    return _ci(folder, name)
+
+
 def is_bi(mod):
     """Whether a Rome mod is Barbarian Invasion's: its data under a 'bi' folder, or factions already tied the BI way
     (shadowed_by / spawns_on_revolt in descr_sm_factions)."""
     import os
     parts = [x.lower() for x in os.path.normpath(mod.data).split(os.sep)]
-    if "bi" in parts:
+    if "bi" in parts or _ci_file(mod.data, "descr_beliefs.txt"):     # BI's own file (beliefs)
         return True
     try:
         return any(t.get(w) for t in ties(mod).values() for w in ("shadowed_by", "spawns_on_revolt", "shadowing",
@@ -216,7 +222,9 @@ def set_way(plan, faction, way, of=None, both_ok=False):
                 of, "a shadow" if way == "shadow" else "a faction splitting off it", has))
         other = PARTNER[OWN_WORD["revolt" if way == "shadow" else "shadow"]]
         m = re.search(r",\s*%s\s+([A-Za-z0-9_]+)" % other, strip_comment(line))
-        if m and m.group(1) != faction and not both_ok:      # both_ok: the test mod's trial on BI only
+        from .limits import game_kind
+        bi = game_kind(mod) == "rome" and is_bi(mod)       # BI with REX takes both (the in-game tester: three
+        if m and m.group(1) != faction and not (both_ok or bi):   # real revolts, no crash - towns go to the shadow)
             raise ValueError(BOTH_TIES % (of, m.group(1), "a shadow" if way == "revolt" else
                                           "a faction splitting off it"))
 
@@ -545,7 +553,7 @@ def problems(mod, campaign):
                 faults.append("descr_sm_factions.txt line %d: can_homeless is REX's and M2EX's own word - the game "
                               "without them does not know it" % (i + 1))
                 break
-    for fac, shadow, split in both_ties(mod):
+    for fac, shadow, split in ([] if not m2 and is_bi(mod) else both_ties(mod)):
         faults.append("descr_sm_factions.txt: %s has a shadow (%s) and a faction splitting off it (%s) - %s "
                       "(Barbarian Invasion never has both on one faction); keep one" % (
                           fac, shadow, split, "its revolting towns go to the shadow, the split-off faction never comes "
