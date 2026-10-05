@@ -84,7 +84,6 @@ texture (vanilla-style uniforms), so a new faction's troops wear its own colour 
   (or keep the old heights - a choice in the window). The sea ground types follow the heights' new coast.
 - **Rivers**: 1 pixel wide (the game crashes on a 2-pixel river), drawn the way rivers run - bends rounded, gentle
   meanders on straight runs (never twice the same, the same map always alike), side by side pixels only; a river mouth runs on to the new coast and ends on the land touching the water - never a pixel on the water (no land is left under it). Medieval II's land bridges stay unbroken lines too. No cliffs and no beach are drawn (paint them where wanted). Small islands and lakes keep their size and come out round (no crosses or clovers), capes one tile wide stay whole strips; the sea along the coast is shallow, the line to the deep water smooth.
-- **Beach one tile wide** along the new coast, as in the games' own maps.
 - **Ground and climates by tile**: every new tile gets the ground type and climate of the old tile it lies in (a
   forest stays a forest), the edges where two kinds meet winding as the coast does - no 3 x 3 steps.
 - **Pictures**: `map_trade_routes`, fog, roughness, disasters and radar maps scaled with exact colours.
