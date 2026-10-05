@@ -2917,7 +2917,8 @@ building smith
         put(os.path.join(m2, "M2EX.exe"))
         put(os.path.join(m2, "Teutonic.bat"), 'start "" "%~dp0M2EX.exe" --features.mod=mods/teutonic\r\n')
         self.assertEqual(launch.start_line(data(m2, "mods", "teutonic"))["bat"], os.path.join(m2, "Teutonic.bat"))
-        dac = launch.start_line(data(m2, "mods", "DaC"))
+        put(os.path.join(m2, "mods", "DaC", "DaC_launcher.bat"), "medieval2.exe @mods/DaC/DaC.cfg\r\n")
+        dac = launch.start_line(data(m2, "mods", "DaC"))   # its own script starts the plain exe: M2EX's line instead
         self.assertEqual((os.path.basename(dac["exe"]), dac["args"], dac["cwd"]),
                          ("M2EX.exe", ["--features.mod=mods/DaC"], m2))
         old = os.path.join(self.root, "old")

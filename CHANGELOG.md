@@ -442,6 +442,8 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Start the game** with M2EX / REX in the game folder starts the extender: a mod's own start script is used only
+  when it starts the extender too (one for the plain exe did not start a mod that worked with M2EX's own line).
 - **Bigger map (x3) mountains**: mountain ground only where the new heights stand high - a range's low edge becomes
   hills, or the ground beside it when it is lower still (it crept onto flat land round every range).
 - **Map**: agents' signs grow and shrink with the zoom like armies and towns.

@@ -32,21 +32,31 @@ def _text(path):
         return ""
 
 
+def _engine(game):
+    """'M2EX.exe' / 'REX.exe' when the extender sits in the game folder, else None."""
+    return next((e for e in ("M2EX.exe", "REX.exe") if os.path.isfile(os.path.join(game, e))), None)
+
+
 def _own_script(game, base, mod_dir):
     """The start script of the mod: one in its own folder naming it (Start_<name>.bat first), else one there that
-    starts the game at all, else one in the game folder naming it (-mod:<name>, mods/<name>, -bi / -alx)."""
+    starts the game at all, else one in the game folder naming it (-mod:<name>, mods/<name>, -bi / -alx). With
+    M2EX / REX in the game folder only a script that starts the extender counts: a mod's own script for the plain
+    exe (or a launcher) did not start the game from the editor (a tester's Third Age Reforged with M2EX), and the
+    extender's own line does."""
+    eng = _engine(game)
+    uses = re.compile(r"(?<![a-z])%s\b" % re.escape(eng), re.I) if eng else None   # %~dp0REX.exe too
     names = [re.compile(r"-mod:\s*\"?%s\b" % re.escape(base), re.I),
              re.compile(r"mods[/\\]+%s\b" % re.escape(base), re.I)]
     flag = EXPANSIONS.get(base.lower(), (None,))[0]
     if flag:
         names.append(re.compile(r"(?<![\w-])%s(?![\w-])" % re.escape(flag), re.I))
-    own = _scripts(mod_dir)
+    own = [p for p in _scripts(mod_dir) if not uses or uses.search(_text(p))]
     first = [p for p in own if os.path.basename(p).lower() == ("start_%s.bat" % base).lower()]
     for p in first + [p for p in own if any(rx.search(_text(p)) for rx in names)] + \
             [p for p in own if RE_STARTS.search(_text(p))]:
         return p
     for p in _scripts(game):
-        if any(rx.search(_text(p)) for rx in names):
+        if any(rx.search(_text(p)) for rx in names) and (not uses or uses.search(_text(p))):
             return p
     return None
 
