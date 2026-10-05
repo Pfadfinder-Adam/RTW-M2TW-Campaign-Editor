@@ -77,10 +77,10 @@ class RecolourWindow(tk.Toplevel):
         panes.pack(fill="both", expand=True, pady=(8, 0))
         left = ttk.Frame(panes)
         self.tree = ttk.Treeview(left, columns=("what", "note"), show="tree headings", selectmode="browse")
-        self.tree.heading("#0", text="Write")
+        self.tree.heading("#0", text="Recolour it?")
         self.tree.heading("what", text="Picture")
         self.tree.heading("note", text="Note")
-        self.tree.column("#0", width=150, stretch=False)
+        self.tree.column("#0", width=260, stretch=False)
         self.tree.column("what", width=260)
         self.tree.column("note", width=200)
         sb = ttk.Scrollbar(left, command=self.tree.yview)
@@ -89,6 +89,11 @@ class RecolourWindow(tk.Toplevel):
         sb.pack(side="left", fill="y")
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.show())
         self.tree.bind("<Button-1>", self._click, add="+")
+        self.tree.bind("<space>", lambda e: self._toggle_selected())     # Space ticks / unticks the picked row(s)
+        ShortHint(left, foreground="#555", justify="left", wraplength=420, text=(
+            "\u2611 = recoloured and written, \u2610 = kept as it is, \u2014 = left alone (why: the Note). Click the "
+            "box (or Space) to change one; click a group's box to change the whole group.")).pack(
+            side="bottom", anchor="w", before=self.tree)       # under the list, the whole width
         self.tree.tag_configure("skip", foreground=theme.ink("#888", "field"))
         panes.add(left, weight=1)
         right = ttk.Frame(panes, padding=(8, 0, 0, 0))
@@ -195,6 +200,7 @@ class RecolourWindow(tk.Toplevel):
         for g, gid in groups.items():
             n = sum(1 for it in self.items if it["group"] == g)
             t.item(gid, text="%s (%d)" % (g, n))
+            self._group_mark(gid)
         if not self.items:
             self.status.configure(text="no picture of %s carries a faction colour" % self.faction)
         kids = [c for g in t.get_children("") for c in t.get_children(g)]
@@ -203,19 +209,49 @@ class RecolourWindow(tk.Toplevel):
 
     def _mark(self, iid):
         it = self.items[int(iid[1:])]
-        return "-  left" if it["skip"] else ("[x] write" if self.ticked.get(iid) else "[ ] keep")
+        return "\u2014  left alone" if it["skip"] else ("\u2611  recolour" if self.ticked.get(iid) else
+                                                        "\u2610  keep as it is")
+
+    def _group_mark(self, gid):
+        """A group's own box: ticked when all of its pictures are, empty when none, half (\u25a3) between."""
+        kids = [k for k in self.tree.get_children(gid) if k in self.ticked and not self.items[int(k[1:])]["skip"]]
+        on = sum(1 for k in kids if self.ticked[k])
+        box = "\u2611" if kids and on == len(kids) else ("\u2610" if not on else "\u25a3")
+        name = self.tree.item(gid, "text").split("  ", 1)[-1] if self.tree.item(gid, "text")[:1] in "\u2611\u2610\u25a3" \
+            else self.tree.item(gid, "text")
+        self.tree.item(gid, text="%s  %s" % (box, name))
+
+    def _set(self, iid, on):
+        if iid in self.ticked and not self.items[int(iid[1:])]["skip"]:
+            self.ticked[iid] = on
+            self.tree.item(iid, text=self._mark(iid))
 
     def _click(self, e):
         iid = self.tree.identify_row(e.y)
-        if iid in self.ticked and self.tree.identify_column(e.x) == "#0" and not self.items[int(iid[1:])]["skip"]:
-            self.ticked[iid] = not self.ticked[iid]
-            self.tree.item(iid, text=self._mark(iid))
+        if self.tree.identify_column(e.x) != "#0" or not iid:
+            return
+        if iid in self.ticked:
+            self._set(iid, not self.ticked[iid])
+            self._group_mark(self.tree.parent(iid))
+        else:                                              # a group's box: the whole group at once
+            kids = [k for k in self.tree.get_children(iid) if k in self.ticked]
+            on = not all(self.ticked[k] for k in kids if not self.items[int(k[1:])]["skip"])
+            for k in kids:
+                self._set(k, on)
+            self._group_mark(iid)
+
+    def _toggle_selected(self):
+        for iid in self.tree.selection():
+            if iid in self.ticked:
+                self._set(iid, not self.ticked[iid])
+                self._group_mark(self.tree.parent(iid))
+        return "break"
 
     def _tick_all(self, on):
         for iid in self.ticked:
-            if not self.items[int(iid[1:])]["skip"]:
-                self.ticked[iid] = on
-                self.tree.item(iid, text=self._mark(iid))
+            self._set(iid, on)
+        for gid in self.tree.get_children(""):
+            self._group_mark(gid)
 
     # ---- before / after ----
     def _key(self, it):

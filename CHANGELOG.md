@@ -453,6 +453,12 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Medieval II: the game could not start with a faction that lives without towns** - `can_homeless` was written at
+  the end of the faction's block, where M2EX stops reading descr_sm_factions.txt (every faction after it was lost,
+  the rebels too: 'no faction named slave'); it now goes after the horde numbers, before horde_unit and can_sap, an
+  old one is moved there, and Check mod files names one out of place.
+- **Recolour: the list says what it does** - ☑ recolour / ☐ keep as it is / — left alone, a box on each group for the
+  whole group, Space ticks the picked row.
 - **Raze Settlement (Medieval II) and Sack Settlement (Rome): the button in its place on every screen** - some
   builds give the capture scroll's buttons in the game's 1024 x 768 layout units, so at 1920 x 1080 the button stood
   left of the scroll; now such units are turned into screen pixels (Avoid Growth's tick follows the same). Put the

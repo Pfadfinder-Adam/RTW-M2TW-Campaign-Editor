@@ -324,6 +324,11 @@ def set_horde(plan, faction):
         while at > start + 1 and (not f.text(at - 1).strip() or f.text(at - 1).lstrip().startswith(";")):
             at -= 1
     f.insert(at, ["%s\t\t\t\t%s" % kv for kv in HORDE] + ["horde_unit\t\t\t\t\t%s" % n for n in pick])
+    if any(t[:1] == [HOMELESS] for t in block):          # can_homeless stays where the engines read it
+        try:
+            set_homeless(plan, faction, True)
+        except ValueError:
+            pass
     plan.note(f, "%s: horde lines (a faction that comes by an event comes as a horde, as the Mongols / Slavs): "
                  "%s" % (faction, ", ".join(pick)))
 
@@ -348,6 +353,32 @@ def _block(f, faction):
     return start, next((i for i in heads if i > start), len(f))
 
 
+# the block's words in the order the engines read them (M2EX.exe's faction_db: a word out of its place stops the
+# reading - a tester's test mod: 'can_homeless' after has_family_tree, and every faction after it was lost: 'no
+# faction named slave in descr_sm_factions.txt', units owned by them 'Invalid ownership type')
+HOMELESS_AFTER = ("custom_battle_availability", "periods_unavailable_in_custom_battle", "horde_min_units",
+                  "horde_max_units", "horde_max_units_reduction_every_horde", "horde_unit_per_settlement_population",
+                  "horde_min_named_characters", "horde_max_percent_army_stack",
+                  "horde_disband_percent_on_settlement_capture")
+HOMELESS_BEFORE = ("horde_unit", "can_sap", "prefers_naval_invasions", "can_have_princess", "has_family_tree")
+
+
+def homeless_place(f, start, end):
+    """The line can_homeless goes in front of: after the horde numbers (after custom_battle_availability when there
+    are none), before the horde's units and can_sap - where M2EX / REX read it."""
+    words = [(i, (tokens(strip_comment(f.text(i)))[:1] or [None])[0]) for i in range(start + 1, end)]
+    after = [i for i, w in words if w in HOMELESS_AFTER]
+    if after:
+        return after[-1] + 1
+    before = [i for i, w in words if w in HOMELESS_BEFORE]
+    if before:
+        return before[0]
+    at = end
+    while at > start + 1 and (not f.text(at - 1).strip() or f.text(at - 1).lstrip().startswith(";")):
+        at -= 1
+    return at
+
+
 def set_homeless(plan, faction, on):
     """descr_sm_factions.txt: 'can_homeless yes' in the faction's block (on) or out of it. REX's and M2EX's own word
     (their exes: 'the faction may exist with zero settlements without becoming a horde'); the original exes do not
@@ -363,15 +394,13 @@ def set_homeless(plan, faction, on):
         raise ValueError("'lives without towns' (can_homeless) is REX's and M2EX's own setting - the game without "
                          "them does not know it; put REX / M2EX beside the game first")
     if on:
-        if have and tokens(strip_comment(f.text(have[0])))[1:2] == ["yes"]:
+        was = [f.text(i) for i in range(start, end)]
+        for i in reversed(have):                          # (an older one at the block's end goes to its place)
+            f.delete(i, i + 1)
+        end -= len(have)
+        f.insert(homeless_place(f, start, end), ["%s				yes" % HOMELESS])
+        if [f.text(i) for i in range(start, end + 1)] == was:
             return
-        if have:
-            f.set(have[0], "%s				yes" % HOMELESS)
-        else:
-            at = end
-            while at > start + 1 and (not f.text(at - 1).strip() or f.text(at - 1).lstrip().startswith(";")):
-                at -= 1
-            f.insert(at, ["%s				yes" % HOMELESS])
         plan.note(f, "%s: can_homeless yes - it stays in the game without a single town (REX / M2EX)" % faction)
     elif have:
         for i in reversed(have):
@@ -493,8 +522,18 @@ def problems(mod, campaign):
     from .limits import game_kind
     m2 = game_kind(mod) == "medieval2"
     from .limits import engine_of
+    f = mod.load(mod.file("sm_factions"))
+    heads = [i for i in range(len(f)) if tokens(f.text(i))[:1] == ["faction"]] + [len(f)]
+    for a, b in zip(heads, heads[1:]):                    # can_homeless where the engines read it, or nothing after
+        words = [(i, (tokens(strip_comment(f.text(i)))[:1] or [None])[0]) for i in range(a + 1, b)]
+        hl = [i for i, w in words if w == HOMELESS]
+        late = [i for i, w in words if w in HOMELESS_BEFORE]
+        if hl and late and late[0] < hl[0]:
+            faults.append("descr_sm_factions.txt line %d: can_homeless comes after %s - the game stops reading the "
+                          "file there and loses every faction after it (the rebels too); it goes after the horde "
+                          "numbers, before horde_unit and can_sap (Events > How a faction comes in puts it right)"
+                          % (hl[0] + 1, tokens(f.text(late[0]))[0]))
     if not engine_of(mod):
-        f = mod.load(mod.file("sm_factions"))
         for i in range(len(f)):
             if tokens(strip_comment(f.text(i)))[:1] == [HOMELESS]:
                 faults.append("descr_sm_factions.txt line %d: can_homeless is REX's and M2EX's own word - the game "

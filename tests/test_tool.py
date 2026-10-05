@@ -4147,6 +4147,33 @@ building smith
         plan.apply()
         self.assertFalse(E.homeless(ModData(self.root), "alpha"))
 
+    def test_can_homeless_where_the_engines_read_it(self):
+        """can_homeless goes after the horde numbers and before horde_unit / can_sap (M2EX reads the block's words in
+        its order: at the end, after has_family_tree, the reading stopped - every faction after it was lost, the
+        rebels too: a tester's test mod 'no faction named slave'); an old one at the end moves to its place; Check
+        names one out of place."""
+        from campaign_editor import emergence as E, limits as L
+        smf = os.path.join(self.root, "data", "descr_sm_factions.txt")
+        with open(smf, encoding="latin-1") as fh:
+            sm = fh.read()
+        horde = ("custom_battle_availability\tyes\nhorde_min_units\t10\nhorde_disband_percent_on_settlement_capture\t0\n"
+                 "horde_unit\tAlpha Spear\ncan_sap\tno\nhas_family_tree\tyes\ncan_homeless\tyes\n")
+        write(smf, sm.replace("secondary_colour\t\tred 4, green 5, blue 6\n",
+                              "secondary_colour\t\tred 4, green 5, blue 6\n" + horde, 1))
+        self.addCleanup(setattr, L, "engine_of", L.engine_of)
+        L.engine_of = lambda m: "M2EX.exe"
+        mod = ModData(self.root)
+        self.assertTrue(any("can_homeless comes after" in f for f in E.problems(mod, "test")[0]))
+        plan = Plan(mod, "later", "alpha", {})
+        E.set_homeless(plan, "alpha", True)
+        plan.apply()
+        with open(smf, encoding="latin-1") as fh:
+            words = [l.split()[0] for l in fh.read().splitlines() if l.strip() and not l.startswith(";")]
+        k = words.index("can_homeless")
+        self.assertEqual((words[k - 1], words[k + 1]), ("horde_disband_percent_on_settlement_capture", "horde_unit"))
+        self.assertEqual(words.count("can_homeless"), 1)
+        self.assertFalse(any("can_homeless comes after" in f for f in E.problems(ModData(self.root), "test")[0]))
+
     def test_medieval2_event_faction_comes_as_a_horde(self):
         """Medieval II brings a faction that comes by an event in as a HORDE (a tester's game with M2EX: 'ASSERT
         FAILED: faction.cpp: can_horde()', the faction never came; 'Couldn't find title string for historic event'):
