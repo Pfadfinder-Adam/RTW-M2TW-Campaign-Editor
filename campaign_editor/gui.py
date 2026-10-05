@@ -4673,9 +4673,30 @@ class App(tk.Tk):
             return
         if ch and ch.get("army"):
             self.army_units_window(cid)
-        elif ch:
+        elif ch and not self.open_person(ch):
             self.status.set("%s %s of %s: an agent has no units - right click for what can be done with him."
                             % (ch["kind"], ch["name"], ch["faction"]))
+
+    def open_person(self, ch):
+        """A double click on an agent on the Map (report #104): the Character editor opens on him - his traits,
+        retinue, age and the game's panel. False when he is not in descr_strat yet (placed, not written)."""
+        if not ch.get("from"):
+            return False
+        self.v_work.set("characters")
+        self.work_changed()
+        ed = self.editor()
+        if ed is None or not hasattr(ed, "v_fac"):
+            return False
+        ed.v_fac.set(ch["faction"])
+        ed.load()
+        people = ed.people()
+        p = next((q for q in people if q["name"] == ch["name"] and q.get("xy") and tuple(q["xy"]) == tuple(ch["from"])),
+                 None) or next((q for q in people if q["name"] == ch["name"]), None)
+        if p is None:
+            return False
+        ed.pick(p["key"])
+        self.status.set("%s %s of %s in the Character editor." % (ch["kind"], ch["name"], ch["faction"]))
+        return True
 
     def take_out(self, cid):
         """An army or an agent leaves its town (the roof flag is part of the town's sign and is not dragged - report

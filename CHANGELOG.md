@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Map: a double click on an agent** opens the Character editor on him (traits, retinue, age, the game's panel).
 - **Delete this mod's folder** (Tools, red): the loaded mod's folder with everything in it, after two questions
   (the second wants the mod's name typed); never the game's own data or an expansion's.
 - **Lives without towns** (Events > How a faction comes into the campaign, a tick; with REX / M2EX): writes the
