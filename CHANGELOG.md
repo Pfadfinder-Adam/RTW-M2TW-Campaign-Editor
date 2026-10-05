@@ -180,10 +180,12 @@
   builder offers all five stances in its list.
 
 ### Changed
-- **Bigger map (x3): pick how the lines are drawn** - the coast, rivers drawn as sea, the borders between regions
-  and the edges of ground and climates: *Smooth* (as water finds its level - no 3 x 3 steps, no beads or breaks in a
-  narrow river; the default), *Smooth, lighter* (1.5 x weaker, closer to the old shapes) or *Winding* (as before).
-  Towns, ports, armies and resources keep their tiles in all three.
+- **Bigger map (x3): values you turn yourself** - the window has a field for each: hills and mountains (times
+  higher), smoothing of the lines (the coast, rivers drawn as sea, the borders, the edges of ground and climates: 1 =
+  smooth, as water finds its level - no 3 x 3 steps, no beads or breaks in a narrow river; 0.67 = lighter; 0 =
+  winding, as before), narrow rivers kept open, crags on mountains, river valleys and volcano cones. Each shows its
+  default and range, a ? says what was tried in the game, and *Back to the defaults* resets them. The shore by the
+  water is the games' own and is not among them. Towns, ports, armies and resources keep their tiles at any value.
 - **Bigger map (x3): no teeth along the shore.** The land by the water now takes the old map's heights by its real
   distance from the water (a corner step counts as 1.4) and capes stand as low as the old map's capes; one height per
   ring had made a small tooth at every step of a diagonal coast.

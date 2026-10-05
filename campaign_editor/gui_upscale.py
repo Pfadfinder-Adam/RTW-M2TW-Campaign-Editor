@@ -9,18 +9,6 @@ from tkinter import messagebox, ttk
 from . import log
 
 APP = "RTW & M2TW Campaign Editor"
-EDGES = (
-    ("smooth", "Smooth - as water finds its level: coasts, wide rivers, borders and the edges of ground and climates "
-               "run as smooth lines (no 3 x 3 steps)"),
-    ("light", "Smooth, lighter - the same, 1.5 x weaker: closer to the old shapes"),
-    ("winding", "Winding - bays and capes, every old tile's corner kept (small steps can stay)"),
-)
-HEIGHTS = (
-    (3, "Hills 3 x higher - they look as they did (the land is 3 x wider, so this keeps them as steep)"),
-    (1, "Heights as they are - a flatter world"),
-)
-
-
 def _game_words(mod):
     from .limits import engine_of, game_kind
     game = "Medieval II" if game_kind(mod) == "medieval2" else "Rome"
@@ -30,11 +18,17 @@ def _game_words(mod):
     return "%s (the original exe - a map this big needs %s)" % (game, "M2EX" if game == "Medieval II" else "REX")
 
 
+def _num(v):
+    """A value as the field shows it: 3 not 3.0, 0.55 not 0.5500000001."""
+    return ("%.2f" % v).rstrip("0").rstrip(".")
+
+
 def open_upscale(app):
     """The window of Bigger map (x3)... (App.upscale_map)."""
     from .moddata import ModData
     from .plan import Plan, restore_to
-    from .upscale import FACTOR, look_over, plan_upscale
+    from .upscale import FACTOR, TUNES, look_over, plan_upscale
+    from .gui_util import hint
     if not app.mod:
         messagebox.showinfo(APP, "Load a mod first.")
         return
@@ -64,17 +58,42 @@ def open_upscale(app):
         "relief stays smooth, and the campaign's scripts and events move with the map. Nothing is written until "
         "you press the button below; a backup is made first, and this window then offers to put the old map "
         "back.")).pack(anchor="w", pady=(8, 0))
-    ttk.Label(frm, text="The heights", font=("", 10, "bold")).pack(anchor="w", pady=(10, 0))
-    v_high = tk.IntVar(value=3)
-    radios = [ttk.Radiobutton(frm, text=text, variable=v_high, value=val) for val, text in HEIGHTS]
-    for r in radios:
-        r.pack(anchor="w")
-    ttk.Label(frm, text="The lines (coast, rivers drawn as sea, borders, ground, climates)",
+    ttk.Label(frm, text="Values (the shore by the water is the game's own and stays as it is)",
               font=("", 10, "bold")).pack(anchor="w", pady=(10, 0))
-    v_edges = tk.StringVar(value="smooth")
-    radios += [ttk.Radiobutton(frm, text=text, variable=v_edges, value=val) for val, text in EDGES]
-    for r in radios[len(HEIGHTS):]:
-        r.pack(anchor="w")
+    grid = ttk.Frame(frm)
+    grid.pack(anchor="w", pady=(2, 0))
+    fields, radios = {}, []                       # radios: every input, greyed once the map is written
+    for row, (key, (words, default, lo, hi, about)) in enumerate(TUNES.items()):
+        ttk.Label(grid, text=words).grid(row=row, column=0, sticky="w", pady=1)
+        var = tk.StringVar(value=_num(default))
+        box = ttk.Spinbox(grid, textvariable=var, from_=lo, to=hi, increment=0.05 if hi <= 1 else 0.1 if hi <= 3
+                          else 0.5, width=6)
+        box.grid(row=row, column=1, sticky="w", padx=(8, 0))
+        ttk.Label(grid, foreground="#666", text="default %s  (%s - %s)" % (_num(default), _num(lo), _num(hi))).grid(
+            row=row, column=2, sticky="w", padx=(6, 0))
+        hint(grid, about, width=480).grid(row=row, column=3, sticky="w")
+        fields[key] = var
+        radios.append(box)
+
+    def defaults():
+        for key, var in fields.items():
+            var.set(_num(TUNES[key][1]))
+    reset = ttk.Button(frm, text="Back to the defaults", command=defaults)
+    reset.pack(anchor="w", pady=(4, 0))
+    radios.append(reset)
+
+    def values():
+        """The fields as numbers, each kept within its range; None (and a message) when one is not a number."""
+        out = {}
+        for key, var in fields.items():
+            try:
+                v = float(var.get().replace(",", "."))
+            except ValueError:
+                messagebox.showerror(APP, "'%s' is not a number: %s" % (TUNES[key][0], var.get()), parent=w)
+                return None
+            out[key] = min(max(v, TUNES[key][2]), TUNES[key][3])
+            var.set(_num(out[key]))
+        return out
     v_state = tk.StringVar(value="")
     state = ttk.Label(frm, textvariable=v_state, justify="left", wraplength=620)
     state.pack(anchor="w", pady=(10, 0))
@@ -83,8 +102,10 @@ def open_upscale(app):
     plans, warns, done = {}, {}, {}
 
     def make_plan():
-        vertical, edges = v_high.get(), v_edges.get()
-        key = (vertical, edges)
+        tune = values()
+        if tune is None:
+            return None
+        key = tuple(sorted(tune.items()))
         if key in plans:
             return plans[key]
         p = Plan(ModData(app.mod.data), "map", "map_x3", {})
@@ -95,7 +116,7 @@ def open_upscale(app):
             v_state.set("Working (a big map takes a minute or two): %s" % text)
             w.update()
         try:
-            warns[key] = plan_upscale(p, camp, vertical=vertical, progress=step, edges=edges)
+            warns[key] = plan_upscale(p, camp, progress=step, tune=tune)
         except Exception as e:
             log.write("upscale failed: %s" % e)
             v_state.set("The map could not be made bigger: %s" % e)
@@ -123,6 +144,7 @@ def open_upscale(app):
             messagebox.showerror(APP, "Not written: %s" % e, parent=w)
             return
         done["bdir"] = bdir
+        done["key"] = next((k for k, v in plans.items() if v is p), None)
         log.write("Map made 3 x bigger (backup %s)\n%s" % (bdir, p.report()))
         app.load()
         try:
@@ -141,7 +163,7 @@ def open_upscale(app):
             r.state(["disabled"])
         ttk.Button(bar, text="Put the old map back", command=undo).pack(side="left")
         ttk.Button(bar, text="Close", command=w.destroy).pack(side="left", padx=(6, 0))
-        messagebox.showinfo(APP, look_over(warns.get((v_high.get(), v_edges.get()), ())), parent=w)   # look it over yourself
+        messagebox.showinfo(APP, look_over(warns.get(done.get("key"), ())), parent=w)   # look it over yourself
 
     def undo():
         bdir = done.get("bdir")

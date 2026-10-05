@@ -58,16 +58,71 @@ CAMPAIGN_PICTURES = {"disasters.tga": "tiles", "radar_map1.tga": "tiles", "radar
 
 
 # How the lines of the bigger map (the coast, the borders between regions, the edges of the ground and the climates)
-# are drawn - the modder picks one in the x3 window (the user: 'let people see what they want'):
-#   winding - every old tile's middle kept, the rest bent by _warp (bays and capes; small steps can stay);
-#   smooth  - as water finds its level: the old map blurred, cut at half (box blurs one after another - about a
-#             bell curve 2 new tiles wide);
-#   light   - the same, 1.5 x weaker (closer to the old shapes).
+# are drawn: `edges` = how strong the smoothing is, a number (or one of the names below) - the modder sets it in
+# the x3 window (the user: 'let people turn the values themselves; a ? with what was tested, a reset'):
+#   0 (winding) - every old tile's middle kept, the rest bent by _warp (bays and capes; small steps can stay);
+#   1 (smooth)  - as water finds its level: the old map blurred (about a bell curve 2 new tiles wide), cut at half;
+#   0.67 (light) - the same, 1.5 x weaker (closer to the old shapes). More than 1: rounder still (not tried in game).
 EDGES = ("winding", "smooth", "light")
+EDGE_NAMES = {"winding": 0.0, "smooth": 1.0, "light": 0.67}
 EDGE_DEFAULT = "smooth"
-EDGE_BLUR = {"smooth": (5, 3, 5), "light": (3, 3, 3)}
-EDGE_WORDS = {"winding": "winding", "smooth": "smooth", "light": "lightly smoothed"}
-WATER_PEAK = {"smooth": 5, "light": 3}   # new tiles: how far a narrow river looks for its own strongest water
+EDGE_SIGMA = 2.16        # new tiles: the blur's width at strength 1 (three boxes 5, 3, 5)
+
+
+def edge_strength(edges):
+    """The smoothing strength of `edges` (a name of EDGE_NAMES or a number)."""
+    return EDGE_NAMES[edges] if isinstance(edges, str) else max(float(edges), 0.0)
+
+
+def edge_passes(edges):
+    """The box blurs (widths, one after another) of the smoothing `edges`, or None for the winding way."""
+    sigma = EDGE_SIGMA * edge_strength(edges)
+    if sigma < 0.3:
+        return None
+    if abs(edge_strength(edges) - 1.0) < 1e-9:
+        return (5, 3, 5)
+    if abs(edge_strength(edges) - 0.67) < 1e-9:
+        return (3, 3, 3)
+    want = sigma * sigma                      # three boxes whose variances add up to it: (b * b - 1) / 12 each
+    b = max(1, int((4 * want + 1) ** 0.5))
+    widths = [b, b, b]
+    for k in range(3):
+        if sum((x * x - 1) / 12.0 for x in widths) < want:
+            widths[k] += 1
+    return tuple(widths)
+
+
+def edge_words(edges):
+    s = edge_strength(edges)
+    return "winding" if s < 0.14 else ("smooth" if s >= 0.9 else "lightly smoothed")
+
+
+# The values the modder may turn in the x3 window (TUNE: what plan_upscale uses; the shore by the water is never
+# among them - the games' own, fixed). key: (words, default, lowest, highest, what was tried).
+TUNES = {
+    "vertical": ("Hills and mountains, times higher", 3.0, 0.5, 6.0,
+                 "3: the land is 3 x wider, so 3 x higher keeps every slope as steep as on the old map (tried in the "
+                 "game, the default). 1: as high as before - a flatter world (tried). Others: not tried in the game."),
+    "edges": ("Smoothing of the lines (coast, borders, ground, climates)", 1.0, 0.0, 3.0,
+              "1: smooth - as water finds its level, no 3 x 3 steps, narrow rivers unbroken (the default). 0.67: "
+              "lighter, closer to the old shapes. 0: winding - every old tile's corner kept, bays and capes (the "
+              "older way, tried in the game). Above 1: rounder still - not tried. Towns, ports, armies and resources "
+              "keep their tiles at any value."),
+    "river": ("Narrow rivers kept open", 0.55, 0.2, 1.0,
+              "How much of its own strongest water a narrow river needs to stay water: lower keeps one-tile rivers "
+              "and straits wider and never broken, higher lets them thin out. 0.55: the default (tried on drawings "
+              "of rivers one tile wide, not yet in the game)."),
+    "rough": ("Crags on mountains, times", 1.0, 0.0, 3.0,
+              "The fine rocky relief on mountains. 1: the default (tried in the game - crags passable). 0: smooth "
+              "mountains. Above 1: craggier - not tried; very high values can make passes impassable."),
+    "valley": ("River valleys, times deeper", 1.0, 0.0, 3.0,
+               "How deep rivers cut their valleys (deep in mountains, hardly on plains). 1: the default (tried in "
+               "the game). 0: no valleys. Above 1: deeper - not tried."),
+    "volcano": ("Volcano cones, times steeper", 1.0, 0.0, 3.0,
+                "A volcano's own cone (the game's volcano model stays the same size on the bigger map). 1: the "
+                "default (tried in the game). 0: no cone of its own."),
+}
+TUNE = {k: v[1] for k, v in TUNES.items()}
 
 def new_xy(x, y):
     return FACTOR * x + FACTOR // 2, FACTOR * y + FACTOR // 2
@@ -410,7 +465,8 @@ def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, 
     plain = getattr(vals, "plain", None)               # the heights not bent: where a slope is too steep, back to it
     near_river = _rings(_tile_points(rivers), W, H, max(VALLEY)) if rivers else {}
     near_town = _rings(_tile_points(towns), W, H, CALM) if towns else {}
-    rough = ROUGH if vertical <= 1 else ROUGH / 2
+    full = ROUGH * TUNE["rough"]                          # the modder's 'crags, times' (x3 window)
+    rough = full if vertical <= 1 else full / 2
     rock_step = 0.0                                      # a mountain's usual slope (the old map's, on its rock)
     if rocky is not None:
         steps = sorted(relief[Y * W + X] for Y in range(0, H, 3) for X in range(0, W, 3)
@@ -429,10 +485,10 @@ def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, 
             rock = rocky is not None and rocky(X, Y)
             slope = max(relief[i], rock_step) if rock else relief[i]
             if noise is not None and slope:
-                add += (ROUGH if rock else rough) * slope * noise[i] * calm
+                add += (full if rock else rough) * slope * noise[i] * calm
             d = near_river.get((X, Y))
             if d is not None:
-                add -= CARVE * VALLEY[d] * max(v + add - floor, 0.0) * max(calm, 0.25)
+                add -= CARVE * TUNE["valley"] * VALLEY[d] * max(v + add - floor, 0.0) * max(calm, 0.25)
             d = banks.get((X, Y))
             if d:                                            # an inland lake's bank, down to its shore
                 add -= LAKE_BANK[d] * max(v + add - floor - SHORE_GAP * grey / max(vertical, 1.0), 0.0)
@@ -701,7 +757,7 @@ def _volcano_cones(vals, W, H, mask, volcanoes, steepest, vertical, floor):
     if not volcanoes or not steepest:
         return
     plain = getattr(vals, "plain", None)
-    top = VOLCANO_RISE * steepest / max(vertical, 1e-9) * VOLCANO_REACH
+    top = VOLCANO_RISE * TUNE["volcano"] * steepest / max(vertical, 1e-9) * VOLCANO_REACH
     for tx, ty in volcanoes:
         cx, cy = 2 * tx + 1, 2 * ty + 1
         for Y in range(cy - VOLCANO_REACH, cy + VOLCANO_REACH + 1):
@@ -903,7 +959,7 @@ def kinds_scaled(path, mask=None, sea_colours=(), rounds=2, shore=(), natural=Fa
     old = lambda x, y: at(2 * x + 1, 2 * y + 1)      # an old tile's kind
     default = {True: (196, 0, 0), False: (0, 0, 0)}  # shallow sea / wilderness when nothing near has the kind
     types = [None] * (TW * TH)
-    smooth = natural and edges in EDGE_BLUR           # the edges drawn the same way as the coast and the borders
+    smooth = natural and edge_passes(edges) is not None   # the edges drawn the same way as the coast and borders
     blur = _smooth_sources(ow, oh, edges) if smooth else None
     if smooth:
         rounds = 0                                     # the blur already rounds them
@@ -1182,7 +1238,7 @@ def coast_mask(path, lands, natural=False, edges=EDGE_DEFAULT):
     not in 3 x 3 steps); every old tile's middle keeps its land or sea."""
     data, w, h, step, top_down, at = _pixels(path)
     lands = set(lands) | {CITY, PORT}
-    if natural and edges in EDGE_BLUR:
+    if natural and edge_passes(edges) is not None:
         return _smooth_water(lambda x, y: at(x, y) not in lands, w, h, edges)
     return _share_mask("tiles", w, h, lambda x, y: at(x, y) in lands, natural)[0]
 
@@ -1206,7 +1262,7 @@ def _smooth_sources(w, h, edges):
     """For each new tile (X, Y): the old tiles round it with their weights in the blur of the old map (each old tile
     its 3 x 3 block) - the 'smooth' / 'light' way of drawing the lines; an old tile's middle has only its own tile
     (it never changes)."""
-    k = _blur_kernel(EDGE_BLUR[edges])
+    k = _blur_kernel(edge_passes(edges))
     span = max(abs(o) for o in k) // FACTOR + 2
     side = []                                         # side[sub][d]: the weight of old tile (own + d) for sub-cell sub
     for sub in range(FACTOR):
@@ -1283,9 +1339,12 @@ def _smooth_water(is_sea, w, h, edges=EDGE_DEFAULT):
     W, H = w * FACTOR, h * FACTOR
     old = [[1.0 if is_sea(x, y) else 0.0 for x in range(w)] for y in range(h)]
     grid = [old[Y // FACTOR][X // FACTOR] for Y in range(H) for X in range(W)]
-    for b in EDGE_BLUR[edges]:
+    passes = edge_passes(edges)
+    for b in passes:
         grid = _rows_cols(grid, W, H, _box, b)
-    peak = _rows_cols(grid, W, H, _wide_max, WATER_PEAK[edges])
+    sigma = sum((b * b - 1) / 12.0 for b in passes) ** 0.5
+    peak = _rows_cols(grid, W, H, _wide_max, max(3, int(round(2.3 * sigma)) | 1))
+    keep = TUNE["river"]
     mid = FACTOR // 2
     out = Mask(W, H)
     for Y in range(H):
@@ -1294,7 +1353,7 @@ def _smooth_water(is_sea, w, h, edges=EDGE_DEFAULT):
             if X % FACTOR == mid and Y % FACTOR == mid:
                 land = not old[Y // FACTOR][X // FACTOR]
             else:
-                land = not grid[i] > min(0.5, 0.55 * peak[i])
+                land = not grid[i] > min(0.5, keep * peak[i])
             if land:
                 out.b[i] = 1
     for oy in range(h):                  # an old tile's middle the blur left alone (a one-tile cape, islet or lake
@@ -1360,7 +1419,7 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=Fals
     land_of = lambda x, y: colour(x, y) in plain
     W, H = w * FACTOR, h * FACTOR
     raw = _blank(W, H, step, (0, 0, 0))
-    smooth = natural and edges in EDGE_BLUR                # the borders drawn the same way as the coast
+    smooth = natural and edge_passes(edges) is not None    # the borders drawn the same way as the coast
     for X, Y, pts in (_smooth_sources(w, h, edges) if smooth else _sources("tiles", w, h, natural)):
         land = mask[(X, Y)] or (X, Y) in keep_land
         p = _pick_most(pts, land, land_of, colour) if smooth else _pick(pts, land, land_of)
@@ -2307,7 +2366,24 @@ def look_over(warnings=()):
     return text
 
 
-def plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEFAULT):
+def plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEFAULT, tune=None):
+    """plan_upscale with the modder's own values (tune: {key of TUNES: number}; 'vertical' and 'edges' among them -
+    the x3 window's fields); the rest stay at their defaults. The shore by the water is never tuned."""
+    if not tune:
+        return _plan_upscale(plan, campaign, vertical, progress, edges)
+    saved = dict(TUNE)
+    try:
+        for k, v in tune.items():
+            if k in TUNES:
+                lo, hi = TUNES[k][2], TUNES[k][3]
+                TUNE[k] = min(max(float(v), lo), hi)
+        return _plan_upscale(plan, campaign, TUNE["vertical"], progress, TUNE["edges"])
+    finally:
+        TUNE.clear()
+        TUNE.update(saved)
+
+
+def _plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEFAULT):
     """Every file of the map made 3 x bigger, in the plan (nothing written until Apply). vertical: how much higher
     the hills, mountains and sea floor get (3 = in proportion with the wider land; 1 = as high as before). edges:
     how the coast, the borders and the edges of ground and climates are drawn (EDGES). Returns the warnings.
@@ -2340,7 +2416,7 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEFA
     on_rivers = (river_tiles(feats), rivers) if rivers else None      # a border along a river stays on it
     plan.binary(regions_path, regions_scaled(regions_path, lands, coast, keep_land, info, natural=True,
                                              rivers=on_rivers, edges=edges))
-    plan.note(None, "map_regions.tga made 3 x bigger (a " + EDGE_WORDS[edges] + " coast and " + EDGE_WORDS[edges] +
+    plan.note(None, "map_regions.tga made 3 x bigger (a " + edge_words(edges) + " coast and " + edge_words(edges) +
               " borders between regions, no 3 x 3 "
                     "steps and no lone pixel sticking out, a border that ran along a river still on the river, "
                     "every region in as many pieces as before; every town with its own region round it, every port "
@@ -2373,11 +2449,11 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEFA
             if heights_data and hpath and os.path.isfile(hpath):
                 data = mountains_by_height(data, heights_data, p, hpath)
             note = "every tile the ground of the old tile it lies in, the sea ground under the heights' new coast, " \
-                   + EDGE_WORDS[edges] + " edges (no 3 x 3 steps), mountains only where the new heights stand high - a range's low " \
+                   + edge_words(edges) + " edges (no 3 x 3 steps), mountains only where the new heights stand high - a range's low " \
                    "edge hills or the ground beside it, by its height"
         elif name == "map_climates.tga":
             data = climates_scaled(p, natural=True, edges=edges)
-            note = "every tile the climate of the old tile it lies in, %s edges (no 3 x 3 steps)" % EDGE_WORDS[edges]
+            note = "every tile the climate of the old tile it lies in, %s edges (no 3 x 3 steps)" % edge_words(edges)
         elif name == "map_roughness.tga":
             data = smooth_scaled(p, kind)
             note = "smooth"

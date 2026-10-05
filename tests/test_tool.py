@@ -2934,6 +2934,29 @@ building smith
             c = (3 * 12 + 1, 3 * 3 + 1)
             self.assertTrue(m[c] and sum(m[(c[0] + a, c[1] + b)] for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1))) >= 2)
 
+    def test_bigger_map_values_the_modder_turns(self):
+        """The x3 window's fields: the smoothing as a number (0 = winding, 1 = smooth, 0.67 = lighter, more =
+        rounder), each value kept in its range, and the module's own values back as they were after a run."""
+        from campaign_editor import upscale as U
+        self.assertIsNone(U.edge_passes(0))
+        self.assertEqual(U.edge_passes("smooth"), (5, 3, 5))
+        self.assertEqual(U.edge_passes(0.67), (3, 3, 3))
+        wide = U.edge_passes(2)
+        self.assertAlmostEqual(sum((b * b - 1) / 12.0 for b in wide) ** 0.5, 2 * U.EDGE_SIGMA, delta=0.6)
+        self.assertEqual(set(U.TUNE), set(U.TUNES))
+        self.assertTrue(all(lo <= d <= hi for _, d, lo, hi, _ in U.TUNES.values()))
+        before = dict(U.TUNE)
+        calls = []
+        real = U._plan_upscale
+        U._plan_upscale = lambda plan, camp, vertical, progress, edges: calls.append((vertical, edges, dict(U.TUNE)))
+        try:
+            U.plan_upscale(None, "c", tune={"vertical": 99, "edges": 2, "rough": 0.5})
+        finally:
+            U._plan_upscale = real
+        self.assertEqual(calls[0][:2], (6.0, 2.0))                # 99 kept within its range
+        self.assertEqual(calls[0][2]["rough"], 0.5)
+        self.assertEqual(U.TUNE, before)                          # put back after the run
+
     def test_bigger_map_borders_stay_on_their_rivers(self):
         """x3 the natural way with the rivers: where a border ran along a river (the river tiles one region's, the
         land beside them another's), the new border runs on the new river - no two land pixels of the two regions
