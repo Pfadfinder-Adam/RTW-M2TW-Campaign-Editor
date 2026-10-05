@@ -2630,9 +2630,51 @@ building smith
                                      name), os.path.join(game, "script", "modules", name))
         self.assertEqual(code_with_tiles(game)[1], ("script", ["forts.nut", "jump.nut"]))
 
+    def test_bigger_map_coast_has_no_pins(self):
+        """x3 heights' water (a tester's Rome and DaC x3 in game): a sea tile held only by its middle point (land on 3
+        sides) takes its whole tile - a square bay, not a triangle of water cut into the coast; two sea tiles
+        touching by a corner stay joined (no land bridge across a river); an unheld sliver of land in the water goes."""
+        from campaign_editor import upscale
+        W = H = 13                                           # 6 x 6 tiles' points
+        m, fixed = upscale.Mask(W, H), bytearray(W * H)
+        for Y in range(1, H, 2):
+            for X in range(1, W, 2):
+                fixed[Y * W + X] = 1
+        m.b[3 * W + 3] = 1                                   # tile (1, 1): a lone sea tile in the land
+        for X, Y in ((7, 7), (9, 9)):                        # tiles (3, 3) and (4, 4): diagonal sea tiles
+            m.b[Y * W + X] = 1
+        upscale._no_spikes(m, W, H, fixed)
+        self.assertTrue(all(m.b[b * W + a] for a in (2, 3, 4) for b in (2, 3, 4)))      # the whole tile
+        self.assertTrue(m.b[8 * W + 8])                      # the corner between the two diagonal sea tiles
+        sea = upscale.Mask(W, H)
+        sea.b[:] = bytes([1]) * (W * H)
+        for X in range(2, 11):
+            sea.b[6 * W + X] = 0                             # a 1-point-thick strip of land no tile holds
+        upscale._no_islets(sea, W, H, bytearray(W * H))
+        self.assertTrue(all(sea.b))
+
+    def test_bigger_map_mountains_follow_the_heights(self):
+        """x3 ground: a mountain point at its range's edge that stands low steps down by its height - to hills when it
+        reaches the old map's hills, else to the flat ground beside it; a high one stays (a tester's Rome x3)."""
+        from campaign_editor import upscale
+        M, Hl, F = upscale.MOUNTAINS, upscale.HILLS, (96, 160, 64)
+        og, oh = os.path.join(self.root, "og.tga"), os.path.join(self.root, "oh.tga")
+        write_tga(og, 4, 1, [[M, M, Hl, F]])
+        write_tga(oh, 4, 1, [[(100,) * 3, (200,) * 3, (50,) * 3, (10,) * 3]])
+        ng, nh = os.path.join(self.root, "ng.tga"), os.path.join(self.root, "nh.tga")
+        write_tga(ng, 5, 1, [[F, M, M, M, F]])
+        write_tga(nh, 5, 1, [[(10,) * 3, (20,) * 3, (60,) * 3, (200,) * 3, (10,) * 3]])
+        with open(ng, "rb") as a, open(nh, "rb") as b:
+            out = upscale.mountains_by_height(a.read(), b.read(), og, oh)
+        with open(ng, "wb") as fh:
+            fh.write(out)
+        got = [upscale._pixels(ng)[5](x, 0) for x in range(5)]
+        self.assertEqual(got, [F, F, Hl, M, F])
+
     def test_bigger_map_rivers_stop_at_the_new_coast(self):
-        """A river whose last tiles the smoother coast puts in the sea stops at the coast: none of it on the sea, its
-        end touching the sea (a tester's DaC x3: land kept under such rivers stood off every mouth as a sandbar)."""
+        """A river whose last tiles the smoother coast puts in the sea runs to the coast and one pixel into the water
+        (the games' own mouths) - no more (a tester's DaC x3: land kept under such rivers stood off every mouth as a
+        sandbar; a river ending on the land stopped short of the water)."""
         from campaign_editor import upscale
         from campaign_editor.tga import read_tga
         river, black = (0, 0, 255), (0, 0, 0)
@@ -2650,9 +2692,9 @@ building smith
             fh.write(data)
         f = read_tga(path)
         on = {(x, y) for x in range(12) for y in range(12) if f.get(x, y) != black}
-        self.assertTrue(on and all(land[p] for p in on))                 # nothing on the sea
+        self.assertEqual([p for p in on if not land[p]], [(8, 4)])      # one pixel into the water, no more
         self.assertEqual(on, drawn)
-        self.assertEqual(max(x for x, y in on), 7)                      # the end on the last land, the sea beside it
+        self.assertEqual(max(x for x, y in on if land[(x, y)]), 7)      # the river runs to the last land
 
     def test_bigger_map_natural_rivers(self):
         """x3 rivers drawn the natural way: a bend's point moves into the bend, a straight run swings a pixel to

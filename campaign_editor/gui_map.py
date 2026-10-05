@@ -1047,7 +1047,7 @@ class MapView(ttk.Frame):
             elif (x, y) in busy:                       # ...an agent or a ship stands small beside the town /
                 n = seen.get((x, y), 0)                # port, to its left (the name is on the right), in a row
                 seen[(x, y)] = n + 1
-                one = max(tile * 0.6, 6)
+                one = max(tile * 0.6, 3)
                 sx = sx - tile * 0.5 - one * 0.45 - n * one * 0.75
             else:
                 n = seen.get((x, y), 0)
@@ -1076,7 +1076,7 @@ class MapView(ttk.Frame):
         tags = ("char", "char:%s" % ch_["id"])
         k = ch_["kind"]
         if k not in ("admiral", "general", "named character"):          # an agent: a disc with its sign
-            r = max(size * 0.5, 5)
+            r = max(size * 0.5, 1.5)                   # shrinks with the zoom like armies and towns (report #119)
             c.create_oval(sx - r, sy - r, sx + r, sy + r, fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
             if size >= 8:
                 self._fill_of_disc = fill

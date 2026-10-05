@@ -442,6 +442,16 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Bigger map (x3) mountains**: mountain ground only where the new heights stand high - a range's low edge becomes
+  hills, or the ground beside it when it is lower still (it crept onto flat land round every range).
+- **Map**: agents' signs grow and shrink with the zoom like armies and towns.
+- **Events window**: a disaster's picture can be replaced too (the game shows one picture for every disaster of a
+  kind - said beside it); the date says "years from the start"; Change... is greyed out until a faction is picked.
+- **Tabs** are as low as the buttons.
+- **Bigger map (x3) coasts**: no sharp triangle of water cut into the coast and no small foam-ringed squares where a
+  sea tile touched the sea only by its corner - such a tile is now a square bay or joins the water through its
+  corner; no land bridges across navigable rivers; small islands and thin strips of land that no tile holds are
+  taken out of the water; a river ends one pixel into the water, as the games' own river mouths do.
 - **Medieval II: a faction that comes by an event never came** - the game brings such a faction in as a horde (the
   Mongols' way) and stopped without horde lines ('ASSERT FAILED: faction.cpp: can_horde()'). New faction and Events
   and later factions now give it the Mongols' horde lines with three foot and three horse units of its own (the

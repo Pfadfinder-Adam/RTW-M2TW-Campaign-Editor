@@ -321,10 +321,10 @@ def _style(root):
     # the line between two panes, dragged to resize: drawn in the text's colour so it stands out on either look
     st.configure("Sash", sashthickness=8, gripcount=60, background=p["muted"], lightcolor=p["fg"],
                  darkcolor=p["fg"], bordercolor=p["border"])
-    # the tabs stand out: bigger, bold, the one open coloured like the work bar's button
-    st.configure("TNotebook", background=p["bg"], tabmargins=(2, 4, 2, 0))
-    st.configure("TNotebook.Tab", background=p["tab"], foreground=p["fg"], padding=(16, 6),
-                 font=("", 10, "bold"))
+    # the tabs: as low as the buttons (BUTTON_PADY), bold, the one open coloured like the work bar's button
+    st.configure("TNotebook", background=p["bg"], tabmargins=(2, 2, 2, 0))
+    st.configure("TNotebook.Tab", background=p["tab"], foreground=p["fg"],
+                 padding=(BUTTON_PADX * 3, BUTTON_PADY + 1), font=("", 9, "bold"))
     st.map("TNotebook.Tab", background=[("selected", p["accent"]), ("active", p["active"])],
            expand=[("selected", (2, 2, 2, 0))])
     for opt, val in (("*Listbox.background", p["field"]), ("*Listbox.foreground", p["fg"]),

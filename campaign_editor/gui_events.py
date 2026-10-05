@@ -64,7 +64,8 @@ class EventsWindow(tk.Toplevel):
         lt.pack(fill="x")
         lb = ttk.Frame(lt)                   # the buttons first: the list takes what is left, the buttons stay whole
         lb.pack(side="right", fill="y", padx=(6, 0))
-        ttk.Button(lb, text="Change...", command=self.change_later).pack(fill="x")
+        self.b_change = ttk.Button(lb, text="Change...", command=self.change_later, state="disabled")
+        self.b_change.pack(fill="x")                 # greyed out until a faction of the list is picked
         ttk.Button(lb, text="Another faction...", command=lambda: self.change_later(new=True)).pack(fill="x", pady=4)
         self.ltv = ttk.Treeview(lt, columns=("faction", "how", "back", "when"), show="headings", height=5,
                                 selectmode="browse")
@@ -74,6 +75,8 @@ class EventsWindow(tk.Toplevel):
             self.ltv.column(c, width=w, minwidth=w if c == "back" else 60, stretch=c == "when")
         self.ltv.pack(side="left", fill="x", expand=True)
         self.ltv.bind("<Double-1>", lambda e: self.change_later())
+        self.ltv.bind("<<TreeviewSelect>>", lambda e: self.b_change.configure(
+            state="normal" if self.ltv.selection() else "disabled"))
         self.later = {}                      # {faction: {'way', 'of', 're_emergent', 'date', 'region'}} not written yet
         bar = ttk.Frame(top)
         bar.pack(fill="x", pady=(6, 0))
@@ -88,6 +91,8 @@ class EventsWindow(tk.Toplevel):
     def fill_later(self):
         from . import emergence as EM
         self.ltv.delete(*self.ltv.get_children())
+        if hasattr(self, "b_change"):
+            self.b_change.configure(state="disabled")
         rows = {r["faction"]: r for r in EM.later_rows(self.mod, self.campaign)}
         for fac, ch in self.later.items():
             rows[fac] = dict(faction=fac, way=ch["way"], of=ch.get("of"), re_emergent=ch.get("re_emergent"),
@@ -115,7 +120,7 @@ class EventsWindow(tk.Toplevel):
         from .gui_util import FactionBox
         sel = self.ltv.selection()
         if not new and not sel:
-            messagebox.showinfo(TITLE, "Pick a faction in the list first (or Another faction...).", parent=self)
+            messagebox.showinfo(TITLE, "Click a faction in the list first, then Change... - or Another faction... for one not listed.", parent=self)
             return
         facs = [n for n, _ in self.mod.factions() if n != "slave"]
         fac0 = sel[0] if sel and not new else ""
@@ -240,8 +245,8 @@ class EventsWindow(tk.Toplevel):
         ttk.Label(r, text="Date", width=14).pack(side="left")
         v_date = tk.StringVar(value=e["date"])
         ttk.Entry(r, textvariable=v_date, width=14).pack(side="left")
-        ttk.Label(r, text="  years [summer|winter]" if self.rome else "  years [years]", foreground="#555").pack(
-            side="left")
+        ttk.Label(r, text="  years from the start (Rome: a word summer / winter may follow)" if self.rome
+                  else "  years from the start", foreground="#555").pack(side="left")
         self._when(r, v_date)
         r = ttk.Frame(self.form)
         r.pack(fill="x", pady=2)
@@ -310,7 +315,7 @@ class EventsWindow(tk.Toplevel):
         side = ttk.Frame(row)
         side.pack(side="left", fill="x", padx=8, anchor="n")
         files = EV.picture_files(self.mod, name, kind)
-        mine = self.pictures.get(name)
+        mine = self.pictures.get(EV.picture_name(name, kind))
         shown = mine or next((p for p in files.values() if p), None)
         have = [c for c, p in files.items() if p]
         if mine:
@@ -321,11 +326,12 @@ class EventsWindow(tk.Toplevel):
             what = "no picture (ui/<culture>/eventpics/%s.tga is not there): the scroll shows none" % name
         ttk.Label(side, text="Picture players see", font=("", 9, "bold")).pack(anchor="w")
         ttk.Label(side, text=what, foreground="#555", wraplength=300, justify="left").pack(anchor="w")
-        if kind == "historic":
-            ttk.Button(side, text="Picture...", command=lambda: self.pick_picture(name)).pack(anchor="w", pady=4)
-        else:
-            ttk.Label(side, text="every %s event shows this one (disaster_%s.tga)" % (kind, kind),
-                      foreground="#555").pack(anchor="w")
+        ttk.Button(side, text="Picture...", command=lambda: self.pick_picture(EV.picture_name(name, kind))).pack(
+            anchor="w", pady=4)
+        if kind != "historic":
+            ttk.Label(side, text="The game shows one picture for every %s - a new one here is shown for all of them "
+                                 "(disaster_%s.tga)." % (kind, kind),
+                      foreground="#555", wraplength=300, justify="left").pack(anchor="w")
         if shown:
             try:
                 from PIL import Image, ImageTk

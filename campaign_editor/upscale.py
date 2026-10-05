@@ -14,7 +14,7 @@ What it writes (Preview lists it; one backup, Restore gives everything back):
                   the sea and its region's land; any colour descr_regions does not list but the heights hold above
                   the sea counts as land (land_colours),
                   map_features (rivers redrawn as 1-pixel lines through the middles - a 2-pixel river crashes the
-                  game -, a corner link as a staircase, a river mouth carried on to the new coast; cliffs and land
+                  game -, a corner link as a staircase, a river mouth carried on to the new coast and one pixel into the water; cliffs and land
                   bridges as unbroken lines too, a bridge's end on the water carried on to the land; fords, sources
                   and volcanoes on the middle pixel), map_trade_routes
     2W+1 x 2H+1   map_heights the NATURAL way (blended, land and sea apart, bent by _warp as the ground, fractal
@@ -829,6 +829,71 @@ def ground_scaled(path, mask, sea_colours, natural=False):
     return kinds_scaled(path, mask, sea_colours, shore=(BEACH,), natural=natural)
 
 
+HILLS, MOUNTAINS, HIGH_MOUNTAINS = (128, 128, 64), (98, 65, 65), (196, 128, 128)
+
+
+def mountains_by_height(ground, heights, old_ground, old_heights, rounds=3):
+    """The new map_ground_types' mountains where the new heights stand high (a tester's Rome x3: mountain tiles
+    crept onto flat ground round every range - 3 x 3 blocks of the old tile while the natural relief fell away at
+    the range's edge). A mountain point at the edge of its range (a point beside it of a lower kind) that stands
+    lower than the old map's points of its kind mostly do (their lowest quarter) steps down by its height: high
+    mountains -> mountains -> hills -> the ground beside it (the kind most of its flat neighbours have) - the
+    highest kind whose lowest quarter it still reaches (the tester: 'hills OR another ground, by the heights and
+    their order'); peeled from the edge in, a few rounds; a range's heart stays. ground / heights: the new
+    pictures' bytes; old_*: the old files. -> the new ground's bytes."""
+    _, ow, oh, _, _, gat = _pixels(old_ground)
+    _, hw, hh, _, _, hat = _pixels(old_heights)
+    if (ow, oh) != (hw, hh):
+        return ground
+    lows = {}
+    for kind in (HILLS, MOUNTAINS, HIGH_MOUNTAINS):
+        vals = sorted(hat(x, y)[0] for y in range(oh) for x in range(ow) if gat(x, y) == kind)
+        if vals:
+            lows[kind] = vals[len(vals) // 4]
+    if MOUNTAINS not in lows and HIGH_MOUNTAINS not in lows:
+        return ground
+    w, h, step, top_down, _, raw = _decode(ground, "map_ground_types.tga")
+    W2, H2, hstep, htop, _, hraw = _decode(heights, "map_heights.tga")
+    if (w, h) != (W2, H2):
+        return ground
+    raw = bytearray(raw)
+
+    def get(r, st, td, x, y):
+        o = (((h - 1 - y) if td else y) * w + x) * st
+        return (r[o + 2], r[o + 1], r[o])
+    rank = {HILLS: 1, MOUNTAINS: 2, HIGH_MOUNTAINS: 3}
+    from .terrain import SEA
+    flat_ok = lambda c: c not in rank and c not in SEA and c != BEACH     # noqa: E731 - a flat land kind
+    for _ in range(rounds):
+        change = []
+        for y in range(h):
+            for x in range(w):
+                c = get(raw, step, top_down, x, y)
+                if c not in (MOUNTAINS, HIGH_MOUNTAINS) or c not in lows:
+                    continue
+                near = [get(raw, step, top_down, a, b) for a, b in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1))
+                        if 0 <= a < w and 0 <= b < h]
+                if all(rank.get(k, 0) >= rank[c] for k in near):
+                    continue                                       # inside the range
+                v = get(hraw, hstep, htop, x, y)[0]
+                if v >= lows[c]:
+                    continue
+                to = None
+                for k in (MOUNTAINS, HILLS):                       # the highest lower kind it still reaches
+                    if rank[k] < rank[c] and v >= lows.get(k, 256):
+                        to = k
+                        break
+                if to is None:
+                    flats = [k for k in near if flat_ok(k)]
+                    to = max(set(flats), key=flats.count) if flats else HILLS
+                change.append((x, y, to))
+        if not change:
+            break
+        for x, y, c in change:
+            _put(raw, w, h, step, top_down, x, y, c)
+    return _write(ground, w, h, step, raw)
+
+
 def climates_scaled(path, natural=False):
     """map_climates made bigger by tiles (kinds_scaled): every new tile the climate of the old tile it lies in, the
     edges between climates rounded (natural: winding as well)."""
@@ -1293,7 +1358,31 @@ def _no_spikes(mask, W, H, fixed=None):
     the game such a corner is a thin triangle lying on the water's level: it flickers (z-fighting), a sand wedge in
     the sea or a blue one on the land (a tester's x3 coasts). A tile's middle the heights alone decided (fixed not
     set: a navigable river map_regions calls land) goes too when it stands alone - the small square islands in a
-    tester's DaC rivers."""
+    tester's DaC rivers.
+    A tile's middle map_regions decided that stands as a pin (water on 3 or 4 of its sides for a land tile, land for
+    a sea tile: a one-tile inlet, a sea tile joined to the sea only by a corner, a one-tile island) takes the whole
+    tile with it - the 8 points round it get its kind -, so the game draws a square bay or island instead of a sharp
+    triangle of water cut into the coast (a tester's Rome x3 in game, after the corner fix)."""
+    if fixed is not None:
+        for Y in range(1, H - 1, 2):
+            for X in range(1, W - 1, 2):
+                if not fixed[Y * W + X]:
+                    continue
+                v = mask.b[Y * W + X]
+                other = sum(1 for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1)) if mask.b[b * W + a] != v)
+                if other >= 3:
+                    for b in (Y - 1, Y, Y + 1):
+                        for a in (X - 1, X, X + 1):
+                            mask.b[b * W + a] = v
+        for Y in range(1, H - 2, 2):                     # two sea tiles touching only by a corner, land tiles on
+            for X in range(1, W - 2, 2):                 # the other two: the water runs on through that corner (a
+                for X0, X1 in ((X, X + 2), (X + 2, X)):  # tester's DaC x3: land bridges across the navigable rivers)
+                    a, b = Y * W + X0, (Y + 2) * W + X1
+                    if fixed[a] and fixed[b] and mask.b[a] and mask.b[b] \
+                            and not mask.b[Y * W + X1] and not mask.b[(Y + 2) * W + X0]:
+                        cx, cy = X + 1, Y + 1
+                        for i, j in ((cx, cy), (cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)):
+                            mask.b[j * W + i] = 1
     for _ in range(4):
         flip = []
         for Y in range(H):
@@ -1314,20 +1403,21 @@ def _no_spikes(mask, W, H, fixed=None):
     _no_islets(mask, W, H, fixed)
 
 
-ISLET = 9              # heights points: land this small in the water, held by no map_regions tile, goes
+ISLET = 30             # heights points: land this small in the water, held by no map_regions tile, goes
 
 
 def _no_islets(mask, W, H, fixed):
-    """A piece of land of ISLET points or less standing in the water with no tile middle map_regions decided in
-    it becomes water: the small square islands in a tester's DaC navigable rivers (old land points the heights
-    held inside the river, grown 3 x)."""
+    """A piece of land standing in the water with no tile middle map_regions decided in it becomes water when it is
+    small (ISLET points or less: about an old 3-point islet grown 3 x) or only a sliver (every point of it touches
+    the water): the small square islands and thin strips in a tester's DaC navigable rivers (old land points the
+    heights held inside the river, grown 3 x)."""
     seen = bytearray(W * H)
     for start in range(W * H):
         if mask.b[start] or seen[start]:
             continue
         piece, st, held = [], [start], False
         seen[start] = 1
-        while st and len(piece) <= ISLET:
+        while st:
             i = st.pop()
             piece.append(i)
             held = held or bool(fixed and fixed[i])
@@ -1338,18 +1428,14 @@ def _no_islets(mask, W, H, fixed):
                     if not mask.b[j] and not seen[j]:
                         seen[j] = 1
                         st.append(j)
-        if st:                                       # bigger than an islet: mark the rest as seen
-            while st:
-                i = st.pop()
-                X, Y = i % W, i // W
-                for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1)):
-                    if 0 <= a < W and 0 <= b < H:
-                        j = b * W + a
-                        if not mask.b[j] and not seen[j]:
-                            seen[j] = 1
-                            st.append(j)
+        if held or len(piece) > 4000:
             continue
-        if not held and len(piece) <= ISLET:
+
+        def wet_by(i):
+            X, Y = i % W, i // W
+            return any(not (0 <= a < W and 0 <= b < H) or mask.b[b * W + a]
+                       for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1)))
+        if len(piece) <= ISLET or all(wet_by(i) for i in piece):
             for i in piece:
                 mask.b[i] = 1
 
@@ -1586,6 +1672,19 @@ def features_scaled(path, land=None, natural=False):
         for p in [p for p in drawn if not land.get(p, True)]: # under it stood in the sea as a sandbar (a tester's
             _put(raw, W, H, step, top_down, p[0], p[1], (0, 0, 0))   # DaC: a strip of beach off every river mouth)
             drawn.discard(p)
+        for p in sorted(drawn):                               # ...and then one pixel INTO the water, as the games'
+            x, y = p                                          # own mouths do (a tester's DaC x3: a river ending on
+            sides = ((1, 0), (-1, 0), (0, 1), (0, -1))        # the land stopped short of the water, on the beach)
+            links = [(a, b) for a, b in sides if (x + a, y + b) in drawn]
+            if len(links) != 1:
+                continue
+            ahead = (x - links[0][0], y - links[0][1])        # straight on first, else a side
+            for q in [ahead] + [(x + a, y + b) for a, b in sides]:
+                if 0 <= q[0] < W and 0 <= q[1] < H and not land.get(q, True) and q not in drawn \
+                        and not any((q[0] + a, q[1] + b) in drawn for a, b in sides if (q[0] + a, q[1] + b) != p):
+                    _put(raw, W, H, step, top_down, q[0], q[1], river)
+                    drawn.add(q)
+                    break
     return _write(data, W, H, step, raw), drawn
 
 
@@ -1833,7 +1932,7 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
         #                                                   at the new coast: no land kept under them
         plan.binary(feats, data)
         plan.note(None, "map_features.tga made 3 x bigger (rivers drawn naturally - bends rounded, gentle meanders, "
-                        "one pixel wide -, cliffs and land bridges as unbroken lines, river mouths on the new coast)")
+                        "one pixel wide -, cliffs and land bridges as unbroken lines, river mouths one pixel into the water of the new coast)")
     say("map_regions.tga...")
     info = {}
     on_rivers = (river_tiles(feats), rivers) if rivers else None      # a border along a river stays on it
@@ -1868,8 +1967,11 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
                    "than the old map's steepest, the same coast as map_regions"
         elif name == "map_ground_types.tga" and hmask is not None:
             data = ground_scaled(p, hmask, SEA, natural=True)
+            if heights_data and hpath and os.path.isfile(hpath):
+                data = mountains_by_height(data, heights_data, p, hpath)
             note = "every tile the ground of the old tile it lies in, the sea ground under the heights' new coast, " \
-                   "winding edges (no 3 x 3 steps)"
+                   "winding edges (no 3 x 3 steps), mountains only where the new heights stand high - a range's low " \
+                   "edge hills or the ground beside it, by its height"
         elif name == "map_climates.tga":
             data = climates_scaled(p, natural=True)
             note = "every tile the climate of the old tile it lies in, winding edges (no 3 x 3 steps)"
