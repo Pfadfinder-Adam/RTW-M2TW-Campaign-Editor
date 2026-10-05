@@ -24,7 +24,7 @@ from . import log
 REPORT_URL = "https://rtw-m2tw-campaign-editor-reports.aldam-dubaev.workers.dev/"
 TEXT_CAP = 1536 * 1024          # a log's newest 1.5 MB (the game's system.log.txt can grow to hundreds of MB)
 PICTURE_CAP = 3 * 1024 * 1024   # a picked picture
-PICTURES = 3
+PICTURES = 10                   # the zip's 4 MB is the real cap (ZIP_CAP)
 ZIP_CAP = 4 * 1024 * 1024       # the relay refuses more
 PICTURE_EXT = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")
 

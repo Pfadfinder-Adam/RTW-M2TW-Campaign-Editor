@@ -446,6 +446,8 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Report a bug / Suggest** takes up to 10 pictures (it was 3, and more were dropped without a word); pictures over
+  the limit are named.
 - **Rome: a faction that comes by an event** now comes as a horde, as Barbarian Invasion's Slavs do: it gets the
   horde lines and its own units (without them the game left it without a leader and it never came); Check mod
   files names an event faction without them in both games.

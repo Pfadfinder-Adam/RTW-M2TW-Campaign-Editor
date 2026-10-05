@@ -135,6 +135,11 @@ def build_tab(app, nb, w):
                 messagebox.showerror(APP, why, parent=w)
             elif p not in pictures and len(pictures) < report.PICTURES:
                 pictures.append(p)
+            elif p not in pictures:
+                messagebox.showinfo(APP, "Up to %d pictures go with one report - %s and the ones after it were left "
+                                         "out. Send the rest in another report." % (report.PICTURES,
+                                                                                     os.path.basename(p)), parent=w)
+                break
         lbl_pics.configure(text=("Pictures: " + ", ".join(os.path.basename(p) for p in pictures)) if pictures
                            else "No pictures.")
     ttk.Button(row, text="Add a screenshot...", command=add_pictures).pack(side="left")
