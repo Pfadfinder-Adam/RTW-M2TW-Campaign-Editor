@@ -34,3 +34,7 @@ goes on the list above.
 If the editor helped you make a mod, please mention it where you share the mod and link to the editor:
 https://github.com/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor - one line is enough. A request, not a condition -
 thank you!
+
+---
+
+And thank you to everyone for the kind words and the support - they keep this project going.
