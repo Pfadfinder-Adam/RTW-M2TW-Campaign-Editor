@@ -23,8 +23,11 @@ DARK = {"bg": "#2b2d31", "fg": "#e3e3e3", "field": "#1e1f22", "muted": "#a9adb3"
 BUTTON_PADX = 4     # px from a button's words to its edge, each side (no wider than its words need - everywhere)
 BUTTON_PADY = 0     # px above and below the words: the button about 1.5 x lower than before (21 / 29 px)
 BUTTON_GAP = 4      # px between two buttons side by side
-# buttons with a colour of their own (the same size and frame): style name -> (background, when pressed / hovered)
-COLOURED = {"Play.TButton": ("#2e7d32", "#256628"), "Kofi.TButton": ("#ff5e5b", "#e14b48")}
+# buttons with a colour of their own (the same size and frame): style name -> (background, when pressed / hovered);
+# white words in either look - the links (Ko-fi, Discord, YouTube, GitHub) in their own sites' colours
+COLOURED = {"Play.TButton": ("#2e7d32", "#256628"), "Kofi.TButton": ("#ff5e5b", "#e14b48"),
+            "Discord.TButton": ("#5865f2", "#4752c4"), "YouTube.TButton": ("#e00000", "#b80000"),
+            "GitHub.TButton": ("#3d444d", "#24292f")}
 NAMED = {"#cfe3ff": "accent"}
 
 BG_KEYS = ("field", "bg", "tab", "button", "trough", "accent", "active", "select")

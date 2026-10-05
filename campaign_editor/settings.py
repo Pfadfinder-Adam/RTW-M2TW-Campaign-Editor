@@ -17,6 +17,7 @@ KINDS = {"game": str, "games": list, "campaigns": dict, "mod_data": str, "fixes_
          "reports_checked_at": (int, float), "report_hide": str, "report_contact": str, "report_url": str,
          "theme": str, "map_look": dict, "banner_grid": str, "map_legend": (bool, int), "art_map_open": (bool, int),
          "level_follows_population": (bool, int), "reports_check": (bool, int), "report_contact_keep": (bool, int),
+         "release_check": (bool, int), "release_checked_at": (int, float), "release_latest": dict,
          "editor_list_width_": int}
 
 

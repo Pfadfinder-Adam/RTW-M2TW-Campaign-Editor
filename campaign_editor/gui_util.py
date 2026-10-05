@@ -325,46 +325,86 @@ class FactionBox(ttk.Combobox):
             self._busy = False
 
 
+def flow_places(items, width, gap_y=2):
+    """Where flow() puts each widget: items = [(width, height, pad_left, pad_right, side)] in their order on the screen
+    (side 'left' or 'right'); -> ([(x, y)] for each item, height of the whole). All on one row when they fit: the
+    'left' ones from the left edge, the 'right' ones up to the right edge. Else they wrap as words in a line of text:
+    the 'left' ones from the left, then the 'right' ones from a row of their own, each row up to the right edge."""
+    need = [w + a + b for w, _, a, b, _ in items]
+    places, rows = [None] * len(items), []            # rows: [index, ...] with their side
+    lefts = [i for i, it in enumerate(items) if it[4] != "right"]
+    rights = [i for i, it in enumerate(items) if it[4] == "right"]
+    if sum(need) <= width:
+        rows = [(lefts + rights, None)]
+    else:
+        for group, side in ((lefts, "left"), (rights, "right")):
+            row, used = [], 0
+            for i in group:
+                if row and used + need[i] > width:
+                    rows.append((row, side))
+                    row, used = [], 0
+                row.append(i)
+                used += need[i]
+            if row:
+                rows.append((row, side))
+    y = 0
+    for row, side in rows:
+        line = max(items[i][1] for i in row)
+        if side is None:                                # one row: lefts from the left, rights up to the right
+            x = 0
+            for i in row:
+                if items[i][4] == "right":
+                    continue
+                places[i] = (x + items[i][2], y + (line - items[i][1]) // 2)
+                x += need[i]
+            x = width - sum(need[i] for i in row if items[i][4] == "right")
+        else:
+            x = 0 if side == "left" else width - sum(need[i] for i in row)
+        for i in row:
+            if places[i] is None:
+                places[i] = (max(x, 0) + items[i][2], y + (line - items[i][1]) // 2)
+                x += need[i]
+        y += line + gap_y
+    return places, max(y, 1)
+
+
 def flow(frame):
-    """Lay the widgets packed side="left" in `frame` out in rows that wrap at the frame's width, as words in a line
-    of text: a toolbar with more buttons than the window is wide goes on to a second row instead of hiding the last
-    ones past the edge. Call it once the toolbar is built; it follows the window's width from then on."""
+    """Lay the widgets packed in `frame` out in rows that wrap at the frame's width, as words in a line of text: a
+    toolbar with more buttons than the window is wide goes on to a second row instead of hiding the last ones past
+    the edge (and never one over another). Those packed side="right" keep to the right edge, in the order they show.
+    Call it once the toolbar is built; it follows the window's width - and a button whose words change - from then
+    on (flow_places)."""
     items = []
+    lefts, rights = [], []
     for w in frame.pack_slaves():
-        padx = w.pack_info().get("padx", 0)
+        info = w.pack_info()
+        padx = info.get("padx", 0)
         if isinstance(padx, (tuple, list)):
             left, right = int(padx[0]), int(padx[-1])
         else:
             left = right = int(padx or 0)
-        items.append((w, left, right))
+        (rights if info.get("side") == "right" else lefts).append((w, left, right, info.get("side")))
         w.pack_forget()
+    items = lefts + rights[::-1]                    # packed side="right" = the last one packed shows leftmost
     state = {"key": None}
 
     def reflow(_=None):
         width = frame.winfo_width()
         if width <= 1:
             width = max(frame.winfo_toplevel().winfo_width() - 20, 200)
-        places, x, y, line = [], 0, 0, 0
-        for w, left, right in items:
-            need = w.winfo_reqwidth() + left + right
-            if x and x + need > width:
-                x, y, line = 0, y + line + 2, 0
-            h = w.winfo_reqheight()
-            places.append((w, x + left, y, h))
-            x += need
-            line = max(line, h)
-        height = y + line + 2
-        key = (width, tuple((p[1], p[2]) for p in places))
+        live = [it for it in items if it[0].winfo_exists()]
+        sizes = [(w.winfo_reqwidth(), w.winfo_reqheight(), a, b, side) for w, a, b, side in live]
+        key = (width, tuple(sizes))
         if key == state["key"]:
             return
         state["key"] = key
-        rows = {}
-        for w, px, py, h in places:
-            rows[py] = max(rows.get(py, 0), h)
-        for w, px, py, h in places:
-            w.place(x=px, y=py + (rows[py] - h) // 2)
+        places, height = flow_places(sizes, width)
+        for (w, _, _, _), (px, py) in zip(live, places):
+            w.place(x=px, y=py)
         frame.configure(height=height)
     frame.bind("<Configure>", reflow, add="+")
+    for w, _, _, _ in items:                        # new words on a button: its width changes
+        w.bind("<Configure>", reflow, add="+")
     frame.after_idle(reflow)
 
 

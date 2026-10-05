@@ -28,7 +28,7 @@ or the game's folder (a `../`, another drive, a link that leads out - whatever a
 before anything is written, and logs it. Every write is shown first and backed up (`CampaignEditor_backups`), and
 Restore undoes it (a backup that names files outside is refused too). It needs no internet connection; it sends
 something only when you press **Send** in **Report a bug / Suggest** (below), and - once it has sent a report -
-asks the same relay for the author's answers to those reports (below). The Windows exe is built from this repository's source by GitHub Actions
+asks the same relay for the author's answers to those reports (below), and it asks GitHub for the number of the newest release (below). The Windows exe is built from this repository's source by GitHub Actions
 (`.github/workflows/release.yml`); anyone can check the build log of every release.
 
 The exe is not code-signed yet, so browsers and Windows SmartScreen may warn about it
@@ -64,4 +64,9 @@ repo. The relay keeps no IP addresses.
 on **Check now**, for the answers to them - it sends only the reports' numbers (random, known only to the sender), and
 gets back only the author's comments on those reports and whether they are closed. **Send the answer** adds your words
 (and, if you pick them, screenshots and the logs, names cut out as above) to the same report. Switch the start-up look
-off in Settings > Reports.
+off in Tools > Settings > Reports.
+
+**New versions**: when it starts (at most every 6 hours) the editor asks GitHub's public page of its own
+repository for the number of the newest release (`api.github.com/repos/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor/releases/latest`).
+Nothing is sent with it but the request itself; a newer number shows on the GitHub button. Switch it off in
+Tools > Settings > New versions.

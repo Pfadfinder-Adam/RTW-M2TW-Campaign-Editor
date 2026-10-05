@@ -6063,6 +6063,66 @@ building smith
         self.assertGreater(len(labels), 30)
         self.assertEqual([t for t in labels if ST.ui_entry(t) is None], [])
 
+    def test_new_version_mark(self):
+        """The GitHub button's mark: only a later RELEASE number counts ('v0.30.0' after 0.29.2), shown short
+        ('0.30'); the number an earlier check saw shows at once and goes away once that version runs; a check
+        turned off in Settings asks nothing."""
+        from campaign_editor import newversion as NV, settings
+        self.assertEqual(NV.parse("v0.30.0"), (0, 30, 0))
+        self.assertEqual(NV.parse("RTW & M2TW Campaign Editor 0.29.2"), (0, 29, 2))
+        self.assertIsNone(NV.parse("latest"))
+        self.assertTrue(NV.newer("v0.30.0", "0.29.2"))
+        self.assertTrue(NV.newer("0.29.10", "0.29.2"))
+        self.assertFalse(NV.newer("v0.29.2", "0.29.2"))
+        self.assertFalse(NV.newer("v0.29.2", "0.29.2.0"))
+        self.assertFalse(NV.newer("v0.28", "0.29.2"))
+        self.assertFalse(NV.newer("nightly", "0.29.2"))
+        self.assertEqual(NV.shown("v0.30.0"), "0.30")
+        self.assertEqual(NV.shown("v0.29.2"), "0.29.2")
+        old = settings.get("release_latest")
+        try:
+            settings.put("release_latest", {"tag": "v0.30.0", "url": "https://example.org/r"})
+            self.assertEqual(NV.known("0.29.2"), ("0.30", "https://example.org/r"))
+            self.assertIsNone(NV.known("0.30.0"))
+            settings.put("release_latest", {"tag": "v0.29.1"})
+            self.assertIsNone(NV.known("0.29.2"))
+        finally:
+            settings.put("release_latest", old if isinstance(old, dict) else {})
+
+        class App:                                         # a check turned off never starts a thread
+            def after(self, *a):
+                raise AssertionError("asked")
+        was = settings.get("release_check", True)
+        try:
+            settings.put("release_check", False)
+            NV.check(App(), "0.29.2", lambda *a: self.fail("shown"))
+        finally:
+            settings.put("release_check", was)
+
+    def test_buttons_wrap_instead_of_hiding(self):
+        """A row of buttons narrower than its window: the left ones from the left edge, the right ones up to the
+        right edge on one row when they fit; else they wrap button by button (left ones first, then the right ones
+        on rows of their own, up to the right edge) - none over another, none past the edge."""
+        try:
+            from campaign_editor.gui_util import flow_places
+        except ImportError:                                # no tkinter here (the CI test job has it)
+            return
+        items = [(100, 20, 0, 4, "left"), (80, 20, 0, 4, "left"), (90, 20, 4, 0, "right"), (60, 20, 4, 0, "right")]
+        places, height = flow_places(items, 600)
+        self.assertEqual([p[0] for p in places], [0, 104, 600 - 158 + 4, 600 - 64 + 4])   # + the gap before each
+        self.assertEqual({p[1] for p in places}, {0})
+        self.assertEqual(height, 22)
+        for width in (300, 200, 120, 60):
+            places, height = flow_places(items, width)
+            boxes = [(x, y, x + w, y + h) for (x, y), (w, h, _, _, _) in zip(places, items)]
+            for i, a in enumerate(boxes):
+                self.assertLessEqual(a[2], max(width, items[i][0] + 8), (width, i))
+                for b in boxes[i + 1:]:
+                    self.assertFalse(a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3], (width, a, b))
+            self.assertGreater(min(y for _, y in places[2:]), max(y for _, y in places[:2]))   # right ones below
+        places, _ = flow_places(items, 300)
+        self.assertEqual(places[3][0] + 60, 300)            # a wrapped right row still ends at the right edge
+
     def test_dds_written_with_the_games_own_header(self):
         """A compressed DDS (Rome .tga.dds, the DDS inside a Medieval II .texture) keeps the top level's byte size
         in its header (DDSD_LINEARSIZE): Pillow wrote a row pitch there (4108 for 1024 x 1024 DXT5) and Medieval II

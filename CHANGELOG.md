@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **Discord, YouTube and GitHub buttons** at the bottom, each in its site's colour. **GitHub** shows the
+  number of a newer release when one is out (`GitHub (new 0.30)`) and then opens its page: the editor asks GitHub for
+  the newest release number when it starts (every few hours; nothing is sent; off in Tools > Settings > New
+  versions). Only releases count, not the builds of every change.
 - **Map: a double click on an agent** opens the Character editor on him (traits, retinue, age, the game's panel).
 - **Delete this mod's folder** (Tools, red): the loaded mod's folder with everything in it, after two questions
   (the second wants the mod's name typed); never the game's own data or an expansion's.
@@ -174,6 +178,10 @@
 
 ### Changed
 - The Ko-fi button reads **Support me on Ko-fi** (Ko-fi's own words).
+- **Settings** and **Help** moved into **Tools** (top of the list); Tools no longer repeats Report a bug / Suggest an
+  idea - the **Report a bug / Suggest** button does both.
+- **The bottom buttons wrap** when the window is narrow: button by button onto the next rows, the right-hand ones
+  kept to the right edge - none hidden past the edge, none over another (also the other button rows that wrap).
 - **Map: the right button drags the map everywhere**; the left button does the rest (picks, drags signs, draws the
   Select box, paints); a right click without moving still opens the menu, a double click stays on the left button.
 - **Map: Select adds** - a box or a click adds to what is selected, Shift takes away; a click on nothing clears it.

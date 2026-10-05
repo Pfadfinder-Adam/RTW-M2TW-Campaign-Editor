@@ -46,6 +46,7 @@ class SettingsWindow(tk.Toplevel):
         self._game(body)
         self._map(body)
         self._report(body)
+        self._updates(body)
         self._fixes(body)
         self._folders(body)
         ttk.Button(body, text="Close", command=self.destroy).pack(side="bottom", anchor="e", pady=(8, 0))
@@ -149,6 +150,15 @@ class SettingsWindow(tk.Toplevel):
                         "starts (every few hours; asks only by the reports' numbers)",
                         command=lambda: settings.put("reports_check", bool(self.v_answers.get()))).pack(
             anchor="w", pady=(6, 0))
+
+    def _updates(self, body):
+        lf, _ = self._box(body, "New versions", "Only the number of the newest release is asked for - nothing is "
+                                                "sent. A newer one shows on the GitHub button at the bottom, which "
+                                                "then opens its page.")
+        self.v_release = tk.BooleanVar(value=settings.get("release_check", True) is not False)
+        ttk.Checkbutton(lf, variable=self.v_release, text="Look for a new version of the editor when it starts "
+                        "(on GitHub, every few hours)",
+                        command=lambda: settings.put("release_check", bool(self.v_release.get()))).pack(anchor="w")
 
     def _fixes(self, body):
         _, row = self._box(body, "Set-up questions on Load", "When a mod is loaded the tool looks for set-up "

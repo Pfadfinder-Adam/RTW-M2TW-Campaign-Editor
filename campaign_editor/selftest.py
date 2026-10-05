@@ -1961,7 +1961,9 @@ UI = {
     "Log": "Settings, Help, the log, Save logs, Game manifest",
     "Save logs": "Settings, Help, the log, Save logs, Game manifest",
     "Report a bug": "Report a bug / Suggest, Answers to my reports",
-    "Suggest an idea": "Report a bug / Suggest, Answers to my reports", "Test mod": "Test mod",
+    "Test mod": "Test mod",
+    "Settings": "Settings, Help, the log, Save logs, Game manifest",
+    "Help": "Settings, Help, the log, Save logs, Game manifest",
 }
 
 

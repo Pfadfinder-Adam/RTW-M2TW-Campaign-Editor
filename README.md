@@ -287,7 +287,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **Check mod files** (Tools; called Check mod before 0.24.0): reads every file the tool uses and reports what it found (factions, cultures, units, buildings, regions, towns, ports, characters, diplomacy) and anything it cannot make sense of - a settlement without a region, a unit an army names but the unit file lacks, a character after a family tree. The deep check also rehearses, in memory, an edit and a new faction for every faction and checks the result the way the game reads it (minutes on a big mod). Nothing is written.
 
-**Undo, keys, help:** **Undo** / **Redo** (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z) step back through towns picked, garrisons, buildings, settlement sizes, map moves, armies and diplomacy. Ctrl+P preview, Ctrl+S apply, F5 load again, Ctrl+1..5 the tabs, F1 or **Help** for a short guide. Far out on the map only towns are drawn; ports and characters show from zoom 4.
+**Undo, keys, help:** **Undo** / **Redo** (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z) step back through towns picked, garrisons, buildings, settlement sizes, map moves, armies and diplomacy. Ctrl+P preview, Ctrl+S apply, F5 load again, Ctrl+1..5 the tabs, F1 or **Tools > Help** for a short guide. Far out on the map only towns are drawn; ports and characters show from zoom 4.
 
 **Log:** the tool keeps `CampaignEditor.log` in `CampaignEditor_logs` next to the exe, together with the logs zips and the sessions (or in `%APPDATA%\RTW-M2TW-Campaign-Editor` where the exe's folder cannot be written): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
 
@@ -367,7 +367,7 @@ free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 - Only builds made by this repository's GitHub Actions release workflow from its own source are signed.
 - Committers and reviewers: [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew). Approver (every signing request): [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew).
 
-Privacy: this program transfers nothing to other networked systems unless you press **Send** in *Report a bug / Suggest* (then only what that window shows); after that it asks, by the reports' numbers only, for the author's answers to them (on start every few hours - off in Settings > Reports). It reads and writes only the game or mod folder you load and its own files beside the exe (`CampaignEditor_settings.json`, `CampaignEditor_logs`, `CampaignEditor_addons`) (see [SECURITY.md](SECURITY.md)).
+Privacy: this program transfers nothing to other networked systems unless you press **Send** in *Report a bug / Suggest* (then only what that window shows); after that it asks, by the reports' numbers only, for the author's answers to them (on start every few hours - off in Tools > Settings > Reports), and asks GitHub for the number of the newest release (on start every few hours; nothing is sent - off in Tools > Settings > New versions). It reads and writes only the game or mod folder you load and its own files beside the exe (`CampaignEditor_settings.json`, `CampaignEditor_logs`, `CampaignEditor_addons`) (see [SECURITY.md](SECURITY.md)).
 
 ## License
 

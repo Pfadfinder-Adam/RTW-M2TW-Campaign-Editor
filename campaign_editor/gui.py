@@ -32,6 +32,8 @@ from .units import faction_units, read_units
 
 VERSION = "0.29.2"
 KOFI = "https://ko-fi.com/pfadfinder"
+DISCORD = "https://discord.gg/uqA9MEn4Z"
+YOUTUBE = "https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ"
 APP = "RTW & M2TW Campaign Editor"
 # Tools > the author's stress test (selftest.py) - said plainly that modders do not need it
 TEST_MOD_LABEL = "Test mod - every feature (for the author, a stress test)..."
@@ -791,27 +793,37 @@ class App(tk.Tk):
         self.status_line.bind("<Configure>", lambda e: self.status_line.configure(wraplength=max(e.width - 4, 200)))
         self.bottom_bar = ttk.Frame(self)
         self.bottom_bar.pack(side="bottom", fill="x", before=self.nb, **pad)
-        # two groups: the writing buttons on the left, the rest on the right - a window too narrow for both puts
-        # the right group on a row of its own under the left one instead of hiding buttons past its edge
-        bar = left_bar = ttk.Frame(self.bottom_bar)
+        # the writing buttons on the left, the rest on the right; a window too narrow for one row wraps them button by
+        # button onto the next rows (gui_util.flow) - never one over another, never one hidden past the edge
+        bar = self.bottom_bar
         self.b_preview = ttk.Button(bar, text="Preview changes", command=self.preview)
         self.b_preview.pack(side="left", padx=(0, theme.BUTTON_GAP))
         self.b_create = ttk.Button(bar, text="Create faction", command=self.create)
         self.b_create.pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Button(bar, text="Undo", command=self.undo).pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Button(bar, text="Redo", command=self.redo).pack(side="left", padx=(0, theme.BUTTON_GAP))
-        bar = right_bar = ttk.Frame(self.bottom_bar)
-        # Ko-fi's own colour (white words on its coral, in either look), a button like the others
-        ttk.Button(bar, text="\u2615 Support me on Ko-fi", command=self.support, style="Kofi.TButton",
-                   cursor="hand2").pack(side="right", padx=(theme.BUTTON_GAP, 0))
-        ttk.Button(bar, text="Help", command=self.once("show_help", self.show_help)).pack(
-            side="right", padx=(theme.BUTTON_GAP, 0))
-        ttk.Button(bar, text="\u2699 Settings", command=self.once("settings_window", self.settings_window)).pack(
-            side="right", padx=(theme.BUTTON_GAP, 0))
+        # the right side, packed from the right edge: Ko-fi last on the screen; each link in its own colour (Ko-fi's
+        # coral, Discord's blue, YouTube's red, GitHub's grey - white words in either look), a button like the others
+        links = []
+        for text, style, url, say in (
+                ("\u2615 Support me on Ko-fi", "Kofi.TButton", KOFI, "Donations keep the work on the editor going."),
+                ("YouTube", "YouTube.TButton", YOUTUBE, "The editor's videos: what it does and how."),
+                ("Discord", "Discord.TButton", DISCORD, "Our Discord server: questions, help, ideas and news."),
+                ("GitHub", "GitHub.TButton", None, "The editor's page: downloads, the changes of every version, "
+                                                   "the wiki. When a newer version is out, its number shows here.")):
+            b = ttk.Button(bar, text=text, style=style, cursor="hand2",
+                           command=self.support if url == KOFI else (lambda u=url: self.open_link(u)) if url
+                           else self.open_github)
+            b.pack(side="right", padx=(theme.BUTTON_GAP, 0))
+            links.append((b, say))
+        self.b_github = links[-1][0]
         self.b_report = ttk.Button(bar, text="Report a bug / Suggest", command=self.once("report", self.send_report))
         self.b_report.pack(side="right", padx=(theme.BUTTON_GAP, 0))
         tools = ttk.Menubutton(bar, text="Tools")
         menu = tk.Menu(tools, tearoff=False)
+        menu.add_command(label="Settings...", command=self.once("settings_window", self.settings_window))
+        menu.add_command(label="Help", command=self.once("show_help", self.show_help))
+        menu.add_separator()
         menu.add_command(label="Check mod files (what the game would stumble on)", command=self.once("check", self.check))
         menu.add_command(label="The game's log in plain words (what went wrong in the game)...",
                          command=self.once("game_log_window", self.game_log_window))
@@ -821,8 +833,6 @@ class App(tk.Tk):
         menu.add_command(label="Game manifest...", command=self.once("game_manifest", self.game_manifest))
         menu.add_command(label="Log", command=self.once("show_log", self.show_log))
         menu.add_command(label="Save logs (zip)...", command=self.once("save_logs", self.save_logs))
-        menu.add_command(label="Report a bug...", command=self.once("report", self.send_report))
-        menu.add_command(label="Suggest an idea...", command=self.once("suggest", lambda: self.send_report(kind="suggestion")))
         menu.add_command(label="Credits (who made it with us)...", command=self.once("credits", self.credits_window))
         menu.add_separator()
         menu.add_command(label=TEST_MOD_LABEL, command=self.once("test_mod", self.test_mod))
@@ -837,25 +847,10 @@ class App(tk.Tk):
         play = ttk.Button(bar, text="\u25b6 Start the game", command=self.start_game, style="Play.TButton",
                           cursor="hand2")
         play.pack(side="right", padx=(theme.BUTTON_GAP, 0))
-        state = {"one_row": None}
-
-        def place_bars(_=None):
-            one_row = self.bottom_bar.winfo_width() >= left_bar.winfo_reqwidth() + right_bar.winfo_reqwidth() + 12 \
-                or self.bottom_bar.winfo_width() <= 1
-            if one_row == state["one_row"]:
-                return
-            state["one_row"] = one_row
-            left_bar.pack_forget()
-            right_bar.pack_forget()
-            if one_row:
-                left_bar.pack(side="left")
-                right_bar.pack(side="right")
-            else:
-                left_bar.pack(side="top", anchor="w")
-                right_bar.pack(side="top", anchor="e", pady=(4, 0))
-        place_bars()
-        self.bottom_bar.bind("<Configure>", place_bars)
+        flow(bar)
         from .gui_util import tip
+        for b, say in links:
+            tip(b, say + " Opens in your browser.")
         tip(play, "Starts the game with the mod that is loaded: its own start script (New mod folder writes "
                   "Start_<name>.bat), else the line the engine's own start scripts use (REX.exe -mod:<name>, "
                   "M2EX.exe --features.mod=mods/<name>). Apply your changes first - the game reads the files on disk.")
@@ -869,6 +864,42 @@ class App(tk.Tk):
         self.after(50, self.load_last)
         self.after(700, self.offer_move)
         self.after(4000, self.check_report_answers)
+        self.after(6000, self.check_new_version)
+
+    def check_new_version(self):
+        """A newer release of the editor on GitHub: its number on the GitHub button (newversion) - the one an earlier
+        check saw at once, a fresh look every few hours in a thread."""
+        from . import newversion
+        try:
+            seen = newversion.known(VERSION)
+            if seen:
+                self.show_new_version(*seen, fresh=False)
+            newversion.check(self, VERSION, self.show_new_version)
+        except Exception as e:
+            log.write("New version not looked for: %s" % e)
+
+    def show_new_version(self, number, url, fresh=True):
+        """'GitHub (new 0.30)' on the button, which then opens that release's page; a fresh find says so below."""
+        self._release = (number, url)
+        try:
+            self.b_github.configure(text="GitHub (new %s)" % number)
+        except tk.TclError:
+            return
+        if fresh:
+            self.status.set("A new version of the editor is out: %s - 'GitHub (new %s)' opens its page." % (
+                number, number))
+
+    def open_github(self):
+        """The editor's page on GitHub - or, when a newer version is out, that release's page."""
+        from . import newversion
+        self.open_link((getattr(self, "_release", None) or ("", newversion.PAGE))[1])
+
+    def open_link(self, url):
+        """A page in the browser (Discord, YouTube, GitHub)."""
+        import webbrowser
+        webbrowser.open(url)
+        self.status.set("%s opened in your browser." % url)
+        log.write("Opened %s" % url)
 
     def check_report_answers(self):
         """The author's answers to the reports this editor sent (gui_answers) - quietly, every few hours."""
@@ -5325,6 +5356,11 @@ class App(tk.Tk):
             return
         if label == TEST_MOD_LABEL:
             self.status.set(TEST_MOD_HINT)
+        elif label == "Settings...":
+            self.status.set("The look (light / dark), the game folder, the map, reports, new versions, set-up "
+                            "questions, where the editor keeps its files.")
+        elif label == "Help":
+            self.status.set("A short guide to the editor (also F1).")
 
     def delete_mod(self):
         """Tools > Delete this mod's folder...: the loaded mod's folder with everything in it, after two questions
