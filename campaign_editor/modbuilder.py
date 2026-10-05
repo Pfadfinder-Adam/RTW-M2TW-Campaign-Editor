@@ -914,10 +914,12 @@ local function mb_console_line(line) {
     return mb_console(verb, rest)
 }
 
-// One condition line of the engines' own list (campaign_script's), checked against the event that fired.
+// One condition line of the engines' own list (campaign_script's), checked against the event that fired. The
+// engines' condition parser reads past the end of a bare line ('Condition parser doesn't recognise this token' at
+// its last token, both games): the line goes in ended, as in a script file.
 local function mb_condition(line) {
     try {
-        return ::game.evaluateCondition(line) == true
+        return ::game.evaluateCondition(line + "\n") == true
     } catch (err) {
         mb_log("condition '" + line + "' could not be checked: " + err)
     }

@@ -105,6 +105,13 @@ def write_texts(plan, name, values):
                 binp = binp or os.path.join(folder, n)
     if txt:
         set_text_values(plan, txt, values)
+        # Rome and Barbarian Invasion keep a copy in data/text and in data/text/english, and which one the game
+        # reads is not certain (an emergent faction's title written to english/ only was 'not found' in Barbarian
+        # Invasion with REX): every copy gets the texts
+        for folder in mod.text_dirs():
+            other = next((os.path.join(folder, n) for n in os.listdir(folder) if n.lower() == name.lower()), None)
+            if other and os.path.normcase(os.path.abspath(other)) != os.path.normcase(os.path.abspath(txt)):
+                set_text_values(plan, other, values)
     elif binp:
         with open(binp, "rb") as fh:
             entries = read_strings_bin(fh.read())

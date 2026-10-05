@@ -1396,8 +1396,8 @@ def s_module(c, mod):
                  "settings": {"dos.0.amount": "Money given"}})
     lines = MB.new_recipe("CE Test engine lines")
     lines.update({"when": "ev:SettlementTurnEnd",
-                  # FactionIsLocal (no parameters, needs the event's faction) logged 'Condition parser doesn't
-                  # recognise this token' in Rome with REX (the module acted all the same) - a line of its own now
+                  # a bare condition line logged 'Condition parser doesn't recognise this token' at its last token
+                  # in both games (FactionIsLocal, I_TurnNumber >= 1) - the builder now ends the line
                   "ifs": [MB.item("if", "game", line="I_TurnNumber >= 1"),
                           MB.item("if", "counter", name="ce_seen_{town}", op="<", v=1)],
                   "dos": [MB.item("do", "counter_add", v=1, name="ce_seen_{town}"),
@@ -1555,6 +1555,9 @@ def s_rules_all(c, mod):
         now = {r.key: r.value for r in rules}
         ch = {}
         for r in rules:
+            if CR.blocked(r):
+                left.setdefault("greyed out in Campaign rules - a change broke the game in a test", []).append(r.key)
+                continue
             new, why = rule_changed(r, now)
             if new is not None and new != r.value and CR.check(r, new) is None:
                 ch[r] = new

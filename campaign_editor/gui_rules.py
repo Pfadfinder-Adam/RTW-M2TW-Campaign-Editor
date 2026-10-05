@@ -4,7 +4,7 @@ beside a changed one, Preview, Write it in (backup, Restore undoes it)."""
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from .gui_util import one_window, ShortHint
+from .gui_util import one_window, ShortHint, tip
 from . import campaignrules as CR
 from .gui_util import ScrollFrame
 from .plan import Plan
@@ -34,6 +34,10 @@ class RulesWindow(tk.Toplevel):
             "descr_strat.txt (start and end date, years a turn, switches). Pick a group on the left (or Find), "
             "change a value, then Preview and Write it in - a backup is made first and Restore undoes it. A value "
             "that differs from the game's own shows the game's beside it, with Reset.")).pack(anchor="w")
+        if any(CR.blocked(r) for g in self.groups for r in g[3]):
+            ttk.Label(frm, foreground="#777", wraplength=1060, justify="left", text=(
+                "Greyed-out values: changing them broke the game in a test, so they are kept as they are for now - "
+                "hover one to see what happened.")).pack(anchor="w", pady=(4, 0))
         bar = ttk.Frame(frm)
         bar.pack(fill="x", pady=(6, 4))
         ttk.Label(bar, text="Find").pack(side="left")
@@ -140,6 +144,11 @@ class RulesWindow(tk.Toplevel):
         else:
             e = tk.Entry(inner, textvariable=v, width=14)
         e.grid(row=r, column=1, sticky="w")
+        why_not = CR.blocked(rule)
+        if why_not:                                     # broke the game in a test: shown, not changed
+            v.set(rule.value)
+            e.configure(state="disabled")
+            tip(e, why_not)
         hint = CR.explain(rule)
         game = self._game(rule)
         hl = ttk.Label(inner, text=hint, foreground="#555", wraplength=360, justify="left")
@@ -159,7 +168,7 @@ class RulesWindow(tk.Toplevel):
             e.configure(**({"readonlybackground": colour} if rule.kind == "flag" else {"background": colour}))
             self._status(why and "%s: %s must be %s" % (rule.key, now or "(empty)", why))
         v.trace_add("write", paint)
-        if game is not None and game != rule.value:
+        if game is not None and game != rule.value and not why_not:
             ttk.Label(cell, text="game: %s" % game, foreground="#b60").pack(side="left")
             ttk.Button(cell, text="Reset", command=lambda: v.set(game)).pack(side="left", padx=4)
         paint()

@@ -3209,6 +3209,19 @@ class App(tk.Tk):
             on_place = res_kw.pop("on_place")
             region_kw.pop("ghost", None)
         region_kw.update(res_kw)
+        if on_place is not None and self.map_view.on_place_stop is None and (
+                getattr(self, "_map_add", None) or getattr(self, "_res_placing", None) or
+                getattr(self, "_port_tool", False)):
+
+            def stop_placing():                         # a right click / Esc: what hangs under the mouse is put back
+                self._map_add = None                    # (only what is not on the map yet - nothing is deleted)
+                self._res_placing = None
+                if getattr(self, "_port_tool", False):
+                    self._port_tool = False
+                    self.map_view.set_tool(None)
+                self.status.set("Nothing placed.")
+                self.show_map()
+            self.map_view.on_place_stop = stop_placing
         if placing is not None and not region_kw.get("ghost") and placing < len(self.field):
             fc = self.field[placing]
             rtw_kind, army = KINDS[fc["kind"]]

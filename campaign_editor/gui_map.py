@@ -13,6 +13,18 @@ from .mapdata import REBELS
 
 FORT_W = 0.45          # a fort's / watchtower's half size, of a tile: the sign stays inside its tile
 ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels per tile
+# the map's zoom settings (Tools > Settings > Campaign map): the wheel's step and Ctrl + wheel's in per cent of the
+# shown zoom, and the zoom from which armies, agents, fleets and ports are drawn (towns always)
+ZOOM_SETTINGS = {"map_zoom_step": 10, "map_zoom_step_fine": 5, "map_signs_from": 300}
+
+
+def zoom_setting(key):
+    from . import settings
+    try:
+        v = float(settings.get(key) or ZOOM_SETTINGS[key])
+    except (TypeError, ValueError):
+        v = ZOOM_SETTINGS[key]
+    return v if v > 0 else ZOOM_SETTINGS[key]
 MODES = (("political", "Political (the owners)"), ("diplomacy", "Diplomacy (towards the faction)"),
          ("religion", "Religion (Medieval II)"), ("none", "None (the ground only)"))
 
@@ -151,8 +163,8 @@ class MapView(ttk.Frame):
             v.trace_add("write", lambda *a: self._layers_label())
         self._layers_label()
         ttk.Button(bar, text="Fit", command=self.fit).pack(side="right")
-        ttk.Button(bar, text="+", command=lambda: self.zoom_by(1)).pack(side="right", padx=2)
-        b = ttk.Button(bar, text="-", command=lambda: self.zoom_by(-1))
+        ttk.Button(bar, text="+", command=lambda: self.zoom_by(1, by=50)).pack(side="right", padx=2)
+        b = ttk.Button(bar, text="-", command=lambda: self.zoom_by(-1, by=50))
         b.pack(side="right")
         # the zoom as a browser shows it: 100% = the whole map in the window (Fit) (report #127)
         self.lbl_zoom = ttk.Label(bar, text="", width=6, anchor="e")
@@ -720,20 +732,34 @@ class MapView(ttk.Frame):
             self.canvas.create_oval(sx - r, sy - r, sx + r, sy + r, outline="#ffd400", width=4, tags=("flash",))
         self.after(400, lambda: self._mark_flash(n, step + 1))
 
-    def zoom_by(self, step, at=None):
+    def _fit_z(self):
+        cw, ch = max(self.canvas.winfo_width(), 200), max(self.canvas.winfo_height(), 200)
+        return min(cw / self.cmap.w, ch / self.cmap.h)
+
+    def pct(self):
+        """The zoom as the window shows it: 100 % = the whole map fits the view."""
+        return 100.0 * self.z / self._fit_z() if self.cmap else 100.0
+
+    def zoom_by(self, step, at=None, by=None):
+        """One wheel notch in (step > 0) or out: the shown zoom moves to the next whole multiple of `by` per cent
+        (the settings' wheel step, 10 by default; Ctrl + wheel the fine step, 5) - 100, 110, 120 ... %."""
         if not self.cmap:
             return
         cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
         sx, sy = at or (cw / 2, ch / 2)
         tx, ty = self.ox + sx / self.z, self.oy + sy / self.z
-        bigger = [z for z in ZOOMS if z > self.z + 1e-6]
-        smaller = [z for z in ZOOMS if z < self.z - 1e-6]
-        fit = min(cw / self.cmap.w, ch / self.cmap.h)
-        least = min(fit / 4, ZOOMS[0])                  # out to a quarter of the view: the field around it
+        fit = self._fit_z()
+        by = by or zoom_setting("map_zoom_step")
+        now = 100.0 * self.z / fit
         if step > 0:
-            self.z = min(self.z * 1.5, ZOOMS[0]) if self.z < ZOOMS[0] - 1e-6 else (bigger[0] if bigger else self.z)
+            pct = (math.floor(now / by + 1e-6) + 1) * by
         elif step < 0:
-            self.z = max(smaller[-1] if smaller else self.z / 1.5, least)
+            pct = (math.ceil(now / by - 1e-6) - 1) * by
+        else:
+            pct = now
+        least = min(25.0, 100.0 * ZOOMS[0] / fit)          # out to a quarter of the view: the field around it
+        most = 100.0 * ZOOMS[-1] / fit
+        self.z = fit * max(least, min(most, pct)) / 100.0
         self.ox, self.oy = tx - sx / self.z, ty - sy / self.z
         self.render()
 
@@ -925,7 +951,8 @@ class MapView(ttk.Frame):
             self._painted(cw, ch)
         size = max(3, min(self.z * 0.9, 60))           # a town fills its tile
         font = ("", 8 if self.z < 10 else 9)
-        if self.v_ports.get() and self.z >= 4:        # far out: towns only - less to draw, less clutter
+        signs = self.pct() >= zoom_setting("map_signs_from") - 1e-6   # far out: towns only (the settings' zoom)
+        if self.v_ports.get() and signs:              # far out: towns only - less to draw, less clutter
             new = {r: xy for (w, r), xy in self.places.items() if w == "port" and r not in cm.ports}
             for region, (x, y) in list(cm.ports.items()) + list(new.items()):     # a new port too (not written yet)
                 x, y = self.places.get(("port", region), (x, y))
@@ -964,7 +991,7 @@ class MapView(ttk.Frame):
                 for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1)):     # a black edge all round: white
                     c.create_text(sx + r + 2 + dx, sy + dy, text=name, anchor="w", fill="black", font=font)
                 c.create_text(sx + r + 2, sy, text=name, anchor="w", fill="white", font=font)   # reads on any land
-        if self.v_chars.get() and self.z >= 4 and not self.region_mode:
+        if self.v_chars.get() and signs and not self.region_mode:
             self._characters(cw, ch, size)
         self._size_badge()
 
@@ -1245,18 +1272,18 @@ class MapView(ttk.Frame):
             bx = sx + k * w * 0.3
             c.create_rectangle(bx - w * 0.09, sy - w * 0.42, bx + w * 0.09, sy - w * 0.25, fill=stone, outline=dark,
                                tags=tags)
-        for k in (-1, 1):                                        # the towers, their battlements in the owner's colour
-            x0, x1 = (sx - w, sx - w * 0.52) if k < 0 else (sx + w * 0.52, sx + w)
+        for k in (-1, 1):                                        # the towers, their battlements as the wall's:
+            x0, x1 = (sx - w, sx - w * 0.52) if k < 0 else (sx + w * 0.52, sx + w)     # stone, as long
             c.create_rectangle(x0, sy - w * 0.62, x1, bottom, fill=stone, outline=dark, width=line, tags=tags)
             m = (x1 - x0) / 5
             for n in (0, 2, 4):
-                c.create_rectangle(x0 + n * m, top, x0 + (n + 1) * m, sy - w * 0.62, fill=edge, outline=dark,
-                                   tags=tags)
+                c.create_rectangle(x0 + n * m, sy - w * 0.79, x0 + (n + 1) * m, sy - w * 0.62, fill=stone,
+                                   outline=dark, tags=tags)
             c.create_rectangle((x0 + x1) / 2 - w * 0.06, sy - w * 0.35, (x0 + x1) / 2 + w * 0.06, sy - w * 0.1,
                                fill="#2a1f14", outline="", tags=tags)          # an arrow slit
-        r = w * 0.24                                             # the arched gate
-        c.create_rectangle(sx - r, sy + w * 0.35, sx + r, bottom, fill="#2a1f14", outline="", tags=tags)
-        c.create_arc(sx - r, sy + w * 0.35 - r, sx + r, sy + w * 0.35 + r, start=0, extent=180, fill="#2a1f14",
+        r = w * 0.24                                             # the arched gate, in the owner's colour
+        c.create_rectangle(sx - r, sy + w * 0.35, sx + r, bottom, fill=edge, outline="", tags=tags)
+        c.create_arc(sx - r, sy + w * 0.35 - r, sx + r, sy + w * 0.35 + r, start=0, extent=180, fill=edge,
                      outline="", tags=tags)
 
     def _wonder_icon(self, c, sx, sy, w, kind, tags, sel=False):
@@ -1585,7 +1612,29 @@ class MapView(ttk.Frame):
 
     def _wheel(self, e, direction=None):
         d = direction if direction is not None else (1 if e.delta > 0 else -1)
-        self.zoom_by(d, (e.x, e.y))
+        state = getattr(e, "state", 0) or 0
+        if state & 0x0001:                              # Shift: slow and smooth - small steps, drawn one by one
+            self._glide(d, (e.x, e.y))
+            return
+        self.zoom_by(d, (e.x, e.y), by=zoom_setting("map_zoom_step_fine") if state & 0x0004 else None)
+
+    def _glide(self, d, at):
+        """Shift + wheel: the zoom slides 1 % at a time over a few frames, so it moves slowly and smoothly."""
+        left = getattr(self, "_glide_left", 0)
+        self._glide_left = left + 3 * d if (left == 0 or (left > 0) == (d > 0)) else 3 * d
+        if left:
+            return                                      # already sliding: it goes on with the new notches
+
+        def tick():
+            n = self._glide_left
+            if not n or not self.winfo_exists():
+                self._glide_left = 0
+                return
+            one = 1 if n > 0 else -1
+            self._glide_left = n - one
+            self.zoom_by(one, at, by=1)
+            self.after(16, tick)
+        tick()
 
     def _place_under(self, sx, sy):
         """('city' | 'port', region) of the town or port under the mouse, or None."""

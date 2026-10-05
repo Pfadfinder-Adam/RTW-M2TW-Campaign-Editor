@@ -43,10 +43,15 @@ local AG_OFFSET_Y = 0                // move the tick down (+) or up (-)
 local AG_FACES = ["verdana_sml", "tnr_sml", "verdana"]
 local AG_INK = [96, 82, 62, 255]
 local AG_KEY = "avoid_growth"        // this add-on's place in the saved game (persistent.avoid_growth)
-// The game's own tick pieces, the first found: [box, tick, their size in 1024 x 768 units]
-local AG_SPRITES = [
-    ["CHECKBOX_BG", "TICK_GADGET", 24],                  // the box of the scroll's own Auto-manage tick (both games)
-    ["PLAIN_CHECKBOX_BG", "PLAIN_CHECKBOX_TICK", 18],    // the small one, where the first is missing
+// The game's own tick pieces, the first found: [box, tick, their size in 1024 x 768 units] - the pieces of the
+// scroll's own Auto-manage tick: Medieval II's bevelled box, Rome's (and Barbarian Invasion's) thin one
+local AG_SPRITES_M2 = [
+    ["CHECKBOX_BG", "TICK_GADGET", 24],
+    ["PLAIN_CHECKBOX_BG", "PLAIN_CHECKBOX_TICK", 18],
+]
+local AG_SPRITES_ROME = [
+    ["PLAIN_CHECKBOX_BG", "PLAIN_CHECKBOX_TICK", 18],
+    ["CHECKBOX_BG", "TICK_GADGET", 24],
 ]
 // Which game's scroll this is: the editor writes the game it puts the script in ("rome" - Rome and Barbarian
 // Invasion, the same scroll - or "medieval2"); "auto" guesses by the game's sprites (Barbarian Invasion has some of
@@ -370,8 +375,9 @@ function ag_sprite(ui, name) {
 function ag_load_art(ui) {
     if (ag_art == null) {
         local m2 = CE_GAME == "medieval2" || (CE_GAME == "auto" && ag_sprite(ui, "BEVEL_TL") != null)
-        ag_art = { box = null, tick = null, size = AG_SPRITES[0][2], m2 = m2 }
-        foreach (pair in AG_SPRITES) {
+        local pairs = m2 ? AG_SPRITES_M2 : AG_SPRITES_ROME
+        ag_art = { box = null, tick = null, size = pairs[0][2], m2 = m2 }
+        foreach (pair in pairs) {
             local b = ag_sprite(ui, pair[0])
             local t = ag_sprite(ui, pair[1])
             if (b != null && t != null) {
@@ -432,6 +438,15 @@ function ag_place(box, m2, k) {
         local at = ag_place_m2(box, k)
         if (at != null) {
             return at
+        }
+    }
+    if (!m2) {
+        // Rome: the town's own scroll first - with Settlement Details open beside it, the details' population
+        // figures are on screen too, and the tick belongs under Automanage, not there
+        local gov = ag_rect(ag_game_element("own_settlement_governor_info_panel"))
+        if (gov != null) {
+            return [gov[0] + (AG_ROME_X * k).tointeger(), gov[1] + gov[3] + (AG_ROME_BELOW * k + 0.5).tointeger(),
+                    "own_settlement_governor_info_panel (Rome: under Automanage)"]
         }
     }
     foreach (a in AG_ANCHORS) {

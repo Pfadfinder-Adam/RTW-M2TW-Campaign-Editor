@@ -125,6 +125,34 @@ class SettingsWindow(tk.Toplevel):
                           (mv.v_grid, "tile grid up close")):
             ttk.Checkbutton(row, text=text, variable=var, command=self._map_look).pack(side="left", padx=(0, 8))
         ttk.Checkbutton(row, text="legend", variable=mv.v_legend, command=mv._legend_toggled).pack(side="left")
+        from .gui_map import ZOOM_SETTINGS, zoom_setting
+        z = ttk.Frame(row.master)
+        z.pack(fill="x", pady=(4, 0))
+        for key, text, most in (("map_zoom_step", "Wheel zoom step, %", 100),
+                                ("map_zoom_step_fine", "with Ctrl, %", 50),
+                                ("map_signs_from", "armies, agents, fleets and ports shown from zoom %", 2000)):
+            ttk.Label(z, text=text).pack(side="left", padx=(0, 4))
+            v = tk.StringVar(value="%g" % zoom_setting(key))
+
+            def keep(*_, key=key, v=v, most=most):
+                try:
+                    n = float(v.get())
+                except ValueError:
+                    return
+                if 0 < n <= most:
+                    settings.put(key, n)
+                    try:
+                        self.app.map_view.render()
+                    except Exception as e:
+                        log.write("map render: %s" % e)
+            v.trace_add("write", keep)
+            ttk.Spinbox(z, from_=1, to=most, increment=1 if key != "map_signs_from" else 50, textvariable=v,
+                        width=6).pack(side="left", padx=(0, 12))
+        hint(z, "The wheel zooms the map by this step (the zoom shown beside - / + / Fit stays a round number: 100, "
+                "110, 120 %%...); Ctrl + wheel by the finer step; Shift + wheel slowly and smoothly. Towns are always "
+                "drawn; armies, agents, fleets and ports only from the zoom given (defaults %d / %d / %d)." % (
+                    ZOOM_SETTINGS["map_zoom_step"], ZOOM_SETTINGS["map_zoom_step_fine"],
+                    ZOOM_SETTINGS["map_signs_from"])).pack(side="left")
 
     def _map_look(self):
         mv = self.app.map_view

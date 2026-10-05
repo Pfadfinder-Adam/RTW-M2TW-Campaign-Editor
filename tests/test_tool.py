@@ -3655,6 +3655,38 @@ building smith
         open(os.path.join(camp, "data", "descr_sm_factions.txt"), "w").close()
         self.assertIsNone(gamefix.unpack_needed(camp))              # unpacked: nothing to offer
 
+    def test_rules_that_broke_the_game_are_kept(self):
+        # a rule a change of which broke the game in a test (recruitment slots lowered to 0: no town recruited) is
+        # greyed out in Campaign rules: any other value is refused, its own value stays fine
+        from campaign_editor import campaignrules as CR
+        r = CR.Rule("descr_caps_ex.txt", "engine", "default_recruitment_slots", "value", "1", "uint", 0, 0, 1)
+        self.assertTrue(CR.blocked(r))
+        self.assertIsNotNone(CR.check(r, "0"))
+        self.assertIsNone(CR.check(r, "1"))
+        other = CR.Rule("descr_ex.txt", "engine", "max_age", "value", "120", "uint", 0, 0, 3)
+        self.assertIsNone(CR.blocked(other))
+        self.assertIsNone(CR.check(other, "121"))
+
+    def test_texts_go_into_every_copy_of_a_table(self):
+        # Rome / Barbarian Invasion keep historic_events.txt in data/text and in data/text/english: a new text goes
+        # into both (written to english/ only, an emergent faction's title was 'not found' in BI with REX)
+        import tempfile
+        from campaign_editor.strtables import write_texts
+        d = tempfile.mkdtemp()
+        data = os.path.join(d, "data")
+        os.makedirs(os.path.join(data, "text", "english"))
+        for p in (os.path.join(data, "text", "historic_events.txt"),
+                  os.path.join(data, "text", "english", "historic_events.txt")):
+            with open(p, "wb") as fh:
+                fh.write(b"\xff\xfe" + "{OLD_TITLE}\tOld\r\n".encode("utf-16-le"))
+        mod = ModData.__new__(ModData)
+        mod.data = data
+        plan = Plan(mod, "t", "t", {})
+        write_texts(plan, "historic_events.txt", {"CE_TEST_LATER_TITLE": "Ce Test Later rises"})
+        self.assertEqual(len(plan.files), 2)
+        for f in plan.files.values():
+            self.assertIn("CE_TEST_LATER_TITLE", "".join(f.text(i) for i in range(len(f.raw))))
+
     def test_english_text_wins(self):
         # the game reads data/text/english first (Medieval II keeps its tables only there):
         # the tool reads and writes that copy, and a new town gets the core level of its size
@@ -4729,7 +4761,7 @@ building smith
         text = MB.script(r)
         self.assertIn('mb_condition(mb_fill("not I_TurnNumber < 3", c))', text)
         self.assertIn('mb_script_line(mb_fill("set_event_counter mb_seen 1", c))', text)
-        self.assertIn("::game.evaluateCondition(line)", text)
+        self.assertIn('::game.evaluateCondition(line + "\\n")', text)
         self.assertIn("::game.runScriptCommand(verb, rest)", text)
 
         def why(kind, line, when="faction_turn"):

@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Avoid Growth (Rome, Barbarian Invasion)**: the tick uses the thin box of the scroll's own Automanage tick, and it stays under Automanage when Settlement Details is open beside the scroll (it jumped onto the details page).
+- **Campaign rules**: a rule whose change broke the game in a test is greyed out and kept as it is for now, with what happened on hover (first: the recruitment slots - lowered to 0, no town could recruit). The test mod leaves such rules alone.
+- **Module builder**: a game condition line is passed to the engine ended, as in a script file - a bare line gave 'Condition parser doesn't recognise this token' in both games.
+- **Texts**: a new text goes into every copy of its table the mod has (data/text and data/text/english) - an emergent faction's title written to one copy was 'not found' in Barbarian Invasion.
+- **Map**: a right click (or Esc) puts back what was picked on the right panel and not placed yet; the wheel zooms in round steps (10 %, Ctrl 5 %, Shift slowly and smoothly; + / - by 50 %); armies, agents, fleets and ports show from 300 % zoom (towns always) - all three in Tools > Settings > Campaign map; a fort's battlements are all stone and alike, its gate in the owner's colour; a click outside a text field takes the typing cursor out of it; the GitHub button is dark.
 - **Load a packed Medieval II without its unpacker**: when the game or a Kingdoms campaign is still in .pack files and tools\unpacker\unpacker.exe is missing, Load now says so and how to get it back (Steam's Verify integrity of game files), instead of a bare 'file not found'.
 - **Religions in Barbarian Invasion** (Rome's expansion and the mods made from it): New religion... writes a new
   belief - its lines in `descr_beliefs.txt`, its three pips and its texts in `expanded_bi.txt`; a town follows it

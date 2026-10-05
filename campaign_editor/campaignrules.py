@@ -332,11 +332,26 @@ def files(mod, campaign=None):
     return out
 
 
+# Rules a change of which broke the game in a test: shown greyed out in Campaign rules and kept as they are for now
+# (key -> what happened, in plain words). Taken off the list once the cause is found and guarded.
+BLOCKED = {
+    "default_recruitment_slots": "Lowered to 0 in a test, no town could recruit any more (the recruitment queue "
+                                 "stood still with a red 0) - Rome with REX, Barbarian Invasion.",
+}
+
+
+def blocked(rule):
+    """What happened when this rule was changed in a test (then it is greyed out and kept as it is), or None."""
+    return BLOCKED.get(rule.key)
+
+
 def check(rule, text):
     """None, or why the text cannot be this value."""
     t = text.strip()
     if not t:
         return "empty"
+    if blocked(rule) and t != rule.value:
+        return "kept as it is for now - changing it broke the game in a test"
     if rule.kind == "uint":
         return None if re.fullmatch(r"\d+", t) else "a whole number, 0 or more"
     if rule.kind == "int":

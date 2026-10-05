@@ -607,6 +607,21 @@ def install_window_helpers(root):
             except (tk.TclError, AttributeError):
                 pass
         state["job"] = root.after(600, show)
+    # a click anywhere but a text field takes the typing cursor out of the field it was in (it kept blinking in the
+    # map's Find field after a click on the map)
+    def away(ev):
+        try:
+            w = ev.widget
+            if not isinstance(w, tk.Misc) or w.winfo_class() in ("TEntry", "Entry", "TCombobox", "TSpinbox",
+                                                                   "Spinbox", "Text"):
+                return
+            now = w.focus_get()
+            if now is not None and now is not w and now.winfo_class() in ("TEntry", "Entry", "TCombobox",
+                                                                           "TSpinbox", "Spinbox", "Text"):
+                w.focus_set()
+        except (tk.TclError, KeyError, AttributeError):
+            pass
+    root.bind_all("<ButtonPress-1>", away, add="+")
     for cls in ("TEntry", "TCombobox", "Entry"):
         root.bind_class(cls, "<Enter>", enter, add="+")
         root.bind_class(cls, "<Leave>", hide, add="+")
