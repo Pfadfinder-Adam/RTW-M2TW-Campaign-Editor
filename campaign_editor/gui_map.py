@@ -11,6 +11,7 @@ from PIL import Image, ImageTk
 from . import theme
 from .mapdata import REBELS
 
+FORT_W = 0.45          # a fort's / watchtower's half size, of a tile: the sign stays inside its tile
 ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels per tile
 MODES = (("political", "Political (the owners)"), ("diplomacy", "Diplomacy (towards the faction)"),
          ("religion", "Religion (Medieval II)"), ("none", "None (the ground only)"))
@@ -123,7 +124,7 @@ class MapView(ttk.Frame):
                         command=self._regions_toggled).pack(side="left", padx=(12, 4))
         ttk.Checkbutton(lbar, text="Edit resources", variable=self.v_res, command=relayer).pack(side="left", padx=4)
         # Select (as in a strategy game): drag a box with the left button - everything of the ticked kinds inside is
-        # selected (Shift adds to it), a click selects / unselects one thing, a right click acts on them all; the
+        # added to the selection (Shift takes away), a click adds one thing (Shift + click takes it away), a right click acts on them all; the
         # right button drags the map meanwhile. Towns picked show yellow on the ground alone.
         self.v_pick = tk.BooleanVar(value=False)
         self.picked, self.on_pick_menu, self._before_pick = set(), None, None
@@ -132,8 +133,9 @@ class MapView(ttk.Frame):
         from .gui_util import tip
         tip(ttk.Checkbutton(lbar, text="Select", variable=self.v_pick, command=self._pick_toggled),
             "Select things on the map, as in a strategy game: drag a box with the left button - everything of the "
-            "kinds ticked in 'what...' inside it is selected (hold Shift to add to it); a click selects or "
-            "unselects one; a right click acts on them all (a building, garrisons or another owner for the towns, "
+            "kinds ticked in 'what...' inside it is added to the selection (hold Shift to take it away instead); "
+            "a click adds one (Shift + click takes it away), a click on nothing clears it all; a right click acts on "
+            "them all (a building, garrisons or another owner for the towns, "
             "the characters or resources taken off the map). The right button drags the map meanwhile.").pack(
             side="left", padx=(4, 0))
         mb = ttk.Menubutton(lbar, text="what...")
@@ -152,11 +154,15 @@ class MapView(ttk.Frame):
         ttk.Button(bar, text="+", command=lambda: self.zoom_by(1)).pack(side="right", padx=2)
         b = ttk.Button(bar, text="-", command=lambda: self.zoom_by(-1))
         b.pack(side="right")
+        # the zoom as a browser shows it: 100% = the whole map in the window (Fit) (report #127)
+        self.lbl_zoom = ttk.Label(bar, text="", width=6, anchor="e")
+        self.lbl_zoom.pack(side="right", padx=(0, 4))
         from .gui_util import first
-        first(b, *bar.pack_slaves()[-3:-1][::-1])  # the zoom buttons keep their room
+        first(b, self.lbl_zoom, *bar.pack_slaves()[-4:-2][::-1])  # the zoom buttons keep their room
         from .gui_util import hint
-        hint(bar, "Wheel: zoom.   Left drag: move the map.   Right drag: move markers (characters, towns, ports).   "
-                  "Click a town: take / give it.   Right click: what can be done there.").pack(side="right", padx=4)
+        hint(bar, "Wheel: zoom (100% = the whole map in the window, as Fit).   Right drag: move the map.   Left drag: "
+                  "move markers (characters, towns, ports).   Click a town: take / give it.   Right click: what can "
+                  "be done there.").pack(side="right", padx=4)
         from . import settings
         self.v_legend = tk.BooleanVar(value=bool(settings.get("map_legend", True)))
         ttk.Checkbutton(lbar, text="Legend", variable=self.v_legend, command=self._legend_toggled).pack(
@@ -236,7 +242,9 @@ class MapView(ttk.Frame):
         c.bind("<Button-5>", lambda e: self._wheel(e, -1))
         # left button: the map moves (a click picks a town); right button - or Ctrl + left
         # on a touchpad - moves characters, towns and ports, so nothing moves by accident
-        c.bind("<ButtonPress-1>", lambda e: self._press(e, icons=False))
+        # the right button drags the map everywhere (a click without moving opens the menu); the left one does all
+        # the rest - picks, drags a sign, draws a box, paints (report #128)
+        c.bind("<ButtonPress-1>", lambda e: self._press(e, icons=True))
         c.bind("<Control-ButtonPress-1>", lambda e: self._press(e, icons=True))
         c.bind("<B1-Motion>", self._move)
         c.bind("<ButtonRelease-1>", self._release)
@@ -337,7 +345,7 @@ class MapView(ttk.Frame):
             self.v_borders.set(False)
             self._show_sel_kinds()
             self._mode_changed(redraw=False)
-            self.readout.configure(text="Select: drag a box with the left button (Shift adds), or click things; "
+            self.readout.configure(text="Select: drag a box with the left button (it adds; Shift takes away), or click things; "
                                         "then a right click")
         elif self._before_pick:
             mode, borders, chars, res, forts = self._before_pick
@@ -379,42 +387,60 @@ class MapView(ttk.Frame):
             return "fleets"
         return "armies" if ch_.get("army") else "agents"
 
-    def select_box(self, a, b, add=False):
+    def select_box(self, a, b, remove=False):
         """Everything of the ticked kinds whose tile lies between screen points a and b (a box dragged with the
-        left button); add: kept with what was selected before (Shift)."""
+        left button) is added to what is selected - with Shift held it is taken out of it instead (the user's
+        wish: adding is the default, Shift takes away)."""
         (x0, y0), (x1, y1) = self.to_tile(*a), self.to_tile(*b)
         lo_x, hi_x, lo_y, hi_y = min(x0, x1), max(x0, x1), min(y0, y1), max(y0, y1)
 
         def inside(xy):
             return lo_x <= xy[0] <= hi_x and lo_y <= xy[1] <= hi_y
-        if not add:
-            self.picked, self.sel_chars, self.sel_res = set(), set(), set()
+        towns, chars, res = set(), set(), set()
         if self.v_sel["towns"].get() and self.cmap:
-            self.picked |= {r for r, xy in self.cmap.cities.items()
-                            if r in self.owners and inside(self.places.get(("city", r), xy))}
+            towns = {r for r, xy in self.cmap.cities.items()
+                     if r in self.owners and inside(self.places.get(("city", r), xy))}
         for c in self.chars:
             k = self._char_kind(c["id"])
             if k and self.v_sel[k].get() and c.get("xy") and inside(tuple(c["xy"])):
-                self.sel_chars.add(c["id"])
+                chars.add(c["id"])
         for r in self.resources:
             kind = "forts" if r["id"][:1] in ("f", "g") else "resources"
             if self.v_sel[kind].get() and inside(tuple(r["xy"])):
-                self.sel_res.add(r["id"])
+                res.add(r["id"])
+        if remove:
+            self.picked -= towns
+            self.sel_chars -= chars
+            self.sel_res -= res
+        else:
+            self.picked |= towns
+            self.sel_chars |= chars
+            self.sel_res |= res
         self._picked_changed()
 
-    def _click_select(self, sx, sy):
-        """A click in Select (no box): the character, resource / fort or town under it selected or unselected."""
+    def _click_select(self, sx, sy, remove=False):
+        """A click in Select (no box): the character, resource / fort or town under it added to what is selected
+        (Shift: taken out of it); a click on nothing clears the selection."""
+        def put(group, key):
+            if remove:
+                group.discard(key)
+            else:
+                group.add(key)
         cid = self._char_under(sx, sy)
         if cid is not None and self._char_kind(cid) and self.v_sel[self._char_kind(cid)].get():
-            self.sel_chars ^= {cid}
+            put(self.sel_chars, cid)
             return self._picked_changed()
         rid = self._res_under(sx, sy)
         if rid is not None and self.v_sel["forts" if rid[:1] in ("f", "g") else "resources"].get():
-            self.sel_res ^= {rid}
+            put(self.sel_res, rid)
             return self._picked_changed()
         town = self._town_under(sx, sy)
         if town and self.v_sel["towns"].get():
-            self.toggle_pick(town[0])
+            put(self.picked, town[0])
+            return self._picked_changed()
+        if not remove:
+            self.picked, self.sel_chars, self.sel_res = set(), set(), set()
+            self._picked_changed()
 
     def selected_count(self):
         return len(self.picked) + len(self.sel_chars) + len(self.sel_res)
@@ -556,7 +582,7 @@ class MapView(ttk.Frame):
             self.draggable = set(keep) | {"legend_mine"}
             row("a general / an army", char("general", army=True), "army")
             if not getattr(self, "everyone", False):
-                row("yours: drag it (right button)", char("general", army=True, mine=True))
+                row("yours: drag it", char("general", army=True, mine=True))
             row("a fleet (admiral)", char("admiral", army=True), "fleet")
             for k, label in (("spy", "spy"), ("assassin", "assassin"), ("diplomat", "diplomat"),
                              ("merchant", "merchant"), ("priest", "priest"), ("princess", "princess"),
@@ -734,6 +760,14 @@ class MapView(ttk.Frame):
         return None if self.inside(xy) else "outside the map"
 
     # ---- drawing ----
+    def _zoom_label(self):
+        lab = getattr(self, "lbl_zoom", None)
+        if lab is None or not self.cmap:
+            return
+        cw, ch = max(self.canvas.winfo_width(), 200), max(self.canvas.winfo_height(), 200)
+        fit = min(cw / self.cmap.w, ch / self.cmap.h)
+        lab.configure(text="%d%%" % round(100 * self.z / fit) if fit else "")
+
     def render(self):
         if self._pending is None:
             self._pending = self.after(15, self._render)
@@ -747,6 +781,7 @@ class MapView(ttk.Frame):
             c.create_text(20, 20, anchor="nw", fill="#ccc", text="Load a mod: the campaign map shows here.")
             return
         self._clamp()
+        self._zoom_label()
         cw, ch = c.winfo_width(), c.winfo_height()
         vw, vh = cw / self.z, ch / self.z
         box = (self.ox, self.oy, self.ox + vw, self.oy + vh)
@@ -1155,53 +1190,56 @@ class MapView(ttk.Frame):
                 continue
             col = self.colours.get(fo.owner) if fo.owner else None
             edge = "#%02x%02x%02x" % tuple(col) if col else "#222222"
-            w = max(2.0, min(self.z * (0.28 if fo.kind == "watchtower" else 0.42), 36))
+            w = max(2.0, min(self.z * FORT_W, 36))            # inside its tile (report #125)
             self._fort_icon(c, sx, sy, w, edge, ("fort", "fort:%d" % fo.line), 2 if col else 1, fo.kind)
 
     @staticmethod
     def _fort_icon(c, sx, sy, w, edge, tags, width=1, kind="fort"):
-        """A fort: a small stone castle - two towers with roofs in the owner's colour (edge), the wall between with
-        its battlements and an arched gate. A watchtower: a wooden lookout on legs, its roof in the owner's colour
-        (report: the two looked alike). Both inside sx +- w, sy - 1.3 w .. sy + 0.8 w."""
-        top, bottom = sy - w * 1.3, sy + w * 0.8
+        """Inside its tile: the square sx +- w, sy +- w (w = about half a tile - report #125). A fort: a stone wall
+        between two square towers, the towers' battlements in the owner's colour (edge), an arched gate - no roofs,
+        or it reads as a castle (report #126). A watchtower: a wooden lookout on legs, its roof in the owner's
+        colour."""
+        top, bottom = sy - w, sy + w
         line = max(1, width) if w >= 6 else 1                   # a thick outline would eat a small sign
         if kind == "watchtower":
-            leg = max(1, int(w / 4))
+            leg = max(1, int(w / 5))
             wood, dark = "#9a6a38", "#4a3018"
-            for a, b in ((-0.6, -0.32), (0.6, 0.32)):           # the legs, a little apart at the foot
-                c.create_line(sx + a * w, bottom, sx + b * w, sy - w * 0.25, fill=dark, width=leg, tags=tags)
+            for a, b in ((-0.6, -0.3), (0.6, 0.3)):             # the legs, a little apart at the foot
+                c.create_line(sx + a * w, bottom, sx + b * w, sy, fill=dark, width=leg, tags=tags)
             if w >= 4:                                           # the cross brace
-                c.create_line(sx - w * 0.5, bottom - w * 0.25, sx + w * 0.38, sy, fill=dark, tags=tags)
-                c.create_line(sx + w * 0.5, bottom - w * 0.25, sx - w * 0.38, sy, fill=dark, tags=tags)
-            c.create_rectangle(sx - w * 0.5, sy - w * 0.75, sx + w * 0.5, sy - w * 0.2, fill=wood, outline="black",
+                c.create_line(sx - w * 0.5, bottom - w * 0.2, sx + w * 0.35, sy + w * 0.2, fill=dark, tags=tags)
+                c.create_line(sx + w * 0.5, bottom - w * 0.2, sx - w * 0.35, sy + w * 0.2, fill=dark, tags=tags)
+            c.create_rectangle(sx - w * 0.5, sy - w * 0.45, sx + w * 0.5, sy + w * 0.05, fill=wood, outline="black",
                                width=line, tags=tags)            # the lookout
             if w >= 4:
-                c.create_rectangle(sx - w * 0.2, sy - w * 0.62, sx + w * 0.2, sy - w * 0.38, fill="#2a1f14",
+                c.create_rectangle(sx - w * 0.18, sy - w * 0.32, sx + w * 0.18, sy - w * 0.1, fill="#2a1f14",
                                    outline="", tags=tags)        # its window
-            c.create_polygon(sx - w * 0.72, sy - w * 0.75, sx + w * 0.72, sy - w * 0.75, sx, top, fill=edge,
+            c.create_polygon(sx - w * 0.7, sy - w * 0.45, sx + w * 0.7, sy - w * 0.45, sx, top, fill=edge,
                              outline="black", width=line, tags=tags)   # the roof
             return
         stone, dark = "#b3ab9f", "#3a332c"
         if w < 4:                                                # far away: a block with the owner's top
-            c.create_rectangle(sx - w, sy - w * 0.6, sx + w, bottom, fill=stone, outline=dark, tags=tags)
-            c.create_rectangle(sx - w, top + w * 0.3, sx + w, sy - w * 0.6, fill=edge, outline=dark, tags=tags)
+            c.create_rectangle(sx - w, sy - w * 0.4, sx + w, bottom, fill=stone, outline=dark, tags=tags)
+            c.create_rectangle(sx - w, top, sx + w, sy - w * 0.4, fill=edge, outline=dark, tags=tags)
             return
-        c.create_rectangle(sx - w * 0.6, sy - w * 0.35, sx + w * 0.6, bottom, fill=stone, outline=dark,
+        c.create_rectangle(sx - w * 0.6, sy - w * 0.25, sx + w * 0.6, bottom, fill=stone, outline=dark,
                            width=line, tags=tags)                # the wall
         for k in (-1, 0, 1):                                     # its battlements
-            bx = sx + k * w * 0.32
-            c.create_rectangle(bx - w * 0.1, sy - w * 0.55, bx + w * 0.1, sy - w * 0.35, fill=stone, outline=dark,
+            bx = sx + k * w * 0.3
+            c.create_rectangle(bx - w * 0.09, sy - w * 0.42, bx + w * 0.09, sy - w * 0.25, fill=stone, outline=dark,
                                tags=tags)
-        for k in (-1, 1):                                        # the towers and their roofs
-            x0, x1 = (sx - w, sx - w * 0.5) if k < 0 else (sx + w * 0.5, sx + w)
-            c.create_rectangle(x0, sy - w * 0.75, x1, bottom, fill=stone, outline=dark, width=line, tags=tags)
-            c.create_polygon(x0 - w * 0.08, sy - w * 0.75, x1 + w * 0.08, sy - w * 0.75, (x0 + x1) / 2, top,
-                             fill=edge, outline="black", width=line, tags=tags)
-            c.create_rectangle((x0 + x1) / 2 - w * 0.06, sy - w * 0.45, (x0 + x1) / 2 + w * 0.06, sy - w * 0.2,
+        for k in (-1, 1):                                        # the towers, their battlements in the owner's colour
+            x0, x1 = (sx - w, sx - w * 0.52) if k < 0 else (sx + w * 0.52, sx + w)
+            c.create_rectangle(x0, sy - w * 0.62, x1, bottom, fill=stone, outline=dark, width=line, tags=tags)
+            m = (x1 - x0) / 5
+            for n in (0, 2, 4):
+                c.create_rectangle(x0 + n * m, top, x0 + (n + 1) * m, sy - w * 0.62, fill=edge, outline=dark,
+                                   tags=tags)
+            c.create_rectangle((x0 + x1) / 2 - w * 0.06, sy - w * 0.35, (x0 + x1) / 2 + w * 0.06, sy - w * 0.1,
                                fill="#2a1f14", outline="", tags=tags)          # an arrow slit
         r = w * 0.24                                             # the arched gate
-        c.create_rectangle(sx - r, sy + w * 0.2, sx + r, bottom, fill="#2a1f14", outline="", tags=tags)
-        c.create_arc(sx - r, sy + w * 0.2 - r, sx + r, sy + w * 0.2 + r, start=0, extent=180, fill="#2a1f14",
+        c.create_rectangle(sx - r, sy + w * 0.35, sx + r, bottom, fill="#2a1f14", outline="", tags=tags)
+        c.create_arc(sx - r, sy + w * 0.35 - r, sx + r, sy + w * 0.35 + r, start=0, extent=180, fill="#2a1f14",
                      outline="", tags=tags)
 
     def _wonder_icon(self, c, sx, sy, w, kind, tags, sel=False):
@@ -1231,12 +1269,12 @@ class MapView(ttk.Frame):
                 self._wonder_icon(c, sx, sy, max(2.5, min(self.z * 0.45, 40)), res.get("type", ""), tags, sel)
                 continue
             if res["kind"] in ("fort", "watchtower"):          # a fort keeps its tower, picked: a yellow frame
-                w = max(2.0, min(self.z * (0.28 if res["kind"] == "watchtower" else 0.42), 36))
+                w = max(2.0, min(self.z * FORT_W, 36))
                 col = self.colours.get(res.get("owner")) if res.get("owner") else None   # battlements: the owner's
                 self._fort_icon(c, sx, sy, w, "#%02x%02x%02x" % tuple(col) if col else "#222222", tags, 2 if col else 1,
                                 res["kind"])
                 if sel:
-                    c.create_rectangle(sx - w - 3, sy - w * 1.3 - 3, sx + w + 3, sy + w + 3, outline="#ffd400",
+                    c.create_rectangle(sx - w - 2, sy - w - 2, sx + w + 2, sy + w + 2, outline="#ffd400",
                                        width=3, tags=tags)
                 continue
             fill = self.res_colour(res["kind"])
@@ -1281,6 +1319,15 @@ class MapView(ttk.Frame):
             return
         line = self._fort_line_under(e.x, e.y)
         fo = next((f for f in (self.forts or []) if f.line == line), None) if line is not None else None
+        if fo is None:                                   # drawn as a movable sign (forts are always movable on the
+            rid = self._res_under(e.x, e.y)              # Map editor): its resource-layer id, f<line> / g<new one>
+            r = next((r for r in self.resources if r["id"] == rid), None) if rid and rid[:1] in ("f", "g") else None
+            if r is not None:
+                fo = next((f for f in (self.forts or []) if "f%d" % f.line == rid), None)
+                if fo is None:
+                    from types import SimpleNamespace
+                    fo = SimpleNamespace(kind=r.get("kind"), type=r.get("type", ""), xy=tuple(r["xy"]), line=None,
+                                         owner=r.get("owner"))
         if fo is not None and fo.kind == "landmark" and self.on_wonder:
             self.on_wonder(fo.type)
         elif fo is not None and self.on_fort_double:
@@ -1374,9 +1421,9 @@ class MapView(ttk.Frame):
             c.create_polygon(cx - h * 0.3, cy - h * 0.5, cx + h * 0.4, cy - h * 0.25, cx - h * 0.3, cy,
                              fill=edge, stipple="gray50", outline=edge, tags=tags)
         elif kind in ("fort", "watchtower"):            # held in the hand: the sign itself, framed green / red
-            w = max(4.0, min(self.z * (0.28 if kind == "watchtower" else 0.42), 36))
+            w = max(4.0, min(self.z * FORT_W, 36))
             self._fort_icon(c, cx, cy, w, "#222222", tags, 1, kind)
-            c.create_rectangle(cx - w - 3, cy - w * 1.3 - 3, cx + w + 3, cy + w + 3, outline=edge, width=2, tags=tags)
+            c.create_rectangle(cx - w - 2, cy - w - 2, cx + w + 2, cy + w + 2, outline=edge, width=2, tags=tags)
         elif kind == "landmark":
             rr = max(5, min(self.z * 0.45, 40))
             self._wonder_icon(c, cx, cy, rr, g.get("type", ""), tags, False)
@@ -1605,17 +1652,22 @@ class MapView(ttk.Frame):
         return self.to_tile(sx, sy), None
 
     def _press(self, e, icons=False):
+        right = getattr(e, "num", None) == 3
+        self._nopan = False
         # a right click that does not move opens the menu of what can be done there (see _release)
-        self._menu_press = (e.x, e.y) if getattr(e, "num", None) == 3 and not self.region_mode else None
+        self._menu_press = (e.x, e.y) if right and not self.region_mode else None
+        if right and not self.region_mode:                # the right button drags the map, everywhere
+            self._drag = (e.x, e.y, self.ox, self.oy, False)
+            return
         if self.v_pick.get() and self.cmap and not self.region_mode and not self.on_place:
-            if not icons:                                 # Select: the left button draws a box (Shift adds)
+            cid = self._char_under(e.x, e.y)              # Select: the left button drags a sign of one's own,
+            if cid is None or cid not in self.draggable:  # else draws a box (it adds; Shift takes away)
                 self._box = [e.x, e.y, False, bool(getattr(e, "state", 0) & 0x1)]
                 return
-            cid = self._char_under(e.x, e.y)
-            if cid is None or cid not in self.draggable:  # the right button on nothing drags the map
-                self._drag = (e.x, e.y, self.ox, self.oy, False)
-                return
+            self._cdrag = (cid, e.x, e.y)
+            return
         if self.region_mode and self.cmap:
+            icons = right                                 # the region tools: left paints, right as before
             if not icons and not self.on_place:           # left: paint
                 if getattr(self, "on_stroke", None):
                     self.on_stroke()                      # one Undo step per stroke
@@ -1635,22 +1687,21 @@ class MapView(ttk.Frame):
             if rid is not None:
                 self._rdrag = [rid, e.x, e.y, False]
                 return
-        if not icons and self.cmap:
+        if self.cmap:
             self._rpress = self._res_under(e.x, e.y)      # a click (no drag) on a resource picks it
-        if icons:
-            cid = self._char_under(e.x, e.y) if self.cmap else None
-            if cid is not None and cid in self.draggable:
-                self._cdrag = (cid, e.x, e.y)
-                return
-            if cid is not None and self.locked:
-                ch_ = next((c for c in self.chars if c["id"] == cid), None)
-                if ch_:
-                    self.readout.configure(text=self.locked(ch_))
-                return
-            pl = self._place_under(e.x, e.y) if self.cmap and self.on_place_move and not self.on_place else None
-            if pl:
-                self._pdrag = [pl[0], pl[1], e.x, e.y, False]      # nothing happens unless the mouse moves
+        cid = self._char_under(e.x, e.y) if self.cmap and not self.on_place else None
+        if cid is not None and cid in self.draggable:
+            self._cdrag = (cid, e.x, e.y)
             return
+        if cid is not None and self.locked:
+            ch_ = next((c for c in self.chars if c["id"] == cid), None)
+            if ch_:
+                self.readout.configure(text=self.locked(ch_))
+        pl = self._place_under(e.x, e.y) if self.cmap and self.on_place_move and not self.on_place else None
+        if pl:
+            self._pdrag = [pl[0], pl[1], e.x, e.y, False]          # nothing happens unless the mouse moves
+            return
+        self._nopan = True                                # a left click: a pick, the map stays where it is
         self._drag = (e.x, e.y, self.ox, self.oy, False)
 
     def _spray_at(self, sx, sy):
@@ -1743,6 +1794,8 @@ class MapView(ttk.Frame):
         if not self._drag or not self.cmap:
             return
         x0, y0, ox, oy, _ = self._drag
+        if getattr(self, "_nopan", False):
+            return
         if abs(e.x - x0) + abs(e.y - y0) > 3:
             self._drag = (x0, y0, ox, oy, True)
             self.ox, self.oy = ox - (e.x - x0) / self.z, oy - (e.y - y0) / self.z
@@ -1755,9 +1808,9 @@ class MapView(ttk.Frame):
             self._box = None
             self.canvas.delete("selbox")
             if moved:
-                self.select_box((x0, y0), (e.x, e.y), add=add)
+                self.select_box((x0, y0), (e.x, e.y), remove=add)       # (Shift held: take away)
             else:
-                self._click_select(e.x, e.y)
+                self._click_select(e.x, e.y, remove=add)
             return
         if self._spray:
             self._spray = None
@@ -1768,15 +1821,18 @@ class MapView(ttk.Frame):
             self.render()
             return
         mp, self._menu_press = self._menu_press, None
-        if mp and getattr(e, "num", None) == 3 and abs(e.x - mp[0]) + abs(e.y - mp[1]) <= 3 \
-                and self.on_place and self.on_place_stop:    # a right click stops what hangs under the mouse
-            self.on_place_stop()
-            return
-        if mp and getattr(e, "num", None) == 3 and abs(e.x - mp[0]) + abs(e.y - mp[1]) <= 3 \
-                and self.on_menu and self.cmap:
-            self._cdrag = self._rdrag = self._pdrag = None
-            self.canvas.delete("target")
-            self._show_menu(e)
+        if getattr(e, "num", None) == 3 and not self.region_mode:     # the right button: the map was dragged, or
+            moved = self._drag and self._drag[4]                       # a click - the menu / stop placing
+            self._drag = None
+            if moved:
+                self.render()
+                return
+            if mp and self.on_place and self.on_place_stop:            # a right click stops what hangs under the mouse
+                self.on_place_stop()
+            elif mp and self.on_menu and self.cmap:
+                self._cdrag = self._rdrag = self._pdrag = None
+                self.canvas.delete("target")
+                self._show_menu(e)
             return
         if self._rclick:
             self._rclick = False

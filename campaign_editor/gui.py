@@ -93,7 +93,7 @@ THE TABS
   Buildings    what stands in each town, its level and population (they follow each other);
                Medieval II: a town can be made a castle or a city.
   Map          left drag moves the map, the wheel zooms, a click on a town takes or gives it;
-               right drag (or Ctrl + left drag) moves characters, towns and ports;
+               left drag moves characters, towns and ports, right drag moves the map;
                Find: type a town, army, unit, fort or resource and jump to it;
                Layers: what is shown; Legend: what every sign means.
                Edit regions: paint borders, New region, Edit region..., Religions... and
@@ -161,7 +161,7 @@ ADD-ONS
 
 KEYS
   Ctrl+Z undo, Ctrl+Y redo    Ctrl+P preview    Ctrl+S apply    F5 load again    F1 this help
-  Ctrl+1 .. Ctrl+5 the tabs    Map: wheel zooms, left drag moves, right drag moves a marker
+  Ctrl+1 .. Ctrl+5 the tabs    Map: wheel zooms, right drag moves the map, left drag moves a marker
 
 THE GAMES
   Rome: Total War, Barbarian Invasion, Alexander - plain or with REX.
@@ -736,7 +736,7 @@ class App(tk.Tk):
             side="left", padx=(0, theme.BUTTON_GAP))
         flow(xb)
         self._how(self.res_bar, "New: pick the resource above, press Place new, then click a land tile on the map.  "
-                                "Move: drag a resource with the right mouse button.  Remove: click it, then Delete "
+                                "Move: drag a resource.  Remove: click it, then Delete "
                                 "picked.  A region's resources are the ones on its land.")
         from .forts import KINDS as FORT_KINDS
         self.v_fort_type = tk.StringVar(value=FORT_KINDS[0])   # forts: no bar - the legend and the right click
@@ -1258,7 +1258,7 @@ class App(tk.Tk):
             return                                  # the Map editor shows its own tabs alone (a hidden tab would come back)
         self.nb.select([self.nb.tab(t, "text").strip() for t in self.nb.tabs()].index(name))
 
-    MAP_EDITOR_HINT = ("Map editor: drag any faction's towns, ports, armies, agents and fleets (right button); right "
+    MAP_EDITOR_HINT = ("Map editor: drag any faction's towns, ports, armies, agents and fleets (left button; the right one drags the map); right "
                        "click for more - give a town, an army's units, delete, new ones. Preview, then Apply changes "
                        "(a backup first).")
 
@@ -2736,7 +2736,7 @@ class App(tk.Tk):
                     self._res_sel = "g%d" % (len(self.fort_added) - 1)
                     self._res_placing = None
                     self.map_view.set_tool(None)
-                    self.status.set("Wonder %s placed at %d, %d - right drag moves it; Preview, then Apply."
+                    self.status.set("Wonder %s placed at %d, %d - drag it to move it; Preview, then Apply."
                                     % (kind.split(":", 1)[1], xy[0], xy[1]))
                     self.show_map()
                     return None
@@ -2758,7 +2758,7 @@ class App(tk.Tk):
                     self._res_sel = "n%d" % (len(self.res_added) - 1)
                 self._res_placing = None
                 self.map_view.set_tool(None)
-                self.status.set("%s placed at %d, %d - right drag moves it; Preview, then Apply." % (kind, xy[0], xy[1]))
+                self.status.set("%s placed at %d, %d - drag it to move it; Preview, then Apply." % (kind, xy[0], xy[1]))
                 self.show_map()
                 return None
             kw["on_place"] = place
@@ -4718,8 +4718,15 @@ class App(tk.Tk):
         if at:
             self.char_window(at[0])
             return
-        self.status.set("This %s at %d, %d is empty: drag an army onto it (right button) - its units are the "
-                        "garrison; a fort has no buildings." % (fo.kind, fo.xy[0], fo.xy[1]))
+        # an empty one: a new army for it at once - its units are the garrison (a fort has no buildings)
+        if self.strat and messagebox.askyesno(APP, "This %s at %d, %d is empty. Put a new army in it? Its units are "
+                                                   "the garrison (a fort has no buildings)." % (fo.kind, fo.xy[0],
+                                                                                              fo.xy[1]), parent=self):
+            from .gui_mapadd import add_at
+            add_at(self, "army", tuple(fo.xy))
+        else:
+            self.status.set("This %s at %d, %d is empty: drag an army onto it - its units are the garrison."
+                            % (fo.kind, fo.xy[0], fo.xy[1]))
 
     def army_units_window(self, cid):
         """Any faction's army or fleet on the map (the Map editor, or another faction's from Edit faction): its units

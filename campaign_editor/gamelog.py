@@ -18,13 +18,13 @@ KNOWN = [
      "stops here. Set it to the start year or earlier."),
     (r"Character '(.+?)' is placed on an invalid tile",
      "{0} stands on a tile no one may stand on (the sea, a river, mountains, dense forest, off the map) - the game "
-     "leaves him out. Move him on the Map (right drag)."),
+     "leaves him out. Move him on the Map (drag him)."),
     (r"unit\((.+?)\) does not match up to the ownership for faction\((.+?)\)",
      "A building lets {1} recruit '{0}', but the unit's ownership (export_descr_unit.txt) does not name {1} - the "
      "game drops that recruit line. Give {1} the unit (Roster tab: Give) or take {1} off the line (Building editor)."),
     (r"invalid tile\((\d+), (\d+)\) for the settlement of (.+?)\.",
      "The town {2} sits on tile {0}, {1}, which nothing can reach (water, a blocked tile or off the map) - the game "
-     "ignores it there for now, but armies cannot get to it. Move it on the Map (right drag) or check the map's size."),
+     "ignores it there for now, but armies cannot get to it. Move it on the Map (drag it) or check the map's size."),
     (r"Target building level not allowed: (.+?), (\w+) -> (\w+)",
      "When a {1} of {0} turns into a {2} (a city made a castle or back, Medieval II), its buildings change by their "
      "chains' convert_to lines - here into a level {0} may not build. Check the requires lines of those levels for "

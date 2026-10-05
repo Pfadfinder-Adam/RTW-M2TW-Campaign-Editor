@@ -173,6 +173,12 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **Map: the right button drags the map everywhere**; the left button does the rest (picks, drags signs, draws the
+  Select box, paints); a right click without moving still opens the menu, a double click stays on the left button.
+- **Map: Select adds** - a box or a click adds to what is selected, Shift takes away; a click on nothing clears it.
+- **Map: the zoom in per cent** beside - / + / Fit (100% = the whole map in the window).
+- **Forts and watchtowers stay inside their tile**; a fort has no roofs any more (its towers' battlements carry the
+  owner's colour).
 - **Forts and watchtowers on the map** drawn anew: a fort is a small stone castle (two towers, a wall, a gate), a
   watchtower a wooden lookout on legs - both with roofs in the owner's colour (the two looked alike).
 - **Every button looks alike and takes less room**: about 1.5 x lower than before (21 px instead of 29 - 33), the
@@ -447,6 +453,8 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Map: a double click on a fort or watchtower** works again on the Map editor (forts are drawn there as movable
+  signs and were not found): its army's units open; an empty one offers a new army for it.
 - **Bigger map (x3): cliffs stay on the land** - a cliff the winding new coast put in the water moves onto the land
   beside it (cliffs showed in the shallow sea).
 - **Report a bug / Suggest** takes up to 10 pictures (it was 3, and more were dropped without a word); pictures over
