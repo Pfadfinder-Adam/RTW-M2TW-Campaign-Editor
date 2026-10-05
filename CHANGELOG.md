@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **The top row**: the Mod box takes the free width (a mod's full name shows), the data folder box is shorter (its whole path on hover).
 - **Unpacking Medieval II**: the unpacker's question 'Do you agree to these terms and conditions? (Y/N)' is answered Y (the offer says so) - it waited and nothing was unpacked; a Kingdoms campaign unpacks into its own folder (mods/<campaign>/data).
 - **Map**: a port is deleted from the right-click menu (its fleet goes to the sea beside, the town's harbour buildings go; Undo brings it back).
 - **Town lists** (Many towns, the Buildings and town lists): each town's row in a muted shade of its owner's colour.

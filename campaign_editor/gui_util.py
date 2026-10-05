@@ -613,7 +613,7 @@ def install_window_helpers(root):
         try:
             w = ev.widget
             if not isinstance(w, tk.Misc) or w.winfo_class() in ("TEntry", "Entry", "TCombobox", "TSpinbox",
-                                                                   "Spinbox", "Text"):
+                                                                   "Spinbox", "Text", "Menu"):
                 return
             now = w.focus_get()
             if now is not None and now is not w and now.winfo_class() in ("TEntry", "Entry", "TCombobox",
