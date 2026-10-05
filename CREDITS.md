@@ -30,3 +30,9 @@ What people said about the editor - being gathered.
 
 Send a report or an idea from the editor (**Report a bug / Suggest**) and write your name in *Contact*. With your
 permission, it goes here.
+
+## Made a mod with it?
+
+If the editor helped you make a mod, please mention it where you share the mod and link to the editor:
+https://github.com/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor - one line is enough. A request, not a condition -
+thank you!

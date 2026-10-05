@@ -29,6 +29,19 @@ every time, without the fear of breaking something, and without everything falli
 The editor is free and stays free. It is built with the help of AI, which costs money every month; if the tool saves
 you time, a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) keeps new features coming. Thank you!
 
+## 🤝 Made a mod with it?
+
+If the editor helped you build or change a mod, please say so where you share the mod (its page, readme or forum
+thread) and link to the editor, so other modders can find it too. One line is enough - copy one of these:
+
+```
+Made with the RTW & M2TW Campaign Editor: https://github.com/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor
+```
+```
+Made with the [url=https://github.com/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor]RTW & M2TW Campaign Editor[/url]
+```
+(the second one for forums such as TWC). It is a request, not a condition - thank you!
+
 ## 🎯 What this tool is for
 
 One goal: **a bridge between the modder and the game's files.** The editor gives you access to every corner of the
