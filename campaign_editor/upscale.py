@@ -14,7 +14,7 @@ What it writes (Preview lists it; one backup, Restore gives everything back):
                   the sea and its region's land; any colour descr_regions does not list but the heights hold above
                   the sea counts as land (land_colours),
                   map_features (rivers redrawn as 1-pixel lines through the middles - a 2-pixel river crashes the
-                  game -, a corner link as a staircase, a river mouth carried on to the new coast and one pixel into the water; cliffs and land
+                  game -, a corner link as a staircase, a river mouth carried on to the new coast, its last pixel the land touching the water; cliffs on the coast and land
                   bridges as unbroken lines too, a bridge's end on the water carried on to the land; fords, sources
                   and volcanoes on the middle pixel), map_trade_routes
     2W+1 x 2H+1   map_heights the NATURAL way (blended, land and sea apart, bent by _warp as the ground, fractal
@@ -1113,6 +1113,93 @@ def ground_scaled(path, mask, sea_colours, natural=False, edges=EDGE_DEFAULT):
     return kinds_scaled(path, mask, sea_colours, shore=(BEACH,), natural=natural, edges=edges)
 
 
+SHALLOW = (196, 0, 0)
+DEEP_KINDS = ((128, 0, 0), (64, 0, 0))     # deep sea, ocean
+SPECK = 40                                 # ground pixels: deep water this small in the shallows is shallow too
+
+
+def shallow_coast(data):
+    """map_ground_types (bytes) with the sea next to the land always shallow (the user's rule for the x3 map: a coast
+    tile's sea neighbour is shallow sea, never deep at once - the games' own maps have some deep sea at the shore), the
+    beach one pixel wide (a beach pixel touching no land is shallow sea) and the line between the shallow and the
+    deep water smoothed the way the coast is (no 3 x 3 steps). Impassable sea stays as it is."""
+    w, h, step, top_down, _, raw = _decode(data, "map_ground_types.tga")
+    raw = bytearray(raw)
+
+    def off(x, y):
+        return (((h - 1 - y) if top_down else y) * w + x) * step
+
+    def get(x, y):
+        o = off(x, y)
+        return (raw[o + 2], raw[o + 1], raw[o])
+
+    def put(x, y, c):
+        o = off(x, y)
+        raw[o], raw[o + 1], raw[o + 2] = c[2], c[1], c[0]
+    sea_kinds = set(DEEP_KINDS) | {SHALLOW}
+    kind = [get(x, y) for y in range(h) for x in range(w)]
+    wet = sea_kinds | {BEACH, (128, 128, 128)}
+    for y in range(h):                              # the beach one pixel wide, as the rivers (the user's rule): a
+        for x in range(w):                          # beach pixel touching no land is shallow sea
+            if kind[y * w + x] == BEACH and not any(
+                    0 <= x + a < w and 0 <= y + b < h and kind[(y + b) * w + x + a] not in wet
+                    for a in (-1, 0, 1) for b in (-1, 0, 1) if a or b):
+                kind[y * w + x] = SHALLOW
+                put(x, y, SHALLOW)
+    water = [k in sea_kinds for k in kind]
+    coast = [False] * (w * h)                      # water within a tile (2 pixels: the picture is 2 x the map)
+    for y in range(h):                             # of the land or the beach
+        for x in range(w):
+            if water[y * w + x] and any(0 <= x + a < w and 0 <= y + b < h and not water[(y + b) * w + x + a]
+                                        and kind[(y + b) * w + x + a] != (128, 128, 128)
+                                        for a in (-2, -1, 0, 1, 2) for b in (-2, -1, 0, 1, 2) if a or b):
+                coast[y * w + x] = True
+    shallow = [1.0 if (k == SHALLOW or c or not wt) else 0.0 for k, c, wt in zip(kind, coast, water)]
+    for b in (3, 3, 3):
+        shallow = _rows_cols(shallow, w, h, _box, b)
+    for y in range(h):
+        for x in range(w):
+            i = y * w + x
+            if not water[i]:
+                continue
+            if coast[i] or shallow[i] > 0.5:
+                if kind[i] != SHALLOW:
+                    put(x, y, SHALLOW)
+            elif kind[i] == SHALLOW:                 # its deep neighbours' kind (deep sea or ocean)
+                near = [kind[(y + b) * w + x + a] for a in (-1, 0, 1) for b in (-1, 0, 1)
+                        if 0 <= x + a < w and 0 <= y + b < h and kind[(y + b) * w + x + a] in DEEP_KINDS]
+                put(x, y, max(DEEP_KINDS, key=near.count) if near else DEEP_KINDS[0])
+    # a speck of deep water in the shallows (or of shallows in the deep) left by the smoothing joins the water round it
+    now = [get(x, y) for y in range(h) for x in range(w)]
+    is_deep = [k in DEEP_KINDS for k in now]
+    seen = [False] * (w * h)
+    for i0 in range(w * h):
+        if seen[i0] or now[i0] not in sea_kinds:
+            continue
+        deep = is_deep[i0]
+        body, todo = [], [i0]
+        seen[i0] = True
+        while todo:
+            i = todo.pop()
+            body.append(i)
+            x, y = i % w, i // w
+            for j in ((i + 1) if x + 1 < w else -1, (i - 1) if x else -1, (i + w) if y + 1 < h else -1,
+                      (i - w) if y else -1):
+                if j >= 0 and not seen[j] and now[j] in sea_kinds and is_deep[j] == deep:
+                    seen[j] = True
+                    todo.append(j)
+        if len(body) < SPECK:
+            for i in body:
+                x, y = i % w, i // w
+                if deep:
+                    put(x, y, SHALLOW)
+                elif not coast[i]:
+                    near = [now[j] for j in (i + 1, i - 1, i + w, i - w) if 0 <= j < w * h and now[j] in DEEP_KINDS]
+                    if near:
+                        put(x, y, max(DEEP_KINDS, key=near.count))
+    return _write(data, w, h, step, raw)
+
+
 HILLS, MOUNTAINS, HIGH_MOUNTAINS = (128, 128, 64), (98, 65, 65), (196, 128, 128)
 
 
@@ -1330,6 +1417,64 @@ def _rows_cols(grid, W, H, fn, arg):
     return out
 
 
+DROP = 12              # old tiles: an island or a lake this small is drawn as a drop of water would be
+
+
+def _drops(out, old, grid, w, h):
+    """Small islands and lakes the way a drop of water takes its shape - round, its size kept (the user: small
+    islands and peninsulas came out as clovers, lakes as rectangles): for each body of land in the sea or water in the
+    land of at most DROP old tiles, its new tiles are the 9 x as many round it where the blurred map holds most of its
+    kind - an oval, no waist, no lost or gained area. Its old tiles' middles stay its own (towns, ports stand there)."""
+    W = w * FACTOR
+    mid = FACTOR // 2
+    seen = [[False] * w for _ in range(h)]
+    for oy0 in range(h):
+        for ox0 in range(w):
+            if seen[oy0][ox0]:
+                continue
+            kind = old[oy0][ox0]
+            body, todo, edge = [], [(ox0, oy0)], False
+            seen[oy0][ox0] = True
+            while todo:
+                x, y = todo.pop()
+                body.append((x, y))
+                if x in (0, w - 1) or y in (0, h - 1):
+                    edge = True
+                for a, b in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if 0 <= a < w and 0 <= b < h and not seen[b][a] and old[b][a] == kind:
+                        seen[b][a] = True
+                        todo.append((a, b))
+            if edge or len(body) > DROP:
+                continue
+            mine = set(body)
+            # the new tiles it may take: its own blocks, and the blocks of the other kind beside it that touch no
+            # other body of its kind (two islets close by stay two)
+            blocks = set(mine)
+            for x, y in body:
+                for a in (x - 1, x, x + 1):
+                    for b in (y - 1, y, y + 1):
+                        if 0 <= a < w and 0 <= b < h and (a, b) not in mine and old[b][a] != kind and not any(
+                                0 <= c < w and 0 <= d < h and old[d][c] == kind and (c, d) not in mine
+                                for c in (a - 1, a, a + 1) for d in (b - 1, b, b + 1)):
+                            blocks.add((a, b))
+            cand, pinned = [], set()
+            for x, y in blocks:
+                for Y in range(y * FACTOR, y * FACTOR + FACTOR):
+                    for X in range(x * FACTOR, x * FACTOR + FACTOR):
+                        i = Y * W + X
+                        if (x, y) in mine and X % FACTOR == mid and Y % FACTOR == mid:
+                            pinned.add(i)
+                        elif X % FACTOR == mid and Y % FACTOR == mid:
+                            continue                  # another tile's middle keeps its own kind
+                        cand.append(i)
+            share = (lambda i: grid[i]) if kind else (lambda i: 1.0 - grid[i])   # how much of its kind the blur put
+            cand.sort(key=lambda i: (i not in pinned, -share(i), i))
+            take = set(cand[:FACTOR * FACTOR * len(body)])
+            land = 0 if kind else 1
+            for i in cand:
+                out.b[i] = land if i in take else 1 - land
+
+
 def _smooth_water(is_sea, w, h, edges=EDGE_DEFAULT):
     """The new tiles' land (Mask, w*FACTOR x h*FACTOR) the way water finds its level: the old sea (each old tile its
     3 x 3 block) blurred, a new tile water where more than half of it is - or, beside a narrow river, more than
@@ -1343,7 +1488,11 @@ def _smooth_water(is_sea, w, h, edges=EDGE_DEFAULT):
     for b in passes:
         grid = _rows_cols(grid, W, H, _box, b)
     sigma = sum((b * b - 1) / 12.0 for b in passes) ** 0.5
-    peak = _rows_cols(grid, W, H, _wide_max, max(3, int(round(2.3 * sigma)) | 1))
+    reach = max(3, int(round(2.3 * sigma)) | 1)
+    peak = _rows_cols(grid, W, H, _wide_max, reach)
+    # the same for the land: a strip of land one tile wide (a thin cape, a chain of islets) keeps its width instead
+    # of falling into a line of crosses (the user's 'clovers' on the x3 map)
+    peak_land = _rows_cols([1.0 - v for v in grid], W, H, _wide_max, reach)
     keep = TUNE["river"]
     mid = FACTOR // 2
     out = Mask(W, H)
@@ -1353,9 +1502,26 @@ def _smooth_water(is_sea, w, h, edges=EDGE_DEFAULT):
             if X % FACTOR == mid and Y % FACTOR == mid:
                 land = not old[Y // FACTOR][X // FACTOR]
             else:
-                land = not grid[i] > min(0.5, keep * peak[i])
+                wet = grid[i] > min(0.5, keep * peak[i])
+                dry = 1.0 - grid[i] > min(0.5, keep * peak_land[i])
+                if wet and dry:                   # both thin here: the one holding more of its own strongest
+                    land = (1.0 - grid[i]) / max(peak_land[i], 1e-9) >= grid[i] / max(peak[i], 1e-9)
+                else:
+                    land = not wet
             if land:
                 out.b[i] = 1
+    for oy in range(h - 1):              # a river of sea tiles corner to corner never breaks: a staircase of water
+        for ox in range(w - 1):          # from one middle to the next (the land may claim the corner otherwise)
+            for a, b, c, d in ((ox, oy, ox + 1, oy + 1), (ox + 1, oy, ox, oy + 1)):
+                if old[b][a] and old[d][c] and not old[b][c] and not old[d][a]:
+                    sx = 1 if c > a else -1
+                    X, Y = a * FACTOR + mid, b * FACTOR + mid
+                    for _ in range(FACTOR):
+                        X += sx
+                        out.b[Y * W + X] = 0
+                        Y += 1
+                        out.b[Y * W + X] = 0
+    _drops(out, old, grid, w, h)
     for oy in range(h):                  # an old tile's middle the blur left alone (a one-tile cape, islet or lake
         for ox in range(w):              # that holds a town, a port, an army...): the 4 tiles beside it take its kind
             X, Y = ox * FACTOR + mid, oy * FACTOR + mid      # too, a small round piece instead of a lone tile
@@ -1958,6 +2124,41 @@ def _line4(a, b):
     return out
 
 
+CLIFF_REACH = 3        # new pixels: a cliff this near the water belongs to the coast and is put on it
+
+
+def _cliffs_on_the_coast(raw, W, H, step, top_down, land, rivers):
+    """A cliff near the water stands on the land touching it (the user's rule: a cliff is always a coast's): a cliff
+    pixel up to CLIFF_REACH from the water but not touching it goes to the nearest free coastal land pixel within 2,
+    or away when there is none; one further inland is the mod's own and stays."""
+    def get(x, y):
+        r = (H - 1 - y) if top_down else y
+        o = (r * W + x) * step
+        return (raw[o + 2], raw[o + 1], raw[o])
+    sides = ((1, 0), (-1, 0), (0, 1), (0, -1))
+
+    def coastal(x, y):
+        return land.get((x, y), False) and any(0 <= x + a < W and 0 <= y + b < H and not land.get((x + a, y + b), True)
+                                               for a, b in sides)
+
+    def near_water(x, y):
+        return any(0 <= x + a < W and 0 <= y + b < H and not land.get((x + a, y + b), True)
+                   for a in range(-CLIFF_REACH, CLIFF_REACH + 1) for b in range(-CLIFF_REACH, CLIFF_REACH + 1))
+    lost = [(x, y) for y in range(H) for x in range(W)
+            if get(x, y) == CLIFF and not coastal(x, y) and near_water(x, y)]
+    for x, y in lost:
+        _put(raw, W, H, step, top_down, x, y, (0, 0, 0))
+    for x, y in lost:
+        spots = [(x + a, y + b) for a in range(-2, 3) for b in range(-2, 3)
+                 if 0 <= x + a < W and 0 <= y + b < H and coastal(x + a, y + b)
+                 and get(x + a, y + b) == (0, 0, 0) and (x + a, y + b) not in rivers]
+        if spots:
+            q = min(spots, key=lambda q: ((q[0] - x) ** 2 + (q[1] - y) ** 2,
+                                          -sum(1 for c, d in sides if 0 <= q[0] + c < W and 0 <= q[1] + d < H
+                                               and get(q[0] + c, q[1] + d) == CLIFF)))
+            _put(raw, W, H, step, top_down, q[0], q[1], CLIFF)
+
+
 def features_scaled(path, land=None, natural=False):
     """map_features x3: black, rivers drawn as 1-pixel lines from block middle to block middle - a corner link a
     staircase (one step across, one up, ...: always side by side, never a corner-only step the game stops a river
@@ -2131,20 +2332,9 @@ def features_scaled(path, land=None, natural=False):
     if land is not None:                                      # a river ends where the new coast begins: land kept
         for p in [p for p in drawn if not land.get(p, True)]: # under it stood in the sea as a sandbar (a tester's
             _put(raw, W, H, step, top_down, p[0], p[1], (0, 0, 0))   # DaC: a strip of beach off every river mouth)
-            drawn.discard(p)
-        for p in sorted(drawn):                               # ...and then one pixel INTO the water, as the games'
-            x, y = p                                          # own mouths do (a tester's DaC x3: a river ending on
-            sides = ((1, 0), (-1, 0), (0, 1), (0, -1))        # the land stopped short of the water, on the beach)
-            links = [(a, b) for a, b in sides if (x + a, y + b) in drawn]
-            if len(links) != 1:
-                continue
-            ahead = (x - links[0][0], y - links[0][1])        # straight on first, else a side
-            for q in [ahead] + [(x + a, y + b) for a, b in sides]:
-                if 0 <= q[0] < W and 0 <= q[1] < H and not land.get(q, True) and q not in drawn \
-                        and not any((q[0] + a, q[1] + b) in drawn for a, b in sides if (q[0] + a, q[1] + b) != p):
-                    _put(raw, W, H, step, top_down, q[0], q[1], river)
-                    drawn.add(q)
-                    break
+            drawn.discard(p)                                  # - its last pixel the land touching the water: no
+        #                                                       river pixel is ever on the water (the user's rule)
+        _cliffs_on_the_coast(raw, W, H, step, top_down, land, drawn)
     return _write(data, W, H, step, raw), drawn
 
 
@@ -2410,7 +2600,7 @@ def _plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEF
         #                                                   at the new coast: no land kept under them
         plan.binary(feats, data)
         plan.note(None, "map_features.tga made 3 x bigger (rivers drawn naturally - bends rounded, gentle meanders, "
-                        "one pixel wide -, cliffs and land bridges as unbroken lines, river mouths one pixel into the water of the new coast)")
+                        "one pixel wide -, cliffs and land bridges as unbroken lines, a river's last pixel the land touching the water - none on the water -, cliffs on the coast)")
     say("map_regions.tga...")
     info = {}
     on_rivers = (river_tiles(feats), rivers) if rivers else None      # a border along a river stays on it
@@ -2448,9 +2638,11 @@ def _plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEF
             data = ground_scaled(p, hmask, SEA, natural=True, edges=edges)
             if heights_data and hpath and os.path.isfile(hpath):
                 data = mountains_by_height(data, heights_data, p, hpath)
+            data = shallow_coast(data)
             note = "every tile the ground of the old tile it lies in, the sea ground under the heights' new coast, " \
                    + edge_words(edges) + " edges (no 3 x 3 steps), mountains only where the new heights stand high - a range's low " \
-                   "edge hills or the ground beside it, by its height"
+                   "edge hills or the ground beside it, by its height; shallow sea all along the coast, its line to " \
+                   "the deep water smoothed"
         elif name == "map_climates.tga":
             data = climates_scaled(p, natural=True, edges=edges)
             note = "every tile the climate of the old tile it lies in, %s edges (no 3 x 3 steps)" % edge_words(edges)

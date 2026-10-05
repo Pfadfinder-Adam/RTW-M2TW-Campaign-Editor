@@ -1638,14 +1638,134 @@ def s_scripts(c, mod):
     return plan
 
 
-@step("Experiment: a copy of {new}'s army put on its fleet's own sea tile in descr_strat.txt (does it start aboard, "
-      "as an army on a town's or a fort's tile is inside it?)",
-      "{aboard} stands on the water by the fleet; move the fleet and {aboard} is aboard (seen in Rome with REX; "
-      "the game's log says 'invalid tile' for him all the same)")
+ABOARD_SCRIPT = "ce_test_aboard.nut"
+ABOARD_NUT = r"""// @title CE Test army aboard
+// @summary The editor's test mod: at the campaign start puts %(army)s (an army of %(faction)s on the shore beside its
+// @summary fleet) aboard the fleet of %(fleet)s - the engine way (REX / M2EX); descr_strat.txt has no form for an
+// @summary army aboard. Each way tried is written to the game's log as [CE_ABOARD]. Does nothing elsewhere.
+local PREFIX = "[CE_ABOARD] "
+local FACTION = "%(faction)s"
+local ARMY = "%(army)s"
+local FLEET = "%(fleet)s"
+local done = false
+
+local function log(message) {
+    println(PREFIX + message)
+}
+
+local function get(o, field) {
+    if (o == null) {
+        return null
+    }
+    try {
+        return o[field]
+    } catch (err) {
+    }
+    return null
+}
+
+local function named(ch, name) {
+    foreach (o in [ch, get(ch, "record"), get(ch, "characterRecord")]) {
+        foreach (f in ["name", "fullName", "shortName"]) {
+            local n = get(o, f)
+            if (n != null && typeof(n) == "string" && n.indexof(name) != null) {
+                return true
+            }
+        }
+    }
+    return false
+}
+
+local function board(...) {
+    if (done) {
+        return
+    }
+    local fac = null
+    local n = 0
+    try {
+        n = ::game.factionCount()
+    } catch (err) {
+        return
+    }
+    for (local i = 0; i < n; i++) {
+        local f = null
+        try {
+            f = ::game.faction(i)
+        } catch (err) {
+        }
+        if (get(f, "name") == FACTION) {
+            fac = f
+        }
+    }
+    if (fac == null) {
+        return
+    }
+    done = true
+    local army = null
+    local navy = null
+    local cn = get(fac, "characterCount") || 0
+    for (local i = 0; i < cn; i++) {
+        local ch = null
+        try {
+            ch = fac.character(i)
+        } catch (err) {
+        }
+        if (army == null && named(ch, ARMY)) {
+            army = get(ch, "army")
+        } else if (navy == null && named(ch, FLEET)) {
+            navy = get(ch, "army")
+        }
+    }
+    if (army == null || navy == null) {
+        log("the army (" + ARMY + ") or the fleet (" + FLEET + ") not found - nothing tried")
+        return
+    }
+    local ways = [
+        ["army.transportingNavy = fleet", function() { army.transportingNavy = navy }],
+        ["fleet.transportedArmy = army", function() { navy.transportedArmy = army }]]
+    foreach (w in ways) {
+        try {
+            w[1]()
+        } catch (err) {
+            log(w[0] + " refused: " + err)
+            continue
+        }
+        local on = get(army, "transportingNavy") != null || get(navy, "transportedArmy") != null
+        log(w[0] + (on ? " - the army is aboard" : " - taken, but the army is not aboard"))
+        if (on) {
+            return
+        }
+    }
+}
+
+local function listen(name, handler) {
+    try {
+        ::events.on(name, handler)
+    } catch (err) {
+        log("events.on(" + name + ") failed: " + err)
+    }
+}
+
+listen("FactionTurnStart", board)
+log("module loaded")
+"""
+
+
+@step("Experiment: a copy of {new}'s army on the shore beside its fleet, put aboard at the start by an engine "
+      "script (REX / M2EX) - descr_strat.txt has no form for an army aboard (an army on the fleet's sea tile stops "
+      "the file there)",
+      "{aboard} is aboard the fleet once the campaign starts (the log's [CE_ABOARD] lines say which way worked); "
+      "else he stands on the shore beside it")
 def s_aboard(c, mod):
+    import types as _types
+    from . import addons as AD
+    from .limits import engine_of
+    from .scriptmods import TEST_MARK
     from .start import _set_xy
     from .textio import strip_comment
     from .strat import Strat
+    if not engine_of(mod):
+        raise Skip("only an engine script (REX / M2EX) can put an army aboard - the original exes cannot")
     path = mod.campaign_file(c.campaign, "descr_strat.txt")
     plan = Plan(mod, "aboard", c.new, {})
     f = plan.edit(path)
@@ -1658,13 +1778,21 @@ def s_aboard(c, mod):
                  and any(strip_comment(t).split()[:1] == ["unit"] for t in f.texts()[ch.start + 1:ch.end])), None)
     if fleet is None or army is None:
         raise Skip("%s has no fleet or no army to copy" % c.new)
+    taken = taken_tiles(c, mod)
+    fx, fy = fleet.xy
+    shore = next((p for d in (1, 2) for p in ((fx + dx, fy + dy) for dx in range(-d, d + 1) for dy in range(-d, d + 1))
+                  if p not in taken and not mod.tile_problem(c.campaign, p, "general", True, taken)), None)
+    if shore is None:
+        raise Skip("no free land beside %s's fleet" % c.new)
     name = free_names(c, mod, c.new, 6)[-1]
     lines = f.texts()[army.start:army.end]
-    lines[0] = _set_xy(lines[0].replace(army.name, name, 1), fleet.xy)
+    lines[0] = _set_xy(lines[0].replace(army.name, name, 1), shore)
     f.insert(fleet.end, lines)
     c.said["aboard"] = name
-    plan.note(f, "%s (a copy of %s's army) put on the fleet's tile %d, %d - an experiment" % (
-        name, army.name, fleet.xy[0], fleet.xy[1]))
+    plan.note(f, "%s (a copy of %s's army) put on the shore at %d, %d beside the fleet of %s" % (
+        name, army.name, shore[0], shore[1], fleet.name))
+    text = ABOARD_NUT % {"faction": c.new, "army": name, "fleet": fleet.name} + TEST_MARK + "\n"
+    plan.binary(AD.target(mod, _types.SimpleNamespace(file=ABOARD_SCRIPT)), text.encode("utf-8"))
     return plan
 
 

@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **Bigger map (x3)**: a river never has a pixel on the water - it ends on the land touching it; a cliff near the water stands on the coast; small islands and lakes (up to 12 tiles) keep their size and come out round, like a drop of water - no crosses or clovers -, and capes one tile wide stay whole strips; the sea along the coast is always shallow (never deep at once), the beach one pixel wide, specks of deep water in the shallows gone and the line to the deep water smooth.
+- **Test mod**: the army aboard a fleet is tried the safe way - on the shore beside its fleet, put aboard by an engine script at the start (an army on the fleet's sea tile made the game stop reading descr_strat.txt there).
 - **Avoid Growth (Rome, Barbarian Invasion)**: the tick uses the thin box of the scroll's own Automanage tick, and it stays under Automanage when Settlement Details is open beside the scroll (it jumped onto the details page).
 - **Campaign rules**: a rule whose change broke the game in a test is greyed out and kept as it is for now, with what happened on hover (first: the recruitment slots - lowered to 0, no town could recruit). The test mod leaves such rules alone.
 - **Module builder**: a game condition line is passed to the engine ended, as in a script file - a bare line gave 'Condition parser doesn't recognise this token' in both games.

@@ -2767,9 +2767,9 @@ building smith
         self.assertEqual(got, [F, F, Hl, M, F])
 
     def test_bigger_map_rivers_stop_at_the_new_coast(self):
-        """A river whose last tiles the smoother coast puts in the sea runs to the coast and one pixel into the water
-        (the games' own mouths) - no more (a tester's DaC x3: land kept under such rivers stood off every mouth as a
-        sandbar; a river ending on the land stopped short of the water)."""
+        """A river whose last tiles the smoother coast puts in the sea runs to the coast and ends on the land touching
+        the water - never a pixel on the water (the user's rule; a tester's DaC x3: land kept under such rivers stood
+        off every mouth as a sandbar)."""
         from campaign_editor import upscale
         from campaign_editor.tga import read_tga
         river, black = (0, 0, 255), (0, 0, 0)
@@ -2787,7 +2787,7 @@ building smith
             fh.write(data)
         f = read_tga(path)
         on = {(x, y) for x in range(12) for y in range(12) if f.get(x, y) != black}
-        self.assertEqual([p for p in on if not land[p]], [(8, 4)])      # one pixel into the water, no more
+        self.assertEqual([p for p in on if not land[p]], [])             # nothing on the water
         self.assertEqual(on, drawn)
         self.assertEqual(max(x for x, y in on if land[(x, y)]), 7)      # the river runs to the last land
 
@@ -2902,6 +2902,56 @@ building smith
         g = read_tga(out)
         border = {X for X in range(W) for Y in range(W) if g.get(X, Y) == A and X + 1 < W and g.get(X + 1, Y) == B}
         self.assertGreater(len(border), 1)
+
+    def test_bigger_map_small_islands_and_coast_rules(self):
+        """x3 rules from the user's look at the bigger map: a small islet or lake keeps its size and comes out whole and
+        round (no cross / clover), a cape one tile wide stays one strip (no line of crosses); the sea beside the land
+        is shallow, the beach one pixel wide, no speck of deep water in the shallows."""
+        from campaign_editor import upscale
+        n = 12
+        islet = lambda x, y: not (x == 6 and y == 6) and not (x == 6 and y == 7)          # a two-tile islet
+        m = upscale._smooth_water(islet, n, n)
+        land = {(X, Y) for X in range(m.W) for Y in range(m.H) if m[(X, Y)]}
+        self.assertEqual(len(land), 18)                                                   # its size kept
+        start = next(iter(land))
+        seen, st = {start}, [start]
+        while st:
+            a, b = st.pop()
+            for q in ((a + 1, b), (a - 1, b), (a, b + 1), (a, b - 1)):
+                if q in land and q not in seen:
+                    seen.add(q)
+                    st.append(q)
+        self.assertEqual(seen, land)                                                      # one piece
+        cape = lambda x, y: not (y == 6 and x <= 8)                                        # a cape one tile wide
+        m = upscale._smooth_water(cape, n, n)
+        for X in range(3, 3 * 8):                                    # along it, at least 2 pixels across everywhere
+            self.assertGreaterEqual(sum(1 for Y in range(m.H) if m[(X, Y)]), 2, X)
+        # the ground: deep water touching the land, a beach two wide, a speck of deep water
+        land_c, deep, beach, shallow = (0, 128, 0), (128, 0, 0), (255, 255, 255), (196, 0, 0)
+        px = [[deep] * 30 for _ in range(30)]
+        for y in range(30):
+            for x in range(10):
+                px[y][x] = land_c
+            px[y][10] = beach
+            px[y][11] = beach
+        px[15][20] = deep
+        for y in range(12, 19):
+            for x in range(12, 26):
+                if (x, y) != (20, 15):
+                    px[y][x] = shallow
+        path = os.path.join(self.root, "g.tga")
+        write_tga(path, 30, 30, px)
+        with open(path, "rb") as fh:
+            out = upscale.shallow_coast(fh.read())
+        with open(path, "wb") as fh:
+            fh.write(out)
+        from campaign_editor.tga import read_tga
+        g = read_tga(path)
+        self.assertEqual(g.get(10, 5), beach)                         # the beach touching the land stays
+        self.assertEqual(g.get(11, 5), shallow)                       # the second row of beach is shallow sea
+        self.assertEqual(g.get(12, 5), shallow)                       # the sea by the coast is shallow
+        self.assertEqual(g.get(20, 15), shallow)                      # the speck of deep water joins the shallows
+        self.assertEqual(g.get(28, 2), deep)                          # the open sea stays deep
 
     def test_bigger_map_edges_three_ways(self):
         """x3 lines drawn three ways (the modder picks in the x3 window): smooth, light (1.5 x weaker) and winding.
