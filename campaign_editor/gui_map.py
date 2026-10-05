@@ -1060,10 +1060,8 @@ class MapView(ttk.Frame):
                              sy + r * 0.4, fill=ink, outline="", tags=tags)
             c.create_line(sx, sy - r * 0.25, sx, sy + r * 0.55, fill=self._fill_of_disc, width=max(1, w - 1),
                           tags=tags)
-        elif k == "princess":                           # a crown
-            c.create_polygon(sx - r * 0.6, sy + r * 0.4, sx - r * 0.6, sy - r * 0.35, sx - r * 0.3, sy,
-                             sx, sy - r * 0.5, sx + r * 0.3, sy, sx + r * 0.6, sy - r * 0.35, sx + r * 0.6, sy + r * 0.4,
-                             fill=ink, outline="", tags=tags)
+        elif k == "princess":                           # a heart (the crowns mark the king and his heir)
+            self._heart(sx, sy + r * 0.05, r * 0.62, ink, tags)
         elif k == "inquisitor":                         # scales: judgement
             c.create_line(sx, sy - r * 0.6, sx, sy + r * 0.5, fill=ink, width=w, tags=tags)
             c.create_line(sx - r * 0.6, sy - r * 0.35, sx + r * 0.6, sy - r * 0.35, fill=ink, width=w, tags=tags)
@@ -1092,6 +1090,12 @@ class MapView(ttk.Frame):
         town_of = {self.places.get(("city", r), xy): r for r, xy in cm.cities.items()}
         seen, flags = {}, set()
         forts = self.fort_spots()
+        rank = {"crown": 3, "small crown": 2, "star": 1}
+        best = {}                                      # a town's / fort's flag shows the highest who stays there
+        for c_ in self.chars:
+            m = self.leader_mark(c_) if c_["kind"] in ("general", "named character") else None
+            if m and rank[m] > rank.get(best.get(tuple(c_["xy"])), 0):
+                best[tuple(c_["xy"])] = m
         for ch_ in sorted(self.chars, key=lambda c: not c["army"]):     # the garrison first
             x, y = ch_["xy"]
             sx, sy = self.to_screen(x, y)
@@ -1105,7 +1109,7 @@ class MapView(ttk.Frame):
                 if (x, y) not in flags:
                     flags.add((x, y))
                     self._roof_flag(sx + size / 2, sy - size / 2, max(tile * 0.6, 6), ch_["faction"],
-                                    ("city", "city:" + town_of.get((x, y), "")))
+                                    ("city", "city:" + town_of.get((x, y), "")), mark=best.get((x, y)))
                 continue
             if (x, y) in forts and ch_["kind"] in ("general", "named character"):
                 # an army in a fort or a watchtower: the same flag as on a town's roof, on the sign's upper right
@@ -1113,7 +1117,8 @@ class MapView(ttk.Frame):
                 if (x, y) not in flags:
                     flags.add((x, y))
                     w = max(2.0, min(self.z * FORT_W, 36))
-                    self._roof_flag(sx + w, sy - w, max(tile * 0.6, 6), ch_["faction"], forts[(x, y)])
+                    self._roof_flag(sx + w, sy - w, max(tile * 0.6, 6), ch_["faction"], forts[(x, y)],
+                                    mark=best.get((x, y)))
                 continue
             elif (x, y) in busy:                       # ...an agent or a ship stands small beside the town /
                 n = seen.get((x, y), 0)                # port, to its left (the name is on the right), in a row
@@ -1134,17 +1139,29 @@ class MapView(ttk.Frame):
                     if r.get("kind") in ("fort", "watchtower")}
         return {tuple(fo.xy): ("fort", "fort:%d" % fo.line) for fo in (self.forts or []) if fo.kind != "landmark"}
 
-    def _roof_flag(self, cx, cy, h, faction, tags):
-        """An army's flag on a town's sign: the cloth's lower left corner on the sign's upper right corner (cx, cy),
+    def _roof_flag(self, cx, cy, h, faction, tags, edge="black", width=1, mark=None, field=False):
+        """An army's flag: on a town's sign the cloth's lower left corner on the sign's upper right corner (cx, cy),
         its pole only along the cloth's left edge; a square cloth in the army's colour with a triangle cut into its
-        right edge, a thin black edge - nothing yellow (the user's choice, report #104)."""
+        right edge, a thin black edge - nothing yellow (the user's choice, report #104). In the field the same flag
+        (cx, cy = the pole's foot) with who leads it on the cloth (mark)."""
         c = self.canvas
         rgb = REBELS if faction == "slave" else self.colours.get(faction, REBELS)
+        fill = "#%02x%02x%02x" % rgb
         w, ch = h * 0.8, h * 0.6
+        if field:                                                       # in the field: the pole down to the tile
+            foot, top = cy, cy - h
+            c.create_line(cx, foot, cx, top - h * 0.05, fill="black", width=2, tags=tags)
+            c.create_polygon(cx, top, cx + w, top, cx + w * 0.7, top + ch / 2, cx + w, top + ch, cx, top + ch,
+                             fill=fill, outline=edge, width=width, tags=tags)
+            if mark and h >= 9:
+                self._mark(mark, cx + w * 0.38, top + ch / 2, ch * 0.32, self.text_on(fill), tags)
+            return
         top = cy - ch
         c.create_polygon(cx, top, cx + w, top, cx + w * 0.7, top + ch / 2, cx + w, cy, cx, cy,
-                         fill="#%02x%02x%02x" % rgb, outline="black", width=1, tags=tags)
+                         fill=fill, outline="black", width=1, tags=tags)
         c.create_line(cx, cy, cx, top - h * 0.12, fill="black", width=2, tags=tags)
+        if mark and h >= 9:
+            self._mark(mark, cx + w * 0.38, top + ch / 2, ch * 0.32, self.text_on(fill), tags)
 
     def _draw_char(self, ch_, sx, sy, size):
         c = self.canvas
@@ -1161,21 +1178,66 @@ class MapView(ttk.Frame):
                 self._fill_of_disc = fill
                 self._glyph(k, sx, sy, r, tags)
         elif k == "admiral":
+            # a ship: its keel one pixel above the tile's lower edge, the hull in the owner's colour, a mast and a
+            # white sail
             w = size * 0.5
-            c.create_polygon(sx - w, sy - w * 0.1, sx + w, sy - w * 0.1, sx + w * 0.6, sy + w * 0.5,
-                             sx - w * 0.6, sy + w * 0.5, fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
-            c.create_line(sx, sy - w * 0.1, sx, sy - w, fill=edge, width=2, tags=tags)
+            keel = sy + max(self.z / 2, w * 0.6) - 1
+            deck = keel - w * 0.55
+            c.create_polygon(sx - w, deck, sx + w, deck, sx + w * 0.6, keel, sx - w * 0.6, keel,
+                             fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
+            top = deck - w * 1.3
+            c.create_line(sx, deck, sx, top, fill="black", width=max(1, int(w / 5)), tags=tags)
+            c.create_polygon(sx + w * 0.08, top + w * 0.1, sx + w * 0.75, deck - w * 0.15, sx + w * 0.08,
+                             deck - w * 0.15, fill="#f4efe2", outline="black", width=1, tags=tags)
         else:
             # an army - and a family member without units too: the game shows every named character on the map
-            # as a general with his flag (a tester: a sign of its own meant nothing in the game)
+            # as a general with his flag (a tester: a sign of its own meant nothing in the game). The flag as on a
+            # town's roof; who leads it on the cloth: the king a crown, his heir a small crown, a family member a
+            # star, a captain nothing
             h = size
-            sx -= h * 0.3                                  # the flag, not its pole, sits on the tile
-            c.create_line(sx, sy + h * 0.5, sx, sy - h * 0.5, fill="black", width=2, tags=tags)
-            c.create_polygon(sx, sy - h * 0.5, sx + h * 0.7, sy - h * 0.25, sx, sy,
-                             fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
+            sx -= h * 0.35                                 # the flag, not its pole, sits on the tile
+            self._roof_flag(sx, sy + h * 0.5, h * 1.25, ch_["faction"], tags, edge=edge, width=2 if mine else 1,
+                            mark=self.leader_mark(ch_), field=True)
             if mine:
                 c.create_rectangle(sx - 2, sy + h * 0.5 - 2, sx + 2, sy + h * 0.5 + 2, fill="#ffd400", outline="",
                                    tags=tags)
+
+    @staticmethod
+    def leader_mark(ch_):
+        """'crown' (the faction's leader), 'small crown' (its heir), 'star' (a family member) or None (a captain)."""
+        role = ch_.get("role")
+        if role == "leader":
+            return "crown"
+        if role == "heir":
+            return "small crown"
+        if ch_.get("kind") == "named character" or ch_.get("named"):
+            return "star"
+        return None
+
+    def _mark(self, mark, cx, cy, r, ink, tags):
+        """A leader's mark at (cx, cy), r about half its width."""
+        c = self.canvas
+        if mark == "star":
+            pts = []
+            for i in range(10):
+                a = -math.pi / 2 + i * math.pi / 5
+                rr = r if i % 2 == 0 else r * 0.45
+                pts += [cx + rr * math.cos(a), cy + rr * math.sin(a)]
+            c.create_polygon(*pts, fill=ink, outline="", tags=tags)
+        elif mark in ("crown", "small crown"):
+            tooth = r * (0.9 if mark == "crown" else 0.45)        # the heir's teeth half the king's
+            base, band = cy + r * 0.55, cy + r * 0.1
+            c.create_polygon(cx - r, base, cx - r, band - tooth, cx - r * 0.5, band, cx, band - tooth,
+                             cx + r * 0.5, band, cx + r, band - tooth, cx + r, base, fill=ink, outline="", tags=tags)
+
+    def _heart(self, cx, cy, r, ink, tags):
+        pts = []
+        for i in range(24):
+            t = 2 * math.pi * i / 24
+            x = 16 * math.sin(t) ** 3
+            y = 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)
+            pts += [cx + x * r / 16, cy - y * r / 16]
+        self.canvas.create_polygon(*pts, fill=ink, outline="", smooth=True, tags=tags)
 
     def _symbol(self, faction, px):
         path = self.symbols.get(faction)
