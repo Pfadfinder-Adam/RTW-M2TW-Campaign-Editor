@@ -170,7 +170,7 @@ THE GAMES
 
 SUPPORT
   The tool is free. If it helps you, a coffee keeps new features coming:
-  https://ko-fi.com/pfadfinder  (the Support on Ko-fi button)
+  https://ko-fi.com/pfadfinder  (the Support me on Ko-fi button)
 """
 
 _showerror = messagebox.showerror
@@ -802,7 +802,7 @@ class App(tk.Tk):
         ttk.Button(bar, text="Redo", command=self.redo).pack(side="left", padx=(0, theme.BUTTON_GAP))
         bar = right_bar = ttk.Frame(self.bottom_bar)
         # Ko-fi's own colour (white words on its coral, in either look), a button like the others
-        ttk.Button(bar, text="\u2615 Support on Ko-fi", command=self.support, style="Kofi.TButton",
+        ttk.Button(bar, text="\u2615 Support me on Ko-fi", command=self.support, style="Kofi.TButton",
                    cursor="hand2").pack(side="right", padx=(theme.BUTTON_GAP, 0))
         ttk.Button(bar, text="Help", command=self.once("show_help", self.show_help)).pack(
             side="right", padx=(theme.BUTTON_GAP, 0))

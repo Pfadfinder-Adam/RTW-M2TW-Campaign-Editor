@@ -173,6 +173,7 @@
   builder offers all five stances in its list.
 
 ### Changed
+- The Ko-fi button reads **Support me on Ko-fi** (Ko-fi's own words).
 - **Map: the right button drags the map everywhere**; the left button does the rest (picks, drags signs, draws the
   Select box, paints); a right click without moving still opens the menu, a double click stays on the left button.
 - **Map: Select adds** - a box or a click adds to what is selected, Shift takes away; a click on nothing clears it.
@@ -453,6 +454,7 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- Recolour window: the 'wheel: zoom, right drag: move' line has a row of its own (it was cut at the window's edge).
 - **Bigger map (x3): the coast comes down to the water** - the land by the water kept the old shore's full height,
   a wall made 3 x taller with the heights (each tile corner on a diagonal coast a cliff tooth); it now slopes down to
   the water over one old tile and falls the way the games' own coasts do (the first land point by the water about as

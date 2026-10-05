@@ -120,8 +120,10 @@ class RecolourWindow(tk.Toplevel):
         self.v_size = tk.IntVar(value=2)
         ttk.Spinbox(row2, from_=1, to=40, textvariable=self.v_size, width=4).pack(side="left", padx=2)
         ttk.Button(row2, text="Clear my touch-ups", command=self.clear_edits).pack(side="left", padx=8)
-        ttk.Label(row2, text="wheel: zoom, right drag: move", foreground="#666").pack(side="left")
-        hint(row2, "Left drag on the 'after' picture paints: 'new primary' / 'new secondary' recolours what you "
+        row3 = ttk.Frame(right)                     # on a line of its own: beside the buttons it was cut at the edge
+        row3.pack(anchor="w", pady=(2, 0))
+        ttk.Label(row3, text="wheel: zoom, right drag: move", foreground="#666").pack(side="left")
+        hint(row3, "Left drag on the 'after' picture paints: 'new primary' / 'new secondary' recolours what you "
                     "paint (a red line the test missed), 'keep as it was' gives the old pixels back (a face or a "
                     "horse it took). The brush size is in the picture's own pixels. Mouse wheel: zoom. The touch-ups "
                     "are kept for that picture until Write it or Clear.").pack(side="left")
