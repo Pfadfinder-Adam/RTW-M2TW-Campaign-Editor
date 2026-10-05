@@ -45,9 +45,13 @@ local AG_INK = [96, 82, 62, 255]
 local AG_KEY = "avoid_growth"        // this add-on's place in the saved game (persistent.avoid_growth)
 // The game's own tick pieces, the first found: [box, tick, their size in 1024 x 768 units]
 local AG_SPRITES = [
-    ["PLAIN_CHECKBOX_BG", "PLAIN_CHECKBOX_TICK", 18],    // the scroll's own small ticks (both games)
-    ["CHECKBOX_BG", "TICK_GADGET", 24],
+    ["CHECKBOX_BG", "TICK_GADGET", 24],                  // the box of the scroll's own Auto-manage tick (both games)
+    ["PLAIN_CHECKBOX_BG", "PLAIN_CHECKBOX_TICK", 18],    // the small one, where the first is missing
 ]
+// Which game's scroll this is: the editor writes the game it puts the script in ("rome" - Rome and Barbarian
+// Invasion, the same scroll - or "medieval2"); "auto" guesses by the game's sprites (Barbarian Invasion has some of
+// Medieval II's too, so a guess put the tick in the wrong place there).
+local CE_GAME = "auto"
 local AG_GAP = 4
 // Medieval II's settlement scroll: the row of its own ticks (Auto-manage, Construction, Recruitment) - the free
 // place right of Recruitment, from the bottom-left of settlement_details_population_stats (measured on the game's
@@ -56,13 +60,17 @@ local AG_M2_ROW = [448, 59]
 // Medieval II's settlement scroll in M2EX builds with one Auto-manage tick under the town's figures (measured on
 // the game's scroll at 1600 x 900): its box's right edge 129 units right of own_settlement_governor_info_panel's
 // left and its middle 71 below the panel's bottom; from own_settlement_info_scroll's top-left: 175 right, 279 down.
-// The tick goes in that row, AG_M2_GAP units right of the game's box.
+// The tick goes in that row, AG_M2_GAP units right of the game's box: past the Construction and Recruitment ticks
+// the game adds to the row once Auto-manage is ticked (a tester's screens: on top of Construction at 14), so it never
+// moves.
 local AG_M2_AUTO = [129, 71]
 local AG_M2_AUTO_SCROLL = [175, 279]
-local AG_M2_GAP = 14
-// Rome's settlement scroll: the free line under Automanage, from the bottom of own_settlement_governor_info_panel
-// (measured on the game's scroll at 1600 x 900: right under the panel the tick lay over 'Settlement Details').
+local AG_M2_GAP = 307
+// Rome's (and Barbarian Invasion's) settlement scroll: the free line under Automanage, left of the build policy
+// arrows, from the bottom-left of own_settlement_governor_info_panel (measured on a tester's scroll at 1600 x 900:
+// the panel [898,96 631x124], Automanage's box 996-1020 x 314-336, the tabs from 373).
 local AG_ROME_BELOW = 103
+local AG_ROME_X = -13
 // Where the tick goes: the first of these parts of the settlement scroll that is open, and where beside it.
 local AG_ANCHORS = [
     ["settlement_details_population_stats", "below"],
@@ -361,7 +369,8 @@ function ag_sprite(ui, name) {
 // The game's own tick pieces: { box, tick, size } - the first pair the game has; none: a plain box.
 function ag_load_art(ui) {
     if (ag_art == null) {
-        ag_art = { box = null, tick = null, size = AG_SPRITES[0][2], m2 = ag_sprite(ui, "BEVEL_TL") != null }
+        local m2 = CE_GAME == "medieval2" || (CE_GAME == "auto" && ag_sprite(ui, "BEVEL_TL") != null)
+        ag_art = { box = null, tick = null, size = AG_SPRITES[0][2], m2 = m2 }
         foreach (pair in AG_SPRITES) {
             local b = ag_sprite(ui, pair[0])
             local t = ag_sprite(ui, pair[1])
@@ -435,7 +444,8 @@ function ag_place(box, m2, k) {
                     a[0] + " (Medieval II tick row)"]
         }
         if (!m2 && a[0] == "own_settlement_governor_info_panel") {
-            return [r[0], r[1] + r[3] + (AG_ROME_BELOW * k + 0.5).tointeger(), a[0] + " (Rome: under Automanage)"]
+            return [r[0] + (AG_ROME_X * k).tointeger(), r[1] + r[3] + (AG_ROME_BELOW * k + 0.5).tointeger(),
+                    a[0] + " (Rome: under Automanage)"]
         }
         if (a[1] == "below") {
             return [r[0], r[1] + r[3] + box / 4, a[0]]

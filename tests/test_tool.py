@@ -2934,6 +2934,17 @@ building smith
             c = (3 * 12 + 1, 3 * 3 + 1)
             self.assertTrue(m[c] and sum(m[(c[0] + a, c[1] + b)] for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1))) >= 2)
 
+    def test_addon_told_its_game(self):
+        """A script for both games is told the game it is put in (Avoid Growth guessed Barbarian Invasion was
+        Medieval II and put its tick in the wrong place): 'rome' for Rome and BI, 'medieval2' for Medieval II."""
+        from campaign_editor import addons as A, limits as L
+        a = A.by_key("avoid_growth")
+        self.assertIn('local CE_GAME = "auto"', a.template())
+        self.addCleanup(setattr, L, "game_kind", L.game_kind)
+        for kind, want in (("rome", "rome"), ("medieval2", "medieval2")):
+            L.game_kind = lambda m, kind=kind: kind
+            self.assertIn('local CE_GAME = "%s"' % want, A.with_game(a.template(), ModData(self.root)))
+
     def test_barbarian_invasion_new_belief(self):
         """Barbarian Invasion has religions of its own (descr_beliefs.txt: a tag, three pips, three text labels a
         belief): a new one gets its 7 lines, its three pips (copies of the template belief's) and its texts in
@@ -4562,8 +4573,9 @@ building smith
                      '"verdana_sml"', '"BEVEL_TL"', "AG_M2_ROW", "root.persistent", '"SettlementTurnStart"',
                      "settlementScroll", "rawdelete"):
             self.assertIn(part, text)
-        # the game's small tick pieces first (the scroll's own Auto-manage / Construction / Recruitment ticks)
-        self.assertLess(text.index('"PLAIN_CHECKBOX_BG"'), text.index('["CHECKBOX_BG"'))
+        # the box of the scroll's own Auto-manage tick first (a tester: 'make the squares the same as the game's'),
+        # the small plain one where it is missing
+        self.assertLess(text.index('["CHECKBOX_BG"'), text.index('"PLAIN_CHECKBOX_BG"'))
         self.assertNotIn("delete ", text.replace("rawdelete", ""))         # the engines forbid 'delete'
         got = A.read_settings(a, text)
         self.assertEqual(A.render(a, text, got), text)

@@ -1619,16 +1619,16 @@ def s_delete_region(c, mod):
 
 
 
-@step("Scripts in the game: the words beside Avoid Growth's tick changed in the script the test mod put in "
+@step("Scripts in the game: the tooltip of Avoid Growth's tick changed in the script the test mod put in "
       "(REX / M2EX)",
-      "the settlement scroll's tick says '{label}'; afterwards Add-ons > Scripts in the game... lists every script the "
+      "the settlement scroll's tick (still 'Avoid Growth') shows '{label}' under the mouse; afterwards Add-ons > Scripts in the game... lists every script the "
       "test mod put into the game's script/modules and takes them all out with one press")
 def s_scripts(c, mod):
     s = next((x for x in SM.scripts(mod) if x.test and x.file.lower() == "avoid_growth.nut"), None)
     if s is None:
         raise Skip("Avoid Growth is not in the game's script/modules (its step did not write)")
-    c.said["label"] = "Stay small"
-    values = dict(s.values, AG_LABEL=c.said["label"])
+    c.said["label"] = "Keep the town at the size it has now (changed by the test mod)"
+    values = dict(s.values, AG_TIP=c.said["label"])
     plan = Plan(mod, "scripts", "avoid_growth", {})
     if not SM.plan_settings(plan, s, values):
         raise Skip("the words were already set")

@@ -626,6 +626,20 @@ def installed(mod, addon):
         return read_settings(addon, f.read().decode("utf-8", "replace"))
 
 
+GAME_LINE = re.compile(r'(local\s+CE_GAME\s*=\s*")auto(")')
+
+
+def with_game(text, mod):
+    """A script for both games that asks which one runs it (`local CE_GAME = "auto"`) told the game it is put in:
+    "rome" (Rome and Barbarian Invasion share the settlement scroll) or "medieval2" - its own guess took Barbarian
+    Invasion for Medieval II (Avoid Growth's tick in the wrong place)."""
+    if mod is None or not GAME_LINE.search(text):
+        return text
+    from .limits import game_kind
+    return GAME_LINE.sub(lambda m: m.group(1) + ("medieval2" if game_kind(mod) == "medieval2" else "rome") + m.group(2),
+                         text, count=1)
+
+
 def plan_install(plan, addon, values, mod=None, mark=None):
     """The add-on put into the script/modules folder the engine runs (target). mark: one comment line written at
     its end (the test mod's scriptmods.TEST_MARK, so Scripts in the game can find and take out what it put in)."""
@@ -634,6 +648,7 @@ def plan_install(plan, addon, values, mod=None, mark=None):
         raise ValueError("; ".join(problems))
     template = addon.template()
     text = render(addon, template, values)
+    text = with_game(text, mod or plan.mod)
     if mark:
         nl = "\r\n" if "\r\n" in text else "\n"
         text = text + ("" if text.endswith("\n") else nl) + mark + nl

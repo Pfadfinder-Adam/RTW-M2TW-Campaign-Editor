@@ -203,8 +203,7 @@
   against the corners flickering at the water's edge. Small pools of water no sea tile holds become land.
 - **Map: an army in a fort or a watchtower** shows the same flag as an army in a town, on the sign's corner; the
   right click on the fort offers *Take the army out*.
-- **Avoid Growth (Medieval II)**: the tick stands in the row of the game's own Auto-manage tick, right of it, at any
-  screen size and also when the game gives its scroll in 1024 x 768 layout units.
+- **Avoid Growth**: the tick is drawn with the box of the scroll's own Auto-manage tick, under the words "Avoid Growth" (the test mod now changes its tooltip, not its words). Medieval II: in the Auto-manage row, past the Construction and Recruitment ticks the game adds there once Auto-manage is on; Rome and Barbarian Invasion: on the free line under Automanage. At any screen size, also when the game gives its scroll in 1024 x 768 layout units; the editor tells the script which game it is put in (it took Barbarian Invasion for Medieval II).
 - **A Kingdoms campaign still in its packs** (Medieval II from Steam: `mods/british_isles`, `americas`, `crusades`,
   `teutonic`): Load offers to unpack it with the game's own script for it (`unpack_britannia.bat`...) instead of
   saying descr_sm_factions.txt is missing; the question for a packed game now says the game plays from its packs
