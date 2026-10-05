@@ -328,6 +328,57 @@ def set_horde(plan, faction):
                  "%s" % (faction, ", ".join(pick)))
 
 
+HOMELESS = "can_homeless"
+
+
+def homeless(mod, faction):
+    """Whether the faction's block in descr_sm_factions.txt says 'can_homeless yes'."""
+    f = mod.load(mod.file("sm_factions"))
+    start, end = _block(f, faction)
+    return start is not None and any(tokens(strip_comment(f.text(i)))[:2] == [HOMELESS, "yes"]
+                                     for i in range(start, end))
+
+
+def _block(f, faction):
+    """(first line, line after) of the faction's block in descr_sm_factions.txt, or (None, None)."""
+    heads = [i for i in range(len(f)) if tokens(f.text(i))[:1] == ["faction"]]
+    start = next((i for i in heads if len(tokens(f.text(i))) > 1 and tokens(f.text(i))[1] == faction), None)
+    if start is None:
+        return None, None
+    return start, next((i for i in heads if i > start), len(f))
+
+
+def set_homeless(plan, faction, on):
+    """descr_sm_factions.txt: 'can_homeless yes' in the faction's block (on) or out of it. REX's and M2EX's own word
+    (their exes: 'the faction may exist with zero settlements without becoming a horde'); the original exes do not
+    know it - refused without an engine beside the game."""
+    from .limits import engine_of
+    mod = plan.mod
+    f = plan.edit(mod.file("sm_factions"))
+    start, end = _block(f, faction)
+    if start is None:
+        raise ValueError("descr_sm_factions.txt has no faction %s" % faction)
+    have = [i for i in range(start, end) if tokens(strip_comment(f.text(i)))[:1] == [HOMELESS]]
+    if on and not engine_of(mod):
+        raise ValueError("'lives without towns' (can_homeless) is REX's and M2EX's own setting - the game without "
+                         "them does not know it; put REX / M2EX beside the game first")
+    if on:
+        if have and tokens(strip_comment(f.text(have[0])))[1:2] == ["yes"]:
+            return
+        if have:
+            f.set(have[0], "%s				yes" % HOMELESS)
+        else:
+            at = end
+            while at > start + 1 and (not f.text(at - 1).strip() or f.text(at - 1).lstrip().startswith(";")):
+                at -= 1
+            f.insert(at, ["%s				yes" % HOMELESS])
+        plan.note(f, "%s: can_homeless yes - it stays in the game without a single town (REX / M2EX)" % faction)
+    elif have:
+        for i in reversed(have):
+            f.delete(i, i + 1)
+        plan.note(f, "%s: can_homeless taken out - without towns it is out of the game, as the games have it" % faction)
+
+
 def set_event_texts(plan, faction):
     """The emergence event's title and text in historic_events.txt ({FACTION_TITLE}, {FACTION_BODY}): Medieval II
     with M2EX asked for them ('Couldn't find title string for historic event ...'); one the mod has stays."""
@@ -400,9 +451,10 @@ def rising_regions(mod, campaign):
     return sorted(r for r, o in owners.items() if o == "slave")
 
 
-def apply(plan, campaign, faction, way, of=None, re_emergent=False, date=None, region=None):
+def apply(plan, campaign, faction, way, of=None, re_emergent=False, date=None, region=None, homeless=None):
     """One faction's way in, in every file: descr_sm_factions (words), descr_strat (dead at the start or alive),
-    descr_events (the emergence event for 'event', taken out otherwise)."""
+    descr_events (the emergence event for 'event', taken out otherwise); homeless True / False: can_homeless (REX /
+    M2EX) written / taken out, None: left as it is."""
     set_way(plan, faction, way, of)
     if way == "shadow":
         from .wincond import drop
@@ -412,6 +464,8 @@ def apply(plan, campaign, faction, way, of=None, re_emergent=False, date=None, r
         set_event(plan, campaign, faction, date, region)
     else:
         set_event(plan, campaign, faction, remove=True)
+    if homeless is not None:
+        set_homeless(plan, faction, bool(homeless))
 
 
 # ---------------------------------------------------------------------------- checking
@@ -438,6 +492,14 @@ def problems(mod, campaign):
                     faults.append("descr_sm_factions.txt: %s is '%s %s' - %s" % (fac, word, t[word], NOT_ROME))
     from .limits import game_kind
     m2 = game_kind(mod) == "medieval2"
+    from .limits import engine_of
+    if not engine_of(mod):
+        f = mod.load(mod.file("sm_factions"))
+        for i in range(len(f)):
+            if tokens(strip_comment(f.text(i)))[:1] == [HOMELESS]:
+                faults.append("descr_sm_factions.txt line %d: can_homeless is REX's and M2EX's own word - the game "
+                              "without them does not know it" % (i + 1))
+                break
     for fac, shadow, split in both_ties(mod):
         faults.append("descr_sm_factions.txt: %s has a shadow (%s) and a faction splitting off it (%s) - %s "
                       "(Barbarian Invasion never has both on one faction); keep one" % (

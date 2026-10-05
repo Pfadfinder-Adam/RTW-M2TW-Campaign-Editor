@@ -51,6 +51,8 @@ class ModuleBuilder(tk.Toplevel):
         self.recipe = MB.new_recipe()
         self.changed = False
         self._quiet = False              # True while the window itself sets its fields
+        from .gui_util import experimental
+        experimental(self).pack(fill="x", padx=10, pady=(8, 0))
         top = ttk.Frame(self, padding=(10, 8, 10, 4))
         top.pack(fill="x")
         ttk.Label(top, text="Module name", font=("", 10, "bold")).pack(side="left")

@@ -708,3 +708,16 @@ class StepWindow(tk.Toplevel):
         ttk.Label(self.body, text=text, wraplength=780, justify="left", foreground="#555").pack(anchor="w",
                                                                                                 pady=(0, 6))
 
+
+EXPERIMENTAL = ("Experimental - try it at your own risk (a backup is made first, Restore undoes it). If you tried "
+                "it, please send a report: Report a bug / Suggest.")
+
+
+def experimental(parent):
+    """The red line of a window whose feature is still experimental (Campaign rules, Module builder): readable in
+    both looks (theme.ink), wrapping to the window's width - never cut at the edge."""
+    from . import theme
+    lab = ttk.Label(parent, text=EXPERIMENTAL, foreground=theme.ink("#c00000"), justify="left",
+                    font=("", 9, "bold"))
+    lab.bind("<Configure>", lambda e: lab.configure(wraplength=max(e.width - 4, 200)))
+    return lab

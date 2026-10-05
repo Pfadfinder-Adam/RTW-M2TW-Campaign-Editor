@@ -27,6 +27,8 @@ class RulesWindow(tk.Toplevel):
         self._read()
         frm = ttk.Frame(self, padding=8)
         frm.pack(fill="both", expand=True)
+        from .gui_util import experimental
+        experimental(frm).pack(fill="x", anchor="w", pady=(0, 4))
         ShortHint(frm, wraplength=1060, justify="left", text=(
             "The rules of the whole campaign, from this mod's settings files and the top of the campaign's "
             "descr_strat.txt (start and end date, years a turn, switches). Pick a group on the left (or Find), "

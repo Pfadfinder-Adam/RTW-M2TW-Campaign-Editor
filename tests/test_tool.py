@@ -3993,6 +3993,32 @@ building smith
             "data/world/maps/campaign/test/descr_events.txt")
         self.assertEqual(before, after)
 
+    def test_faction_lives_without_towns_only_with_an_engine(self):
+        """can_homeless (REX's and M2EX's own word: 'the faction may exist with zero settlements without becoming a
+        horde') goes into the faction's block of descr_sm_factions.txt only with an engine beside the game; out again
+        on a no; without an engine it is refused and Check names a line left in a mod."""
+        from campaign_editor import emergence as E, limits as L
+        mod = ModData(self.root)
+        with self.assertRaises(ValueError) as cm:
+            E.set_homeless(Plan(mod, "later", "alpha", {}), "alpha", True)
+        self.assertIn("REX", str(cm.exception))
+        self.addCleanup(setattr, L, "engine_of", L.engine_of)
+        L.engine_of = lambda m: "REX.exe"
+        plan = Plan(mod, "later", "alpha", {})
+        E.set_homeless(plan, "alpha", True)
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertTrue(E.homeless(mod, "alpha"))
+        self.assertFalse(E.homeless(mod, "slave"))
+        L.engine_of = lambda m: None                                  # the engine gone: Check names the line
+        faults, _ = E.problems(mod, "test")
+        self.assertTrue(any("can_homeless" in f for f in faults), faults)
+        L.engine_of = lambda m: "REX.exe"
+        plan = Plan(mod, "later", "alpha", {})
+        E.set_homeless(plan, "alpha", False)
+        plan.apply()
+        self.assertFalse(E.homeless(ModData(self.root), "alpha"))
+
     def test_medieval2_event_faction_comes_as_a_horde(self):
         """Medieval II brings a faction that comes by an event in as a HORDE (a tester's game with M2EX: 'ASSERT
         FAILED: faction.cpp: can_horde()', the faction never came; 'Couldn't find title string for historic event'):

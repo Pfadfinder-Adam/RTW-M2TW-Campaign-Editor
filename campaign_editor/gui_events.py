@@ -135,6 +135,9 @@ class EventsWindow(tk.Toplevel):
         v_of, v_date, v_reg = tk.StringVar(value=ch.get("of") or ""), tk.StringVar(value=ch.get("date") or ""), \
             tk.StringVar(value=ch.get("region") or "")
         v_back = tk.BooleanVar(value=bool(ch.get("re_emergent")))
+        from .limits import engine_of
+        engine = engine_of(self.mod)
+        v_home = tk.BooleanVar(value=bool(ch.get("homeless", EM.homeless(self.mod, fac0) if fac0 else False)))
         ttk.Label(fr, text="Faction").grid(row=0, column=0, sticky="w", pady=2)
         cb = FactionBox(fr, v_fac, state="readonly" if new else "disabled", width=30)
         cb["values"] = facs
@@ -156,6 +159,11 @@ class EventsWindow(tk.Toplevel):
                      width=30).grid(row=4, column=1, sticky="w")
         ttk.Checkbutton(fr, text="may come back after it dies (re_emergent)", variable=v_back).grid(
             row=5, column=1, sticky="w", pady=2)
+        hb = ttk.Checkbutton(fr, text="lives without towns - stays in the game with none (can_homeless, %s)" % (
+            engine.replace(".exe", "") if engine else "REX / M2EX only"), variable=v_home)
+        hb.grid(row=8, column=1, sticky="w", pady=2)
+        if not engine:
+            hb.state(["disabled"])
         ttk.Label(fr, foreground="#666", wraplength=460, justify="left", text=(
             "A faction that comes in later must hold no towns and no characters (give them away first). The date is "
             "%s. Written with Write it in below." % ("years from the start and optionally summer or winter" if
@@ -169,7 +177,7 @@ class EventsWindow(tk.Toplevel):
                 messagebox.showerror(TITLE, "Pick the faction.", parent=w)
                 return
             got = {"way": way, "of": v_of.get() or None, "re_emergent": v_back.get(), "date": v_date.get().strip(),
-                   "region": v_reg.get() or None}
+                   "region": v_reg.get() or None, "homeless": v_home.get() if engine else None}
             try:                                     # refused now, not at Write: the same checks on a throw-away plan
                 EM.apply(Plan(self.mod, "later", fac, {}), self.campaign, fac, **got)
             except Exception as e:
@@ -180,7 +188,7 @@ class EventsWindow(tk.Toplevel):
             self.fill_later()
             self.lbl.configure(text="%s: changed - Preview / Write it in" % fac)
         bb = ttk.Frame(fr)
-        bb.grid(row=7, column=0, columnspan=2, sticky="e", pady=(8, 0))
+        bb.grid(row=9, column=0, columnspan=2, sticky="e", pady=(8, 0))
         ttk.Button(bb, text="Cancel", command=w.destroy).pack(side="right")
         ttk.Button(bb, text="OK", command=ok).pack(side="right", padx=4)
 

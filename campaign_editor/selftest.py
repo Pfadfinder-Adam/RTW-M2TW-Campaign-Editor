@@ -246,13 +246,16 @@ def s_later(c, mod):
 
 
 @step("...its event moved to turn 2, in the rebel region next to {new}'s capital (it comes in at once, beside "
-      "the test faction, to be seen on the first turns)",
-      "{later} comes in on turn 2 in {near}, beside {new}'s capital, in its own colours")
+      "the test faction, to be seen on the first turns); with REX / M2EX it also lives without towns (can_homeless)",
+      "{later} comes in on turn 2 in {near}, beside {new}'s capital, in its own colours; with REX / M2EX it stays in "
+      "the game even when it has no town (can_homeless)")
 def s_later_way(c, mod):
     from . import emergence as E
     from .events import turn_date
+    from .limits import engine_of
     plan = Plan(mod, "later", c.later, {})
-    E.apply(plan, c.campaign, c.later, "event", date=turn_date(mod, c.campaign, 2), region=near_capital(c, mod))
+    E.apply(plan, c.campaign, c.later, "event", date=turn_date(mod, c.campaign, 2), region=near_capital(c, mod),
+            homeless=True if engine_of(mod) else None)
     return plan
 
 

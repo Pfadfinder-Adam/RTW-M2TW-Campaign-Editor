@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+- **Lives without towns** (Events > How a faction comes into the campaign, a tick; with REX / M2EX): writes the
+  engines' own `can_homeless yes` in the faction's block of descr_sm_factions.txt - the faction stays in the game
+  with no town instead of dying or turning into a horde. Greyed out without an engine (the plain games do not know
+  the word); Check mod files names the line if it is there without one. The test mod's later faction gets it.
+- **Campaign rules and the Module builder say they are experimental**: a red line at the top of both windows (try it
+  at your own risk, a backup is made first, please send a report).
 - **Credits** (Tools > Credits (who made it with us)..., and the [CREDITS.md](CREDITS.md) page beside this one): the
   author, who helped a lot, the testers who sent reports and ideas, the supporters on Ko-fi and what people said -
   one page, the same in the editor and on GitHub.
