@@ -269,7 +269,7 @@ class ArtEditor(ttk.Frame):
                 cb.grid(row=0, column=1 + 2 * lv, padx=(0, 2))
                 cb.bind("<<ComboboxSelected>>", lambda e, t=fg["type"], lv=lv, v=v, fg=fg: self.pick_figure(
                     t, lv, v.get(), fg["models"]))
-                ttk.Button(cell, text="3D", width=3, command=lambda v=v: self.view_figure(v.get(), faction)).grid(
+                ttk.Button(cell, text="3D", command=lambda v=v: self.view_figure(v.get(), faction)).grid(
                     row=0, column=2 + 2 * lv, padx=(0, 6))
             if fg["type"] in a.figures:
                 ttk.Label(cell, text="was %s (not written yet)" % ", ".join(fg["models"]),

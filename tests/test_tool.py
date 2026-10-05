@@ -2922,6 +2922,34 @@ building smith
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))},
                          before)
 
+    def test_bigger_map_with_an_empty_hgt(self):
+        """A tester's Rome mod carried an empty map_heights.hgt (0 bytes): x3 stopped with 'unpack_from requires a
+        buffer of at least 8 bytes'. It is made again from the new map_heights.tga instead (as the game converts it),
+        said in the warnings; Restore gives the empty file back."""
+        from campaign_editor.plan import Plan, restore
+        from campaign_editor import upscale
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "descr_terrain.txt"), "dimensions\n{\n\twidth  4\n\theight  4\n}\n"
+              "heights\n{\n\tmin_sea_height  -3122.256\n\tmax_land_height  7511.272\n}\n")
+        hp = [[(0, 0, 253) if x < 3 else (51, 51, 51) for x in range(9)] for y in range(9)]
+        write_tga(os.path.join(camp, "map_heights.tga"), 9, 9, hp)
+        open(os.path.join(camp, "map_heights.hgt"), "wb").close()
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        plan = Plan(mod, "map", "map_x3", {})
+        warn = upscale.plan_upscale(plan, "test")
+        self.assertTrue(any("map_heights.hgt was empty" in w for w in warn), warn)
+        bdir = plan.apply()
+        with open(os.path.join(camp, "map_heights.hgt"), "rb") as fh:
+            raw = fh.read()
+        self.assertEqual(struct.unpack_from("<II", raw), (25, 25))
+        vals = struct.unpack_from("<625f", raw, 8)
+        self.assertLess(vals[0], 0)                                           # the sea in the west
+        self.assertAlmostEqual(vals[24], 51 * 7511.272 * 3 / 255, 0)          # land: grey x the new top / 255
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items()
+                          if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}, before)
+
     def test_bigger_map_keeps_towns_ports_bridges_and_ground(self):
         """x3 on a map like a tester's DaC: a town in a region descr_regions does not list (Erebor became 9 town
         pixels), a port (ports were left off the water), a land bridge over a strait (left as dots), forests painted

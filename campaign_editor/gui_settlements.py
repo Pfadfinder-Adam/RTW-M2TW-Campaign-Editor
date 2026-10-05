@@ -53,7 +53,7 @@ class SettlementsPanel(ttk.Frame):
                           ("Names by culture...", self.by_culture),
                           ("All towns' names...", lambda: self.app.culture_names_table()),
                           ("Show on the map", self.show_on_map)):
-            ttk.Button(side, text=text, command=cmd, width=24).pack(anchor="w", pady=2)
+            ttk.Button(side, text=text, command=cmd).pack(anchor="w", pady=2)
         ttk.Label(side, foreground="#666", wraplength=200, justify="left", text=(
             "double click: the names players see\nNames by culture: REX (Rome) / M2EX (Medieval II) rename a town "
             "by its owner's culture while the campaign runs")).pack(anchor="w", pady=(10, 0))

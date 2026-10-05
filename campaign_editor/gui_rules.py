@@ -159,7 +159,7 @@ class RulesWindow(tk.Toplevel):
         v.trace_add("write", paint)
         if game is not None and game != rule.value:
             ttk.Label(cell, text="game: %s" % game, foreground="#b60").pack(side="left")
-            ttk.Button(cell, text="Reset", width=6, command=lambda: v.set(game)).pack(side="left", padx=4)
+            ttk.Button(cell, text="Reset", command=lambda: v.set(game)).pack(side="left", padx=4)
         paint()
 
     def _status(self, problem=None):

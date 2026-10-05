@@ -362,7 +362,7 @@ class RecordEditor(ttk.Frame):
             e.grid(row=row, column=2, sticky="we", pady=1)
             v.trace_add("write", lambda *x, fd=fd, v=v, e=e: self.edited(fd, v.get(), e))
             if self.kind == "unit" and fd.key in unitattrs.LINES and unitattrs.for_line(fd.key) and not gone:
-                ttk.Button(self.form, text="REX...", width=7,
+                ttk.Button(self.form, text="REX...",
                            command=lambda fd=fd, v=v: self.attrs_dialog(fd, v)).grid(row=row, column=3, padx=(4, 0))
             why = E.removable(self.kind, fd, self.tree, self.required())
             if why is None:
@@ -1062,9 +1062,9 @@ class RecordEditor(ttk.Frame):
                       "Name call: none of its own (it says only its orders)",
                       foreground="#555" if nc else "#b60").pack(side="left")
             if nc:
-                ttk.Button(line, text="Play", width=6,
+                ttk.Button(line, text="Play",
                            command=lambda fs=nc.files: self.play_sound(fs)).pack(side="left", padx=4)
-                ttk.Button(line, text="Save...", width=7, command=lambda fs=nc.files, u=unit: self.save_sounds(
+                ttk.Button(line, text="Save...", command=lambda fs=nc.files, u=unit: self.save_sounds(
                     fs, "the name call of %s" % u)).pack(side="left", padx=(0, 4))
             ttk.Button(line, text="Put in my own...",
                        command=lambda uv=uv: self.own_name_call(uv)).pack(side="left", padx=(4 if not nc else 0, 0))
@@ -1077,7 +1077,7 @@ class RecordEditor(ttk.Frame):
                 names = [ev.vocal for ev in orders]
                 v = tk.StringVar(value=names[0])
                 ttk.Combobox(line, textvariable=v, values=names, state="readonly", width=30).pack(side="left", padx=4)
-                ttk.Button(line, text="Play", width=6, command=lambda v=v, o=orders: self.play_sound(
+                ttk.Button(line, text="Play", command=lambda v=v, o=orders: self.play_sound(
                     next(ev.files for ev in o if ev.vocal == v.get()))).pack(side="left")
         ttk.Label(box, foreground="#555", wraplength=320, justify="left", text=(
             "The voice class is the voice_type line above (%s)." % ", ".join(

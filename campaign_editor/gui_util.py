@@ -163,8 +163,8 @@ class HScroll(ttk.Frame):
 
     def __init__(self, parent, **kw):
         super().__init__(parent, **kw)
-        self.back = ttk.Button(self, text="\u25c0", width=2, command=lambda: self.step(-1))
-        self.fore = ttk.Button(self, text="\u25b6", width=2, command=lambda: self.step(1))
+        self.back = ttk.Button(self, text="\u25c0", command=lambda: self.step(-1))
+        self.fore = ttk.Button(self, text="\u25b6", command=lambda: self.step(1))
         self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0, xscrollincrement=0)
         self.canvas.pack(side="left", fill="x", expand=True)
         self.inner = ttk.Frame(self.canvas)

@@ -148,9 +148,9 @@ class MapView(ttk.Frame):
                   self.v_regions, self.v_mode):
             v.trace_add("write", lambda *a: self._layers_label())
         self._layers_label()
-        ttk.Button(bar, text="Fit", width=5, command=self.fit).pack(side="right")
-        ttk.Button(bar, text="+", width=3, command=lambda: self.zoom_by(1)).pack(side="right", padx=2)
-        b = ttk.Button(bar, text="-", width=3, command=lambda: self.zoom_by(-1))
+        ttk.Button(bar, text="Fit", command=self.fit).pack(side="right")
+        ttk.Button(bar, text="+", command=lambda: self.zoom_by(1)).pack(side="right", padx=2)
+        b = ttk.Button(bar, text="-", command=lambda: self.zoom_by(-1))
         b.pack(side="right")
         from .gui_util import first
         first(b, *bar.pack_slaves()[-3:-1][::-1])  # the zoom buttons keep their room

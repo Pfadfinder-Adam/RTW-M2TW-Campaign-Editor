@@ -18,6 +18,8 @@ DARK = {"bg": "#2b2d31", "fg": "#e3e3e3", "field": "#1e1f22", "muted": "#a9adb3"
         "button": "#3a3d43", "active": "#46505e", "link": "#8ab8ff"}
 
 # colours the window sets by hand that belong to the palette, not to a meaning
+BUTTON_PADX = 6     # px from a button's words to its edge, each side: about two spaces (a tester's rule: a button
+#                     no wider than its words need - everywhere)
 NAMED = {"#cfe3ff": "accent"}
 
 BG_KEYS = ("field", "bg", "tab", "button", "trough", "accent", "active", "select")
@@ -256,7 +258,9 @@ def _style(root):
                  focuscolor=p["select"])
     st.map(".", background=[("disabled", p["bg"]), ("active", p["active"])],
            foreground=[("disabled", p["muted"])])
-    st.configure("TButton", background=p["button"], padding=(8, 3))
+    # a button no wider than its words and about two spaces each side (no minimum width of 11 letters - clam's own
+    # - which made '+' or 'OK' as wide as 'Browse...')
+    st.configure("TButton", background=p["button"], padding=(BUTTON_PADX, 3), width=0)
     st.map("TButton", background=[("pressed", p["accent"]), ("active", p["active"])])
     st.configure("TMenubutton", background=p["button"])
     st.configure("TEntry", fieldbackground=p["field"], foreground=p["fg"])

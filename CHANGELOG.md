@@ -154,6 +154,11 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **Buttons no wider than their words** - about two spaces from the words to the edge, everywhere (no minimum width
+  any more: '+', '-' and 'Fit' were as wide as 'Browse...'); the works and the window buttons on the top row too.
+- **Map: a new town from the legend can stand on another region's land** - it takes its own tile and the 8 round it
+  at once (they were refused with 'not ...'s land - paint it first' before the click), and the brush is then in
+  your hand with the new region to paint the rest of its land.
 - **Bigger map (x3): rivers drawn the way rivers run** - a bend is rounded instead of a right angle, a long straight
   run swings gently (a meander about every four old tiles, never twice the same, the same map always alike); still one
   pixel wide everywhere, as many rivers, sources and mouths as before, none on the sea, fords kept on the river.
@@ -402,6 +407,9 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Make the map 3 x bigger stopped on a mod with an empty `map_heights.hgt`** ('unpack_from requires a buffer of
+  at least 8 bytes'). An empty or cut `.hgt`, or one that does not fit `map_heights.tga`, is now made again from the
+  new heights picture, the way the game converts it, and the window says so.
 - **Signs read on any colour** (both games): a town's hall, an agent's sign and a resource's letters are black on a
   bright colour and white on a dark one, on the map and in its legend (Egypt's white discs hid their agents' white
   signs); town names have a black edge all round, so they read on light land too; the colour buttons follow the

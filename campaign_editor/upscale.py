@@ -505,6 +505,36 @@ def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0, natural=False, rivers=(),
     return struct.pack("<II", W, H) + struct.pack("<%df" % (W * H), *out)
 
 
+def hgt_usable(hgt_path, tga_path):
+    """Whether map_heights.hgt can be read as the heights at the picture's size: uint32 w, h matching
+    map_heights.tga, then w * h floats. A mod may carry an empty or cut one (a tester's Rome mod: 0 bytes - x3
+    stopped with 'unpack_from requires a buffer of at least 8 bytes')."""
+    try:
+        with open(hgt_path, "rb") as fh:
+            raw = fh.read()
+        if len(raw) < 8:
+            return False
+        w, h = struct.unpack_from("<II", raw)
+        _, tw, th, _, _, _ = _pixels(tga_path)
+        return (w, h) == (tw, th) and len(raw) >= 8 + 4 * w * h
+    except (OSError, ValueError, struct.error):
+        return False
+
+
+def hgt_from_picture(tga_bytes, top, low):
+    """map_heights.hgt made from a map_heights.tga's bytes, as the games convert it (terrain.hgt_value: land grey *
+    top / 255, sea low * (255 - blue) / 255; top / low = descr_terrain's max_land_height / min_sea_height)."""
+    from .terrain import hgt_value
+    w, h, step, top_down, _, raw = _decode(tga_bytes, "map_heights.tga")
+    out = []
+    for y in range(h):                            # bottom-up rows, as the .hgt keeps them
+        r = (h - 1 - y) if top_down else y
+        for x in range(w):
+            o = (r * w + x) * step
+            out.append(hgt_value((raw[o + 2], raw[o + 1], raw[o]), top, low))
+    return struct.pack("<II", w, h) + struct.pack("<%df" % (w * h), *out)
+
+
 def _warp(TX, TY):
     """A smooth sideways shift (in new tiles, -1.2 .. 1.2) for the tile TX, TY: two waves whose sizes stand in the
     golden ratio, so the field never repeats (quasi-periodic, as girih's patterns) and borders bend like a forest's
@@ -1439,7 +1469,7 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
                     "every port on a coastal land tile touching the sea and its region)")
     for (x, y), spot, why in info.get("moved_ports", []):
         warn.append("the port at %d, %d: %s (now at %d, %d)" % (x, y, why, spot[0], spot[1]))
-    hmask = None
+    hmask = heights_data = None
     if hpath:
         say("the heights' coast...")
         hmask = heights_from_tiles(info["land"], _agreement(regions_path, hpath, lands), heights_mask(hpath))
@@ -1467,10 +1497,19 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
             data, _ = scaled(p, kind)
             note = ""
         plan.binary(p, data)
+        if name == "map_heights.tga":
+            heights_data = data
         plan.note(None, "%s made 3 x bigger%s" % (name, " (%s)" % note if note else ""))
     hgt = os.path.join(base, "map_heights.hgt")
     say("map_heights.hgt...")
-    if os.path.isfile(hgt) and os.path.isfile(hpath):
+    if os.path.isfile(hgt) and heights_data and not hgt_usable(hgt, hpath):
+        from .terrain import max_land_height, min_sea_height    # empty or cut: made again from the new picture
+        top, low = max_land_height(mod, campaign) * vertical, min_sea_height(mod, campaign) * vertical
+        plan.binary(hgt, hgt_from_picture(heights_data, top, low))
+        plan.note(None, "map_heights.hgt was empty or did not fit map_heights.tga - made again from the new "
+                        "map_heights.tga (the game reads it instead of the picture)")
+        warn.append("map_heights.hgt was empty or did not fit map_heights.tga: made again from the new heights")
+    elif os.path.isfile(hgt) and hpath and os.path.isfile(hpath):
         plan.binary(hgt, hgt_scaled(hgt, hpath, hmask, vertical, natural=True, rivers=rivers,
                                     towns=info.get("towns", ())))
         plan.note(None, "map_heights.hgt made 3 x bigger%s (the game reads it instead of the picture and never "

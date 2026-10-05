@@ -412,7 +412,7 @@ class App(tk.Tk):
         self.work_buttons = {}
         for val, text in self.WORK_TITLES.items():
             b = tk.Radiobutton(self.work_row.inner, text=text, value=val, variable=self.v_work, indicatoron=0,
-                               command=self.work_changed, padx=16, pady=5, font=("", 10, "bold"),
+                               command=self.work_changed, padx=theme.BUTTON_PADX, pady=5, font=("", 10, "bold"),
                                selectcolor="#cfe3ff", relief="raised", offrelief="groove", cursor="hand2")
             b.pack(side="left", padx=(0, 4))
             self.work_row.grab(b)
@@ -422,7 +422,7 @@ class App(tk.Tk):
         # sight, one press away); the row scrolls when the window is narrower - drag it with the left button
         ttk.Separator(self.work_row.inner, orient="vertical").pack(side="left", fill="y", padx=(4, 8), pady=4)
         for key, text, method, hint_text in self.WINDOW_BUTTONS:
-            b = tk.Button(self.work_row.inner, text=text, padx=12, pady=5, font=("", 10), relief="groove",
+            b = tk.Button(self.work_row.inner, text=text, padx=theme.BUTTON_PADX, pady=5, font=("", 10), relief="groove",
                           cursor="hand2", command=self.once(method, lambda m=method: getattr(self, m)()))
             b.pack(side="left", padx=(0, 4))
             self.work_row.grab(b)
@@ -791,8 +791,8 @@ class App(tk.Tk):
         self.b_preview.pack(side="left")
         self.b_create = ttk.Button(bar, text="Create faction", command=self.create)
         self.b_create.pack(side="left", padx=6)
-        ttk.Button(bar, text="Undo", width=6, command=self.undo).pack(side="left", padx=(12, 0))
-        ttk.Button(bar, text="Redo", width=6, command=self.redo).pack(side="left", padx=4)
+        ttk.Button(bar, text="Undo", command=self.undo).pack(side="left", padx=(12, 0))
+        ttk.Button(bar, text="Redo", command=self.redo).pack(side="left", padx=4)
         kofi = tk.Button(bar, text="\u2615  Support on Ko-fi", command=self.support, bg="#ff5e5b", fg="white",
                          activebackground="#e14b48", activeforeground="white", relief="flat", cursor="hand2",
                          font=("", 9, "bold"), padx=10)
@@ -945,7 +945,7 @@ class App(tk.Tk):
             self.lb_units.selection_clear(0, "end"), self.load_field()))
         self.lb_field.bind("<Double-1>", lambda e: self.field_on_map())
         for text, kind in (("+ Army", "army"), ("+ Agent", "agent"), ("+ Fleet", "fleet")):
-            ttk.Button(fb, text=text, width=8, command=lambda k=kind: self.add_field(k)).pack(side="left", padx=1)
+            ttk.Button(fb, text=text, command=lambda k=kind: self.add_field(k)).pack(side="left", padx=1)
         ttk.Button(fb, text="Place on map", command=self.place_field).pack(side="left", padx=(8, 1))
         ttk.Button(fb, text="Remove", command=self.remove_field).pack(side="left", padx=1)
         opts = self.units_opts = ttk.LabelFrame(side, text="Towns without a garrison of your own", padding=6)
@@ -1923,7 +1923,8 @@ class App(tk.Tk):
             mv._regions_toggled()
         self.v_paint.set(name + "  (new)")
         self._region_point, self._town_auto = ("city", name), True
-        self.status.set("Click the tile where the town of %s stands - the land around it becomes %s's." % (name, name))
+        self.status.set("Click the tile where the town of %s stands - also on another region: the town's tile and the 8 "
+                        "round it become %s's, then the brush is in your hand to paint more." % (name, name))
         self.show_map()
 
     def region_point(self, what):
@@ -1954,11 +1955,14 @@ class App(tk.Tk):
         cm = self._cmap
         if not (0 <= xy[0] < cm.w and 0 <= xy[1] < cm.h):
             return "off the map"
-        own = self.region_paint.get(tuple(xy)) or cm.region_at(*xy)
-        if own != name:
-            return "not %s's land - paint it first" % name
         if cm.regions_img.get(*xy) in ((0, 0, 0), (255, 255, 255)):
             return "another town or port stands there"
+        own = self.region_paint.get(tuple(xy)) or cm.region_at(*xy)
+        if what == "city" and self._town_auto:          # from the legend: it takes its tile and the 8 round it
+            if own is None:
+                return "the sea - a town stands on land"
+        elif own != name:
+            return "not %s's land - paint it first" % name
         if what == "port" and not any(cm.is_sea(xy[0] + dx, xy[1] + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             return "a port needs the sea next to it"
         r = self._new_region(name)
@@ -2010,9 +2014,16 @@ class App(tk.Tk):
         if before is None:
             self.remember()
         r[what] = tuple(xy)
+        auto = self._town_auto
         self._region_point, self._town_auto = None, False
         self.map_view.set_tool(None)
-        self.status.set("%s of %s at %d, %d." % ("Town" if what == "city" else "Port", name, xy[0], xy[1]))
+        if auto and what == "city":                    # the brush in hand: paint the rest of its land at once
+            self.v_paint.set(name + "  (new)")
+            self.status.set("Town of %s at %d, %d with the 8 tiles round it - now paint more of %s's land with a "
+                            "left drag (the brush holds %s); 'Place its port' when it reaches the sea."
+                            % (name, xy[0], xy[1], name, name))
+        else:
+            self.status.set("%s of %s at %d, %d." % ("Town" if what == "city" else "Port", name, xy[0], xy[1]))
         self.show_map()
         return None
 
