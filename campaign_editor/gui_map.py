@@ -285,8 +285,9 @@ class MapView(ttk.Frame):
         self.on_town = None                              # (region) -> the town's own page (a double click)
         self.on_char_double = None                       # (char id) -> its units' window (a double click)
         self.on_place_stop = None                        # () -> what hangs under the mouse is dropped (Esc / right)
-        self.canvas.winfo_toplevel().bind("<Escape>", lambda e: self.on_place and self.on_place_stop and
-                                          self.on_place_stop(), add="+")
+        self.waiting = False                             # something picked waits for its click (Edit regions too)
+        self.canvas.winfo_toplevel().bind("<Escape>", lambda e: (self.on_place or self.waiting) and
+                                          self.on_place_stop and self.on_place_stop(), add="+")
         self.on_fort_double = None                       # (Fort) -> its garrison's window (a double click)
         c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
         self._hot = None                                # the marker under the mouse, drawn bigger
@@ -637,8 +638,8 @@ class MapView(ttk.Frame):
             # the resources meant nothing to a modder (report #103)
             kinds = sorted(({r["kind"] for r in self.resources} | set(self.res_types)) - {"fort", "watchtower",
                                                                                          "landmark"})
-            if kinds or self.v_res.get():
-                head("Resources (first letters)")
+            if kinds and self.v_res.get():           # with Layers > Resources on, every type a tool (+): a click
+                head("Resources (first letters)")  # picks it, the next click on the map puts one there
                 for k in kinds:
                     def d(x, yy, k=k):
                         lc.create_rectangle(x - 9, yy - 9, x + 9, yy + 9, fill=self.res_colour(k), outline="black")
@@ -1056,11 +1057,13 @@ class MapView(ttk.Frame):
         if k == "spy":                                  # an eye
             c.create_oval(sx - r * 0.7, sy - r * 0.38, sx + r * 0.7, sy + r * 0.38, outline=ink, width=w, tags=tags)
             c.create_oval(sx - r * 0.2, sy - r * 0.2, sx + r * 0.2, sy + r * 0.2, fill=ink, outline="", tags=tags)
-        elif k == "assassin":                           # a slanted dagger: blade, guard, grip
-            c.create_polygon(sx + r * 0.7, sy - r * 0.7, sx + r * 0.05, sy + r * 0.2, sx - r * 0.2, sy - r * 0.05,
-                             fill=ink, outline="", tags=tags)
-            c.create_line(sx - r * 0.35, sy - r * 0.05, sx + r * 0.1, sy + r * 0.4, fill=ink, width=w, tags=tags)
-            c.create_line(sx - r * 0.1, sy + r * 0.15, sx - r * 0.55, sy + r * 0.6, fill=ink, width=w + 1, tags=tags)
+        elif k == "assassin":                           # an upright dagger, the point down: pommel, grip, guard,
+            c.create_oval(sx - r * 0.13, sy - r * 0.8, sx + r * 0.13, sy - r * 0.54, fill=ink, outline="",  # blade
+                          tags=tags)
+            c.create_line(sx, sy - r * 0.6, sx, sy - r * 0.25, fill=ink, width=w + 1, tags=tags)
+            c.create_line(sx - r * 0.45, sy - r * 0.22, sx + r * 0.45, sy - r * 0.22, fill=ink, width=w + 1, tags=tags)
+            c.create_polygon(sx - r * 0.17, sy - r * 0.15, sx + r * 0.17, sy - r * 0.15, sx, sy + r * 0.8, fill=ink,
+                             outline="", tags=tags)
         elif k == "diplomat":                           # a scroll
             c.create_rectangle(sx - r * 0.5, sy - r * 0.6, sx + r * 0.5, sy + r * 0.6, outline=ink, width=w, tags=tags)
             for dy in (-0.25, 0.05, 0.35):
@@ -1086,14 +1089,14 @@ class MapView(ttk.Frame):
                                  sx + r * dx, sy + r * 0.3, fill=ink, outline="", tags=tags)
             c.create_line(sx - r * 0.3, sy + r * 0.55, sx + r * 0.3, sy + r * 0.55, fill=ink, width=w, tags=tags)
         elif k == "witch":                              # a pointed hat
-            c.create_polygon(sx - r * 0.2, sy + r * 0.25, sx + r * 0.1, sy - r * 0.75, sx + r * 0.25, sy + r * 0.25,
+            c.create_polygon(sx - r * 0.3, sy + r * 0.25, sx, sy - r * 0.75, sx + r * 0.3, sy + r * 0.25,
                              fill=ink, outline="", tags=tags)
             c.create_oval(sx - r * 0.7, sy + r * 0.15, sx + r * 0.7, sy + r * 0.45, fill=ink, outline="", tags=tags)
-        elif k == "heretic":                            # a book torn in two
-            c.create_polygon(sx - r * 0.75, sy - r * 0.35, sx - r * 0.1, sy - r * 0.2, sx - r * 0.2, sy + r * 0.55,
-                             sx - r * 0.75, sy + r * 0.4, fill=ink, outline="", tags=tags)
-            c.create_polygon(sx + r * 0.75, sy - r * 0.45, sx + r * 0.15, sy - r * 0.3, sx + r * 0.05, sy + r * 0.45,
-                             sx + r * 0.75, sy + r * 0.3, fill=ink, outline="", tags=tags)
+        elif k == "heretic":                            # a book torn in two: two halves apart, mirrored
+            for m in (-1, 1):
+                c.create_polygon(sx + m * r * 0.75, sy - r * 0.35, sx + m * r * 0.12, sy - r * 0.22,
+                                 sx + m * r * 0.2, sy + r * 0.1, sx + m * r * 0.08, sy + r * 0.5,
+                                 sx + m * r * 0.75, sy + r * 0.4, fill=ink, outline="", tags=tags)
         else:
             c.create_text(sx, sy, text=self.AGENT_LETTER.get(k, k[:1].upper()), fill=ink,
                           font=("", max(6, int(r)), "bold"), tags=tags)
@@ -1106,7 +1109,7 @@ class MapView(ttk.Frame):
         town_of = {self.places.get(("city", r), xy): r for r, xy in cm.cities.items()}
         seen, flags = {}, set()
         forts = self.fort_spots()
-        rank = {"crown": 3, "small crown": 2, "star": 1}
+        rank = {"crown": 3, "small crown": 2, "star": 1, "chevron": 0.5}
         best = {}                                      # a town's / fort's flag shows the highest who stays there
         for c_ in self.chars:
             m = self.leader_mark(c_) if c_["kind"] in ("general", "named character") else None
@@ -1124,7 +1127,7 @@ class MapView(ttk.Frame):
                 # army is there (the user's choice, report #104)
                 if (x, y) not in flags:
                     flags.add((x, y))
-                    self._roof_flag(sx + size / 2, sy - size / 2, max(tile * 0.6, 6), ch_["faction"],
+                    self._roof_flag(sx + size / 2, sy - size / 2, max(tile * 0.8, 8), ch_["faction"],
                                     ("city", "city:" + town_of.get((x, y), "")), mark=best.get((x, y)))
                 continue
             if (x, y) in forts and ch_["kind"] in ("general", "named character"):
@@ -1133,7 +1136,7 @@ class MapView(ttk.Frame):
                 if (x, y) not in flags:
                     flags.add((x, y))
                     w = max(2.0, min(self.z * FORT_W, 36))
-                    self._roof_flag(sx + w, sy - w, max(tile * 0.6, 6), ch_["faction"], forts[(x, y)],
+                    self._roof_flag(sx + w, sy - w, max(tile * 0.8, 8), ch_["faction"], forts[(x, y)],
                                     mark=best.get((x, y)))
                 continue
             elif (x, y) in busy:                       # ...an agent or a ship stands small beside the town /
@@ -1169,14 +1172,14 @@ class MapView(ttk.Frame):
             c.create_line(cx, foot, cx, top - h * 0.05, fill="black", width=2, tags=tags)
             c.create_polygon(cx, top, cx + w, top, cx + w * 0.7, top + ch / 2, cx + w, top + ch, cx, top + ch,
                              fill=fill, outline=edge, width=width, tags=tags)
-            if mark and h >= 9:
+            if mark and h >= 7:
                 self._mark(mark, cx + w * 0.38, top + ch / 2, ch * 0.32, self.text_on(fill), tags)
             return
         top = cy - ch
         c.create_polygon(cx, top, cx + w, top, cx + w * 0.7, top + ch / 2, cx + w, cy, cx, cy,
                          fill=fill, outline="black", width=1, tags=tags)
         c.create_line(cx, cy, cx, top - h * 0.12, fill="black", width=2, tags=tags)
-        if mark and h >= 9:
+        if mark and h >= 7:
             self._mark(mark, cx + w * 0.38, top + ch / 2, ch * 0.32, self.text_on(fill), tags)
 
     def _draw_char(self, ch_, sx, sy, size):
@@ -1220,7 +1223,8 @@ class MapView(ttk.Frame):
 
     @staticmethod
     def leader_mark(ch_):
-        """'crown' (the faction's leader), 'small crown' (its heir), 'star' (a family member) or None (a captain)."""
+        """'crown' (the faction's leader), 'small crown' (its heir), 'star' (a family member), 'chevron' (a captain,
+        no family member)."""
         role = ch_.get("role")
         if role == "leader":
             return "crown"
@@ -1228,7 +1232,7 @@ class MapView(ttk.Frame):
             return "small crown"
         if ch_.get("kind") == "named character" or ch_.get("named"):
             return "star"
-        return None
+        return "chevron"                               # a captain: a soldier's rank chevron
 
     def _mark(self, mark, cx, cy, r, ink, tags):
         """A leader's mark at (cx, cy), r about half its width."""
@@ -1240,6 +1244,9 @@ class MapView(ttk.Frame):
                 rr = r if i % 2 == 0 else r * 0.45
                 pts += [cx + rr * math.cos(a), cy + rr * math.sin(a)]
             c.create_polygon(*pts, fill=ink, outline="", tags=tags)
+        elif mark == "chevron":                       # a wide chevron, its point up
+            c.create_line(cx - r, cy + r * 0.45, cx, cy - r * 0.45, cx + r, cy + r * 0.45, fill=ink,
+                          width=max(2, int(r * 0.45)), joinstyle="miter", tags=tags)
         elif mark in ("crown", "small crown"):
             tooth = r * (0.9 if mark == "crown" else 0.45)        # the heir's teeth half the king's
             base, band = cy + r * 0.55, cy + r * 0.1
@@ -1984,6 +1991,8 @@ class MapView(ttk.Frame):
             self._drag = None
             if moved:
                 self.render()
+            elif self.waiting and self.on_place_stop:  # a town / port waiting for its click: put back
+                self.on_place_stop()
             elif self.on_pick and self.inside(self.to_tile(e.x, e.y)):
                 self.on_pick(self.to_tile(e.x, e.y))
             return

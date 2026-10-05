@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **Map signs**: the assassin's dagger upright, its point down; every agent's sign symmetric; a plain army led by a captain carries a rank chevron; the leader marks show on smaller flags too (a town's flag bigger).
+- **Map editor**: a right click or Esc puts back every tool still waiting for its click (armies, fleets, agents, resources, forts, watchtowers, ports, a new region's town); a fort, watchtower or wonder is deleted from the right-click menu too; the legend lists the resources while Layers > Resources is on.
+- **Bigger map (x3)**: a one-tile islet or lake loses one or two corners - no plain 3 x 3 squares -; a cross left at the tip of a one-tile cape is rounded off.
 - **Bigger map (x3)**: a river never has a pixel on the water - it ends on the land touching it; a cliff near the water stands on the coast; small islands and lakes (up to 12 tiles) keep their size and come out round, like a drop of water - no crosses or clovers -, and capes one tile wide stay whole strips; the sea along the coast is always shallow (never deep at once), the beach one pixel wide, specks of deep water in the shallows gone and the line to the deep water smooth.
 - **Test mod**: the army aboard a fleet is tried the safe way - on the shore beside its fleet, put aboard by an engine script at the start (an army on the fleet's sea tile made the game stop reading descr_strat.txt there).
 - **Avoid Growth (Rome, Barbarian Invasion)**: the tick uses the thin box of the scroll's own Automanage tick, and it stays under Automanage when Settlement Details is open beside the scroll (it jumped onto the details page).

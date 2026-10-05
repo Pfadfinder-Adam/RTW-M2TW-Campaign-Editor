@@ -1440,7 +1440,8 @@ def _drops(out, old, grid, w, h):
                 body.append((x, y))
                 if x in (0, w - 1) or y in (0, h - 1):
                     edge = True
-                for a, b in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                for a, b in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1), (x + 1, y + 1), (x - 1, y - 1),
+                             (x + 1, y - 1), (x - 1, y + 1)):          # corner to corner too: a diagonal river is one
                     if 0 <= a < w and 0 <= b < h and not seen[b][a] and old[b][a] == kind:
                         seen[b][a] = True
                         todo.append((a, b))
@@ -1470,6 +1471,13 @@ def _drops(out, old, grid, w, h):
             share = (lambda i: grid[i]) if kind else (lambda i: 1.0 - grid[i])   # how much of its kind the blur put
             cand.sort(key=lambda i: (i not in pinned, -share(i), i))
             take = set(cand[:FACTOR * FACTOR * len(body)])
+            xs, ys = {i % W for i in take}, {i // W for i in take}
+            if len(take) == len(xs) * len(ys):             # a plain rectangle (a one-tile islet: a 3 x 3 square) -
+                corners = [(min(xs), min(ys)), (max(xs), min(ys)), (max(xs), max(ys)), (min(xs), max(ys))]
+                turn = (ox0 * GOLD + oy0 * GOLD * GOLD) % 1.0  # one or two of its corners cut, by the golden ratio
+                for k in range(1 + int(turn * 2)):         # (never the same look twice, the same map always alike)
+                    cx, cy = corners[(int(turn * 4) + 2 * k) % 4]
+                    take.discard(cy * W + cx)
             land = 0 if kind else 1
             for i in cand:
                 out.b[i] = land if i in take else 1 - land
@@ -1510,6 +1518,7 @@ def _smooth_water(is_sea, w, h, edges=EDGE_DEFAULT):
                     land = not wet
             if land:
                 out.b[i] = 1
+    _drops(out, old, grid, w, h)
     for oy in range(h - 1):              # a river of sea tiles corner to corner never breaks: a staircase of water
         for ox in range(w - 1):          # from one middle to the next (the land may claim the corner otherwise)
             for a, b, c, d in ((ox, oy, ox + 1, oy + 1), (ox + 1, oy, ox, oy + 1)):
@@ -1521,7 +1530,6 @@ def _smooth_water(is_sea, w, h, edges=EDGE_DEFAULT):
                         out.b[Y * W + X] = 0
                         Y += 1
                         out.b[Y * W + X] = 0
-    _drops(out, old, grid, w, h)
     for oy in range(h):                  # an old tile's middle the blur left alone (a one-tile cape, islet or lake
         for ox in range(w):              # that holds a town, a port, an army...): the 4 tiles beside it take its kind
             X, Y = ox * FACTOR + mid, oy * FACTOR + mid      # too, a small round piece instead of a lone tile
@@ -1531,6 +1539,22 @@ def _smooth_water(is_sea, w, h, edges=EDGE_DEFAULT):
                 for a, b in side:
                     if 0 <= a < W and 0 <= b < H:
                         out.b[b * W + a] = v
+    for oy in range(h):                  # a cross left round an old middle (a cape one tile long, its tip): the
+        for ox in range(w):              # corners on the side it is joined by take its kind - a rounded tip
+            X, Y = ox * FACTOR + mid, oy * FACTOR + mid
+            if not (0 < X < W - 1 and 0 < Y < H - 1):
+                continue
+            v = out.b[Y * W + X]
+            arms = [out.b[(Y + b) * W + X + a] == v for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1))]
+            corners = [(X + a, Y + b) for a in (-1, 1) for b in (-1, 1)]
+            if sum(arms) < 3 or any(out.b[cy * W + cx] == v for cx, cy in corners):
+                continue
+            for cx, cy in corners:
+                outside = sum(1 for a in (-1, 0, 1) for b in (-1, 0, 1)
+                              if 0 <= cx + a < W and 0 <= cy + b < H and max(abs(cx + a - X), abs(cy + b - Y)) == 2
+                              and out.b[(cy + b) * W + cx + a] == v)
+                if outside >= 2:
+                    out.b[cy * W + cx] = v
     return out
 
 

@@ -3209,16 +3209,17 @@ class App(tk.Tk):
             on_place = res_kw.pop("on_place")
             region_kw.pop("ghost", None)
         region_kw.update(res_kw)
-        if on_place is not None and self.map_view.on_place_stop is None and (
-                getattr(self, "_map_add", None) or getattr(self, "_res_placing", None) or
-                getattr(self, "_port_tool", False)):
+        waiting = bool(getattr(self, "_map_add", None) or getattr(self, "_res_placing", None) or
+                       getattr(self, "_port_tool", False) or getattr(self, "_region_point", None))
+        self.map_view.waiting = waiting
+        if waiting and self.map_view.on_place_stop is None:
 
             def stop_placing():                         # a right click / Esc: what hangs under the mouse is put back
-                self._map_add = None                    # (only what is not on the map yet - nothing is deleted)
-                self._res_placing = None
-                if getattr(self, "_port_tool", False):
-                    self._port_tool = False
-                    self.map_view.set_tool(None)
+                self._map_add = None                    # (only what is not on the map yet - nothing is deleted):
+                self._res_placing = None                # an army, fleet, agent, resource, fort, watchtower, port, a
+                self._port_tool = False                 # new region's town or port
+                self._region_point, self._town_auto = None, False
+                self.map_view.set_tool(None)
                 self.status.set("Nothing placed.")
                 self.show_map()
             self.map_view.on_place_stop = stop_placing
@@ -3241,7 +3242,8 @@ class App(tk.Tk):
                            draggable=mine, on_char_move=moved, check_tile=check, symbols=symbols,
                            on_place=on_place,
                            places=self.place_moves, check_place=check_place, on_place_move=place_moved,
-                           locked=self._locked_hint, forts=self.strat.forts if self.strat else [],
+                           locked=self._locked_hint, forts=[fo for fo in self.strat.forts if fo.line not in self.fort_removed] if self.strat
+                           else [],
                            everyone=self.map_work(), **region_kw)
 
     RELIGION_COLOURS = {"catholic": (214, 170, 60), "orthodox": (70, 110, 190), "islam": (60, 150, 70),
@@ -4527,6 +4529,14 @@ class App(tk.Tk):
                     acid in getattr(self.map_view, "draggable", ()):
                 items.append(("Take the army out: %s (%s) - then click a free tile" % (ach["name"], ach["faction"]),
                               lambda acid=acid: self.take_out(acid)))
+        if fo is not None and not rid:                   # a fort / watchtower / wonder drawn as the file has it:
+            def delete_fort(line=fo.line):              # deleted the same way as a picked one
+                self._res_sel = "f%d" % line
+                self.res_delete()
+            if items:
+                items.append((None, None))
+            items.append(("Delete the %s from the map" % ("wonder %s" % fo.type if fo.kind == "landmark" else fo.kind),
+                          delete_fort))
         if fo is not None and fo.kind == "landmark":     # a wonder (drawn on every map): its window and its model
             from .gui_wonders import show as show_wonder, view_3d
             if items:
