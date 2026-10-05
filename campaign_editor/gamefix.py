@@ -194,10 +194,42 @@ def _game_folder(path):
     return None
 
 
+# the Kingdoms campaigns' folders and the names of their unpack scripts in tools/unpacker
+KINGDOMS_BATS = {"americas": "americas", "british_isles": "britannia", "crusades": "crusades", "teutonic": "teutonic"}
+
+
+def _campaign_folder(path):
+    """(game folder, campaign folder) when path is a Medieval II Kingdoms campaign (or any mod) with packs of its own:
+    <game>/mods/<name>[/data]; else None."""
+    path = os.path.abspath(path)
+    for cand in (path, os.path.dirname(path)):
+        parent = os.path.dirname(cand)
+        if os.path.basename(parent).lower() == "mods" and os.path.isdir(os.path.join(cand, "packs")):
+            return os.path.dirname(parent), cand
+    return None
+
+
 def unpack_needed(path):
-    """{'game', 'unpacker', 'bat', 'dlls': [missing next to the unpacker], 'from': game folder}
-    when path (the game or its data folder) is a Medieval II with packs and nothing unpacked;
-    else None."""
+    """{'game', 'unpacker', 'bat', 'dlls': [missing next to the unpacker], 'packs', 'data': the folder to load
+    afterwards, 'campaign': a Kingdoms campaign's folder name or ''} when path (the game, its data folder or a
+    Kingdoms campaign's folder - mods/british_isles...) is a Medieval II with its files still in packs; else None.
+    Steam's Medieval II comes packed; a campaign's folder holds only its own few files until its packs are unpacked
+    (tools/unpacker/unpack_britannia.bat and the like)."""
+    camp = _campaign_folder(path)
+    if camp:
+        game, folder_c = camp
+        data = os.path.join(folder_c, "data")
+        name = os.path.basename(folder_c)
+        if not _ci(data, "descr_sm_factions.txt"):
+            folder = os.path.join(game, "tools", "unpacker")
+            exe = _ci(folder, "unpacker.exe")
+            bat = _ci(folder, "unpack_%s.bat" % KINGDOMS_BATS.get(name.lower(), name))
+            packs = [n for n in os.listdir(os.path.join(folder_c, "packs")) if n.lower().endswith(".pack")]
+            if exe and packs:
+                return {"game": game, "unpacker": exe, "bat": bat, "packs": len(packs), "data": data,
+                        "campaign": name, "dlls": [d for d in UNPACK_DLLS if not _ci(folder, d)],
+                        "source": "../../mods/%s/packs/*.pack" % name, "base": "mods/%s/data/" % name}
+        return None
     game = _game_folder(path)
     if not game:
         return None
@@ -209,7 +241,8 @@ def unpack_needed(path):
     if not packs or not exe:
         return None
     return {"game": game, "unpacker": exe, "bat": _ci(folder, "unpack_all.bat"),
-            "dlls": [d for d in UNPACK_DLLS if not _ci(folder, d)], "packs": len(packs)}
+            "dlls": [d for d in UNPACK_DLLS if not _ci(folder, d)], "packs": len(packs),
+            "data": os.path.join(game, "data"), "campaign": ""}
 
 
 def unpack(need, log=None):
@@ -230,14 +263,17 @@ def unpack(need, log=None):
     if need.get("bat"):
         cmd = ["cmd", "/c", os.path.basename(need["bat"])]
     else:
-        cmd = [need["unpacker"], "--source=../../packs/*.pack", "--destination=../../"]
+        cmd = [need["unpacker"], "--source=%s" % need.get("source", "../../packs/*.pack"), "--destination=../../"]
+        if need.get("base"):
+            cmd.append("--base_pack_path=%s" % need["base"])
     # the batch ends with 'pause': a newline on stdin lets it finish
     run = subprocess.run(cmd, cwd=folder, input=b"\r\n\r\n", stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     out = run.stdout.decode("latin-1", "replace")
-    if not _ci(os.path.join(need["game"], "data"), "descr_sm_factions.txt"):
-        raise RuntimeError("the unpacker ran (exit %s) but data/descr_sm_factions.txt is still missing:\n%s"
-                           % (run.returncode, out[-2000:]))
+    data = need.get("data") or os.path.join(need["game"], "data")
+    if not _ci(data, "descr_sm_factions.txt"):
+        raise RuntimeError("the unpacker ran (exit %s) but %s is still missing:\n%s"
+                           % (run.returncode, os.path.join(data, "descr_sm_factions.txt"), out[-2000:]))
     return out
 
 

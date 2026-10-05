@@ -185,6 +185,12 @@
   right click on the fort offers *Take the army out*.
 - **Avoid Growth (Medieval II)**: the tick stands in the row of the game's own Auto-manage tick, right of it, at any
   screen size and also when the game gives its scroll in 1024 x 768 layout units.
+- **A Kingdoms campaign still in its packs** (Medieval II from Steam: `mods/british_isles`, `americas`, `crusades`,
+  `teutonic`): Load offers to unpack it with the game's own script for it (`unpack_britannia.bat`...) instead of
+  saying descr_sm_factions.txt is missing; the question for a packed game now says the game plays from its packs
+  and only the editor needs them unpacked.
+- **Test mod**: the step that replaces every picture of the later faction leaves its 3D figures' textures alone (the
+  test picture on a model's skin made solid green figures on the campaign map).
 - **Ctrl shortcuts in any keyboard layout** (Undo / Redo / Preview / Write it, copy / paste / cut / select all, a
   screenshot pasted into a report): a Russian or another non-Latin layout no longer stops them.
 

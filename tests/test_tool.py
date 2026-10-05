@@ -3525,6 +3525,18 @@ building smith
             gamefix.unpack(need)
             self.assertTrue(all(os.path.exists(os.path.join(tools, d)) for d in gamefix.UNPACK_DLLS))
             self.assertIsNone(gamefix.unpack_needed(game))          # unpacked now
+        # a Kingdoms campaign straight from Steam (a tester: 'no descr_sm_factions.txt in ...\\mods\\british_isles'):
+        # its own packs, only a few files in its data - the same offer, with its own unpack script
+        camp = os.path.join(game, "mods", "british_isles")
+        os.makedirs(os.path.join(camp, "packs"))
+        os.makedirs(os.path.join(camp, "data"))
+        open(os.path.join(camp, "packs", "british_isles_0.pack"), "wb").close()
+        open(os.path.join(tools, "unpack_britannia.bat"), "w").close()
+        need = gamefix.unpack_needed(os.path.join(camp, "data"))
+        self.assertEqual((need["campaign"], os.path.basename(need["bat"]), need["data"]),
+                         ("british_isles", "unpack_britannia.bat", os.path.join(camp, "data")))
+        open(os.path.join(camp, "data", "descr_sm_factions.txt"), "w").close()
+        self.assertIsNone(gamefix.unpack_needed(camp))              # unpacked: nothing to offer
 
     def test_english_text_wins(self):
         # the game reads data/text/english first (Medieval II keeps its tables only there):

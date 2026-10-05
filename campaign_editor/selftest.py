@@ -1569,12 +1569,16 @@ def s_roster_take(c, mod):
     return edit(mod, c.campaign, c.edited, {"roster": {"unit:" + u: False}})
 
 
-@step("Art: every picture of {later} replaced (each one the Art tab offers)",
-      "{later}'s pictures (buttons, loading screen, banners, cards...) are the test picture once it comes in")
+@step("Art: every picture of {later} replaced (each one the Art tab offers, but the 3D figures' textures)",
+      "{later}'s pictures (buttons, loading screen, banners, cards...) are the test picture once it comes in; its "
+      "figures on the campaign map look as the template's, in its colours")
 def s_art_all(c, mod):
     from . import factionart as FA
     from .edit import edit
-    pics = [p for p in FA.faction_pictures(mod, c.campaign, c.later) if not p.get("locked") and p.get("size")]
+    # not the 3D models' textures (the campaign map figures, the 3D symbol): the test picture laid over a model's
+    # unfolded skin made solid green figures on the map in the game - the recolour steps test those
+    pics = [p for p in FA.faction_pictures(mod, c.campaign, c.later) if not p.get("locked") and p.get("size")
+            and not p.get("rel", "").startswith("models_strat/")]
     if not pics:
         raise Skip("no pictures of its own")
     return edit(mod, c.campaign, c.later, {"art": {FA.picture_target(p, c.later, c.later): logo(c) for p in pics}})

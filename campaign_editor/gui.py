@@ -3564,10 +3564,12 @@ class App(tk.Tk):
         dlls = (" First %s %s copied from the game folder next to the unpacker (it needs them)." % (
             " and ".join(need["dlls"]), "is" if len(need["dlls"]) == 1 else "are")) if need["dlls"] else ""
         if not messagebox.askyesno(APP, (
-                "This Medieval II is not unpacked yet: its files are still in %d .pack file(s), so there is "
-                "nothing to edit.\n\nUnpack it now with the game's own unpacker (tools\\unpacker)?%s\n\n"
+                "%s is not unpacked yet: its files are still in %d .pack file(s) (Steam's Medieval II comes "
+                "that way - the game reads the packs, so it plays), and there is nothing to edit yet.\n\nUnpack "
+                "it now with the game's own unpacker (tools\\unpacker%s)?%s\n\n"
                 "It takes a few minutes and several GB of disk; the packs stay as they are.") % (
-                need["packs"], dlls)):
+                ("This Medieval II campaign (%s)" % need["campaign"]) if need.get("campaign") else "This Medieval II",
+                need["packs"], ("\\" + os.path.basename(need["bat"])) if need.get("bat") else "", dlls)):
             return
         result = {}
 
@@ -3591,7 +3593,7 @@ class App(tk.Tk):
                 self.status.set("")
                 messagebox.showerror(APP, "Unpacking failed: %s" % result["error"])
                 return
-            self.v_path.set(os.path.join(need["game"], "data"))
+            self.v_path.set(need.get("data") or os.path.join(need["game"], "data"))
             self.load()
             self.status.set("Medieval II unpacked and loaded.")
         wait()
