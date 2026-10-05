@@ -114,15 +114,30 @@ class MapView(ttk.Frame):
                                command=self._mode_changed)
         self._menu = lm
         lm.add_separator()
+
+        def stay(cmd):
+            """A tick in Layers keeps the menu open (it closed after each one): done, the menu is shown again
+            where it was, below its button."""
+            def run():
+                cmd()
+
+                def again():
+                    try:
+                        if lb.winfo_ismapped():
+                            lm.post(lb.winfo_rootx(), lb.winfo_rooty() + lb.winfo_height())
+                    except tk.TclError:
+                        pass
+                lb.after(30, again)
+            return run
         for label, var, cmd in (("Borders", self.v_borders, relayer),
                                 ("Town names", self.v_names, self.render), ("Ports", self.v_ports, self.render),
                                 ("Characters", self.v_chars, self.render), ("Resources", self.v_res, relayer)):
-            lm.add_checkbutton(label=label, variable=var, command=cmd)
+            lm.add_checkbutton(label=label, variable=var, command=stay(cmd))
         lm.add_separator()
         for label, var in (("Relief (map_heights)", self.v_relief),
                            ("Rivers, fords, cliffs (map_features)", self.v_rivers),
                            ("Tile grid when zoomed in", self.v_grid)):
-            lm.add_checkbutton(label=label, variable=var, command=look_changed)
+            lm.add_checkbutton(label=label, variable=var, command=stay(look_changed))
         lb["menu"] = lm
         lb.pack(side="left")
         # the colour mode, in sight on the bar (also in Layers)
@@ -134,7 +149,8 @@ class MapView(ttk.Frame):
         # the two modes that change what a click does, as switches of their own
         ttk.Checkbutton(lbar, text="Edit regions", variable=self.v_regions,
                         command=self._regions_toggled).pack(side="left", padx=(12, 4))
-        ttk.Checkbutton(lbar, text="Edit resources", variable=self.v_res, command=relayer).pack(side="left", padx=4)
+        # resources: no switch of their own on the bar - Layers > Resources shows them (and then they are dragged,
+        # deleted by a right click; new ones come from the legend on the right)
         # Select (as in a strategy game): drag a box with the left button - everything of the ticked kinds inside is
         # added to the selection (Shift takes away), a click adds one thing (Shift + click takes it away), a right click acts on them all; the
         # right button drags the map meanwhile. Towns picked show yellow on the ground alone.

@@ -3655,6 +3655,22 @@ building smith
         open(os.path.join(camp, "data", "descr_sm_factions.txt"), "w").close()
         self.assertIsNone(gamefix.unpack_needed(camp))              # unpacked: nothing to offer
 
+    def test_beach_is_painted_on_the_coast_only(self):
+        # the beach (white ground) lies on the sea's tiles along the coast, one wide, in both games' maps: painted
+        # with the sea's brushes, on a sea tile touching land only
+        from campaign_editor import terrain as T
+
+        class Map:
+            w = h = 5
+
+            def is_sea(self, x, y):
+                return x >= 2
+        self.assertIn(T.BEACH, T.SEA_BRUSHES)
+        self.assertEqual(T.GROUND[T.BEACH], "beach")
+        self.assertIsNone(T.paint_problem(Map(), "ground", (2, 2), T.BEACH, set()))
+        self.assertIsNotNone(T.paint_problem(Map(), "ground", (4, 2), T.BEACH, set()))     # open sea
+        self.assertIsNotNone(T.paint_problem(Map(), "ground", (1, 2), T.BEACH, set()))     # land
+
     def test_rules_that_broke_the_game_are_kept(self):
         # a rule a change of which broke the game in a test (recruitment slots lowered to 0: no town recruited) is
         # greyed out in Campaign rules: any other value is refused, its own value stays fine

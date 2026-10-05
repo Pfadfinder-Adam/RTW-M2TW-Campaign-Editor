@@ -20,14 +20,16 @@ GROUND = {
     (101, 124, 0): "low fertility", (96, 160, 64): "medium fertility", (0, 128, 0): "high fertility",
     (0, 0, 0): "wilderness", (0, 64, 0): "dense forest", (0, 128, 128): "sparse forest",
     (128, 128, 64): "hills", (98, 65, 65): "mountains", (196, 128, 128): "high mountains",
-    (0, 255, 128): "swamp", (255, 255, 255): "beach / impassable", (64, 0, 0): "ocean",
+    (0, 255, 128): "swamp", (255, 255, 255): "beach", (64, 0, 0): "ocean",
     (128, 0, 0): "deep sea", (196, 0, 0): "shallow sea",
     (64, 64, 64): "impassable land", (128, 128, 128): "impassable sea",
 }
 SEA = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (128, 128, 128)}
 LAND_BRUSHES = [(101, 124, 0), (96, 160, 64), (0, 128, 0), (0, 0, 0), (0, 128, 128), (0, 64, 0), (128, 128, 64),
                 (98, 65, 65), (196, 128, 128), (0, 255, 128)]
-SEA_BRUSHES = [(196, 0, 0), (64, 0, 0), (128, 0, 0)]
+# the beach (white): the sea's tiles along the coast, one wide, as both games' own maps draw it (M2TW 502 on the sea,
+# 1 inland; Rome 571 / 9) - painted with the sea's brushes
+SEA_BRUSHES = [(196, 0, 0), (64, 0, 0), (128, 0, 0), (255, 255, 255)]
 
 # map_features.tga colours (one pixel per tile; black = nothing)
 FEATURES = {
@@ -41,6 +43,7 @@ VOLCANO, LAND_BRIDGE = (255, 0, 0), (0, 255, 0)
 
 
 IMPASSABLE_LAND, IMPASSABLE_SEA = (64, 64, 64), (128, 128, 128)
+BEACH = (255, 255, 255)
 
 
 def ground_brushes(game, engine=None):
@@ -103,6 +106,13 @@ def paint_problem(cmap, what, xy, colour, standing):
             return "the sea keeps its climate - climates are painted on land"
         return None
     if what == "ground":
+        if colour == BEACH:                           # the sea's edge along the coast, one tile wide
+            if not sea:
+                return "the beach is the sea's edge along the coast - paint it on a sea tile beside the land"
+            if not any(0 <= x + dx < cmap.w and 0 <= y + dy < cmap.h and not cmap.is_sea(x + dx, y + dy)
+                       for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy):
+                return "the beach is one tile wide along the coast - this sea tile does not touch the land"
+            return None
         if (colour in SEA) != sea:
             return "land and sea are not swapped with the ground brush - use 'Land and sea' (it changes the regions and heights too)"
         if xy in standing and colour in BLOCKED_GROUND:
