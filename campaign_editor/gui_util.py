@@ -155,19 +155,18 @@ class ScrollFrame(ttk.Frame):
 
 
 class HScroll(ttk.Frame):
-    """A row (built in .inner) that scrolls left and right when the window is narrower than it: a scrollbar under
-    it then (a tester on a narrow screen: arrows at the ends were slow to get through many buttons - a bar shows
-    where you are and goes anywhere at once), the mouse wheel over it, and a press dragged sideways (the row follows
-    the mouse smoothly; a click without a drag is a click). Nothing in the row is ever cut off for good."""
+    """A row (built in .inner) that scrolls left and right when the window is narrower than it: the mouse wheel
+    over it and a press dragged sideways (the row follows the mouse smoothly; a click without a drag is a click) -
+    no arrows, no scrollbar taking a line of its own (a tester found arrows slow; the author wants no extra line).
+    Nothing in the row is ever cut off for good."""
     STEP = 60
     DRAG = 6                                     # pixels the mouse moves before a press is a drag, not a click
 
     def __init__(self, parent, **kw):
         super().__init__(parent, **kw)
         self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0, xscrollincrement=0)
-        self.bar = ttk.Scrollbar(self, orient="horizontal", command=self.canvas.xview)
-        self.canvas.configure(xscrollcommand=self.bar.set)
         self.canvas.pack(side="top", fill="x", expand=True)
+        self._wider = False
         self.inner = ttk.Frame(self.canvas)
         self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda e: self._resize())
@@ -210,18 +209,16 @@ class HScroll(ttk.Frame):
         return "break"
 
     def wider(self):
-        """Whether the row is wider than the window (the bar is shown)."""
-        return bool(self.bar.winfo_ismapped())
+        """Whether the row is wider than the window (it scrolls then)."""
+        return self._wider
 
     def _resize(self):
         w, h = self.inner.winfo_reqwidth(), self.inner.winfo_reqheight()
         self.canvas.configure(width=w, height=h, scrollregion=(0, 0, w, h))    # asks for the whole row
-        if w > self.canvas.winfo_width():
-            if not self.wider():
-                self.bar.pack(side="top", fill="x", after=self.canvas)
-        elif self.wider():
-            self.bar.pack_forget()
+        wider = w > self.canvas.winfo_width()
+        if self._wider and not wider:
             self.canvas.xview_moveto(0)
+        self._wider = wider
 
     def step(self, d):
         total = max(self.inner.winfo_reqwidth(), 1)

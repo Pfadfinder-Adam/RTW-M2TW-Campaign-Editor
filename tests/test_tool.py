@@ -3793,6 +3793,13 @@ building smith
         with self.assertRaises(ValueError) as cm:
             E.apply(Plan(mod, "later", "slavs", {}), "test", "slavs", "event", date="6 summer", region="A_R")
         self.assertIn("A_R is held by alpha", str(cm.exception))
+        # plain Rome takes no shadow / split-off faction (a test mod crashed at the end of a turn) - only BI does
+        self.assertEqual(E.ways_for(mod), ("map", "event"))
+        with self.assertRaises(ValueError) as cm:
+            E.apply(Plan(mod, "later", "alpha", {}), "test", "slavs", "shadow", of="alpha")
+        self.assertIn("only Barbarian Invasion", str(cm.exception))
+        self.addCleanup(setattr, E, "ways_for", E.ways_for)
+        E.ways_for = lambda m: E.WAYS                          # the rest as on Barbarian Invasion
         # the shadow of alpha: both header lines; a clone of the dead faction starts plain and alive
         plan = Plan(mod, "later", "alpha", {})
         E.apply(plan, "test", "slavs", "shadow", of="alpha", re_emergent=True)

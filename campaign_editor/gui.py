@@ -52,7 +52,7 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   give / take towns, armies ..... Edit faction: Map (a click on a town), Units & armies (garrisons,
                                   armies, agents, fleets), Map (click towns, drag characters)
   change the campaign map ....... Map tab (move towns and ports, paint regions, resources)
-                                  and the Terrain editor (ground, rivers, climates, heights)
+                                  and the Map editor's Terrain tab (ground, rivers, climates, heights)
   a building / garrisons in many  Many towns... (top row), or the Map:
     towns at once ............... Select, drag a box (left button), right click
   change a unit or a building ... Unit editor / Building editor
@@ -411,6 +411,8 @@ class App(tk.Tk):
         self.v_work = tk.StringVar(value="new")
         self.work_buttons = {}
         for val, text in self.WORK_TITLES.items():
+            if val == "terrain":
+                continue                                 # a tab of the Map editor now, not a work of its own
             b = tk.Radiobutton(self.work_row.inner, text=text, value=val, variable=self.v_work, indicatoron=0,
                                command=self.work_changed, padx=theme.BUTTON_PADX, pady=5, font=("", 10, "bold"),
                                selectcolor="#cfe3ff", relief="raised", offrelief="groove", cursor="hand2")
@@ -755,6 +757,11 @@ class App(tk.Tk):
         self.map_view.pack(fill="both", expand=True)
         self.map_view.on_stroke = self.remember
         self._cmap, self._cmap_for = None, None
+        # the Terrain editor: a tab of the Map editor beside its Map (once a work of its own on the top row - the
+        # author: no sense keeping it up there), made the first time it is opened
+        self.terrain_tab = ttk.Frame(self.nb, padding=0)
+        self.nb.add(self.terrain_tab, text="  Terrain  ")
+        self.nb.hide(self.terrain_tab)                  # shown with the Map editor (_map_tab_only)
         tab = ttk.Frame(self.nb, padding=4)
         self.nb.add(tab, text="  Diplomacy  ")
         self.dip_editor = DiplomacyEditor(tab)
@@ -1216,8 +1223,8 @@ class App(tk.Tk):
         return self.nb.tab(cur, "text").strip() if cur else ""
 
     def select_tab(self, name):
-        if self.map_work() and name != "Map":
-            return                                  # the Map editor shows the map alone (a hidden tab would come back)
+        if self.map_work() and name not in self.MAP_TABS:
+            return                                  # the Map editor shows its own tabs alone (a hidden tab would come back)
         self.nb.select([self.nb.tab(t, "text").strip() for t in self.nb.tabs()].index(name))
 
     MAP_EDITOR_HINT = ("Map editor: drag any faction's towns, ports, armies, agents and fleets (right button); right "
@@ -1228,12 +1235,16 @@ class App(tk.Tk):
         """The Map editor: the map alone, no faction picked - every faction's things alike."""
         return getattr(self, "v_mode", None) is not None and self.v_mode.get() == "map"
 
+    MAP_TABS = ("Map", "Terrain")                   # the Map editor's own tabs
+
     def _map_tab_only(self, on):
-        """The Map editor shows the Map tab alone; New / Edit faction all the tabs again."""
+        """The Map editor shows its Map and Terrain tabs alone; New / Edit faction all the others again (Terrain is
+        the Map editor's)."""
         for t in self.nb.tabs():
-            if self.nb.tab(t, "text").strip() == "Map":
+            name = self.nb.tab(t, "text").strip()
+            if name == "Map":
                 continue
-            if on:
+            if on != (name in self.MAP_TABS):
                 self.nb.hide(t)
             elif self.nb.tab(t, "state") == "hidden":
                 self.nb.add(t)
@@ -1243,6 +1254,9 @@ class App(tk.Tk):
         tab = self.tab_name()
         if tab == "Map":
             self.show_map()
+            return
+        if tab == "Terrain":
+            self.open_terrain()
             return
         if tab == "Diplomacy":
             self.load_diplomacy()
@@ -1298,6 +1312,11 @@ class App(tk.Tk):
         """New / Edit faction share the campaign tabs; the unit and building editors
         take the window's middle instead."""
         w = self.v_work.get()
+        if w == "terrain":                              # a tab of the Map editor now
+            self.v_work.set("map")
+            self.work_changed()
+            self.select_tab("Terrain")
+            return
         if w in self.work_buttons:
             self.work_row.show(self.work_buttons[w])
         if w in ("map", "new", "edit"):
@@ -1332,11 +1351,23 @@ class App(tk.Tk):
         self.update_actions()
         self._mark_work()
 
+    def open_terrain(self):
+        """The Terrain editor in the Map editor's Terrain tab: made the first time, on the mod loaded now."""
+        ed = self.editors.get("terrain")
+        if ed is None:
+            from .gui_terrain import TerrainEditor
+            ed = self.editors["terrain"] = TerrainEditor(self.terrain_tab, self)
+            ed.pack(fill="both", expand=True)
+        if self.mod and ed.mod is not self.mod:
+            self._rebind(ed)
+        self.update_actions()
+        self._mark_work()
+
     def editor(self):
         """The unit, building or character editor on show, made the first time; None for the faction work."""
         w = self.v_work.get()
-        if w not in ("units", "buildings", "characters", "terrain", "addons", "religions"):
-            return None
+        if w not in ("units", "buildings", "characters", "addons", "religions"):
+            return None                                 # (the Terrain editor is a tab of the Map editor now)
         if w not in self.editors:
             if w == "religions":
                 from .gui_religions import ReligionsPanel
@@ -1344,9 +1375,6 @@ class App(tk.Tk):
             elif w == "addons":
                 from .gui_addons import AddonsPanel
                 self.editors[w] = AddonsPanel(self, self)
-            elif w == "terrain":
-                from .gui_terrain import TerrainEditor
-                self.editors[w] = TerrainEditor(self, self)
             elif w == "characters":
                 from .gui_family import FamilyEditor
                 self.editors[w] = FamilyEditor(self, self, standalone=True)
@@ -3564,6 +3592,7 @@ class App(tk.Tk):
             self.regions = self.mod.regions(c)
             self.mod.city_tiles(c)
             self.cb_way_region["values"] = EM.rising_regions(self.mod, c)
+            self.cb_way["values"] = [WAY_LABELS[WAY_KEYS.index(k)] for k in EM.ways_for(self.mod)]
         except Exception as e:
             messagebox.showerror(APP, "Could not read the campaign: %s" % e)
             return
@@ -4895,7 +4924,7 @@ class App(tk.Tk):
         keys = {k for k, _ in self.pending_parts()} if self.mod else set()
         for val, b in getattr(self, "work_buttons", {}).items():
             base = self.WORK_TITLES[val]
-            mine = val in keys or val == self.v_mode.get() and "faction" in keys
+            mine = val in keys or val == self.v_mode.get() and "faction" in keys or val == "map" and "terrain" in keys
             b.configure(text=base + ("  *" if mine else ""))
 
     def _faction_plan(self):

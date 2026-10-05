@@ -269,6 +269,9 @@ def near_capital(c, mod):
       "{shadow} is not on the map at the start; when {new} has a revolt (a civil war), {shadow} takes the rebel "
       "towns - {new}'s far town (the Town window step's) is left without a garrison for it")
 def s_shadow(c, mod):
+    from . import emergence as EM
+    if "shadow" not in EM.ways_for(mod):
+        raise Skip(EM.NOT_ROME)
     from .build import build
     return build(mod, c.campaign, c.template, c.shadow, {
         "display_name": "Shadow Test", "short_name": "Shadow", "adjective": "Shadowy", "raise_faction_limit": True,
@@ -281,6 +284,9 @@ def s_shadow(c, mod):
       "{split} is not on the map at the start; when towns of {template} revolt they go to {split}, in its own "
       "colours ({new} has a shadow already - one faction with both crashes the game at the end of a turn)")
 def s_split(c, mod):
+    from . import emergence as EM
+    if "shadow" not in EM.ways_for(mod):
+        raise Skip(EM.NOT_ROME)
     from .build import build
     return build(mod, c.campaign, c.template, c.split, {
         "display_name": "Split Test", "short_name": "Split", "adjective": "Splitting", "raise_faction_limit": True,
@@ -401,7 +407,7 @@ def s_forts(c, mod):
 
 @step("Town window: a rebel town given to {new}, its population set to 2600 (the level follows the people)",
       "{far} is {new}'s, big enough for 2600 people - with NO garrison on purpose, far from {new}'s capital: when it "
-      "revolts, {shadow} ({new}'s shadow, a civil war) takes it")
+      "revolts, {shadow} ({new}'s shadow, a civil war - Barbarian Invasion and Medieval II) takes it, else the rebels")
 def s_town(c, mod):
     from . import masstown as MT
     region = towns_of(c, mod, "slave")[-1]

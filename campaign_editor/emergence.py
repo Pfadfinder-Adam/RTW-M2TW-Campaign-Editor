@@ -37,6 +37,37 @@ BOTH_TIES = ("%s already has %s as %s - a faction with both a shadow and a facti
              "game at the end of a turn (Barbarian Invasion never has both): pick another faction")
 
 
+# Shadow and split-off factions are Barbarian Invasion's: plain Rome (also with REX) cannot take them - a test mod
+# with them crashed at the end of a turn (the author: 'not compatible with ordinary Rome at all, only in Barbarian
+# Invasion'). Medieval II keeps them (its engine is BI's; a shadow tried in the game with M2EX).
+BI_ONLY = ("shadow", "revolt")
+NOT_ROME = ("only Barbarian Invasion (and Medieval II) take a shadow or a faction splitting off another - plain "
+            "Rome, also with REX, crashes at the end of a turn with one")
+
+
+def is_bi(mod):
+    """Whether a Rome mod is Barbarian Invasion's: its data under a 'bi' folder, or factions already tied the BI way
+    (shadowed_by / spawns_on_revolt in descr_sm_factions)."""
+    import os
+    parts = [x.lower() for x in os.path.normpath(mod.data).split(os.sep)]
+    if "bi" in parts:
+        return True
+    try:
+        return any(t.get(w) for t in ties(mod).values() for w in ("shadowed_by", "spawns_on_revolt", "shadowing",
+                                                                   "spawned_by"))
+    except Exception:
+        return False
+
+
+def ways_for(mod):
+    """The ways in this mod's game takes: all on Medieval II and Barbarian Invasion, plain Rome only 'map' and
+    'event'."""
+    from .limits import game_kind
+    if game_kind(mod) == "rome" and not is_bi(mod):
+        return tuple(w for w in WAYS if w not in BI_ONLY)
+    return WAYS
+
+
 def both_ties(mod):
     """[(faction, shadow, split)] of the factions that carry both shadowed_by and spawns_on_revolt."""
     return [(fac, t["shadowed_by"], t["spawns_on_revolt"]) for fac, t in ties(mod).items()
@@ -153,6 +184,8 @@ def set_way(plan, faction, way, of=None):
     if way not in WAYS:
         raise ValueError("unknown way '%s'" % way)
     mod = plan.mod
+    if way not in ways_for(mod):
+        raise ValueError("%s cannot come in as %s: %s" % (faction, describe(way, of or "another faction"), NOT_ROME))
     f = plan.edit(mod.file("sm_factions"))
     heads = [(i, tokens(f.text(i))[1]) for i in range(len(f))
              if tokens(f.text(i))[:1] == ["faction"] and len(tokens(f.text(i))) > 1]
@@ -328,6 +361,11 @@ def problems(mod, campaign):
             elif (tie[who] or {}).get(PARTNER[word]) != fac:
                 faults.append("descr_sm_factions.txt: %s is '%s %s' but %s's line lacks '%s %s' - the two lines "
                               "go in pairs" % (fac, word, who, who, PARTNER[word], fac))
+    if ways_for(mod) != WAYS:
+        for fac, t in tie.items():
+            for word in ("shadowing", "spawned_by"):
+                if t.get(word):
+                    faults.append("descr_sm_factions.txt: %s is '%s %s' - %s" % (fac, word, t[word], NOT_ROME))
     for fac, shadow, split in both_ties(mod):
         faults.append("descr_sm_factions.txt: %s has a shadow (%s) and a faction splitting off it (%s) - the game "
                       "crashes at the end of a turn (Barbarian Invasion never has both on one faction); keep one"

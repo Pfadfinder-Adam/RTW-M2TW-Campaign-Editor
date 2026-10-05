@@ -140,8 +140,8 @@ class EventsWindow(tk.Toplevel):
         cb["values"] = facs
         cb.grid(row=0, column=1, sticky="w")
         ttk.Label(fr, text="Comes in").grid(row=1, column=0, sticky="w", pady=2)
-        ttk.Combobox(fr, textvariable=v_way, values=WAY_LABELS, state="readonly", width=48).grid(row=1, column=1,
-                                                                                                  sticky="w")
+        ttk.Combobox(fr, textvariable=v_way, values=[WAY_LABELS[WAY_KEYS.index(k)] for k in EM.ways_for(self.mod)],
+                     state="readonly", width=48).grid(row=1, column=1, sticky="w")
         ttk.Label(fr, text="of (shadow / splits off)").grid(row=2, column=0, sticky="w", pady=2)
         cbo = FactionBox(fr, v_of, state="readonly", width=30)
         cbo["values"] = facs

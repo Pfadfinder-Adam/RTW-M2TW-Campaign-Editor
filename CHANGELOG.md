@@ -154,8 +154,11 @@
   builder offers all five stances in its list.
 
 ### Changed
-- **The top row scrolls with a bar under it** when the window is narrower than its buttons (it had arrows at its
-  ends: slow through many buttons); the wheel and dragging the row still work.
+- **The Terrain editor is a tab of the Map editor** (Map | Terrain), no longer a work of its own on the top row.
+- **The top row has no arrows any more** when the window is narrower than its buttons: the mouse wheel over it and
+  dragging it sideways move it, and it takes no extra line.
+- **Shadow and split-off factions only where the game takes them** - Barbarian Invasion and Medieval II; plain
+  Rome (also with REX) is offered 'on the map' and 'by an event' only, and Check mod files names such a tie in it.
 - **Avoid Growth (Rome): the tick sits on the free line under Automanage** (it lay over 'Settlement Details').
 - **Campaign rules: Unit sizes say to change them with care** - with other multipliers than the game's own the
   game's options lost the unit size choice (Rome with REX).

@@ -1,4 +1,4 @@
-"""The Terrain editor (its own work at the top): paint what each tile of the campaign map is
+"""The Terrain editor (the Map editor's Terrain tab, beside its Map): paint what each tile of the campaign map is
 (map_ground_types.tga), what runs across it (map_features.tga: rivers, fords, sources,
 cliffs), its climate (map_climates.tga, the climates of descr_climates.txt) and how high the land is
 (map_heights.tga, a spray brush: held longer, it raises / lowers more), on the map drawn tile by tile. Kept here until Apply, written by terrain.apply with
