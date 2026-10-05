@@ -828,8 +828,23 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
         if new.lower() in taken_levels:
             raise ValueError("a building level '%s' exists in this mod already" % new)
     units_here = {t.lower(): t for t in type_blocks(mod.load(mod.file("edu")))}
+    # who may own each unit (export_descr_unit's ownership, units brought in the same plan too): a recruit line
+    # names only those owners - a line for a unit its faction may not own is a warning of the game's on every start
+    # ('unit(...) does not match up to the ownership for faction(...)': 159 of them in a test mod)
+    from .units import owner_factions, read_units
+    edu_path = mod.file("edu")
+    edu_now = plan.files.get(edu_path) or mod.load(edu_path)     # the plan's copy when units came in with it
+    owners_of = {u.type.lower(): set(owner_factions(mod, u.ownership)) | set(u.ownership) for u in read_units(edu_now)}
+    units_here.update({t: u for t, u in ((u.type.lower(), u.type) for u in read_units(edu_now))})
+    cult = {n: mod.culture(n) for n in facs}
+
+    def may_own(o, unit):
+        own = owners_of.get(unit.lower())
+        if own is None or o == "all" or "all" in own:
+            return True
+        return o in own or any(c == o and n in own for n, c in cult.items())
     unit_map = dict(unit_map or {})
-    dropped, gone = [], []
+    dropped, gone, unowned = [], [], []
     conds = known_conditions(mod)
     at = blocks[-1][2] if blocks else len(f.raw)
     out = []
@@ -849,9 +864,16 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
                     continue
                 text = text.replace('"%s"' % r[1], '"%s"' % target, 1)
             head = strip_comment(text).strip().split()[:1]
+            who = list(factions)
+            if r:
+                who = [o for o in factions if may_own(o, target)]
+                if not who:
+                    if target not in unowned:
+                        unowned.append(target)
+                    continue
             if (r or (head and head[0] in new_levels and "requires" in text)) and factions_groups(text):
                 if len(factions_groups(text)) == 1:
-                    text = with_factions(text, list(factions))
+                    text = with_factions(text, who)
                 else:
                     plan.warn(f, "%s: a line with several factions groups (REX) kept as it is - check it in the "
                                  "Building editor" % (head[0] if head else "?"))
@@ -867,6 +889,9 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
     f.insert(at, out)
     if gone:
         plan.warn(f, "taken out, this mod does not have them (the game would stop at start): %s" % ", ".join(gone))
+    if unowned:
+        plan.note(f, "recruit line(s) left out - %s may not own the unit (export_descr_unit.txt's ownership; give it "
+                     "in Roster first): %s" % (", ".join(factions), ", ".join(unowned)))
     if dropped:
         plan.warn(f, "recruit line(s) left out - the unit is not in this mod: %s (bring the unit too, or add a "
                      "recruit line in the Building editor)" % ", ".join(dropped))

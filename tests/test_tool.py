@@ -5234,6 +5234,34 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
 
+    def test_brought_building_recruits_only_units_its_faction_may_own(self):
+        """Bring from another mod: a brought barracks recruited the units of every culture, each line written for the
+        new faction - the game warned 'unit(...) does not match up to the ownership for faction(...)' 159 times on
+        every start (a test mod in Rome). A recruit line now names only the factions export_descr_unit lets own the
+        unit; a line no picked faction may own is left out, said."""
+        from campaign_editor import packs
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, slave, }\n"
+              "        {\n            capability\n            {\n"
+              "                recruit \"alpha general\"  0  requires factions { alpha, }\n"
+              "                recruit \"rebel spear\"  0  requires factions { slave, }\n"
+              "            }\n        }\n    }\n}\n")
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        shutil.copytree(self.root, os.path.join(target, "mod"))
+        tmod = ModData(os.path.join(target, "mod"))
+        bman, bfiles = packs.collect_buildings(ModData(self.root), ["barracks"])
+        plan = Plan(tmod, "pack", "pack", {})
+        cn, ln = packs.building_names(tmod, bman)
+        packs.import_buildings(plan, bman, bfiles, ["alpha"], cn, ln)
+        text = "\n".join(plan.files[tmod.file("edb")].texts())
+        block = text[text.index("building " + cn["barracks"]):]
+        self.assertIn('recruit "alpha general"  0  requires factions { alpha, }', block)
+        self.assertNotIn("rebel spear", block)                       # alpha may not own it
+        self.assertIn("may not own the unit", plan.report())
+        self.assertNotIn(tmod.file("edu"), plan.files)               # export_descr_unit only read
+
     def test_brought_lines_lose_conditions_this_mod_lacks(self):
         # a tester brought BI's british legionaries into plain Rome: their recruit line kept 'hidden_resource
         # britain', which Rome does not have, and REX stopped at start ('unrecognised hidden resource')

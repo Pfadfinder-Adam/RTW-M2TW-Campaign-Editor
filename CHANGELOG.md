@@ -430,6 +430,10 @@
   game's volcano model stays its size. Each volcano keeps a cone of its own; mountain ground is never a flat
   field (its crags at least a mountain's usual slope); lakes that are water only in the heights wind with the
   coast and their banks come down to the water gently, with no wall.
+- **Bring from another mod: a brought building's recruit lines named its faction for every unit**, also units
+  of other cultures it may not own - the game warned 'unit(...) does not match up to the ownership for
+  faction(...)' at every start (159 times in a test). A recruit line now names only the factions
+  `export_descr_unit.txt` lets own the unit; a line none of them may own is left out, said in Preview.
 - **Make the map 3 x bigger stopped on a mod with an empty `map_heights.hgt`** ('unpack_from requires a buffer of
   at least 8 bytes'). An empty or cut `.hgt`, or one that does not fit `map_heights.tga`, is now made again from the
   new heights picture, the way the game converts it, and the window says so.
