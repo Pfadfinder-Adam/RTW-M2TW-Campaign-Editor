@@ -97,8 +97,9 @@ def add_at(app, kind, xy, preset=None, faction=None):
         ttk.Checkbutton(frm, text="Make him a general", variable=v_general).grid(row=row, column=1, columnspan=2,
                                                                               sticky="w")
         ttk.Label(frm, foreground="#666", wraplength=420, justify="left",
-                  text="his first unit is the faction's general's bodyguard, so the game shows him as a general "
-                       "with his own name (not a captain)").grid(row=row + 1, column=1, columnspan=2, sticky="w")
+                  text="a character with his own name, not in the family tree (the game may adopt him later, "
+                       "after a great victory); his bodyguard leads his army, so the game shows him as a general, not "
+                       "a captain").grid(row=row + 1, column=1, columnspan=2, sticky="w")
         row += 2
     note = ttk.Label(frm, foreground="#666", wraplength=420, justify="left")
     note.grid(row=row, column=0, columnspan=3, sticky="w", pady=(4, 0))
@@ -168,8 +169,10 @@ def add_at(app, kind, xy, preset=None, faction=None):
             from .edit import bodyguard_unit
             guard = bodyguard_unit(app.mod, camp, fac)      # the rebels' own: a unit they may own
             if not guard:
-                messagebox.showerror(APP, "%s may own no general's bodyguard unit (general_unit in the unit file) - "
-                                          "untick 'Make him a general' or give it one in the Unit editor." % fac,
+                messagebox.showerror(APP, "This mod's unit file gives %s no general's bodyguard (a unit marked "
+                                          "general_unit - the one its family members ride with too), so the editor "
+                                          "cannot tell which unit is his. Give the bodyguard unit %s in its "
+                                          "ownership in the Unit editor, or untick 'Make him a general'." % (fac, fac),
                                      parent=w)
                 return
         if fac == app.field_faction() and not app.map_only():
