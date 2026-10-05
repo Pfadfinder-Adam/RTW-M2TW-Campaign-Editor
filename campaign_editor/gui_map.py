@@ -543,11 +543,11 @@ class MapView(ttk.Frame):
             row("rebel village (no town yet)", town("", "black", 1, hollow=True))
             row("an army in it: a flag on its roof", lambda x, yy: self._roof_flag(x - 6, yy + 5, 13, "__legend__", ()))
             row("a port (click the coast)", port, "port")
-            row("a fort (top: its owner's colour)",
+            row("a fort (owner's colour)",
                 lambda x, yy: self._fort_icon(lc, x, yy + 2, 7, "#%02x%02x%02x" % self.LEGEND_RED, (), 2), "fort")
-            row("a watchtower",
-                lambda x, yy: self._fort_icon(lc, x, yy + 2, 5, "#%02x%02x%02x" % self.LEGEND_RED, (), 2),
-                "watchtower")
+            row("a watchtower (the same)",
+                lambda x, yy: self._fort_icon(lc, x, yy + 2, 6, "#%02x%02x%02x" % self.LEGEND_RED, (), 2,
+                                              "watchtower"), "watchtower")
             if any(fo.kind == "landmark" for fo in self.forts):
                 row("a wonder (landmark): right drag",
                     lambda x, yy: self._wonder_icon(lc, x, yy, 8, "", ()))
@@ -1156,21 +1156,53 @@ class MapView(ttk.Frame):
             col = self.colours.get(fo.owner) if fo.owner else None
             edge = "#%02x%02x%02x" % tuple(col) if col else "#222222"
             w = max(2.0, min(self.z * (0.28 if fo.kind == "watchtower" else 0.42), 36))
-            self._fort_icon(c, sx, sy, w, edge, ("fort", "fort:%d" % fo.line), 2 if col else 1)
+            self._fort_icon(c, sx, sy, w, edge, ("fort", "fort:%d" % fo.line), 2 if col else 1, fo.kind)
 
     @staticmethod
-    def _fort_icon(c, sx, sy, w, edge, tags, width=1):
-        """A brown tower outlined in black; its battlements in the owner's colour (edge)."""
-        h = w * 1.3
-        c.create_rectangle(sx - w, sy - h * 0.5, sx + w, sy + h * 0.6, fill="#9a6a38", outline="black",
-                           width=max(1, width), tags=tags)
-        if w >= 4:
-            for k in (-1, 0, 1):                  # battlements
-                bx = sx + k * w * 0.66
-                c.create_rectangle(bx - w * 0.25, sy - h * 0.5 - w * 0.45, bx + w * 0.25, sy - h * 0.5,
-                                   fill=edge, outline="black", tags=tags)
-            c.create_rectangle(sx - w * 0.25, sy + h * 0.1, sx + w * 0.25, sy + h * 0.6, fill="black",
-                               outline="", tags=tags)   # the gate
+    def _fort_icon(c, sx, sy, w, edge, tags, width=1, kind="fort"):
+        """A fort: a small stone castle - two towers with roofs in the owner's colour (edge), the wall between with
+        its battlements and an arched gate. A watchtower: a wooden lookout on legs, its roof in the owner's colour
+        (report: the two looked alike). Both inside sx +- w, sy - 1.3 w .. sy + 0.8 w."""
+        top, bottom = sy - w * 1.3, sy + w * 0.8
+        line = max(1, width) if w >= 6 else 1                   # a thick outline would eat a small sign
+        if kind == "watchtower":
+            leg = max(1, int(w / 4))
+            wood, dark = "#9a6a38", "#4a3018"
+            for a, b in ((-0.6, -0.32), (0.6, 0.32)):           # the legs, a little apart at the foot
+                c.create_line(sx + a * w, bottom, sx + b * w, sy - w * 0.25, fill=dark, width=leg, tags=tags)
+            if w >= 4:                                           # the cross brace
+                c.create_line(sx - w * 0.5, bottom - w * 0.25, sx + w * 0.38, sy, fill=dark, tags=tags)
+                c.create_line(sx + w * 0.5, bottom - w * 0.25, sx - w * 0.38, sy, fill=dark, tags=tags)
+            c.create_rectangle(sx - w * 0.5, sy - w * 0.75, sx + w * 0.5, sy - w * 0.2, fill=wood, outline="black",
+                               width=line, tags=tags)            # the lookout
+            if w >= 4:
+                c.create_rectangle(sx - w * 0.2, sy - w * 0.62, sx + w * 0.2, sy - w * 0.38, fill="#2a1f14",
+                                   outline="", tags=tags)        # its window
+            c.create_polygon(sx - w * 0.72, sy - w * 0.75, sx + w * 0.72, sy - w * 0.75, sx, top, fill=edge,
+                             outline="black", width=line, tags=tags)   # the roof
+            return
+        stone, dark = "#b3ab9f", "#3a332c"
+        if w < 4:                                                # far away: a block with the owner's top
+            c.create_rectangle(sx - w, sy - w * 0.6, sx + w, bottom, fill=stone, outline=dark, tags=tags)
+            c.create_rectangle(sx - w, top + w * 0.3, sx + w, sy - w * 0.6, fill=edge, outline=dark, tags=tags)
+            return
+        c.create_rectangle(sx - w * 0.6, sy - w * 0.35, sx + w * 0.6, bottom, fill=stone, outline=dark,
+                           width=line, tags=tags)                # the wall
+        for k in (-1, 0, 1):                                     # its battlements
+            bx = sx + k * w * 0.32
+            c.create_rectangle(bx - w * 0.1, sy - w * 0.55, bx + w * 0.1, sy - w * 0.35, fill=stone, outline=dark,
+                               tags=tags)
+        for k in (-1, 1):                                        # the towers and their roofs
+            x0, x1 = (sx - w, sx - w * 0.5) if k < 0 else (sx + w * 0.5, sx + w)
+            c.create_rectangle(x0, sy - w * 0.75, x1, bottom, fill=stone, outline=dark, width=line, tags=tags)
+            c.create_polygon(x0 - w * 0.08, sy - w * 0.75, x1 + w * 0.08, sy - w * 0.75, (x0 + x1) / 2, top,
+                             fill=edge, outline="black", width=line, tags=tags)
+            c.create_rectangle((x0 + x1) / 2 - w * 0.06, sy - w * 0.45, (x0 + x1) / 2 + w * 0.06, sy - w * 0.2,
+                               fill="#2a1f14", outline="", tags=tags)          # an arrow slit
+        r = w * 0.24                                             # the arched gate
+        c.create_rectangle(sx - r, sy + w * 0.2, sx + r, bottom, fill="#2a1f14", outline="", tags=tags)
+        c.create_arc(sx - r, sy + w * 0.2 - r, sx + r, sy + w * 0.2 + r, start=0, extent=180, fill="#2a1f14",
+                     outline="", tags=tags)
 
     def _wonder_icon(self, c, sx, sy, w, kind, tags, sel=False):
         """A wonder (Rome's landmark): a golden pyramid, its type written beside it up close."""
@@ -1201,7 +1233,8 @@ class MapView(ttk.Frame):
             if res["kind"] in ("fort", "watchtower"):          # a fort keeps its tower, picked: a yellow frame
                 w = max(2.0, min(self.z * (0.28 if res["kind"] == "watchtower" else 0.42), 36))
                 col = self.colours.get(res.get("owner")) if res.get("owner") else None   # battlements: the owner's
-                self._fort_icon(c, sx, sy, w, "#%02x%02x%02x" % tuple(col) if col else "#222222", tags, 2 if col else 1)
+                self._fort_icon(c, sx, sy, w, "#%02x%02x%02x" % tuple(col) if col else "#222222", tags, 2 if col else 1,
+                                res["kind"])
                 if sel:
                     c.create_rectangle(sx - w - 3, sy - w * 1.3 - 3, sx + w + 3, sy + w + 3, outline="#ffd400",
                                        width=3, tags=tags)
@@ -1342,7 +1375,7 @@ class MapView(ttk.Frame):
                              fill=edge, stipple="gray50", outline=edge, tags=tags)
         elif kind in ("fort", "watchtower"):            # held in the hand: the sign itself, framed green / red
             w = max(4.0, min(self.z * (0.28 if kind == "watchtower" else 0.42), 36))
-            self._fort_icon(c, cx, cy, w, "#222222", tags, 1)
+            self._fort_icon(c, cx, cy, w, "#222222", tags, 1, kind)
             c.create_rectangle(cx - w - 3, cy - w * 1.3 - 3, cx + w + 3, cy + w + 3, outline=edge, width=2, tags=tags)
         elif kind == "landmark":
             rr = max(5, min(self.z * 0.45, 40))

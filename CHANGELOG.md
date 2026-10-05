@@ -170,6 +170,8 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **Forts and watchtowers on the map** drawn anew: a fort is a small stone castle (two towers, a wall, a gate), a
+  watchtower a wooden lookout on legs - both with roofs in the owner's colour (the two looked alike).
 - **Every button looks alike and takes less room**: about 1.5 x lower than before (21 px instead of 29 - 33), the
   same frame, padding and gap everywhere - the top row's works and windows, Tools and the other menu buttons, Start
   the game and Ko-fi (their own colours, the same frame), the colour buttons and the Terrain tab's palette (the
