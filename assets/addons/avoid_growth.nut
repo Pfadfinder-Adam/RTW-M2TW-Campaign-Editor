@@ -273,6 +273,13 @@ function ag_rect(el) {
     }
     try {
         local r = [el.screenX, el.screenY, el.screenWidth, el.screenHeight]
+        // a build that gives the game's rects in 1024 x 768 layout units: the capture scroll's add-ons find it
+        // out (the scroll is centred) and leave the factors here - turned into screen px
+        local k = "ce_layout_units" in getroottable() ? getroottable().ce_layout_units : null
+        if (k != null) {
+            r = [(r[0] * k[0]).tointeger(), (r[1] * k[1]).tointeger(), (r[2] * k[0]).tointeger(),
+                 (r[3] * k[1]).tointeger()]
+        }
         if (r[2] > 0 && r[3] > 0) {
             return r
         }

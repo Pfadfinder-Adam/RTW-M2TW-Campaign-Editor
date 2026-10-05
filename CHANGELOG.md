@@ -453,6 +453,10 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Raze Settlement (Medieval II) and Sack Settlement (Rome): the button in its place on every screen** - some
+  builds give the capture scroll's buttons in the game's 1024 x 768 layout units, so at 1920 x 1080 the button stood
+  left of the scroll; now such units are turned into screen pixels (Avoid Growth's tick follows the same). Put the
+  add-on in again (Add-ons) to get the new copy.
 - **Map: a double click on a fort or watchtower** works again on the Map editor (forts are drawn there as movable
   signs and were not found): its army's units open; an empty one offers a new army for it.
 - **Bigger map (x3): cliffs stay on the land** - a cliff the winding new coast put in the water moves onto the land

@@ -231,6 +231,7 @@ local raze_force_region = null       // region the Raze button asked for
 local raze_button_canvas = null
 local raze_button_art = null          // { l, m, r, dl, dm, dr } text-button sprites
 local raze_button_logged = false
+local raze_units_logged = false
 local raze_scroll_flag = false        // loot_settlement_scroll open, from ScrollOpened (a hint only)
 local RAZE_HOLD_TICKS = 300           // longest wait for the capture scroll to shut
 local raze_hold_ticks = 0
@@ -1272,6 +1273,29 @@ function raze_button_draw() {
     local scroll = raze_element_rect(raze_game_element("loot_settlement_scroll"))
     local ens = raze_element_rect(raze_game_element("loot_settlement_enslave_button"))
     local occ = raze_element_rect(raze_game_element("loot_settlement_occupy_button"))
+    // Some builds give the scroll's rects in the game's 1024x768 layout units, not screen px (a tester at
+    // 1920x1080: the button stood left of the scroll, where Exterminate would be on a 1024x768 screen). The
+    // capture scroll is centred: a centre nearer 512 than half the screen's width means layout units.
+    local screen = null
+    local units = null
+    try {
+        screen = ui.screenSize()
+    } catch (err) {
+    }
+    local mid = scroll != null ? scroll : ext
+    if (screen != null && screen[0] > 1100 && mid != null) {
+        local cx = mid[0] + mid[2] / 2.0
+        local d1 = cx - 512.0, d2 = cx - screen[0] / 2.0
+        if (d1 * d1 < d2 * d2) {
+            units = [screen[0] / 1024.0, screen[1] / 768.0]
+            getroottable().ce_layout_units <- units   // the other add-ons (Avoid Growth) read it too
+            if (!raze_units_logged) {
+                raze_units_logged = true
+                raze_log("the scroll's rects are in 1024x768 layout units - scaled to the " + screen[0] + "x"
+                    + screen[1] + " screen")
+            }
+        }
+    }
     if (!raze_button_logged) {
         raze_button_logged = true
         local fmt = function(r) { return r == null ? "-" : "[" + r[0] + "," + r[1] + " " + r[2] + "x" + r[3] + "]" }
@@ -1293,6 +1317,12 @@ function raze_button_draw() {
     if (scroll != null && x + w > scroll[0] + scroll[2]) {
         x = ext[0]
         y = ext[1] + h + h / 4
+    }
+    if (units != null) {                           // layout units -> screen px
+        x = (x * units[0]).tointeger()
+        w = (w * units[0]).tointeger()
+        y = (y * units[1]).tointeger()
+        h = (h * units[1]).tointeger()
     }
 
     local hit = ui.hitRect(x, y, w, h)
