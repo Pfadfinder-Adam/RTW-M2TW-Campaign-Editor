@@ -307,6 +307,8 @@ class MassTownWindow(tk.Toplevel):
             tv.insert("", "end", iid=t["region"], values=(t["name"], t["owner"], _level(t),
                                                           self._garrison_text(t)))
             n += 1
+        from .gui_util import tint_owners
+        tint_owners(tv, {t["region"]: t["owner"] for t in self._shown() if tv.exists(t["region"])}, self.app.mod)
         self.left_box.configure(text="All towns - %d shown of %d" % (n, len(self.towns) - len(self.chosen)))
 
     def _what(self, t):
@@ -346,6 +348,8 @@ class MassTownWindow(tk.Toplevel):
             text, tag = self._what(t)
             do += tag == "do"
             tv.insert("", "end", iid=r, values=(t["name"], t["owner"], _level(t), text), tags=(tag,) if tag else ())
+        from .gui_util import tint_owners
+        tint_owners(tv, {r: self.by[r]["owner"] for r in self.chosen}, self.app.mod)
         self.right_box.configure(text="Chosen towns - %d" % len(self.chosen))
         self.lbl_chosen.configure(text="%d will change" % do if self.chosen else "")
 

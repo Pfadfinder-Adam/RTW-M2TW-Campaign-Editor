@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **Unpacking Medieval II**: the unpacker's question 'Do you agree to these terms and conditions? (Y/N)' is answered Y (the offer says so) - it waited and nothing was unpacked; a Kingdoms campaign unpacks into its own folder (mods/<campaign>/data).
+- **Map**: a port is deleted from the right-click menu (its fleet goes to the sea beside, the town's harbour buildings go; Undo brings it back).
+- **Town lists** (Many towns, the Buildings and town lists): each town's row in a muted shade of its owner's colour.
 - **Building pictures**: a building level given to a faction whose culture has no picture of it gets the picture of a culture that has one (there was only a note to import one); a copied building chain takes another culture's picture where a culture lacks its own.
 - **Map signs**: the dagger's guard thinner; a merchant is a coin with the euro sign, a heretic a lightning bolt.
 - **Credits**: the reporters thanked by the names they signed with; no quotes.

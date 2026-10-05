@@ -216,11 +216,88 @@ def sea_spot(mod, campaign, port, taken):
     return None
 
 
+PORT_CHAINS = ("port", "sea_trade", "port_buildings")   # a town's harbour chains: gone with its port
+
+
+def _remove_ports(plan, campaign, regions):
+    """The ports of `regions` taken off the map: the port pixel of map_regions.tga back to its region's land, a fleet
+    standing on it moved to the sea beside, the town's harbour buildings (a port with no port on the map) taken out
+    of descr_strat.txt."""
+    mod = plan.mod
+    path = mod.campaign_file(campaign, "map_regions.tga")
+    info = mod.regions(campaign)
+    changes = {}
+    sp = mod.campaign_file(campaign, "descr_strat.txt")
+    f = plan.edit(sp)
+    s = Strat(f)
+    taken = {c.xy for fb in s.factions for c in fb.characters if c.xy}
+    for region in regions:
+        at = orig(mod, campaign, "port", region)
+        if not at:
+            continue
+        changes[tuple(at)] = info[region]["colour"]
+        plan.notes.append((mod.rel(path), "the port of %s at %d, %d taken off the map" % (region, at[0], at[1])))
+        for c in port_fleets(s, tuple(at)):
+            dest = sea_spot(mod, campaign, tuple(at), taken)
+            if dest:
+                taken.discard(c.xy)
+                taken.add(dest)
+                f.set(c.start, RE_XY.sub("x %d, y %d" % dest, f.text(c.start), 1))
+                plan.note(f, "%s's fleet leaves the port of %s for the sea at %d, %d" % (c.name, region, dest[0],
+                                                                                        dest[1]))
+        s = Strat(f)                                  # afresh: an earlier town's lines may be gone
+        town = next((st for fb in s.factions for st in fb.settlements if st.region == region), None)
+        lines = f.texts()
+        start, end = (town.start, town.end) if town else _settlement_span(lines, region)
+        if start is None:
+            continue
+        i = end - 1
+        while i >= start:                             # building { type <chain> <level> } blocks of a harbour chain
+            t = lines[i].split()
+            if t[:1] == ["type"] and len(t) >= 2 and t[1] in PORT_CHAINS:
+                a, b = i, i
+                while a > start and lines[a].strip() != "building":
+                    a -= 1
+                while b < end - 1 and lines[b].strip() != "}":
+                    b += 1
+                if lines[a].strip() == "building":
+                    f.delete(a, b + 1)
+                    plan.note(f, "%s: its %s building taken out - the town has no port now" % (region, t[1]))
+                    lines = f.texts()
+                    i = a
+            i -= 1
+    if changes:
+        plan.binary(path, patched(path, changes))
+        for folder in {os.path.dirname(path), os.path.join(mod.data, "world", "maps", "base")}:
+            plan.delete(os.path.join(folder, "map.rwm"), "the game rebuilds it from the changed map")
+
+
+def _settlement_span(lines, region):
+    """(first, end) of the settlement block naming `region` in descr_strat lines, or (None, None)."""
+    for i, l in enumerate(lines):
+        if l.split()[:2] == ["region", region]:
+            a = i
+            while a > 0 and lines[a].strip() != "settlement" and not lines[a].strip().startswith("settlement"):
+                a -= 1
+            depth, b = 0, a
+            while b < len(lines):
+                depth += lines[b].count("{") - lines[b].count("}")
+                b += 1
+                if depth == 0 and b > a + 1 and "{" in "".join(lines[a:b]):
+                    break
+            return a, b
+    return None, None
+
+
 def apply_places(plan, campaign, places):
     """places = [{'what': 'city'|'port', 'region', 'to': (x, y)}]: repaint
     map_regions.tga, remove map.rwm, move the characters on a moved town."""
     mod = plan.mod
     moved = {}
+    gone = [p["region"] for p in places if p["what"] == "port" and p.get("to") is None]
+    places = [p for p in places if p.get("to") is not None]
+    if gone:
+        _remove_ports(plan, campaign, gone)
     for p in places:
         key = (p["what"], p["region"])
         why = place_problem(mod, campaign, p["what"], p["region"], tuple(p["to"]),

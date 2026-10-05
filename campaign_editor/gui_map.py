@@ -972,6 +972,8 @@ class MapView(ttk.Frame):
         if self.v_ports.get() and signs:              # far out: towns only - less to draw, less clutter
             new = {r: xy for (w, r), xy in self.places.items() if w == "port" and r not in cm.ports}
             for region, (x, y) in list(cm.ports.items()) + list(new.items()):     # a new port too (not written yet)
+                if region in getattr(self, "ports_gone", ()):
+                    continue                            # taken off the map (written with the next Apply)
                 x, y = self.places.get(("port", region), (x, y))
                 sx, sy = self.to_screen(x, y)
                 if -10 < sx < cw + 10 and -10 < sy < ch + 10:
@@ -1743,6 +1745,8 @@ class MapView(ttk.Frame):
             cid = self._char_under(e.x, e.y)
             self.menu_res = self._res_under(e.x, e.y)          # a resource / fort / tower under the mouse
             self.menu_fort = self._fort_line_under(e.x, e.y)        # a fort / tower / wonder sign (also when not editing)
+            under = self._place_under(e.x, e.y)
+            self.menu_port = under[1] if under and under[0] == "port" else None
             items = self.on_menu(town[1] if town else xy, town[0] if town else None, cid) or []
         m = tk.Menu(self, tearoff=0)
         for label, fn in items:

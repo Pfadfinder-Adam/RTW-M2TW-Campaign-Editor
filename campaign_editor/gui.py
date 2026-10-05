@@ -318,6 +318,7 @@ class App(tk.Tk):
         self.field = []                 # [{kind, name, age, units, xy}] armies/agents/fleets to place
         self.removed_existing = []      # Edit: [{name, from}] characters taken off the map
         self.place_moves = {}           # {('city' | 'port', region): (x, y)} towns and ports moved on the map
+        self.ports_gone = []            # regions whose port is taken off the map (right click > Delete the port)
         # the Map's changes for any faction (not only the one made or edited): towns given {region: new owner},
         # armies / agents / fleets placed {faction: [character dicts]} - written with the next Apply
         self.map_owners, self.map_chars, self.map_removed = {}, {}, {}
@@ -1629,7 +1630,7 @@ class App(tk.Tk):
         return out
 
     # ------------------------------------------------------------------ undo / redo
-    UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "place_moves", "char_moves", "field",
+    UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "place_moves", "ports_gone", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions", "new_religions", "region_edits",
                  "culture_names", "name_list", "res_moves", "res_removed", "res_added", "region_tags", "fort_moves", "fort_removed", "fort_added", "art_replace", "sel_map", "figures", "roster_set",
                  "family_set", "map_owners", "map_chars", "map_removed", "map_moves", "map_units")
@@ -3232,6 +3233,7 @@ class App(tk.Tk):
         self._map_labels = self.culture_labels(owners, me)
         self.map_view.allow_religion(self._m2())
         self.map_view.tools = self._map_tools()           # the legend's signs that are tools here
+        self.map_view.ports_gone = set(self.ports_gone)
         from .resources import types as _res_types
         self.map_view.res_types = list(_res_types(self.mod))
         if self.map_view.v_rel.get():                # Religion colours: each region in its main religion's colour
@@ -3594,7 +3596,8 @@ class App(tk.Tk):
                 "%s is not unpacked yet: its files are still in %d .pack file(s) (Steam's Medieval II comes "
                 "that way - the game reads the packs, so it plays), and there is nothing to edit yet.\n\nUnpack "
                 "it now with the game's own unpacker (tools\\unpacker%s)?%s\n\n"
-                "It takes a few minutes and several GB of disk; the packs stay as they are.") % (
+                "It takes a few minutes and several GB of disk; the packs stay as they are. The unpacker asks you to "
+                "agree to SEGA's terms for it - Yes here answers Y to that for you.") % (
                 ("This Medieval II campaign (%s)" % need["campaign"]) if need.get("campaign") else "This Medieval II",
                 need["packs"], ("\\" + os.path.basename(need["bat"])) if need.get("bat") else "", dlls)):
             return
@@ -3757,6 +3760,7 @@ class App(tk.Tk):
         self.field, self._placing = [], None
         self.editing_now, self.char_moves = None, {}
         self.place_moves = {}
+        self.ports_gone = []
         self.map_owners, self.map_chars, self.map_removed = {}, {}, {}
         self.map_moves, self.map_units = {}, {}          # the Map editor: any faction's characters moved, units
         self.dip_set.clear()
@@ -4093,6 +4097,9 @@ class App(tk.Tk):
                                                     else "  [its own]",
                                                     "  " + " ".join(str(v) for v in (size.get("level"),
                                                     size.get("population")) if v is not None) if size else ""))
+        owners_now = self.town_owners() if self.strat else {}
+        for i, r in enumerate(self.chosen):
+            self._tint_row(self.lb_build, i, owners_now.get(r))
         if keep_units_selection and bsel and bsel[0] < len(self.chosen):
             self.lb_build.selection_set(bsel[0])
         self.lb.delete(0, "end")
@@ -4100,6 +4107,7 @@ class App(tk.Tk):
             owner = self.town_owners().get(r, "?") if self.strat else "?"
             mark = "  [%d units]" % len(self.garrisons[r]) if r in self.garrisons else ""
             self.lb.insert("end", "%s  (%s)%s" % (r, owner, mark))
+            self._tint_row(self.lb, "end", owner)
         self.cb_capital["values"] = self.chosen
         if self.v["capital"].get() not in self.chosen:
             self.v["capital"].set(self.chosen[0] if self.chosen else "")
@@ -4495,6 +4503,19 @@ class App(tk.Tk):
                     self.lb_build.selection_set(self.chosen.index(region))
                     self.load_buildings()
                 items.append(("Its buildings...  (Buildings)", buildings))
+        port = getattr(self.map_view, "menu_port", None)
+        if port and port not in self.ports_gone:
+            def delete_port(port=port):
+                self.remember()
+                self.ports_gone.append(port)
+                self.place_moves.pop(("port", port), None)
+                self.status.set("The port of %s goes with the next Apply (its fleet moves to the sea beside, its "
+                                "harbour buildings go) - Preview first; Undo brings it back." % port)
+                self._mark_work()
+                self.show_map()
+            if items:
+                items.append((None, None))
+            items.append(("Delete the port of %s" % port, delete_port))
         rid = getattr(self.map_view, "menu_res", None)
         what = None
         if rid:                                        # a resource, fort, watchtower or wonder: gone with its line
@@ -4994,8 +5015,26 @@ class App(tk.Tk):
             "family": copy.deepcopy(self.family_set) if self.family_set else None,
             "victory": self.victory.get()}
 
+    def _tint_row(self, lb, index, owner):
+        """A town's row in the muted colour of its owner (gui_util.owner_tint)."""
+        from .gui_util import owner_tint
+        from .mapdata import faction_colours
+        if getattr(self, "_fc_for", None) is not self.mod:
+            try:
+                self._fc, self._fc_for = faction_colours(self.mod), self.mod
+            except Exception:
+                self._fc, self._fc_for = {}, self.mod
+        bg = owner_tint(self._fc.get(owner)) if owner else None
+        if bg:
+            try:
+                lb.itemconfigure(index, background=bg)
+            except tk.TclError:
+                pass
+
     def _places(self):
-        return [{"what": w, "region": r, "to": xy} for (w, r), xy in self.place_moves.items()]
+        return [{"what": w, "region": r, "to": xy} for (w, r), xy in self.place_moves.items()
+                if not (w == "port" and r in self.ports_gone)] + \
+            [{"what": "port", "region": r, "to": None} for r in self.ports_gone]
 
     def map_only(self):
         """The Map editor, or New faction mode with no faction named yet: the buttons write the map's changes

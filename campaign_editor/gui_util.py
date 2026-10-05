@@ -776,3 +776,30 @@ def experimental(parent):
                     font=("", 9, "bold"))
     lab.bind("<Configure>", lambda e: lab.configure(wraplength=max(e.width - 4, 200)))
     return lab
+
+
+def owner_tint(rgb):
+    """A list row's background in the muted colour of the faction owning it (its primary colour, softened toward the
+    window's own) - who holds a town is seen at a glance; the text stays readable."""
+    from . import theme
+    if not rgb:
+        return None
+    base = (40, 42, 46) if theme.dark() else (255, 255, 255)
+    k = 0.3 if theme.dark() else 0.32
+    return "#%02x%02x%02x" % tuple(int(b + (c - b) * k) for c, b in zip(rgb[:3], base))
+
+
+def tint_owners(tree, rows, mod):
+    """Each Treeview row {iid: owner faction} gets its owner's muted colour (owner_tint) as a tag 'own:<faction>'."""
+    from .mapdata import faction_colours
+    try:
+        colours = faction_colours(mod)
+    except Exception:
+        return
+    for iid, owner in rows.items():
+        tag = "own:%s" % owner
+        bg = owner_tint(colours.get(owner))
+        if not bg or not tree.exists(iid):
+            continue
+        tree.tag_configure(tag, background=bg)
+        tree.item(iid, tags=tuple(t for t in tree.item(iid, "tags") if not str(t).startswith("own:")) + (tag,))
