@@ -28,7 +28,7 @@ def open_upscale(app):
     """The window of Bigger map (x3)... (App.upscale_map)."""
     from .moddata import ModData
     from .plan import Plan, restore_to
-    from .upscale import FACTOR, plan_upscale
+    from .upscale import FACTOR, look_over, plan_upscale
     if not app.mod:
         messagebox.showinfo(APP, "Load a mod first.")
         return
@@ -68,7 +68,7 @@ def open_upscale(app):
     state.pack(anchor="w", pady=(10, 0))
     bar = ttk.Frame(frm)
     bar.pack(anchor="e", pady=(10, 0))
-    plans, done = {}, {}
+    plans, warns, done = {}, {}, {}
 
     def make_plan():
         vertical = v_high.get()
@@ -78,11 +78,11 @@ def open_upscale(app):
         w.config(cursor="watch")
         buttons(False)
 
-        def step(text):                           # a big map takes half a minute: say what is being done
-            v_state.set("Working (a big map takes about half a minute): %s" % text)
+        def step(text):                           # a big map takes a minute or two: say what is being done
+            v_state.set("Working (a big map takes a minute or two): %s" % text)
             w.update()
         try:
-            plan_upscale(p, camp, vertical=vertical, progress=step)
+            warns[vertical] = plan_upscale(p, camp, vertical=vertical, progress=step)
         except Exception as e:
             log.write("upscale failed: %s" % e)
             v_state.set("The map could not be made bigger: %s" % e)
@@ -118,15 +118,17 @@ def open_upscale(app):
         except Exception:
             now = ""
         app.status.set("The map is 3 x bigger now%s - written (backup %s)." % (now, bdir))
-        v_state.set("DONE: the map is 3 x bigger now%s.\nStart the game and look - on the first start the game "
-                    "builds map.rwm again, which takes a while.\nNot happy with it? 'Put the old map back' undoes it "
-                    "(or later: Tools > Restore a backup...)." % now)
+        v_state.set("DONE: the map is 3 x bigger now%s.\nLook it over (what to look at: the message that opened), "
+                    "then start the game - on the first start the game builds map.rwm again, which takes a while.\n"
+                    "Not happy with it? 'Put the old map back' undoes it (or later: Tools > Restore a backup...)."
+                    % now)
         for b in bar.winfo_children():
             b.destroy()
         for r in radios:                          # written: the choice is made
             r.state(["disabled"])
         ttk.Button(bar, text="Put the old map back", command=undo).pack(side="left")
         ttk.Button(bar, text="Close", command=w.destroy).pack(side="left", padx=(6, 0))
+        messagebox.showinfo(APP, look_over(warns.get(v_high.get(), ())), parent=w)   # look it over yourself
 
     def undo():
         bdir = done.get("bdir")

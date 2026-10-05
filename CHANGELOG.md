@@ -176,6 +176,13 @@
   and the same map always comes out alike. Every old tile's middle keeps its region, land or sea, ground and climate
   (nothing changes under a town, army or resource), every region stays in as many pieces as before, rivers stay on
   the land, the beach one tile wide.
+- **Bigger map (x3): a border that ran along a river stays on the river** - the new borders wound across the new
+  rivers; now the land on each bank belongs to that bank's region, the river itself to its own. Lone pixels sticking
+  out of a border (one side of their own region, two of another) go to the region round them, on every border.
+- **Bigger map (x3): it says what to look over** - once the map is written, a message lists what to check by hand in
+  the Map editor and in the game (coasts and river mouths, navigable rivers and straits, borders along rivers, ports,
+  passes), which brushes fix small things, and what the editor could not do itself: no rule draws every map 100 %
+  right.
 - **Bigger map (x3): the relief the natural way** - the heights bend with the ground (hills and their ground types
   stay together), mountains get crags in three sizes as real ones have (plains stay flat; half as strong when the
   heights grow 3 x, which grows the crags too), and every river carves its valley (deep in the mountains, hardly at

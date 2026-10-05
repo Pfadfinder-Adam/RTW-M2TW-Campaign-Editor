@@ -2825,6 +2825,19 @@ building smith
         with open(out, "rb") as fh:
             self.assertEqual(fh.read(), first)          # the same map, the same picture
 
+    def test_bigger_map_says_what_to_look_over(self):
+        """Once the map is 3 x bigger the window says what to look over by hand (no rule draws every map 100 %
+        right) and adds what the editor could not do itself - short, at most 8 lines of it."""
+        from campaign_editor import upscale
+        text = upscale.look_over()
+        for words in ("100 %", "coasts and river mouths", "along a river", "Put the old map back", "Paint with"):
+            self.assertIn(words, text)
+        many = ["campaign_script.txt: line(s) %d hold numbers" % k + " x" * 400 for k in range(10)]
+        text = upscale.look_over(many)
+        self.assertIn("could not do itself", text)
+        self.assertIn("... and 2 more in the editor's log", text)
+        self.assertTrue(all(len(line) <= 302 for line in text.splitlines()))
+
     def test_bigger_map_natural_heights(self):
         """x3 heights the natural way: the sea and land as the mask says, no slope (times the heights' growth)
         steeper than the old map's steepest, a river's valley lower than the land beside it, the land round a town

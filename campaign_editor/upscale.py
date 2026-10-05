@@ -1783,10 +1783,34 @@ def _dimensions(f, vertical=1.0):
     return n
 
 
+def look_over(warnings=()):
+    """What the modder should look over by hand once the map is 3 x bigger (shown when it is written): the new
+    map is drawn by rules, and no rule draws every map 100 % right."""
+    text = ("The map is 3 x bigger now. Please look it over yourself before you play or share it: the new map is "
+            "drawn from the old one by rules, and no rule gets every map 100 % right - here and there a coast, a "
+            "river or a border can come out a pixel off.\n\n"
+            "Look in the Map editor (its Map and Terrain tabs), then in the game, at:\n"
+            "- coasts and river mouths: a stray pixel of land in the water or of water on the land\n"
+            "- navigable rivers and narrow straits: still open where ships pass\n"
+            "- borders that run along a river: on the river, not across it\n"
+            "- every port on the coast, every town with its own land round it\n"
+            "- mountains and passes: armies can still get through\n\n"
+            "Small things are quick to fix by hand: the Map tab's 'Paint with' brush for borders, the Terrain "
+            "tab's Land and sea, heights and ground brushes for the rest. Not happy with the whole map? 'Put the "
+            "old map back' undoes it.")
+    warnings = list(warnings)
+    if warnings:
+        text += "\n\nAnd what the editor could not do itself:\n" + "\n".join(
+            "- " + (w if len(w) <= 300 else w[:297] + "...") for w in warnings[:8])
+        if len(warnings) > 8:
+            text += "\n- ... and %d more in the editor's log" % (len(warnings) - 8)
+    return text
+
+
 def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
     """Every file of the map made 3 x bigger, in the plan (nothing written until Apply). vertical: how much higher
     the hills, mountains and sea floor get (3 = in proportion with the wider land; 1 = as high as before). Returns
-    the warnings. progress(text) is told each step (a big map takes half a minute)."""
+    the warnings. progress(text) is told each step (a big map takes a minute or two)."""
     say = progress or (lambda text: None)
     mod = plan.mod
     warn = []
@@ -1812,10 +1836,13 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
                         "one pixel wide -, cliffs and land bridges as unbroken lines, river mouths on the new coast)")
     say("map_regions.tga...")
     info = {}
-    plan.binary(regions_path, regions_scaled(regions_path, lands, coast, keep_land, info, natural=True))
+    on_rivers = (river_tiles(feats), rivers) if rivers else None      # a border along a river stays on it
+    plan.binary(regions_path, regions_scaled(regions_path, lands, coast, keep_land, info, natural=True,
+                                             rivers=on_rivers))
     plan.note(None, "map_regions.tga made 3 x bigger (a winding coast and winding borders between regions, no 3 x 3 "
-                    "steps, every region in as many pieces as before; every town with its own region round it, "
-                    "every port on a coastal land tile touching the sea and its region)")
+                    "steps and no lone pixel sticking out, a border that ran along a river still on the river, "
+                    "every region in as many pieces as before; every town with its own region round it, every port "
+                    "on a coastal land tile touching the sea and its region)")
     for (x, y), spot, why in info.get("moved_ports", []):
         warn.append("the port at %d, %d: %s (now at %d, %d)" % (x, y, why, spot[0], spot[1]))
     hmask = heights_data = None
