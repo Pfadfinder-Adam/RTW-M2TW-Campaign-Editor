@@ -2689,6 +2689,29 @@ building smith
         M.data = os.path.join(game, "bi", "data")
         self.assertEqual(mod_ref(M, ref), ref)
 
+    def test_bigger_map_cliffs_stay_on_land(self):
+        """A cliff the winding new coast put in the water moves onto the land beside it (a tester's DaC x3: cliffs in
+        the shallow sea; the games' own maps have none there)."""
+        from campaign_editor import upscale
+        C, black = upscale.CLIFF, (0, 0, 0)
+        n = 6
+        px = [[black] * n for _ in range(n)]
+        for y in range(n):
+            px[y][3] = C                                  # a cliff down the coast's last land column
+        path = os.path.join(self.root, "feat.tga")
+        write_tga(path, n, n, px)
+        land = upscale.Mask(18, 18)
+        for X in range(18):
+            for Y in range(18):
+                land[(X, Y)] = X < 10 + (Y % 3)           # the new coast cuts into the cliff's blocks
+        data, _ = upscale.features_scaled(path, land, natural=True)
+        with open(path, "wb") as fh:
+            fh.write(data)
+        at = upscale._pixels(path)[5]
+        cl = [(X, Y) for X in range(18) for Y in range(18) if at(X, Y) == C]
+        self.assertTrue(cl)
+        self.assertEqual([p for p in cl if not land[p]], [])
+
     def test_bigger_map_fords_over_wide_rivers(self):
         """A mod's wide river painted as sea tiles, crossed by land bridges (map_features green - DaC's fords): after
         x3 each bridge is still one unbroken line from bank to bank, whatever the winding coast does."""

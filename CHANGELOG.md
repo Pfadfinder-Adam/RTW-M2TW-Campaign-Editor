@@ -447,6 +447,8 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Bigger map (x3): cliffs stay on the land** - a cliff the winding new coast put in the water moves onto the land
+  beside it (cliffs showed in the shallow sea).
 - **Report a bug / Suggest** takes up to 10 pictures (it was 3, and more were dropped without a word); pictures over
   the limit are named.
 - **Rome: a faction that comes by an event** now comes as a horde, as Barbarian Invasion's Slavs do: it gets the

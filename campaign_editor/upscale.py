@@ -1668,6 +1668,24 @@ def features_scaled(path, land=None, natural=False):
             at = next((q for q in ((at[0], at[1] + 1), (at[0], at[1] - 1), (at[0] + 1, at[1]),   # river beside it
                                    (at[0] - 1, at[1])) if q in drawn), at)
         paint(at[0], at[1], c)
+    if land is not None:                                      # a cliff stands on the land's edge, never in the water
+        def get(x, y):                                        # (a tester's DaC x3: cliffs in the shallow sea where
+            r = (H - 1 - y) if top_down else y                # the winding coast took their tile; the games' own
+            o = (r * W + x) * step                            # maps have none on the sea)
+            return (raw[o + 2], raw[o + 1], raw[o])
+        sides = ((1, 0), (-1, 0), (0, 1), (0, -1))
+        wet = [(x, y) for y in range(H) for x in range(W) if get(x, y) == CLIFF and not land.get((x, y), True)]
+        for x, y in wet:
+            _put(raw, W, H, step, top_down, x, y, (0, 0, 0))
+        for x, y in wet:                                      # onto the land beside it that touches the water
+            near = [(x + a, y + b) for a, b in sides if 0 <= x + a < W and 0 <= y + b < H
+                    and land.get((x + a, y + b), False) and get(x + a, y + b) == (0, 0, 0)
+                    and any(not land.get((x + a + c, y + b + d), True) for c, d in sides)]
+            if near:
+                q = max(near, key=lambda q: sum(1 for c, d in sides
+                                                if 0 <= q[0] + c < W and 0 <= q[1] + d < H
+                                                and get(q[0] + c, q[1] + d) == CLIFF))
+                _put(raw, W, H, step, top_down, q[0], q[1], CLIFF)
     if land is not None:                                      # a river ends where the new coast begins: land kept
         for p in [p for p in drawn if not land.get(p, True)]: # under it stood in the sea as a sandbar (a tester's
             _put(raw, W, H, step, top_down, p[0], p[1], (0, 0, 0))   # DaC: a strip of beach off every river mouth)
