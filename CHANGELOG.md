@@ -184,8 +184,7 @@
   builder offers all five stances in its list.
 
 ### Changed
-- **Barbarian Invasion takes a shadow and a split-off faction on one faction** (Rome with REX: three real revolts in
-  the game, no crash - the revolting towns go to the shadow); plain Rome and Medieval II still refuse it.
+- **One faction with both a shadow and a split-off faction** is refused only in plain Rome (it crashes at the end of a turn). Medieval II with M2EX and Barbarian Invasion with REX take it without a crash; Preview says that the revolting towns then go to the shadow, so the split-off faction does not come while the shadow is there.
 - **Bigger map (x3): values you turn yourself** - the window has a field for each: hills and mountains (times
   higher), smoothing of the lines (the coast, rivers drawn as sea, the borders, the edges of ground and climates: 1 =
   smooth, as water finds its level - no 3 x 3 steps, no beads or breaks in a narrow river; 0.67 = lighter; 0 =

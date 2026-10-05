@@ -4335,8 +4335,7 @@ building smith
         FAILED: faction.cpp: can_horde()', the faction never came; 'Couldn't find title string for historic event'):
         its event writes the Mongols' horde lines with its own units (no general's) after custom_battle_availability
         and the event's title and text; a block with horde lines keeps them; Check finds an event faction without
-        them; one faction with a shadow and a split-off is refused with Medieval II's own reason (the revolting town
-        went to the shadow)."""
+        them; one faction with a shadow and a split-off is taken, with Preview saying the revolting towns go to the shadow."""
         from campaign_editor import emergence as E, limits
         from campaign_editor.minimod import EDU
         d = os.path.join(self.root, "data")
@@ -4386,9 +4385,9 @@ building smith
         plan = build(mod, "test", "alpha", "shade", {"start": {"way": "shadow", "of": "alpha", "denari": 1,
                                                                  "regions": [], "leader": None}})
         plan.apply()
-        with self.assertRaises(ValueError) as cm:
-            E.set_way(Plan(ModData(self.root), "x", "y", {}), "riders", "revolt", "alpha")
-        self.assertIn("went to the shadow", str(cm.exception))
+        p2 = Plan(ModData(self.root), "x", "y", {})                    # Medieval II takes both (no crash in game)
+        E.set_way(p2, "riders", "revolt", "alpha")                    # but says the revolting towns go to the shadow
+        self.assertIn("goes to the shadow", p2.report())
 
     def test_one_town_population_and_owner(self):
         """The town window's writes (masstown.apply): the population line, the town handed to another faction (the

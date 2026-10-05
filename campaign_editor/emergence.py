@@ -31,12 +31,15 @@ PARTNER = {"shadowing": "shadowed_by", "spawned_by": "spawns_on_revolt",
            "shadowed_by": "shadowing", "spawns_on_revolt": "spawned_by"}
 OWN_WORD = {"shadow": "shadowing", "revolt": "spawned_by"}       # the way -> the word on the faction's own line
 DEAD_WORDS = ("dead_until_resurrected", "re_emergent")
-# one faction with a shadow AND a faction splitting off it crashes plain Rome at the end of a turn (REX:
-# SETTLEMENT::get_revolt_type); Barbarian Invasion with REX takes both (the in-game tester, run 1934: three real
-# revolts, no crash - the towns went to the shadow), so only plain Rome and Medieval II refuse it
-BOTH_TIES = ("%s already has %s as %s - one faction takes only one of the two: Rome with REX crashed at the end of a "
-             "turn, and in Medieval II with M2EX its revolting town went to the shadow, the split-off faction never came "
-             "(Barbarian Invasion never has both): pick another faction")
+# ONE faction with a shadow AND a faction splitting off it (in the games, checked by the in-game tester):
+#   plain Rome with REX - crashes at the end of a turn (SETTLEMENT::get_revolt_type): refused;
+#   Medieval II with M2EX, Barbarian Invasion with REX - no crash, but every revolting town goes to the SHADOW, so the
+#   split-off faction never comes: allowed, with that said in Preview.
+BOTH_TIES = ("%s already has %s as %s - plain Rome crashes at the end of a turn with both on one faction: pick "
+             "another faction")
+BOTH_NOTE = ("%s has both a shadow and a faction splitting off it: the game takes it (Medieval II with M2EX and "
+             "Barbarian Invasion with REX, no crash), but every town of %s that revolts goes to the shadow - the "
+             "split-off faction never comes while the shadow is there")
 # Medieval II brings a faction that comes by an event in as a HORDE (the Mongols' and Timurids' way): the engine stops
 # when its descr_sm_factions block has no horde lines - 'ASSERT FAILED: faction.cpp: can_horde()', 'horde.cpp: ...
 # m_horde_unit_resource_ids.empty()' (a tester's game with M2EX: the faction never came). The Mongols' own numbers:
@@ -223,10 +226,12 @@ def set_way(plan, faction, way, of=None, both_ok=False):
         other = PARTNER[OWN_WORD["revolt" if way == "shadow" else "shadow"]]
         m = re.search(r",\s*%s\s+([A-Za-z0-9_]+)" % other, strip_comment(line))
         from .limits import game_kind
-        bi = game_kind(mod) == "rome" and is_bi(mod)       # BI with REX takes both (the in-game tester: three
-        if m and m.group(1) != faction and not (both_ok or bi):   # real revolts, no crash - towns go to the shadow)
-            raise ValueError(BOTH_TIES % (of, m.group(1), "a shadow" if way == "revolt" else
-                                          "a faction splitting off it"))
+        plain_rome = game_kind(mod) == "rome" and not is_bi(mod)
+        if m and m.group(1) != faction:
+            if plain_rome and not both_ok:
+                raise ValueError(BOTH_TIES % (of, m.group(1), "a shadow" if way == "revolt" else
+                                              "a faction splitting off it"))
+            plan.warn(f, BOTH_NOTE % (of, of))
 
     if way_of(mod, faction, _ties_in(f)) == (way, of if way in ("shadow", "revolt") else None):
         return                                      # already so: nothing to change
@@ -553,11 +558,9 @@ def problems(mod, campaign):
                 faults.append("descr_sm_factions.txt line %d: can_homeless is REX's and M2EX's own word - the game "
                               "without them does not know it" % (i + 1))
                 break
-    for fac, shadow, split in ([] if not m2 and is_bi(mod) else both_ties(mod)):
-        faults.append("descr_sm_factions.txt: %s has a shadow (%s) and a faction splitting off it (%s) - %s "
-                      "(Barbarian Invasion never has both on one faction); keep one" % (
-                          fac, shadow, split, "its revolting towns go to the shadow, the split-off faction never comes "
-                          "(Medieval II with M2EX)" if m2 else "the game crashes at the end of a turn (Rome with REX)"))
+    for fac, shadow, split in ([] if m2 or is_bi(mod) else both_ties(mod)):     # plain Rome only: it crashes
+        faults.append("descr_sm_factions.txt: %s has a shadow (%s) and a faction splitting off it (%s) - plain Rome "
+                      "crashes at the end of a turn with both on one faction; keep one" % (fac, shadow, split))
     if True:                                # both games bring a faction that comes by an event as a horde
         blocks_ = {}
         cur = None
