@@ -5,8 +5,9 @@ Why 3: an odd factor keeps each town, port, army and resource in the MIDDLE of i
 
 What it writes (Preview lists it; one backup, Restore gives everything back):
 - world/maps/base pictures (colours stay exact - no new colours are made, except the heights' blended values):
-    W x H         map_regions with a SMOOTH coast (a new point is land when most of the old land round it is: the
-                  coast is a rounded line, not 3 x 3 squares; every block's middle keeps its old value, so towns,
+    W x H         map_regions with a WINDING coast and winding region borders (a new point is land when most of
+                  the old land round a place bent by _warp - two golden-ratio waves - is: bays and capes, not 3 x 3
+                  squares nor 45-degree cuts; a region keeps its pieces; every block's middle keeps its old value, so towns,
                   armies and resources stay on their kind of ground). The rules both games' own maps keep (measured
                   on vanilla Rome and Medieval II, 2026-10-02): a town pixel in its block's middle with its own
                   region (or sea) all round it; a port on a coastal LAND tile (its heights' point is land) touching
@@ -20,7 +21,7 @@ What it writes (Preview lists it; one backup, Restore gives everything back):
                   exactly when the new map_regions has sea there (heights_from_tiles), and map_heights.hgt beside it
                   at the new size (the game reads it instead of the picture and never makes it again);
                   map_ground_types and map_climates BY TILES (kinds_scaled: every new tile the kind of the old tile
-                  it lies in, natural edges between kinds, the sea ground under the heights' sea), map_fog
+                  it lies in, winding edges between kinds, the sea ground under the heights' sea), map_fog
     2W x 2H       map_roughness (smooth)
   and the campaign's disasters.tga, radar_map1 / radar_map2 (when present);
 - descr_terrain.txt: the dimensions (width / height x 3) and - by default - the heights x 3 (max_land_height,
@@ -117,13 +118,29 @@ def _weights(kind, n_old):
     return out
 
 
-def _sources(kind, w, h):
+def _sources(kind, w, h, natural=False):
     """For each new point (X, Y) - bottom-up, like the game's tiles -: the 4 old points round it with their
     weights. A block's middle (tiles) or an old corner point (corners) has its old point at weight 1, so it keeps
-    its old value exactly: towns, armies, resources and the rest never change their kind of ground."""
+    its old value exactly: towns, armies, resources and the rest never change their kind of ground. natural (tiles
+    only): every other pixel looks from a place bent by _warp, so a coast or a border made from these weights winds
+    like a real one instead of running in steps and straight 45-degree cuts."""
     xs, ys = _weights(kind, w), _weights(kind, h)
+    bend = natural and kind == "tiles"
+    mid = FACTOR // 2
     for Y, (ya, yb, fy) in enumerate(ys):
         for X, (xa, xb, fx) in enumerate(xs):
+            if bend and not (X % FACTOR == mid and Y % FACTOR == mid):
+                wx, wy = _warp(X, Y)
+                px = min(max((X + 0.5 + wx) / FACTOR - 0.5, 0.0), w - 1.0)
+                py = min(max((Y + 0.5 + wy) / FACTOR - 0.5, 0.0), h - 1.0)
+                xa, ya = int(px), int(py)
+                xb, yb = min(xa + 1, w - 1), min(ya + 1, h - 1)
+                fx, fy = px - xa, py - ya
+                yield X, Y, ((xa, ya, (1 - fx) * (1 - fy)), (xb, ya, fx * (1 - fy)),
+                             (xa, yb, (1 - fx) * fy), (xb, yb, fx * fy))
+                xa, xb, fx = xs[X]
+                ya, yb, fy = ys[Y]
+                continue
             yield X, Y, ((xa, ya, (1 - fx) * (1 - fy)), (xb, ya, fx * (1 - fy)),
                          (xa, yb, (1 - fx) * fy), (xb, yb, fx * fy))
 
@@ -149,14 +166,14 @@ class Mask:
         return default
 
 
-def _share_mask(kind, w, h, flag):
+def _share_mask(kind, w, h, flag, natural=False):
     """A yes / no picture made bigger SMOOTHLY: a new point is yes when more than half of the 4 old points round it
     (by weight) are (a tie: its nearest old point decides). Blocks become rounded shapes - a coast drawn in
     3 x 3 squares becomes a smooth line - while every old middle keeps its value. -> Mask, W, H."""
     W, H = len(_weights(kind, w)), len(_weights(kind, h))
     out = Mask(W, H)
     flags = {}
-    for X, Y, pts in _sources(kind, w, h):
+    for X, Y, pts in _sources(kind, w, h, natural):
         share = 0.0
         for x, y, wt in pts:
             f = flags.get((x, y))
@@ -283,7 +300,19 @@ def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0):
     return struct.pack("<II", W, H) + struct.pack("<%df" % (W * H), *out)
 
 
-def kinds_scaled(path, mask=None, sea_colours=(), rounds=2, shore=()):
+def _warp(TX, TY):
+    """A smooth sideways shift (in new tiles, -1.2 .. 1.2) for the tile TX, TY: two waves whose sizes stand in the
+    golden ratio, so the field never repeats (quasi-periodic, as girih's patterns) and borders bend like a forest's
+    or a marsh's edge, not in 3 x 3 steps nor in random dots; the same map, the same shift."""
+    import math
+    k = 2 * math.pi / 13.0                          # a bend every ~13 new tiles (4 - 5 old ones)
+    p = 1 / GOLD                                    # 1.618...
+    wx = 0.65 * math.sin(k * (TX + p * TY)) + 0.55 * math.sin(k * p * (TY - 0.5 * TX) + 1.3)
+    wy = 0.65 * math.sin(k * (TY - p * TX) + 2.1) + 0.55 * math.sin(k * p * (TX + 0.5 * TY) + 0.4)
+    return wx, wy
+
+
+def kinds_scaled(path, mask=None, sea_colours=(), rounds=2, shore=(), natural=False):
     """A picture of kinds on the heights' grid (map_ground_types, map_climates; 2W+1 x 2H+1, a tile = the point at
     its middle and the 8 round it) made 3 x bigger BY TILES - a tester's DaC map lost its forests: 8 of every 9 new
     tiles took their kind from the old picture's in-between points (Mirkwood: dense forest middles, wilderness
@@ -321,6 +350,13 @@ def kinds_scaled(path, mask=None, sea_colours=(), rounds=2, shore=()):
                             if best is None or d < best[0]:
                                 best = (d, k)
                 c = best[1] if best else default[want]
+            if natural and not (TX % FACTOR == FACTOR // 2 and TY % FACTOR == FACTOR // 2):
+                wx, wy = _warp(TX, TY)                     # natural edges: the kind from a bent place (land kinds
+                sx = min(max(int((TX + 0.5 + wx) / FACTOR), 0), ow - 1)   # only, never across the coast)
+                sy = min(max(int((TY + 0.5 + wy) / FACTOR), 0), oh - 1)
+                k = old(sx, sy)
+                if not is_sea(k) and not is_sea(c):
+                    c = k
             types[TY * TW + TX] = c
     if rounds:
         _round_tiles(types, TW, TH, keep=is_sea)
@@ -430,16 +466,17 @@ def _thin_shore(types, TW, TH, ow, oh, old, is_sea, shore):
                 types[y * TW + x] = old(a, b)
 
 
-def ground_scaled(path, mask, sea_colours):
+def ground_scaled(path, mask, sea_colours, natural=False):
     """map_ground_types made bigger by tiles (kinds_scaled): sea or land as the heights' new coast (mask) says, the
-    sea ground under the heights' sea as in the games' own maps, the beach one tile wide along the new coast."""
-    return kinds_scaled(path, mask, sea_colours, shore=(BEACH,))
+    sea ground under the heights' sea as in the games' own maps, the beach one tile wide along the new coast.
+    natural: the edges between kinds of ground wind (_warp) instead of following the 3 x 3 blocks."""
+    return kinds_scaled(path, mask, sea_colours, shore=(BEACH,), natural=natural)
 
 
-def climates_scaled(path):
+def climates_scaled(path, natural=False):
     """map_climates made bigger by tiles (kinds_scaled): every new tile the climate of the old tile it lies in, the
-    edges between climates natural."""
-    return kinds_scaled(path)
+    edges between climates rounded (natural: winding as well)."""
+    return kinds_scaled(path, natural=natural)
 
 
 def _pixels(path):
@@ -489,19 +526,20 @@ def land_colours(regions_path, region_colours, heights_path=None):
     return lands
 
 
-def coast_mask(path, lands):
+def coast_mask(path, lands, natural=False):
     """map_regions' land made bigger smoothly: Mask of the new tiles (lands: land_colours - towns and ports count as
-    land)."""
+    land). natural: the coast winds (bays and capes, _warp) instead of running in steps and 45-degree cuts; every
+    old tile's middle keeps its land or sea."""
     data, w, h, step, top_down, at = _pixels(path)
     lands = set(lands) | {CITY, PORT}
-    return _share_mask("tiles", w, h, lambda x, y: at(x, y) in lands)[0]
+    return _share_mask("tiles", w, h, lambda x, y: at(x, y) in lands, natural)[0]
 
 
 def _mode(cols):
     return max(sorted(set(cols)), key=cols.count) if cols else None
 
 
-def regions_scaled(path, lands, mask=None, keep_land=(), info=None):
+def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=False):
     """map_regions x3 with a SMOOTH coast (mask: coast_mask): a land pixel takes the region of the old land tile round
     it with the most weight, a sea pixel the sea's colour; keep_land (pixels under a river) stay land. Each town on its
     block's middle pixel with its own region all round it (the game wants the 8 tiles round a town its region or
@@ -512,7 +550,7 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None):
     lands = set(lands) | {CITY, PORT}
     plain = lands - {CITY, PORT}                  # the colours a land pixel takes
     if mask is None:
-        mask = coast_mask(path, lands)
+        mask = coast_mask(path, lands, natural)
     keep_land = set(keep_land)
     N4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
     N8 = N4 + ((1, 1), (1, -1), (-1, 1), (-1, -1))
@@ -546,7 +584,7 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None):
     land_of = lambda x, y: colour(x, y) in plain
     W, H = w * FACTOR, h * FACTOR
     raw = _blank(W, H, step, (0, 0, 0))
-    for X, Y, pts in _sources("tiles", w, h):
+    for X, Y, pts in _sources("tiles", w, h, natural):     # natural: borders between regions wind as the coast
         land = mask[(X, Y)] or (X, Y) in keep_land
         p = _pick(pts, land, land_of)
         if p is None and land:                    # no land tile round it (a river kept on land, a coast corner)
@@ -562,6 +600,8 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None):
         r = (H - 1 - Y) if top_down else Y
         o = (r * W + X) * step
         return (raw[o + 2], raw[o + 1], raw[o])
+    if natural:
+        _join_pieces(raw, W, H, step, top_down, plain)
     town_px = set()
     for x, y in towns:                            # the town and its own region all round it (its 3 x 3 block)
         cx, cy = new_xy(x, y)
@@ -615,6 +655,52 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None):
         info["land"] = land
         info["moved_ports"] = moved
     return _write(data, W, H, step, raw)
+
+
+def _join_pieces(raw, W, H, step, top_down, plain):
+    """A bent border may cut a sliver off a region: a piece of a region's colour holding no block middle (every old
+    tile's middle keeps its own region, so each real piece - an island too - holds one) takes the region round it
+    most (side neighbours, land only), until none is left; a region stays one piece as it was."""
+    def get(X, Y):
+        r = (H - 1 - Y) if top_down else Y
+        o = (r * W + X) * step
+        return (raw[o + 2], raw[o + 1], raw[o])
+    mid = FACTOR // 2
+    N4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    for _ in range(4):
+        seen = bytearray(W * H)
+        loose = []
+        for Y in range(H):
+            for X in range(W):
+                if seen[Y * W + X]:
+                    continue
+                c = get(X, Y)
+                if c not in plain:
+                    continue
+                piece, st, real = [], [(X, Y)], False
+                seen[Y * W + X] = 1
+                while st:
+                    a, b = st.pop()
+                    piece.append((a, b))
+                    real = real or (a % FACTOR == mid and b % FACTOR == mid)
+                    for dx, dy in N4:
+                        q = (a + dx, b + dy)
+                        if 0 <= q[0] < W and 0 <= q[1] < H and not seen[q[1] * W + q[0]] and get(*q) == c:
+                            seen[q[1] * W + q[0]] = 1
+                            st.append(q)
+                if not real:
+                    loose.append((c, piece))
+        if not loose:
+            return
+        for c, piece in loose:
+            inside = set(piece)
+            round_ = [get(a + dx, b + dy) for a, b in piece for dx, dy in N4
+                      if 0 <= a + dx < W and 0 <= b + dy < H and (a + dx, b + dy) not in inside]
+            round_ = [k for k in round_ if k in plain and k != c]
+            if round_:
+                k = _mode(round_)
+                for a, b in piece:
+                    _put(raw, W, H, step, top_down, a, b, k)
 
 
 def _agreement(regions_path, heights_path, lands):
@@ -1129,7 +1215,7 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
         hpath = None
     lands = land_colours(regions_path, colours, hpath)   # the regions' colours and any other land colour
     say("the coast (map_regions)...")
-    coast = coast_mask(regions_path, lands)              # the regions' land, made bigger with a smooth coast
+    coast = coast_mask(regions_path, lands, natural=True)  # the regions' land, made bigger with a winding coast
     keep_land = ()
     feats = os.path.join(base, "map_features.tga")
     if os.path.isfile(feats):
@@ -1141,8 +1227,9 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
                         "one pixel wide -, cliffs and land bridges as unbroken lines, river mouths on the new coast)")
     say("map_regions.tga...")
     info = {}
-    plan.binary(regions_path, regions_scaled(regions_path, lands, coast, keep_land, info))
-    plan.note(None, "map_regions.tga made 3 x bigger (with a smooth coast; every town with its own region round it, "
+    plan.binary(regions_path, regions_scaled(regions_path, lands, coast, keep_land, info, natural=True))
+    plan.note(None, "map_regions.tga made 3 x bigger (a winding coast and winding borders between regions, no 3 x 3 "
+                    "steps, every region in as many pieces as before; every town with its own region round it, "
                     "every port on a coastal land tile touching the sea and its region)")
     for (x, y), spot, why in info.get("moved_ports", []):
         warn.append("the port at %d, %d: %s (now at %d, %d)" % (x, y, why, spot[0], spot[1]))
@@ -1159,12 +1246,12 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None):
             data = smooth_scaled(p, kind, sea=True, mask=hmask)       # the relief smooth, no steps
             note = "smooth, with a smooth coast"
         elif name == "map_ground_types.tga" and hmask is not None:
-            data = ground_scaled(p, hmask, SEA)
+            data = ground_scaled(p, hmask, SEA, natural=True)
             note = "every tile the ground of the old tile it lies in, the sea ground under the heights' new coast, " \
-                   "natural edges"
+                   "winding edges (no 3 x 3 steps)"
         elif name == "map_climates.tga":
-            data = climates_scaled(p)
-            note = "every tile the climate of the old tile it lies in, natural edges"
+            data = climates_scaled(p, natural=True)
+            note = "every tile the climate of the old tile it lies in, winding edges (no 3 x 3 steps)"
         elif name == "map_roughness.tga":
             data = smooth_scaled(p, kind)
             note = "smooth"

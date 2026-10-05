@@ -2721,6 +2721,43 @@ building smith
         self.assertTrue(all(wet[p] for p in ring), [p for p in ring if not wet[p]])
         self.assertFalse(wet[(1, 1)])                                   # the bank (heights land) stays land
 
+    def test_bigger_map_winding_coast_and_borders(self):
+        """x3 the natural way: the coast and the borders between regions wind (not along the 3 x 3 blocks), while
+        every old tile's middle keeps its region or sea, each region stays in as many pieces as before and the
+        ground's edges wind too - the same map gives the same picture."""
+        from campaign_editor import upscale
+        from campaign_editor.tga import read_tga
+        A, B, S = (200, 40, 40), (40, 200, 40), (41, 140, 233)
+        n = 14
+        old = [[S if x + y < 6 else (A if x < 7 else B) for x in range(n)] for y in range(n)]
+        rpath = os.path.join(self.root, "regions.tga")
+        write_tga(rpath, n, n, old)
+        flat = upscale.coast_mask(rpath, {A, B})
+        bent = upscale.coast_mask(rpath, {A, B}, natural=True)
+        self.assertNotEqual(bytes(flat.b), bytes(bent.b))
+        self.assertEqual(bytes(bent.b), bytes(upscale.coast_mask(rpath, {A, B}, natural=True).b))
+        out = os.path.join(self.root, "regions3.tga")
+        with open(out, "wb") as fh:
+            fh.write(upscale.regions_scaled(rpath, {A, B}, bent, (), {}, natural=True))
+        g, first = read_tga(out), read_tga(rpath)
+        W = n * 3
+        for x in range(n):
+            for y in range(n):
+                self.assertEqual(g.get(3 * x + 1, 3 * y + 1), first.get(x, y))
+        cols = lambda c: [(X, Y) for X in range(W) for Y in range(W) if g.get(X, Y) == c]
+        for c in (A, B):
+            px = set(cols(c))
+            seen, st = {next(iter(px))}, [next(iter(px))]
+            while st:
+                a, b = st.pop()
+                for q in ((a + 1, b), (a - 1, b), (a, b + 1), (a, b - 1)):
+                    if q in px and q not in seen:
+                        seen.add(q)
+                        st.append(q)
+            self.assertEqual(seen, px)                                  # one piece, as before
+        border = {X for X in range(W) for Y in range(W) if g.get(X, Y) == A and X + 1 < W and g.get(X + 1, Y) == B}
+        self.assertGreater(len(border), 1)                              # the border bends: not one straight column
+
     def test_bigger_map_beach_one_tile_wide(self):
         """The beach stays one tile wide along the new coast, as in both games' own maps (a tester's DaC x3: grown
         3 x it was a wide band of sand)."""

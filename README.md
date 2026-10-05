@@ -54,9 +54,10 @@ texture (vanilla-style uniforms), so a new faction's troops wear its own colour 
 
 - **Positions** (`descr_strat.txt`, `descr_events.txt`, ...): towns, characters, fleets, resources, forts,
   watchtowers, wonders and event places go to the middle of their new block.
-- **Coast**: smooth - a new pixel is land when most of the old land round it is, so the coastline is a rounded
-  line instead of 3 x 3 squares; every block's middle keeps its old value, so nothing changes under a town, army
-  or resource. The rules the games' own maps keep are kept: every town has its own region (or sea) all round it,
+- **Coast and borders**: natural - the coastline winds with bays and capes and the borders between regions wind
+  too, instead of 3 x 3 squares and straight 45-degree cuts (two waves whose sizes stand in the golden ratio bend
+  them, so the pattern never repeats; the same map always comes out alike); every block's middle keeps its old
+  value, so nothing changes under a town, army or resource, and every region stays in as many pieces as before. The rules the games' own maps keep are kept: every town has its own region (or sea) all round it,
   every port stands on a coastal land tile touching the sea and its region, and a region `descr_regions.txt` does
   not list still counts as land.
 - **Heights**: `map_heights` interpolated between the old points, with **the same coast as `map_regions`** (every
@@ -69,12 +70,14 @@ texture (vanilla-style uniforms), so a new faction's troops wear its own colour 
   meanders on straight runs (never twice the same, the same map always alike), side by side pixels only; a river mouth runs on to the new coast and stops there (no land is left under a river in the sea). Cliffs and Medieval II's land bridges stay unbroken lines too.
 - **Beach one tile wide** along the new coast, as in the games' own maps.
 - **Ground and climates by tile**: every new tile gets the ground type and climate of the old tile it lies in (a
-  forest stays a forest), with natural edges where two kinds meet.
+  forest stays a forest), the edges where two kinds meet winding as the coast does - no 3 x 3 steps.
 - **Pictures**: `map_trade_routes`, fog, roughness, disasters and radar maps scaled with exact colours.
 - `descr_terrain.txt` gets the new size; `map.rwm` is deleted so the game rebuilds it.
 - Preview of every file, one backup, Restore byte-exact.
 
 <img src="docs/images/bigger_map_coast.png" width="700" alt="The coast of Italy made 3 x bigger: before (squares), after (smooth)">
+
+<img src="docs/images/bigger_map_natural.png" width="700" alt="Regions of Italy and Greece 3 x bigger: in squares (left), the natural way (right)">
 
 Scripts follow too: every campaign-map place in the campaign's scripts (spawned armies and characters, `reposition_character`, `move`, the camera, `reveal_tile`, forts and resources made by `console_command`, 'near a tile' and 'in a rectangle' conditions) goes to its block; battle positions in the same scripts stay. Lines the editor cannot read for sure, and Lua / Squirrel scripts that place things by tile (not the engines' own interface scripts), are listed to check by hand.
 Without REX / M2EX the original exes stop at
@@ -275,7 +278,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 
 **Victory:** the **Faction** tab's **Victory** block shows what the player must do to win the long and the short campaign (`descr_win_conditions.txt`): regions to **Hold**, how many to **Take**, factions to **Outlive**, and in Rome the Senate's **Goal** (be emperor / take Rome). Pick regions and factions from a list; a region or faction that does not exist is refused (the game crashes on it). A new faction starts from its template's conditions.
 
-**Make the campaign map 3 x bigger (alpha):** **Bigger map (x3)...** (top row) turns every tile into a 3 x 3 block, for room between the towns for new regions and factions. The coast is drawn smooth (not in squares), the heights and `map_heights.hgt` (the game's own copy of them) are made at the new size, and the hills, mountains and sea floor 3 x higher so the slopes stay as they were (a choice in the window). Towns, armies, agents, resources, forts and event positions keep their places in the middle of their blocks, ports stay on their region's shore, rivers stay 1 pixel wide (the game crashes on a 2-pixel river), every picture of the map grows with exact colours, `descr_terrain.txt` gets the new size and `map.rwm` is removed (the game builds it again). Press **Make the map 3 x bigger** in its window (Show every change... lists every file first); one backup, and **Put the old map back** undoes it at once. The campaign's scripts follow: spawned armies, moved characters, the camera, revealed tiles and 'near a tile' conditions go to their blocks (battle positions stay; lines it cannot read for sure are listed). Past 510 tiles the original exes need REX / M2EX.
+**Make the campaign map 3 x bigger (alpha):** **Bigger map (x3)...** (top row) turns every tile into a 3 x 3 block, for room between the towns for new regions and factions. The coast and the borders of regions, ground types and climates wind naturally (not in squares), rivers bend and meander, the heights and `map_heights.hgt` (the game's own copy of them) are made at the new size, and the hills, mountains and sea floor 3 x higher so the slopes stay as they were (a choice in the window). Towns, armies, agents, resources, forts and event positions keep their places in the middle of their blocks, ports stay on their region's shore, rivers stay 1 pixel wide (the game crashes on a 2-pixel river), every picture of the map grows with exact colours, `descr_terrain.txt` gets the new size and `map.rwm` is removed (the game builds it again). Press **Make the map 3 x bigger** in its window (Show every change... lists every file first); one backup, and **Put the old map back** undoes it at once. The campaign's scripts follow: spawned armies, moved characters, the camera, revealed tiles and 'near a tile' conditions go to their blocks (battle positions stay; lines it cannot read for sure are listed). Past 510 tiles the original exes need REX / M2EX.
 
 **The game's log in plain words** (Tools): the game's newest `system.log.txt` for this mod read and explained - a crash first, errors grouped, what each means and what to do, and for a Script Error the mod's line as it reads now. With a report, it is the quickest way to the cause of a crash.
 

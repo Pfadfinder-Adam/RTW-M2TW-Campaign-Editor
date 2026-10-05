@@ -157,6 +157,12 @@
 - **Bigger map (x3): rivers drawn the way rivers run** - a bend is rounded instead of a right angle, a long straight
   run swings gently (a meander about every four old tiles, never twice the same, the same map always alike); still one
   pixel wide everywhere, as many rivers, sources and mouths as before, none on the sea, fords kept on the river.
+- **Bigger map (x3): the coast, the borders of regions, ground types and climates wind the way nature draws them**
+  instead of following the 3 x 3 blocks and straight 45-degree cuts: bays and capes, borders that bend, forests and
+  marshes with ragged edges. Two waves whose sizes stand in the golden ratio bend them, so the pattern never repeats
+  and the same map always comes out alike. Every old tile's middle keeps its region, land or sea, ground and climate
+  (nothing changes under a town, army or resource), every region stays in as many pieces as before, rivers stay on
+  the land, the beach one tile wide.
 - **The tools with a window of their own are buttons on the top row**, beside the works: Campaign rules, Events,
   Traits and retinue, Module builder, Recolour, Culture names, Many towns, Bigger map (x3) - one press away instead
   of in Tools (New religion and the region's shares are the Religions work's own buttons). Tools keeps the checks,
