@@ -6,7 +6,7 @@ shape, no ground) for the flags and banners."""
 import tkinter as tk
 from tkinter import colorchooser, ttk
 
-from . import emblem_edit as EE
+from . import emblem_edit as EE, theme
 from .gui_util import ShortHint, hint
 
 VIEW = 320
@@ -89,7 +89,8 @@ class EmblemFitter(tk.Toplevel):
         fb = ttk.Frame(side)
         fb.grid(row=10, column=0, columnspan=2, sticky="w", pady=(4, 0))
         ttk.Label(fb, text="bucket colour").pack(side="left")
-        self.b_fill = tk.Button(fb, width=3, bg="#ffffff", command=self._pick_fill)
+        self.b_fill = ttk.Button(fb, width=3, command=self._pick_fill)
+        theme.paint(self.b_fill, "#ffffff")
         self.b_fill.pack(side="left", padx=4)
         ttk.Separator(side).grid(row=11, column=0, columnspan=2, sticky="we", pady=8)
         bb = ttk.Frame(side)
@@ -139,7 +140,7 @@ class EmblemFitter(tk.Toplevel):
         got = colorchooser.askcolor(parent=self, title="The paint bucket's colour")
         if got and got[0]:
             self.fill = tuple(int(v) for v in got[0])
-            self.b_fill.configure(bg="#%02x%02x%02x" % self.fill)
+            theme.paint(self.b_fill, self.fill)
 
     def _cursor(self):
         self.cv.configure(cursor="fleur" if self.v_tool.get() == "move" else "crosshair")

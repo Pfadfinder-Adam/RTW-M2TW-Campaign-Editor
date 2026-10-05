@@ -141,15 +141,15 @@ class RecolourWindow(tk.Toplevel):
         ttk.Button(bot, text="Close", command=self.destroy).pack(side="right")
 
     def _swatch(self, parent, side, k):
-        b = tk.Button(parent, width=3, relief="raised", command=lambda: self._pick(side, k))
+        b = ttk.Button(parent, width=3, command=lambda: self._pick(side, k))
         b.pack(side="left", padx=2)
         return b
 
     def _paint_swatches(self):
         for b, c in zip(self.sw_from, self.source):
-            b.configure(bg=_hex(c), activebackground=_hex(c), text="" if c and R.coloured(c) else "-")
+            theme.paint(b, _hex(c), text="" if c and R.coloured(c) else "-")
         for b, c in zip(self.sw_to, self.target):
-            b.configure(bg=_hex(c), activebackground=_hex(c), text="")
+            theme.paint(b, _hex(c), text="")
 
     def _pick(self, side, k):
         cols = self.source if side == "from" else self.target

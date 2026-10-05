@@ -9,7 +9,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from .gui_util import ShortHint
 from . import factionart as FA
-from .theme import on_colour
+from . import theme
 
 # The campaign-select map part is put away for now (the user, 2026-10-01): the code stays for a later release;
 # True shows it again. While False the originals stay and nothing is drawn (gui.App.select_map_opts).
@@ -42,7 +42,7 @@ class ArtEditor(ttk.Frame):
         ttk.Label(top, foreground="#555", justify="left", wraplength=420, text=(
             "It replaces the faction's map_<faction>.tga, and the maps of the factions whose land changes "
             "follow. Off (the default): every map stays the original.")).grid(row=1, column=1, sticky="w", padx=10)
-        self.b_colour = tk.Button(top, text="Colour of its land...", command=self.pick_colour, width=22)
+        self.b_colour = ttk.Button(top, text="Colour of its land...", command=self.pick_colour, width=22)
         self.b_colour.grid(row=2, column=1, sticky="w", padx=10, pady=4)
         self.lbl_map = ttk.Label(top, text="", foreground="#555", justify="left", wraplength=420)
         self.lbl_map.grid(row=3, column=1, sticky="nw", padx=10)
@@ -607,7 +607,7 @@ class ArtEditor(ttk.Frame):
         if not self.v_open.get():
             return                                  # closed: nothing drawn (on Medieval II the first draw takes a while)
         col = self.colour()
-        self.b_colour.configure(bg="#%02x%02x%02x" % col, fg=on_colour(col))
+        theme.paint(self.b_colour, col)
         if not a.mod:
             return
         finding = ("select_frame", a.v_campaign.get()) not in a.mod._cache

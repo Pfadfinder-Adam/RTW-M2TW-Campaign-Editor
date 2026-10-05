@@ -18,8 +18,13 @@ DARK = {"bg": "#2b2d31", "fg": "#e3e3e3", "field": "#1e1f22", "muted": "#a9adb3"
         "button": "#3a3d43", "active": "#46505e", "link": "#8ab8ff"}
 
 # colours the window sets by hand that belong to the palette, not to a meaning
-BUTTON_PADX = 6     # px from a button's words to its edge, each side: about two spaces (a tester's rule: a button
-#                     no wider than its words need - everywhere)
+# EVERY button has one look (a tester's rule, 2026-10-05: 'all buttons alike, 1.5 x smaller, the same gaps; only
+# the colour may differ'): one size, one frame, one gap - set here, nowhere else
+BUTTON_PADX = 4     # px from a button's words to its edge, each side (no wider than its words need - everywhere)
+BUTTON_PADY = 0     # px above and below the words: the button about 1.5 x lower than before (21 / 29 px)
+BUTTON_GAP = 4      # px between two buttons side by side
+# buttons with a colour of their own (the same size and frame): style name -> (background, when pressed / hovered)
+COLOURED = {"Play.TButton": ("#2e7d32", "#256628"), "Kofi.TButton": ("#ff5e5b", "#e14b48")}
 NAMED = {"#cfe3ff": "accent"}
 
 BG_KEYS = ("field", "bg", "tab", "button", "trough", "accent", "active", "select")
@@ -83,6 +88,34 @@ def on_colour(fill):
     if isinstance(fill, str):
         fill = tuple(int(fill[i:i + 2], 16) for i in (1, 3, 5))
     return "black" if contrast(fill[:3], (0, 0, 0)) >= contrast(fill[:3], (255, 255, 255)) else "white"
+
+
+def colour_style(colour, base="TButton"):
+    """The style of a button with a colour of its own (a colour picker's swatch, a palette entry): `base` - the
+    same size, frame and gap as every other button - with this background and words that read on it ('#rrggbb' or
+    (r, g, b)); made once per colour, it keeps its colour in either look."""
+    if not isinstance(colour, str):
+        colour = "#%02x%02x%02x" % tuple(int(v) for v in colour[:3])
+    name = "C%s.%s" % (colour.lstrip("#").lower(), base)
+    if name not in _STYLES:
+        st = ttk.Style()
+        words = on_colour(colour)
+        st.configure(name, background=colour, foreground=words)
+        st.map(name, background=[("disabled", "#9a9a9a"), ("pressed", colour), ("active", colour),
+                                 ("selected", colour)],
+               foreground=[("disabled", "#d0d0d0")], bordercolor=[("selected", words), ("focus", words)],
+               relief=[("pressed", "sunken"), ("selected", "sunken")])   # the picked palette colour stands out
+        _STYLES.add(name)
+    return name
+
+
+def paint(button, colour, **kw):
+    """Give a ttk button (or a Toolbutton radio) a colour of its own (colour_style), with any other options."""
+    base = "Toolbutton" if button.winfo_class() in ("TRadiobutton", "Toolbutton") else "TButton"
+    button.configure(style=colour_style(colour, base), **kw)
+
+
+_STYLES = set()
 
 
 def contrast(a, b):
@@ -260,9 +293,17 @@ def _style(root):
            foreground=[("disabled", p["muted"])])
     # a button no wider than its words and about two spaces each side (no minimum width of 11 letters - clam's own
     # - which made '+' or 'OK' as wide as 'Browse...')
-    st.configure("TButton", background=p["button"], padding=(BUTTON_PADX, 3), width=0)
+    # one size for every kind of button: no focus ring (it made them taller) - a focused button shows a coloured
+    # frame instead
+    for kind in ("TButton", "TMenubutton", "Toolbutton"):
+        st.configure(kind, background=p["button"], padding=(BUTTON_PADX, BUTTON_PADY), width=0, focusthickness=0,
+                     borderwidth=1, relief="raised")       # one frame: a toggle has it too, not only when picked
+        st.map(kind, bordercolor=[("focus", p["select"])], relief=[("pressed", "sunken"), ("selected", "sunken")])
     st.map("TButton", background=[("pressed", p["accent"]), ("active", p["active"])])
-    st.configure("TMenubutton", background=p["button"], padding=(BUTTON_PADX, 3), width=0)   # as a button beside it
+    st.map("Toolbutton", background=[("selected", p["accent"]), ("pressed", p["accent"]), ("active", p["active"])])
+    for name, (colour, deep) in COLOURED.items():
+        st.configure(name, background=colour, foreground="#ffffff")
+        st.map(name, background=[("pressed", deep), ("active", deep)], foreground=[("disabled", "#dddddd")])
     st.configure("TEntry", fieldbackground=p["field"], foreground=p["fg"])
     st.configure("TSpinbox", fieldbackground=p["field"], foreground=p["fg"], arrowcolor=p["fg"])
     st.configure("TCombobox", fieldbackground=p["field"], foreground=p["fg"], arrowcolor=p["fg"],

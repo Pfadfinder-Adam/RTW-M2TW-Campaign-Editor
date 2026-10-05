@@ -244,14 +244,14 @@ class ModuleBuilder(tk.Toplevel):
                     wide.append((name, kind, label))      # on a line of its own below: no text cut at the edge
                 else:
                     self._field(row, c, group, i, it, part, name, kind, label)
-            tk.Button(row, text="x", relief="flat", bg=c, fg="#a00", activebackground=c, cursor="hand2",
-                      command=lambda g=group, n=i: self.remove(g, n)).pack(side="left", padx=6)
+            ttk.Button(row, text="x", style=theme.colour_style(c), cursor="hand2",
+                       command=lambda g=group, n=i: self.remove(g, n)).pack(side="left", padx=theme.BUTTON_GAP)
             if part and part.help:
                 hint(row, part.help).pack(side="left")
             for name, kind, label in wide:
                 if self._shown(part, it, name, kind):
                     self._wide_field(f, c, group, i, it, name, kind, label)
-        add = tk.Button(f, text=ADD[group], relief="groove", bg=c, activebackground=c, cursor="hand2")
+        add = ttk.Button(f, text=ADD[group], style=theme.colour_style(c), cursor="hand2")
         add.configure(command=lambda b=add, g=group: self.add_menu(b, g))
         add.pack(anchor="w", padx=18, pady=(4, 6))
 

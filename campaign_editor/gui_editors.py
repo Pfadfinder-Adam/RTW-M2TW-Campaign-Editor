@@ -16,7 +16,7 @@ from .plan import Plan
 CHANGED = "#fff2b3"          # a field changed and not written yet
 REMOVED = "#f4c7c3"          # a line to be removed
 ADDED = "#d9f2d0"            # a line to be added
-SMALL = dict(padx=3, pady=0, bd=1, font=("", 8), cursor="hand2")
+SMALL = dict(cursor="hand2", width=0)        # a row's small x / undo: a button like every other one
 
 
 class RecordEditor(ttk.Frame):
@@ -337,7 +337,7 @@ class RecordEditor(ttk.Frame):
                     tk.Label(self.form, text=text.expandtabs(4).strip(), anchor="w", background=ADDED, foreground="#000000",
                              font=("", 9)).grid(row=row, column=2, sticky="we", pady=1)
                     if text.strip() == self.adds[n]["text"].strip():
-                        tk.Button(self.form, text="x", command=lambda n=n: self.drop_add(n), **SMALL).grid(
+                        ttk.Button(self.form, text="x", command=lambda n=n: self.drop_add(n), **SMALL).grid(
                             row=row, column=0, padx=(0, 4))
                     row += 1
                 pending.remove((at, n, lines))
@@ -366,7 +366,7 @@ class RecordEditor(ttk.Frame):
                            command=lambda fd=fd, v=v: self.attrs_dialog(fd, v)).grid(row=row, column=3, padx=(4, 0))
             why = E.removable(self.kind, fd, self.tree, self.required())
             if why is None:
-                tk.Button(self.form, text="\u21ba" if gone else "x", command=lambda fd=fd: self.toggle_remove(fd),
+                ttk.Button(self.form, text="\u21ba" if gone else "x", command=lambda fd=fd: self.toggle_remove(fd),
                           **SMALL).grid(row=row, column=0, padx=(0, 4))
             row += 1
         added_rows(b + 1)

@@ -194,14 +194,6 @@ WAY_LABELS = ("on the map from the start", "later, by an event (a date and a reg
 WAY_KEYS = ("map", "event", "shadow", "revolt")
 
 
-def colour_look(rgb):
-    """A colour button's background and a text colour that reads on it."""
-    rgb = tuple(int(v) for v in rgb)
-    light = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] > 140
-    return {"bg": "#%02x%02x%02x" % rgb, "fg": "#000000" if light else "#ffffff",
-            "activebackground": "#%02x%02x%02x" % rgb, "activeforeground": "#000000" if light else "#ffffff"}
-
-
 class FieldTable(ttk.Frame):
     """The armies, agents and fleets as a table (kind, name, units, tile, state),
     with the few Listbox calls the window uses. A row keeps its place in the
@@ -387,9 +379,9 @@ class App(tk.Tk):
         ttk.Label(top, text="data folder").pack(side="left")
         self.v_path = tk.StringVar()
         ttk.Entry(top, textvariable=self.v_path, width=8).pack(side="left", fill="x", expand=True, padx=6)
-        ttk.Button(top, text="Browse...", command=self.browse).pack(side="left")
-        ttk.Button(top, text="Load", command=self.load_clicked).pack(side="left", padx=4)
-        ttk.Button(top, text="New mod folder...", command=self.new_mod).pack(side="left", padx=4)
+        ttk.Button(top, text="Browse...", command=self.browse).pack(side="left", padx=(0, theme.BUTTON_GAP))
+        ttk.Button(top, text="Load", command=self.load_clicked).pack(side="left", padx=(0, theme.BUTTON_GAP))
+        ttk.Button(top, text="New mod folder...", command=self.new_mod).pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Label(top, text="Campaign").pack(side="left", padx=(12, 2))
         self.v_campaign = tk.StringVar()
         self.cb_campaign = ttk.Combobox(top, textvariable=self.v_campaign, state="readonly", width=20)
@@ -407,7 +399,7 @@ class App(tk.Tk):
         work = ttk.Frame(self)
         work.pack(fill="x", padx=6, pady=(4, 0))
         self.b_theme = ttk.Button(work, text="", command=self.toggle_theme)
-        self.b_theme.pack(side="right", padx=(6, 0))
+        self.b_theme.pack(side="right", padx=(theme.BUTTON_GAP, 0))
         self.work_row = HScroll(work)
         self.work_row.pack(side="left", fill="x", expand=True)
         self.v_work = tk.StringVar(value="new")
@@ -415,20 +407,20 @@ class App(tk.Tk):
         for val, text in self.WORK_TITLES.items():
             if val == "terrain":
                 continue                                 # a tab of the Map editor now, not a work of its own
-            b = tk.Radiobutton(self.work_row.inner, text=text, value=val, variable=self.v_work, indicatoron=0,
-                               command=self.work_changed, padx=theme.BUTTON_PADX, pady=5, font=("", 10, "bold"),
-                               selectcolor="#cfe3ff", relief="raised", offrelief="groove", cursor="hand2")
-            b.pack(side="left", padx=(0, 4))
+            b = ttk.Radiobutton(self.work_row.inner, text=text, value=val, variable=self.v_work, style="Toolbutton",
+                                command=self.work_changed, cursor="hand2")   # a button like every other one
+            b.pack(side="left", padx=(0, theme.BUTTON_GAP))
             self.work_row.grab(b)
             self.work_buttons[val] = b
             tip(b, self.WORK_HINTS.get(val, ""))         # what each work is: shown on hover, takes no room
         # the tools with a window of their own, beside the works (they were in Tools: a tester wanted them in
         # sight, one press away); the row scrolls when the window is narrower - drag it with the left button
-        ttk.Separator(self.work_row.inner, orient="vertical").pack(side="left", fill="y", padx=(4, 8), pady=4)
+        ttk.Separator(self.work_row.inner, orient="vertical").pack(side="left", fill="y", padx=(0, theme.BUTTON_GAP),
+                                                                    pady=2)
         for key, text, method, hint_text in self.WINDOW_BUTTONS:
-            b = tk.Button(self.work_row.inner, text=text, padx=theme.BUTTON_PADX, pady=5, font=("", 10), relief="groove",
-                          cursor="hand2", command=self.once(method, lambda m=method: getattr(self, m)()))
-            b.pack(side="left", padx=(0, 4))
+            b = ttk.Button(self.work_row.inner, text=text, cursor="hand2",
+                           command=self.once(method, lambda m=method: getattr(self, m)()))
+            b.pack(side="left", padx=(0, theme.BUTTON_GAP))
             self.work_row.grab(b)
             tip(b, hint_text)
         tip(self.b_theme, "light or dark window")
@@ -537,10 +529,10 @@ class App(tk.Tk):
         field("Removed towns go to", self.cb_give)
         self.give_row = [lf.grid_slaves(row=row - 1, column=c)[0] for c in (0, 1)]
         cf = ttk.Frame(lf)
-        self.b_primary = tk.Button(cf, text="primary", width=10, command=lambda: self.pick_colour("primary"))
-        self.b_primary.pack(side="left")
-        self.b_secondary = tk.Button(cf, text="secondary", width=10, command=lambda: self.pick_colour("secondary"))
-        self.b_secondary.pack(side="left", padx=4)
+        self.b_primary = ttk.Button(cf, text="primary", width=10, command=lambda: self.pick_colour("primary"))
+        self.b_primary.pack(side="left", padx=(0, theme.BUTTON_GAP))
+        self.b_secondary = ttk.Button(cf, text="secondary", width=10, command=lambda: self.pick_colour("secondary"))
+        self.b_secondary.pack(side="left", padx=(0, theme.BUTTON_GAP))
         field("Colours", cf)
         self.v_playable = tk.BooleanVar(value=True)
         self.v_triggers = tk.BooleanVar(value=True)
@@ -716,16 +708,16 @@ class App(tk.Tk):
         self.v_brush = tk.IntVar(value=1)
         ttk.Spinbox(rb, from_=1, to=6, width=3, textvariable=self.v_brush,
                     command=lambda: setattr(self.map_view, "brush", self.v_brush.get())).pack(side="left")
-        ttk.Button(rb, text="New region...", command=self.new_region_dialog).pack(side="left", padx=(12, 2))
+        ttk.Button(rb, text="New region...", command=self.new_region_dialog).pack(side="left", padx=(12, theme.BUTTON_GAP))
         ttk.Button(rb, text="Edit region...", command=lambda: self.new_region_dialog(
-            edit=self.v_paint.get().replace("  (new)", "").strip())).pack(side="left", padx=2)
-        ttk.Button(rb, text="Place its town", command=lambda: self.region_point("city")).pack(side="left", padx=2)
-        ttk.Button(rb, text="Place its port", command=lambda: self.region_point("port")).pack(side="left", padx=2)
-        ttk.Button(rb, text="Delete this new region", command=self.drop_region).pack(side="left", padx=2)
-        ttk.Button(rb, text="Religions...", command=self.religions_dialog).pack(side="left", padx=2)
-        ttk.Button(rb, text="New religion...", command=self.new_religion_dialog).pack(side="left", padx=2)
+            edit=self.v_paint.get().replace("  (new)", "").strip())).pack(side="left", padx=(0, theme.BUTTON_GAP))
+        ttk.Button(rb, text="Place its town", command=lambda: self.region_point("city")).pack(side="left", padx=(0, theme.BUTTON_GAP))
+        ttk.Button(rb, text="Place its port", command=lambda: self.region_point("port")).pack(side="left", padx=(0, theme.BUTTON_GAP))
+        ttk.Button(rb, text="Delete this new region", command=self.drop_region).pack(side="left", padx=(0, theme.BUTTON_GAP))
+        ttk.Button(rb, text="Religions...", command=self.religions_dialog).pack(side="left", padx=(0, theme.BUTTON_GAP))
+        ttk.Button(rb, text="New religion...", command=self.new_religion_dialog).pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Button(rb, text="Names by culture...", command=lambda: self.culture_names_dialog(
-            self.v_paint.get().replace("  (new)", "").strip())).pack(side="left", padx=2)
+            self.v_paint.get().replace("  (new)", "").strip())).pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Label(rb, text="left drag paints, right click picks a region, right drag moves the map",
                   foreground="#666").pack(side="left", padx=10)
         flow(rb)
@@ -738,9 +730,10 @@ class App(tk.Tk):
         self.cb_res_type = ttk.Combobox(xb, textvariable=self.v_res_type, width=16, state="readonly")
         self.cb_res_type.pack(side="left", padx=4)
         ttk.Button(xb, text="Place new", command=lambda: self.res_place_new(self.v_res_type.get())).pack(
-            side="left", padx=2)
-        ttk.Button(xb, text="Delete picked", command=self.res_delete).pack(side="left", padx=2)
-        ttk.Button(xb, text="Region tags (hidden resources)...", command=self.region_tags_dialog).pack(side="left", padx=(12, 2))
+            side="left", padx=(0, theme.BUTTON_GAP))
+        ttk.Button(xb, text="Delete picked", command=self.res_delete).pack(side="left", padx=(0, theme.BUTTON_GAP))
+        ttk.Button(xb, text="Region tags (hidden resources)...", command=self.region_tags_dialog).pack(
+            side="left", padx=(0, theme.BUTTON_GAP))
         flow(xb)
         self._how(self.res_bar, "New: pick the resource above, press Place new, then click a land tile on the map.  "
                                 "Move: drag a resource with the right mouse button.  Remove: click it, then Delete "
@@ -802,21 +795,21 @@ class App(tk.Tk):
         # the right group on a row of its own under the left one instead of hiding buttons past its edge
         bar = left_bar = ttk.Frame(self.bottom_bar)
         self.b_preview = ttk.Button(bar, text="Preview changes", command=self.preview)
-        self.b_preview.pack(side="left")
+        self.b_preview.pack(side="left", padx=(0, theme.BUTTON_GAP))
         self.b_create = ttk.Button(bar, text="Create faction", command=self.create)
-        self.b_create.pack(side="left", padx=6)
-        ttk.Button(bar, text="Undo", command=self.undo).pack(side="left", padx=(12, 0))
-        ttk.Button(bar, text="Redo", command=self.redo).pack(side="left", padx=4)
+        self.b_create.pack(side="left", padx=(0, theme.BUTTON_GAP))
+        ttk.Button(bar, text="Undo", command=self.undo).pack(side="left", padx=(0, theme.BUTTON_GAP))
+        ttk.Button(bar, text="Redo", command=self.redo).pack(side="left", padx=(0, theme.BUTTON_GAP))
         bar = right_bar = ttk.Frame(self.bottom_bar)
-        kofi = tk.Button(bar, text="\u2615  Support on Ko-fi", command=self.support, bg="#ff5e5b", fg="white",
-                         activebackground="#e14b48", activeforeground="white", relief="flat", cursor="hand2",
-                         font=("", 9, "bold"), padx=10)
-        kofi.pack(side="right", padx=(8, 0))
-        theme.leave_alone(kofi)                  # Ko-fi's own look: white bold text on its coral, in either look
-        ttk.Button(bar, text="Help", command=self.once("show_help", self.show_help)).pack(side="right", padx=(6, 0))
-        ttk.Button(bar, text="\u2699 Settings", command=self.once("settings_window", self.settings_window)).pack(side="right", padx=(6, 0))
+        # Ko-fi's own colour (white words on its coral, in either look), a button like the others
+        ttk.Button(bar, text="\u2615 Support on Ko-fi", command=self.support, style="Kofi.TButton",
+                   cursor="hand2").pack(side="right", padx=(theme.BUTTON_GAP, 0))
+        ttk.Button(bar, text="Help", command=self.once("show_help", self.show_help)).pack(
+            side="right", padx=(theme.BUTTON_GAP, 0))
+        ttk.Button(bar, text="\u2699 Settings", command=self.once("settings_window", self.settings_window)).pack(
+            side="right", padx=(theme.BUTTON_GAP, 0))
         self.b_report = ttk.Button(bar, text="Report a bug / Suggest", command=self.once("report", self.send_report))
-        self.b_report.pack(side="right", padx=(6, 0))
+        self.b_report.pack(side="right", padx=(theme.BUTTON_GAP, 0))
         tools = ttk.Menubutton(bar, text="Tools")
         menu = tk.Menu(tools, tearoff=False)
         menu.add_command(label="Check mod files (what the game would stumble on)", command=self.once("check", self.check))
@@ -836,13 +829,11 @@ class App(tk.Tk):
         # a menu entry has no hover box: the status line says what it is while the mouse is on it
         menu.bind("<<MenuSelect>>", lambda e, m=menu: self._menu_hint(m))
         tools["menu"] = menu
-        tools.pack(side="right")
-        # the game with the loaded mod, one press away - in sight beside Tools
-        play = tk.Button(bar, text="\u25b6  Start the game", command=self.start_game, bg="#2e7d32", fg="white",
-                         activebackground="#256628", activeforeground="white", relief="flat", cursor="hand2",
-                         font=("", 9, "bold"), padx=10)
-        play.pack(side="right", padx=(0, 8))
-        theme.leave_alone(play)
+        tools.pack(side="right", padx=(theme.BUTTON_GAP, 0))
+        # the game with the loaded mod, one press away - in sight beside Tools, green, a button like the others
+        play = ttk.Button(bar, text="\u25b6 Start the game", command=self.start_game, style="Play.TButton",
+                          cursor="hand2")
+        play.pack(side="right", padx=(theme.BUTTON_GAP, 0))
         state = {"one_row": None}
 
         def place_bars(_=None):
@@ -1551,7 +1542,7 @@ class App(tk.Tk):
             rgb = now.get(key + "_colour")
             self.colours[key] = rgb
             if rgb:
-                b.configure(**colour_look(rgb))
+                theme.paint(b, rgb)
         for role in ("leader", "heir"):
             who = now.get(role) or {}
             name = who.get("name", "")
@@ -3901,7 +3892,7 @@ class App(tk.Tk):
         for key, b in (("primary", self.b_primary), ("secondary", self.b_secondary)):
             rgb = self.colours.get(key) or now.get(key + "_colour")
             if rgb:
-                b.configure(**colour_look(rgb))
+                theme.paint(b, rgb)
         self.status.set("Template %s: %s. Its units, buildings, names, traits and art are copied." %
                         (t, disp.get("display_name", t)))
 
@@ -3953,7 +3944,7 @@ class App(tk.Tk):
             rgb = tuple(int(x) for x in c[0])
             self.colours[which] = rgb
             btn = self.b_primary if which == "primary" else self.b_secondary
-            btn.configure(**colour_look(rgb))
+            theme.paint(btn, rgb)
 
     def rename_town(self):
         """Rename... beside the town list: the region picked on the left (or a chosen town) in Edit region, whose

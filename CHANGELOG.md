@@ -164,7 +164,10 @@
   builder offers all five stances in its list.
 
 ### Changed
-- **The Tools button is as tall as the buttons beside it and no wider than its word** (menu buttons everywhere).
+- **Every button looks alike and takes less room**: about 1.5 x lower than before (21 px instead of 29 - 33), the
+  same frame, padding and gap everywhere - the top row's works and windows, Tools and the other menu buttons, Start
+  the game and Ko-fi (their own colours, the same frame), the colour buttons and the Terrain tab's palette (the
+  picked one framed); a focused button shows a coloured frame.
 - **The Terrain editor is a tab of the Map editor** (Map | Terrain), no longer a work of its own on the top row.
 - **The top row has no arrows any more** when the window is narrower than its buttons: the mouse wheel over it and
   dragging it sideways move it, and it takes no extra line.

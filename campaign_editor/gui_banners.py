@@ -11,7 +11,7 @@ import os
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
-from . import banners as B
+from . import banners as B, theme
 from .gui_util import ShortHint
 
 VIEW = 384                     # the longer side of the big view (Rome's square banners)
@@ -82,7 +82,7 @@ class BannerWindow(tk.Toplevel):
             self.s["colours"] = [tuple(self.s.get("colour") or (200, 200, 200))[:3], (240, 240, 240), (30, 30, 30)]
         self.b_cols = []
         for i in range(3):
-            b = tk.Button(row2, width=4, command=lambda i=i: self._colour(i))
+            b = ttk.Button(row2, width=4, command=lambda i=i: self._colour(i))
             b.pack(side="left", padx=3)
             self.b_cols.append(b)
         self.v_sym = tk.BooleanVar(value=not self.s.get("no_symbol"))
@@ -344,8 +344,7 @@ class BannerWindow(tk.Toplevel):
         drawing = self.s.get("drawing")
         used = 0 if drawing else B.PATTERNS.get(self.s.get("pattern") or "plain", B.PATTERNS["plain"])[0]
         for i, b in enumerate(self.b_cols):              # only as many colours as the pattern takes
-            b.configure(bg="#%02x%02x%02x" % tuple(cols[i][:3]), state="normal" if i < used else "disabled",
-                        relief="raised" if i < used else "flat")
+            theme.paint(b, cols[i], state="normal" if i < used else "disabled")
         self.c_sym.configure(state="normal" if self.symbol is not None else "disabled")
         self.b_dye.configure(state="normal" if drawing else "disabled")
         self.lbl_draw.configure(text="your drawing: %s" % os.path.basename(drawing) if drawing else "")

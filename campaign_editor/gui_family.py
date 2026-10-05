@@ -13,7 +13,7 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
 from .gui_util import one_window, ShortHint
-from . import family as FM
+from . import family as FM, theme
 
 CARD_W, CARD_H, GAP, ROW = 150, 66, 16, 110
 PIC_W, PIC_H = 40, 56                           # a portrait on a card (the game's are 69 x 96)
@@ -194,10 +194,8 @@ class FamilyEditor(ttk.Frame):
             sw.pack(fill="x", pady=(0, 4))
             self.v_view = tk.StringVar(value="panel")
             for val, text in (("panel", "Character"), ("tree", "Family tree")):     # like the work buttons
-                tk.Radiobutton(sw, text=text, value=val, variable=self.v_view, indicatoron=0,
-                               command=self._view_changed, padx=16, pady=4, font=("", 10, "bold"),
-                               selectcolor="#cfe3ff", relief="raised", offrelief="groove", cursor="hand2").pack(
-                    side="left", padx=(0, 4))
+                ttk.Radiobutton(sw, text=text, value=val, variable=self.v_view, style="Toolbutton",
+                                command=self._view_changed, cursor="hand2").pack(side="left", padx=(0, theme.BUTTON_GAP))
             hint = ttk.Label(sw, text="the picked person as the game shows him - or the whole family",
                              foreground="#555", justify="left")
             hint.pack(side="left", padx=8, fill="x", expand=True)

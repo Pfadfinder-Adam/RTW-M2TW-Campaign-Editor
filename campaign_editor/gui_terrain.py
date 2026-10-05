@@ -8,7 +8,7 @@ import hashlib
 import tkinter as tk
 from tkinter import ttk
 
-from . import terrain as T
+from . import terrain as T, theme
 
 NEAREST = "(the nearest region)"
 
@@ -547,10 +547,8 @@ class TerrainEditor(ttk.Frame):
                 look = GROUND_LOOK.get(c) if what == "ground" else c if what == "climate" else \
                     CampaignMap.FEATURE_LOOK.get(c, (20, 20, 20))
                 hexc = "#%02x%02x%02x" % look
-                fg = "white" if sum(look) < 380 else "black"
-                b = tk.Radiobutton(box, text=names[c], value="%d,%d,%d" % c, variable=self.v_colour,
-                                   indicatoron=0, bg=hexc, fg=fg, selectcolor=hexc, activebackground=hexc,
-                                   padx=6, pady=3, relief="raised", offrelief="flat", bd=3, cursor="hand2")
+                b = ttk.Radiobutton(box, text=names[c], value="%d,%d,%d" % c, variable=self.v_colour,
+                                    style=theme.colour_style(hexc, "Toolbutton"), cursor="hand2")
                 b.grid(row=i // per_row, column=i % per_row, padx=1, pady=1, sticky="ew")
                 swatches.append(b.cget("value"))
                 first = first or "%d,%d,%d" % c
