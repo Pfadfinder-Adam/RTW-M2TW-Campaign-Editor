@@ -4339,7 +4339,7 @@ building smith
         (The whole run is tried on both games' real files by check-scripts/testmod.py.)"""
         from campaign_editor import selftest as ST
         names = {"template": "alpha", "edited": "beta", "other": "gamma", "new": "ce_test", "later": "ce_test_later",
-                 "split": "ce_test_split", "shadow": "ce_test_shadow", "foreign": "delta",
+                 "split": "ce_test_split", "split_of": "alpha", "shadow": "ce_test_shadow", "foreign": "delta",
                  "addon": "Sack Settlement (Rome, REX)"}
         self.assertGreaterEqual(len(ST.STEPS), 30)
         for title, see, fn in ST.STEPS:

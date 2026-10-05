@@ -51,6 +51,13 @@ class Ctx:
         cult = dict(mod.factions())
         self.foreign = next((n for n, cu in mod.factions() if n != "slave" and cu != cult.get(self.template) and
                              n not in (self.new, self.later, self.split, self.shadow)), self.other)
+        # the faction the split-off one leaves: on Barbarian Invasion the new faction itself, which has a shadow too -
+        # the test of whether one faction may have both (BI's own never does; plain Rome takes neither); elsewhere
+        # the template
+        from . import emergence as EM
+        from .limits import game_kind
+        self.both = game_kind(mod) == "rome" and EM.is_bi(mod)
+        self.split_of = self.new if self.both else self.template
         self.logo = None
         self.colours = test_colours(mod, [self.new, self.shadow, self.later, self.split])
         self.said = {}                       # what the steps picked, for the texts: {'near': town, 'far': town}
@@ -280,9 +287,10 @@ def s_shadow(c, mod):
                   "playable": False}})
 
 
-@step("A faction that splits off {template} in a revolt: a clone of {template}, dead at the start",
-      "{split} is not on the map at the start; when towns of {template} revolt they go to {split}, in its own "
-      "colours ({new} has a shadow already - one faction with both crashes the game at the end of a turn)")
+@step("A faction that splits off {split_of} in a revolt: a clone of {template}, dead at the start",
+      "{split} is not on the map at the start; when towns of {split_of} revolt they go to {split}, in its own "
+      "colours (Barbarian Invasion: {new} has a shadow too - the test of whether one faction may have both: play "
+      "a few turns, the game must not stop at the end of a turn)")
 def s_split(c, mod):
     from . import emergence as EM
     if "shadow" not in EM.ways_for(mod):
@@ -291,7 +299,7 @@ def s_split(c, mod):
     return build(mod, c.campaign, c.template, c.split, {
         "display_name": "Split Test", "short_name": "Split", "adjective": "Splitting", "raise_faction_limit": True,
         "primary_colour": c.colours[c.split][0], "secondary_colour": c.colours[c.split][1],
-        "start": {"way": "revolt", "of": c.template, "denari": 2000, "regions": [], "leader": None,
+        "start": {"way": "revolt", "of": c.split_of, "both_ok": c.both, "denari": 2000, "regions": [], "leader": None,
                   "playable": False}})
 
 
@@ -1976,7 +1984,7 @@ def run(data, campaign, progress=None, make=True):
     os.makedirs(work, exist_ok=True)
     c = Ctx(data, campaign, work)
     names = {"template": c.template, "edited": c.edited, "other": c.other, "new": c.new, "later": c.later,
-             "split": c.split, "shadow": c.shadow, "foreign": c.foreign,
+             "split": c.split, "split_of": c.split_of, "shadow": c.shadow, "foreign": c.foreign,
              "addon": "Sack Settlement (Medieval II, M2EX)" if c.m2 else "Sack Settlement (Rome, REX)"}
     before = problems(ModData(data), campaign)
     results = []

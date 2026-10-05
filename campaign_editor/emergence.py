@@ -177,7 +177,7 @@ def later_rows(mod, campaign):
 
 
 # ---------------------------------------------------------------------------- writing
-def set_way(plan, faction, way, of=None):
+def set_way(plan, faction, way, of=None, both_ok=False):
     """descr_sm_factions.txt: the faction's own way in (its header line) and its partner's word; the faction's old
     way and any partner word naming it go. Refused: a partner that is the faction itself / unknown / already has a
     shadow (or a split-off faction) of its own."""
@@ -208,7 +208,7 @@ def set_way(plan, faction, way, of=None):
                 of, "a shadow" if way == "shadow" else "a faction splitting off it", has))
         other = PARTNER[OWN_WORD["revolt" if way == "shadow" else "shadow"]]
         m = re.search(r",\s*%s\s+([A-Za-z0-9_]+)" % other, strip_comment(line))
-        if m and m.group(1) != faction:
+        if m and m.group(1) != faction and not both_ok:      # both_ok: the test mod's trial on BI only
             raise ValueError(BOTH_TIES % (of, m.group(1), "a shadow" if way == "revolt" else
                                           "a faction splitting off it"))
 

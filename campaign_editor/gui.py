@@ -790,8 +790,10 @@ class App(tk.Tk):
         # --- actions
         # the status line and the buttons are packed at the bottom before the tabs: a tab taller than
         # the window then shrinks, the Apply buttons never go off the window's edge
-        self.status_line = ttk.Label(self, anchor="w")
+        self.status_line = ttk.Label(self, anchor="w", justify="left")
         self.status_line.pack(side="bottom", fill="x", padx=6, pady=(0, 6), before=self.nb)
+        # a long message wraps onto a second line instead of running off the window's edge
+        self.status_line.bind("<Configure>", lambda e: self.status_line.configure(wraplength=max(e.width - 4, 200)))
         bar = self.bottom_bar = ttk.Frame(self)
         bar.pack(side="bottom", fill="x", before=self.nb, **pad)
         self.b_preview = ttk.Button(bar, text="Preview changes", command=self.preview)

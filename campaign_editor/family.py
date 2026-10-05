@@ -481,6 +481,10 @@ def apply(plan, f, faction, opts):
     pool = plan.name_pool(faction) or {}
     known_traits = trait_list(plan.mod)
     known_ancs = ancillary_list(plan.mod)
+    # the games read trait and ancillary names in any case: Barbarian Invasion's leaders carry 'FactionLeader', its
+    # traits file defines 'Factionleader' (the BI test mod's step was refused for it)
+    lower_traits = {k.lower(): v for k, v in known_traits.items()}
+    lower_ancs = {a.lower() for a in known_ancs}
     renames = {}
     for key, ch in changes.items():
         p = people.get(key)
@@ -493,13 +497,13 @@ def apply(plan, f, faction, opts):
                 raise ValueError("%s: %s" % (p.name, why))
             renames[p.name] = name
         for t, n in ch.get("traits") or []:
-            info = known_traits.get(t)
+            info = known_traits.get(t) or lower_traits.get(t.lower())
             if known_traits and info is None:
                 raise ValueError("%s: trait %s is not in export_descr_character_traits.txt" % (p.name, t))
             if info and info["levels"] and not 1 <= int(n) <= len(info["levels"]):
                 raise ValueError("%s: %s has levels 1-%d, not %s" % (p.name, t, len(info["levels"]), n))
         for a in ch.get("ancillaries") or []:
-            if known_ancs and a not in known_ancs:
+            if known_ancs and a not in known_ancs and a.lower() not in lower_ancs:
                 raise ValueError("%s: ancillary %s is not in export_descr_ancillaries.txt" % (p.name, a))
         if not p.on_map and (ch.get("traits") or ch.get("ancillaries")):
             raise ValueError("%s is off the map (a record): the game keeps no traits or ancillaries for records"

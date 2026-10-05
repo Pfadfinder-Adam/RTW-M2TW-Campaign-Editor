@@ -430,6 +430,9 @@
   game's volcano model stays its size. Each volcano keeps a cone of its own; mountain ground is never a flat
   field (its crags at least a mountain's usual slope); lakes that are water only in the heights wind with the
   coast and their banks come down to the water gently, with no wall.
+- **Character editor: a trait written in other letter case was refused** (Barbarian Invasion's leaders carry
+  `FactionLeader`, its traits file says `Factionleader`) - names of traits and retinue are now matched in any case,
+  as the games read them. A long message in the status line wraps instead of running off the window.
 - **Bring from another mod: a brought building's recruit lines named its faction for every unit**, also units
   of other cultures it may not own - the game warned 'unit(...) does not match up to the ownership for
   faction(...)' at every start (159 times in a test). A recruit line now names only the factions

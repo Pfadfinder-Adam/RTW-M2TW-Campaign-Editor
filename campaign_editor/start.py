@@ -595,7 +595,7 @@ def _later_start(plan, f, s, tb, start, head_lines):
         plan.note(f, "%s goes on the nonplayable list: it starts dead (the games' own later factions are all "
                      "nonplayable)" % new)
     _lists_and_diplomacy(plan, f, dict(start, playable=False))
-    emergence.set_way(plan, new, way, start.get("of"))
+    emergence.set_way(plan, new, way, start.get("of"), both_ok=bool(start.get("both_ok")))
     if way == "shadow":                  # a shadow has no victory conditions (the game stops reading the file)
         from .wincond import drop
         drop(plan, campaign, new)
