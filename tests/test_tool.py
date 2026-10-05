@@ -2758,6 +2758,60 @@ building smith
         border = {X for X in range(W) for Y in range(W) if g.get(X, Y) == A and X + 1 < W and g.get(X + 1, Y) == B}
         self.assertGreater(len(border), 1)                              # the border bends: not one straight column
 
+    def test_bigger_map_borders_stay_on_their_rivers(self):
+        """x3 the natural way with the rivers: where a border ran along a river (the river tiles one region's, the
+        land beside them another's), the new border runs on the new river - no two land pixels of the two regions
+        touch beside it - while each region stays one piece and every middle of a tile without a river keeps its
+        region; the same map, the same picture."""
+        from campaign_editor import upscale
+        A, B, river, black = (200, 40, 40), (40, 200, 40), (0, 0, 255), (0, 0, 0)
+        n = 14
+        old = [[A if x < 7 else B for x in range(n)] for y in range(n)]
+        feats = [[black] * n for _ in range(n)]
+        for y in range(1, 13):
+            feats[y][6] = river                         # the river on A's last column, along the border
+        rpath, fpath = os.path.join(self.root, "regions.tga"), os.path.join(self.root, "features.tga")
+        write_tga(rpath, n, n, old)
+        write_tga(fpath, n, n, feats)
+        coast = upscale.coast_mask(rpath, {A, B}, natural=True)
+        _, drawn = upscale.features_scaled(fpath, coast, natural=True)
+        tiles = upscale.river_tiles(fpath)
+        self.assertEqual(tiles, {(6, y) for y in range(1, 13)})
+        out = os.path.join(self.root, "regions3.tga")
+        from campaign_editor.tga import read_tga
+
+        def scaled(rivers):
+            with open(out, "wb") as fh:
+                fh.write(upscale.regions_scaled(rpath, {A, B}, coast, (), {}, natural=True, rivers=rivers))
+            return read_tga(out)
+
+        def off_river(g):                               # A beside B, neither a river pixel, by the river's rows
+            return [(X, Y) for Y in range(3 * 2, 3 * 11) for X in range(3 * 5, 3 * 8)
+                    if g.get(X, Y) != g.get(X + 1, Y) and (X, Y) not in drawn and (X + 1, Y) not in drawn]
+        self.assertTrue(off_river(scaled(None)))         # without the rivers the bent border crosses the river
+        g = scaled((tiles, drawn))
+        self.assertEqual(off_river(g), [])
+        W = n * 3
+        for c in (A, B):
+            px = {(X, Y) for X in range(W) for Y in range(W) if g.get(X, Y) == c}
+            seen, st = {next(iter(px))}, [next(iter(px))]
+            while st:
+                a, b = st.pop()
+                for q in ((a + 1, b), (a - 1, b), (a, b + 1), (a, b - 1)):
+                    if q in px and q not in seen:
+                        seen.add(q)
+                        st.append(q)
+            self.assertEqual(seen, px)                  # one piece, as before
+        for x in range(n):
+            for y in range(n):
+                if (x, y) not in tiles:
+                    self.assertEqual(g.get(3 * x + 1, 3 * y + 1), old[y][x])
+        with open(out, "rb") as fh:
+            first = fh.read()
+        scaled((tiles, drawn))
+        with open(out, "rb") as fh:
+            self.assertEqual(fh.read(), first)          # the same map, the same picture
+
     def test_bigger_map_natural_heights(self):
         """x3 heights the natural way: the sea and land as the mask says, no slope (times the heights' growth)
         steeper than the old map's steepest, a river's valley lower than the land beside it, the land round a town

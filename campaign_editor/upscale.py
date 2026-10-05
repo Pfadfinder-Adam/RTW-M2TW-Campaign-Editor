@@ -895,9 +895,11 @@ def _mode(cols):
     return max(sorted(set(cols)), key=cols.count) if cols else None
 
 
-def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=False):
+def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=False, rivers=None):
     """map_regions x3 with a SMOOTH coast (mask: coast_mask): a land pixel takes the region of the old land tile round
-    it with the most weight, a sea pixel the sea's colour; keep_land (pixels under a river) stay land. Each town on its
+    it with the most weight, a sea pixel the sea's colour; keep_land (pixels under a river) stay land. rivers: (the old
+    river tiles - river_tiles -, the new river pixels - features_scaled's) - a border that ran along a river runs
+    along the new river (_borders_on_rivers). Each town on its
     block's middle pixel with its own region all round it (the game wants the 8 tiles round a town its region or
     sea); each port on a coastal land pixel of its block touching the sea and its region's land (as every port of the
     games' own maps stands). info (a dict) gets 'land': Mask of the new tiles' land (towns and ports land) and
@@ -956,8 +958,9 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=Fals
         r = (H - 1 - Y) if top_down else Y
         o = (r * W + X) * step
         return (raw[o + 2], raw[o + 1], raw[o])
-    if natural:
-        _join_pieces(raw, W, H, step, top_down, plain)
+    moved = _borders_on_rivers(raw, W, H, step, top_down, plain, colour, land_of, w, h, *rivers) if rivers else ()
+    if natural or moved:
+        _join_pieces(raw, W, H, step, top_down, plain, moved)
     town_px = set()
     for x, y in towns:                            # the town and its own region all round it (its 3 x 3 block)
         cx, cy = new_xy(x, y)
@@ -1014,10 +1017,13 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=Fals
     return _write(data, W, H, step, raw)
 
 
-def _join_pieces(raw, W, H, step, top_down, plain):
+def _join_pieces(raw, W, H, step, top_down, plain, free=()):
     """A bent border may cut a sliver off a region: a piece of a region's colour holding no block middle (every old
     tile's middle keeps its own region, so each real piece - an island too - holds one) takes the region round it
-    most (side neighbours, land only), until none is left; a region stays one piece as it was."""
+    most (side neighbours, land only), until none is left; a region stays one piece as it was. free: old tiles
+    whose middle may have gone to another region (the river tiles of _borders_on_rivers) - theirs count for none."""
+    free = set(free)
+
     def get(X, Y):
         r = (H - 1 - Y) if top_down else Y
         o = (r * W + X) * step
@@ -1039,7 +1045,8 @@ def _join_pieces(raw, W, H, step, top_down, plain):
                 while st:
                     a, b = st.pop()
                     piece.append((a, b))
-                    real = real or (a % FACTOR == mid and b % FACTOR == mid)
+                    real = real or (a % FACTOR == mid and b % FACTOR == mid
+                                    and (a // FACTOR, b // FACTOR) not in free)
                     for dx, dy in N4:
                         q = (a + dx, b + dy)
                         if 0 <= q[0] < W and 0 <= q[1] < H and not seen[q[1] * W + q[0]] and get(*q) == c:
@@ -1058,6 +1065,88 @@ def _join_pieces(raw, W, H, step, top_down, plain):
                 k = _mode(round_)
                 for a, b in piece:
                     _put(raw, W, H, step, top_down, a, b, k)
+
+
+def river_tiles(path):
+    """The old map's river tiles (rivers, fords, sources) of map_features."""
+    _, w, h, _, _, at = _pixels(path)
+    return {(x, y) for y in range(h) for x in range(w) if at(x, y) in RIVERY}
+
+
+def _borders_on_rivers(raw, W, H, step, top_down, plain, colour, land_of, w, h, old_rivers, river_px):
+    """A border that ran ALONG a river (a river tile beside a land tile of another region, side by side) runs along
+    the new river, never across it: each land pixel of that river tile's 3 x 3 block takes the region of the nearest
+    tile round it that it reaches without crossing a river (as water parts two fields), its river pixels keep the
+    river tile's region, and the river's region spilt over the river into a neighbour's block goes back to that
+    side's region. Borders that cross a river, and every other border, keep their winding. -> those river tiles."""
+    from collections import deque
+
+    def get(X, Y):
+        r = (H - 1 - Y) if top_down else Y
+        o = (r * W + X) * step
+        return (raw[o + 2], raw[o + 1], raw[o])
+    N4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    N8 = N4 + ((1, 1), (1, -1), (-1, 1), (-1, -1))
+    inside = lambda x, y: 0 <= x < w and 0 <= y < h
+    along = [(x, y) for x, y in sorted(old_rivers) if inside(x, y) and land_of(x, y)
+             and any(inside(x + dx, y + dy) and (x + dx, y + dy) not in old_rivers and land_of(x + dx, y + dy)
+                     and colour(x + dx, y + dy) != colour(x, y) for dx, dy in N4)
+             and any(inside(x + dx, y + dy) and colour(x + dx, y + dy) == colour(x, y) for dx, dy in N8)]
+    mine = set(along)          # (no other region beside it: no border along it; none of its own: a piece of its own)
+    for x, y in along:
+        a = colour(x, y)
+        X0, Y0 = max(0, FACTOR * (x - 1)), max(0, FACTOR * (y - 1))
+        X1, Y1 = min(W, FACTOR * (x + 2)), min(H, FACTOR * (y + 2))
+        open_ = lambda q: X0 <= q[0] < X1 and Y0 <= q[1] < Y1 and q not in river_px and get(*q) in plain
+        reg, side, todo = {}, {}, deque()
+        for dx, dy in N8:                              # the land tiles round it, from their middles
+            t = (x + dx, y + dy)
+            if not inside(*t) or t in old_rivers or not land_of(*t):
+                continue
+            m = new_xy(*t)
+            if m in river_px or get(*m) not in plain:
+                continue
+            reg[m] = colour(*t)
+            todo.append(m)
+        while todo:                                    # spread, never over a river pixel
+            p = todo.popleft()
+            for dx, dy in N4:
+                q = (p[0] + dx, p[1] + dy)
+                if q not in reg and open_(q):
+                    reg[q] = reg[p]
+                    todo.append(q)
+        for p in reg:                                  # the banks: the pieces the rivers cut the window into,
+            if p in side:                              # each with the regions whose tiles stand on it
+                continue
+            k, st = len(side), [p]
+            side[p] = k
+            while st:
+                q = st.pop()
+                for dx, dy in N4:
+                    r = (q[0] + dx, q[1] + dy)
+                    if r in reg and r not in side:
+                        side[r] = k
+                        st.append(r)
+        bank = {}
+        for m, c in reg.items():
+            bank.setdefault(side[m], set()).add(c)
+        seeded = set().union(*bank.values()) if bank else set()
+        for Y in range(Y0, Y1):
+            for X in range(X0, X1):
+                here = get(X, Y)
+                if here not in plain:
+                    continue
+                t = (X // FACTOR, Y // FACTOR)
+                if t == (x, y):                        # the river tile's own block
+                    new = a if (X, Y) in river_px else reg.get((X, Y), here)
+                elif (X, Y) in reg and (here in seeded or here == a) and here not in bank.get(side[(X, Y)], ()) \
+                        and here != colour(*t) and t not in mine:   # from the other bank (a block's own stays)
+                    new = reg[(X, Y)]
+                else:
+                    continue
+                if new != here:
+                    _put(raw, W, H, step, top_down, X, Y, new)
+    return mine
 
 
 def _agreement(regions_path, heights_path, lands):
