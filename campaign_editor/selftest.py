@@ -1607,7 +1607,7 @@ def s_scripts(c, mod):
     s = next((x for x in SM.scripts(mod) if x.test and x.file.lower() == "avoid_growth.nut"), None)
     if s is None:
         raise Skip("Avoid Growth is not in the game's script/modules (its step did not write)")
-    c.said["label"] = "Avoid Growth (CE_Test)"
+    c.said["label"] = "Stay small"
     values = dict(s.values, AG_LABEL=c.said["label"])
     plan = Plan(mod, "scripts", "avoid_growth", {})
     if not SM.plan_settings(plan, s, values):

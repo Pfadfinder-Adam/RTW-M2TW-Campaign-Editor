@@ -53,6 +53,13 @@ local AG_GAP = 4
 // place right of Recruitment, from the bottom-left of settlement_details_population_stats (measured on the game's
 // scroll at 1600 x 900): the box's top-left 448 units right and 59 below.
 local AG_M2_ROW = [448, 59]
+// Medieval II's settlement scroll in M2EX builds with one Auto-manage tick under the town's figures (measured on
+// the game's scroll at 1600 x 900): its box's right edge 129 units right of own_settlement_governor_info_panel's
+// left and its middle 71 below the panel's bottom; from own_settlement_info_scroll's top-left: 175 right, 279 down.
+// The tick goes in that row, AG_M2_GAP units right of the game's box.
+local AG_M2_AUTO = [129, 71]
+local AG_M2_AUTO_SCROLL = [175, 279]
+local AG_M2_GAP = 14
 // Rome's settlement scroll: the free line under Automanage, from the bottom of own_settlement_governor_info_panel
 // (measured on the game's scroll at 1600 x 900: right under the panel the tick lay over 'Settlement Details').
 local AG_ROME_BELOW = 103
@@ -267,6 +274,26 @@ function ag_game_element(name) {
     return null
 }
 
+// Some builds give the scroll's rects in the game's 1024 x 768 layout units, not screen px (the Raze button stood in
+// the wrong place at 1920 x 1080 for that). Medieval II's own settlement scroll fills the screen's right half: its
+// middle nearer 768 (three quarters of 1024) than three quarters of the screen's width means layout units. Else the
+// factors the capture scroll's add-ons (Sack / Raze Settlement) found, if they did.
+function ag_units() {
+    local root = getroottable()
+    local found = "ce_layout_units" in root ? root.ce_layout_units : null
+    try {
+        local el = ::ui.element("own_settlement_info_scroll")
+        local screen = ag_ui().screenSize()
+        if (el != null && screen != null && screen[0] > 1100 && el.screenWidth > 0 && ag_art != null && ag_art.m2) {
+            local cx = el.screenX + el.screenWidth / 2.0
+            local d1 = cx - 768.0, d2 = cx - screen[0] * 0.75
+            return d1 * d1 < d2 * d2 ? [screen[0] / 1024.0, screen[1] / 768.0] : null
+        }
+    } catch (err) {
+    }
+    return found
+}
+
 function ag_rect(el) {
     if (el == null) {
         return null
@@ -275,7 +302,7 @@ function ag_rect(el) {
         local r = [el.screenX, el.screenY, el.screenWidth, el.screenHeight]
         // a build that gives the game's rects in 1024 x 768 layout units: the capture scroll's add-ons find it
         // out (the scroll is centred) and leave the factors here - turned into screen px
-        local k = "ce_layout_units" in getroottable() ? getroottable().ce_layout_units : null
+        local k = ag_units()
         if (k != null) {
             r = [(r[0] * k[0]).tointeger(), (r[1] * k[1]).tointeger(), (r[2] * k[0]).tointeger(),
                  (r[3] * k[1]).tointeger()]
@@ -370,9 +397,34 @@ function ag_face(ui) {
     return ag_font
 }
 
+// Medieval II: [x, y, anchor] in the row of the game's own Auto-manage tick, right of it - from the governor panel
+// when it lies on the town's own scroll (with Settlement Details open beside it the game may name another place),
+// else from the scroll itself; null: neither is open.
+function ag_place_m2(box, k) {
+    local scroll = ag_rect(ag_game_element("own_settlement_info_scroll"))
+    local gov = ag_rect(ag_game_element("own_settlement_governor_info_panel"))
+    if (gov != null && (scroll == null || (gov[0] >= scroll[0] && gov[0] + gov[2] <= scroll[0] + scroll[2]))) {
+        return [gov[0] + ((AG_M2_AUTO[0] + AG_M2_GAP) * k + 0.5).tointeger(),
+                gov[1] + gov[3] + (AG_M2_AUTO[1] * k + 0.5).tointeger() - box / 2,
+                "own_settlement_governor_info_panel (Medieval II: right of Auto-manage)"]
+    }
+    if (scroll != null) {
+        return [scroll[0] + ((AG_M2_AUTO_SCROLL[0] + AG_M2_GAP) * k + 0.5).tointeger(),
+                scroll[1] + (AG_M2_AUTO_SCROLL[1] * k + 0.5).tointeger() - box / 2,
+                "own_settlement_info_scroll (Medieval II: right of Auto-manage)"]
+    }
+    return null
+}
+
 // [x, y] of the tick box (physical px), from the first open anchor, or null. m2: Medieval II's scroll (its tick
 // row is known: the box goes right of Recruitment); k: screen px per 1024 x 768 unit.
 function ag_place(box, m2, k) {
+    if (m2 && ag_rect(ag_game_element("settlement_details_population_stats")) == null) {
+        local at = ag_place_m2(box, k)
+        if (at != null) {
+            return at
+        }
+    }
     foreach (a in AG_ANCHORS) {
         local r = ag_rect(ag_game_element(a[0]))
         if (r == null) {

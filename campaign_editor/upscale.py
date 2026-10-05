@@ -504,6 +504,79 @@ def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=(), vertical=1.0, 
         vals.plain = None
 
 
+SHORE_KEEP = 3         # points from the water on each side that take the old map's own shore heights
+SHORE_EASE = 4         # points after them over which the land / the sea blend back into the bigger map's own
+
+
+def _coast_rings(wet, W, H, reach):
+    """{point: its distance (1, 2, ...) from the coast line, counted on its own side} up to reach; wet(i) = water."""
+    from collections import deque
+    dist, q = {}, deque()
+    for i in range(W * H):
+        X, Y = i % W, i // W
+        w = wet(i)
+        for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1)):
+            if 0 <= a < W and 0 <= b < H and wet(b * W + a) != w:
+                dist[i] = 1
+                q.append(i)
+                break
+    while q:
+        i = q.popleft()
+        if dist[i] >= reach:
+            continue
+        X, Y = i % W, i // W
+        w = wet(i)
+        for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1)):
+            if 0 <= a < W and 0 <= b < H:
+                j = b * W + a
+                if j not in dist and wet(j) == w:
+                    dist[j] = dist[i] + 1
+                    q.append(j)
+    return dist
+
+
+def shore_profile(w, h, value, is_sea):
+    """The old map's own shore: ([land median 1, 2, 3 points from the water], [sea median 1, 2, 3]) in its own units
+    (value(x, y); the sea's as it reads - a depth below 0 for the .hgt). The games' own (Medieval II .hgt): land 70 /
+    232 / 353, the sea -30 all along."""
+    dist = _coast_rings(lambda i: is_sea(i % w, i // w), w, h, SHORE_KEEP)
+    land, sea = [[] for _ in range(SHORE_KEEP)], [[] for _ in range(SHORE_KEEP)]
+    for i, d in dist.items():
+        x, y = i % w, i // w
+        (sea if is_sea(x, y) else land)[d - 1].append(value(x, y))
+    med = lambda a: sorted(a)[len(a) // 2] if a else None
+    return [med(a) for a in land], [med(a) for a in sea]
+
+
+def vanilla_shore(get, put, W, H, mask, profile):
+    """The coast exactly as the old map had it, whatever the bigger map did inland (the user, after z-fighting
+    corners on a tester's x3 coasts: 'make the shore fully vanilla, the first three cells, smooth the rest'): the
+    first SHORE_KEEP points on each side of the water's edge take the old map's own shore heights (shore_profile -
+    the land never higher than them, the sea at their depth), the next SHORE_EASE blend back into the bigger map's
+    own heights, so no bump and no step shows. get(i) / put(i, v): a point's height in the old map's units."""
+    land_p, sea_p = profile
+    if not any(v is not None for v in land_p + sea_p):
+        return
+    dist = _coast_rings(lambda i: mask.b[i], W, H, SHORE_KEEP + SHORE_EASE)
+    for i, d in dist.items():
+        v = get(i)
+        if v is None:
+            continue
+        sea = mask.b[i]
+        prof = sea_p if sea else land_p
+        k = min(d, SHORE_KEEP) - 1
+        ref = prof[k] if prof[k] is not None else next((p for p in prof if p is not None), None)
+        if ref is None:
+            continue
+        if d <= SHORE_KEEP:
+            t = ref if sea else min(v, ref)
+        else:
+            t = ref + (v - ref) * (d - SHORE_KEEP) / (SHORE_EASE + 1)
+            if not sea:
+                t = min(v, t)
+        put(i, t)
+
+
 SHORE_GAP = 2          # old grey levels: land touching water never lower (the games' own shores: 1 - 3)
 SHORE_RAMP = {1: 0.3, 2: 0.65}   # by points from the water: the share of the next point inland's rise above the floor
 # (the games' own maps, map_heights.hgt medians 1, 2, 3 points from the water: Medieval II 70 / 232 / 353, Rome
@@ -598,6 +671,19 @@ def smooth_scaled(path, kind, sea=False, mask=None, natural=False, rivers=(), to
         if natural:
             _nature(vals, relief, W, H, mask, 1.0, rivers, towns, vertical, _steepest(w, h, value, is_sea), 1.0,
                     volcanoes, _rocky(ground, w, h))
+        if natural:                                  # the coast as the old map had it: in the old map's meaning
+            # (the picture's levels grow `vertical` times with descr_terrain: land grey x vertical, the sea's depth
+            # below 255 x vertical)
+            prof = shore_profile(w, h, lambda x, y: float(at(x, y)[0]) if not is_sea(x, y)
+                                 else -(255.0 - at(x, y)[2]), is_sea)
+
+            def get(i):
+                v = vals[i]
+                return None if v is None else (-(255.0 - v) * vertical if mask.b[i] else v * vertical)
+
+            def put(i, v):
+                vals[i] = (255.0 + min(v, -1.0) / vertical) if mask.b[i] else max(v / vertical, 1.0)
+            vanilla_shore(get, put, W, H, mask, prof)
         raw = _blank(W, H, step, (0, 0, 0))
         for Y in range(H):
             for X in range(W):
@@ -662,6 +748,12 @@ def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0, natural=False, rivers=(),
         v = 0.0 if v is None else v
         v = min(v, 0.0) if mask.b[i] else max(v, 0.0)
         out[i] = v * vertical
+    if natural:                                     # the coast as the old map had it (the .hgt's own units)
+        prof = shore_profile(w, h, lambda x, y: vals[y * w + x], is_sea)
+
+        def put(i, v):
+            out[i] = min(v, -0.5) if mask.b[i] else max(v, 0.5)
+        vanilla_shore(lambda i: out[i], put, W, H, mask, prof)
     return struct.pack("<II", W, H) + struct.pack("<%df" % (W * H), *out)
 
 
@@ -1477,6 +1569,35 @@ def _no_islets(mask, W, H, fixed):
         if len(piece) <= ISLET or all(wet_by(i) for i in piece):
             for i in piece:
                 mask.b[i] = 1
+    _no_pools(mask, W, H, fixed)
+
+
+def _no_pools(mask, W, H, fixed):
+    """The same for water: a small pool on the land (ISLET points or less) with no tile middle map_regions calls sea
+    in it becomes land - the small square pools of water a tester's DaC x3 showed inland (old water points of the
+    heights that no sea tile held, grown 3 x). Lakes are sea tiles in map_regions, so they stay."""
+    if not fixed:
+        return
+    seen = bytearray(W * H)
+    for start in range(W * H):
+        if not mask.b[start] or seen[start]:
+            continue
+        piece, st, held = [], [start], False
+        seen[start] = 1
+        while st:
+            i = st.pop()
+            piece.append(i)
+            held = held or bool(fixed[i])
+            X, Y = i % W, i // W
+            for a, b in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1)):
+                if 0 <= a < W and 0 <= b < H:
+                    j = b * W + a
+                    if mask.b[j] and not seen[j]:
+                        seen[j] = 1
+                        st.append(j)
+        if not held and len(piece) <= ISLET:
+            for i in piece:
+                mask.b[i] = 0
 
 
 GOLD = (5 ** 0.5 - 1) / 2                                      # 0.618...: the golden ratio's part

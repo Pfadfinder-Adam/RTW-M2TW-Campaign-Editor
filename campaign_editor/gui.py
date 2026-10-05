@@ -1764,6 +1764,39 @@ class App(tk.Tk):
         self.bind_all("<F5>", lambda e: self.load_clicked())
         for i in range(5):
             self.bind_all("<Control-Key-%d>" % (i + 1), lambda e, i=i: None if self.map_work() else self.nb.select(i))
+        self.bind_all("<Control-KeyPress>", self._layout_keys)
+
+    # Windows key codes of the letters the shortcuts use: with a non-Latin keyboard layout (Russian, Greek...) Tk
+    # names the key by its own letter ('Cyrillic_ya' for Z), so <Control-z> never fires - the key's code still says Z.
+    LAYOUT_KEYS = {90: "z", 89: "y", 80: "p", 83: "s", 67: "c", 86: "v", 88: "x", 65: "a"}
+
+    def _layout_keys(self, e):
+        """Ctrl + a letter in any keyboard layout: Undo / Redo / Preview / Write it, and copy / paste / cut / select
+        all in the box that has the keys (a Latin layout's letters are bound above and never reach here)."""
+        letter = self.LAYOUT_KEYS.get(e.keycode)
+        if letter is None or (len(e.keysym) == 1 and e.keysym.isascii()):
+            return None
+        w = self.focus_get()
+        if letter in "cvx":
+            if w is not None:
+                w.event_generate({"c": "<<Copy>>", "v": "<<Paste>>", "x": "<<Cut>>"}[letter])
+            return "break"
+        if letter == "a":
+            if w is not None and w.winfo_class() in ("Text",):
+                w.tag_add("sel", "1.0", "end-1c")
+            elif w is not None and w.winfo_class() in ("Entry", "TEntry", "TCombobox"):
+                w.selection_range(0, "end")
+            return "break"
+        shift = bool(e.state & 0x1)
+        if letter == "z":
+            (self.redo if shift else self.undo)(e)
+        elif letter == "y":
+            self.redo(e)
+        elif letter == "p":
+            self.preview()
+        elif letter == "s":
+            self.create()
+        return "break"
 
     def start_game(self):
         """The bottom bar's Start the game: the game with the loaded mod (launch.start_line - its own start script,
@@ -4434,6 +4467,7 @@ class App(tk.Tk):
                     self.load_buildings()
                 items.append(("Its buildings...  (Buildings)", buildings))
         rid = getattr(self.map_view, "menu_res", None)
+        what = None
         if rid:                                        # a resource, fort, watchtower or wonder: gone with its line
             mark = getattr(self.map_view, "resources", None) or []
             what = next((m for m in mark if m.get("id") == rid), None)
@@ -4456,6 +4490,16 @@ class App(tk.Tk):
             items.append(("Delete the %s from the map" % name, delete_mark))
         fl = getattr(self.map_view, "menu_fort", None)
         fo = next((x for x in (self.strat.forts if self.strat else []) if x.line == fl), None) if fl is not None else None
+        fxy = None                                       # a fort / watchtower: the army in it can be taken out
+        if rid and (what or {}).get("kind") in ("fort", "watchtower"):
+            fxy = tuple(what.get("xy") or ())
+        elif fo is not None and fo.kind != "landmark":
+            fxy = tuple(fo.xy)
+        for acid, ach in ((getattr(self, "_map_chars", None) or {}).items() if fxy else ()):
+            if tuple(ach.get("xy") or ()) == fxy and ach.get("army") and \
+                    acid in getattr(self.map_view, "draggable", ()):
+                items.append(("Take the army out: %s (%s) - then click a free tile" % (ach["name"], ach["faction"]),
+                              lambda acid=acid: self.take_out(acid)))
         if fo is not None and fo.kind == "landmark":     # a wonder (drawn on every map): its window and its model
             from .gui_wonders import show as show_wonder, view_3d
             if items:

@@ -1064,6 +1064,7 @@ class MapView(ttk.Frame):
         tile = max(self.z * 0.9, 6)                    # a character fills its tile...
         town_of = {self.places.get(("city", r), xy): r for r, xy in cm.cities.items()}
         seen, flags = {}, set()
+        forts = self.fort_spots()
         for ch_ in sorted(self.chars, key=lambda c: not c["army"]):     # the garrison first
             x, y = ch_["xy"]
             sx, sy = self.to_screen(x, y)
@@ -1079,6 +1080,14 @@ class MapView(ttk.Frame):
                     self._roof_flag(sx + size / 2, sy - size / 2, max(tile * 0.6, 6), ch_["faction"],
                                     ("city", "city:" + town_of.get((x, y), "")))
                 continue
+            if (x, y) in forts and ch_["kind"] in ("general", "named character"):
+                # an army in a fort or a watchtower: the same flag as on a town's roof, on the sign's upper right
+                # corner, part of the sign (the army leaves by the right click's 'Take the army out')
+                if (x, y) not in flags:
+                    flags.add((x, y))
+                    w = max(2.0, min(self.z * FORT_W, 36))
+                    self._roof_flag(sx + w, sy - w, max(tile * 0.6, 6), ch_["faction"], forts[(x, y)])
+                continue
             elif (x, y) in busy:                       # ...an agent or a ship stands small beside the town /
                 n = seen.get((x, y), 0)                # port, to its left (the name is on the right), in a row
                 seen[(x, y)] = n + 1
@@ -1089,6 +1098,14 @@ class MapView(ttk.Frame):
                 seen[(x, y)] = n + 1
                 sx += n * one * 0.5
             self._draw_char(ch_, sx, sy, one)
+
+    def fort_spots(self):
+        """{tile: the tags of its sign} of every fort and watchtower where it stands now (moved ones, added ones in
+        the Map editor - drawn there as movable signs)."""
+        if self._marks_on():
+            return {tuple(r["xy"]): ("res", "res:%s" % r["id"]) for r in self.resources
+                    if r.get("kind") in ("fort", "watchtower")}
+        return {tuple(fo.xy): ("fort", "fort:%d" % fo.line) for fo in (self.forts or []) if fo.kind != "landmark"}
 
     def _roof_flag(self, cx, cy, h, faction, tags):
         """An army's flag on a town's sign: the cloth's lower left corner on the sign's upper right corner (cx, cy),

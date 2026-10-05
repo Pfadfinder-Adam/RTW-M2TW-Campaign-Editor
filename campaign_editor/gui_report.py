@@ -158,6 +158,8 @@ def open_report(app, message="", kind="bug", tab=None):
     ttk.Button(pics_row, text="Paste a screenshot (Ctrl+V)", command=paste_picture).pack(side="left", padx=6)
     w.bind("<Control-v>", paste_picture)
     w.bind("<Control-V>", paste_picture)
+    w.bind("<Control-KeyPress>", lambda e: paste_picture(e) if e.keycode == 86 and not (
+        len(e.keysym) == 1 and e.keysym.isascii()) else None)       # Ctrl+V in a non-Latin keyboard layout
 
     def words():
         return [x.strip() for x in v_hide.get().split(",") if x.strip()]

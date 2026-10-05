@@ -177,6 +177,17 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **Bigger map (x3): the coast as the old map had it.** The first three points on each side of the water's edge take
+  the old map's own shore heights (land never higher, the sea at the old depth by the shore, not three times
+  deeper), and the next four blend into the bigger map's heights, so the shore lies as in the games' own maps -
+  against the corners flickering at the water's edge. Small pools of water no sea tile holds become land.
+- **Map: an army in a fort or a watchtower** shows the same flag as an army in a town, on the sign's corner; the
+  right click on the fort offers *Take the army out*.
+- **Avoid Growth (Medieval II)**: the tick stands in the row of the game's own Auto-manage tick, right of it, at any
+  screen size and also when the game gives its scroll in 1024 x 768 layout units.
+- **Ctrl shortcuts in any keyboard layout** (Undo / Redo / Preview / Write it, copy / paste / cut / select all, a
+  screenshot pasted into a report): a Russian or another non-Latin layout no longer stops them.
+
 - The Ko-fi button reads **Support me on Ko-fi** (Ko-fi's own words).
 - **Settings** and **Help** moved into **Tools** (top of the list); Tools no longer repeats Report a bug / Suggest an
   idea - the **Report a bug / Suggest** button does both.

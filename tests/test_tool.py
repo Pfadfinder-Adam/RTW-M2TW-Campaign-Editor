@@ -2652,6 +2652,16 @@ building smith
             sea.b[6 * W + X] = 0                             # a 1-point-thick strip of land no tile holds
         upscale._no_islets(sea, W, H, bytearray(W * H))
         self.assertTrue(all(sea.b))
+        land = upscale.Mask(W, H)                            # a small pool on the land no sea tile holds goes
+        for X, Y in ((5, 5), (6, 5), (5, 6), (6, 6)):        # (a tester's DaC x3: square pools inland) ...
+            land.b[Y * W + X] = 1
+        held = bytearray(W * H)
+        for X, Y in ((10, 10), (11, 10), (10, 11), (11, 11)):     # ... one with a sea tile's middle in it stays
+            land.b[Y * W + X] = 1
+            held[Y * W + X] = 1
+        upscale._no_islets(land, W, H, held)
+        self.assertFalse(any(land.b[Y * W + X] for X, Y in ((5, 5), (6, 5), (5, 6), (6, 6))))
+        self.assertTrue(all(land.b[Y * W + X] for X, Y in ((10, 10), (11, 10), (10, 11), (11, 11))))
 
     def test_delete_mod_folder_guard(self):
         """Tools > Delete this mod's folder: only <game>/<mod> or <game>/mods/<mod> - never the game's own data, an
@@ -3120,9 +3130,8 @@ building smith
         for Y in range(6, W - 6):
             d1, d2, d3 = (g.get(X, Y)[0] - 1 for X in (3, 4, 5))
             self.assertLess(d1, d2, Y)
-            self.assertLess(d2, d3, Y)
-            self.assertLessEqual(d1, 0.35 * d2 + 1, Y)
-            self.assertLessEqual(d2, 0.7 * d3 + 1, Y)
+            self.assertLessEqual(d2, d3, Y)
+            self.assertLessEqual(d3, 200 / 3.0 + 1, Y)       # never above the old map's own shore (vanilla_shore)
 
     def test_bigger_map_no_islets_no_spikes(self):
         """x3 heights' coast: a land point the old heights held inside a navigable river (map_regions calls the
@@ -3257,7 +3266,7 @@ building smith
         self.assertEqual((hw, hh), (25, 25))                                   # the picture's new size: 6W+1
         vals = struct.unpack_from("<625f", raw, 8)
         self.assertAlmostEqual(vals[24], 1502.3 * 3, 1)                        # land, 3 x higher
-        self.assertAlmostEqual(vals[0], -24.5 * 3, 1)                          # sea, 3 x deeper
+        self.assertTrue(-24.5 * 3 - 0.1 <= vals[0] < 0)          # sea by the coast: the old map's own depth eased
         hi = read_tga(os.path.join(camp, "map_heights.tga"))
         self.assertEqual((hi.width, hi.height), (25, 25))
         self.assertFalse(os.path.exists(os.path.join(camp, "map.rwm")))
