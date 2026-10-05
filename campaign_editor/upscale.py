@@ -122,17 +122,24 @@ def _sources(kind, w, h, natural=False):
     """For each new point (X, Y) - bottom-up, like the game's tiles -: the 4 old points round it with their
     weights. A block's middle (tiles) or an old corner point (corners) has its old point at weight 1, so it keeps
     its old value exactly: towns, armies, resources and the rest never change their kind of ground. natural (tiles
-    only): every other pixel looks from a place bent by _warp, so a coast or a border made from these weights winds
-    like a real one instead of running in steps and straight 45-degree cuts."""
+    and corners): every other point looks from a place bent by _warp, so a coast or a border made from these weights
+    winds like a real one instead of running in steps and straight 45-degree cuts (corners: an old point never
+    bent, so every old height stays where it was)."""
     xs, ys = _weights(kind, w), _weights(kind, h)
-    bend = natural and kind == "tiles"
-    mid = FACTOR // 2
+    bend = natural and kind in ("tiles", "corners")
+    corners = kind == "corners"
+    mid = 0 if corners else FACTOR // 2
     for Y, (ya, yb, fy) in enumerate(ys):
         for X, (xa, xb, fx) in enumerate(xs):
             if bend and not (X % FACTOR == mid and Y % FACTOR == mid):
-                wx, wy = _warp(X, Y)
-                px = min(max((X + 0.5 + wx) / FACTOR - 0.5, 0.0), w - 1.0)
-                py = min(max((Y + 0.5 + wy) / FACTOR - 0.5, 0.0), h - 1.0)
+                if corners:                         # a point of the heights' grid: the bend of the tile it sits in
+                    wx, wy = _warp((X - 1) / 2, (Y - 1) / 2)    # (a tile = 2 points), so hills and their ground
+                    px = min(max((X + 2 * wx) / FACTOR, 0.0), w - 1.0)   # move together
+                    py = min(max((Y + 2 * wy) / FACTOR, 0.0), h - 1.0)
+                else:
+                    wx, wy = _warp(X, Y)
+                    px = min(max((X + 0.5 + wx) / FACTOR - 0.5, 0.0), w - 1.0)
+                    py = min(max((Y + 0.5 + wy) / FACTOR - 0.5, 0.0), h - 1.0)
                 xa, ya = int(px), int(py)
                 xb, yb = min(xa + 1, w - 1), min(ya + 1, h - 1)
                 fx, fy = px - xa, py - ya
@@ -231,7 +238,110 @@ def _nearest_kind(pts, want, kind_of, w, h, reach=4):
     return None
 
 
-def smooth_scaled(path, kind, sea=False, mask=None):
+def _heights_field(w, h, value, is_sea, mask, natural=False):
+    """The heights at the new size (corners), land and sea blended apart by mask (True = sea): only old points of
+    the new point's kind are blended; none round it - the nearest one's value. -> (values, relief, W, H): relief = how
+    much the old points of that kind round each new point differ (a mountain's slope; 0 on a plain or the sea)."""
+    W, H = len(_weights("corners", w)), len(_weights("corners", h))
+    out, relief = [0.0] * (W * H), [0.0] * (W * H)
+    for X, Y, pts in _sources("corners", w, h, natural):
+        want = mask[(X, Y)]
+        tot = val = 0.0
+        lo = hi = None
+        for x, y, wt in pts:
+            if is_sea(x, y) == want:
+                v = value(x, y)
+                tot += wt
+                val += v * wt
+                lo = v if lo is None or v < lo else lo
+                hi = v if hi is None or v > hi else hi
+        if not tot:                                  # no old point of that kind round it: the nearest one's value
+            got = _nearest_kind(pts, want, is_sea, w, h)
+            val, tot = (value(*got) if got else None), 1.0
+        i = Y * W + X
+        out[i] = val / tot if val is not None else None
+        if lo is not None and not want:
+            relief[i] = hi - lo
+    return out, relief, W, H
+
+
+ROUGH, CARVE = 0.45, 0.35       # mountains' fine relief (a share of the slope); a river's valley (a share of the height)
+
+
+def _noise(W, H):
+    """Fine relief the way mountains have it - big hills carrying smaller ones carrying smaller ones (fractal, three
+    sizes: 24, 12 and 6 points - 4, 2 and 1 tiles): -1 .. 1 a point, the same map always alike. None without Pillow (only a run from the
+    source may lack it - the exe has it): then the heights stay smooth."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    import random
+    rnd = random.Random(1618)
+    total = [0.0] * (W * H)
+    for size, part in ((24, 0.45), (12, 0.35), (6, 0.2)):
+        sw, sh = W // size + 2, H // size + 2
+        small = Image.frombytes("L", (sw, sh), bytes(rnd.randrange(256) for _ in range(sw * sh)))
+        big = small.resize((sw * size, sh * size), Image.BICUBIC).crop((0, 0, W, H)).tobytes()
+        for i, b in enumerate(big):
+            total[i] += (b / 127.5 - 1.0) * part
+    return total
+
+
+def _rings(points, W, H, reach):
+    """{point: steps to the nearest of points} for every point of the W x H grid within reach (8 ways)."""
+    dist = {p: 0 for p in points if 0 <= p[0] < W and 0 <= p[1] < H}
+    edge = list(dist)
+    for d in range(1, reach + 1):
+        nxt = []
+        for x, y in edge:
+            for a in (-1, 0, 1):
+                for b in (-1, 0, 1):
+                    q = (x + a, y + b)
+                    if 0 <= q[0] < W and 0 <= q[1] < H and q not in dist:
+                        dist[q] = d
+                        nxt.append(q)
+        edge = nxt
+    return dist
+
+
+def _tile_points(tiles):
+    """The heights' points of new tiles (a tile = the 3 x 3 points round its middle 2X+1, 2Y+1)."""
+    return {(2 * X + 1 + a, 2 * Y + 1 + b) for X, Y in tiles for a in (-1, 0, 1) for b in (-1, 0, 1)}
+
+
+VALLEY = {0: 1.0, 1: 0.8, 2: 0.55, 3: 0.3, 4: 0.12}      # a river's valley: how deep, by points from the river
+CALM = 4                                                  # points round a town where the land is left smooth
+
+
+def _nature(vals, relief, W, H, mask, floor, rivers=(), towns=()):
+    """Land heights the way nature makes them (in place; vals in the file's own unit, floor = the lowest land):
+    - fine relief on mountains: _noise times the old slope (ROUGH) - rocky ranges, plains stay flat;
+    - rivers carve their valleys: the land along a river (rivers: its new tiles) lowered by CARVE of its height
+      above the floor, less further off (VALLEY) - deep in the mountains, hardly at all on a plain;
+    - every old point keeps its height (the fine relief fades to nothing at it), round a town (towns: new tiles)
+      the land is left smooth, the sea is never touched and no land drops to the sea."""
+    noise = _noise(W, H)
+    near_river = _rings(_tile_points(rivers), W, H, max(VALLEY)) if rivers else {}
+    near_town = _rings(_tile_points(towns), W, H, CALM) if towns else {}
+    for Y in range(H):
+        for X in range(W):
+            i = Y * W + X
+            v = vals[i]
+            if v is None or mask.b[i]:
+                continue
+            calm = min(near_town.get((X, Y), CALM), CALM) / CALM
+            if noise is not None and relief[i]:
+                dx, dy = min(X % FACTOR, -X % FACTOR), min(Y % FACTOR, -Y % FACTOR)
+                fade = min(1.0, (dx * dx + dy * dy) ** 0.5)          # 0 on an old point
+                v += ROUGH * relief[i] * noise[i] * fade * calm
+            d = near_river.get((X, Y))
+            if d is not None:
+                v -= CARVE * VALLEY[d] * max(v - floor, 0.0) * max(calm, 0.25)
+            vals[i] = max(v, floor)
+
+
+def smooth_scaled(path, kind, sea=False, mask=None, natural=False, rivers=(), towns=()):
     """A height-like picture made bigger SMOOTHLY (no steps): each new point blends the old ones round it. With
     sea=True (map_heights: land grey, its level; the sea blue, its depth) land and sea are blended apart: a point is
     sea or land by mask (heights_mask - a smooth coast), and only old points of that kind are blended."""
@@ -239,6 +349,23 @@ def smooth_scaled(path, kind, sea=False, mask=None):
     is_sea = _heights_sea(at) if sea else (lambda x, y: False)
     if sea and mask is None:
         mask = heights_mask(path)
+    if sea and kind == "corners":                    # map_heights: land grey (its level), the sea blue (its depth)
+        value = lambda x, y: float(at(x, y)[2] if is_sea(x, y) else at(x, y)[0])
+        vals, relief, W, H = _heights_field(w, h, value, is_sea, mask, natural)
+        if natural:
+            _nature(vals, relief, W, H, mask, 1.0, rivers, towns)
+        raw = _blank(W, H, step, (0, 0, 0))
+        for Y in range(H):
+            for X in range(W):
+                want = mask.b[Y * W + X]
+                v = vals[Y * W + X]
+                v = int(v + 0.5) if v is not None else (253 if want else 1)
+                if want:
+                    _put(raw, W, H, step, top_down, X, Y, (0, 0, min(max(v, 1), 255)))
+                else:                                # land never black (0 0 0 may be read as sea)
+                    v = min(max(v, 1), 255)
+                    _put(raw, W, H, step, top_down, X, Y, (v, v, v))
+        return _write(data, W, H, step, raw)
     W, H = len(_weights(kind, w)), len(_weights(kind, h))
     raw = _blank(W, H, step, (0, 0, 0))
     for X, Y, pts in _sources(kind, w, h):
@@ -266,7 +393,7 @@ def smooth_scaled(path, kind, sea=False, mask=None):
     return _write(data, W, H, step, raw)
 
 
-def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0):
+def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0, natural=False, rivers=(), towns=()):
     """map_heights.hgt (the game's own float copy of the heights, read INSTEAD of the picture and never made again)
     at the new size: the old floats blended like the picture (land and sea apart, by mask), times `vertical` (the
     heights grow with the land: descr_terrain's max_land_height / min_sea_height are multiplied the same way).
@@ -279,24 +406,13 @@ def hgt_scaled(hgt_path, tga_path, mask, vertical=1.0):
     if (tw, th) != (w, h):
         raise ValueError("map_heights.hgt is %d x %d but map_heights.tga %d x %d - they must match" % (w, h, tw, th))
     is_sea = _heights_sea(at)
-    W, H = len(_weights("corners", w)), len(_weights("corners", h))
-    out = [0.0] * (W * H)
-    for X, Y, pts in _sources("corners", w, h):
-        want = mask[(X, Y)]
-        tot = val = 0.0
-        for x, y, wt in pts:
-            if is_sea(x, y) == want:
-                tot += wt
-                val += vals[y * w + x] * wt
-        if not tot:
-            got = _nearest_kind(pts, want, is_sea, w, h)
-            val, tot = (vals[got[1] * w + got[0]] if got else 0.0), 1.0
-        v = val / tot
-        if want:
-            v = min(v, 0.0)
-        else:
-            v = max(v, 0.0)
-        out[Y * W + X] = v * vertical
+    out, relief, W, H = _heights_field(w, h, lambda x, y: vals[y * w + x], is_sea, mask, natural)
+    if natural:                                     # the same fine relief and valleys as the picture's
+        _nature(out, relief, W, H, mask, 0.0, rivers, towns)
+    for i, v in enumerate(out):
+        v = 0.0 if v is None else v
+        v = min(v, 0.0) if mask.b[i] else max(v, 0.0)
+        out[i] = v * vertical
     return struct.pack("<II", W, H) + struct.pack("<%df" % (W * H), *out)
 
 
@@ -653,6 +769,7 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=Fals
                 if get(X, Y) in lands:
                     land.b[Y * W + X] = 1
         info["land"] = land
+        info["towns"] = town_px
         info["moved_ports"] = moved
     return _write(data, W, H, step, raw)
 
