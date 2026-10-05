@@ -2792,6 +2792,19 @@ building smith
         g = scaled((tiles, drawn))
         self.assertEqual(off_river(g), [])
         W = n * 3
+
+        def teeth(g):                                   # a pixel with one side of its own, two of the other region
+            out = []
+            for X in range(1, W - 1):
+                for Y in range(1, W - 1):
+                    if (X, Y) in drawn or (X % 3 == 1 and Y % 3 == 1):
+                        continue
+                    sides = [q for q in ((X + 1, Y), (X - 1, Y), (X, Y + 1), (X, Y - 1)) if q not in drawn]
+                    c = g.get(X, Y)
+                    if sum(g.get(*q) == c for q in sides) <= 1 and sum(g.get(*q) != c for q in sides) >= 2:
+                        out.append((X, Y))
+            return out
+        self.assertEqual(teeth(g), [])
         for c in (A, B):
             px = {(X, Y) for X in range(W) for Y in range(W) if g.get(X, Y) == c}
             seen, st = {next(iter(px))}, [next(iter(px))]

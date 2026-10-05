@@ -960,6 +960,7 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=Fals
         return (raw[o + 2], raw[o + 1], raw[o])
     moved = _borders_on_rivers(raw, W, H, step, top_down, plain, colour, land_of, w, h, *rivers) if rivers else ()
     if natural or moved:
+        _no_teeth(raw, W, H, step, top_down, plain, rivers[1] if rivers else (), moved)
         _join_pieces(raw, W, H, step, top_down, plain, moved)
     town_px = set()
     for x, y in towns:                            # the town and its own region all round it (its 3 x 3 block)
@@ -1067,6 +1068,70 @@ def _join_pieces(raw, W, H, step, top_down, plain, free=()):
                     _put(raw, W, H, step, top_down, a, b, k)
 
 
+def _no_teeth(raw, W, H, step, top_down, plain, river_px=(), free=()):
+    """No lone tooth on a border: a land pixel with at most one side of its own region, and two sides or more of one
+    other region, goes to that region (a few rounds, so a spike one pixel wide goes too); a river pixel (river_px)
+    neither changes nor counts as a side (it is drawn over the land), and every tile's middle stays (but the free
+    tiles' - _borders_on_rivers'). Taking a pixel with one side of its own never cuts its region in two; one that also
+    touches a river pixel of its region goes only when its land side reaches that river pixel another way."""
+    n = W * H
+    col = [0] * n                                      # the colours as numbers, by Y * W + X (bottom-up)
+    for Y in range(H):
+        o = ((H - 1 - Y) if top_down else Y) * W * step
+        row = raw[o:o + W * step]
+        col[Y * W:(Y + 1) * W] = [row[i + 2] << 16 | row[i + 1] << 8 | row[i] for i in range(0, W * step, step)]
+    land = {c[0] << 16 | c[1] << 8 | c[2] for c in plain}
+    river = {Y * W + X for X, Y in river_px if 0 <= X < W and 0 <= Y < H}
+    mid = FACTOR // 2
+    free = set(free)
+
+    def kept(i):
+        X, Y = i % W, i // W
+        return X % FACTOR == mid and Y % FACTOR == mid and (X // FACTOR, Y // FACTOR) not in free
+
+    def sides(i):
+        X = i % W
+        return [j for j, ok in ((i - 1, X > 0), (i + 1, X < W - 1), (i - W, i >= W), (i + W, i < n - W)) if ok]
+    def joined(start, goals, without, c):          # start reaches a goal near by, not through 'without'
+        goals, seen, st = set(goals), {start, without}, [start]
+        x0, y0 = without % W, without // W
+        while st:
+            j = st.pop()
+            if j in goals:
+                return True
+            for q in sides(j):
+                if q not in seen and col[q] == c and abs(q % W - x0) <= 4 and abs(q // W - y0) <= 4:
+                    seen.add(q)
+                    st.append(q)
+        return False
+    todo = {i for i in range(n) if col[i] in land and any(col[j] != col[i] for j in sides(i))}
+    changed = {}
+    for _ in range(4):
+        nxt = set()
+        for i in sorted(todo):
+            c = col[i]
+            if c not in land or i in river or kept(i):
+                continue
+            near = sides(i)
+            mine = [j for j in near if col[j] == c and j not in river]
+            if len(mine) > 1:
+                continue
+            round_ = [col[j] for j in near if j not in river and col[j] in land and col[j] != c]
+            k = max(sorted(set(round_)), key=round_.count) if round_ else None
+            if k is None or round_.count(k) < 2:
+                continue
+            wet = [j for j in near if col[j] == c and j in river]
+            if mine and wet and not joined(mine[0], wet, i, c):
+                continue                               # the river's pixel of its region held it on: keep it
+            col[i] = changed[i] = k
+            nxt.update(near)
+        if not nxt:
+            break
+        todo = nxt
+    for i, k in changed.items():
+        _put(raw, W, H, step, top_down, i % W, i // W, (k >> 16, k >> 8 & 255, k & 255))
+
+
 def river_tiles(path):
     """The old map's river tiles (rivers, fords, sources) of map_features."""
     _, w, h, _, _, at = _pixels(path)
@@ -1095,12 +1160,12 @@ def _borders_on_rivers(raw, W, H, step, top_down, plain, colour, land_of, w, h, 
     mine = set(along)          # (no other region beside it: no border along it; none of its own: a piece of its own)
     for x, y in along:
         a = colour(x, y)
-        X0, Y0 = max(0, FACTOR * (x - 1)), max(0, FACTOR * (y - 1))
-        X1, Y1 = min(W, FACTOR * (x + 2)), min(H, FACTOR * (y + 2))
+        X0, Y0 = max(0, FACTOR * (x - 2)), max(0, FACTOR * (y - 2))      # it looks 2 tiles round it (a bank
+        X1, Y1 = min(W, FACTOR * (x + 3)), min(H, FACTOR * (y + 3))      # cut by the window's edge would miss
         open_ = lambda q: X0 <= q[0] < X1 and Y0 <= q[1] < Y1 and q not in river_px and get(*q) in plain
-        reg, side, todo = {}, {}, deque()
-        for dx, dy in N8:                              # the land tiles round it, from their middles
-            t = (x + dx, y + dy)
+        reg, side, todo = {}, {}, deque()                                # its own regions) and changes 1 round
+        for dx, dy in ((a, b) for b in range(-2, 3) for a in range(-2, 3) if (a, b) != (0, 0)):
+            t = (x + dx, y + dy)                       # the land tiles round it, from their middles
             if not inside(*t) or t in old_rivers or not land_of(*t):
                 continue
             m = new_xy(*t)
@@ -1131,8 +1196,8 @@ def _borders_on_rivers(raw, W, H, step, top_down, plain, colour, land_of, w, h, 
         for m, c in reg.items():
             bank.setdefault(side[m], set()).add(c)
         seeded = set().union(*bank.values()) if bank else set()
-        for Y in range(Y0, Y1):
-            for X in range(X0, X1):
+        for Y in range(max(0, FACTOR * (y - 1)), min(H, FACTOR * (y + 2))):
+            for X in range(max(0, FACTOR * (x - 1)), min(W, FACTOR * (x + 2))):
                 here = get(X, Y)
                 if here not in plain:
                     continue
@@ -1140,8 +1205,8 @@ def _borders_on_rivers(raw, W, H, step, top_down, plain, colour, land_of, w, h, 
                 if t == (x, y):                        # the river tile's own block
                     new = a if (X, Y) in river_px else reg.get((X, Y), here)
                 elif (X, Y) in reg and (here in seeded or here == a) and here not in bank.get(side[(X, Y)], ()) \
-                        and here != colour(*t) and t not in mine:   # from the other bank (a block's own stays)
-                    new = reg[(X, Y)]
+                        and (here != colour(*t) or t in old_rivers) and t not in mine:
+                    new = reg[(X, Y)]                  # from the other bank (a land block's own colour stays)
                 else:
                     continue
                 if new != here:
