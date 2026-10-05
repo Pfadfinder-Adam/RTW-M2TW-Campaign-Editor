@@ -5858,6 +5858,22 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_new_army_made_a_general(self):
+        """Map > New army, 'Make him a general': his army starts with the faction's general's bodyguard (general_unit
+        in the unit file), so the game shows him as a general with his own name, not a captain."""
+        from campaign_editor.edit import bodyguard_unit
+        mod = ModData(self.root)
+        self.assertIsNone(bodyguard_unit(mod, "test", "alpha"))        # no general_unit: nothing to give
+        edu = mod.file("edu")
+        with open(edu, "a", encoding="utf-8") as fh:
+            fh.write("\ntype\t\talpha guard\ndictionary\talpha_guard\ncategory\tcavalry\nattributes\tgeneral_unit_upgrade"
+                     " \"late\"\nownership\talpha\n\ntype\t\talpha bodyguard\ndictionary\talpha_bodyguard\n"
+                     "category\tcavalry\nattributes\tsea_faring, general_unit\nownership\talpha, slave\n")
+        mod = ModData(self.root)
+        self.assertEqual(bodyguard_unit(mod, "test", "alpha"), "alpha bodyguard")   # the plain one before an upgrade
+        self.assertEqual(bodyguard_unit(mod, "test", "slave"), "alpha bodyguard")   # one the rebels may own
+        self.assertIsNone(bodyguard_unit(mod, "test", "beta"))
+
     def test_recolour_keeps_a_bright_colour_of_its_own(self):
         # a tester's emblem: a gold wolf and laurel on red turned red - the rim growth took bright gold for red
         try:

@@ -92,6 +92,14 @@ def add_at(app, kind, xy, preset=None, faction=None):
     ttk.Label(frm, text="Age").grid(row=row, column=0, sticky="w")
     ttk.Entry(frm, textvariable=v_age, width=5).grid(row=row, column=1, sticky="w")
     row += 1
+    v_general = tk.BooleanVar(value=False)
+    if kind == "army":                           # a general of his own name: the bodyguard leads his army
+        ttk.Checkbutton(frm, text="Make him a general", variable=v_general).grid(row=row, column=1, columnspan=2,
+                                                                              sticky="w")
+        ttk.Label(frm, foreground="#666", wraplength=420, justify="left",
+                  text="his first unit is the faction's general's bodyguard, so the game shows him as a general "
+                       "with his own name (not a captain)").grid(row=row + 1, column=1, columnspan=2, sticky="w")
+        row += 2
     note = ttk.Label(frm, foreground="#666", wraplength=420, justify="left")
     note.grid(row=row, column=0, columnspan=3, sticky="w", pady=(4, 0))
     state = {"pool": {}}
@@ -119,9 +127,10 @@ def add_at(app, kind, xy, preset=None, faction=None):
         note.configure(text=(
             "Goes to %s's list on Units & armies (give it its units there)." % fac if mine else
             "Written with the next Apply%s." % (
+                "; it starts with %s's general's bodyguard (more units in Edit faction)" % fac if v_general.get() else
                 "; it starts with the first unit of %s's nearest %s (change it in Edit faction)" % (
                     fac, "fleet" if kind == "fleet" else "army") if not agent else "")))
-    for v in (v_fac, v_kind, v_sub):
+    for v in (v_fac, v_kind, v_sub, v_general):
         v.trace_add("write", refresh)
     refresh()
 
@@ -154,22 +163,34 @@ def add_at(app, kind, xy, preset=None, faction=None):
         c = {"kind": v_kind.get() if agent else kind, "name": full,
              "age": int(v_age.get()) if v_age.get().isdigit() else 30, "units": [], "xy": tuple(xy),
              **({"sub_faction": v_sub.get()} if fac == "slave" else {})}
+        guard = None
+        if kind == "army" and v_general.get():
+            from .edit import bodyguard_unit
+            guard = bodyguard_unit(app.mod, camp, fac)      # the rebels' own: a unit they may own
+            if not guard:
+                messagebox.showerror(APP, "%s may own no general's bodyguard unit (general_unit in the unit file) - "
+                                          "untick 'Make him a general' or give it one in the Unit editor." % fac,
+                                     parent=w)
+                return
         if fac == app.field_faction() and not app.map_only():
+            if guard:
+                c["units"] = [guard]
             app.field.append(c)
             app.refresh_field(keep=len(app.field) - 1)
             app.load_field()
         else:
             if not agent:
                 from .edit import first_units
-                c["units"] = first_units(app.mod, camp, fac, kind, xy)
+                c["units"] = [guard] if guard else first_units(app.mod, camp, fac, kind, xy)
                 if not c["units"]:
                     messagebox.showerror(APP, "%s has no unit to start the %s with" % (fac, kind), parent=w)
                     return
             app.map_chars.setdefault(fac, []).append(c)
         w.destroy()
         app.map_view.set_tool(None)
-        app.status.set("%s %s of %s at %d, %d - Preview, then %s." % (
-            c["kind"], full, fac, xy[0], xy[1], "Apply changes" if app.editing() or app.map_only() else
+        app.status.set("%s %s of %s at %d, %d%s - Preview, then %s." % (
+            c["kind"], full, fac, xy[0], xy[1], (", a general (his bodyguard: %s)" % guard) if guard else "",
+            "Apply changes" if app.editing() or app.map_only() else
             "Create faction"))
         app._mark_work()
         app.show_map()

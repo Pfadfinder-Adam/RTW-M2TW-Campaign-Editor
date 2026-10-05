@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **Map > New army: Make him a general** (a tick, both games): his army starts with the faction's general's
+  bodyguard (the unit marked general_unit, the one its own generals lead), so the game shows him as a general with his
+  own name instead of a captain.
 - **Discord, YouTube and GitHub buttons** at the bottom, each in its site's colour. **GitHub** shows the
   number of a newer release when one is out (`GitHub (new 0.30)`) and then opens its page: the editor asks GitHub for
   the newest release number when it starts (every few hours; nothing is sent; off in Tools > Settings > New

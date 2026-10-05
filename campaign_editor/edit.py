@@ -465,6 +465,30 @@ def first_units(mod, campaign, faction, kind, xy):
     return [owned[0].type] if owned else []
 
 
+def bodyguard_unit(mod, campaign, faction):
+    """The unit that makes an army's leader a general (the game's bodyguard - general_unit in the unit file) for
+    faction: the bodyguard its own generals lead in descr_strat (the one most of them have), else the first unit it
+    may own marked general_unit, else one marked general_unit_upgrade; None when it has none (Medieval II, Rome)."""
+    from collections import Counter
+    from .start import unit_name
+    from .units import faction_units
+    owned = [u for u in faction_units(mod, faction) if u.general]
+    if not owned:
+        return None
+    kinds = {u.type for u in owned}
+    s = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
+    fb = s.faction(faction)
+    led = Counter()
+    for c in (fb.characters if fb else []):
+        first = next((unit_name(l) for l in s.lines[c.start:c.end] if tokens(l)[:1] == ["unit"]), None)
+        if first in kinds:
+            led[first] += 1
+    if led:
+        return led.most_common(1)[0][0]
+    plain = [u for u in owned if "general_unit" in u.attributes]
+    return (plain or owned)[0].type
+
+
 def map_changes(plan, campaign, changes):
     """What the Map changed for factions other than the one being made or edited (or with none picked - the Map
     editor): changes = {'owners': {region: new owner}, 'characters': {faction: [character dicts as

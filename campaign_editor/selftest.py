@@ -481,14 +481,18 @@ def s_masstown(c, mod):
     return plan
 
 
-@step("Map: an army placed for another faction ({other})", "a new army next to {other}'s town")
+@step("Map: an army placed for another faction ({other}), its leader made a general ('Make him a general')",
+      "a new army next to {other}'s town, led by a general with his own name and the faction's bodyguard")
 def s_map(c, mod):
-    from .edit import first_units, map_changes
+    from .edit import bodyguard_unit, first_units, map_changes
     region = towns_of(c, mod, c.other)[0]
     free = mod.free_tile(c.campaign, region, taken_tiles(c, mod))
     if not free:
         raise Skip("no free tile")
     units = first_units(mod, c.campaign, c.other, "army", free)
+    guard = bodyguard_unit(mod, c.campaign, c.other)
+    if guard:
+        units = [guard] + [u for u in units if u != guard]
     plan = Plan(mod, "map", "map", {})
     map_changes(plan, c.campaign, {"characters": {c.other: [
         {"kind": "army", "name": free_names(c, mod, c.other, 1)[0], "age": 30, "units": units, "xy": free}]}})
