@@ -3621,6 +3621,11 @@ building smith
         os.makedirs(os.path.join(game, "data"))
         open(os.path.join(game, "packs", "data_0.pack"), "wb").close()
         self.assertIsNone(gamefix.unpack_needed(game))              # no unpacker: nothing to offer
+        self.assertIn("Verify integrity", gamefix.unpacker_missing(game))   # ... but it says where to get one
+        camp0 = os.path.join(game, "mods", "americas")                      # a Kingdoms campaign the same
+        os.makedirs(os.path.join(camp0, "packs"))
+        open(os.path.join(camp0, "packs", "data_0.pack"), "wb").close()
+        self.assertIn("(americas)", gamefix.unpacker_missing(camp0))
         tools = os.path.join(game, "tools", "unpacker")
         os.makedirs(tools)
         exe = os.path.join(tools, "unpacker.exe")
@@ -3636,6 +3641,7 @@ building smith
             gamefix.unpack(need)
             self.assertTrue(all(os.path.exists(os.path.join(tools, d)) for d in gamefix.UNPACK_DLLS))
             self.assertIsNone(gamefix.unpack_needed(game))          # unpacked now
+            self.assertEqual(gamefix.unpacker_missing(game), "")
         # a Kingdoms campaign straight from Steam (a tester: 'no descr_sm_factions.txt in ...\\mods\\british_isles'):
         # its own packs, only a few files in its data - the same offer, with its own unpack script
         camp = os.path.join(game, "mods", "british_isles")

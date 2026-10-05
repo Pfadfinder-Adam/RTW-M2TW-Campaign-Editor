@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Load a packed Medieval II without its unpacker**: when the game or a Kingdoms campaign is still in .pack files and tools\unpacker\unpacker.exe is missing, Load now says so and how to get it back (Steam's Verify integrity of game files), instead of a bare 'file not found'.
 - **Religions in Barbarian Invasion** (Rome's expansion and the mods made from it): New religion... writes a new
   belief - its lines in `descr_beliefs.txt`, its three pips and its texts in `expanded_bi.txt`; a town follows it
   through the buildings that carry it. The test mod's religion step now runs there too (a belief of its own and a

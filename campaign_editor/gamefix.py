@@ -245,6 +245,33 @@ def unpack_needed(path):
             "data": os.path.join(game, "data"), "campaign": ""}
 
 
+def unpacker_missing(path):
+    """The plain words to show when path is a Medieval II (or a Kingdoms campaign) with its files still in packs but
+    no unpacker in <game>/tools/unpacker to unpack them with; else ''."""
+    camp = _campaign_folder(path)
+    if camp:
+        game, folder_c = camp
+        if _ci(os.path.join(folder_c, "data"), "descr_sm_factions.txt"):
+            return ""
+        packs = os.path.join(folder_c, "packs")
+        what = "This Medieval II campaign (%s)" % os.path.basename(folder_c)
+    else:
+        game = _game_folder(path)
+        if not game or _ci(os.path.join(game, "data"), "descr_sm_factions.txt"):
+            return ""
+        packs = os.path.join(game, "packs")
+        what = "This Medieval II"
+    if not any(n.lower().endswith(".pack") for n in os.listdir(packs)):
+        return ""
+    if _ci(os.path.join(game, "tools", "unpacker"), "unpacker.exe"):
+        return ""
+    return ("%s is not unpacked yet: its files are still in .pack files, and the game's own unpacker is not there "
+            "to unpack them (%s).\n\nSteam puts it there with the game: in Steam right click Medieval II: Total War > "
+            "Properties > Installed Files > Verify integrity of game files - it brings back what is missing. Or copy "
+            "the folder tools\\unpacker from another Medieval II.\n\nThen press Load again - the editor offers to "
+            "unpack it.") % (what, os.path.join(game, "tools", "unpacker", "unpacker.exe"))
+
+
 def unpack(need, log=None):
     """Copy the missing DLLs from the game folder next to the unpacker, then run the game's
     unpack_all.bat (or unpacker.exe on every pack). Returns the unpacker's output; raises
@@ -277,4 +304,4 @@ def unpack(need, log=None):
     return out
 
 
-__all__ = ["problems", "fix_plan", "unpack_needed", "unpack"]
+__all__ = ["problems", "fix_plan", "unpack_needed", "unpacker_missing", "unpack"]

@@ -3448,8 +3448,11 @@ class App(tk.Tk):
         except Exception as e:
             from . import gamefix
             need = gamefix.unpack_needed(self.v_path.get()) if isinstance(e, FileNotFoundError) else None
+            missing = gamefix.unpacker_missing(self.v_path.get()) if isinstance(e, FileNotFoundError) else ""
             if need:
                 self.offer_unpack(need)
+            elif missing:
+                messagebox.showinfo(APP, missing)
             else:
                 messagebox.showerror(APP, str(e))
             return
