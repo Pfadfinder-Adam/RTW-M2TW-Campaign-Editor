@@ -1015,6 +1015,7 @@ class MapView(ttk.Frame):
         if self._marks_on():
             self._resources(cw, ch)
         self._forts(cw, ch)
+        names = []                                       # (not mine, x, y, name) - written after every town
         for region, (x, y) in cm.cities.items():
             x, y = self.places.get(("city", region), (x, y))
             sx, sy = self.to_screen(x, y)
@@ -1037,9 +1038,21 @@ class MapView(ttk.Frame):
                 self._hall(sx, sy, size / 2, rgb, ("city", "city:" + region))
             if self.v_names.get() and (self.z >= 4 or mine):
                 name = self.labels.get(region) or cm.info.get(region, {}).get("settlement", region)
-                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1)):     # a black edge all round: white
-                    c.create_text(sx + r + 2 + dx, sy + dy, text=name, anchor="w", fill="black", font=font)
-                c.create_text(sx + r + 2, sy, text=name, anchor="w", fill="white", font=font)   # reads on any land
+                names.append((not mine, sx + r + 2, sy, name))
+        # the names last, one never over another: the player's own towns first, a name that would cover one
+        # already written is left out (zoom in and it shows)
+        from tkinter import font as tkfont
+        measure = tkfont.Font(font=font)
+        line = measure.metrics("linespace")
+        taken = []
+        for _, x0, y0, name in sorted(names, key=lambda n: n[0]):
+            box = (x0 - 2, y0 - line / 2, x0 + measure.measure(name) + 2, y0 + line / 2)
+            if any(box[0] < b[2] and b[0] < box[2] and box[1] < b[3] and b[1] < box[3] for b in taken):
+                continue
+            taken.append(box)
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1)):         # a black edge all round: white
+                c.create_text(x0 + dx, y0 + dy, text=name, anchor="w", fill="black", font=font)
+            c.create_text(x0, y0, text=name, anchor="w", fill="white", font=font)       # reads on any land
         if self.v_chars.get() and signs and not self.region_mode:
             self._characters(cw, ch, size)
         self._size_badge()

@@ -217,6 +217,7 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **Map**: town names never cover each other - the faction's own towns first, a name that would sit on another is left out until you zoom in.
 - **Ctrl+Z / Ctrl+Y** in a window of its own (banner, emblem) undo and redo that window's steps, never the main window's work unseen.
 - **Character panel**: a trait's long effects no longer run into the next trait, a retinue card's two-line name no longer covers its effects.
 - **New mod folder** copies every file by default (the mod stands on its own, to share); hard links are a tick for a mod kept to oneself.
