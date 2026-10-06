@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Region tags**: taking a tag (hidden resource) off a region first lists what stops working there - the buildings and recruitment that ask for it, with their lines.
 - **Character window** from the map: right click a general, a family member, the heir, the leader or an agent > *Edit this character...* (a double click on an agent too) opens the Character editor on him in a window of its own, with Preview / Write it in, as the town's window does.
 - **Save picture...** under the map: the whole campaign map as it is drawn now (layers, colours, borders; 8 pixels a tile) saved as a PNG or TGA picture.
 - **Find** on the map matches the names players read in the game (the campaign's region and town labels) besides the file names; a town comes before its own port.

@@ -2977,6 +2977,14 @@ class App(tk.Tk):
             if not text:
                 messagebox.showerror(APP, "a region needs at least one tag", parent=w)
                 return
+            gone = [x.strip() for x in now.split(",") if x.strip() and x.strip() not in
+                    {y.strip() for y in text.split(",")}]
+            uses = self._tag_uses(gone)                 # taken off: say first what stops working in this region
+            if uses and not messagebox.askyesno(APP, "Taking %s off %s: in this region these stop working:\n\n%s\n\n"
+                                                     "Take it off anyway?" % (", ".join(gone), name, "\n".join(
+                                                         uses[:20]) + ("\n... and %d more" % (len(uses) - 20)
+                                                                        if len(uses) > 20 else "")), parent=w):
+                return
             self.remember()
             if text == self.regions[name].get("resources", ""):
                 self.region_tags.pop(name, None)
@@ -2988,6 +2996,29 @@ class App(tk.Tk):
         bar.pack(anchor="e", pady=(8, 0))
         ttk.Button(bar, text="OK", command=ok).pack(side="left")
         ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left", padx=4)
+
+    def _tag_uses(self, tags):
+        """['building chain level (line N)' / 'unit: recruited by ...'] of export_descr_buildings.txt asking for any of
+        these region tags - what a region without them can no longer build or recruit."""
+        import re
+        edb = self.mod.file("edb") if self.mod and tags else None
+        if not edb:
+            return []
+        rx = re.compile(r"\b(?:hidden_)?resource\s+(%s)\b" % "|".join(re.escape(t) for t in tags))
+        out, chain = [], None
+        for n, line in enumerate(self.mod.load(edb).texts(), 1):
+            code = line.split(";")[0]
+            t = code.split()
+            if t[:1] == ["building"] and len(t) > 1:
+                chain = t[1]
+            m = rx.search(code)
+            if m:
+                if t[:1] in (["recruit_pool"], ["recruit"]):
+                    what = "recruiting %s" % (code.split('"')[1] if '"' in code else t[1] if len(t) > 1 else "?")
+                else:
+                    what = "%s %s" % (chain or "?", t[0]) if t else chain or "?"
+                out.append("%s - asks for %s (export_descr_buildings.txt line %d)" % (what, m.group(1), n))
+        return out
 
     def _region_tag_names(self):
         """The region tags this mod uses: descr_regions' line 6 and the names the
