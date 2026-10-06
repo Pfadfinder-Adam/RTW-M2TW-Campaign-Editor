@@ -3254,6 +3254,12 @@ class App(tk.Tk):
         self.map_view.allow_religion(self._m2())
         self.map_view.tools = self._map_tools()           # the legend's signs that are tools here
         self.map_view.ports_gone = set(self.ports_gone)
+        try:                                              # Find matches the names players read too
+            from .regionedit import shown_labels
+            keys = list(self.regions) + [i.get("settlement") for i in self.regions.values() if i.get("settlement")]
+            self.map_view.shown_names = shown_labels(self.mod, self.v_campaign.get(), keys)
+        except Exception:
+            self.map_view.shown_names = {}
         from .resources import types as _res_types
         self.map_view.res_types = list(_res_types(self.mod))
         if self.map_view.v_rel.get():                # Religion colours: each region in its main religion's colour

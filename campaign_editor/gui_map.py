@@ -265,6 +265,7 @@ class MapView(ttk.Frame):
         self.resources, self.check_res, self.on_res_move, self.on_res_click = [], None, None, None
         self.res_sel, self._rdrag, self._rpress = None, None, None
         self.forts, self.labels = [], {}
+        self.shown_names = {}                            # {region / town file name: the name players read}
         self._symimg = {}
         c = self.canvas
         c.bind("<Configure>", lambda e: self.render())
@@ -1641,13 +1642,16 @@ class MapView(ttk.Frame):
         if not self.cmap:
             return []
         out = []
+        read = getattr(self, "shown_names", {}) or {}   # the names players read ({Roma} Roma) beside the files'
         for region, xy in self.cmap.cities.items():
             town = self.cmap.info.get(region, {}).get("settlement", "")
-            shown = self.labels.get(region)
+            shown = self.labels.get(region) or read.get(town)
+            land = read.get(region)
             owner = self.owners.get(region)
-            out.append(("town %s%s - region %s%s" % (town, " (shown: %s)" % shown if shown and shown != town else "",
-                                                       region, ", %s" % owner if owner else ""), tuple(xy),
-                        " ".join(x for x in (town, shown or "", region) if x)))
+            out.append(("town %s%s - region %s%s%s" % (
+                town, " (shown: %s)" % shown if shown and shown != town else "", region,
+                " (shown: %s)" % land if land and land != region else "", ", %s" % owner if owner else ""),
+                tuple(xy), " ".join(x for x in (town, shown or "", region, land or "") if x)))
         for region, xy in self.cmap.ports.items():
             town = self.cmap.info.get(region, {}).get("settlement", region)
             out.append(("port of %s (%s)" % (town, region), tuple(xy), "%s %s" % (town, region)))
@@ -1680,7 +1684,8 @@ class MapView(ttk.Frame):
             # the name itself first (typing "rom" finds the town Roma before the Romans' armies), then a word
             # starting so, then the rest
             return (0 if any(p.startswith(words[0]) for p in name) else
-                    1 if any(p.startswith(words[0]) for p in text) else 2, h[0].lower())
+                    1 if any(p.startswith(words[0]) for p in text) else 2,
+                    not h[0].startswith("town "), h[0].lower())     # a town before its own port
         hits.sort(key=rank)
         self._found = [(t, xy) for t, xy, _ in hits[:200]]
         lb = self.find_list
