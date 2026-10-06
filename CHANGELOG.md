@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Save picture...** under the map: the whole campaign map as it is drawn now (layers, colours, borders; 8 pixels a tile) saved as a PNG or TGA picture.
 - **Find** on the map matches the names players read in the game (the campaign's region and town labels) besides the file names; a town comes before its own port.
 - **Check mod files** checks the shape of the building tree: a chain named twice, a level the `levels` line names without a block of its own, an `upgrades` to no level of its chain, a `convert_to` to no chain or past its levels, a `building_present(_min_level)` that names no building or level (it can never be met) - each with its line.
 - **Check mod files** with a faction picked: *Is it complete?* - every file that names every other faction but not this one, with a faction of the same culture to copy from (measured on the mod itself; files most factions go without are only noted).

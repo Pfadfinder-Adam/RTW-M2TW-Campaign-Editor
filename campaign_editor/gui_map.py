@@ -240,7 +240,8 @@ class MapView(ttk.Frame):
         self.size_label.pack(side="left", padx=(0, 4))
         self.on_resize = None                            # () -> the Map size window (tiles added / cut at the edges)
         self.b_resize = ttk.Button(row, text="Change size...", command=lambda: self.on_resize and self.on_resize())
-        self.b_resize.pack(side="left", padx=(0, 12))
+        self.b_resize.pack(side="left", padx=(0, 4))
+        ttk.Button(row, text="Save picture...", command=self.save_picture).pack(side="left", padx=(0, 12))
         self.readout = ttk.Label(row, text="", anchor="w")
         self.readout.pack(side="left", fill="x", expand=True)
         self.z, self.ox, self.oy = 2, 0.0, 0.0           # zoom; top-left corner in top-down tile units
@@ -873,6 +874,26 @@ class MapView(ttk.Frame):
         c.move("all", dx, dy)
         c.move("bg", -dx, -dy)
         self._drawn_at = (self.ox, self.oy)
+
+    PICTURE_PX = 8                                      # Save picture...: pixels per tile
+
+    def save_picture(self, path=None):
+        """The whole map as it is drawn now (the layers, colours and borders that are on; not the signs) saved as a
+        picture, PICTURE_PX pixels a tile - for a forum post or a plan. Returns the path or None."""
+        if not self.cmap:
+            return None
+        if path is None:
+            from tkinter import filedialog
+            path = filedialog.asksaveasfilename(parent=self, defaultextension=".png", initialfile="campaign_map.png",
+                                                filetypes=[("PNG picture", "*.png"), ("TGA picture", "*.tga")])
+            if not path:
+                return None
+        pic = self._base().convert("RGB")
+        k = self.PICTURE_PX // 2                          # the base is 2 px a tile
+        pic = pic.resize((pic.width * k, pic.height * k), Image.NEAREST)
+        pic.save(path)
+        self.readout.configure(text="the map saved as a picture: %s (%d x %d px)" % (path, pic.width, pic.height))
+        return path
 
     def _base(self):
         """The background with the political colours laid on, at 2 px per tile,
