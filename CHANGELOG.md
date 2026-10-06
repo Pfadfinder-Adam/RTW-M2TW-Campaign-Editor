@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Character window** from the map: right click a general, a family member, the heir, the leader or an agent > *Edit this character...* (a double click on an agent too) opens the Character editor on him in a window of its own, with Preview / Write it in, as the town's window does.
 - **Save picture...** under the map: the whole campaign map as it is drawn now (layers, colours, borders; 8 pixels a tile) saved as a PNG or TGA picture.
 - **Find** on the map matches the names players read in the game (the campaign's region and town labels) besides the file names; a town comes before its own port.
 - **Check mod files** checks the shape of the building tree: a chain named twice, a level the `levels` line names without a block of its own, an `upgrades` to no level of its chain, a `convert_to` to no chain or past its levels, a `building_present(_min_level)` that names no building or level (it can never be met) - each with its line.
@@ -215,6 +216,7 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **New mod folder** copies every file by default (the mod stands on its own, to share); hard links are a tick for a mod kept to oneself.
 - **One faction with both a shadow and a split-off faction** is refused only in plain Rome (it crashes at the end of a turn). Medieval II with M2EX and Barbarian Invasion with REX take it without a crash; Preview says that the revolting towns then go to the shadow, so the split-off faction does not come while the shadow is there.
 - **Bigger map (x3): values you turn yourself** - the window has a field for each: hills and mountains (times
   higher), smoothing of the lines (the coast, rivers drawn as sea, the borders, the edges of ground and climates: 1 =

@@ -3684,7 +3684,7 @@ class App(tk.Tk):
         self.status.set("Set-up fixed: %s (backup made)." % ", ".join(p["id"] for p in found))
 
     def new_mod(self):
-        """Make <game>/<name> from the loaded mod (hard links + copied text), then load it."""
+        """Make <game>/<name> from the loaded mod (every file copied; hard links on a tick), then load it."""
         if not self.mod:
             messagebox.showerror(APP, "load the mod (or the game's data folder) to build on first")
             return
@@ -3703,17 +3703,17 @@ class App(tk.Tk):
         ttk.Label(frm, text="New mod name").grid(row=2, column=0, sticky="w")
         v_name = tk.StringVar(value=(base or ("M2" if m2 else "RTW")) + "_" + (self.v["name"].get().strip().capitalize() or "New"))
         ttk.Entry(frm, textvariable=v_name, width=30).grid(row=3, column=0, sticky="we", padx=(0, 6))
-        v_copy = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frm, text="Copy every file (no hard links; needs the disk space)", variable=v_copy).grid(
-            row=4, column=0, columnspan=2, sticky="w", pady=4)
+        v_links = tk.BooleanVar(value=False)            # copies by default: a mod one shares stands on its own
+        ttk.Checkbutton(frm, text="Hard links instead of copies (no extra disk space - for a mod you keep to "
+                                  "yourself)", variable=v_links).grid(row=4, column=0, columnspan=2, sticky="w", pady=4)
         ttk.Label(frm, justify="left", wraplength=560, text=(
-            "The base stays untouched. Text files are copied. Models, textures and sounds are 'hard links': "
-            "the new folder shows every file (tens of thousands of them) at its full size in Explorer, but "
-            "they are the same files on the disk as the base's - they take no extra space (only the copied "
-            "text does, some tens of MB).\n"
-            "Deleting the new mod folder never touches the game or the base mod. Only a program that "
-            "overwrites a linked file in place (a texture editor saving over a .dds, say) changes the "
-            "base's file too - the tool itself never does; tick 'Copy every file' to be fully apart.\n" +
+            "The base stays untouched. Every file is copied: the new mod stands on its own - to share, to zip, "
+            "to change in any program (it takes the disk space of the base's files).\n"
+            "Hard links (the tick above) are for a mod you keep to yourself: text files are still copied, models, "
+            "textures and sounds become the same files on the disk as the base's under a second name - no extra "
+            "space, Explorer still shows their full size. Only a program that overwrites such a file in place (a "
+            "texture editor saving over a .dds, say) changes the base's file too - the tool itself never does. "
+            "Deleting the new mod folder never touches the game or the base mod.\n" +
             ("It goes into the game's mods folder with %s.cfg and Start_%s.bat (Medieval II starts a mod "
              "from its .cfg)." % ("<name>", "<name>") if m2 else
              "A start script Start_<name>.bat is written into the new folder."))).grid(
@@ -3728,7 +3728,7 @@ class App(tk.Tk):
             def work():
                 try:
                     result["data"], result["stats"] = create_mod(
-                        self.mod.data, name, v_copy.get(),
+                        self.mod.data, name, not v_links.get(),
                         progress=lambda n: result.__setitem__("n", n))
                 except Exception as e:
                     result["error"] = str(e)
@@ -3751,7 +3751,7 @@ class App(tk.Tk):
                     "Made %s\n\n%d file(s) linked, %d copied (%.0f MB really written)%s.\n\n%s"
                     "It is loaded now: the faction you create goes into it. Start the game with %s." % (
                         st["target"], st["linked"], st["copied"], st["bytes_copied"] / 1048576.0,
-                        "" if st["hard_links"] else " - no hard links (another drive or 'copy every file')",
+                        "" if st["hard_links"] else " - every file copied",
                         ("The linked files show full size in Explorer but take no disk space: they are the "
                          "base's own files under a second name. Deleting this folder never touches the "
                          "game.\n\n") if st["hard_links"] and st["linked"] else "",
@@ -4594,9 +4594,12 @@ class App(tk.Tk):
         if cid is not None and ":" in str(cid) and not str(cid).startswith(("map:", "new:")):
             ch = (getattr(self, "_map_chars", None) or {}).get(cid)
             mine = self.field_faction() and not self.map_only() and ch and ch["faction"] == self.field_faction()
-            if ch and not mine and ch.get("army"):
+            if ch and ch.get("from"):                    # anyone in descr_strat: his own window (as a town's)
                 if items:
                     items.append((None, None))
+                items.append(("Edit this character...  (%s %s of %s: name, age, traits, retinue)"
+                              % (ch["kind"], ch["name"], ch["faction"]), lambda ch=ch: self.person_window(ch)))
+            if ch and not mine and ch.get("army"):
                 items.append(("Its units...  (%s %s of %s)" % (ch["kind"], ch["name"], ch["faction"]),
                               lambda cid=cid: self.army_units_window(cid)))
             if ch and not mine:
@@ -4832,9 +4835,14 @@ class App(tk.Tk):
             return
         if ch and ch.get("army"):
             self.army_units_window(cid)
-        elif ch and not self.open_person(ch):
+        elif ch and not self.person_window(ch):
             self.status.set("%s %s of %s: an agent has no units - right click for what can be done with him."
                             % (ch["kind"], ch["name"], ch["faction"]))
+
+    def person_window(self, ch):
+        """The character's own window (gui_person): the Character editor on him, Write it in with a backup."""
+        from .gui_person import open_person_window
+        return open_person_window(self, ch)
 
     def open_person(self, ch):
         """A double click on an agent on the Map (report #104): the Character editor opens on him - his traits,
