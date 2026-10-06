@@ -54,6 +54,7 @@ class TerrainEditor(ttk.Frame):
                 side="left", padx=4)
         ttk.Label(top, text="   brush").pack(side="left")
         self.v_brush = tk.IntVar(value=1)
+        self.v_brush.trace_add("write", lambda *_: self._brush_changed())     # typed too, not only the arrows
         ttk.Spinbox(top, from_=1, to=12, width=3, textvariable=self.v_brush,
                     command=lambda: setattr(self.view, "brush", self.v_brush.get())).pack(side="left", padx=2)
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
@@ -204,6 +205,12 @@ class TerrainEditor(ttk.Frame):
         self.view.load(self.cmap, {}, {}, region_mode=True, on_paint=self.paint, on_pick=self.pick,
                        brush=self.v_brush.get(), plain=True)
         self.view.on_spray = self.spray if self.v_what.get() == "heights" else None
+
+    def _brush_changed(self):
+        try:
+            self.view.brush = max(1, int(self.v_brush.get()))
+        except (tk.TclError, ValueError, AttributeError):
+            pass
 
     def _img(self, name):
         return self.mod._optional_map(self.app.v_campaign.get(), name)

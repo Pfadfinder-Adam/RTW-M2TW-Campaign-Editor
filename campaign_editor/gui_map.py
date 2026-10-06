@@ -1644,16 +1644,30 @@ class MapView(ttk.Frame):
             c.create_text(cx + r + 4, cy, text=why, anchor="w", fill="#ff5050", font=("", 9, "bold"), tags=tags)
 
     def _outline(self, sx, sy):
-        """The edges of the tile under the mouse, like a block outline in Minecraft."""
+        """What the brush will take, outlined under the mouse (like a block outline in Minecraft): the one tile with
+        no brush; a painting brush - its whole square of tiles (size n: 2n - 1 across); the heights spray - the
+        one point of map_heights under the mouse at size 1 (a tile has 2 x 2 of them), else the circle it raises."""
         c = self.canvas
         c.delete("tile_outline")
         if not self.cmap or self.z < 3:
             return
-        x, y = self.to_tile(sx, sy)
-        cx, cy = self.to_screen(x, y)
-        h = self.z / 2
-        c.create_rectangle(cx - h, cy - h, cx + h, cy + h, outline="white", width=2 if self.z >= 12 else 1,
-                           tags="tile_outline")
+        z, width = self.z, 2 if self.z >= 12 else 1
+        b = max(1, int(getattr(self, "brush", 1) or 1))
+        if self.region_mode and getattr(self, "on_spray", None):
+            px, py = self.heights_px(sx, sy)
+            fx0, fr0 = px / 2.0, (2 * self.cmap.h - 1 - py) / 2.0        # the point's square, in tiles
+            x0, y0 = (fx0 - self.ox) * z, (fr0 - self.oy) * z
+            if b == 1:
+                c.create_rectangle(x0, y0, x0 + z / 2, y0 + z / 2, outline="white", width=width, tags="tile_outline")
+            else:
+                r = (b - 0.5) / 2.0 * z                                 # radius in points, 2 points a tile
+                mx, my = x0 + z / 4, y0 + z / 4
+                c.create_oval(mx - r, my - r, mx + r, my + r, outline="white", width=width, tags="tile_outline")
+        else:
+            x, y = self.to_tile(sx, sy)
+            cx, cy = self.to_screen(x, y)
+            h = z / 2 + (z * (b - 1) if self.region_mode and self.on_paint else 0)
+            c.create_rectangle(cx - h, cy - h, cx + h, cy + h, outline="white", width=width, tags="tile_outline")
         c.tag_lower("tile_outline", "city") if c.find_withtag("city") else None
 
     def _grow(self, tag, near=1.0):

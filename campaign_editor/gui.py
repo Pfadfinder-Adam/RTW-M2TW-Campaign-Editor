@@ -712,6 +712,7 @@ class App(tk.Tk):
         self.cb_paint.pack(side="left", padx=4)
         ttk.Label(rb, text="brush").pack(side="left", padx=(8, 2))
         self.v_brush = tk.IntVar(value=1)
+        self.v_brush.trace_add("write", lambda *_: self._brush_changed())     # typed too, not only the arrows
         ttk.Spinbox(rb, from_=1, to=6, width=3, textvariable=self.v_brush,
                     command=lambda: setattr(self.map_view, "brush", self.v_brush.get())).pack(side="left")
         ttk.Button(rb, text="New region...", command=self.new_region_dialog).pack(side="left", padx=(12, theme.BUTTON_GAP))
@@ -1868,6 +1869,12 @@ class App(tk.Tk):
         """Tools > Credits...: the author, who helped, the testers, the supporters (CREDITS.md - gui_credits)."""
         from .gui_credits import open_credits
         return open_credits(self)
+
+    def _brush_changed(self):
+        try:
+            self.map_view.brush = max(1, int(self.v_brush.get()))
+        except (tk.TclError, ValueError, AttributeError):
+            pass
 
     def mercenaries_window(self, region=None, new_from=None):
         from .gui_mercenaries import open_mercenaries
