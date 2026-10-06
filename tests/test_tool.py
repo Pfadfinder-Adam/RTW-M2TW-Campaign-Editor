@@ -5533,6 +5533,65 @@ building smith
         self.assertEqual(RC._game_colours(mod)["alpha"][0], alpha)
         self.assertEqual(RC._game_colours(ModData(os.path.join(game, "data"))), {})     # the game itself: none
 
+    def test_mercenary_pools(self):
+        """Mercenaries window: pools read with every unit's numbers; a new pool of regions takes them out of their old
+        pools (a pool left without a region goes), a unit's numbers changed, one added, a pool renamed - lines not
+        changed stay byte-exact; a mistake the mod already had is shown, not refused; Restore byte for byte."""
+        from campaign_editor import mercenaries as ME
+        before = tree_hash(self.root)
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        mod_edu = os.path.join(self.root, "data", "export_descr_unit.txt")
+        with open(mod_edu) as fh:
+            old_edu = fh.read()
+        write(mod_edu, old_edu + "\ntype\t\tmerc spear\ndictionary\tmerc_spear\ncategory\tinfantry\nclass\t\tspearmen\n"
+              "attributes\tsea_faring, mercenary_unit\nownership\tslave\n")
+        text = ("; pools\npool Both\n\tregions A_R B_R ; both\n\tunit merc spear,\t\texp 0 cost 100 replenish "
+                "0.1 - 0.2 max 2 initial 1\n\tunit merc spear\texp 1 cost 200 replenish 0.05 - 0.1 max 1 initial  "
+                "end_year 1300\n\npool Only_B\n\tregions B_R\n\tunit merc spear exp 0 cost 100 replenish "
+                "0.1 - 0.2 max 2 initial 1 religions { catholic } crusading\n")
+        write(os.path.join(camp, "descr_mercenaries.txt"), text)
+        mod = ModData(self.root)
+        path, pools = ME.read(mod, "test")
+        self.assertEqual([(p.name, p.regions, len(p.units)) for p in pools], [("Both", ["A_R", "B_R"], 2),
+                                                                             ("Only_B", ["B_R"], 1)])
+        self.assertEqual(pools[1].units[0].more, "religions { catholic } crusading")
+        self.assertIn("one every 5 - 10 turns", pools[0].units[0].words())
+        self.assertTrue(any("at the start must be a number" in w for w in ME.problems(mod, "test", pools)))
+        plan = Plan(mod, "mercenaries", "test", {})
+        ME.plan_pools(plan, "test", pools)
+        self.assertEqual(plan.changed_files(), [])                   # nothing changed: nothing written
+        left = ME.give_regions(pools, pools[0], ["A_R"])               # Both keeps only A_R ...
+        new = ME.Pool("Mine")
+        pools.append(new)
+        left += ME.give_regions(pools, new, ["B_R"])                   # ... and Only_B: Only_B goes
+        self.assertEqual(left, [("B_R", "Only_B")])
+        new.units = [ME.Unit("merc spear", cost="50")]
+        pools[0].units[0].cost = "150"
+        pools[0].name = "Alone"
+        plan = Plan(mod, "mercenaries", "test", {})
+        ME.plan_pools(plan, "test", pools)                            # the old mistake (initial) is left, not refused
+        f = plan.files[path]
+        out = f.dump().decode("latin-1")
+        self.assertIn("pool Alone\r\n\tregions A_R ; both\r\n\tunit merc spear,\t\t\texp 0 cost 150", out)
+        self.assertIn("max 1 initial  end_year 1300\r\n", out)      # not changed: as it was
+        self.assertNotIn("Only_B", out)
+        self.assertIn("pool Mine\r\n\tregions B_R\r\n\tunit merc spear,", out)
+        self.assertEqual([(p.name, p.regions) for p in ME.read_lines(f.texts())], [("Alone", ["A_R"]),
+                                                                                 ("Mine", ["B_R"])])
+        pools[0].units[0].initial = "5"                                # more at the start than at most: refused
+        with self.assertRaises(ValueError):
+            ME.plan_pools(Plan(mod, "mercenaries", "test", {}), "test", pools)
+        pools[0].units[0].initial = "1"
+        plan = Plan(mod, "mercenaries", "test", {})
+        ME.plan_pools(plan, "test", pools)
+        bdir = plan.apply()
+        self.assertEqual([p.name for p in ME.read(ModData(self.root), "test")[1]], ["Alone", "Mine"])
+        restore_to(ModData(self.root), bdir)
+        os.remove(os.path.join(camp, "descr_mercenaries.txt"))
+        write(mod_edu, old_edu)
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
+        self.assertEqual(after, before)
+
     def test_delete_a_town_with_its_region(self):
         """Map editor: a town deleted with its region in every file that ties them - its land, town and port
         pixels to the neighbour, its descr_regions block, its settlement and the rebels on its tile, its mercenary

@@ -2005,6 +2005,30 @@ def s_special(c, mod):
         c.said["special_engine"] = "(no model to copy)"
     return plan
 
+@step("Mercenaries: a new pool of one region with one mercenary unit; another pool's first unit costs 1 more",
+      "{merc}")
+def s_mercs(c, mod):
+    from . import mercenaries as ME
+    path, pools = ME.read(mod, c.campaign)
+    units = ME.mercenary_units(mod)
+    if not path or len(pools) < 2 or not units:
+        raise Skip("no descr_mercenaries.txt with two pools, or no mercenary unit")
+    region = pools[0].regions[0]
+    new = ME.Pool("ce_test_pool")
+    pools.append(new)
+    ME.give_regions(pools, new, [region])
+    new.units = [ME.Unit(units[0].type, cost="100", max_="3", initial="3")]
+    u = pools[1].units[0] if pools[1].units else None
+    if u is not None:
+        u.cost = str(int(u.cost) + 1)
+    plan = Plan(mod, "mercenaries", c.campaign, {})
+    ME.plan_pools(plan, c.campaign, pools)
+    c.said["merc"] = ("in %s: %s for hire (3 at the start, cost 100) - its own pool ce_test_pool%s" % (
+        region, units[0].type, "; in %s %s costs %s" % (pools[1].regions[0] if pools[1].regions else pools[1].name,
+                                                        u.name, u.cost) if u is not None else ""))
+    return plan
+
+
 @step("Map size: the map grown by 2 tiles of deep sea at the right and at the top (the last step - grown at the "
       "left or the bottom every place would move, and the test mod's engine scripts name tiles by number)",
       "the campaign map is 2 tiles wider and higher: open water at its right and top edges; every town, army and "
@@ -2045,6 +2069,7 @@ COVERAGE = {
     "Map editor: any faction's army moved, its units": ["s_map_any"],
     "Map editor: a town deleted with its region": ["s_delete_region"],
     "Map size: tiles added or cut at the edges": ["s_map_size"],
+    "Mercenaries: pools of regions and their units": ["s_mercs"],
     "New region": ["s_region", "s_region_garrison"],
     "Rename a region and its town everywhere": ["s_rename"],
     "Edit region: rebels, resources, farming, names players see": ["s_region_props"],
@@ -2120,6 +2145,7 @@ UI = {
     "Culture names": "Settlement names by culture", "Many towns": "Many towns: a building, random garrisons",
     "Bigger map": "Make the campaign map 3 x bigger",
     "Change size": "Map size: tiles added or cut at the edges",
+    "Mercenaries": "Mercenaries: pools of regions and their units",
     "New religion": "Religions (Medieval II, Barbarian Invasion)", "Religions of a region": "Religions (Medieval II, Barbarian Invasion)",
     "Restore a backup": "Restore a backup", "Game manifest": "Settings, Help, the log, Save logs, Game manifest",
     "Log": "Settings, Help, the log, Save logs, Game manifest",

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Mercenaries...** (top row; right click on the map > *Mercenaries for hire in <region>...*): the campaign's mercenary pools - a pool's regions selected on the map and changed with the map's Select box, new pools from the selected regions (a region leaves its old pool; an empty pool goes), every unit's numbers in plain words and changeable, mercenaries added or taken out, pools renamed or deleted; Preview and a backup, unchanged lines kept as they were.
 - **Where it can be built...** (Building editor) and **Where it is recruited...** (Unit editor): windows of their own - the regions whose land lets a level be built (counted from the goods and tags its requirement asks for; NOWHERE in red), and every building level that recruits a unit with its pool in plain words, its requirement, the regions it applies in and a button to that building.
 - **Region tags**: taking a tag (hidden resource) off a region first lists what stops working there - the buildings and recruitment that ask for it, with their lines.
 - **Character window** from the map: right click a general, a family member, the heir, the leader or an agent > *Edit this character...* (a double click on an agent too) opens the Character editor on him in a window of its own, with Preview / Write it in, as the town's window does.

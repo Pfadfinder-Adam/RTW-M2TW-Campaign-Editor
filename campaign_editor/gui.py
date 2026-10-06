@@ -1363,6 +1363,8 @@ class App(tk.Tk):
         ("culture", "Culture names...", "culture_names_table", "settlement names by culture, every town"),
         ("towns", "Many towns...", "mass_towns", "buildings and garrisons for many towns at once"),
         ("bigger", "Bigger map (x3)...", "upscale_map", "make the campaign map 3 x bigger (alpha)"),
+        ("mercs", "Mercenaries...", "mercenaries_window", "who is for hire in which regions: pools of regions and "
+                                                          "their units"),
     ]
     WORK_TITLES = {"map": "Map editor", "new": "New faction", "edit": "Edit faction", "units": "Unit editor",
                    "buildings": "Building editor", "characters": "Character editor",
@@ -1866,6 +1868,10 @@ class App(tk.Tk):
         """Tools > Credits...: the author, who helped, the testers, the supporters (CREDITS.md - gui_credits)."""
         from .gui_credits import open_credits
         return open_credits(self)
+
+    def mercenaries_window(self, region=None, new_from=None):
+        from .gui_mercenaries import open_mercenaries
+        return open_mercenaries(self, region=region, new_from=new_from)
 
     def map_size_window(self):
         """Change size... under the map: tiles added at an edge (deep sea) or cut off, everything on the map moved
@@ -4433,6 +4439,8 @@ class App(tk.Tk):
                       (lambda: self.mass_towns(sorted(picked), "garrison")) if n else None))
         items.append(("City / castle and level for the %d picked town(s)..." % n,
                       (lambda: self.mass_towns(sorted(picked), "town")) if n else None))
+        items.append(("New mercenary pool from the %d selected region(s)..." % n,
+                      (lambda: self.mercenaries_window(new_from=sorted(picked))) if n else None))
         items.append(("Unselect all", (lambda: mv.pick_many(None)) if n or nc or nr else None))
         return items
 
@@ -4711,6 +4719,11 @@ class App(tk.Tk):
                     self.remove_field()
                     self.show_map()
                 items.append(("Delete %s from the map" % c["name"], delete_own))
+        land = region or (self._cmap.region_at(*xy) if self._cmap else None)
+        if cid is None and land:
+            if items:
+                items.append((None, None))
+            items.append(("Mercenaries for hire in %s..." % land, lambda: self.mercenaries_window(region=land)))
         if cid is None and self.strat:
             # for any faction: the land's owner by default, another picked in the window
             from .gui_mapadd import add_at, owner_at
