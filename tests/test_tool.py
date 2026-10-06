@@ -5533,6 +5533,55 @@ building smith
         self.assertEqual(RC._game_colours(mod)["alpha"][0], alpha)
         self.assertEqual(RC._game_colours(ModData(os.path.join(game, "data"))), {})     # the game itself: none
 
+    def test_coast_and_river_mouths_as_the_games_own(self):
+        """The games' own maps (both measured): a coast corner of 3 land tiles is land, of 3 sea tiles water (a water
+        corner in the land cut an inner saw tooth); a river touching the water only by a corner gets one pixel more
+        so its mouth touches it by a side; a river may be painted onto the sea (estuaries); the heights brush's size
+        1 is one point."""
+        import struct as _st
+        from campaign_editor import upscale as U, terrain as T, tga
+        W, H = 3, 3                                   # land: the left column and the middle; the rest sea
+        land = {(0, 0), (0, 1), (0, 2), (1, 1)}
+        w, h = 2 * W + 1, 2 * H + 1
+
+        def tga_bytes(w_, h_, px):
+            head = _st.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, w_, h_, 24, 0)
+            return head + b"".join(bytes((px(x, y)[2], px(x, y)[1], px(x, y)[0])) for y in range(h_) for x in range(w_))
+        water = (0, 0, 253)
+        heights = tga_bytes(w, h, lambda x, y: water if (x, y) in ((2, 2), (4, 4)) else (40, 40, 40) if x <= 2
+                            else water)
+        hgt = _st.pack("<II", w, h) + _st.pack("<%df" % (w * h), *[(-30.0 if x > 2 else 100.0) for y in range(h)
+                                                                    for x in range(w)])
+        out, out_hgt, n = U.coast_corners(heights, hgt, lambda x, y: (x, y) in land)
+        _, _, _, _, _, raw = U._decode(out, "map_heights.tga")
+        at = lambda x, y: (raw[(y * w + x) * 3 + 2], raw[(y * w + x) * 3 + 1], raw[(y * w + x) * 3])  # noqa: E731
+        self.assertEqual(at(2, 2), (40, 40, 40))       # touches (0,0) (1,0)? no - (0,0),(0,1),(1,1) land, (1,0) sea
+        self.assertTrue(n >= 1)
+        self.assertGreater(_st.unpack("<f", out_hgt[8 + 4 * (2 * w + 2):8 + 4 * (2 * w + 3)])[0], 0)
+        # a river ending by a corner of the sea gets a pixel touching it by a side
+        feats = tga_bytes(W, H, lambda x, y: (0, 0, 255) if (x, y) in ((0, 0), (0, 1)) else (0, 0, 0))
+        ground = tga_bytes(w, h, lambda x, y: (96, 160, 64))
+        flat = tga_bytes(w, h, lambda x, y: (40, 40, 40))
+        sea_tiles = {(1, 2), (2, 2), (2, 1), (2, 0)}
+        new = U.rivers_off_the_water(feats, flat, ground, land=lambda x, y: (x, y) not in sea_tiles)
+        _, _, _, _, _, fr = U._decode(new, "map_features.tga")
+        rivers = {(x, y) for y in range(H) for x in range(W) if fr[(y * W + x) * 3] == 255 and fr[(y * W + x) * 3 + 2] == 0}
+        added = rivers - {(0, 0), (0, 1)}             # (0,1)'s end touched sea (1,2) by a corner only
+        self.assertEqual(len(added), 1)
+        a = added.pop()
+        self.assertTrue(any((a[0] + dx, a[1] + dy) in sea_tiles for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))))
+        # rivers onto the sea may be painted; cliffs not
+        class Cm:
+            w = h = 3
+            def is_sea(self, x, y):
+                return (x, y) in sea_tiles
+        self.assertIsNone(T.paint_problem(Cm(), "features", (2, 2), (0, 0, 255), ()))
+        self.assertIsNotNone(T.paint_problem(Cm(), "features", (2, 2), (255, 255, 0), ()))
+        # the heights brush: size 1 = one point
+        img = tga.Image(5, 5, [(50, 50, 50)] * 25)
+        got = T.height_spray(img, (2.2, 1.8), 0.5, "raise", 10, {})
+        self.assertEqual(list(got), [(2, 2)])
+
     def test_mercenary_pools(self):
         """Mercenaries window: pools read with every unit's numbers; a new pool of regions takes them out of their old
         pools (a pool left without a region goes), a unit's numbers changed, one added, a pool renamed - lines not

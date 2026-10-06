@@ -388,8 +388,9 @@ class TerrainEditor(ttk.Frame):
             self.app.status.set("This campaign has no map_heights.tga.")
             return False
         tool = self.v_tool.get()
-        # the brush in tiles, a tile being 2 pixels of map_heights: size 1 = about one tile across
-        radius = max(1.5, 2.0 * self.v_brush.get() - 0.5)
+        # the brush in points of map_heights (a tile is 2 x 2 of them): size 1 = the one point under the mouse,
+        # size 2 a point and its ring (about one tile across), each size one point wider
+        radius = self.v_brush.get() - 0.5
         got = T.height_spray(img, (px, py), radius, tool, max(1, min(10, self.v_strength.get())), self._hvals,
                              level=self.v_level.get())
         for p, v in got.items():
@@ -408,12 +409,18 @@ class TerrainEditor(ttk.Frame):
         return bool(got)
 
     def pick(self, xy):
-        if self.v_what.get() == "heights":
-            hv = self.cmap.height_at(*xy) if self.cmap else None
-            if hv is not None:
-                self.v_level.set(hv)
+        if self.v_what.get() == "heights":               # the eyedropper: the point under the mouse, not the tile
+            img = self._img("map_heights.tga")
+            px = getattr(self.view, "pick_px", None)
+            c = img.get(*px) if img is not None and px and 0 <= px[0] < img.width and 0 <= px[1] < img.height \
+                else None
+            if c is not None and T.is_land_height(c):
+                self.v_level.set(c[0])
                 self.v_tool.set("level")
-                self.app.status.set("Terrain: height %d picked - 'Level' brings the land towards it." % hv)
+                self.app.status.set("Terrain: height %d picked (point %d, %d) - 'Level' brings the land towards it."
+                                    % (c[0], px[0], px[1]))
+            elif c is not None:
+                self.app.status.set("Terrain: point %d, %d is water - the heights brush changes land only." % px)
             return
         c = self._current(self.v_what.get(), tuple(xy))
         if c is not None:
@@ -594,7 +601,10 @@ class TerrainEditor(ttk.Frame):
         self.hint.configure(text=(
             "Like a spray can: hold the left button and the land under the brush rises (or sinks) more the "
             "longer you hold; the middle of the brush does the most, the edge fades out. Smooth evens out bumps, "
-            "Level brings the land towards the height set beside it (right click picks a tile's own height). "
+            "Level brings the land towards the height set beside it (right click picks the height of the point "
+            "under the mouse - an eyedropper). The heights picture has 2 x 2 points a tile, drawn as they are; brush "
+            "size 1 is one point, and the line under the map gives the point under the mouse exactly (grey, metres, "
+            "water's depth). "
             "Shown as map_heights.tga is: land grey - black low, white high (brightened a little here) - "
             "the sea blue; only land is changed, the coast stays. On Apply: map_heights.tga written, "
             "the same points changed in map_heights.hgt (the game's own copy of the heights, read instead of the "

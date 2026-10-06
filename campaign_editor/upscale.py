@@ -1113,10 +1113,12 @@ def ground_scaled(path, mask, sea_colours, natural=False, edges=EDGE_DEFAULT):
     return kinds_scaled(path, mask, sea_colours, shore=(BEACH,), natural=natural, edges=edges)
 
 
-def rivers_off_the_water(features, heights, ground):
-    """map_features (bytes) with every river, ford and source pixel taken off a WATER tile: its ground is sea or its
-    heights middle is below the sea (map_regions may call it land where the heights' coast runs otherwise) - a river
-    stands on land only, touching the water by a side at its mouth (the user's rule)."""
+def rivers_off_the_water(features, heights, ground, land=None):
+    """map_features (bytes) with river, ford and source pixels taken off WATER tiles (ground sea, or the heights
+    middle below the sea - map_regions may call it land where the heights' coast runs otherwise), except the MOUTH:
+    the one wet pixel a river on dry land steps onto by a side is kept - the games' own maps end a river so (a third
+    of M2TW's mouth tiles, a fifth of Rome's, have their middle under the water; rules.md 'RIVER MOUTHS, the games'
+    own'); a river cut one tile before the water stopped short of the sea in the game."""
     w, h, step, top_down, _, raw = _decode(features, "map_features.tga")
     raw = bytearray(raw)
     hw, hh, hs, htd, _, hraw = _decode(heights, "map_heights.tga")
@@ -1126,18 +1128,112 @@ def rivers_off_the_water(features, heights, ground):
         o = (((H - 1 - y) if td else y) * W + x) * st
         return (r[o + 2], r[o + 1], r[o])
     sea_ground = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (128, 128, 128), (255, 255, 255)}
+    rivery, wet = set(), set()
     for y in range(h):
         for x in range(w):
             if px(raw, w, h, step, top_down, x, y) not in RIVERY:
                 continue
-            wet = px(graw, gw, gh, gs, gtd, min(2 * x + 1, gw - 1), min(2 * y + 1, gh - 1)) in sea_ground
+            rivery.add((x, y))
             c = px(hraw, hw, hh, hs, htd, min(2 * x + 1, hw - 1), min(2 * y + 1, hh - 1))
-            if c[0] == 0 and c[1] == 0 and c[2] > 0:             # the tile's own middle under the sea
-                wet = True
-            if wet:
-                o = (((h - 1 - y) if top_down else y) * w + x) * step
-                raw[o], raw[o + 1], raw[o + 2] = 0, 0, 0
+            if px(graw, gw, gh, gs, gtd, min(2 * x + 1, gw - 1), min(2 * y + 1, gh - 1)) in sea_ground or \
+                    (c[0] == 0 and c[1] == 0 and c[2] > 0):         # the tile's own middle under the sea
+                wet.add((x, y))
+    for x, y in wet:
+        if any((x + dx, y + dy) in rivery and (x + dx, y + dy) not in wet
+               for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+            continue                                                # the mouth: kept
+        o = (((h - 1 - y) if top_down else y) * w + x) * step
+        raw[o], raw[o + 1], raw[o + 2] = 0, 0, 0
+        rivery.discard((x, y))
+
+    def wet_tile(x, y):
+        if not (0 <= x < w and 0 <= y < h):
+            return False
+        if land is not None:                                        # the sea as map_regions has it (the game's)
+            return not land(x, y)
+        c = px(hraw, hw, hh, hs, htd, min(2 * x + 1, hw - 1), min(2 * y + 1, hh - 1))
+        return px(graw, gw, gh, gs, gtd, min(2 * x + 1, gw - 1), min(2 * y + 1, gh - 1)) in sea_ground or \
+            (c[0] == 0 and c[1] == 0 and c[2] > 0)
+    # a river ending at the water by a corner only (the games' own maps: every mouth touches the water by a side -
+    # M2TW 29 of 29, Rome 26 of 26) gets one pixel more, beside its end, touching that water by a side
+    side = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    for x, y in sorted(rivery):
+        near = [(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if (dx or dy) and (x + dx, y + dy) in rivery]
+        if len(near) != 1 or wet_tile(x, y) or any(wet_tile(x + dx, y + dy) for dx, dy in side):
+            continue
+        for dx, dy in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+            if not wet_tile(x + dx, y + dy):
+                continue
+            for p in ((x + dx, y), (x, y + dy)):
+                if p in rivery or not (0 <= p[0] < w and 0 <= p[1] < h) or p == near[0] or any(
+                        all(q in rivery or q == p for q in ((a, b), (a + 1, b), (a, b + 1), (a + 1, b + 1)))
+                        for a in (p[0] - 1, p[0]) for b in (p[1] - 1, p[1])):
+                    continue                                        # never a 2 x 2 block (the game crashes)
+                o = (((h - 1 - p[1]) if top_down else p[1]) * w + p[0]) * step
+                raw[o], raw[o + 1], raw[o + 2] = 255, 0, 0                # BGR: a river (0, 0, 255)
+                rivery.add(p)
+                break
+            else:
+                continue
+            break
     return _write(features, w, h, step, raw)
+
+
+def coast_corners(heights, hgt, land):
+    """map_heights (bytes) and map_heights.hgt (bytes or None) with the coast's corner points as both games' own maps
+    have them (rules.md 'COAST POINTS, the games' own'): a tile corner touching 3 land tiles and 1 sea tile is land
+    (vanilla 93 %, Rome; 90 % M2TW) - a water corner there cut a triangle into the land, the inner saw tooth; one
+    touching 1 land tile and 3 sea tiles is water (vanilla 94 % / 91 %). A point made land takes the median height of
+    the land points round it (the shore as it is, never multiplied), one made water the median depth of the water
+    round it; the .hgt the same from its own neighbours. land(x, y) -> bool per tile. -> (heights, hgt, changed)."""
+    w, h, step, top_down, _, raw = _decode(heights, "map_heights.tga")
+    raw = bytearray(raw)
+    W, H = (w - 1) // 2, (h - 1) // 2
+
+    def off(x, y):
+        return (((h - 1 - y) if top_down else y) * w + x) * step
+
+    def colour(x, y):
+        o = off(x, y)
+        return raw[o + 2], raw[o + 1], raw[o]
+
+    def wet(c):
+        return c[0] == 0 and c[1] == 0 and c[2] > 0
+    vals = None
+    if hgt is not None and len(hgt) >= 8 and struct.unpack("<II", hgt[:8]) == (w, h):
+        vals = list(struct.unpack("<%df" % (w * h), hgt[8:8 + 4 * w * h]))
+    changed = 0
+    for py in range(0, h, 2):
+        for px in range(0, w, 2):
+            tiles = [land(tx, ty) for tx in (px // 2 - 1, px // 2) for ty in (py // 2 - 1, py // 2)
+                     if 0 <= tx < W and 0 <= ty < H]
+            if len(tiles) != 4 or tiles.count(True) not in (1, 3):
+                continue
+            want_wet = tiles.count(True) == 1
+            if wet(colour(px, py)) == want_wet:
+                continue
+            near = [(px + dx, py + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                    if (dx or dy) and 0 <= px + dx < w and 0 <= py + dy < h]
+            same = [p for p in near if wet(colour(*p)) == want_wet]
+            if not same:
+                continue
+            if want_wet:
+                blues = sorted(colour(*p)[2] for p in same)
+                c = (0, 0, blues[len(blues) // 2])
+            else:
+                greys = sorted(max(1, colour(*p)[0]) for p in same)
+                g = greys[len(greys) // 2]
+                c = (g, g, g)
+            o = off(px, py)
+            raw[o], raw[o + 1], raw[o + 2] = c[2], c[1], c[0]
+            if vals is not None:
+                vs = sorted(vals[q[1] * w + q[0]] for q in same)
+                vals[py * w + px] = vs[len(vs) // 2]
+            changed += 1
+    out_hgt = hgt
+    if vals is not None and changed:
+        out_hgt = hgt[:8] + struct.pack("<%df" % (w * h), *vals) + hgt[8 + 4 * w * h:]
+    return _write(heights, w, h, step, raw), out_hgt, changed
 
 
 SHALLOW = (196, 0, 0)
@@ -1706,6 +1802,7 @@ def regions_scaled(path, lands, mask=None, keep_land=(), info=None, natural=Fals
                     land.b[Y * W + X] = 1
         info["land"] = land
         info["towns"] = town_px
+        info["ports"] = set(port_px)
         info["moved_ports"] = moved
     return _write(data, W, H, step, raw)
 
@@ -2714,7 +2811,9 @@ def _plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEF
             heights_data = data
         plan.note(None, "%s made 3 x bigger%s" % (name, " (%s)" % note if note else ""))
     if os.path.isfile(feats) and heights_data and ground_data:
-        plan.binary(feats, rivers_off_the_water(plan.binaries[feats], heights_data, ground_data))
+        tl = info.get("land")
+        plan.binary(feats, rivers_off_the_water(plan.binaries[feats], heights_data, ground_data, land=(lambda x, y: bool(
+            tl.b[y * tl.W + x])) if tl is not None else None))
     hgt = os.path.join(base, "map_heights.hgt")
     say("map_heights.hgt...")
     if os.path.isfile(hgt) and heights_data and not hgt_usable(hgt, hpath):
@@ -2729,6 +2828,15 @@ def _plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEF
                                     towns=info.get("towns", ()), ground=ground_path, volcanoes=volcanoes))
         plan.note(None, "map_heights.hgt made 3 x bigger%s (the game reads it instead of the picture and never "
                         "makes it again)" % (", the heights x %g" % vertical if vertical != 1 else ""))
+    if heights_data and info.get("land") is not None:     # the coast's corners as the games' own maps
+        land, standing = info["land"], set(info.get("towns", ())) | set(info.get("ports", ()))
+        heights_data, new_hgt, corners = coast_corners(heights_data, plan.binaries.get(hgt), lambda x, y: bool(
+            land.b[y * land.W + x]) or (x, y) in standing)
+        plan.binary(hpath, heights_data)
+        if new_hgt is not None:
+            plan.binary(hgt, new_hgt)
+        plan.note(None, "map_heights: %d coast corner(s) set as the games' own maps have them (3 land tiles: land, "
+                        "3 sea tiles: water)" % corners)
     for name, kind in CAMPAIGN_PICTURES.items():
         p = os.path.join(camp, name)
         if os.path.isfile(p):

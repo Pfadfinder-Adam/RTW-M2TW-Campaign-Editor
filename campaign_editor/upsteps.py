@@ -240,20 +240,25 @@ def step_heights(plan, campaign, st):
     towns = _towns_now(mod, campaign)
     data = U.smooth_scaled(o_heights, "corners", sea=True, mask=hmask, natural=True, rivers=rivers, towns=towns,
                            vertical=vertical, ground=o_ground, volcanoes=volcanoes)
-    plan.binary(hpath, data)
-    plan.note(None, "map_heights.tga: the relief the natural way over the coast map_regions has now - every sea "
-                    "point under the water, no land point under it, the old map's own shore, no slope steeper than "
-                    "the old map's steepest")
     hgt = os.path.join(base, "map_heights.hgt")
     o_hgt = old(mod, st, hgt)
+    hgt_data = None
     if os.path.isfile(o_hgt) and U.hgt_usable(o_hgt, o_heights):
-        plan.binary(hgt, U.hgt_scaled(o_hgt, o_heights, hmask, vertical, natural=True, rivers=rivers, towns=towns,
-                                      ground=o_ground, volcanoes=volcanoes))
-        plan.note(None, "map_heights.hgt: the same relief (the game reads it instead of the picture)")
+        hgt_data = U.hgt_scaled(o_hgt, o_heights, hmask, vertical, natural=True, rivers=rivers, towns=towns,
+                                ground=o_ground, volcanoes=volcanoes)
     elif os.path.isfile(hgt):
         from .terrain import max_land_height, min_sea_height
         top, low = max_land_height(mod, campaign) * vertical, min_sea_height(mod, campaign) * vertical
-        plan.binary(hgt, U.hgt_from_picture(data, top, low))
+        hgt_data = U.hgt_from_picture(data, top, low)
+    data, hgt_data, corners = U.coast_corners(data, hgt_data, lambda x, y: bool(land.b[y * land.W + x]))
+    plan.binary(hpath, data)
+    plan.note(None, "map_heights.tga: the relief the natural way over the coast map_regions has now - every sea "
+                    "point under the water, no land point under it, the old map's own shore, no slope steeper than "
+                    "the old map's steepest; the coast's corners as the games' own maps have them (%d set: a corner "
+                    "of 3 land tiles is land, of 3 sea tiles water)" % corners)
+    if hgt_data is not None:
+        plan.binary(hgt, hgt_data)
+        plan.note(None, "map_heights.hgt: the same relief (the game reads it instead of the picture)")
     from .terrain import SEA
     g = os.path.join(base, "map_ground_types.tga")
     if os.path.isfile(g):
@@ -323,16 +328,17 @@ def step_rivers(plan, campaign, st):
             hdata = fh.read()
         with open(g, "rb") as fh:
             gdata = fh.read()
-        data = U.rivers_off_the_water(data, hdata, gdata)
+        data = U.rivers_off_the_water(data, hdata, gdata, land=lambda x, y: bool(land.b[y * land.W + x]))
     plan.binary(feats, data)
     plan.note(None, "map_features.tga: rivers drawn naturally over the land as it is now - one pixel wide, bends "
-                    "rounded, none on the water, each ending on the last land tile at the water; no cliffs (paint "
+                    "rounded, none on the water but each mouth - one step from the land onto it, as the games' own maps; no cliffs (paint "
                     "them with the Terrain tab)")
     return []
 
 
 def check_rivers(mod, campaign, st):
-    """No river pixel on water; no 2 x 2 block of river (2 pixels wide)."""
+    """No river pixel on water but a mouth (one step from the land onto it, as the games' own maps); no 2 x 2 block of
+    river (2 pixels wide)."""
     base = _base(mod, campaign)
     feats = os.path.join(base, "map_features.tga")
     if not os.path.isfile(feats):
@@ -341,12 +347,15 @@ def check_rivers(mod, campaign, st):
     regions = mod.campaign_file(campaign, "map_regions.tga")
     land = _land_now(regions, _lands(mod, campaign, regions, os.path.join(base, "map_heights.tga")))
     river = {(x, y) for y in range(h) for x in range(w) if at(x, y) in U.RIVERY}
-    wet = [p for p in river if not land.get(p, True)]
+    dry = {p for p in river if land.get(p, True)}
+    wet = [p for p in river if p not in dry and not any((p[0] + dx, p[1] + dy) in dry      # a mouth may step on it
+                                                         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
     wide = [p for p in river if (p[0] + 1, p[1]) in river and (p[0], p[1] + 1) in river and
             (p[0] + 1, p[1] + 1) in river]
     out = []
     if wet:
-        out.append("%d river pixel(s) on the water, e.g. %d, %d" % (len(wet), wet[0][0], wet[0][1]))
+        out.append("%d river pixel(s) out on the water (more than a mouth's one step), e.g. %d, %d" % (
+            len(wet), wet[0][0], wet[0][1]))
     if wide:
         out.append("%d place(s) where a river is 2 pixels wide (the game crashes), e.g. %d, %d" % (
             len(wide), wide[0][0], wide[0][1]))

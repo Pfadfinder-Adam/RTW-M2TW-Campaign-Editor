@@ -118,9 +118,7 @@ class CampaignMap:
         g = self.ground_at(x, y)
         if g is not None:
             parts.append(GROUND.get(g, "ground %s" % (g,)))
-        if getattr(self, "show_heights", False):
-            hv = self.height_at(x, y)
-            parts.append("height %d of 255" % hv if hv is not None else "sea")
+        # the heights: the map view adds the point under the mouse exactly (height_point) - a tile has 2 x 2 points
         if region and px not in (CITY, PORT) and not self.is_sea(x, y):
             why = self.mod.land_problem(self.campaign, (x, y))
             parts.append("armies and agents may stand here" if not why else "no one can stand here: " + why)
@@ -229,6 +227,46 @@ class CampaignMap:
         im = getattr(self, "_hpil", None)
         if im is not None and 0 <= px < im.width and 0 <= py < im.height:
             im.putpixel((px, im.height - 1 - py), self.height_look((value, value, value)))
+
+    def height_point(self, px, py):
+        """map_heights pixel (px, py) (bottom-up, 2 per tile, 2W+1 x 2H+1) in plain words: land grey and metres, or
+        water and its depth; with map_heights.hgt (the game reads it instead of the picture) its own value too."""
+        from .terrain import max_land_height, min_sea_height
+        t = self.mod._optional_map(self.campaign, "map_heights.tga")
+        if t is None or not (0 <= px < t.width and 0 <= py < t.height):
+            return ""
+        c = t.get(px, py)                                    # the brush paints into this picture: shown as painted
+        top, low = max_land_height(self.mod, self.campaign), min_sea_height(self.mod, self.campaign)
+        if c[0] == c[1] == c[2]:
+            text = "point %d, %d: land, grey %d of 255 (about %d m%s)" % (
+                px, py, c[0], round(c[0] * top / 255), "; 0 = the lowest land, still above the water" if c[0] == 0
+                else "")
+        else:
+            text = "point %d, %d: water, blue %d (sea floor about %d m; the water's surface is 0)" % (
+                px, py, c[2], round(low * (255 - c[2]) / 255))
+        hv = self._hgt_at(px, py)
+        if hv is not None:
+            text += "   (map_heights.hgt in the file: %.1f)" % hv
+        return text
+
+    def _hgt_at(self, px, py):
+        if "_hgt" not in self.__dict__:
+            import struct
+            from array import array
+            path = self.mod.campaign_file(self.campaign, "map_heights.hgt")
+            self._hgt = None
+            if path:
+                with open(path, "rb") as fh:
+                    raw = fh.read()
+                w, h = struct.unpack("<II", raw[:8])
+                vals = array("f")
+                vals.frombytes(raw[8:8 + 4 * w * h])
+                if len(vals) == w * h:
+                    self._hgt = (w, h, vals)
+        if self._hgt is None:
+            return None
+        w, h, vals = self._hgt
+        return vals[py * w + px] if 0 <= px < w and 0 <= py < h else None
 
     def height_at(self, x, y):
         """The grey of tile (x, y)'s middle in map_heights.tga (land), or None (the sea, no file)."""

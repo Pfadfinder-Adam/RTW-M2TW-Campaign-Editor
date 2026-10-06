@@ -118,8 +118,11 @@ def paint_problem(cmap, what, xy, colour, standing):
         if xy in standing and colour in BLOCKED_GROUND:
             return "a town, port or character stands there - the game refuses %s under them" % GROUND.get(colour)
         return None
-    if sea and colour not in ((0, 0, 0), LAND_BRIDGE):
-        return "rivers, fords, cliffs and volcanoes are on land (a land bridge may cross the sea)"
+    # rivers, fords and sources may run onto the sea: the games' own maps end a river in the water at a few mouths
+    # (estuaries - M2TW 15 river pixels on sea tiles, Rome 7; one M2TW source); cliffs and volcanoes stay on land
+    if sea and colour not in ((0, 0, 0), LAND_BRIDGE) and colour not in RIVERY:
+        return "cliffs and volcanoes are on land (rivers, fords and sources may run onto the sea, a land bridge may " \
+               "cross it)"
     if xy in standing and colour not in ((0, 0, 0), LAND_BRIDGE):
         return "a town, port or character stands there - the game refuses them on a river, ford, cliff or volcano"
     return None
@@ -265,10 +268,18 @@ def height_spray(img, centre, radius, tool, strength, values, level=None):
     1..10; values: {(px, py): float} - the running heights of pixels touched so far (kept between puffs,
     so small steps add up), updated here. Returns {(px, py): int} of the pixels whose grey changed."""
     cx, cy = centre
-    r = max(float(radius), 1.0)
     out = {}
-    x0, x1 = max(int(cx - r), 0), min(int(cx + r) + 1, img.width - 1)
-    y0, y1 = max(int(cy - r), 0), min(int(cy + r) + 1, img.height - 1)
+    if float(radius) < 1.0:                      # size 1: the one point under the mouse, the whole strength
+        cx, cy = int(round(cx)), int(round(cy))
+        if not (0 <= cx < img.width and 0 <= cy < img.height):
+            return out
+        r = 0.5
+        x0 = x1 = cx
+        y0 = y1 = cy
+    else:
+        r = float(radius)
+        x0, x1 = max(int(cx - r), 0), min(int(cx + r) + 1, img.width - 1)
+        y0, y1 = max(int(cy - r), 0), min(int(cy + r) + 1, img.height - 1)
 
     def now(x, y):
         v = values.get((x, y))
@@ -286,7 +297,7 @@ def height_spray(img, centre, radius, tool, strength, values, level=None):
             v = now(x, y)
             if v is None:                               # the sea: left alone
                 continue
-            w = (1 - d / r) ** 2 if r > 1 else 1.0      # soft edge: the middle gets the most
+            w = (1 - d / r) ** 2 if r >= 1 else 1.0     # soft edge: the middle gets the most
             if tool == "raise":
                 nv = v + 4.0 * k * w
             elif tool == "lower":

@@ -1930,10 +1930,18 @@ class MapView(ttk.Frame):
         self._drag = (e.x, e.y, self.ox, self.oy, False)
 
     def _spray_at(self, sx, sy):
-        """Canvas point -> map_heights pixel (bottom-up, with fractions): tile x spans pixels 2x..2x+2."""
+        """Canvas point -> map_heights pixel (bottom-up, with fractions): the heights picture is drawn 2 points a
+        tile (heights_view), point px over 2 * x in [px, px + 1) - its middle at px + 0.5, so - 0.5 here makes the
+        brush's middle the point under the mouse (it sat half a point off)."""
         fx = self.ox + sx / self.z
         fr = self.oy + sy / self.z
-        return 2 * fx, 2 * (self.cmap.h - fr)
+        return 2 * fx - 0.5, 2 * (self.cmap.h - fr) - 0.5
+
+    def heights_px(self, sx, sy):
+        """The map_heights point (px, py, bottom-up) drawn under canvas point (sx, sy)."""
+        fx = self.ox + sx / self.z
+        fr = self.oy + sy / self.z
+        return int(math.floor(2 * fx)), 2 * self.cmap.h - 1 - int(math.floor(2 * fr))
 
     def _spray_tick(self):
         if not self._spray or not self.cmap or not self.on_spray:
@@ -2068,6 +2076,7 @@ class MapView(ttk.Frame):
             elif self.waiting and self.on_place_stop:  # a town / port waiting for its click: put back
                 self.on_place_stop()
             elif self.on_pick and self.inside(self.to_tile(e.x, e.y)):
+                self.pick_px = self.heights_px(e.x, e.y)       # the heights point under the mouse (an eyedropper)
                 self.on_pick(self.to_tile(e.x, e.y))
             return
         if self._rdrag:
@@ -2194,4 +2203,6 @@ class MapView(ttk.Frame):
                 here.sort(key=lambda c: not c["army"])
                 text += "   in it: " + ", ".join("%s (%s%s)" % (c["name"], c["kind"], ", %d units" % c["units"]
                                                              if c["army"] else "") for c in here)
+            if getattr(self.cmap, "show_heights", False):      # the heights: the point under the mouse, exact
+                text += "   " + self.cmap.height_point(*self.heights_px(e.x, e.y))
             self.readout.configure(text=text)
