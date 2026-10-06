@@ -3122,6 +3122,34 @@ building smith
         with open(out, "rb") as fh:
             self.assertEqual(fh.read(), first)          # the same map, the same picture
 
+    def test_building_tree_problems(self):
+        """The shape of export_descr_buildings.txt: a chain twice, a level without its block, an upgrade to no level,
+        convert_to to no chain / past its levels, a requirement naming no building or no level - each with its line;
+        a whole tree says nothing."""
+        from campaign_editor.check import building_tree_problems
+        edb = os.path.join(self.root, "data", "export_descr_buildings.txt")
+        good = ("building market\n{\n    convert_to port\n    levels stall shop\n    {\n"
+                "        stall city requires factions { all, }\n        {\n            convert_to 0\n"
+                "            upgrades\n            {\n                shop\n            }\n        }\n"
+                "        shop city requires factions { all, } and building_present_min_level port dock\n"
+                "        {\n        }\n    }\n}\n"
+                "building port\n{\n    levels dock\n    {\n        dock city requires factions { all, }\n        {\n"
+                "        }\n    }\n}\n")
+        with open(edb, "w") as fh:
+            fh.write(good)
+        self.assertEqual(building_tree_problems(ModData(self.root)), [])
+        bad = good.replace("                shop\n", "                bazaar\n") \
+            .replace("levels stall shop", "levels stall shop mall").replace("convert_to 0", "convert_to 3") \
+            .replace("port dock", "port pier") + "building market\n{\n    levels x\n    {\n    }\n}\n" \
+            + "building y\n{\n    levels a\n    {\n        a city requires building_present nowhere\n        {\n" \
+              "        }\n    }\n}\n"
+        with open(edb, "w") as fh:
+            fh.write(bad)
+        got = " | ".join(building_tree_problems(ModData(self.root)))
+        for want in ("upgrades to 'bazaar'", "the level 'mall', which has no block", "level 3 of 'port', which has 1",
+                     "the level 'pier' of 'port'", "the chain 'market' again", "the building 'nowhere'"):
+            self.assertIn(want, got)
+
     def test_is_this_faction_complete(self):
         """A file that names every other faction but not this one is a gap; one that names most is a note; the
         rebels are never checked; a text dump without {KEY} lines is not read."""

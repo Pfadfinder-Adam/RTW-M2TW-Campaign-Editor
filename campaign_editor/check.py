@@ -12,7 +12,7 @@ import traceback
 
 from .buildings import core_chain, core_level_for, is_temple, read_buildings
 from .strat import Strat, characters_after_tree
-from .textio import tokens
+from .textio import strip_comment, tokens
 from .units import read_units
 
 
@@ -331,6 +331,11 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad("characters off the map: %s" % ", ".join(off_map[:5]))
     for msg in building_condition_problems(mod):
         bad(msg)
+    tree = building_tree_problems(mod)
+    for msg in tree[:12]:
+        bad(msg)
+    if len(tree) > 12:
+        bad("... and %d more problem(s) in the shape of export_descr_buildings.txt" % (len(tree) - 12))
     if bad_names:
         say("    note: %d named character(s) whose first name is not in their faction's list "
             "(fine if the game has the string), e.g. %s" % (len(bad_names), ", ".join(bad_names[:3])))
@@ -432,6 +437,83 @@ def building_condition_problems(mod):
              "religion": "religion(s) this game does not have (religious_belief)"}
     return ["export_descr_buildings.txt names %s - the game stops at start: %s" % (words[k], ", ".join(v[:5]) +
             (" and %d more" % (len(v) - 5) if len(v) > 5 else "")) for k, v in found.items()]
+
+
+def building_tree_problems(mod):
+    """[message] on the shape of export_descr_buildings.txt, each with its line: a chain named twice, a chain without
+    levels, a level the 'levels' line names but no block holds, an 'upgrades' naming no level of its chain, a
+    convert_to naming no chain (Medieval II) or no level of it, a 'building_present(_min_level)' naming no chain or
+    no level of it."""
+    import re
+    if not mod.file("edb"):
+        return []
+    lines = mod.load(mod.file("edb")).texts()
+    chains, at, blocks = {}, {}, []                # chain -> every level with a block (all its blocks); first line
+    out = []
+    upgrades, converts, presents = [], [], []       # (line, chain, name...)
+    depth, cur, blk, in_up = 0, None, None, False
+    for n, line in enumerate(lines, 1):
+        code = strip_comment(line)
+        t = tokens(code)
+        if t[:1] == ["building"] and depth == 0 and len(t) > 1:
+            cur = t[1]
+            if cur in at:
+                out.append("export_descr_buildings.txt line %d: the chain '%s' again (first at line %d) - the game "
+                           "takes one of them" % (n, cur, at[cur]))
+            chains.setdefault(cur, [])
+            at.setdefault(cur, n)
+            blk = {"name": cur, "at": n, "named": [], "declared": n, "levels": []}
+            blocks.append(blk)
+        elif cur is not None and t:
+            if t[0] == "levels" and depth == 1:
+                blk["named"], blk["declared"] = t[1:], n
+            elif t[0] == "convert_to" and depth == 1 and len(t) > 1:
+                converts.append((n, cur, t[1], None))
+            elif depth == 2 and t[0] in blk["named"]:
+                blk["levels"].append(t[0])
+                chains[cur].append(t[0])
+            elif depth == 3 and t[0] == "upgrades":
+                in_up = True
+            elif depth == 3 and t[0] == "convert_to" and len(t) > 1 and t[1].isdigit():
+                converts.append((n, cur, None, int(t[1])))
+            elif depth == 4 and in_up:
+                upgrades.extend((n, cur, w) for w in t if w not in ("{", "}"))
+        for m in re.finditer(r"\bbuilding_present_min_level\s+(\w+)\s+(\w+)|\bbuilding_present\s+(\w+)", code):
+            presents.append((n, m.group(1) or m.group(3), m.group(2)))
+        depth += code.count("{") - code.count("}")
+        if depth < 3:
+            in_up = False
+        if depth <= 0:
+            depth, cur = 0, (cur if code.count("}") == 0 else None)
+    for b in blocks:
+        if not b["named"] and not b["levels"]:
+            out.append("export_descr_buildings.txt line %d: the chain '%s' has no levels" % (b["at"], b["name"]))
+        for lv in b["named"]:
+            if lv not in b["levels"]:
+                out.append("export_descr_buildings.txt line %d: '%s' names the level '%s', which has no block of its "
+                           "own" % (b["declared"], b["name"], lv))
+    for n, c, w in upgrades:
+        if w not in chains.get(c, ()):
+            out.append("export_descr_buildings.txt line %d: '%s' upgrades to '%s', which is not one of its levels"
+                       % (n, c, w))
+    targets = {}
+    for n, c, chain, idx in converts:               # the chain's convert_to, then its levels' indexes
+        if chain is not None:
+            targets[c] = chain
+            if chain not in chains:
+                out.append("export_descr_buildings.txt line %d: '%s' converts to the chain '%s', which does not exist"
+                           % (n, c, chain))
+        elif c in targets and targets[c] in chains and not 0 <= idx < len(chains[targets[c]]):
+            out.append("export_descr_buildings.txt line %d: a level of '%s' converts to level %d of '%s', which has %d"
+                       % (n, c, idx, targets[c], len(chains[targets[c]])))
+    for n, c, lv in presents:
+        if c not in chains:
+            out.append("export_descr_buildings.txt line %d: a requirement names the building '%s', which does not "
+                       "exist - it can never be met" % (n, c))
+        elif lv and lv not in chains[c]:
+            out.append("export_descr_buildings.txt line %d: a requirement names the level '%s' of '%s', which it does "
+                       "not have - it can never be met" % (n, lv, c))
+    return out
 
 
 def hidden_resources(mod):

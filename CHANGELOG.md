@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Check mod files** checks the shape of the building tree: a chain named twice, a level the `levels` line names without a block of its own, an `upgrades` to no level of its chain, a `convert_to` to no chain or past its levels, a `building_present(_min_level)` that names no building or level (it can never be met) - each with its line.
 - **Check mod files** with a faction picked: *Is it complete?* - every file that names every other faction but not this one, with a faction of the same culture to copy from (measured on the mod itself; files most factions go without are only noted).
 - **Map size** (Change size... under the map): rows or columns of tiles added at any edge as deep sea, or cut off; every picture of the map, `map_heights.hgt`, `descr_terrain.txt`, characters, resources, forts, events and the campaign's scripts move with it; a cut that would leave something off the map is refused with each place named.
 - **Start the game** checks first: a start script whose exe the game folder lacks is refused in plain words; a Medieval II `.cfg` that does not name the mod's folder is asked about; a 32-bit exe limited to 2 GB of memory is noted.
