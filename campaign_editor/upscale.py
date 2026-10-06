@@ -1113,6 +1113,37 @@ def ground_scaled(path, mask, sea_colours, natural=False, edges=EDGE_DEFAULT):
     return kinds_scaled(path, mask, sea_colours, shore=(BEACH,), natural=natural, edges=edges)
 
 
+def rivers_off_the_water(features, heights, ground):
+    """map_features (bytes) with every river, ford and source pixel taken off a tile the game draws (partly) as water:
+    its ground is sea, or any of the 9 heights points round it is below the sea (the shore tile the game floods
+    half) - a river stands on land only (the user's rule: a river on a water tile looks awful). The river then ends
+    on the last whole land tile."""
+    w, h, step, top_down, _, raw = _decode(features, "map_features.tga")
+    raw = bytearray(raw)
+    hw, hh, hs, htd, _, hraw = _decode(heights, "map_heights.tga")
+    gw, gh, gs, gtd, _, graw = _decode(ground, "map_ground_types.tga")
+
+    def px(r, W, H, st, td, x, y):
+        o = (((H - 1 - y) if td else y) * W + x) * st
+        return (r[o + 2], r[o + 1], r[o])
+    sea_ground = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (128, 128, 128), (255, 255, 255)}
+    for y in range(h):
+        for x in range(w):
+            if px(raw, w, h, step, top_down, x, y) not in RIVERY:
+                continue
+            wet = px(graw, gw, gh, gs, gtd, min(2 * x + 1, gw - 1), min(2 * y + 1, gh - 1)) in sea_ground
+            for a in (0, 1, 2):
+                for b in (0, 1, 2):
+                    X, Y = min(2 * x + a, hw - 1), min(2 * y + b, hh - 1)
+                    c = px(hraw, hw, hh, hs, htd, X, Y)
+                    if c[0] == 0 and c[1] == 0 and c[2] > 0:
+                        wet = True
+            if wet:
+                o = (((h - 1 - y) if top_down else y) * w + x) * step
+                raw[o], raw[o + 1], raw[o + 2] = 0, 0, 0
+    return _write(features, w, h, step, raw)
+
+
 SHALLOW = (196, 0, 0)
 DEEP_KINDS = ((128, 0, 0), (64, 0, 0))     # deep sea, ocean
 SPECK = 40                                 # ground pixels: deep water this small in the shallows is shallow too
@@ -2643,6 +2674,7 @@ def _plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEF
     if hpath:
         say("the heights' coast...")
         hmask = heights_from_tiles(info["land"], _agreement(regions_path, hpath, lands), heights_mask(hpath, True))
+    ground_data = None
     volcanoes = []                                       # their cones stay as steep as they were
     if os.path.isfile(feats):
         _, fw, fh, _, _, fat = _pixels(feats)
@@ -2665,6 +2697,7 @@ def _plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEF
             if heights_data and hpath and os.path.isfile(hpath):
                 data = mountains_by_height(data, heights_data, p, hpath)
             data = shallow_coast(data)
+            ground_data = data
             note = "every tile the ground of the old tile it lies in, the sea ground under the heights' new coast, " \
                    + edge_words(edges) + " edges (no 3 x 3 steps), mountains only where the new heights stand high - a range's low " \
                    "edge hills or the ground beside it, by its height; shallow sea all along the coast, its line to " \
@@ -2682,6 +2715,8 @@ def _plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEF
         if name == "map_heights.tga":
             heights_data = data
         plan.note(None, "%s made 3 x bigger%s" % (name, " (%s)" % note if note else ""))
+    if os.path.isfile(feats) and heights_data and ground_data:
+        plan.binary(feats, rivers_off_the_water(plan.binaries[feats], heights_data, ground_data))
     hgt = os.path.join(base, "map_heights.hgt")
     say("map_heights.hgt...")
     if os.path.isfile(hgt) and heights_data and not hgt_usable(hgt, hpath):

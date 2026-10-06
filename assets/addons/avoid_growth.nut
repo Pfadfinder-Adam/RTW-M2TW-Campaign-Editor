@@ -387,6 +387,8 @@ function ag_load_art(ui) {
         }
         if (ag_art.box == null) {
             ag_log("the game's tick pieces not found - the tick is drawn as a plain box")
+        } else {
+            ag_log("tick pieces: " + (m2 ? "Medieval II's" : "Rome's") + " (" + CE_GAME + "), " + ag_art.size + " units")
         }
     }
     return ag_art
@@ -507,18 +509,6 @@ function ag_draw() {
     local name = ag_name(s)
     local store = ag_store()
     local on = name != null && name in store
-    if (art.box != null) {
-        ui.image(art.box.img, box, box, x, y)
-    } else {
-        ui.drawRect(x, y, box, box, 230, 220, 190, 255)
-    }
-    if (on) {
-        if (art.tick != null) {
-            ui.image(art.tick.img, tick, tick, x + (box - tick) / 2, y + (box - tick) / 2)
-        } else {
-            ui.drawRect(x + box / 4, y + box / 4, box / 2, box / 2, 40, 30, 20, 255)
-        }
-    }
     local words = AG_LABEL
     if (on && AG_SHOW_CAP) {
         words += " (at most " + store[name].cap + ")"
@@ -529,12 +519,26 @@ function ag_draw() {
         tw = ui.textSize(words, face, 0)
     } catch (err) {
     }
-    local tx = x + box + (AG_GAP * k).tointeger()
+    // the words first, the box right of them - as the scroll's own 'Automanage [ ]' and Medieval II's ticks
     ui.pushFont(face, false, 0)
-    ui.layoutAt(tx, y + (box - tw[1]) / 2)
+    ui.layoutAt(x, y + (box - tw[1]) / 2)
     ui.textColoured(words, AG_INK[0], AG_INK[1], AG_INK[2], AG_INK[3])
     ui.popFont()
-    local w = tx - x + tw[0]
+    local bx = x + tw[0] + (AG_GAP * k).tointeger()
+    if (art.box != null) {
+        ui.image(art.box.img, box, box, bx, y)
+    } else {
+        ui.drawRect(bx, y, box, box, 230, 220, 190, 255)
+    }
+    if (on) {
+        if (art.tick != null) {
+            ui.image(art.tick.img, tick, tick, bx + (box - tick) / 2, y + (box - tick) / 2)
+        } else {
+            ui.drawRect(bx + box / 4, y + box / 4, box / 2, box / 2, 40, 30, 20, 255)
+        }
+    }
+    local tx = bx + box
+    local w = tx - x
     local hit = ui.hitRect(x, y, w, box)
     if (hit != null) {
         try {

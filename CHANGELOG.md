@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **Bigger map (x3)**: no river, ford or source on a tile the game draws (even partly) as water - by the heights' shore and the sea ground too, not only map_regions; a river ends on the last whole land tile.
+- **Avoid Growth**: the words first and the box right of them, as the scroll's own 'Automanage [ ]'; the game's log says which tick pieces it took.
 - **Bigger map (x3)**: no cliffs and no beach on the bigger map - the game drew the beach as a zigzag band over the land and the cliffs never sat right on the new coast; the shore looks right without them. Paint them where wanted with the Terrain editor's brushes.
 - **The top row**: the Mod box takes the free width (a mod's full name shows), the data folder box is shorter (its whole path on hover).
 - **Unpacking Medieval II**: the unpacker's question 'Do you agree to these terms and conditions? (Y/N)' is answered Y (the offer says so) - it waited and nothing was unpacked; a Kingdoms campaign unpacks into its own folder (mods/<campaign>/data).
