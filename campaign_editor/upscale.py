@@ -1114,10 +1114,9 @@ def ground_scaled(path, mask, sea_colours, natural=False, edges=EDGE_DEFAULT):
 
 
 def rivers_off_the_water(features, heights, ground):
-    """map_features (bytes) with every river, ford and source pixel taken off a tile the game draws (partly) as water:
-    its ground is sea, or any of the 9 heights points round it is below the sea (the shore tile the game floods
-    half) - a river stands on land only (the user's rule: a river on a water tile looks awful). The river then ends
-    on the last whole land tile."""
+    """map_features (bytes) with every river, ford and source pixel taken off a WATER tile: its ground is sea or its
+    heights middle is below the sea (map_regions may call it land where the heights' coast runs otherwise) - a river
+    stands on land only, touching the water by a side at its mouth (the user's rule)."""
     w, h, step, top_down, _, raw = _decode(features, "map_features.tga")
     raw = bytearray(raw)
     hw, hh, hs, htd, _, hraw = _decode(heights, "map_heights.tga")
@@ -1132,12 +1131,9 @@ def rivers_off_the_water(features, heights, ground):
             if px(raw, w, h, step, top_down, x, y) not in RIVERY:
                 continue
             wet = px(graw, gw, gh, gs, gtd, min(2 * x + 1, gw - 1), min(2 * y + 1, gh - 1)) in sea_ground
-            for a in (0, 1, 2):
-                for b in (0, 1, 2):
-                    X, Y = min(2 * x + a, hw - 1), min(2 * y + b, hh - 1)
-                    c = px(hraw, hw, hh, hs, htd, X, Y)
-                    if c[0] == 0 and c[1] == 0 and c[2] > 0:
-                        wet = True
+            c = px(hraw, hw, hh, hs, htd, min(2 * x + 1, hw - 1), min(2 * y + 1, hh - 1))
+            if c[0] == 0 and c[1] == 0 and c[2] > 0:             # the tile's own middle under the sea
+                wet = True
             if wet:
                 o = (((h - 1 - y) if top_down else y) * w + x) * step
                 raw[o], raw[o + 1], raw[o + 2] = 0, 0, 0
