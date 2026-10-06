@@ -613,7 +613,7 @@ class MapView(ttk.Frame):
             if not getattr(self, "everyone", False):
                 row("yours: drag it", char("general", army=True, mine=True))
             for mark, label in (("crown", "flag: the faction's leader in it"), ("small crown", "flag: his heir"),
-                                ("star", "flag: a family member"), ("chevron", "flag: a captain (no family)")):
+                                ("diamond", "flag: a family member"), ("star", "flag: a general (no family)")):
                 row(label, lambda x, yy, m=mark: self._roof_flag(x - 9, yy + 10, 22, "__legend__", (), mark=m,
                                                                  field=True))
             row("a fleet (admiral)", char("admiral", army=True), "fleet")
@@ -1115,7 +1115,7 @@ class MapView(ttk.Frame):
         town_of = {self.places.get(("city", r), xy): r for r, xy in cm.cities.items()}
         seen, flags = {}, set()
         forts = self.fort_spots()
-        rank = {"crown": 3, "small crown": 2, "star": 1, "chevron": 0.5}
+        rank = {"crown": 3, "small crown": 2, "diamond": 1.5, "star": 1, "chevron": 0.5}
         best = {}                                      # a town's / fort's flag shows the highest who stays there
         for c_ in self.chars:
             m = self.leader_mark(c_) if c_["kind"] in ("general", "named character") else None
@@ -1218,7 +1218,7 @@ class MapView(ttk.Frame):
             # an army - and a family member without units too: the game shows every named character on the map
             # as a general with his flag (a tester: a sign of its own meant nothing in the game). The flag as on a
             # town's roof; who leads it on the cloth: the king a crown, his heir a small crown, a family member a
-            # star, a captain nothing
+            # diamond, a general of no family a star
             h = size                                       # pole and cloth inside the tile
             sx -= h * 0.35
             self._roof_flag(sx, sy + h * 0.5, h * 0.95, ch_["faction"], tags, edge=edge, width=2 if mine else 1,
@@ -1229,14 +1229,17 @@ class MapView(ttk.Frame):
 
     @staticmethod
     def leader_mark(ch_):
-        """'crown' (the faction's leader), 'small crown' (its heir), 'star' (a family member), 'chevron' (a captain,
-        no family member)."""
+        """'crown' (the faction's leader), 'small crown' (its heir), 'diamond' (a family member), 'star' (a general
+        of no family - descr_strat's 'general'), 'chevron' (a captain: an army with no character, which descr_strat
+        cannot hold - kept for what may come)."""
         role = ch_.get("role")
         if role == "leader":
             return "crown"
         if role == "heir":
             return "small crown"
         if ch_.get("kind") == "named character" or ch_.get("named"):
+            return "diamond"
+        if ch_.get("kind") == "general":
             return "star"
         return "chevron"                               # a captain: a soldier's rank chevron
 
@@ -1250,6 +1253,9 @@ class MapView(ttk.Frame):
                 rr = r if i % 2 == 0 else r * 0.45
                 pts += [cx + rr * math.cos(a), cy + rr * math.sin(a)]
             c.create_polygon(*pts, fill=ink, outline="", tags=tags)
+        elif mark == "diamond":                       # a family member: a filled rhombus, taller than wide
+            c.create_polygon(cx, cy - r, cx + r * 0.7, cy, cx, cy + r, cx - r * 0.7, cy, fill=ink, outline="",
+                             tags=tags)
         elif mark == "chevron":                       # a wide chevron, its point up
             c.create_line(cx - r, cy + r * 0.45, cx, cy - r * 0.45, cx + r, cy + r * 0.45, fill=ink,
                           width=max(2, int(r * 0.45)), joinstyle="miter", tags=tags)

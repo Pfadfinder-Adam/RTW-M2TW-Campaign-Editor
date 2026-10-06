@@ -6,11 +6,11 @@
 
 **Pfadfinder ("Adam")** - the idea and the program.
 
-## Helped a lot
+## A special thank you
 
-- **Ruthron** - the 3 x bigger map. He tried it again and again on *Divide and Conquer* (Medieval II with M2EX) and
-  sent report after report. Thanks to him many mistakes were found and many new ideas came in: natural rivers,
-  coasts and borders among them.
+- **Ruthron** - for the 3 x bigger map, and for so many reports. He made the map bigger again and again on
+  *Divide and Conquer* (Medieval II with M2EX) and sent report after report; thanks to him many mistakes were found
+  and many new ideas came in - natural rivers, coasts and borders among them.
 
 ## Thank you for the reports
 
@@ -22,7 +22,10 @@ Everyone who sent a report or an idea from the editor - each one made it better.
 
 ## Supporters on Ko-fi
 
-Thank you for keeping the work going. Names only, never amounts; the list is being gathered.
+Thank you for keeping the work going (names only, never amounts):
+
+- **GKpretorian**
+- **Ruthron**
 
 ## How to get in
 
