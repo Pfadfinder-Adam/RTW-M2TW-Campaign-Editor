@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Where it can be built...** (Building editor) and **Where it is recruited...** (Unit editor): windows of their own - the regions whose land lets a level be built (counted from the goods and tags its requirement asks for; NOWHERE in red), and every building level that recruits a unit with its pool in plain words, its requirement, the regions it applies in and a button to that building.
 - **Region tags**: taking a tag (hidden resource) off a region first lists what stops working there - the buildings and recruitment that ask for it, with their lines.
 - **Character window** from the map: right click a general, a family member, the heir, the leader or an agent > *Edit this character...* (a double click on an agent too) opens the Character editor on him in a window of its own, with Preview / Write it in, as the town's window does.
 - **Save picture...** under the map: the whole campaign map as it is drawn now (layers, colours, borders; 8 pixels a tile) saved as a PNG or TGA picture.

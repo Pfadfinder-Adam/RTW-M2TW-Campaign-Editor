@@ -92,6 +92,8 @@ class RecordEditor(ttk.Frame):
                     "units (with their models, textures, cards and texts)" if kind == "unit" else
                     "building chains (with their levels, texts and pictures)",
                     "where they are recruited" if kind == "unit" else "the units they recruit"))
+        ttk.Button(tools, text="Where it is recruited..." if kind == "unit" else "Where it can be built...",
+                   command=self.where_window).pack(side="left", padx=(0, 6))
         ttk.Button(tools, text="Add line...", command=self.add_dialog).pack(side="left")
         ttk.Button(tools, text="New %s step by step..." % ("unit" if kind == "unit" else "building"),
                    command=self.copy_dialog).pack(side="left", padx=6)
@@ -138,6 +140,15 @@ class RecordEditor(ttk.Frame):
         from .gui_util import scroll_y, wheel
         wheel(canvas, scroll_y(canvas))
         self._photos = []
+
+    def where_window(self):
+        """Where the picked unit is recruited / the picked building can be built (buildwhere.open_where)."""
+        if not self.current:
+            from tkinter import messagebox
+            messagebox.showinfo("Where", "Pick one on the left first.")
+            return None
+        from .buildwhere import open_where
+        return open_where(self, self.current[0])
 
     def _sash_to(self, x):
         try:

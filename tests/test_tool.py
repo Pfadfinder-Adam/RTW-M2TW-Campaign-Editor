@@ -3122,6 +3122,21 @@ building smith
         with open(out, "rb") as fh:
             self.assertEqual(fh.read(), first)          # the same map, the same picture
 
+    def test_where_built_and_recruited(self):
+        """A requirement's land terms decide where: resource / hidden_resource, 'not', 'or'; factions and other
+        buildings are taken as met; brackets say they cannot be counted; a recruit line's numbers in plain words."""
+        from campaign_editor import buildwhere as BW
+        goods = {"A": {"iron", "america"}, "B": {"gold"}, "C": set()}
+        self.assertIsNone(BW.regions_for(None, "x", "factions { all, }", goods))
+        self.assertEqual(BW.regions_for(None, "x", "factions { all, } and resource iron", goods), ["A"])
+        self.assertEqual(BW.regions_for(None, "x", "hidden_resource america or resource gold", goods), ["A", "B"])
+        self.assertEqual(BW.regions_for(None, "x", "not hidden_resource america and building_present port", goods),
+                         ["B", "C"])
+        self.assertEqual(BW.regions_for(None, "x", "resource silver", goods), [])
+        self.assertEqual(BW.regions_for(None, "x", "(resource iron)", goods), "unreadable")
+        self.assertEqual(BW.pool_words('recruit_pool "Peasants" 1 0.5 3 0 requires factions { all, }'),
+                         "1 at the start, +0.5 a turn, at most 3, experience 0")
+
     def test_building_tree_problems(self):
         """The shape of export_descr_buildings.txt: a chain twice, a level without its block, an upgrade to no level,
         convert_to to no chain / past its levels, a requirement naming no building or no level - each with its line;
