@@ -20,7 +20,6 @@ import os
 import re
 
 from . import clone as C
-from .moddata import _ci
 
 RE_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 TEXT_EXT = (".txt", ".xml", ".json")
@@ -98,6 +97,7 @@ def plan_rename(plan, campaign, old, new):
             moved.append((a, b))
     moved.sort(key=lambda m: -len(m[0]))
     rx = _word(old)
+    rx_xml = re.compile(r'(\bfaction\s*=\s*")(%s)(")' % re.escape(old), re.I)
     files, scripts = _text_files(mod, campaign)
     total = 0
     for p in files:
@@ -107,13 +107,16 @@ def plan_rename(plan, campaign, old, new):
             continue                                    # a UTF-16 / binary file under a text name: not ours
         text = raw.decode("latin-1")
         low = text.lower()
-        if old not in text and not any(a.lower() in low for a, _ in moved):
+        if old not in low and not any(a.lower() in low for a, _ in moved):
             continue
         f = plan.edit(p)
         n = 0
         for i in range(len(f.raw)):
             t = f.text(i)
             new_t = rx.sub(new, t)
+            if p.lower().endswith(".xml"):            # Medieval II's XML lists: Faction="Milan" - any case
+                new_t = rx_xml.sub(lambda m: m.group(1) + (new.capitalize() if m.group(2)[:1].isupper() else new)
+                                   + m.group(3), new_t)
             for a, b in moved:                          # a path to a picture that was copied: to the copy
                 for sa, sb in ((a, b), (a.replace("/", "\\"), b.replace("/", "\\"))):
                     k = new_t.lower().find(sa.lower())
@@ -158,5 +161,4 @@ def plan_rename(plan, campaign, old, new):
         plan.warn(None, "scripts name %s - not changed (code is changed by hand): %s" % (old, "; ".join(left[:8])))
     plan.note(None, "%s renamed %s: %d line(s) in the data files, its pictures copied under the new name, the "
                     "string tables' keys copied" % (old, new, total))
-    _ = _ci
     return left
