@@ -3122,6 +3122,28 @@ building smith
         with open(out, "rb") as fh:
             self.assertEqual(fh.read(), first)          # the same map, the same picture
 
+    def test_is_this_faction_complete(self):
+        """A file that names every other faction but not this one is a gap; one that names most is a note; the
+        rebels are never checked; a text dump without {KEY} lines is not read."""
+        from campaign_editor import factioncheck as FC
+        mod = ModData(self.root)
+        sm = mod.file("sm_factions")
+        with open(sm, "a") as fh:
+            for n in ("beta", "gamma"):
+                fh.write("faction\t\t%s\nculture\t\teastern\n;;;;;;;;\n\n" % n)
+        with open(os.path.join(self.root, "data", "descr_banners.txt"), "w") as fh:
+            fh.write("faction alpha\nfaction beta\n")
+        os.makedirs(os.path.join(self.root, "data", "text"), exist_ok=True)
+        with open(os.path.join(self.root, "data", "text", "dump.txt"), "w") as fh:
+            fh.write("ALPHA\nBETA\n")
+        mod = ModData(self.root)
+        rows, _ = FC.complete(mod, "gamma", "test")
+        self.assertIn(("data/descr_banners.txt", "gap"), [(r[0], r[1]) for r in rows])
+        self.assertEqual([r[3] for r in rows if r[0] == "data/descr_banners.txt"], ["alpha"])   # same culture
+        self.assertNotIn("data/text/dump.txt", [r[0] for r in rows])
+        self.assertEqual(FC.complete(mod, "slave", "test"), ([], 0))
+        self.assertNotIn("data/descr_banners.txt", [r[0] for r in FC.complete(mod, "alpha", "test")[0]])
+
     def test_map_size_moves_pictures_and_places(self):
         """Map size: a picture grows by the tiles asked (deep sea's value in the new points) and back again pixel for
         pixel; places move by left / bottom, distances and sizes stay; script tiles too."""

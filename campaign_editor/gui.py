@@ -5609,6 +5609,11 @@ class App(tk.Tk):
                 result["text"] = check_mod(ModData(data), campaign, deep=deep,
                                            progress=lambda m: result.__setitem__("step", m), found=result["found"])
                 if faction:
+                    from .factioncheck import complete, words
+                    result["step"] = "is %s complete..." % faction
+                    rows, fine = complete(ModData(data), faction, campaign)
+                    result["complete"] = (faction, rows, fine)
+                    result["text"] += "\n\n" + "\n".join(words(rows, fine, faction))
                     result["step"] = "where %s is named..." % faction
                     result["text"] += "\n\n" + "=" * 70 + "\nWHERE %s IS NAMED (every text file of the mod)\n\n" \
                         % faction + scan_mod(ModData(data), faction, campaign).report()
@@ -5630,7 +5635,7 @@ class App(tk.Tk):
                 self.show_text(title, result["text"], extra=extra)
                 return
             from .gui_check import open_problems         # worst first, each with the place that puts it right
-            open_problems(self, result["found"], result["text"], title, extra)
+            open_problems(self, result["found"], result["text"], title, extra, result.get("complete"))
         wait()
 
     def _log_status(self):
