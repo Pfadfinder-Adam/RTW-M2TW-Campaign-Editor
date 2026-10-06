@@ -2005,6 +2005,17 @@ def s_special(c, mod):
         c.said["special_engine"] = "(no model to copy)"
     return plan
 
+@step("Map size: the map grown by 2 tiles of deep sea at the right and at the top (the last step - grown at the "
+      "left or the bottom every place would move, and the test mod's engine scripts name tiles by number)",
+      "the campaign map is 2 tiles wider and higher: open water at its right and top edges; every town, army and "
+      "resource where it was; the game builds map.rwm again on the first start")
+def s_map_size(c, mod):
+    from .mapresize import plan_resize
+    plan = Plan(mod, "map", "map_size", {})
+    plan_resize(plan, c.campaign, right=2, top=2)
+    return plan
+
+
 # ---------------------------------------------------------------------------
 # coverage: every feature of the editor and the steps that try it - a feature tried by the run itself or one that
 # only shows (writes nothing) says so. tests.test_tool checks that every work button, tab and Tools entry of the
@@ -2033,6 +2044,7 @@ COVERAGE = {
     "Map: a character moved, one deleted": ["s_move_delete"],
     "Map editor: any faction's army moved, its units": ["s_map_any"],
     "Map editor: a town deleted with its region": ["s_delete_region"],
+    "Map size: tiles added or cut at the edges": ["s_map_size"],
     "New region": ["s_region", "s_region_garrison"],
     "Rename a region and its town everywhere": ["s_rename"],
     "Edit region: rebels, resources, farming, names players see": ["s_region_props"],
@@ -2107,6 +2119,7 @@ UI = {
     "Events": "Events", "Recolour": "Recolour a faction's pictures",
     "Culture names": "Settlement names by culture", "Many towns": "Many towns: a building, random garrisons",
     "Bigger map": "Make the campaign map 3 x bigger",
+    "Change size": "Map size: tiles added or cut at the edges",
     "New religion": "Religions (Medieval II, Barbarian Invasion)", "Religions of a region": "Religions (Medieval II, Barbarian Invasion)",
     "Restore a backup": "Restore a backup", "Game manifest": "Settings, Help, the log, Save logs, Game manifest",
     "Log": "Settings, Help, the log, Save logs, Game manifest",

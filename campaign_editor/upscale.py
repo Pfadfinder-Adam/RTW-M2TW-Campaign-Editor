@@ -2473,13 +2473,15 @@ def _script_values(kind, nums):
     return out + [v * FACTOR for v in nums[2:4]]
 
 
-def move_script_line(text):
+def move_script_line(text, values=None, xy=None):
     """One script line with its campaign-map tiles moved to their blocks (a spawned character's 'x N, y M' too);
-    (the new text, how many places moved, places a known command wanted but could not be read)."""
+    (the new text, how many places moved, places a known command wanted but could not be read). values(kind, nums)
+    and xy(x, y) move them another way (mapresize: the map grown or cut at its edges)."""
+    values, xy = values or _script_values, xy or new_xy
     code, sep, comment = text.partition(";")
     moved = missing = 0
     def char_xy(m):
-        x, y = new_xy(int(m.group(2)), int(m.group(4)))
+        x, y = xy(int(m.group(2)), int(m.group(4)))
         return "%s%d%s%d" % (m.group(1), x, m.group(3), y)
     code, n = RE_CHAR_XY.subn(char_xy, code)
     moved += n
@@ -2495,7 +2497,7 @@ def move_script_line(text):
         if len(ints) < NEEDS[kind]:
             missing += 1
             continue
-        new = _script_values(kind, [int(i.group()) for i in ints])
+        new = values(kind, [int(i.group()) for i in ints])
         edits += [(i.start(), i.end(), str(v)) for i, v in zip(ints, new)]
         moved += 1
     for a, b, v in sorted(edits, reverse=True):
@@ -2528,14 +2530,14 @@ def script_files(mod, campaign):
     return out
 
 
-def move_script(f):
+def move_script(f, values=None, xy=None):
     """Every campaign-map tile in a script file moved; (places moved, [line numbers left to check by hand]): lines a
     known command could not be read on, and lines holding 'x, y'-like numbers outside any known command and outside
     the battle commands."""
     moved, check = 0, []
     for i in range(len(f.raw)):
         text = f.text(i)
-        new, n, missing = move_script_line(text)
+        new, n, missing = move_script_line(text, values, xy)
         if n:
             f.raw[i] = f.make(new)
             moved += n
@@ -2545,22 +2547,22 @@ def move_script(f):
     return moved, check
 
 
-def _move_line(text, patterns):
+def _move_line(text, patterns, xy=None):
     code, sep, comment = text.partition(";")
     for rx in patterns:
         m = rx.search(code)
         if m:
-            x, y = new_xy(int(m.group(2)), int(m.group(4)))
+            x, y = (xy or new_xy)(int(m.group(2)), int(m.group(4)))
             code = code[:m.start()] + m.group(1) + str(x) + m.group(3) + str(y) + code[m.end():]
             return code + sep + comment, True
     return text, False
 
 
-def move_coordinates(f, patterns):
-    """Every coordinate in a text file's lines moved to its block's middle; how many."""
+def move_coordinates(f, patterns, xy=None):
+    """Every coordinate in a text file's lines moved to its block's middle (or by xy(x, y)); how many."""
     n = 0
     for i in range(len(f.raw)):
-        new, hit = _move_line(f.text(i), patterns)
+        new, hit = _move_line(f.text(i), patterns, xy)
         if hit:
             f.raw[i] = f.make(new)
             n += 1

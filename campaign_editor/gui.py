@@ -753,6 +753,7 @@ class App(tk.Tk):
         self.map_view.on_wonder = lambda t: __import__("campaign_editor.gui_wonders", fromlist=["show"]).show(self, self.mod, t)
         self.map_view.on_pick_menu = self.pick_menu
         self.map_view.on_tool = self.map_tool
+        self.map_view.on_resize = self.map_size_window    # Change size... beside the map's size
         self.v_borders = self.map_view.v_borders
         self.map_view.pack(fill="both", expand=True)
         self.map_view.on_stroke = self.remember
@@ -1844,6 +1845,12 @@ class App(tk.Tk):
         """Tools > Credits...: the author, who helped, the testers, the supporters (CREDITS.md - gui_credits)."""
         from .gui_credits import open_credits
         return open_credits(self)
+
+    def map_size_window(self):
+        """Change size... under the map: tiles added at an edge (deep sea) or cut off, everything on the map moved
+        with it (gui_mapsize, mapresize)."""
+        from .gui_mapsize import open_map_size
+        return open_map_size(self)
 
     def upscale_map(self):
         """Bigger map (x3)... (top row): one window - what happens, the heights, its progress, a backup, and the old

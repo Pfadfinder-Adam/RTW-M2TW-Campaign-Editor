@@ -237,7 +237,10 @@ class MapView(ttk.Frame):
         row = ttk.Frame(self)                            # under the map: its size (fixed, left), then the tile read
         row.pack(fill="x")
         self.size_label = ttk.Label(row, text="", anchor="w", font=("", 9, "bold"))
-        self.size_label.pack(side="left", padx=(0, 12))
+        self.size_label.pack(side="left", padx=(0, 4))
+        self.on_resize = None                            # () -> the Map size window (tiles added / cut at the edges)
+        self.b_resize = ttk.Button(row, text="Change size...", command=lambda: self.on_resize and self.on_resize())
+        self.b_resize.pack(side="left", padx=(0, 12))
         self.readout = ttk.Label(row, text="", anchor="w")
         self.readout.pack(side="left", fill="x", expand=True)
         self.z, self.ox, self.oy = 2, 0.0, 0.0           # zoom; top-left corner in top-down tile units
@@ -1253,9 +1256,9 @@ class MapView(ttk.Frame):
                 rr = r if i % 2 == 0 else r * 0.45
                 pts += [cx + rr * math.cos(a), cy + rr * math.sin(a)]
             c.create_polygon(*pts, fill=ink, outline="", tags=tags)
-        elif mark == "diamond":                       # a family member: a filled rhombus, taller than wide
-            c.create_polygon(cx, cy - r, cx + r * 0.7, cy, cx, cy + r, cx - r * 0.7, cy, fill=ink, outline="",
-                             tags=tags)
+        elif mark == "diamond":                       # a family member: a white rhombus, taller than wide (a thin
+            c.create_polygon(cx, cy - r, cx + r * 0.7, cy, cx, cy + r, cx - r * 0.7, cy, fill="white",  # dark edge
+                             outline="#202020" if ink == "black" else "", tags=tags)   # where the cloth is light)
         elif mark == "chevron":                       # a wide chevron, its point up
             c.create_line(cx - r, cy + r * 0.45, cx, cy - r * 0.45, cx + r, cy + r * 0.45, fill=ink,
                           width=max(2, int(r * 0.45)), joinstyle="miter", tags=tags)

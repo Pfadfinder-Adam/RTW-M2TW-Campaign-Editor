@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Map size** (Change size... under the map): rows or columns of tiles added at any edge as deep sea, or cut off; every picture of the map, `map_heights.hgt`, `descr_terrain.txt`, characters, resources, forts, events and the campaign's scripts move with it; a cut that would leave something off the map is refused with each place named.
 - **Start the game** checks first: a start script whose exe the game folder lacks is refused in plain words; a Medieval II `.cfg` that does not name the mod's folder is asked about; a 32-bit exe limited to 2 GB of memory is noted.
 - **Check mod files**: problems worst first, grouped by when the game would meet them (would not start, campaign loads with something lost, battle, play); each one with a button that opens the place to put it right; the whole report behind **Full report...**.
 - **Top row**: the data folder box three times wider, the Mod box takes what is left.

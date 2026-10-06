@@ -3122,6 +3122,31 @@ building smith
         with open(out, "rb") as fh:
             self.assertEqual(fh.read(), first)          # the same map, the same picture
 
+    def test_map_size_moves_pictures_and_places(self):
+        """Map size: a picture grows by the tiles asked (deep sea's value in the new points) and back again pixel for
+        pixel; places move by left / bottom, distances and sizes stay; script tiles too."""
+        from campaign_editor import mapresize as MR
+        from campaign_editor.tga import read_tga_bytes
+        rows = [[(10 * y + x, 0, 0) for x in range(4)] for y in range(3)]
+        path = os.path.join(self.root, "p.tga")
+        write_tga(path, 4, 3, rows)
+        with open(path, "rb") as fh:
+            data = fh.read()
+        img = read_tga_bytes(data)
+        grown = MR.shifted(data, "tiles", 2, 1, 1, 0, (0, 0))
+        g = read_tga_bytes(grown)
+        self.assertEqual((g.width, g.height), (7, 4))
+        self.assertEqual(g.get(2, 1), img.get(0, 0))
+        self.assertEqual(g.get(5, 3), img.get(3, 2))
+        self.assertEqual(g.get(0, 0), img.get(0, 0))                 # new points: the fill tile's value
+        back = read_tga_bytes(MR.shifted(grown, "tiles", -2, -1, -1, 0, (0, 0)))
+        self.assertEqual(back.raw, img.raw)
+        xy, values = MR._mover(2, 1)
+        self.assertEqual(values("xyr", [5, 6, 3]), [7, 7, 3])
+        self.assertEqual(values("rect", [5, 6, 4, 4]), [7, 7, 4, 4])
+        from campaign_editor import upscale as U
+        self.assertEqual(U.move_script_line("  reveal_tile 10, 20", values, xy)[0], "  reveal_tile 12, 21")
+
     def test_check_problems_worst_first_with_the_place_to_fix(self):
         """Check mod files groups its problems by when the game meets them - would not start, campaign loads with
         something lost, battle, play - and names the place each is put right in."""
