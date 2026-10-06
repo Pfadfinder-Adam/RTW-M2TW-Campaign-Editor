@@ -218,6 +218,7 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **Bigger map (x3) step by step**: five steps, one press each - 1 grid, 2 smoothing (coast, borders, ground, climates), 3 heights (every sea point under the water, no land point under it), 4 rivers (one pixel, on land only), 5 objects (towns, ports, armies, resources on tiles they may stand on); each written with a backup and checked, the map shown between them to fix by hand; steps 3-5 build on the map as it is then (the modder's fixes count); the window goes on where it stopped; one button puts the old map back.
 - **Map**: town names never cover each other - the faction's own towns first, a name that would sit on another is left out until you zoom in.
 - **Ctrl+Z / Ctrl+Y** in a window of its own (banner, emblem) undo and redo that window's steps, never the main window's work unseen.
 - **Character panel**: a trait's long effects no longer run into the next trait, a retinue card's two-line name no longer covers its effects.

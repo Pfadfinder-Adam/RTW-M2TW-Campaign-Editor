@@ -1,8 +1,9 @@
-"""Bigger map (x3)... (the work bar): one window that says what happens, asks one thing (the heights), shows its
-progress, writes with a backup and then offers to put the old map back. A tester pressed the button, saw the long
-list of changes (it looked like a log), missed the 'Write it' buttons under it, found no bigger map in the game and
-no way back - so the list is now behind 'Show every change...' and the window itself leads the way."""
+"""Bigger map (x3)... (the work bar): one window that leads through the five steps of upsteps - each written with a
+backup and checked, the map in the editor between them to look at and fix by hand - and puts the old map back with
+one button. The values (heights, smoothing...) are fields of their own; the list of changes is behind 'Show every
+change...' (a tester once took the long list for a log and missed the button under it)."""
 
+import os
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -26,16 +27,11 @@ def _num(v):
 def open_upscale(app):
     """The window of Bigger map (x3)... (App.upscale_map)."""
     from .moddata import ModData
-    from .plan import Plan, restore_to
-    from .upscale import FACTOR, TUNES, look_over, plan_upscale
+    from .plan import restore_to
+    from .upscale import FACTOR, TUNES, look_over
     from .gui_util import hint
     if not app.mod:
         messagebox.showinfo(APP, "Load a mod first.")
-        return
-    if app.pending_parts():
-        messagebox.showwarning(APP, "There are changes not written yet (%s). Apply or undo them first - the bigger "
-                                    "map is built from the files as they are."
-                               % ", ".join(label for _, label in app.pending_parts()))
         return
     camp = app.v_campaign.get()
     try:
@@ -49,15 +45,20 @@ def open_upscale(app):
     frm = ttk.Frame(w, padding=12)
     frm.pack(fill="both", expand=True)
     ttk.Label(frm, text="Make the campaign map 3 x bigger (alpha)", font=("", 12, "bold")).pack(anchor="w")
+    resume = _unfinished(app, camp)
     ttk.Label(frm, justify="left", wraplength=620, text="Campaign %s - %s%s" % (
-        camp, _game_words(app.mod), "\nThe map now: %d x %d tiles  ->  after: %d x %d tiles" % (
-            size[0], size[1], size[0] * FACTOR, size[1] * FACTOR) if size else "")).pack(anchor="w", pady=(4, 0))
+        camp, _game_words(app.mod), ("\nThe map now: %d x %d tiles (3 x bigger since step 1)" % size if resume else
+                                     "\nThe map now: %d x %d tiles  ->  after: %d x %d tiles" % (
+                                         size[0], size[1], size[0] * FACTOR, size[1] * FACTOR)) if size else "")
+              ).pack(anchor="w", pady=(4, 0))
     ttk.Label(frm, justify="left", wraplength=620, text=(
-        "Every tile becomes a block of 3 x 3 tiles. Towns, ports, armies, agents, resources and forts keep their "
-        "places (in the middle of their blocks); the coast is drawn smooth, rivers run on to the new coast, the "
-        "relief stays smooth, and the campaign's scripts and events move with the map. Nothing is written until "
-        "you press the button below; a backup is made first, and this window then offers to put the old map "
-        "back.")).pack(anchor="w", pady=(8, 0))
+        "Every tile becomes a block of 3 x 3 tiles, in five steps: the grid, smoothing, heights, rivers, objects. "
+        "Each step is written with a backup and checked; between the steps the map is in the Map editor - look at "
+        "it, fix what you want by hand (borders after step 2, the coast before step 3, the ground after step 3), "
+        "then do the next step. Towns, ports, armies, agents, resources and forts keep their places (in the middle "
+        "of their blocks), and the campaign's scripts and events move with the map. 'Put the old map back' undoes "
+        "every step at once. You may close this window between the steps: opened again, it goes on where it "
+        "stopped.")).pack(anchor="w", pady=(8, 0))
     ttk.Label(frm, text="Values (the shore by the water is the game's own and stays as it is)",
               font=("", 10, "bold")).pack(anchor="w", pady=(10, 0))
     grid = ttk.Frame(frm)
@@ -95,80 +96,103 @@ def open_upscale(app):
             var.set(_num(out[key]))
         return out
     v_state = tk.StringVar(value="")
+    # the five steps (upsteps.STEPS): each written with its own backup and checked; between them the map is in the
+    # editor - look, fix by hand, then the next step
+    from .upsteps import STEPS, check_step, plan_step
+    steps_box = ttk.Frame(frm)
+    steps_box.pack(anchor="w", pady=(10, 0))
+    ttk.Label(steps_box, text="Step by step - look at the map after each, fix what you want, then the next",
+              font=("", 10, "bold")).pack(anchor="w")
+    marks = []
+    for n, (_, words) in enumerate(STEPS):
+        lbl = ttk.Label(steps_box, text="", justify="left")
+        lbl.pack(anchor="w")
+        marks.append((lbl, words))
+    st = {}
+    if resume:
+        st.update(resume)
     state = ttk.Label(frm, textvariable=v_state, justify="left", wraplength=620)
     state.pack(anchor="w", pady=(10, 0))
     bar = ttk.Frame(frm)
     bar.pack(anchor="e", pady=(10, 0))
-    plans, warns, done = {}, {}, {}
 
-    def make_plan():
+    def show_marks():
+        done = st.get("done", 0)
+        for n, (lbl, words) in enumerate(marks):
+            lbl.configure(text="%s %d. %s" % ("\u2714" if n < done else "\u25b6" if n == done else "   ", n + 1, words),
+                          foreground="#2a8a2a" if n < done else "")
+        for r in radios:                          # the values serve steps 2 and 3: fixed once those are done
+            r.state(["disabled"] if done >= 3 else ["!disabled"])
+        buttons()
+
+    def step():
+        k = st.get("done", 0)
+        if k >= len(STEPS):
+            return
+        if app.pending_parts():
+            messagebox.showwarning(APP, "There are changes not written yet in the main window (%s). Apply or undo "
+                                        "them first - the next step reads the files as they are." % ", ".join(
+                                            label for _, label in app.pending_parts()), parent=w)
+            return
         tune = values()
         if tune is None:
-            return None
-        key = tuple(sorted(tune.items()))
-        if key in plans:
-            return plans[key]
-        p = Plan(ModData(app.mod.data), "map", "map_x3", {})
+            return
         w.config(cursor="watch")
-        buttons(False)
-
-        def step(text):                           # a big map takes a minute or two: say what is being done
-            v_state.set("Working (a big map takes a minute or two): %s" % text)
-            w.update()
+        v_state.set("Working on step %d of %d: %s ... (step 2 and 3 take a minute or two)" % (
+            k + 1, len(STEPS), STEPS[k][1]))
+        w.update()
         try:
-            warns[key] = plan_upscale(p, camp, progress=step, tune=tune)
+            plan, warn = plan_step(ModData(app.mod.data), camp, k, st, tune)
+            bdir = plan.apply()
         except Exception as e:
-            log.write("upscale failed: %s" % e)
-            v_state.set("The map could not be made bigger: %s" % e)
-            return None
-        finally:
-            if w.winfo_exists():
-                w.config(cursor="")
-                buttons(True)
-        plans[key] = p
-        v_state.set("Ready: %d file(s) will change. Nothing is written yet." % len(p.changed_files()))
-        return p
+            log.write("x3 step %d failed: %s" % (k + 1, e))
+            v_state.set("Step %d could not be done: %s" % (k + 1, e))
+            w.config(cursor="")
+            return
+        if k == 0:
+            st["bdir"] = bdir
+        st["done"] = k + 1
+        _save_state(st, camp)
+        log.write("x3 step %d (%s) written (backup %s)\n%s" % (k + 1, STEPS[k][0], bdir, plan.report()))
+        app.load()
+        found = check_step(ModData(app.mod.data), camp, k, st)
+        w.config(cursor="")
+        img = ModData(app.mod.data).region_map(camp)
+        text = "Step %d done - the map is %d x %d tiles; look at it in the Map editor (Map and Terrain tabs)." % (
+            k + 1, img.width, img.height)
+        text += ("\nThe check after it: fine." if not found else
+                 "\nThe check after it found:\n- " + "\n- ".join(found) + "\nFix it by hand, or go on.")
+        if warn:
+            text += "\nNote:\n- " + "\n- ".join(warn[:6])
+        if k == 0:
+            text += "\nFixes made now are drawn over by step 2 (it smooths from the old map): fix after step 2."
+        if st["done"] == len(STEPS):
+            text += "\nALL DONE. Look the map over (the message that opened says what), then start the game: on the " \
+                    "first start it builds map.rwm again, which takes a while."
+            messagebox.showinfo(APP, look_over(warn), parent=w)
+        v_state.set(text)
+        show_marks()
 
     def show_all():
-        p = make_plan()
-        if p:
-            app.show_text("Every change of the bigger map - nothing written yet", p.report())
-
-    def write():
-        p = make_plan()
-        if not p:
+        k = st.get("done", 0)
+        if k >= len(STEPS):
             return
-        try:
-            bdir = p.apply()
-        except Exception as e:
-            messagebox.showerror(APP, "Not written: %s" % e, parent=w)
+        tune = values()
+        if tune is None:
             return
-        done["bdir"] = bdir
-        done["key"] = next((k for k, v in plans.items() if v is p), None)
-        log.write("Map made 3 x bigger (backup %s)\n%s" % (bdir, p.report()))
-        app.load()
+        w.config(cursor="watch")
+        w.update()
         try:
-            img = ModData(app.mod.data).region_map(camp)
-            now = " (%d x %d tiles)" % (img.width, img.height)
-        except Exception:
-            now = ""
-        app.status.set("The map is 3 x bigger now%s - written (backup %s)." % (now, bdir))
-        v_state.set("DONE: the map is 3 x bigger now%s.\nLook it over (what to look at: the message that opened), "
-                    "then start the game - on the first start the game builds map.rwm again, which takes a while.\n"
-                    "Not happy with it? 'Put the old map back' undoes it (or later: Tools > Restore a backup...)."
-                    % now)
-        for b in bar.winfo_children():
-            b.destroy()
-        for r in radios:                          # written: the choice is made
-            r.state(["disabled"])
-        ttk.Button(bar, text="Put the old map back", command=undo).pack(side="left")
-        ttk.Button(bar, text="Close", command=w.destroy).pack(side="left", padx=(6, 0))
-        messagebox.showinfo(APP, look_over(warns.get(done.get("key"), ())), parent=w)   # look it over yourself
+            plan, _ = plan_step(ModData(app.mod.data), camp, k, st, tune)
+        finally:
+            w.config(cursor="")
+        app.show_text("Step %d - every change, nothing written yet" % (k + 1), plan.report())
 
     def undo():
-        bdir = done.get("bdir")
-        if not bdir or not messagebox.askyesno(APP, "Put the old map back? Every file the bigger map changed is "
-                                                    "put back as it was (and every change made after it).", parent=w):
+        bdir = st.get("bdir")
+        if not bdir or not messagebox.askyesno(APP, "Put the old map back? Every file the steps changed is put "
+                                                    "back as it was before step 1 (and every change made after "
+                                                    "it).", parent=w):
             return
         try:
             restore_to(ModData(app.mod.data), bdir)
@@ -176,21 +200,57 @@ def open_upscale(app):
             messagebox.showerror(APP, "Not undone: %s" % e, parent=w)
             return
         log.write("The bigger map undone (backup %s restored)" % bdir)
+        st.clear()
         app.load()
         app.status.set("The old map is back (backup %s restored)." % bdir)
-        v_state.set("The old map is back - every file as it was before.")
+        v_state.set("The old map is back - every file as it was before step 1.")
+        show_marks()
+
+    def buttons():
         for b in bar.winfo_children():
             b.destroy()
-        ttk.Button(bar, text="Close", command=w.destroy).pack(side="left")
+        k = st.get("done", 0)
+        if k < len(STEPS):
+            ttk.Button(bar, text="Do step %d: %s" % (k + 1, STEPS[k][0]), command=step).pack(side="left")
+            ttk.Button(bar, text="Show every change...", command=show_all).pack(side="left", padx=(6, 0))
+        if st.get("bdir"):
+            ttk.Button(bar, text="Put the old map back", command=undo).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Close", command=w.destroy).pack(side="left", padx=(6, 0))
 
-    def buttons(on):
-        for b in bar.winfo_children():
-            try:
-                b.state(["!disabled"] if on else ["disabled"])
-            except tk.TclError:
-                pass
-
-    ttk.Button(bar, text="Make the map 3 x bigger", command=write).pack(side="left")
-    ttk.Button(bar, text="Show every change...", command=show_all).pack(side="left", padx=(6, 0))
-    ttk.Button(bar, text="Close", command=w.destroy).pack(side="left", padx=(6, 0))
+    if resume:
+        v_state.set("This map is part-way through: %d of %d steps done. Go on with step %d, or put the old map "
+                    "back." % (st["done"], len(STEPS), st["done"] + 1))
+    show_marks()
     return w
+
+
+STATE = "x3_steps.json"
+
+
+def _save_state(st, campaign):
+    """The steps done, kept in step 1's backup folder: the window goes on from there when opened again."""
+    import json
+    try:
+        with open(os.path.join(st["bdir"], STATE), "w", encoding="utf-8") as fh:
+            json.dump({"campaign": campaign, "done": st["done"], "bdir": st["bdir"],
+                       "vertical": st.get("vertical"), "edges": st.get("edges")}, fh)
+    except OSError:
+        pass
+
+
+def _unfinished(app, campaign):
+    """The steps state of a bigger map begun and not finished on this campaign (the newest), else None."""
+    import json
+    from .plan import backups
+    for b in backups(app.mod):
+        p = os.path.join(b, STATE)
+        if os.path.isfile(p):
+            try:
+                with open(p, encoding="utf-8") as fh:
+                    st = json.load(fh)
+            except (OSError, ValueError):
+                return None
+            if st.get("campaign") == campaign and 0 < st.get("done", 0) < 5 and os.path.isdir(st.get("bdir", "")):
+                return st
+            return None
+    return None

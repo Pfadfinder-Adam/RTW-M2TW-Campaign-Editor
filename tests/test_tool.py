@@ -3032,6 +3032,28 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_bigger_map_step_by_step(self):
+        """The five x3 steps one after another on the files: the map 3 x bigger after step 1, each step's check
+        clean, every town on its block's middle, the old map read from step 1's backup; the old map back byte for
+        byte from that backup."""
+        from campaign_editor import upsteps as US
+        before = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
+        mod = ModData(self.root)
+        w0 = mod.region_map("test").width
+        towns = dict(mod.city_tiles("test"))
+        st = {}
+        for k in range(len(US.STEPS)):
+            plan, _ = US.plan_step(ModData(self.root), "test", k, st)
+            bdir = plan.apply()
+            if k == 0:
+                st["bdir"] = bdir
+            self.assertEqual(US.check_step(ModData(self.root), "test", k, st), [], US.STEPS[k][0])
+        mod = ModData(self.root)
+        self.assertEqual(mod.region_map("test").width, 3 * w0)
+        self.assertEqual(mod.city_tiles("test"), {r: (3 * x + 1, 3 * y + 1) for r, (x, y) in towns.items()})
+        restore_to(ModData(self.root), st["bdir"])
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_bigger_map_values_the_modder_turns(self):
         """The x3 window's fields: the smoothing as a number (0 = winding, 1 = smooth, 0.67 = lighter, more =
         rounder), each value kept in its range, and the module's own values back as they were after a run."""
