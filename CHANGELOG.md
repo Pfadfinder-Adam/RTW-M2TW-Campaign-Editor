@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- The editor could stop responding (Windows: 'not responding') a while after start: every window, hover tips included, was made resizable each time it showed, and on Windows that showed it again and again. Now only real windows, once each; hover tips are left alone.
+
 ### Added
 - **Heights brush, point by point**: brush size 1 is one point of the heights picture (2 x 2 points a tile), the brush's middle exactly under the mouse (it sat half a point off), a right click picks the height of the point under the mouse (an eyedropper), and the line under the map gives that point exactly - land grey and metres, or water and the sea floor's depth - with what `map_heights.hgt` holds there.
 - **Mercenaries...** (top row; right click on the map > *Mercenaries for hire in <region>...*): the campaign's mercenary pools - a pool's regions selected on the map and changed with the map's Select box, new pools from the selected regions (a region leaves its old pool; an empty pool goes), every unit's numbers in plain words and changeable, mercenaries added or taken out, pools renamed or deleted; Preview and a backup, unchanged lines kept as they were.

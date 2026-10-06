@@ -197,14 +197,15 @@ def scroll_body(w, padding=10):
     state = {"sized": False}
 
     def size(e=None):
+        # once, on the first showing: sized again on every change, the canvas, its scrollbar and the wrapping texts
+        # could chase each other for ever (a window that never settles = an editor that does not respond)
+        if state["sized"]:
+            return
+        state["sized"] = True
         try:
             sw, sh = w.winfo_screenwidth(), w.winfo_screenheight()
             rw, rh = frm.winfo_reqwidth(), frm.winfo_reqheight()
-            if not state["sized"] or rw > int(sf.canvas.cget("width")):
-                sf.canvas.configure(width=min(rw, sw - 60))
-            if not state["sized"] or rh > int(sf.canvas.cget("height")) and rh < sh - 120:
-                sf.canvas.configure(height=min(rh, sh - 160))
-            state["sized"] = True
+            sf.canvas.configure(width=min(rw, sw - 60), height=min(rh, sh - 160))
         except tk.TclError:
             pass
     frm.bind("<Configure>", size, add="+")
@@ -213,12 +214,17 @@ def scroll_body(w, padding=10):
 
 def keep_on_screen(w):
     """Every window (bound to the class at start): resizable, and never bigger than the screen - a window whose
-    contents grow is shrunk to the screen with its title bar in sight."""
+    contents grow is shrunk to the screen with its title bar in sight. Once per window, on its first showing only,
+    never a borderless one (hover tips, menus, the splash): on Windows a style change re-shows a window, and done on
+    every showing (with update_idletasks inside the event) it looped for ever - the editor froze ('not responding')."""
     try:
-        if not isinstance(w, tk.Toplevel):
+        if not isinstance(w, tk.Toplevel) or getattr(w, "_kept_on_screen", False):
             return
-        w.resizable(True, True)
-        w.update_idletasks()
+        w._kept_on_screen = True
+        if w.overrideredirect():
+            return
+        if w.resizable() != (True, True):
+            w.resizable(True, True)
         sw, sh = w.winfo_screenwidth(), w.winfo_screenheight()
         ww, wh = w.winfo_width(), w.winfo_height()
         if ww > sw - 20 or wh > sh - 80:
