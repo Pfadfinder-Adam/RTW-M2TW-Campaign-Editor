@@ -269,7 +269,7 @@ class MapView(ttk.Frame):
         self.shown_names = {}                            # {region / town file name: the name players read}
         self._symimg = {}
         c = self.canvas
-        c.bind("<Configure>", lambda e: self.render())
+        c.bind("<Configure>", self._configured)
         c.bind("<MouseWheel>", self._wheel)
         c.bind("<Button-4>", lambda e: self._wheel(e, 1))
         c.bind("<Button-5>", lambda e: self._wheel(e, -1))
@@ -723,9 +723,21 @@ class MapView(ttk.Frame):
         row = math.floor(self.oy + sy / self.z)
         return x, self.cmap.h - 1 - row
 
+    def _configured(self, e=None):
+        """The canvas got its size (or a new one): a fit asked for before it had one is done now (the Terrain tab
+        fitted the map to a 1-pixel canvas - the map showed tiny or not at all)."""
+        if getattr(self, "_fit_waiting", False) and self.canvas.winfo_width() > 50 and \
+                self.canvas.winfo_height() > 50:
+            self._fit_waiting = False
+            self.fit()
+            return
+        self.render()
+
     def fit(self):
         if not self.cmap:
             return
+        if self.canvas.winfo_width() <= 50 or self.canvas.winfo_height() <= 50:
+            self._fit_waiting = True                    # not laid out yet: fitted when it gets its size
         cw, ch = max(self.canvas.winfo_width(), 200), max(self.canvas.winfo_height(), 200)
         self.z = min(cw / self.cmap.w, ch / self.cmap.h)
         self.ox, self.oy = (self.cmap.w - cw / self.z) / 2, (self.cmap.h - ch / self.z) / 2      # in the middle

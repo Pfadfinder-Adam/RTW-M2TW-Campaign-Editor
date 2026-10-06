@@ -536,6 +536,7 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- **Terrain tab**: the map showed tiny or not at all when the tab opened - it was fitted before the tab had its size; it is fitted again once it has one.
 - Recolour window: the 'wheel: zoom, right drag: move' line has a row of its own (it was cut at the window's edge).
 - **Bigger map (x3): the coast comes down to the water** - the land by the water kept the old shore's full height,
   a wall made 3 x taller with the heights (each tile corner on a diagonal coast a cliff tooth); it now slopes down to
