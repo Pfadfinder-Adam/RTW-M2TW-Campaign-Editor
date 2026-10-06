@@ -30,8 +30,8 @@ def open_map_size(app):
     w = tk.Toplevel(app)
     w.title("Map size - add or cut tiles at the edges")
     w.transient(app)
-    frm = ttk.Frame(w, padding=12)
-    frm.pack(fill="both", expand=True)
+    from .gui_util import window_body
+    frm, bottom = window_body(w, 640, 520)            # resizable, scrolls, the buttons always in sight
     ttk.Label(frm, text="Add or cut tiles at the edges of the map", font=("", 12, "bold")).pack(anchor="w")
     ttk.Label(frm, justify="left", wraplength=560, text=(
         "Campaign %s - the map now: %d x %d tiles.\n\nA number above 0 adds that many rows or columns of tiles at "
@@ -54,8 +54,8 @@ def open_map_size(app):
     ttk.Label(frm, textvariable=v_after, font=("", 10, "bold")).pack(anchor="w", pady=(8, 0))
     v_state = tk.StringVar()
     ttk.Label(frm, textvariable=v_state, justify="left", wraplength=560).pack(anchor="w", pady=(8, 0))
-    bar = ttk.Frame(frm)
-    bar.pack(anchor="e", pady=(10, 0))
+    bar = ttk.Frame(bottom)
+    bar.pack(anchor="e")
     done = {}
 
     def numbers():

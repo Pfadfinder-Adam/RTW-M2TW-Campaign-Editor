@@ -42,8 +42,8 @@ def open_upscale(app):
     w = tk.Toplevel(app)
     w.title("Make the campaign map 3 x bigger")
     w.transient(app)
-    frm = ttk.Frame(w, padding=12)
-    frm.pack(fill="both", expand=True)
+    from .gui_util import window_body
+    frm, bottom = window_body(w, 720, 760)            # resizable, scrolls, the buttons always in sight
     ttk.Label(frm, text="Make the campaign map 3 x bigger (alpha)", font=("", 12, "bold")).pack(anchor="w")
     resume = _unfinished(app, camp)
     ttk.Label(frm, justify="left", wraplength=620, text="Campaign %s - %s%s" % (
@@ -113,8 +113,8 @@ def open_upscale(app):
         st.update(resume)
     state = ttk.Label(frm, textvariable=v_state, justify="left", wraplength=620)
     state.pack(anchor="w", pady=(10, 0))
-    bar = ttk.Frame(frm)
-    bar.pack(anchor="e", pady=(10, 0))
+    bar = ttk.Frame(bottom)
+    bar.pack(anchor="e")
 
     def show_marks():
         done = st.get("done", 0)

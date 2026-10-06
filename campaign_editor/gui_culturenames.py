@@ -4,6 +4,7 @@ edit a name in place. Changes wait in App.culture_names like the per-town dialog
 import tkinter as tk
 from tkinter import ttk
 
+from .gui_util import scroll_body
 from . import culturenames as CN
 from . import theme
 
@@ -24,8 +25,7 @@ class CultureNamesTable:
         w.title("Settlement names by culture - %s" % camp)
         w.transient(app)
         w.geometry("1180x640")
-        frm = ttk.Frame(w, padding=8)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 8)          # resizable, scrolls when the window is lower than it
         about = ("Each town may have a name for each culture of its owner; %s renames it when it changes hands. "
                  "Double click a culture's cell to type a name (Enter keeps it, Esc drops it, an empty cell = no name "
                  "of its own: 'every other' is used, else the game's name). Double click a town's name for its own "

@@ -4,6 +4,7 @@ picture, title, what it does, its short and long description - and its campaign-
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import scroll_body
 from . import wonders as W
 
 
@@ -22,8 +23,7 @@ def show(parent, mod, kind):
     w = tk.Toplevel(parent)
     w.title("Wonder - %s" % w_info["title"])
     w.transient(parent.winfo_toplevel())
-    frm = ttk.Frame(w, padding=10)
-    frm.pack(fill="both", expand=True)
+    frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
     top = ttk.Frame(frm)
     top.pack(fill="x")
     pic = tk.Label(top)

@@ -8,6 +8,7 @@ import copy
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from .gui_util import scroll_body
 from . import addons as AD
 from . import modbuilder as MB
 from . import theme
@@ -489,8 +490,7 @@ class ModuleBuilder(tk.Toplevel):
         w = tk.Toplevel(self)
         w.title("Pick %s" % what)
         w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         ttk.Label(frm, text="The %s of this mod - click to tick or untick." % what).pack(anchor="w")
         v_find = tk.StringVar()
         ttk.Entry(frm, textvariable=v_find, width=30).pack(anchor="w", pady=4)

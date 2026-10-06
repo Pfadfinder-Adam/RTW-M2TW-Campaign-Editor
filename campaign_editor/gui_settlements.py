@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from .gui_util import ShortHint
+from .gui_util import scroll_body
 from . import log
 
 APP = "RTW & M2TW Campaign Editor"
@@ -183,8 +184,7 @@ def rename_in_files(app, region, parent):
     w = tk.Toplevel(parent)
     w.title("Rename in the files - %s / %s" % (region, town))
     w.transient(parent)
-    frm = ttk.Frame(w, padding=10)
-    frm.pack(fill="both", expand=True)
+    frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
     ttk.Label(frm, justify="left", wraplength=560, text=(
         "The names the game's files use for this place. Every text file of the mod that names it gets the new "
         "name: descr_regions, descr_strat, the names lookup and texts, mercenaries, win conditions, scripts, "
@@ -256,8 +256,7 @@ def delete_town(app, region, parent):
     w = tk.Toplevel(parent)
     w.title("Delete %s with its region %s" % (town, region))
     w.transient(parent)
-    frm = ttk.Frame(w, padding=10)
-    frm.pack(fill="both", expand=True)
+    frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
     ttk.Label(frm, justify="left", wraplength=560, text=(
         "The town and its region go from the campaign in every file that ties them: the region's land (and its "
         "port) becomes a neighbour's, its block of descr_regions and its settlement of descr_strat go, the rebels "

@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
 from .gui_util import one_window, ShortHint
+from .gui_util import scroll_body
 from . import events as EV
 from .plan import Plan
 
@@ -134,8 +135,7 @@ class EventsWindow(tk.Toplevel):
         w = tk.Toplevel(self)
         w.title("How a faction comes into the campaign")
         w.transient(self)
-        fr = ttk.Frame(w, padding=10)
-        fr.pack(fill="both", expand=True)
+        fr = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         v_fac, v_way = tk.StringVar(value=fac0), tk.StringVar(value=WAY_LABELS[WAY_KEYS.index(ch["way"])])
         v_of, v_date, v_reg = tk.StringVar(value=ch.get("of") or ""), tk.StringVar(value=ch.get("date") or ""), \
             tk.StringVar(value=ch.get("region") or "")

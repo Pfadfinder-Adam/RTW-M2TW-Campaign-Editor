@@ -154,6 +154,79 @@ class ScrollFrame(ttk.Frame):
 
 
 
+def window_body(w, width=700, height=640, padding=12):
+    """A window's room the way every window of the editor should have it: resizable, never taller than the screen,
+    the buttons on a bar at the bottom that always stays in sight (.pack into the returned bar), everything else in
+    a frame that scrolls when the window is lower than it, its texts wrapping to the window's width as it is
+    dragged wider or narrower (the x3 window's buttons slid out of sight as its text grew). -> (frame, bar)."""
+    w.resizable(True, True)
+    sw, sh = w.winfo_screenwidth(), w.winfo_screenheight()
+    w.geometry("%dx%d" % (min(width, sw - 40), min(height, sh - 100)))
+    w.minsize(min(420, sw - 40), min(300, sh - 100))
+    bar = ttk.Frame(w, padding=(padding, 6, padding, padding))
+    bar.pack(side="bottom", fill="x")
+    sf = ScrollFrame(w)
+    sf.pack(fill="both", expand=True)
+    frm = ttk.Frame(sf.inner, padding=padding)
+    frm.pack(fill="both", expand=True)
+
+    def rewrap(e=None, box=frm):
+        width_now = max(200, sf.canvas.winfo_width() - 2 * padding - 20)
+        stack = [box]
+        while stack:
+            x = stack.pop()
+            stack.extend(x.winfo_children())
+            if x.winfo_class() == "TLabel":
+                try:
+                    if int(str(x.cget("wraplength")) or 0) > 0:
+                        x.configure(wraplength=width_now)
+                except (tk.TclError, ValueError):
+                    pass
+    sf.canvas.bind("<Configure>", lambda e: (sf._resize(), rewrap()), add="+")
+    return frm, bar
+
+
+def scroll_body(w, padding=10):
+    """The frame a dialog builds its contents in, inside a frame that scrolls: the window opens as big as its
+    contents (never bigger than the screen), can be dragged to any size, and what does not fit scrolls - no
+    button or text out of reach. Packed already."""
+    sf = ScrollFrame(w)
+    sf.pack(fill="both", expand=True)
+    frm = ttk.Frame(sf.inner, padding=padding)
+    frm.pack(fill="both", expand=True)
+    state = {"sized": False}
+
+    def size(e=None):
+        try:
+            sw, sh = w.winfo_screenwidth(), w.winfo_screenheight()
+            rw, rh = frm.winfo_reqwidth(), frm.winfo_reqheight()
+            if not state["sized"] or rw > int(sf.canvas.cget("width")):
+                sf.canvas.configure(width=min(rw, sw - 60))
+            if not state["sized"] or rh > int(sf.canvas.cget("height")) and rh < sh - 120:
+                sf.canvas.configure(height=min(rh, sh - 160))
+            state["sized"] = True
+        except tk.TclError:
+            pass
+    frm.bind("<Configure>", size, add="+")
+    return frm
+
+
+def keep_on_screen(w):
+    """Every window (bound to the class at start): resizable, and never bigger than the screen - a window whose
+    contents grow is shrunk to the screen with its title bar in sight."""
+    try:
+        if not isinstance(w, tk.Toplevel):
+            return
+        w.resizable(True, True)
+        w.update_idletasks()
+        sw, sh = w.winfo_screenwidth(), w.winfo_screenheight()
+        ww, wh = w.winfo_width(), w.winfo_height()
+        if ww > sw - 20 or wh > sh - 80:
+            w.geometry("%dx%d+%d+%d" % (min(ww, sw - 20), min(wh, sh - 80), 10, 10))
+    except tk.TclError:
+        pass
+
+
 class HScroll(ttk.Frame):
     """A row (built in .inner) that scrolls left and right when the window is narrower than it: the mouse wheel
     over it and a press dragged sideways (the row follows the mouse smoothly; a click without a drag is a click) -

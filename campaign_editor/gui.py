@@ -10,6 +10,7 @@ import traceback
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
+from .gui_util import scroll_body
 from . import emergence as EM, log, settings, theme
 from .build import build, template_display
 from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need, core_settlement, population_of, rank,
@@ -1777,6 +1778,8 @@ class App(tk.Tk):
         return w is not None and w.winfo_class() in ("Text",)
 
     def _keys(self):
+        from .gui_util import keep_on_screen          # every window: resizable, never bigger than the screen
+        self.bind_class("Toplevel", "<Map>", lambda e: keep_on_screen(e.widget), add="+")
         self.bind_all("<Control-z>", self.undo)
         self.bind_all("<Control-Z>", self.redo)                  # Ctrl+Shift+Z
         self.bind_all("<Control-y>", self.redo)
@@ -2246,8 +2249,7 @@ class App(tk.Tk):
         w = tk.Toplevel(self)
         w.title("Region %s%s" % (edit, " (new)" if cur else "") if edit else "New region")
         w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         facs = [fb.name for fb in self.strat.factions]
         rebels = sorted({v.get("rebels") for v in self.regions.values() if v.get("rebels")})
         res = self._region_tag_names()
@@ -2490,8 +2492,7 @@ class App(tk.Tk):
         w = tk.Toplevel(self)
         w.title("Names of %s by culture" % town)
         w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         eng, rex = CN.engine(self.mod)
         ttk.Label(frm, justify="left", wraplength=460, foreground="#555" if rex else "#a33", text=(
             "When the town changes hands, " + eng + " renames it for the new owner's culture - at once when a general "
@@ -2598,8 +2599,7 @@ class App(tk.Tk):
         w = tk.Toplevel(self)
         w.title("Religions of %s" % (shown.get(name) or name))
         w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         ttk.Label(frm, text=head, font=("", 10, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
         ttk.Label(frm, text="percent of the region's people, 100 in all", foreground="#666").grid(
             row=1, column=0, columnspan=2, sticky="w", pady=(0, 6))
@@ -2662,8 +2662,7 @@ class App(tk.Tk):
         w = tk.Toplevel(self)
         w.title("New religion")
         w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         v = {k: tk.StringVar() for k in ("name", "shown", "pip_from", "picture")}
         v["pip_from"].set(have[0])
         from .limits import engine_of, lifted
@@ -2961,8 +2960,7 @@ class App(tk.Tk):
         w = tk.Toplevel(self)
         w.title("Region tags of %s" % name)
         w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         ttk.Label(frm, text="%s - region tags (hidden resources), comma separated: line 6 of its entry in "
                             "descr_regions.txt.\nBuildings ask for them ('resource' / 'hidden_resource' "
                             "requirements) - they open buildings and local units. The goods drawn on the map are "
@@ -3751,8 +3749,7 @@ class App(tk.Tk):
         w = tk.Toplevel(self)
         w.title("New mod folder")
         w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         ttk.Label(frm, text="Based on:  %s" % (base or "the game's own data"), font=("", 10, "bold")).grid(
             row=0, column=0, columnspan=2, sticky="w")
         ttk.Label(frm, text="Created in:  %s" % os.path.dirname(mod_target(self.mod.data, "x"))).grid(
@@ -5499,8 +5496,7 @@ class App(tk.Tk):
         w = tk.Toplevel(self)
         w.title("Apply changes")
         w.transient(self)
-        frm = ttk.Frame(w, padding=12)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 12)          # resizable, scrolls when the window is lower than it
         ttk.Label(frm, text="Changes not written yet - Apply writes the ticked ones, one after another, each with "
                             "its own backup (Restore undoes each):", wraplength=560, justify="left").pack(anchor="w")
         picks = []

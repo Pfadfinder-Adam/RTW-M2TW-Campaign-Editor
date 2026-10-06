@@ -6,6 +6,7 @@ import os
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import scroll_body
 from . import addons as AD
 from .gui_util import ScrollFrame
 from .plan import Plan
@@ -102,8 +103,7 @@ class SettingsForm:
         w = tk.Toplevel(self)
         w.title(s.label)
         w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         ttk.Label(frm, text="%s - from this mod's %s. Click to tick or untick." % (
             s.label, "buildings" if what == "chains" else "units"), wraplength=420).pack(anchor="w")
         body = ttk.Frame(frm)

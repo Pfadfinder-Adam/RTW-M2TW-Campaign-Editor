@@ -13,6 +13,7 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
 from .gui_util import one_window, ShortHint
+from .gui_util import scroll_body
 from . import family as FM, theme
 
 CARD_W, CARD_H, GAP, ROW = 150, 66, 16, 110
@@ -1043,8 +1044,7 @@ class FamilyEditor(ttk.Frame):
         w = tk.Toplevel(self)
         w.title("Add a person - who is it?")
         w.transient(self.winfo_toplevel())
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         ttk.Label(frm, text="The new person is", font=("", 10, "bold")).grid(row=0, column=0, sticky="w")
         v = tk.StringVar(value="son")
         rels = list(self.RELATIONS) + [("family", "tied to no one (a man goes on the map as a general)")]

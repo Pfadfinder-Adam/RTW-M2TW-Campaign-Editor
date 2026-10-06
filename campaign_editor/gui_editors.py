@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from .gui_util import ShortHint, hint
+from .gui_util import scroll_body
 from . import editors as E
 from . import settings, theme, unitattrs
 from .gui_util import save_copy
@@ -392,8 +393,7 @@ class RecordEditor(ttk.Frame):
         w = tk.Toplevel(self)
         w.title("%s: what REX adds" % fd.key)
         w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         rex = faction_limit(self.mod).get("engine") == "REX.exe"
         ttk.Label(frm, text=("Ticked = on this unit's '%s' line. These words work only under REX; "
                              "the original game refuses them%s." % (
@@ -552,8 +552,7 @@ class RecordEditor(ttk.Frame):
         w = tk.Toplevel(self)
         w.title("Add a line to %s" % name)
         w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         v = {k: tk.StringVar() for k in ("place", "level", "key", "value", "unit", "exp", "factions", "extra",
                                          "start", "per_turn", "most")}
         v["exp"].set("0")
@@ -1171,8 +1170,7 @@ class RecordEditor(ttk.Frame):
         w = tk.Toplevel(self)
         w.title("Replace battle model - %s, %s" % (unit, what))
         w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         ttk.Label(frm, justify="left", wraplength=640, text=(
             "%s of %s use %s now. Pick the model to use instead. The unit is %s: a model made to sit otherwise is "
             "marked. Every faction that owns the unit gets a texture on the model where it has none (a copy of "
@@ -1540,8 +1538,7 @@ class RecordEditor(ttk.Frame):
         w = tk.Toplevel(self)
         w.title("Import pack - %s" % os.path.basename(path))
         w.transient(self)
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         ttk.Label(frm, text="Units (a name taken in this mod has a free one already; change it if you like)",
                   font=("", 9, "bold")).grid(row=0, column=0, columnspan=3, sticky="nw")
         vs = {}

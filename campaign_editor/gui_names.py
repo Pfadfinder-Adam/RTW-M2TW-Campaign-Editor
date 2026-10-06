@@ -3,6 +3,7 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import scroll_body
 from . import namelists as NL
 from . import theme
 
@@ -41,8 +42,7 @@ class NameListWizard:
         w.title("Name list of %s" % faction_label)
         w.transient(app)
         w.geometry("740x560")
-        frm = ttk.Frame(w, padding=10)
-        frm.pack(fill="both", expand=True)
+        frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         self.l_title = ttk.Label(frm, font=("", 11, "bold"))
         self.l_title.pack(anchor="w")
         self.l_what = ttk.Label(frm, wraplength=700, justify="left")
