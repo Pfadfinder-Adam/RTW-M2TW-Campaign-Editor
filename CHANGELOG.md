@@ -216,6 +216,7 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **Character panel**: a trait's long effects no longer run into the next trait, a retinue card's two-line name no longer covers its effects.
 - **New mod folder** copies every file by default (the mod stands on its own, to share); hard links are a tick for a mod kept to oneself.
 - **One faction with both a shadow and a split-off faction** is refused only in plain Rome (it crashes at the end of a turn). Medieval II with M2EX and Barbarian Invasion with REX take it without a crash; Preview says that the revolting towns then go to the shadow, so the split-off faction does not come while the shadow is there.
 - **Bigger map (x3): values you turn yourself** - the window has a field for each: hills and mountains (times

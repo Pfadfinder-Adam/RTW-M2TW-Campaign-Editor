@@ -84,10 +84,11 @@ class CharacterPanel(ttk.Frame):
             c.create_text(x0, y, anchor="nw", text="none", fill=MUTED)
             y += 20
         for shown, trait, level, eff in d["traits"]:
-            c.create_text(x0, y, anchor="nw", text=shown, fill=INK, font=("", 10, "bold"))
-            c.create_text(x0 + 230, y, anchor="nw", fill=MUTED, font=("", 9), width=max(120, w - x0 - 260),
-                          text=(eff + "   " if eff else "") + "(%s %d)" % (trait, level))
-            y += 20
+            a = c.create_text(x0, y, anchor="nw", text=shown, fill=INK, font=("", 10, "bold"), width=220)
+            b = c.create_text(x0 + 230, y, anchor="nw", fill=MUTED, font=("", 9), width=max(120, w - x0 - 260),
+                              text=(eff + "   " if eff else "") + "(%s %d)" % (trait, level))
+            # the next row under the taller of the two (a long effect wraps to more lines - they overlapped)
+            y = max(c.bbox(a)[3], c.bbox(b)[3], y + 16) + 6
         # the retinue: picture cards
         y += 8
         c.create_line(x0, y, w - 16, y, fill=GOLD)
@@ -97,7 +98,7 @@ class CharacterPanel(ttk.Frame):
             c.create_text(x0, y, anchor="nw", text="none" if d["attributes"] else
                           "none (a person off the map has no retinue)", fill=MUTED)
             y += 20
-        cw, chh = 112, 150
+        cw, chh = 112, 168                                   # room for a two-line name and its effects
         x = x0
         for shown, anc, pic, eff in d["retinue"]:
             if x + cw > w - 8 and x > x0:
@@ -109,11 +110,11 @@ class CharacterPanel(ttk.Frame):
                 c.create_image(x + (cw - 8) / 2, y + 52, image=im)
             else:
                 c.create_text(x + (cw - 8) / 2, y + 52, text="(no picture)", fill=MUTED, font=("", 8))
-            c.create_text(x + (cw - 8) / 2, y + 104, anchor="n", text=shown, fill=INK, width=cw - 14,
-                          font=("", 9, "bold"), justify="center")
-            if eff:
-                c.create_text(x + (cw - 8) / 2, y + 122, anchor="n", text=eff, fill=MUTED, width=cw - 14,
-                              font=("", 7), justify="center")
+            t = c.create_text(x + (cw - 8) / 2, y + 104, anchor="n", text=shown, fill=INK, width=cw - 14,
+                              font=("", 9, "bold"), justify="center")
+            if eff:                                      # under the name, however many lines the name took
+                c.create_text(x + (cw - 8) / 2, c.bbox(t)[3] + 1, anchor="n", text=eff, fill=MUTED,
+                              width=cw - 14, font=("", 7), justify="center")
             x += cw
         y += chh + 16
         c.configure(scrollregion=(0, 0, w, y))
