@@ -3122,6 +3122,21 @@ building smith
         with open(out, "rb") as fh:
             self.assertEqual(fh.read(), first)          # the same map, the same picture
 
+    def test_check_problems_worst_first_with_the_place_to_fix(self):
+        """Check mod files groups its problems by when the game meets them - would not start, campaign loads with
+        something lost, battle, play - and names the place each is put right in."""
+        from campaign_editor import check as CK
+        probs = ["descr_strat.txt has a block for 'x', which descr_sm_factions.txt does not know",
+                 "win condition of 'y' names a region the map lacks z",
+                 "A (b): a town without its governor's building (core 1) - the game stops: 'has not been given a "
+                 "core building'",
+                 "3 battle model(s) give a faction its texture but no weapons texture"]
+        self.assertEqual([CK.when_of(p) for p in probs], ["start", "play", "load", "battle"])
+        self.assertEqual([h for h, _ in CK.grouped(probs)], [h for _, h, _ in CK.WHEN])
+        self.assertEqual(CK.fix_of(probs[2])[1], "edit")
+        self.assertEqual(CK.fix_of(probs[3])[1], "units")
+        self.assertIsNone(CK.fix_of("something nobody knows"))
+
     def test_credits_page_and_window_text(self):
         """CREDITS.md - the page on GitHub and the Tools > Credits... window - names the author and its sections;
         the window shows it without Markdown marks (bold, italics, links keep their words), a paragraph or item over

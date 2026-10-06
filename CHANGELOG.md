@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Check mod files**: problems worst first, grouped by when the game would meet them (would not start, campaign loads with something lost, battle, play); each one with a button that opens the place to put it right; the whole report behind **Full report...**.
 - **Top row**: the data folder box three times wider, the Mod box takes what is left.
 - **Credits**: a special thank you, Ko-fi supporters listed.
 - **Map signs**: an army's flag and a ship fit inside their tile; the ship no longer shifts in the legend when the map zooms; the heir's crown is a narrow outlined coronet (the king's a full filled crown); the legend explains the flag marks; a general of no family has a star on his flag, a family member a diamond; the wheel zooms 50 % a notch by default (Ctrl 10 %).

@@ -16,13 +16,77 @@ from .textio import tokens
 from .units import read_units
 
 
+# when a problem bites, worst first (Check mod files groups its PROBLEMS by these): (key, heading, words that put a
+# problem there) - the first group whose words a problem holds takes it; the last takes the rest
+WHEN = [
+    ("start", "the game would not start or the campaign would not load",
+     ("is missing", "does not know", "no culture line", "no name list", "the game crashes", "two settlement blocks",
+      "rehearsal for", "town pixel", "no such region", "wasteland region")),
+    ("load", "the campaign loads, but something is lost or the game stops on it",
+     ("descr_strat", "the game stops", "core building", "governor's building", "without its towns", "temples",
+      "off the map", "txt lacks", "children", "relative line")),
+    ("battle", "in battle", ("battle", "skeleton", "modeldb", "texture")),
+    ("play", "while playing (later turns, events, winning)", ()),
+]
+
+
+# a crash that waits for a moment of play goes with the play group, whatever else it says
+LATER = ("faction is played", "rebels appear", "victory conditions", "descr_win_conditions")
+
+
+def when_of(msg):
+    """The WHEN key of a problem: 'start', 'load', 'battle' or 'play'."""
+    low = msg.lower()
+    if any(w in low for w in LATER):
+        return "play"
+    for key, _, words in WHEN:
+        if any(w in low for w in words):
+            return key
+    return WHEN[-1][0]
+
+
+# where a problem is put right: (words in the problem, the button's words, the place - an App work or window)
+FIXES = [
+    (("load offers",), "Load the mod again (it offers the fix)", "load"),
+    (("campaign rules", "max_number_of_children", "age of manhood"), "Open Campaign rules", "rules"),
+    (("family tree", "children", "character_record"), "Open the Character editor (family tree)", "characters"),
+    (("settlements tab", "population", "governor's building", "core building", "temples"),
+     "Open Edit faction (Settlements)", "edit"),
+    (("win condition", "descr_win_conditions"), "Open Edit faction (victory)", "edit"),
+    (("emergent", "event", "shadow", "spawn"), "Open Events", "events"),
+    (("export_descr_unit", "ownership", "battle model", "skeleton", "units in armies"), "Open the Unit editor",
+     "units"),
+    (("export_descr_buildings", "buildings in towns", "building"), "Open the Building editor", "buildings"),
+    (("town pixel", "map_regions", "region", "port", "off the map", "touch"), "Open the Map editor", "map"),
+]
+
+
+def fix_of(msg):
+    """(button words, place) where the problem msg is put right, or None."""
+    low = msg.lower()
+    for words, label, place in FIXES:
+        if any(w in low for w in words):
+            return label, place
+    return None
+
+
+def grouped(problems):
+    """[(heading, [problem...])] in WHEN order, empty groups left out."""
+    out = []
+    for key, heading, _ in WHEN:
+        these = [p for p in problems if when_of(p) == key]
+        if these:
+            out.append((heading, these))
+    return out
+
+
 def _has_army(lines):
     return any(tokens(l)[:1] == ["army"] for l in lines)
 
 
-def check_mod(mod, campaign, deep=False, progress=None):
-    """A report (text) on the mod as the tool sees it."""
-    out, problems = [], []
+def check_mod(mod, campaign, deep=False, progress=None, found=None):
+    """A report (text) on the mod as the tool sees it; found (a list), when given, gets every problem's line."""
+    out, problems = [], [] if found is None else found
 
     def say(msg):
         out.append(msg)
@@ -288,9 +352,11 @@ def check_mod(mod, campaign, deep=False, progress=None):
 
     say("")
     if problems:
-        say("PROBLEMS (%d)" % len(problems))
-        for p in problems:
-            say("    " + p)
+        say("PROBLEMS (%d) - worst first, by when the game would meet them" % len(problems))
+        for heading, these in grouped(problems):
+            say("    -- %s --" % heading)
+            for p in these:
+                say("    " + p)
     else:
         say("No problems found.")
     say("(%.1f s)" % (time.time() - t0))

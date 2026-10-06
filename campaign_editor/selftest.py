@@ -2145,7 +2145,8 @@ def problems(mod, campaign):
             on = True
             continue
         if on and line.startswith("    "):
-            out.append(line.strip())
+            if not line.strip().startswith("-- "):            # a 'when it bites' heading
+                out.append(line.strip())
         elif on:
             on = False
     return out

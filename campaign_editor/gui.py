@@ -5583,13 +5583,13 @@ class App(tk.Tk):
         if deep is None:
             return
         from .check import check_mod
-        result, data, campaign = {}, self.mod.data, self.v_campaign.get()
+        result, data, campaign = {"found": []}, self.mod.data, self.v_campaign.get()
         faction = self.v["template"].get().strip()         # picked: where it is named goes into the report too
 
         def work():
             try:
                 result["text"] = check_mod(ModData(data), campaign, deep=deep,
-                                           progress=lambda m: result.__setitem__("step", m))
+                                           progress=lambda m: result.__setitem__("step", m), found=result["found"])
                 if faction:
                     result["step"] = "where %s is named..." % faction
                     result["text"] += "\n\n" + "=" * 70 + "\nWHERE %s IS NAMED (every text file of the mod)\n\n" \
@@ -5606,8 +5606,13 @@ class App(tk.Tk):
                 return
             self.status.set("Check finished.")
             log.write("Check mod files\n" + result["text"])
-            self.show_text("Check mod files" + (" (and where %s is named)" % faction if faction else ""), result["text"],
-                           extra=[("Ignore list...", self.edit_ignore)] if faction else ())
+            title = "Check mod files" + (" (and where %s is named)" % faction if faction else "")
+            extra = [("Ignore list...", self.edit_ignore)] if faction else []
+            if result["text"].startswith("The check stopped"):
+                self.show_text(title, result["text"], extra=extra)
+                return
+            from .gui_check import open_problems         # worst first, each with the place that puts it right
+            open_problems(self, result["found"], result["text"], title, extra)
         wait()
 
     def _log_status(self):
