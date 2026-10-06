@@ -3153,6 +3153,35 @@ building smith
         self.assertEqual(CR.blocks("# T\n\n- one\n  two\n> said\n> it\n\nA *b*\nc [d](x)"),
                          [("title", "T"), ("item", "one two"), ("quote", "said it"), ("text", "A b c d")])
 
+    def test_start_the_game_checks_first(self):
+        """Before the game starts: a script that starts an exe the game folder lacks is refused, a Medieval II .cfg
+        not naming the mod's folder is asked about, a 32-bit exe without Large Address Aware is a note."""
+        from campaign_editor import launch
+
+        def put(path, data=b""):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as fh:
+                fh.write(data)
+        pe = bytearray(512)
+        pe[:2], pe[60:64] = b"MZ", (128).to_bytes(4, "little")
+        pe[128:132], pe[132:134] = b"PE\0\0", (0x14c).to_bytes(2, "little")
+        m2 = os.path.join(self.root, "m2p")
+        put(os.path.join(m2, "medieval2.exe"), bytes(pe))
+        self.assertIs(launch.large_address_aware(os.path.join(m2, "medieval2.exe")), False)
+        pe[150:152] = (0x20).to_bytes(2, "little")
+        put(os.path.join(m2, "medieval2.exe"), bytes(pe))
+        self.assertIs(launch.large_address_aware(os.path.join(m2, "medieval2.exe")), True)
+        put(os.path.join(m2, "mods", "x", "data", "descr_sm_factions.txt"))
+        put(os.path.join(m2, "mods", "x", "x.cfg"), b"[features]\r\nmod = mods/y\r\n")
+        data = os.path.join(m2, "mods", "x", "data")
+        how = launch.start_line(data)
+        self.assertEqual([s for s, _ in launch.problems(how, data)], [False])      # names mods/y, not mods/x
+        put(os.path.join(m2, "mods", "x", "x.cfg"), b"[features]\r\nmod = mods/x\r\n")
+        self.assertEqual(launch.problems(how, data), [])
+        put(os.path.join(m2, "mods", "x", "Start_x.bat"), b"kingdoms.exe @mods/x/x.cfg\r\n")
+        bat = launch.start_line(data)
+        self.assertEqual([s for s, _ in launch.problems(bat, data)], [True])       # kingdoms.exe is not there
+
     def test_start_the_game_with_the_loaded_mod(self):
         """Start the game: the mod's own start script (Start_<name>.bat first; not an unpacker's .bat), else the
         engine's start script in the game folder naming it (REX's Barbarian Invasion.bat -bi, M2EX's Teutonic.bat

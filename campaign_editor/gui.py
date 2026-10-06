@@ -1814,14 +1814,25 @@ class App(tk.Tk):
             return
         try:
             how = launch.start_line(self.mod.data)
+            found = launch.problems(how, self.mod.data)       # what would keep it from starting, said first
+            stops = [w for s_, w in found if s_]
+            if stops:
+                raise ValueError("\n\n".join(stops))
+            maybe = [w for s_, w in found if s_ is False]
+            if maybe and not messagebox.askyesno(
+                    APP, "The game may not start as it should:\n\n%s\n\nStart it anyway?" % "\n\n".join(maybe)):
+                return
             launch.start(how)
         except (ValueError, OSError) as e:
             log.write("Start the game: not started - %s" % e)
             messagebox.showerror(APP, "The game did not start: %s" % e)
             return
         log.write("Start the game: %s" % how["words"])
-        self.status.set("The game is starting: %s. Something went wrong in it? Report a bug / Suggest sends the "
-                        "game's log with it." % how["words"])
+        notes = [w for s_, w in found if s_ is None]
+        for w in notes:
+            log.write("Start the game: note - %s" % w)
+        self.status.set("The game is starting: %s. %sSomething went wrong in it? Report a bug / Suggest sends the "
+                        "game's log with it." % (how["words"], "".join("Note: %s. " % w for w in notes)))
 
     def support(self):
         """The Ko-fi page in the browser: donations keep the work on the tool going."""

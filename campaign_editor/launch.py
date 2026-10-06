@@ -101,6 +101,74 @@ def start_line(data):
     return {"exe": os.path.join(game, exe), "args": args, "cwd": game, "words": " ".join([exe] + args)}
 
 
+def large_address_aware(exe):
+    """True / False: the exe may use more than 2 GB (the PE header's flag - a big mod runs out of memory without it on
+    the 32-bit games); None when it cannot be read or is a 64-bit exe (the extenders: no such limit)."""
+    try:
+        with open(exe, "rb") as fh:
+            head = fh.read(4096)
+    except OSError:
+        return None
+    if head[:2] != b"MZ" or len(head) < 64:
+        return None
+    pe = int.from_bytes(head[60:64], "little")
+    if pe + 24 > len(head) or head[pe:pe + 4] != b"PE\0\0":
+        return None
+    machine = int.from_bytes(head[pe + 4:pe + 6], "little")
+    if machine != 0x14c:                                    # not 32-bit x86
+        return None
+    return bool(int.from_bytes(head[pe + 22:pe + 24], "little") & 0x20)
+
+
+RE_EXE = re.compile(r"([\w.-]+\.exe)\b", re.I)
+
+
+def problems(how, data):
+    """What would keep the game from starting with the mod, before it is started: [(stops, words)] - stops True
+    when it surely would not start (refused), False when it may still start (asked), None a note (said beside: the
+    games' own exes are all so, a question every start would only nag)."""
+    out = []
+    data = os.path.abspath(data)
+    game = game_of(data)
+    _, base = game_root_of(data)
+    if "bat" in how:
+        text = re.sub(r"%~[a-z]*\d", " ", _text(how["bat"]))        # %~dp0REX.exe = the folder's REX.exe
+        exes = [e for e in RE_EXE.findall(text) if not e.lower().startswith(("unpacker", "cmd"))]
+        here = [e for e in exes if os.path.isfile(os.path.join(game, e)) or
+                os.path.isfile(os.path.join(os.path.dirname(how["bat"]), e))]
+        if exes and not here:
+            out.append((True, "%s starts %s, which is not in the game folder %s" % (
+                os.path.basename(how["bat"]), " / ".join(sorted(set(exes))), game)))
+        for cfg in re.findall(r"@(\S+?\.cfg)\b", text, re.I):
+            path = os.path.join(game, cfg.replace("\\", os.sep).replace("/", os.sep))
+            if not os.path.isfile(path):
+                out.append((True, "%s starts the game with %s, which is not there" % (os.path.basename(how["bat"]),
+                                                                                       cfg)))
+            else:
+                out += _cfg_problems(path, base)
+        exe = next((os.path.join(game, e) for e in here if os.path.isfile(os.path.join(game, e))), None)
+    else:
+        exe = how["exe"]
+        cfg = next((a[1:] for a in how["args"] if a.startswith("@")), None)
+        if cfg:
+            out += _cfg_problems(os.path.join(game, cfg.replace("\\", os.sep)), base)
+    if exe and large_address_aware(exe) is False:
+        out.append((None, "%s can use only 2 GB of memory (it is not 'Large Address Aware') - a big mod may "
+                           "crash when the campaign loads; a 4 GB patch for it fixes that" % os.path.basename(exe)))
+    return out
+
+
+def _cfg_problems(path, base):
+    """Medieval II's mod .cfg: [features] mod = mods/<name>, or the game starts without the mod (file_first is not
+    asked for: whether a mod = line needs it is not known for sure)."""
+    text = _text(path)
+    out = []
+    if base and not re.search(r"^\s*mod\s*=\s*mods[/\\]+%s\b" % re.escape(base), text, re.I | re.M):
+        out.append((False, "%s does not name the mod's folder (mod = mods/%s under [features]) - the game may "
+                           "start without the mod" % (os.path.basename(path), base)))
+    return out
+
+
 def start(how):
     """Start it (start_line's answer) and return at once - the game runs on its own. Windows only: elsewhere
     OSError names the line to start by hand."""
