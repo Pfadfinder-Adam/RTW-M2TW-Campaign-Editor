@@ -15,7 +15,7 @@ FORT_W = 0.45          # a fort's / watchtower's half size, of a tile: the sign 
 ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels per tile
 # the map's zoom settings (Tools > Settings > Campaign map): the wheel's step and Ctrl + wheel's in per cent of the
 # shown zoom, and the zoom from which armies, agents, fleets and ports are drawn (towns always)
-ZOOM_SETTINGS = {"map_zoom_step": 10, "map_zoom_step_fine": 5, "map_signs_from": 300}
+ZOOM_SETTINGS = {"map_zoom_step": 50, "map_zoom_step_fine": 10, "map_signs_from": 300}
 
 
 def zoom_setting(key):
@@ -612,6 +612,10 @@ class MapView(ttk.Frame):
             row("a general / an army", char("general", army=True), "army")
             if not getattr(self, "everyone", False):
                 row("yours: drag it", char("general", army=True, mine=True))
+            for mark, label in (("crown", "flag: the faction's leader in it"), ("small crown", "flag: his heir"),
+                                ("star", "flag: a family member"), ("chevron", "flag: a captain (no family)")):
+                row(label, lambda x, yy, m=mark: self._roof_flag(x - 9, yy + 10, 22, "__legend__", (), mark=m,
+                                                                 field=True))
             row("a fleet (admiral)", char("admiral", army=True), "fleet")
             for k, label in (("spy", "spy"), ("assassin", "assassin"), ("diplomat", "diplomat"),
                              ("merchant", "merchant"), ("priest", "priest"), ("princess", "princess"),
@@ -1175,14 +1179,14 @@ class MapView(ttk.Frame):
             c.create_polygon(cx, top, cx + w, top, cx + w * 0.7, top + ch / 2, cx + w, top + ch, cx, top + ch,
                              fill=fill, outline=edge, width=width, tags=tags)
             if mark and h >= 7:
-                self._mark(mark, cx + w * 0.38, top + ch / 2, ch * 0.32, self.text_on(fill), tags)
+                self._mark(mark, cx + w * 0.4, top + ch / 2, ch * 0.42, self.text_on(fill), tags)
             return
         top = cy - ch
         c.create_polygon(cx, top, cx + w, top, cx + w * 0.7, top + ch / 2, cx + w, cy, cx, cy,
                          fill=fill, outline="black", width=1, tags=tags)
         c.create_line(cx, cy, cx, top - h * 0.12, fill="black", width=2, tags=tags)
         if mark and h >= 7:
-            self._mark(mark, cx + w * 0.38, top + ch / 2, ch * 0.32, self.text_on(fill), tags)
+            self._mark(mark, cx + w * 0.4, top + ch / 2, ch * 0.42, self.text_on(fill), tags)
 
     def _draw_char(self, ch_, sx, sy, size):
         c = self.canvas
@@ -1201,8 +1205,8 @@ class MapView(ttk.Frame):
         elif k == "admiral":
             # a ship: its keel one pixel above the tile's lower edge, the hull in the owner's colour, a mast and a
             # white sail
-            w = size * 0.5
-            keel = sy + max(self.z / 2, w * 0.6) - 1
+            w = size * 0.5                              # the keel by the sign's own size (the legend draws it at
+            keel = sy + size * 0.55 - 1                 # another zoom than the map's - it moved there)
             deck = keel - w * 0.55
             c.create_polygon(sx - w, deck, sx + w, deck, sx + w * 0.6, keel, sx - w * 0.6, keel,
                              fill=fill, outline=edge, width=2 if mine else 1, tags=tags)
@@ -1215,9 +1219,9 @@ class MapView(ttk.Frame):
             # as a general with his flag (a tester: a sign of its own meant nothing in the game). The flag as on a
             # town's roof; who leads it on the cloth: the king a crown, his heir a small crown, a family member a
             # star, a captain nothing
-            h = size
-            sx -= h * 0.35                                 # the flag, not its pole, sits on the tile
-            self._roof_flag(sx, sy + h * 0.5, h * 1.25, ch_["faction"], tags, edge=edge, width=2 if mine else 1,
+            h = size                                       # pole and cloth inside the tile
+            sx -= h * 0.35
+            self._roof_flag(sx, sy + h * 0.5, h * 0.95, ch_["faction"], tags, edge=edge, width=2 if mine else 1,
                             mark=self.leader_mark(ch_), field=True)
             if mine:
                 c.create_rectangle(sx - 2, sy + h * 0.5 - 2, sx + 2, sy + h * 0.5 + 2, fill="#ffd400", outline="",
@@ -1249,11 +1253,17 @@ class MapView(ttk.Frame):
         elif mark == "chevron":                       # a wide chevron, its point up
             c.create_line(cx - r, cy + r * 0.45, cx, cy - r * 0.45, cx + r, cy + r * 0.45, fill=ink,
                           width=max(2, int(r * 0.45)), joinstyle="miter", tags=tags)
-        elif mark in ("crown", "small crown"):
-            tooth = r * (0.9 if mark == "crown" else 0.45)        # the heir's teeth half the king's
-            base, band = cy + r * 0.55, cy + r * 0.1
+        elif mark == "crown":                         # the king: a full crown, three tall teeth, filled
+            tooth = r * 0.95
+            base, band = cy + r * 0.6, cy + r * 0.1
             c.create_polygon(cx - r, base, cx - r, band - tooth, cx - r * 0.5, band, cx, band - tooth,
                              cx + r * 0.5, band, cx + r, band - tooth, cx + r, base, fill=ink, outline="", tags=tags)
+        elif mark == "small crown":                   # the heir: a narrow coronet - a band, three short teeth,
+            rr = r * 0.7                                # only outlined (told apart from the king's at a glance)
+            base, band = cy + r * 0.45, cy + r * 0.05
+            c.create_polygon(cx - rr, base, cx - rr, band - rr * 0.45, cx - rr * 0.5, band, cx, band - rr * 0.45,
+                             cx + rr * 0.5, band, cx + rr, band - rr * 0.45, cx + rr, base, fill="", outline=ink,
+                             width=max(1, int(r * 0.22)), tags=tags)
 
     def _heart(self, cx, cy, r, ink, tags):
         pts = []

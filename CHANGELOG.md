@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Map signs**: an army's flag and a ship fit inside their tile; the ship no longer shifts in the legend when the map zooms; the heir's crown is a narrow outlined coronet (the king's a full filled crown); the legend explains the flag marks (leader, heir, family member, captain); the wheel zooms 50 % a notch by default (Ctrl 10 %).
 - **Bigger map (x3)**: no river, ford or source on a water tile - by the heights and the sea ground too, not only map_regions; a river stands on land and touches the water by a side at its mouth.
 - **Avoid Growth**: the words first and the box right of them, as the scroll's own 'Automanage [ ]'; the game's log says which tick pieces it took.
 - **Bigger map (x3)**: no cliffs and no beach on the bigger map - the game drew the beach as a zigzag band over the land and the cliffs never sat right on the new coast; the shore looks right without them. Paint them where wanted with the Terrain editor's brushes.
