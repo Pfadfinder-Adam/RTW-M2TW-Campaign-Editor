@@ -3043,7 +3043,14 @@ class App(tk.Tk):
                         fleet_moves[c.start] = dest
         from .start import unit_name
         removed = {(f, x["name"], tuple(x["from"])) for f, xs in self.map_removed.items() for x in xs}
+        from .family import _parse_relative
         for fb in self.strat.factions:
+            family = set()                            # every name on the faction's relative lines: the family
+            for line in self.strat.lines[fb.start:fb.end]:
+                if tokens(line)[:1] == ["relative"]:
+                    r = _parse_relative(line)
+                    if r:
+                        family.update([r[0], r[1]] + list(r[2]))
             for i, c in enumerate(fb.characters):
                 if not c.xy or (fb.name, c.name, tuple(c.xy)) in removed:
                     continue
@@ -3055,7 +3062,8 @@ class App(tk.Tk):
                 ulines = [l for l in lines if tokens(l)[:1] == ["unit"]]
                 chars.append({"id": cid, "faction": fb.name, "name": c.name, "kind": c.kind, "xy": xy,
                               "army": army, "units": len(ulines), "unit_names": [unit_name(l) for l in ulines],
-                              "from": c.xy, "named": bool(c.named), "role": c.role})
+                              "from": c.xy, "named": bool(c.named), "role": c.role,
+                              "family": c.name in family or bool(c.role)})
                 if army:
                     armies_at.add(xy)
         from .start import KINDS

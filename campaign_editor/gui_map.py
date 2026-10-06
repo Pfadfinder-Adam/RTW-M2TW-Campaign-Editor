@@ -618,8 +618,8 @@ class MapView(ttk.Frame):
             if not getattr(self, "everyone", False):
                 row("yours: drag it", char("general", army=True, mine=True))
             for mark, label in (("crown", "flag: the faction's leader in it"), ("small crown", "flag: his heir"),
-                                ("diamond", "flag: a family member"),
-                                ("chevron", "flag: a captain (no family)")):
+                                ("diamond", "flag: a family member"), ("star", "flag: a general (not family)"),
+                                ("chevron", "flag: a captain (no general)")):
                 row(label, lambda x, yy, m=mark: self._roof_flag(x - 9, yy + 10, 22, "__legend__", (), mark=m,
                                                                  field=True))
             row("a fleet (admiral)", char("admiral", army=True), "fleet")
@@ -1244,7 +1244,7 @@ class MapView(ttk.Frame):
             # an army - and a family member without units too: the game shows every named character on the map
             # as a general with his flag (a tester: a sign of its own meant nothing in the game). The flag as on a
             # town's roof; who leads it on the cloth: the king a crown, his heir a small crown, a family member a
-            # diamond, a captain (no family member leads it) a chevron
+            # diamond, a general not of the family a star, a captain (no general) a chevron
             h = size                                       # pole and cloth inside the tile
             sx -= h * 0.35
             self._roof_flag(sx, sy + h * 0.5, h * 0.95, ch_["faction"], tags, edge=edge, width=2 if mine else 1,
@@ -1255,16 +1255,17 @@ class MapView(ttk.Frame):
 
     @staticmethod
     def leader_mark(ch_):
-        """'crown' (the faction's leader), 'small crown' (its heir), 'diamond' (a family member), 'chevron' (a
-        captain: descr_strat's 'general' - an army no family member leads; in the game its first unit's captain
-        leads it)."""
+        """Who leads it (the user's words, 2026-10-06): 'crown' the faction's leader, 'small crown' its heir,
+        'diamond' a family member (a named character on the faction's relative lines), 'star' a general - a named
+        character of his own (portrait, traits, retinue) who is not of the family, 'chevron' a captain: descr_strat's
+        'general', an army no named character leads (the game makes its first unit's captain lead it)."""
         role = ch_.get("role")
         if role == "leader":
             return "crown"
         if role == "heir":
             return "small crown"
         if ch_.get("kind") == "named character" or ch_.get("named"):
-            return "diamond"
+            return "diamond" if ch_.get("family", True) else "star"
         return "chevron"                               # a captain: a soldier's rank chevron
 
     def _mark(self, mark, cx, cy, r, ink, tags):
