@@ -1723,9 +1723,25 @@ class App(tk.Tk):
                         "its old value." % self.WORK_TITLES.get(self.v_work.get(), "editor"))
         return True
 
+    def _in_window(self, redo=False):
+        """Ctrl+Z / Ctrl+Y in a window of its own (the banner, the emblem...): its own Undo / Redo button's step;
+        a window without one is never undone from the main window unseen."""
+        w = self.focus_get()
+        top = w.winfo_toplevel() if w is not None else None
+        if top is None or top is self:
+            return False
+        step = getattr(top, "_redo" if redo else "_undo", None)
+        if step:
+            step()
+        else:
+            self.status.set("This window has no Undo of its own - Close it without writing to drop its changes.")
+        return True
+
     def undo(self, e=None):
         if self._typing():
             return None
+        if self._in_window():
+            return "break"
         if self._in_editor():
             return "break"
         while self.undo_stack:
@@ -1743,6 +1759,8 @@ class App(tk.Tk):
     def redo(self, e=None):
         if self._typing():
             return None
+        if self._in_window(redo=True):
+            return "break"
         if self._in_editor(redo=True):
             return "break"
         if not self.redo_stack:
