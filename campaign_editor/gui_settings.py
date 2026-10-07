@@ -228,3 +228,26 @@ class SettingsWindow(tk.Toplevel):
             btn.pack(side="left", padx=6)
             if not os.path.isdir(b):
                 btn.state(["disabled"])
+            dele = ttk.Button(row, text="Delete this mod's backups...", command=self._delete_backups)
+            dele.pack(side="left", padx=(18, 0))           # destructive: set apart from the others
+            if not os.path.isdir(b):
+                dele.state(["disabled"])
+
+    def _delete_backups(self):
+        """Every backup of the loaded mod goes, after a yes: the files stay as they are, Restore / Undo this write
+        have nothing left to put back."""
+        from .gui_util import ask
+        from .plan import backups, delete_backups
+        mod = self.app.mod
+        n = len(backups(mod))
+        if not ask("Settings", "Delete all %d backup(s) of this mod?\n\nThe mod's files stay as they are now; "
+                   "only the way back goes - Restore a backup and Undo this write will have nothing to put back. "
+                   "This cannot be undone." % n, yes="Delete them", no="Keep them", danger=True, parent=self):
+            return
+        gone = delete_backups(mod)
+        log.write("Backups deleted: %d folder(s) of %s" % (gone, mod.data))
+        gone_undo = getattr(self.app, "_undo_gone", None)
+        if gone_undo:
+            gone_undo()
+        from tkinter import messagebox
+        messagebox.showinfo("Settings", "%d backup folder(s) deleted." % gone, parent=self)

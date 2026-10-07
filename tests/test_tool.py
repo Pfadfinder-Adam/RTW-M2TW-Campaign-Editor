@@ -161,6 +161,12 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(clean_restored(ModData(self.root)), 1)
         self.assertFalse(os.path.exists(old))
         self.assertTrue(os.path.isdir(live))
+        from campaign_editor.plan import delete_backups        # Settings > Delete this mod's backups
+        now = tree_hash(self.root)
+        self.assertEqual(delete_backups(ModData(self.root)), 1)
+        self.assertEqual(backups(ModData(self.root)), [])
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")},
+                         {k: v for k, v in now.items() if not k.startswith("CampaignEditor_backups")})
 
     def test_modeldb_round_trip_and_clone(self):
         # Medieval II battle_models.modeldb: read back byte for byte, the clone copies the template's texture

@@ -453,6 +453,19 @@ def clean_restored(mod):
     return gone
 
 
+def delete_backups(mod):
+    """Tools > Settings > Delete this mod's backups: every backup folder of the mod goes (after a yes) - the files
+    stay as they are now, only the way back is gone. Returns how many went."""
+    gone = 0
+    for b in backups(mod):
+        try:
+            shutil.rmtree(b)
+            gone += 1
+        except OSError:
+            pass
+    return gone + clean_restored(mod)
+
+
 def restore(mod, bdir):
     """Put every file of a backup back and remove what that run created."""
     root = os.path.dirname(mod.data)

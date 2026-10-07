@@ -2031,6 +2031,23 @@ def s_mercs(c, mod):
     return plan
 
 
+@step("Rename a faction everywhere: a faction no other step uses gets the code name <name>_ce",
+      "the renamed faction plays as before - its towns, units, pictures and names on screen")
+def s_rename_faction(c, mod):
+    from . import factionrename as FR
+    used = {c.template, c.edited, c.other, c.foreign, c.new, c.later, c.split, c.shadow, "slave"}
+    old = next((n for n, _ in mod.factions() if n not in used), None)
+    if old is None:
+        raise Skip("no faction left that no other step uses")
+    taken = {n.lower() for n, _ in mod.factions()}
+    new = _free_name(old + "_ce", taken)
+    if FR.problems(mod, old, new):
+        raise Skip(FR.problems(mod, old, new))
+    plan = Plan(mod, "rename", new)
+    FR.plan_rename(plan, c.campaign, old, new)
+    return plan
+
+
 @step("Map size: the map grown by 2 tiles of deep sea at the right and at the top (the last step - grown at the "
       "left or the bottom every place would move, and the test mod's engine scripts name tiles by number)",
       "the campaign map is 2 tiles wider and higher: open water at its right and top edges; every town, army and "
@@ -2074,6 +2091,7 @@ COVERAGE = {
     "Mercenaries: pools of regions and their units": ["s_mercs"],
     "New region": ["s_region", "s_region_garrison"],
     "Rename a region and its town everywhere": ["s_rename"],
+    "Rename a faction everywhere (Edit faction > Rename...)": ["s_rename_faction"],
     "Edit region: rebels, resources, farming, names players see": ["s_region_props"],
     "Settlement names by culture": ["s_culture_names"],
     "Terrain editor: ground and heights": ["s_terrain"],

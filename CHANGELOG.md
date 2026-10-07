@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+- **Edit faction > Rename...**: the faction's code name changed in every file of the mod in one write (pictures copied under the new name, scripts that name it listed); Undo this write puts it back.
+- Hover a unit or a building in any list or table: its card shows - the picture the game shows and what it is (men, cost, upkeep; a building's level, cost and turns).
+- A click on a table's column heading sorts the rows by it, a second click the other way.
+- **Tools > Settings > Folders > Delete this mod's backups...** (after a question).
+- Load says what it is loading, with the moving bar.
+
 ### Changed
 - One language in every window: **Preview** shows what will be written, **Write it in** writes at once, **Keep for Apply** keeps a window's changes for **Apply changes**. Enter presses the window's main button and Esc closes it (Cancel / Close), in every window; the main window is never closed by Esc, and a tool waiting for its click on the map is stopped by Esc first.
 - Questions are answered in words, not Yes / No ("Drop them" / "Stay", "Unpack it" / "Not now"...); a button that loses something stands apart on the left and is never the one Enter presses.

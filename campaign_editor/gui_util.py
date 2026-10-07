@@ -5,6 +5,7 @@ first. So buttons are packed first and long hint labels last, and a form taller 
 
 import itertools
 import os
+import re
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -702,6 +703,7 @@ def install_window_helpers(root):
             pass
     root.bind_all("<ButtonPress-1>", away, add="+")
     keys(root)
+    sortable(root)
     for cls in ("TEntry", "TCombobox", "Entry"):
         root.bind_class(cls, "<Enter>", enter, add="+")
         root.bind_class(cls, "<Leave>", hide, add="+")
@@ -836,6 +838,73 @@ def right_click(widget, fn):
         return "break"
     widget.bind("<Button-3>", go)
     return widget
+
+
+ARROWS = (" \u25b2", " \u25bc")
+
+
+def _sort_key(text):
+    """Numbers by their value ('1 / 2' by its first number, '750' > '90'), words without case; numbers first."""
+    t = str(text).strip()
+    m = re.match(r"-?\d+(?:\.\d+)?", t)
+    return (0, float(m.group(0)), t.lower()) if m else (1, 0.0, t.lower())
+
+
+def sort_tree(tv, col, reverse=False):
+    """Rows of a Treeview by column col ('#0' = the tree's own text, '#n' = the n-th column), within each parent."""
+    n = int(col[1:])
+
+    def cell(iid):
+        if n == 0:
+            return tv.item(iid, "text")
+        vals = tv.item(iid, "values") or ()
+        dc = tv["displaycolumns"]
+        cols = list(tv["columns"])
+        if dc and dc != ("#all",) and str(dc[0]) != "#all":
+            name = dc[n - 1]
+            k = cols.index(name) if name in cols else n - 1
+        else:
+            k = n - 1
+        return vals[k] if k < len(vals) else ""
+
+    def sort_children(parent):
+        kids = list(tv.get_children(parent))
+        kids.sort(key=lambda i: _sort_key(cell(i)), reverse=reverse)
+        for pos, i in enumerate(kids):
+            tv.move(i, parent, pos)
+            sort_children(i)
+    sort_children("")
+
+
+def sortable(root):
+    """A click on a table's column heading sorts its rows by that column, a second click the other way (an arrow
+    shows which); tables with a sort of their own (a heading command) keep it. One binding for every Treeview."""
+    def click(e):
+        tv = e.widget
+        if not isinstance(tv, ttk.Treeview):
+            return
+        try:
+            if tv.identify_region(e.x, e.y) != "heading":
+                return
+            col = tv.identify_column(e.x)
+            if not col or tv.heading(col, "command"):
+                return
+            last = getattr(tv, "_ce_sort", None)
+            reverse = bool(last and last[0] == col and not last[1])
+            for c in ["#0"] + ["#%d" % (i + 1) for i in range(len(tv["displaycolumns"]
+                                                                  if tv["displaycolumns"] and str(
+                                                                      tv["displaycolumns"][0]) != "#all"
+                                                                  else tv["columns"]))]:
+                t = tv.heading(c, "text")
+                for a in ARROWS:
+                    if t.endswith(a):
+                        tv.heading(c, text=t[:-len(a)])
+            sort_tree(tv, col, reverse)
+            tv.heading(col, text=tv.heading(col, "text") + ARROWS[1 if reverse else 0])
+            tv._ce_sort = (col, reverse)
+        except (tk.TclError, ValueError, IndexError):
+            pass
+    root.bind_class("Treeview", "<ButtonRelease-1>", click, add="+")
 
 
 def tip(widget, text, **kw):

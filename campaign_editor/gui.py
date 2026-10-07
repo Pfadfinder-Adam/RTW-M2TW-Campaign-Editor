@@ -353,6 +353,8 @@ class App(tk.Tk):
         self.buildings_picked = {}      # region -> [(chain, level)] set by hand
         self._edb_for, self._edb, self._bpics = None, [], None
         self.pictures = Pictures()
+        from .gui_hovercard import install as hover_cards
+        hover_cards(self, lambda: getattr(self, "mod", None), self.pictures, culture=self._picked_culture)   # a unit / building in any list shows its card
         self.colours = {"primary": None, "secondary": None}
         self.editing_now = None
         self.char_moves = {}            # "faction:index" -> (x, y) dragged on the map (Edit)
@@ -368,6 +370,14 @@ class App(tk.Tk):
             pass                        # no icon is no reason to stop
 
     # ------------------------------------------------------------------ layout
+
+    def _picked_culture(self):
+        """The culture of the faction picked in the window now (None when none is)."""
+        try:
+            t = self.v["template"].get().strip()
+            return self.mod.culture(t) if t and self.mod else None
+        except Exception:
+            return None
 
     def _build(self):
         theme.apply(self)                          # light or dark, as last chosen
@@ -502,6 +512,9 @@ class App(tk.Tk):
         self.lbl_template = lf.grid_slaves(row=row - 1, column=0)[0]
         self.e_name = ttk.Entry(lf, textvariable=self.v["name"])
         field("Internal name", self.e_name)
+        self.b_rename = ttk.Button(lf, text="Rename...", command=self.rename_faction)   # Edit faction only
+        self.b_rename.grid(row=row - 1, column=2, sticky="w")
+        self.b_rename.grid_remove()
         field("Name (full)", ttk.Entry(lf, textvariable=self.v["display_name"]))
         field("Name (short)", ttk.Entry(lf, textvariable=self.v["short_name"]))
         # Rome only: Medieval II's texts have no short name ({ST_...}) nor the faction icon's tooltip
@@ -1529,6 +1542,7 @@ class App(tk.Tk):
         self.lf2.configure(text="Leader and heir (names from the faction's name list)" if edit else
                            "Leader and heir (names must come from the template's name list)")
         self.e_name.configure(state="readonly" if edit else "normal")
+        (self.b_rename.grid if edit else self.b_rename.grid_remove)()
         for ws in self.extra_rows.values():             # shown again by load_existing when the faction has them
             for w in ws:
                 w.grid_remove()
@@ -3713,6 +3727,25 @@ class App(tk.Tk):
         return self._shown
 
     def load(self):
+        """Load the mod in the data folder box: the status line says so and the bar moves while it reads (a big
+        mod on a slow disk takes seconds - the window looked frozen)."""
+        self.status.set("Loading %s ..." % (self.v_path.get().strip() or "the mod"))
+        self.busy(True)
+        try:
+            self.config(cursor="watch")
+            self.update_idletasks()
+        except tk.TclError:
+            pass
+        try:
+            return self._load()
+        finally:
+            self.busy(False)
+            try:
+                self.config(cursor="")
+            except tk.TclError:
+                pass
+
+    def _load(self):
         before = self.mod.data if self.mod else None
         try:
             self.mod = ModData(self.v_path.get())
@@ -4273,6 +4306,51 @@ class App(tk.Tk):
                 theme.paint(b, rgb)
         self.status.set("Template %s: %s. Its units, buildings, names, traits and art are copied." %
                         (t, disp.get("display_name", t)))
+
+    def rename_faction(self):
+        """Edit faction > Rename...: the faction's code name changed in every file of the mod (factionrename) -
+        one write, one backup; Preview first, scripts naming it listed (not changed)."""
+        from tkinter import simpledialog
+        from . import factionrename as FR
+        from .plan import Plan
+        from .gui_util import ask
+        old = self.v["template"].get().strip()
+        if not self.mod or not old:
+            return
+        if self.unwritten():
+            messagebox.showinfo(APP, "Other changes wait for Apply. Apply (or undo) them first - they were made with "
+                                     "the old name.", parent=self)
+            return
+        new = simpledialog.askstring(APP, "The new code name of %s (small letters, digits and _ - the name the "
+                                          "files use; the names players read are on this tab):" % old, parent=self)
+        new = (new or "").strip()
+        if not new or new == old:
+            return
+        why = FR.problems(self.mod, old, new)
+        if why:
+            messagebox.showerror(APP, "Not renamed: %s." % why, parent=self)
+            return
+        plan = Plan(self.mod, "rename", new)
+        try:
+            FR.plan_rename(plan, self.v_campaign.get(), old, new)
+        except (ValueError, OSError) as e:
+            messagebox.showerror(APP, "Not renamed: %s." % e, parent=self)
+            return
+        if not ask(APP, "%s\n\nRename %s to %s in %d file(s)? A backup is made first (Undo this write puts it "
+                        "back)." % (plan.report()[:3000], old, new, len(plan.changed_files())),
+                   yes="Rename it", no="Cancel", parent=self):
+            return
+        try:
+            bdir = plan.apply()
+        except Exception as e:
+            messagebox.showerror(APP, "Not renamed: %s" % e, parent=self)
+            return
+        log.write("Faction %s renamed %s (backup %s)\n%s" % (old, new, bdir, plan.report()))
+        self.load()
+        if new in [n for n, _ in self.mod.factions()]:
+            self.v["template"].set(new)
+            self.template_changed()
+        self.status.set("%s is %s now in every file; Undo this write puts it back." % (old, new))
 
     def show_family_button(self):
         """The Faction tab's Family tree button: what a click does, and whose family it is."""
