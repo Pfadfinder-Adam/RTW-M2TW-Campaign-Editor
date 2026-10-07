@@ -1,4 +1,4 @@
-"""Make a campaign map bigger: every tile becomes a 3 x 3 block (alpha). Both games.
+"""Make a campaign map bigger: every tile becomes a 3 x 3 block (beta). Both games.
 
 Why 3: an odd factor keeps each town, port, army and resource in the MIDDLE of its block - tile (x, y) becomes
 (3x + 1, 3y + 1) - so nothing has to be placed again by hand. The room in between is for new regions and factions.

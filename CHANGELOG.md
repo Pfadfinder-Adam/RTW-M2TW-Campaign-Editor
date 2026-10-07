@@ -228,6 +228,7 @@
   builder offers all five stances in its list.
 
 ### Changed
+- **Bigger map (x3)** is now a beta (was alpha): step by step, checked after each step, tried in the game on both games.
 - An unexpected fault of the editor is told in plain words - your files are safe, you can go on, *Send a report...* - with the technical line kept short for the report; the same fault again is not shown again (it goes to the log and the message line).
 - Fields of one game only are shown greyed with the game named (*Name (short) (Rome only)*, *Religion (Medieval II only)*) instead of vanishing.
 - Buttons that undo or delete (Put the old map back, Delete this pool, Delete a script) stand apart from the buttons beside them, so a hurried click does not land on them.

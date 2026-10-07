@@ -44,7 +44,7 @@ def open_upscale(app):
     w.transient(app)
     from .gui_util import window_body
     frm, bottom = window_body(w, 720, 760)            # resizable, scrolls, the buttons always in sight
-    ttk.Label(frm, text="Make the campaign map 3 x bigger (alpha)", font=("", 12, "bold")).pack(anchor="w")
+    ttk.Label(frm, text="Make the campaign map 3 x bigger (beta)", font=("", 12, "bold")).pack(anchor="w")
     resume = _unfinished(app, camp)
     ttk.Label(frm, justify="left", wraplength=620, text="Campaign %s - %s%s" % (
         camp, _game_words(app.mod), ("\nThe map now: %d x %d tiles (3 x bigger since step 1)" % size if resume else

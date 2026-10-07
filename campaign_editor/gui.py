@@ -1374,7 +1374,7 @@ class App(tk.Tk):
                                                        "symbols"),
         ("culture", "Culture names...", "culture_names_table", "settlement names by culture, every town"),
         ("towns", "Many towns...", "mass_towns", "buildings and garrisons for many towns at once"),
-        ("bigger", "Bigger map (x3)...", "upscale_map", "make the campaign map 3 x bigger (alpha)"),
+        ("bigger", "Bigger map (x3)...", "upscale_map", "make the campaign map 3 x bigger (beta)"),
         ("mercs", "Mercenaries...", "mercenaries_window", "who is for hire in which regions: pools of regions and "
                                                           "their units"),
     ]
