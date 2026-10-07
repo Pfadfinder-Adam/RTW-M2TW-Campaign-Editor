@@ -183,7 +183,7 @@ def extra_pictures(mod, faction):
             if got:
                 return got[1]
         return None
-    sm = _ci(mod.data, "descr_sm_factions.txt")
+    sm = mod.find("descr_sm_factions.txt")
     symbols, cur = {}, None
     if sm:
         with open(sm, encoding="latin-1") as fh:
@@ -209,7 +209,7 @@ def extra_pictures(mod, faction):
                             "kind": "symbol", "ref": ref, "cas": got[1], "tex": m.group(1).decode("latin-1"),
                             "where": "the faction's 3D symbol (%s): the faction-select screen and the campaign "
                                      "map's faction panels" % os.path.basename(ref)})
-    bb = _ci(mod.data, "descr_building_battle.txt")
+    bb = mod.find("descr_building_battle.txt")
     if bb:
         whose = {}
         with open(bb, encoding="latin-1") as fh:
@@ -224,7 +224,7 @@ def extra_pictures(mod, faction):
                     out.append({"path": p, "label": "flag on its towns in battle", "users": fs, "kind": "town_flag",
                                 "ref": tex, "file": bb,
                                 "where": "the flags on the faction's towns and forts in a siege battle"})
-    xml = _ci(mod.data, "descr_banners_new.xml")
+    xml = mod.find("descr_banners_new.xml")
     if xml:
         whose, refs = {}, {}
         with open(xml, encoding="latin-1") as fh:
@@ -298,7 +298,7 @@ def _copy_for(plan, x, who, keep):
         if os.path.exists(new_cas):
             new_cas = os.path.join(cas_dir, "symbol_%s_own.%s" % (who, cas_ext))
         plan.binary(new_cas, raw)
-        sm = _ci(mod.data, "descr_sm_factions.txt")
+        sm = mod.find("descr_sm_factions.txt")
         f = plan.edit(sm)
         cur = None
         for i, t in enumerate(f.texts()):

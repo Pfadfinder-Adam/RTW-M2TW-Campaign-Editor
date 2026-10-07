@@ -119,7 +119,7 @@ def apply(plan, faction, pools):
     """Write the faction's own name list: its section in descr_names.txt (replacing the one it had alone;
     taken out of a shared header), the names.txt strings and the lookup keys that are missing. Names the
     faction's characters already carry stay in the list (said in Preview)."""
-    from .moddata import name_sections, _ci
+    from .moddata import name_sections
     bad = problems(pools)
     if bad:
         raise ValueError("name list of %s: %s" % (faction, "; ".join(bad)))
@@ -165,7 +165,7 @@ def apply(plan, faction, pools):
             plan.note(t, "%d name(s) the game shows added" % len(add))
     else:
         plan.warn(None, "no text/names.txt found: the game would show the names' keys")
-    lp = _ci(mod.data, "descr_names_lookup.txt")
+    lp = mod.find("descr_names_lookup.txt")
     if lp:
         lk = plan.edit(lp)
         have = {x.strip().lower() for x in lk.texts()}

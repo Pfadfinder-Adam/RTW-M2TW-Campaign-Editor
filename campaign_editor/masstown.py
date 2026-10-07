@@ -255,8 +255,7 @@ def town_pool(mod, town, pool):
 def rebel_types(mod):
     """{rebel type: [unit names]} of descr_rebel_factions.txt (the units the game raises for a revolt of that type;
     a region names its type in descr_regions.txt) - the one reader (Check mod files uses it too)."""
-    from .moddata import _ci
-    p = _ci(mod.data, "descr_rebel_factions.txt")
+    p = mod.find("descr_rebel_factions.txt")
     out, cur = {}, None
     for line in mod.load(p).texts() if p else []:
         t = line.split(";")[0].split("//")[0].strip()              # Rome comments with // too

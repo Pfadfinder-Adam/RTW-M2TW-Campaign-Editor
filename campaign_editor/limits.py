@@ -33,7 +33,7 @@ def game_kind(mod):
             return "medieval2"
     except Exception:
         pass
-    return "medieval2" if _ci(mod.data, "descr_religions.txt") else "rome"
+    return "medieval2" if mod.find("descr_religions.txt") else "rome"
 
 
 def _setting(path, key="max_factions"):
@@ -105,7 +105,8 @@ def ex_file(mod, name):
     mod's own copy, else None - the engine's built-in defaults. A mod never takes the game's data copy: both
     engines' descr_caps_ex.txt say "Mods that don't ship this file get safe defaults" (each option marked "default
     for mods"), REX ships separate copies for bi/ and alexander/, M2EX one in each Kingdoms mod, and modders
-    (Klerski, 2026-10-01) found the same. For the game's own data the mod's copy is that copy."""
+    (Klerski, 2026-10-01) found the same. For the game's own data the mod's copy is that copy. Never the game's copy
+    under a mod that holds only its changes (ModData.under) - the engines read these from the mod alone."""
     return _ci(mod.data, name)
 
 

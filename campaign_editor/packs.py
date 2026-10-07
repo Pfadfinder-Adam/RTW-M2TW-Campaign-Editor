@@ -26,7 +26,7 @@ import os
 import re
 import zipfile
 
-from .moddata import _ci, ci_path
+from .moddata import _ci
 from .textio import strip_comment, tokens
 
 PACK_VERSION = 1
@@ -84,11 +84,14 @@ def _file_refs(lines):
 def _on_disk(mod, ref):
     """(data-relative path, absolute path) of a file a model line names, or None. Rome
     writes 'data/models_unit/x.tga' and keeps x.tga.dds; Medieval II 'unit_models/...'."""
+    from .moddata import ci_path
     rel = ref[5:] if ref.lower().startswith("data/") else ref
-    for cand in (rel, rel + ".dds"):
-        p = ci_path(mod.data, cand)
-        if p and os.path.isfile(p):
-            return os.path.relpath(p, mod.data).replace("\\", "/"), p
+    roots = mod.roots() if hasattr(mod, "roots") else [mod.data]       # the mod's own, then the game's under it
+    for root in roots:
+        for cand in (rel, rel + ".dds"):
+            p = ci_path(root, cand)
+            if p and os.path.isfile(p):
+                return os.path.relpath(p, root).replace("\\", "/"), p
     return None
 
 
@@ -113,7 +116,7 @@ class _Gather:
     def __init__(self, mod):
         self.mod = mod
         self.deps = {k: (mod.load(p) if p else None) for k, p in
-                     ((k, _ci(mod.data, v)) for k, v in DEP_FILES.items())}
+                     ((k, mod.find(v)) for k, v in DEP_FILES.items())}
         self.dep_blocks = {k: type_blocks(f) if f else {} for k, f in self.deps.items()}
         self.manifest = {"pack": PACK_VERSION, "game": game_kind(mod), "units": [],
                          "blocks": {k: {} for k in DEP_FILES}, "texts": {}, "recruit": [], "files": [],
@@ -435,7 +438,7 @@ def _put_blocks(plan, manifest, owners):
         want = manifest["blocks"].get(kind) or {}
         if not want:
             continue
-        path = _ci(mod.data, DEP_FILES[kind])
+        path = mod.find(DEP_FILES[kind])
         if not path:
             raise ValueError("%s is missing in this mod" % DEP_FILES[kind])
         f = plan.edit(path)
@@ -616,7 +619,7 @@ def known_conditions(mod):
     res = {r.lower() for r in resources.types(mod)}
     hidden, res = hidden or None, res or None
     rel = {r.lower() for r in religions.names(mod)}
-    beliefs = _ci(mod.data, "descr_beliefs.txt")
+    beliefs = mod.find("descr_beliefs.txt")
     if beliefs:
         for l in mod.load(beliefs).texts():
             w = strip_comment(l).strip()

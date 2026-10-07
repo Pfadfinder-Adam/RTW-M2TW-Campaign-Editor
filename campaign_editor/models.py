@@ -20,7 +20,6 @@ import io
 import os
 import re
 
-from .moddata import _ci
 from .textio import strip_comment
 
 SEATS = ("none", "horse", "camel", "elephant", "chariot")
@@ -88,7 +87,7 @@ def skeleton_seats(name):
 def _text_models(mod):
     """{lower name: ModelInfo} of descr_model_battle.txt."""
     from .packs import _block_lines, _values, type_blocks
-    path = _ci(mod.data, TEXT_FILE)
+    path = mod.find(TEXT_FILE)
     out = {}
     if not path:
         return out
@@ -195,7 +194,7 @@ def unit_slots(lines):
 def mount_classes(mod):
     """{mount type (lower): class} of descr_mount.txt."""
     from .packs import _block_lines, _values, type_blocks
-    path = _ci(mod.data, "descr_mount.txt")
+    path = mod.find("descr_mount.txt")
     if not path:
         return {}
     f = mod.load(path)
@@ -213,7 +212,7 @@ def unit_mount(mod, lines):
     if not mounts or not mounts[0] or not mounts[0][0]:
         return None, None
     kind = mounts[0][0]
-    path = _ci(mod.data, "descr_mount.txt")
+    path = mod.find("descr_mount.txt")
     if not path:
         return kind, None
     f = mod.load(path)
@@ -231,7 +230,7 @@ def chariot_of(mod, lines):
     if not mounts or not mounts[0] or not mounts[0][0]:
         return None
     kind = mounts[0][0]
-    path = _ci(mod.data, "descr_mount.txt")
+    path = mod.find("descr_mount.txt")
     if not path:
         return None
     f = mod.load(path)
@@ -273,7 +272,7 @@ def engine_of(mod, lines):
     if not eng or not eng[0] or not eng[0][0]:
         return None
     kind = eng[0][0]
-    path = _ci(mod.data, "descr_engines.txt")
+    path = mod.find("descr_engines.txt")
     if not path:
         return None
     info, cur, group = None, None, None
@@ -422,7 +421,7 @@ def _give_textures(plan, info, factions):
     if not factions:
         return
     if "text" in info.where:
-        path = _ci(mod.data, TEXT_FILE)
+        path = mod.find(TEXT_FILE)
         f = plan.edit(path)
         blocks = type_blocks(f)
         name = next((k for k in blocks if k.lower() == info.name.lower()), None)
@@ -483,7 +482,7 @@ def set_faction_texture(plan, info, faction, ref, kind="texture"):
     mod = plan.mod
     key = "texture" if kind == "texture" else "texture_attachments"
     if "text" in info.where:
-        path = _ci(mod.data, TEXT_FILE)
+        path = mod.find(TEXT_FILE)
         f = plan.edit(path)
         blocks = type_blocks(f)
         name = next((k for k in blocks if k.lower() == info.name.lower()), None)
@@ -537,7 +536,7 @@ def set_faction_sprite(plan, info, faction, ref):
     from .packs import _block_lines, _values, type_blocks
     mod = plan.mod
     if "text" in info.where:
-        f = plan.edit(_ci(mod.data, TEXT_FILE))
+        f = plan.edit(mod.find(TEXT_FILE))
         blocks = type_blocks(f)
         name = next((k for k in blocks if k.lower() == info.name.lower()), None)
         if name:

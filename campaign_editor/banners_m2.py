@@ -40,8 +40,7 @@ _CACHE = {}
 # The mod's banner sheets and meshes (descr_banners_new.xml)
 # ---------------------------------------------------------------------------
 def _xml(mod):
-    from .factionart import _ci
-    p = _ci(mod.data, "descr_banners_new.xml")
+    p = mod.find("descr_banners_new.xml")
     if not p:
         return None, ""
     with open(p, encoding="latin-1") as fh:

@@ -833,7 +833,7 @@ class RecordEditor(ttk.Frame):
         mod = mod or self.mod
         src, _ = MDB.find(mod) if MO.game_kind(mod) == "medieval2" else (None, None)
         stamp = tuple(os.path.getmtime(p) if p and os.path.exists(p) else 0
-                      for p in (_ci(mod.data, MO.TEXT_FILE), src, mod.file("edu")))
+                      for p in (mod.find(MO.TEXT_FILE), src, mod.file("edu")))
         cache = self.__dict__.setdefault("_models_cache", {})
         key = os.path.normcase(os.path.abspath(mod.data))
         if key not in cache or cache[key][0] != stamp:

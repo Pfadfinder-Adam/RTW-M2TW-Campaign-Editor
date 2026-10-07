@@ -178,7 +178,7 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         from .moddata import _ci
         from . import family as FM
         gd = game_data(mod)
-        cdb = _ci(mod.data, "descr_campaign_db.xml") or (_ci(gd, "descr_campaign_db.xml") if gd else None)
+        cdb = mod.find("descr_campaign_db.xml") or (_ci(gd, "descr_campaign_db.xml") if gd else None)
         rule = next((r for r in read_rules(cdb) if r.key == "max_number_of_children"), None) if cdb else None
         most_allowed = int(rule.value) if rule is not None and str(rule.value).isdigit() else None
         if most_allowed is not None:
@@ -372,9 +372,8 @@ def weapons_texture_problems(mod):
     """[(model, [factions])] of descr_model_battle.txt (Medieval II): a faction with a 'texture' line but no
     'texture_attachments' line in a model that has them (vanilla: none of 690)."""
     from .models import TEXT_FILE
-    from .moddata import _ci
     from .packs import _block_lines, _values, type_blocks
-    path = _ci(mod.data, TEXT_FILE)
+    path = mod.find(TEXT_FILE)
     if not path:
         return []
     f = mod.load(path)
@@ -641,8 +640,7 @@ def slaves_problems(mod, regions):
 
 
 def _data_file(mod, name):
-    from .moddata import _ci
-    return _ci(mod.data, name)
+    return mod.find(name)
 
 
 def rehearse(data, campaign, step=None):

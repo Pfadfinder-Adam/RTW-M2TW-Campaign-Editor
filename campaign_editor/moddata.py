@@ -173,41 +173,114 @@ def region_entries(f):
     return out
 
 
+def thin_mod(path):
+    """(the mod's data folder, the game's data folder under it) for a mod inside a game's folder (Medieval II
+    mods/<name>, REX -mod:<name>, a New mod folder...): the game reads every file the mod lacks from its own data
+    folder, and so does the editor - a mod that holds only the files it changes loads too. None for the game's own
+    data or a folder in no game. FileNotFoundError when such a mod sits on a game whose data is still packed."""
+    path = os.path.abspath(path)
+    data = next((c for c in (os.path.join(path, "data"), os.path.join(path, "Data"), path)
+                 if os.path.isfile(os.path.join(c, "descr_sm_factions.txt")) or os.path.isdir(os.path.join(c, "text"))
+                 or os.path.isdir(os.path.join(c, "world"))), None)
+    if not data:
+        return None
+    from .newmod import game_of, is_game
+    game = game_of(data)
+    if not game or not is_game(game):
+        return None
+    under = os.path.join(game, "data")
+    if os.path.normcase(os.path.abspath(under)) == os.path.normcase(os.path.abspath(data)):
+        return None
+    if not os.path.isfile(os.path.join(under, "descr_sm_factions.txt")):
+        if os.path.isfile(os.path.join(data, "descr_sm_factions.txt")):
+            return None                                  # a whole mod on a packed game: it stands on its own
+        raise FileNotFoundError(
+            "%s holds only the files this mod changes, and the game's own data (%s) is still packed - the editor reads "
+            "the rest from there, as the game does. Load the game's own data folder once: the editor offers to unpack "
+            "it; then load this mod again." % (path, under))
+    return data, under
+
+
 class ModData:
+    under = None                 # the game's data under a mod (set in __init__; a ModData made otherwise has none)
+
     def __init__(self, path):
-        self.data = find_data_dir(path)
+        thin = thin_mod(path)
+        # under: the game's own data folder a mod that holds only its changes sits on - read where the mod has no
+        # file of its own; every write goes into the mod (Plan: a copy of the game's file, Restore takes it away)
+        self.data, self.under = thin if thin else (find_data_dir(path), None)
         self.campaign_root = os.path.join(self.data, "world", "maps", "campaign")
         self.base = os.path.join(self.data, "world", "maps", "base")
         self._cache = {}
 
     # ---- locations ----
+    def roots(self):
+        """The data folders read, the mod's first."""
+        return [self.data] + ([self.under] if self.under else [])
+
+    def find(self, rel):
+        """data/<rel> found without case - the mod's own first, then the game's under it (the game reads it so), or
+        None."""
+        for root in self.roots():
+            p = ci_path(root, rel)
+            if p:
+                return p
+        return None
+
+    def own(self, path):
+        """Where a write of this file goes: the mod's own copy of a file read from the game's data (the same place
+        under the mod's data folder); any other path as it is."""
+        if not self.under or not path:
+            return path
+        a = os.path.abspath(path)
+        u = os.path.abspath(self.under)
+        if os.path.normcase(a).startswith(os.path.normcase(u) + os.sep):
+            return os.path.join(self.data, os.path.relpath(a, u))
+        return path
+
     def file(self, key):
-        return _ci(self.data, DATA_FILES[key])
+        return next((p for p in (_ci(r, DATA_FILES[key]) for r in self.roots()) if p), None)
 
     def campaigns(self):
-        out = []
-        if os.path.isdir(self.campaign_root):
-            for n in sorted(os.listdir(self.campaign_root)):
-                if _ci(os.path.join(self.campaign_root, n), "descr_strat.txt"):
-                    out.append(n)
-        return out
+        """The mod's own campaigns; a mod without one plays the game's (as the game does)."""
+        for root in self.roots():
+            croot = os.path.join(root, "world", "maps", "campaign")
+            out = [n for n in sorted(os.listdir(croot)) if _ci(os.path.join(croot, n), "descr_strat.txt")] \
+                if os.path.isdir(croot) else []
+            if out:
+                return out
+        return []
 
     def campaign_dir(self, campaign):
-        return os.path.join(self.campaign_root, campaign)
+        mine = os.path.join(self.campaign_root, campaign)
+        if self.under and not os.path.isdir(mine):
+            game = os.path.join(self.under, "world", "maps", "campaign", campaign)
+            if os.path.isdir(game):
+                return game
+        return mine
 
     def campaign_file(self, campaign, name):
-        """A campaign file, falling back to world/maps/base like the game does."""
-        return _ci(self.campaign_dir(campaign), name) or _ci(self.base, name)
+        """A campaign file, falling back to world/maps/base like the game does (the mod's own first, then the
+        game's, for a mod that holds only its changes)."""
+        for sub in (("campaign", campaign), ("base",)):
+            for root in self.roots():
+                p = _ci(os.path.join(root, "world", "maps", *sub), name)
+                if p:
+                    return p
+        return None
 
     def text_dirs(self):
         """The string-table folders in the order the game reads them: data/text/english
         first (Medieval II keeps its tables only there; RTW Gold reads a table there before
-        data/text when both have it), then data/text."""
-        text = _ci(self.data, "text")
-        if not text or not os.path.isdir(text):
-            return []
-        eng = _ci(text, "english")
-        return [d for d in (eng, text) if d and os.path.isdir(d)]
+        data/text when both have it), then data/text - the mod's, then the game's under it."""
+        out = []
+        for root in self.roots():
+            text = _ci(root, "text")
+            if not text or not os.path.isdir(text):
+                continue
+            eng = _ci(text, "english")
+            out += [d for d in (eng, text) if d and os.path.isdir(d)]
+        return out
 
     def text_files(self):
         """Every string table the game reads, one per name: the copy in text/english wins
@@ -252,6 +325,10 @@ class ModData:
         return self.text_file("%s_regions_and_settlement_names.txt" % campaign)
 
     def rel(self, path):
+        if self.under and path:
+            a, u = os.path.abspath(path), os.path.abspath(self.under)
+            if os.path.normcase(a).startswith(os.path.normcase(u) + os.sep):      # read from the game's own data
+                return "(the game's) data/" + os.path.relpath(a, u).replace("\\", "/")
         return os.path.relpath(path, os.path.dirname(self.data)).replace("\\", "/")
 
     def load(self, path):

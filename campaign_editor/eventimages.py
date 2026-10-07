@@ -22,7 +22,7 @@ EVENT = "faction_defeated"
 
 def path_of(mod):
     """(path, own): the mod's descr_event_images.txt, else the game's (own False), else (None, False)."""
-    own = _ci(mod.data, NAME)
+    own = mod.find(NAME)
     if own:
         return own, True
     try:

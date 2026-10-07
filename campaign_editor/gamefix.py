@@ -128,7 +128,7 @@ def missing_engine_files(mod):
                        and os.path.isfile(os.path.join(gdata, n)))
     except OSError:
         return []
-    return [n for n in names if not _ci(mod.data, n)]
+    return [n for n in names if not _ci(mod.data, n)]   # the engines read these from the mod alone
 
 
 def fix_plan(mod, found):

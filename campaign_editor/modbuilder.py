@@ -1203,7 +1203,7 @@ def plan_messages(plan, mod, recipe, values=None):
     msgs = messages(recipe, values)
     if not msgs:
         return None
-    text = _ci(mod.data, "text") or os.path.join(mod.data, "text")
+    text = mod.find("text") or os.path.join(mod.data, "text")
     path = _ci(text, MESSAGES_FILE) if os.path.isdir(text) else None
     entries = {}
     for mid, title, body in msgs:

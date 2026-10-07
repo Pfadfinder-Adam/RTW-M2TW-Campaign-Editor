@@ -323,7 +323,7 @@ def files(mod, campaign=None):
         if own or base:
             out.append(("descr_strat.txt", "The campaign %s" % campaign, own, base))
     for name, title in FILES:
-        own = _ci(mod.data, name)
+        own = _ci(mod.data, name)                       # the mod's own copy; the game's is 'base' beside it
         base = _ci(game, name) if game else None
         if own or base:
             if not own and name.lower().endswith("_ex.txt"):    # the engines read these from the mod alone

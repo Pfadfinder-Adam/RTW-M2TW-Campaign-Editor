@@ -429,7 +429,7 @@ def _campaign_db_children(plan, tree):
                 kids.setdefault(parent, set()).update(ks)
     most = max((len(k) for k in kids.values()), default=0)
     name = "descr_campaign_db.xml"
-    own = _ci(plan.mod.data, name)
+    own = plan.mod.find(name)
     game = game_data(plan.mod)
     base = _ci(game, name) if game else None
     path = own or base

@@ -49,7 +49,7 @@ def _block(f, key):
 
 def beliefs_path(mod):
     """descr_beliefs.txt of a Barbarian Invasion mod (None elsewhere)."""
-    return None if _ci(mod.data, "descr_religions.txt") else _ci(mod.data, "descr_beliefs.txt")
+    return None if mod.find("descr_religions.txt") else mod.find("descr_beliefs.txt")
 
 
 def _beliefs(mod):
@@ -65,7 +65,7 @@ def _beliefs(mod):
 def names(mod):
     """The religions the engine reads: the names in descr_religions.txt's `religions { }` list (Medieval II), or
     descr_beliefs.txt's tags (Barbarian Invasion)."""
-    p = _ci(mod.data, "descr_religions.txt")
+    p = mod.find("descr_religions.txt")
     if not p:
         return [b[0] for b in _beliefs(mod)]
     f = mod.load(p)
@@ -179,7 +179,7 @@ def follow_religion(plan, faction, old, new):
 
 def pip_of(mod, religion):
     """The data-relative pip_path of a religion's block, or None."""
-    p = _ci(mod.data, "descr_religions.txt")
+    p = mod.find("descr_religions.txt")
     if not p:
         return None
     f = mod.load(p)
@@ -367,7 +367,7 @@ def apply(plan, specs):
         for spec in specs:
             _apply_belief(plan, spec)
         return
-    path = _ci(mod.data, "descr_religions.txt")
+    path = mod.find("descr_religions.txt")
     f = plan.edit(path)
     for spec in specs:
         name = spec["name"].strip()
@@ -381,7 +381,7 @@ def apply(plan, specs):
         tpl = _block(f, "religion %s" % tokens(f.text(last))[1])
         f.insert(tpl[2] + 1, ["", "religion %s" % name, "{", "\tpip_path\t%s" % pip, "}"])
         plan.note(f, "religion %s added (symbol %s)" % (name, pip))
-        lookup = _ci(mod.data, "descr_religions_lookup.txt")
+        lookup = mod.find("descr_religions_lookup.txt")
         if lookup:
             lf = plan.edit(lookup)
             at = max((i for i in range(len(lf.raw)) if lf.text(i).strip()), default=-1) + 1
@@ -445,7 +445,7 @@ def _mentions(plan, template, name):
                        ("export_descr_ancillaries.txt", "ancillaries"),
                        ("descr_faction_standing.txt", "faction standing"),
                        ("descr_campaign_ai_db.xml", "campaign AI")):
-        p = _ci(mod.data, rel)
+        p = mod.find(rel)
         if not p:
             continue
         n = sum(1 for l in mod.load(p).texts() if re.search(r"\b%s\b" % re.escape(template), strip_comment(l)))

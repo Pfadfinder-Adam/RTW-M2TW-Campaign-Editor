@@ -1806,11 +1806,9 @@ SPECIAL_SCRIPT = "ce_test_special_models.nut"
 
 
 def _special_model(mod, route):
-    from .moddata import _ci
     from .packs import game_kind
     name = SPECIAL_MODELS[("rome" if game_kind(mod) != "medieval2" else "medieval2", route)]
-    folder = _ci(mod.data, "models_strat")
-    return _ci(folder, name) if folder else None
+    return mod.find("models_strat/" + name)
 
 
 @step("Own buildings on the map 1/2: a new resource type '%s' with its own model (a copy of one of the game's) - "

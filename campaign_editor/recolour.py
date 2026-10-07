@@ -448,7 +448,7 @@ def targets(mod, campaign, faction):
                     "alike": alike, "own_tex": own_tex, "source": source, "own_sprite": own_sprite,
                     "painted": painted_in[0], "painted_by": painted_in[1]})
     for sub, label in (("units", "unit card"), ("unit_info", "unit info picture")):
-        d = _ci(_ci(mod.data, "ui") or "", sub) if _ci(mod.data, "ui") else None
+        d = _ci(mod.find("ui") or "", sub) if mod.find("ui") else None
         own = _ci(d, faction) if d else None
         if not own:
             continue
@@ -762,7 +762,7 @@ def _more_targets(mod, faction, names, colours, add):
     from .moddata import _ci
     # far-away sprites: <faction>_<unit>_sprite_NNN in data/sprites (Rome) or data/unit_sprites (Medieval II)
     for sub in ("sprites", "unit_sprites"):
-        d = _ci(mod.data, sub)
+        d = mod.find(sub)
         if not d:
             continue
         pre = faction.lower() + "_"
@@ -778,7 +778,7 @@ def _more_targets(mod, faction, names, colours, add):
             add(os.path.join(d, n), "unit sprites (far away)", "sprite %s" % rest, others[:6])
     # Medieval II's own siege engines named after the faction (the carroccio: siege_engines/textures/
     # great_bell_tower_milan.texture); the normal / bump maps beside them are no pictures to recolour
-    d = _ci(_ci(mod.data, "siege_engines") or "", "textures") if _ci(mod.data, "siege_engines") else None
+    d = _ci(mod.find("siege_engines") or "", "textures") if mod.find("siege_engines") else None
     if d:
         tail = "_" + faction.lower() + ".texture"
         for n in sorted(os.listdir(d)):

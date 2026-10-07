@@ -50,8 +50,9 @@ def is_game(folder):
 
 def list_mods(game):
     """[(label, data folder)] of what a game folder holds: the game's own data, the
-    expansions (bi, alexander), every mod folder with a data/descr_sm_factions.txt
-    of its own, and Medieval II's mods/<name>/data. Sorted: the game first."""
+    expansions (bi, alexander), every mod folder with a data folder of its own (whole, or holding only the files it
+    changes - the rest comes from the game's data, as the game reads it), and Medieval II's mods/<name>/data.
+    Sorted: the game first."""
     out = []
     if not game or not os.path.isdir(game):
         return out
@@ -65,7 +66,8 @@ def list_mods(game):
             if n in BACKUP_DIRS or (not prefix and n.lower() in ("data", "mods")):
                 continue
             d = os.path.join(parent, n, "data")
-            if os.path.isfile(os.path.join(d, "descr_sm_factions.txt")):
+            if os.path.isfile(os.path.join(d, "descr_sm_factions.txt")) or \
+                    any(os.path.isdir(os.path.join(d, x)) for x in ("text", "world", "Text", "World")):
                 found.append((prefix + n, d))
     return out + found
 

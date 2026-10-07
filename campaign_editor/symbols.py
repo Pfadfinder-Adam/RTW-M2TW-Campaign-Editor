@@ -120,7 +120,7 @@ def _standards(plan_or_mod):
     plan = plan_or_mod if hasattr(plan_or_mod, "files") else None
     mine = os.path.join(mod.data, "descr_standards.txt")
     if plan is not None:
-        for p in (mine, _ci(mod.data, "descr_standards.txt")):
+        for p in (mine, mod.find("descr_standards.txt")):
             if p and p in plan.binaries:
                 return p, TextFile.from_bytes(p, plan.binaries[p]), p
     src = _find(mod, "descr_standards.txt")

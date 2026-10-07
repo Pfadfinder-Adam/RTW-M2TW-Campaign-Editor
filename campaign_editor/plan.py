@@ -17,16 +17,47 @@ BACKUP_DIRS = (BACKUP_DIR, OLD_BACKUP_DIR)
 # listeners told of every finished write: fn(backup folder, the plan) - the window's 'Undo this write' button
 WRITTEN = []
 
+class _Owned(dict):
+    """A dict of paths whose keys are the mod's own places: a file of the game's data under a mod that holds only
+    its changes (ModData.under) is written as the mod's copy, so a lookup by either path finds it."""
+
+    def __init__(self, mod):
+        super().__init__()
+        self._own = getattr(mod, "own", None) or (lambda p: p)
+
+    def __getitem__(self, k):
+        return super().__getitem__(self._own(k))
+
+    def __setitem__(self, k, v):
+        super().__setitem__(self._own(k), v)
+
+    def __contains__(self, k):
+        return super().__contains__(self._own(k))
+
+    def __delitem__(self, k):
+        super().__delitem__(self._own(k))
+
+    def get(self, k, default=None):
+        return super().get(self._own(k), default)
+
+    def pop(self, k, *default):
+        return super().pop(self._own(k), *default)
+
+    def setdefault(self, k, default=None):
+        return super().setdefault(self._own(k), default)
+
+
 class Plan:
     def __init__(self, mod, template, new, opts=None):
         self.mod = mod
         self.template = template
         self.new = new
         self.opts = opts or {}
-        self.files = {}          # path -> edited TextFile
-        self.binaries = {}       # path -> new bytes (pictures such as map_regions.tga)
+        self.files = _Owned(mod)       # path -> edited TextFile
+        self.binaries = _Owned(mod)    # path -> new bytes (pictures such as map_regions.tga)
         self.deletions = []      # paths removed (map.rwm, which the game rebuilds)
-        self.originals = {}      # path -> original bytes
+        self.originals = _Owned(mod)   # path -> original bytes
+        self.borrowed = set()    # the mod's new copies of the game's files (Restore removes them)
         self.copies = []         # (src, dst) files or folders to copy
         self.notes = []          # (rel path or "", message)
         self.warnings = []
@@ -36,6 +67,10 @@ class Plan:
     def edit(self, path):
         if path not in self.files:
             f = TextFile.load(path)
+            mine = self.mod.own(path) if hasattr(self.mod, "own") else path
+            if mine != path and not os.path.exists(mine):    # the game's file: written as the mod's own copy
+                f.path = mine
+                self.borrowed.add(mine)
             self.originals[path] = f.dump()
             self.files[path] = f
         return self.files[path]
@@ -50,6 +85,7 @@ class Plan:
         return self.mod.name_pool(faction)
 
     def copy(self, src, dst):
+        dst = self.mod.own(dst) if hasattr(self.mod, "own") else dst   # never into the game's data under a mod
         self.copies.append((src, dst))
         self.note(None, "copy %s -> %s" % (self.mod.rel(src), self.mod.rel(dst)))
 
@@ -60,7 +96,11 @@ class Plan:
         self.warnings.append((self.mod.rel(f.path) if f is not None else "", msg))
 
     def binary(self, path, data):
-        """A whole new content for a (binary) file, backed up like any edit."""
+        """A whole new content for a (binary) file, backed up like any edit (a file of the game's data under a mod
+        that holds only its changes: the mod's own copy)."""
+        mine = self.mod.own(path) if hasattr(self.mod, "own") else path
+        if mine != path and not os.path.exists(mine):
+            self.borrowed.add(mine)
         self.binaries[path] = data
 
     def patch_tga(self, path, changes):
@@ -70,6 +110,8 @@ class Plan:
         self.binary(path, patched(path, changes, self.binaries.get(path)))
 
     def delete(self, path, why):
+        if hasattr(self.mod, "own") and self.mod.own(path) != path:
+            return                                  # the game's own file: a mod never removes it
         if os.path.exists(path) and path not in self.deletions:
             self.deletions.append(path)
             self.notes.append((self.mod.rel(path), "removed - %s" % why))
@@ -168,9 +210,9 @@ class Plan:
             os.makedirs(bdir)
             for path in changed:
                 rel = os.path.relpath(path, root)
-                if path not in self.originals and not os.path.exists(path):
-                    created.append(rel.replace("\\", "/"))     # a new picture: Restore removes it
-                    continue
+                if (path not in self.originals or path in self.borrowed) and not os.path.exists(path):
+                    created.append(rel.replace("\\", "/"))     # a new picture / the mod's copy of a game file: Restore
+                    continue                                    # removes it
                 dst = os.path.join(bdir, stored(rel))
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
                 if path in self.originals:

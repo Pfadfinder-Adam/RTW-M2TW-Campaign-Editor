@@ -216,9 +216,8 @@ def climates(mod):
     """[(name, colour, heat)] of data/descr_climates.txt in its order - each colour is a climate on
     map_climates.tga (what grows on the strategy and battle maps, winter, heat - fatigue in battle)."""
     import re
-    from .moddata import _ci
     from .textio import strip_comment
-    path = _ci(mod.data, "descr_climates.txt")
+    path = mod.find("descr_climates.txt")
     if not path:
         return []
     out, cur = [], None

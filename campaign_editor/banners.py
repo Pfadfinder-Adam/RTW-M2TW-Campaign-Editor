@@ -16,7 +16,7 @@ ALLY_STRENGTH = 0.35                  # how strongly the allies' banner shows th
 def template_path(mod, kind):
     """The blank banner of that kind in the mod (or the game's data), or None."""
     name = dict(TEMPLATES)[kind] + ".tga.dds"
-    for data in (mod.data, getattr(mod, "game_data", None)):
+    for data in (mod.roots() if hasattr(mod, "roots") else [mod.data]) + [getattr(mod, "game_data", None)]:
         if not data:
             continue
         folder = os.path.join(data, "models", "textures")

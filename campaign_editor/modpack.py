@@ -19,7 +19,7 @@ import os
 import struct
 import zipfile
 
-from .moddata import _ci, ci_path
+from .moddata import _ci
 from .textio import TextFile
 
 TEXT_EXT = (".txt", ".xml", ".json", ".cfg", ".nut", ".lua", ".csv", ".ini")
@@ -186,7 +186,7 @@ def check(mod, files):
     out = []
     for rel in sorted(files, key=str.lower):
         data = files[rel]
-        target = ci_path(mod.data, rel) or os.path.join(mod.data, *rel.split("/"))
+        target = mod.find(rel) or os.path.join(mod.data, *rel.split("/"))
         low = rel.lower()
         kind = "text" if low.endswith(TEXT_EXT) else ("picture" if low.endswith(PICTURE_EXT) else "file")
         e = {"rel": rel, "target": target, "kind": kind, "notes": [], "merge": None}

@@ -162,7 +162,7 @@ class VoiceEvent:
 
 
 def voice_file(mod):
-    return _ci(mod.data, VOICE_FILE)
+    return mod.find(VOICE_FILE)
 
 
 def voice_events(f):
@@ -208,7 +208,7 @@ def voice_events(f):
 
 def accents(mod):
     """Medieval II: {faction: accent} from descr_sounds_accents.txt ({} on Rome / without the file)."""
-    p = _ci(mod.data, ACCENTS_FILE)
+    p = mod.find(ACCENTS_FILE)
     out = {}
     if not p:
         return out
@@ -366,7 +366,7 @@ def set_name_call(plan, unit, key, cls, sounds):
         taken.add(name.lower())
         index[(VOICE_FOLDER + "/" + name).lower()] = None
         dst = os.path.join(mod.data, *VOICE_FOLDER[5:].split("/"), name)
-        folder = ci_path(mod.data, VOICE_FOLDER[5:])
+        folder = mod.find(VOICE_FOLDER[5:])
         if folder and os.path.isdir(folder):
             dst = os.path.join(folder, name)
         plan.binary(dst, data)
@@ -403,7 +403,7 @@ def set_name_call(plan, unit, key, cls, sounds):
 
 def rebuild_events(plan):
     """Remove the mod's events.dat / events.idx (backed up) so the game builds them from the changed texts."""
-    d = _ci(plan.mod.data, "sounds")
+    d = plan.mod.find("sounds")
     found = False
     for n in ("events.dat", "events.idx"):
         p = _ci(d, n) if d else None

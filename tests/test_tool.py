@@ -3033,6 +3033,40 @@ building smith
         self.assertIn("(24 lines)", words[0])
         self.assertEqual(grouped_words([{"id": "a", "why": "f line 7: x"}]), ["f line 7: x"])
 
+    def test_a_mod_that_holds_only_its_changes(self):
+        """A mod inside a game folder that holds only the files it changes (Medieval II mods/<x>, REX -mod:<x>) loads:
+        every file it lacks is read from the game's data, as the game does; a write goes into the mod (a copy of the
+        game's file), never into the game's data; Restore takes the copy away again."""
+        from campaign_editor.plan import Plan, restore
+        game = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, game)
+        write(os.path.join(game, "RomeTW.exe"), "exe")
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "data"))
+        strat = os.path.join("world", "maps", "campaign", "test", "descr_strat.txt")
+        thin = os.path.join(game, "Thin", "data")
+        os.makedirs(os.path.dirname(os.path.join(thin, strat)))
+        shutil.copy(os.path.join(game, "data", strat), os.path.join(thin, strat))
+        game_before, thin_before = tree_hash(os.path.join(game, "data")), tree_hash(os.path.join(game, "Thin"))
+        mod = ModData(os.path.join(game, "Thin"))
+        self.assertEqual(mod.under, os.path.join(game, "data"))
+        self.assertEqual(mod.campaign_file("test", "descr_strat.txt"), os.path.join(thin, strat))   # the mod's own
+        self.assertTrue(mod.file("edu").startswith(os.path.join(game, "data")))                     # the game's
+        self.assertEqual(mod.campaigns(), ["test"])
+        self.assertTrue(mod.factions())
+        plan = Plan(mod, "t", "t", {})
+        f = plan.edit(mod.file("edu"))
+        f.raw.append("; a line of the mod")
+        self.assertIn(mod.file("edu"), plan.files)                       # found by the game's path too
+        bdir = plan.apply()
+        own = os.path.join(thin, "export_descr_unit.txt")
+        self.assertTrue(os.path.isfile(own))
+        self.assertEqual(tree_hash(os.path.join(game, "data")), game_before)        # the game's data untouched
+        self.assertEqual(ModData(os.path.join(game, "Thin")).file("edu"), own)       # now the mod's own
+        restore(ModData(os.path.join(game, "Thin")), bdir)
+        self.assertFalse(os.path.exists(own))
+        self.assertEqual({k: v for k, v in tree_hash(os.path.join(game, "Thin")).items() if "_backups" not in k},
+                         thin_before)
+
     def test_barbarian_invasion_new_belief(self):
         """Barbarian Invasion has religions of its own (descr_beliefs.txt: a tag, three pips, three text labels a
         belief): a new one gets its 7 lines, its three pips (copies of the template belief's) and its texts in
