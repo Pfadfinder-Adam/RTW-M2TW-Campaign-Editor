@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.31.0 - 2026-10-07
 
 ### Added
 - **Edit faction > Rename...**: the faction's code name changed in every file of the mod in one write (pictures copied under the new name, scripts that name it listed); Undo this write puts it back.
