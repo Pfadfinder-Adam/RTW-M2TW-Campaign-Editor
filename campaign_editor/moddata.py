@@ -259,6 +259,19 @@ class ModData:
                 return game
         return mine
 
+    def in_campaign(self, campaign, name):
+        """The campaign folder's own file (no base fallback) - the mod's, then the game's under it - or None."""
+        for root in self.roots():
+            p = _ci(os.path.join(root, "world", "maps", "campaign", campaign), name)
+            if p:
+                return p
+        return None
+
+    def campaign_dirs(self, campaign):
+        """The campaign's folders read, the mod's first (a mod that holds only its changes: the game's too)."""
+        return [d for d in (os.path.join(r, "world", "maps", "campaign", campaign) for r in self.roots())
+                if os.path.isdir(d)]
+
     def campaign_file(self, campaign, name):
         """A campaign file, falling back to world/maps/base like the game does (the mod's own first, then the
         game's, for a mod that holds only its changes)."""

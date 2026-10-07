@@ -844,7 +844,7 @@ def colour_on_map(mod, campaign, faction, regions):
     """The colour a faction's land has on its own campaign-select map now (the mean
     of the lit pixels), or None."""
     got = select_background(mod, campaign)
-    path = _ci(mod.campaign_dir(campaign), "map_%s.tga" % faction)
+    path = mod.in_campaign(campaign, "map_%s.tga" % faction)
     if not got or not path:
         return None
     from PIL import Image
@@ -912,7 +912,7 @@ def redraw_others(plan, campaign, changed_factions, force=False):
     before = Strat(mod.load(sp)).owners()
     after = Strat(plan.files[sp]).owners() if sp in plan.files else before
     for fac in sorted(changed_factions):
-        if fac == "slave" or not _ci(mod.campaign_dir(campaign), "map_%s.tga" % fac):
+        if fac == "slave" or not mod.in_campaign(campaign, "map_%s.tga" % fac):
             continue
         old = [r for r, o in before.items() if o == fac]
         new = [r for r, o in after.items() if o == fac]

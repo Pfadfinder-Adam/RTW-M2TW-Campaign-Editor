@@ -84,11 +84,15 @@ def neighbours(mod, campaign, region):
 def _script_files(mod, campaign):
     """The campaign's own script files (campaign_script.txt, a prologue's ..._Script.txt): the game reads them as
     the campaign loads."""
-    d = mod.campaign_dir(campaign)
-    if not os.path.isdir(d):
-        return []
-    return [os.path.join(d, n) for n in sorted(os.listdir(d))
-            if n.lower().endswith(".txt") and "script" in n.lower()]
+    out, seen = [], set()
+    for d in mod.campaign_dirs(campaign) if hasattr(mod, "campaign_dirs") else [mod.campaign_dir(campaign)]:
+        if not os.path.isdir(d):
+            continue
+        for n in sorted(os.listdir(d)):
+            if n.lower().endswith(".txt") and "script" in n.lower() and n.lower() not in seen:
+                seen.add(n.lower())              # the mod's own copy wins over the game's
+                out.append(os.path.join(d, n))
+    return out
 
 
 def _hits(path, names):

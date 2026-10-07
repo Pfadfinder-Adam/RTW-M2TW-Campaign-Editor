@@ -80,8 +80,7 @@ def script_path(mod, campaign):
 
 def _texts(mod, campaign, plan=None):
     """The lines of the campaign's campaign_script.txt (the plan's edited or new copy first), or None."""
-    from .moddata import _ci
-    p = _ci(mod.campaign_dir(campaign), "campaign_script.txt")
+    p = mod.in_campaign(campaign, "campaign_script.txt")
     if plan is not None:
         if p and p in plan.files:
             return plan.files[p].texts()
@@ -190,7 +189,6 @@ def apply(plan, campaign, changes):
     campaign's script holds and written with the plan (a backup, Restore). Not REX: a warning only."""
     if not changes:
         return
-    from .moddata import _ci
     mod = plan.mod
     table = read(mod, campaign, plan)
     for town, names in changes.items():
@@ -208,7 +206,7 @@ def apply(plan, campaign, changes):
                         "the game folder has no %s.exe - nothing written" % (name, name))
         return
     lines = block(table) if table else []
-    existing = _ci(mod.campaign_dir(campaign), "campaign_script.txt")
+    existing = mod.in_campaign(campaign, "campaign_script.txt")
     if existing:
         f = plan.edit(existing)
         texts = f.texts()

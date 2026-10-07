@@ -20,9 +20,7 @@ RE_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 
 
 def path_of(mod, campaign):
-    from .moddata import _ci
-    d = mod.campaign_dir(campaign)
-    return _ci(d, "descr_events.txt") if d and os.path.isdir(d) else None
+    return mod.in_campaign(campaign, "descr_events.txt")
 
 
 def read(f):
@@ -148,7 +146,6 @@ def turn_date(mod, campaign, turn):
 def later_factions(mod, campaign):
     """[(faction, [lines of the campaign script that wake it])] of the factions descr_strat keeps dead until the
     script brings them in (dead_until_resurrected)."""
-    from .moddata import _ci
     f = mod.load(mod.campaign_file(campaign, "descr_strat.txt"))
     out, cur = [], None
     for l in f.texts():
@@ -157,7 +154,7 @@ def later_factions(mod, campaign):
             cur = t[1]
         elif t[:1] == ["dead_until_resurrected"] and cur:
             out.append(cur)
-    script = _ci(mod.campaign_dir(campaign), "campaign_script.txt") if mod.campaign_dir(campaign) else None
+    script = mod.in_campaign(campaign, "campaign_script.txt")
     lines = mod.load(script).texts() if script else []
     return [(fac, [" ".join(strip_comment(l).split()) for l in lines if re.search(r"(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])" % re.escape(fac),
                                                          strip_comment(l)) and "emergent_faction" in l])

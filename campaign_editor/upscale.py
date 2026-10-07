@@ -2621,7 +2621,8 @@ def script_files(mod, campaign):
     names.append("campaign_script.txt")
     out = []
     for n in names:
-        p = _ci(camp, n.replace("\\", "/"))
+        p = (mod.in_campaign(campaign, n.replace("\\", "/")) if hasattr(mod, "in_campaign") else None) or \
+            _ci(camp, n.replace("\\", "/"))
         if p and os.path.isfile(p) and p not in out:
             out.append(p)
     return out
