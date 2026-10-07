@@ -8,9 +8,6 @@
 - Mercenaries: after a write the window showed the pools as they were before it.
 - The editor could stop responding (Windows: 'not responding') a while after start: every window, hover tips included, was made resizable each time it showed, and on Windows that showed it again and again. Now only real windows, once each; hover tips are left alone.
 
-### Changed
-- The **Tools** menu is grouped by what one comes for, each group under a grey heading: *Find what is wrong* (Check mod files, the game's log, the test mod), *Files and backups* (Restore, packs, game manifest), *About the editor* (log, Credits); Delete this mod's folder stays last, in red.
-
 ### Added
 - **Long work shows it is working**: checking the mod, the test mod and every step of the bigger map run beside the window with a moving bar and the seconds at the bottom - the window never freezes (the x3 heights step took up to two minutes with the window not answering).
 - **Nothing is lost by closing a window**: a window with changes not written yet (Mercenaries, a town, a character, Events, Campaign rules, Traits and retinue, the Module builder) asks before it closes - *Write it in*, *Keep editing* or *Throw the changes away* (that one set apart on the left; Enter writes, Esc keeps editing).
@@ -233,6 +230,7 @@
   builder offers all five stances in its list.
 
 ### Changed
+- The **Tools** menu is grouped by what one comes for, each group under a grey heading: *Find what is wrong* (Check mod files, the game's log, the test mod), *Files and backups* (Restore, packs, game manifest), *About the editor* (log, Credits); Delete this mod's folder stays last, in red.
 - **Bigger map (x3)** is now a beta (was alpha): step by step, checked after each step, tried in the game on both games.
 - An unexpected fault of the editor is told in plain words - your files are safe, you can go on, *Send a report...* - with the technical line kept short for the report; the same fault again is not shown again (it goes to the log and the message line).
 - Fields of one game only are shown greyed with the game named (*Name (short) (Rome only)*, *Religion (Medieval II only)*) instead of vanishing.
