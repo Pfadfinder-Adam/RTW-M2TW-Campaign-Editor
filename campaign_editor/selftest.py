@@ -345,7 +345,7 @@ def s_diplomacy(c, mod):
     return edit(mod, c.campaign, c.edited, {"relations": [
         {"kind": "core_attitudes", "from": "me", "to": c.new, "value": 100},
         {"kind": "core_attitudes", "from": c.new, "to": "me", "value": 100},
-        {"kind": "faction_relationships", "from": "me", "to": c.other, "value": -600}]})
+        {"kind": "core_attitudes", "from": "me", "to": c.other, "value": 600}]})     # Rome: lower is better
 
 
 @step("Victory conditions of {edited}: hold its capital, take 20 regions", "the victory conditions screen")
@@ -1428,7 +1428,11 @@ def s_events_more(c, mod):
         raise Skip("no descr_events.txt")
     x, y = mod.city_tiles(c.campaign)[towns_of(c, mod, c.other)[0]]
     old = [e for e in EV.read(mod.load(path)) if not e["name"].startswith("ce_test")]
-    ch = {"new": [{"kind": k, "name": "ce_test_" + k, "date": EV.turn_date(mod, c.campaign, t), "position": [x, y]}
+    # a storm strikes only at sea: the sea tile nearest the town (the tester's storm on the town's land never came)
+    sea = next((p for d in range(1, 80) for p in ((x + dx, y + dy) for dx in range(-d, d + 1) for dy in range(-d, d + 1))
+                if mod.is_sea(c.campaign, p)), (x, y))
+    ch = {"new": [{"kind": k, "name": "ce_test_" + k, "date": EV.turn_date(mod, c.campaign, t),
+                   "position": list(sea) if k == "storm" else [x, y]}
                   for k, t in (("plague", 6), ("flood", 7), ("storm", 8))]}
     if len(old) >= 2:
         d = old[-2]["date"].split()

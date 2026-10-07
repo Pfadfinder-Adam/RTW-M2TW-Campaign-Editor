@@ -128,9 +128,29 @@ def apply(plan, campaign, changes):
         if why:
             raise ValueError("the %s at %d, %d cannot go to %d, %d: %s" % (fo.kind, fo.xy[0], fo.xy[1], xy[0], xy[1],
                                                                            why))
+        block = _block_region(f, line)
+        if block and _region_at(mod, campaign, xy) not in (None, block):
+            # in the regions section the line belongs to its region's block: moved into another region it moves
+            # there (removed here, added there - the game skips one under the wrong region)
+            removed.add(line)
+            added.append({"kind": fo.kind, "xy": list(xy), "copy": line})
+            continue
         f.set(line, moved_line(f.text(line), xy))
         plan.note(f, "%s moved from %d, %d to %d, %d" % (fo.kind, fo.xy[0], fo.xy[1], xy[0], xy[1]))
     inserts = []                                   # (after line, text)
+    blocks = {}                                    # a region block made in this run: its header -> its insert
+
+    def put(after, text):
+        """An insert; a second line for a region block this run makes joins that block (one block a region)."""
+        head = text.split("\n")[:-1]
+        key = "\n".join(head)
+        if head and key in blocks:
+            k = blocks[key]
+            inserts[k] = (inserts[k][0], inserts[k][1] + "\n" + text.split("\n")[-1])
+            return
+        if head:
+            blocks[key] = len(inserts)
+        inserts.append((after, text))
     for a in added:
         kind, xy = a["kind"], tuple(a["xy"])
         if kind == LANDMARK:
@@ -147,11 +167,22 @@ def apply(plan, campaign, changes):
         why = problem(mod, campaign, xy, others(xy))
         if why:
             raise ValueError("a new %s at %d, %d: %s" % (kind, xy[0], xy[1], why))
-        ex = example([fo for fo in now if fo.line not in removed], kind, xy)
+        ex = by_line[a["copy"]] if a.get("copy") is not None else \
+            example([fo for fo in now if fo.line not in removed], kind, xy)
         if ex is None:
             after, text = region_line(mod, campaign, f, kind, xy)
-            inserts.append((after, text))
+            put(after, text)
             plan.note(f, "new %s at %d, %d (in the regions section at the end of the file)" % (kind, xy[0], xy[1]))
+            continue
+        start = Strat(f).diplomacy_start
+        if start is not None and ex.line >= start:
+            # the regions section after the diplomacy (Barbarian Invasion's watchtowers): the line goes under the
+            # block of the region its tile lies in, not beside the nearest one (that one may be the next region's -
+            # BI with REX: 'watchtower region Sarmatia(157:104) does not match up to region name(Thracia), skipping')
+            after, text = region_line(mod, campaign, f, kind, xy)
+            put(after, "\n".join(text.split("\n")[:-1] + [moved_line(f.text(ex.line), xy)]))
+            plan.note(f, "new %s at %d, %d (in its region's block, the line copied from the one at %d, %d)" % (
+                kind, xy[0], xy[1], ex.xy[0], ex.xy[1]))
             continue
         inserts.append((ex.line, moved_line(f.text(ex.line), xy)))
         plan.note(f, "new %s at %d, %d (its line copied from the one at %d, %d%s)" % (
@@ -165,6 +196,24 @@ def apply(plan, campaign, changes):
             plan.note(f, "%s at %d, %d removed" % (fo.kind, fo.xy[0], fo.xy[1]))
         else:
             f.raw[line + 1:line + 1] = [f.make(t) for t in text.split("\n")]
+
+
+def _block_region(f, line):
+    """The region whose block in the regions section (after the diplomacy) holds line, else None."""
+    from .textio import strip_comment
+    start = Strat(f).diplomacy_start
+    if start is None or line < start:
+        return None
+    for i in range(line, start - 1, -1):
+        t = strip_comment(f.text(i)).split()
+        if t[:1] == ["region"] and len(t) > 1 and f.text(i)[:1] not in (" ", "\t"):
+            return t[1]
+    return None
+
+
+def _region_at(mod, campaign, xy):
+    img = mod.region_map(campaign)
+    return {v["colour"]: k for k, v in mod.regions(campaign).items()}.get(img.get(*xy))
 
 
 def town_problem(mod, campaign, xy, strat=None):

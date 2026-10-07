@@ -158,11 +158,60 @@ def rebels(strat, faction):
     return out
 
 
+def standing_of(number):
+    """Rome's feeling number (0 allied .. 200 neutral .. 600 at war) as a Medieval II standing (0.5 .. 0 .. -1.0)."""
+    return round(max(-1.0, min(1.0, (200 - number) / 400.0)), 2)
+
+
+def number_of(standing):
+    """A Medieval II standing as Rome's feeling number (the other way of standing_of)."""
+    return int(round(200 - 400 * standing))
+
+
+def in_game_forms(wanted, feeling):
+    """`wanted` with every line in the form the game of this descr_strat reads (`feeling` = its feeling kind):
+    Medieval II reads no core_attitudes and only allied_to / at_war_with on faction_relationships (a Rome form there
+    made M2EX drop the whole diplomacy); Rome reads no faction_standings."""
+    out = {}
+    for kind, pairs in (wanted or {}).items():
+        for pair, v in pairs.items():
+            to = kind
+            if v is not None and not isinstance(v, str):
+                if feeling == "faction_standings" and kind in ("core_attitudes", "faction_relationships"):
+                    to, v = "faction_standings", standing_of(v)
+                elif feeling == "core_attitudes" and kind == "faction_standings":
+                    to, v = "core_attitudes", number_of(v)
+            elif v is None and kind == "core_attitudes" and feeling == "faction_standings":
+                to = "faction_standings"
+            elif v is None and kind == "faction_standings" and feeling == "core_attitudes":
+                to = "core_attitudes"
+            out.setdefault(to, {})[pair] = v
+    return out
+
+
+def foreign_lines(strat):
+    """[(index, the line in this game's own form)] for diplomacy lines the game of this descr_strat does not read:
+    on Medieval II core_attitudes and numeric faction_relationships (as faction_standings), on Rome
+    faction_standings (as core_attitudes)."""
+    feeling = kinds(strat)[0]
+    out = []
+    for i, kind, a, value, targets in strat.diplomacy_lines():
+        v = value_of(kind, value)
+        if v is None or isinstance(v, str):
+            continue
+        new = in_game_forms({kind: {(a, None): v}}, feeling)
+        (to, pairs), = new.items()
+        if to != kind:
+            out.append((i, _line(to, a.rstrip(","), pairs[(a, None)], [t.rstrip(",") for t in targets if t != ","])))
+    return out
+
+
 def set_relations(plan, f, faction, wanted):
     """wanted = {kind: {('me', other): value or None, (other, 'me'): value or None}}
     with 'me' standing for `faction`. Rewrites only the lines that name it."""
     from .strat import Strat
     s = Strat(f)
+    wanted = in_game_forms(wanted, kinds(s)[0])
     now = read(s)
     start = s.diplomacy_start
     lines = [("raw", r) for r in f.raw[start:]]           # the diplomacy section and what follows

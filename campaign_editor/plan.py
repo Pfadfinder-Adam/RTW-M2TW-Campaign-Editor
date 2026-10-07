@@ -116,6 +116,26 @@ class Plan:
             self.deletions.append(path)
             self.notes.append((self.mod.rel(path), "removed - %s" % why))
 
+    def stale_bins(self):
+        """Medieval II reads a string table's compiled <name>.txt.strings.bin when one lies beside the .txt, so a
+        changed .txt was never seen (the event, temple and hall names of a tester's run, 2026-10-05): the .bin
+        beside every changed text file goes (backed up; the game builds it again from the .txt)."""
+        made = [p for p in self.binaries if p.lower().endswith(".txt")]   # a .txt made from the .bin (strtables)
+        for p in [p for p, f in self.files.items() if f.dump() != self.originals.get(p)] + made:
+            if not p.lower().endswith(".txt"):
+                continue
+            folder = os.path.dirname(p)
+            want = os.path.basename(p).lower() + ".strings.bin"
+            try:
+                names = os.listdir(folder)
+            except OSError:
+                continue
+            for n in names:
+                if n.lower() == want:
+                    self.delete(os.path.join(folder, n), "the compiled copy of %s - Medieval II would read it instead "
+                                                         "of the changed text; the game builds it again"
+                                % os.path.basename(p))
+
     def changed_files(self):
         return [p for p, f in self.files.items() if f.dump() != self.originals[p]] + \
             [p for p, d in self.binaries.items() if not os.path.exists(p) or _read(p) != d] + \
@@ -151,6 +171,7 @@ class Plan:
 
     # ---- report ----
     def report(self):
+        self.stale_bins()
         lines = []
         by = {}
         for rel, msg in self.notes:
@@ -183,6 +204,7 @@ class Plan:
     def apply(self):
         from .limits import keep_up
         keep_up(self)                       # REX / M2EX: max_factions follows the factions, silently (limits.py)
+        self.stale_bins()
         sm = self.mod.file("sm_factions")
         if sm and sm in self.files:         # Rome: a 'faction destroyed' picture for every faction (eventimages.py)
             from . import eventimages

@@ -14,9 +14,8 @@ A level's name is also the key of the name players see ({Promising_Defender} in 
 keys <level>_desc / <level>_effects_desc ... An ancillary's name is the key of its name, <name>_desc its text.
 
 Medieval II ships its string tables compiled (text/<name>.txt.strings.bin). A text written where only the .bin lies
-becomes a .txt made from the .bin with the change in it; the .bin is never removed on our own (that the game builds
-it again from the .txt is not checked in the game) - Preview says to remove it if the game shows the old text, the
-same as a region renamed in the files.
+becomes a .txt made from the .bin with the change in it, and the .bin goes (Plan.stale_bins: the game reads a .bin
+beside the .txt instead of it - a tester's run showed the old texts - and builds it again).
 Triggers (what gives a trait) are not touched: a new trait is given to characters in the Character editor."""
 
 import os

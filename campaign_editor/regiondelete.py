@@ -13,6 +13,9 @@ Both games (Rome with REX or without, Medieval II with M2EX or without). Audited
 - descr_win_conditions.txt: the region leaves every hold_regions line (the keyword stays, as vanilla Medieval II's
   'short_campaign hold_regions' with none).
 - Medieval II's descr_sounds_music_types.txt: the region leaves every regions line (a line left empty goes).
+- Barbarian Invasion's descr_harvests.txt (bad harvests: 'year N' + 'region R' [+ 'faction F']): an entry naming the
+  region goes whole (without its region a faction's entry would turn into an empire-wide bad harvest). Left in, BI
+  with REX logged 'cannot find this region name' (a tester's run).
 - map.rwm is removed (the game builds it again).
 - Kept: descr_regions_and_settlement_name_lookup.txt and the names texts - an unused name harms nothing (vanilla
   Medieval II's norman_prologue lookup lists every region of the big map).
@@ -159,7 +162,7 @@ def problems(mod, campaign, region, into=None):
 
 
 HANDLED = re.compile(r"(^|/)(descr_regions|descr_strat|descr_mercenaries|descr_win_conditions|descr_sounds_music_types|"
-                     r"descr_regions_and_settlement_name_lookup|descr_events)\.txt$|(^|/)text/", re.I)
+                     r"descr_regions_and_settlement_name_lookup|descr_events|descr_harvests)\.txt$|(^|/)text/", re.I)
 
 
 def _other_mentions(mod, campaign, names):
@@ -245,6 +248,10 @@ def delete(plan, campaign, region, into=None):
         if sp and sp not in done:
             done.add(sp)
             _strat(plan, sp, region, tile, tag)
+        hp = mod.campaign_file(c, "descr_harvests.txt")
+        if hp and hp not in done:
+            done.add(hp)
+            _harvests(plan, hp, region, tag)
         for name, key in (("descr_mercenaries.txt", "regions"), ("descr_win_conditions.txt", "hold_regions")):
             p = mod.campaign_file(c, name)
             if not p or p in done:
@@ -267,6 +274,22 @@ def delete(plan, campaign, region, into=None):
     for w in warns:
         plan.warn(None, w)
     return into
+
+
+def _harvests(plan, path, region, tag):
+    """descr_harvests.txt: every entry ('year N' and the lines after it up to the next 'year') naming the region
+    goes whole."""
+    f = plan.edit(path)
+    starts = [i for i in range(len(f.raw)) if strip_comment(f.text(i)).split()[:1] == ["year"]]
+    gone = 0
+    for k in reversed(range(len(starts))):
+        a = starts[k]
+        b = starts[k + 1] if k + 1 < len(starts) else len(f.raw)
+        if any(strip_comment(f.text(i)).split()[:2] == ["region", region] for i in range(a, b)):
+            del f.raw[a:b]
+            gone += 1
+    if gone:
+        plan.note(f, "%d bad-harvest entr%s of %s out%s" % (gone, "y" if gone == 1 else "ies", region, tag))
 
 
 def _ci_file(folder, name):

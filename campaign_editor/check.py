@@ -339,6 +339,18 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     if bad_names:
         say("    note: %d named character(s) whose first name is not in their faction's list "
             "(fine if the game has the string), e.g. %s" % (len(bad_names), ", ".join(bad_names[:3])))
+    from . import events as EV
+    ep = EV.path_of(mod, campaign)
+    for ev in EV.read(mod.load(ep)) if ep else []:
+        why = EV.place_problem(mod, campaign, ev["kind"], ev.get("position"))
+        if why:
+            bad("descr_events.txt, event %s: %s" % (ev["name"], why))
+    from .diplomacy import foreign_lines
+    foreign = foreign_lines(s)
+    if foreign:
+        bad("descr_strat.txt: %d diplomacy line(s) in the other game's form (line %s) - this game reads none of them "
+            "and Medieval II loses the whole diplomacy at the start; Load offers to put them right"
+            % (len(foreign), ", ".join(str(i + 1) for i, _ in foreign[:5])))
     say("DIPLOMACY: %d core_attitudes, %d faction_relationships lines" % (
         sum(1 for l in s.lines if tokens(l)[:1] == ["core_attitudes"]),
         sum(1 for l in s.lines if tokens(l)[:1] == ["faction_relationships"])))

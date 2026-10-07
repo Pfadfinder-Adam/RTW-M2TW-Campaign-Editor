@@ -2507,6 +2507,38 @@ building smith
             else:
                 self.assertEqual(rel["core_attitudes"][("gamma", "slave")], 600)
             self.assertTrue(f.raw[0].endswith(b"\r\n") if isinstance(f.raw[0], bytes) else True)
+        # a Rome form asked for on Medieval II (core_attitudes, a numeric faction_relationships) is written in the
+        # game's own form: Medieval II reads no core_attitudes and dropped the whole diplomacy (tester run 1811)
+        for text, feeling in ((rome, "core_attitudes"), (m2, "faction_standings")):
+            path = os.path.join(self.root, "s.txt")
+            with open(path, "wb") as fh:
+                fh.write(text.encode())
+            f = TextFile.load(path)
+            set_relations(P(), f, "gamma", {"core_attitudes": {("me", "alpha"): 100},
+                                            "faction_relationships": {("me", "beta"): 600},
+                                            "faction_standings": {("me", "slave"): -1.0}})
+            body = "\n".join(f.text(i) for i in range(len(f.raw)))
+            rel = read(Strat(f))
+            if feeling == "faction_standings":
+                self.assertNotIn("core_attitudes", body)
+                self.assertEqual(rel["faction_standings"][("gamma", "alpha")], 0.25)
+                self.assertEqual(rel["faction_standings"][("gamma", "beta")], -1.0)
+                self.assertNotIn(("gamma", "beta"), rel["faction_relationships"])
+            else:
+                self.assertNotIn("faction_standings", body)
+                self.assertEqual(rel["core_attitudes"][("gamma", "alpha")], 100)
+                self.assertEqual(rel["faction_relationships"][("gamma", "beta")], 600)
+                self.assertEqual(rel["core_attitudes"][("gamma", "slave")], 600)
+        # a file an older build wrote so: the lines found (Check mod files, the Load fix) in the game's own form
+        from campaign_editor.diplomacy import foreign_lines
+        path = os.path.join(self.root, "s.txt")
+        with open(path, "wb") as fh:
+            fh.write((m2 + "core_attitudes\talpha,\t100\t\tgamma\r\nfaction_relationships\talpha, -600\tbeta\r\n")
+                     .encode())
+        found = foreign_lines(Strat(TextFile.load(path)))
+        self.assertEqual([t for _, t in found], ["faction_standings\talpha,\t0.25\t\tgamma",
+                                                 "faction_standings\talpha,\t1.0\t\tbeta"])
+        self.assertEqual(foreign_lines(Strat(TextFile.load(os.path.join(self.root, "s.txt")))), found)
         self.assertEqual(parse("alliance", "faction_relationships"), "allied_to")
         self.assertEqual(parse("-0.45 dislike", "faction_standings"), -0.45)
         self.assertEqual(parse("310 wary"), 310)
@@ -3032,6 +3064,28 @@ building smith
         self.assertIn("lines 5, 13, 21", words[0])
         self.assertIn("(24 lines)", words[0])
         self.assertEqual(grouped_words([{"id": "a", "why": "f line 7: x"}]), ["f line 7: x"])
+
+    def test_a_compiled_text_beside_a_changed_text_goes(self):
+        """Medieval II reads text/<name>.txt.strings.bin instead of the .txt beside it (a tester's run: new event,
+        temple and hall names never shown): a write that changes the .txt removes the .bin (backed up)."""
+        from campaign_editor.strtables import write_texts
+        mod = ModData(self.root)
+        text = os.path.join(self.root, "data", "text")
+        stale = os.path.join(text, "expanded_bi.txt.strings.bin")
+        other = os.path.join(text, "names.txt.strings.bin")
+        for p in (stale, other):
+            with open(p, "wb") as fh:
+                fh.write(b"\x02\x00\x00\x08\x00\x00\x00\x00")
+        before = tree_hash(self.root)
+        plan = Plan(mod, "texts", "alpha", {})
+        write_texts(plan, "expanded_bi.txt", {"CE_NEW": "A new text"})
+        self.assertIn("expanded_bi.txt.strings.bin", plan.report())
+        bdir = plan.apply()
+        self.assertFalse(os.path.exists(stale))
+        self.assertTrue(os.path.exists(other))          # a .bin whose .txt was not changed stays
+        restore(mod, bdir)
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
+        self.assertEqual(after, before)
 
     def test_a_mod_that_holds_only_its_changes(self):
         """A mod inside a game folder that holds only the files it changes (Medieval II mods/<x>, REX -mod:<x>) loads:
@@ -4979,6 +5033,7 @@ building smith
         words = raw[2:].decode("utf-16-le")
         self.assertIn("{help_when_broke_msg1}\tA loan", words)
         self.assertIn("{help_when_broke_msg1_body}\tThe treasury was empty", words)
+        self.assertIn("{help_when_broke_msg1_image}\tmessenger", words)
         restore(mod, bdir)
         self.assertFalse(os.path.exists(dst) or os.path.exists(msgs))
         # problems in plain words
@@ -5727,6 +5782,8 @@ building smith
               "initial 1\n\npool Only_B\n\tregions B_R\n\tunit rebel spear exp 0 cost 100 replenish 0.1 - 0.2 "
               "max 2 initial 1\n")
         write(os.path.join(camp, "descr_win_conditions.txt"), "alpha\nhold_regions A_R B_R\ntake_regions 10\n")
+        write(os.path.join(camp, "descr_harvests.txt"), "; bad harvests\n\nyear 3\nregion A_R\n\nyear 4\nfaction alpha\n"
+              "region B_R\n\nyear 5\nregion A_R\n")
         write(os.path.join(camp, "campaign_script.txt"), "script\n\tsettlement_flash_start Btown\nend_script\n")
         write(os.path.join(self.root, "data", "export_descr_ancillaries.txt"),
               "Trigger t1\n    WhenToTest CharacterTurnEnd\n    Condition SettlementName Btown\n")
@@ -5758,7 +5815,10 @@ building smith
         self.assertNotIn("Only_B", merc)
         with open(os.path.join(camp, "descr_win_conditions.txt")) as fh:
             self.assertIn("hold_regions A_R\n", fh.read())
+        with open(os.path.join(camp, "descr_harvests.txt")) as fh:      # BI's bad harvests: the entry goes whole
+            self.assertEqual(fh.read(), "; bad harvests\n\nyear 3\nregion A_R\n\nyear 5\nregion A_R\n")
         restore(mod, backups(mod)[0])
+        os.remove(os.path.join(camp, "descr_harvests.txt"))
         os.remove(os.path.join(camp, "descr_mercenaries.txt"))
         os.remove(os.path.join(self.root, "data", "export_descr_ancillaries.txt"))
         write(os.path.join(camp, "descr_win_conditions.txt"), "alpha\nhold_regions A_R\ntake_regions 10\n")
@@ -7361,7 +7421,8 @@ building smith
         text = plan.binaries[made].decode("utf-16")
         self.assertIn("{healer}\tPhysician", text)
         self.assertIn("{healer_desc}\tMends wounds.", text)
-        self.assertTrue(any("strings.bin" in w for _, w in plan.warnings))
+        plan.report()                                   # the .bin beside the made .txt goes (the game reads the .bin)
+        self.assertTrue(any(p.lower().endswith("export_ancillaries.txt.strings.bin") for p in plan.deletions))
         bdir = plan.apply()
         restore(ModData(self.root), bdir)
         self.assertEqual(tree_hash(d), before)
@@ -7400,6 +7461,15 @@ building smith
         self.assertEqual(sum(1 for l in t if l.startswith("event")), 3)              # one gone, one new
         self.assertIn("event\tvolcano\tboom", t)
         self.assertIn("{BOOM_TITLE}\tBoom!", plan.files[mod.text_file("historic_events.txt")].texts())
+        # a storm strikes only at sea: on a land tile it is said (it never came in a tester's game), at sea not
+        mod.is_sea = lambda campaign, xy: tuple(xy) == (3, 0)            # the tiny mod has no sea: one tile is
+        wet = Plan(mod, "e", "e", {})
+        EV.apply(wet, "test", {"new": [{"kind": "storm", "name": "gale", "date": "32", "position": [1, 1]},
+                                       {"kind": "storm", "name": "squall", "date": "33", "position": [3, 0]}]})
+        said = [w for _, w in wet.warnings]
+        self.assertTrue(any("gale" in w and "only at sea" in w for w in said), said)
+        self.assertFalse(any("squall" in w for w in said), said)
+        del mod.is_sea
         # a historic event always gets its body - the game stops without one (event_manager: description_string)
         quiet = Plan(mod, "e", "e", {})
         EV.apply(quiet, "test", {"new": [{"kind": "historic", "name": "hush", "date": "31", "title": "Hush"}]})
@@ -7699,7 +7769,11 @@ building smith
         bdir = plan.apply()
         with open(path) as fh:
             new = fh.read()
-        self.assertIn("region A_R\nwatchtower \t3 3\nwatchtower \t2 3\n", new)     # layout kept, new after it
+        # moved onto B_R's tile and added there: both under B_R's one block, never beside a line of another region
+        # (BI with REX skipped it: 'watchtower region Sarmatia(157:104) does not match up to region name(Thracia)')
+        self.assertIn("region B_R\nroad_level 0\nfarming_level 0\nfamine_threat 0\nwatchtower\t2 3\n"
+                      "watchtower \t3 3\n", new)
+        self.assertEqual(new.count("region B_R\n"), 2)                     # the settlement's line and the one block
         self.assertNotIn("0 3 ; west", new)
         restore(ModData(self.root), bdir)
         with open(path, "rb") as fh:

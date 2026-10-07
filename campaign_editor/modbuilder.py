@@ -1194,10 +1194,12 @@ def messages(recipe, values=None):
 
 
 MESSAGES_FILE = "custom_messages.txt"
+MESSAGE_IMAGE = "messenger"
 
 
 def plan_messages(plan, mod, recipe, values=None):
-    """The module's messages written into the mod's text/custom_messages.txt (<id> the title, <id>_body the text) -
+    """The module's messages written into the mod's text/custom_messages.txt (<id> the title, <id>_body the text, <id>_image
+    the picture) -
     the file made in the encoding of the mod's other string tables when it is not there yet."""
     from .moddata import _ci
     msgs = messages(recipe, values)
@@ -1209,6 +1211,9 @@ def plan_messages(plan, mod, recipe, values=None):
     for mid, title, body in msgs:
         entries[mid] = title
         entries[mid + "_body"] = body or title
+        # the engines read <id>_image too; without it they look for 'eventpics/.tga' (a tester's log) - the
+        # messenger picture every culture of both games has
+        entries[mid + "_image"] = MESSAGE_IMAGE
     if path:
         from .editors import set_text_values
         set_text_values(plan, path, entries)

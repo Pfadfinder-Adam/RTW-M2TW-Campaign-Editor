@@ -175,9 +175,11 @@ def rename(plan, campaign, region, new_region, new_town=None):
     rwm = _ci(base, "map.rwm") if os.path.isdir(base) else None
     if rwm:
         plan.delete(rwm, "the game rebuilds it from the renamed map on the next start")
+    plan.stale_bins()                       # a .bin beside a changed .txt goes (Plan.stale_bins)
+    gone = {os.path.basename(p).lower() for p in plan.deletions}
     bins = [n for n in os.listdir(os.path.join(mod.data, "text"))
-            if n.lower().endswith(".strings.bin") and "regions_and_settlement_names" in n.lower()] \
-        if os.path.isdir(os.path.join(mod.data, "text")) else []
+            if n.lower().endswith(".strings.bin") and "regions_and_settlement_names" in n.lower()
+            and n.lower() not in gone] if os.path.isdir(os.path.join(mod.data, "text")) else []
     if bins:
         plan.warn(None, "Medieval II keeps the names text also compiled (%s): if the game shows the old name or a key, "
                         "remove that .strings.bin so it is built again from the .txt" % ", ".join(sorted(bins)))

@@ -225,6 +225,9 @@ def apply(plan, campaign, changes):
         lines = ["", "event\t%s\t%s" % (ev.get("kind") or "historic", name), "date\t%s" % ev["date"].strip()]
         if ev.get("position"):
             lines.append("position\t%d, %d" % tuple(ev["position"]))
+            why = place_problem(mod, campaign, ev.get("kind"), ev["position"])
+            if why:
+                plan.warn(f, "%s: %s" % (name, why))
         # in date order: the games read the events as a queue (date_key)
         key = date_key(ev["date"], rome)
         later = [e for e in read(f) if date_key(e["date"], rome) is not None and date_key(e["date"], rome) > key]
@@ -287,6 +290,15 @@ DEFAULT_TEXT = {
     "dustbowl": ("Dust storms", "Dust storms ruin the farms: the harvests will be poor."),
     "locusts": ("Locusts", "Swarms of locusts ruin the farms: the harvests will be poor."),
 }
+
+
+def place_problem(mod, campaign, kind, xy):
+    """Why an event of `kind` would do nothing at tile xy, or None: a storm strikes only fleets at sea (both games'
+    descr_disasters.txt: 'event storm' ... 'region the sea'; a tester's storm on a land tile never came)."""
+    if kind == "storm" and xy and not mod.is_sea(campaign, tuple(xy)):
+        return ("a storm strikes only at sea - %d, %d is land, so nothing happens there; put it on a sea tile "
+                "(near the coast, where fleets sail)" % tuple(xy))
+    return None
 
 
 def what_it_does(kind):

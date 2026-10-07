@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+- Medieval II: diplomacy at the start reset for every faction (all neutral) after an edit of a faction's feelings - Rome's form of the lines (`core_attitudes`, a number on `faction_relationships`) was written, which Medieval II does not read. Each game now gets its own form (`faction_standings` -1.0 .. 1.0 in Medieval II, and the other way in Rome). Lines older versions wrote so are named by Check mod files, and Load offers to rewrite them.
+- Medieval II: new texts (an event's title, a new building's or temple's name) were not shown in the game - it reads the compiled `<name>.txt.strings.bin` beside a text file instead of the file. A write that changes a text file now takes that `.strings.bin` away (backed up; the game builds it again from the text).
+- Module builder messages showed the game's 'picture not found' placeholder: the picture line of a message (`<id>_image`) is now written too (the messenger picture every culture has).
+- Barbarian Invasion: a deleted region stayed in the campaign's bad-harvest list (`descr_harvests.txt`, 'cannot find this region name'); its entries now go with it.
+- Barbarian Invasion: a new watchtower was written beside the nearest one even when that one belongs to another region, and the game skipped it ('does not match up to region name'). A new or moved one now goes under the block of the region its tile lies in.
+- Sack Settlement (both games): a town of the player's that revolted to another faction was taken as the player's own capture. Only a capture by the player counts now.
+- A storm placed on land never comes - storms strike only fleets at sea. The Events window and Check mod files now say so.
+
 ### Changed
 - **One write for the session - every window**: Mercenaries, Events, Campaign rules, Traits and retinue, Many towns and Recolour keep their changes for Apply too (**Keep for Apply**), as the town and character windows do; one **Apply changes** writes them all, **Undo this write** takes back the last part or the whole write. (Traits' *New...* still writes at once: a new trait must exist before it is edited.)
 - **Mods that hold only the files they change load** (Medieval II `mods/<name>`, REX `-mod:<name>`): every file the mod lacks is read from the game's own data, as the game reads it; the Mod list shows them too. A change to such a file goes into the mod as its own copy - the game's files are never written - and Restore takes the copy away again. The engines' `descr_ex.txt` / `descr_caps_ex.txt` are still read from the mod alone. Medieval II with its data still packed: Load says to unpack the game first.

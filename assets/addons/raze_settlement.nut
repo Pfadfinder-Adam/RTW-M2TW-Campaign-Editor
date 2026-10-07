@@ -1517,7 +1517,9 @@ function raze_on_capture(e) {
         faction = e.faction
     } catch (err) {
     }
-    if (region_id != null && !faction_is_player(faction)) {
+    // only when the event names no taker: a town that revolted to another faction (a shadow taking a town of
+    // the player's) is still the player's settlement at that moment - it must not count as the player's capture
+    if (region_id != null && faction == null) {
         try {
             faction = ::stratMap.region(region_id).settlementAt(0).owner
         } catch (err) {

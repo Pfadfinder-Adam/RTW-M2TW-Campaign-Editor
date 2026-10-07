@@ -128,6 +128,3 @@ def write_texts(plan, name, values):
     else:
         plan.warn(None, "no %s in data/text - the new texts are not written (the game shows the keys)" % name)
         return
-    if binp:        # not removed on our own: that the game builds it again is not checked in the game yet
-        plan.warn(None, "Medieval II keeps %s also compiled (%s): if the game shows the old text or a key, remove "
-                        "that .strings.bin so it is built again from the .txt" % (name, mod.rel(binp)))

@@ -61,6 +61,16 @@ def problems(mod):
                                "games' order (superfaction / ai_label, dead_until_resurrected, re_emergent, denari, "
                                "denari_kings_purse), nothing else changed."
                                % (camp, ", ".join(n for n, _ in bad))})
+        from .diplomacy import foreign_lines
+        from .strat import Strat
+        foreign = foreign_lines(Strat(mod.load(sp))) if sp else []
+        if foreign:
+            out.append({"id": "diplomacy_form", "file": sp, "lines": foreign,
+                        "why": "%s's descr_strat.txt: %d diplomacy line(s) in the other game's form (e.g. line %d) - "
+                               "this game reads none of them, and Medieval II then loses the whole diplomacy at the "
+                               "start (every faction neutral). Older versions of this tool wrote them so. The fix: "
+                               "the same feelings written in this game's own form, nothing else changed."
+                               % (camp, len(foreign), foreign[0][0] + 1)})
     from . import eventimages
     why = eventimages.problem(mod)
     if why:
@@ -161,6 +171,12 @@ def fix_plan(mod, found):
                 for i, t in zip(idx, texts):
                     f.set(i, t)
             plan.note(f, "faction header lines put in the games' order: %s" % ", ".join(n for n, _ in p["blocks"]))
+            continue
+        if p["id"] == "diplomacy_form":
+            f = plan.edit(p["file"])
+            for i, text in p["lines"]:
+                f.set(i, text)
+            plan.note(f, "%d diplomacy line(s) written in this game's own form" % len(p["lines"]))
             continue
         if p["id"] == "faction_defeated":
             from . import eventimages
