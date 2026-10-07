@@ -6,6 +6,7 @@ at once, then edited like the others). Changes wait for Preview / Keep for Apply
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
+from .gui_util import ask
 from .gui_util import one_window, ShortHint
 from . import traitsedit as TE
 from .plan import Plan
@@ -404,8 +405,8 @@ class TraitsWindow(tk.Toplevel):
             messagebox.showerror(TITLE, "Other changes of the window wait for Apply - Apply (or undo) them first: "
                                         "the mod is read again after this write.", parent=self)
             return None
-        if not messagebox.askyesno(TITLE, "%s\n\n%s\n\nA backup is made first (Tools > Restore undoes it)." % (
-                question, plan.report()[:1500]), parent=self):
+        if not ask(TITLE, "%s\n\n%s\n\nA backup is made first (Tools > Restore undoes it)." % (
+                question, plan.report()[:1500]), parent=self, yes='Write it in', no='Cancel'):
             return None
         bdir = plan.apply()
         from . import log

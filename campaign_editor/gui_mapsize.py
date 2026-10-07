@@ -5,6 +5,8 @@ the four edges, a backup, and the old map back with one button."""
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import ShortHint
+from .gui_util import ask
 from . import log
 
 APP = "RTW & M2TW Campaign Editor"
@@ -33,13 +35,14 @@ def open_map_size(app):
     from .gui_util import window_body
     frm, bottom = window_body(w, 640, 520)            # resizable, scrolls, the buttons always in sight
     ttk.Label(frm, text="Add or cut tiles at the edges of the map", font=("", 12, "bold")).pack(anchor="w")
-    ttk.Label(frm, justify="left", wraplength=560, text=(
-        "Campaign %s - the map now: %d x %d tiles.\n\nA number above 0 adds that many rows or columns of tiles at "
+    ttk.Label(frm, text="Campaign %s - the map now: %d x %d tiles." % (camp, w0, h0)).pack(anchor="w", pady=(4, 0))
+    ShortHint(frm, text=(
+        "Above 0 adds tiles of deep sea at that edge, below 0 cuts tiles off. A number above 0 adds that many rows or columns of tiles at "
         "that edge - deep sea, as the map's own deepest water; paint land on it with the Map editor and the Terrain "
         "tab. Below 0 cuts them off (refused when a town, port, army, resource, fort or an event's place stands "
         "there - each is named). Towns, armies, agents, resources, forts, events and the campaign's scripts move "
-        "with the map. Nothing is written until you press the button; a backup is made first.") % (camp, w0, h0)
-              ).pack(anchor="w", pady=(4, 0))
+        "with the map. Nothing is written until you press the button; a backup is made first.")
+              ).pack(anchor="w", fill="x", pady=(4, 0))
     grid = ttk.Frame(frm)
     grid.pack(anchor="w", pady=(10, 0))
     vars_ = {}
@@ -118,8 +121,8 @@ def open_map_size(app):
 
     def undo():
         bdir = done.get("bdir")
-        if not bdir or not messagebox.askyesno(APP, "Put the old map back? Every file the new size changed is put "
-                                                    "back as it was (and every change made after it).", parent=w):
+        if not bdir or not ask(APP, "Put the old map back? Every file the new size changed is put "
+                                                    "back as it was (and every change made after it).", parent=w, yes='Put the old map back', no='Cancel'):
             return
         try:
             restore_to(ModData(app.mod.data), bdir)
@@ -134,7 +137,7 @@ def open_map_size(app):
             b.destroy()
         ttk.Button(bar, text="Close", command=w.destroy).pack(side="left")
 
-    ttk.Button(bar, text="Change the map's size", command=write).pack(side="left")
-    ttk.Button(bar, text="Show every change...", command=show_all).pack(side="left", padx=(6, 0))
+    ttk.Button(bar, text="Write it in", command=write).pack(side="left")
+    ttk.Button(bar, text="Preview", command=show_all).pack(side="left", padx=(6, 0))
     ttk.Button(bar, text="Close", command=w.destroy).pack(side="left", padx=(6, 0))
     return w

@@ -8,6 +8,7 @@ import copy
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from .gui_util import ask
 from .gui_util import scroll_body
 from . import addons as AD
 from . import modbuilder as MB
@@ -131,10 +132,10 @@ class ModuleBuilder(tk.Toplevel):
         name = r["title"] if r else EMPTY
         # asked only when the module there now was changed by hand (an example looked at and left as it is goes
         # without a word); a tester did not see what 'Start from ...?' asked
-        if self.changed and not messagebox.askyesno(
+        if self.changed and not ask(
                 TITLE, "Put the example '%s' in the builder?\n\nThe module you are making now has changes that are not "
-                       "saved - they are lost (Save to my add-ons keeps them). No = keep working on yours." % name,
-                parent=self):
+                       "saved - they are lost (Save to my add-ons keeps them). Keep mine = go on with yours." % name,
+                parent=self, yes='Put the example in', no='Keep mine'):
             return
         if kind == "ex":
             r = MB.fit_to_mod(r, self.mod) if self.mod is not None else copy.deepcopy(r)
@@ -142,12 +143,12 @@ class ModuleBuilder(tk.Toplevel):
             r = MB.new_recipe()
         self.load(r, fresh=True)
 
-    def load(self, recipe, fresh=False, ask=False):
-        """The recipe into the window (a copy); ask: say first that the one there now is replaced."""
-        if ask and self.changed and not messagebox.askyesno(
+    def load(self, recipe, fresh=False, confirm=False):
+        """The recipe into the window (a copy); confirm: say first that the one there now is replaced."""
+        if confirm and self.changed and not ask(
                 TITLE, "Open '%s' in the builder?\n\nThe module you are making now has changes that are not saved - "
-                       "they are lost (Save to my add-ons keeps them). No = keep working on yours." % recipe.get("title"),
-                parent=self):
+                       "they are lost (Save to my add-ons keeps them). Keep mine = go on with yours." % recipe.get("title"),
+                parent=self, yes='Open it', no='Keep mine'):
             return
         self.recipe = copy.deepcopy(recipe)
         self.recipe.setdefault("settings", {})
@@ -623,8 +624,8 @@ class ModuleBuilder(tk.Toplevel):
         from .limits import engine_of
         warn = "" if engine_of(self.mod) else ("\n\nNo REX / M2EX was found beside this game: the original exes run "
                                               "no scripts - the module does nothing without one.")
-        if not messagebox.askyesno(TITLE, "%s%s\n\nWrite it? A backup is made first (Restore undoes it)." % (
-                plan.report(), warn), parent=self):
+        if warn and not ask(TITLE, "%s%s\n\nWrite it? A backup is made first (Restore undoes it)." % (
+                plan.report(), warn), parent=self, yes='Write it in', no='Cancel'):
             return
         bdir = plan.apply()
         from . import log
@@ -676,7 +677,7 @@ def open_builder(app, recipe=None):
     """The builder (one window); recipe: a module to open in it (a builder-made add-on)."""
     w = ModuleBuilder(app)
     if recipe is not None:
-        w.load(recipe, ask=True)
+        w.load(recipe, confirm=True)
     return w
 
 

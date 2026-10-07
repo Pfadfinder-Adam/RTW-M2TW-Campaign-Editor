@@ -6,6 +6,7 @@ import os
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import ask
 from .gui_util import scroll_body
 from . import addons as AD
 from .gui_util import ScrollFrame
@@ -247,8 +248,8 @@ class AddonsPanel(SettingsForm, ttk.Frame):
                                            initialfile="%s.zip" % a.key, filetypes=[("Zip", "*.zip")])
         if not out:
             return
-        with_values = self.mod is not None and self.vars and messagebox.askyesno(
-            "Share", "With the settings picked here?\n\nYes: your settings\nNo: the script as it came", parent=self)
+        with_values = self.mod is not None and self.vars and ask(
+            "Share", "Share it with the settings picked here, or as it came?", parent=self, yes='With my settings', no='As it came')
         try:
             AD.share(a, out, self.values() if with_values else None)
         except Exception as e:
@@ -285,8 +286,8 @@ class AddonsPanel(SettingsForm, ttk.Frame):
         if not a.own:
             messagebox.showinfo("Add-ons", "%s is built in - it stays in the list." % a.title, parent=self)
             return
-        if not messagebox.askyesno("Add-ons", "Take %s off the list? (If it is put into a game it stays there - "
-                                              "Take it out does that.)" % a.title, parent=self):
+        if not ask("Add-ons", "Take %s off the list? (If it is put into a game it stays there - "
+                                              "Take it out does that.)" % a.title, parent=self, yes='Take it off the list', no='Keep it'):
             return
         AD.remove_from_library(a)
         self.fill()
@@ -372,15 +373,15 @@ class AddonsPanel(SettingsForm, ttk.Frame):
             messagebox.showinfo("Add-ons", "It is in already with exactly these settings - nothing to write.",
                                 parent=self)
             return
-        if not messagebox.askyesno("Add-ons", "%s\n\nWrite it? A backup is made first (Restore undoes it)."
-                                   % plan.report(), parent=self):
+        if plan.warnings and not ask("Add-ons", "%s\n\nWrite it? A backup is made first (Restore undoes it)."
+                                   % plan.report(), parent=self, yes='Put it in', no='Cancel'):
             return
         self._apply(plan, "put in")
 
     def remove(self):
         plan = self._plan(remove=True)
-        if not messagebox.askyesno("Add-ons", "Take %s out of the game? A backup is made first (Restore puts it "
-                                              "back)." % self.addon().title, parent=self):
+        if not ask("Add-ons", "Take %s out of the game? A backup is made first (Restore puts it "
+                                              "back)." % self.addon().title, parent=self, yes='Take it out', no='Keep it'):
             return
         self._apply(plan, "taken out")
 

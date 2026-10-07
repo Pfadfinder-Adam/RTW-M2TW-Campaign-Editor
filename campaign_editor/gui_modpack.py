@@ -5,6 +5,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from .gui_util import ask
 from .gui_util import one_window, ShortHint
 from . import modpack as MP
 from . import theme
@@ -163,10 +164,10 @@ class PackWindow(tk.Toplevel):
             messagebox.showinfo("Check a pack", "Nothing picked to go in.", parent=self)
             return
         risky = [w for _, w in plan.warnings if w != "nothing picked to go in"]
-        if not messagebox.askyesno("Install a pack", "%sWrite %d file(s)? A backup is made first (Restore undoes it)."
+        if risky and not ask("Install a pack", "%sWrite %d file(s)? A backup is made first (Restore undoes it)."
                                    % (("These go in although they lose something:\n- " + "\n- ".join(risky[:6]) +
                                        "\n\n") if risky else "", n), icon="warning" if risky else "question",
-                                   parent=self):
+                                   parent=self, yes='Write it in', no='Cancel'):
             return
         bdir = plan.apply()
         from . import log

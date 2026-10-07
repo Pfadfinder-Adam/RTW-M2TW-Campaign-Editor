@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+- One language in every window: **Preview** shows what will be written, **Write it in** writes at once, **Keep for Apply** keeps a window's changes for **Apply changes**. Enter presses the window's main button and Esc closes it (Cancel / Close), in every window; the main window is never closed by Esc, and a tool waiting for its click on the map is stopped by Esc first.
+- Questions are answered in words, not Yes / No ("Drop them" / "Stay", "Unpack it" / "Not now"...); a button that loses something stands apart on the left and is never the one Enter presses.
+- Fewer questions: a write that can be undone (**Undo this write**) is no longer asked about unless it has a warning; removing an army or agent from the faction's list is undone with Ctrl+Z.
+- The right mouse button takes things out of a list: a mercenary's card or line (Mercenaries), an army / agent / fleet (the faction's list), an event (Events), a trait or a member of the retinue (the character) - the separate Remove buttons are gone.
+- Long explanations at the top of Mercenaries, Map size and the 3 x bigger map are one line now; the rest shows on the '?'.
+
 ### Fixed
 - Medieval II: diplomacy at the start reset for every faction (all neutral) after an edit of a faction's feelings - Rome's form of the lines (`core_attitudes`, a number on `faction_relationships`) was written, which Medieval II does not read. Each game now gets its own form (`faction_standings` -1.0 .. 1.0 in Medieval II, and the other way in Rome). Lines older versions wrote so are named by Check mod files, and Load offers to rewrite them.
 - Medieval II: new texts (an event's title, a new building's or temple's name) were not shown in the game - it reads the compiled `<name>.txt.strings.bin` beside a text file instead of the file. A write that changes a text file now takes that `.strings.bin` away (backed up; the game builds it again from the text).

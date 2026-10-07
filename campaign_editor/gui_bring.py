@@ -11,6 +11,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from .gui_util import ask
 from . import packs
 from .editors import building_blocks
 from .gui_util import one_window, ScrollFrame, StepWindow
@@ -425,9 +426,9 @@ class BringWindow(StepWindow):
         sb.pack(side="left", fill="y")
 
     def finish(self):
-        if self.ed.pending() and not messagebox.askyesno(
+        if self.ed.pending() and not ask(
                 self.title(), "The %s editor holds changes not written yet; writing now reads the files again, so "
-                              "they would be dropped. Go on?" % self.kind, parent=self):
+                              "they would be dropped. Go on?" % self.kind, parent=self, yes='Write, drop them', no='Stay', danger=True):
             return
         try:
             plan = self._plan()

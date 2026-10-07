@@ -6,6 +6,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from .gui_util import ask, ask_choice
 from .gui_util import ShortHint, hint
 from .gui_util import scroll_body
 from . import editors as E
@@ -1147,12 +1148,12 @@ class RecordEditor(ttk.Frame):
             messagebox.showerror("Name call", "%s\n\nNothing was written." % e, parent=self)
             return
         warns = "\n".join(x for _, x in plan.warnings)
-        if not messagebox.askyesno("Name call", (
+        if not ask("Name call", (
                 "%s (%s, class %s) will say your %d sound(s) when selected.\n\n%s%sWrite %d file(s)? A backup is made "
                 "first (Restore undoes it).\n\nThen start the game: it builds data/sounds/events.dat again on the "
                 "first start (that start takes a little longer)." % (
                     unit, uv.key, uv.cls, len(paths), plan.report(), ("\n\n" + warns + "\n\n") if warns else "\n\n",
-                    len(plan.changed_files()))), parent=self):
+                    len(plan.changed_files()))), parent=self, yes='Write it in', no='Cancel'):
             return
         bdir = plan.apply()
         log.write("Name call of %s (%s, %s) replaced (backup %s)\n%s" % (unit, uv.key, uv.cls, bdir, plan.report()))
@@ -1174,9 +1175,9 @@ class RecordEditor(ttk.Frame):
         from .plan import Plan
         unit = self.current[0]
         what = "soldiers" if key == "soldier" else "officer %d" % (idx + 1)
-        if self.pending() and not messagebox.askyesno(
+        if self.pending() and not ask(
                 "Replace model", "The unit editor holds changes not written yet; replacing the model writes "
-                                 "export_descr_unit.txt, so they would be dropped. Go on?", parent=self):
+                                 "export_descr_unit.txt, so they would be dropped. Go on?", parent=self, yes='Replace, drop them', no='Stay', danger=True):
             return
         lines = self._unit_lines()
         seat = MO.unit_seat(self.mod, lines)
@@ -1308,10 +1309,10 @@ class RecordEditor(ttk.Frame):
                 messagebox.showerror("Replace model", str(e), parent=w)
                 return
             serious = [x for _, x in plan.warnings if "WARNING" in x]
-            if not messagebox.askyesno("Replace model", "%sWrite %d file(s)? A backup is made first (Restore undoes "
+            if serious and not ask("Replace model", "%sWrite %d file(s)? A backup is made first (Restore undoes "
                                                         "it)." % (("\n".join(serious) + "\n\n") if serious else "",
                                                                   len(plan.changed_files())),
-                                       icon="warning" if serious else "question", parent=w):
+                                       icon="warning" if serious else "question", parent=w, yes='Write it in', no='Cancel'):
                 return
             bdir = plan.apply()
             from . import log
@@ -1461,9 +1462,9 @@ class RecordEditor(ttk.Frame):
             return
         size = need[:2] if need else None
         if size and tuple(got) != tuple(size):
-            if not messagebox.askyesno("Import", "%s is %d x %d; this mod's own are %d x %d.\n\n"
+            if not ask("Import", "%s is %d x %d; this mod's own are %d x %d.\n\n"
                                                  "Resize it to %d x %d?" % ((os.path.basename(src),) + tuple(got) +
-                                                                            tuple(size) + tuple(size))):
+                                                                            tuple(size) + tuple(size)), yes='Resize it', no='Keep its size'):
                 size = None
         self.imports = [(s, t, z) for s, t, z in self.imports if not set(t) & set(targets)]
         self.imports.append((src, list(targets), size))
@@ -1494,9 +1495,9 @@ class RecordEditor(ttk.Frame):
         picked = self.shown[sel[0]][0] if sel and sel[0] < len(self.shown) else None
         types = [b[0] for b in self.shown]
         if picked and len(types) > 1:
-            one = messagebox.askyesnocancel(
-                "Export pack", "Yes: only %s\nNo: all %d units the list shows now (Show / Find)" % (picked, len(types)),
-                parent=self)
+            k = ask_choice(self, "Export pack", "Export which units?", ["Only %s" % picked,
+                           "All %d the list shows now" % len(types), "Cancel"], cancel=2)
+            one = None if k == 2 else k == 0
             if one is None:
                 return
             if one:
@@ -1537,9 +1538,9 @@ class RecordEditor(ttk.Frame):
         from .plan import Plan
         if not self.mod:
             return
-        if self.pending() and not messagebox.askyesno(
+        if self.pending() and not ask(
                 "Import pack", "The unit editor holds changes not written yet; the import writes "
-                               "export_descr_unit.txt, so they would be dropped. Go on?", parent=self):
+                               "export_descr_unit.txt, so they would be dropped. Go on?", parent=self, yes='Import, drop them', no='Stay', danger=True):
             return
         path = filedialog.askopenfilename(parent=self, filetypes=[("Unit pack", "*.zip")])
         if not path:
@@ -1610,8 +1611,8 @@ class RecordEditor(ttk.Frame):
             except Exception as e:
                 messagebox.showerror("Import pack", str(e), parent=w)
                 return
-            if not messagebox.askyesno("Import pack", "Write %d file(s)? A backup is made first (Restore undoes "
-                                                      "it)." % len(plan.changed_files()), parent=w):
+            if plan.warnings and not ask("Import pack", "Write %d file(s)? A backup is made first (Restore undoes "
+                                                      "it)." % len(plan.changed_files()), parent=w, yes='Write it in', no='Cancel'):
                 return
             bdir = plan.apply()
             from . import log

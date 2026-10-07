@@ -3,6 +3,7 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import ask
 from .gui_util import scroll_body
 from . import namelists as NL
 from . import theme
@@ -133,7 +134,7 @@ class NameListWizard:
             messagebox.showerror("Name list", "\n".join(bad), parent=self.w)
             return
         tips = NL.advice(pools)
-        if tips and not messagebox.askyesno("Name list", "\n".join(tips) + "\n\nKeep this list?", parent=self.w):
+        if tips and not ask("Name list", "\n".join(tips) + "\n\nKeep this list?", parent=self.w, yes='Keep this list', no='Change it'):
             return
         self.app.name_list_set(self.who, pools)
         self.w.destroy()

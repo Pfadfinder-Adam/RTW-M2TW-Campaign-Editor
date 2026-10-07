@@ -11,6 +11,7 @@ import os
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
+from .gui_util import ask
 from . import banners as B, theme
 from .gui_util import ShortHint
 
@@ -253,9 +254,9 @@ class BannerWindow(tk.Toplevel):
             messagebox.showerror("Your drawing", "Cannot read %s: %s" % (src, e), parent=self)
             return
         want = self.blank().size
-        if tuple(got) != tuple(want) and not messagebox.askyesno(
+        if tuple(got) != tuple(want) and not ask(
                 "Your drawing", "%s is %d x %d; the banner picture is %d x %d.\n\nStretch it to %d x %d?" % (
-                    (os.path.basename(src),) + tuple(got) + tuple(want) + tuple(want)), parent=self):
+                    (os.path.basename(src),) + tuple(got) + tuple(want) + tuple(want)), parent=self, yes='Stretch it', no='Cancel'):
             return
         self._set("drawing", src)
 

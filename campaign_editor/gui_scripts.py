@@ -8,6 +8,7 @@ import os
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import ask
 from . import log
 from . import scriptmods as SM
 from .gui_addons import SettingsForm
@@ -148,7 +149,7 @@ class ScriptsWindow(SettingsForm, tk.Toplevel):
         bar = ttk.Frame(inner)                    # two rows: what changes it, then what only shows it
         bar.grid(row=r, column=0, columnspan=3, sticky="w", pady=(12, 0))
         if s.addon.settings:
-            ttk.Button(bar, text="Write the settings", command=self.write_settings).grid(row=0, column=0, sticky="we")
+            ttk.Button(bar, text="Write it in", command=self.write_settings).grid(row=0, column=0, sticky="we")
         ttk.Button(bar, text="Turn it on" if not s.on else "Turn it off", command=self.switch).grid(
             row=0, column=1, sticky="we", padx=(6, 0))
         ttk.Button(bar, text="Delete it...", command=self.delete).grid(row=0, column=2, sticky="we", padx=(24, 0))
@@ -169,8 +170,8 @@ class ScriptsWindow(SettingsForm, tk.Toplevel):
         except ValueError as e:
             messagebox.showerror(TITLE, "%s\n\nNothing was written." % e, parent=self)
             return
-        if not messagebox.askyesno(TITLE, "%s\n\n%s? A backup is made first (Tools > Restore a backup undoes it)."
-                                   % (plan.report(), what), parent=self):
+        if not ask(TITLE, "%s\n\n%s? A backup is made first (Tools > Restore a backup undoes it)."
+                                   % (plan.report(), what), parent=self, yes=what, no='Cancel'):
             return
         try:
             bdir = plan.apply()

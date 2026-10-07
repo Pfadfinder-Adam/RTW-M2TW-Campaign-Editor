@@ -16,6 +16,8 @@ import hashlib
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
+from .gui_util import ShortHint
+from .gui_util import ask
 from . import mercenaries as M
 from . import theme
 
@@ -53,18 +55,18 @@ class MercWindow(tk.Toplevel):
         self.lbl_problems.pack(side="left", fill="x", expand=True)
         ttk.Button(bar, text="Close", command=self.close).pack(side="right")
         ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=(0, 6))
-        ttk.Button(bar, text="Show every change...", command=self.preview).pack(side="right", padx=(0, 6))
+        ttk.Button(bar, text="Preview", command=self.preview).pack(side="right", padx=(0, 6))
         top = ttk.Frame(self, padding=(10, 10, 10, 0))
         top.pack(fill="x")
         self.lbl_title = ttk.Label(top, font=("", 12, "bold"))
         self.lbl_title.pack(anchor="w")
         self.lbl_file = ttk.Label(top, foreground=theme.palette()["muted"])
         self.lbl_file.pack(anchor="w")
-        ttk.Label(top, wraplength=1000, justify="left", text=(
+        ShortHint(top, text=(
             "Who is for hire where. A region takes its mercenaries from its pool: the regions of one pool share one "
             "list. 'For hire in a region' makes a region's list the way a garrison is made; 'Pools' groups the "
             "regions on the map (a box adds, Shift + box takes away). Keep for Apply, then Apply changes in the main window writes it.")
-                  ).pack(anchor="w", pady=(2, 6))
+                  ).pack(anchor="w", fill="x", pady=(2, 6))
         # the picked unit's numbers: under both tabs, for the unit picked on either
         ed = ttk.LabelFrame(self, text="The picked unit", padding=8)
         ed.pack(side="bottom", fill="x", padx=10, pady=(6, 0))
@@ -130,7 +132,9 @@ class MercWindow(tk.Toplevel):
                                    values=[u.type for u in self.units])
         self.cb_add.pack(side="left", padx=(6, 6))
         ttk.Button(add, text="Add", command=self.add_unit).pack(side="left")
-        ttk.Button(add, text="Take the picked unit out", command=self.remove_unit).pack(side="left", padx=(6, 0))
+        ttk.Label(add, text="(right click a line: take it out)", foreground=theme.palette()["muted"]).pack(
+            side="left", padx=(8, 0))
+        self.tree.bind("<Button-3>", self._tree_take)
     def _region_tab(self):
         """For hire in a region: the region's list the garrison way - mercenaries' cards left (a click adds), the
         units for hire right (a click picks one for its numbers)."""
@@ -152,14 +156,12 @@ class MercWindow(tk.Toplevel):
         row2.pack(anchor="w", pady=(2, 4))
         self.b_own = ttk.Button(row2, text="A list of its own (leave the pool)", command=self.own_list)
         self.b_own.pack(side="left")
-        self.b_take = ttk.Button(row2, text="Take the picked unit out", command=self.remove_unit)
-        self.b_take.pack(side="left", padx=(6, 0))
         self.lbl_card = ttk.Label(tab, foreground=theme.palette()["muted"])
         self.lbl_card.pack(anchor="w", fill="x")
         panes = ttk.Panedwindow(tab, orient="horizontal")
         panes.pack(fill="both", expand=True)
         left = ttk.LabelFrame(panes, text="Mercenaries - click to add")
-        right = ttk.LabelFrame(panes, text="For hire here - click to pick")
+        right = ttk.LabelFrame(panes, text="For hire here - click to pick, right click to take out")
         panes.add(left, weight=3)
         panes.add(right, weight=2)
         self.cards_all = self._cards_box(left)
@@ -259,6 +261,7 @@ class MercWindow(tk.Toplevel):
         for u in (p.units if p else []):
             b = self._card(self.cards_here, u.name, "%s / %s" % (u.initial, u.max), lambda x=u: self.pick_here(x),
                            "%s: %s" % (u.name, u.words()))
+            b.bind("<Button-3>", lambda e, x=u: self.take_here(x))     # the right button takes it out, no button
             if u is keep:
                 b.configure(relief="solid", borderwidth=2)
         self.after_idle(lambda: self._reflow(self.cards_here, True))
@@ -270,6 +273,25 @@ class MercWindow(tk.Toplevel):
             self._card(self.cards_all, u.type, str(getattr(u, "upkeep", "")), lambda n=u.type: self.add_here(n),
                        u.summary() if hasattr(u, "summary") else u.type)
         self.after_idle(lambda: self._reflow(self.cards_all, True))
+
+    def take_here(self, u):
+        """A right click on a card for hire here: that unit goes out of the list (nothing is written before Keep for Apply)."""
+        p = next((q for q in self.pools if any(x is u for x in q.units)), None)
+        if p is None:
+            return
+        p.units = [x for x in p.units if x is not u]
+        self.show(map_too=False)
+        self.show_region()
+        self.check()
+
+    def _tree_take(self, e):
+        """A right click on a line of the pool's list takes that unit out."""
+        row = self.tree.identify_row(e.y)
+        if not row:
+            return
+        self.tree.selection_set(row)
+        self.update_idletasks()
+        self.remove_unit()
 
     def pick_here(self, u):
         self.show_region(keep=u)
@@ -529,9 +551,9 @@ class MercWindow(tk.Toplevel):
         p = self.pool()
         if p is None:
             return
-        if not messagebox.askyesno(TITLE, "Delete the pool %s? Its regions (%s) will have no mercenaries for hire "
+        if not ask(TITLE, "Delete the pool %s? Its regions (%s) will have no mercenaries for hire "
                                           "(written with Keep for Apply, then Apply changes)." % (p.name, ", ".join(p.regions) or "none"),
-                                   parent=self):
+                                   parent=self, yes='Delete the pool', no='Keep it', danger=True):
             return
         self.pools.remove(p)
         if p.start is not None:                 # an old pool: kept with no region, so the write takes its lines out

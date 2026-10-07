@@ -7,6 +7,7 @@ import os
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
+from .gui_util import ask
 from .gui_util import ShortHint
 from . import factionart as FA
 from . import theme
@@ -332,9 +333,9 @@ class ArtEditor(ttk.Frame):
             messagebox.showerror("Replace", "Cannot read %s: %s" % (src, e))
             return
         if size and tuple(got) != tuple(size[:2]):
-            if not messagebox.askyesno("Replace", "%s is %d x %d; the game's picture is %d x %d.\n\n"
+            if not ask("Replace", "%s is %d x %d; the game's picture is %d x %d.\n\n"
                                                   "Resize it to %d x %d?" % ((os.path.basename(src),) + tuple(got) +
-                                                                             tuple(size[:2]) + tuple(size[:2]))):
+                                                                             tuple(size[:2]) + tuple(size[:2])), yes='Resize it', no='Cancel'):
                 return
         self.app.remember()
         self.app.art_replace[target] = {"src": src, "extra": extra} if extra else \

@@ -291,8 +291,7 @@ class MapView(ttk.Frame):
         self.on_char_double = None                       # (char id) -> its units' window (a double click)
         self.on_place_stop = None                        # () -> what hangs under the mouse is dropped (Esc / right)
         self.waiting = False                             # something picked waits for its click (Edit regions too)
-        self.canvas.winfo_toplevel().bind("<Escape>", lambda e: (self.on_place or self.waiting) and
-                                          self.on_place_stop and self.on_place_stop(), add="+")
+        self.canvas.winfo_toplevel().bind("<Escape>", self._escape, add="+")
         self.on_fort_double = None                       # (Fort) -> its garrison's window (a double click)
         c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
         self._hot = None                                # the marker under the mouse, drawn bigger
@@ -2049,6 +2048,12 @@ class MapView(ttk.Frame):
             self.ox, self.oy = ox - (e.x - x0) / self.z, oy - (e.y - y0) / self.z
             if self._pending is None:
                 self._pending = self.after(15, self._pan)
+
+    def _escape(self, e=None):
+        """Esc drops what waits for its click; only then it goes no further (else Esc closes the window)."""
+        if (getattr(self, "on_place", None) or self.waiting) and self.on_place_stop:
+            self.on_place_stop()
+            return "break"
 
     def _release(self, e):
         if self._box:

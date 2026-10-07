@@ -7,6 +7,8 @@ import os
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import ShortHint
+from .gui_util import ask
 from . import log
 
 APP = "RTW & M2TW Campaign Editor"
@@ -51,14 +53,14 @@ def open_upscale(app):
                                      "\nThe map now: %d x %d tiles  ->  after: %d x %d tiles" % (
                                          size[0], size[1], size[0] * FACTOR, size[1] * FACTOR)) if size else "")
               ).pack(anchor="w", pady=(4, 0))
-    ttk.Label(frm, justify="left", wraplength=620, text=(
+    ShortHint(frm, text=(
         "Every tile becomes a block of 3 x 3 tiles, in five steps: the grid, smoothing, heights, rivers, objects. "
         "Each step is written with a backup and checked; between the steps the map is in the Map editor - look at "
         "it, fix what you want by hand (borders after step 2, the coast before step 3, the ground after step 3), "
         "then do the next step. Towns, ports, armies, agents, resources and forts keep their places (in the middle "
         "of their blocks), and the campaign's scripts and events move with the map. 'Put the old map back' undoes "
         "every step at once. You may close this window between the steps: opened again, it goes on where it "
-        "stopped.")).pack(anchor="w", pady=(8, 0))
+        "stopped.")).pack(anchor="w", fill="x", pady=(8, 0))
     ttk.Label(frm, text="Values (the shore by the water is the game's own and stays as it is)",
               font=("", 10, "bold")).pack(anchor="w", pady=(10, 0))
     grid = ttk.Frame(frm)
@@ -218,9 +220,9 @@ def open_upscale(app):
 
     def undo():
         bdir = st.get("bdir")
-        if not bdir or not messagebox.askyesno(APP, "Put the old map back? Every file the steps changed is put "
+        if not bdir or not ask(APP, "Put the old map back? Every file the steps changed is put "
                                                     "back as it was before step 1 (and every change made after "
-                                                    "it).", parent=w):
+                                                    "it).", parent=w, yes='Put the old map back', no='Cancel'):
             return
         try:
             restore_to(ModData(app.mod.data), bdir)
@@ -240,7 +242,7 @@ def open_upscale(app):
         k = st.get("done", 0)
         if k < len(STEPS):
             ttk.Button(bar, text="Do step %d: %s" % (k + 1, STEPS[k][0]), command=step).pack(side="left")
-            ttk.Button(bar, text="Show every change...", command=show_all).pack(side="left", padx=(6, 0))
+            ttk.Button(bar, text="Preview", command=show_all).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Close", command=w.destroy).pack(side="right")
         if st.get("bdir"):          # undoes every step: set apart from 'Do step' (a hurried click must not land on it)
             ttk.Button(bar, text="Put the old map back", command=undo).pack(side="right", padx=(0, 24))

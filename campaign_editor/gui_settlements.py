@@ -6,6 +6,7 @@ M2EX). Both games."""
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import ask
 from .gui_util import ShortHint
 from .gui_util import scroll_body
 from . import log
@@ -157,8 +158,8 @@ def rename_now(app, campaign, region, new_region, new_town, parent):
         return False
     if not p.changed_files():
         return False
-    if not messagebox.askyesno(APP, "%s\n\nWrite %d file(s) now? A backup is made first (Tools > Restore undoes "
-                                    "it)." % (p.report(), len(p.changed_files())), parent=parent):
+    if p.warnings and not ask(APP, "%s\n\nWrite %d file(s) now? A backup is made first (Tools > Restore undoes "
+                                    "it)." % (p.report(), len(p.changed_files())), parent=parent, yes='Write it in', no='Cancel'):
         return False
     bdir = p.apply()
     log.write("Renamed in the files: %s / %s -> %s / %s (backup %s)\n%s" % (
@@ -292,11 +293,11 @@ def delete_town(app, region, parent):
     def write():
         p = plan()
         into = near[labels.index(v_into.get())][0] if p else None
-        if not p or not messagebox.askyesno(APP, "%s\n\nDelete %s and its region %s now (%d file(s))? Every tile of "
+        if not p or not ask(APP, "%s\n\nDelete %s and its region %s now (%d file(s))? Every tile of "
                                                  "it becomes %s's - no land is left without a region (the game wants "
                                                  "each tile in one). A backup is made first (Tools > Restore undoes "
                                                  "it)." % (p.report(), town, region, len(p.changed_files()), into),
-                                            parent=w):
+                                            parent=w, yes='Delete it', no='Keep it', danger=True):
             return
         bdir = p.apply()
         log.write("Deleted %s with its region %s (backup %s)\n%s" % (town, region, bdir, p.report()))

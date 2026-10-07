@@ -11,6 +11,8 @@ import traceback
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
+from .gui_util import right_click
+from .gui_util import ask, ask_choice
 from .gui_util import scroll_body
 from . import emergence as EM, log, settings, theme
 from .build import build, template_display
@@ -1026,7 +1028,7 @@ class App(tk.Tk):
         # field armies, agents and fleets, placed on the Map
         ff = ttk.LabelFrame(split, text="Armies, agents & fleets  (drag the line above to resize)", padding=4)
         split.add(ff, weight=2)
-        ttk.Label(ff, text="double click: show it on the map", foreground="#666").pack(side="bottom", anchor="w")
+        ttk.Label(ff, text="double click: show it on the map; right click: remove it", foreground="#666").pack(side="bottom", anchor="w")
         fb = ttk.Frame(ff)
         fb.pack(side="bottom", fill="x", pady=(4, 0))
         self.lb_field = FieldTable(ff)
@@ -1037,7 +1039,7 @@ class App(tk.Tk):
         for text, kind in (("+ Army", "army"), ("+ Agent", "agent"), ("+ Fleet", "fleet")):
             ttk.Button(fb, text=text, command=lambda k=kind: self.add_field(k)).pack(side="left", padx=1)
         ttk.Button(fb, text="Place on map", command=self.place_field).pack(side="left", padx=(8, 1))
-        ttk.Button(fb, text="Remove", command=self.remove_field).pack(side="left", padx=1)
+        right_click(self.lb_field.tv, self.remove_field)
         opts = self.units_opts = ttk.LabelFrame(side, text="Towns without a garrison of your own", padding=6)
         opts.pack(side="bottom", fill="x", pady=(10, 0), before=split)
         ttk.Label(opts, text="Leader's army").grid(row=0, column=0, sticky="w")
@@ -1407,9 +1409,9 @@ class App(tk.Tk):
         if w in ("map", "new", "edit"):
             for ed in self.editors.values():
                 ed.pack_forget()
-            if self.v_mode.get() != w and self.undo_stack and self.v_mode.get() != "map" and not messagebox.askyesno(
+            if self.v_mode.get() != w and self.undo_stack and self.v_mode.get() != "map" and not ask(
                     APP, "Switch to %s? The faction's changes not written yet (its towns, garrisons, diplomacy...) "
-                         "are dropped; the map's changes stay." % self.WORK_TITLES[w]):
+                         "are dropped; the map's changes stay." % self.WORK_TITLES[w], yes='Switch, drop them', no='Stay', danger=True):
                 self.v_work.set(self.v_mode.get())         # stay where the work is
                 return
             self._map_tab_only(w == "map")
@@ -1848,9 +1850,9 @@ class App(tk.Tk):
         if not self.mod:
             messagebox.showinfo(APP, "Load a mod first - the game starts with the mod that is loaded.")
             return
-        if self.pending_parts() and not messagebox.askyesno(
+        if self.pending_parts() and not ask(
                 APP, "There are changes not written yet (%s). The game reads the files as they are on disk - "
-                     "start it without these changes?" % ", ".join(label for _, label in self.pending_parts())):
+                     "start it without these changes?" % ", ".join(label for _, label in self.pending_parts()), yes='Start without them', no='Not now'):
             return
         try:
             how = launch.start_line(self.mod.data)
@@ -1859,8 +1861,8 @@ class App(tk.Tk):
             if stops:
                 raise ValueError("\n\n".join(stops))
             maybe = [w for s_, w in found if s_ is False]
-            if maybe and not messagebox.askyesno(
-                    APP, "The game may not start as it should:\n\n%s\n\nStart it anyway?" % "\n\n".join(maybe)):
+            if maybe and not ask(
+                    APP, "The game may not start as it should:\n\n%s\n\nStart it anyway?" % "\n\n".join(maybe), yes='Start it anyway', no='Not now'):
                 return
             launch.start(how)
         except (ValueError, OSError) as e:
@@ -2048,8 +2050,8 @@ class App(tk.Tk):
         if path is None:
             logs = report.game_logs(game, mod_dir) if game else []
             if not logs:
-                if messagebox.askyesno(APP, "No system.log.txt of the game found%s.\n\n%s\n\nPick a log file by "
-                                            "hand?" % (" in %s or its mods" % game if game else "", report.LOG_HOWTO)):
+                if ask(APP, "No system.log.txt of the game found%s.\n\n%s\n\nPick a log file by "
+                                            "hand?" % (" in %s or its mods" % game if game else "", report.LOG_HOWTO), yes='Pick a log file...', no='Not now'):
                     path = filedialog.askopenfilename(title="The game's system.log.txt",
                                                       filetypes=[("Game log", "*.txt"), ("Any file", "*.*")])
                 if not path:
@@ -3137,10 +3139,10 @@ class App(tk.Tk):
             gone = [x.strip() for x in now.split(",") if x.strip() and x.strip() not in
                     {y.strip() for y in text.split(",")}]
             uses = self._tag_uses(gone)                 # taken off: say first what stops working in this region
-            if uses and not messagebox.askyesno(APP, "Taking %s off %s: in this region these stop working:\n\n%s\n\n"
+            if uses and not ask(APP, "Taking %s off %s: in this region these stop working:\n\n%s\n\n"
                                                      "Take it off anyway?" % (", ".join(gone), name, "\n".join(
                                                          uses[:20]) + ("\n... and %d more" % (len(uses) - 20)
-                                                                        if len(uses) > 20 else "")), parent=w):
+                                                                        if len(uses) > 20 else "")), parent=w, yes='Take it off', no='Keep it'):
                 return
             self.remember()
             if text == self.regions[name].get("resources", ""):
@@ -3610,9 +3612,9 @@ class App(tk.Tk):
         waiting = self.unwritten(editors)
         if not waiting:
             return True
-        return messagebox.askyesno(APP, "%s?\n\nThese changes are not written yet and would be dropped:\n%s\n\n"
-                                        "Yes = drop them. No = stay (Apply writes them first)."
-                                   % (what, "\n".join("- " + w for w in waiting)))
+        return ask(APP, "%s?\n\nThese changes are not written yet and would be dropped:\n%s\n\n"
+                                        "(Stay, then Apply writes them first.)"
+                                   % (what, "\n".join("- " + w for w in waiting)), yes='Drop them', no='Stay', danger=True)
 
     def load_clicked(self):
         """Load (the button, F5, Browse...): the mod in the data folder box - after asking when changes made on the
@@ -3859,14 +3861,14 @@ class App(tk.Tk):
         from . import gamefix
         dlls = (" First %s %s copied from the game folder next to the unpacker (it needs them)." % (
             " and ".join(need["dlls"]), "is" if len(need["dlls"]) == 1 else "are")) if need["dlls"] else ""
-        if not messagebox.askyesno(APP, (
+        if not ask(APP, (
                 "%s is not unpacked yet: its files are still in %d .pack file(s) (Steam's Medieval II comes "
                 "that way - the game reads the packs, so it plays), and there is nothing to edit yet.\n\nUnpack "
                 "it now with the game's own unpacker (tools\\unpacker%s)?%s\n\n"
                 "It takes a few minutes and several GB of disk; the packs stay as they are. The unpacker asks you to "
-                "agree to SEGA's terms for it - Yes here answers Y to that for you.") % (
+                "agree to SEGA's terms for it - 'Unpack it' answers Y to that for you.") % (
                 ("This Medieval II campaign (%s)" % need["campaign"]) if need.get("campaign") else "This Medieval II",
-                need["packs"], ("\\" + os.path.basename(need["bat"])) if need.get("bat") else "", dlls)):
+                need["packs"], ("\\" + os.path.basename(need["bat"])) if need.get("bat") else "", dlls), yes='Unpack it', no='Not now'):
             return
         result = {}
 
@@ -4204,9 +4206,10 @@ class App(tk.Tk):
             was = self.editing_now.get("_faction") if self.editing_now else None
             if was and was != t and self.faction_pending():
                 # the changes belong to the faction picked before: write them, drop them, or stay
-                ans = messagebox.askyesnocancel(APP, "%s has changes not written yet.\n\nYes: apply them now "
-                                                     "(with a backup), then open %s.\nNo: drop them.\n"
-                                                     "Cancel: stay with %s." % (was, t, was))
+                k = ask_choice(self, APP, "%s has changes not written yet. Apply writes them (with a backup) before "
+                                          "%s opens." % (was, t), ["Apply, then open %s" % t, "Drop them",
+                                                               "Stay with %s" % was], cancel=2, danger=1)
+                ans = None if k == 2 else k == 0
                 if ans is None:
                     self.v["template"].set(was)
                     return
@@ -4979,8 +4982,6 @@ class App(tk.Tk):
                 messagebox.showerror(APP, "%s is a member of the family - the tool does not remove those "
                                           "(the family tree names them)." % c["name"])
                 return
-            if not messagebox.askyesno(APP, "Remove %s %s from the map?" % (c["kind"], c["name"])):
-                return
             self.removed_existing.append({"name": c["name"], "from": c["from"]})
             self.char_moves.pop(c["cid"], None)
         del self.field[i]
@@ -5131,9 +5132,9 @@ class App(tk.Tk):
             self.char_window(at[0])
             return
         # an empty one: a new army for it at once - its units are the garrison (a fort has no buildings)
-        if self.strat and messagebox.askyesno(APP, "This %s at %d, %d is empty. Put a new army in it? Its units are "
+        if self.strat and ask(APP, "This %s at %d, %d is empty. Put a new army in it? Its units are "
                                                    "the garrison (a fort has no buildings)." % (fo.kind, fo.xy[0],
-                                                                                              fo.xy[1]), parent=self):
+                                                                                              fo.xy[1]), parent=self, yes='Put a new army in', no='Not now'):
             from .gui_mapadd import add_at
             add_at(self, "army", tuple(fo.xy))
         else:
@@ -5626,9 +5627,9 @@ class App(tk.Tk):
                                        initialdir=start or "")
         if not root:
             return
-        if not messagebox.askyesno(APP, "Fingerprint every game file under\n%s\n\nMod folders in it are left out. "
+        if not ask(APP, "Fingerprint every game file under\n%s\n\nMod folders in it are left out. "
                                         "For a clean list, let Steam 'Verify integrity of game files' first.\n"
-                                        "This reads every file once and can take a minute or two." % root):
+                                        "This reads every file once and can take a minute or two." % root, yes='Fingerprint them', no='Cancel'):
             return
         result = {}
 
@@ -5718,7 +5719,7 @@ class App(tk.Tk):
             warn = "\n".join("- " + m for _, m in plan.warnings)
             msg = "Write %d file(s) and copy %d art item(s)?\nA backup is made first.%s" % (
                 len(plan.changed_files()), len(plan.copies), ("\n\nWarnings:\n" + warn) if warn else "")
-            if not messagebox.askyesno(APP, msg):
+            if plan.warnings and not ask(APP, msg, yes='Write it in', no='Cancel'):   # else: Undo this write
                 return
             self._write([(key or "current", parts[0][1] if parts else "", plan)])
             return
@@ -5828,9 +5829,9 @@ class App(tk.Tk):
             messagebox.showinfo(APP, "Not deleted: %s." % e, parent=self)
             return
         name = os.path.basename(folder)
-        if not messagebox.askyesno(APP, "Delete the mod folder\n\n%s\n\nwith everything in it - its files, its "
+        if not ask(APP, "Delete the mod folder\n\n%s\n\nwith everything in it - its files, its "
                                         "backups, its start script? This cannot be undone: Restore cannot bring it "
-                                        "back. The game itself is not touched." % folder, icon="warning", parent=self):
+                                        "back. The game itself is not touched." % folder, icon="warning", parent=self, yes='Delete the folder', no='Keep it', danger=True):
             return
         typed = simpledialog.askstring(APP, "To delete it, type the mod's name: %s" % name, parent=self)
         if (typed or "").strip() != name:
@@ -5858,13 +5859,12 @@ class App(tk.Tk):
         from . import selftest
         from .newmod import mod_target
         where = os.path.dirname(mod_target(self.mod.data, selftest.NAME))
-        go = messagebox.askyesnocancel(APP, TEST_MOD_HINT + "\n\n"
+        go = _three(self, ["Both", "Only %s" % selftest.NAME, "Cancel"], TEST_MOD_HINT + "\n\n"
                                        "It makes a NEW mod folder %s (or %s_2...) in\n%s\nfrom the loaded mod, and "
                                        "applies every feature of the editor to it, step by step (a minute or two). "
                                        "The loaded mod is not changed.\n\n"
-                                       "Also make a second copy, %s_x3, with the campaign map 3 x bigger?\n"
-                                       "Yes = both, No = only %s" % (selftest.NAME, selftest.NAME, where,
-                                                                     selftest.NAME, selftest.NAME))
+                                       "Also make a second copy, %s_x3, with the campaign map 3 x bigger?"
+                                       % (selftest.NAME, selftest.NAME, where, selftest.NAME))
         if go is None:
             return
         result, data, campaign = {}, self.mod.data, self.v_campaign.get()
@@ -5907,10 +5907,9 @@ class App(tk.Tk):
         if not self.mod:
             messagebox.showerror(APP, "load a mod first")
             return
-        deep = messagebox.askyesnocancel(APP, "Check the mod (nothing is written).\n\n"
-                                              "Also rehearse an edit and a new faction for every faction?\n"
-                                              "Yes = deep check (a few minutes, longer on a big mod)\n"
-                                              "No = quick check (seconds)")
+        deep = _three(self, ["Deep check (minutes)", "Quick check (seconds)", "Cancel"],
+                      "Check the mod (nothing is written). The deep check also rehearses an edit and a new faction "
+                      "for every faction - a few minutes, longer on a big mod.")
         if deep is None:
             return
         from .check import check_mod
@@ -6086,7 +6085,7 @@ class App(tk.Tk):
             n = bs.index(b) + 1
             text = ("Undo %s?" % backup_label(b) if n == 1 else
                     "Undo %d changes, from the newest back to\n%s?" % (n, backup_label(b)))
-            if not messagebox.askyesno(APP, text + "\nFiles are put back as they were before it."):
+            if not ask(APP, text + "\nFiles are put back as they were before it.", yes='Undo', no='Cancel'):
                 return
             try:
                 ms = restore_to(self.mod, b)
@@ -6103,6 +6102,15 @@ class App(tk.Tk):
             w.destroy()
             self.load()
         ttk.Button(w, text="Undo back to here", command=go).pack(pady=(0, 6))
+
+def _three(parent, words, text):
+    """A question with two answers and Cancel, in words: True / False / None (Cancel)."""
+    from .gui_util import _patched
+    if _patched("askyesnocancel"):              # a check script answers for the user
+        return messagebox.askyesnocancel(APP, text)
+    k = ask_choice(parent, APP, text, words, cancel=2)
+    return None if k == 2 else k == 0
+
 
 def main():
     log.session_start()

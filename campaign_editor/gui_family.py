@@ -12,6 +12,8 @@ import hashlib
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
+from .gui_util import right_click
+from .gui_util import ask
 from .gui_util import one_window, ShortHint
 from .gui_util import scroll_body
 from . import family as FM, theme
@@ -170,7 +172,8 @@ class FamilyEditor(ttk.Frame):
         self.cb_trait.pack(side="left")
         ttk.Spinbox(tb, from_=1, to=10, textvariable=self.v_level, width=4).pack(side="left", padx=2)
         ttk.Button(tb, text="Add / set", command=self.add_trait).pack(side="left", padx=2)
-        ttk.Button(tb, text="Remove", command=self.remove_trait).pack(side="left")
+        ttk.Label(tb, text="right click: remove", foreground="#666").pack(side="left", padx=4)
+        right_click(self.tv_tr, self.remove_trait)
         self.tv_tr.bind("<<TreeviewSelect>>", lambda e: self._trait_row())
 
         an = ttk.LabelFrame(form, text="Ancillaries (retinue)", padding=2)
@@ -183,7 +186,8 @@ class FamilyEditor(ttk.Frame):
         self.cb_anc = ttk.Combobox(ab, textvariable=self.v_anc, width=24)
         self.cb_anc.pack(side="left")
         ttk.Button(ab, text="Add", command=self.add_anc).pack(side="left", padx=2)
-        ttk.Button(ab, text="Remove", command=self.remove_anc).pack(side="left")
+        ttk.Label(ab, text="right click: remove", foreground="#666").pack(side="left", padx=4)
+        right_click(self.lb_an, self.remove_anc)
         self.char_parts = [tr, an]
 
         # the Character editor: the person as the game's character panel shows him, the family tree behind a
@@ -990,7 +994,7 @@ class FamilyEditor(ttk.Frame):
             next(c for c in t if c[0] == father)[2].append(pick)
             self.changed()
             return
-        sex = "female" if messagebox.askyesno("Family", "A daughter? (No = a son)") else "male"
+        sex = "female" if ask("Family", "A daughter or a son?", yes='A daughter', no='A son') else "male"
         first = father.split(" ")[0]
         surname = father[len(first):].strip() if sex == "male" else ""
         by = {x["name"]: x for x in self.people()}
@@ -1013,7 +1017,7 @@ class FamilyEditor(ttk.Frame):
         or a man as his wife (Add a person... > son / daughter / wife of, then pick them)."""
         if not self.fam:
             return
-        sex = "female" if messagebox.askyesno("New person", "A woman? (No = a man)", parent=self) else "male"
+        sex = "female" if ask("New person", "A woman or a man?", parent=self, yes='A woman', no='A man') else "male"
         got = self._ask_person("New person of %s" % self.faction, sex, 16 if sex == "female" else 25,
                                on_map=sex == "male")
         if not got:
@@ -1212,9 +1216,9 @@ class FamilyEditor(ttk.Frame):
         most = self._manhood()
         if sex == "male" and got[1] not in (None, "") and int(got[1]) > most:
             # the game crashes on a living man off the map older than the age of manhood: only as one who died
-            if not messagebox.askyesno("Family", "A living man off the map may be %d at most - the game crashes "
+            if not ask("Family", "A living man off the map may be %d at most - the game crashes "
                                                  "otherwise. Write %s as one who died before the start?"
-                                       % (most, got[0])):
+                                       % (most, got[0]), yes='Write as dead', no='Cancel'):
                 return
             dead = True
         self._before()

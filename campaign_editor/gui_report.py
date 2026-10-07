@@ -8,6 +8,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from .gui_util import ask
 from . import log, report, settings
 
 APP = "RTW & M2TW Campaign Editor"
@@ -212,8 +213,8 @@ def open_report(app, message="", kind="bug", tab=None):
             if v_kind.get() == "suggestion":
                 messagebox.showerror(APP, "Write your idea first - a few words are enough.", parent=w)
                 return
-            if not messagebox.askyesno(APP, "Nothing written under 'What happened?' - a report with a few words is "
-                                            "much easier to fix. Send it anyway?", parent=w):
+            if not ask(APP, "Nothing written under 'What happened?' - a report with a few words is "
+                                            "much easier to fix. Send it anyway?", parent=w, yes='Send it anyway', no='Write a few words'):
                 return
         remember()
         b_send.configure(state="disabled")
@@ -248,8 +249,8 @@ def open_report(app, message="", kind="bug", tab=None):
             else:
                 log.write("Report not sent: %s" % result["error"])
                 lbl_state.configure(text="")
-                if messagebox.askyesno(APP, "The report was not sent: %s.\n\nSave it as a zip instead (to send on "
-                                            "Discord or GitHub)?" % result["error"], parent=w):
+                if ask(APP, "The report was not sent: %s.\n\nSave it as a zip instead (to send on "
+                                            "Discord or GitHub)?" % result["error"], parent=w, yes='Save as a zip...', no='Not now'):
                     save_zip()
         wait()
 

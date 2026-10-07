@@ -6,7 +6,7 @@ first. So buttons are packed first and long hint labels last, and a form taller 
 import itertools
 import os
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 
 def first(*widgets):
@@ -323,7 +323,7 @@ def save_copy(parent, path, what="the file"):
     """'Save a copy...' beside an Import / Replace: the file as it is now, saved where the user picks - as it is,
     or as a PNG for a picture (to edit it and bring it back with Import). Never writes into the mod."""
     import shutil
-    from tkinter import filedialog, messagebox
+    from tkinter import filedialog
     if not path or not os.path.isfile(path):
         messagebox.showerror("Save a copy", "There is no file for %s yet." % what, parent=parent)
         return None
@@ -701,11 +701,141 @@ def install_window_helpers(root):
         except (tk.TclError, KeyError, AttributeError):
             pass
     root.bind_all("<ButtonPress-1>", away, add="+")
+    keys(root)
     for cls in ("TEntry", "TCombobox", "Entry"):
         root.bind_class(cls, "<Enter>", enter, add="+")
         root.bind_class(cls, "<Leave>", hide, add="+")
         root.bind_class(cls, "<ButtonPress>", hide, add="+")
         root.bind_class(cls, "<KeyPress>", hide, add="+")
+
+
+# The button Enter presses in a window, by its words, the first found wins (one language for every window: Preview
+# shows, 'Write it in' writes at once, 'Keep for Apply' keeps for the main window's Apply - ux_heuristics.md C1)
+MAIN_WORDS = ("Write it in", "Keep for Apply", "Apply", "OK", "Create", "Use it", "Send", "Send the answer")
+CLOSE_WORDS = ("Cancel", "Close")
+_TYPING = ("Text", "TCombobox", "Treeview", "Listbox", "TSpinbox", "Spinbox")
+
+
+def _buttons(w):
+    out, todo = [], [w]
+    while todo:
+        x = todo.pop()
+        for c in x.winfo_children():
+            if isinstance(c, tk.Toplevel):
+                continue
+            if c.winfo_class() in ("TButton", "Button"):
+                try:
+                    if c.winfo_ismapped() and "disabled" not in str(c.cget("state")):
+                        out.append(c)
+                except tk.TclError:
+                    pass
+            todo.append(c)
+    return out
+
+
+def _words(b):
+    try:
+        return b.cget("text").split(" (")[0]
+    except tk.TclError:
+        return ""
+
+
+def main_button(w):
+    """The button Enter presses in window w: w._main if set, else the one of MAIN_WORDS (a word found twice = none)."""
+    own = getattr(w, "_main", None)
+    if own is not None:
+        return own
+    found = _buttons(w)
+    for word in MAIN_WORDS:
+        hits = [b for b in found if _words(b) == word]
+        if len(hits) == 1:
+            return hits[0]
+        if hits:
+            return None
+    return None
+
+
+def keys(root):
+    """Enter = the window's main button, Esc = close it, in every window of the editor (ux_heuristics.md C1): one
+    binding for all. A field / list / map with keys of its own keeps them (its binding runs first; a binding that
+    acts returns 'break'); the main window is never closed by Esc."""
+    def window_of(e):
+        try:
+            w = e.widget.winfo_toplevel()
+        except (tk.TclError, AttributeError):
+            return None
+        if w is root or not isinstance(w, tk.Toplevel) or w.winfo_class() != "Toplevel":
+            return None
+        return w
+
+    def own_key(e, seq):
+        try:
+            return bool(e.widget.bind(seq)) or (e.widget is not e.widget.winfo_toplevel() and
+                                                 bool(e.widget.winfo_toplevel().bind(seq)) and seq == "<Return>")
+        except (tk.TclError, AttributeError):
+            return True
+
+    def enter(e):
+        w = window_of(e)
+        if w is None or own_key(e, "<Return>") or own_key(e, "<KP_Enter>"):
+            return
+        try:
+            if e.widget.winfo_class() in _TYPING or e.widget.winfo_class() in ("TButton", "Button"):
+                return                       # a new line / a list's own pick / the focused button itself
+        except tk.TclError:
+            return
+        b = main_button(w)
+        if b is not None:
+            b.invoke()
+            return "break"
+
+    def escape(e):
+        w = window_of(e)
+        if w is None or own_key(e, "<Escape>") or getattr(w, "_no_escape", False):
+            return
+        try:
+            cmd = w.protocol("WM_DELETE_WINDOW")
+        except tk.TclError:
+            return
+        if cmd and not str(cmd).endswith("destroy"):     # the window's own closing (close_guard asks first)
+            w.tk.eval(cmd)
+            return "break"
+        for b in _buttons(w):                            # else its Cancel / Close button, as a click would
+            if _words(b) in CLOSE_WORDS:
+                b.invoke()
+                return "break"
+        w.destroy()
+        return "break"
+    root.bind_all("<Return>", enter, add="+")
+    root.bind_all("<KP_Enter>", enter, add="+")
+    root.bind_all("<Escape>", escape, add="+")
+
+
+def right_click(widget, fn):
+    """A right click on a row of a list / table picks that row and does fn() - the second mouse button in place of a
+    separate 'Remove' button beside the list (the user, 2026-10-07)."""
+    def go(e):
+        try:
+            if isinstance(widget, ttk.Treeview):
+                row = widget.identify_row(e.y)
+                if not row:
+                    return
+                widget.selection_set(row)
+                widget.focus(row)
+            else:
+                i = widget.nearest(e.y)
+                if i < 0 or i >= widget.size():
+                    return
+                widget.selection_clear(0, "end")
+                widget.selection_set(i)
+                widget.event_generate("<<ListboxSelect>>")
+            widget.update_idletasks()
+        except tk.TclError:
+            return
+        fn()
+        return "break"
+    widget.bind("<Button-3>", go)
+    return widget
 
 
 def tip(widget, text, **kw):
@@ -942,6 +1072,21 @@ def ask_choice(parent, title, text, choices, default=0, cancel=None, danger=None
         pass
     parent.wait_window(w)
     return out["k"]
+
+
+def _patched(name):
+    """True when a check script replaced messagebox.<name> to answer the questions itself."""
+    return getattr(getattr(messagebox, name, None), "__module__", "tkinter.messagebox") != "tkinter.messagebox"
+
+
+def ask(title, text, yes, no="Cancel", danger=False, parent=None, icon=None):
+    """A yes / no question answered in words (ux_heuristics.md C2): True when `yes` is picked. danger: the yes is
+    destructive - set apart on the left and not the Enter default. (icon: kept for the old messagebox calls.)"""
+    if _patched("askyesno"):                     # a check script answers for the user (they patch messagebox)
+        return bool(messagebox.askyesno(title, text))
+    parent = parent if parent is not None else tk._default_root
+    return ask_choice(parent, title, text, [yes, no], default=1 if danger else 0, cancel=1,
+                      danger=0 if danger else None) == 0
 
 
 def close_guard(w, title, dirty, write, after=None):

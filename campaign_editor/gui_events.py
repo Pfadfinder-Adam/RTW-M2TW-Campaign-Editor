@@ -6,6 +6,7 @@ Keep for Apply - the main window's Apply changes writes it with the rest of the 
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
+from .gui_util import right_click
 from .gui_util import one_window, ShortHint
 from .gui_util import scroll_body
 from . import events as EV
@@ -49,7 +50,8 @@ class EventsWindow(tk.Toplevel):
         bb = ttk.Frame(left)
         bb.pack(side="bottom", fill="x", pady=(4, 0))
         ttk.Button(bb, text="New event...", command=self.add).pack(side="left")
-        ttk.Button(bb, text="Remove", command=self.remove).pack(side="left", padx=4)
+        ttk.Label(bb, text="right click an event: remove it", foreground="#666").pack(side="left", padx=8)
+        right_click(self.tv, self.remove)
         sb.pack(side="right", fill="y")
         self.tv.pack(side="left", fill="both", expand=True)
         self.tv.bind("<<TreeviewSelect>>", lambda e: self.show())

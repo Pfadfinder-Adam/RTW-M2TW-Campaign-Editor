@@ -6,6 +6,7 @@ Character editor's own: gui_family.FamilyEditor.make_plan)."""
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from .gui_util import ask
 from .gui_family import FamilyEditor
 
 TITLE = "Character"
@@ -100,9 +101,9 @@ def open_person_window(app, ch):
         return None
     w = getattr(app, "_person_window", None)
     if w is not None and w.winfo_exists():
-        if w._dirty() and not messagebox.askyesno(TITLE, "Show %s instead? The changes made to %s are not "
+        if w._dirty() and not ask(TITLE, "Show %s instead? The changes made to %s are not "
                                                          "kept for the write and go (Keep for Apply keeps them)."
-                                                  % (ch["name"], w.ch["name"]), parent=w):
+                                                  % (ch["name"], w.ch["name"]), parent=w, yes='Show the other', no='Stay'):
             return w
         w.ed.states, w.ed.lib_adds = {}, []
         w.show(ch)
