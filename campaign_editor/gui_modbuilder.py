@@ -12,7 +12,7 @@ from .gui_util import ask
 from .gui_util import scroll_body
 from . import addons as AD
 from . import modbuilder as MB
-from . import theme
+from . import settings, theme
 from .gui_util import ScrollFrame, hint, one_window
 from .plan import Plan
 
@@ -54,6 +54,7 @@ class ModuleBuilder(tk.Toplevel):
         self.recipe = MB.new_recipe()
         self.changed = False
         self._quiet = False              # True while the window itself sets its fields
+        self.block_colours = {}          # {block: colour} the Scratch view gives the builder's own blocks
         from .gui_util import experimental
         experimental(self).pack(fill="x", padx=10, pady=(8, 0))
         top = ttk.Frame(self, padding=(10, 8, 10, 4))
@@ -68,6 +69,12 @@ class ModuleBuilder(tk.Toplevel):
         self.v_once = tk.BooleanVar()
         ttk.Checkbutton(top, text="only once in a campaign", variable=self.v_once).pack(side="left", padx=10)
         hint(top, HOW, width=520).pack(side="left")
+        # the look: Scratch's blocks (dragged into each other) or the lists (one block under another) - one module
+        self.v_view = tk.StringVar(value=settings.get("mb_view") or "blocks")
+        for val, words in (("lists", "Lists"), ("blocks", "Blocks (like Scratch)")):
+            ttk.Radiobutton(top, text=words, value=val, variable=self.v_view, style="Toolbutton",
+                            command=self._view_changed).pack(side="right", padx=(theme.BUTTON_GAP, 0))
+        ttk.Label(top, text="Look:").pack(side="right")
         self.v_title.trace_add("write", lambda *a: self._top_changed())
         self.v_game.trace_add("write", lambda *a: self._top_changed())
         self.v_once.trace_add("write", lambda *a: self._top_changed())
@@ -83,7 +90,9 @@ class ModuleBuilder(tk.Toplevel):
             "An example is made for the loaded mod: its names (a unit, a building, a town) are the mod's own - "
             "change any of them.")).pack(anchor="w", pady=(4, 0))
         self.sf = ScrollFrame(body)
-        self.sf.pack(side="left", fill="both", expand=True)
+        from .gui_modscratch import ScratchView
+        self.scratch = ScratchView(body, self)
+        (self.scratch if self.v_view.get() == "blocks" else self.sf).pack(side="left", fill="both", expand=True)
 
         low = ttk.Frame(self, padding=(10, 4, 10, 8))
         low.pack(fill="x")
@@ -181,7 +190,18 @@ class ModuleBuilder(tk.Toplevel):
             self.names[what] = MB.mod_names(self.mod, what) if self.mod is not None else []
         return self.names[what]
 
+    def _view_changed(self):
+        settings.put("mb_view", self.v_view.get())
+        blocks = self.v_view.get() == "blocks"
+        (self.sf if blocks else self.scratch).pack_forget()
+        (self.scratch if blocks else self.sf).pack(side="left", fill="both", expand=True)
+        self.rebuild()
+
     def rebuild(self):
+        if self.v_view.get() == "blocks":
+            self.scratch.render()
+            self.refresh()
+            return
         inner = self.sf.inner
         for w in inner.winfo_children():
             w.destroy()
@@ -193,13 +213,13 @@ class ModuleBuilder(tk.Toplevel):
         self.refresh()
 
     def _frame(self, inner, key):
-        c = (COLOURS_DARK if theme.dark() else COLOURS)[key]
+        c = self.block_colours.get(key) or (COLOURS_DARK if theme.dark() else COLOURS)[key]
         f = tk.Frame(inner, bg=c, bd=1, relief="solid")
         f.pack(fill="x", pady=4, padx=2)
-        tk.Label(f, text=HEADS[key], bg=c, fg="#1e1e1e", font=("", 11, "bold")).pack(anchor="w", padx=8, pady=(4, 2))
+        tk.Label(f, text=HEADS[key], bg=c, fg=theme.on_colour(c), font=("", 11, "bold")).pack(anchor="w", padx=8, pady=(4, 2))
         return f, c
 
-    def _when(self, inner):
+    def _when(self, inner, each=True):
         f, c = self._frame(inner, "when")
         row = tk.Frame(f, bg=c)
         row.pack(anchor="w", padx=18, pady=(0, 2))
@@ -213,9 +233,10 @@ class ModuleBuilder(tk.Toplevel):
         cur = ev.engine if ev and ev.key not in MB.EVENT else ""
         ttk.Button(row, text="More events... (every one of the engines)", command=lambda: EnginePicker(
             self, "events", self.set_engine_event, current=cur)).pack(side="left", padx=8)
-        self._each_row(f, c)
+        if each:
+            self._each_row(f, c)
         if ev:
-            wrapping(tk.Label(f, text=ev.help[0].upper() + ev.help[1:] + ".", bg=c, fg="#444", justify="left",
+            wrapping(tk.Label(f, text=ev.help[0].upper() + ev.help[1:] + ".", bg=c, fg=theme.on_colour(c), justify="left",
                               anchor="w"), padx=18)
             brings = MB.event_subjects(ev, self.recipe.get("game", "both"), self.mod)
             if brings is None:
@@ -226,7 +247,7 @@ class ModuleBuilder(tk.Toplevel):
                 each = self.recipe.get("each") or ""
                 more = {"town": "each town in turn", "army": "each army's general in turn",
                         "faction": "each faction in turn"}.get(each)
-                wrapping(tk.Label(f, bg=c, fg="#444", justify="left", anchor="w", text="It brings along: " + (
+                wrapping(tk.Label(f, bg=c, fg=theme.on_colour(c), justify="left", anchor="w", text="It brings along: " + (
                     ", ".join(MB.SUBJECT_WORDS[s] for s in brings) or "nothing") +
                     ("; FOR EACH brings %s" % more if more else "") +
                     " - the conditions and actions below work on them."), padx=18, pady=(0, 6))
@@ -236,7 +257,7 @@ class ModuleBuilder(tk.Toplevel):
         'repeat', in the game's words)."""
         row = tk.Frame(f, bg=c)
         row.pack(anchor="w", padx=18, pady=(2, 2))
-        tk.Label(row, text="then do it", bg=c, fg="#1e1e1e").pack(side="left")
+        tk.Label(row, text="then do it", bg=c, fg=theme.on_colour(c)).pack(side="left")
         each = self.recipe.get("each") or ""
         v = tk.StringVar(value=dict(MB.EACH)[each])
         cb = ttk.Combobox(row, textvariable=v, values=[l for _, l in MB.EACH], state="readonly",
@@ -281,13 +302,11 @@ class ModuleBuilder(tk.Toplevel):
 
     def _block(self, inner, group):
         f, c = self._frame(inner, group)
-        table = MB.table_of(group)
-        parts = MB.CONDITIONS if group == "ifs" else MB.ACTIONS
         items = self.recipe.get(group) or []
         if group == "ifs":                         # how the lines count: all (and), any one (or), none of them
             mrow = tk.Frame(f, bg=c)
             mrow.pack(anchor="w", padx=18, pady=(0, 2))
-            tk.Label(mrow, text="only when", bg=c, fg="#1e1e1e").pack(side="left")
+            tk.Label(mrow, text="only when", bg=c, fg=theme.on_colour(c)).pack(side="left")
             v = tk.StringVar(value=dict(MB.MATCH).get(self.recipe.get("match") or "all"))
             cb = ttk.Combobox(mrow, textvariable=v, values=[l for _, l in MB.MATCH], state="readonly",
                               width=max(len(l) for _, l in MB.MATCH) + 1)
@@ -296,38 +315,51 @@ class ModuleBuilder(tk.Toplevel):
             hint(mrow, "All: every line below must be true (and). Any one: one true line is enough (or). None: "
                        "no line may be true. 'not' in front of one line turns that line round.").pack(side="left")
         if not items:
-            tk.Label(f, bg=c, fg="#555", text="(nothing yet - %s)" % {
+            tk.Label(f, bg=c, fg=theme.on_colour(c), text="(nothing yet - %s)" % {
                 "ifs": "the actions run every time", "dos": "add what it does",
                 "else": "nothing is done when the IF does not hold"}[group]).pack(anchor="w", padx=18)
         for i, it in enumerate(items):
-            part = table.get(it.get("k"))
-            row = tk.Frame(f, bg=c)
-            row.pack(anchor="w", padx=18, pady=2, fill="x")
-            if group == "ifs":
-                nv = tk.BooleanVar(value=bool(it.get("not")))
-                tk.Checkbutton(row, text="not", variable=nv, bg=c, fg="#1e1e1e", activebackground=c,
-                               selectcolor=c, command=lambda n=i, b=nv: self.set_not(n, b.get())).pack(side="left")
-            pv = tk.StringVar(value=part.label if part else it.get("k"))
-            pcb = ttk.Combobox(row, textvariable=pv, values=[p.label for p in parts], state="readonly",
-                               width=max(len(p.label) for p in parts) + 1)
-            pcb.pack(side="left")
-            pcb.bind("<<ComboboxSelected>>", lambda e, g=group, n=i, v=pv: self.change_part(g, n, v.get()))
-            wide = []
-            for name, kind, label, _ in (part.fields if part else []):
-                if kind in WIDE or kind.startswith(("names:", "cmd:")) or kind in ("cond", "counter"):
-                    wide.append((name, kind, label))      # on a line of its own below: no text cut at the edge
-                else:
-                    self._field(row, c, group, i, it, part, name, kind, label)
-            ttk.Button(row, text="x", style=theme.colour_style(c), cursor="hand2",
-                       command=lambda g=group, n=i: self.remove(g, n)).pack(side="left", padx=theme.BUTTON_GAP)
-            if part and part.help:
-                hint(row, part.help).pack(side="left")
-            for name, kind, label in wide:
-                if self._shown(part, it, name, kind):
-                    self._wide_field(f, c, group, i, it, name, kind, label)
+            self.item_row(f, c, group, i, it)
         add = ttk.Button(f, text=ADD[group], style=theme.colour_style(c), cursor="hand2")
         add.configure(command=lambda b=add, g=group: self.add_menu(b, g))
         add.pack(anchor="w", padx=18, pady=(4, 6))
+
+    def item_row(self, f, c, group, i, it, grip=None, padx=18):
+        """One condition / action line into frame f (background c): the 'not' tick of a condition, the part's box,
+        its fields, the '?' and the longer fields on lines of their own. grip: a label the Scratch view drags the
+        block by (it has no x - a right click or a drag back to the blocks takes it out); None = the list view's
+        row with its x."""
+        table = MB.table_of(group)
+        parts = MB.CONDITIONS if group == "ifs" else MB.ACTIONS
+        part = table.get(it.get("k"))
+        row = tk.Frame(f, bg=c)
+        row.pack(anchor="w", padx=padx, pady=2, fill="x")
+        if grip is not None:
+            grip(row)
+        if group == "ifs":
+            nv = tk.BooleanVar(value=bool(it.get("not")))
+            tk.Checkbutton(row, text="not", variable=nv, bg=c, fg=theme.on_colour(c), activebackground=c,
+                           selectcolor=c, command=lambda n=i, b=nv: self.set_not(n, b.get())).pack(side="left")
+        pv = tk.StringVar(value=part.label if part else it.get("k"))
+        pcb = ttk.Combobox(row, textvariable=pv, values=[p.label for p in parts], state="readonly",
+                           width=max(len(p.label) for p in parts) + 1)
+        pcb.pack(side="left")
+        pcb.bind("<<ComboboxSelected>>", lambda e, g=group, n=i, v=pv: self.change_part(g, n, v.get()))
+        wide = []
+        for name, kind, label, _ in (part.fields if part else []):
+            if kind in WIDE or kind.startswith(("names:", "cmd:")) or kind in ("cond", "counter"):
+                wide.append((name, kind, label))      # on a line of its own below: no text cut at the edge
+            else:
+                self._field(row, c, group, i, it, part, name, kind, label)
+        if grip is None:
+            ttk.Button(row, text="x", style=theme.colour_style(c), cursor="hand2",
+                       command=lambda g=group, n=i: self.remove(g, n)).pack(side="left", padx=theme.BUTTON_GAP)
+        if part and part.help:
+            hint(row, part.help).pack(side="left")
+        for name, kind, label in wide:
+            if self._shown(part, it, name, kind):
+                self._wide_field(f, c, group, i, it, name, kind, label)
+        return row
 
     def _shown(self, part, it, name, kind):
         """A faction list shows only for 'one of these factions', a faction name only for 'this faction:'."""
@@ -342,7 +374,7 @@ class ModuleBuilder(tk.Toplevel):
             return
         before = bool(label) and kind not in NUMBERS
         if before:
-            tk.Label(row, text=label, bg=c, fg="#1e1e1e").pack(side="left", padx=(6, 2))
+            tk.Label(row, text=label, bg=c, fg=theme.on_colour(c)).pack(side="left", padx=(6, 2))
         if kind in NUMBERS:
             v = tk.StringVar(value="" if it.get(name) is None else str(it.get(name)))
             ttk.Entry(row, textvariable=v, width=8).pack(side="left", padx=2)
@@ -360,20 +392,20 @@ class ModuleBuilder(tk.Toplevel):
             ttk.Combobox(row, textvariable=v, values=self.names_of(what), width=28).pack(side="left", padx=2)
             v.trace_add("write", lambda *a: self.set_value(group, i, name, kind, v.get()))
         if label and not before:
-            tk.Label(row, text=label, bg=c, fg="#1e1e1e").pack(side="left", padx=(2, 6))
+            tk.Label(row, text=label, bg=c, fg=theme.on_colour(c)).pack(side="left", padx=(2, 6))
 
     def _wide_field(self, f, c, group, i, it, name, kind, label):
         """A text or a list of names on a line of its own under its row, in a box as wide as the block that grows
         with what is typed (one line of words: Enter adds none)."""
         sub = tk.Frame(f, bg=c)
         sub.pack(anchor="w", fill="x", padx=(46, 18), pady=(0, 3))
-        tk.Label(sub, text=label, bg=c, fg="#1e1e1e", width=8, anchor="e").pack(side="left", padx=(0, 4))
+        tk.Label(sub, text=label, bg=c, fg=theme.on_colour(c), width=8, anchor="e").pack(side="left", padx=(0, 4))
         names = kind.startswith("names:")
         line = kind == "cond" or kind.startswith("cmd:")
         now = ", ".join(it.get(name) or []) if names else str(it.get(name) or "")
         about = None
         if line:                                      # what the engines say of the command / condition typed
-            about = tk.Label(f, bg=c, fg="#444", justify="left", anchor="w")
+            about = tk.Label(f, bg=c, fg=theme.on_colour(c), justify="left", anchor="w")
             wrapping(about, padx=(46 + 8 * 8, 18), pady=(0, 3))
 
         def changed(text):

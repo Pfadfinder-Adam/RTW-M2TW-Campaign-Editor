@@ -4,6 +4,7 @@
 
 ### Added
 - **Module builder: control blocks** as in Scratch - **ELSE** (what the module does when the IF does not hold), the IF lines counted as **all / any one / none** of them and **not** before a line, and **FOR EACH** town or army of a faction, or each faction (everything below done for each one in turn). Older modules open and work as before.
+- **Module builder looks like Scratch** (Look: Blocks): the kinds of blocks in coloured groups on the left (events, control, conditions, actions), the module on the right as blocks that fit into each other - the WHEN block on top, FOR EACH and IF / ELSE holding their actions. Drag a block into its place (a line shows where) or click it to add it at the end; drag a block of the module to move it, or back to the left (or right click it) to take it out. **Look: Lists** keeps the old view of the same module.
 
 ## 0.31.0 - 2026-10-07
 
