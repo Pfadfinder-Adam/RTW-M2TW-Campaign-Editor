@@ -66,7 +66,10 @@ def read_faction(mod, campaign, faction):
     s = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
     fb = s.faction(faction)
     if not fb:
-        raise ValueError("%s has no faction block in this campaign's descr_strat.txt" % faction)
+        raise ValueError("%s is a faction of the mod (descr_sm_factions.txt) but is not in the campaign %s - its "
+                         "descr_strat.txt has no 'faction %s' block, so there is nothing of it to edit there. Pick "
+                         "another campaign at the top right, or bring it into this one: New faction with it as the "
+                         "template, or Events... > a faction that comes later." % (faction, campaign, faction))
     out["ai"] = " ".join(tokens(fb.header)[2:])
     for i in range(fb.start, fb.end):
         t = tokens(s.lines[i])

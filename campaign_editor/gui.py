@@ -1955,7 +1955,7 @@ class App(tk.Tk):
         if not mine:
             return
         self._undo_bdir = bdir
-        self._undo_group = set(group or {bdir})
+        self._undo_group = list(group or [(bdir, "")])           # [(backup, what it wrote)], oldest first
         from .gui_util import tip
         tip(self.b_undo_write, "Puts back every file this last write changed, as it was before it (%s). The same as "
                                "Tools > Restore a backup on its newest line." % backup_label(bdir))
@@ -1970,34 +1970,57 @@ class App(tk.Tk):
         if not bdir or not self.mod or not os.path.isdir(bdir):
             self._undo_gone()
             return
-        bs = [os.path.normcase(os.path.abspath(b)) for b in backups(self.mod)]
-        group = {os.path.normcase(os.path.abspath(b)) for b in getattr(self, "_undo_group", None) or {bdir}}
-        me = os.path.normcase(os.path.abspath(bdir))
+        norm = lambda b: os.path.normcase(os.path.abspath(b))     # noqa: E731
+        bs = [norm(b) for b in backups(self.mod)]
+        parts = list(getattr(self, "_undo_group", None) or [(bdir, "")])
+        group = {norm(b) for b, _ in parts}
+        me = norm(bdir)
         newer = bs[:bs.index(me)] if me in bs else None
         if newer is None or any(b not in group for b in newer):
             self._undo_gone()                      # a newer write came since (or it was restored): Restore does it
             return
         waiting = self.pending_parts()
         if waiting:
-            messagebox.showerror(APP, "Not undone yet. The window holds changes not applied:\n\n%s\n\nApply them or "
+            messagebox.showerror(APP, "Not undone yet. Changes wait for the write:\n\n%s\n\nApply them or "
                                       "Undo them first (the mod is read again after the files are put back)."
                                  % "\n".join("- " + label for _, label in waiting))
             return
         from .gui_util import ask_choice
-        if ask_choice(self, APP, "Undo the last write?\n\n%s\n\nEvery file it changed is put back as it was before "
-                                 "it; what it added is taken away." % backup_label(bdir),
-                      ["Undo it", "Keep it"], default=1, cancel=1) != 0:
-            return
+        if len(parts) > 1:                         # one Apply wrote several parts: a step back, or all of it
+            k = ask_choice(self, APP, "The last write put in %d parts:\n\n%s\n\nUndo only the last part (one step "
+                                      "back), or the whole write? Every file is put back as it was before it; what "
+                                      "it added is taken away." % (len(parts), "\n".join(
+                                          "%d. %s" % (i + 1, lab or backup_label(b)) for i, (b, lab) in
+                                          enumerate(parts))),
+                           ["Undo the last part only", "Undo the whole write", "Keep it"], default=2, cancel=2)
+            if k == 2 or k is None:
+                return
+            target = parts[-1][0] if k == 0 else parts[0][0]
+        else:
+            if ask_choice(self, APP, "Undo the last write?\n\n%s\n\nEvery file it changed is put back as it was "
+                                     "before it; what it added is taken away." % backup_label(bdir),
+                          ["Undo it", "Keep it"], default=1, cancel=1) != 0:
+                return
+            k, target = 1, bdir
         try:
-            ms = restore_to(self.mod, bdir)
+            ms = restore_to(self.mod, target)
         except (ValueError, OSError) as e:
             log.write("Undo this write stopped: %s" % e)
             messagebox.showerror(APP, "%s" % e)
             return
-        log.write("Undo this write: %s restored (%d file(s) back)" % (bdir, sum(len(m["modified"]) for m in ms)))
-        self._undo_gone()
+        log.write("Undo this write: %s restored (%d file(s) back)" % (target, sum(len(m["modified"]) for m in ms)))
         self.load()
-        self.status.set("The last write is undone - the files are as they were before it.")
+        if k == 0 and len(parts) > 2:              # one step back: the parts before it can still be undone
+            self._written(parts[0][0], None, group=parts[:-1])
+            self.status.set("The last part (%s) is undone; the parts before it are still written - Undo this write "
+                            "again takes them back too." % (parts[-1][1] or "the newest"))
+        elif k == 0:
+            self._written(parts[0][0], None)
+            self.status.set("The last part (%s) is undone; the part before it is still written." % (
+                parts[-1][1] or "the newest"))
+        else:
+            self._undo_gone()
+            self.status.set("The last write is undone - the files are as they were before it.")
 
     def mercenaries_window(self, region=None, new_from=None):
         from .gui_mercenaries import open_mercenaries
@@ -5751,7 +5774,7 @@ class App(tk.Tk):
                 log.write("Writing failed: %s\n%s" % (failed, traceback.format_exc()))
                 break
             applied.add(key)
-            bdirs.append(bdir)
+            bdirs.append((bdir, label or key))
             part = (getattr(self, "_session", None) or {}).pop(key, None)
             if part is not None and part.get("after"):
                 try:
@@ -5772,8 +5795,8 @@ class App(tk.Tk):
             text += "\n\nStart a NEW campaign to see the changes."
             self.show_text("Done" if not failed else "Written in part", text)
             self.load()
-        if len(bdirs) > 1:                              # Undo this write puts back the whole write, every part
-            self.after_idle(lambda: self._written(bdirs[0], None, group=set(bdirs)))
+        if len(bdirs) > 1:                              # Undo this write: the last part, or the whole write
+            self.after_idle(lambda: self._written(bdirs[0][0], None, group=list(bdirs)))
         self._mark_work()
 
     def _menu_hint(self, menu):

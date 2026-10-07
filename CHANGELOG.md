@@ -3,11 +3,12 @@
 ## Unreleased
 
 ### Fixed
+- Edit faction on a faction the mod has but the campaign does not (no block in its `descr_strat.txt`): said in plain words what to do (another campaign, or bring it in as a new / later faction).
 - Module builder and Add-ons on Medieval II: putting a script into the game refused with 'D:\Medieval II Total War\data holds only the files this mod changes' when the game keeps its data in packs (the usual install). The loaded mod now carries the write and its backup; Scripts in the game the same.
 - The set-up problems found on Load: a long list ran off the screen and the window could not be closed. The same problem on many lines of a file is now said once with its lines, a long text scrolls, and the buttons are always in sight (*Put them right* / *Not now*).
 
 ### Changed
-- **One write for the session**: the town window and the character window no longer write by themselves. **Keep for Apply** puts their changes into the session's list; **Apply changes** in the main window writes everything waiting in one go (the button shows `(+N kept)`), each part laid over the files as the parts before it left them. **Undo this write** then puts the whole write back. Closing a window with changes asks *Keep for Apply / Keep editing / Throw the changes away*.
+- **One write for the session**: the town window and the character window no longer write by themselves. **Keep for Apply** puts their changes into the session's list; **Apply changes** in the main window writes everything waiting in one go (the button shows `(+N kept)`), each part laid over the files as the parts before it left them. **Undo this write** then asks: *Undo the last part only* (one step back) or *Undo the whole write*. Closing a window with changes asks *Keep for Apply / Keep editing / Throw the changes away*.
 
 ## 0.30.0 - 2026-10-07
 
