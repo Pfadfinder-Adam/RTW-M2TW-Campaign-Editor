@@ -181,7 +181,7 @@ def save_session(game=None, mod_dir=None):
             if mark in seen:
                 continue
             name = GAME_LOG if i == 0 else "game_system.log.%d.txt" % i
-            with open(os.path.join(out, name), "w", encoding="utf-8") as o:
+            with open(os.path.join(out, name), "w", encoding="utf-8", newline="") as o:
                 o.write(report._read_tail(f))
             with open(os.path.join(out, "game_logs_kept.txt"), "a", encoding="utf-8") as o:
                 o.write(mark + "\n")

@@ -3,6 +3,7 @@
 ## 0.30.0 - 2026-10-07
 
 ### Fixed
+- Windows: two writes in the same second could be put back by Restore in the wrong order (the files' own times are too coarse there); every backup now keeps the exact moment it was made. The game's log kept with the editor's logs got every line ending doubled.
 - The map: painting land to a region and moving a town or port in the same write kept only one of them (the second change of the regions picture started again from the file); a town or port moved onto land just painted to its region was refused as 'not its land' until written. Both now go in one write.
 - Unit cards: a mod folder that keeps the game's own cards showed them as wide name buttons; the cards are now found in the game's data too, a unit without any picture gets a grey card of the same size with its name, and cards of another size sit in the middle of the usual box, so the rows stay even.
 - A new region's port: with the map's port sign, a click on the coast of a region painted over another one moved the old region's port there instead of giving the new region its own - it had to be written first. Now the port goes to the region the land is painted to, in the same go.

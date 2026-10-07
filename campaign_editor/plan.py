@@ -3,6 +3,7 @@ it to disk with a backup that restore() undoes."""
 
 import datetime
 import json
+import time
 import os
 import shutil
 
@@ -156,7 +157,10 @@ class Plan:
             bdir = os.path.join(root, BACKUP_DIR, "%s_%s_%d" % (stamp, self.new, k))
         # copied_from {created: its source}: what a copied picture was before it was replaced (Art's
         # "Back to the original"); Restore does not need it
-        manifest = {"faction": self.new, "template": self.template, "modified": [], "created": [], "copied_from": {}}
+        # made: when, to the nanosecond - two writes in one second keep their order for Restore (a file's own
+        # time is too coarse on Windows to tell them apart)
+        manifest = {"faction": self.new, "template": self.template, "modified": [], "created": [], "copied_from": {},
+                    "made": time.time_ns()}
         created = []
         changed = self.changed_files()
         dst = bdir
@@ -277,9 +281,14 @@ def backups(mod):
         for n in os.listdir(root):
             m = os.path.join(root, n, "manifest.json")
             if os.path.isfile(m) and not n.endswith("_restored"):
-                out.append((n[:15], os.path.getmtime(m), os.path.join(root, n)))
-    # newest first; two runs in one second (terrain + faction by one Apply) by the time
-    # their manifest was written, not by name
+                try:
+                    with open(m, encoding="utf-8") as fh:
+                        made = json.load(fh).get("made")
+                except (OSError, ValueError):
+                    made = None
+                out.append((n[:15], made or int(os.path.getmtime(m) * 1e9), os.path.join(root, n)))
+    # newest first; two runs in one second (terrain + faction by one Apply) by when they were made (older
+    # backups without it: the time their manifest was written), not by name
     return [p for _, _, p in sorted(out, reverse=True)]
 
 
