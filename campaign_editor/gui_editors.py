@@ -121,12 +121,19 @@ class RecordEditor(ttk.Frame):
         # a window of their own, like the family tree's (a tester: folded open in the editor they still left too
         # little room): opened by the button, closed by its own close box; the editor keeps its whole height
         self._lines_open = False
+        self._make_lines_window()
+        self._photos = []
+
+    def _make_lines_window(self):
+        """The lines' own window (made again if something destroyed it: a closed window must never break the editor)."""
         top = self._lines_win = tk.Toplevel(self)
         top.withdraw()
         top.geometry("980x680")
         top.protocol("WM_DELETE_WINDOW", self.toggle_lines)
         # another work picked (the editor hidden): its lines window goes too
-        self.bind("<Unmap>", lambda e: self.toggle_lines() if e.widget is self and self._lines_open else None, "+")
+        if not getattr(self, "_unmap_bound", False):
+            self._unmap_bound = True
+            self.bind("<Unmap>", lambda e: self.toggle_lines() if e.widget is self and self._lines_open else None, "+")
         box = self._lines_box = ttk.Frame(top, padding=6)
         box.pack(fill="both", expand=True)
         self._lines_label()
@@ -140,7 +147,12 @@ class RecordEditor(ttk.Frame):
         canvas.pack(side="left", fill="both", expand=True)
         from .gui_util import scroll_y, wheel
         wheel(canvas, scroll_y(canvas))
-        self._photos = []
+
+    def _form(self):
+        if not self.form.winfo_exists():
+            self._lines_open = False
+            self._make_lines_window()
+        return self.form
 
     def where_window(self):
         """Where the picked unit is recruited / the picked building can be built (buildwhere.open_where)."""
@@ -167,12 +179,15 @@ class RecordEditor(ttk.Frame):
         n = len(getattr(self, "fields", None) or ()) if self.current else 0
         self.b_lines.configure(text="Every line of the block%s%s" % (
             " (%d)" % n if n else "", " - open" if self._lines_open else "..."))
-        if self._lines_open:
+        if self._lines_open and self._lines_win.winfo_exists():
             cur = self.current[0] if isinstance(self.current, tuple) else (self.current or "")
             self._lines_win.title("Every line of %s %s" % (self.kind, cur))
 
     def toggle_lines(self):
         """Open the block's lines in their own window, or close it."""
+        if not self._lines_win.winfo_exists():         # destroyed by something else: made again, closed
+            self._form()
+            self._lines_stale = True
         self._lines_open = not self._lines_open
         w = self._lines_win
         if self._lines_open:
@@ -202,7 +217,7 @@ class RecordEditor(ttk.Frame):
             self.blocks = E.unit_blocks(f) if self.kind == "unit" else E.building_blocks(f)
         self._fill_filters()
         self.fill_list()
-        for w in self.form.winfo_children():
+        for w in self._form().winfo_children():
             w.destroy()
         for w in self.pics.winfo_children():
             w.destroy()
@@ -320,7 +335,7 @@ class RecordEditor(ttk.Frame):
         self.fields = E.fields(f, a, b)
         self.tree = E.chain_tree(f, a, b) if self.kind == "building" else None
         self.title.configure(text=("unit " if self.kind == "unit" else "building ") + name)
-        for w in self.form.winfo_children():
+        for w in self._form().winfo_children():
             w.destroy()
         # the lines to add, each shown after the field it will follow
         pending = []
