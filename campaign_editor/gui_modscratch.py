@@ -46,9 +46,11 @@ class ScratchView(ttk.Frame):
         sx = ttk.Scrollbar(right, orient="horizontal", command=self.cv.xview)
         self.cv.configure(yscrollcommand=sy.set, xscrollcommand=sx.set)
         sy.pack(side="right", fill="y")
-        ttk.Label(right, foreground=theme.palette()["muted"], wraplength=600, justify="left",
-                  text="Drag a block by its %s to move it; take it out with its \u2715, by dragging it back to the "
-                       "left, or with a right click on its %s." % (GRIP, GRIP)).pack(side="bottom", anchor="w")
+        tip = ttk.Label(right, foreground=theme.palette()["muted"], wraplength=600, justify="left",
+                        text="Drag a block by its %s to move it; take it out with its \u2715, by dragging it back to "
+                             "the left, or with a right click on its %s." % (GRIP, GRIP))
+        tip.pack(side="bottom", anchor="w", fill="x")
+        tip.bind("<Configure>", lambda e: tip.configure(wraplength=max(120, e.width - 4)))   # never cut at the edge
         sx.pack(side="bottom", fill="x")
         self.cv.pack(fill="both", expand=True)
         wheel(self.cv, scroll_y(self.cv))

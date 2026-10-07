@@ -2163,6 +2163,39 @@ def s_rename_faction(c, mod):
     return plan
 
 
+@step("Your own files for a battle model: a unit of {edited} gets its model's texture (colours turned over, as "
+      "a picture made in another program) and its model file put in as files of its own - a model of its own",
+      "the unit in battle: its colours turned over (a negative); the other units of that model unchanged")
+def s_own_model(c, mod):
+    try:
+        from PIL import ImageOps
+    except ImportError:
+        raise Skip("needs Pillow")
+    from . import models as MO
+    from .meshview import on_disk
+    cat = MO.catalogue(mod)
+    for u in unit_names(mod, c.edited, 80):
+        lines = MO.unit_lines(mod, u)
+        slots = [x for x in (MO.unit_slots(lines) if lines else []) if x[0] == "soldier"]
+        info = cat.get(slots[0][2].lower()) if slots else None
+        if info is None or not info.meshes or not on_disk(mod, info.meshes[0]):
+            continue
+        wear = c.edited if c.edited in info.textures else next((f for f in info.textures if f), None)
+        im = MO.texture_image(mod, info.textures.get(wear, "")) if wear else None
+        if im is None:
+            continue
+        pic = os.path.join(c.work, "ce_test_own_texture.png")
+        ImageOps.invert(im.convert("RGB")).save(pic)
+        mesh = os.path.join(c.work, "ce_test_own_model" + MO.mesh_kind(mod)[0])
+        with open(on_disk(mod, info.meshes[0])[1], "rb") as fh, open(mesh, "wb") as out:
+            out.write(fh.read())
+        plan = Plan(mod, "own", "own", {})
+        MO.own_files(plan, u, "soldier", 0, textures={wear: pic}, meshes=[mesh], name="ce_test_own_model")
+        c.said["own_model"] = u
+        return plan
+    raise Skip("no unit of %s whose model's files are on disk" % c.edited)
+
+
 @step("Map size: the map grown by 2 tiles of deep sea at the right and at the top (the last step - grown at the "
       "left or the bottom every place would move, and the test mod's engine scripts name tiles by number)",
       "the campaign map is 2 tiles wider and higher: open water at its right and top edges; every town, army and "
@@ -2223,6 +2256,7 @@ COVERAGE = {
     "Unit editor: lines": ["s_unit_fields"],
     "Unit editor: new unit step by step": ["s_units"],
     "Unit editor: replace the battle model": ["s_model"],
+    "Unit editor: your own files for a battle model (texture, model file)": ["s_own_model"],
     "Unit editor: voice": ["s_voice"],
     "Building editor: lines": ["s_building_fields"],
     "Building editor: new building step by step": ["s_buildings"],

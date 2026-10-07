@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+- **Your own files for a battle model** (Unit editor > Battle model > **Your own files...**, both games): a texture
+  you made elsewhere for every faction or one faction (PNG, TGA, DDS, JPG - made the game's form: Rome `.tga.dds`,
+  Medieval II `.texture`), Medieval II's weapons and shields texture, and the model file itself (Rome `.cas`,
+  Medieval II `.mesh`; several files = its detail levels). The editor names and places every file and writes the
+  lines; when other units share the model, the unit gets a model of its own (a copy) so they keep their look.
+  Preview first, a backup, Undo this write / Restore takes it all out. Nothing is drawn by the editor.
+
 ### Changed
 - **Start the game** names what it starts: *Start Rome - CE_Test*, or in amber *Start Rome - no mod* when the
   game's own data is loaded (the game started the plain campaign right after a test mod was made, and it looked

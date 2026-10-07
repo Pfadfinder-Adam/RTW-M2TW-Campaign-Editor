@@ -935,6 +935,8 @@ class RecordEditor(ttk.Frame):
                     i, mount=mount if k == "soldier" else None)).pack(side="left", padx=4)
                 ttk.Button(bar, text="Save its files...", command=lambda i=info: self.save_model_files(i)).pack(
                     side="left")
+                ttk.Button(bar, text="Your own files...", command=lambda k=key, i=idx, m=model: self.own_files(
+                    k, i, m)).pack(side="left", padx=(4, 0))
         # the mount (horse, camel, elephant ...): its own model, from descr_mount.txt
         if kind:
             r = len(slots)
@@ -1332,6 +1334,155 @@ class RecordEditor(ttk.Frame):
             lb.selection_set(i)
             lb.see(i)
             show()
+
+    def own_files(self, key, idx, current):
+        """The modder's own files in place of the model's (made in another program): a texture per faction or
+        one for every faction, Medieval II's weapons and shields texture, the model file itself (Rome .cas,
+        Medieval II .mesh; several = detail levels, closest first). The editor converts the pictures, names and
+        places every file, writes the lines; Preview first, a backup, Restore takes it all out (models.own_files)."""
+        from . import models as MO
+        unit = self.current[0]
+        what = "soldiers" if key == "soldier" else "officer %d" % (idx + 1)
+        info = self._model_catalogue().get(current.lower())
+        if info is None:
+            messagebox.showerror("Your own files", "%s is not in this mod's battle models." % current, parent=self)
+            return
+        if self.pending() and not ask(
+                "Your own files", "The unit editor holds changes not written yet; this writes "
+                                  "export_descr_unit.txt, so they would be dropped. Go on?", parent=self,
+                yes="Go on, drop them", no="Stay", danger=True):
+            return
+        m2 = MO.game_kind(self.mod) == "medieval2"
+        ext, word = MO.mesh_kind(self.mod)
+        others = sorted({u for u, k, i in MO.users_of(self.mod, info.name) if (u, k, i) != (unit, key, idx)})
+        st = {"tex": {}, "attach": None, "meshes": []}
+        w = tk.Toplevel(self)
+        w.title("Your own files - %s, %s" % (unit, what))
+        w.transient(self)
+        frm = scroll_body(w, 10)
+        ttk.Label(frm, justify="left", wraplength=620, text=(
+            "Put files you made in another program in place of the model's: the editor turns a picture into the "
+            "game's texture form, names and places every file and writes the lines. Nothing is drawn here.")).grid(
+            row=0, column=0, columnspan=3, sticky="w")
+        ttk.Label(frm, justify="left", wraplength=620, foreground="#555", text=(
+            "%s of %s use the model %s.%s" % (
+                what.capitalize(), unit, info.name,
+                (" %d other unit(s) use it too (%s): %s gets a model of its own - a copy of %s - so they keep "
+                 "their look." % (len(others), ", ".join(others[:3]) + (" ..." if len(others) > 3 else ""), unit,
+                                  info.name)) if others else
+                " No other unit uses it; a model file of yours makes a copy of it for this unit.")
+            )).grid(row=1, column=0, columnspan=3, sticky="w", pady=(4, 8))
+        pics = "*" + " *".join(MO.PICTURES)
+
+        def pick_picture(target, label):
+            path = filedialog.askopenfilename(parent=w, title="A picture for the texture", filetypes=[
+                ("Pictures", pics), ("Every file", "*.*")])
+            if not path:
+                return
+            if target == "attach":
+                st["attach"] = path
+            else:
+                st["tex"][target] = path
+            label.configure(text=os.path.basename(path))
+
+        def take_back(target, label):
+            if target == "attach":
+                st["attach"] = None
+            else:
+                st["tex"].pop(target, None)
+            label.configure(text="(as it is)")
+        tex = ttk.LabelFrame(frm, text="Texture (the picture wrapped round the model)", padding=6)
+        tex.grid(row=2, column=0, columnspan=3, sticky="we")
+        facs = [f for f in info.textures if f] or [""]
+        rows = [("*", "Every faction")] + [(f, f) for f in facs if f]
+        for r, (target, text) in enumerate(rows):
+            ttk.Label(tex, text=text).grid(row=r, column=0, sticky="w")
+            lbl = ttk.Label(tex, text="(as it is)", foreground="#555")
+            lbl.grid(row=r, column=2, sticky="w", padx=6)
+            b = ttk.Button(tex, text="Pick a picture...", command=lambda t=target, lb=lbl: pick_picture(t, lb))
+            b.grid(row=r, column=1, sticky="w", padx=6, pady=1)
+            for wd in (b, lbl):
+                wd.bind("<Button-3>", lambda e, t=target, lb=lbl: take_back(t, lb))
+        ttk.Label(tex, foreground="#555", wraplength=600, justify="left", text=(
+            "PNG, TGA, DDS%s or JPG; sides of 64, 128, 256, 512, 1024... (another size is made the old texture's). "
+            "'Every faction' fills the factions you leave as they are. Right click: as it is." % (
+                ", .texture" if m2 else ""))).grid(row=len(rows), column=0, columnspan=3, sticky="w", pady=(4, 0))
+        r0 = 3
+        if m2:
+            att = ttk.LabelFrame(frm, text="Weapons and shields texture (Medieval II)", padding=6)
+            att.grid(row=r0, column=0, columnspan=3, sticky="we", pady=(6, 0))
+            lbl = ttk.Label(att, text="(as it is)", foreground="#555")
+            ttk.Button(att, text="Pick a picture...", command=lambda lb=lbl: pick_picture("attach", lb)).grid(
+                row=0, column=0, sticky="w")
+            lbl.grid(row=0, column=1, sticky="w", padx=6)
+            lbl.bind("<Button-3>", lambda e, lb=lbl: take_back("attach", lb))
+            r0 += 1
+        mdl = ttk.LabelFrame(frm, text="The model itself (%s)" % word, padding=6)
+        mdl.grid(row=r0, column=0, columnspan=3, sticky="we", pady=(6, 0))
+        v_meshes = tk.StringVar(value="(as it is: %s%s)" % (", ".join(
+            m.replace("\\", "/").split("/")[-1] for m in info.meshes[:2]), " ..." if len(info.meshes) > 2 else ""))
+
+        def pick_meshes():
+            paths = filedialog.askopenfilenames(parent=w, title="Your %s file(s), the closest detail first" % word,
+                                                filetypes=[(word, "*" + ext), ("Every file", "*.*")])
+            if not paths:
+                return
+            try:
+                for p in paths:
+                    MO.check_mesh(self.mod, p)
+            except ValueError as e:
+                messagebox.showerror("Your own files", str(e), parent=w)
+                return
+            st["meshes"] = list(paths)
+            v_meshes.set(", ".join(os.path.basename(p) for p in paths))
+        ttk.Button(mdl, text="Pick the model file(s)...", command=pick_meshes).grid(row=0, column=0, sticky="w")
+        ttk.Label(mdl, textvariable=v_meshes, foreground="#555", wraplength=420, justify="left").grid(
+            row=0, column=1, sticky="w", padx=6)
+        ttk.Label(mdl, foreground="#555", wraplength=600, justify="left", text=(
+            "Several files = its detail levels, the closest first (they take the old levels' distances). It keeps "
+            "the old model's skeleton, so it must be made for it (%s)." % ", ".join(info.skeletons[:2]))).grid(
+            row=1, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        nbar = ttk.Frame(frm)
+        nbar.grid(row=r0 + 1, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        ttk.Label(nbar, text="Name of the unit's own model (when one is made)").pack(side="left")
+        dic = (self.value("dictionary") or unit).split()[0].lower() if (self.value("dictionary") or unit).split() \
+            else unit.lower()
+        v_name = tk.StringVar(value=dic if dic != info.name.lower() else info.name + "_own")
+        ttk.Entry(nbar, textvariable=v_name, width=30).pack(side="left", padx=6)
+
+        def make():
+            plan = Plan(self.mod, "model", "unit_model", {})
+            MO.own_files(plan, unit, key, idx, textures=dict(st["tex"]), attach=st["attach"],
+                         meshes=st["meshes"], name=v_name.get())
+            return plan
+
+        def preview():
+            try:
+                plan = make()
+            except Exception as e:
+                messagebox.showerror("Your own files", str(e), parent=w)
+                return
+            self.app.show_text("Your own files - preview (nothing written)", plan.report())
+
+        def write():
+            try:
+                plan = make()
+            except Exception as e:
+                messagebox.showerror("Your own files", str(e), parent=w)
+                return
+            bdir = plan.apply()
+            from . import log
+            log.write("Own files for the battle model of %s (%s) (backup %s)\n%s" % (unit, what, bdir,
+                                                                                    plan.report()))
+            w.destroy()
+            self.app.load()
+            self.app.status.set("%s: %s wear your own files now (backup %s) - Undo this write takes them out." % (
+                unit, what, bdir))
+        bar = ttk.Frame(frm)
+        bar.grid(row=r0 + 2, column=0, columnspan=3, sticky="e", pady=(10, 0))
+        ttk.Button(bar, text="Preview", command=preview).pack(side="left")
+        ttk.Button(bar, text="Write it in", command=write).pack(side="left", padx=6)
+        ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
 
     def _building_pictures(self):
         from .buildings import BuildingPictures

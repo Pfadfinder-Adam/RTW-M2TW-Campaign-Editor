@@ -7278,6 +7278,78 @@ building smith
             MO.replace(Plan(ModData(self.root), "model", "model", {}), "alpha general", "soldier", 0, "foot_model",
                        src_mod=ModData(os.path.join(other, "mod")))
 
+    def test_own_files_for_a_battle_model(self):
+        """The modder's own texture (any picture, made the game's form) and own model file put in place of a unit's
+        model: a model only this unit uses changes in place for a texture alone; a model shared with another unit
+        or a new model file = a copy of the model for this unit (the other keeps its look); a file the game cannot
+        read refused; Restore byte for byte."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from unittest import mock
+        from campaign_editor import models as MO
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1\nownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\talpha_model\nskeleton\t\tfs_swordsman\ntexture\t\talpha, data/models_unit/textures/a.tga\n"
+              "texture\t\tslave, data/models_unit/textures/s.tga\n"
+              "model_flexi_m\t\tdata/models_unit/a_high.cas, 15\nmodel_flexi\t\tdata/models_unit/a_low.cas, max\n")
+        tex = os.path.join(d, "models_unit", "textures")
+        os.makedirs(tex)
+        Image.new("RGBA", (64, 64), (200, 0, 0, 255)).save(os.path.join(tex, "a.tga"), format="TGA")
+        Image.new("RGBA", (64, 64), (0, 0, 200, 255)).save(os.path.join(tex, "s.tga"), format="TGA")
+        pic = os.path.join(self.root, "mine.png")
+        Image.new("RGB", (100, 60), (0, 255, 0)).save(pic)            # not a power of two: made 64 x 64
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        # a texture alone, the model only this unit's: changed in place, a file of its own, the old file kept
+        plan = Plan(mod, "own", "own", {})
+        self.assertEqual(MO.own_files(plan, "alpha general", "soldier", 0, textures={"alpha": pic}), "alpha_model")
+        dmb = "\n".join(plan.files[os.path.join(d, "descr_model_battle.txt")].texts())
+        self.assertIn("texture\t\talpha, data/models_unit/textures/alpha_model_alpha.tga", dmb)
+        self.assertIn("texture\t\tslave, data/models_unit/textures/s.tga", dmb)
+        made = plan.binaries[os.path.join(tex, "alpha_model_alpha.tga")]
+        import io
+        self.assertEqual(Image.open(io.BytesIO(made)).size, (64, 64))
+        self.assertTrue(any("100 x 60" in n for _, n in plan.notes))
+        # a second unit on the same model: this one gets a copy; a model file of its own replaces the levels
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1\nownership\talpha") + "\n" + EDU.replace(
+            "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1\nownership\talpha").replace(
+            "alpha general", "alpha guard"))
+        cas = os.path.join(self.root, "mine.cas")
+        write(cas, "MY-MODEL")
+        with self.assertRaises(ValueError):
+            MO.own_files(Plan(ModData(self.root), "own", "own", {}), "alpha general", "soldier", 0, meshes=[cas])
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        plan = Plan(mod, "own", "own", {})
+        with mock.patch.object(MO, "check_mesh", lambda m, p: b"MY-MODEL"):
+            new = MO.own_files(plan, "alpha general", "soldier", 0, textures={"*": pic}, meshes=[cas])
+        self.assertEqual(new, "alpha_general")          # named after the unit's dictionary
+        bdir = plan.apply()
+        m2 = ModData(self.root)
+        info = MO.catalogue(m2)["alpha_general"]
+        self.assertEqual(info.meshes, ["data/models_unit/alpha_general.cas"])
+        self.assertEqual(info.textures["alpha"], info.textures["slave"])
+        self.assertTrue(os.path.exists(os.path.join(d, "models_unit", "alpha_general.cas")))
+        self.assertEqual(MO.unit_slots(MO.unit_lines(m2, "alpha general")), [("soldier", 0, "alpha_general")])
+        self.assertEqual(MO.unit_slots(MO.unit_lines(m2, "alpha guard")), [("soldier", 0, "alpha_model")])
+        self.assertIn("data/models_unit/a_high.cas", MO.catalogue(m2)["alpha_model"].meshes)
+        with open(os.path.join(d, "descr_model_battle.txt")) as fh:
+            self.assertIn("model_flexi\t\tdata/models_unit/alpha_general.cas, max", fh.read())
+        restore(ModData(self.root), bdir)
+        after = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
+        self.assertEqual(after, before)
+        # Rome has no weapons texture of its own; nothing picked = refused
+        with self.assertRaises(ValueError):
+            MO.own_files(Plan(ModData(self.root), "own", "own", {}), "alpha general", "soldier", 0, attach=pic)
+        with self.assertRaises(ValueError):
+            MO.own_files(Plan(ModData(self.root), "own", "own", {}), "alpha general", "soldier", 0)
+
     def test_medieval_religions(self):
         # Medieval II: a ninth line per region, the religions
         from campaign_editor.edit import edit
