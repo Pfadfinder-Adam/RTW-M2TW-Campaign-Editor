@@ -32,6 +32,15 @@ class RecolourWindow(tk.Toplevel):
         self.side = max(180, min(SIDE, (min(sw, 1400) - 620) // 2, sh - 470))
         self.geometry("%dx%d" % (min(sw - 40, 600 + 2 * self.side + 60), min(sh - 80, 720)))
         self.colours = R.faction_colours(self.mod)
+        self._cache, self._photos = {}, []
+        self._take(faction)
+        self._build()
+        self.fill()
+
+    def _take(self, faction):
+        """Read the faction's pictures and guess the colours they carry now."""
+        self.faction = faction
+        self.title("%s - %s" % (TITLE, faction))
         self.items = R.targets(self.mod, self.camp, faction)
         paths = [it for it in self.items if it["group"] != "symbols and banners" and not it["skip"]] or \
             [it for it in self.items if not it["skip"]]
@@ -39,8 +48,23 @@ class RecolourWindow(tk.Toplevel):
             (self.colours.get(faction, ((200, 0, 0), None)), faction)
         self.target = list(self.colours.get(faction, ((200, 0, 0), None)))
         self.source = list(self.source)
-        self._cache, self._photos = {}, []
-        self._build()
+
+    def _faction_picked(self):
+        """Another faction picked in the window: its pictures and colours, the unwritten changes asked about first."""
+        want = self._faction_of.get(self.v_faction.get(), self.v_faction.get())
+        if want == self.faction:
+            return
+        if any(self.edits.values()):
+            from .gui_util import ask_choice
+            if ask_choice(self, TITLE, "The brush changes on %s's pictures are not written yet. Switch to %s and "
+                                       "throw them away?" % (self.faction, want),
+                          ["Switch", "Stay on %s" % self.faction], default=1, cancel=1) != 0:
+                self.v_faction.set(self._shown_of(self.faction))
+                return
+        self._cache, self.edits, self.zoom = {}, {}, {}
+        self._take(want)
+        self.v_from.set(self.source_of)
+        self._paint_swatches()
         self.fill()
 
     # ---- the window ----
@@ -57,7 +81,18 @@ class RecolourWindow(tk.Toplevel):
             anchor="w", pady=(0, 6))
         bar = ttk.Frame(outer)
         bar.pack(fill="x")
-        ttk.Label(bar, text="From the colours of").pack(side="left")
+        ttk.Label(bar, text="Faction").pack(side="left")
+        shown = self.app.shown_names() if hasattr(self.app, "shown_names") else {}
+        self._faction_of = {}
+        for tag in sorted(self.colours, key=lambda t: (shown.get(t) or t).lower()):
+            self._faction_of["%s (%s)" % (shown[tag], tag) if shown.get(tag) and shown[tag] != tag else tag] = tag
+        self._shown_of = lambda tag: next((k for k, v in self._faction_of.items() if v == tag), tag)
+        self.v_faction = tk.StringVar(value=self._shown_of(self.faction))
+        fcb = ttk.Combobox(bar, textvariable=self.v_faction, values=list(self._faction_of), state="readonly",
+                           width=min(26, max(12, max((len(k) for k in self._faction_of), default=12))))
+        fcb.pack(side="left", padx=(4, 14))
+        fcb.bind("<<ComboboxSelected>>", lambda e: self._faction_picked())
+        ttk.Label(bar, text="from the colours of").pack(side="left")
         names = sorted(self.colours) + [CUSTOM]
         self.v_from = tk.StringVar(value=self.source_of)
         cb = ttk.Combobox(bar, textvariable=self.v_from, values=names, state="readonly", width=18)

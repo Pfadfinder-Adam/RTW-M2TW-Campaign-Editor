@@ -838,21 +838,25 @@ class App(tk.Tk):
         self.b_report.pack(side="right", padx=(theme.BUTTON_GAP, 0))
         tools = ttk.Menubutton(bar, text="Tools")
         menu = tk.Menu(tools, tearoff=False)
+        # grouped by what one comes for, each group under a grey heading (not a junk drawer of everything)
+        def head(text):
+            menu.add_separator()
+            menu.add_command(label=text, state="disabled")
         menu.add_command(label="Settings...", command=self.once("settings_window", self.settings_window))
         menu.add_command(label="Help", command=self.once("show_help", self.show_help))
-        menu.add_separator()
+        head("Find what is wrong")
         menu.add_command(label="Check mod files (what the game would stumble on)", command=self.once("check", self.check))
         menu.add_command(label="The game's log in plain words (what went wrong in the game)...",
                          command=self.once("game_log_window", self.game_log_window))
-        menu.add_command(label="Check and install a pack...", command=self.once("install_pack", self.install_pack))
+        menu.add_command(label=TEST_MOD_LABEL, command=self.once("test_mod", self.test_mod))
+        head("Files and backups")
         menu.add_command(label="Restore a backup...", command=self.restore)
-        menu.add_separator()
+        menu.add_command(label="Check and install a pack...", command=self.once("install_pack", self.install_pack))
         menu.add_command(label="Game manifest...", command=self.once("game_manifest", self.game_manifest))
+        head("About the editor")
         menu.add_command(label="Log", command=self.once("show_log", self.show_log))
         menu.add_command(label="Save logs (zip)...", command=self.once("save_logs", self.save_logs))
         menu.add_command(label="Credits (who made it with us)...", command=self.once("credits", self.credits_window))
-        menu.add_separator()
-        menu.add_command(label=TEST_MOD_LABEL, command=self.once("test_mod", self.test_mod))
         menu.add_separator()
         menu.add_command(label="Delete this mod's folder...", command=self.delete_mod,
                          foreground=theme.ink("#c00000"))       # red: it deletes for good (asked twice)
@@ -3390,10 +3394,18 @@ class App(tk.Tk):
             region_kw["ghost"] = {"kind": kind if kind != "agent" else "agent", "check": add_why,
                                   "char": preset if kind == "agent" else None}
         if getattr(self, "_port_tool", False) and self._cmap:
+            def port_region(xy):                        # the land as painted now: a new region painted over an
+                return self.region_paint.get(tuple(xy)) or self._cmap.region_at(*xy)   # old one gets its own port
+
             def port_why(xy):
-                region = self._cmap.region_at(*xy)
+                region = port_region(xy)
                 if not region:
                     return "not a region's land"
+                if self._new_region(region):                # not written yet: its port is part of the new region
+                    self._region_point = ("port", region)
+                    why = self.region_point_problem(xy)
+                    self._region_point = None
+                    return why
                 return check_place("port", region, xy)
 
             def port_click(xy):
@@ -3402,7 +3414,11 @@ class App(tk.Tk):
                     return why
                 self._port_tool = False
                 self.map_view.set_tool(None)
-                place_moved("port", self._cmap.region_at(*xy), xy)
+                region = port_region(xy)
+                if self._new_region(region):
+                    self._region_point = ("port", region)
+                    return self.place_region_point(xy)
+                place_moved("port", region, xy)
                 return None
             region_kw["on_place"] = port_click
             region_kw["ghost"] = {"kind": "port", "check": port_why}
@@ -4514,20 +4530,16 @@ class App(tk.Tk):
             messagebox.showerror(APP, "Could not read the towns: %s" % e)
 
     def recolour_window(self, faction=None):
-        """Recolour the faction's pictures (the faction picked in the window, else asked)."""
+        """Recolour the faction's pictures (the faction picked in the window, else the first; the window's list changes it)."""
         if not self.mod:
             messagebox.showinfo(APP, "Load a mod first.")
             return
         names = [n for n, _ in self.mod.factions()]
         faction = faction or self.field_faction()
-        if faction not in names:
-            from tkinter import simpledialog
-            faction = simpledialog.askstring(APP, "Which faction's pictures? (%s)" % ", ".join(names[:12]) +
-                                             (" ..." if len(names) > 12 else ""), parent=self)
+        if faction not in names:                    # no faction picked yet: the window opens on the first, a list
+            faction = next(iter(sorted(names)), None)   # at its top changes it
             if not faction:
-                return
-            if faction not in names:
-                messagebox.showerror(APP, "%s is not a faction of this mod" % faction)
+                messagebox.showinfo(APP, "This mod has no faction to recolour.")
                 return
         if self.editor() is None and self.undo_stack and self.v_mode.get() == "new":
             messagebox.showinfo(APP, "Recolour works on the files as they are: create the new faction first "

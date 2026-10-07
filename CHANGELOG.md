@@ -3,8 +3,13 @@
 ## Unreleased
 
 ### Fixed
+- A new region's port: with the map's port sign, a click on the coast of a region painted over another one moved the old region's port there instead of giving the new region its own - it had to be written first. Now the port goes to the region the land is painted to, in the same go.
+- **Recolour...** with no faction picked asked for the faction's name to be typed in. Now the window opens on a faction and a list at its top changes it (names players read first); brush changes not written yet are asked about before switching.
 - Mercenaries: after a write the window showed the pools as they were before it.
 - The editor could stop responding (Windows: 'not responding') a while after start: every window, hover tips included, was made resizable each time it showed, and on Windows that showed it again and again. Now only real windows, once each; hover tips are left alone.
+
+### Changed
+- The **Tools** menu is grouped by what one comes for, each group under a grey heading: *Find what is wrong* (Check mod files, the game's log, the test mod), *Files and backups* (Restore, packs, game manifest), *About the editor* (log, Credits); Delete this mod's folder stays last, in red.
 
 ### Added
 - **Long work shows it is working**: checking the mod, the test mod and every step of the bigger map run beside the window with a moving bar and the seconds at the bottom - the window never freezes (the x3 heights step took up to two minutes with the window not answering).
