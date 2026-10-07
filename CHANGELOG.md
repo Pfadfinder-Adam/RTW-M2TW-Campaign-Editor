@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Closing the editor could end with a Windows error box ('Unhandled exception in script ... application has been
+  destroyed'). Closing never fails now, and a fault while the editor closes goes only into its log.
+
 ## 0.32.0 - 2026-10-07
 
 ### Added

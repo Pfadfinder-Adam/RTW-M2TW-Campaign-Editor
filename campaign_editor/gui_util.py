@@ -31,7 +31,9 @@ def unique_tcl_names():
     is deleted (its widget gone) Python reuses the address and a new callback can get the old name - a stale reference
     (a call already scheduled, an option of a widget being torn down) then runs the wrong function ("<lambda>()
     missing 1 required positional argument: 'e'", once in thousands of clicks of the click test). A running number
-    in every name keeps a deleted command's name from coming back: a stale reference just finds no command."""
+    in every name keeps a deleted command's name from coming back: a stale reference just finds no command.
+    A window deletes the commands it keeps when it goes; one already deleted another way (a call scheduled through one
+    part and called off through another) is skipped - it made closing the editor fail: "can't delete Tcl command"."""
     if getattr(tk.Misc, "_ce_unique_names", False):
         return
     real = tk.Misc._register
@@ -40,10 +42,23 @@ def unique_tcl_names():
         name = real(self, func, subst, needcleanup)
         new = "ce%d_%s" % (next(_TCL_SERIAL), name)
         self.tk.call("rename", name, new)
-        if needcleanup and self._tclCommands and self._tclCommands[-1] == name:
-            self._tclCommands[-1] = new
+        kept = self._tclCommands if needcleanup else None
+        if kept:
+            for i in range(len(kept) - 1, -1, -1):    # its own entry, wherever another name landed after it
+                if kept[i] == name:
+                    kept[i] = new
+                    break
         return new
+
+    def destroy(self):
+        kept, self._tclCommands = self._tclCommands, None
+        for name in kept or ():
+            try:
+                self.tk.deletecommand(name)
+            except tk.TclError:                       # already gone - nothing left to delete
+                pass
     tk.Misc._register = tk.Misc.register = _register
+    tk.Misc.destroy = destroy
     tk.Misc._ce_unique_names = True
 
 

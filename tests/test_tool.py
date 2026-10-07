@@ -8407,6 +8407,34 @@ building smith
         finally:
             root.destroy()
 
+    def test_closing_the_editor_when_a_command_is_already_gone(self):
+        """Closing the editor once showed 'can't delete Tcl command' and then, while it reported that, a Windows box
+        'application has been destroyed' (a tester, 0.32.0): a window keeps the names of its callbacks to delete them
+        when it goes; a name deleted another way before (a call scheduled by one part and called off through
+        another) made the close fail. A name already gone is skipped; every name a window keeps is a real one."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display (CI): the window is not tested here
+            self.skipTest("no window: %s" % e)
+        from campaign_editor.gui_util import unique_tcl_names
+        unique_tcl_names()
+        try:
+            other = tk.Label(root)
+            job = root.after(100000, lambda: None)    # scheduled by the main window...
+            other.after_cancel(job)                   # ...called off through another part: Tcl deletes the command
+            root.bind("<Configure>", lambda e: None, add="+")
+            root.after(100000, lambda: None)
+            have = set(root.tk.splitlist(root.tk.call("info", "commands")))
+            kept = [n for n in root._tclCommands if n not in have]
+            self.assertEqual(len(kept), 1)            # the cancelled call's name: the list keeps it, Tcl does not
+            other.destroy()
+        except BaseException:
+            root.destroy()
+            raise
+        root.destroy()                                # before: TclError "can't delete Tcl command"
+        self.assertIsNone(root._tclCommands)
+
     def test_no_internet_or_a_silent_service_never_hangs(self):
         """No internet, or a report service that takes the call and never answers: the editor gives up after its
         time and says it in plain words (the window runs these in a thread, so it never freezes)."""

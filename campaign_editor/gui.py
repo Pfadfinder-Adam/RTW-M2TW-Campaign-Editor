@@ -6112,6 +6112,8 @@ class App(tk.Tk):
             messagebox.showerror(APP, str(val))
             return
         log.write("ERROR (unexpected)\n" + text)
+        if getattr(self, "_closing", False) or not self._alive():
+            return                                # the editor is closing: a window now would fail (tester, 0.32.0)
         # plain words, what it means, what to do, a button for it (NN/g error-message guidelines); the same fault
         # again (a mouse-move handler fires many times a second) is logged, not shown again
         last = traceback.extract_tb(tb)[-1] if tb else None
@@ -6123,16 +6125,26 @@ class App(tk.Tk):
             return
         seen.add(sig)
         from .gui_util import ask_choice
-        k = ask_choice(self, APP, "Something went wrong inside the editor - a fault of the editor itself, not of "
-                                  "your mod.\n\nYour files are safe: a write either finishes with its backup or is "
-                                  "put back whole. You can go on working; if the same thing happens again, please "
-                                  "send a report so it gets fixed (the logs go with it, your names cut out - you see "
-                                  "everything before it is sent).\n\nFor the report: %s: %s (%s)"
-                       % (exc.__name__, str(val)[:300], where),
-                       ["Send a report...", "Go on working"], default=1, cancel=1)
+        try:
+            k = ask_choice(self, APP, "Something went wrong inside the editor - a fault of the editor itself, not of "
+                                      "your mod.\n\nYour files are safe: a write either finishes with its backup or is "
+                                      "put back whole. You can go on working; if the same thing happens again, please "
+                                      "send a report so it gets fixed (the logs go with it, your names cut out - you see "
+                                      "everything before it is sent).\n\nFor the report: %s: %s (%s)"
+                           % (exc.__name__, str(val)[:300], where),
+                           ["Send a report...", "Go on working"], default=1, cancel=1)
+        except tk.TclError as e:                  # the window went while it was being shown
+            log.write("The fault could not be shown: %s" % e)
+            return
         if k == 0:
             self.send_report("The editor showed: %s: %s (%s)\n\nWhat I did just before:\n" % (exc.__name__, val,
                                                                                                where))
+
+    def _alive(self):
+        try:
+            return bool(self.winfo_exists())
+        except tk.TclError:
+            return False
 
     def restore(self):
         if not self.mod:
@@ -6203,8 +6215,12 @@ def main():
     app = App()
 
     def close():
+        app._closing = True                       # from here a fault is only logged, no window opens
         app.save_session()
-        app.destroy()
+        try:
+            app.destroy()
+        except tk.TclError as e:                  # the editor goes anyway; say it in the log, never in a box
+            log.write("Closing: %s" % e)
     app.protocol("WM_DELETE_WINDOW", close)
     import atexit
     atexit.register(app.save_session)             # also when the window goes another way
