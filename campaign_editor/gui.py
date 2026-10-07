@@ -793,8 +793,15 @@ class App(tk.Tk):
         # --- actions
         # the status line and the buttons are packed at the bottom before the tabs: a tab taller than
         # the window then shrinks, the Apply buttons never go off the window's edge
-        self.status_line = ttk.Label(self, anchor="w", justify="left")
-        self.status_line.pack(side="bottom", fill="x", padx=6, pady=(0, 6), before=self.nb)
+        srow = ttk.Frame(self)
+        srow.pack(side="bottom", fill="x", padx=6, pady=(0, 6), before=self.nb)
+        # right after a write: 'Undo this write' beside the message (NN/g: an easy way back, like 'Undo Send')
+        self.b_undo_write = ttk.Button(srow, text="Undo this write", command=self.undo_write)
+        self._undo_bdir = None
+        from . import plan as _plan
+        _plan.WRITTEN.append(lambda bdir, p: self.after_idle(lambda: self._written(bdir, p)))
+        self.status_line = ttk.Label(srow, anchor="w", justify="left")
+        self.status_line.pack(side="left", fill="x", expand=True)
         # a long message wraps onto a second line instead of running off the window's edge
         self.status_line.bind("<Configure>", lambda e: self.status_line.configure(wraplength=max(e.width - 4, 200)))
         self.bottom_bar = ttk.Frame(self)
@@ -1875,6 +1882,56 @@ class App(tk.Tk):
             self.map_view.brush = max(1, int(self.v_brush.get()))
         except (tk.TclError, ValueError, AttributeError):
             pass
+
+    def _written(self, bdir, p):
+        """A write finished: offer to undo it, if it is this mod's (the test mod writes into another folder)."""
+        try:
+            mine = self.mod and os.path.normcase(os.path.abspath(bdir)).startswith(
+                os.path.normcase(os.path.abspath(os.path.dirname(self.mod.data))) + os.sep)
+        except Exception:
+            mine = False
+        if not mine:
+            return
+        self._undo_bdir = bdir
+        from .gui_util import tip
+        tip(self.b_undo_write, "Puts back every file this last write changed, as it was before it (%s). The same as "
+                               "Tools > Restore a backup on its newest line." % backup_label(bdir))
+        self.b_undo_write.pack(side="right", padx=(6, 0), before=self.status_line)   # never squeezed by a long message
+
+    def _undo_gone(self):
+        self._undo_bdir = None
+        self.b_undo_write.pack_forget()
+
+    def undo_write(self):
+        bdir = self._undo_bdir
+        if not bdir or not self.mod or not os.path.isdir(bdir):
+            self._undo_gone()
+            return
+        bs = backups(self.mod)
+        if not bs or os.path.normcase(os.path.abspath(bs[0])) != os.path.normcase(os.path.abspath(bdir)):
+            self._undo_gone()                      # a newer write came since (or it was restored): Restore does it
+            return
+        waiting = self.pending_parts()
+        if waiting:
+            messagebox.showerror(APP, "Not undone yet. The window holds changes not applied:\n\n%s\n\nApply them or "
+                                      "Undo them first (the mod is read again after the files are put back)."
+                                 % "\n".join("- " + label for _, label in waiting))
+            return
+        from .gui_util import ask_choice
+        if ask_choice(self, APP, "Undo the last write?\n\n%s\n\nEvery file it changed is put back as it was before "
+                                 "it; what it added is taken away." % backup_label(bdir),
+                      ["Undo it", "Keep it"], default=1, cancel=1) != 0:
+            return
+        try:
+            ms = restore_to(self.mod, bdir)
+        except (ValueError, OSError) as e:
+            log.write("Undo this write stopped: %s" % e)
+            messagebox.showerror(APP, "%s" % e)
+            return
+        log.write("Undo this write: %s restored (%d file(s) back)" % (bdir, sum(len(m["modified"]) for m in ms)))
+        self._undo_gone()
+        self.load()
+        self.status.set("The last write is undone - the files are as they were before it.")
 
     def mercenaries_window(self, region=None, new_from=None):
         from .gui_mercenaries import open_mercenaries

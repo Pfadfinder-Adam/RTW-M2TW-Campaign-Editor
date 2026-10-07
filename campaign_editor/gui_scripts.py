@@ -151,7 +151,7 @@ class ScriptsWindow(SettingsForm, tk.Toplevel):
             ttk.Button(bar, text="Write the settings", command=self.write_settings).grid(row=0, column=0, sticky="we")
         ttk.Button(bar, text="Turn it on" if not s.on else "Turn it off", command=self.switch).grid(
             row=0, column=1, sticky="we", padx=(6, 0))
-        ttk.Button(bar, text="Delete it", command=self.delete).grid(row=0, column=2, sticky="we", padx=(6, 0))
+        ttk.Button(bar, text="Delete it...", command=self.delete).grid(row=0, column=2, sticky="we", padx=(24, 0))
         ttk.Button(bar, text="Show the code", command=lambda: self.app.show_text(
             "%s - %s" % (s.file, s.title), s.text)).grid(row=1, column=0, sticky="we", pady=(6, 0))
         ttk.Button(bar, text="Open the folder", command=lambda: _open(s.folder)).grid(

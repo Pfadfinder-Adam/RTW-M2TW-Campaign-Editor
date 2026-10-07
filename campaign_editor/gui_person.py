@@ -26,7 +26,8 @@ class PersonWindow(tk.Toplevel):
         self.transient(app)
         self.geometry("1100x%d" % max(560, min(860, self.winfo_screenheight() - 110)))
         self.minsize(760, 520)
-        self.protocol("WM_DELETE_WINDOW", self.close)
+        from .gui_util import close_guard               # never closes over unwritten changes silently
+        self.close = close_guard(self, TITLE, lambda: self.ed.dirty(), lambda: self.write(), after=self._forget)
         bar = ttk.Frame(self, padding=(10, 4, 10, 6))
         bar.pack(side="bottom", fill="x")
         ttk.Button(bar, text="Close", command=self.close).pack(side="right")
@@ -89,13 +90,9 @@ class PersonWindow(tk.Toplevel):
         self.app.status.set("%s written (backup %s)." % (self.ch["name"], bdir))
         self.show(self.ch)
 
-    def close(self):
-        if self.ed.dirty() and not messagebox.askyesno(TITLE, "Close without writing the changes made here?",
-                                                       parent=self):
-            return
+    def _forget(self):
         if getattr(self.app, "_person_window", None) is self:
             self.app._person_window = None
-        self.destroy()
 
 
 def open_person_window(app, ch):

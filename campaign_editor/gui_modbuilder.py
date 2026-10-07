@@ -658,8 +658,17 @@ class ModuleBuilder(tk.Toplevel):
                                    "Module builder opens it again." % out, parent=self)
 
     def close(self):
-        if self.changed and not messagebox.askyesno(TITLE, "Close the builder? The module is not saved.", parent=self):
-            return
+        from .gui_util import ask_choice                  # never closes over an unsaved module silently
+        if self.changed:
+            k = ask_choice(self, TITLE, "The module is not saved yet.\n\nSave it to your add-ons now, keep working, "
+                                        "or throw it away?", ["Save to my add-ons", "Keep working", "Throw it away"],
+                           default=0, cancel=1, danger=2)
+            if k in (1, None):
+                return
+            if k == 0:
+                self.save()
+                if self.changed:
+                    return
         self.destroy()
 
 

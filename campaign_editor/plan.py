@@ -13,6 +13,9 @@ OLD_BACKUP_DIR = "faction_tool_backups"           # up to 0.28: still listed, Re
 BACKUP_DIRS = (BACKUP_DIR, OLD_BACKUP_DIR)
 
 
+# listeners told of every finished write: fn(backup folder, the plan) - the window's 'Undo this write' button
+WRITTEN = []
+
 class Plan:
     def __init__(self, mod, template, new, opts=None):
         self.mod = mod
@@ -213,6 +216,11 @@ class Plan:
             raise WriteError("%s\n\nNothing was changed: %s" % (
                 why, "the %d file(s) written before it were put back." % (len(done) + len(made))
                 if done or made else "no file had been written yet.")) from e
+        for fn in list(WRITTEN):                    # the window offers 'Undo this write' (gui.App._written)
+            try:
+                fn(bdir, self)
+            except Exception:
+                pass
         return bdir
 
 

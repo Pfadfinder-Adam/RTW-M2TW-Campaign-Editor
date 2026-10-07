@@ -319,10 +319,21 @@ class TownWindow(tk.Toplevel):
         self.app.status.set("%s written (backup %s)." % (self.town["name"], bdir))
         self.load(self.region)
 
-    def close(self):
+    def _unwritten(self):
+        """Words of what is not written yet, or '' (the close guard asks before throwing it away)."""
+        try:
+            n = len(self._plan().changed_files())
+        except Exception:
+            return "changes"
+        return ("%d file(s) to change" % n) if n else ""
+
+    def _forget(self):
         if getattr(self.app, "_town_window", None) is self:
             self.app._town_window = None
-        self.destroy()
+
+    def close(self):
+        from .gui_util import close_guard                 # never closes over unwritten changes silently
+        close_guard(self, TITLE, self._unwritten, self.write, after=self._forget)()
 
 
 def open_town_window(app, region):

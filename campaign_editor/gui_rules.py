@@ -62,7 +62,10 @@ class RulesWindow(tk.Toplevel):
         foot.pack(fill="x", pady=(6, 0))
         self.lbl = ttk.Label(foot, foreground="#555")
         self.lbl.pack(side="left")
-        ttk.Button(foot, text="Close", command=self.destroy).pack(side="right")
+        from .gui_util import close_guard               # never closes over unwritten changes silently
+        close = close_guard(self, "Campaign rules", lambda: ("%d value(s)" % len(self.changes)) if self.changes
+                            else "", self.write)
+        ttk.Button(foot, text="Close", command=close).pack(side="right")
         ttk.Button(foot, text="Write it in", command=self.write).pack(side="right", padx=6)
         ttk.Button(foot, text="Preview", command=self.preview).pack(side="right")
         if self.groups:

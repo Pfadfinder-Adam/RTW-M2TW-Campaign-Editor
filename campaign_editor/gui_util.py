@@ -882,3 +882,84 @@ def tint_owners(tree, rows, mod):
             continue
         tree.tag_configure(tag, background=bg)
         tree.item(iid, tags=tuple(t for t in tree.item(iid, "tags") if not str(t).startswith("own:")) + (tag,))
+
+
+def ask_choice(parent, title, text, choices, default=0, cancel=None, danger=None):
+    """A question whose buttons answer it in words (not Yes / No - Microsoft's writing guidelines: the buttons answer
+    the title's question); choices = [words, ...] left to right, danger = the index of a destructive one, set apart on
+    the left so a hurried click never lands on it (NN/g: destructive next to confirming = slips). Enter picks
+    default, Esc / closing the window gives cancel. Returns the index picked (or cancel)."""
+    w = tk.Toplevel(parent)
+    w.title(title)
+    w.transient(parent.winfo_toplevel() if parent is not None else None)
+    w.resizable(False, False)
+    out = {"k": cancel}
+    frm = ttk.Frame(w, padding=14)
+    frm.pack(fill="both", expand=True)
+    ttk.Label(frm, text=text, justify="left", wraplength=480).pack(anchor="w")
+    bar = ttk.Frame(frm)
+    bar.pack(fill="x", pady=(14, 0))
+
+    def pick(k):
+        out["k"] = k
+        w.destroy()
+    for k in reversed(range(len(choices))):
+        if k == danger:
+            continue
+        b = ttk.Button(bar, text=choices[k], command=lambda k=k: pick(k))
+        b.pack(side="right", padx=(6, 0))
+        if k == default:
+            b.focus_set()
+    if danger is not None:
+        ttk.Button(bar, text=choices[danger], command=lambda: pick(danger)).pack(side="left")
+    w.bind("<Return>", lambda e: pick(default))
+    w.bind("<Escape>", lambda e: pick(cancel))
+    w.protocol("WM_DELETE_WINDOW", lambda: pick(cancel))
+    w.update_idletasks()
+    try:
+        px, py = parent.winfo_rootx(), parent.winfo_rooty()
+        pw, ph = parent.winfo_width(), parent.winfo_height()
+        w.geometry("+%d+%d" % (px + max(0, (pw - w.winfo_reqwidth()) // 2),
+                               py + max(0, (ph - w.winfo_reqheight()) // 3)))
+    except tk.TclError:
+        pass
+    try:
+        w.grab_set()
+    except tk.TclError:
+        pass
+    parent.wait_window(w)
+    return out["k"]
+
+
+def close_guard(w, title, dirty, write, after=None):
+    """Closing a window never throws its work away silently (NN/g 'close-as-discard'): dirty() -> words of what is
+    not written yet (or '' / None); with it, Close asks 'Write it in / Keep editing / Throw the changes away' - the
+    throw-away apart on the left, Enter writes, Esc keeps editing. write() is the window's own write (it may still
+    refuse - then the window stays). after() runs before the window goes (its app slot cleared). Returns the close
+    function for the window's Close button; the title bar's X does the same."""
+    def close():
+        try:
+            what = dirty()
+        except Exception:
+            what = "changes"
+        if what:
+            k = ask_choice(w, title, "The changes made here are not written yet%s.\n\nWrite them in now, keep editing, "
+                                     "or throw them away?" % ((" (%s)" % what) if isinstance(what, str) else ""),
+                           ["Write it in", "Keep editing", "Throw the changes away"], default=0, cancel=1, danger=2)
+            if k == 1 or k is None:
+                return
+            if k == 0:
+                write()
+                try:
+                    if not w.winfo_exists() or dirty():
+                        return                     # not written (refused, or the user said no): keep the window
+                except tk.TclError:
+                    return
+        if after:
+            after()
+        try:
+            w.destroy()
+        except tk.TclError:
+            pass
+    w.protocol("WM_DELETE_WINDOW", close)
+    return close

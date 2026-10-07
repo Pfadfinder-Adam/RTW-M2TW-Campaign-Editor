@@ -3,9 +3,12 @@
 ## Unreleased
 
 ### Fixed
+- Mercenaries: after a write the window showed the pools as they were before it.
 - The editor could stop responding (Windows: 'not responding') a while after start: every window, hover tips included, was made resizable each time it showed, and on Windows that showed it again and again. Now only real windows, once each; hover tips are left alone.
 
 ### Added
+- **Nothing is lost by closing a window**: a window with changes not written yet (Mercenaries, a town, a character, Events, Campaign rules, Traits and retinue, the Module builder) asks before it closes - *Write it in*, *Keep editing* or *Throw the changes away* (that one set apart on the left; Enter writes, Esc keeps editing).
+- **Undo this write**: right after anything is written, a button beside the message at the bottom puts every file of that write back as it was (the same as Restore on the newest backup).
 - **The outline under the mouse shows the brush**: a painting brush outlines its whole square of tiles, the heights brush the one point it changes at size 1 and its circle above that (Terrain editor, region borders); the brush size follows a typed number too, not only the arrows.
 - **Heights brush, point by point**: brush size 1 is one point of the heights picture (2 x 2 points a tile), the brush's middle exactly under the mouse (it sat half a point off), a right click picks the height of the point under the mouse (an eyedropper), and the line under the map gives that point exactly - land grey and metres, or water and the sea floor's depth - with what `map_heights.hgt` holds there.
 - **Mercenaries...** (top row; right click on the map > *Mercenaries for hire in <region>...*): the campaign's mercenary pools - a pool's regions selected on the map and changed with the map's Select box, new pools from the selected regions (a region leaves its old pool; an empty pool goes), every unit's numbers in plain words and changeable, mercenaries added or taken out, pools renamed or deleted; Preview and a backup, unchanged lines kept as they were.
@@ -224,6 +227,7 @@
   builder offers all five stances in its list.
 
 ### Changed
+- Buttons that undo or delete (Put the old map back, Delete this pool, Delete a script) stand apart from the buttons beside them, so a hurried click does not land on them.
 - **Rivers may run onto the sea again** in the Terrain editor (river, ford, source - the games' own maps end some rivers in the water); cliffs and volcanoes stay on land.
 - **Bigger map (x3)**: river mouths as the games' own maps have them - the last pixel may step onto the half-flooded shore tile (rivers stopped one tile short of the sea), and a river touching the sea only by a corner gets one pixel more so it touches it by a side; the coast's corners as the games' own maps - a corner between three land tiles is always land (no more triangles of water cut into the land), between three sea tiles always water.
 - **Bigger map (x3) step by step**: five steps, one press each - 1 grid, 2 smoothing (coast, borders, ground, climates), 3 heights (every sea point under the water, no land point under it), 4 rivers (one pixel, on land only), 5 objects (towns, ports, armies, resources on tiles they may stand on); each written with a backup and checked, the map shown between them to fix by hand; steps 3-5 build on the map as it is then (the modder's fixes count); the window goes on where it stopped; one button puts the old map back.

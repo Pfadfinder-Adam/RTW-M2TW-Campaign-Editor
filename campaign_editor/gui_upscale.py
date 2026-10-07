@@ -213,9 +213,9 @@ def open_upscale(app):
         if k < len(STEPS):
             ttk.Button(bar, text="Do step %d: %s" % (k + 1, STEPS[k][0]), command=step).pack(side="left")
             ttk.Button(bar, text="Show every change...", command=show_all).pack(side="left", padx=(6, 0))
-        if st.get("bdir"):
-            ttk.Button(bar, text="Put the old map back", command=undo).pack(side="left", padx=(6, 0))
-        ttk.Button(bar, text="Close", command=w.destroy).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Close", command=w.destroy).pack(side="right")
+        if st.get("bdir"):          # undoes every step: set apart from 'Do step' (a hurried click must not land on it)
+            ttk.Button(bar, text="Put the old map back", command=undo).pack(side="right", padx=(0, 24))
 
     if resume:
         v_state.set("This map is part-way through: %d of %d steps done. Go on with step %d, or put the old map "

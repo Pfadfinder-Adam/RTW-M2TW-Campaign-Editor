@@ -74,9 +74,10 @@ class MercWindow(tk.Toplevel):
         sb.pack(side="right", fill="y")
         self.lb.pack(fill="both", expand=True)
         self.lb.bind("<<ListboxSelect>>", lambda e: self.show())
-        for text, fn in (("New pool from the map's selection", self.new_pool), ("Rename...", self.rename),
-                         ("Delete this pool", self.delete_pool)):
+        for text, fn in (("New pool from the map's selection", self.new_pool), ("Rename...", self.rename)):
             ttk.Button(left, text=text, command=fn).pack(fill="x", pady=(4, 0))
+        # destructive: set apart from the others (NN/g - a slip onto it costs the pool)
+        ttk.Button(left, text="Delete this pool...", command=self.delete_pool).pack(fill="x", pady=(16, 0))
         # right: the pool picked
         right = ttk.Frame(body, padding=(10, 0, 0, 0))
         body.add(right, weight=3)
@@ -142,6 +143,9 @@ class MercWindow(tk.Toplevel):
 
     # ---- reading ----
     def reload(self, pick=None):
+        p = M.path_of(self.mod, self.campaign)
+        if p:
+            self.mod._cache.pop(p, None)              # read as the file is now (after a write it was the old text)
         self.path, self.pools = M.read(self.mod, self.campaign)
         self.hash = _hash(self.path) if self.path else None
         self.title("%s - %s" % (TITLE, self.campaign))
@@ -395,10 +399,26 @@ class MercWindow(tk.Toplevel):
             if p:
                 self.fill(p)
 
-    def close(self):
+    def _unwritten(self):
+        """Words of what is not written yet, or '' (the close guard asks before throwing it away)."""
+        if not self.path:
+            return ""
+        try:
+            from .plan import Plan
+            plan = Plan(self.mod, "mercenaries", self.campaign, {})
+            M.plan_pools(plan, self.campaign, self.pools)
+            n = len(plan.changed_files())
+        except Exception:
+            return "changes"
+        return "the pools" if n else ""
+
+    def _forget(self):
         if getattr(self.app, "_merc_window", None) is self:
             self.app._merc_window = None
-        self.destroy()
+
+    def close(self):
+        from .gui_util import close_guard                 # never closes over unwritten changes silently
+        close_guard(self, TITLE, self._unwritten, self.write, after=self._forget)()
 
 
 def open_mercenaries(app, region=None, new_from=None):

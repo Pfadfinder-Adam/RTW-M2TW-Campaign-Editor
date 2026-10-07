@@ -83,7 +83,10 @@ class EventsWindow(tk.Toplevel):
         bar.pack(fill="x", pady=(6, 0))
         self.lbl = ttk.Label(bar, text="", foreground="#555")
         self.lbl.pack(side="left")
-        ttk.Button(bar, text="Close", command=self.destroy).pack(side="right")
+        from .gui_util import close_guard               # never closes over unwritten changes silently
+        close = close_guard(self, "Events", lambda: bool(self.edits or self.removed or self.new or self.texts
+                                                         or self.pictures or self.later), self.write)
+        ttk.Button(bar, text="Close", command=close).pack(side="right")
         ttk.Button(bar, text="Write it in", command=self.write).pack(side="right", padx=4)
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
         self.reload()
