@@ -2994,6 +2994,45 @@ building smith
             L.game_kind = lambda m, kind=kind: kind
             self.assertIn('local CE_GAME = "%s"' % want, A.with_game(a.template(), ModData(self.root)))
 
+    def test_addon_into_a_packed_medieval2_game(self):
+        """Medieval II keeps most of its data in packs: the game's own data folder has no descr_sm_factions.txt. An
+        add-on (the Module builder's too) going into the game's script/modules was refused 'D:\\Medieval II Total
+        War\\data holds only the files this mod changes' (a tester) - the loaded mod carries the write instead, and
+        Restore takes the script out again."""
+        from campaign_editor import addons as A
+        from campaign_editor.plan import Plan, restore
+        game = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, game)
+        write(os.path.join(game, "medieval2.exe"), "exe")
+        write(os.path.join(game, "data", "text", "x.txt"), "packed game")          # no descr_sm_factions.txt
+        write(os.path.join(game, "script", "main.nut"), "listModules()\n")
+        mod_dir = os.path.join(game, "mods", "m")
+        shutil.copytree(self.root, mod_dir)
+        mod = ModData(mod_dir)
+        a = A.by_key("avoid_growth")
+        dst = A.target(mod, a)
+        self.assertTrue(dst.startswith(os.path.join(game, "script", "modules")))
+        pm = A.plan_mod(mod, a)                                                   # raised before
+        self.assertIs(pm, mod)
+        plan = Plan(pm, "addon", a.key, {})
+        A.plan_install(plan, a, {}, mod=mod)
+        bdir = plan.apply()
+        self.assertTrue(os.path.isfile(dst))
+        restore(ModData(mod_dir), bdir)
+        self.assertFalse(os.path.isfile(dst))
+
+    def test_setup_problems_said_once_per_file(self):
+        """One mistake on many lines of a file is said once with its lines (a tester's list of 23 lines ran off the
+        screen and the window could not be closed)."""
+        from campaign_editor.gamefix import grouped_words
+        found = [{"id": "w%d" % n, "why": "c's descr_win_conditions.txt line %d: 'short_campaign' - the fix." % n}
+                 for n in range(5, 190, 8)] + [{"id": "x", "why": "something else"}]
+        words = grouped_words(found)
+        self.assertEqual(len(words), 2)
+        self.assertIn("lines 5, 13, 21", words[0])
+        self.assertIn("(24 lines)", words[0])
+        self.assertEqual(grouped_words([{"id": "a", "why": "f line 7: x"}]), ["f line 7: x"])
+
     def test_barbarian_invasion_new_belief(self):
         """Barbarian Invasion has religions of its own (descr_beliefs.txt: a tag, three pips, three text labels a
         belief): a new one gets its 7 lines, its three pips (copies of the template belief's) and its texts in

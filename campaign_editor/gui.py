@@ -1944,8 +1944,9 @@ class App(tk.Tk):
             done(state.get("result"), state.get("error"))
         wait()
 
-    def _written(self, bdir, p):
-        """A write finished: offer to undo it, if it is this mod's (the test mod writes into another folder)."""
+    def _written(self, bdir, p, group=None):
+        """A write finished: offer to undo it, if it is this mod's (the test mod writes into another folder).
+        group: every backup of one Apply that wrote several parts - undone together (from its first one)."""
         try:
             mine = self.mod and os.path.normcase(os.path.abspath(bdir)).startswith(
                 os.path.normcase(os.path.abspath(os.path.dirname(self.mod.data))) + os.sep)
@@ -1954,6 +1955,7 @@ class App(tk.Tk):
         if not mine:
             return
         self._undo_bdir = bdir
+        self._undo_group = set(group or {bdir})
         from .gui_util import tip
         tip(self.b_undo_write, "Puts back every file this last write changed, as it was before it (%s). The same as "
                                "Tools > Restore a backup on its newest line." % backup_label(bdir))
@@ -1968,8 +1970,11 @@ class App(tk.Tk):
         if not bdir or not self.mod or not os.path.isdir(bdir):
             self._undo_gone()
             return
-        bs = backups(self.mod)
-        if not bs or os.path.normcase(os.path.abspath(bs[0])) != os.path.normcase(os.path.abspath(bdir)):
+        bs = [os.path.normcase(os.path.abspath(b)) for b in backups(self.mod)]
+        group = {os.path.normcase(os.path.abspath(b)) for b in getattr(self, "_undo_group", None) or {bdir}}
+        me = os.path.normcase(os.path.abspath(bdir))
+        newer = bs[:bs.index(me)] if me in bs else None
+        if newer is None or any(b not in group for b in newer):
             self._undo_gone()                      # a newer write came since (or it was restored): Restore does it
             return
         waiting = self.pending_parts()
@@ -3883,9 +3888,11 @@ class App(tk.Tk):
         found = [p for p in found if p["id"] not in declined.get(self.mod.data, [])]
         if not found:
             return
-        text = "\n\n".join(p["why"] for p in found)
-        if not messagebox.askyesno(APP, "Found on Load - set-up problems of this game / mod:\n\n%s\n\nPut them right now? "
-                                        "A backup is made first (Restore undoes it)." % text):
+        text = "\n\n".join(gamefix.grouped_words(found))
+        from .gui_util import ask_choice
+        if ask_choice(self, APP, "Found on Load - set-up problems of this game / mod:\n\n%s\n\nPut them right now? "
+                                 "A backup is made first (Restore undoes it)." % text,
+                      ["Put them right", "Not now"], default=0, cancel=1) != 0:
             declined = dict(declined)
             declined[self.mod.data] = declined.get(self.mod.data, []) + [p["id"] for p in found]
             settings.put("fixes_declined", declined)
@@ -5303,6 +5310,9 @@ class App(tk.Tk):
             p, a = "Preview changes", "Apply changes"
         else:
             p, a = "Preview changes", "Create faction"
+        kept = len(self.session_parts()) if getattr(self, "mod", None) else 0
+        if kept:                                       # the windows' changes kept for this one write
+            a += "  (+%d kept)" % kept
         self.b_preview.configure(text=p)
         self.b_create.configure(text=a)
         if getattr(self, "lbl_work", None) is not None and getattr(self, "v_work", None) is not None:
@@ -5400,9 +5410,47 @@ class App(tk.Tk):
                 out.append((key, "%s: %d change(s)" % (name, ed.pending())))
         if self.faction_pending():
             out.append(("faction", self._faction_label()))
+        for key, part in self.session_parts().items():     # the own windows' changes, kept for the one write
+            out.append((key, part["label"]))
         return out
 
+    # ---- the session's list: every window hands its changes here, one Apply writes them all ----
+    def session_parts(self):
+        """{key: {'label', 'plan', 'after', 'mod'}} - the changes of the own windows (a town, a character,
+        Mercenaries, Events, Campaign rules, ...) kept for the one write; only those made on the mod loaded now."""
+        here = os.path.normcase(os.path.abspath(self.mod.data)) if self.mod else None
+        parts = getattr(self, "_session", None)
+        if parts is None:
+            parts = self._session = {}
+        return {k: v for k, v in parts.items() if v["mod"] == here}
+
+    def session_add(self, key, label, plan, after=None):
+        """A window's changes (its plan, made on the files as they are now) go into the session's list; kept again
+        they replace the first. At the write each is laid over the files as the parts before it left them
+        (plan.rebased: line by line; the same lines changed twice are refused in words). after(bdir) once written."""
+        from .plan import keep
+        self.session_parts()
+        self._session[key] = {"label": label, "plan": keep(plan), "after": after,
+                              "mod": os.path.normcase(os.path.abspath(self.mod.data))}
+        self._mark_work()
+        self.update_actions()
+        n = len(self.pending_parts())
+        self.status.set("%s - kept. %d change(s) wait for the write: Apply changes (bottom left) writes them all, "
+                        "Preview changes shows them." % (label, n))
+
+    def session_kept(self, key):
+        return key in self.session_parts()
+
+    def session_drop(self, key):
+        if getattr(self, "_session", None) and self._session.pop(key, None) is not None:
+            self._mark_work()
+            self.update_actions()
+
     def _part_plan(self, key):
+        part = (getattr(self, "_session", None) or {}).get(key)
+        if part is not None:
+            from .plan import rebased
+            return rebased(part["plan"])
         return self.editors[key].make_plan() if key in self.editors else self._faction_plan()
 
     def _mark_work(self):
@@ -5688,7 +5736,7 @@ class App(tk.Tk):
     def _write(self, parts):
         """Write [(key, label, plan or None)] in order; a plan left None is built just
         before it is written, on the files as the pieces before it left them."""
-        done, failed, applied = [], None, set()
+        done, failed, applied, bdirs = [], None, set(), []
         for key, label, plan in parts:
             try:
                 ed = self.editors.get(key)
@@ -5703,6 +5751,13 @@ class App(tk.Tk):
                 log.write("Writing failed: %s\n%s" % (failed, traceback.format_exc()))
                 break
             applied.add(key)
+            bdirs.append(bdir)
+            part = (getattr(self, "_session", None) or {}).pop(key, None)
+            if part is not None and part.get("after"):
+                try:
+                    part["after"](bdir)
+                except Exception as e:                  # the window was closed meanwhile: nothing to show
+                    log.write("after write of %s: %s" % (label, e))
             log.write("Written (backup %s)\n%s" % (bdir, plan.report()))
             done.append("%s%s\n\nBackup: %s" % (("=" * 70 + "\n%s\n" % label + "=" * 70 + "\n") if label and
                                                  len(parts) > 1 else "", plan.report(), bdir))
@@ -5717,6 +5772,9 @@ class App(tk.Tk):
             text += "\n\nStart a NEW campaign to see the changes."
             self.show_text("Done" if not failed else "Written in part", text)
             self.load()
+        if len(bdirs) > 1:                              # Undo this write puts back the whole write, every part
+            self.after_idle(lambda: self._written(bdirs[0], None, group=set(bdirs)))
+        self._mark_work()
 
     def _menu_hint(self, menu):
         try:

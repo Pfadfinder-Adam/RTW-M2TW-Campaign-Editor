@@ -2,7 +2,7 @@
 games, any owner (the Map editor too): its owner (hand it to another faction), city or castle (Medieval II), level,
 population, and - switched in the same window - its buildings (the Buildings tab's own editor: the pictures, a click
 builds a level) and its garrison (the Units & armies tab's card picker; a named character keeps his bodyguard).
-Preview / Write it in with a backup like every write; the writing is masstown.apply - the same one place the 'many
+Preview / Keep for Apply (written by the main window's Apply with the rest of the session, a backup first); the writing is masstown.apply - the same one place the 'many
 towns at once' window uses, so one town and many follow the same rules."""
 
 import tkinter as tk
@@ -53,8 +53,9 @@ class TownWindow(tk.Toplevel):
         hint(head, "This town as the campaign starts: its owner, its size and its buildings. Changes are checked the "
                    "way the game checks them (a level the town is too small for, a castle-only building in a city, "
                    "one temple per town...). Buildings and Garrison switch this window between the two (as the "
-                   "Buildings and Units & armies tabs look). Preview shows every line, Write it in makes a backup "
-                   "first - Tools > Restore undoes it.", width=520).pack(side="left")
+                   "Buildings and Units & armies tabs look). Preview shows every line; Keep for Apply puts the changes in "
+                   "the session's list - Apply changes in the main window writes them all at once (a backup first; "
+                   "Undo this write puts them back).", width=520).pack(side="left")
         self.lbl_view = ttk.Label(head, foreground="#666", text="")
         self.lbl_view.pack(side="left", padx=10)
         top = ttk.Frame(b, padding=(0, 2))
@@ -124,7 +125,7 @@ class TownWindow(tk.Toplevel):
         self.lbl_why = ttk.Label(bar, foreground="#a33", text="", wraplength=600, justify="left")
         self.lbl_why.pack(side="left", fill="x", expand=True)
         ttk.Button(bar, text="Close", command=self.close).pack(side="right")
-        ttk.Button(bar, text="Write it in", command=self.write).pack(side="right", padx=4)
+        ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=4)
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
         self.show_view()
 
@@ -274,7 +275,7 @@ class TownWindow(tk.Toplevel):
             return False
         self.load(self.region)
         messagebox.showinfo(TITLE, "The mod was written and read again in the main window - this town is shown "
-                                   "as the files hold it now. Pick your changes again, then Write it in.", parent=self)
+                                   "as the files hold it now. Pick your changes again, then Keep for Apply.", parent=self)
         return True
 
     def preview(self):
@@ -291,41 +292,27 @@ class TownWindow(tk.Toplevel):
         self.app.show_text("%s - preview (nothing written)" % self.town["name"], plan.report())
 
     def write(self):
+        """Keep for Apply: the town's changes go into the session's list, written by the main window's Apply changes
+        with everything else (one write, one Undo)."""
         if self._fresh():
-            return
-        try:
-            plan = self._plan()
-        except Exception as e:
-            messagebox.showerror(TITLE, str(e), parent=self)
-            return
-        if not plan.changed_files():
-            messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
-            return
-        waiting = self.app.pending_parts()
-        if waiting:                                     # say WHAT waits: the bare refusal left the modder guessing
-            messagebox.showerror(TITLE, "Not written yet. The main window holds changes not applied:\n\n%s\n\n"
-                                        "Apply them (Apply changes, bottom left of the main window) or Undo them first: "
-                                        "this write reads the mod again afterwards, and they would be lost. After an "
-                                        "Apply this window shows the town as written - make your changes here again."
-                                 % "\n".join("- " + label for _, label in waiting), parent=self)
-            return
-        if not messagebox.askyesno(TITLE, "%s\n\nWrite it? A backup is made first (Tools > Restore undoes it)."
-                                   % plan.report()[:1500], parent=self):
-            return
-        bdir = plan.apply()
-        from . import log
-        log.write("Town %s changed (backup %s)\n%s" % (self.region, bdir, plan.report()))
-        self.app.load()
-        self.app.status.set("%s written (backup %s)." % (self.town["name"], bdir))
-        self.load(self.region)
+            return False
+        from .gui_util import keep_for_apply
+        region, name = self.region, self.town["name"]
+
+        def after(bdir):
+            from . import log
+            log.write("Town %s changed (backup %s)" % (region, bdir))
+            if self.winfo_exists() and self.region == region:
+                self.mod = self.app.mod
+                self.load(region)
+        return keep_for_apply(self, "town:%s" % region, "Town %s: buildings / garrison / owner" % name, self._plan,
+                              after, TITLE)
 
     def _unwritten(self):
-        """Words of what is not written yet, or '' (the close guard asks before throwing it away)."""
-        try:
-            n = len(self._plan().changed_files())
-        except Exception:
-            return "changes"
-        return ("%d file(s) to change" % n) if n else ""
+        """Words of what is neither written nor kept for the write, or '' (the close guard asks before throwing it
+        away)."""
+        from .gui_util import kept_or_not
+        return kept_or_not(self.app, "town:%s" % self.region, self._plan)
 
     def _forget(self):
         if getattr(self.app, "_town_window", None) is self:

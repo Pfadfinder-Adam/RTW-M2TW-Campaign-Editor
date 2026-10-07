@@ -306,3 +306,24 @@ def unpack(need, log=None):
 
 
 __all__ = ["problems", "fix_plan", "unpack_needed", "unpacker_missing", "unpack"]
+
+
+def grouped_words(found):
+    """The problems in words, the same one on many lines of a file said once with its lines ('lines 5, 13, 21 ...
+    - 23 lines'): a tester's mod had one mistake on 23 lines of descr_win_conditions.txt and the list ran off the
+    screen."""
+    groups = {}
+    for p in found:
+        why = p["why"]
+        m = re.search(r"\bline (\d+)\b", why)
+        key = re.sub(r"\bline \d+\b", "line #", why, count=1) if m else why
+        groups.setdefault(key, []).append(int(m.group(1)) if m else None)
+    out = []
+    for key, lines in groups.items():
+        nums = [n for n in lines if n is not None]
+        if len(nums) > 1:
+            shown = ", ".join(str(n) for n in nums[:8]) + (" ..." if len(nums) > 8 else "")
+            out.append(key.replace("line #", "lines %s (%d lines)" % (shown, len(nums)), 1))
+        else:
+            out.append(key.replace("line #", "line %d" % nums[0], 1) if nums else key)
+    return out

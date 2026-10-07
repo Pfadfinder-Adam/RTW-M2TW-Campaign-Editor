@@ -398,3 +398,84 @@ def restore(mod, bdir):
                          "file is free (the files already put back are put back again, nothing is lost)."
                          % (words.replace("then Apply again", "then Restore again"), os.path.basename(bdir))) from e
     return manifest
+
+
+# ---- kept plans: a window's changes kept for the session's one write (App.session_add) ----
+def merge_lines(base, ours, theirs):
+    """ours and theirs both grew from base (lists of lines): theirs with ours' changes laid over it, the way two
+    people's edits of one file come together. Changes to different lines both stay; the same lines changed both
+    ways (differently) -> ValueError naming the line. ours unchanged -> theirs; theirs unchanged -> ours."""
+    import difflib
+    if ours == base:
+        return list(theirs)
+    if theirs == base:
+        return list(ours)
+
+    def changes(new):
+        return [(i1, i2, new[j1:j2]) for tag, i1, i2, j1, j2 in
+                difflib.SequenceMatcher(None, base, new, autojunk=False).get_opcodes() if tag != "equal"]
+    mine, other = changes(ours), changes(theirs)
+    for a1, a2, a_new in mine:
+        for b1, b2, b_new in other:
+            touch = max(a1, b1) < min(a2, b2) or (a1 == b1 and (a1 == a2 or b1 == b2)) or \
+                (a1 == a2 and b1 < a1 < b2) or (b1 == b2 and a1 < b1 < a2)
+            both_insert = a1 == a2 == b1 == b2               # two additions at one place (the end of a file):
+            if touch and not both_insert and (a1, a2, a_new) != (b1, b2, b_new):   # theirs, then ours
+                raise ValueError("line %d was changed twice in this session, two different ways" % (min(a1, b1) + 1))
+    # walk base once, taking each line from theirs' side and laying ours' changes over it
+    other_at = {b1: (b2, b_new) for b1, b2, b_new in other}
+    mine_at = {a1: (a2, a_new) for a1, a2, a_new in mine}
+    out, i = [], 0
+    while i <= len(base):
+        if i in mine_at:
+            a2, a_new = mine_at.pop(i)
+            if i in other_at and other_at[i] == (a2, a_new):
+                other_at.pop(i)                       # the same change made twice: once
+            elif i in other_at and other_at[i][0] == i:   # theirs inserts here too: theirs' lines first
+                out += other_at.pop(i)[1]
+            out += a_new
+            if a2 > i:
+                i = a2
+                continue
+        if i in other_at:
+            b2, b_new = other_at.pop(i)
+            out += b_new
+            if b2 > i:
+                i = b2
+                continue
+        if i < len(base):
+            out.append(base[i])
+        i += 1
+    return out
+
+
+def rebased(plan):
+    """The kept plan laid over the files as they are NOW (parts of the same write before it may have changed
+    some): every edited text file merged line by line (merge_lines), its backup what the disk holds now. A picture
+    changed on the disk since the plan was made cannot be laid over - ValueError. The plan itself is changed."""
+    for path, f in list(plan.files.items()):
+        base = plan.originals[path]
+        now = _read(path) if os.path.exists(path) else base
+        if now == base:
+            continue
+        mine = f.dump()
+        theirs = TextFile.from_bytes(path, now)
+        try:
+            lines = merge_lines(TextFile.from_bytes(path, base).raw, TextFile.from_bytes(path, mine).raw, theirs.raw)
+        except ValueError as e:
+            raise ValueError("%s: %s - keep this window's changes again (it reads the file as it is now)"
+                             % (plan.mod.rel(path), e))
+        plan.files[path] = TextFile(path, lines, theirs.encoding, theirs.bom)
+        plan.originals[path] = now
+    for path in plan.binaries:
+        was = getattr(plan, "disk_before", {}).get(path, "?")
+        if was != "?" and (_read(path) if os.path.exists(path) else None) != was:
+            raise ValueError("%s was changed by another part of this write - keep this window's changes again"
+                             % plan.mod.rel(path))
+    return plan
+
+
+def keep(plan):
+    """Mark a plan as kept for a later write: what its pictures are on the disk now (rebased checks it)."""
+    plan.disk_before = {p: (_read(p) if os.path.exists(p) else None) for p in plan.binaries}
+    return plan

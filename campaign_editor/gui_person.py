@@ -1,6 +1,6 @@
 """A character's own window from the Map (right click a general, a family man, the heir, the king, an agent >
 'Edit this character...', or a double click on an agent): the Character editor in a window of its own, as the town's
-garrison and buildings have theirs - the person picked, Preview / Write it in with a backup (the writing is the
+garrison and buildings have theirs - the person picked, Preview / Keep for Apply (the main window's Apply writes it with the rest, a backup first) (the writing is the
 Character editor's own: gui_family.FamilyEditor.make_plan)."""
 
 import tkinter as tk
@@ -15,7 +15,7 @@ class _Editor(FamilyEditor):
     """The Character editor inside the window: its changes are written by the window's own button."""
 
     def changed(self):
-        self.app.status.set("Character window: changes waiting - Preview, then Write it in.")
+        self.app.status.set("Character window: changes waiting - Preview, then Keep for Apply.")
         self.redraw()
 
 
@@ -27,11 +27,11 @@ class PersonWindow(tk.Toplevel):
         self.geometry("1100x%d" % max(560, min(860, self.winfo_screenheight() - 110)))
         self.minsize(760, 520)
         from .gui_util import close_guard               # never closes over unwritten changes silently
-        self.close = close_guard(self, TITLE, lambda: self.ed.dirty(), lambda: self.write(), after=self._forget)
+        self.close = close_guard(self, TITLE, self._dirty, lambda: self.write(), after=self._forget)
         bar = ttk.Frame(self, padding=(10, 4, 10, 6))
         bar.pack(side="bottom", fill="x")
         ttk.Button(bar, text="Close", command=self.close).pack(side="right")
-        ttk.Button(bar, text="Write it in", command=self.write).pack(side="right", padx=4)
+        ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=4)
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
         self.ed = _Editor(self, app, standalone=True)
         self.ed.pack(fill="both", expand=True)
@@ -68,27 +68,26 @@ class PersonWindow(tk.Toplevel):
             self.app.show_text("%s - preview (nothing written)" % self.ch["name"], plan.report())
 
     def write(self):
-        plan = self._plan()
-        if not plan:
-            return
-        waiting = self.app.pending_parts()
-        if waiting:
-            messagebox.showerror(TITLE, "Not written yet. The main window holds changes not applied:\n\n%s\n\nApply "
-                                        "them (Apply changes) or Undo them first: this write reads the mod again "
-                                        "afterwards, and they would be lost."
-                                 % "\n".join("- " + label for _, label in waiting), parent=self)
-            return
-        if not messagebox.askyesno(TITLE, "%s\n\nWrite it? A backup is made first (Tools > Restore undoes it)."
-                                   % plan.report()[:1500], parent=self):
-            return
-        bdir = plan.apply()
-        from . import log
-        log.write("Character %s (%s) changed (backup %s)\n%s" % (self.ch["name"], self.ch["faction"], bdir,
-                                                                 plan.report()))
-        self.ed.states, self.ed.lib_adds = {}, []
-        self.app.load()
-        self.app.status.set("%s written (backup %s)." % (self.ch["name"], bdir))
-        self.show(self.ch)
+        """Keep for Apply: the character's changes go into the session's list, written by the main window's Apply
+        changes with everything else."""
+        if not self.ed.dirty():
+            messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
+            return False
+        from .gui_util import keep_for_apply
+        ch = dict(self.ch)
+
+        def after(bdir):
+            from . import log
+            log.write("Character %s (%s) changed (backup %s)" % (ch["name"], ch["faction"], bdir))
+            if self.winfo_exists():
+                self.ed.states, self.ed.lib_adds = {}, []
+                self.show(self.ch)
+        return keep_for_apply(self, "person:%s" % ch["faction"], "Characters of %s (%s)" % (ch["faction"], ch["name"]),
+                              self.ed.make_plan, after, TITLE)
+
+    def _dirty(self):
+        from .gui_util import kept_or_not
+        return kept_or_not(self.app, "person:%s" % self.ch["faction"], self.ed.make_plan) if self.ed.dirty() else ""
 
     def _forget(self):
         if getattr(self.app, "_person_window", None) is self:
@@ -101,9 +100,9 @@ def open_person_window(app, ch):
         return None
     w = getattr(app, "_person_window", None)
     if w is not None and w.winfo_exists():
-        if w.ed.dirty() and not messagebox.askyesno(TITLE, "Show %s instead? The changes made to %s are not "
-                                                           "written yet and go." % (ch["name"], w.ch["name"]),
-                                                    parent=w):
+        if w._dirty() and not messagebox.askyesno(TITLE, "Show %s instead? The changes made to %s are not "
+                                                         "kept for the write and go (Keep for Apply keeps them)."
+                                                  % (ch["name"], w.ch["name"]), parent=w):
             return w
         w.ed.states, w.ed.lib_adds = {}, []
         w.show(ch)

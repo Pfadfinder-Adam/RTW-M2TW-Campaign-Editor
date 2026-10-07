@@ -161,7 +161,7 @@ class ScriptsWindow(SettingsForm, tk.Toplevel):
 
     # ---- writing ----
     def _write(self, s, make, what, keep=None, name=None):
-        plan = Plan(s.plan_mod(), "scripts", name or os.path.splitext(s.file)[0], {})
+        plan = Plan(s.plan_mod(self.mod), "scripts", name or os.path.splitext(s.file)[0], {})
         try:
             if make(plan) is False or not plan.changed_files():
                 messagebox.showinfo(TITLE, "Nothing to change.", parent=self)

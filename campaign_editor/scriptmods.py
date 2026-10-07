@@ -86,10 +86,16 @@ class Script:
             return "an add-on you added"
         return "someone's script"
 
-    def plan_mod(self):
+    def plan_mod(self, mod=None):
         """The ModData whose folder holds this script (the backups go beside it): <root>/script/modules ->
-        <root>/data."""
-        return ModData(os.path.join(os.path.dirname(os.path.dirname(self.folder)), "data"))
+        <root>/data; the loaded mod when that data folder cannot be read alone (Medieval II's game data: the rest is
+        in packs - the mod's backup holds the game-folder file too)."""
+        try:
+            return ModData(os.path.join(os.path.dirname(os.path.dirname(self.folder)), "data"))
+        except (FileNotFoundError, OSError):
+            if mod is None:
+                raise
+            return mod
 
 
 def scripts(mod):

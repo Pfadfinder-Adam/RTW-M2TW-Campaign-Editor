@@ -896,9 +896,22 @@ def ask_choice(parent, title, text, choices, default=0, cancel=None, danger=None
     out = {"k": cancel}
     frm = ttk.Frame(w, padding=14)
     frm.pack(fill="both", expand=True)
-    ttk.Label(frm, text=text, justify="left", wraplength=480).pack(anchor="w")
-    bar = ttk.Frame(frm)
-    bar.pack(fill="x", pady=(14, 0))
+    bar = ttk.Frame(frm)                    # the buttons first, at the bottom: never pushed off the screen
+    bar.pack(side="bottom", fill="x", pady=(14, 0))
+    if len(text) > 900 or text.count("\n") > 18:   # a long text scrolls (a tester's set-up list ran off the screen
+        w.resizable(True, True)                     # and the window could not be closed)
+        box = ttk.Frame(frm)
+        box.pack(fill="both", expand=True)
+        t = tk.Text(box, wrap="word", width=90, height=min(24, max(8, w.winfo_screenheight() // 40)),
+                    relief="flat", font=("", 9))
+        sb = ttk.Scrollbar(box, orient="vertical", command=t.yview)
+        t.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        t.pack(side="left", fill="both", expand=True)
+        t.insert("1.0", text)
+        t.configure(state="disabled")
+    else:
+        ttk.Label(frm, text=text, justify="left", wraplength=480).pack(anchor="w")
 
     def pick(k):
         out["k"] = k
@@ -933,26 +946,27 @@ def ask_choice(parent, title, text, choices, default=0, cancel=None, danger=None
 
 def close_guard(w, title, dirty, write, after=None):
     """Closing a window never throws its work away silently (NN/g 'close-as-discard'): dirty() -> words of what is
-    not written yet (or '' / None); with it, Close asks 'Write it in / Keep editing / Throw the changes away' - the
-    throw-away apart on the left, Enter writes, Esc keeps editing. write() is the window's own write (it may still
-    refuse - then the window stays). after() runs before the window goes (its app slot cleared). Returns the close
-    function for the window's Close button; the title bar's X does the same."""
+    neither written nor kept for the write (or '' / None); with it, Close asks 'Keep for Apply / Keep editing /
+    Throw the changes away' - the throw-away apart on the left, Enter keeps, Esc keeps editing. write() is the
+    window's own keep (it may still refuse - then the window stays). after() runs before the window goes (its app
+    slot cleared). Returns the close function for the window's Close button; the title bar's X does the same."""
     def close():
         try:
             what = dirty()
         except Exception:
             what = "changes"
         if what:
-            k = ask_choice(w, title, "The changes made here are not written yet%s.\n\nWrite them in now, keep editing, "
-                                     "or throw them away?" % ((" (%s)" % what) if isinstance(what, str) else ""),
-                           ["Write it in", "Keep editing", "Throw the changes away"], default=0, cancel=1, danger=2)
+            k = ask_choice(w, title, "The changes made here are not kept for the write yet%s.\n\nKeep them (Apply "
+                                     "changes in the main window writes them with everything else), keep editing, or "
+                                     "throw them away?" % ((" (%s)" % what) if isinstance(what, str) else ""),
+                           ["Keep for Apply", "Keep editing", "Throw the changes away"], default=0, cancel=1, danger=2)
             if k == 1 or k is None:
                 return
             if k == 0:
                 write()
                 try:
                     if not w.winfo_exists() or dirty():
-                        return                     # not written (refused, or the user said no): keep the window
+                        return                     # not kept (refused): keep the window
                 except tk.TclError:
                     return
         if after:
@@ -963,3 +977,40 @@ def close_guard(w, title, dirty, write, after=None):
             pass
     w.protocol("WM_DELETE_WINDOW", close)
     return close
+
+
+def _plan_content(plan):
+    return ({p: f.dump() for p, f in plan.files.items() if f.dump() != plan.originals.get(p)},
+            dict(plan.binaries), list(plan.copies), list(plan.deletions))
+
+
+def kept_or_not(app, key, make_plan):
+    """Words of what a window holds that is neither unchanged nor exactly what it kept for the write, or ''."""
+    try:
+        plan = make_plan()
+    except Exception:
+        return "changes"
+    files = plan.changed_files()
+    if not files:
+        return ""
+    part = app.session_parts().get(key) if hasattr(app, "session_parts") else None
+    if part is not None and _plan_content(part["plan"]) == _plan_content(plan):
+        return ""
+    return "%d file(s) to change" % len(files)
+
+
+def keep_for_apply(win, key, label, make_plan, after=None, title=None):
+    """A window's 'Keep for Apply': its changes made into a plan now (a mistake said at once) and put in the session's
+    list (App.session_add) - written by the main window's Apply changes with everything else, in one go. False when
+    nothing changed or the plan refused."""
+    from tkinter import messagebox
+    try:
+        plan = make_plan()
+    except Exception as e:
+        messagebox.showerror(title or label, str(e), parent=win)
+        return False
+    if not plan.changed_files():
+        messagebox.showinfo(title or label, "Nothing changed yet.", parent=win)
+        return False
+    win.app.session_add(key, label, plan, after)
+    return True

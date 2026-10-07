@@ -614,7 +614,13 @@ def plan_mod(mod, addon):
     if dst.startswith(os.path.join(root, "")):
         return mod
     game_root = os.path.dirname(os.path.dirname(os.path.dirname(dst)))
-    return ModData(os.path.join(game_root, "data"))
+    try:
+        return ModData(os.path.join(game_root, "data"))
+    except (FileNotFoundError, OSError):
+        # Medieval II keeps most of its data in packs: the game's data folder has no descr_sm_factions.txt (a tester:
+        # 'D:\Medieval II Total War\data holds only the files this mod changes' - nothing put in). The mod's own
+        # backup holds the game-folder file too (plan.stored), so the mod carries the write.
+        return mod
 
 
 def installed(mod, addon):
