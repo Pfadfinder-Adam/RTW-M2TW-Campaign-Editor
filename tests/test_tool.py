@@ -4536,8 +4536,8 @@ building smith
             restore(mod, b)
         write(smf, SM)
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
-        before["data/world/maps/campaign/test/descr_events.txt"] = after.get(
-            "data/world/maps/campaign/test/descr_events.txt")
+        events = os.path.join("data", "world", "maps", "campaign", "test", "descr_events.txt")   # '\\' on Windows
+        before[events] = after.get(events)
         self.assertEqual(before, after)
 
     def test_faction_lives_without_towns_only_with_an_engine(self):
