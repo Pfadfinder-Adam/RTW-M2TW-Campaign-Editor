@@ -125,6 +125,8 @@ def open_upscale(app):
             r.state(["disabled"] if done >= 3 else ["!disabled"])
         buttons()
 
+    busy = {}
+
     def step():
         k = st.get("done", 0)
         if k >= len(STEPS):
@@ -137,18 +139,37 @@ def open_upscale(app):
         tune = values()
         if tune is None:
             return
-        w.config(cursor="watch")
-        v_state.set("Working on step %d of %d: %s ... (step 2 and 3 take a minute or two)" % (
-            k + 1, len(STEPS), STEPS[k][1]))
-        w.update()
-        try:
-            plan, warn = plan_step(ModData(app.mod.data), camp, k, st, tune)
-            bdir = plan.apply()
-        except Exception as e:
-            log.write("x3 step %d failed: %s" % (k + 1, e))
-            v_state.set("Step %d could not be done: %s" % (k + 1, e))
-            w.config(cursor="")
+        if busy.get("on"):
             return
+        busy["on"] = True
+        v_state.set("Working on step %d of %d: %s ... (step 2 and 3 take a minute or two - the bar at the bottom of "
+                    "the main window moves while it works)" % (k + 1, len(STEPS), STEPS[k][1]))
+
+        def work(report):                    # in a thread: no window touched here (run_long)
+            report("step %d of %d, %s" % (k + 1, len(STEPS), STEPS[k][0]))
+            plan, warn = plan_step(ModData(app.mod.data), camp, k, st, tune)
+            report("writing step %d" % (k + 1))
+            return plan, warn, plan.apply()
+
+        def done(result, error):
+            busy["on"] = False
+            if error is not None:
+                v_state.set("Step %d could not be done: %s" % (k + 1, error))
+                return
+            if not w.winfo_exists():              # the window was closed meanwhile: keep the state, read the map
+                plan, warn, bdir = result
+                if k == 0:
+                    st["bdir"] = bdir
+                st["done"] = k + 1
+                _save_state(st, camp)
+                log.write("x3 step %d (%s) written (backup %s)\n%s" % (k + 1, STEPS[k][0], bdir, plan.report()))
+                app.load()
+                app.status.set("Bigger map (x3): step %d written - open the window again to go on." % (k + 1))
+                return
+            finish(k, *result)
+        app.run_long("Bigger map (x3)", work, done, window=w)
+
+    def finish(k, plan, warn, bdir):
         if k == 0:
             st["bdir"] = bdir
         st["done"] = k + 1
@@ -180,13 +201,20 @@ def open_upscale(app):
         tune = values()
         if tune is None:
             return
-        w.config(cursor="watch")
-        w.update()
-        try:
-            plan, _ = plan_step(ModData(app.mod.data), camp, k, st, tune)
-        finally:
-            w.config(cursor="")
-        app.show_text("Step %d - every change, nothing written yet" % (k + 1), plan.report())
+        if busy.get("on"):
+            return
+        busy["on"] = True
+
+        def done(result, error):
+            busy["on"] = False
+            if not w.winfo_exists():
+                return
+            if error is not None:
+                v_state.set("Could not work out step %d: %s" % (k + 1, error))
+                return
+            app.show_text("Step %d - every change, nothing written yet" % (k + 1), result.report())
+        app.run_long("Bigger map (x3), working out step %d" % (k + 1),
+                     lambda report: plan_step(ModData(app.mod.data), camp, k, st, tune)[0], done, window=w)
 
     def undo():
         bdir = st.get("bdir")

@@ -7,6 +7,7 @@
 - The editor could stop responding (Windows: 'not responding') a while after start: every window, hover tips included, was made resizable each time it showed, and on Windows that showed it again and again. Now only real windows, once each; hover tips are left alone.
 
 ### Added
+- **Long work shows it is working**: checking the mod, the test mod and every step of the bigger map run beside the window with a moving bar and the seconds at the bottom - the window never freezes (the x3 heights step took up to two minutes with the window not answering).
 - **Nothing is lost by closing a window**: a window with changes not written yet (Mercenaries, a town, a character, Events, Campaign rules, Traits and retinue, the Module builder) asks before it closes - *Write it in*, *Keep editing* or *Throw the changes away* (that one set apart on the left; Enter writes, Esc keeps editing).
 - **Undo this write**: right after anything is written, a button beside the message at the bottom puts every file of that write back as it was (the same as Restore on the newest backup).
 - **The outline under the mouse shows the brush**: a painting brush outlines its whole square of tiles, the heights brush the one point it changes at size 1 and its circle above that (Terrain editor, region borders); the brush size follows a typed number too, not only the arrows.
@@ -227,6 +228,8 @@
   builder offers all five stances in its list.
 
 ### Changed
+- An unexpected fault of the editor is told in plain words - your files are safe, you can go on, *Send a report...* - with the technical line kept short for the report; the same fault again is not shown again (it goes to the log and the message line).
+- Fields of one game only are shown greyed with the game named (*Name (short) (Rome only)*, *Religion (Medieval II only)*) instead of vanishing.
 - Buttons that undo or delete (Put the old map back, Delete this pool, Delete a script) stand apart from the buttons beside them, so a hurried click does not land on them.
 - **Rivers may run onto the sea again** in the Terrain editor (river, ford, source - the games' own maps end some rivers in the water); cliffs and volcanoes stay on land.
 - **Bigger map (x3)**: river mouths as the games' own maps have them - the last pixel may step onto the half-flooded shore tile (rivers stopped one tile short of the sea), and a river touching the sea only by a corner gets one pixel more so it touches it by a side; the coast's corners as the games' own maps - a corner between three land tiles is always land (no more triangles of water cut into the land), between three sea tiles always water.

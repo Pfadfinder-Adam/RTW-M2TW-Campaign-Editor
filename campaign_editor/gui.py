@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import threading
+import time
 import traceback
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox, ttk
@@ -802,6 +803,9 @@ class App(tk.Tk):
         _plan.WRITTEN.append(lambda bdir, p: self.after_idle(lambda: self._written(bdir, p)))
         self.status_line = ttk.Label(srow, anchor="w", justify="left")
         self.status_line.pack(side="left", fill="x", expand=True)
+        # long work (over a second or two): a moving bar and the seconds beside the message (NN/g: feedback while
+        # waiting - without it the window looks broken; Windows even calls it 'not responding')
+        self.busy_bar = ttk.Progressbar(srow, mode="indeterminate", length=120)
         # a long message wraps onto a second line instead of running off the window's edge
         self.status_line.bind("<Configure>", lambda e: self.status_line.configure(wraplength=max(e.width - 4, 200)))
         self.bottom_bar = ttk.Frame(self)
@@ -1882,6 +1886,59 @@ class App(tk.Tk):
             self.map_view.brush = max(1, int(self.v_brush.get()))
         except (tk.TclError, ValueError, AttributeError):
             pass
+
+    def busy(self, on):
+        """The moving bar beside the message: on while long work runs (counted - two at once keep it on)."""
+        n = getattr(self, "_busy_n", 0) + (1 if on else -1)
+        self._busy_n = max(0, n)
+        if self._busy_n and on and n == 1:
+            self.busy_bar.pack(side="right", padx=(6, 0), before=self.status_line)
+            self.busy_bar.start(12)
+        elif not self._busy_n:
+            self.busy_bar.stop()
+            self.busy_bar.pack_forget()
+
+    def run_long(self, title, work, done, window=None):
+        """work(report) runs in a thread (no Tk in it - report(text) says the step it is on); meanwhile the status
+        line says title, the step and the seconds, with a moving bar; then done(result, error) runs here. window: a
+        window to give the busy cursor too."""
+        import time as _time
+        state = {"step": "", "t0": _time.time()}
+
+        def report(text):
+            state["step"] = text
+
+        def body():
+            try:
+                state["result"] = work(report)
+            except Exception as e:
+                state["error"] = e
+                state["trace"] = traceback.format_exc()
+        th = threading.Thread(target=body, daemon=True)
+        self.busy(True)
+        for x in (self, window):
+            try:
+                x and x.config(cursor="watch")
+            except tk.TclError:
+                pass
+        th.start()
+
+        def wait():
+            secs = int(_time.time() - state["t0"])
+            if th.is_alive():
+                self.status.set("%s%s - %d s" % (title, (": " + state["step"]) if state["step"] else "", secs))
+                self.after(300, wait)
+                return
+            self.busy(False)
+            for x in (self, window):
+                try:
+                    x and x.config(cursor="")
+                except tk.TclError:
+                    pass
+            if state.get("error") is not None:
+                log.write("%s stopped: %s\n%s" % (title, state["error"], state.get("trace", "")))
+            done(state.get("result"), state.get("error"))
+        wait()
 
     def _written(self, bdir, p):
         """A write finished: offer to undo it, if it is this mod's (the test mod writes into another folder)."""
@@ -3713,22 +3770,36 @@ class App(tk.Tk):
         self.l_way_note.pack(anchor="w")
 
     def _game_rows(self):
-        """The faction form shows only what the loaded game has: Rome's short name and icon tooltip are hidden on
-        Medieval II (its texts have neither)."""
+        """The faction form greys what the loaded game has not: Rome's short name and icon tooltip on Medieval II
+        (its texts have neither), Medieval II's religion on Rome - each label says which game it is for."""
         m2 = self._m2()
-        for w in self.rome_rows:
-            (w.grid_remove if m2 else w.grid)()
-        for w in self.m2_rows:
-            (w.grid if m2 else w.grid_remove)()
+        if m2:                                         # cleared before the fields are greyed (a greyed Text ignores it)
+            self.v["short_name"].set("")
+            self.t_descr.configure(state="normal")
+            self.t_descr.delete("1.0", "end")
+        # shown greyed with the game it belongs to, not hidden (NN/g: features vanishing unexplained confuse)
+        for rows, mine, words in ((self.rome_rows, not m2, " (Rome only)"), (self.m2_rows, m2, " (Medieval II only)")):
+            for w in rows:
+                w.grid()
+                if w.winfo_class() in ("TLabel", "Label"):
+                    base = getattr(w, "_plain_text", None)
+                    if base is None:
+                        base = w._plain_text = str(w.cget("text"))
+                    w.configure(text=base if mine else base + words)
+                    continue
+                try:
+                    if w.winfo_class() == "TCombobox":
+                        w.configure(state="readonly" if mine else "disabled")
+                    else:
+                        w.configure(state="normal" if mine else "disabled")
+                except tk.TclError:
+                    pass
         if m2:
             from .religions import names
             self.cb_religion["values"] = names(self.mod) + [r["name"] for r in self.new_religions
                                                             if r["name"] not in names(self.mod)]
         else:
             self.v["religion"].set("")
-        if m2:
-            self.v["short_name"].set("")
-            self.t_descr.delete("1.0", "end")
 
     def _rebind(self, ed):
         lost = ed.rebind(self.mod)
@@ -5716,12 +5787,15 @@ class App(tk.Tk):
                 result["text"] = "The test mod stopped: %s\n\n%s" % (e, traceback.format_exc())
         th = threading.Thread(target=work, daemon=True)
         th.start()
+        self.busy(True)
+        t0 = time.time()
 
         def wait():
             if th.is_alive():
-                self.status.set("Making the test mod... %s" % result.get("step", ""))
+                self.status.set("Making the test mod... %s - %d s" % (result.get("step", ""), time.time() - t0))
                 self.after(300, wait)
                 return
+            self.busy(False)
             log.write("Test mod\n" + result["text"])
             folder = os.path.dirname(result["data"]) if result.get("data") else None
             fine = sum(1 for r in result.get("results", []) if r["status"] in ("OK", "SKIPPED") and not r["new_problems"])
@@ -5765,12 +5839,15 @@ class App(tk.Tk):
                 result["text"] = "The check stopped: %s\n\n%s" % (e, traceback.format_exc())
         th = threading.Thread(target=work, daemon=True)
         th.start()
+        self.busy(True)
+        t0 = time.time()
 
         def wait():
             if th.is_alive():
-                self.status.set("Checking the mod... %s" % result.get("step", ""))
+                self.status.set("Checking the mod... %s - %d s" % (result.get("step", ""), time.time() - t0))
                 self.after(300, wait)
                 return
+            self.busy(False)
             self.status.set("Check finished.")
             log.write("Check mod files\n" + result["text"])
             title = "Check mod files" + (" (and where %s is named)" % faction if faction else "")
@@ -5856,10 +5933,27 @@ class App(tk.Tk):
             messagebox.showerror(APP, str(val))
             return
         log.write("ERROR (unexpected)\n" + text)
-        if messagebox.askyesno(APP, "Something went wrong: %s\n\nThe details are in the log. Send a report to the "
-                                    "author now (the logs, with your names cut out - you see it before it goes)?"
-                               % val, icon="error"):
-            self.send_report("The editor showed: %s\n\nWhat I did just before:\n" % val)
+        # plain words, what it means, what to do, a button for it (NN/g error-message guidelines); the same fault
+        # again (a mouse-move handler fires many times a second) is logged, not shown again
+        last = traceback.extract_tb(tb)[-1] if tb else None
+        where = "%s line %d" % (os.path.basename(last.filename), last.lineno) if last else ""
+        sig = (exc.__name__, where)
+        seen = self.__dict__.setdefault("_errors_seen", set())
+        if sig in seen:
+            self.status.set("The same fault of the editor again (%s) - in the log; Report a bug sends it." % where)
+            return
+        seen.add(sig)
+        from .gui_util import ask_choice
+        k = ask_choice(self, APP, "Something went wrong inside the editor - a fault of the editor itself, not of "
+                                  "your mod.\n\nYour files are safe: a write either finishes with its backup or is "
+                                  "put back whole. You can go on working; if the same thing happens again, please "
+                                  "send a report so it gets fixed (the logs go with it, your names cut out - you see "
+                                  "everything before it is sent).\n\nFor the report: %s: %s (%s)"
+                       % (exc.__name__, str(val)[:300], where),
+                       ["Send a report...", "Go on working"], default=1, cancel=1)
+        if k == 0:
+            self.send_report("The editor showed: %s: %s (%s)\n\nWhat I did just before:\n" % (exc.__name__, val,
+                                                                                               where))
 
     def restore(self):
         if not self.mod:
