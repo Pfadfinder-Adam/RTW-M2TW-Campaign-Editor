@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.30.1 - 2026-10-07
 
 ### Fixed
 - Edit faction on a faction the mod has but the campaign does not (no block in its `descr_strat.txt`): said in plain words what to do (another campaign, or bring it in as a new / later faction).

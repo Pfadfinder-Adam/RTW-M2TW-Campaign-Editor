@@ -32,7 +32,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.30.0"
+VERSION = "0.30.1"
 KOFI = "https://ko-fi.com/pfadfinder"
 DISCORD = "https://discord.gg/uqA9MEn4Z"
 YOUTUBE = "https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ"
