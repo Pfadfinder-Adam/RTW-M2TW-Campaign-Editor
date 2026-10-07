@@ -239,7 +239,7 @@ class MapView(ttk.Frame):
         self.size_label = ttk.Label(row, text="", anchor="w", font=("", 9, "bold"))
         self.size_label.pack(side="left", padx=(0, 4))
         self.on_resize = None                            # () -> the Map size window (tiles added / cut at the edges)
-        self.b_resize = ttk.Button(row, text="Change size...", command=lambda: self.on_resize and self.on_resize())
+        self.b_resize = ttk.Button(row, text="Change size...", command=self._resize)
         self.b_resize.pack(side="left", padx=(0, 4))
         ttk.Button(row, text="Save picture...", command=self.save_picture).pack(side="left", padx=(0, 12))
         self.readout = ttk.Label(row, text="", anchor="w")
@@ -1302,9 +1302,9 @@ class MapView(ttk.Frame):
                 rr = r if i % 2 == 0 else r * 0.45
                 pts += [cx + rr * math.cos(a), cy + rr * math.sin(a)]
             c.create_polygon(*pts, fill=ink, outline="", tags=tags)
-        elif mark == "diamond":                       # a family member: a white rhombus, taller than wide (a thin
-            c.create_polygon(cx, cy - r, cx + r * 0.7, cy, cx, cy + r, cx - r * 0.7, cy, fill="white",  # dark edge
-                             outline="#202020" if ink == "black" else "", tags=tags)   # where the cloth is light)
+        elif mark == "diamond":                       # a family member: a rhombus, taller than wide, in the ink
+            c.create_polygon(cx, cy - r, cx + r * 0.7, cy, cx, cy + r, cx - r * 0.7, cy, fill=ink,  # that reads on
+                             outline="", tags=tags)    # the cloth (theme.on_colour) like every other mark
         elif mark == "chevron":                       # a wide chevron, its point up
             c.create_line(cx - r, cy + r * 0.45, cx, cy - r * 0.45, cx + r, cy + r * 0.45, fill=ink,
                           width=max(2, int(r * 0.45)), joinstyle="miter", tags=tags)
@@ -2048,6 +2048,13 @@ class MapView(ttk.Frame):
             self.ox, self.oy = ox - (e.x - x0) / self.z, oy - (e.y - y0) / self.z
             if self._pending is None:
                 self._pending = self.after(15, self._pan)
+
+    def _resize(self):
+        """Change size...: the map's own window; a map without one of its own (the Terrain tab's) takes the main
+        window's - the button did nothing there (the user, 2026-10-07)."""
+        fn = self.on_resize or getattr(self.winfo_toplevel(), "map_size_window", None)
+        if fn:
+            fn()
 
     def _escape(self, e=None):
         """Esc drops what waits for its click; only then it goes no further (else Esc closes the window)."""

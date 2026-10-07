@@ -14,6 +14,9 @@ from . import log, report, settings
 APP = "RTW & M2TW Campaign Editor"
 
 
+
+SEND_LIMIT = 90                 # seconds without an answer before the report is given up (then: save the zip)
+
 def open_report(app, message="", kind="bug", tab=None):
     """tab 'answers' opens on Answers to my reports (the Report button does when one came)."""
     game = mod_dir = None
@@ -225,15 +228,20 @@ def open_report(app, message="", kind="bug", tab=None):
             try:
                 result["id"], result["issue"] = report.send(
                     data, ("Idea: " if info["kind"] == "suggestion" else "Bug: ") + report.scrub(msg, hide),
-                    v_contact.get().strip(), info, full=True)
+                    v_contact.get().strip(), info, full=True, timeout=SEND_LIMIT)
             except Exception as e:           # RuntimeError in plain words; anything else still shown
                 result["error"] = str(e)
         th = threading.Thread(target=work, daemon=True)
         th.start()
+        import time
+        started = time.monotonic()
 
         def wait():
-            if th.is_alive():
-                w.after(200, wait)
+            if th.is_alive():                # the seconds go on: it is working, not stuck (a report with pictures
+                n = int(time.monotonic() - started)     # takes up to a minute - the user thought it hung)
+                lbl_state.configure(text="Sending... %d s (up to a minute with pictures; it gives up after %d s)"
+                                    % (n, SEND_LIMIT))
+                w.after(500, wait)
                 return
             b_send.configure(state="normal")
             if "id" in result:

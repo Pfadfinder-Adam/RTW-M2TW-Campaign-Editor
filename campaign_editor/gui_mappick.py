@@ -22,6 +22,7 @@ def pick_regions(parent, app, chosen, title="Pick regions on the map"):
     view = MapView(w)
     view.pack(fill="both", expand=True)
     view.legend.pack_forget()                      # only towns are picked here
+    view.b_resize.pack_forget()                    # picking towns: the map's size is not changed here
     from .mapdata import faction_colours
     try:
         owners = app.owners_after()

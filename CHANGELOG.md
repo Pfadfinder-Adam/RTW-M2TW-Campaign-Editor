@@ -10,6 +10,10 @@
 - Long explanations at the top of Mercenaries, Map size and the 3 x bigger map are one line now; the rest shows on the '?'.
 
 ### Fixed
+- **Change size...** under the map did nothing on the Terrain tab; it opens the Map size window from every map now.
+- The family member's diamond on a flag was always white; it takes the colour that reads on the flag (dark on a light flag, light on a dark one), like every other mark.
+- Sending a report shows the seconds while it goes (with pictures it takes up to a minute - it looked stuck) and gives up after 90 s with the offer to save the zip.
+- The Mod box and the data folder box at the top are the same width.
 - Medieval II: diplomacy at the start reset for every faction (all neutral) after an edit of a faction's feelings - Rome's form of the lines (`core_attitudes`, a number on `faction_relationships`) was written, which Medieval II does not read. Each game now gets its own form (`faction_standings` -1.0 .. 1.0 in Medieval II, and the other way in Rome). Lines older versions wrote so are named by Check mod files, and Load offers to rewrite them.
 - Medieval II: new texts (an event's title, a new building's or temple's name) were not shown in the game - it reads the compiled `<name>.txt.strings.bin` beside a text file instead of the file. A write that changes a text file now takes that `.strings.bin` away (backed up; the game builds it again from the text).
 - Module builder messages showed the game's 'picture not found' placeholder: the picture line of a message (`<id>_image`) is now written too (the messenger picture every culture has).

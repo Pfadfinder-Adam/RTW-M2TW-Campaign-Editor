@@ -379,15 +379,15 @@ class App(tk.Tk):
         ttk.Label(top, text="Mod").pack(side="left")
         # the mods of the game folder last used; picking one loads it
         self.v_modpick = tk.StringVar()
-        self.cb_mods = ttk.Combobox(top, textvariable=self.v_modpick, state="readonly", width=8)
-        self.cb_mods.pack(side="left", padx=(4, 8), fill="x", expand=True)   # it takes most of the free room: a
-        #                                                   mod's full name shows (the data folder needs less)
+        self.cb_mods = ttk.Combobox(top, textvariable=self.v_modpick, state="readonly", width=20)
+        self.cb_mods.pack(side="left", padx=(4, 8), fill="x", expand=True)   # Mod and data folder: the same width,
+        #                                                   sharing the free room half and half (the user, 2026-10-07)
         self.cb_mods.bind("<<ComboboxSelected>>", lambda e: self.mod_picked())
         self._mods = []
         ttk.Label(top, text="data folder").pack(side="left")
         self.v_path = tk.StringVar()
-        e_path = ttk.Entry(top, textvariable=self.v_path, width=30)    # the whole path shows on hover
-        e_path.pack(side="left", padx=6)
+        e_path = ttk.Entry(top, textvariable=self.v_path, width=20)    # the whole path shows on hover
+        e_path.pack(side="left", padx=6, fill="x", expand=True)
         ttk.Button(top, text="Browse...", command=self.browse).pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Button(top, text="Load", command=self.load_clicked).pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Button(top, text="New mod folder...", command=self.new_mod).pack(side="left", padx=(0, theme.BUTTON_GAP))
