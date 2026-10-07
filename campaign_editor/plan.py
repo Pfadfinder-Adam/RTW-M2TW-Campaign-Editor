@@ -424,6 +424,35 @@ def read_manifest(bdir):
     return manifest
 
 
+def _drop_backup(bdir):
+    """A backup that was put back goes (the user, 2026-10-07: 'why keep all these _restored folders if I undid it');
+    one that cannot go now (a file held open) is renamed *_restored and taken away by clean_restored later."""
+    try:
+        shutil.rmtree(bdir)
+    except OSError:
+        if os.path.isdir(bdir):
+            shutil.move(bdir, bdir + "_restored")
+
+
+def clean_restored(mod):
+    """Take away the *_restored folders older versions left in the backups folders (backups already put back:
+    nothing reads them). Returns how many went."""
+    gone = 0
+    for name in BACKUP_DIRS:
+        root = os.path.join(os.path.dirname(mod.data), name)
+        if not os.path.isdir(root):
+            continue
+        for n in os.listdir(root):
+            d = os.path.join(root, n)
+            if n.endswith("_restored") and os.path.isfile(os.path.join(d, "manifest.json")):
+                try:
+                    shutil.rmtree(d)
+                    gone += 1
+                except OSError:
+                    pass
+    return gone
+
+
 def restore(mod, bdir):
     """Put every file of a backup back and remove what that run created."""
     root = os.path.dirname(mod.data)
@@ -454,7 +483,7 @@ def restore(mod, bdir):
                 os.rmdir(d)
                 d = os.path.dirname(d)
         p = bdir
-        shutil.move(bdir, bdir + "_restored")
+        _drop_backup(bdir)               # undone: its copies are the files as they are now - nothing left to keep
     except OSError as e:                        # a file held by the game, the disk full...: the backup stays whole
         words = str(e) if isinstance(e, WriteError) else plain(getattr(e, "filename", None) or p, e) or \
             "%s: %s" % (type(e).__name__, e)

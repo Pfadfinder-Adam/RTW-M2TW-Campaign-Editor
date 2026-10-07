@@ -147,6 +147,20 @@ class ToolTest(unittest.TestCase):
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
         self.assertNotEqual(mid, after)
+        root = os.path.join(self.root, "CampaignEditor_backups")
+        self.assertEqual([n for n in os.listdir(root) if os.path.isdir(os.path.join(root, n))], [])   # put back = gone
+        # an older version's *_restored folder is taken away by clean_restored; a live backup stays
+        from campaign_editor.plan import clean_restored
+        old = os.path.join(root, "20260101_000000_x_restored")
+        os.makedirs(old)
+        with open(os.path.join(old, "manifest.json"), "w") as fh:
+            fh.write('{"modified": [], "created": []}')
+        p3 = Plan(ModData(self.root), None, "delta")
+        p3.binary(os.path.join(mod.campaign_dir("test"), "map_beta.tga"), b"again")
+        live = p3.apply()
+        self.assertEqual(clean_restored(ModData(self.root)), 1)
+        self.assertFalse(os.path.exists(old))
+        self.assertTrue(os.path.isdir(live))
 
     def test_modeldb_round_trip_and_clone(self):
         # Medieval II battle_models.modeldb: read back byte for byte, the clone copies the template's texture

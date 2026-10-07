@@ -3730,6 +3730,13 @@ class App(tk.Tk):
             return
         self.v_path.set(self.mod.data)
         log.write("Load %s" % self.mod.data)
+        try:
+            from .plan import clean_restored
+            n = clean_restored(self.mod)
+            if n:
+                log.write("Backups already put back taken away: %d *_restored folder(s)" % n)
+        except Exception:
+            pass
         self.roster_editor.forget()
         self.family_editor.forget()
         # remembered for the next start: this mod, its game folder, the campaign picked in it

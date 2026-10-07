@@ -10,6 +10,7 @@
 - Long explanations at the top of Mercenaries, Map size and the 3 x bigger map are one line now; the rest shows on the '?'.
 
 ### Fixed
+- Backups that were put back (Restore, Undo this write) stayed in `CampaignEditor_backups` as `*_restored` folders, one per undo. They are deleted now, and the ones older versions left are taken away when the mod is loaded.
 - **Change size...** under the map did nothing on the Terrain tab; it opens the Map size window from every map now.
 - The family member's diamond on a flag was always white; it takes the colour that reads on the flag (dark on a light flag, light on a dark one), like every other mark.
 - Sending a report shows the seconds while it goes (with pictures it takes up to a minute - it looked stuck) and gives up after 90 s with the offer to save the zip.
