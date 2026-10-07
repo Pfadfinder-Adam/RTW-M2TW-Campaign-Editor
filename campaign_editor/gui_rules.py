@@ -1,5 +1,5 @@
 """Campaign rules... (top row): the campaign's settings files as plain values with an explanation, the game's own value
-beside a changed one, Preview, Write it in (backup, Restore undoes it)."""
+beside a changed one, Preview, Keep for Apply (the main window's Apply writes it with the rest, a backup first)."""
 
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -32,7 +32,7 @@ class RulesWindow(tk.Toplevel):
         ShortHint(frm, wraplength=1060, justify="left", text=(
             "The rules of the whole campaign, from this mod's settings files and the top of the campaign's "
             "descr_strat.txt (start and end date, years a turn, switches). Pick a group on the left (or Find), "
-            "change a value, then Preview and Write it in - a backup is made first and Restore undoes it. A value "
+            "change a value, then Preview and Keep for Apply - Apply changes in the main window writes it (a backup first). A value "
             "that differs from the game's own shows the game's beside it, with Reset.")).pack(anchor="w")
         if any(CR.blocked(r) for g in self.groups for r in g[3]):
             ttk.Label(frm, foreground="#777", wraplength=1060, justify="left", text=(
@@ -66,7 +66,7 @@ class RulesWindow(tk.Toplevel):
         close = close_guard(self, "Campaign rules", lambda: ("%d value(s)" % len(self.changes)) if self.changes
                             else "", self.write)
         ttk.Button(foot, text="Close", command=close).pack(side="right")
-        ttk.Button(foot, text="Write it in", command=self.write).pack(side="right", padx=6)
+        ttk.Button(foot, text="Keep for Apply", command=self.write).pack(side="right", padx=6)
         ttk.Button(foot, text="Preview", command=self.preview).pack(side="right")
         if self.groups:
             self.lb.selection_set(0)
@@ -178,8 +178,8 @@ class RulesWindow(tk.Toplevel):
 
     def _status(self, problem=None):
         n = len(self.changes)
-        self.lbl.configure(text=problem or ("%d value(s) changed - Preview, then Write it in." % n if n else
-                                            "Nothing changed yet - change a value, then Preview and Write it in."),
+        self.lbl.configure(text=problem or ("%d value(s) changed - Preview, then Keep for Apply." % n if n else
+                                            "Nothing changed yet - change a value, then Preview and Keep for Apply."),
                            foreground="#a33" if problem else "#555")
 
     def _plan(self):
@@ -206,24 +206,21 @@ class RulesWindow(tk.Toplevel):
         self.app.show_text("Campaign rules - preview (nothing written)", plan.report())
 
     def write(self):
+        """Keep for Apply: the changed values go into the session's list (the window closes), written by the main
+        window's Apply changes with everything else."""
         if not self.changes:
             messagebox.showinfo("Campaign rules", "Nothing changed yet - change a value first.", parent=self)
-            return
-        try:
-            plan = self._plan()
-        except Exception as e:
-            messagebox.showerror("Campaign rules", str(e), parent=self)
-            return
-        if not messagebox.askyesno("Campaign rules", "Write %d value(s) into %d file(s)? A backup is made first "
-                                                     "(Restore undoes it). The game reads them on the next start."
-                                   % (len(self.changes), len(plan.changed_files())), parent=self):
-            return
-        bdir = plan.apply()
-        from . import log
-        log.write("Campaign rules changed (backup %s)\n%s" % (bdir, plan.report()))
-        self.app.status.set("Campaign rules: %d value(s) written (backup %s) - start the game to try them."
-                            % (len(self.changes), bdir))
-        self.destroy()
+            return False
+        from .gui_util import keep_for_apply
+        n = len(self.changes)
+
+        def after(bdir):
+            from . import log
+            log.write("Campaign rules changed (backup %s)" % bdir)
+        if keep_for_apply(self, "rules", "Campaign rules: %d value(s)" % n, self._plan, after, "Campaign rules"):
+            self.destroy()
+            return True
+        return False
 
 
 def open_rules(app):

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+- **One write for the session - every window**: Mercenaries, Events, Campaign rules, Traits and retinue, Many towns and Recolour keep their changes for Apply too (**Keep for Apply**), as the town and character windows do; one **Apply changes** writes them all, **Undo this write** takes back the last part or the whole write. (Traits' *New...* still writes at once: a new trait must exist before it is edited.)
 - **Mods that hold only the files they change load** (Medieval II `mods/<name>`, REX `-mod:<name>`): every file the mod lacks is read from the game's own data, as the game reads it; the Mod list shows them too. A change to such a file goes into the mod as its own copy - the game's files are never written - and Restore takes the copy away again. The engines' `descr_ex.txt` / `descr_caps_ex.txt` are still read from the mod alone. Medieval II with its data still packed: Load says to unpack the game first.
 
 ## 0.30.1 - 2026-10-07

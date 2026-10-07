@@ -1,7 +1,7 @@
 """Traits and retinue: the traits and ancillaries themselves (traitsedit), both games - a list to pick from, each
 level's name and description as players see them, its threshold and effects; an ancillary's name, text,
 picture, the cultures it is barred from and its effects. A new one is made as a copy of the picked one (written
-at once, then edited like the others). Changes wait for Preview / Write it in, with a backup like every write."""
+at once, then edited like the others). Changes wait for Preview / Keep for Apply; the main window's Apply writes them with the rest of the session."""
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
@@ -32,7 +32,7 @@ class TraitsWindow(tk.Toplevel):
             "Pick one on the left: each level's name and description as players see them, the points it needs "
             "(Threshold) and what it gives (Effects, like 'Command 1, Loyalty -2'). New... makes a copy of the "
             "picked one under a new name - then give it to characters in the Character editor. Preview, then "
-            "Write it in (a backup first, Tools > Restore undoes it).")).pack(fill="x")
+            "Keep for Apply - Apply changes in the main window writes it (a backup first; Undo this write puts it back).")).pack(fill="x")
         self.nb = ttk.Notebook(top)
         self.nb.pack(fill="both", expand=True, pady=6)
         self.tabs = {}
@@ -43,10 +43,9 @@ class TraitsWindow(tk.Toplevel):
         self.lbl = ttk.Label(bar, text="", foreground="#555")
         self.lbl.pack(side="left")
         from .gui_util import close_guard               # never closes over unwritten changes silently
-        close = close_guard(self, "Traits and retinue", lambda: bool(any(self.pending.values()) or any(
-            self.texts.values()) or self.pictures), self.write)
+        close = close_guard(self, "Traits and retinue", self._dirty, self.write)
         ttk.Button(bar, text="Close", command=close).pack(side="right")
-        ttk.Button(bar, text="Write it in", command=self.write).pack(side="right", padx=4)
+        ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=4)
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
         self.reload(pick)
 
@@ -309,7 +308,7 @@ class TraitsWindow(tk.Toplevel):
 
     def _status(self):
         n = self._count()
-        self.lbl.configure(text="%d change(s) - Preview, then Write it in." % n if n else
+        self.lbl.configure(text="%d change(s) - Preview, then Keep for Apply." % n if n else
                            "Nothing changed yet.")
 
     def replace_picture(self, name, image):
@@ -375,20 +374,30 @@ class TraitsWindow(tk.Toplevel):
         self.app.show_text("Traits and retinue - preview (nothing written)", plan.report())
 
     def write(self):
+        """Keep for Apply: the changes go into the session's list, written by the main window's Apply changes with
+        everything else. (New... still writes at once: a new trait must exist before it is edited.)"""
         if not self._count():
             messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
-            return
-        try:
-            plan = self._plan()
-        except Exception as e:
-            messagebox.showerror(TITLE, str(e), parent=self)
-            return
-        if not self._apply(plan, "Write %d change(s) into %d file(s)?" % (self._count(), len(plan.changed_files()))):
-            return
-        self.pending = {"trait": {}, "ancillary": {}}
-        self.texts = {"trait": {}, "ancillary": {}}
-        self.pictures = {}
-        self.reload()
+            return False
+        from .gui_util import keep_for_apply
+
+        def after(bdir):
+            from . import log
+            log.write("Traits and retinue changed (backup %s)" % bdir)
+            if self.winfo_exists():
+                self.mod = self.app.mod
+                self.pending = {"trait": {}, "ancillary": {}}
+                self.texts = {"trait": {}, "ancillary": {}}
+                self.pictures = {}
+                self.reload()
+        return keep_for_apply(self, "traits", "Traits and retinue: %d change(s)" % self._count(), self._plan, after,
+                              TITLE)
+
+    def _dirty(self):
+        if not self._count():
+            return ""
+        from .gui_util import kept_or_not
+        return kept_or_not(self.app, "traits", self._plan)
 
     def _apply(self, plan, question):
         if self.app.pending_parts():
@@ -412,7 +421,7 @@ class TraitsWindow(tk.Toplevel):
             messagebox.showinfo(TITLE, "Pick the %s to copy first (on the left)." % kind, parent=self)
             return
         if self._count():
-            messagebox.showinfo(TITLE, "Write in (or close without) the changes waiting first - a new one is "
+            messagebox.showinfo(TITLE, "Keep (or throw away) the changes waiting first - a new one is "
                                        "written at once.", parent=self)
             return
         new = simpledialog.askstring(TITLE, "Name of the new %s (letters, digits and _), a copy of %s:" % (kind, src),

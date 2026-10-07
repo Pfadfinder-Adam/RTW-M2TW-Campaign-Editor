@@ -117,7 +117,7 @@ class MassTownWindow(tk.Toplevel):
         bar = ttk.Frame(outer)
         bar.pack(fill="x", pady=(8, 0))
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="left")
-        self.b_write = ttk.Button(bar, text="Write it", command=self.write)
+        self.b_write = ttk.Button(bar, text="Keep for Apply", command=self.write)
         self.b_write.pack(side="left", padx=4)
         self.status = ttk.Label(bar, foreground="#555")
         self.status.pack(side="left", padx=8)
@@ -440,7 +440,7 @@ class MassTownWindow(tk.Toplevel):
                 a = b = max(1, min(M.MAX_UNITS, sizes[t["owner"]].get(t["level"], lo)))
             self.garrisons[r] = M.random_garrison(self._town_pool(t), a, b, cap, self.rng)
         self.fill_chosen()
-        self.status.configure(text="garrisons drawn - Preview, or Write it")
+        self.status.configure(text="garrisons drawn - Preview, or Keep for Apply")
 
     # ---- writing ----
     def opts(self):
@@ -496,26 +496,33 @@ class MassTownWindow(tk.Toplevel):
         self.app.show_text("Preview - " + TITLE, plan.report(), wrap="word")
 
     def write(self):
+        """Keep for Apply: this change for many towns goes into the session's list (each one a part of its own),
+        written by the main window's Apply changes with everything else."""
+        from .gui_util import keep_for_apply
         try:
             plan = self._plan()
         except ValueError as e:
             messagebox.showinfo(TITLE, str(e), parent=self)
-            return
-        if getattr(self.app, "undo_stack", None) and not messagebox.askyesno(
-                TITLE, "The main window holds changes not written yet; writing now reads the files again, so "
-                       "they would be dropped. Go on?", parent=self):
-            return
-        bdir = plan.apply()
-        from . import log
-        log.write("%s (backup %s)\n%s" % (TITLE, bdir, plan.report()))
+            return False
         n = plan.towns_written
-        self.app.load()
-        self._read()
-        self.garrisons = {}
-        self.fill_all()
-        self.fill_chosen()
-        self.status.configure(text="written for %d town(s) (backup %s) - Restore undoes it" % (n, bdir))
-        self.app.status.set("%s: written (backup %s) - Restore undoes it." % (TITLE, bdir))
+        App = type(self.app)
+        App._towns_kept = getattr(App, "_towns_kept", 0) + 1
+
+        def after(bdir):
+            from . import log
+            log.write("%s (backup %s)" % (TITLE, bdir))
+            if self.winfo_exists():
+                self.mod = self.app.mod
+                self._read()
+                self.garrisons = {}
+                self.fill_all()
+                self.fill_chosen()
+                self.status.configure(text="written for %d town(s) (backup %s)" % (n, bdir))
+        if keep_for_apply(self, "towns:%d" % App._towns_kept, "%s: %d town(s)" % (TITLE, n), lambda: plan, after,
+                          TITLE):
+            self.status.configure(text="kept for %d town(s) - Apply changes in the main window writes it" % n)
+            return True
+        return False
 
 
 __all__ = ["MassTownWindow"]

@@ -9,7 +9,8 @@ shares its list with the other regions of its pool: said above the cards, and 'A
 regions can be changed the map's own way - a box adds, Shift + box takes away - and 'Take the map's selection'
 gives the pool exactly what is selected. 'New pool from the map's selection' makes a pool of the selected regions.
 Right: the pool's units with their numbers in plain words; a picked unit's numbers are changed in the fields under
-the list. Nothing is written before 'Write it in' (a backup first; Tools > Restore a backup undoes it)."""
+the list. Nothing is written before 'Keep for Apply' and then Apply changes in the main window, which writes it with
+the rest of the session (a backup first; Undo this write / Tools > Restore a backup undo it)."""
 
 import hashlib
 import tkinter as tk
@@ -51,7 +52,7 @@ class MercWindow(tk.Toplevel):
         self.lbl_problems = ttk.Label(bar, foreground=theme.ink("#c00000"), wraplength=700, justify="left")
         self.lbl_problems.pack(side="left", fill="x", expand=True)
         ttk.Button(bar, text="Close", command=self.close).pack(side="right")
-        ttk.Button(bar, text="Write it in", command=self.write).pack(side="right", padx=(0, 6))
+        ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=(0, 6))
         ttk.Button(bar, text="Show every change...", command=self.preview).pack(side="right", padx=(0, 6))
         top = ttk.Frame(self, padding=(10, 10, 10, 0))
         top.pack(fill="x")
@@ -62,7 +63,7 @@ class MercWindow(tk.Toplevel):
         ttk.Label(top, wraplength=1000, justify="left", text=(
             "Who is for hire where. A region takes its mercenaries from its pool: the regions of one pool share one "
             "list. 'For hire in a region' makes a region's list the way a garrison is made; 'Pools' groups the "
-            "regions on the map (a box adds, Shift + box takes away). Nothing is written before 'Write it in'.")
+            "regions on the map (a box adds, Shift + box takes away). Keep for Apply, then Apply changes in the main window writes it.")
                   ).pack(anchor="w", pady=(2, 6))
         # the picked unit's numbers: under both tabs, for the unit picked on either
         ed = ttk.LabelFrame(self, text="The picked unit", padding=8)
@@ -529,7 +530,7 @@ class MercWindow(tk.Toplevel):
         if p is None:
             return
         if not messagebox.askyesno(TITLE, "Delete the pool %s? Its regions (%s) will have no mercenaries for hire "
-                                          "(written with 'Write it in')." % (p.name, ", ".join(p.regions) or "none"),
+                                          "(written with Keep for Apply, then Apply changes)." % (p.name, ", ".join(p.regions) or "none"),
                                    parent=self):
             return
         self.pools.remove(p)
@@ -597,38 +598,37 @@ class MercWindow(tk.Toplevel):
         self.app.show_text("Mercenaries - every change (nothing written yet)", plan.report())
 
     def write(self):
-        plan = self._try_plan()
-        if plan is None:
-            return
-        if not plan.changed_files():
-            messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
-            return
-        if not messagebox.askyesno(TITLE, "%s\n\nWrite it? A backup is made first (Tools > Restore a backup undoes "
-                                          "it)." % plan.report()[:1500], parent=self):
-            return
-        bdir = plan.apply()
-        from . import log
-        log.write("Mercenary pools changed (backup %s)\n%s" % (bdir, plan.report()))
-        self.app.status.set("Mercenaries written (backup %s)." % bdir)
-        name = self.pool().name if self.pool() else None
-        self.reload()
-        if name:
-            p = next((q for q in self.pools if q.name == name), None)
-            if p:
-                self.fill(p)
+        """Keep for Apply: the pools' changes go into the session's list, written by the main window's Apply changes
+        with everything else (one write, one Undo)."""
+        from .gui_util import keep_for_apply
+        try:
+            self._plan()
+        except ValueError as e:
+            messagebox.showerror(TITLE, str(e), parent=self)
+            if "read again" in str(e):
+                self.reload()
+            return False
+
+        def after(bdir):
+            from . import log
+            log.write("Mercenary pools changed (backup %s)" % bdir)
+            if self.winfo_exists():
+                self.mod = self.app.mod
+                name = self.pool().name if self.pool() else None
+                self.reload()
+                p = next((q for q in self.pools if q.name == name), None) if name else None
+                if p:
+                    self.fill(p)
+        return keep_for_apply(self, "mercenaries:%s" % self.campaign, "Mercenary pools (%s)" % self.campaign,
+                              self._plan, after, TITLE)
 
     def _unwritten(self):
-        """Words of what is not written yet, or '' (the close guard asks before throwing it away)."""
+        """Words of what is neither written nor kept for the write, or '' (the close guard asks before throwing it
+        away)."""
         if not self.path:
             return ""
-        try:
-            from .plan import Plan
-            plan = Plan(self.mod, "mercenaries", self.campaign, {})
-            M.plan_pools(plan, self.campaign, self.pools)
-            n = len(plan.changed_files())
-        except Exception:
-            return "changes"
-        return "the pools" if n else ""
+        from .gui_util import kept_or_not
+        return kept_or_not(self.app, "mercenaries:%s" % self.campaign, self._plan)
 
     def _forget(self):
         if getattr(self.app, "_merc_window", None) is self:

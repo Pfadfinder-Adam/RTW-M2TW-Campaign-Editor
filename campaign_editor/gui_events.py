@@ -1,7 +1,7 @@
 """Events... (top row): the campaign's events (descr_events.txt) - their date, place, the title and
 text players see; new ones, removed ones; Show on the map. Below them, the factions that appear later in the
 campaign (emergence.py: by an event, a faction's shadow, split off in a revolt) - shown and changed. Preview /
-Write it in, with a backup like every write."""
+Keep for Apply - the main window's Apply changes writes it with the rest of the session, a backup first."""
 
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
@@ -32,7 +32,7 @@ class EventsWindow(tk.Toplevel):
         ShortHint(top, foreground="#555", justify="left", wraplength=1020, text=(
             "The campaign's events (descr_events.txt): a historic message, or a plague, volcano, earthquake ... at a "
             "place. The date is %s. The title and text players see are in historic_events.txt. Preview, then "
-            "Write it in (a backup first, Tools > Restore undoes it)." % (
+            "Keep for Apply - Apply changes in the main window writes it (a backup first; Undo this write puts it back)." % (
                 "years from the start and optionally summer or winter, like '14 winter'" if self.rome else
                 "years from the start, or two - the game picks one between them, like '210 220'"))).pack(fill="x")
         body = ttk.Frame(top)
@@ -84,10 +84,9 @@ class EventsWindow(tk.Toplevel):
         self.lbl = ttk.Label(bar, text="", foreground="#555")
         self.lbl.pack(side="left")
         from .gui_util import close_guard               # never closes over unwritten changes silently
-        close = close_guard(self, "Events", lambda: bool(self.edits or self.removed or self.new or self.texts
-                                                         or self.pictures or self.later), self.write)
+        close = close_guard(self, "Events", self._dirty, self.write)
         ttk.Button(bar, text="Close", command=close).pack(side="right")
-        ttk.Button(bar, text="Write it in", command=self.write).pack(side="right", padx=4)
+        ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=4)
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
         self.reload()
 
@@ -118,7 +117,7 @@ class EventsWindow(tk.Toplevel):
                                                         "yes" if r.get("re_emergent") else "", when))
 
     def change_later(self, new=False):
-        """A faction's way into the campaign: on the map, by an event, shadow, split-off (written with Write it in)."""
+        """A faction's way into the campaign: on the map, by an event, shadow, split-off (written with Keep for Apply, then Apply changes)."""
         from . import emergence as EM
         from .gui import WAY_KEYS, WAY_LABELS
         from .gui_util import FactionBox
@@ -174,7 +173,7 @@ class EventsWindow(tk.Toplevel):
             hb.state(["disabled"])
         ttk.Label(fr, foreground="#666", wraplength=460, justify="left", text=(
             "A faction that comes in later must hold no towns and no characters (give them away first). The date is "
-            "%s. Written with Write it in below." % ("years from the start and optionally summer or winter" if
+            "%s. Written with Keep for Apply below, then Apply changes in the main window." % ("years from the start and optionally summer or winter" if
                                                      self.rome else "years from the start, or two"))).grid(
             row=6, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
@@ -194,7 +193,7 @@ class EventsWindow(tk.Toplevel):
             self.later[fac] = got
             w.destroy()
             self.fill_later()
-            self.lbl.configure(text="%s: changed - Preview / Write it in" % fac)
+            self.lbl.configure(text="%s: changed - Preview / Keep for Apply" % fac)
         bb = ttk.Frame(fr)
         bb.grid(row=9, column=0, columnspan=2, sticky="e", pady=(8, 0))
         ttk.Button(bb, text="Cancel", command=w.destroy).pack(side="right")
@@ -230,7 +229,7 @@ class EventsWindow(tk.Toplevel):
             self.tv.see(cur)
         self.show()
         n = len(self.edits) + len(self.removed) + len(self.new) + len(self.texts) + len(self.pictures)
-        self.lbl.configure(text="%d change(s) - Preview, then Write it in." % n if n else "Nothing changed yet.")
+        self.lbl.configure(text="%d change(s) - Preview, then Keep for Apply." % n if n else "Nothing changed yet.")
 
     # ---- the form ----
     def show(self):
@@ -302,7 +301,7 @@ class EventsWindow(tk.Toplevel):
                 else:
                     self.texts[k] = value
             n = len(self.edits) + len(self.removed) + len(self.new) + len(self.texts) + len(self.pictures)
-            self.lbl.configure(text="%d change(s) - Preview, then Write it in." % n if n else "Nothing changed yet.")
+            self.lbl.configure(text="%d change(s) - Preview, then Keep for Apply." % n if n else "Nothing changed yet.")
         for v in (v_date, v_x, v_y, v_title):
             v.trace_add("write", keep)
         t.bind("<KeyRelease>", keep)
@@ -322,7 +321,7 @@ class EventsWindow(tk.Toplevel):
         shown = mine or next((p for p in files.values() if p), None)
         have = [c for c, p in files.items() if p]
         if mine:
-            what = "your picture - written for every culture with Write it in"
+            what = "your picture - written for every culture with Keep for Apply, then Apply changes"
         elif shown:
             what = "%s.tga - %s" % (EV.picture_name(name, kind), ", ".join(have))
         else:
@@ -355,7 +354,7 @@ class EventsWindow(tk.Toplevel):
         self.pictures[name] = path
         self.show()
         n = len(self.edits) + len(self.removed) + len(self.new) + len(self.texts) + len(self.pictures)
-        self.lbl.configure(text="%d change(s) - Preview, then Write it in." % n)
+        self.lbl.configure(text="%d change(s) - Preview, then Keep for Apply." % n)
 
     def show_on_map(self, x, y):
         if not (x.strip().lstrip("-").isdigit() and y.strip().lstrip("-").isdigit()):
@@ -440,30 +439,26 @@ class EventsWindow(tk.Toplevel):
         self.app.show_text("Events - preview (nothing written)", plan.report())
 
     def write(self):
-        try:
-            plan = self._plan()
-        except Exception as e:
-            messagebox.showerror(TITLE, str(e), parent=self)
-            return
-        if not plan.changed_files():
-            messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
-            return
-        if self.app.pending_parts():
-            messagebox.showerror(TITLE, "Other changes of the window wait for Apply - Apply (or undo) them first: "
-                                        "the mod is read again after this write.", parent=self)
-            return
-        if not messagebox.askyesno(TITLE, "%s\n\nWrite it? A backup is made first (Tools > Restore undoes it)."
-                                   % plan.report()[:1500], parent=self):
-            return
-        bdir = plan.apply()
-        from . import log
-        log.write("Events changed (backup %s)\n%s" % (bdir, plan.report()))
-        self.app.load()
-        self.mod = self.app.mod
-        self.edits, self.removed, self.new, self.texts, self.pictures = {}, [], [], {}, {}
-        self.later = {}
-        self.reload()
-        self.app.status.set("Events written (backup %s)." % bdir)
+        """Keep for Apply: the events' changes go into the session's list, written by the main window's Apply
+        changes with everything else (one write, one Undo)."""
+        from .gui_util import keep_for_apply
+
+        def after(bdir):
+            from . import log
+            log.write("Events changed (backup %s)" % bdir)
+            if self.winfo_exists():
+                self.mod = self.app.mod
+                self.edits, self.removed, self.new, self.texts, self.pictures = {}, [], [], {}, {}
+                self.later = {}
+                self.reload()
+        return keep_for_apply(self, "events:%s" % self.campaign, "Events and later factions (%s)" % self.campaign,
+                              self._plan, after, TITLE)
+
+    def _dirty(self):
+        if not (self.edits or self.removed or self.new or self.texts or self.pictures or self.later):
+            return ""
+        from .gui_util import kept_or_not
+        return kept_or_not(self.app, "events:%s" % self.campaign, self._plan)
 
 
 def open_events(app):

@@ -1,7 +1,8 @@
 """The window 'Recolour the faction's pictures': every picture of a faction that carries its colours (unit cards,
 battle textures, symbols, banners, captain cards...) moved from the colours they carry now (the template's, for a
 cloned faction - guessed, can be changed) to the faction's own colours (descr_sm_factions.txt, can be changed).
-Before / after of the picked picture; Write it makes one backup (Restore undoes it)."""
+Before / after of the picked picture; Keep for Apply puts them in the session's list - the main window's Apply
+writes them with the rest (one backup; Undo this write puts them back)."""
 
 import tkinter as tk
 from tkinter import colorchooser, messagebox, ttk
@@ -161,7 +162,7 @@ class RecolourWindow(tk.Toplevel):
         hint(row3, "Left drag on the 'after' picture paints: 'new primary' / 'new secondary' recolours what you "
                     "paint (a red line the test missed), 'keep as it was' gives the old pixels back (a face or a "
                     "horse it took). The brush size is in the picture's own pixels. Mouse wheel: zoom. The touch-ups "
-                    "are kept for that picture until Write it or Clear.").pack(side="left")
+                    "are kept for that picture until Keep for Apply or Clear.").pack(side="left")
         self.edits, self.zoom = {}, {}
         a = self.after
         a.bind("<ButtonPress-1>", self._paint)
@@ -177,7 +178,7 @@ class RecolourWindow(tk.Toplevel):
         ttk.Button(bot, text="Tick all", command=lambda: self._tick_all(True)).pack(side="left")
         ttk.Button(bot, text="Untick all", command=lambda: self._tick_all(False)).pack(side="left", padx=4)
         ttk.Button(bot, text="Preview", command=self.preview).pack(side="left", padx=(16, 0))
-        ttk.Button(bot, text="Write it", command=self.write).pack(side="left", padx=4)
+        ttk.Button(bot, text="Keep for Apply", command=self.write).pack(side="left", padx=4)
         self.status = ttk.Label(bot, foreground="#555")
         self.status.pack(side="left", padx=8)
         ttk.Button(bot, text="Close", command=self.destroy).pack(side="right")
@@ -440,26 +441,34 @@ class RecolourWindow(tk.Toplevel):
         self.app.show_text("Preview - " + TITLE, plan.report(), wrap="word")
 
     def write(self):
+        """Keep for Apply: the recoloured pictures go into the session's list, written by the main window's Apply
+        changes with everything else (one write, one Undo)."""
+        from .gui_util import keep_for_apply
         try:
             plan = self._plan()
         except ValueError as e:
             messagebox.showinfo(TITLE, str(e), parent=self)
-            return
-        bdir = plan.apply()
-        from . import log
-        log.write("%s %s (backup %s)\n%s" % (TITLE, self.faction, bdir, plan.report()))
-        n = len(plan.binaries)
-        self.status.configure(text="%d picture(s) written (backup %s) - Restore undoes it" % (n, bdir))
-        self.app.status.set("%s: %d picture(s) of %s recoloured (backup %s)." % (TITLE, n, self.faction, bdir))
-        self._cache, self.edits = {}, {}
-        if self.v_set.get():
-            self.app.load()                         # the faction's colours are read again everywhere
+            return False
+        n, faction, target = len(plan.binaries), self.faction, list(self.target)
+
+        def after(bdir):
+            from . import log
+            log.write("%s %s (backup %s)" % (TITLE, faction, bdir))
+            if not self.winfo_exists() or self.faction != faction:
+                return
             self.mod = self.app.mod
+            self._cache, self.edits = {}, {}
             self.colours = R.faction_colours(self.mod)
-        self.items = R.targets(self.mod, self.camp, self.faction)
-        self.source = list(self.target)
-        self.v_from.set(self.faction if tuple(self.target) == tuple(self.colours.get(self.faction, ())) else CUSTOM)
-        self.fill()
+            self.items = R.targets(self.mod, self.camp, self.faction)
+            self.source = list(target)
+            self.v_from.set(self.faction if tuple(target) == tuple(self.colours.get(self.faction, ())) else CUSTOM)
+            self.fill()
+            self.status.configure(text="%d picture(s) written (backup %s)" % (n, bdir))
+        if keep_for_apply(self, "recolour:%s" % faction, "%s: %d picture(s) of %s" % (TITLE, n, faction),
+                          lambda: plan, after, TITLE):
+            self.status.configure(text="%d picture(s) kept - Apply changes in the main window writes them" % n)
+            return True
+        return False
 
 
 __all__ = ["RecolourWindow"]
