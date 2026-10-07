@@ -7,8 +7,8 @@ Only the latest release gets fixes. Please update to it before reporting a probl
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.29.x (latest) | :white_check_mark: |
-| < 0.29   | :x:                |
+| 0.30.x (latest) | :white_check_mark: |
+| < 0.30   | :x:                |
 
 ## Where to get it
 
