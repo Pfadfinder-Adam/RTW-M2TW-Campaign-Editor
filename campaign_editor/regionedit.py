@@ -21,7 +21,6 @@ import re
 from .mapedit import CITY, PORT
 from .moddata import religions_line
 from .strat import Strat, village_block
-from .tga import patched
 
 RE_NAME_OK = "letters, digits and _ (like Tribus_Novus)"
 
@@ -203,7 +202,7 @@ def apply_regions(plan, campaign, painted, new_regions):
         changes[tuple(r["city"])] = CITY
         if r.get("port"):
             changes[tuple(r["port"])] = PORT
-    plan.binary(path, patched(path, changes))
+    plan.patch_tga(path, changes)
     moved = {}
     for xy, r in painted.items():
         moved.setdefault(r, 0)

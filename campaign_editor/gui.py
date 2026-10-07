@@ -3332,9 +3332,10 @@ class App(tk.Tk):
                 if fc["kind"] in ("army", "fleet") and not fc.get("units") else ""))
             self.show_map()
             return None
-        def check_place(what, region, xy):
+        def check_place(what, region, xy):              # land painted and not written yet counts (one go)
             return place_problem(self.mod, self.v_campaign.get(), what, region, xy,
-                                 {k: v for k, v in self.place_moves.items() if k != (what, region)})
+                                 {k: v for k, v in self.place_moves.items() if k != (what, region)},
+                                 self.region_paint)
 
         def place_moved(what, region, xy):
             self.remember()
@@ -5447,12 +5448,13 @@ class App(tk.Tk):
             from .mapedit import apply_places
             from .regionedit import apply_opts as apply_region_opts
             from .resources import apply as apply_resources
+            if regions:                         # the painted land first: a town or port may be moved onto it
+                apply_region_opts(plan, self.v_campaign.get(), regions)
             if places:
-                apply_places(plan, self.v_campaign.get(), places)
+                apply_places(plan, self.v_campaign.get(), places, (regions or {}).get("painted"))
             if res:
                 apply_resources(plan, self.v_campaign.get(), res)
             if regions:
-                apply_region_opts(plan, self.v_campaign.get(), regions)
                 # the campaign-select maps of the factions whose land changed follow the new borders
                 if self.select_map_opts().get("on"):    # only when asked on the Art tab: the originals stay
                     from .factionart import redraw_map_changes

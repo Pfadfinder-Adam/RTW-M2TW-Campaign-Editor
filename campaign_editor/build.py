@@ -119,7 +119,7 @@ def build(mod, campaign, template, new, opts):
     build_start(plan, campaign, opts["start"])
     if opts.get("places"):
         from .mapedit import apply_places
-        apply_places(plan, campaign, opts["places"])
+        apply_places(plan, campaign, opts["places"], (opts.get("regions") or {}).get("painted"))
     if opts.get("resources"):
         from .resources import apply as apply_resources
         apply_resources(plan, campaign, opts["resources"])

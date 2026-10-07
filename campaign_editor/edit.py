@@ -112,7 +112,7 @@ def edit(mod, campaign, faction, opts):
     _strat(plan, campaign, now)
     if opts.get("places"):
         from .mapedit import apply_places
-        apply_places(plan, campaign, opts["places"])
+        apply_places(plan, campaign, opts["places"], (opts.get("regions") or {}).get("painted"))
     if opts.get("resources"):
         from .resources import apply as apply_resources
         apply_resources(plan, campaign, opts["resources"])

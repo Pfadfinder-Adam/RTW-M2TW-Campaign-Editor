@@ -6264,6 +6264,44 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_a_port_onto_land_painted_in_the_same_write(self):
+        """Paint a region's land and put its port there in one go (a tester: it moved another region's port, or
+        wanted a write in between): the check counts the painted land, and the one write keeps both the painting and
+        the port (the second change to map_regions.tga starts from the first, not from the file)."""
+        from campaign_editor import mapedit as ME
+        from campaign_editor.plan import Plan
+        from campaign_editor.regionedit import apply_opts
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        red, blue, black, sea = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233)
+        write_tga(os.path.join(camp, "map_regions.tga"), 5, 7, [[red, red, blue, blue, sea],
+                                                                 [red, black, blue, blue, sea],
+                                                                 [red, red, blue, black, sea],
+                                                                 [red, red, blue, blue, sea],
+                                                                 [red, red, blue, blue, sea],
+                                                                 [red, red, blue, blue, sea],
+                                                                 [red, red, blue, blue, sea]])
+        write_tga(os.path.join(camp, "map_heights.tga"), 11, 15,
+                  [[(0, 0, 250) if x >= 8 else (20, 20, 20) for x in range(11)] for y in range(15)])
+        mod = ModData(self.root)
+        by = {v["colour"]: r for r, v in mod.regions("test").items()}
+        reds, blues = by[red], by[blue]
+        town_y = mod.city_tiles("test")[blues][1]
+        painted = {(x, y): reds for x in (2, 3) for y in range(7) if abs(y - town_y) >= 2}
+        spot = sorted(t for t in painted if t[0] == 3 and (3, t[1] - 1) in painted and (3, t[1] + 1) in painted)[0]
+        self.assertIn("not", ME.place_problem(mod, "test", "port", reds, spot) or "not")   # unpainted: not its land
+        self.assertIsNone(ME.place_problem(mod, "test", "port", reds, spot, painted=painted))
+        before = tree_hash(self.root)
+        plan = Plan(mod, "map", "map", {})
+        apply_opts(plan, "test", {"painted": painted})
+        ME.apply_places(plan, "test", [{"what": "port", "region": reds, "to": spot}], painted)
+        bdir = plan.apply()
+        after = ModData(self.root)
+        img = after.region_map("test")
+        self.assertEqual(tuple(ME.ports(after, "test").get(reds)), spot)
+        self.assertTrue(all(img.get(*t) == red for t in painted if t != spot))      # the painting is kept
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_map_deletes_a_character_of_any_faction(self):
         """The Map's right-click Delete: a character of any faction goes with his whole block (army too); the leader,
         the heir and one on the family tree are refused."""

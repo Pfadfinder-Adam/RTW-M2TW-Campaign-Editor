@@ -12,16 +12,23 @@ next to a moved port sail to the sea next to its new spot."""
 import os
 
 from .strat import RE_XY, Strat
-from .tga import patched
 
 CITY, PORT = (0, 0, 0), (255, 255, 255)
 
 
-def place_problem(mod, campaign, what, region, xy, moved=None):
+def place_problem(mod, campaign, what, region, xy, moved=None, painted=None):
     """Why town/port ('city' or 'port') of region may not go to tile xy, or None.
-    moved: {(what, region): xy} other moves already picked."""
+    moved: {(what, region): xy} other moves already picked; painted: {(x, y): region} land painted to a region of
+    the map and not written yet - it counts as that region's (paint, then move the town or port onto it, one go)."""
     moved = moved or {}
+    painted = {tuple(k): v for k, v in (painted or {}).items()}
     img = mod.region_map(campaign)
+    colours = {k: v["colour"] for k, v in mod.regions(campaign).items()}
+
+    def colour_at(cx, cy):
+        c = img.get(cx, cy)
+        r = painted.get((cx, cy))
+        return colours[r] if r in colours and c not in (CITY, PORT) else c
     x, y = xy
     if not (0 <= x < img.width and 0 <= y < img.height):
         return "off the map"
@@ -36,7 +43,7 @@ def place_problem(mod, campaign, what, region, xy, moved=None):
     here = orig(mod, campaign, what, region)
     here = tuple(here) if here else None
     # the tile as it would be: freed spots of other moves count as the region's own land
-    px = img.get(x, y)
+    px = colour_at(x, y)
     for (w, r), to in moved.items():
         if tuple(to) == (x, y) and (w, r) != (what, region):
             return "the new %s of %s goes there" % ("town" if w == "city" else "port", r)
@@ -59,18 +66,18 @@ def place_problem(mod, campaign, what, region, xy, moved=None):
         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
             nx, ny = x + dx, y + dy
             if 0 <= nx < img.width and 0 <= ny < img.height:
-                r = by_colour.get(img.get(nx, ny))
+                r = by_colour.get(colour_at(nx, ny))
                 if (nx, ny) == here:
                     r = region
                 if r:
                     votes[r] = votes.get(r, 0) + 1
         if votes.get(region, 0) <= max([n for r, n in votes.items() if r != region] or [0]):
             return "most of the land round it is another region's - the port would count as theirs"
-    serious = [m for s, m in _move_ring(mod, campaign, what, region, xy, moved) if s]
+    serious = [m for s, m in _move_ring(mod, campaign, what, region, xy, moved, painted) if s]
     return serious[0] if serious else None
 
 
-def _move_ring(mod, campaign, what, region, xy, moved):
+def _move_ring(mod, campaign, what, region, xy, moved, painted=None):
     """ring_problems for one town / port put at xy (with the other moves picked)."""
     moves = dict(moved or {})
     moves[(what, region)] = tuple(xy)
@@ -78,7 +85,7 @@ def _move_ring(mod, campaign, what, region, xy, moved):
     port_tiles = dict(ports(mod, campaign))
     for (w, r), to in moves.items():
         (towns if w == "city" else port_tiles)[r] = tuple(to)
-    return ring_problems(mod, campaign, owner_of(mod, campaign, moves), towns, port_tiles,
+    return ring_problems(mod, campaign, owner_of(mod, campaign, moves, painted=painted or None), towns, port_tiles,
                          touched=({tuple(xy)}, {region}))
 
 
@@ -267,7 +274,7 @@ def _remove_ports(plan, campaign, regions):
                     i = a
             i -= 1
     if changes:
-        plan.binary(path, patched(path, changes))
+        plan.patch_tga(path, changes)
         for folder in {os.path.dirname(path), os.path.join(mod.data, "world", "maps", "base")}:
             plan.delete(os.path.join(folder, "map.rwm"), "the game rebuilds it from the changed map")
 
@@ -289,9 +296,10 @@ def _settlement_span(lines, region):
     return None, None
 
 
-def apply_places(plan, campaign, places):
+def apply_places(plan, campaign, places, painted=None):
     """places = [{'what': 'city'|'port', 'region', 'to': (x, y)}]: repaint
-    map_regions.tga, remove map.rwm, move the characters on a moved town."""
+    map_regions.tga, remove map.rwm, move the characters on a moved town. painted: the land painted in the same
+    write (apply_regions first), so a town or port may go onto it."""
     mod = plan.mod
     moved = {}
     gone = [p["region"] for p in places if p["what"] == "port" and p.get("to") is None]
@@ -301,12 +309,12 @@ def apply_places(plan, campaign, places):
     for p in places:
         key = (p["what"], p["region"])
         why = place_problem(mod, campaign, p["what"], p["region"], tuple(p["to"]),
-                            {k: v for k, v in moved.items() if k != key})
+                            {k: v for k, v in moved.items() if k != key}, painted)
         if why:
             raise ValueError("%s of %s cannot go to %d, %d: %s" % (
                 "town" if p["what"] == "city" else "port", p["region"], p["to"][0], p["to"][1], why))
         for serious, msg in _move_ring(mod, campaign, p["what"], p["region"], tuple(p["to"]),
-                                       {k: v for k, v in moved.items() if k != key}):
+                                       {k: v for k, v in moved.items() if k != key}, painted):
             if not serious:
                 plan.warn(None, msg)
         moved[key] = tuple(p["to"])
@@ -325,7 +333,7 @@ def apply_places(plan, campaign, places):
         plan.notes.append((mod.rel(path), "%s of %s moved from %d, %d to %d, %d" % (
             "town" if what == "city" else "port", region, old[0], old[1], to[0], to[1]) if old else
             "a new port for %s at %d, %d (its town can build a port now)" % (region, to[0], to[1])))
-    plan.binary(path, patched(path, changes))
+    plan.patch_tga(path, changes)
     for folder in {os.path.dirname(path), os.path.join(mod.data, "world", "maps", "base")}:
         rwm = os.path.join(folder, "map.rwm")
         plan.delete(rwm, "the game rebuilds it from the changed map on the next start (takes a moment)")

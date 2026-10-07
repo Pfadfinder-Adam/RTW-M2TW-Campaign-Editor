@@ -132,13 +132,15 @@ def read_tga_bytes(data, path="(picture)"):
     return Image(width, height, raw=rgb)
 
 
-def patched(path, changes):
+def patched(path, changes, data=None):
     """The TGA's bytes with pixels changed: changes = {(x, y): (r, g, b)} in the
     bottom-up tile coordinates read_tga uses. The header, id field, bit depth,
     alpha and row order stay; an RLE image comes back uncompressed (type 2),
-    which the game reads the same way."""
-    with open(path, "rb") as f:
-        data = f.read()
+    which the game reads the same way. data: the bytes to start from (a picture
+    an earlier part of the same write already changed), else the file's."""
+    if data is None:
+        with open(path, "rb") as f:
+            data = f.read()
     width, height, step, top_down, _, raw = _decode(data, path)
     id_len = data[0]
     for (x, y), (r, g, b) in changes.items():

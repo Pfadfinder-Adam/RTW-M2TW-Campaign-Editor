@@ -22,6 +22,28 @@ class Pictures:
     def __init__(self):
         self.cache = {}
 
+    def missing(self, name, size=CARD):
+        """A grey card of the usual size with the unit's name on it: a unit without a picture keeps the grid even
+        (it was a wide text button that looked like a broken card)."""
+        if Image is None:
+            return None
+        key = ("missing", name, size)
+        if key not in self.cache:
+            from PIL import ImageDraw
+            im = Image.new("RGBA", size, (128, 128, 128, 255))
+            d = ImageDraw.Draw(im)
+            d.rectangle((0, 0, size[0] - 1, size[1] - 1), outline=(80, 80, 80, 255))
+            words, lines = name.split(), [""]
+            for w in words:                                  # a few short lines of the name
+                if len(lines[-1]) + len(w) + 1 > 8 and lines[-1]:
+                    lines.append(w)
+                else:
+                    lines[-1] = (lines[-1] + " " + w).strip()
+            for i, t in enumerate(lines[:5]):
+                d.text((3, 4 + i * 11), t[:9], fill=(255, 255, 255, 255))
+            self.cache[key] = ImageTk.PhotoImage(im)
+        return self.cache[key]
+
     def get(self, path, size=CARD):
         if not path or Image is None:
             return None
@@ -33,6 +55,10 @@ class Pictures:
                 im = im.convert("RGBA")
                 if im.size != size:
                     im.thumbnail(size)
+                    if size[1] <= CARD[1] * 2 and im.size != size:   # a card of another size sits in the middle
+                        box = Image.new("RGBA", size, (0, 0, 0, 0))      # of the same box: the grid stays even
+                        box.paste(im, ((size[0] - im.width) // 2, (size[1] - im.height) // 2))
+                        im = box
                 self.cache[key] = ImageTk.PhotoImage(im)
             except Exception:
                 self.cache[key] = None
@@ -130,7 +156,7 @@ class GarrisonEditor(ttk.Frame):
 
     def _card(self, parent, unit, command):
         path = card_path(self.mod, self.faction, unit.dictionary)
-        img = self.pics.get(path)
+        img = self.pics.get(path) or self.pics.missing(unit.type)     # no picture: a grey card with its name
         text = unit.type if img is None else str(unit.upkeep)          # upkeep under the card
         b = tk.Button(parent, image=img, text=text, compound="top", wraplength=90, width=None if img else 12,
                       relief="flat", command=command, cursor="hand2", font=("", 8), pady=0)

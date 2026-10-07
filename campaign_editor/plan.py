@@ -62,6 +62,12 @@ class Plan:
         """A whole new content for a (binary) file, backed up like any edit."""
         self.binaries[path] = data
 
+    def patch_tga(self, path, changes):
+        """Pixels of a TGA changed on top of what this plan already changed in it (painted regions and a moved
+        town in one write: the second must not start again from the file and lose the first)."""
+        from .tga import patched
+        self.binary(path, patched(path, changes, self.binaries.get(path)))
+
     def delete(self, path, why):
         if os.path.exists(path) and path not in self.deletions:
             self.deletions.append(path)

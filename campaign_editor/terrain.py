@@ -13,7 +13,6 @@ for them (the rules of moddata.land_problem)."""
 
 import os
 
-from .tga import patched
 
 # map_ground_types.tga colours (Rome and Medieval II; the last two are Medieval II's)
 GROUND = {
@@ -550,7 +549,7 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
     climate_names = {c: n for n, c, _ in climates(mod)}
     if ctiles:
         path = mod.campaign_file(campaign, "map_regions.tga")
-        plan.binary(path, patched(path, {tuple(k): tuple(v) for k, v in coast["regions"].items()}))
+        plan.patch_tga(path, {tuple(k): tuple(v) for k, v in coast["regions"].items()})
         n_land = sum(1 for v in ctiles.values() if v == "land")
         plan.notes.append((mod.rel(path), "%d tile(s) made land, %d made sea" % (n_land, len(ctiles) - n_land)))
     gchanges = {tuple(k): tuple(v) for k, v in (coast.get("ground") or {}).items()}
@@ -566,7 +565,7 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
         path = mod.campaign_file(campaign, name)
         if not path:
             raise ValueError("this campaign has no %s" % name)
-        plan.binary(path, patched(path, changes))
+        plan.patch_tga(path, changes)
         count = Counter(names.get(c, str(c)) for c in tiles.values())
         plan.notes.append((mod.rel(path), "%d tile(s): %s" % (len(tiles), ", ".join(
             "%d %s" % (n, k) for k, n in count.most_common()))))
@@ -581,7 +580,7 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
             raise ValueError("heights painted on the sea at %d, %d - the brush changes land only" % bad[0])
         final = dict(cheights)
         final.update({p: (v, v, v) for p, v in heights.items()})
-        plan.binary(path, patched(path, final))
+        plan.patch_tga(path, final)
         if heights:
             up = sum(1 for p, v in heights.items() if is_land_height(img.get(*p)) and v > img.get(*p)[0])
             plan.notes.append((mod.rel(path), "%d pixel(s) of land: %d raised, %d lowered" % (

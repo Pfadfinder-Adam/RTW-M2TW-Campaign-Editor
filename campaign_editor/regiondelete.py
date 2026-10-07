@@ -28,7 +28,6 @@ import os
 import re
 
 from .strat import Strat
-from .tga import patched
 from .textio import strip_comment
 
 N4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
@@ -222,7 +221,7 @@ def delete(plan, campaign, region, into=None):
     path = mod.campaign_file(campaign, "map_regions.tga")
     colour = regions[into]["colour"]
     px = region_pixels(mod, campaign, region)
-    plan.binary(path, patched(path, {xy: colour for xy in px}))
+    plan.patch_tga(path, {xy: colour for xy in px})
     plan.notes.append((mod.rel(path), "%d tile(s) of %s, its town and port pixels with them -> %s" % (
         len(px), region, into)))
     for folder in {os.path.dirname(path), os.path.join(mod.data, "world", "maps", "base")}:

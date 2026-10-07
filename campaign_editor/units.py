@@ -115,17 +115,26 @@ def faction_units(mod, faction, ships=False, mercs=False):
 
 
 def card_path(mod, faction, dictionary, info=False):
-    """ui/units/<faction>/#<dict>.tga (or ui/unit_info/<faction>/<dict>_info.tga),
-    else the same picture in any other faction's folder, else None."""
-    folder = os.path.join(mod.data, "ui", "unit_info" if info else "units")
+    """ui/units/<faction>/#<dict>.tga (or ui/unit_info/<faction>/<dict>_info.tga), else the same picture in any
+    other faction's folder, else None. The mod's own data first, then the game's (a mod folder holding only what it
+    changed shows the game's cards, as the game itself does)."""
+    from .clone import data_roots
     name = ("%s_info.tga" if info else "#%s.tga") % dictionary
-    own = _ci(folder, faction)
-    if own:
-        p = _ci(own, name)
+    folders = [os.path.join(d, "ui", "unit_info" if info else "units") for d in data_roots(mod)]
+    folders = [f for f in folders if os.path.isdir(f)]
+    for folder in folders:                              # the faction's own card
+        own = _ci(folder, faction) if faction else None
+        p = _ci(own, name) if own else None
         if p:
             return p
-    if not os.path.isdir(folder):
-        return None
+    for folder in folders:                              # else any other faction's
+        for d in sorted(os.listdir(folder)):
+            sub = os.path.join(folder, d)
+            if os.path.isdir(sub):
+                p = _ci(sub, name)
+                if p:
+                    return p
+    return None
     for d in sorted(os.listdir(folder)):
         sub = os.path.join(folder, d)
         if os.path.isdir(sub):
