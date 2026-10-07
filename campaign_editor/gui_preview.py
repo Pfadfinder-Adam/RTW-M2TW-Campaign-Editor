@@ -212,8 +212,12 @@ class UnitPreview(_Base):
         owners = [x.strip() for x in val("ownership").split(",") if x.strip()]
         first = owners[0] if owners else ""
         self.title.configure(text="unit %s" % unit)
-        self._pic(card_path(self.mod, first, dic), (60, 80), "card")
-        self._pic(card_path(self.mod, first, dic, True), (120, 160), "description")
+        from .units import owner_factions
+        facs = owner_factions(self.mod, owners)
+        merc = "mercenary_unit" in val("attributes").replace(",", " ").split()
+        self._pic(card_path(self.mod, facs[0] if facs else first, dic, owners=facs, mercenary=merc), (60, 80), "card")
+        self._pic(card_path(self.mod, facs[0] if facs else first, dic, True, owners=facs, mercenary=merc),
+                  (120, 160), "description")
         name = text_value(self.mod, "export_units.txt", dic) or unit
         short = text_value(self.mod, "export_units.txt", dic + "_descr_short")
         parts = [(name + "\n", "h")]

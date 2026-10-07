@@ -682,6 +682,32 @@ building smith
             bat = fh.read()
         self.assertIn("REX.exe -bi -nm -show_err -mod:bi_test", bat)
 
+    def test_one_resolver_for_unit_cards_and_building_cultures(self):
+        """The editor shows what the game would: a unit's card from an owner's folder (or the mercenaries'), never
+        ui/units/construction (the queue's whole figures - a tester saw them as 'full-height cards') and never a
+        card of a faction that does not own it; none found = None, said plainly. A building level opens on a culture
+        that builds it (Rome's despotic_law: never barbarian - its texts are stand-ins)."""
+        from campaign_editor.units import card_path, unit_card, read_units
+        from campaign_editor.buildings import Level, builder_cultures
+        d = os.path.join(self.root, "data")
+        for folder in ("construction", "beta"):
+            write(os.path.join(d, "ui", "units", folder, "#alpha_spear.tga"), "x")
+        mod = ModData(self.root)
+        u = read_units(mod.load(mod.file("edu")))[0]
+        u.dictionary, u.ownership, u.attributes = "alpha_spear", ["alpha"], []
+        self.assertIsNone(unit_card(mod, u))                       # alpha owns it and has no card: said, not taken
+        self.assertIsNone(card_path(mod, None, "alpha_spear", owners=["alpha"]))
+        self.assertTrue(card_path(mod, None, "alpha_spear").endswith(os.path.join("beta", "#alpha_spear.tga")))
+        write(os.path.join(d, "ui", "units", "alpha", "#alpha_spear.tga"), "x")
+        self.assertTrue(unit_card(mod, u).endswith(os.path.join("alpha", "#alpha_spear.tga")))
+        u.ownership, u.attributes = ["slave"], ["mercenary_unit"]
+        write(os.path.join(d, "ui", "units", "mercs", "#alpha_spear.tga"), "x")
+        self.assertTrue(unit_card(mod, u).endswith(os.path.join("mercs", "#alpha_spear.tga")))
+        cults = {n: c for n, c in mod.factions()}
+        lv = Level("execution_square", "factions { %s, }" % cults["alpha"])
+        self.assertEqual(builder_cultures(mod, lv), [cults["alpha"]])
+        self.assertEqual(set(builder_cultures(mod, Level("x", ""))), {c for c in cults.values() if c})
+
     def test_unit_cards_fill_a_folder_left_from_an_earlier_attempt(self):
         # ui/units/beta exists already (an old manual attempt) but lacks alpha's cards
         write(os.path.join(self.root, "data", "ui", "units", "beta", "#old_unit.tga"), "old")
@@ -2728,6 +2754,26 @@ building smith
         for bad in (os.path.join(g, "data"), os.path.join(g, "bi", "data"), os.path.join(self.root, "x", "data")):
             with self.assertRaises(ValueError):
                 deletable_mod_folder(bad)
+        # a mod never started in the game is asked about once more (a tester threw away a test mod that had never
+        # run - the game had started the plain campaign): a save, or a game log naming it, shows it ran
+        from campaign_editor.newmod import ever_started
+        hlr = os.path.join(g, "HLR")
+        self.assertFalse(ever_started(hlr, g))
+        with open(os.path.join(g, "system.log.txt"), "w") as fh:
+            fh.write("12:00:00 [system.rpt] [always] Mod: other\n")
+        self.assertFalse(ever_started(hlr, g))
+        with open(os.path.join(g, "system.log.txt"), "w") as fh:
+            fh.write("12:00:00 [system.rpt] [always] Mod: HLR\n")
+        self.assertTrue(ever_started(hlr, g))
+        os.remove(os.path.join(g, "system.log.txt"))
+        os.makedirs(os.path.join(hlr, "saves"))
+        open(os.path.join(hlr, "saves", "Autosave.sav"), "w").close()
+        self.assertTrue(ever_started(hlr, g))
+        # the Start button names what it starts: 'Rome - HLR'; the game's own data has no mod
+        from campaign_editor import launch
+        self.assertEqual(launch.what(os.path.join(g, "HLR", "data")), ("Rome", "HLR"))
+        self.assertEqual(launch.what(os.path.join(g, "data")), ("Rome", None))
+        self.assertEqual(launch.what(os.path.join(g, "bi", "data")), ("Barbarian Invasion", None))
 
     def test_expansion_picture_paths(self):
         """Barbarian Invasion names its pictures from the game's folder (bi/data/models_strat/...): found under the
@@ -3434,12 +3480,19 @@ building smith
         put(os.path.join(m2, "mods", "x", "x.cfg"), b"[features]\r\nmod = mods/y\r\n")
         data = os.path.join(m2, "mods", "x", "data")
         how = launch.start_line(data)
-        self.assertEqual([s for s, _ in launch.problems(how, data)], [False])      # names mods/y, not mods/x
+        # names mods/y, not mods/x: the folder is said to be misnamed, and the .cfg asked about
+        self.assertEqual([s for s, _ in launch.problems(how, data)], [True, False])
         put(os.path.join(m2, "mods", "x", "x.cfg"), b"[features]\r\nmod = mods/x\r\n")
         self.assertEqual(launch.problems(how, data), [])
         put(os.path.join(m2, "mods", "x", "Start_x.bat"), b"kingdoms.exe @mods/x/x.cfg\r\n")
         bat = launch.start_line(data)
         self.assertEqual([s for s, _ in launch.problems(bat, data)], [True])       # kingdoms.exe is not there
+        # the mod's own files look for another folder (a tester's mod unpacked into 'Neuer Ordner'): said first
+        self.assertIsNone(launch.named_folder(data))
+        put(os.path.join(m2, "mods", "x", "Start_x.bat"), b"cd ..\\..\r\nM2EX.exe @mods\\kirsi\\configuration.cfg\r\n")
+        put(os.path.join(m2, "mods", "x", "x.cfg"), b"[features]\r\nmod = mods/kirsi\r\n")
+        self.assertEqual(launch.named_folder(data), "kirsi")
+        self.assertTrue(any(st and "rename the folder to kirsi" in w for st, w in launch.problems(bat, data)))
 
     def test_start_the_game_with_the_loaded_mod(self):
         """Start the game: the mod's own start script (Start_<name>.bat first; not an unpacker's .bat), else the
@@ -4609,10 +4662,35 @@ building smith
         camp = os.path.join(d, "world", "maps", "campaign", "test")
         write(os.path.join(camp, "descr_events.txt"), "; events\n\nevent\thistoric\tfirst\ndate\t2\n")
         mod = ModData(self.root)
+        # plain Rome (also with REX) stops reading descr_strat.txt at a faction that starts dead - the in-game tester's
+        # proof (rebels empty, diplomacy lost); it takes no faction that comes later at all, only BI and Medieval II do
+        self.assertEqual(E.ways_for(mod), ("map",))
+        for way in ("event", "shadow"):
+            with self.assertRaises(ValueError) as cm:
+                build(mod, "test", "alpha", "slavs", {"start": {"way": way, "of": "alpha", "date": "5 summer",
+                                                               "region": "B_R", "regions": [], "leader": None}})
+            self.assertIn("only Barbarian Invasion", str(cm.exception))
+        sp = mod.campaign_file("test", "descr_strat.txt")
+        with open(sp, "rb") as fh:
+            strat0 = fh.read()
+        with open(sp, "wb") as fh:
+            fh.write(strat0.replace(b"denari", b"dead_until_resurrected\r\ndenari", 1))
+        mod = ModData(self.root)
+        self.assertTrue(any("stops reading descr_strat.txt at 'dead_until_resurrected'" in f
+                            for f in E.problems(mod, "test")[0]), E.problems(mod, "test"))
+        from campaign_editor import gamefix
+        found = [p for p in gamefix.problems(mod) if p["id"] == "rome_dead"]
+        self.assertEqual(len(found), 1)
+        fix = gamefix.fix_plan(mod, found)
+        self.assertNotIn("dead_until_resurrected", "\n".join(fix.files[sp].texts()))
+        with open(sp, "wb") as fh:
+            fh.write(strat0)
+        self.addCleanup(setattr, E, "is_bi", E.is_bi)
+        E.is_bi = lambda m: True                               # the rest as on Barbarian Invasion
+        mod = ModData(self.root)
         plan = build(mod, "test", "alpha", "slavs", {"start": {
             "way": "event", "date": "5 summer", "region": "B_R", "re_emergent": True, "denari": 2000,
             "regions": [], "leader": None, "playable": True}})
-        sp = mod.campaign_file("test", "descr_strat.txt")
         s = Strat(plan.files[sp])
         fb = s.faction("slavs")
         self.assertEqual((fb.settlements, fb.characters), ([], []))
@@ -4644,13 +4722,6 @@ building smith
         with self.assertRaises(ValueError) as cm:
             E.apply(Plan(mod, "later", "slavs", {}), "test", "slavs", "event", date="6 summer", region="A_R")
         self.assertIn("A_R is held by alpha", str(cm.exception))
-        # plain Rome takes no shadow / split-off faction (a test mod crashed at the end of a turn) - only BI does
-        self.assertEqual(E.ways_for(mod), ("map", "event"))
-        with self.assertRaises(ValueError) as cm:
-            E.apply(Plan(mod, "later", "alpha", {}), "test", "slavs", "shadow", of="alpha")
-        self.assertIn("only Barbarian Invasion", str(cm.exception))
-        self.addCleanup(setattr, E, "ways_for", E.ways_for)
-        E.ways_for = lambda m: E.WAYS                          # the rest as on Barbarian Invasion
         # the shadow of alpha: both header lines; a clone of the dead faction starts plain and alive
         plan = Plan(mod, "later", "alpha", {})
         E.apply(plan, "test", "slavs", "shadow", of="alpha", re_emergent=True)
@@ -4755,6 +4826,8 @@ building smith
         them; one faction with a shadow and a split-off is taken, with Preview saying the revolting towns go to the shadow."""
         from campaign_editor import emergence as E, limits
         from campaign_editor.minimod import EDU
+        self.addCleanup(setattr, E, "is_bi", E.is_bi)
+        E.is_bi = lambda m: True                               # plain Rome takes no later faction
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
             "dictionary\talpha_general\n", "dictionary\talpha_general\ncategory\tcavalry\nattributes\tsea_faring, "
@@ -5000,6 +5073,20 @@ building smith
         restore(mod, bdir)
         self.assertIsNone(A.installed(mod, a))
 
+    def test_module_builder_only_in_a_campaign_with_a_faction(self):
+        """The test mod's modules lie in the GAME's script/modules: a module with only_with acts only where that
+        faction is in the campaign, else one log line (a tester's plain campaign got the test's +100 people)."""
+        from campaign_editor import modbuilder as MB
+        r = MB.new_recipe("Only here")
+        r.update(only_with="ce_test", dos=[MB.item("do", "log", text="hello")])
+        text = MB.script(r)
+        self.assertIn('if (mb_faction("ce_test") == null) {', text)
+        self.assertIn("no faction ce_test - nothing done", text)
+        self.assertIn("Only in a campaign that has the faction ce_test.", MB.plain_words(r))
+        r2 = MB.new_recipe("Anywhere")
+        r2.update(dos=[MB.item("do", "log", text="hello")])
+        self.assertNotIn("nothing done", MB.script(r2))
+
     def test_module_builder(self):
         """The Module builder: a recipe of WHEN / IF / DO blocks -> a REX / M2EX script that is an ordinary add-on
         (its settings and their words found by from_script, money below 0 allowed, the recipe read back out of it, no
@@ -5014,8 +5101,8 @@ building smith
         mod = ModData(self.root)
         r = MB.example("Help when broke")
         self.assertTrue(MB.plain_words(r).startswith(
-            "When a faction's turn starts, if the faction is the player and its money is below 0: the faction gets "
-            "3000 denarii"))
+            "When the player's turn starts (once a turn), if its money is below 0: the faction gets 3000 denarii"))
+        self.assertIn("if (!mb_is_player(c.faction))", MB.script(r))      # FactionTurnStart comes for every faction
         text = MB.script(r)
         self.assertEqual(MB.recipe_of(text), r)
         for part in ('"FactionTurnStart"', "mb_add_money", "display_message", "help_when_broke_msg1",
@@ -5301,6 +5388,9 @@ building smith
         head = [l.strip() for l in s.lines[fb.start + 1:fb.end] if l.strip() and not l.startswith(";")][:3]
         self.assertEqual([h.split()[0] for h in head], ["superfaction", "ai_label", "denari"])
         self.assertEqual(headers_out_of_order(plan.files[sp]), [])
+        from campaign_editor import emergence as E
+        self.addCleanup(setattr, E, "is_bi", E.is_bi)
+        E.is_bi = lambda m: True                               # plain Rome takes no later faction
         later = build(ModData(self.root), "test", "alpha", "gamma", {"start": {
             "way": "event", "date": "5 summer", "region": "B_R", "re_emergent": True, "regions": [], "leader": None}})
         s = Strat(later.files[sp])
@@ -6456,6 +6546,12 @@ building smith
         spot = next((x, y) for y in range(4) for x in range(5)
                     if mod.region_map("test").get(x, y) == blue and not ME.place_problem(mod, "test", "port", region,
                                                                                          (x, y)))
+        # another place checked while this new port waits: it has no old spot to free (report #142: "'NoneType'
+        # object is not iterable" under the mouse while ports were being put on the map)
+        other = next(r for r in mod.regions("test") if r != region)
+        moved = {("port", region): spot}
+        self.assertIn("goes there", ME.place_problem(mod, "test", "port", other, spot, moved=moved))
+        self.assertIsInstance(ME.place_problem(mod, "test", "city", other, (0, 0), moved=moved), (str, type(None)))
         before = tree_hash(self.root)
         plan = Plan(mod, "map", "port", {})
         ME.apply_places(plan, "test", [{"what": "port", "region": region, "to": spot}])
@@ -7748,6 +7844,32 @@ building smith
               'let events = require("game.events")\nlocal PREFIX = "[SACK] "\n')
         self.assertTrue(any("main.nut" in p for p in AD.already_in_scripts(mod, sack)))
         self.assertTrue(any("run twice" in x for x in AD.check(sack, {}, mod)))
+        # the add-on's OWN file outside script/modules (an older copy put there by hand; a tester: 'it is in my game,
+        # the page says not put in, no button to take it out, and Put it in is refused'): in the game, moved by Put
+        # it in, taken away by Take it out
+        from campaign_editor.plan import Plan, restore
+        write(os.path.join(game, "HLR", "script", "main.nut"), 'let events = require("game.events")\n')
+        old = os.path.join(game, "HLR", "script", "sack_settlement.nut")
+        with open(old, "w", encoding="utf-8") as fh:
+            fh.write(sack.template())
+        self.assertEqual(AD.stray_copies(mod, sack), [old])
+        self.assertFalse(AD.check(sack, AD.read_settings(sack, sack.template()), mod))    # not refused
+        self.assertIsNotNone(AD.installed(mod, sack))                                     # the page: in the game
+        before = tree_hash(game)
+        plan = Plan(AD.plan_mod(mod, sack), "addon", "sack", {})
+        AD.plan_install(plan, sack, AD.read_settings(sack, sack.template()), mod)
+        self.assertIn("older copy", plan.report())
+        bdir = plan.apply()
+        self.assertFalse(os.path.exists(old))
+        self.assertTrue(os.path.isfile(AD.target(mod, sack)))
+        plan = Plan(AD.plan_mod(mod, sack), "addon", "sack", {})
+        AD.plan_remove(plan, sack, mod)
+        bdir2 = plan.apply()
+        self.assertFalse(os.path.exists(AD.target(mod, sack)))
+        self.assertIsNone(AD.installed(mod, sack))
+        restore(AD.plan_mod(mod, sack), bdir2)
+        restore(AD.plan_mod(mod, sack), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(game).items() if "_backups" not in k}, before)
 
     def test_addons_from_anyone(self):
         import zipfile
@@ -7823,6 +7945,20 @@ building smith
         now = FT.read(mod, "test")
         self.assertEqual([(f.kind, f.xy) for f in now], [("watchtower", (2, 3)), ("watchtower", (0, 3))])
         self.assertIn("fort", FT.no_example("fort"))
+        # a fort / watchtower right beside a town or another one: plain Rome with REX skipped a watchtower next to a
+        # fort ('positioned on an invalid tile'); BI keeps every one 2 tiles away - refused (a wonder may stand there)
+        town = next(iter(mod.city_tiles("test").values()))
+        apart = ModData(self.root)
+        apart.city_tiles = lambda campaign: {"A_R": (9, 9)}
+        apart.land_problem = lambda campaign, xy: None
+        apart.is_sea = lambda campaign, xy: False
+        self.assertIn("beside another fort", FT.problem(apart, "test", (1, 3), [(2, 3)], "watchtower") or "")
+        self.assertIsNone(FT.problem(apart, "test", (0, 3), [(2, 3)], "watchtower"))
+        self.assertIsNone(FT.problem(apart, "test", (1, 3), [(2, 3)], FT.LANDMARK))
+        near = (town[0] + 1, town[1]) if town[0] + 1 < 4 else (town[0] - 1, town[1])
+        self.assertIn("beside a town", FT.problem(mod, "test", near, [], "fort") or "")
+        self.addCleanup(setattr, FT, "APART", FT.APART)
+        FT.APART = 1                                      # the 4 x 4 test map has no room for the rule below
         # no fort line to copy: written under its region in the regions section (the form both exes read there)
         p2 = edit(ModData(self.root), "test", "alpha", {"resources": {"forts": {"added": [{"kind": "fort", "xy": [3, 3]}]}}})
         b2 = p2.apply()

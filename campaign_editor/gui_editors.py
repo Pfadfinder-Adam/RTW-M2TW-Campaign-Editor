@@ -779,7 +779,8 @@ class RecordEditor(ttk.Frame):
             box.grid(row=col, column=0, sticky="nw", pady=(0, 6))
             targets = E.unit_picture_targets(self.mod, dic, facs, info)
             pending = self._pending(targets)
-            have = pending or card_path(self.mod, facs[0] if facs else "", dic, info)
+            have = pending or card_path(self.mod, facs[0] if facs else "", dic, info, owners=facs,
+                                        mercenary="mercenary_unit" in self.value("attributes").replace(",", " ").split())
             self._thumb(box, have).grid(row=0, column=0, rowspan=3)
             need = E.unit_picture_need(self.mod, info)
             ttk.Label(box, text=label, font=("", 9, "bold")).grid(row=0, column=1, sticky="w", padx=6)
@@ -1351,17 +1352,39 @@ class RecordEditor(ttk.Frame):
         cb.pack(side="left", padx=4)
         cb.bind("<<ComboboxSelected>>", lambda ev: (self.show_pictures(), self.show_links()))
         ttk.Label(bar, text="Culture").pack(side="left", padx=(12, 0))
+        pics = BuildingPictures(self.mod)
+        # the cultures that build this level first (its factions lists): a culture that never builds it has only
+        # the game's stand-ins - no picture, an empty name, 'WARNING! ... never appear on screen!' (a tester)
+        from .buildings import builder_cultures, read_buildings
+        chain = self.current[0] if self.current else None
+        lv_obj = next((b.level(self.v_level.get()) for b in read_buildings(self.mod.load(self.path()))
+                       if b.name == chain), None)
+        builders = [c for c in builder_cultures(self.mod, lv_obj) if c in cultures] if lv_obj else list(cultures)
+        others = [c for c in cultures if c not in builders]
+        never = " (never builds it)"
+        shown = builders + [c + never for c in others]
         self.v_cult = getattr(self, "v_cult", tk.StringVar())
-        if self.v_cult.get() not in cultures:
-            self.v_cult.set(cultures[0] if cultures else "")
-        cb2 = ttk.Combobox(bar, textvariable=self.v_cult, values=cultures, state="readonly", width=14)
+        if self.v_cult.get().replace(never, "") not in cultures or getattr(self, "_cult_for", None) != (
+                chain, self.v_level.get()):
+            first = next((c for c in builders if pics.find(c, self.v_level.get())), builders[0] if builders else
+                         (cultures[0] if cultures else ""))
+            if getattr(self, "_cult_for", None) is None or self.v_cult.get().replace(never, "") not in builders:
+                self.v_cult.set(first)
+        self._cult_for = (chain, self.v_level.get())
+        cur = self.v_cult.get().replace(never, "")
+        self.v_cult.set(cur + (never if cur in others else ""))
+        cb2 = ttk.Combobox(bar, textvariable=self.v_cult, values=shown, state="readonly", width=28)
         cb2.pack(side="left", padx=4)
         cb2.bind("<<ComboboxSelected>>", lambda ev: self.show_pictures())
         if not cultures:
             ttk.Label(self.pics, text="no ui/<culture>/buildings folders in this mod").grid(row=1, column=0)
             return
-        pics = BuildingPictures(self.mod)
-        level, cult = self.v_level.get(), self.v_cult.get()
+        level, cult = self.v_level.get(), cur
+        if cult in others and lv_obj is not None:
+            ttk.Label(self.pics, foreground=theme.ink("#a60000"), wraplength=520, justify="left", text=(
+                "%s never builds %s (requires factions %s): the game has no picture of it and only its stand-in "
+                "texts - pick a culture that builds it." % (cult, level, ", ".join(lv_obj.factions() or []))
+            )).grid(row=2, column=0, columnspan=3, sticky="w")
         for col, (constructed, label) in enumerate(((False, "Building picture"), (True, "Picture when built"))):
             box = ttk.Frame(self.pics)
             box.grid(row=1, column=col, sticky="nw", padx=(0, 24), pady=(6, 0))
@@ -1431,10 +1454,10 @@ class RecordEditor(ttk.Frame):
                 w.bind("<KeyRelease>", lambda ev, k=key, v=v: self._text_edited(k, v.get()))
             w.grid(row=r, column=1, sticky="we", pady=2)
             rows.append(w)
-        if not suffix and any("DO NOT TRANSLATE" in _text_value(self.mod, "export_buildings.txt", base + p)
-                              for p, _ in E.TEXT_PARTS[1:]):
-            ttk.Label(box, foreground="#a60", text="The plain texts are stand-ins the game never shows - pick a "
-                                                    "culture or faction above.").grid(row=4, column=1, sticky="w")
+        if any(x in _text_value(self.mod, "export_buildings.txt", base + p)
+               for p, _ in E.TEXT_PARTS for x in E.STAND_INS):
+            ttk.Label(box, foreground=theme.ink("#a60"), text="These texts are stand-ins the game never shows - pick "
+                      "a culture or faction that builds it above.").grid(row=4, column=1, sticky="w")
         box.columnconfigure(1, weight=1)
 
     def _text_edited(self, key, text):

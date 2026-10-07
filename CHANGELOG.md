@@ -2,7 +2,60 @@
 
 ## Unreleased
 
+### Changed
+- **Start the game** names what it starts: *Start Rome - CE_Test*, or in amber *Start Rome - no mod* when the
+  game's own data is loaded (the game started the plain campaign right after a test mod was made, and it looked
+  like the test mod). **Tools > Test mod** offers to load the new test mod and start the game with it.
+- **Module builder (Blocks look)**: every block has a small **✕** that takes it out, and a line under the module
+  says the three ways (✕, drag it back to the left, right click its dots) - taking a block out was found only by
+  guessing.
+- **Load** says when a mod lies in another folder than its own start script / `.cfg` look for (a mod unpacked into
+  'New folder' while its files say `mods\kirsi_biggermap_medieval2`): the game would not find it - rename the
+  folder. Start the game refuses it in the same words.
+- **Delete this mod's folder** asks once more about a mod that was never started in the game (no saved game, no
+  game log naming it).
+- The test mod's Module builder modules act only in a campaign that has the test faction - they lie in the game's
+  `script\modules` and gave a plain campaign's towns the test's people. A module can be made so ('only in a
+  campaign that has the faction ...').
+- **Module builder: WHEN 'the player's turn starts (once a turn)'**, and new modules start with it. The old 'a
+  faction's turn starts' is now called **every faction's turn starts**: it comes once for EACH faction, about twenty
+  times a round - a module on it without 'the faction is the player' acted for every faction. The examples 'Help
+  when broke' and 'A message on turn 10' use the new one.
+- **Test mod**: its Module builder modules act on the player's turn; the control blocks module gives the towns
+  100 people once, on turn 2 (it gave them every turn, for every faction); the game condition has a module of its
+  own, and a short script tries it in several forms once and writes each to the game's log ([CE_CONDITIONS]) -
+  the engines refused 'I_TurnNumber >= 1' and wrote that thousands of times; the script does nothing outside the
+  test mod.
+
 ### Fixed
+- **Unit cards and building pictures are the ones the game shows**, in every window (the Unit editor's boxes, the
+  hover cards, the garrison cards, the previews, Mercenaries): a unit's card comes from a faction that owns it (or
+  the mercenaries' folder), never from `ui/units/construction` - the recruitment queue's small whole figures were
+  shown as cards - and none found is said plainly. The Building editor opens a level on a culture that builds it
+  (despotic_law opened on barbarian: no picture, the game's 'WARNING!' stand-in texts); a culture that never builds
+  it is marked so in the list and says why; the hover card names whose picture it shows.
+- **Plain Rome (also with REX): no faction that comes later.** A faction that starts dead
+  (`dead_until_resurrected`) made the game stop reading `descr_strat.txt` at that line, with no error in the log:
+  every rebel town stood empty, the diplomacy was lost and the faction was killed as the campaign loaded. Only
+  Barbarian Invasion and Medieval II read it, so on plain Rome New faction / Events offer only *on the map*; Check
+  mod files names such a line and Load offers to take it out.
+- **Avoid Growth**: its tick shows only on the **Construction** tab of the settlement scroll (it stood on
+  Recruitment, Repair and Retrain too); in Rome its words and box look like Automanage's (the same grey, the box as
+  wide and in the same column), a little lower so the two never touch.
+- **Forts and watchtowers** are not put right beside a town or another fort / watchtower: the game skipped a
+  watchtower placed next to a fort ('positioned on an invalid tile'). A wonder may still stand beside a town.
+- **Terrain tab**: painting again right after Apply showed "'NoneType' object has no attribute '_optional_map'"
+  (the tab kept no files after the write). The tab reads the new files at once now.
+- **Map**: putting ports on the map for regions that had none could show "'NoneType' object is not iterable"
+  under the mouse; also when such a port and a moved town were written together.
+- **Add-ons**: an add-on's own file lying in the game's `script` folder outside `script\modules` (an older copy
+  put there by hand) made Put it in refuse ('it would run twice') and the page said 'Not put in yet', with no
+  way to take it out. The page now says where the old copy is; Update it moves it to `script\modules`, Take it
+  out takes it away (with a backup). Code pasted into another script file (a mod's main.nut) is still refused.
+- A refusal in plain words is written into the editor's log as one line ('Refused: ...'), not as an error with
+  a long trace.
+- A garrison for a faction with no men's names in descr_names.txt says what to do (add names there, or leave
+  the town without a garrison).
 - Closing the editor could end with a Windows error box ('Unhandled exception in script ... application has been
   destroyed'). Closing never fails now, and a fault while the editor closes goes only into its log.
 

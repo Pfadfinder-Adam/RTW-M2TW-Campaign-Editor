@@ -61,6 +61,22 @@ def _own_script(game, base, mod_dir):
     return None
 
 
+def what(data):
+    """(game, mod or None) the Start button names: ('Rome', 'CE_Test'), ('Medieval II', None) for the game's own
+    data, ('Barbarian Invasion', None) / ('Alexander', None) for the expansions' own data."""
+    data = os.path.abspath(data)
+    game = game_of(data)
+    _, base = game_root_of(data)
+    if is_medieval2(game):
+        return "Medieval II", base
+    low = (base or "").lower()
+    if low == "bi":
+        return "Barbarian Invasion", None
+    if low == "alexander":
+        return "Alexander", None
+    return "Rome", base
+
+
 def start_line(data):
     """How the game starts with the mod of this data folder: {'bat': its start script} or {'exe': the engine,
     'args': [...], 'cwd': the game folder}, both with 'words' (what is started, in plain words). ValueError when the
@@ -123,6 +139,28 @@ def large_address_aware(exe):
 RE_EXE = re.compile(r"([\w.-]+\.exe)\b", re.I)
 
 
+def named_folder(data):
+    """The folder a mod's own start script / .cfg expects it in, when that is not where it lies (a tester's Medieval
+    II mod unpacked into 'Neuer Ordner' while its start.bat and configuration.cfg say mods/kirsi_biggermap_medieval2:
+    the game cannot find it). None when they agree or name nothing."""
+    data = os.path.abspath(data)
+    _, base = game_root_of(data)
+    if not base:
+        return None
+    mod_dir = os.path.dirname(data)
+    try:
+        names = os.listdir(mod_dir)
+    except OSError:
+        return None
+    seen = []
+    for n in names:
+        if n.lower().endswith((".cfg", ".bat", ".cmd")):
+            seen += [m for m in re.findall(r"mods[/\\]+([A-Za-z0-9_.-]+)", _text(os.path.join(mod_dir, n)))]
+    if not seen or any(m.lower() == base.lower() for m in seen):
+        return None
+    return max(set(seen), key=seen.count)
+
+
 def problems(how, data):
     """What would keep the game from starting with the mod, before it is started: [(stops, words)] - stops True
     when it surely would not start (refused), False when it may still start (asked), None a note (said beside: the
@@ -131,6 +169,10 @@ def problems(how, data):
     data = os.path.abspath(data)
     game = game_of(data)
     _, base = game_root_of(data)
+    want = named_folder(data)
+    if want:
+        out.append((True, "the mod's own start script / .cfg look for it in mods\\%s, but it lies in %s - rename "
+                          "the folder to %s (the game cannot find it under another name)" % (want, base, want)))
     if "bat" in how:
         text = re.sub(r"%~[a-z]*\d", " ", _text(how["bat"]))        # %~dp0REX.exe = the folder's REX.exe
         exes = [e for e in RE_EXE.findall(text) if not e.lower().startswith(("unpacker", "cmd"))]

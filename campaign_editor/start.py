@@ -577,6 +577,8 @@ def _later_start(plan, f, s, tb, start, head_lines):
     from . import emergence
     new, campaign = plan.new, plan.campaign
     way = start["way"]
+    if way not in emergence.ways_for(plan.mod):
+        raise ValueError("%s cannot come into the campaign later here: %s" % (new, emergence.NOT_ROME))
     ai = start.get("ai") or " ".join(tokens(tb.header)[2:]) or "balanced smith"
     dead = ["dead_until_resurrected"] + (["re_emergent"] if start.get("re_emergent") else [])
     from .strat import ordered_header

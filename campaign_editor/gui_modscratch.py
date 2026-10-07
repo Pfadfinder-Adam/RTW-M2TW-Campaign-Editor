@@ -46,6 +46,9 @@ class ScratchView(ttk.Frame):
         sx = ttk.Scrollbar(right, orient="horizontal", command=self.cv.xview)
         self.cv.configure(yscrollcommand=sy.set, xscrollcommand=sx.set)
         sy.pack(side="right", fill="y")
+        ttk.Label(right, foreground=theme.palette()["muted"], wraplength=600, justify="left",
+                  text="Drag a block by its %s to move it; take it out with its \u2715, by dragging it back to the "
+                       "left, or with a right click on its %s." % (GRIP, GRIP)).pack(side="bottom", anchor="w")
         sx.pack(side="bottom", fill="x")
         self.cv.pack(fill="both", expand=True)
         wheel(self.cv, scroll_y(self.cv))
@@ -259,7 +262,12 @@ class ScratchView(ttk.Frame):
         self._draggable(g, src, text, c)
         g.bind("<Button-3>", lambda e: self.take_out(src))
         from .gui_util import tip
-        tip(g, "Drag it to another place; drag it onto the blocks on the left, or right click, to take it out.")
+        tip(g, "Drag to move it - drag it back to the blocks on the left (or right click) to take it out.")
+        # taking a block out in sight (a tester found the right click only by guessing): a small x on the block
+        x = tk.Label(row, text="\u2715", bg=c, fg=theme.on_colour(c), cursor="hand2", font=("", 9), padx=1)
+        x.pack(side="left")
+        x.bind("<ButtonRelease-1>", lambda e: self.take_out(src))
+        tip(x, "Take this block out")
         return g
 
     # ---- dragging ----

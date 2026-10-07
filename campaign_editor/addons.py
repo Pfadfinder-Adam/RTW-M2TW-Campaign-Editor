@@ -473,7 +473,8 @@ def check(addon, values, mod=None):
     and the add-on's own code already pasted into the mod's scripts is refused (it would run twice)."""
     out = []
     if mod is not None:
-        dup = already_in_scripts(mod, addon)
+        strays = stray_copies(mod, addon)
+        dup = [p for p in already_in_scripts(mod, addon) if p not in strays]
         if dup:
             out.append("this mod's own %s already holds the %s code - it would run twice (two buttons); take it out "
                        "of that file first, or leave the add-on out" % (
@@ -605,6 +606,15 @@ def already_in_scripts(mod, addon):
     return out
 
 
+def stray_copies(mod, addon):
+    """[the add-on's own file (its file name) lying in the scripts folder outside script/modules] - an older copy put
+    there by hand. Put it in moves it where the engine runs add-ons, Take it out takes it away, and the Add-ons page
+    says it is in the game (a tester: 'it is in my game, the page says not put in, and there is no button to take it
+    out' - the install was refused: it would run twice)."""
+    name = addon.file.lower()
+    return [p for p in already_in_scripts(mod, addon) if os.path.basename(p).lower() == name]
+
+
 def plan_mod(mod, addon):
     """The ModData whose folder holds the add-on's place (backups live beside it): the mod itself, or the game's own
     data when the add-on goes into the game's script folder (a mod without scripts of its own)."""
@@ -624,10 +634,14 @@ def plan_mod(mod, addon):
 
 
 def installed(mod, addon):
-    """{var: value} of the add-on as it is installed, or None."""
+    """{var: value} of the add-on as it is installed (also an older copy outside script/modules - stray_copies),
+    or None."""
     p = target(mod, addon)
     if not os.path.isfile(p):
-        return None
+        strays = stray_copies(mod, addon)
+        if not strays:
+            return None
+        p = strays[0]
     with open(p, "rb") as f:
         return read_settings(addon, f.read().decode("utf-8", "replace"))
 
@@ -660,6 +674,9 @@ def plan_install(plan, addon, values, mod=None, mark=None):
         text = text + ("" if text.endswith("\n") else nl) + mark + nl
     dst = target(plan.mod, addon)
     plan.binary(dst, text.encode("utf-8"))
+    for p in stray_copies(mod or plan.mod, addon):
+        plan.delete(p, "an older copy of %s outside script/modules - it would run twice; the add-on is in %s now"
+                    % (addon.title, os.path.relpath(dst, os.path.dirname(p))))
     _old_lua(plan, mod or plan.mod, addon)
     from . import modbuilder as MB
     recipe = MB.recipe_of(template)
@@ -673,6 +690,8 @@ def plan_install(plan, addon, values, mod=None, mark=None):
 def plan_remove(plan, addon, mod=None):
     dst = target(plan.mod, addon)
     plan.delete(dst, "the %s add-on taken out" % addon.title)
+    for p in stray_copies(mod or plan.mod, addon):
+        plan.delete(p, "an older copy of the %s add-on taken out" % addon.title)
     _old_lua(plan, mod or plan.mod, addon)
     return dst
 

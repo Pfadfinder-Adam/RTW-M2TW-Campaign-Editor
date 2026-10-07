@@ -212,6 +212,13 @@ class TerrainEditor(ttk.Frame):
         except (tk.TclError, ValueError, AttributeError):
             pass
 
+    def _bound(self):
+        """True when the editor has the loaded mod's files - after an Apply it starts clean on the new ones (a brush
+        stroke then went into nothing: "'NoneType' object has no attribute '_optional_map'", report #141)."""
+        if self.mod is None and self.app.mod is not None:
+            self.app.open_terrain()
+        return self.mod is not None and self.cmap is not None
+
     def _img(self, name):
         return self.mod._optional_map(self.app.v_campaign.get(), name)
 
@@ -259,6 +266,8 @@ class TerrainEditor(ttk.Frame):
         return f.get(*xy) if f and 0 <= xy[0] < f.width and 0 <= xy[1] < f.height else None
 
     def paint(self, tiles):
+        if not self._bound():
+            return []
         what = self.v_what.get()
         if what == "coast":
             return self.paint_coast(tiles)
@@ -390,6 +399,8 @@ class TerrainEditor(ttk.Frame):
 
     def spray(self, px, py):
         """One puff of the heights brush at map_heights pixel (px, py); True when a pixel changed."""
+        if not self._bound():
+            return None
         img = self._img("map_heights.tga")
         if img is None:
             self.app.status.set("This campaign has no map_heights.tga.")
@@ -416,6 +427,8 @@ class TerrainEditor(ttk.Frame):
         return bool(got)
 
     def pick(self, xy):
+        if not self._bound():
+            return None
         if self.v_what.get() == "heights":               # the eyedropper: the point under the mouse, not the tile
             img = self._img("map_heights.tga")
             px = getattr(self.view, "pick_px", None)

@@ -67,8 +67,15 @@ def read(mod, campaign):
     return Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))).forts
 
 
-def problem(mod, campaign, xy, taken=()):
-    """None, or why a fort / watchtower may not stand on tile xy: on land, not on a town, port or another one."""
+# A fort or watchtower right beside a town or another fort / watchtower: plain Rome with REX skipped one ('watchtower
+# positioned on an invalid tile', the in-game tester's run 2202 - a watchtower next to a fort); Barbarian Invasion's 53
+# watchtowers all stand 2 tiles or more from a town and from each other. Wonders may stand beside a town (vanilla).
+APART = 2
+
+
+def problem(mod, campaign, xy, taken=(), kind=None):
+    """None, or why a fort / watchtower (kind; a wonder: LANDMARK, None: either) may not stand on tile xy: on land,
+    not on a town, port or another one; a fort or watchtower not right beside a town or another one."""
     x, y = xy
     img = mod.region_map(campaign)
     if not (0 <= x < img.width and 0 <= y < img.height):
@@ -81,6 +88,12 @@ def problem(mod, campaign, xy, taken=()):
         return "a town or port stands there"
     if tuple(xy) in {tuple(t) for t in taken}:
         return "another fort or watchtower stands there"
+    if kind in KINDS:
+        near = [t for t in mod.city_tiles(campaign).values() if max(abs(t[0] - x), abs(t[1] - y)) < APART]
+        if near:
+            return "right beside a town - the game skips a fort or watchtower there (keep a tile between)"
+        if any(max(abs(t[0] - x), abs(t[1] - y)) < APART for t in taken):
+            return "right beside another fort or watchtower - the game skips it (keep a tile between)"
     return mod.land_problem(campaign, (x, y))
 
 
@@ -124,7 +137,7 @@ def apply(plan, campaign, changes):
 
     for line, xy in moved.items():
         fo = by_line[line]
-        why = problem(mod, campaign, xy, others(xy))
+        why = problem(mod, campaign, xy, others(xy), fo.kind)
         if why:
             raise ValueError("the %s at %d, %d cannot go to %d, %d: %s" % (fo.kind, fo.xy[0], fo.xy[1], xy[0], xy[1],
                                                                            why))
@@ -164,7 +177,7 @@ def apply(plan, campaign, changes):
             continue
         if kind not in KINDS:
             raise ValueError("'%s' is neither a fort nor a watchtower" % kind)
-        why = problem(mod, campaign, xy, others(xy))
+        why = problem(mod, campaign, xy, others(xy), kind)
         if why:
             raise ValueError("a new %s at %d, %d: %s" % (kind, xy[0], xy[1], why))
         ex = by_line[a["copy"]] if a.get("copy") is not None else \

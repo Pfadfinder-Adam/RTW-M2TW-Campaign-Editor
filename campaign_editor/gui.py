@@ -183,8 +183,16 @@ _showerror = messagebox.showerror
 
 
 def _logged_error(title=None, message=None, **kw):
-    """Every error box also goes to the log (CampaignEditor.log)."""
-    log.error(message)
+    """Every error box also goes to the log (CampaignEditor.log). A refusal in plain words (the editor's own
+    ValueError: 'it would run twice', 'no men's names') is one line, not an ERROR with a traceback - those read as a
+    crash in a report (a tester's note on 0.32.0)."""
+    exc = sys.exc_info()
+    if isinstance(exc[1], ValueError):
+        last = traceback.extract_tb(exc[2])[-1] if exc[2] else None
+        log.write("Refused: %s%s" % (message, "  (%s line %d)" % (os.path.basename(last.filename), last.lineno)
+                                     if last else ""))
+    else:
+        log.error(message)
     return _showerror(title, message, **kw)
 
 
@@ -883,11 +891,13 @@ class App(tk.Tk):
         play = ttk.Button(bar, text="\u25b6 Start the game", command=self.start_game, style="Play.TButton",
                           cursor="hand2")
         play.pack(side="right", padx=(theme.BUTTON_GAP, 0))
+        self.play_button = play
         flow(bar)
         from .gui_util import tip
         for b, say in links:
             tip(b, say + " Opens in your browser.")
-        tip(play, "Starts the game with the mod that is loaded: its own start script (New mod folder writes "
+        tip(play, "Starts the game with the mod that is loaded - the button names it (amber when no mod is loaded: "
+                  "the game's own campaign starts): its own start script (New mod folder writes "
                   "Start_<name>.bat), else the line the engine's own start scripts use (REX.exe -mod:<name>, "
                   "M2EX.exe --features.mod=mods/<name>). Apply your changes first - the game reads the files on disk.")
         self.status = tk.StringVar(value="Pick the Mod, or Browse... to its data folder (for example ...\\HLR\\data) "
@@ -1856,6 +1866,42 @@ class App(tk.Tk):
         elif letter == "s":
             self.create()
         return "break"
+
+    def _folder_named(self):
+        """Said on Load: the mod's own start script / .cfg look for it under another folder name (a tester's mod
+        lay in 'Neuer Ordner' - the game could not find it)."""
+        from . import launch
+        try:
+            want = launch.named_folder(self.mod.data) if self.mod else None
+        except Exception:
+            want = None
+        if want:
+            here = os.path.basename(os.path.dirname(os.path.abspath(self.mod.data)))
+            log.write("Load: the mod lies in %s, its start script / .cfg look for %s" % (here, want))
+            messagebox.showwarning(APP, "This mod lies in the folder '%s', but its own start script / .cfg look for "
+                                        "it in mods\\%s - the game will not find it so. Close the editor and rename "
+                                        "the folder to %s." % (here, want, want))
+
+    def play_label(self):
+        """The Start button says what it starts: 'Start Rome - CE_Test'; amber 'Start Rome - no mod' when the game's
+        own data is loaded (a tester played the plain game believing it was the test mod he had just made)."""
+        b = getattr(self, "play_button", None)
+        if b is None:
+            return
+        from . import launch
+        try:
+            game, mod = launch.what(self.mod.data) if self.mod else (None, None)
+        except Exception:
+            game, mod = None, None
+        if not game:
+            text, style = "\u25b6 Start the game", "Play.TButton"
+        else:
+            text = "\u25b6 Start %s - %s" % (game, mod or "no mod")
+            style = "Play.TButton" if mod else "PlayNoMod.TButton"
+        try:
+            b.configure(text=text, style=style)
+        except tk.TclError:
+            pass
 
     def start_game(self):
         """The bottom bar's Start the game: the game with the loaded mod (launch.start_line - its own start script,
@@ -2972,7 +3018,8 @@ class App(tk.Tk):
 
         def check(rid, xy):
             if is_fort(rid):
-                return FT.problem(self.mod, camp, xy, taken(rid, True))
+                kind = next((r.get("kind") for r in shown if r["id"] == rid), None)
+                return FT.problem(self.mod, camp, xy, taken(rid, True), kind)
             return problem(self.mod, camp, xy, taken(rid))
 
         def moved(rid, xy):
@@ -3027,7 +3074,7 @@ class App(tk.Tk):
                     self.show_map()
                     return None
                 if kind in FT.KINDS:
-                    why = FT.problem(self.mod, camp, xy, taken(None, True))
+                    why = FT.problem(self.mod, camp, xy, taken(None, True), kind)
                     alive = [fo for fo in file_forts if fo.line not in self.fort_removed]
                     if not why and FT.example(alive, kind, xy) is None:
                         why = FT.town_problem(self.mod, camp, xy, self.strat)
@@ -3051,7 +3098,7 @@ class App(tk.Tk):
 
             def placing_why(xy):                        # the same checks as place(), nothing written
                 if kind.startswith(FT.LANDMARK + ":") or kind in FT.KINDS:
-                    why = FT.problem(self.mod, camp, xy, taken(None, True))
+                    why = FT.problem(self.mod, camp, xy, taken(None, True), kind if kind in FT.KINDS else None)
                     if not why and kind in FT.KINDS:
                         alive = [fo for fo in file_forts if fo.line not in self.fort_removed]
                         if FT.example(alive, kind, xy) is None:
@@ -3740,6 +3787,8 @@ class App(tk.Tk):
             return self._load()
         finally:
             self.busy(False)
+            self.play_label()
+            self._folder_named()
             try:
                 self.config(cursor="")
             except tk.TclError:
@@ -3821,6 +3870,9 @@ class App(tk.Tk):
         ed = self.editor()
         if ed is not None:
             self._rebind(ed)
+        if self.editors.get("terrain") is not None and self.tab_name() == "Terrain":
+            self.open_terrain()                 # written and loaded again: the tab on show reads the new files (a
+            #                                     brush stroke after an Apply painted on nothing - report #141)
         self._mark_work()
 
     def _m2(self):
@@ -5918,6 +5970,12 @@ class App(tk.Tk):
                                         "backups, its start script? This cannot be undone: Restore cannot bring it "
                                         "back. The game itself is not touched." % folder, icon="warning", parent=self, yes='Delete the folder', no='Keep it', danger=True):
             return
+        from .newmod import ever_started
+        if not ever_started(folder, game_of(self.mod.data)) and not ask(
+                APP, "%s was never started in the game: it has no saved game, and no game log names it. Delete it "
+                     "anyway? (Start the game with the mod loaded first, if you meant to try it.)" % name,
+                icon="warning", parent=self, yes="Delete it anyway", no="Keep it", danger=True):
+            return
         typed = simpledialog.askstring(APP, "To delete it, type the mod's name: %s" % name, parent=self)
         if (typed or "").strip() != name:
             messagebox.showinfo(APP, "Not deleted - the name did not match.", parent=self)
@@ -5984,6 +6042,15 @@ class App(tk.Tk):
             from .gui_settings import open_folder
             self.show_text("Test mod - every feature (for the author)", result["text"], wrap="word",
                            extra=[("Open the mod's folder", lambda: open_folder(folder))] if folder else ())
+            # the game started with what was loaded before: a tester played the plain game, took it for the test
+            # mod and threw the test mod away - so the test mod is offered to be loaded and started at once
+            if folder and ask(APP, "The test mod %s is ready. Load it now and start the game with it?"
+                              % os.path.basename(folder), yes="Load it and start", no="Later"):
+                self.v_path.set(result["data"])
+                self.load()
+                if self.mod and os.path.normcase(os.path.abspath(self.mod.data)) == \
+                        os.path.normcase(os.path.abspath(result["data"])):
+                    self.start_game()
         wait()
 
     def check(self):

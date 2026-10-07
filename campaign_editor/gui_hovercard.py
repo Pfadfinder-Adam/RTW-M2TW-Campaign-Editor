@@ -60,9 +60,9 @@ class Cards:
         return None
 
     def unit_card(self, name):
-        from .units import card_path
+        from .units import unit_card
         u = self.units[name]
-        path = card_path(self.mod, None, u.dictionary) if u.dictionary else None
+        path = unit_card(self.mod, u)                    # the card of an owner (never another picture)
         return path, u.summary()
 
     def building_card(self, kind, name):
@@ -74,13 +74,21 @@ class Cards:
             lv = b.levels[0] if b.levels else None
         else:
             b, lv = self.levels[name]
-        path = None
+        path, whose = None, None
         if lv is not None:
-            for culture in self._cultures():
+            # only a culture that builds it (its factions lists): another culture's picture is not the game's
+            from .buildings import builder_cultures
+            builds = builder_cultures(self.mod, lv)
+            for culture in [c for c in self._cultures() if c in builds]:
                 path = self._bpics.find(culture, lv.name)
                 if path:
+                    whose = culture
                     break
         words = "%s - building %s" % (name, b.name)
+        if whose:
+            words += " (%s's picture)" % whose
+        elif lv is not None:
+            words += " (no picture of a culture that builds it)"
         if lv is not None:
             words += ", level %s" % lv.name
             if getattr(lv, "cost", 0):

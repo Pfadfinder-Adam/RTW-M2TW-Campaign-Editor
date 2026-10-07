@@ -236,6 +236,9 @@ def s_new_faction(c, mod):
 @step("A faction that comes later: a clone of {edited}, dead at the start, woken by an event on turn 3 in a rebel "
       "region beside {new}'s capital", "{later} is not on the map at the start")
 def s_later(c, mod):
+    from . import emergence as EM
+    if "event" not in EM.ways_for(mod):
+        raise Skip(EM.NOT_ROME)
     from .build import build
     from .events import turn_date
     return build(mod, c.campaign, c.edited, c.later, {
@@ -251,6 +254,8 @@ def s_later(c, mod):
       "the game even when it has no town (can_homeless)")
 def s_later_way(c, mod):
     from . import emergence as E
+    if "event" not in E.ways_for(mod):
+        raise Skip(E.NOT_ROME)
     from .events import turn_date
     from .limits import engine_of
     plan = Plan(mod, "later", c.later, {})
@@ -398,7 +403,8 @@ def s_forts(c, mod):
         for dx in range(-d, d + 1):
             for dy in (-d, d):
                 p = (cap[0] + dx, cap[1] + dy)
-                if len(spots) < 3 and p not in taken and not FT.problem(mod, c.campaign, p, taken | set(spots)):
+                kind = ("fort", "watchtower", None)[len(spots)] if len(spots) < 3 else None
+                if len(spots) < 3 and p not in taken and not FT.problem(mod, c.campaign, p, taken | set(spots), kind):
                     spots.append(p)
     if len(spots) < 3:
         raise Skip("no free land for a fort")
@@ -411,7 +417,7 @@ def s_forts(c, mod):
         for d in range(1, 5):
             p = (f0.xy[0] + d, f0.xy[1])
             if "moved" not in ch and p not in taken and p not in spots and \
-                    not FT.problem(mod, c.campaign, p, taken | set(spots)):
+                    not FT.problem(mod, c.campaign, p, taken | set(spots), f0.kind):
                 ch["moved"] = {str(f0.line): list(p)}
     return edit(mod, c.campaign, c.edited, {"resources": {"forts": ch}})
 
@@ -1375,21 +1381,108 @@ def s_addon_growth(c, mod):
     return plan
 
 
-@step("Module builder: four modules made of blocks put in (REX / M2EX) - money and a message on turn 2, loot for "
-      "every town taken, one of the engines' own lines (an engine event, a game condition, a remembered number, "
-      "a console and a campaign-script command), and the control blocks (FOR EACH town, NOT, ELSE)",
+COND_SCRIPT = "ce_test_conditions.nut"
+# the forms of one game condition tried once (the engines' parser refused 'I_TurnNumber >= 1' thousands of times in
+# the tester's runs, also with a line end): the docs' own sample form first - the log shows which form it takes
+COND_FORMS = ["I_TurnNumber > 0", "I_TurnNumber >= 1", "I_TurnNumber > 0\\n", "I_TurnNumber > 0 ",
+              "Condition I_TurnNumber > 0", "not I_TurnNumber < 1", "I_TurnNumber > 0 and I_TurnNumber < 100000",
+              "FactionIsLocal", "IsFactionAIControlled"]
+COND_NUT = r"""// @title CE Test game conditions
+// @summary The editor's test mod: at the player's first turn tries one game condition in several forms through
+// @summary game.evaluateCondition, each written to the game's log as [CE_CONDITIONS] before and after - a form
+// @summary the engine cannot read shows its 'Condition parser' line between them. Does nothing outside the test mod.
+local PREFIX = "[CE_CONDITIONS] "
+local FACTION = "%(faction)s"
+local FORMS = [%(forms)s]
+local done = false
+
+local function log(message) {
+    println(PREFIX + message)
+}
+
+local function test_mod() {
+    local n = 0
+    try {
+        n = ::game.factionCount()
+    } catch (err) {
+        return false
+    }
+    for (local i = 0; i < n; i++) {
+        try {
+            if (::game.faction(i).name == FACTION) {
+                return true
+            }
+        } catch (err) {
+        }
+    }
+    return false
+}
+
+local function player(f) {
+    try {
+        return f != null && f.isPlayerControlled
+    } catch (err) {
+    }
+    return false
+}
+
+local function probe(e) {
+    if (done) {
+        return
+    }
+    local f = null
+    try {
+        f = e.faction
+    } catch (err) {
+    }
+    if (!player(f)) {
+        return
+    }
+    done = true
+    if (!test_mod()) {
+        log("not the test mod (no faction " + FACTION + ") - nothing done")
+        return
+    }
+    foreach (i, line in FORMS) {
+        log("form " + (i + 1) + " tried: '" + line + "'")
+        local r = null
+        try {
+            r = ::game.evaluateCondition(line)
+        } catch (err) {
+            log("form " + (i + 1) + " refused: " + err)
+            continue
+        }
+        log("form " + (i + 1) + " gave: " + r + " (" + typeof(r) + ")")
+    }
+}
+
+try {
+    ::events.on("FactionTurnStart", probe)
+} catch (err) {
+    log("events.on(FactionTurnStart) failed: " + err)
+}
+log("module loaded")
+"""
+
+
+@step("Module builder: five modules made of blocks put in (REX / M2EX) - money and a message on turn 2, loot for "
+      "every town taken, one of the engines' own lines (an engine event, a remembered number, a console and a "
+      "campaign-script command), the control blocks (FOR EACH town, NOT, ELSE) and a game condition; plus a script "
+      "trying the game condition in several forms",
       "on turn 2 (the first turn after, if it was missed) your treasury gets 1000 denarii and the game's message "
       "scroll 'The Module builder works' shows; take a town: 1500 denarii of loot; at the end of your first turn each "
-      "of your towns gives 10 denarii once; the game's log has [CE_TEST_MODULE], [LOOT_FOR_TAKING_A_TOWN] and "
-      "[CE_TEST_ENGINE_LINES] lines ('the number ce_seen_<town> is now 1', 'add_money ...', "
-      "'set_event_counter ...'); from turn 2 each of your towns but the capital gets 100 people a turn and the "
-      "capital a [CE_TEST_CONTROL_BLOCKS] 'ELSE' log line")
+      "of your towns gives 10 denarii once; on turn 2 each of your towns but the capital gets 100 people ONCE and the "
+      "capital a [CE_TEST_CONTROL_BLOCKS] 'ELSE' log line; the game's log has [CE_TEST_MODULE], "
+      "[LOOT_FOR_TAKING_A_TOWN], [CE_TEST_ENGINE_LINES] ('the number ce_seen_<town> is now 1', 'add_money ...', "
+      "'set_event_counter ...'), [CE_TEST_GAME_CONDITION] and [CE_CONDITIONS] lines (which form of a game condition "
+      "the engine reads: a 'Condition parser' line right after a 'tried' line = that form is refused)")
 def s_module(c, mod):
     import tempfile
+    import types as _types
     from . import addons as AD, modbuilder as MB
     test = MB.new_recipe("CE Test module")
-    test.update({"when": "faction_turn", "once": True,
-                 "ifs": [MB.item("if", "who", v="player"), MB.item("if", "turn", op=">=", v=2)],
+    test.update({"when": "player_turn", "once": True,
+                 "ifs": [MB.item("if", "turn", op=">=", v=2)],
                  "dos": [MB.item("do", "money", amount=1000, to="this"),
                          MB.item("do", "message", title="The Module builder works",
                                  body="CE_Test: a module made of blocks (no code) gave you 1000 denarii."),
@@ -1397,10 +1490,7 @@ def s_module(c, mod):
                  "settings": {"dos.0.amount": "Money given"}})
     lines = MB.new_recipe("CE Test engine lines")
     lines.update({"when": "ev:SettlementTurnEnd",
-                  # a bare condition line logged 'Condition parser doesn't recognise this token' at its last token
-                  # in both games (FactionIsLocal, I_TurnNumber >= 1) - the builder now ends the line
-                  "ifs": [MB.item("if", "game", line="I_TurnNumber >= 1"),
-                          MB.item("if", "counter", name="ce_seen_{town}", op="<", v=1)],
+                  "ifs": [MB.item("if", "counter", name="ce_seen_{town}", op="<", v=1)],
                   "dos": [MB.item("do", "counter_add", v=1, name="ce_seen_{town}"),
                           MB.item("do", "console", text="add_money {faction} 10"),
                           MB.item("do", "script", text="set_event_counter ce_test_engine_lines 1"),
@@ -1408,14 +1498,25 @@ def s_module(c, mod):
     ctl = MB.new_recipe("CE Test control blocks")
     cap = MB.item("if", "capital")
     cap["not"] = True
-    ctl.update({"when": "faction_turn", "each": "town", "each_of": "player", "match": "all",
-                "ifs": [MB.item("if", "turn", op=">=", v=2), cap],
+    # the player's turn only, turn 2 only: on 'every faction's turn starts' and 'turn >= 2' the towns got +100 about
+    # 20 times a turn and every turn after (the tester's vanilla Rome run of 0.32.0)
+    ctl.update({"when": "player_turn", "each": "town", "each_of": "player", "match": "all",
+                "ifs": [MB.item("if", "turn", op="==", v=2), cap],
                 "dos": [MB.item("do", "people", amount=100),
                         MB.item("do", "log", text="{town}: FOR EACH town, not the capital - 100 people")],
-                "else": [MB.item("do", "log", text="{town}: ELSE (the capital, or turn 1)")]})
+                "else": [MB.item("do", "log", text="{town}: ELSE (the capital, or not turn 2)")]})
+    # the game condition by itself, once a turn until it holds (it was on every town's turn end: thousands of
+    # 'Condition parser' lines when the engine refused it)
+    cond = MB.new_recipe("CE Test game condition")
+    cond.update({"when": "player_turn", "once": True,
+                 "ifs": [MB.item("if", "game", line=COND_FORMS[0])],
+                 "dos": [MB.item("do", "log", text="the game condition '%s' held on turn {turn}" % COND_FORMS[0])]})
     plan = Plan(mod, "addon", "ce_test_module", {})
     with tempfile.TemporaryDirectory() as d:          # the editor's own add-ons list is left as it is
-        for r in (test, MB.fit_to_mod(MB.example("Loot for taking a town"), mod), lines, ctl):
+        for r in (test, MB.fit_to_mod(MB.example("Loot for taking a town"), mod), lines, ctl, cond):
+            # they lie in the GAME's script/modules: in any other campaign of that game they do nothing (a tester's
+            # plain campaign got the test's +100 people in every town)
+            r["only_with"] = c.new
             bad = MB.problems(r, mod)
             if bad:
                 raise ValueError("; ".join(bad))
@@ -1425,6 +1526,9 @@ def s_module(c, mod):
                 fh.write(text)
             a = AD.from_script(text, os.path.basename(p), p)
             AD.plan_install(plan, a, AD.read_settings(a, text), mod, mark=SM.TEST_MARK)
+    forms = ", ".join('"%s"' % f for f in COND_FORMS)
+    text = COND_NUT % {"faction": c.new, "forms": forms} + SM.TEST_MARK + "\n"
+    plan.binary(AD.target(mod, _types.SimpleNamespace(file=COND_SCRIPT)), text.encode("utf-8"))
     return plan
 
 
@@ -1609,6 +1713,8 @@ def s_art_all(c, mod):
     from .edit import edit
     # not the 3D models' textures (the campaign map figures, the 3D symbol): the test picture laid over a model's
     # unfolded skin made solid green figures on the map in the game - the recolour steps test those
+    if c.later not in {n for n, _ in mod.factions()}:
+        raise Skip("%s was not made (the step that makes it was skipped)" % c.later)
     pics = [p for p in FA.faction_pictures(mod, c.campaign, c.later) if not p.get("locked") and p.get("size")
             and not p.get("rel", "").startswith("models_strat/")]
     if not pics:

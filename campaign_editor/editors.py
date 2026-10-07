@@ -1101,6 +1101,10 @@ def level_text_suffixes(mod, level):
     return sorted(out)
 
 
+# Texts the games keep for a level a culture never builds (the plain key): shown as stand-ins, never as real texts
+STAND_INS = ("DO NOT TRANSLATE", "should never appear on screen")
+
+
 def level_names(mod, level):
     """[(suffix, name)] of a building level in export_buildings.txt: its own name and
     the names for a culture or a faction ({<level>_<culture or faction>}, e.g. Shrine to

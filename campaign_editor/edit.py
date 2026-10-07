@@ -778,7 +778,9 @@ def _garrisons(plan, f, s, campaign, faction=None, picked=None, add=False):
                 used.add(name)
             else:
                 if not captains:
-                    raise ValueError("%s: no name in %s's name list for a captain" % (region, faction))
+                    raise ValueError("%s: a garrison needs a captain, and %s has no men's names in descr_names.txt "
+                                     "(the 'characters' list of its part is empty) - add names there, or leave this "
+                                     "town without a garrison" % (region, faction))
                 name = captains.pop(0)
             block = [character_line(f, name, "general", 30, xy, sub_faction=sub), "army"] + lines + [""]
             f.insert(_chars_at(f, fb), block)

@@ -42,6 +42,10 @@ local AG_OFFSET_Y = 0                // move the tick down (+) or up (-)
 // scroll's own tick labels use, in their grey-brown ink.
 local AG_FACES = ["verdana_sml", "tnr_sml", "verdana"]
 local AG_INK = [96, 82, 62, 255]
+// Rome's Automanage, measured on a tester's screenshot (report R-20261007-8A29B4): its words (128, 119, 97), its box
+// 25 x 18 units (wider than high) standing 98 units right of where its words start - ours stands in that column too
+local AG_INK_ROME = [128, 119, 97, 255]
+local AG_ROME_BOX = [98, 25]
 local AG_KEY = "avoid_growth"        // this add-on's place in the saved game (persistent.avoid_growth)
 // The game's own tick pieces, the first found: [box, tick, their size in 1024 x 768 units] - the pieces of the
 // scroll's own Auto-manage tick: Medieval II's bevelled box, Rome's (and Barbarian Invasion's) thin one
@@ -74,7 +78,7 @@ local AG_M2_GAP = 307
 // Rome's (and Barbarian Invasion's) settlement scroll: the free line under Automanage, left of the build policy
 // arrows, from the bottom-left of own_settlement_governor_info_panel (measured on a tester's scroll at 1600 x 900:
 // the panel [898,96 631x124], Automanage's box 996-1020 x 314-336, the tabs from 373).
-local AG_ROME_BELOW = 103
+local AG_ROME_BELOW = 107
 local AG_ROME_X = -13
 // Where the tick goes: the first of these parts of the settlement scroll that is open, and where beside it.
 local AG_ANCHORS = [
@@ -347,6 +351,41 @@ function ag_shown() {
     return s != null && ag_is_player(ag_owner(s)) ? s : null
 }
 
+// The tick belongs to the Construction tab of the settlement scroll (the user: never on Recruitment, Repair or
+// Retrain - it hung on the governor panel every tab shares). The tabs are named in both games; a button's 'selected'
+// says which one is open. A build that cannot tell keeps the tick on every tab (said once in the log).
+local AG_TABS = ["settlement_info_construction_tab", "settlement_info_recruitment_tab", "settlement_info_repair_tab",
+                 "settlement_info_retrain_tab"]
+local ag_tab_said = false
+
+function ag_tab_open() {
+    local known = false
+    foreach (i, name in AG_TABS) {
+        local el = ag_game_element(name)
+        if (el == null) {
+            continue
+        }
+        local on = null
+        try {
+            on = el.selected
+        } catch (err) {
+        }
+        if (on == null) {
+            continue
+        }
+        known = true
+        if (on) {
+            return i == 0
+        }
+    }
+    if (!ag_tab_said) {
+        ag_tab_said = true
+        ag_log(known ? "no tab of the settlement scroll is open - the tick waits for the Construction tab"
+                     : "the settlement scroll does not say which tab is open - the tick shows on every tab")
+    }
+    return !known
+}
+
 function ag_scale(ui) {
     try {
         local v = ui.virtualScale()
@@ -484,7 +523,7 @@ function ag_draw() {
         return
     }
     local s = ag_shown()
-    if (s == null) {
+    if (s == null || !ag_tab_open()) {
         return
     }
     local k = ag_scale(ui)
@@ -522,22 +561,29 @@ function ag_draw() {
     // the words first, the box right of them - as the scroll's own 'Automanage [ ]' and Medieval II's ticks
     ui.pushFont(face, false, 0)
     ui.layoutAt(x, y + (box - tw[1]) / 2)
-    ui.textColoured(words, AG_INK[0], AG_INK[1], AG_INK[2], AG_INK[3])
+    local ink = art.m2 ? AG_INK : AG_INK_ROME
+    ui.textColoured(words, ink[0], ink[1], ink[2], ink[3])
     ui.popFont()
     local bx = x + tw[0] + (AG_GAP * k).tointeger()
+    local bw = box
+    if (!art.m2) {                  // in Automanage's column, as wide as its box
+        bw = (AG_ROME_BOX[1] * k + 0.5).tointeger()
+        local col = x + (AG_ROME_BOX[0] * k).tointeger()
+        bx = bx > col ? bx : col
+    }
     if (art.box != null) {
-        ui.image(art.box.img, box, box, bx, y)
+        ui.image(art.box.img, bw, box, bx, y)
     } else {
-        ui.drawRect(bx, y, box, box, 230, 220, 190, 255)
+        ui.drawRect(bx, y, bw, box, 230, 220, 190, 255)
     }
     if (on) {
         if (art.tick != null) {
-            ui.image(art.tick.img, tick, tick, bx + (box - tick) / 2, y + (box - tick) / 2)
+            ui.image(art.tick.img, tick, tick, bx + (bw - tick) / 2, y + (box - tick) / 2)
         } else {
-            ui.drawRect(bx + box / 4, y + box / 4, box / 2, box / 2, 40, 30, 20, 255)
+            ui.drawRect(bx + bw / 4, y + box / 4, bw / 2, box / 2, 40, 30, 20, 255)
         }
     }
-    local tx = bx + box
+    local tx = bx + bw
     local w = tx - x
     local hit = ui.hitRect(x, y, w, box)
     if (hit != null) {

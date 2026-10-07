@@ -114,31 +114,56 @@ def faction_units(mod, faction, ships=False, mercs=False):
             and u.category != "non_combatant"]            # townsfolk for battles in towns, not troops
 
 
-def card_path(mod, faction, dictionary, info=False):
-    """ui/units/<faction>/#<dict>.tga (or ui/unit_info/<faction>/<dict>_info.tga), else the same picture in any
-    other faction's folder, else None. The mod's own data first, then the game's (a mod folder holding only what it
-    changed shows the game's cards, as the game itself does)."""
+# Folders of ui/units (ui/unit_info) that are not a faction's: the recruitment queue's small pictures
+# (ui/units/construction, 42 x 56 - a whole figure) - a card looked up there showed a figure where the game shows
+# the card (a tester: 'full-height pictures instead of the cards').
+NOT_FACTIONS = ("construction",)
+MERC_FOLDERS = ("mercs", "merc", "mercenaries")        # the games' own: Rome ui/units/mercs + ui/unit_info/merc
+
+
+def card_path(mod, faction, dictionary, info=False, owners=None, mercenary=False):
+    """The card the game shows for a unit (ui/units/<faction>/#<dict>.tga; info: the picture of its description,
+    ui/unit_info/<faction>/<dict>_info.tga) - the one resolver every window uses. Looked up the game's way: the
+    faction's own folder, then each owner's (owners: the factions the unit's ownership gives it - unit_owners), then
+    the mercenaries' folder for a mercenary; never a folder that is no faction's (construction). owners None (a
+    caller that does not know the unit): any faction's folder. None when there is no such card - a window says so,
+    never another picture in its place. The mod's own data first, then the game's (as the game reads them)."""
     from .clone import data_roots
     name = ("%s_info.tga" if info else "#%s.tga") % dictionary
     folders = [os.path.join(d, "ui", "unit_info" if info else "units") for d in data_roots(mod)]
     folders = [f for f in folders if os.path.isdir(f)]
-    for folder in folders:                              # the faction's own card
-        own = _ci(folder, faction) if faction else None
-        p = _ci(own, name) if own else None
-        if p:
-            return p
-    for folder in folders:                              # else any other faction's
+    order = [faction] if faction else []
+    if owners is not None:
+        order += [o for o in owners if o and o not in order]
+        if mercenary:
+            order += [m for m in MERC_FOLDERS if m not in order]
+    for who in order:
+        for folder in folders:
+            own = _ci(folder, who)
+            p = _ci(own, name) if own else None
+            if p:
+                return p
+    if owners is not None:
+        return None
+    for folder in folders:                              # a caller without the unit: any faction's card
         for d in sorted(os.listdir(folder)):
             sub = os.path.join(folder, d)
-            if os.path.isdir(sub):
+            if d.lower() not in NOT_FACTIONS and os.path.isdir(sub):
                 p = _ci(sub, name)
                 if p:
                     return p
     return None
-    for d in sorted(os.listdir(folder)):
-        sub = os.path.join(folder, d)
-        if os.path.isdir(sub):
-            p = _ci(sub, name)
-            if p:
-                return p
-    return None
+
+
+def unit_owners(mod, unit):
+    """The factions whose cards a unit has, in the order the card is looked up: its ownership's factions (a culture
+    named: every faction of it; 'all': every faction), descr_sm_factions.txt's order."""
+    return owner_factions(mod, getattr(unit, "ownership", None) or [])
+
+
+def unit_card(mod, unit, faction=None, info=False):
+    """card_path for a Unit (units.read_units): its own owners and, for a mercenary, the mercenaries' folder."""
+    if not getattr(unit, "dictionary", ""):
+        return None
+    return card_path(mod, faction, unit.dictionary, info, owners=unit_owners(mod, unit),
+                     mercenary=bool(getattr(unit, "mercenary", False)))

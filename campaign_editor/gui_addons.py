@@ -314,7 +314,11 @@ class AddonsPanel(SettingsForm, ttk.Frame):
             return
         dst = AD.target(self.mod, a)
         now = AD.installed(self.mod, a)
+        stray = AD.stray_copies(self.mod, a) if now is not None else []
         ttk.Label(inner, foreground="#2a7a1f" if now is not None else "#b60", wraplength=760, justify="left", text=(
+            "In the game as an older copy: %s - not where the engine runs add-ons from. Update it puts it into %s "
+            "(the old copy goes); Take it out takes it away. The settings below are the ones it has now."
+            % (stray[0], dst) if stray and not os.path.isfile(dst) else
             "Put in: %s - the settings below are the ones it has now." % dst if now is not None else
             "Not put in yet. It goes to %s - pick the settings, then Put it in." % dst)).grid(
             row=3, column=0, columnspan=3, sticky="w", pady=(6, 8))

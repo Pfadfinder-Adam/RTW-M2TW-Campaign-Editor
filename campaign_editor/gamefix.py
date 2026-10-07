@@ -61,6 +61,16 @@ def problems(mod):
                                "games' order (superfaction / ai_label, dead_until_resurrected, re_emergent, denari, "
                                "denari_kings_purse), nothing else changed."
                                % (camp, ", ".join(n for n, _ in bad))})
+        from . import emergence
+        sf = mod.load(sp) if sp and emergence.plain_rome(mod) else None
+        dead = [i for i in range(len(sf)) if tokens(strip_comment(sf.text(i)))[:1] in
+                (["dead_until_resurrected"], ["re_emergent"])] if sf else []
+        if dead:
+            out.append({"id": "rome_dead", "file": sp, "rows": dead, "line": 0,
+                        "why": "%s's descr_strat.txt line %d: dead_until_resurrected - %s. Older versions of this "
+                               "tool wrote it for a faction that comes later. The fix: the line taken out (that "
+                               "faction then dies as the campaign loads; the rest of the file is read again), "
+                               "nothing else changed." % (camp, dead[0] + 1, emergence.DEAD_ROME)})
         from .diplomacy import foreign_lines
         from .strat import Strat
         foreign = foreign_lines(Strat(mod.load(sp))) if sp else []
@@ -171,6 +181,13 @@ def fix_plan(mod, found):
                 for i, t in zip(idx, texts):
                     f.set(i, t)
             plan.note(f, "faction header lines put in the games' order: %s" % ", ".join(n for n, _ in p["blocks"]))
+            continue
+        if p["id"] == "rome_dead":
+            f = plan.edit(p["file"])
+            for i in reversed(p["rows"]):
+                f.delete(i, i + 1)
+            plan.note(f, "%d dead_until_resurrected / re_emergent line(s) taken out (plain Rome stops reading "
+                         "the file at them)" % len(p["rows"]))
             continue
         if p["id"] == "diplomacy_form":
             f = plan.edit(p["file"])

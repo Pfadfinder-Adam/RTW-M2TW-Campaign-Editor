@@ -112,6 +112,24 @@ def available(level, faction, culture, template=None):
     return any(x in fs for x in (faction, culture, template) if x)
 
 
+def builder_cultures(mod, level):
+    """The cultures that build a level (its factions lists: a faction's culture, a culture named, everyone for 'all'
+    or no list), in descr_sm_factions.txt's order - the ones whose picture and texts the game shows for it. A
+    culture that never builds it has only the game's stand-ins (an empty name, 'WARNING! This text should never
+    appear on screen!'): the editors open a level on a builder's culture and say so of the others."""
+    table = mod.factions()
+    every = list(dict.fromkeys(c for _, c in table if c))
+    fs = level.factions() if level is not None else None
+    if fs is None or "all" in fs:
+        return every
+    out = []
+    for n, c in table:
+        if c and (n in fs or c in fs) and c not in out:
+            out.append(c)
+    out += [x for x in fs if x in every and x not in out]
+    return out
+
+
 def ranks_ok(level, settlement_level):
     try:
         return SETTLEMENT_LEVELS.index(level.settlement_min) <= SETTLEMENT_LEVELS.index(settlement_level)

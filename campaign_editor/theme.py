@@ -25,7 +25,7 @@ BUTTON_PADY = 0     # px above and below the words: the button about 1.5 x lower
 BUTTON_GAP = 4      # px between two buttons side by side
 # buttons with a colour of their own (the same size and frame): style name -> (background, when pressed / hovered);
 # white words in either look - the links (Ko-fi, Discord, YouTube, GitHub) in their own sites' colours
-COLOURED = {"Play.TButton": ("#2e7d32", "#256628"), "Kofi.TButton": ("#ff5e5b", "#e14b48"),
+COLOURED = {"Play.TButton": ("#2e7d32", "#256628"), "PlayNoMod.TButton": ("#a35f00", "#864e00"), "Kofi.TButton": ("#ff5e5b", "#e14b48"),
             "Discord.TButton": ("#5865f2", "#4752c4"), "YouTube.TButton": ("#e00000", "#b80000"),
             "GitHub.TButton": ("#1b1f24", "#0d1117")}
 NAMED = {"#cfe3ff": "accent"}

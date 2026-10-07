@@ -49,12 +49,17 @@ HORDE = (("horde_min_units", "10"), ("horde_max_units", "20"), ("horde_max_units
 HORDE_UNITS = 6
 
 
-# Shadow and split-off factions are Barbarian Invasion's: plain Rome (also with REX) cannot take them - a test mod
-# with them crashed at the end of a turn (the author: 'not compatible with ordinary Rome at all, only in Barbarian
-# Invasion'). Medieval II keeps them (its engine is BI's; a shadow tried in the game with M2EX).
-BI_ONLY = ("shadow", "revolt")
-NOT_ROME = ("only Barbarian Invasion (and Medieval II) take a shadow or a faction splitting off another - plain "
-            "Rome, also with REX, crashes at the end of a turn with one")
+# Factions that come later are Barbarian Invasion's: plain Rome (also with REX) cannot take them. A shadow + a split-off
+# faction crashed it at the end of a turn, and its descr_strat.txt reader STOPS at a faction that starts dead
+# (dead_until_resurrected, the in-game tester's proof 2026-10-07: the rebels' garrisons, the diplomacy and every faction
+# after it were lost, no error written). Medieval II keeps them all (its engine is BI's; tried in the game with M2EX).
+BI_ONLY = ("event", "shadow", "revolt")
+NOT_ROME = ("only Barbarian Invasion and Medieval II take a faction that comes later - plain Rome, also with REX, "
+            "stops reading descr_strat.txt at a faction that starts dead (the rebels' garrisons, the diplomacy and "
+            "every faction after it are lost) and crashes at the end of a turn with a shadow and a split-off faction")
+DEAD_ROME = ("plain Rome (also with REX) stops reading descr_strat.txt at 'dead_until_resurrected': the rebels' "
+             "garrisons, the diplomacy and every faction after it are lost, with no error in the log - only Barbarian "
+             "Invasion and Medieval II read it")
 
 
 def _ci_file(folder, name):
@@ -76,9 +81,14 @@ def is_bi(mod):
         return False
 
 
+def plain_rome(mod):
+    """Rome that is not Barbarian Invasion (also with REX): no faction that comes later."""
+    from .limits import game_kind
+    return game_kind(mod) == "rome" and not is_bi(mod)
+
+
 def ways_for(mod):
-    """The ways in this mod's game takes: all on Medieval II and Barbarian Invasion, plain Rome only 'map' and
-    'event'."""
+    """The ways in this mod's game takes: all on Medieval II and Barbarian Invasion, plain Rome only 'map'."""
     from .limits import game_kind
     if game_kind(mod) == "rome" and not is_bi(mod):
         return tuple(w for w in WAYS if w not in BI_ONLY)
@@ -107,7 +117,8 @@ HOW = ("A faction that appears later starts dead: no towns, no characters, only 
        "Slavs). The shadow of a faction: the side that splits off it in a civil war (Barbarian Invasion's rebels of "
        "the two Roman empires). Splits off in a revolt: towns of the other faction that revolt go to it (Barbarian "
        "Invasion's Ostrogoths split off the Goths). 'May come back' (re_emergent): after it dies it can rise again. "
-       "Barbarian Invasion's, REX's and Medieval II's engines read these words; on vanilla Rome try it in the game.")
+       "Barbarian Invasion's, REX's and Medieval II's engines read these words; plain Rome (also with REX) does not: "
+       "a faction that starts dead stops its reading of descr_strat.txt.")
 
 
 def ties(mod):
@@ -225,10 +236,8 @@ def set_way(plan, faction, way, of=None, both_ok=False):
                 of, "a shadow" if way == "shadow" else "a faction splitting off it", has))
         other = PARTNER[OWN_WORD["revolt" if way == "shadow" else "shadow"]]
         m = re.search(r",\s*%s\s+([A-Za-z0-9_]+)" % other, strip_comment(line))
-        from .limits import game_kind
-        plain_rome = game_kind(mod) == "rome" and not is_bi(mod)
         if m and m.group(1) != faction:
-            if plain_rome and not both_ok:
+            if plain_rome(mod) and not both_ok:
                 raise ValueError(BOTH_TIES % (of, m.group(1), "a shadow" if way == "revolt" else
                                               "a faction splitting off it"))
             plan.warn(f, BOTH_NOTE % (of, of))
@@ -279,6 +288,8 @@ def set_dead(plan, campaign, faction, dead, re_emergent=False):
     fb = s.faction(faction)
     if not fb:
         raise ValueError("descr_strat.txt has no block for %s" % faction)
+    if dead and plain_rome(plan.mod):
+        raise ValueError("%s cannot start dead: %s" % (faction, DEAD_ROME))
     if dead and (fb.settlements or fb.characters):
         raise ValueError("%s holds %d town(s) and %d character(s) - a faction that appears later starts with none; "
                          "give them to others first" % (faction, len(fb.settlements), len(fb.characters)))
@@ -531,9 +542,10 @@ def problems(mod, campaign):
                               "go in pairs" % (fac, word, who, who, PARTNER[word], fac))
     if ways_for(mod) != WAYS:
         for fac, t in tie.items():
-            for word in ("shadowing", "spawned_by"):
+            for word in ("shadowing", "spawned_by", "spawned_on_event"):
                 if t.get(word):
-                    faults.append("descr_sm_factions.txt: %s is '%s %s' - %s" % (fac, word, t[word], NOT_ROME))
+                    faults.append("descr_sm_factions.txt: %s is '%s%s' - %s" % (
+                        fac, word, "" if t[word] is True else " " + t[word], NOT_ROME))
     from .limits import game_kind
     m2 = game_kind(mod) == "medieval2"
     from .limits import engine_of
@@ -587,8 +599,14 @@ def problems(mod, campaign):
                               "out)" % fac)
     from .events import later_factions
     script = dict(later_factions(mod, campaign))
+    rome = plain_rome(mod)
     for fac, st in state.items():
         way, of = way_of(mod, fac, tie)
+        if rome:
+            if st["dead"]:
+                faults.append("descr_strat.txt: %s starts dead - %s (Load offers to take the line out)" % (
+                    fac, DEAD_ROME))
+            continue
         if st["dead"] and (st["towns"] or st["people"]):
             faults.append("descr_strat.txt: %s starts dead (dead_until_resurrected) but holds %d town(s) and %d "
                           "character(s) - the games' own later factions hold none" % (fac, st["towns"], st["people"]))
@@ -613,6 +631,8 @@ def problems(mod, campaign):
                          "event (slavs, romano_british) are not; only the shadow and split-off ones are" % fac)
         if fac not in state:
             faults.append("descr_events.txt: event emergent_faction %s - descr_strat.txt has no such faction" % fac)
+        elif rome:
+            faults.append("descr_events.txt: event emergent_faction %s - %s" % (fac, NOT_ROME))
         elif not state[fac]["dead"]:
             faults.append("descr_events.txt: event emergent_faction %s - the faction must start dead "
                           "(dead_until_resurrected in descr_strat.txt), the file's own comment says" % fac)

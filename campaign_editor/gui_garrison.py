@@ -5,7 +5,7 @@ take it out."""
 import tkinter as tk
 from tkinter import ttk
 
-from .units import card_path
+from .units import unit_card
 
 try:                                   # pictures need Pillow; without it the cards are text
     from PIL import Image, ImageTk
@@ -155,7 +155,7 @@ class GarrisonEditor(ttk.Frame):
         return inner
 
     def _card(self, parent, unit, command):
-        path = card_path(self.mod, self.faction, unit.dictionary)
+        path = unit_card(self.mod, unit, self.faction)
         img = self.pics.get(path) or self.pics.missing(unit.type)     # no picture: a grey card with its name
         text = unit.type if img is None else str(unit.upkeep)          # upkeep under the card
         b = tk.Button(parent, image=img, text=text, compound="top", wraplength=90, width=None if img else 12,

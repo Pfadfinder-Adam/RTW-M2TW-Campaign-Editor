@@ -274,6 +274,31 @@ def _same(a, b):
                 return True
 
 
+def ever_started(folder, game=None):
+    """Whether a mod folder shows it ran in the game: a save in its saves/ folder, or a game log (system.log.txt in
+    the mod, the game folder or their logs/) naming it ('Mod: <name>'). A tester threw a test mod away believing it
+    tested - the game had run the plain campaign; Delete this mod's folder asks once more for a mod never started."""
+    name = os.path.basename(os.path.normpath(folder))
+    saves = os.path.join(folder, "saves")
+    if os.path.isdir(saves) and any(n.lower().endswith(".sav") for n in os.listdir(saves)):
+        return True
+    rx = re.compile(r"\bmod\s*[:=]\s*(?:mods[/\\])?%s\b|-mod:\s*%s\b|mods[/\\]%s\b"
+                    % ((re.escape(name),) * 3), re.I)
+    places = [folder, os.path.join(folder, "logs")] + ([game, os.path.join(game, "logs")] if game else [])
+    for place in places:
+        if not os.path.isdir(place):
+            continue
+        for n in os.listdir(place):
+            if n.lower().startswith("system.log") and n.lower().endswith(".txt"):
+                try:
+                    with open(os.path.join(place, n), "rb") as fh:
+                        if rx.search(fh.read(400000).decode("latin-1", "replace")):
+                            return True
+                except OSError:
+                    pass
+    return False
+
+
 def deletable_mod_folder(data_dir):
     """The mod folder Tools > Delete this mod... may delete for a loaded data folder: <game>/<mod> (Rome) or
     <game>/mods/<mod> (Medieval II). ValueError in plain words for the game's own data, an expansion's (bi,

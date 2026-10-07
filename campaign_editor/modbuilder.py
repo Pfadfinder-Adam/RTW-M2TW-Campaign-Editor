@@ -1,7 +1,7 @@
 """The Module builder: a new add-on put together from blocks, no code.
 
 A module is a recipe of three parts, each picked from lists in plain words:
-  WHEN  something happens in the campaign (a faction's turn starts, a general takes a town, a building is done ...),
+  WHEN  something happens in the campaign (the player's turn starts, a general takes a town, a building is done ...),
   IF    conditions hold (it is the player, its money is below 0, the town has over 24000 people, a 5 % chance ...),
   DO    actions (give money, add or take people, build, tear down, new units, give the town away, a trait, a message).
 The editor writes the Squirrel script itself (REX for Rome and M2EX for Medieval II run the same script: their
@@ -30,8 +30,11 @@ class Event:
 
 
 EVENTS = [
-    Event("faction_turn", "a faction's turn starts", "FactionTurnStart", (F,),
-          "once for every faction at the start of its turn - add 'the faction is: the player' for your own turns"),
+    Event("player_turn", "the player's turn starts (once a turn)", "FactionTurnStart", (F,),
+          "once a turn, when your own (the player's) turn starts - the faction is the player"),
+    Event("faction_turn", "every faction's turn starts (each one in turn)", "FactionTurnStart", (F,),
+          "once for EVERY faction at the start of its turn - about 20 times a round; for once a turn take 'the "
+          "player's turn starts'"),
     Event("town_turn", "a town's turn starts (each town)", "SettlementTurnStart", (F, S),
           "once for every town of every faction, at the start of its faction's turn"),
     Event("town_taken", "a general takes a town", "GeneralCaptureSettlement", (F, S, C, T),
@@ -171,7 +174,7 @@ BUILT_IN = ("sack_settlement", "raze_settlement", "avoid_growth", "player_diplom
 # A recipe: a plain dict, kept in the script as JSON
 # ---------------------------------------------------------------------------
 def new_recipe(title="My module"):
-    return {"v": 1, "title": title, "game": "both", "when": "faction_turn", "once": False, "ifs": [], "dos": [],
+    return {"v": 1, "title": title, "game": "both", "when": "player_turn", "once": False, "ifs": [], "dos": [],
             "settings": {}, "match": "all", "else": [], "each": "", "each_of": "this", "each_faction": ""}
 
 
@@ -373,6 +376,8 @@ def plain_words(recipe):
         ("; otherwise: " + "; ".join(alt) if alt and ifs else "") + "."
     if recipe.get("once"):
         text += " Only once in a campaign."
+    if (recipe.get("only_with") or "").strip():
+        text += " Only in a campaign that has the faction %s." % recipe["only_with"].strip()
     return text[0].upper() + text[1:]
 
 
@@ -684,9 +689,19 @@ def script(recipe):
     else:
         lines += ["    }", "    return ok"]
     lines += ["}", ""]
-    lines += ["local function mb_run(e) {", "    if (!MB_ON) {", "        return", "    }",
+    lines += ["local mb_absent_said = false", "local function mb_run(e) {", "    if (!MB_ON) {", "        return", "    }",
               "    if (MB_ONCE && mb_done()) {", "        return", "    }",
               "    local c = mb_context(e)"]
+    only = (recipe.get("only_with") or "").strip()
+    if only:                            # acts only in a campaign that has this faction (the test mod's modules)
+        lines += ["    if (mb_faction(%s) == null) {" % _sq(only),
+                  "        if (!mb_absent_said) {",
+                  "            mb_absent_said = true",
+                  '            mb_log("not in this campaign: no faction %s - nothing done (the module is for the '
+                  'campaign of %s only)")' % (only, only),
+                  "        }", "        return", "    }"]
+    if ev.key == "player_turn":                  # FactionTurnStart comes for every faction - only the player's
+        lines += ["    if (!mb_is_player(c.faction)) {", "        return", "    }"]
     each = recipe.get("each") or ""
     if each:
         if each == "faction":
@@ -1516,8 +1531,8 @@ def _ex(title, when, ifs, dos, settings=None, once=False, game="both"):
 
 
 EXAMPLES = [
-    _ex("Help when broke", "faction_turn",
-        [item("if", "who", v="player"), item("if", "money", op="<", v=0)],
+    _ex("Help when broke", "player_turn",
+        [item("if", "money", op="<", v=0)],
         [item("do", "money", amount=3000, to="this"),
          item("do", "message", title="A loan", body="The treasury was empty: the money lenders give you 3000.")],
         {"dos.0.amount": "Amount of the loan"}),
@@ -1535,11 +1550,11 @@ EXAMPLES = [
     _ex("Gold for holding the capital", "town_turn",
         [item("if", "capital"), item("if", "who", v="player")],
         [item("do", "money", amount=300, to="this")], {"dos.0.amount": "Gold each turn"}),
-    _ex("A message on turn 10", "faction_turn",
-        [item("if", "who", v="player"), item("if", "turn", op="==", v=10)],
+    _ex("A message on turn 10", "player_turn",
+        [item("if", "turn", op="==", v=10)],
         [item("do", "message", title="Ten years of rule",
               body="Your people celebrate ten years of your rule.")],
-        {"ifs.1.v": "On turn"}, once=True),
+        {"ifs.0.v": "On turn"}, once=True),
     _ex("Rebellion punished", "town_rebels", [],
         [item("do", "people_pct", pct=25), item("do", "log", text="{town} rebelled and was punished")],
         {"dos.0.pct": "People lost (%)"}),

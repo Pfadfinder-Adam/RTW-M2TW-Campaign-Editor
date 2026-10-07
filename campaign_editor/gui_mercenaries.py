@@ -194,14 +194,11 @@ class MercWindow(tk.Toplevel):
             w.grid(row=i // cols, column=i % cols, padx=1, pady=1)
 
     def _card_img(self, name):
-        from .units import card_path
+        from .units import MERC_FOLDERS, card_path, unit_owners
         u = next((x for x in self.units if x.type == name), None)
         path = None
-        if u is not None:
-            for folder in ("mercs", "mercenaries", "merc"):          # the games' own mercenary folders first
-                path = card_path(self.mod, folder, u.dictionary)
-                if path:
-                    break
+        if u is not None and u.dictionary:                 # the games' own mercenary folders first, then its owners'
+            path = card_path(self.mod, None, u.dictionary, owners=list(MERC_FOLDERS) + unit_owners(self.mod, u))
         return self.pics.get(path) or self.pics.missing(name)
 
     def _card(self, parent, name, under, command, summary):

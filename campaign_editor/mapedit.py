@@ -47,7 +47,9 @@ def place_problem(mod, campaign, what, region, xy, moved=None, painted=None):
     for (w, r), to in moved.items():
         if tuple(to) == (x, y) and (w, r) != (what, region):
             return "the new %s of %s goes there" % ("town" if w == "city" else "port", r)
-    freed = {tuple(orig(mod, campaign, w, r)): r for (w, r) in moved if (w, r) != (what, region)}
+    # (a new port of a region that had none frees nothing - report #142)
+    freed = {tuple(o): r for (w, r) in moved if (w, r) != (what, region)
+             for o in (orig(mod, campaign, w, r),) if o}
     if px in (CITY, PORT) and (x, y) not in freed and (x, y) != here:
         return "another town or port stands there"
     if px != info["colour"] and freed.get((x, y)) != region and (x, y) != here:
@@ -366,7 +368,7 @@ def apply_places(plan, campaign, places, painted=None):
                 # an army on the town's new tile (often one this very plan sent out of a taken town) steps
                 # aside to the nearest free tile of the region - two armies may not share a tile
                 busy = {cc.xy for fb in s.factions for cc in fb.characters if cc.xy} | set(moved.values()) | \
-                    {tuple(orig(mod, campaign, w, r)) for (w, r) in moved}
+                    {tuple(o) for (w, r) in moved for o in (orig(mod, campaign, w, r),) if o}
                 dest = mod.free_tile(campaign, region, busy, start=tuple(to))
                 if dest is None:
                     raise ValueError("%s: %s's army stands on %d, %d and there is no free tile next to it - move "
