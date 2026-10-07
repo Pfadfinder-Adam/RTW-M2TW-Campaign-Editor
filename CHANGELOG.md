@@ -9,6 +9,7 @@
 - Barbarian Invasion: a deleted region stayed in the campaign's bad-harvest list (`descr_harvests.txt`, 'cannot find this region name'); its entries now go with it.
 - Barbarian Invasion: a new watchtower was written beside the nearest one even when that one belongs to another region, and the game skipped it ('does not match up to region name'). A new or moved one now goes under the block of the region its tile lies in.
 - Sack Settlement (both games): a town of the player's that revolted to another faction was taken as the player's own capture. Only a capture by the player counts now.
+- New / Edit faction map: a single click on a town did nothing (the town only began a drag); only a double click picked it, and that also opened the town's window. A click picks it now; a double click picks it once and opens the window.
 - A storm placed on land never comes - storms strike only fleets at sea. The Events window and Check mod files now say so.
 
 ### Changed

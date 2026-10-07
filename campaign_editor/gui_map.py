@@ -1506,6 +1506,7 @@ class MapView(ttk.Frame):
         return None
 
     def _double(self, e):
+        self._doubled = True                             # its release must not pick the town back (on_city)
         town = self._town_under(e.x, e.y)
         if town and self.on_town and not self.v_pick.get():
             self.on_town(town[0])                        # a town: straight to its own window (a tester)
@@ -2108,9 +2109,16 @@ class MapView(ttk.Frame):
                 self.on_res_click(rid)
             return
         rpress, self._rpress = self._rpress, None
+        doubled, self._doubled = getattr(self, "_doubled", False), False
         if getattr(self, "_pdrag", None):
             what, region, _, _, started = self._pdrag
             self._pdrag = None
+            if not started:
+                # a town that may be dragged, pressed and let go without moving: a plain click picks it (only a
+                # double click seemed to - and that opens the town's window; a tester, 2026-10-07)
+                if what == "city" and self.on_city and not doubled and not self.v_pick.get():
+                    self.on_city(region)
+                return
             if started:
                 xy = self.to_tile(e.x, e.y)
                 why = self._outside(xy) or (self.check_place(what, region, xy) if self.check_place else None)
@@ -2157,6 +2165,8 @@ class MapView(ttk.Frame):
         if self.v_pick.get():                           # (a double click's second press comes here)
             self._click_select(e.x, e.y)
             return
+        if doubled:
+            return                                       # the first click of the double click picked it already
         for item in reversed(hit):
             for tag in self.canvas.gettags(item):
                 if tag.startswith("city:") and self.on_city:
