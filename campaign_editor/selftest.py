@@ -1375,14 +1375,15 @@ def s_addon_growth(c, mod):
     return plan
 
 
-@step("Module builder: three modules made of blocks put in (REX / M2EX) - money and a message on turn 2, loot for "
-      "every town taken, and one of the engines' own lines (an engine event, a game condition, a remembered number, "
-      "a console and a campaign-script command)",
+@step("Module builder: four modules made of blocks put in (REX / M2EX) - money and a message on turn 2, loot for "
+      "every town taken, one of the engines' own lines (an engine event, a game condition, a remembered number, "
+      "a console and a campaign-script command), and the control blocks (FOR EACH town, NOT, ELSE)",
       "on turn 2 (the first turn after, if it was missed) your treasury gets 1000 denarii and the game's message "
       "scroll 'The Module builder works' shows; take a town: 1500 denarii of loot; at the end of your first turn each "
       "of your towns gives 10 denarii once; the game's log has [CE_TEST_MODULE], [LOOT_FOR_TAKING_A_TOWN] and "
       "[CE_TEST_ENGINE_LINES] lines ('the number ce_seen_<town> is now 1', 'add_money ...', "
-      "'set_event_counter ...')")
+      "'set_event_counter ...'); from turn 2 each of your towns but the capital gets 100 people a turn and the "
+      "capital a [CE_TEST_CONTROL_BLOCKS] 'ELSE' log line")
 def s_module(c, mod):
     import tempfile
     from . import addons as AD, modbuilder as MB
@@ -1404,9 +1405,17 @@ def s_module(c, mod):
                           MB.item("do", "console", text="add_money {faction} 10"),
                           MB.item("do", "script", text="set_event_counter ce_test_engine_lines 1"),
                           MB.item("do", "log", text="{town}: counted once, 10 denarii")]})
+    ctl = MB.new_recipe("CE Test control blocks")
+    cap = MB.item("if", "capital")
+    cap["not"] = True
+    ctl.update({"when": "faction_turn", "each": "town", "each_of": "player", "match": "all",
+                "ifs": [MB.item("if", "turn", op=">=", v=2), cap],
+                "dos": [MB.item("do", "people", amount=100),
+                        MB.item("do", "log", text="{town}: FOR EACH town, not the capital - 100 people")],
+                "else": [MB.item("do", "log", text="{town}: ELSE (the capital, or turn 1)")]})
     plan = Plan(mod, "addon", "ce_test_module", {})
     with tempfile.TemporaryDirectory() as d:          # the editor's own add-ons list is left as it is
-        for r in (test, MB.fit_to_mod(MB.example("Loot for taking a town"), mod), lines):
+        for r in (test, MB.fit_to_mod(MB.example("Loot for taking a town"), mod), lines, ctl):
             bad = MB.problems(r, mod)
             if bad:
                 raise ValueError("; ".join(bad))

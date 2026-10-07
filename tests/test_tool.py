@@ -5074,6 +5074,54 @@ building smith
         for title in ready:
             MB.script(MB.fit_to_mod(MB.example(title), mod))
 
+    def test_module_builder_else_any_none_not_and_for_each(self):
+        """The control blocks: ELSE (actions when the IF does not hold, their messages and settings too), the IF lines
+        counted as all / any / none, one line turned round ('not'), FOR EACH town / army of a faction or each faction
+        (what the lines below may name grows by it); an old recipe without them still makes the same kind of script;
+        the problems say what is missing in plain words (ELSE without IF, FOR EACH of a faction not picked)."""
+        from campaign_editor import modbuilder as MB
+        r = MB.new_recipe("Control")
+        nt = MB.item("if", "who", v="player")
+        nt["not"] = True
+        r.update(when="faction_turn", match="any", ifs=[nt, MB.item("if", "money", op="<", v=0)],
+                 dos=[MB.item("do", "money", amount=100, to="this")],
+                 **{"else": [MB.item("do", "message", title="Poor", body="No money.")]},
+                 settings={"else.0.title": "The poor title"})
+        self.assertEqual(MB.problems(r), [])
+        words = MB.plain_words(r)
+        self.assertIn("if not true that the faction is the player or its money is below 0", words)
+        self.assertIn("otherwise: the player sees the message", words)
+        text = MB.script(r)
+        self.assertIn("!(mb_is_player(c.faction)) || (mb_cmp(", text)
+        self.assertIn("} else {", text)
+        self.assertIn("mb_message(\"control_msg1\", MB_THE_POOR_TITLE)", text)
+        self.assertEqual(MB.recipe_of(text), r)
+        self.assertEqual([m[0] for m in MB.messages(r)], ["control_msg1"])
+        r["match"] = "none"
+        self.assertIn("ok = !(!(mb_is_player", MB.script(r))
+        # FOR EACH: a town line on a faction's turn needs a town - FOR EACH town brings one
+        t = MB.new_recipe("Grow")
+        t.update(when="faction_turn", dos=[MB.item("do", "people", amount=100)])
+        self.assertTrue(any("brings no town" in x for x in MB.problems(t)))
+        t.update(each="town", each_of="named", each_faction="")
+        self.assertEqual(MB.problems(t), ["FOR EACH: pick the faction"])
+        t["each_faction"] = "egypt"
+        self.assertEqual(MB.problems(t), [])
+        self.assertIn("mb_each_town(c, mb_faction(\"egypt\"), mb_body)", MB.script(t))
+        self.assertIn("for each town of this faction: egypt", MB.plain_words(t))
+        t.update(each="faction")
+        self.assertIn("mb_each_faction(c, mb_body)", MB.script(dict(t, dos=[MB.item("do", "money", amount=1,
+                                                                                   to="this")])))
+        e = MB.new_recipe("Else alone")
+        e.update(when="faction_turn", dos=[MB.item("do", "money", amount=1, to="this")],
+                 **{"else": [MB.item("do", "money", amount=1, to="this")]})
+        self.assertTrue(any(x.startswith("ELSE: there is no IF") for x in MB.problems(e)))
+        old = MB.example("Help when broke")            # an old recipe: no match / else / each keys at all
+        for k in ("match", "else", "each", "each_of", "each_faction"):
+            old.pop(k, None)
+        self.assertEqual(MB.problems(old), [])
+        self.assertIn("local acted = mb_body(c)", MB.script(old))
+
     def test_module_builder_takes_every_line_of_the_engines(self):
         """The engines' own lists (dump_docudemon) read: console usages split at the first ':' outside <> / [],
         docudemon blocks with their fields; the catalogue the editor carries has both engines (a module for both games

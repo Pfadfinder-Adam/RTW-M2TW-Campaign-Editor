@@ -19,11 +19,12 @@ from .plan import Plan
 TITLE = "Module builder"
 # the blocks' colours, light and dark look (the dark ones kept as they are by the theme: a tint that means a block;
 # the texts in them are made readable by the theme)
-COLOURS = {"when": "#dfe9f7", "ifs": "#f7efd6", "dos": "#e2f2df"}
-COLOURS_DARK = {"when": "#25334a", "ifs": "#43391f", "dos": "#243f29"}
-HEADS = {"when": "WHEN  (what happens in the game)", "ifs": "IF  (only when all of this is true)",
-         "dos": "DO  (what the module does, in this order)"}
-ADD = {"ifs": "+ another condition...", "dos": "+ another action..."}
+COLOURS = {"when": "#dfe9f7", "ifs": "#f7efd6", "dos": "#e2f2df", "else": "#f3e3ef"}
+COLOURS_DARK = {"when": "#25334a", "ifs": "#43391f", "dos": "#243f29", "else": "#432a3d"}
+HEADS = {"when": "WHEN  (what happens in the game)", "ifs": "IF",
+         "dos": "DO  (what the module does, in this order)",
+         "else": "ELSE  (what it does when the IF does not hold)"}
+ADD = {"ifs": "+ another condition...", "dos": "+ another action...", "else": "+ another action..."}
 GAMES = [("both", "both games (REX and M2EX)"), ("rome", "Rome: Total War (REX)"),
          ("medieval2", "Medieval II (M2EX)")]
 CHOICES = {"op": MB.OPS, "turn_op": MB.TURN_OPS, "who": MB.WHO_IS, "to": MB.TO, "stance": MB.STANCES}
@@ -32,7 +33,7 @@ WIDE = ("text", "long")
 EMPTY = "Empty - make your own"
 MINE = "--- my modules ---"
 HOW = ("A module is a small script the engine runs during the campaign: WHEN something happens, IF the conditions "
-       "hold, it DOES the actions. REX (Rome) and M2EX (Medieval II) run it from the game's script/modules folder; "
+       "hold, it DOES the actions (ELSE: what it does when they do not; FOR EACH under WHEN: all of it for each town / army / faction in turn). REX (Rome) and M2EX (Medieval II) run it from the game's script/modules folder; "
        "the original exes run no scripts.\n\nStart from an example on the left or from an empty one: the list under "
        "WHEN says what happens, '+ another condition...' / '+ another action...' add a line, x takes it out. The "
        "sentence 'In plain words' says what it will do.\n\nTick a value under 'What the player may change later' and "
@@ -185,7 +186,7 @@ class ModuleBuilder(tk.Toplevel):
         for w in inner.winfo_children():
             w.destroy()
         self._when(inner)
-        for group in ("ifs", "dos"):
+        for group in ("ifs", "dos", "else"):
             self._block(inner, group)
         self._settings(inner)
         inner.update_idletasks()
@@ -212,6 +213,7 @@ class ModuleBuilder(tk.Toplevel):
         cur = ev.engine if ev and ev.key not in MB.EVENT else ""
         ttk.Button(row, text="More events... (every one of the engines)", command=lambda: EnginePicker(
             self, "events", self.set_engine_event, current=cur)).pack(side="left", padx=8)
+        self._each_row(f, c)
         if ev:
             wrapping(tk.Label(f, text=ev.help[0].upper() + ev.help[1:] + ".", bg=c, fg="#444", justify="left",
                               anchor="w"), padx=18)
@@ -221,22 +223,90 @@ class ModuleBuilder(tk.Toplevel):
                     "%s has no such event - see the line at the bottom." % MB.GAME_ENGINES.get(
                         self.recipe.get("game", "both")))), padx=18, pady=(0, 6))
             else:
+                each = self.recipe.get("each") or ""
+                more = {"town": "each town in turn", "army": "each army's general in turn",
+                        "faction": "each faction in turn"}.get(each)
                 wrapping(tk.Label(f, bg=c, fg="#444", justify="left", anchor="w", text="It brings along: " + (
                     ", ".join(MB.SUBJECT_WORDS[s] for s in brings) or "nothing") +
+                    ("; FOR EACH brings %s" % more if more else "") +
                     " - the conditions and actions below work on them."), padx=18, pady=(0, 6))
+
+    def _each_row(self, f, c):
+        """FOR EACH: the IF / DO / ELSE done once for each town / army of a faction, or each faction (Scratch's
+        'repeat', in the game's words)."""
+        row = tk.Frame(f, bg=c)
+        row.pack(anchor="w", padx=18, pady=(2, 2))
+        tk.Label(row, text="then do it", bg=c, fg="#1e1e1e").pack(side="left")
+        each = self.recipe.get("each") or ""
+        v = tk.StringVar(value=dict(MB.EACH)[each])
+        cb = ttk.Combobox(row, textvariable=v, values=[l for _, l in MB.EACH], state="readonly",
+                          width=max(len(l) for _, l in MB.EACH) + 1)
+        cb.pack(side="left", padx=4)
+        cb.bind("<<ComboboxSelected>>", lambda e: self.set_each("each", next(k for k, l in MB.EACH
+                                                                                if l == v.get())))
+        if each in ("town", "army"):
+            vo = tk.StringVar(value=dict(MB.EACH_OF).get(self.recipe.get("each_of") or "this"))
+            co = ttk.Combobox(row, textvariable=vo, values=[l for _, l in MB.EACH_OF], state="readonly",
+                              width=max(len(l) for _, l in MB.EACH_OF) + 1)
+            co.pack(side="left", padx=4)
+            co.bind("<<ComboboxSelected>>", lambda e: self.set_each("each_of", next(
+                k for k, l in MB.EACH_OF if l == vo.get())))
+            if self.recipe.get("each_of") == "named":
+                vf = tk.StringVar(value=self.recipe.get("each_faction") or "")
+                ttk.Combobox(row, textvariable=vf, values=self.names_of("factions"), width=22).pack(side="left",
+                                                                                                    padx=4)
+                vf.trace_add("write", lambda *a: self.set_each("each_faction", vf.get().strip(), rebuild=False))
+        hint(row, "Once: the lines below work on what happened (its faction, town, general). For each town / "
+                  "army of a faction, or for each faction (not the rebels): everything below is done once for each "
+                  "of them in turn, and 'the town' / 'the general' / 'the faction' of the lines below is that one - "
+                  "like Scratch's 'repeat'.").pack(side="left", padx=4)
+
+    def set_each(self, key, value, rebuild=True):
+        self.recipe[key] = value
+        self.changed = True
+        self.rebuild() if rebuild else self.refresh()
+
+    def set_match(self, label):
+        self.recipe["match"] = next(k for k, l in MB.MATCH if l == label)
+        self.changed = True
+        self.refresh()
+
+    def set_not(self, i, on):
+        if on:
+            self.recipe["ifs"][i]["not"] = True
+        else:
+            self.recipe["ifs"][i].pop("not", None)
+        self.changed = True
+        self.refresh()
 
     def _block(self, inner, group):
         f, c = self._frame(inner, group)
-        table = MB.CONDITION if group == "ifs" else MB.ACTION
+        table = MB.table_of(group)
         parts = MB.CONDITIONS if group == "ifs" else MB.ACTIONS
-        items = self.recipe.get(group, [])
+        items = self.recipe.get(group) or []
+        if group == "ifs":                         # how the lines count: all (and), any one (or), none of them
+            mrow = tk.Frame(f, bg=c)
+            mrow.pack(anchor="w", padx=18, pady=(0, 2))
+            tk.Label(mrow, text="only when", bg=c, fg="#1e1e1e").pack(side="left")
+            v = tk.StringVar(value=dict(MB.MATCH).get(self.recipe.get("match") or "all"))
+            cb = ttk.Combobox(mrow, textvariable=v, values=[l for _, l in MB.MATCH], state="readonly",
+                              width=max(len(l) for _, l in MB.MATCH) + 1)
+            cb.pack(side="left", padx=4)
+            cb.bind("<<ComboboxSelected>>", lambda e: self.set_match(v.get()))
+            hint(mrow, "All: every line below must be true (and). Any one: one true line is enough (or). None: "
+                       "no line may be true. 'not' in front of one line turns that line round.").pack(side="left")
         if not items:
-            tk.Label(f, bg=c, fg="#555", text="(nothing yet - %s)" % (
-                "the actions run every time" if group == "ifs" else "add what it does")).pack(anchor="w", padx=18)
+            tk.Label(f, bg=c, fg="#555", text="(nothing yet - %s)" % {
+                "ifs": "the actions run every time", "dos": "add what it does",
+                "else": "nothing is done when the IF does not hold"}[group]).pack(anchor="w", padx=18)
         for i, it in enumerate(items):
             part = table.get(it.get("k"))
             row = tk.Frame(f, bg=c)
             row.pack(anchor="w", padx=18, pady=2, fill="x")
+            if group == "ifs":
+                nv = tk.BooleanVar(value=bool(it.get("not")))
+                tk.Checkbutton(row, text="not", variable=nv, bg=c, fg="#1e1e1e", activebackground=c,
+                               selectcolor=c, command=lambda n=i, b=nv: self.set_not(n, b.get())).pack(side="left")
             pv = tk.StringVar(value=part.label if part else it.get("k"))
             pcb = ttk.Combobox(row, textvariable=pv, values=[p.label for p in parts], state="readonly",
                                width=max(len(p.label) for p in parts) + 1)
@@ -455,13 +525,14 @@ class ModuleBuilder(tk.Toplevel):
     def _new_item(self, group, key):
         it = MB.item("if" if group == "ifs" else "do", key)
         if self.mod is not None:                    # its names filled from the mod, like an example's
-            r = MB.fit_to_mod({"ifs": [it] if group == "ifs" else [], "dos": [it] if group == "dos" else []}, self.mod)
-            it = r[group][0]
+            it = MB.fit_to_mod({group: [it]}, self.mod)[group][0]
         return it
 
     def add_menu(self, button, group):
         ev = self.event()
         have = set(MB.event_subjects(ev, self.recipe.get("game", "both"), self.mod) or ev.subjects) if ev else set()
+        have |= {"town": {MB.S, MB.F}, "army": {MB.C, MB.F}, "faction": {MB.F}}.get(self.recipe.get("each") or "",
+                                                                                     set())
         m = tk.Menu(self, tearoff=False)
         for p in (MB.CONDITIONS if group == "ifs" else MB.ACTIONS):
             lack = [MB.SUBJECT_WORDS[n] for n in p.needs if n not in have]

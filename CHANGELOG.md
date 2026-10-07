@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Module builder: control blocks** as in Scratch - **ELSE** (what the module does when the IF does not hold), the IF lines counted as **all / any one / none** of them and **not** before a line, and **FOR EACH** town or army of a faction, or each faction (everything below done for each one in turn). Older modules open and work as before.
+
 ## 0.31.0 - 2026-10-07
 
 ### Added

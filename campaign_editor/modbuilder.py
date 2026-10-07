@@ -172,7 +172,29 @@ BUILT_IN = ("sack_settlement", "raze_settlement", "avoid_growth", "player_diplom
 # ---------------------------------------------------------------------------
 def new_recipe(title="My module"):
     return {"v": 1, "title": title, "game": "both", "when": "faction_turn", "once": False, "ifs": [], "dos": [],
-            "settings": {}}
+            "settings": {}, "match": "all", "else": [], "each": "", "each_of": "this", "each_faction": ""}
+
+
+# The blocks of control (Scratch's 'if / else', 'and / or / not', 'repeat'), in the game's own words:
+#   match   how the IF lines count together: all of them (and), any one of them (or), none of them (not);
+#           each line may be turned round by itself ('not': true);
+#   else    the actions done when the IF does not hold;
+#   each    the IF / DO / ELSE done once for each town / army of a faction, or for each faction - 'the town', 'the
+#           general', 'the faction' of the lines below are then that one.
+MATCH = (("all", "all of these are true"), ("any", "any one of these is true"), ("none", "none of these is true"))
+EACH = (("", "once (what happened)"), ("town", "for each town of"), ("army", "for each army of"),
+        ("faction", "for each faction"))
+EACH_OF = (("this", "the faction it happened to"), ("player", "the player"), ("named", "this faction:"))
+ACTION_GROUPS = ("dos", "else")
+
+
+def actions(recipe):
+    """[(group, i, item)] - every action of the recipe in the order the script holds them: DO, then ELSE."""
+    return [(g, i, it) for g in ACTION_GROUPS for i, it in enumerate(recipe.get(g) or [])]
+
+
+def table_of(group):
+    return CONDITION if group == "ifs" else ACTION
 
 
 def item(kind, key, **values):
@@ -214,7 +236,7 @@ def field_kind(recipe, path):
     try:
         group, idx, name = path.split(".")
         it = recipe[group][int(idx)]
-        part = (CONDITION if group == "ifs" else ACTION)[it["k"]]
+        part = table_of(group)[it["k"]]
         return next(k for n, k, _, _ in part.fields if n == name)
     except (ValueError, KeyError, IndexError, StopIteration):
         return None
@@ -226,9 +248,9 @@ SETTABLE = ("int", "signed", "percent", "text", "long")
 def settable(recipe):
     """[(path, plain words)] - every value of the recipe that may be made a setting (numbers and texts)."""
     out = []
-    for group in ("ifs", "dos"):
-        for i, it in enumerate(recipe.get(group, [])):
-            part = (CONDITION if group == "ifs" else ACTION).get(it.get("k"))
+    for group in ("ifs",) + ACTION_GROUPS:
+        for i, it in enumerate(recipe.get(group) or []):
+            part = table_of(group).get(it.get("k"))
             if part is None:
                 continue
             for name, kind, label, _ in part.fields:
@@ -335,9 +357,20 @@ def plain_words(recipe):
     """The whole module in one sentence or two."""
     ev = event_of(recipe.get("when"), recipe.get("game", "both"))
     head = "When %s" % (ev.label if ev else "(nothing picked)")
-    ifs = [condition_words(i) for i in recipe.get("ifs", [])]
+    ifs = [("not true that " if i.get("not") else "") + condition_words(i) for i in recipe.get("ifs", [])]
     dos = [action_words(a) for a in recipe.get("dos", [])]
-    text = head + (", if " + " and ".join(ifs) if ifs else "") + ": " + ("; ".join(dos) if dos else "nothing yet") + "."
+    alt = [action_words(a) for a in recipe.get("else") or []]
+    each = recipe.get("each") or ""
+    if each:
+        head += ", " + dict(EACH)[each] + (" " + dict(EACH_OF).get(recipe.get("each_of"), "")
+                                           if each != "faction" else "")
+        if each != "faction" and recipe.get("each_of") == "named":
+            head += " " + (recipe.get("each_faction") or "(no faction picked)")
+    match = recipe.get("match") or "all"
+    joined = (" or " if match == "any" else " and ").join(ifs)
+    cond = ("if none of: " + "; ".join(ifs)) if match == "none" else ("if " + joined)
+    text = head + (", " + cond if ifs else "") + ": " + ("; ".join(dos) if dos else "nothing yet") + \
+        ("; otherwise: " + "; ".join(alt) if alt and ifs else "") + "."
     if recipe.get("once"):
         text += " Only once in a campaign."
     return text[0].upper() + text[1:]
@@ -400,6 +433,18 @@ def problems(recipe, mod=None, names=None):
                 "Rome" if only == ["rome"] else "Medieval II") if len(only) == 1 else ""))
         brings = ev.subjects
     have = set(brings)
+    each = recipe.get("each") or ""
+    if each and each not in dict(EACH):
+        out.append("FOR EACH: unknown (%s)" % each)
+    have |= {"town": {S, F}, "army": {C, F}, "faction": {F}}.get(each, set())
+    if each in ("town", "army") and recipe.get("each_of") == "this" and F not in brings:
+        out.append("FOR EACH: '%s' brings no faction - pick the player or a faction by name" % ev.label)
+    if each in ("town", "army") and recipe.get("each_of") == "named" and not recipe.get("each_faction"):
+        out.append("FOR EACH: pick the faction")
+    if (recipe.get("match") or "all") not in dict(MATCH):
+        out.append("IF: unknown way to count the conditions (%s)" % recipe.get("match"))
+    if recipe.get("else") and not recipe.get("ifs"):
+        out.append("ELSE: there is no IF - the ELSE actions never run (add a condition or take them out)")
     names_cache = {}
 
     def known(what):
@@ -408,8 +453,8 @@ def problems(recipe, mod=None, names=None):
             names_cache[what] = {n.lower() for n in got}
         return names_cache[what]
 
-    for group, table, word in (("ifs", CONDITION, "IF"), ("dos", ACTION, "DO")):
-        for n, it in enumerate(recipe.get(group, []), 1):
+    for group, table, word in (("ifs", CONDITION, "IF"), ("dos", ACTION, "DO"), ("else", ACTION, "ELSE")):
+        for n, it in enumerate(recipe.get(group) or [], 1):
             part = table.get(it.get("k"))
             if part is None:
                 out.append("%s %d: unknown (%s)" % (word, n, it.get("k")))
@@ -594,22 +639,67 @@ def script(recipe):
         lines.append("local %s = %s        // %s" % (v, _sq(recipe[group][int(i)][name]), label))
     lines += ["local mb_key = %s" % _sq(key), ""]
     lines += LIBRARY.splitlines()
-    lines += ["", "local function mb_run(e) {", "    if (!MB_ON) {", "        return", "    }",
-              "    local c = mb_context(e)"]
+    match = recipe.get("match") or "all"
+    conds = []
     for i, it in enumerate(recipe.get("ifs", [])):
-        lines += ["    if (!(%s)) {" % _cond_code(it, i, val), "        return", "    }   // " + condition_words(it)]
-    lines += ["    if (MB_ONCE && mb_done()) {", "        return", "    }",
-              '    mb_log("acts: " + mb_where(c))']
+        code = "(%s)" % _cond_code(it, i, val)
+        conds.append(("!" + code) if it.get("not") else code)
+    if not conds:
+        test = "true"
+    elif match == "any":
+        test = " || ".join(conds)
+    elif match == "none":
+        test = "!(" + " || ".join(conds) + ")"
+    else:
+        test = " && ".join(conds)
+    lines += ["", "// what is done for one faction / town / army (FOR EACH calls it for each)",
+              "local function mb_body(c) {"]
+    for i, it in enumerate(recipe.get("ifs", [])):
+        lines.append("    // IF %s%s" % ("not true that " if it.get("not") else "", condition_words(it)))
+    lines += ["    local ok = false",
+              "    try {",
+              "        ok = %s" % test,
+              "    } catch (err) {",
+              '        mb_log("the conditions could not be checked: " + err)',
+              "    }"]
     msg = 0
-    for i, it in enumerate(recipe.get("dos", [])):
-        if it["k"] == "message":
-            msg += 1
-        lines.append("    try {")
-        lines += ["        " + l for l in _act_code(it, i, val, key, msg)]
-        lines += ["    } catch (err) {", '        mb_log("%s failed: " + err)' % action_words(it).replace('"', "'"),
-                  "    }"]
-    lines += ["    if (MB_ONCE) {", "        mb_mark_done()", "    }", "}", "",
-              'mb_listen("%s", mb_run)' % ev.engine,
+
+    def block(group, indent):
+        nonlocal msg
+        out = []
+        for i, it in enumerate(recipe.get(group) or []):
+            if it["k"] == "message":
+                msg += 1
+            out.append(indent + "try {")
+            out += [indent + "    " + l for l in _act_code(it, i, val, key, msg, group)]
+            out += [indent + "} catch (err) {",
+                    indent + '    mb_log("%s failed: " + err)' % action_words(it).replace('"', "'"),
+                    indent + "}"]
+        return out
+    lines += ["    if (ok) {", '        mb_log("acts: " + mb_where(c))'] + block("dos", "        ")
+    alt = block("else", "        ")
+    if alt:
+        lines += ["    } else {", '        mb_log("acts (else): " + mb_where(c))'] + alt
+        lines += ["    }", "    return true"]
+    else:
+        lines += ["    }", "    return ok"]
+    lines += ["}", ""]
+    lines += ["local function mb_run(e) {", "    if (!MB_ON) {", "        return", "    }",
+              "    if (MB_ONCE && mb_done()) {", "        return", "    }",
+              "    local c = mb_context(e)"]
+    each = recipe.get("each") or ""
+    if each:
+        if each == "faction":
+            lines.append("    local acted = mb_each_faction(c, mb_body)")
+        else:
+            who = {"this": "c.faction", "player": "mb_player()"}.get(recipe.get("each_of"),
+                                                                     "mb_faction(%s)" % _sq(recipe.get("each_faction")
+                                                                                            or ""))
+            lines.append("    local acted = mb_each_%s(c, %s, mb_body)" % (each, who))
+    else:
+        lines.append("    local acted = mb_body(c)")
+    lines += ["    if (MB_ONCE && acted) {", "        mb_mark_done()", "    }", "}", ""]
+    lines += ['mb_listen("%s", mb_run)' % ev.engine,
               'mb_listen("GameReloaded", function(...) { mb_faction_cache = {} })',
               'mb_log("%s module loaded")' % title.replace('"', "'"), ""]
     return "\n".join(lines)
@@ -661,9 +751,9 @@ def _cond_code(it, i, val):
     raise ValueError("unknown condition %s" % k)
 
 
-def _act_code(it, i, val, key, msg):
+def _act_code(it, i, val, key, msg, group="dos"):
     k = it["k"]
-    v = lambda name: val("dos", i, name, it[name])
+    v = lambda name: val(group, i, name, it[name])
     if k == "money":
         return ["mb_add_money(%s, %s)" % (_faction_expr(it, "to", "faction"), v("amount"))]
     if k == "people":
@@ -1152,6 +1242,109 @@ local function mb_set_counter(name, v) {
     mb_log("the number " + name + " is now " + v)
 }
 
+// FOR EACH: the body run with c as a copy whose faction / town / general is each one in turn; true when the body
+// acted for any of them. The towns of a faction are read from the map's regions (stratMap.region(i).settlementAt(0)
+// and its owner - names both engines have); an army is read the way Player Diplomacy reads them (army(i) / armyAt(i)).
+local function mb_count(o, field) {
+    local v = mb_get(o, field)
+    if (typeof(v) == "function") {
+        try {
+            v = v.call(o)
+        } catch (err) {
+            v = null
+        }
+    }
+    return v == null ? 0 : v
+}
+
+local function mb_each_town(c, f, body) {
+    if (f == null) {
+        mb_log("for each town: no such faction")
+        return false
+    }
+    local fname = mb_name(f)
+    local acted = false
+    local n = mb_count(::stratMap, "regionCount")
+    for (local i = 0; i < n; i++) {
+        local s = null
+        try {
+            s = ::stratMap.region(i).settlementAt(0)
+        } catch (err) {
+        }
+        if (s == null || mb_name(mb_get(s, "owner")) != fname) {
+            continue
+        }
+        local one = clone c
+        one.settlement = s
+        one.faction = f
+        if (body(one)) {
+            acted = true
+        }
+    }
+    return acted
+}
+
+local function mb_each_army(c, f, body) {
+    if (f == null) {
+        mb_log("for each army: no such faction")
+        return false
+    }
+    local acted = false
+    local n = mb_count(f, "armyCount")
+    for (local i = 0; i < n; i++) {
+        local army = null
+        foreach (getter in ["army", "armyAt"]) {
+            try {
+                army = f[getter](i)
+                break
+            } catch (err) {
+            }
+        }
+        if (army == null) {
+            continue
+        }
+        local one = clone c
+        one.faction = f
+        one.character = null
+        foreach (field in ["general", "leader", "character"]) {
+            local g = mb_get(army, field)
+            if (g != null) {
+                one.character = g
+                break
+            }
+        }
+        if (body(one)) {
+            acted = true
+        }
+    }
+    return acted
+}
+
+local function mb_each_faction(c, body) {
+    local acted = false
+    local n = 0
+    try {
+        n = ::game.factionCount()
+    } catch (err) {
+    }
+    for (local i = 0; i < n; i++) {
+        local f = null
+        try {
+            f = ::game.faction(i)
+        } catch (err) {
+        }
+        if (f == null || mb_name(f) == "slave") {
+            continue                             // the rebels are no faction of their own here
+        }
+        local one = clone c
+        one.faction = f
+        if (body(one)) {
+            acted = true
+        }
+    }
+    return acted
+}
+
 local function mb_listen(name, handler) {
     try {
         ::events.on(name, handler)
@@ -1180,13 +1373,13 @@ def messages(recipe, values=None):
     sv = setting_vars(recipe)
     key = key_of(recipe.get("title") or "")
     out, n = [], 0
-    for i, it in enumerate(recipe.get("dos", [])):
+    for group, i, it in actions(recipe):
         if it.get("k") != "message":
             continue
         n += 1
         got = []
         for name in ("title", "body"):
-            path = "dos.%d.%s" % (i, name)
+            path = "%s.%d.%s" % (group, i, name)
             var = sv.get(path, (None,))[0]
             got.append(values.get(var, it.get(name, "")) if var else it.get(name, ""))
         out.append((message_id(key, n), got[0], got[1]))
@@ -1381,8 +1574,8 @@ def fit_to_mod(recipe, mod):
     player's first town) - an example made for any mod. Names already given stay."""
     import copy
     r = copy.deepcopy(recipe)
-    for group, table in (("ifs", CONDITION), ("dos", ACTION)):
-        for it in r.get(group, []):
+    for group, table in (("ifs", CONDITION), ("dos", ACTION), ("else", ACTION)):
+        for it in r.get(group) or []:
             part = table.get(it.get("k"))
             for name, kind, _, _ in (part.fields if part else []):
                 if kind.startswith("name:") and kind != "name:factions" and not it.get(name):
