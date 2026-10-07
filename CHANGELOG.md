@@ -10,6 +10,8 @@
 - Load says what it is loading, with the moving bar.
 
 ### Changed
+- **One write for the session - every window**: Mercenaries, Events, Campaign rules, Traits and retinue, Many towns and Recolour keep their changes for Apply too (**Keep for Apply**), as the town and character windows do; one **Apply changes** writes them all, **Undo this write** takes back the last part or the whole write. (Traits' *New...* still writes at once: a new trait must exist before it is edited.)
+- **Mods that hold only the files they change load** (Medieval II `mods/<name>`, REX `-mod:<name>`): every file the mod lacks is read from the game's own data, as the game reads it; the Mod list shows them too. A change to such a file goes into the mod as its own copy - the game's files are never written - and Restore takes the copy away again. The engines' `descr_ex.txt` / `descr_caps_ex.txt` are still read from the mod alone. Medieval II with its data still packed: Load says to unpack the game first.
 - One language in every window: **Preview** shows what will be written, **Write it in** writes at once, **Keep for Apply** keeps a window's changes for **Apply changes**. Enter presses the window's main button and Esc closes it (Cancel / Close), in every window; the main window is never closed by Esc, and a tool waiting for its click on the map is stopped by Esc first.
 - Questions are answered in words, not Yes / No ("Drop them" / "Stay", "Unpack it" / "Not now"...); a button that loses something stands apart on the left and is never the one Enter presses.
 - Fewer questions: a write that can be undone (**Undo this write**) is no longer asked about unless it has a warning; removing an army or agent from the faction's list is undone with Ctrl+Z.
@@ -30,10 +32,6 @@
 - Sack Settlement (both games): a town of the player's that revolted to another faction was taken as the player's own capture. Only a capture by the player counts now.
 - New / Edit faction map: a single click on a town did nothing (the town only began a drag); only a double click picked it, and that also opened the town's window. A click picks it now; a double click picks it once and opens the window.
 - A storm placed on land never comes - storms strike only fleets at sea. The Events window and Check mod files now say so.
-
-### Changed
-- **One write for the session - every window**: Mercenaries, Events, Campaign rules, Traits and retinue, Many towns and Recolour keep their changes for Apply too (**Keep for Apply**), as the town and character windows do; one **Apply changes** writes them all, **Undo this write** takes back the last part or the whole write. (Traits' *New...* still writes at once: a new trait must exist before it is edited.)
-- **Mods that hold only the files they change load** (Medieval II `mods/<name>`, REX `-mod:<name>`): every file the mod lacks is read from the game's own data, as the game reads it; the Mod list shows them too. A change to such a file goes into the mod as its own copy - the game's files are never written - and Restore takes the copy away again. The engines' `descr_ex.txt` / `descr_caps_ex.txt` are still read from the mod alone. Medieval II with its data still packed: Load says to unpack the game first.
 
 ## 0.30.1 - 2026-10-07
 
