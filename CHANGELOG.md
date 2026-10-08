@@ -3,6 +3,20 @@
 ## Unreleased
 
 ### Added
+- **Merge regions** (a switch on the map's bar, both games): only the regions and town names drawn; click the region
+  that stays (yellow) and its neighbour that goes (red), then **Merge them** - the second region and its town go from
+  every file, all its land joins the first, which stays as it is. One write with a backup per pair; the switch stays
+  on for the next pair. For maps with more regions than wanted.
+- **Map size: drag the map's edges** (Change size... under the map, both games): the map's four edges become an
+  orange frame with a grip on each side - drag one out to add rows or columns of deep sea (shown blue), in to cut them
+  off (shown dark); the window's numbers follow the mouse, and typed numbers move the frame. What stands on the part
+  cut off - a town, port, army, agent, resource, fort, an event's place or a script's tile - is ringed red on the map
+  and named in the window before anything is written. The window stands beside the map, the whole map in sight.
+- **A religion from nothing** (Medieval II, Barbarian Invasion): New religion needs no other religion any more - its
+  symbol drawn by the editor (its first letter on a disc of the colour picked, in the game's own size; Barbarian
+  Invasion's order / unrest pips: the same full-size symbol with the game's own green / red arrow laid on it) - and **Temples of its own** makes a temple chain
+  for it from nothing: the mod's usual temple numbers, Medieval II's `religion` line / Barbarian Invasion's
+  `religious_belief` naming the new faith, built by the factions picked, plain pictures drawn.
 - **A building from nothing** (both games): New building step by step > Start from: *Nothing*. Say what it is for
   (soldiers, money or food, order and learning, a temple, something else) and how many levels; each level's town
   size, cost and turns start at what is usual for such buildings in this mod, with the effects most of them have.
@@ -49,6 +63,17 @@
   test mod.
 
 ### Fixed
+- **Map size** said a refused cut only in a line at the bottom of its window, and nothing on the map: a cut over a
+  town or an army looked as if it was written and did nothing. It is said in a message now, written in the editor's
+  log, and what is in the way is ringed red on the map.
+- **Recolour never writes over the original battle texture**: the original is copied, the copy recoloured and put
+  in the mod, and the faction's model line points at it - also for a texture only that faction wears, when it is a
+  file of the game's install (it was recoloured where it lay). A copy made for the faction before is recoloured where
+  it is.
+- **Men like bare skeletons in battle (Medieval II)**: a faction that had a unit's texture but no weapons / shields
+  texture (`texture_attachments`) got none when it was recoloured or given the unit again - only a faction with no
+  line at all did. It gets the missing line now, and Load offers to give it to every such faction of the mod at once
+  (Check mod files names them, the battle_models.modeldb too).
 - A picture of your own given in New unit / New building step by step stopped the write (its size came with the
   colour depth); it is put in at the size wanted now.
 - A copied building chain now has the chain's own name text (`{<chain>_name}` - Medieval II logged 'localised string

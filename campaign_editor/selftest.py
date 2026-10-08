@@ -767,6 +767,22 @@ def faith_temples(plan, faction):
     plan.note(f, "temple_ce_faith: the Test Faith's temples (a copy of %s)" % chain)
 
 
+@step("A religion from nothing (Medieval II, Barbarian Invasion): 'Sun Faith' - no other religion copied: its symbol "
+      "drawn by the editor (an orange disc with an S), three temples of its own made from nothing, built by {new}",
+      "'Sun Faith' with the orange S in the religion bar (Medieval II) / a town's beliefs once its Sun Faith shrine "
+      "stands; {new}'s towns can build the Sun Faith Shrine")
+def s_religion_nothing(c, mod):
+    from . import religions as RL
+    from .regionedit import apply_opts
+    if not RL.names(mod):
+        raise Skip("plain Rome has no religions (Barbarian Invasion's beliefs and Medieval II's religions do)")
+    plan = Plan(mod, None, "religion")
+    apply_opts(plan, c.campaign, {"new_religions": [{
+        "name": "ce_sunfaith", "shown": "Sun Faith", "pip_from": "", "picture": None, "draw": (230, 120, 20),
+        "factions": [], "temples": 3, "builders": [c.new]}]})
+    return plan
+
+
 @step("Roster: {edited} gets a unit and a building level it lacked", "the unit in its recruitment list")
 def s_roster(c, mod):
     from . import roster as R
@@ -1740,6 +1756,28 @@ def s_delete_region(c, mod):
     raise Skip("no rebel town that can go (each is named by a campaign script, an event or is an island)")
 
 
+@step("Map editor: Merge regions - a rebel region joins the neighbour picked first (all its land, its port; the "
+      "picked one stays as it was)",
+      "{merged} is not on the map any more: its land is {merged_into}'s (Merge regions: {merged_into} picked first, "
+      "{merged} second)")
+def s_merge_regions(c, mod):
+    from . import regiondelete as RD
+    keep = {c.said.get("near"), c.said.get("far"), c.said.get("split_far"), c.said.get("gone_into")}
+    tiles = mod.city_tiles(c.campaign)
+    capital = next((tiles[r] for r in towns_of(c, mod, c.new) if tiles.get(r)), (0, 0))
+    cands = [r for r in towns_of(c, mod, "slave") if r not in keep and tiles.get(r)]
+    for r in sorted(cands, key=lambda r: -(abs(tiles[r][0] - capital[0]) + abs(tiles[r][1] - capital[1]))):
+        # the neighbour that shares the shortest border: not the one a plain delete would give the land to
+        for into, _ in reversed(RD.neighbours(mod, c.campaign, r)):
+            if into in keep or RD.problems(mod, c.campaign, r, into)[0]:
+                continue
+            plan = Plan(mod, "merge", "%s_into_%s" % (r, into), {})
+            c.said["merged"], c.said["merged_into"] = r, RD.delete(plan, c.campaign, r, into)
+            return plan
+    raise Skip("no rebel region that can join a neighbour (each is named by a campaign script, an event or is an "
+               "island)")
+
+
 
 @step("Scripts in the game: the tooltip of Avoid Growth's tick changed in the script the test mod put in "
       "(REX / M2EX)",
@@ -2272,6 +2310,7 @@ COVERAGE = {
     "Map: a character moved, one deleted": ["s_move_delete"],
     "Map editor: any faction's army moved, its units": ["s_map_any"],
     "Map editor: a town deleted with its region": ["s_delete_region"],
+    "Map: two regions merged into one (Merge regions)": ["s_merge_regions"],
     "Map size: tiles added or cut at the edges": ["s_map_size"],
     "Mercenaries: pools of regions and their units": ["s_mercs"],
     "New region": ["s_region", "s_region_garrison"],
@@ -2296,6 +2335,7 @@ COVERAGE = {
     "Unit editor: your own files for a battle model (texture, model file)": ["s_own_model"],
     "Unit editor: a new unit made from nothing": ["s_unit_nothing"],
     "Building editor: a new building made from nothing": ["s_building_nothing"],
+    "Religions: a religion from nothing (drawn symbol, temples of its own)": ["s_religion_nothing"],
     "Unit editor: voice": ["s_voice"],
     "Building editor: lines": ["s_building_fields"],
     "Building editor: new building step by step": ["s_buildings"],

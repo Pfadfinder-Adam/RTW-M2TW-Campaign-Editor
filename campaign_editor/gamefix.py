@@ -102,6 +102,18 @@ def problems(mod):
                                        "conditions ('No win condition has been set'). Version 0.29.2 of this tool "
                                        "wrote it so. The fix: 'short_campaign hold_regions' and the rest on the next "
                                        "line." % (camp, i + 1, f.text(i).strip())})
+    if game_kind(mod) == "medieval2":
+        from .check import weapons_texture_gaps
+        text, db = weapons_texture_gaps(mod)
+        if text or db:
+            first = (text or db)[0]
+            out.append({"id": "weapons_texture", "text": text, "db": db, "line": 0,
+                        "why": "%d battle model(s) give a faction its texture but no weapons / shields texture, e.g. "
+                               "%s for %s - in battle its men look like bare skeletons (the figure takes half its "
+                               "picture from that texture). Older versions of this tool and other tools left it so. "
+                               "The fix: each such faction gets the weapons texture the model's other factions wear "
+                               "(the mercenaries', else the first), nothing else changed."
+                               % (len(text) + len(db), first[0], ", ".join(first[1][:3]))})
     old = _old_culture_module(mod)
     if old:
         out.append({"id": "old_culture_names", "file": old[0], "table": old[1],
@@ -194,6 +206,31 @@ def fix_plan(mod, found):
             for i, text in p["lines"]:
                 f.set(i, text)
             plan.note(f, "%d diplomacy line(s) written in this game's own form" % len(p["lines"]))
+            continue
+        if p["id"] == "weapons_texture":
+            from .packs import _block_lines, _owner_textures, type_blocks
+            from .models import TEXT_FILE
+            if p["text"]:
+                f = plan.edit(mod.find(TEXT_FILE))
+                for name, facs in p["text"]:
+                    blocks = type_blocks(f)
+                    if name in blocks:
+                        a, b = blocks[name]
+                        now = _block_lines(f, (a, b))
+                        got, _ = _owner_textures(now, facs)
+                        f.raw[a:a + len(now)] = [f.make(x) for x in got]
+                plan.note(f, "%d model(s): a weapons texture line for the factions that had none" % len(p["text"]))
+            if p["db"]:
+                from . import modeldb as MDB
+                src, dst = MDB.find(mod)
+                db = MDB._db_in_plan(plan, src, dst)
+                for name, facs in p["db"]:
+                    m = db.model(name)
+                    if m is not None:
+                        MDB.give_owners(m, facs)
+                plan.binary(dst, db.dump().encode("latin-1"))
+                plan.notes.append((mod.rel(dst), "%d model(s): a weapons texture for the factions that had none"
+                                   % len(p["db"])))
             continue
         if p["id"] == "faction_defeated":
             from . import eventimages

@@ -59,6 +59,10 @@ SELECT_KINDS = (("towns", True), ("armies", True), ("agents", True), ("fleets", 
                 ("forts", False))
 
 
+EDGES = ("left", "right", "top", "bottom")
+EDGE_GRAB = 8                                           # px from an edge that grabs it
+
+
 class MapView(ttk.Frame):
     def __init__(self, master, status=None, on_layers=None):
         super().__init__(master)
@@ -172,6 +176,16 @@ class MapView(ttk.Frame):
             menu.add_checkbutton(label=k, variable=self.v_sel[k], command=self._sel_kinds_changed)
         mb["menu"] = menu
         mb.pack(side="left", padx=(2, 4))
+        # Merge regions (big maps with too many regions): the first region clicked keeps everything (yellow), the
+        # second goes and all its land joins the first (red); only the regions and town names are drawn meanwhile
+        self.v_merge = tk.BooleanVar(value=False)
+        self.merge, self.on_merge, self._before_merge = [None, None], None, None
+        tip(ttk.Checkbutton(lbar, text="Merge regions", variable=self.v_merge, command=self._merge_toggled),
+            "Join two regions into one (a map with too many regions): click the region that stays (yellow), then "
+            "its neighbour that goes (red), then 'Merge them' under the map - the second region's town and region "
+            "go from every file and all its land becomes the first one's; the first stays as it is. Only the "
+            "regions and the town names are drawn meanwhile. A click on a picked region drops it. Written at "
+            "once with a backup (Undo this write / Tools > Restore).").pack(side="left", padx=(4, 4))
         self.lbl_layers = ttk.Label(lbar, text="", foreground="#666")
         self.lbl_layers.pack(side="left", padx=8)
         for v in (self.v_pol, self.v_borders, self.v_names, self.v_ports, self.v_chars, self.v_res, self.v_dip,
@@ -242,6 +256,12 @@ class MapView(ttk.Frame):
         self.b_resize = ttk.Button(row, text="Change size...", command=self._resize)
         self.b_resize.pack(side="left", padx=(0, 4))
         ttk.Button(row, text="Save picture...", command=self.save_picture).pack(side="left", padx=(0, 12))
+        self.merge_bar = ttk.Frame(row)                  # shown while Merge regions is on
+        self.lbl_merge = ttk.Label(self.merge_bar, text="")
+        self.lbl_merge.pack(side="left", padx=(0, 6))
+        self.b_merge = ttk.Button(self.merge_bar, text="Merge them", command=self._merge_go, state="disabled")
+        self.b_merge.pack(side="left", padx=(0, 4))
+        ttk.Button(self.merge_bar, text="Clear", command=self._merge_clear).pack(side="left", padx=(0, 12))
         self.readout = ttk.Label(row, text="", anchor="w")
         self.readout.pack(side="left", fill="x", expand=True)
         self.z, self.ox, self.oy = 2, 0.0, 0.0           # zoom; top-left corner in top-down tile units
@@ -250,6 +270,9 @@ class MapView(ttk.Frame):
         self._drag = None
         self._cdrag = None
         self._pdrag = None               # a town or port being dragged
+        # Map size: the four edges drawn as handles to drag (show_edges); tiles out = new sea, in = cut (darkened)
+        self.edge_mode, self.edges, self.on_edges, self._edrag = False, dict.fromkeys(EDGES, 0), None, None
+        self.edge_blocked = []                           # tiles of what stands on the part cut off
         # the Regions mode: left drag paints tiles to a region, right click picks one
         self.region_mode, self.paint_overlay, self.region_points = False, {}, []
         self.region_painted, self.region_colours = {}, {}
@@ -504,6 +527,216 @@ class MapView(ttk.Frame):
         self.readout.configure(text="selected: %d town(s), %d character(s), %d resource(s) / fort(s) - a right "
                                     "click acts on them all" % (len(self.picked), len(self.sel_chars),
                                                                 len(self.sel_res)))
+
+    # ---- Map size: the edges dragged ----
+    def show_edges(self, edges, on_edges):
+        """The Map size window is open: the map's four edges are handles - drag one outward to add tiles of sea
+        (drawn blue), inward to cut them (the part that goes drawn dark); on_edges({side: tiles}) tells the window."""
+        self.edge_mode, self.on_edges, self.edge_blocked = True, on_edges, []
+        self.edges = {k: int(edges.get(k, 0)) for k in EDGES}
+        self.render()
+
+    def set_edges(self, edges, blocked=None):
+        """The edges as the window's numbers say; blocked = the tiles (x, y up) of what stands on the part cut off
+        (ringed red)."""
+        self.edges = {k: int(edges.get(k, 0)) for k in EDGES}
+        if blocked is not None:
+            self.edge_blocked = list(blocked)
+        if self.edge_mode:
+            self.render()
+            if self.cmap:
+                self._edges_said()
+
+    def hide_edges(self):
+        self.edge_mode, self.on_edges, self._edrag, self.edge_blocked = False, None, None, []
+        self.edges = dict.fromkeys(EDGES, 0)
+        self.readout.configure(text="")                  # 'the map would be ...' said no more
+        self.render()
+
+    def fit_beside(self, free=0, margin=40):
+        """The whole map in sight but for the canvas's right `free` pixels (a window stands there), with `margin`
+        pixels round it to drag an edge out into (Map size)."""
+        if not self.cmap:
+            return
+        cw, ch = max(self.canvas.winfo_width(), 200), max(self.canvas.winfo_height(), 200)
+        self.z = min(max(100, cw - free - 2 * margin) / self.cmap.w, max(100, ch - 2 * margin) / self.cmap.h)
+        self.ox, self.oy = -margin / self.z, (self.cmap.h - ch / self.z) / 2
+        self.render()
+
+    def _new_rect(self):
+        """The map as the edges would leave it, in top-down tiles: (x0, y0, x1, y1)."""
+        e, w, h = self.edges, self.cmap.w, self.cmap.h
+        return -e["left"], -e["top"], w + e["right"], h + e["bottom"]
+
+    def _edge_near(self, sx, sy):
+        """The edge (as it would be) a screen point is on, or None."""
+        if not self.cmap:
+            return None
+        x0, y0, x1, y1 = [v * self.z for v in self._new_rect()]
+        x0, x1, y0, y1 = x0 - self.ox * self.z, x1 - self.ox * self.z, y0 - self.oy * self.z, y1 - self.oy * self.z
+        if y0 - EDGE_GRAB <= sy <= y1 + EDGE_GRAB:
+            if abs(sx - x0) <= EDGE_GRAB:
+                return "left"
+            if abs(sx - x1) <= EDGE_GRAB:
+                return "right"
+        if x0 - EDGE_GRAB <= sx <= x1 + EDGE_GRAB:
+            if abs(sy - y0) <= EDGE_GRAB:
+                return "top"
+            if abs(sy - y1) <= EDGE_GRAB:
+                return "bottom"
+        return None
+
+    def _edge_drag(self, side, sx, sy):
+        """The dragged edge to the tile line nearest the mouse: tiles out (+) or in (-); the map keeps a tile at least."""
+        w, h, e = self.cmap.w, self.cmap.h, self.edges
+        fx, fy = self.ox + sx / self.z, self.oy + sy / self.z
+        n = {"left": round(-fx), "right": round(fx - w), "top": round(-fy), "bottom": round(fy - h)}[side]
+        other = {"left": "right", "right": "left", "top": "bottom", "bottom": "top"}[side]
+        size = w if side in ("left", "right") else h
+        was, e[side] = e[side], max(n, 1 - size - e[other])
+        if e[side] != was and self.on_edges:           # the window's numbers (and its check) follow the drag
+            self.on_edges(dict(e))
+        self._draw_edges()
+        self._edges_said()
+
+    def _edges_said(self):
+        w, h, e = self.cmap.w, self.cmap.h, self.edges
+        add = [("%s %s%d" % (k, "+" if e[k] > 0 else "", e[k])) for k in EDGES if e[k]]
+        self.readout.configure(text="the map would be %d x %d tiles (%s) - out: new sea, in: cut off" % (
+            w + e["left"] + e["right"], h + e["top"] + e["bottom"], ", ".join(add) or "as it is"))
+
+    def _draw_edges(self):
+        c, z, w, h, e = self.canvas, self.z, self.cmap.w, self.cmap.h, self.edges
+        c.delete("edges")
+        nx0, ny0, nx1, ny1 = self._new_rect()
+
+        def rect(x0, y0, x1, y1, fill):
+            if x1 > x0 and y1 > y0:
+                c.create_rectangle((x0 - self.ox) * z, (y0 - self.oy) * z, (x1 - self.ox) * z, (y1 - self.oy) * z,
+                                   fill=fill, stipple="gray50", outline="", tags=("edges",))
+        sea, cut = "#2f6fd0", "#000000"
+        if e["left"] > 0:
+            rect(nx0, ny0, 0, ny1, sea)
+        if e["right"] > 0:
+            rect(w, ny0, nx1, ny1, sea)
+        if e["top"] > 0:
+            rect(max(0, nx0), ny0, min(w, nx1), 0, sea)
+        if e["bottom"] > 0:
+            rect(max(0, nx0), h, min(w, nx1), ny1, sea)
+        if e["left"] < 0:
+            rect(0, 0, nx0, h, cut)
+        if e["right"] < 0:
+            rect(nx1, 0, w, h, cut)
+        if e["top"] < 0:
+            rect(0, 0, w, ny0, cut)
+        if e["bottom"] < 0:
+            rect(0, ny1, w, h, cut)
+        r = max(z * 1.2, 7)
+        for x, y in self.edge_blocked:                  # what stands on the part cut off: a red ring each
+            sx, sy = self.to_screen(x, y)
+            c.create_oval(sx - r, sy - r, sx + r, sy + r, outline="#000000", width=5, tags=("edges",))
+            c.create_oval(sx - r, sy - r, sx + r, sy + r, outline="#ff2a2a", width=3, tags=("edges",))
+        X0, Y0, X1, Y1 = [(v - o) * z for v, o in ((nx0, self.ox), (ny0, self.oy), (nx1, self.ox), (ny1, self.oy))]
+        c.create_rectangle(X0, Y0, X1, Y1, outline="#ff9a1f", width=3, tags=("edges",))
+        for side, (a, b, cx, cy) in {"left": (X0, X0, X0, (Y0 + Y1) / 2), "right": (X1, X1, X1, (Y0 + Y1) / 2),
+                                     "top": (Y0, Y0, (X0 + X1) / 2, Y0),
+                                     "bottom": (Y1, Y1, (X0 + X1) / 2, Y1)}.items():
+            if side in ("left", "right"):          # a grip in the middle of each edge
+                c.create_rectangle(cx - 5, cy - 18, cx + 5, cy + 18, fill="#ff9a1f", outline="#5a3000",
+                                   tags=("edges",))
+            else:
+                c.create_rectangle(cx - 18, cy - 5, cx + 18, cy + 5, fill="#ff9a1f", outline="#5a3000",
+                                   tags=("edges",))
+
+    def _merge_toggled(self):
+        """Merge regions on: only the regions (their borders) and the town names are drawn - every other layer goes,
+        Select and Edit regions are switched off; all comes back as it was after."""
+        if self.v_merge.get():
+            if not (self.on_merge or getattr(self.winfo_toplevel(), "merge_regions", None)):
+                self.v_merge.set(False)
+                self.readout.configure(text="regions are merged on the Map tab of the main window")
+                return
+            for var, off in ((self.v_pick, self._pick_toggled), (self.v_regions, self._regions_toggled)):
+                if var.get():
+                    var.set(False)
+                    off()
+            self._before_merge = (self.v_mode.get(), self.v_borders.get(), self.v_names.get(), self.v_ports.get(),
+                                  self.v_chars.get(), self.v_res.get(), self.v_forts.get())
+            self.v_mode.set("none")
+            for var, on in ((self.v_borders, True), (self.v_names, True), (self.v_ports, False),
+                            (self.v_chars, False), (self.v_res, False), (self.v_forts, False)):
+                var.set(on)
+            self._mode_changed(redraw=False)
+            self.merge = [None, None]
+            self.merge_bar.pack(side="left", before=self.readout)
+            self._merge_said()
+        else:
+            if self._before_merge:
+                mode, borders, names, ports, chars, res, forts = self._before_merge
+                self._before_merge = None
+                self.v_mode.set(mode)
+                for var, val in ((self.v_borders, borders), (self.v_names, names), (self.v_ports, ports),
+                                 (self.v_chars, chars), (self.v_res, res), (self.v_forts, forts)):
+                    var.set(val)
+                self._mode_changed(redraw=False)
+            self.merge = [None, None]
+            self.merge_bar.pack_forget()
+            self.readout.configure(text="Merge regions off")
+        self._relayer()
+
+    def _merge_click(self, sx, sy):
+        """A left click while merging: the region under it is the one that stays (first), then the one that goes
+        (second); a click on a picked one drops it, on a third region it becomes the one that goes."""
+        if not self.cmap:
+            return
+        x, y = self.to_tile(sx, sy)
+        r = self.cmap.region_at(x, y) if self.inside((x, y)) else None
+        keep, gone = self.merge
+        if not r:
+            self.readout.configure(text="that is the sea - click a region's land")
+            return
+        if r == keep:
+            self.merge = [gone, None]
+        elif r == gone:
+            self.merge = [keep, None]
+        elif keep is None:
+            self.merge = [r, None]
+        else:
+            self.merge = [keep, r]
+        self._merge_said()
+        self.render()
+
+    def _merge_said(self):
+        keep, gone = self.merge
+        def town(r):
+            name = self.labels.get(r) or self.cmap.info.get(r, {}).get("settlement") or r
+            return "%s (%s)" % (name, r) if name != r else r
+        if keep is None:
+            text = "Merge regions: click the region that stays"
+        elif gone is None:
+            text = "%s stays (yellow) - now click the neighbour that joins it" % town(keep)
+        else:
+            text = "%s (red) joins %s (yellow)" % (town(gone), town(keep))
+        self.lbl_merge.configure(text=text)
+        self.b_merge.configure(state="normal" if keep and gone else "disabled")
+
+    def _merge_clear(self):
+        self.merge = [None, None]
+        self._merge_said()
+        self.render()
+
+    def _merge_go(self):
+        keep, gone = self.merge
+        fn = self.on_merge or getattr(self.winfo_toplevel(), "merge_regions", None)
+        if keep and gone and fn:
+            fn(keep, gone)
+
+    def merged(self):
+        """After a merge was written (the map read again): nothing picked, the mode stays on for the next pair."""
+        self.merge = [None, None]
+        if self.v_merge.get():
+            self._merge_said()
+        self.render()
 
     def _regions_toggled(self):
         """Regions mode colours the land by region: the political colours and the
@@ -859,6 +1092,8 @@ class MapView(ttk.Frame):
         if self.v_grid.get() and self.z >= 10:
             self._grid(cw, ch)
         self._markers(cw, ch)
+        if self.edge_mode:
+            self._draw_edges()
         if self.v_pick.get() and (self.sel_chars or self.sel_res):
             self._sel_marks()
         key = (tuple(sorted({r["kind"] for r in self.resources})), self.v_res.get(), self.v_forts.get(),
@@ -914,7 +1149,11 @@ class MapView(ttk.Frame):
         if getattr(self, "plain", False):
             return bg
         land = () if self.region_mode else tuple(sorted(self.new_land.items()))
-        if self.v_pick.get() and self.picked and not self.region_mode:
+        if self.v_merge.get() and any(self.merge) and not self.region_mode:
+            keep, gone = self.merge
+            pol = self.cmap.political({r: k for r, k in ((keep, "keep"), (gone, "gone")) if r},
+                                      {"keep": (255, 212, 0), "gone": (220, 40, 30)}, None, alpha=130, borders=True)
+        elif self.v_pick.get() and self.picked and not self.region_mode:
             # Pick towns: the picked towns' regions see-through yellow (a tester: the towns alone were hard to see)
             pol = self.cmap.political({r: "picked" for r in self.picked}, {"picked": (255, 212, 0)}, None,
                                       alpha=110, borders=True)
@@ -1898,6 +2137,14 @@ class MapView(ttk.Frame):
         if right and not self.region_mode:                # the right button drags the map, everywhere
             self._drag = (e.x, e.y, self.ox, self.oy, False)
             return
+        if self.edge_mode and self.cmap and not right:
+            side = self._edge_near(e.x, e.y)              # Map size: an edge grabbed with the left button
+            if side:
+                self._edrag = side
+                return
+        if self.v_merge.get() and self.cmap and not self.region_mode and not self.on_place:
+            self._merge_click(e.x, e.y)                   # Merge regions: a left click picks a region
+            return
         if self.v_pick.get() and self.cmap and not self.region_mode and not self.on_place:
             cid = self._char_under(e.x, e.y)              # Select: the left button drags a sign of one's own,
             if cid is None or cid not in self.draggable:  # else draws a box (it adds; Shift takes away)
@@ -1977,6 +2224,9 @@ class MapView(ttk.Frame):
         c.itemconfigure("bg", image=self._photo)
 
     def _move(self, e):
+        if self._edrag:
+            self._edge_drag(self._edrag, e.x, e.y)
+            return
         if self._box:
             x0, y0, moved, add = self._box
             if moved or abs(e.x - x0) + abs(e.y - y0) > 3:
@@ -2054,7 +2304,7 @@ class MapView(ttk.Frame):
         window's - the button did nothing there (the user, 2026-10-07)."""
         fn = self.on_resize or getattr(self.winfo_toplevel(), "map_size_window", None)
         if fn:
-            fn()
+            fn(view=self)                                # its edges are dragged on this very map
 
     def _escape(self, e=None):
         """Esc drops what waits for its click; only then it goes no further (else Esc closes the window)."""
@@ -2063,6 +2313,11 @@ class MapView(ttk.Frame):
             return "break"
 
     def _release(self, e):
+        if self._edrag:
+            self._edrag = None
+            if self.on_edges:
+                self.on_edges(dict(self.edges))
+            return
         if self._box:
             x0, y0, moved, add = self._box
             self._box = None
@@ -2206,7 +2461,12 @@ class MapView(ttk.Frame):
             self.canvas.config(cursor="hand2")
             self.readout.configure(text="click to place   " + self.cmap.describe(x, y, self.owners))
             return
-        self.canvas.config(cursor="crosshair")
+        side = self._edge_near(e.x, e.y) if self.edge_mode else None
+        self.canvas.config(cursor={"left": "sb_h_double_arrow", "right": "sb_h_double_arrow",
+                                   "top": "sb_v_double_arrow", "bottom": "sb_v_double_arrow"}.get(side, "crosshair"))
+        if side:
+            self.readout.configure(text="drag the %s edge: out adds tiles of sea, in cuts them off" % side)
+            return
         self.canvas.delete("ghost")
         self._outline(e.x, e.y)
         if self.cmap and not self._cdrag:

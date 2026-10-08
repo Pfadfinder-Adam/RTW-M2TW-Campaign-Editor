@@ -1,8 +1,8 @@
 name: release
 
 # Started by hand (Actions -> release -> Run workflow, or the API): tests, builds the
-# Windows exe and publishes a GitHub release v<version> with it, the notes from
-# CHANGELOG.md. The tag is made by GitHub on the commit the run is for.
+# Windows exe and publishes a GitHub release v<version> with it, the notes = this version's part of
+# CHANGELOG.md only. The tag is made by GitHub on the commit the run is for.
 on:
   workflow_dispatch:
     inputs:
@@ -24,6 +24,32 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # the release's text = only this version's part of CHANGELOG.md (under its "## X.Y.Z" heading, up to the next
+      # "## "); the earlier versions stay in CHANGELOG.md. No such part = no release.
+      - name: notes of this release only
+        shell: python
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          import os, re, sys
+          version = os.environ["VERSION"].strip().lstrip("v")
+          head = re.compile(r"## \[?v?%s\]?(\s|$)" % re.escape(version))
+          notes, inside = [], False
+          with open("CHANGELOG.md", encoding="utf-8") as fh:
+              for line in fh.read().splitlines():
+                  if line.startswith("## "):
+                      if inside:
+                          break
+                      inside = bool(head.match(line))
+                      continue
+                  if inside:
+                      notes.append(line)
+          text = "\n".join(notes).strip()
+          if not text:
+              sys.exit("CHANGELOG.md has no '## %s' part with text - write it first" % version)
+          with open("release_notes.md", "w", encoding="utf-8") as fh:
+              fh.write(text + "\n")
+          print(text)
       - run: python -m unittest discover -s tests
       - run: pip install pyinstaller pillow certifi
       # the game manifests go inside the exe: Scan tells game, REX and mod files apart
@@ -42,5 +68,5 @@ jobs:
           tag_name: v${{ inputs.version }}
           target_commitish: ${{ github.sha }}
           name: RTW & M2TW Campaign Editor ${{ inputs.version }}
-          body_path: CHANGELOG.md
+          body_path: release_notes.md
           files: dist/RTW-M2TW-Campaign-Editor.exe

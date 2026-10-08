@@ -381,23 +381,40 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
 
 
 def weapons_texture_problems(mod):
-    """[(model, [factions])] of descr_model_battle.txt (Medieval II): a faction with a 'texture' line but no
-    'texture_attachments' line in a model that has them (vanilla: none of 690)."""
+    """[(model, [factions])] (Medieval II): a faction with a texture but no weapons / shields texture in a model that
+    gives them - descr_model_battle.txt's 'texture_attachments' lines (vanilla: none missing of 690) and the
+    battle_models.modeldb's own (vanilla: none of 701)."""
+    text, db = weapons_texture_gaps(mod)
+    return text + [(n, fs) for n, fs in db if n.lower() not in {t.lower() for t, _ in text}]
+
+
+def weapons_texture_gaps(mod):
+    """([(model, [factions])] of descr_model_battle.txt, the same of the battle_models.modeldb the mod reads)."""
     from .models import TEXT_FILE
     from .packs import _block_lines, _values, type_blocks
+    text, db = [], []
     path = mod.find(TEXT_FILE)
-    if not path:
-        return []
-    f = mod.load(path)
-    out = []
-    for name, span in type_blocks(f).items():
-        lines = _block_lines(f, span)
-        att = {v[0] for v in _values(lines, "texture_attachments") if len(v) > 1}
-        if att:
-            gone = sorted({v[0] for v in _values(lines, "texture") if len(v) > 1 and "/" not in v[0]} - att)
-            if gone:
-                out.append((name, gone))
-    return out
+    if path:
+        f = mod.load(path)
+        for name, span in type_blocks(f).items():
+            lines = _block_lines(f, span)
+            att = {v[0] for v in _values(lines, "texture_attachments") if len(v) > 1}
+            if att:
+                gone = sorted({v[0] for v in _values(lines, "texture") if len(v) > 1 and "/" not in v[0]} - att)
+                if gone:
+                    text.append((name, gone))
+    try:
+        from . import modeldb as MDB
+        src, _ = MDB.find(mod)
+        models = MDB.load(src).models if src else []
+    except Exception:
+        models = []
+    for m in models:
+        att = {r[0] for r in m.attach}
+        gone = sorted({r[0] for r in m.textures} - att) if att else []
+        if gone:
+            db.append((m.name, gone))
+    return text, db
 
 
 def _modeldb_report(mod):

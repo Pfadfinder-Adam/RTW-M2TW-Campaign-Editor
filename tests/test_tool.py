@@ -779,6 +779,34 @@ building smith
             write(dmb, fh.read() + "type\tsword\ntexture\talpha, s.texture\ntexture\tbeta, s.texture\n"
                                     "texture_attachments\talpha, k.texture, kn.texture\n")
         self.assertEqual(weapons_texture_problems(ModData(self.root)), [("sword", ["beta"])])
+        # a faction that HAS its texture line but no weapons texture line (an older version, a hand edit): asked for
+        # again (a recolour, a unit given), it gets the missing line - before, only a faction without any line did
+        lines, added = packs._owner_textures(["type sword", "texture alpha, s.texture", "texture beta, s.texture",
+                                              "texture_attachments alpha, k.texture, kn.texture"], ["beta"])
+        self.assertEqual(added, ["beta"])
+        self.assertIn("texture_attachments beta, k.texture, kn.texture", lines)
+        self.assertEqual(sum(l.startswith("texture beta") for l in lines), 1)
+        # Load offers to put it right (Medieval II), every model at once; Restore byte for byte
+        from campaign_editor import gamefix
+        import campaign_editor.packs as P
+        kind = P.game_kind
+        P.game_kind = lambda m: "medieval2"
+        try:
+            mod = ModData(self.root)
+            found = [p for p in gamefix.problems(mod) if p["id"] == "weapons_texture"]
+            self.assertEqual(len(found), 1)
+            self.assertIn("bare skeletons", found[0]["why"])
+            with open(dmb, "rb") as fh:
+                old = fh.read()
+            plan = gamefix.fix_plan(mod, found)
+            bdir = plan.apply()
+            self.assertEqual(weapons_texture_problems(ModData(self.root)), [])
+            self.assertEqual([p for p in gamefix.problems(ModData(self.root)) if p["id"] == "weapons_texture"], [])
+            restore(ModData(self.root), bdir)
+            with open(dmb, "rb") as fh:
+                self.assertEqual(fh.read(), old)
+        finally:
+            P.game_kind = kind
 
     def test_scan_sorts_mentions(self):
         write(os.path.join(self.root, "script", "war.nut"), "local f = \"alpha\";\nlocal alphabet = 1;\n")
@@ -3427,6 +3455,27 @@ building smith
         from campaign_editor import upscale as U
         self.assertEqual(U.move_script_line("  reveal_tile 10, 20", values, xy)[0], "  reveal_tile 12, 21")
 
+    def test_map_size_names_what_stands_on_the_part_cut_off(self):
+        """Map size: the places are read once and any cut checked against them at once (the window checks each
+        dragged edge and rings them red on the map) - a town and the character in it on the columns cut off are
+        named with their tiles, nothing when tiles are only added; the refusal of a cut says the same."""
+        from campaign_editor import mapresize as MR
+        from campaign_editor.plan import Plan
+        mod = ModData(self.root)
+        img = mod.region_map("test")
+        found = MR.places(mod, "test")
+        self.assertEqual(MR.blocking(found, img.width, img.height), [])
+        self.assertEqual(MR.blocking(found, img.width, img.height, left=3, right=1, top=2, bottom=5), [])
+        cut = MR.blocking(found, img.width, img.height, left=-2)            # columns 0 and 1 go
+        self.assertEqual([xy for _, xy in cut], [(1, 1), (1, 1)])
+        self.assertIn("the town of A_R (1, 1)", cut[0][0])
+        self.assertIn("Aaron Alphid", cut[1][0])
+        self.assertEqual(MR.off_map(mod, "test", -2, 0, 0, 0), [label for label, _ in cut])
+        self.assertEqual(MR.blocking(found, img.width, img.height, right=-1), [])      # column 3 holds nothing
+        with self.assertRaises(ValueError) as said:
+            MR.plan_resize(Plan(mod, "map", "map_size", {}), "test", left=-2)
+        self.assertIn("the town of A_R", str(said.exception))
+
     def test_check_problems_worst_first_with_the_place_to_fix(self):
         """Check mod files groups its problems by when the game meets them - would not start, campaign loads with
         something lost, battle, play - and names the place each is put right in."""
@@ -5745,6 +5794,54 @@ building smith
         self.assertEqual(own.getpixel((5, 0)), (90, 90, 90))                       # the grey kept
         restore(mod, backups(mod)[0])
         self.assertFalse(os.path.exists(os.path.join(tex, "spearman_beta.tga")))
+
+    def test_recolour_never_writes_over_the_original_texture(self):
+        """The rule (a tester, again after 'bare skeletons' in battle): the ORIGINAL texture is copied, the COPY
+        recoloured and put in the mod, the faction's line pointed at it - also for a texture only the faction wears,
+        when it is the game's own file (it was recoloured in place in the game's data). A copy made for the faction
+        before (in a mod folder, named after it, worn by no one else) is recoloured where it is."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import recolour as RC, models as M
+        d = os.path.join(self.root, "data")
+        tex = os.path.join(d, "models_unit", "textures")
+        os.makedirs(tex, exist_ok=True)
+        Image.new("RGB", (32, 32), (200, 20, 20)).save(os.path.join(tex, "spearman_alpha.tga"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\tspearman\nskeleton\tfs_spearman\nindiv_range\t40\n"
+              "texture\t\talpha, data/models_unit/textures/spearman_alpha.tga\n"
+              "model_flexi\tdata/models_unit/spearman.cas, max\n\n")
+        write(os.path.join(self.root, "RomeTW.exe"), "")  # a game folder: its data is the game's own, all original
+        mod = ModData(self.root)
+        items = [t for t in RC.targets(mod, "test", "alpha") if t["group"] == "unit textures"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["own_tex"]["ref"], "data/models_unit/textures/spearman_alpha_own.tga")
+        with open(os.path.join(tex, "spearman_alpha.tga"), "rb") as fh:
+            before = fh.read()
+        plan = Plan(mod, "recolour", "alpha", {})
+        RC.plan_recolour(plan, items, ((200, 20, 20), None), ((20, 160, 40), None), "alpha")
+        plan.apply()
+        with open(os.path.join(tex, "spearman_alpha.tga"), "rb") as fh:
+            self.assertEqual(fh.read(), before)                                    # the original as it was
+        self.assertEqual(M.catalogue(ModData(self.root))["spearman"].textures["alpha"],
+                         "data/models_unit/textures/spearman_alpha_own.tga")
+        own = Image.open(os.path.join(tex, "spearman_alpha_own.tga")).convert("RGB").getpixel((5, 5))
+        self.assertGreater(own[1], own[0])                                         # the copy is green
+        # recoloured again: the copy is its own now - written where it is, no third file
+        mod = ModData(self.root)
+        items = [t for t in RC.targets(mod, "test", "alpha") if t["group"] == "unit textures"]
+        import campaign_editor.recolour as RCm
+        keep = RCm._games_file
+        RCm._games_file = lambda m, p: os.path.basename(p) == "spearman_alpha.tga"
+        try:
+            items = [t for t in RC.targets(mod, "test", "alpha") if t["group"] == "unit textures"]
+        finally:
+            RCm._games_file = keep
+        self.assertIsNone(items[0]["own_tex"])
+        restore(mod, backups(mod)[0])
+        self.assertFalse(os.path.exists(os.path.join(tex, "spearman_alpha_own.tga")))
 
     def test_recolour_copies_of_two_textures_never_share_a_name(self):
         """Two battle textures that differ only in the wearer's word (EN_Peasant_Padded_england / _france) both became
@@ -9215,6 +9312,95 @@ building shrine
         restore(mod, backups(mod)[0])
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
+
+    def test_a_religion_made_from_nothing(self):
+        """A religion from nothing (Medieval II): no other religion's symbol needed - its own drawn (the first letter on
+        a disc of its colour, in the size of the game's pips) - and temples of its own made from nothing: a chain
+        temple_<name> whose 'religion' line names it, with the mod's usual temple numbers less another religion's own
+        lines; Restore byte for byte."""
+        from campaign_editor import religions as RL
+        from campaign_editor import editors as E
+        from campaign_editor.regionedit import apply_opts
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_religions.txt"), "religions\n{\n\tcatholic\n}\n\n"
+              "religion catholic\n{\n\tpip_path\tui/pips/pip_catholic.tga\n}\n")
+        write(os.path.join(d, "text", "religions.txt"), "\u00ac\n{catholic}Catholic\n", utf16=True)
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building temple_catholic\n{\n    religion catholic\n    levels chapel \n    {\n"
+              "        chapel requires factions { alpha, }\n        {\n            capability\n            {\n"
+              "                religion_level bonus 2\n                pope_disapproval 1\n"
+              "                happiness_bonus bonus 1\n            }\n            construction  2 \n"
+              "            cost  800 \n            settlement_min town\n            upgrades\n            {\n"
+              "            }\n        }\n    }\n    plugins \n    {\n    }\n}\n")
+        try:
+            from PIL import Image
+            os.makedirs(os.path.join(d, "ui", "pips"), exist_ok=True)
+            Image.new("RGBA", (16, 16), (200, 200, 0, 255)).save(os.path.join(d, "ui", "pips", "pip_catholic.tga"))
+        except ImportError:
+            return                                   # drawing the symbol needs Pillow (problems() says so)
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        spec = {"name": "sunfaith", "shown": "Sun Faith", "pip_from": "", "picture": None, "draw": (230, 120, 20),
+                "factions": ["alpha"], "temples": 2, "builders": ["alpha"]}
+        self.assertEqual(RL.problems(mod, spec), [])
+        self.assertTrue(RL.problems(mod, dict(spec, draw=None)))              # nothing to copy, nothing drawn
+        nums = RL.temple_numbers(mod, "sunfaith", 2)
+        self.assertNotIn("pope_disapproval", nums[0]["effects"])           # one religion's own line
+        self.assertEqual(nums[0]["effects"].get("religion_level bonus"), "2")
+        plan = Plan(mod, None, "religion")
+        import campaign_editor.limits as L
+        kind = L.game_kind
+        L.game_kind = lambda m: "medieval2"
+        try:
+            apply_opts(plan, "test", {"new_religions": [spec]})
+            plan.apply()
+        finally:
+            L.game_kind = kind
+        mod = ModData(self.root)
+        self.assertIn("sunfaith", RL.names(mod))
+        self.assertEqual(E.tga_info(os.path.join(d, "ui", "pips", "pip_sunfaith.tga"))[:2], (16, 16))
+        f = mod.load(mod.file("edb"))
+        blk = next(b for b in E.building_blocks(f) if b[0] == "temple_sunfaith")
+        text = "\n".join(f.text(i) for i in range(blk[1], blk[2]))
+        self.assertIn("religion sunfaith", text)
+        self.assertIn("levels sunfaith_shrine sunfaith_temple", text)
+        self.assertNotIn("pope_disapproval", text)
+        restore(mod, backups(mod)[0])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups",
+                                                                                  "CampaignEditor_backups"))}
+        self.assertEqual(before, after)
+
+    def test_drawn_belief_pips_keep_the_symbol_whole_with_the_games_arrow_on_it(self):
+        """Barbarian Invasion's order / unrest pips of a religion from nothing: the symbol at its FULL size (it was
+        drawn smaller to leave room - a tester: 'do not make the symbol smaller, draw the arrow on it') and the game's
+        own arrow - taken from a belief's plain pip and its _positive / _negative one - laid over it pixel for pixel."""
+        try:
+            from PIL import Image
+        except ImportError:
+            return
+        from campaign_editor import religions as RL
+        plain = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+        for y in range(16):
+            plain.putpixel((7, y), (150, 100, 60, 255))                      # a thin cross-like symbol
+        marked = plain.copy()
+        for y in range(9, 15):
+            marked.putpixel((13, y), (40, 170, 40, 255))                     # the game's green arrow
+        pa, pm = os.path.join(self.root, "plain.tga"), os.path.join(self.root, "marked.tga")
+        plain.save(pa)
+        marked.save(pm)
+        mark = RL.arrow_mark(pa, pm)
+        self.assertIsNotNone(mark)
+        self.assertEqual(mark.getpixel((13, 10)), (40, 170, 40, 255))
+        self.assertEqual(mark.getpixel((7, 10))[3], 0)                       # the symbol itself is not the mark
+        self.assertIsNone(RL.arrow_mark(pa, pa))                             # nothing differs: no mark
+        im = RL.symbol_picture((16, 16), "Sun", (230, 120, 20), "RGBA", "up", mark)
+        self.assertEqual(im.getpixel((13, 10)), (40, 170, 40, 255))          # the arrow lies on the symbol
+        self.assertGreater(im.getpixel((14, 7))[3], 200)                     # the disc reaches the right side
+        bare = RL.symbol_picture((16, 16), "Sun", (230, 120, 20), "RGBA", None)
+        self.assertEqual(bare.getpixel((3, 8)), im.getpixel((3, 8)))         # the same size as the plain pip's
+        drawn = RL.symbol_picture((16, 16), "Sun", (230, 120, 20), "RGBA", "down")   # no game pip: drawn there
+        r, g, b, a = drawn.getpixel((13, 11))
+        self.assertTrue(r > g + 60 and a > 200, drawn.getpixel((13, 11)))
 
     def test_give_unit_joins_one_recruit_line_per_level(self):
         """A level that recruits a unit by two lines for different factions (vanilla: Arab Cavalry for moors and

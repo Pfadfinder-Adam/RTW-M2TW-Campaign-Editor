@@ -231,6 +231,57 @@ def rename_in_files(app, region, parent):
     ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
 
 
+def merge_regions(app, keep, gone, parent=None):
+    """Merge regions: the region `gone` and its town go from the campaign in every file that ties them, all its land
+    (and port) becomes `keep`'s - regiondelete.delete(..., into=keep); `keep` stays as it is. Asked in a few words
+    (what goes, what is said about it), written with a backup, the mod read again; the map stays in its Merge mode
+    for the next pair."""
+    from .plan import Plan
+    from .mapedit import ports
+    from .regiondelete import delete, problems
+    parent = parent or app
+    campaign = app.v_campaign.get()
+    regions = app.mod.regions(campaign)
+    for r in (keep, gone):
+        if r not in regions:
+            messagebox.showerror(APP, "%s is not in the campaign's files yet - Apply the changes first." % r,
+                                 parent=parent)
+            return None
+    if app.pending_parts():
+        messagebox.showerror(APP, "Other changes wait for Apply. Apply (or undo) them first - a merged region would "
+                                  "leave them pointing at nothing.", parent=parent)
+        return None
+    town = lambda r: regions[r].get("settlement") or r
+    errors, warns = problems(app.mod, campaign, gone, keep)
+    if errors:
+        messagebox.showerror(APP, "%s cannot join %s:\n\n- %s" % (gone, keep, "\n- ".join(errors)), parent=parent)
+        return None
+    p = Plan(app.mod, "merge", "%s_into_%s" % (gone, keep))
+    try:
+        delete(p, campaign, gone, keep)
+    except ValueError as e:
+        messagebox.showerror(APP, str(e), parent=parent)
+        return None
+    text = ("%s (%s) joins %s (%s): its town and region go from every file that ties them (%d file(s)), all its "
+            "land%s becomes %s's; %s stays as it is.%s\n\nA backup is made first - Undo this write or Tools > "
+            "Restore gives everything back." % (
+                gone, town(gone), keep, town(keep), len(p.changed_files()),
+                " and its port" if gone in ports(app.mod, campaign) else "", keep, keep,
+                ("\n\nGood to know:\n- " + "\n- ".join(warns[:5])) if warns else ""))
+    if not ask(APP, text, parent=parent, yes="Merge them", no="Not now"):
+        return None
+    bdir = p.apply()
+    log.write("Merged %s into %s (backup %s)\n%s" % (gone, keep, bdir, p.report()))
+    app.load()
+    app.status.set("%s joined %s (backup %s) - %d region(s) now. Start the game: it builds map.rwm again." % (
+        gone, keep, bdir, len(app.mod.regions(campaign))))
+    views = [getattr(app, "map_view", None)] + [getattr(e, "view", None) for e in getattr(app, "editors", {}).values()]
+    for view in views:
+        if view is not None and hasattr(view, "merged"):
+            view.merged()
+    return bdir
+
+
 def delete_town(app, region, parent):
     """Delete a town together with its region (regiondelete: its land to a neighbour, every file that ties them),
     asked first with the whole list of changes, written with a backup, the mod read again. The Map's right click

@@ -486,10 +486,30 @@ def targets(mod, campaign, faction):
         if theirs and theirs != colours.get(w) and _games_own(mod, rel, got[1]):     # read only when they differ
             return theirs, w
         return colours.get(w), w
+    users = {}                                           # a texture FILE -> every faction wearing it, any model
     for info in cat.values():
         for r in (info.textures.get(faction), getattr(info, "attach", {}).get(faction)):
             if r:
                 taken.setdefault(r.replace("\\", "/").lower(), None)
+        for rows in (info.textures, getattr(info, "attach", {})):
+            for f, r in rows.items():
+                if r:
+                    users.setdefault(r.replace("\\", "/").lower(), set()).add(f)
+
+    def needs_copy(rel, got, wearers):
+        """The original stays as it is: a texture is recoloured in place only when it is a copy made for the faction
+        already (by the clone or an earlier recolour) - in the mod, named after the faction, worn by no other faction
+        on any model, and no file of the game's install (the game's own data, Barbarian Invasion's, a Kingdoms
+        campaign's, or an unchanged copy of one in the mod). Anything else gets a copy of its own and the faction's
+        line points at it (the original, its copy, the copy recoloured, the copy in the mod)."""
+        if wearers or users.get(rel.replace("\\", "/").lower(), set()) - {faction}:
+            return True
+        if not os.path.normcase(os.path.abspath(got[1])).startswith(os.path.normcase(os.path.abspath(mod.data))):
+            return True
+        from .models import own_texture_ref
+        if own_texture_ref(rel, faction) != rel.replace("\\", "/"):
+            return True                                  # not named after the faction: someone's original
+        return _games_file(mod, got[1]) or _games_own(mod, rel, got[1])
     for name, info in sorted(cat.items()):
         rel = info.textures.get(faction)
         if not rel:
@@ -498,11 +518,11 @@ def targets(mod, campaign, faction):
         wearers = sorted(f for f, r in info.textures.items() if f != faction and r.lower() == rel.lower())
         if not got:
             continue
-        inside = os.path.normcase(os.path.abspath(got[1])).startswith(os.path.normcase(os.path.abspath(mod.data)))
-        # worn by other factions too (a clone wears its template's), or only in the game's data: the faction gets a
-        # copy of its own in the mod and its model line points at it - the others' and the game's stay as they are
+        # worn by other factions too (a clone wears its template's), only in the game's data, or the game's own
+        # file: the faction gets a copy of its own in the mod and its model line points at it - the others' and the
+        # game's stay as they are
         own_tex = _own_texture(mod, info, faction, rel, got, wearers, "texture", taken) \
-            if wearers or not inside else None
+            if needs_copy(rel, got, wearers) else None
         others = [(on_disk(mod, r)[1], colours[f]) for f, r in info.textures.items()
                   if f != faction and f in colours and r.lower() != rel.lower() and on_disk(mod, r)]
         label = "battle texture of %s" % info.name + (" - gets a copy of its own" if own_tex else "")
@@ -531,9 +551,8 @@ def targets(mod, campaign, faction):
         if not got:
             continue
         wearers = sorted(f for f, r in info.attach.items() if f != faction and r.lower() == rel.lower())
-        inside = os.path.normcase(os.path.abspath(got[1])).startswith(os.path.normcase(os.path.abspath(mod.data)))
         own_tex = _own_texture(mod, info, faction, rel, got, wearers, "attach", taken) \
-            if wearers or not inside else None
+            if needs_copy(rel, got, wearers) else None
         others = [(on_disk(mod, r)[1], colours[f]) for f, r in info.attach.items()
                   if f != faction and f in colours and r.lower() != rel.lower() and on_disk(mod, r)]
         label = "weapons and shields of %s" % info.name + (" - gets a copy of its own" if own_tex else "")
@@ -650,6 +669,32 @@ def _games_own(mod, rel, path):
         return False
 
 
+def _games_file(mod, path):
+    """True when the file is one of the game's install: in the game's own folders (data, bi/data, alexander/data, the
+    Kingdoms campaigns' mods/<campaign>), or - by the game's manifests - a file of the install as it came that a mod
+    folder copied unchanged."""
+    from .newmod import game_of
+    from .scan import Origins
+    try:
+        origins = Origins.for_mod(mod)
+        game = game_of(mod.data)
+        size = os.path.getsize(path)
+    except Exception:
+        return False
+    if not game:
+        return False
+    rel = os.path.relpath(path, game).replace("\\", "/")
+    low = rel.lower()
+    from .gamefix import KINGDOMS_BATS
+    if low.startswith(("data/", "bi/data/", "alexander/data/")) or \
+            any(low.startswith("mods/%s/" % k) for k in KINGDOMS_BATS):
+        return True                                    # the game's own folders (unpacked files are in no manifest)
+    if origins is None:
+        return False
+    keys = [rel, "data/" + os.path.relpath(path, mod.data).replace("\\", "/")]
+    return any(not k.startswith("..") and origins.classify(k, path, size) in ("game", "rex") for k in keys)
+
+
 def _game_colours(mod):
     """faction_colours of the game's own data folder (a mod in mods/ keeps only what it changes), or {}."""
     from .campaignrules import game_data
@@ -718,6 +763,9 @@ def _own_texture(mod, info, faction, rel, got, wearers, kind, taken=None):
     from .clone import disk_tail
     from .models import own_texture_ref
     ref = own_texture_ref(rel, faction, wearers)
+    if ref.lower() == rel.replace("\\", "/").lower():  # named after the faction already (its own original): the
+        stem, dot, ext = ref.rpartition("/")[2].partition(".")     # copy is <name>_own beside it
+        ref = ref[:len(ref) - len(ref.rpartition("/")[2])] + stem + "_own" + dot + ext
     if taken is not None:
         src = os.path.normcase(os.path.abspath(got[1]))
         holds = lambda r: r.lower() in taken and taken[r.lower()] != src

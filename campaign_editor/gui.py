@@ -61,6 +61,9 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
                                   and the Map editor's Terrain tab (ground, rivers, climates, heights)
   a building / garrisons in many  Many towns... (top row), or the Map:
     towns at once ............... Select, drag a box (left button), right click
+  join two regions into one ..... Map: Merge regions - the one that stays, then the one that goes
+  grow or cut the map ........... Map: Change size... under the map - drag its edges out (sea)
+                                  or in (cut); Bigger map (x3)... for 3 x the tiles
   change a unit or a building ... Unit editor / Building editor
   make a new unit or building ... Unit / Building editor: New unit (New building) step by step...
   change a unit's look .......... Unit editor: Battle model - View in 3D..., Replace model...
@@ -2088,11 +2091,17 @@ class App(tk.Tk):
         from .gui_mercenaries import open_mercenaries
         return open_mercenaries(self, region=region, new_from=new_from)
 
-    def map_size_window(self):
+    def merge_regions(self, keep, gone):
+        """Merge regions (the map's switch): `gone` goes with its town from every file and all its land becomes
+        `keep`'s (regiondelete, as Delete this town with its region... with the land going to `keep`)."""
+        from .gui_settlements import merge_regions
+        return merge_regions(self, keep, gone)
+
+    def map_size_window(self, view=None):
         """Change size... under the map: tiles added at an edge (deep sea) or cut off, everything on the map moved
-        with it (gui_mapsize, mapresize)."""
+        with it (gui_mapsize, mapresize); the edges are dragged on that map (view; the main window's by default)."""
         from .gui_mapsize import open_map_size
-        return open_map_size(self)
+        return open_map_size(self, view=view)
 
     def upscale_map(self):
         """Bigger map (x3)... (top row): one window - what happens, the heights, its progress, a backup, and the old
@@ -2884,8 +2893,13 @@ class App(tk.Tk):
         w.title("New religion")
         w.transient(self)
         frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
-        v = {k: tk.StringVar() for k in ("name", "shown", "pip_from", "picture")}
+        v = {k: tk.StringVar() for k in ("name", "shown", "pip_from", "picture", "symbol", "temples")}
         v["pip_from"].set(have[0])
+        v["symbol"].set("draw")                    # from nothing: the editor draws it (no other religion's look)
+        v["temples"].set("3")
+        golden = (len(have) + len(self.new_religions)) * 137.508 % 360       # each new one its own colour
+        import colorsys
+        colour = [tuple(int(c * 255) for c in colorsys.hsv_to_rgb(golden / 360, 0.75, 0.8))]
         from .limits import engine_of, lifted
         count = ("%d religions in this mod (%s beside the game: no limit)" % (len(have), engine_of(self.mod)[:-4])
                  if lifted(self.mod, "religions") else
@@ -2893,7 +2907,7 @@ class App(tk.Tk):
         about = ("Barbarian Invasion: %d beliefs in this mod%s. A new one is written to descr_beliefs.txt, its three "
                  "pips (ui/pips: the order and unrest pips copied, the level pip your picture) and its texts "
                  "(expanded_bi.txt). A town follows it through the buildings that carry it (religious_belief) - "
-                 "give a temple chain its name in the Building editor." % (
+                 "Temples of its own below makes them." % (
                      len(have), ", %d waiting" % len(self.new_religions) if self.new_religions else "")) if bi else (
             "%s%s. A new one is written to descr_religions.txt, its lookup, text/religions.txt, its symbol (ui/pips) "
             "and every region's religions line (0 %% until you set its share with Religions...); map.rwm is "
@@ -2905,17 +2919,44 @@ class App(tk.Tk):
         ttk.Label(frm, text="e.g. judaism", foreground="#666").grid(row=1, column=2, sticky="w")
         ttk.Label(frm, text="Name players see").grid(row=2, column=0, sticky="w")
         ttk.Entry(frm, textvariable=v["shown"], width=24).grid(row=2, column=1, sticky="w")
-        ttk.Label(frm, text="Symbol like").grid(row=3, column=0, sticky="w")
-        ttk.Combobox(frm, textvariable=v["pip_from"], values=have, state="readonly", width=21).grid(
-            row=3, column=1, sticky="w")
-        ttk.Label(frm, text="its size; its picture unless you pick one", foreground="#666").grid(
-            row=3, column=2, sticky="w")
-        ttk.Label(frm, text="Own symbol").grid(row=4, column=0, sticky="w")
-        pic = ttk.Frame(frm)
-        pic.grid(row=4, column=1, columnspan=2, sticky="w")
-        ttk.Entry(pic, textvariable=v["picture"], width=30).pack(side="left")
-        ttk.Button(pic, text="Browse...", command=lambda: v["picture"].set(filedialog.askopenfilename(
-            parent=w, title="The religion's symbol (PNG, JPG, TGA...)") or v["picture"].get())).pack(side="left", padx=4)
+        ttk.Label(frm, text="Its symbol").grid(row=3, column=0, sticky="nw")
+        sym = ttk.Frame(frm)
+        sym.grid(row=3, column=1, columnspan=2, sticky="w")
+        drawn = ttk.Frame(sym)
+        drawn.pack(anchor="w")
+        ttk.Radiobutton(drawn, text="drawn: its first letter on a disc of",
+                        variable=v["symbol"], value="draw").pack(side="left")
+        swatch = ttk.Button(drawn, text="colour")
+        swatch.pack(side="left", padx=4)
+
+        def pick_colour():
+            from tkinter import colorchooser
+            got = colorchooser.askcolor(color="#%02x%02x%02x" % colour[0], parent=w)
+            if got and got[0]:
+                colour[0] = tuple(int(c) for c in got[0])
+                theme.paint(swatch, colour[0])
+                v["symbol"].set("draw")
+        swatch.configure(command=pick_colour)
+        theme.paint(swatch, colour[0])
+        like = ttk.Frame(sym)
+        like.pack(anchor="w")
+        ttk.Radiobutton(like, text="a copy of the symbol of", variable=v["symbol"], value="copy").pack(side="left")
+        ttk.Combobox(like, textvariable=v["pip_from"], values=have, state="readonly", width=21).pack(
+            side="left", padx=4)
+        pic = ttk.Frame(sym)
+        pic.pack(anchor="w")
+        ttk.Radiobutton(pic, text="a picture of mine", variable=v["symbol"], value="picture").pack(side="left")
+        ttk.Entry(pic, textvariable=v["picture"], width=20).pack(side="left", padx=4)
+        ttk.Button(pic, text="Browse...", command=lambda: (v["picture"].set(filedialog.askopenfilename(
+            parent=w, title="The religion's symbol (PNG, JPG, TGA...)") or v["picture"].get()),
+            v["symbol"].set("picture" if v["picture"].get() else v["symbol"].get()))).pack(side="left")
+        ttk.Label(frm, text="Temples of its own").grid(row=4, column=0, sticky="w", pady=(6, 0))
+        tem = ttk.Frame(frm)
+        tem.grid(row=4, column=1, columnspan=2, sticky="w", pady=(6, 0))
+        ttk.Spinbox(tem, from_=0, to=9, textvariable=v["temples"], width=4).pack(side="left", anchor="n")
+        ttk.Label(tem, foreground="#666", wraplength=420, justify="left", text="levels, made from nothing with the "
+                  "usual numbers of this mod's temples (0 = none); built by the factions picked below, all if "
+                  "none").pack(side="left", padx=4)
         ttk.Label(frm, text="Factions that follow it").grid(row=5, column=0, sticky="nw", pady=(6, 0))
         lb = tk.Listbox(frm, selectmode="multiple", height=8, exportselection=False)
         facs = [n for n, _ in self.mod.factions() if n != "slave"]
@@ -2923,16 +2964,24 @@ class App(tk.Tk):
         for n in facs:
             lb.insert("end", faction_label(n, self.shown_names().get(n)))
         lb.grid(row=5, column=1, sticky="w", pady=(6, 0))
-        if bi:                                       # BI's factions have no religion line
-            lb.configure(state="disabled")
-        ttk.Label(frm, text="Barbarian Invasion: a faction follows a belief by its buildings" if bi else
-                  "optional - none keeps every faction's religion", foreground="#666").grid(
-            row=5, column=2, sticky="nw", pady=(6, 0))
+        if bi:                                       # there the list says who builds its temples
+            lb.configure(state="normal")
+        ttk.Label(frm, text="Barbarian Invasion: a faction follows a belief by its buildings - the ones picked build "
+                  "its temples" if bi else "optional - none keeps every faction's religion; they build its temples",
+                  foreground="#666", wraplength=220, justify="left").grid(row=5, column=2, sticky="nw", pady=(6, 0))
 
         def ok():
+            how = v["symbol"].get()
+            picked = [facs[i] for i in lb.curselection()]
+            try:
+                temples = max(0, int(v["temples"].get() or 0))
+            except ValueError:
+                temples = 0
             spec = {"name": v["name"].get().strip().lower(), "shown": v["shown"].get().strip(),
-                    "pip_from": v["pip_from"].get(), "picture": v["picture"].get().strip() or None,
-                    "factions": [facs[i] for i in lb.curselection()]}
+                    "pip_from": v["pip_from"].get(),
+                    "picture": (v["picture"].get().strip() or None) if how == "picture" else None,
+                    "draw": colour[0] if how == "draw" else None,
+                    "factions": [] if bi else picked, "temples": temples, "builders": picked or ["all"]}
             why = RL.problems(self.mod, spec, self.new_religions)
             if why:
                 messagebox.showerror(APP, "\n".join(why), parent=w)

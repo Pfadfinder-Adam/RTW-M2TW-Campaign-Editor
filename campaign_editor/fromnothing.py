@@ -741,10 +741,12 @@ def building_problems(mod, kind, chain, levels, builders, numbers=None, units=()
     return out
 
 
-def building_lines(mod, chain, levels, builders, numbers, castle=False, units=(), indent="    ", f=None):
+def building_lines(mod, chain, levels, builders, numbers, castle=False, units=(), indent="    ", f=None,
+                   religion=None):
     """The new chain's block, every line written new in both games' form: levels [(code name, ...)], numbers per
     level {'settlement_min', 'cost', 'construction', 'material', 'effects': {head: number}}, units [(type, from
-    level index)] - recruit lines from that level on (Medieval II: recruit_pool)."""
+    level index)] - recruit lines from that level on (Medieval II: recruit_pool); religion: Medieval II's
+    'religion <name>' line of a temple chain (the religion its religion_level spreads)."""
     from .roster import recruit_dialect
     f = f or mod.load(mod.file("edb"))
     m2 = _game(mod) == "medieval2"
@@ -752,7 +754,8 @@ def building_lines(mod, chain, levels, builders, numbers, castle=False, units=()
     names = [lv[0] for lv in levels]
     i1, i2, i3, i4 = (indent * k for k in (1, 2, 3, 4))
     who = "requires factions { %s}" % "".join("%s, " % b for b in builders)
-    out = ["building %s" % chain, "{", "%slevels %s " % (i1, " ".join(names)), "%s{" % i1]
+    out = ["building %s" % chain, "{"] + (["%sreligion %s" % (i1, religion)] if religion and m2 else []) + \
+        ["%slevels %s " % (i1, " ".join(names)), "%s{" % i1]
     for k, name in enumerate(names):
         lv = numbers[k]
         out.append("%s%s%s %s " % (i2, name, (" castle" if castle else " city") if m2 else "", who))
@@ -851,7 +854,7 @@ def building_pictures(plan, chain, levels, builders, pictures=None):
 
 
 def new_building(plan, kind, chain, levels, builders, numbers, castle=False, units=(), chain_name="",
-                 pictures=None):
+                 pictures=None, religion=None):
     """Write a building chain made from nothing: its block after the mod's last chain in export_descr_buildings.txt,
     the texts players read (export_buildings.txt: {chain}_name, each level's name, description and short
     description - every copy of the table the game may read), each level's pictures (building_pictures). levels
@@ -867,7 +870,7 @@ def new_building(plan, kind, chain, levels, builders, numbers, castle=False, uni
     if blocks:
         t = f.text(blocks[-1][1] + 2)                 # the 'levels' line of the last chain
         indent = t[:len(t) - len(t.lstrip())] or indent
-    lines = building_lines(mod, chain, levels, builders, numbers, castle, units, indent, f)
+    lines = building_lines(mod, chain, levels, builders, numbers, castle, units, indent, f, religion)
     at = blocks[-1][2] if blocks else len(f.raw)
     f.insert(at, [""] + lines)
     plan.note(f, "building %s made from nothing: %s, %d level(s) %s (the usual numbers of the mod's %s buildings, "

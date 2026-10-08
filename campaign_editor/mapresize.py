@@ -128,22 +128,16 @@ def _texts(path):
         return fh.read().splitlines()
 
 
-def off_map(mod, campaign, left, bottom, right, top):
-    """What a cut would leave off the map: ['file line N: what (x, y)']. Towns and ports from map_regions."""
-    img = read_tga(mod.campaign_file(campaign, "map_regions.tga"))
-    W, H = img.width + left + right, img.height + bottom + top
-    xy, values = _mover(left, bottom)
+def places(mod, campaign):
+    """Every place on the map a cut must not leave off it: [('file line N: what (x, y)', (x, y))] - towns and ports
+    from map_regions, characters / resources / forts in descr_strat.txt, events' places, the campaign scripts' tiles.
+    Read once; blocking() then checks any cut against it at once (the Map size window, as the edges are dragged)."""
     out = []
-
-    def gone(p):
-        return not (0 <= p[0] < W and 0 <= p[1] < H)
     for region, t in sorted(mod.city_tiles(campaign).items()):
-        if gone(xy(*t)):
-            out.append("map_regions.tga: the town of %s (%d, %d)" % (region, t[0], t[1]))
+        out.append(("map_regions.tga: the town of %s (%d, %d)" % (region, t[0], t[1]), tuple(t)))
     from .mapedit import ports
     for region, t in sorted(ports(mod, campaign).items()):
-        if gone(xy(*t)):
-            out.append("map_regions.tga: the port of %s (%d, %d)" % (region, t[0], t[1]))
+        out.append(("map_regions.tga: the port of %s (%d, %d)" % (region, t[0], t[1]), tuple(t)))
     camp = os.path.dirname(mod.campaign_file(campaign, "descr_strat.txt"))
     files = [(mod.campaign_file(campaign, "descr_strat.txt"), (U.RE_CHAR_XY, U.RE_RESOURCE, U.RE_FORT))]
     ev = os.path.join(camp, "descr_events.txt")
@@ -152,20 +146,30 @@ def off_map(mod, campaign, left, bottom, right, top):
     for path, patterns in files:
         for i, text in enumerate(_texts(path)):
             seen = []
-            U._move_line(text, patterns, lambda x, y: seen.append((x, y)) or xy(x, y))
+            U._move_line(text, patterns, lambda x, y: seen.append((x, y)) or (x, y))
             for p in seen:
-                if gone(xy(*p)):
-                    out.append("%s line %d: %s (%d, %d)" % (os.path.basename(path), i + 1,
-                                                             text.split(";")[0].strip()[:60], p[0], p[1]))
+                out.append(("%s line %d: %s (%d, %d)" % (os.path.basename(path), i + 1,
+                                                          text.split(";")[0].strip()[:60], p[0], p[1]), p))
+    _, same = _mover(0, 0)
     for path in U.script_files(mod, campaign):
         for i, text in enumerate(_texts(path)):
             code = text.split(";")[0]
-            new = _tiles_in(text, values) + [xy(int(m.group(2)), int(m.group(4))) for m in U.RE_CHAR_XY.finditer(code)]
-            for p in new:
-                if gone(p):
-                    out.append("%s line %d: %s (%d, %d)" % (os.path.basename(path), i + 1, code.strip()[:60],
-                                                             p[0] - left, p[1] - bottom))
+            for p in _tiles_in(text, same) + [(int(m.group(2)), int(m.group(4))) for m in U.RE_CHAR_XY.finditer(code)]:
+                out.append(("%s line %d: %s (%d, %d)" % (os.path.basename(path), i + 1, code.strip()[:60], p[0], p[1]),
+                            p))
     return out
+
+
+def blocking(found, width, height, left=0, bottom=0, right=0, top=0):
+    """Of places() those a cut would leave off a width x height map: [(label, (x, y))], (x, y) as now."""
+    W, H = width + left + right, height + bottom + top
+    return [(label, p) for label, p in found if not (0 <= p[0] + left < W and 0 <= p[1] + bottom < H)]
+
+
+def off_map(mod, campaign, left, bottom, right, top):
+    """What a cut would leave off the map: ['file line N: what (x, y)']. Towns and ports from map_regions."""
+    img = read_tga(mod.campaign_file(campaign, "map_regions.tga"))
+    return [label for label, _ in blocking(places(mod, campaign), img.width, img.height, left, bottom, right, top)]
 
 
 def _tiles_in(text, values):

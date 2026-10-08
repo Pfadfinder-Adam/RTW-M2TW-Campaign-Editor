@@ -546,8 +546,10 @@ def _modeldb(plan, manifest, renamed, owners):
 
 def _owner_textures(lines, facs):
     """A model block's lines with a 'texture <faction>, ...' line for every faction that has none, copied from
-    the mercenaries' line (else the first faction's): (lines, [factions added]). A model with no per-faction
-    texture lines is left as it is (one texture for everyone)."""
+    the mercenaries' line (else the first faction's), and - Medieval II - a 'texture_attachments' line for every one
+    of them that has a texture line but no such line (a faction given its texture by an older version, a hand edit
+    or another tool: its men looked like bare skeletons in battle): (lines, [factions given a line]). A model with
+    no per-faction texture lines is left as it is (one texture for everyone)."""
     tex = [(i, l) for i, l in enumerate(lines) if strip_comment(l).split(None, 1)[:1] == ["texture"]
            and len(_values([l], "texture")[0]) > 1 and "/" not in _values([l], "texture")[0][0]]
     if not tex:
@@ -568,10 +570,12 @@ def _owner_textures(lines, facs):
         have_a = {_values([l], "texture_attachments")[0][0] for _, l in att}
         src_a = next((l for _, l in att if _values([l], "texture_attachments")[0][0] == src_f), att[0][1])
         f_a = _values([src_a], "texture_attachments")[0][0]
+        bare = [f for f in facs if f not in have_a and (f in have or f in add)]
         more = [re.sub(r"(texture_attachments\s+)%s(\s*,)" % re.escape(f_a),
-                       lambda m, f=f: m.group(1) + f + m.group(2), src_a, count=1) for f in add if f not in have_a]
+                       lambda m, f=f: m.group(1) + f + m.group(2), src_a, count=1) for f in bare]
         at = att[-1][0] + 1
         lines = lines[:at] + more + lines[at:]
+        add = add + [f for f in bare if f not in add]
     return lines, add
 
 
