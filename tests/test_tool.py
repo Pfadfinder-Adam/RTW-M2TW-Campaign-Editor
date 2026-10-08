@@ -3583,33 +3583,27 @@ building smith
         restore(mod, bdir)
         self.assertEqual(tree_hash(self.root), before)
 
-    def test_map_cut_leaves_a_wasteland_under_an_engine(self):
-        """A cut that takes a town off but leaves part of its land (report #154): without an engine the land left joins
-        the neighbour; under REX / M2EX the region stays on it as a wasteland - nobody's, no neighbour grows."""
+    def test_map_cut_deletes_the_region_of_a_town_it_takes(self):
+        """A cut that takes a town off but leaves part of its land: the region goes from the files and its land left is
+        left as it is, given to no one, with or without an engine (the user, 2026-10-08: 'just delete the region, the
+        modder fills the gap himself')."""
         from campaign_editor import mapresize as MR
         from campaign_editor.plan import Plan, restore
         self._three_towns()
-        mod = ModData(self.root)
-        plan = Plan(mod, "map", "map_size", {})
-        MR.plan_resize(plan, "test", right=-1, clear=True)
-        bdir = plan.apply()
-        mod = ModData(self.root)
-        self.assertNotIn("C_R", mod.regions("test"))                # its land left joined B_R
-        restore(mod, bdir)
-        write(os.path.join(self.root, "data", "descr_ex.txt"), "max_factions 21\n")
-        before = tree_hash(self.root)
-        mod = ModData(self.root)
-        plan = Plan(mod, "map", "map_size", {})
-        MR.plan_resize(plan, "test", right=-1, clear=True)
-        bdir = plan.apply()
-        mod = ModData(self.root)
-        self.assertTrue(mod.regions("test")["C_R"]["wasteland"])
-        self.assertNotIn("C_R", mod.city_tiles("test"))
-        self.assertEqual(sum(1 for _ in mod.region_map("test").find((0, 255, 0))), 4)    # its column left, its own
-        self.assertNotIn("C_R", Strat(mod.load(mod.campaign_file("test", "descr_strat.txt"))).owners())
-        restore(mod, bdir)
-        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_")},
-                         {k: v for k, v in before.items() if not k.startswith("CampaignEditor_")})
+        for engine in (False, True):
+            if engine:
+                write(os.path.join(self.root, "data", "descr_ex.txt"), "max_factions 21\n")
+            before = tree_hash(self.root)
+            mod = ModData(self.root)
+            plan = Plan(mod, "map", "map_size", {})
+            MR.plan_resize(plan, "test", right=-1, clear=True)
+            bdir = plan.apply()
+            mod = ModData(self.root)
+            self.assertNotIn("C_R", mod.regions("test"))            # the region is gone from the files
+            self.assertEqual(sum(1 for _ in mod.region_map("test").find((0, 255, 0))), 4)    # its land left as it is
+            restore(mod, bdir)
+            self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_")},
+                             {k: v for k, v in before.items() if not k.startswith("CampaignEditor_")})
 
     def test_check_problems_worst_first_with_the_place_to_fix(self):
         """Check mod files groups its problems by when the game meets them - would not start, campaign loads with

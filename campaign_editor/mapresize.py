@@ -216,8 +216,7 @@ def cut_words(hit, waste=False):
         towns = sorted({w for _, _, w in by["town"]})
         lines.append("%d town(s) with their regions: %s%s - %s" % (
             len(towns), ", ".join(towns[:8]), " ..." if len(towns) > 8 else "",
-            "the land of theirs that stays stays their regions', as wastelands nobody owns (REX / M2EX)" if waste
-            else "the land of theirs that stays joins the neighbour region that stays"))
+            "the land of theirs that stays is left with no region - paint it into a region yourself (Edit regions)"))
     if by.get("port"):
         ports_ = sorted({w for _, _, w in by["port"]} - {w for _, _, w in by.get("town", [])})
         if ports_:
@@ -269,9 +268,9 @@ def lost_factions(mod, campaign, left=0, bottom=0, right=0, top=0, owners=None):
 
 def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0, factions_out=()):
     """Everything standing on the part a cut takes off, taken off first, in the plan (the modder said yes to it):
-    - a town: its region goes everywhere (regiondelete); the part of its land that stays becomes a wasteland of that
-      region under REX / M2EX (nobody's, report #154), else joins the neighbour that stays it shares the longest
-      border with; a region all on the cut part goes with its land;
+    - a town: its region goes from every file (regiondelete), with or without an engine (the user, 2026-10-08: 'just
+      delete the region, the modder fills the gap himself'); the part of its land that stays is left as it is, with
+      no region (a warning names it - Edit regions paints it), never given to a neighbour, never a wasteland;
     - the port of a region that stays: taken off with the harbour buildings (mapedit._remove_ports);
     - a member of a faction's family (a named character: the leader, the heir, the family tree) moves into the
       nearest town his faction keeps; every other character - armies, agents, fleets, rebels - goes with his army;
@@ -281,8 +280,7 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0, factions_out=())
     - a faction left without a town, when it is in factions_out (the modder said yes): taken out of the campaign
       with all its people (factionout.take_out - it stays in the mod).
     Refused before anything is written (ValueError, every reason in plain words): a faction left without a town, a
-    region a campaign script or a faction's rising names (regiondelete.refusals), a town whose land partly stays but
-    touches no region that stays (without an engine), a family member whose faction keeps no town to go to, a faction's rising placed on
+    region a campaign script or a faction's rising names (regiondelete.refusals), a family member whose faction keeps no town to go to, a faction's rising placed on
     the cut part. Returns the warnings."""
     from . import regiondelete as RD
     from .edit import _has_army, map_changes
@@ -313,21 +311,15 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0, factions_out=())
             errors.append("%s would keep no town (%s on the part cut off) - a faction without a town dies as the "
                           "campaign loads and the game crashes; give it a town that stays first" % (
                               fac, ", ".join(r for r in cut if owners.get(r) == fac)))
-    into, waste = {}, set()
-    can_waste = RD.can_waste(mod)
+    # a town cut = its region goes from the files, and that is all (the user, 2026-10-08: 'just delete the region and
+    # let it be as it is - the modder fills the gap himself'): the land of it that stays is given to no one and not
+    # made a wasteland - it keeps its colour with no region, said in the warnings, painted by the modder (Edit regions)
+    into, waste, leftover = {}, set(), {}
     for r in cut:
         stays = [p for p in RD.region_pixels(mod, campaign, r) if not gone(p)]
-        if stays and can_waste:                     # the region stays on the land left, nobody's
-            into[r] = (None, True)
-            waste.add(r)
-            continue
-        near = [n for n, _ in RD.neighbours(mod, campaign, r) if n not in cut]
-        if stays and not near:
-            errors.append("the town of %s is on the part cut off, but %d tile(s) of its land stay and touch no "
-                          "region that stays - move its town onto the land that stays, or cut all of it" % (
-                              r, len(stays)))
-            continue
-        into[r] = (near[0] if stays else None, bool(stays))
+        into[r] = (None, False)
+        if stays:
+            leftover[r] = stays
     errs, said = RD.refusals(mod, campaign, cut, last_town=False)     # the files read once for every town cut
     errors += errs
     ev_path = path_of(mod, campaign)
@@ -365,6 +357,15 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0, factions_out=())
     if errors:
         raise ValueError("the cut cannot take these off the map:\n- " + "\n- ".join(dict.fromkeys(errors)))
     RD._delete(plan, campaign, into, waste)          # every file read once for all the towns cut
+    if leftover:
+        regs = mod.regions(campaign)
+        harbour = ports(mod, campaign)
+        port_px = {tuple(harbour[r]): regs[r]["colour"] for r in leftover if harbour.get(r) and not gone(harbour[r])}
+        if port_px:                                  # a port of a deleted region left white: plain land of its colour
+            plan.patch_tga(mod.campaign_file(campaign, "map_regions.tga"), port_px)
+        warn.append("land with no region left on the map (its town was cut): %s - paint it into a region (Map > Edit "
+                    "regions) before you start the game" % ", ".join(
+                        "%s %d tile(s)" % (r, len(px)) for r, px in sorted(leftover.items())))
     for w in said:
         plan.warn(None, w)
     lost_ports = [r for r, t in ports(mod, campaign).items() if r not in cut and town_gone(t)]
