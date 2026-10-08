@@ -67,7 +67,8 @@ class NewRecordWizard(StepWindow):
         cults = sorted({c for _, c in self.mod.factions() if c})
         self.choices = facs + [c for c in cults if c not in facs] + ["all"]
         self.v = {"src": tk.StringVar(value=start if start in self.names else (self.names[0] if self.names else "")),
-                  "mode": tk.StringVar(value="copy"), "kind": tk.StringVar(value="")}
+                  "mode": tk.StringVar(value="copy"), "kind": tk.StringVar(value=""),
+                  "levels": tk.StringVar(value="3"), "castle": tk.BooleanVar(value=False)}
         self.state = {}                      # what each step holds, filled when the source is chosen
         self.finish_text = "Add to the %s editor" % self.kind
         self.steps_copy = ([("Start from", self.s_start), ("Names and texts", self.s_names),
@@ -77,11 +78,17 @@ class NewRecordWizard(StepWindow):
                            [("Start from", self.s_start), ("Names and texts", self.s_names),
                             ("Who may build it", self.s_who), ("Pictures", self.s_pictures),
                             ("Check and add", self.s_check)])
-        # a unit made from nothing (fromnothing.py): the modder says what it is, every line is written new
-        self.steps_nothing = [("Start from", self.s_start), ("Names and texts", self.s_names),
-                              ("Who has it", self.s_who), ("Numbers and look", self.s_nothing_values),
-                              ("Where it is recruited", self.s_where), ("Pictures", self.s_pictures),
-                              ("Check and add", self.s_check)]
+        # a unit or a building chain made from nothing (fromnothing.py): the modder says what it is, every line is
+        # written new
+        self.steps_nothing = ([("Start from", self.s_start), ("Names and texts", self.s_names),
+                               ("Who has it", self.s_who), ("Numbers and look", self.s_nothing_values),
+                               ("Where it is recruited", self.s_where), ("Pictures", self.s_pictures),
+                               ("Check and add", self.s_check)]
+                              if self.kind == "unit" else
+                              [("Start from", self.s_start), ("Names and texts", self.s_bnames),
+                               ("Who may build it", self.s_who), ("Levels", self.s_blevels),
+                               ("Units it trains", self.s_bunits), ("Pictures", self.s_bpictures),
+                               ("Check and add", self.s_check)])
         self.make_steps(self.steps_copy)
         self.load_source()
         self.show()
@@ -142,12 +149,14 @@ class NewRecordWizard(StepWindow):
 
     # ---- moving between steps (gui_util.StepWindow) ----
     def nothing(self):
-        return self.kind == "unit" and self.v["mode"].get() == "nothing"
+        return self.v["mode"].get() == "nothing"
 
     def load_nothing(self):
         """A unit made from nothing: what is usual for the kind in this mod, the names left to the modder."""
         from . import fromnothing as FN
         kind = self.v["kind"].get()
+        if self.kind == "building":
+            return self.load_nothing_building(kind)
         if self.state.get("mode") == "nothing" and self.state.get("kind") == kind:
             return True
         try:
@@ -164,12 +173,39 @@ class NewRecordWizard(StepWindow):
                       "levels": None, "pictures": {"card": "", "info": ""}}
         return True
 
+    def load_nothing_building(self, kind):
+        """A building chain made from nothing: each level's usual numbers for the kind in this mod, the names left
+        to the modder; asked again when the kind, the levels' count or city / castle change."""
+        from . import buildings as B
+        from . import fromnothing as FN
+        try:
+            n = max(1, min(FN.MAX_LEVELS, int(self.v["levels"].get())))
+        except ValueError:
+            n = 3
+        castle = bool(self.v["castle"].get())
+        st = self.state
+        if st.get("mode") == "nothing" and (st.get("kind"), len(st.get("levels") or ()), st.get("castle")) == (
+                kind, n, castle):
+            return True
+        try:
+            typ = FN.building_typical(self.mod, kind, n)
+        except ValueError as e:
+            from tkinter import messagebox
+            messagebox.showerror("New building", str(e), parent=self)
+            return False
+        builders = B.cultures_of(self.mod, [f for f, _ in self.mod.factions() if f != "slave"])
+        self.state = {"mode": "nothing", "kind": kind, "typ": typ, "castle": castle, "chain": "",
+                      "chain_name": "", "levels": [("", "", "", "")] * n, "factions": builders,
+                      "keep_factions": False, "numbers": FN.typical_numbers(typ), "effects": list(typ["effects"]),
+                      "units": [], "pictures": {}}
+        return True
+
     def leaving(self, step):
         if step == 0:
             if self.nothing():
                 if not self.v["kind"].get():
                     from tkinter import messagebox
-                    messagebox.showinfo("New unit", "Pick what kind of unit it is.", parent=self)
+                    messagebox.showinfo("New " + self.kind, "Pick what kind of %s it is." % self.kind, parent=self)
                     return False
                 if not self.load_nothing():
                     return False
@@ -183,18 +219,18 @@ class NewRecordWizard(StepWindow):
 
     # ---- step 1 ----
     def s_start(self):
-        if self.kind == "unit":
-            top = ttk.Frame(self.body)
-            top.pack(fill="x", pady=(0, 6))
-            def mode():
-                self.steps = self.steps_nothing if self.nothing() else self.steps_copy
-                self.show()
-            ttk.Radiobutton(top, text="A copy of a unit of the mod", variable=self.v["mode"], value="copy",
-                            command=mode).pack(side="left")
-            ttk.Radiobutton(top, text="Nothing - I say what it is, the editor writes every line",
-                            variable=self.v["mode"], value="nothing", command=mode).pack(side="left", padx=12)
-            if self.nothing():
-                return self._start_nothing()
+        top = ttk.Frame(self.body)
+        top.pack(fill="x", pady=(0, 6))
+
+        def mode():
+            self.steps = self.steps_nothing if self.nothing() else self.steps_copy
+            self.show()
+        ttk.Radiobutton(top, text="A copy of a %s of the mod" % ("unit" if self.kind == "unit" else "building chain"),
+                        variable=self.v["mode"], value="copy", command=mode).pack(side="left")
+        ttk.Radiobutton(top, text="Nothing - I say what it is, the editor writes every line",
+                        variable=self.v["mode"], value="nothing", command=mode).pack(side="left", padx=12)
+        if self.nothing():
+            return self._start_nothing() if self.kind == "unit" else self._start_nothing_building()
         self._note("A new %s starts as a copy of one that already works in the game - pick the one closest to "
                    "what you want. Every later step changes the copy; the %s you pick stays as it is." % (
                        self.kind, self.kind))
@@ -348,6 +384,11 @@ class NewRecordWizard(StepWindow):
                            "Each of their factions gets its cards and a texture on its model." if self.nothing() else
                            "Picked from the copy; new owners get a copy of its cards."))
             picked = st["owners"]
+        elif self.nothing():
+            self._note("Who may build it (the factions list of every level's requires line): factions, cultures or "
+                       "'all'. Each culture of theirs gets the level's pictures and the units it trains let in only "
+                       "those of them who may own the unit.")
+            picked = st["factions"]
         else:
             self._note("Who may build every level of the new chain (the factions list of each level's requires "
                        "line): factions or cultures. 'Keep each level's own list' copies them as they are.")
@@ -488,6 +529,268 @@ class NewRecordWizard(StepWindow):
             st["levels"] = [levels[i][:2] for i in lb.curselection()]
         self._collect = collect
 
+    # ---- a building made from nothing (fromnothing.new_building) ----
+    def _start_nothing_building(self):
+        from . import fromnothing as FN
+        self._note("Say what the building is for and how many levels it has. The editor writes every line of the "
+                   "new chain itself; each level's town size, cost and turns start at what is usual for such "
+                   "buildings in this mod, with the effects most of them have - you change them, add other effects "
+                   "and the units it trains in the next steps.")
+        box = ttk.Frame(self.body)
+        box.pack(fill="x", anchor="w")
+        f = self.f
+        for key, words in FN.BUILDING_KINDS:
+            n = len(FN.chains_of_kind(self.mod, key, f))
+            rb = ttk.Radiobutton(box, variable=self.v["kind"], value=key, text="%s   (%d in this mod)" % (words, n))
+            rb.pack(anchor="w", pady=2)
+            if not n:
+                rb.state(["disabled"])
+        row = ttk.Frame(self.body)
+        row.pack(fill="x", anchor="w", pady=(8, 0))
+        ttk.Label(row, text="Levels").pack(side="left")
+        ttk.Spinbox(row, from_=1, to=FN.MAX_LEVELS, textvariable=self.v["levels"], width=4).pack(
+            side="left", padx=(4, 16))
+        if FN._game(self.mod) == "medieval2":
+            ttk.Radiobutton(row, text="for cities", variable=self.v["castle"], value=False).pack(side="left")
+            ttk.Radiobutton(row, text="for castles", variable=self.v["castle"], value=True).pack(
+                side="left", padx=(8, 0))
+
+    def s_bnames(self):
+        st = self.state
+        self._note("The chain's name in the files (one word) and the name players see over all its levels; each "
+                   "level's name in the files, the name players see and its texts. A level left without a name in "
+                   "the files gets the chain's name and its number.")
+        g = ttk.Frame(self.body)
+        g.pack(fill="x")
+        v_chain, v_shown = tk.StringVar(value=st["chain"]), tk.StringVar(value=st["chain_name"])
+        ttk.Label(g, text="Chain name in the files").grid(row=0, column=0, sticky="w")
+        ttk.Entry(g, textvariable=v_chain, width=30).grid(row=0, column=1, sticky="w", padx=6)
+        ttk.Label(g, text="Name players see").grid(row=0, column=2, sticky="w")
+        ttk.Entry(g, textvariable=v_shown, width=30).grid(row=0, column=3, sticky="w", padx=6)
+        if st["kind"] == "temple":
+            ttk.Label(self.body, foreground="#666", wraplength=780, justify="left", text=(
+                "A chain whose name starts with temple_ is a temple to the game: a town holds one temple at a "
+                "time.")).pack(anchor="w", pady=(4, 0))
+        from .gui_util import ScrollFrame
+        sf = ScrollFrame(self.body)
+        sf.pack(fill="both", expand=True, pady=6)
+        inner = sf.inner
+        rows = []
+        for r, (name, shown, short, desc) in enumerate(st["levels"]):
+            ttk.Label(inner, text="level %d" % (r + 1), font=("", 9, "bold")).grid(row=3 * r, column=0, sticky="w",
+                                                                                  pady=(6, 0))
+            vn, vs_, vsh = tk.StringVar(value=name), tk.StringVar(value=shown), tk.StringVar(value=short)
+            ttk.Label(inner, text="name in the files").grid(row=3 * r + 1, column=0, sticky="w")
+            ttk.Entry(inner, textvariable=vn, width=24).grid(row=3 * r + 1, column=1, sticky="w", padx=6)
+            ttk.Label(inner, text="name players see").grid(row=3 * r + 1, column=2, sticky="w")
+            ttk.Entry(inner, textvariable=vs_, width=24).grid(row=3 * r + 1, column=3, sticky="w", padx=6)
+            ttk.Label(inner, text="short text").grid(row=3 * r + 2, column=0, sticky="w")
+            ttk.Entry(inner, textvariable=vsh, width=40).grid(row=3 * r + 2, column=1, columnspan=2, sticky="we",
+                                                              padx=6)
+            t = tk.Text(inner, height=2, width=40, wrap="word")
+            t.insert("1.0", desc)
+            t.grid(row=3 * r + 2, column=3, sticky="we", pady=2)
+            rows.append((vn, vs_, vsh, t))
+
+        def collect():
+            st["chain"] = v_chain.get().strip()
+            st["chain_name"] = v_shown.get().strip()
+            st["levels"] = []
+            for k, (vn, vs_, vsh, t) in enumerate(rows):
+                code = vn.get().strip() or ("%s_%d" % (st["chain"], k + 1) if st["chain"] else "")
+                st["levels"].append((code, vs_.get().strip(), vsh.get().strip(), t.get("1.0", "end").strip()))
+        self._collect = collect
+
+    def s_blevels(self):
+        from . import fromnothing as FN
+        st = self.state
+        typ = st["typ"]
+        self._note("Every level side by side. The town it needs, its cost and turns start at what is usual for such "
+                   "buildings in this mod (the middle of its %d); each effect row is what the level gives. Add an "
+                   "effect from the list (everything this mod's buildings do); right click an effect's name to take "
+                   "it out." % typ["count"])
+        cat = typ["catalogue"]
+        game = FN._game(self.mod)
+        grid = ttk.Frame(self.body)
+        grid.pack(fill="x")
+        names = [n or "level %d" % (k + 1) for k, (n, *_) in enumerate(st["levels"])]
+        vs = {}
+
+        def draw():
+            for w in grid.winfo_children():
+                w.destroy()
+            vs.clear()
+            for k, n in enumerate(names):
+                ttk.Label(grid, text=n, font=("", 9, "bold")).grid(row=0, column=k + 1, sticky="w", padx=4)
+            rows = [("settlement_min", "Town it needs", FN.SETTLEMENT_LEVELS), ("cost", "Cost", None),
+                    ("construction", "Turns to build", None)]
+            if game == "medieval2":
+                rows.append(("material", "Built of", ("wooden", "stone")))
+            r = 1
+            for key, label, choices in rows:
+                ttk.Label(grid, text=label).grid(row=r, column=0, sticky="w", pady=1)
+                for k in range(len(names)):
+                    v = vs[(key, k)] = tk.StringVar(value=st["numbers"][k].get(key) or "")
+                    if choices:
+                        ttk.Combobox(grid, textvariable=v, values=choices, state="readonly", width=11).grid(
+                            row=r, column=k + 1, sticky="w", padx=4)
+                    else:
+                        ttk.Entry(grid, textvariable=v, width=8).grid(row=r, column=k + 1, sticky="w", padx=4)
+                r += 1
+            for head in st["effects"]:
+                lbl = ttk.Label(grid, text=FN.effect_label(head), foreground="#1d4f91")
+                lbl.grid(row=r, column=0, sticky="w", pady=1)
+                lbl.bind("<Button-3>", lambda e, h=head: drop(h))       # the right button takes it out
+                for k in range(len(names)):
+                    v = vs[(head, k)] = tk.StringVar(value=st["numbers"][k]["effects"].get(head, ""))
+                    ttk.Entry(grid, textvariable=v, width=8).grid(row=r, column=k + 1, sticky="w", padx=4)
+                r += 1
+
+        def keep():
+            for (key, k), v in vs.items():
+                if key in ("settlement_min", "cost", "construction", "material"):
+                    st["numbers"][k][key] = v.get().strip()
+                else:
+                    st["numbers"][k]["effects"][key] = v.get().strip()
+
+        def drop(head):
+            keep()
+            st["effects"].remove(head)
+            for lv in st["numbers"]:
+                lv["effects"].pop(head, None)
+            draw()
+
+        add = ttk.Frame(self.body)
+        add.pack(fill="x", pady=(8, 0))
+        heads = sorted(cat, key=lambda h: -cat[h]["count"])
+        shown = ["%s  -  %s" % (h, FN.effect_label(h)) for h in heads]
+        v_add = tk.StringVar()
+        ttk.Label(add, text="Another effect").pack(side="left")
+        ttk.Combobox(add, textvariable=v_add, values=shown, state="readonly", width=70).pack(side="left", padx=4)
+
+        def plus():
+            if not v_add.get():
+                return
+            head = heads[shown.index(v_add.get())]
+            keep()
+            if head not in st["effects"]:
+                st["effects"].append(head)
+                mid = FN.nice(cat[head]["middle"])
+                for lv in st["numbers"]:
+                    lv["effects"].setdefault(head, mid)
+            draw()
+        ttk.Button(add, text="Add", command=plus).pack(side="left")
+        draw()
+        self._collect = keep
+
+    def s_bunits(self):
+        from . import fromnothing as FN
+        st = self.state
+        self._note("The units it trains: pick one on the left (left click) and it is trained from the level chosen "
+                   "above the list, at every level after it too; right click a unit on the right to take it out. "
+                   "Only units someone who builds it may own are offered (the game refuses a recruit line for a "
+                   "faction the unit's ownership leaves out).")
+        top = ttk.Frame(self.body)
+        top.pack(fill="x")
+        names = [n for n, *_ in st["levels"]]
+        v_from = tk.StringVar(value=names[0] if names else "")
+        ttk.Label(top, text="Trained from level").pack(side="left")
+        ttk.Combobox(top, textvariable=v_from, values=names, state="readonly", width=24).pack(side="left", padx=4)
+        ttk.Label(top, text="Find").pack(side="left", padx=(16, 0))
+        v_find = tk.StringVar()
+        ttk.Entry(top, textvariable=v_find, width=20).pack(side="left", padx=4)
+        box = ttk.Frame(self.body)
+        box.pack(fill="both", expand=True, pady=4)
+        units = FN.trainable_units(self.mod, st["factions"])
+        left = tk.Listbox(box, exportselection=False, width=40, height=16)
+        right = tk.Listbox(box, exportselection=False, width=46, height=16)
+        left.pack(side="left", fill="y")
+        ttk.Label(box, text="  >  ").pack(side="left")
+        right.pack(side="left", fill="y")
+        shown = []
+
+        def fill(*_):
+            q = v_find.get().strip().lower()
+            left.delete(0, "end")
+            shown[:] = [u for u in units if q in u.lower()]
+            for u in shown:
+                left.insert("end", u)
+            right.delete(0, "end")
+            for u, k in st["units"]:
+                right.insert("end", "%s  -  from %s" % (u, names[k] if k < len(names) else "level %d" % (k + 1)))
+
+        def pick(_e=None):
+            sel = left.curselection()
+            if not sel:
+                return
+            u = shown[sel[0]]
+            k = names.index(v_from.get()) if v_from.get() in names else 0
+            st["units"] = [x for x in st["units"] if x[0] != u] + [(u, k)]
+            fill()
+
+        def take():
+            sel = right.curselection()
+            if sel:
+                del st["units"][sel[0]]
+                fill()
+        left.bind("<<ListboxSelect>>", pick)
+        from .gui_util import right_click
+        right_click(right, take)
+        ttk.Label(self.body, text="right click: take it out", foreground="#777").pack(anchor="w")
+        v_find.trace_add("write", fill)
+        fill()
+        self._collect = lambda: None
+
+    def s_bpictures(self):
+        from .gui_preview import _photo
+        st = self.state
+        pics = st["pictures"]
+        self._note("Each level has two pictures: the one in the town and the wide one shown when it is built "
+                   "(Medieval II also a small one in the construction queue, made from the first). Without a "
+                   "picture of your own the editor draws a plain one with the level's initials, for every culture "
+                   "that builds it; a picture of yours (PNG, JPG, TGA...) is put in the size this mod's building "
+                   "pictures have.")
+        from .gui_util import ScrollFrame
+        sf = ScrollFrame(self.body)
+        sf.pack(fill="both", expand=True)
+        inner = sf.inner
+        keep = []
+
+        def draw():
+            for w in inner.winfo_children():
+                w.destroy()
+            keep.clear()
+            for r, (name, shown, *_) in enumerate(st["levels"]):
+                ttk.Label(inner, text=shown or name, font=("", 9, "bold")).grid(row=2 * r, column=0, columnspan=2,
+                                                                               sticky="w", pady=(8, 0))
+                title = shown or name
+                for c, (key, label, box) in enumerate((("pic", "in the town", (78, 62)),
+                                                       ("constructed", "when built", (190, 86)))):
+                    cell = ttk.Frame(inner)
+                    cell.grid(row=2 * r + 1, column=c, sticky="nw", padx=(0, 16))
+                    mine = pics.get(r, {}).get(key, "")
+                    ph = _photo(mine, box) if mine else _drawn(box, title)
+                    if ph:
+                        keep.append(ph)
+                        ttk.Label(cell, image=ph).pack(anchor="w")
+                    ttk.Label(cell, text="%s: %s" % (label, os.path.basename(mine) if mine else "a plain one drawn"),
+                              foreground="#2a7a1f" if mine else "#666").pack(anchor="w")
+                    row = ttk.Frame(cell)
+                    row.pack(anchor="w")
+
+                    def browse(r=r, key=key):
+                        p = filedialog.askopenfilename(parent=self, title="A picture", filetypes=[
+                            ("Pictures", "*.tga *.png *.jpg *.jpeg *.bmp *.dds"), ("All files", "*.*")])
+                        if p:
+                            pics.setdefault(r, {})[key] = p
+                            draw()
+                    ttk.Button(row, text="Picture...", command=browse).pack(side="left")
+                    if mine:
+                        ttk.Button(row, text="A plain one", command=lambda r=r, key=key: (
+                            pics[r].pop(key, None), draw())).pack(side="left", padx=4)
+        draw()
+        self._collect = lambda: None
+
     # ---- pictures ----
     def s_pictures(self):
         st = self.state
@@ -604,6 +907,14 @@ class NewRecordWizard(StepWindow):
     # ---- the last step ----
     def op(self):
         st = self.state
+        if self.nothing() and self.kind == "building":
+            levels = list(st["levels"])
+            return "", st["chain"], {
+                "nothing": st["kind"], "levels": levels, "factions": list(st["factions"]),
+                "numbers": [dict(lv, effects=dict(lv["effects"])) for lv in st["numbers"]],
+                "castle": st["castle"], "units": list(st["units"]), "chain_name": st["chain_name"],
+                "pictures": {levels[k][0]: dict(v) for k, v in st["pictures"].items() if k < len(levels) and
+                             any(v.values())}}
         if self.nothing():
             return "", st["type"], {"nothing": st["kind"], "dict": st["dict"], "owners": st["owners"],
                                     "model": st["model"], "mount": st["mount"], "values": dict(st["values"]),
@@ -630,6 +941,14 @@ class NewRecordWizard(StepWindow):
     def problems(self):
         st = self.state
         out = []
+        if self.nothing() and self.kind == "building":
+            from . import fromnothing as FN
+            _, chain, d = self.op()
+            out = FN.building_problems(self.mod, d["nothing"], chain, d["levels"], d["factions"], d["numbers"],
+                                       d["units"])
+            out += ["picture not found: %s" % v for pair in d["pictures"].values() for v in pair.values()
+                    if v and not os.path.isfile(v)]
+            return out
         if self.nothing():
             from . import fromnothing as FN
             out = FN.problems(self.mod, st["kind"], st["type"], st["dict"], st["owners"], st["model"],
@@ -663,7 +982,11 @@ class NewRecordWizard(StepWindow):
             from .plan import Plan
             try:
                 plan = Plan(ModData(self.mod.data), "new_" + self.kind, "new_" + self.kind, {})
-                if d.get("nothing"):
+                if d.get("nothing") and self.kind == "building":
+                    from . import fromnothing as FN
+                    FN.new_building(plan, d["nothing"], new, d["levels"], d["factions"], d["numbers"], d["castle"],
+                                    d["units"], d["chain_name"], d["pictures"])
+                elif d.get("nothing"):
                     from . import fromnothing as FN
                     FN.new_unit(plan, d["nothing"], new, d["dict"], d["owners"], d["model"], d["mount"],
                                 d["values"], d["texts"], d["pictures"], d["recruit"])
@@ -705,3 +1028,15 @@ class NewRecordWizard(StepWindow):
         self.ed.app.status.set("New %s %s %s waits in the %s editor - Preview, then Apply." % (
             self.kind, op[1], "made from nothing" if op[2].get("nothing") else "from %s" % op[0], self.kind))
         self.destroy()
+
+
+def _drawn(box, title):
+    """The plain picture the editor draws for a building level without one of the modder's (its initials), for
+    looking at in the window; None without Pillow."""
+    from . import fromnothing as FN
+    try:
+        from PIL import ImageTk
+    except ImportError:
+        return None
+    im = FN.card_picture(box, title)
+    return ImageTk.PhotoImage(im) if im is not None else None

@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **A building from nothing** (both games): New building step by step > Start from: *Nothing*. Say what it is for
+  (soldiers, money or food, order and learning, a temple, something else) and how many levels; each level's town
+  size, cost and turns start at what is usual for such buildings in this mod, with the effects most of them have.
+  All levels side by side: change any number, add any effect this mod's buildings use (in plain words), take one
+  out with the right button; the units it trains from a level on (only those its builders may own); names and
+  texts; pictures of your own or plain ones drawn for every culture that builds it (Medieval II: the small
+  construction-queue picture too).
 - **A unit from nothing** (both games): New unit step by step > Start from: *Nothing*. Say what it is (foot soldiers
   who fight hand to hand, with spears, or who shoot; horsemen who charge or who shoot) and the editor writes every
   line itself in the form this mod's units of that kind have, each number starting at what is usual for such a
@@ -42,6 +49,10 @@
   test mod.
 
 ### Fixed
+- A picture of your own given in New unit / New building step by step stopped the write (its size came with the
+  colour depth); it is put in at the size wanted now.
+- A copied building chain now has the chain's own name text (`{<chain>_name}` - Medieval II logged 'localised string
+  ... does not exist') and, in Medieval II, its small picture in the construction queue.
 - **Unit cards and building pictures are the ones the game shows**, in every window (the Unit editor's boxes, the
   hover cards, the garrison cards, the previews, Mercenaries): a unit's card comes from a faction that owns it (or
   the mercenaries' folder), never from `ui/units/construction` - the recruitment queue's small whole figures were

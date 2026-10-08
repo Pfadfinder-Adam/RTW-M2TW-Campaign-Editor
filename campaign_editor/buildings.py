@@ -117,16 +117,21 @@ def builder_cultures(mod, level):
     or no list), in descr_sm_factions.txt's order - the ones whose picture and texts the game shows for it. A
     culture that never builds it has only the game's stand-ins (an empty name, 'WARNING! This text should never
     appear on screen!'): the editors open a level on a builder's culture and say so of the others."""
+    return cultures_of(mod, level.factions() if level is not None else None)
+
+
+def cultures_of(mod, names):
+    """The cultures a factions list stands for (a faction's culture, a culture named, every one for 'all' or no
+    list), in descr_sm_factions.txt's order - builder_cultures for a level, and for a chain being made."""
     table = mod.factions()
     every = list(dict.fromkeys(c for _, c in table if c))
-    fs = level.factions() if level is not None else None
-    if fs is None or "all" in fs:
+    if names is None or "all" in names:
         return every
     out = []
     for n, c in table:
-        if c and (n in fs or c in fs) and c not in out:
+        if c and (n in names or c in names) and c not in out:
             out.append(c)
-    out += [x for x in fs if x in every and x not in out]
+    out += [x for x in names if x in every and x not in out]
     return out
 
 

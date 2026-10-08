@@ -7345,6 +7345,98 @@ building smith
         after = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
         self.assertEqual(after, before)
 
+    def test_a_building_made_from_nothing(self):
+        """A building chain from nothing: each level's usual numbers from the mod's chains of its kind (the middle
+        cost, the commonest town size, a deeper level grown from the one below), the effects at least half such
+        chains have, the modder's numbers and effects on top; units trained from the level picked, their recruit
+        lines letting in only builders who may own them; {chain}_name and every level's texts; pictures (the
+        modder's in the mod's size, else plain ones drawn) for the cultures that build it; taken names, an unknown
+        or unownable unit, a word for a number refused; Restore byte for byte. A copied chain gets its
+        {chain}_name too, and a picture given to New ... step by step is put in at the size wanted."""
+        from campaign_editor import fromnothing as FN
+        from campaign_editor import editors as E
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+
+        def level(name, cost, smin, nxt, fx):
+            return ("        %s requires factions { alpha, }\n        {\n            capability\n            {\n"
+                    "%s            }\n            construction  2 \n            cost  %d \n"
+                    "            settlement_min %s\n            upgrades\n            {\n%s            }\n        }\n" % (
+                        name, "".join("                %s\n" % x for x in fx), cost, smin,
+                        "                %s\n" % nxt if nxt else ""))
+
+        def chain(name, lvls):
+            return ("building %s\n{\n    levels %s \n    {\n%s    }\n    plugins \n    {\n    }\n}\n" % (
+                name, " ".join(x[0] for x in lvls), "".join(level(*x) for x in lvls)))
+        write(os.path.join(d, "export_descr_buildings.txt"), "hidden_resources rome\n\n" +
+              chain("market", [("trader", 400, "town", "bazaar", ["trade_base_income_bonus bonus 1"]),
+                               ("bazaar", 800, "large_town", "", ["trade_base_income_bonus bonus 2"])]) +
+              chain("hinterland_farms", [("fields", 600, "village", "", ["farming_level 1",
+                                                                         "trade_base_income_bonus bonus 3"])]) +
+              chain("hinterland_roads", [("paths", 500, "town", "", ["road_level 0"])]) +
+              chain("barracks", [("hall", 300, "town", "", ['recruit "foot one"  0  requires factions { alpha, }'])]))
+        write(os.path.join(d, "export_descr_unit.txt"),
+              "type             foot one\ndictionary       foot_one\ncategory         infantry\nclass            heavy\n"
+              "ownership        alpha\n\ntype             beta guard\ndictionary       beta_guard\n"
+              "category         infantry\nclass            heavy\nownership        beta\n")
+        write(os.path.join(d, "text", "export_buildings.txt"), "{trader}Trader\n{market_name}Market\n", utf16=True)
+        mod = ModData(self.root)
+        typ = FN.building_typical(mod, "economy", 3)
+        self.assertEqual(typ["count"], 3)                              # market, farms, roads
+        self.assertEqual([lv["cost"] for lv in typ["levels"]], ["500", "800", "1600"])
+        self.assertEqual([lv["settlement_min"] for lv in typ["levels"]], ["town", "large_town", "city"])
+        self.assertEqual(typ["effects"], {"trade_base_income_bonus bonus": ["1", "2", "2"]})   # 2 of 3 have it
+        with self.assertRaises(ValueError):
+            FN.building_typical(mod, "temple", 2)                       # no temple here to learn from
+        self.assertEqual(FN.trainable_units(mod, ["alpha"]), ["foot one"])
+        one = [("a_1", "A", "", "")]
+        self.assertTrue(FN.building_problems(mod, "economy", "new_market", [("trader", "X", "", "")], ["alpha"]))
+        self.assertTrue(FN.building_problems(mod, "economy", "market", one, ["alpha"]))      # the chain is taken
+        self.assertTrue(FN.building_problems(mod, "economy", "new_market", one, []))          # nobody builds it
+        self.assertTrue(FN.building_problems(mod, "economy", "new_market", one, ["alpha"],
+                                             units=[("beta guard", 0)]))                     # alpha may not own it
+        nums = FN.typical_numbers(typ)[:2]
+        self.assertTrue(FN.building_problems(mod, "economy", "new_market", one + [("a_2", "B", "", "")], ["alpha"],
+                                             [dict(nums[0], cost="lots"), nums[1]]))
+        nums[1]["effects"]["happiness_bonus bonus"] = "2"
+        pic = None
+        try:
+            from PIL import Image
+            pic = os.path.join(self.root, "stall.png")
+            Image.new("RGB", (200, 150), (200, 30, 30)).save(pic)
+        except ImportError:
+            pass
+        before = tree_hash(self.root)
+        plan = Plan(mod, "nothing", "nothing", {})
+        levels = [("stall", "Stall", "Sells things.", "A small stall."), ("shops", "Shops", "", "")]
+        out = FN.new_building(plan, "economy", "ce_trade", levels, ["alpha"], nums, units=[("foot one", 1)],
+                              chain_name="Trade", pictures={"stall": {"pic": pic}} if pic else None)
+        text = "\n".join(out)
+        self.assertIn("levels stall shops", text)
+        self.assertIn("stall requires factions { alpha, }", text)
+        self.assertIn("happiness_bonus bonus 2", text)
+        self.assertEqual(text.count('recruit "foot one"  0  requires factions { alpha, }'), 1)   # from 'shops' on
+        bdir = plan.apply()
+        m2 = ModData(self.root)
+        self.assertIn("ce_trade", [b[0] for b in E.building_blocks(m2.load(m2.file("edb")))])
+        with open(m2.text_file("export_buildings.txt"), "rb") as fh:
+            got = fh.read().decode("utf-16")
+        self.assertRegex(got, r"\{ce_trade_name\}\s*Trade")
+        self.assertRegex(got, r"\{stall_desc_short\}\s*Sells things\.")
+        if pic:
+            folder = os.path.join(d, "ui", "eastern", "buildings")      # alpha's culture
+            self.assertEqual(E.tga_info(os.path.join(folder, "#eastern_stall.tga"))[:2], (78, 62))
+            self.assertTrue(os.path.exists(os.path.join(folder, "#eastern_shops_constructed.tga")))   # drawn
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+        plan = Plan(ModData(self.root), "copy", "copy", {})
+        E.copy_building(plan, "market", "market_two", {"trader": "trader_two", "bazaar": "bazaar_two"})
+        bdir = plan.apply()
+        with open(ModData(self.root).text_file("export_buildings.txt"), "rb") as fh:
+            self.assertRegex(fh.read().decode("utf-16"), r"\{market_two_name\}\s*Market")
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_own_files_for_a_battle_model(self):
         """The modder's own texture (any picture, made the game's form) and own model file put in place of a unit's
         model: a model only this unit uses changes in place for a texture alone; a model shared with another unit

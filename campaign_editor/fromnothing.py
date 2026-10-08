@@ -1,4 +1,4 @@
-"""Units (and later buildings) made from nothing - not as a copy of one the modder picks.
+"""Units and buildings made from nothing - not as a copy of one the modder picks.
 
 The modder says WHAT it is (foot soldiers with swords, with spears, with bows / slings / javelins, horsemen
 with lances or with bows) and the editor writes every line of the new unit itself, in the form this mod's own
@@ -9,11 +9,18 @@ the mod's range beside it. The model is one of the mod's (or the modder's own fi
 are pictures of the modder's or plain ones the editor draws; it is recruited where the modder says.
 
 A siege crew, a ship, an elephant or a chariot needs an engine, a ship or an animal of its own - those are still
-made as a copy (New unit step by step, 'Start from a unit')."""
+made as a copy (New unit step by step, 'Start from a unit').
 
+A building chain the same way: the modder says what it is for (soldiers, money or food, order and learning, a
+temple, something else) and how many levels; each level's town size, cost and turns start at the middle of the mod's
+chains of that kind, with the effects most of them have; the modder changes them, adds any effect the mod's
+buildings use, the units it trains from a level on, its names, texts and pictures (plain ones drawn when none)."""
+
+import os
 import re
 import statistics
 
+from . import buildings as B
 from . import editors as E
 from .textio import strip_comment, tokens
 
@@ -386,10 +393,8 @@ def new_unit(plan, kind, new_type, new_dict, owners, model=None, mount=None, val
     plan.note(f, "unit %s made from nothing: %s (the usual numbers of the mod's %d such units, then yours)" % (
         new_type, KIND_WORDS[kind].split(" (")[0].lower(), typ["count"]))
     # texts players read
-    table = mod.text_file("export_units.txt")
-    if not table:
-        raise ValueError("no text/export_units.txt in this mod or the game's data - the unit's name has nowhere to go")
-    E.set_text_values(plan, table, {
+    from . import strtables
+    strtables.write_texts(plan, "export_units.txt", {
         new_dict: name, new_dict + "_descr": (texts.get("descr") or "").strip() or name,
         new_dict + "_descr_short": (texts.get("descr_short") or "").strip() or name})
     # the model wears a texture for each of its factions
@@ -464,5 +469,434 @@ def usual_levels(mod, kind, owners):
     return [k for k, _ in sorted(count.items(), key=lambda kv: -kv[1])[:2]]
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# Buildings made from nothing
+# ---------------------------------------------------------------------------------------------------------------
+# (key = editors.chain_group, what players would call it): the mod's chains of each kind give the usual numbers
+BUILDING_KINDS = [
+    ("military", "Trains soldiers (barracks, stables, ranges, ports)"),
+    ("economy", "Brings money or food (markets, farms, mines, roads, smiths)"),
+    ("culture and law", "Keeps order or brings learning (law, games, schools, halls)"),
+    ("temple", "A temple (a town holds one temple: its name in the files starts with temple_)"),
+    ("other", "Something else"),
+]
+BUILDING_KIND_WORDS = dict(BUILDING_KINDS)
+SETTLEMENT_LEVELS = B.SETTLEMENT_LEVELS
+MAX_LEVELS = 20                                 # the spin box's top; the original exes take 9 (building_problems)
+NOT_EFFECTS = ("recruit", "recruit_pool", "retrain", "retrain_pool")    # units are picked on their own
+SPECIAL_CHAINS = ("core_", "convert_to_", "guild_")                     # never what a new chain learns from
+LEVEL_KEYS = ("settlement_min", "cost", "construction", "material")
+
+
+def _game(mod):
+    from .limits import game_kind
+    return game_kind(mod)
+
+
+def _effect(code):
+    """(head, number) of a capability line - the words before its first number ('happiness_bonus bonus',
+    'agent spy', 'road_level') and that number - or None (a recruit line, braces, a line with no number)."""
+    w = code.split(" requires ")[0].split()
+    if not w or w[0] in ("{", "}") or w[0] in NOT_EFFECTS:
+        return None
+    head = []
+    for x in w:
+        if NUMBER.match(x):
+            return (" ".join(head), x) if head else None
+        head.append(x)
+    return None
+
+
+def chain_levels(mod, f=None):
+    """[(chain, group, [{'name', 'cost', 'construction', 'settlement_min', 'material', 'effects': [(head, n)]}])]
+    of every building chain of the mod."""
+    f = f or mod.load(mod.file("edb"))
+    out = []
+    for name, a, b in E.building_blocks(f):
+        levels = []
+        for lv in E.chain_tree(f, a, b)["levels"]:
+            info = {"name": lv["name"], "effects": []}
+            for i in range(lv["open"] + 1, lv["close"]):
+                w = strip_comment(f.text(i)).split()
+                if len(w) > 1 and w[0] in LEVEL_KEYS:
+                    info[w[0]] = w[1]
+            if lv["capability"]:
+                for i in range(lv["capability"][0] + 1, lv["capability"][1]):
+                    e = _effect(strip_comment(f.text(i)))
+                    if e:
+                        info["effects"].append(e)
+            levels.append(info)
+        out.append((name, E.chain_group(name), levels))
+    return out
+
+
+def chains_of_kind(mod, kind, f=None):
+    """[(chain, levels)] of the mod's own chains of a kind (core, convert_to and guild chains left out)."""
+    return [(n, ls) for n, g, ls in chain_levels(mod, f) if g == kind and not n.startswith(SPECIAL_CHAINS)]
+
+
+def effect_catalogue(mod, f=None):
+    """{head: {'count', 'low', 'middle', 'high'}} of every effect the mod's buildings have - what a new building may
+    do (both games; the REX / M2EX words a mod uses come with it)."""
+    vals = {}
+    for _, _, levels in chain_levels(mod, f):
+        for lv in levels:
+            for head, n in lv["effects"]:
+                x = _num(n)
+                if x is not None:
+                    vals.setdefault(head, []).append(x)
+    return {h: {"count": len(v), "low": min(v), "middle": statistics.median_low(v), "high": max(v)}
+            for h, v in vals.items()}         # median_low: a value the mod really uses (a whole number stays whole)
+
+
+def effect_label(head):
+    """What an effect row means, without its number ('public order from happiness (+5% a point)')."""
+    from .effects import WORDS
+    w = head.split()
+    if w[0] == "agent" and len(w) > 1:
+        return "trains agents: %s (the number: their experience)" % w[1]
+    if w[0] == "agent_limit" and len(w) > 1:
+        return "more %s agents allowed" % w[1]
+    if w[0] == "religious_belief" and len(w) > 1:
+        return "spreads %s (the number: its strength)" % w[1]
+    if w[0] in WORDS:
+        words, per = WORDS[w[0]]
+        if per is None:
+            return words
+        base = re.sub(r"\s*[+-]?%s(%%)?", "", words).replace("%%", "%").strip()
+        return base + (" (%s%g%% a point)" % ("+" if "+%s" in words else "", per) if "%%" in words and per != 1
+                       else "")
+    return head.replace("_", " ")
+
+
+def _usual(values):
+    """The commonest word (the first seen wins a tie), or None."""
+    count = {}
+    for v in values:
+        if v:
+            count[v] = count.get(v, 0) + 1
+    return max(count, key=lambda k: (count[k], -values.index(k))) if count else None
+
+
+def building_typical(mod, kind, levels):
+    """What is usual for a building of this kind in this mod, level by level: {'levels': [{'settlement_min',
+    'cost', 'construction', 'material'}], 'effects': {head: [number per level]} (the effects at least half the
+    kind's chains have, each level their middle value there), 'count': the kind's chains, 'catalogue':
+    effect_catalogue}. A level deeper than the mod's chains go grows from the one before (cost x 2, a turn more).
+    ValueError when the mod has no chain of the kind."""
+    f = mod.load(mod.file("edb"))
+    chains = chains_of_kind(mod, kind, f)
+    if not chains:
+        raise ValueError("this mod has no building of that kind (%s) to learn the usual numbers from" %
+                         BUILDING_KIND_WORDS.get(kind, kind))
+    cat = effect_catalogue(mod, f)
+    out = []
+    for i in range(levels):
+        deep = [ls[i] for _, ls in chains if len(ls) > i]
+        prev = out[-1] if out else None
+        if not deep:                                 # past every chain of the kind: grows from the level before
+            lv = dict(prev)
+            lv["cost"] = nice(float(prev["cost"]) * 2)
+            lv["construction"] = nice(float(prev["construction"]) + 1)
+            at = SETTLEMENT_LEVELS.index(prev["settlement_min"]) if prev["settlement_min"] in SETTLEMENT_LEVELS \
+                else 1
+            lv["settlement_min"] = SETTLEMENT_LEVELS[min(at + 1, len(SETTLEMENT_LEVELS) - 1)]
+            out.append(lv)
+            continue
+        smin = _usual([x.get("settlement_min") for x in deep]) or "town"
+        if prev and smin in SETTLEMENT_LEVELS and prev["settlement_min"] in SETTLEMENT_LEVELS and \
+                SETTLEMENT_LEVELS.index(smin) < SETTLEMENT_LEVELS.index(prev["settlement_min"]):
+            smin = prev["settlement_min"]            # a higher level never needs a smaller town
+        lv = {"settlement_min": smin}
+        for key, start in (("cost", 600), ("construction", 2)):
+            nums = [_num(x.get(key) or "") for x in deep]
+            nums = [x for x in nums if x is not None]
+            mid = statistics.median(nums) if nums else start
+            if prev and mid < float(prev[key]):
+                mid = float(prev[key])               # never cheaper or quicker than the level below
+            lv[key] = nice(round(mid))
+        lv["material"] = _usual([x.get("material") for x in deep])
+        out.append(lv)
+    have = {}
+    for _, ls in chains:
+        for h in {h for x in ls for h, _ in x["effects"]}:
+            have[h] = have.get(h, 0) + 1
+    effects = {}
+    for h, n in sorted(have.items(), key=lambda kv: -kv[1]):
+        if n * 2 < len(chains):
+            continue
+        row = []
+        for i in range(levels):
+            nums = [_num(v) for _, ls in chains if len(ls) > i for hh, v in ls[i]["effects"] if hh == h]
+            nums = [x for x in nums if x is not None]
+            row.append(nice(statistics.median_low(nums)) if nums else (row[-1] if row else nice(cat[h]["middle"])))
+        effects[h] = row
+    return {"levels": out, "effects": effects, "count": len(chains), "catalogue": cat}
+
+
+def _ownership(mod, unit):
+    f = mod.load(mod.file("edu"))
+    for n, a, b in E.unit_blocks(f):
+        if n.lower() == unit.lower():
+            return [x for x in (_first([f.text(i) for i in range(a, b)], "ownership") or []) if x]
+    return None
+
+
+def recruiters(mod, unit, builders):
+    """The names a recruit line of the unit in this chain lets in: of the builders those who may own it (its
+    ownership line) - a builder the ownership names itself as it is, a culture or 'all' only as far as its factions
+    may own it (the game stops on a line letting in a faction the unit's ownership leaves out)."""
+    from .units import owner_factions
+    own = _ownership(mod, unit)
+    if not own:
+        return []
+    may = set(owner_factions(mod, own))
+    facs = [(n, c) for n, c in mod.factions() if n != "slave" or "slave" in builders]   # the rebels only by name
+    out = []
+    for b in builders:
+        names = [n for n, _ in facs] if b == "all" else [b] if b in dict(facs) else [n for n, c in facs if c == b]
+        hits = [n for n in names if n in may]
+        if b in own or (hits and len(hits) == len(names) and b != "all"):
+            got = [b]
+        else:
+            got = hits
+        out += [x for x in got if x not in out]
+    return out
+
+
+def trainable_units(mod, builders):
+    """The units at least one of the builders may own (what a new chain can train), the mod's order; never the
+    townsfolk (category non_combatant) nor ships (a new chain is no port: ships come from the game's port
+    buildings)."""
+    f = mod.load(mod.file("edu"))
+    out = []
+    for n, a, b in E.unit_blocks(f):
+        lines = [f.text(i) for i in range(a, b)]
+        if (_first(lines, "category") or [""])[0].lower() in ("non_combatant", "ship"):
+            continue
+        if recruiters(mod, n, builders):
+            out.append(n)
+    return out
+
+
+def building_problems(mod, kind, chain, levels, builders, numbers=None, units=()):
+    """Why the new chain cannot be written (plain sentences; empty = fine). levels: [(code name, ...)]; numbers:
+    [{'settlement_min', 'cost', 'construction', 'effects': {head: number}}] per level; units: [(type, from level
+    index)]."""
+    from . import limits
+    out = []
+    f = mod.load(mod.file("edb"))
+    blocks = E.building_blocks(f)
+    if not chain or not re.match(r"^[A-Za-z0-9_]+$", chain):
+        out.append("the chain's name in the files is one word: letters, digits and _ only")
+    elif any(b[0].lower() == chain.lower() for b in blocks):
+        out.append("a building chain '%s' is in the mod already" % chain)
+    taken = set()
+    for _, a, b in blocks:
+        for fd in E.fields(f, a, b):
+            if fd.key == "levels":
+                taken.update(x.lower() for x in fd.value.split())
+    names = [lv[0] for lv in levels]
+    if not names:
+        out.append("give it at least one level")
+    for n in names:
+        if not re.match(r"^[A-Za-z0-9_]+$", n or ""):
+            out.append("level '%s': its name in the files is one word (letters, digits and _)" % n)
+        elif n.lower() in taken:
+            out.append("a level '%s' is in the mod already" % n)
+        elif chain and n.lower() == chain.lower():
+            out.append("level '%s' has the chain's own name - give it another" % n)
+    if len({(n or "").lower() for n in names}) < len(names):
+        out.append("two levels have the same name")
+    if not builders:
+        out.append("pick who may build it (factions, cultures or all)")
+    if kind not in BUILDING_KIND_WORDS:
+        out.append("pick what kind of building it is")
+    game = _game(mod)
+    if not limits.lifted(mod, "chains"):
+        cap = limits.HARD_LIMITS.get(game, {}).get("chains")
+        if cap and len(blocks) + 1 > cap:
+            out.append("the game takes %d building chains without REX / M2EX - this mod has %d" % (cap, len(blocks)))
+    if not limits.lifted(mod, "levels"):
+        cap = limits.HARD_LIMITS.get(game, {}).get("levels")
+        if cap and len(names) > cap:
+            out.append("the game takes %d levels in one chain without REX / M2EX" % cap)
+    for i, lv in enumerate(numbers or []):
+        for key, words in (("cost", "cost"), ("construction", "turns to build")):
+            if _num(str(lv.get(key, ""))) is None:
+                out.append("level %d: %s '%s' is not a number" % (i + 1, words, lv.get(key, "")))
+        if lv.get("settlement_min") not in SETTLEMENT_LEVELS:
+            out.append("level %d: the town it needs is one of %s" % (i + 1, ", ".join(SETTLEMENT_LEVELS)))
+        for head, v in (lv.get("effects") or {}).items():
+            if _num(str(v)) is None:
+                out.append("level %d: %s - '%s' is not a number" % (i + 1, effect_label(head), v))
+    for unit, start in units or ():
+        own = _ownership(mod, unit)
+        if own is None:
+            out.append("no unit '%s' in the mod" % unit)
+        elif not recruiters(mod, unit, builders):
+            out.append("%s: no one who builds it may own it (its ownership: %s)" % (unit, ", ".join(own) or "none"))
+        if not 0 <= start < max(1, len(names)):
+            out.append("%s: trained from a level the chain does not have" % unit)
+    return out
+
+
+def building_lines(mod, chain, levels, builders, numbers, castle=False, units=(), indent="    ", f=None):
+    """The new chain's block, every line written new in both games' form: levels [(code name, ...)], numbers per
+    level {'settlement_min', 'cost', 'construction', 'material', 'effects': {head: number}}, units [(type, from
+    level index)] - recruit lines from that level on (Medieval II: recruit_pool)."""
+    from .roster import recruit_dialect
+    f = f or mod.load(mod.file("edb"))
+    m2 = _game(mod) == "medieval2"
+    dialect = recruit_dialect(f)
+    names = [lv[0] for lv in levels]
+    i1, i2, i3, i4 = (indent * k for k in (1, 2, 3, 4))
+    who = "requires factions { %s}" % "".join("%s, " % b for b in builders)
+    out = ["building %s" % chain, "{", "%slevels %s " % (i1, " ".join(names)), "%s{" % i1]
+    for k, name in enumerate(names):
+        lv = numbers[k]
+        out.append("%s%s%s %s " % (i2, name, (" castle" if castle else " city") if m2 else "", who))
+        out += ["%s{" % i2, "%scapability" % i3, "%s{" % i3]
+        for head, v in (lv.get("effects") or {}).items():
+            if head.split()[0] == "agent":
+                out.append("%s%s  %s  %s " % (i4, head, v, who))
+            else:
+                out.append("%s%s %s" % (i4, head, v))
+        for unit, start in units or ():
+            if k >= start:
+                out.append(i4 + E.recruit_text(dialect, unit, "0", factions=recruiters(mod, unit, builders)))
+        out.append("%s}" % i3)
+        if m2:
+            out.append("%smaterial %s" % (i3, lv.get("material") or "wooden"))
+        out += ["%sconstruction  %s " % (i3, lv["construction"]), "%scost  %s " % (i3, lv["cost"]),
+                "%ssettlement_min %s" % (i3, lv["settlement_min"]), "%supgrades" % i3, "%s{" % i3]
+        if k + 1 < len(names):
+            out.append("%s%s" % (i4, names[k + 1]))
+        out += ["%s}" % i3, "%s}" % i2]
+    out += ["%s}" % i1, "%splugins " % i1, "%s{" % i1, "%s}" % i1, "}"]
+    return out
+
+
+def picture_folders(mod, builders):
+    """[culture folder] whose building pictures the cultures that build it read: each one's own buildings folder,
+    else the first descr_ui_buildings.txt sends it to (the game falls back the same way), in the mod or the game's
+    data; a culture with neither gets its own (the folder is made). And the BuildingPictures used."""
+    bp = B.BuildingPictures(mod)
+    out = []
+    for c in B.cultures_of(mod, builders):
+        to = next((x for x in bp.cultures(c) if bp.index.get(x.lower())), c)
+        if to not in out:
+            out.append(to)
+    return out, bp
+
+
+def picture_need(bp, culture, which, game):
+    """(w, h) of a culture's own building pictures of one kind ('pic' in the town, 'constructed' when built,
+    'small' in Medieval II's construction queue), from its files; else the games' usual sizes."""
+    seen = {}
+    for name, path in bp.index.get(culture.lower(), {}).items():
+        if not name.startswith("#") or not name.endswith(".tga") or \
+                (which == "constructed") != name.endswith("_constructed.tga"):
+            continue
+        if which == "small":
+            path = os.path.join(os.path.dirname(path), "construction", os.path.basename(path))
+            if not os.path.isfile(path):
+                continue
+        info = E.tga_info(path)
+        if info:
+            seen[info[:2]] = seen.get(info[:2], 0) + 1
+        if sum(seen.values()) >= 30:
+            break
+    if seen:
+        return max(seen, key=seen.get)
+    return {"pic": (78, 62), "constructed": (300, 245) if game == "medieval2" else (361, 163),
+            "small": (64, 51)}[which]
+
+
+def has_small(bp, culture):
+    """Whether a culture keeps construction-queue pictures (Medieval II: buildings/construction/)."""
+    return any(os.path.isdir(os.path.join(os.path.dirname(p), "construction"))
+               for p in list(bp.index.get(culture.lower(), {}).values())[:1])
+
+
+def building_pictures(plan, chain, levels, builders, pictures=None):
+    """Each level's pictures for every culture folder its builders read: in the town, when built and (Medieval II)
+    the small one of the construction queue - the modder's (pictures {code name: {'pic', 'constructed'}}; the
+    small one made from 'pic'), else plain ones drawn with the level's initials. How many were drawn."""
+    from .factionart import image_tga
+    mod = plan.mod
+    game = _game(mod)
+    folders, bp = picture_folders(mod, builders)
+    drawn = 0
+    for name, shown, *_ in levels:
+        given = (pictures or {}).get(name) or {}
+        for folder in folders:
+            kinds = [("pic", "pic"), ("constructed", "constructed")]
+            if game == "medieval2" and has_small(bp, folder):
+                kinds.append(("small", "pic"))
+            for which, src_key in kinds:
+                size = picture_need(bp, folder, which, game)
+                path = E.building_picture_target(mod, folder, name, which == "constructed")
+                if which == "small":
+                    path = os.path.join(os.path.dirname(path), "construction", os.path.basename(path))
+                src = given.get(src_key)
+                if src:
+                    plan.binary(path, E.tga_bytes(src, size))
+                    continue
+                im = card_picture(size, shown or name)
+                if im is not None:
+                    plan.binary(path, image_tga(im))
+                    drawn += 1
+    return drawn
+
+
+def new_building(plan, kind, chain, levels, builders, numbers, castle=False, units=(), chain_name="",
+                 pictures=None):
+    """Write a building chain made from nothing: its block after the mod's last chain in export_descr_buildings.txt,
+    the texts players read (export_buildings.txt: {chain}_name, each level's name, description and short
+    description - every copy of the table the game may read), each level's pictures (building_pictures). levels
+    [(code name, name players see, short description, description)]. Returns the block's lines."""
+    from . import strtables
+    mod = plan.mod
+    why = building_problems(mod, kind, chain, levels, builders, numbers, units)
+    if why:
+        raise ValueError("; ".join(why))
+    f = plan.edit(mod.file("edb"))
+    blocks = E.building_blocks(f)
+    indent = "    "
+    if blocks:
+        t = f.text(blocks[-1][1] + 2)                 # the 'levels' line of the last chain
+        indent = t[:len(t) - len(t.lstrip())] or indent
+    lines = building_lines(mod, chain, levels, builders, numbers, castle, units, indent, f)
+    at = blocks[-1][2] if blocks else len(f.raw)
+    f.insert(at, [""] + lines)
+    plan.note(f, "building %s made from nothing: %s, %d level(s) %s (the usual numbers of the mod's %s buildings, "
+                 "then yours)" % (chain, BUILDING_KIND_WORDS[kind].split(" (")[0].lower(), len(levels),
+                                  ", ".join(lv[0] for lv in levels), kind))
+    values = {"%s_name" % chain: chain_name or levels[0][1] or chain.replace("_", " ")}
+    for name, shown, short, desc in levels:
+        values[name] = shown or name.replace("_", " ")
+        values[name + "_desc"] = desc or short or values[name]
+        values[name + "_desc_short"] = short or values[name]
+    strtables.write_texts(plan, "export_buildings.txt", values)
+    drawn = building_pictures(plan, chain, levels, builders, pictures)
+    if drawn:
+        plan.note(None, "%d plain picture(s) drawn for %s (the levels' initials) - put your own in any time with "
+                        "the Building editor" % (drawn, chain))
+    elif not any((pictures or {}).values()):
+        plan.warn(None, "no pictures for %s: Pillow is missing to draw plain ones - put pictures in with the "
+                        "Building editor" % chain)
+    return lines
+
+
+def typical_numbers(typ):
+    """The per-level numbers a chain starts with: [{'settlement_min', 'cost', 'construction', 'material', 'effects':
+    {head: number}}] from building_typical."""
+    return [dict(lv, effects={h: row[i] for h, row in typ["effects"].items()})
+            for i, lv in enumerate(typ["levels"])]
+
+
 __all__ = ["KINDS", "kind_of", "units_of_kind", "typical", "fields", "unit_lines", "problems", "new_unit",
-           "card_picture", "recruit_levels", "usual_levels"]
+           "card_picture", "recruit_levels", "usual_levels", "BUILDING_KINDS", "chains_of_kind", "effect_catalogue",
+           "effect_label", "building_typical", "typical_numbers", "recruiters", "trainable_units",
+           "building_problems", "building_lines", "building_pictures", "new_building"]

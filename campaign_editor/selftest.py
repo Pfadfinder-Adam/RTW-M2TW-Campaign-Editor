@@ -2211,6 +2211,28 @@ def s_unit_nothing(c, mod):
     return plan
 
 
+@step("A building made from nothing: 'ce_nothing_market', two levels for {new} - a market's usual numbers in this "
+      "mod, public order added, a unit trained from the second level, plain pictures drawn",
+      "the new building in {new}'s construction list (its plain 'CN' pictures), its second level training the unit; "
+      "Medieval II also shows its small picture in the construction queue")
+def s_building_nothing(c, mod):
+    from . import fromnothing as FN
+    kind = "economy" if FN.chains_of_kind(mod, "economy") else FN.BUILDING_KINDS[0][0]
+    typ = FN.building_typical(mod, kind, 2)
+    nums = FN.typical_numbers(typ)
+    extra = next((h for h in ("happiness_bonus bonus", "law_bonus bonus") if h in typ["catalogue"]), None)
+    if extra:
+        for lv in nums:
+            lv["effects"].setdefault(extra, "1")
+    units = FN.trainable_units(mod, [c.new])[:1]
+    plan = Plan(mod, "nothing", "nothing", {})
+    FN.new_building(plan, kind, "ce_nothing_market", [
+        ("ce_nothing_stall", "CE Nothing Stall", "A building the editor made from nothing.", ""),
+        ("ce_nothing_hall", "CE Nothing Hall", "Its second level.", "")], [c.new], nums,
+        units=[(units[0], 1)] if units else [], chain_name="CE Nothing Market")
+    return plan
+
+
 @step("Map size: the map grown by 2 tiles of deep sea at the right and at the top (the last step - grown at the "
       "left or the bottom every place would move, and the test mod's engine scripts name tiles by number)",
       "the campaign map is 2 tiles wider and higher: open water at its right and top edges; every town, army and "
@@ -2273,6 +2295,7 @@ COVERAGE = {
     "Unit editor: replace the battle model": ["s_model"],
     "Unit editor: your own files for a battle model (texture, model file)": ["s_own_model"],
     "Unit editor: a new unit made from nothing": ["s_unit_nothing"],
+    "Building editor: a new building made from nothing": ["s_building_nothing"],
     "Unit editor: voice": ["s_voice"],
     "Building editor: lines": ["s_building_fields"],
     "Building editor: new building step by step": ["s_buildings"],

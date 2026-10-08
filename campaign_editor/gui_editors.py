@@ -1932,7 +1932,11 @@ class RecordEditor(ttk.Frame):
             E.set_text_values(plan, mod.text_file("export_buildings.txt" if self.kind == "building" else
                                                   "export_units.txt"), dict(self.text_edits))
         for src, new, d in self.copy_ops:                 # after the field changes: copies add lines
-            if d.get("nothing"):
+            if d.get("nothing") and self.kind == "building":
+                from . import fromnothing as FN
+                FN.new_building(plan, d["nothing"], new, d["levels"], d["factions"], d["numbers"], d["castle"],
+                                d["units"], d["chain_name"], d["pictures"])
+            elif d.get("nothing"):
                 from . import fromnothing as FN
                 FN.new_unit(plan, d["nothing"], new, d["dict"], d["owners"], d["model"], d["mount"], d["values"],
                             d["texts"], d["pictures"], d["recruit"])

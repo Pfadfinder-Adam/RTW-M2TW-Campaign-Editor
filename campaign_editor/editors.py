@@ -243,10 +243,11 @@ def sample_size(folder, pattern_end, limit=40):
 
 def tga_bytes(src, size=None):
     """src (PNG, JPG, TGA... any picture Pillow reads) as an uncompressed 32-bit TGA,
-    resized to size (width, height) if given."""
+    resized to size (width, height) if given - a (width, height, bits) of tga_info / sample_size is fine too."""
     from PIL import Image
     im = Image.open(src).convert("RGBA")
-    if size and im.size != tuple(size):
+    size = tuple(size)[:2] if size else None
+    if size and im.size != size:
         im = im.resize(tuple(size), Image.LANCZOS)
     out = io.BytesIO()
     im.save(out, format="TGA", rle=False, orientation=-1)      # bottom-up, like the game's own
@@ -287,7 +288,7 @@ def import_picture(plan, src, targets, size=None):
     for t in targets:
         plan.binary(t, data)
         plan.notes.append((plan.mod.rel(t), "picture from %s%s" % (
-            os.path.basename(src), " (%d x %d)" % tuple(size) if size else "")))
+            os.path.basename(src), " (%d x %d)" % tuple(size)[:2] if size else "")))
 
 
 # ---------------------------------------------------------------------------
@@ -528,6 +529,7 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
     window also gives: texts {new level: {'name', 'desc', 'desc_short'}}, factions [who may build every
     level: factions or cultures] and pictures {new level: a picture file, or {'pic': file, 'constructed': file}}."""
     import re
+    from .moddata import _ci
     from .roster import factions_groups, with_factions
     mod = plan.mod
     edb = mod.file("edb")
@@ -573,6 +575,8 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
                 for old, new in level_names.items():
                     if k.lower() == old.lower() or k.lower().startswith(old.lower() + "_"):
                         keys[k] = new + k[len(old):]
+                if k.lower() == src_chain.lower() + "_name":      # the chain's own name ({market_name}): the
+                    keys[k] = new_chain + "_name"                    # game asks for it ('localised string ...')
         copy_text_entries(plan, path, keys)
     ui = os.path.join(mod.data, "ui")
     if os.path.isdir(ui):
@@ -593,11 +597,16 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
                         return os.path.join(folders[c2], n)
             return None
         for cult, folder in folders.items():
+            small = _ci(folder, "construction")            # Medieval II: the construction queue's small pictures
+            small_names = {n.lower(): n for n in os.listdir(small)} if small and os.path.isdir(small) else {}
             for old, new in level_names.items():
                 for tail in (".tga", "_constructed.tga"):
                     src = card(old, tail, cult)
                     if src:
                         plan.copy(src, os.path.join(folder, "#%s_%s%s" % (cult, new, tail)))
+                got = small_names.get(("#%s_%s.tga" % (cult, old)).lower())
+                if got:
+                    plan.copy(os.path.join(small, got), os.path.join(small, "#%s_%s.tga" % (cult, new)))
     if texts:
         # a level's name and description, and every culture's / faction's own copy of them (<level>_<culture>,
         # <level>_<culture>_desc ...): the game shows the most specific one, so all say the new text
@@ -632,6 +641,11 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
             for t in targets:
                 cult = os.path.basename(os.path.dirname(os.path.dirname(t)))
                 import_picture(plan, pic, [t], building_picture_need(mod, cult, built))
+                small = _ci(os.path.dirname(t), "construction")
+                if not built and small and os.path.isdir(small):      # its small one in the construction queue
+                    to = os.path.join(small, os.path.basename(t))
+                    plan.copies = [(a, d) for a, d in plan.copies if d != to]
+                    import_picture(plan, pic, [to], sample_size(small, ".tga") or (64, 51))
 
 
 # ---------------------------------------------------------------------------
