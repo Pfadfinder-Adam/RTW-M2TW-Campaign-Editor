@@ -51,6 +51,10 @@
   release's page.
 
 ### Fixed
+- **Map size: a cut that left a town on the map's new edge** made the game stop while loading (it builds the map
+  again and cannot place a town on the edge row - it needs land all round). A town or port that would stand on an
+  edge the cut makes now counts as cut off: it is named in the question before the cut and goes with it (its land
+  that stays a wasteland under REX / M2EX), or move it one tile in first.
 - **Place its town / Place its port for a region of the map** (Edit regions): they worked only for a new region and
   said 'pick a new region first'. Now, for the region in *Paint with*: a **wasteland** gets its town on the tile
   clicked (the same window as its right-click *Give it its town here*; its port after that), a region's town or port

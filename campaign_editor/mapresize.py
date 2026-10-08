@@ -182,10 +182,21 @@ def places(mod, campaign):
     return out
 
 
+def off(p, W, H, left=0, bottom=0, right=0, top=0, town=False):
+    """Whether place p (as now) is off the W x H map the edges make. town: a town or port is off on the edge a cut
+    makes too - the game cannot place one there and stops while it builds map.rwm (report #158: Girga and Quseir
+    left on the bottom row)."""
+    x, y = p[0] + left, p[1] + bottom
+    if not (0 <= x < W and 0 <= y < H):
+        return True
+    return town and ((left < 0 and x == 0) or (bottom < 0 and y == 0) or (right < 0 and x == W - 1) or
+                     (top < 0 and y == H - 1))
+
+
 def blocking(found, width, height, left=0, bottom=0, right=0, top=0):
     """Of places() those a cut would leave off a width x height map, as places() gives them ((x, y) as now)."""
     W, H = width + left + right, height + bottom + top
-    return [x for x in found if not (0 <= x[1][0] + left < W and 0 <= x[1][1] + bottom < H)]
+    return [x for x in found if off(x[1], W, H, left, bottom, right, top, x[2] in ("town", "port"))]
 
 
 def off_map(mod, campaign, left, bottom, right, top):
@@ -248,7 +259,7 @@ def lost_factions(mod, campaign, left=0, bottom=0, right=0, top=0, owners=None):
     if owners is None:
         owners = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))).owners()
     tiles = mod.city_tiles(campaign)
-    cut = {r for r, t in tiles.items() if not (0 <= t[0] + left < W and 0 <= t[1] + bottom < H)}
+    cut = {r for r, t in tiles.items() if off(t, W, H, left, bottom, right, top, town=True)}
     out = {}
     for fac in sorted({owners.get(r) for r in cut} - {None, "slave"}):
         if not [r for r, o in owners.items() if o == fac and r not in cut]:
@@ -284,12 +295,15 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0, factions_out=())
     W, H = img.width + left + right, img.height + bottom + top
 
     def gone(p):
-        return not (0 <= p[0] + left < W and 0 <= p[1] + bottom < H)
+        return off(p, W, H, left, bottom, right, top)
+
+    def town_gone(p):                               # a town / port on the edge the cut makes goes too
+        return off(p, W, H, left, bottom, right, top, town=True)
     strat_path = mod.campaign_file(campaign, "descr_strat.txt")
     s0 = Strat(mod.load(strat_path))
     owners = s0.owners()
     tiles = mod.city_tiles(campaign)
-    cut = sorted(r for r, t in tiles.items() if gone(t))
+    cut = sorted(r for r, t in tiles.items() if town_gone(t))
     errors, warn, out = [], [], []
     for fac in sorted({owners.get(r) for r in cut} - {None, "slave"}):
         if not [r for r, o in owners.items() if o == fac and r not in cut]:
@@ -353,7 +367,7 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0, factions_out=())
     RD._delete(plan, campaign, into, waste)          # every file read once for all the towns cut
     for w in said:
         plan.warn(None, w)
-    lost_ports = [r for r, t in ports(mod, campaign).items() if r not in cut and gone(t)]
+    lost_ports = [r for r, t in ports(mod, campaign).items() if r not in cut and town_gone(t)]
     if lost_ports:
         _remove_ports(plan, campaign, sorted(lost_ports))
     from .factionout import take_out
