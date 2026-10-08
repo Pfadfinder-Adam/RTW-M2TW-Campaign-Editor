@@ -4776,6 +4776,54 @@ building smith
             import importlib
             importlib.reload(R)
 
+    def test_recolour_into_black_white_starts_from_the_nearest_faction(self):
+        """A battle texture in red / yellow made black / white (a modder's faction: white bands on the faces, black and
+        white patches on the skin): it starts from the same model's texture of the faction whose colours are nearest
+        (grey / white - not blue / white), the artist's own black / white kept as they are; the face stays; written
+        into the faction's file even where nothing in the start needed recolouring."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import recolour as R
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data", "unit_models")
+        os.makedirs(d)
+
+        def tex(name, c1, c2):
+            im = Image.new("RGBA", (40, 30), (0, 0, 0, 255))
+            for x in range(40):
+                for y in range(30):
+                    im.putpixel((x, y), (c1 if x < 10 else c2 if x < 20 else (200, 150, 120)) + (255,))
+            p = os.path.join(d, name)
+            im.save(p)
+            return p
+        mine = tex("knights_alpha.tga", (215, 0, 0), (255, 210, 0))
+        grey = tex("knights_beta.tga", (30, 30, 30), (235, 235, 235))
+        blue = tex("knights_gamma.tga", (0, 16, 94), (239, 239, 239))
+        starts = [(blue, ((0, 16, 94), (239, 239, 239)), "gamma"), (grey, ((70, 70, 70), (250, 250, 255)), "beta")]
+        it = {"path": mine, "rel": "unit_models/knights_alpha.tga", "group": "unit textures", "label": "knights",
+              "faction": "alpha", "others": [(p, c) for p, c, _ in starts], "starts": starts, "alike": True}
+        target = ((20, 20, 20), (240, 240, 240))
+        im, src, others, by = R.start_of(it, ((215, 0, 0), (255, 210, 0)), target)
+        self.assertEqual(by, "beta")
+        self.assertEqual(len(others), 2)                            # the faction's own picture is a copy to compare
+        # a green / yellow target turns well from red / yellow: the faction's own picture stays the start
+        self.assertIsNone(R.start_of(it, ((215, 0, 0), (255, 210, 0)), ((20, 120, 40), (255, 210, 0)))[3])
+        mod = ModData(self.root)
+        plan = Plan(mod, "recolour", "recolour_alpha", {})
+        R.plan_recolour(plan, [it], ((215, 0, 0), (255, 210, 0)), target)
+        import io
+        new = Image.open(io.BytesIO(plan.binaries[mine])).convert("RGB")
+        self.assertEqual(new.getpixel((5, 5)), (30, 30, 30))        # the artist's black, as it was
+        self.assertEqual(new.getpixel((15, 5)), (235, 235, 235))    # his white
+        self.assertEqual(new.getpixel((30, 5)), (200, 150, 120))    # the face
+        self.assertTrue(any("made from beta's texture" in n for n in plan.report().splitlines()))
+        # with no other faction's texture the colours themselves are made black / white, the folds kept
+        it2 = dict(it, starts=[], others=[])
+        im, src, others, by = R.start_of(it2, ((215, 0, 0), (255, 210, 0)), target)
+        self.assertIsNone(by)
+
     def test_recolour_keeps_what_all_factions_share(self):
         """A banner nearly all in the faction's red, with a bronze (orange-red) star that every faction's banner has:
         the field changes, the star stays - even though most of the picture differs between the factions."""

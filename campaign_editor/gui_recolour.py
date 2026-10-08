@@ -33,7 +33,7 @@ class RecolourWindow(tk.Toplevel):
         self.side = max(180, min(SIDE, (min(sw, 1400) - 620) // 2, sh - 470))
         self.geometry("%dx%d" % (min(sw - 40, 600 + 2 * self.side + 60), min(sh - 80, 720)))
         self.colours = R.faction_colours(self.mod)
-        self._cache, self._photos = {}, []
+        self._cache, self._photos, self._by = {}, [], {}
         self._take(faction)
         self._build()
         self.fill()
@@ -311,22 +311,17 @@ class RecolourWindow(tk.Toplevel):
     def _pair(self, it):
         key = self._key(it)
         if key not in self._cache:
-            im = R.read_picture(it["path"])
+            by = None
             if it.get("crop"):
                 x, y, w, h = it["crop"]
-                im = im.crop((x, y, x + w, y + h))
-                others = []
-            else:
-                others = []
-                for p, c in it.get("others") or []:
-                    try:
-                        others.append((R.read_picture(p), c))
-                    except Exception:
-                        pass
-            new, share = R.recolour(im, R.item_source(it, self.source, self._from_of()), self.target, others,
-                                    edits=self.edits.get(key),
+                im = R.read_picture(it["path"]).crop((x, y, x + w, y + h))
+                src, others = R.item_source(it, self.source, self._from_of()), []
+            else:                                  # maybe another faction's texture as the start (nearest colours)
+                im, src, others, by = R.start_of(it, self.source, self.target, self._from_of())
+            new, share = R.recolour(im, src, self.target, others, edits=self.edits.get(key),
                                     plain=it.get("alike", True))
             self._cache[key] = (im, new, share)
+            self._by[key] = by
         return self._cache[key]
 
     def show(self):
@@ -353,8 +348,10 @@ class RecolourWindow(tk.Toplevel):
         a.delete("all")
         a.create_image(0, 0, image=self._photos[1], anchor="nw")
         a.configure(scrollregion=(0, 0, big[0], big[1]))
-        self.lbl_pic.configure(text="%s\n%s - %.0f%% of it is the faction's colour%s" % (
-            it["label"], it["rel"], 100 * share, ("\nleft as it is: " + it["skip"]) if it["skip"] else ""))
+        by = self._by.get(self._key(it))
+        self.lbl_pic.configure(text="%s\n%s - %.0f%% of it is the faction's colour%s%s" % (
+            it["label"], it["rel"], 100 * share, ("\nleft as it is: " + it["skip"]) if it["skip"] else "",
+            ("\nmade from %s's texture of the model (shown before): its colours are nearest" % by) if by else ""))
 
     # ---- touch-ups ----
     def _paint(self, e):

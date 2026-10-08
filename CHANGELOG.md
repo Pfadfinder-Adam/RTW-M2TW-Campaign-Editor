@@ -8,6 +8,12 @@
   mod the first time you change it, and the whole map folder (all but map.rwm, which the game builds again there) the
   first time you change the map. A mod built on another mod (HLR) still holds all of it - the game takes one mod
   folder, never a chain.
+- **Recolour into black / white looks like the game's own**: a unit's battle texture made black / white starts from
+  the same model's texture of the faction whose colours are nearest (Medieval II: Sicily's grey / white, the rebels'
+  grey...) - the artist's own black and white cloth, its folds and the faces kept - and only what still differs is
+  recoloured; where no such texture exists the colours are made black / white with every fold kept (a flat black lost
+  the folds, white bands came on the faces and black / white patches on the skin - a modder's report). The window
+  says which faction's texture a picture was made from.
 - **Recolour: an area of like colour in one click** (the touch-ups' new tool beside the brush): a click on the
   'after' picture takes the whole patch of the picture's own colour joined to that point - a hood, a shield's field -
   and paints it the new primary or secondary colour; 'keep as it was' + a click gives an area back; *alike* says how

@@ -292,16 +292,20 @@ def _shift(im, src, dst):
 PLAIN_LIGHT = {"dark": 0.22, "light": 0.77}      # the lightness the games' artists give a black / a white part
 
 
-def _to_plain(im, mask, dst):
-    """A coloured part made black / white / grey (dst has no hue) the way the games' own textures do it: no hue, the
-    part's average light set to the artists' black (0.22) or white (0.77) - grey: dst's own - and every fold kept (each
-    pixel as far from the average as it was). A flat black (lightness scaled to near 0) lost every fold: black shields
-    and hoods like holes in battle."""
+def _to_plain(im, mask, dst, src=None):
+    """A part made black / white / grey (dst has no hue) the way the games' own textures do it: no hue, the part's
+    average light set to the artists' black (0.22) or white (0.77) - grey: dst's own - and every fold kept (each pixel
+    as far from the average as it was). A flat black (lightness scaled to near 0) lost every fold: black shields and
+    hoods like holes in battle. A white part as lit as its source colour (a flat card) is as light as dst itself (the
+    artists' 0.77 made a flat white card grey)."""
     from PIL import Image, ImageStat
     H, S, V = im.convert("RGB").convert("HSV").split()
     kind = _plain(dst)
     goal = PLAIN_LIGHT.get(kind, hsv(dst)[2]) * 255.0
     ref = max(ImageStat.Stat(V, mask).mean[0], 12.0)
+    if kind == "light" and src:
+        lit = min(1.0, ref / max(hsv(src)[2] * 255.0, 12.0))     # how lit the part is against its own colour
+        goal = max(goal, hsv(dst)[2] * 255.0 * lit)
     S = Image.new("L", im.size, 0)
     if kind == "dark":       # measured against the HRE's own copies: the light scaled down is nearest the artists' black
         k = goal / ref
@@ -348,10 +352,12 @@ def recolour(im, source, target, others=(), edits=None, plain=True):
     for m, src, dst in zip(ms, source, target):
         if not dst or not m.getbbox():
             continue
-        if _plain(src):
+        if _plain(dst):
+            if _plain(src) == _plain(dst):
+                continue                         # white to white: the artist's own white stays as it is
+            part = _to_plain(rgb, m, dst, src)
+        elif _plain(src):
             part = _shift_plain(rgb, m, dst)
-        elif _plain(dst):
-            part = _to_plain(rgb, m, dst)
         else:
             part = _shift(rgb, src or dst, dst)
         out.paste(part, (0, 0), m)
@@ -394,7 +400,61 @@ def guess_source(mod, faction, items, colours=None):
     return colours.get(faction, ((200, 0, 0), None)), faction
 
 
-__all__ = ["faction_colours", "masks", "recolour", "guess_source", "coloured"]
+def _cost(a, b):
+    """How well colour a turns into colour b: 0 alike, 1 a hue moved or one black / white / grey made another, 2 a
+    colour made black / white / grey or back (no hue to move: the folds and the faces suffer)."""
+    if not b:
+        return 0
+    if not a:
+        return 2
+    pa, pb = _plain(a), _plain(b)
+    if pa and pb:
+        return 0 if pa == pb else 1
+    if pa or pb:
+        return 2
+    return 0 if _near(a, b) else 1
+
+
+def _far(a, b):
+    return sum(sum((x - y) ** 2 for x, y in zip(c, d)) ** 0.5 for c, d in zip(a, b) if c and d)
+
+
+def start_of(it, source, target, source_of=None):
+    """(picture, its colours, the other copies [(picture, colours)], the faction it is from or None): what the recolour
+    of an item starts from. A battle texture whose colours turn badly into the target (a colour made black or white:
+    the faces got white bands, the skin black and white patches - a modder's black / white faction) starts from the
+    same model's texture of the faction whose colours are nearest, the game's artist's own black / white kept (the
+    faction's own copy is made from it; its heraldry comes along); else from the item's own picture."""
+    src = item_source(it, source, source_of)
+    im = read_picture(it["path"])
+    others = it.get("others") or []
+    mine = sum(_cost(a, b) for a, b in zip(src, target))
+    by = None
+    if mine >= 2 and it.get("starts"):
+        best = sorted((sum(_cost(a, b) for a, b in zip(c, target)), _far(c, target), p, c, f)
+                      for p, c, f in it["starts"])
+        for cost, _, p, c, f in best:
+            if cost >= mine:
+                break
+            try:
+                o = read_picture(p)
+            except Exception:
+                continue
+            if o.size != im.size:
+                continue                         # another drawing: the touch-ups and the copies would not fit
+            others = [(it["path"], src)] + [(q, d) for q, d in others if q != p]
+            im, src, by = o, c, f
+            break
+    got = []
+    for p, c in others:
+        try:
+            got.append((read_picture(p), c))
+        except Exception:
+            pass
+    return im, src, got, by
+
+
+__all__ = ["faction_colours", "masks", "recolour", "guess_source", "coloured", "start_of"]
 
 
 # ---------------------------------------------------------------------------
@@ -475,7 +535,7 @@ def targets(mod, campaign, faction):
     out, seen = [], set()
 
     def add(path, group, label, others=(), crop=None, skip=None, of=(), own=None, alike=True, own_tex=None,
-            source=None, own_sprite=None, painted_in=(None, None)):
+            source=None, own_sprite=None, painted_in=(None, None), starts=()):
         k = (os.path.normcase(os.path.abspath(path)), crop)
         if k in seen:
             if own_tex:                                  # one texture worn by several models: all of them follow
@@ -487,7 +547,7 @@ def targets(mod, campaign, faction):
         out.append({"path": path, "rel": mod.rel(path), "group": group, "label": label, "others": list(others),
                     "of": list(of), "crop": crop, "skip": skip, "own": own, "faction": faction,
                     "alike": alike, "own_tex": own_tex, "source": source, "own_sprite": own_sprite,
-                    "painted": painted_in[0], "painted_by": painted_in[1]})
+                    "painted": painted_in[0], "painted_by": painted_in[1], "starts": list(starts)})
     for sub, label in (("units", "unit card"), ("unit_info", "unit info picture")):
         d = _ci(mod.find("ui") or "", sub) if mod.find("ui") else None
         own = _ci(d, faction) if d else None
@@ -564,10 +624,10 @@ def targets(mod, campaign, faction):
         # game's stay as they are
         own_tex = _own_texture(mod, info, faction, rel, got, wearers, "texture", taken) \
             if needs_copy(rel, got, wearers) else None
-        others = [(on_disk(mod, r)[1], colours[f]) for f, r in info.textures.items()
-                  if f != faction and f in colours and r.lower() != rel.lower() and on_disk(mod, r)]
+        starts = _starts(mod, info.textures, faction, rel, colours)
         label = "battle texture of %s" % info.name + (" - gets a copy of its own" if own_tex else "")
-        add(got[1], "unit textures", label, others[:6], own_tex=own_tex, painted_in=painted(rel, got, wearers))
+        add(got[1], "unit textures", label, [(p, c) for p, c, _ in starts][:6], own_tex=own_tex,
+            painted_in=painted(rel, got, wearers), starts=starts)
     # a unit the faction was given (Roster, a new unit, Bring...) whose model has no texture line of the faction:
     # the game dresses it in another faction's texture (the mercenaries' or the first) - the faction gets its own
     # copy, made from an owner's texture and recoloured from that owner's colours (a tester: the units given by the
@@ -594,10 +654,10 @@ def targets(mod, campaign, faction):
         wearers = sorted(f for f, r in info.attach.items() if f != faction and r.lower() == rel.lower())
         own_tex = _own_texture(mod, info, faction, rel, got, wearers, "attach", taken) \
             if needs_copy(rel, got, wearers) else None
-        others = [(on_disk(mod, r)[1], colours[f]) for f, r in info.attach.items()
-                  if f != faction and f in colours and r.lower() != rel.lower() and on_disk(mod, r)]
+        starts = _starts(mod, info.attach, faction, rel, colours)
         label = "weapons and shields of %s" % info.name + (" - gets a copy of its own" if own_tex else "")
-        add(got[1], "unit textures", label, others[:6], own_tex=own_tex, painted_in=painted(rel, got, wearers))
+        add(got[1], "unit textures", label, [(p, c) for p, c, _ in starts][:6], own_tex=own_tex,
+            painted_in=painted(rel, got, wearers), starts=starts)
     # the far-away sprite a model names for the faction (Medieval II: the texture line's fourth value; Rome: its
     # model_sprite line) - a clone names its template's (england_...spr), so the faction gets its own .spr and pages
     # (<faction>_..._sprite_000.texture / .tga.dds ...) and the line points at them
@@ -686,6 +746,22 @@ def targets(mod, campaign, faction):
         if out_x is not None:
             out[-1]["share_out"] = out_x
     _more_targets(mod, faction, names, colours, add)
+    return out
+
+
+def _starts(mod, rows, faction, rel, colours):
+    """[(path, colours, faction)] of the model's other textures (one per file) of the factions with colours: the
+    pictures a recolour may start from (start_of) and compare with."""
+    from .meshview import on_disk
+    out, seen = [], set()
+    for f, r in rows.items():
+        if f == faction or f not in colours or not r or r.lower() == rel.lower():
+            continue
+        got = on_disk(mod, r)
+        k = got and os.path.normcase(os.path.abspath(got[1]))
+        if got and k not in seen:
+            seen.add(k)
+            out.append((got[1], colours[f], f))
     return out
 
 
@@ -912,15 +988,13 @@ def plan_recolour(plan, items, source, target, source_of=None):
                 sheet.paste(new, (x, y))
                 sheets[it["path"]] = sheet
             else:
-                im = read_picture(it["path"])
-                others = []
-                for p, c in it.get("others") or []:
-                    try:
-                        others.append((read_picture(p), c))
-                    except Exception:
-                        pass
-                new, share = recolour(im, item_source(it, source, source_of), target, others, edits=it.get("edits"),
-                                      plain=it.get("alike", True))
+                im, src, others, by = start_of(it, source, target, source_of)
+                new, share = recolour(im, src, target, others, edits=it.get("edits"), plain=it.get("alike", True))
+                if by:
+                    # another faction's texture is the start: written even where nothing in it needed recolouring
+                    share = max(share, 1.0 / (im.size[0] * im.size[1]))
+                    plan.note(None, "%s: made from %s's texture of the model (its colours are nearest to %s)" % (
+                        it["rel"], by, _words(target)))
                 if share > 0 and it.get("own_tex"):
                     # the faction's own copy in the mod, its model line pointed at it (both games, text + modeldb)
                     from .models import catalogue, set_faction_texture

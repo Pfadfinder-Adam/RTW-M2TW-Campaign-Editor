@@ -1050,6 +1050,21 @@ def _game_data(mod):
     return game_data(mod)
 
 
+@step("Recolour into black / white: {new}'s battle textures made black and white, each from the same model's "
+      "texture of the faction whose colours are nearest (the artist's own black / white kept)",
+      "{new}'s soldiers in battle in black / white: faces and hands as they were (no white bands, no black or white "
+      "patches on the skin), the cloth's folds kept; cards and banners stay in its green / yellow")
+def s_recolour_plain(c, mod):
+    from . import recolour as R
+    items = [it for it in R.targets(mod, c.campaign, c.new)
+             if not isinstance(it, str) and not it.get("skip") and it["group"] == "unit textures"]
+    if not items:
+        raise Skip("no battle texture to recolour")
+    plan = Plan(mod, "recolour", c.new, {})
+    R.plan_recolour(plan, items, c.colours[c.new], ((20, 20, 20), (240, 240, 240)), c.new)
+    return plan
+
+
 @step("Diplomacy at the start: {edited} allied to {new} and at war with {foreign}",
       "the diplomacy screen: {new} an ally of {edited}, {foreign} at war with it from the first turn")
 def s_alliance(c, mod):
@@ -2455,6 +2470,7 @@ COVERAGE = {
     "Faction emblem": ["s_emblem"],
     "Banner...": ["s_banner"],
     "Recolour a faction's pictures": ["s_recolour"],
+    "Recolour into black / white (the nearest faction's texture as the start)": ["s_recolour_plain"],
     "Make the campaign map 3 x bigger": RUN + " (the x3 copy, when asked)",
     "Check mod files": RUN + " (after every step)",
     "Restore a backup": RUN + " (check-scripts/testmod.py restores every step byte for byte)",
