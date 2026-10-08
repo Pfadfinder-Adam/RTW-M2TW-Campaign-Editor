@@ -180,6 +180,7 @@ class MapView(ttk.Frame):
         # second goes and all its land joins the first (red); only the regions and town names are drawn meanwhile
         self.v_merge = tk.BooleanVar(value=False)
         self.merge, self.on_merge, self._before_merge = [None, None], None, None
+        self.region_marks, self.on_region_click = {}, None    # mark_regions: a window's regions coloured, clicks to it
         tip(ttk.Checkbutton(lbar, text="Merge regions", variable=self.v_merge, command=self._merge_toggled),
             "Join two regions into one (a map with too many regions): click the region that stays (yellow), then "
             "its neighbour that goes (red), then 'Merge them' under the map - the second region's town and region "
@@ -731,6 +732,18 @@ class MapView(ttk.Frame):
         if keep and gone and fn:
             fn(keep, gone)
 
+    MARK_COLOURS = {"gone": (220, 40, 30), "this": (255, 120, 0), "into": (255, 212, 0), "can": (70, 190, 90)}
+
+    def mark_regions(self, marks=None, on_click=None):
+        """Regions coloured on the map for a window that works on them - Delete a town with its region: red = goes,
+        orange = the one picked of many, yellow = takes its land, green = could take it (MARK_COLOURS). on_click(region
+        or None for the sea) gets a left click on the map while they are shown (instead of a pick / a drag). No marks
+        and no on_click: the map as it was."""
+        self.region_marks = {r: k for r, k in (marks or {}).items() if r}
+        self.on_region_click = on_click
+        if self.cmap:
+            self.render()
+
     def merged(self):
         """After a merge was written (the map read again): nothing picked, the mode stays on for the next pair."""
         self.merge = [None, None]
@@ -1149,7 +1162,9 @@ class MapView(ttk.Frame):
         if getattr(self, "plain", False):
             return bg
         land = () if self.region_mode else tuple(sorted(self.new_land.items()))
-        if self.v_merge.get() and any(self.merge) and not self.region_mode:
+        if self.region_marks and not self.region_mode:
+            pol = self.cmap.political(self.region_marks, self.MARK_COLOURS, None, alpha=130, borders=True)
+        elif self.v_merge.get() and any(self.merge) and not self.region_mode:
             keep, gone = self.merge
             pol = self.cmap.political({r: k for r, k in ((keep, "keep"), (gone, "gone")) if r},
                                       {"keep": (255, 212, 0), "gone": (220, 40, 30)}, None, alpha=130, borders=True)
@@ -1745,6 +1760,8 @@ class MapView(ttk.Frame):
 
     def _double(self, e):
         self._doubled = True                             # its release must not pick the town back (on_city)
+        if self.on_region_click:                         # a window's regions are being picked (mark_regions)
+            return
         town = self._town_under(e.x, e.y)
         if town and self.on_town and not self.v_pick.get():
             self.on_town(town[0])                        # a town: straight to its own window (a tester)
@@ -2142,6 +2159,11 @@ class MapView(ttk.Frame):
             if side:
                 self._edrag = side
                 return
+        if self.on_region_click and self.cmap and not self.region_mode and not self.on_place:
+            x, y = self.to_tile(e.x, e.y)                 # a window's regions (mark_regions): the click is theirs
+            self._marked_click = True                     # (its release and a double click do nothing more)
+            self.on_region_click(self.cmap.region_at(x, y) if self.inside((x, y)) else None)
+            return
         if self.v_merge.get() and self.cmap and not self.region_mode and not self.on_place:
             self._merge_click(e.x, e.y)                   # Merge regions: a left click picks a region
             return
@@ -2313,6 +2335,9 @@ class MapView(ttk.Frame):
             return "break"
 
     def _release(self, e):
+        if getattr(self, "_marked_click", False) and getattr(e, "num", None) != 3:
+            self._marked_click = False
+            return
         if self._edrag:
             self._edrag = None
             if self.on_edges:

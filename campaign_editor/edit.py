@@ -365,7 +365,7 @@ def move_towns(plan, f, campaign, moves, fac=None, taking=()):
     for r, old, new in moves:
         if old is None:
             raise ValueError("%s has no settlement in descr_strat.txt" % r)
-        if old == new:
+        if old == new and s.settlement_of(r) is not None:
             raise ValueError("%s already belongs to %s" % (r, new))
         if not s.faction(new):
             raise ValueError("%s has no faction block in descr_strat.txt" % new)
@@ -374,15 +374,23 @@ def move_towns(plan, f, campaign, moves, fac=None, taking=()):
     armies_at = {c.xy for fb in s.factions for c in fb.characters
                  if c.xy and _has_army(s.lines[c.start:c.end])}
     sets, cuts, to_add = {}, [], {}        # line -> text; (start, end); owner -> {"towns": [], "chars": []}
+    built = None                            # descr_regions' creator of each region (read once, when needed)
     for r, old, new in moves:
         st = s.settlement_of(r)
         if st is None:                          # the game's rebel village, written out
-            block = [f.make(l) for l in village_block(r, new)]
+            creator = new
+            if new == "slave":                  # the rebels' village keeps the look of the faction that built it
+                built = mod.regions(campaign) if built is None else built
+                by = (built.get(r) or {}).get("creator") or ""
+                creator = by if by and s.faction(by) else new     # never a faction descr_strat does not have
+            block = [f.make(l) for l in village_block(r, creator)]
             plan.note(f, "%s: the rebel village (no settlement in descr_strat.txt) is written as a village" % r)
         else:
             cuts.append((st.start, st.end))
             block = list(f.raw[st.start:st.end])
         to_add.setdefault(new, {"towns": [], "chars": []})["towns"].append(block)
+        if old == new:                          # the rebels' own village written out: nobody standing there moves
+            continue
         xy = tiles.get(r)
         ob = s.faction(old)
         for c in [c for c in ob.characters if xy and c.xy == xy]:
@@ -535,7 +543,8 @@ def map_changes(plan, campaign, changes):
             _moves(plan, f, campaign, fac, items)
     if changes.get("owners"):
         now = _owners_now(plan.mod, campaign, f)
-        moves = [(r, now.get(r), to) for r, to in changes["owners"].items() if now.get(r) != to]
+        written = Strat(f).owners()             # a rebel village given to the rebels = its town written out
+        moves = [(r, now.get(r), to) for r, to in changes["owners"].items() if now.get(r) != to or r not in written]
         move_towns(plan, f, campaign, moves)
     for fac, chars in (changes.get("characters") or {}).items():
         if not chars:

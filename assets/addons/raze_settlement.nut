@@ -222,13 +222,24 @@ local RAZE_ASK = true
 local RAZE_BUTTON = true
 // The capture scroll's buttons are TEXT buttons on the game's parchment pieces
 // (shared page TEXT_BUTTON_BG_*, all three as wide as the widest). Ours copies
-// that; its words in the first of these game fonts the game has (sq ::raze_ui_fonts()
-// lists them).
+// that. Its words: the game writes its three in a plain Verdana-like face (not the
+// Times face tnr_med - a tester's screen showed ours in Times), so ours take M2EX's
+// own Verdana (script/core/fonts.nut, ::EX.fonts.body) at RAZE_BUTTON_TEXT of the
+// button's height; without it the first of these game fonts the game has
+// (sq ::raze_ui_fonts() lists them).
 local RAZE_BUTTON_LABEL = "Raze Settlement"
-local RAZE_BUTTON_FACES = ["tnr_med", "font_14", "verdana"]
-local RAZE_BUTTON_INK = [0, 0, 0, 255]
-local RAZE_BUTTON_TIP = "Exterminate, tear down every building but the core and roads, and leave the ruins to the rebels"
-local raze_button_font = null        // the face picked from RAZE_BUTTON_FACES
+local RAZE_BUTTON_TEXT = 0.4
+local RAZE_BUTTON_FACES = ["verdana_sml", "font_14", "tnr_med"]
+local RAZE_BUTTON_INK = [30, 26, 20, 255]
+// Words under the mouse: none, as on the game's own three buttons ("" = none).
+local RAZE_BUTTON_TIP = ""
+// The scroll is made for three buttons: the 4th would stand on its bottom frame
+// (a tester's screen). It is made one button-step taller (its height written once
+// each time it opens); if the game keeps its size, the button stays under
+// Exterminate all the same (a tester's word: rather there than moved).
+local RAZE_GROW_SCROLL = true
+local raze_button_font = null        // M2EX's Verdana, else the face picked from RAZE_BUTTON_FACES
+local raze_grow = { asked = null, grown = null, frames = 0, said = false }   // the scroll's height (its own units)
 local raze_force_region = null       // region the Raze button asked for
 local raze_button_canvas = null
 local raze_button_art = null          // { l, m, r, dl, dm, dr } text-button sprites
@@ -674,40 +685,6 @@ function raze_sprite(ui, name) {
     return null
 }
 
-// Creates one text widget inside its own font scope.
-function raze_make(ui, font, size, make) {
-    local pushed = false
-    if (font != null) {
-        try {
-            ui.pushFont(font, false, size)
-            pushed = true
-        } catch (err) {
-        }
-    }
-    local handle = null
-    try {
-        handle = make()
-    } catch (err) {
-        if (pushed) {
-            try {
-                ui.popFont()
-            } catch (err2) {
-            }
-        }
-        throw err
-    }
-    if (pushed) {
-        try {
-            ui.popFont()
-        } catch (err) {
-        }
-    }
-    if (font != null) {
-        raze_style(ui, handle, ui.Font.body, font)
-    }
-    return handle
-}
-
 // A click in the window is only remembered here; it runs on the next frame,
 // outside the window's own draw, so the window can safely be destroyed.
 function raze_ui_run_click() {
@@ -847,28 +824,31 @@ function raze_build_window(ui, id, body_text, on_yes, on_no) {
                 local left = r[0] + px(RAZE_UI_PAD_X)
                 local top = r[1] + px(RAZE_UI_PAD_TOP)
 
-                // Title, centred.
-                ui.pushFont(title_font, false, title_size)
-                ui.layoutAt(r[0] + (r[2] - title_wh[0]) / 2, top)
-                ui.textColoured(title, RAZE_UI_TITLE_INK[0], RAZE_UI_TITLE_INK[1], RAZE_UI_TITLE_INK[2], RAZE_UI_TITLE_INK[3])
-                ui.popFont()
+                // Title, centred. Every font / style scope is handed its body as a closure: the engine closes it
+                // itself, also when the body throws (a scope left open draws the console and every later text of
+                // the frame in our font).
+                ui.pushFont(title_font, false, title_size, function() {
+                    ui.layoutAt(r[0] + (r[2] - title_wh[0]) / 2, top)
+                    ui.textColoured(title, RAZE_UI_TITLE_INK[0], RAZE_UI_TITLE_INK[1], RAZE_UI_TITLE_INK[2], RAZE_UI_TITLE_INK[3])
+                })
 
                 // The text, wrapped to the scroll.
                 local body_top = top + title_wh[1] + gap
-                ui.pushFont(body_font, false, body_size)
-                ui.pushStyle({ [ui.Colour.text] = RAZE_UI_BODY_INK })
-                ui.layoutAt(left, body_top)
-                ui.textWrapped(body_text, inner)
-                local body_bottom = body_top + body_wh[1]
-                try {
-                    local cur = ui.layoutCursor()
-                    if (cur != null && cur[1] > body_bottom) {
-                        body_bottom = cur[1]
-                    }
-                } catch (err) {
-                }
-                ui.popStyle()
-                ui.popFont()
+                local bottom = { v = body_top + body_wh[1] }
+                ui.pushFont(body_font, false, body_size, function() {
+                    ui.pushStyle({ [ui.Colour.text] = RAZE_UI_BODY_INK }, function() {
+                        ui.layoutAt(left, body_top)
+                        ui.textWrapped(body_text, inner)
+                        try {
+                            local cur = ui.layoutCursor()
+                            if (cur != null && cur[1] > bottom.v) {
+                                bottom.v = cur[1]
+                            }
+                        } catch (err) {
+                        }
+                    })
+                })
+                local body_bottom = bottom.v
 
                 // Tick and cross, centred under the text.
                 local by = body_bottom + gap * 2
@@ -1132,6 +1112,11 @@ function raze_capture_scroll_open() {
     local open = raze_element_rect(raze_game_element("loot_settlement_extermintate_button")) != null
     if (!open) {
         raze_scroll_flag = false
+        if (raze_grow.grown == null || raze_grow.frames > 10) {
+            raze_grow = { asked = null, grown = null, frames = 0, said = false }   // the next opening asks again
+        } else {
+            raze_grow.said = false
+        }
     }
     return open
 }
@@ -1227,12 +1212,71 @@ function raze_button_load_art(ui) {
     return art
 }
 
-// The game font the label is written in: the first of RAZE_BUTTON_FACES the game has.
+// The font the label is written in: M2EX's own Verdana (a size of our own), else the first of
+// RAZE_BUTTON_FACES the game has (a game face draws at its own baked size).
 function raze_button_face(ui) {
     if (raze_button_font == null) {
-        raze_button_font = raze_pick_face(ui, RAZE_BUTTON_FACES, RAZE_UI_FONT)
+        local ex = raze_ex(["fonts", "body"])
+        raze_button_font = ex != null ? ex : raze_pick_face(ui, RAZE_BUTTON_FACES, RAZE_UI_FONT)
     }
     return raze_button_font
+}
+
+function raze_face_name(face) {
+    return typeof face == "string" ? face : "M2EX's Verdana"
+}
+
+// The scroll one button-step taller, so the 4th button stands inside it: written once each time it opens (the
+// game may keep the element between openings - a scroll already as tall as we made it is left alone). Returns
+// true while the scroll is (or is about to be) tall enough, false once the game is seen to keep its own size.
+function raze_grow_scroll(el, step) {
+    if (!RAZE_GROW_SCROLL || el == null || step <= 0) {
+        return false
+    }
+    local hh = null, sh = null
+    try {
+        hh = el.height
+        sh = el.screenHeight
+    } catch (err) {
+        return false
+    }
+    if (hh == null || sh == null || sh <= 0) {
+        return false
+    }
+    if (raze_grow.grown != null && hh == raze_grow.grown) {
+        if (!raze_grow.said) {
+            raze_grow.said = true
+            raze_log("the capture scroll is one button taller (height " + raze_grow.asked + " -> " + hh
+                + ") - the Raze button stands inside it")
+        }
+        return true
+    }
+    if (raze_grow.asked != null) {                  // written, not (yet) taken: a few frames, then give up
+        raze_grow.frames += 1
+        if (raze_grow.frames > 10) {
+            if (!raze_grow.said) {
+                raze_grow.said = true
+                raze_log("the game kept the capture scroll's height (" + hh + ") - the Raze button stays under "
+                    + "Exterminate")
+            }
+            return false
+        }
+        return true
+    }
+    local add = (step * hh.tofloat() / sh + 0.5).tointeger()
+    try {
+        el.height = hh + add
+        raze_grow.asked = hh
+        raze_grow.grown = hh + add
+        raze_grow.frames = 0
+    } catch (err) {
+        raze_log("the capture scroll's height cannot be written (" + err + ") - the Raze button stays under "
+            + "Exterminate")
+        raze_grow.asked = hh
+        raze_grow.frames = 99
+        return false
+    }
+    return true
 }
 
 // What the Raze button does, on the frame after the click.
@@ -1310,7 +1354,7 @@ function raze_button_draw() {
         raze_button_logged = true
         local fmt = function(r) { return r == null ? "-" : "[" + r[0] + "," + r[1] + " " + r[2] + "x" + r[3] + "]" }
         raze_log("capture scroll " + fmt(scroll) + ", occupy " + fmt(occ)
-            + ", sack " + fmt(ens) + ", exterminate " + fmt(ext) + ", font " + raze_button_face(ui))
+            + ", sack " + fmt(ens) + ", exterminate " + fmt(ext) + ", font " + raze_face_name(raze_button_face(ui)))
     }
     // Next in the column/row: the same step as from Sack to Exterminate
     // (vertical or horizontal, whichever the scroll uses), same size.
@@ -1327,6 +1371,11 @@ function raze_button_draw() {
     if (scroll != null && x + w > scroll[0] + scroll[2]) {
         x = ext[0]
         y = ext[1] + h + h / 4
+    }
+    // Under Exterminate the scroll ends (it is made for three): it is made one step taller. If the game keeps its
+    // size, the button stays under Exterminate all the same.
+    if (scroll != null && y > ext[1]) {
+        raze_grow_scroll(raze_game_element("loot_settlement_scroll"), y - ext[1])
     }
     if (units != null) {                           // layout units -> screen px
         x = (x * units[0]).tointeger()
@@ -1354,23 +1403,33 @@ function raze_button_draw() {
         ui.drawRect(x, y, w, h, 200, 190, 160, 255)
     }
 
-    // The label, centred, in the scroll buttons' own font and ink.
+    // The label, centred, in a Verdana face as the game's own three and their dark ink; M2EX's Verdana sized
+    // to the button (and smaller if the words would reach its rolled ends).
+    local face = raze_button_face(ui)
+    local size = typeof face == "string" ? 0 : (h * RAZE_BUTTON_TEXT + 0.5).tointeger()
     local tw = [0, 0]
     try {
-        tw = ui.textSize(RAZE_BUTTON_LABEL, raze_button_face(ui), 0)
+        tw = ui.textSize(RAZE_BUTTON_LABEL, face, size)
+        local room = w - w / 5
+        if (size > 0 && tw[0] > room) {
+            size = (size * room.tofloat() / tw[0]).tointeger()
+            tw = ui.textSize(RAZE_BUTTON_LABEL, face, size)
+        }
     } catch (err) {
     }
     local off = down ? 1 : 0
-    ui.pushFont(raze_button_face(ui), false, 0)
-    ui.layoutAt(x + (w - tw[0]) / 2 + off, y + (h - tw[1]) / 2 + off)
-    ui.textColoured(RAZE_BUTTON_LABEL, RAZE_BUTTON_INK[0], RAZE_BUTTON_INK[1], RAZE_BUTTON_INK[2], RAZE_BUTTON_INK[3])
-    ui.popFont()
+    ui.pushFont(face, false, size, function() {        // the engine closes the scope, also on a throw
+        ui.layoutAt(x + (w - tw[0]) / 2 + off, y + (h - tw[1]) / 2 + off)
+        ui.textColoured(RAZE_BUTTON_LABEL, RAZE_BUTTON_INK[0], RAZE_BUTTON_INK[1], RAZE_BUTTON_INK[2], RAZE_BUTTON_INK[3])
+    })
 
     if (hit != null) {
-        try {
-            ui.tooltipAt(x, y, w, h)
-            ui.tooltip(0, RAZE_BUTTON_TIP)
-        } catch (err) {
+        if (RAZE_BUTTON_TIP != "") {
+            try {
+                ui.tooltipAt(x, y, w, h)
+                ui.tooltip(0, RAZE_BUTTON_TIP)
+            } catch (err) {
+            }
         }
         if (hit.clicked && raze_ui_click == null) {
             raze_ui_click = raze_button_pressed

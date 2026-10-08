@@ -7,6 +7,15 @@
   that stays (yellow) and its neighbour that goes (red), then **Merge them** - the second region and its town go from
   every file, all its land joins the first, which stays as it is. One write with a backup per pair; the switch stays
   on for the next pair. For maps with more regions than wanted.
+- **Delete many towns with their regions at once** (both games): with Select on, select the towns on the map, right
+  click > **Delete the N selected town(s) with their regions...** - one window lists each town and the region its
+  land goes to (the neighbour that stays it shares the longest border with; a region ringed only by regions deleted
+  with it follows them). The map shows them: red = goes, yellow = takes land; pick a row (or click a red region) and
+  its neighbours that could take its land turn green - click one to give it the land. One write, one backup, one Undo.
+- **Delete this town with its region** shows the choice on the map: red = the town's region, yellow = the region that
+  takes its land, green = the other neighbours - a click on a green one gives it the land (the list in the window
+  follows). The window stands beside the map, the whole map in sight; the mod's files are read once (they were read
+  three times - slow on a big mod).
 - **Map size: drag the map's edges** (Change size... under the map, both games): the map's four edges become an
   orange frame with a grip on each side - drag one out to add rows or columns of deep sea (shown blue), in to cut them
   off (shown dark); the window's numbers follow the mouse, and typed numbers move the frame. What stands on the part
@@ -44,6 +53,19 @@
   Preview first, a backup, Undo this write / Restore takes it all out. Nothing is drawn by the editor.
 
 ### Changed
+- **A region with no town of its own** (the game makes a rebel village there by itself): its town window is a short
+  note as big as its words (it was a window the size of the screen) with an owner to pick and **Write its town** -
+  the rebels too (the village as the game makes it, in the look of the faction descr_regions names as its builder)
+  or any faction; after Apply it opens like any town (buildings, garrison). Written with the next Apply, as the
+  Map's *Give this town to*.
+- **Edit region... shows the owner** (who holds the town at the start, descr_strat.txt) beside the region's own
+  lines; a change is written with the next Apply, as the Map's *Give this town to*; a region with no town gets its
+  town written there (the rebels too).
+- **Sack Settlement (Medieval II)**: the Raze Settlement button's words in the game's own Verdana (they were in a
+  Times face), no words under the mouse (the game's three buttons have none), and the capture scroll is made one
+  button taller so the 4th button stands inside it, not on its bottom edge; if the game keeps the scroll's size, the
+  button stays under Exterminate. **Avoid Growth (Medieval II)**: its words in the game's Verdana too. Put them in
+  the game again (Add-ons > Update it) to have the new look.
 - **Start the game** names what it starts: *Start Rome - CE_Test*, or in amber *Start Rome - no mod* when the
   game's own data is loaded (the game started the plain campaign right after a test mod was made, and it looked
   like the test mod). **Tools > Test mod** offers to load the new test mod and start the game with it.
@@ -69,6 +91,10 @@
   test mod.
 
 ### Fixed
+- **Add-ons (Sack Settlement, both games; Avoid Growth): the game's script console and other script texts turned
+  into another font** after the add-on had drawn - a font it opened could stay open when its drawing failed, and
+  everything drawn after it took that font. Every font the add-ons use is now closed by the game itself, whatever
+  happens. Put them in the game again (Add-ons > Update it).
 - The town window of a region with no town of its own (a rebel village the game makes by itself) failed when it was
   closed ('TownWindow' object has no attribute 'town'). It closes now.
 - **A town's own garrison, with no captain** (both games): a garrison written inside the town's own block -

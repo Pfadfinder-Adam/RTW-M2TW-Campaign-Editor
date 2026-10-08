@@ -42,6 +42,10 @@ local AG_OFFSET_Y = 0                // move the tick down (+) or up (-)
 // scroll's own tick labels use, in their grey-brown ink.
 local AG_FACES = ["verdana_sml", "tnr_sml", "verdana"]
 local AG_INK = [96, 82, 62, 255]
+// Medieval II writes its ticks' words (Auto-manage, Construction, Recruitment) in a plain Verdana-like face as big as
+// about half their box - M2EX's game faces draw at a fixed small size (a tester's screen: ours stood out), so the words
+// take M2EX's own Verdana (script/core/fonts.nut, ::EX.fonts.body) at AG_M2_TEXT of the box's height
+local AG_M2_TEXT = 0.58
 // Rome's Automanage, measured on a tester's screenshot (report R-20261007-8A29B4): its words (128, 119, 97), its box
 // 25 x 18 units (wider than high) standing 98 units right of where its words start - ours stands in that column too
 local AG_INK_ROME = [128, 119, 97, 255]
@@ -433,6 +437,18 @@ function ag_load_art(ui) {
     return ag_art
 }
 
+// M2EX's own Verdana (a size of our own), or null.
+function ag_ex_font() {
+    try {
+        local root = getroottable()
+        if ("EX" in root && "fonts" in root.EX && "body" in root.EX.fonts) {
+            return root.EX.fonts.body
+        }
+    } catch (err) {
+    }
+    return null
+}
+
 function ag_face(ui) {
     if (ag_font == null) {
         ag_font = AG_FACES[AG_FACES.len() - 1]
@@ -541,7 +557,8 @@ function ag_draw() {
             local r = ag_rect(ag_game_element(a[0]))
             line += " " + a[0] + (r == null ? " -" : " [" + r[0] + "," + r[1] + " " + r[2] + "x" + r[3] + "]")
         }
-        ag_log(line + "; the tick at " + at[0] + "," + at[1] + " beside " + at[2] + ", font " + ag_face(ui))
+        ag_log(line + "; the tick at " + at[0] + "," + at[1] + " beside " + at[2] + ", font "
+            + (art.m2 && ag_ex_font() != null ? "M2EX's Verdana" : ag_face(ui)))
     }
     local x = at[0] + (AG_OFFSET_X * k).tointeger()
     local y = at[1] + (AG_OFFSET_Y * k).tointeger()
@@ -553,17 +570,24 @@ function ag_draw() {
         words += " (at most " + store[name].cap + ")"
     }
     local face = ag_face(ui)
+    local size = 0
+    if (art.m2 && ag_ex_font() != null) {
+        face = ag_ex_font()
+        size = (box * AG_M2_TEXT + 0.5).tointeger()
+    }
     local tw = [words.len() * 7, 14]
     try {
-        tw = ui.textSize(words, face, 0)
+        tw = ui.textSize(words, face, size)
     } catch (err) {
     }
     // the words first, the box right of them - as the scroll's own 'Automanage [ ]' and Medieval II's ticks
-    ui.pushFont(face, false, 0)
-    ui.layoutAt(x, y + (box - tw[1]) / 2)
     local ink = art.m2 ? AG_INK : AG_INK_ROME
-    ui.textColoured(words, ink[0], ink[1], ink[2], ink[3])
-    ui.popFont()
+    // the engine closes the font scope itself, also when the body throws (a scope left open would draw the
+    // console and every later text of the frame in our font)
+    ui.pushFont(face, false, size, function() {
+        ui.layoutAt(x, y + (box - tw[1]) / 2)
+        ui.textColoured(words, ink[0], ink[1], ink[2], ink[3])
+    })
     local bx = x + tw[0] + (AG_GAP * k).tointeger()
     local bw = box
     if (!art.m2) {                  // in Automanage's column, as wide as its box

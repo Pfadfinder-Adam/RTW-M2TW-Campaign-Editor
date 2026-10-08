@@ -122,7 +122,8 @@ ADDONS = [
                    "mod's export_descr_unit.txt; empty = none"),
            Setting("RAZE_BUTTON", "bool", "The 4th button", "off: Exterminate asks Yes / No to raze instead"),
            Setting("RAZE_BUTTON_LABEL", "text", "Button text", "the words on the button"),
-           Setting("RAZE_BUTTON_TIP", "text", "Button tooltip", "shown when the mouse is over it")],
+           Setting("RAZE_BUTTON_TIP", "text", "Button tooltip", "shown when the mouse is over it; empty = none, as "
+                   "on the game's own three buttons")],
           "M2EX (Medieval II: Total War) - its own scripts (script/main.nut) load every .nut of the game's "
           "script/modules, whatever mod runs. Vanilla Medieval II runs no scripts - the add-on then does nothing.",
           picks={"RAZE_KEEP_CHAINS": "chains", "RAZE_DEFAULT_REBEL_UNITS": "units", "RAZE_FACTIONS": "factions"}),

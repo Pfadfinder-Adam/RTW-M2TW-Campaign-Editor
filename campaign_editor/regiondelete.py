@@ -25,7 +25,11 @@ Both games (Rome with REX or without, Medieval II with M2EX or without). Audited
 Refused, in plain words: the last town of a faction that is alive (it would die as the campaign loads and the game
 crash - a tester's Rome with REX), a faction rising there by an event, a campaign script that names the town or the
 region (the script would stop). Trait / ancillary conditions and REX / M2EX scripts that name it are listed as
-warnings: they simply never fire there again."""
+warnings: they simply never fire there again.
+
+Many at once (the map's Select, report R-20261008-7696AA): refusals() reads the files once for all of them (the
+last towns of a faction counted together), receivers() gives each region the neighbour that stays (one ringed by
+regions deleted with it follows them), delete_many() writes them in one plan - one backup, one Undo."""
 
 import os
 import re
@@ -124,9 +128,7 @@ def problems(mod, campaign, region, into=None, land=True):
     regions = mod.regions(campaign)
     if region not in regions:
         return ["%s is no region of this campaign" % region], []
-    town = regions[region].get("settlement") or ""
-    names = [n for n in (region, town) if n]
-    errors, warns = [], []
+    errors = []
     near = neighbours(mod, campaign, region) if land else [(into, 1)] if into else []
     if land and not near:
         errors.append("%s touches no other region's land (an island) - its land would belong to no region; give it to "
@@ -134,32 +136,82 @@ def problems(mod, campaign, region, into=None, land=True):
     elif into and into not in dict(near):
         errors.append("%s does not touch %s - its land can go only to a neighbour (%s)" % (
             into, region, ", ".join(r for r, _ in near[:6])))
+    more, warns = refusals(mod, campaign, [region])
+    return errors + more, warns
+
+
+def refusals(mod, campaign, gone, last_town=True):
+    """([refusals], [warnings]) for the regions `gone` deleted together, every file read once for all of them (a big
+    mod has tens of thousands): a faction left without a town (unless last_town is False - the caller says it its own
+    way), a faction rising in one by an event, a campaign script naming one (refused); other files naming one -
+    trait / ancillary conditions, REX / M2EX scripts (warned: they never fire there again)."""
+    regions = mod.regions(campaign)
+    gone = [r for r in gone if r in regions]
+    town = {r: regions[r].get("settlement") or "" for r in gone}
+    names = [n for r in gone for n in (r, town[r]) if n]
+    errors, warns = [], []
+
+    def named(got):
+        """The names a file's lines name (all of one region's when only one goes - the old words)."""
+        if len(gone) == 1:
+            return names
+        return [n for n in names if any(_word(n).search(line) for _, line in got)] or names
     from .emergence import emergent_events
     for c in sharing(mod, campaign):
         p = mod.campaign_file(c, "descr_strat.txt")
-        s = Strat(mod.load(p)) if p else None
-        owner = s.owners().get(region) if s else None
-        if owner and owner != "slave":
-            left = [r for r, o in s.owners().items() if o == owner and r != region]
-            if not left:
-                errors.append("%s is the last town of %s%s - a faction without a town dies as the campaign loads "
-                              "and the game crashes; give %s another town first" % (
-                                  town or region, owner, "" if c == campaign else " in %s" % c, owner))
+        owners = Strat(mod.load(p)).owners() if p else {}
+        for fac in sorted({owners.get(r) for r in gone} - {None, "slave"}) if last_town else ():
+            if [r for r, o in owners.items() if o == fac and r not in gone]:
+                continue
+            mine = [town[r] or r for r in gone if owners.get(r) == fac]
+            errors.append("%s %s the last town%s of %s%s - a faction without a town dies as the campaign loads and "
+                          "the game crashes; give %s another town first" % (
+                              ", ".join(mine), "is" if len(mine) == 1 else "are", "" if len(mine) == 1 else "s",
+                              fac, "" if c == campaign else " in %s" % c, fac))
         for fac, e in emergent_events(mod, c).items():
-            if e.get("region") == region:
+            if e.get("region") in gone:
                 errors.append("%s rises in %s by an event (descr_events.txt%s) - pick another region for it first "
-                              "(Events and later factions)" % (fac, region, "" if c == campaign else " of %s" % c))
+                              "(Events and later factions)" % (fac, e["region"], "" if c == campaign else " of %s" % c))
         for path in _script_files(mod, c):
             got = _hits(path, names)
             if got:
                 errors.append("%s names %s on line%s %s (%s) - the script would stop; change those lines first" % (
-                    mod.rel(path), " / ".join(names), "s" if len(got) > 1 else "",
+                    mod.rel(path), " / ".join(named(got)), "s" if len(got) > 1 else "",
                     ", ".join(str(n) for n, _ in got[:8]) + (" ..." if len(got) > 8 else ""), got[0][1][:60]))
     for path, got in _other_mentions(mod, campaign, names):
         warns.append("%s names %s on line%s %s - it never fires there again" % (
-            mod.rel(path), " / ".join(names), "s" if len(got) > 1 else "",
+            mod.rel(path), " / ".join(named(got)), "s" if len(got) > 1 else "",
             ", ".join(str(n) for n, _ in got[:6]) + (" ..." if len(got) > 6 else "")))
     return errors, warns
+
+
+def receivers(near, gone, chosen=None):
+    """Where the land of each region in `gone` goes when they are deleted together -> ({region: the region that
+    stays and takes its land}, [regions with nowhere to go]). near = {region: neighbours(...)} of every region in
+    gone. A region keeps the neighbour picked for it (chosen) when that one stays and touches it; else it goes to the
+    neighbour that stays it shares the longest border with. A neighbour deleted with it counts with the region its
+    own land goes to, so a region ringed only by regions deleted with it follows them (step by step, outside in)."""
+    gone, chosen = list(gone), chosen or {}
+    into, left = {}, sorted(gone)
+    while left:
+        known = dict(into)                    # each round reads the rounds before it only: the order never matters
+        for r in list(left):
+            pick = chosen.get(r)
+            if pick and pick not in gone and pick in dict(near.get(r, ())):
+                into[r] = pick
+            else:
+                count = {}
+                for n, k in near.get(r, ()):
+                    t = known.get(n) if n in gone else n
+                    if t:
+                        count[t] = count.get(t, 0) + k
+                if not count:
+                    continue
+                into[r] = min(count, key=lambda t: (-count[t], t))
+            left.remove(r)
+        if len(into) == len(known):
+            break
+    return into, left
 
 
 HANDLED = re.compile(r"(^|/)(descr_regions|descr_strat|descr_mercenaries|descr_win_conditions|descr_sounds_music_types|"
@@ -216,11 +268,13 @@ def _drop_block(f, start):
     del f.raw[start:end]
 
 
-def delete(plan, campaign, region, into=None, land=True):
+def delete(plan, campaign, region, into=None, land=True, checked=False):
     """Write the deletion into the plan (see the module text). Returns the region the land went to. land=False (a cut
-    of the map's edge takes all its land off the map): its pixels are left for the cut, given to no one (None)."""
+    of the map's edge takes all its land off the map): its pixels are left for the cut, given to no one (None).
+    checked: the caller has asked problems / refusals already (and says their warnings) - the files are not read
+    again (a big mod's thousands of them)."""
     mod = plan.mod
-    errors, warns = problems(mod, campaign, region, into, land)
+    errors, warns = ([], []) if checked else problems(mod, campaign, region, into, land)
     if errors:
         raise ValueError("; ".join(errors))
     regions = mod.regions(campaign)
@@ -280,6 +334,15 @@ def delete(plan, campaign, region, into=None, land=True):
     for w in warns:
         plan.warn(None, w)
     return into
+
+
+def delete_many(plan, campaign, into, warns=()):
+    """Many towns deleted with their regions in one plan (one backup, one Undo): into = {region: the region that
+    stays and takes its land} as receivers() gives it (refusals asked already - its warnings in warns)."""
+    for region in sorted(into):
+        delete(plan, campaign, region, into[region], checked=True)
+    for w in warns:
+        plan.warn(None, w)
 
 
 def _harvests(plan, path, region, tag):

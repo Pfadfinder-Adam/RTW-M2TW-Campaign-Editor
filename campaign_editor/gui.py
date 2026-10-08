@@ -2528,9 +2528,18 @@ class App(tk.Tk):
             fields = [("Region - name in the files", "file_region", edit, files_hint),
                       fields[0],
                       ("Town - name in the files", "file_town", town, files_hint)] + fields[1:]
+            # who holds it (descr_strat.txt, not descr_regions - a tester: 'why is the owner not here?'); a change
+            # goes the way of the Map's 'Give this town to' (with the next Apply)
+            village = edit not in self.strat.owners() and edit not in self.map_owners
+            owner_now = rebel_text if village else (self.owners_after().get(edit) or rebel_text)
+            fields.append(("Owner", "owner", owner_now,
+                           "no town in descr_strat.txt yet: the game makes a rebel village there - pick an owner "
+                           "(the rebels, slave, too) to write its town" if village else
+                           "who holds the town at the start (descr_strat.txt); a change is written with the next "
+                           "Apply"))
             ttk.Label(frm, text="%s - town %s. The names in the files are changed at once in every file (with a "
-                                "backup); the rest is written with the next Apply (descr_regions.txt, the names "
-                                "players see in the campaign's names text). Tip: give the name players see and the "
+                                "backup); the rest is written with the next Apply (descr_regions.txt, the owner in "
+                                "descr_strat.txt, the names players see in the campaign's names text). Tip: give the name players see and the "
                                 "name in the files the same spelling (Latium / Latium) - a mod is easier to read, "
                                 "search and fix when a place has one name everywhere."
                                 % (edit, town), font=("", 9, "bold"), wraplength=620, justify="left"
@@ -2542,7 +2551,8 @@ class App(tk.Tk):
             v = tk.StringVar(value=default)
             vs[key] = v
             if key in ("creator", "owner"):
-                vals = [AS_LAND] + facs if key == "creator" else ["(rebel village - no settlement written)"] + facs
+                vals = [AS_LAND] + facs if key == "creator" else \
+                    ([rebel_text] if not old or default == rebel_text else []) + facs
                 from .gui_util import FactionBox
                 FactionBox(frm, v, vals, self.shown_names(), width=34).grid(row=i, column=1, sticky="we", padx=6)
             elif key == "rebels":
@@ -2586,15 +2596,28 @@ class App(tk.Tk):
                         return
                     if val and val != now:
                         ch[k] = val
+                owner = d.get("owner", owner_now)
+                if owner != owner_now and owner not in facs:
+                    messagebox.showerror(APP, "%s is no faction of this mod" % owner, parent=w)
+                    return
                 self.remember()
                 if ch:
                     self.region_edits[region] = ch
                 else:
                     self.region_edits.pop(region, None)
+                if owner != owner_now:                   # the Map's 'Give this town to' - one Undo step with the rest
+                    from .gui_mapadd import give_town
+                    keep, self.remember = self.remember, lambda: None
+                    try:
+                        give_town(self, region, owner)
+                    finally:
+                        self.remember = keep
+                said = dict(ch, **({"owner": owner} if owner != owner_now else {}))
                 if w.winfo_exists():
                     w.destroy()
-                if ch:
-                    self.status.set("%s: %s - Preview, then Apply." % (region, ", ".join("%s %s" % x for x in ch.items())))
+                if said:
+                    self.status.set("%s: %s - Preview, then Apply." % (region, ", ".join("%s %s" % x
+                                                                                      for x in said.items())))
                 elif region == edit:
                     self.status.set("%s: as it is." % region)
                 return
@@ -4789,6 +4812,10 @@ class App(tk.Tk):
         if nr:
             items.append(("Delete the %d selected resource(s) / fort(s) from the map" % nr,
                           lambda: self.delete_selected_res(set(mv.sel_res))))
+        if n:
+            from .gui_settlements import delete_towns       # many at once (report R-20261008-7696AA)
+            items.append(("Delete the %d selected town(s) with their regions..." % n,
+                          self.once("delete_towns", lambda: delete_towns(self, sorted(picked), self))))
         if n or nc or nr:
             items.append((None, None))
         if region:
