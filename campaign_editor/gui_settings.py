@@ -181,11 +181,11 @@ class SettingsWindow(tk.Toplevel):
 
     def _updates(self, body):
         lf, _ = self._box(body, "New versions", "Only the number of the newest release is asked for - nothing is "
-                                                "sent. A newer one shows on the GitHub button at the bottom, which "
-                                                "then opens its page.")
+                                                "sent. A newer one turns the GitHub button at the bottom green with "
+                                                "its number; it then opens its page.")
         self.v_release = tk.BooleanVar(value=settings.get("release_check", True) is not False)
         ttk.Checkbutton(lf, variable=self.v_release, text="Look for a new version of the editor when it starts "
-                        "(on GitHub, every few hours)",
+                        "(on GitHub; again every 6 hours while it is open)",
                         command=lambda: settings.put("release_check", bool(self.v_release.get()))).pack(anchor="w")
 
     def _fixes(self, body):

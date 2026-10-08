@@ -853,7 +853,7 @@ class App(tk.Tk):
                 ("YouTube", "YouTube.TButton", YOUTUBE, "The editor's videos: what it does and how."),
                 ("Discord", "Discord.TButton", DISCORD, "Our Discord server: questions, help, ideas and news."),
                 ("GitHub", "GitHub.TButton", None, "The editor's page: downloads, the changes of every version, "
-                                                   "the wiki. When a newer version is out, its number shows here.")):
+                                                   "the wiki. When a newer version is out, it turns green with its number.")):
             b = ttk.Button(bar, text=text, style=style, cursor="hand2",
                            command=self.support if url == KOFI else (lambda u=url: self.open_link(u)) if url
                            else self.open_github)
@@ -917,21 +917,25 @@ class App(tk.Tk):
 
     def check_new_version(self):
         """A newer release of the editor on GitHub: its number on the GitHub button (newversion) - the one an earlier
-        check saw at once, a fresh look every few hours in a thread."""
+        check saw at once, a fresh look in a thread on every start and every few hours while the editor is open."""
         from . import newversion
         try:
             seen = newversion.known(VERSION)
-            if seen:
+            if seen and not getattr(self, "_release", None):
                 self.show_new_version(*seen, fresh=False)
             newversion.check(self, VERSION, self.show_new_version)
         except Exception as e:
             log.write("New version not looked for: %s" % e)
+        self.after(newversion.CHECK_EVERY * 1000, self.check_new_version)
 
     def show_new_version(self, number, url, fresh=True):
-        """'GitHub (new 0.30)' on the button, which then opens that release's page; a fresh find says so below."""
+        """'GitHub (new 0.30)' on the button, green, which then opens that release's page; a fresh find says so
+        below (once per number)."""
+        if getattr(self, "_release", None) == (number, url):
+            return
         self._release = (number, url)
         try:
-            self.b_github.configure(text="GitHub (new %s)" % number)
+            self.b_github.configure(text="GitHub (new %s)" % number, style="GitHubNew.TButton")
         except tk.TclError:
             return
         if fresh:

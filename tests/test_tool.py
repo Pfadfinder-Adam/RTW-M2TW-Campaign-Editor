@@ -7175,6 +7175,32 @@ building smith
         finally:
             settings.put("release_check", was)
 
+        # it looks on EVERY start, even right after a look (it waited 6 hours: a release made after the morning's
+        # start was not seen that day)
+        import time as _time
+
+        class Wait:
+            def after(self, ms, fn):
+                _time.sleep(0.01)
+                fn()
+        keep = {k: settings.get(k) for k in ("release_check", "release_checked_at", "release_latest")}
+        real, shown = NV.latest, []
+        try:
+            settings.put("release_check", True)
+            settings.put("release_checked_at", _time.time())
+            NV.latest = lambda current: ("v9.1.0", "https://example.org/v9.1.0")
+            NV.check(Wait(), "0.33.0", lambda *a: shown.append(a))
+            for _ in range(200):
+                if shown:
+                    break
+                _time.sleep(0.01)
+            self.assertEqual(shown, [("9.1", "https://example.org/v9.1.0")])
+        finally:
+            NV.latest = real
+            for k, v in keep.items():
+                settings.put(k, v if v is not None else ({} if k == "release_latest" else 0 if k != "release_check"
+                                                         else True))
+
     def test_buttons_wrap_instead_of_hiding(self):
         """A row of buttons narrower than its window: the left ones from the left edge, the right ones up to the
         right edge on one row when they fit; else they wrap button by button (left ones first, then the right ones

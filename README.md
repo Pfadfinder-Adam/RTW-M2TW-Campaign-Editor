@@ -381,7 +381,7 @@ free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 - Only builds made by this repository's GitHub Actions release workflow from its own source are signed.
 - Committers and reviewers: [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew). Approver (every signing request): [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew).
 
-Privacy: this program transfers nothing to other networked systems unless you press **Send** in *Report a bug / Suggest* (then only what that window shows); after that it asks, by the reports' numbers only, for the author's answers to them (on start every few hours - off in Tools > Settings > Reports), and asks GitHub for the number of the newest release (on start every few hours; nothing is sent - off in Tools > Settings > New versions). It reads and writes only the game or mod folder you load and its own files beside the exe (`CampaignEditor_settings.json`, `CampaignEditor_logs`, `CampaignEditor_addons`) (see [SECURITY.md](SECURITY.md)).
+Privacy: this program transfers nothing to other networked systems unless you press **Send** in *Report a bug / Suggest* (then only what that window shows); after that it asks, by the reports' numbers only, for the author's answers to them (on start every few hours - off in Tools > Settings > Reports), and asks GitHub for the number of the newest release (on every start and every 6 hours while it is open; nothing is sent - off in Tools > Settings > New versions). It reads and writes only the game or mod folder you load and its own files beside the exe (`CampaignEditor_settings.json`, `CampaignEditor_logs`, `CampaignEditor_addons`) (see [SECURITY.md](SECURITY.md)).
 
 ## License
 

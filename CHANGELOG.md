@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **A new version of the editor is seen at once**: the editor looks on GitHub on every start, and again every 6 hours
+  while it stays open (it looked at most once in 6 hours, only on start - a release made after the day's first start
+  was not seen that day). The GitHub button turns **green** with the new number (`GitHub (new 0.34)`) and opens that
+  release's page.
+
 ## 0.33.0 - 2026-10-08
 
 ### Added

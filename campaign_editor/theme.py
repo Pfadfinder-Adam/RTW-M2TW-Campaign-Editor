@@ -27,7 +27,8 @@ BUTTON_GAP = 4      # px between two buttons side by side
 # white words in either look - the links (Ko-fi, Discord, YouTube, GitHub) in their own sites' colours
 COLOURED = {"Play.TButton": ("#2e7d32", "#256628"), "PlayNoMod.TButton": ("#a35f00", "#864e00"), "Kofi.TButton": ("#ff5e5b", "#e14b48"),
             "Discord.TButton": ("#5865f2", "#4752c4"), "YouTube.TButton": ("#e00000", "#b80000"),
-            "GitHub.TButton": ("#1b1f24", "#0d1117")}
+            "GitHub.TButton": ("#1b1f24", "#0d1117"),
+            "GitHubNew.TButton": ("#1f883d", "#1a7f37")}       # GitHub's own green: a newer release is out
 NAMED = {"#cfe3ff": "accent"}
 
 BG_KEYS = ("field", "bg", "tab", "button", "trough", "accent", "active", "select")
