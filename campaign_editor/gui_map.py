@@ -732,11 +732,13 @@ class MapView(ttk.Frame):
         if keep and gone and fn:
             fn(keep, gone)
 
-    MARK_COLOURS = {"gone": (220, 40, 30), "this": (255, 120, 0), "into": (255, 212, 0), "can": (70, 190, 90)}
+    MARK_COLOURS = {"gone": (220, 40, 30), "this": (255, 120, 0), "into": (255, 212, 0), "can": (70, 190, 90),
+                    "waste": (128, 128, 128)}
 
     def mark_regions(self, marks=None, on_click=None):
         """Regions coloured on the map for a window that works on them - Delete a town with its region: red = goes,
-        orange = the one picked of many, yellow = takes its land, green = could take it (MARK_COLOURS). on_click(region
+        orange = the one picked of many, yellow = takes its land, green = could take it, grey = stays as a wasteland
+        (MARK_COLOURS). on_click(region
         or None for the sea) gets a left click on the map while they are shown (instead of a pick / a drag). No marks
         and no on_click: the map as it was."""
         self.region_marks = {r: k for r, k in (marks or {}).items() if r}

@@ -672,40 +672,6 @@ function raze_sprite(ui, name) {
     return null
 }
 
-// Creates one text widget inside its own font scope.
-function raze_make(ui, font, size, make) {
-    local pushed = false
-    if (font != null) {
-        try {
-            ui.pushFont(font, false, size)
-            pushed = true
-        } catch (err) {
-        }
-    }
-    local handle = null
-    try {
-        handle = make()
-    } catch (err) {
-        if (pushed) {
-            try {
-                ui.popFont()
-            } catch (err2) {
-            }
-        }
-        throw err
-    }
-    if (pushed) {
-        try {
-            ui.popFont()
-        } catch (err) {
-        }
-    }
-    if (font != null) {
-        raze_style(ui, handle, ui.Font.body, font)
-    }
-    return handle
-}
-
 // A click in the window is only remembered here; it runs on the next frame,
 // outside the window's own draw, so the window can safely be destroyed.
 function raze_ui_run_click() {
@@ -845,28 +811,31 @@ function raze_build_window(ui, id, body_text, on_yes, on_no) {
                 local left = r[0] + px(RAZE_UI_PAD_X)
                 local top = r[1] + px(RAZE_UI_PAD_TOP)
 
-                // Title, centred.
-                ui.pushFont(title_font, false, title_size)
-                ui.layoutAt(r[0] + (r[2] - title_wh[0]) / 2, top)
-                ui.textColoured(title, RAZE_UI_TITLE_INK[0], RAZE_UI_TITLE_INK[1], RAZE_UI_TITLE_INK[2], RAZE_UI_TITLE_INK[3])
-                ui.popFont()
+                // Title, centred. Every font / style scope is handed its body as a closure: the engine closes it
+                // itself, also when the body throws (a scope left open draws the console and every later text of
+                // the frame in our font).
+                ui.pushFont(title_font, false, title_size, function() {
+                    ui.layoutAt(r[0] + (r[2] - title_wh[0]) / 2, top)
+                    ui.textColoured(title, RAZE_UI_TITLE_INK[0], RAZE_UI_TITLE_INK[1], RAZE_UI_TITLE_INK[2], RAZE_UI_TITLE_INK[3])
+                })
 
                 // The text, wrapped to the scroll.
                 local body_top = top + title_wh[1] + gap
-                ui.pushFont(body_font, false, body_size)
-                ui.pushStyle({ [ui.Colour.text] = RAZE_UI_BODY_INK })
-                ui.layoutAt(left, body_top)
-                ui.textWrapped(body_text, inner)
-                local body_bottom = body_top + body_wh[1]
-                try {
-                    local cur = ui.layoutCursor()
-                    if (cur != null && cur[1] > body_bottom) {
-                        body_bottom = cur[1]
-                    }
-                } catch (err) {
-                }
-                ui.popStyle()
-                ui.popFont()
+                local bottom = { v = body_top + body_wh[1] }
+                ui.pushFont(body_font, false, body_size, function() {
+                    ui.pushStyle({ [ui.Colour.text] = RAZE_UI_BODY_INK }, function() {
+                        ui.layoutAt(left, body_top)
+                        ui.textWrapped(body_text, inner)
+                        try {
+                            local cur = ui.layoutCursor()
+                            if (cur != null && cur[1] > bottom.v) {
+                                bottom.v = cur[1]
+                            }
+                        } catch (err) {
+                        }
+                    })
+                })
+                local body_bottom = bottom.v
 
                 // Tick and cross, centred under the text.
                 local by = body_bottom + gap * 2
@@ -1351,10 +1320,10 @@ function raze_button_draw() {
     } catch (err) {
     }
     local off = down ? 1 : 0
-    ui.pushFont(RAZE_BUTTON_FONT, false, 0)
-    ui.layoutAt(x + (w - tw[0]) / 2 + off, y + (h - tw[1]) / 2 + off)
-    ui.textColoured(RAZE_BUTTON_LABEL, RAZE_BUTTON_INK[0], RAZE_BUTTON_INK[1], RAZE_BUTTON_INK[2], RAZE_BUTTON_INK[3])
-    ui.popFont()
+    ui.pushFont(RAZE_BUTTON_FONT, false, 0, function() {   // the engine closes the scope, also on a throw
+        ui.layoutAt(x + (w - tw[0]) / 2 + off, y + (h - tw[1]) / 2 + off)
+        ui.textColoured(RAZE_BUTTON_LABEL, RAZE_BUTTON_INK[0], RAZE_BUTTON_INK[1], RAZE_BUTTON_INK[2], RAZE_BUTTON_INK[3])
+    })
 
     if (hit != null) {
         try {

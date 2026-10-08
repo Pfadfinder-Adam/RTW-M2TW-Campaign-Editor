@@ -5,6 +5,7 @@ builds a level) and its garrison (the Units & armies tab's card picker; a named 
 Preview / Keep for Apply (written by the main window's Apply with the rest of the session, a backup first); the writing is masstown.apply - the same one place the 'many
 towns at once' window uses, so one town and many follow the same rules."""
 
+import re
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -20,28 +21,98 @@ class TownWindow(tk.Toplevel):
         super().__init__(app)
         self.app = app
         self.transient(app)
-        # as tall as the screen lets it be (a 900-pixel screen kept the buttons under the taskbar)
-        self.geometry("980x%d" % max(560, min(860, self.winfo_screenheight() - 110)))
-        self.minsize(720, 520)
+        self.small = None                                  # sized for a town (False) or for the short note (True)
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.body = ttk.Frame(self, padding=(10, 6, 10, 6))
         self.body.pack(fill="both", expand=True)
         self.load(region)
+
+    def _size(self, small):
+        """A town: 960 x 680 (report #155: the screen's height was 'a bit long'), never past the screen (a 900-pixel
+        screen kept the buttons under the taskbar), or the size the modder gave it last (kept in the settings); the
+        short note of a region with no town: as big as its words (a tester's screen: two lines in a window the size of
+        the screen)."""
+        from . import settings as _settings
+        if small == self.small:
+            return
+        self.small = small
+        if small:
+            self.minsize(1, 1)
+            self.geometry("")
+        else:
+            kept = str(_settings.get("town_window_size", "") or "")
+            m = re.match(r"^(\d+)x(\d+)$", kept)
+            w, h = (int(m.group(1)), int(m.group(2))) if m else (960, 680)
+            self.geometry("%dx%d" % (max(720, min(w, self.winfo_screenwidth() - 40)),
+                                     max(480, min(h, self.winfo_screenheight() - 110))))
+            self.minsize(720, 480)
+
+    def _keep_size(self):
+        """The town window's size as the modder left it - the next one opens so."""
+        from . import settings as _settings
+        if self.small is False:
+            try:
+                size = self.geometry().split("+")[0]
+            except tk.TclError:
+                return
+            if re.match(r"^\d+x\d+$", size):
+                _settings.put("town_window_size", size)
+
+    def _no_town(self, region):
+        """A region descr_strat.txt has no town for: the game makes a rebel village there by itself (no buildings,
+        a few rebels), so there is nothing to change yet - unless its town is written: for the rebels (the village
+        as it is, the look of the faction descr_regions names as its builder) or for a faction. Kept for Apply like
+        the Map's 'Give this town to' (the same one place, gui_mapadd.give_town)."""
+        from .gui_mapadd import factions_here, give_town
+        self.title("%s - %s" % (TITLE, region))
+        if (self.mod.regions(self.campaign).get(region) or {}).get("wasteland"):
+            ttk.Label(self.body, text="%s is a wasteland (REX / M2EX): no town, no owner, no rebels - nobody's land. "
+                                      "To give it a town again, right click a tile of its land on the Map: 'Give %s "
+                                      "its town here...'." % (region, region),
+                      wraplength=560, justify="left").pack(anchor="w")
+            ttk.Button(self.body, text="Close", command=self.close).pack(anchor="e", pady=(10, 0))
+            return
+        ttk.Label(self.body, text="%s has no town in descr_strat.txt: the game makes a rebel village there by itself "
+                                  "(no buildings, a few rebels). Write its town to change it here:" % region,
+                  wraplength=560, justify="left").pack(anchor="w")
+        facs = factions_here(self.app)
+        row = ttk.Frame(self.body)
+        row.pack(anchor="w", pady=(8, 0))
+        if not facs:
+            ttk.Label(row, text="(descr_strat.txt has no faction to give it to)", foreground="#666").pack(side="left")
+        else:
+            shown = self.app.shown_names() if hasattr(self.app, "shown_names") else {}
+            v_owner = tk.StringVar(value="slave" if "slave" in facs else facs[0])
+            ttk.Label(row, text="Owner").pack(side="left")
+            FactionBox(row, v_owner, facs, shown, state="readonly", width=30).pack(side="left", padx=4)
+
+            def write():
+                owner = v_owner.get()
+                if owner not in facs:
+                    return
+                give_town(self.app, region, owner)
+                self.app.status.set("%s: its town goes to %s with the next Apply - Preview first. Then double click "
+                                    "it on the Map to change its buildings and garrison." % (region, owner))
+                self._forget()
+                self.destroy()
+            ttk.Button(row, text="Write its town", command=write).pack(side="left", padx=(4, 0))
+            hint(row, "Its town is written into descr_strat.txt with the next Apply: a village of 400 people with no "
+                      "buildings, as the game makes it. Given to the rebels (slave) it stays theirs; given to a "
+                      "faction, that faction starts with it.", width=420).pack(side="left", padx=4)
+        ttk.Button(self.body, text="Close", command=self.close).pack(anchor="e", pady=(10, 0))
 
     # ---- reading ----
     def load(self, region):
         """Show region's town as the files hold it now (also when the window is reused for another town)."""
         self.region = region
         self.mod, self.campaign = self.app.mod, self.app.v_campaign.get()
-        town = next((t for t in MT.towns(self.mod, self.campaign) if t["region"] == region), None)
+        town = next(iter(MT.towns(self.mod, self.campaign, only=region)), None)      # one town, not all 749
         for w in self.body.winfo_children():
             w.destroy()
         self.town = town                                   # None: nothing to change - closing asks nothing
+        self._size(town is None)
         if town is None:
-            ttk.Label(self.body, text="%s has no town in descr_strat.txt (a rebel village the game makes by itself) - "
-                                      "give it to a faction first (right click on the Map > Give this town to)."
-                      % region, wraplength=640).pack(anchor="w")
-            ttk.Button(self.body, text="Close", command=self.close).pack(anchor="e", pady=10)
+            self._no_town(region)
             return
         self.town = town
         if not town.get("army") and town.get("near"):        # said in the log too: a report shows it
@@ -121,7 +192,7 @@ class TownWindow(tk.Toplevel):
         self.picked = None                                  # the buildings as picked here, None = as the file has
         self.garrison = None                                # the garrison as picked here, None = as it stands
         self.load_buildings()
-        self.load_garrison()
+        self.ged_loaded = False                             # the garrison's cards are made when it is first shown:
         self.v_owner.trace_add("write", lambda *a: self._owner_changed())
         self.v_level.trace_add("write", lambda *a: self.v_level.get() and self.bed.buildings is not None and
                                self.bed.set_level(self.v_level.get()))
@@ -142,6 +213,8 @@ class TownWindow(tk.Toplevel):
     def show_view(self, select=True):
         if select:
             self.views.select(self.ged if self.v_view.get() == "garrison" else self.bed)
+        if self.v_view.get() == "garrison" and not self.ged_loaded:
+            self.load_garrison()                            # HLR's owners have 500+ cards (report #155: slow to open)
         if self.v_view.get() == "garrison":
             t = self.town
             self.lbl_view.configure(text=("the army in the town: %s%s" % (t.get("army") or "a captain",
@@ -197,6 +270,7 @@ class TownWindow(tk.Toplevel):
 
     def load_garrison(self):
         from .units import faction_units
+        self.ged_loaded = True
         t, owner = self.town, self._owner()
         named = t.get("army_named")
         now = list(t.get("unit_names") or [])
@@ -222,7 +296,8 @@ class TownWindow(tk.Toplevel):
     def _owner_changed(self):
         """Another owner: the buildings it may build and the units it may have are its own."""
         self.load_buildings()
-        self.load_garrison()
+        if self.ged_loaded:
+            self.load_garrison()
 
     # ---- writing ----
     def changes(self):
@@ -342,6 +417,7 @@ class TownWindow(tk.Toplevel):
 
     def close(self):
         from .gui_util import close_guard                 # never closes over unwritten changes silently
+        self._keep_size()
         close_guard(self, TITLE, self._unwritten, self.write, after=self._forget)()
 
 

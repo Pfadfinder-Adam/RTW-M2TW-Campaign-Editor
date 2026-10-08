@@ -1,6 +1,8 @@
 """Is a newer release of the editor out? One GET of GitHub's public 'latest release' page of the editor's repository
-(nothing is sent, nothing else is asked), when the editor starts, once in CHECK_EVERY seconds, in a thread. A newer one
-puts its number on the GitHub button ('GitHub (new 0.30)') and the button opens its release page. The last answer is
+(nothing is sent, nothing else is asked), in a thread, on every start and again every CHECK_EVERY seconds while the
+editor stays open (it looked at most once in 6 hours, on start only: a release made after the morning's start was not
+seen that day). A newer one turns the GitHub button green with its number ('GitHub (new 0.30)') and the button opens its
+release page. The last answer is
 kept in the settings, so the mark shows at once on the next start; it goes away by itself once that version (or a
 later one) runs. Settings > 'Look for a new version' turns it off. Only releases count - the builds of every push
 (GitHub Actions) do not."""
@@ -15,7 +17,7 @@ from . import log, settings
 REPO = "MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor"
 PAGE = "https://github.com/" + REPO
 API = "https://api.github.com/repos/%s/releases/latest" % REPO
-CHECK_EVERY = 6 * 3600          # seconds between the checks on start
+CHECK_EVERY = 6 * 3600          # seconds between the looks while the editor stays open
 
 
 def _number(text):
@@ -68,15 +70,9 @@ def known(current):
 
 
 def check(app, current, done):
-    """When due (and not turned off): ask GitHub in a thread; done(number, page) runs in the window's thread when a
-    newer release is out. Offline or an error: one line in the log, nothing shown."""
+    """Unless turned off: ask GitHub in a thread; done(number, page) runs in the window's thread when a newer release
+    is out. Offline or an error: one line in the log, nothing shown."""
     if settings.get("release_check", True) is False:
-        return
-    try:
-        last = float(settings.get("release_checked_at") or 0)
-    except (TypeError, ValueError):
-        last = 0
-    if time.time() - last < CHECK_EVERY:
         return
     result = {}
 

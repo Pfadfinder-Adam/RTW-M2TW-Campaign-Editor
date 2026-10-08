@@ -169,7 +169,10 @@ class GarrisonEditor(ttk.Frame):
         """Lay the cards out in as many columns as the pane is wide."""
         kids = inner.winfo_children()
         cell = (kids[0].winfo_reqwidth() + 2) if kids else 58
-        cols = max(1, (inner.canvas.winfo_width() - 4) // cell)
+        width = inner.canvas.winfo_width()
+        if width <= 1:                       # not laid out yet: as wide as it asks, never one column of 500 cards
+            width = max(inner.canvas.winfo_reqwidth(), 600)  # (46 000 pixels tall - report #155, slow to open)
+        cols = max(1, (width - 4) // cell)
         if cols == inner.cols and inner.winfo_children():
             return
         inner.cols = cols

@@ -34,7 +34,7 @@ from .strat import FEMALE_KINDS, Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.32.0"
+VERSION = "0.33.0"
 KOFI = "https://ko-fi.com/pfadfinder"
 DISCORD = "https://discord.gg/uqA9MEn4Z"
 YOUTUBE = "https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ"
@@ -827,6 +827,8 @@ class App(tk.Tk):
         self._undo_bdir = None
         from . import plan as _plan
         _plan.WRITTEN.append(lambda bdir, p: self.after_idle(lambda: self._written(bdir, p)))
+        _plan.BEFORE.append(self._own_folder_first)
+        self._own_folder_asked = set()
         self.status_line = ttk.Label(srow, anchor="w", justify="left")
         self.status_line.pack(side="left", fill="x", expand=True)
         # long work (over a second or two): a moving bar and the seconds beside the message (NN/g: feedback while
@@ -853,7 +855,7 @@ class App(tk.Tk):
                 ("YouTube", "YouTube.TButton", YOUTUBE, "The editor's videos: what it does and how."),
                 ("Discord", "Discord.TButton", DISCORD, "Our Discord server: questions, help, ideas and news."),
                 ("GitHub", "GitHub.TButton", None, "The editor's page: downloads, the changes of every version, "
-                                                   "the wiki. When a newer version is out, its number shows here.")):
+                                                   "the wiki. When a newer version is out, it turns green with its number.")):
             b = ttk.Button(bar, text=text, style=style, cursor="hand2",
                            command=self.support if url == KOFI else (lambda u=url: self.open_link(u)) if url
                            else self.open_github)
@@ -917,21 +919,25 @@ class App(tk.Tk):
 
     def check_new_version(self):
         """A newer release of the editor on GitHub: its number on the GitHub button (newversion) - the one an earlier
-        check saw at once, a fresh look every few hours in a thread."""
+        check saw at once, a fresh look in a thread on every start and every few hours while the editor is open."""
         from . import newversion
         try:
             seen = newversion.known(VERSION)
-            if seen:
+            if seen and not getattr(self, "_release", None):
                 self.show_new_version(*seen, fresh=False)
             newversion.check(self, VERSION, self.show_new_version)
         except Exception as e:
             log.write("New version not looked for: %s" % e)
+        self.after(newversion.CHECK_EVERY * 1000, self.check_new_version)
 
     def show_new_version(self, number, url, fresh=True):
-        """'GitHub (new 0.30)' on the button, which then opens that release's page; a fresh find says so below."""
+        """'GitHub (new 0.30)' on the button, green, which then opens that release's page; a fresh find says so
+        below (once per number)."""
+        if getattr(self, "_release", None) == (number, url):
+            return
         self._release = (number, url)
         try:
-            self.b_github.configure(text="GitHub (new %s)" % number)
+            self.b_github.configure(text="GitHub (new %s)" % number, style="GitHubNew.TButton")
         except tk.TclError:
             return
         if fresh:
@@ -2528,9 +2534,18 @@ class App(tk.Tk):
             fields = [("Region - name in the files", "file_region", edit, files_hint),
                       fields[0],
                       ("Town - name in the files", "file_town", town, files_hint)] + fields[1:]
+            # who holds it (descr_strat.txt, not descr_regions - a tester: 'why is the owner not here?'); a change
+            # goes the way of the Map's 'Give this town to' (with the next Apply)
+            village = edit not in self.strat.owners() and edit not in self.map_owners
+            owner_now = rebel_text if village else (self.owners_after().get(edit) or rebel_text)
+            fields.append(("Owner", "owner", owner_now,
+                           "no town in descr_strat.txt yet: the game makes a rebel village there - pick an owner "
+                           "(the rebels, slave, too) to write its town" if village else
+                           "who holds the town at the start (descr_strat.txt); a change is written with the next "
+                           "Apply"))
             ttk.Label(frm, text="%s - town %s. The names in the files are changed at once in every file (with a "
-                                "backup); the rest is written with the next Apply (descr_regions.txt, the names "
-                                "players see in the campaign's names text). Tip: give the name players see and the "
+                                "backup); the rest is written with the next Apply (descr_regions.txt, the owner in "
+                                "descr_strat.txt, the names players see in the campaign's names text). Tip: give the name players see and the "
                                 "name in the files the same spelling (Latium / Latium) - a mod is easier to read, "
                                 "search and fix when a place has one name everywhere."
                                 % (edit, town), font=("", 9, "bold"), wraplength=620, justify="left"
@@ -2542,7 +2557,8 @@ class App(tk.Tk):
             v = tk.StringVar(value=default)
             vs[key] = v
             if key in ("creator", "owner"):
-                vals = [AS_LAND] + facs if key == "creator" else ["(rebel village - no settlement written)"] + facs
+                vals = [AS_LAND] + facs if key == "creator" else \
+                    ([rebel_text] if not old or default == rebel_text else []) + facs
                 from .gui_util import FactionBox
                 FactionBox(frm, v, vals, self.shown_names(), width=34).grid(row=i, column=1, sticky="we", padx=6)
             elif key == "rebels":
@@ -2586,15 +2602,28 @@ class App(tk.Tk):
                         return
                     if val and val != now:
                         ch[k] = val
+                owner = d.get("owner", owner_now)
+                if owner != owner_now and owner not in facs:
+                    messagebox.showerror(APP, "%s is no faction of this mod" % owner, parent=w)
+                    return
                 self.remember()
                 if ch:
                     self.region_edits[region] = ch
                 else:
                     self.region_edits.pop(region, None)
+                if owner != owner_now:                   # the Map's 'Give this town to' - one Undo step with the rest
+                    from .gui_mapadd import give_town
+                    keep, self.remember = self.remember, lambda: None
+                    try:
+                        give_town(self, region, owner)
+                    finally:
+                        self.remember = keep
+                said = dict(ch, **({"owner": owner} if owner != owner_now else {}))
                 if w.winfo_exists():
                     w.destroy()
-                if ch:
-                    self.status.set("%s: %s - Preview, then Apply." % (region, ", ".join("%s %s" % x for x in ch.items())))
+                if said:
+                    self.status.set("%s: %s - Preview, then Apply." % (region, ", ".join("%s %s" % x
+                                                                                      for x in said.items())))
                 elif region == edit:
                     self.status.set("%s: as it is." % region)
                 return
@@ -4069,8 +4098,45 @@ class App(tk.Tk):
         self.load()
         self.status.set("Set-up fixed: %s (backup made)." % ", ".join(p["id"] for p in found))
 
+    def _own_folder_first(self, plan):
+        """Before the first write into a mod the editor did not make (the game's own data, a downloaded mod - no
+        CampaignEditor_mod.json): asked once, 'Make your own mod folder first?' (recommended: the game / that mod stays
+        clean, its update never takes your work, deleting your folder takes everything back). 'Write here' is
+        remembered for that mod (settings own_folder_ok); 'Make my own mod folder' stops this write and opens New mod
+        folder."""
+        from . import gui_util, settings as _settings
+        from .newmod import game_root_of, marker
+        from .textio import NotWritten
+        import threading
+        if self.mod is None or plan.mod is not self.mod or threading.current_thread() is not threading.main_thread():
+            return                                   # another mod's plan (the test mod makes its own), or no window
+        root = os.path.dirname(os.path.abspath(self.mod.data))
+        key = os.path.normcase(root)
+        said = list(_settings.get("own_folder_ok", []) or [])
+        if marker(root) or key in said or key in self._own_folder_asked:
+            return
+        _, base = game_root_of(self.mod.data)
+        what = ("the game's own data folder - your changes would go into the game itself" if not base else
+                "%s, a mod the editor did not make - your changes would go into it" % base)
+        pick = gui_util.ask_choice(self, APP, (
+            "This is %s.\n\nBetter: a mod folder of your own (New mod folder...) - the game%s stays clean, an update "
+            "of %s never takes your work, and deleting your folder takes everything back. On the plain game it holds "
+            "only what you change.\n\nMake your own mod folder first? (Write here: not asked again for this mod - "
+            "a backup is made before every write anyway.)" % (what, " and %s" % base if base else "",
+                                                               base or "the game")),
+            ["Make my own mod folder", "Write here"], default=0, cancel=1)
+        if pick == 0:
+            self.after_idle(self.new_mod)
+            raise NotWritten("Nothing was written: make your own mod folder first - the New mod folder window is "
+                             "open; it is loaded when made, then do the change again there.")
+        if pick == 1:
+            _settings.put("own_folder_ok", said + [key])
+        else:                                        # the question closed: not asked again in this session
+            self._own_folder_asked.add(key)
+
     def new_mod(self):
-        """Make <game>/<name> from the loaded mod (every file copied; hard links on a tick), then load it."""
+        """Make <game>/<name> from the loaded mod (every file copied; hard links on a tick) - on the plain game a
+        THIN mod (nothing copied: only what changes goes into it), then load it."""
         if not self.mod:
             messagebox.showerror(APP, "load the mod (or the game's data folder) to build on first")
             return
@@ -4089,19 +4155,28 @@ class App(tk.Tk):
         v_name = tk.StringVar(value=(base or ("M2" if m2 else "RTW")) + "_" + (self.v["name"].get().strip().capitalize() or "New"))
         ttk.Entry(frm, textvariable=v_name, width=30).grid(row=3, column=0, sticky="we", padx=(0, 6))
         v_links = tk.BooleanVar(value=False)            # copies by default: a mod one shares stands on its own
-        ttk.Checkbutton(frm, text="Hard links instead of copies (no extra disk space - for a mod you keep to "
-                                  "yourself)", variable=v_links).grid(row=4, column=0, columnspan=2, sticky="w", pady=4)
-        ttk.Label(frm, justify="left", wraplength=560, text=(
+        if base:                                        # the plain game: a thin mod, nothing to copy or link
+            ttk.Checkbutton(frm, text="Hard links instead of copies (no extra disk space - for a mod you keep to "
+                                      "yourself)", variable=v_links).grid(row=4, column=0, columnspan=2, sticky="w",
+                                                                         pady=4)
+        thin_words = (
+            "The game stays untouched. The new mod holds only what you change (a 'thin' mod): nothing is copied now "
+            "- made at once, no disk space; the game reads every other file from its own data, and the editor puts "
+            "a game file into the mod the first time you change it (the whole map folder at the first change of the "
+            "map, so the game builds its map again there). The mod stays small - easy to share and to zip. "
+            "Deleting the new mod folder never touches the game.\n")
+        full_words = (
             "The base stays untouched. Every file is copied: the new mod stands on its own - to share, to zip, "
             "to change in any program (it takes the disk space of the base's files).\n"
             "Hard links (the tick above) are for a mod you keep to yourself: text files are still copied, models, "
             "textures and sounds become the same files on the disk as the base's under a second name - no extra "
             "space, Explorer still shows their full size. Only a program that overwrites such a file in place (a "
             "texture editor saving over a .dds, say) changes the base's file too - the tool itself never does. "
-            "Deleting the new mod folder never touches the game or the base mod.\n" +
-            ("It goes into the game's mods folder with %s.cfg and Start_%s.bat (Medieval II starts a mod "
-             "from its .cfg)." % ("<name>", "<name>") if m2 else
-             "A start script Start_<name>.bat is written into the new folder."))).grid(
+            "Deleting the new mod folder never touches the game or the base mod.\n")
+        start_words = ("It goes into the game's mods folder with %s.cfg and Start_%s.bat (Medieval II starts a mod "
+                       "from its .cfg)." % ("<name>", "<name>") if m2 else
+                       "A start script Start_<name>.bat is written into the new folder.")
+        ttk.Label(frm, justify="left", wraplength=560, text=(full_words if base else thin_words) + start_words).grid(
             row=5, column=0, columnspan=2, sticky="w", pady=(4, 8))
 
         def go():
@@ -4133,10 +4208,12 @@ class App(tk.Tk):
                 self.v_path.set(result["data"])
                 self.load()
                 messagebox.showinfo(APP, (
-                    "Made %s\n\n%d file(s) linked, %d copied (%.0f MB really written)%s.\n\n%s"
-                    "It is loaded now: the faction you create goes into it. Start the game with %s." % (
-                        st["target"], st["linked"], st["copied"], st["bytes_copied"] / 1048576.0,
-                        "" if st["hard_links"] else " - every file copied",
+                    "Made %s\n\n%s.\n\n%s"
+                    "It is loaded now: what you change goes into it. Start the game with %s." % (
+                        st["target"], "A thin mod: nothing copied - the game reads every file you do not change from "
+                        "its own data" if st.get("thin") else "%d file(s) linked, %d copied (%.0f MB really written)%s"
+                        % (st["linked"], st["copied"], st["bytes_copied"] / 1048576.0,
+                           "" if st["hard_links"] else " - every file copied"),
                         ("The linked files show full size in Explorer but take no disk space: they are the "
                          "base's own files under a second name. Deleting this folder never touches the "
                          "game.\n\n") if st["hard_links"] and st["linked"] else "",
@@ -4962,6 +5039,14 @@ class App(tk.Tk):
                     self.lb_build.selection_set(self.chosen.index(region))
                     self.load_buildings()
                 items.append(("Its buildings...  (Buildings)", buildings))
+        elif self._cmap and cid is None:
+            # a wasteland's land (REX / M2EX: no town, nobody's): the way back - its town on this tile
+            land = self._cmap.region_at(*xy)
+            if land and self._cmap.info.get(land, {}).get("wasteland"):
+                from .gui_settlements import wasteland_town
+                items.append(("%s - a wasteland (no town, nobody's)" % land, None))
+                items.append(("Give %s its town here..." % land, self.once(
+                    "wasteland_town:%s" % land, lambda: wasteland_town(self, land, tuple(xy), self))))
         port = getattr(self.map_view, "menu_port", None)
         if port and port not in self.ports_gone:
             def delete_port(port=port):
@@ -5091,7 +5176,7 @@ class App(tk.Tk):
                     self.show_map()
                 items.append(("Delete %s from the map" % c["name"], delete_own))
         land = region or (self._cmap.region_at(*xy) if self._cmap else None)
-        if cid is None and land:
+        if cid is None and land and not (self._cmap and self._cmap.info.get(land, {}).get("wasteland")):  # it hires none
             if items:
                 items.append((None, None))
             items.append(("Mercenaries for hire in %s..." % land, lambda: self.mercenaries_window(region=land)))
@@ -5627,7 +5712,9 @@ class App(tk.Tk):
                 out.append((key, "%s: %d change(s)" % (name, ed.pending())))
         if self.faction_pending():
             out.append(("faction", self._faction_label()))
-        for key, part in self.session_parts().items():     # the own windows' changes, kept for the one write
+        # the own windows' changes, kept for the one write; a part built at the write (a map cut) last of all: it is
+        # made on the files as every other part leaves them (towns given meanwhile count)
+        for key, part in sorted(self.session_parts().items(), key=lambda kv: bool(kv[1].get("build"))):
             out.append((key, part["label"]))
         return out
 
@@ -5641,14 +5728,16 @@ class App(tk.Tk):
             parts = self._session = {}
         return {k: v for k, v in parts.items() if v["mod"] == here}
 
-    def session_add(self, key, label, plan, after=None):
+    def session_add(self, key, label, plan, after=None, build=None):
         """A window's changes (its plan, made on the files as they are now) go into the session's list; kept again
         they replace the first. At the write each is laid over the files as the parts before it left them
-        (plan.rebased: line by line; the same lines changed twice are refused in words). after(bdir) once written."""
+        (plan.rebased: line by line; the same lines changed twice are refused in words). after(bdir) once written.
+        build (plan None): a part made only at the write, on the files as every other part left them - written
+        last (Map size: a cut counts the towns given on the Map meanwhile)."""
         from .plan import keep
         self.session_parts()
-        self._session[key] = {"label": label, "plan": keep(plan), "after": after,
-                              "mod": os.path.normcase(os.path.abspath(self.mod.data))}
+        self._session[key] = {"label": label, "plan": keep(plan) if plan is not None else None, "after": after,
+                              "build": build, "mod": os.path.normcase(os.path.abspath(self.mod.data))}
         self._mark_work()
         self.update_actions()
         n = len(self.pending_parts())
@@ -5665,6 +5754,8 @@ class App(tk.Tk):
 
     def _part_plan(self, key):
         part = (getattr(self, "_session", None) or {}).get(key)
+        if part is not None and part.get("build"):
+            return part["build"]()
         if part is not None:
             from .plan import rebased
             return rebased(part["plan"])
@@ -6229,7 +6320,11 @@ class App(tk.Tk):
     def report_callback_exception(self, exc, val, tb):
         """A crash inside the window: logged with its traceback and shown, never silent."""
         text = "".join(traceback.format_exception(exc, val, tb))
-        from .textio import WriteError
+        from .textio import NotWritten, WriteError
+        if isinstance(val, NotWritten):           # the modder's own choice (own mod folder first): said, no error box
+            log.write("Not written: %s" % val)
+            self.status.set(str(val))
+            return
         if isinstance(val, WriteError):           # the system refused a file (held, read-only, disk full): no bug
             log.write("Writing refused\n" + text)
             messagebox.showerror(APP, str(val))

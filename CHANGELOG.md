@@ -3,6 +3,67 @@
 ## Unreleased
 
 ### Added
+- **New mod folder on the plain game makes a thin mod**: nothing is copied (made at once, no disk space) - the mod
+  holds only what you change, the game reads every other file from its own data. The editor puts a game file into the
+  mod the first time you change it, and the whole map folder (all but map.rwm, which the game builds again there) the
+  first time you change the map. A mod built on another mod (HLR) still holds all of it - the game takes one mod
+  folder, never a chain.
+- **Recolour: an area of like colour in one click** (the touch-ups' new tool beside the brush): a click on the
+  'after' picture takes the whole patch of the picture's own colour joined to that point - a hood, a shield's field -
+  and paints it the new primary or secondary colour; 'keep as it was' + a click gives an area back; *alike* says how
+  far a colour may differ and still belong.
+- **The test mod's report puts what to look at first**: the steps that were already seen working in the game (per
+  game) are listed as such, the new or changed ones on top - 'look at these in the game'.
+- **Your own mod folder first?** Before the first write into the game's own data or a mod the editor did not make,
+  the editor asks once: *Make my own mod folder* (nothing is written, New mod folder opens) or *Write here* (not asked
+  again for that mod; a backup is made before every write anyway).
+- **A deleted town's region can stay as a wasteland** (Rome with REX, Medieval II with M2EX): *Delete this town with
+  its region* and *Delete the N selected towns* ask where its land goes - **stays as a wasteland** (the default with
+  an engine) or **goes to a neighbour** (as before; the only way of the original exes). A wasteland keeps the region
+  and its land but has no town, no owner, no rebels and no economy: the AI never goes for it, no victory counts it,
+  no neighbour grows, armies can still walk over it. An island can go too now. The engines' own way (REX's
+  `wasteland` keyword in descr_regions), in place of the old trick of a town hidden behind a river ring.
+- **The way back**: right click a wasteland's land on the Map - *Give it its town here...* writes its town on that
+  tile again (its name, the name players see, its owner; a village as the game makes it), with a backup.
+- **Map size**: a cut that takes a town off but leaves part of its land keeps that region as a wasteland (with an
+  engine) instead of giving the land to a neighbour.
+- **Map size: a cut that takes a faction's last town takes the faction out of this campaign** (both games), after a
+  question that names it - its people, its place in the faction lists, its diplomacy, its victory conditions and the
+  events that make it rise; it stays in the mod (its units, pictures and other campaigns keep it). Script lines naming
+  it are listed to change by hand. It was a refusal ('... would keep no town').
+
+### Changed
+- **README**: a quick start, what it works with, what is new, the features at a glance (the long list folds away), a
+  short FAQ.
+- **Faster on a big mod** (a tester's HLR, 749 regions): deleting 48 towns at once took about 21 seconds before the
+  window could write - every file is now read once for all of them (1.6 s); the town window opens about 5 times
+  faster (its garrison cards are made when the Garrison tab is first shown, one town is read instead of all of them)
+  and its first look never lays 500 unit cards out in one column.
+- **The town window is smaller** (960 x 680 at first instead of the screen's height) and opens at the size it was
+  last left at.
+- **Map size waits for Apply**: *Keep for Apply* puts the cut in the list of changes waiting; Apply changes writes it
+  after every other change, so a town given on the Map meanwhile counts - a faction that gets a town that stays keeps
+  its place, its family moves into that town. The window opens with other changes waiting too (it refused before).
+  Undo this write / Restore give the old map back.
+- **A new version of the editor is seen at once**: the editor looks on GitHub on every start, and again every 6 hours
+  while it stays open (it looked at most once in 6 hours, only on start - a release made after the day's first start
+  was not seen that day). The GitHub button turns **green** with the new number (`GitHub (new 0.34)`) and opens that
+  release's page.
+
+### Fixed
+- **Deleting a region left its block in descr_strat's regions section** (roads, forts, watchtowers - Barbarian
+  Invasion has 16): a region given to a neighbour now hands its forts and watchtowers over to the neighbour's block;
+  a wasteland's block goes (the game takes forts and watchtowers only in a region with a town).
+- **Check mod files**: no false alarms on building levels with a '+' in their names (`grain+1`) or on upgrades with
+  conditions (`fleet_arsenal requires factions { roman, } ...`) - a tester's HLR showed 72 of them, now none. A
+  wasteland region without REX / M2EX beside the game is said.
+- **Map size**: a cut over the rebels stopped with '... is not a character of slave' when a rebel general stood in a
+  rebel town on the part cut off (the town went with its garrison, then the general was looked for again). The
+  rebels' characters on the part cut off now simply go with the cut, generals too (they have no town to keep).
+
+## 0.33.0 - 2026-10-08
+
+### Added
 - **Merge regions** (a switch on the map's bar, both games): only the regions and town names drawn; click the region
   that stays (yellow) and its neighbour that goes (red), then **Merge them** - the second region and its town go from
   every file, all its land joins the first, which stays as it is. One write with a backup per pair; the switch stays
@@ -53,6 +114,19 @@
   Preview first, a backup, Undo this write / Restore takes it all out. Nothing is drawn by the editor.
 
 ### Changed
+- **A region with no town of its own** (the game makes a rebel village there by itself): its town window is a short
+  note as big as its words (it was a window the size of the screen) with an owner to pick and **Write its town** -
+  the rebels too (the village as the game makes it, in the look of the faction descr_regions names as its builder)
+  or any faction; after Apply it opens like any town (buildings, garrison). Written with the next Apply, as the
+  Map's *Give this town to*.
+- **Edit region... shows the owner** (who holds the town at the start, descr_strat.txt) beside the region's own
+  lines; a change is written with the next Apply, as the Map's *Give this town to*; a region with no town gets its
+  town written there (the rebels too).
+- **Sack Settlement (Medieval II)**: the Raze Settlement button's words in the game's own Verdana (they were in a
+  Times face), no words under the mouse (the game's three buttons have none), and the capture scroll is made one
+  button taller so the 4th button stands inside it, not on its bottom edge; if the game keeps the scroll's size, the
+  button stays under Exterminate. **Avoid Growth (Medieval II)**: its words in the game's Verdana too. Put them in
+  the game again (Add-ons > Update it) to have the new look.
 - **Start the game** names what it starts: *Start Rome - CE_Test*, or in amber *Start Rome - no mod* when the
   game's own data is loaded (the game started the plain campaign right after a test mod was made, and it looked
   like the test mod). **Tools > Test mod** offers to load the new test mod and start the game with it.
@@ -78,6 +152,10 @@
   test mod.
 
 ### Fixed
+- **Add-ons (Sack Settlement, both games; Avoid Growth): the game's script console and other script texts turned
+  into another font** after the add-on had drawn - a font it opened could stay open when its drawing failed, and
+  everything drawn after it took that font. Every font the add-ons use is now closed by the game itself, whatever
+  happens. Put them in the game again (Add-ons > Update it).
 - The town window of a region with no town of its own (a rebel village the game makes by itself) failed when it was
   closed ('TownWindow' object has no attribute 'town'). It closes now.
 - **A town's own garrison, with no captain** (both games): a garrison written inside the town's own block -

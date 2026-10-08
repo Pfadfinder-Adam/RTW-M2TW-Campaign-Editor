@@ -10,6 +10,7 @@ runs on vanilla and on any mod."""
 
 import os
 import random
+import re
 import time
 import traceback
 
@@ -1806,6 +1807,74 @@ def s_delete_many(c, mod):
     raise Skip("no two neighbouring rebel towns that can go together")
 
 
+@step("Map editor: two rebel towns deleted as WASTELANDS (REX / M2EX - the regions stay, nobody's; no neighbour "
+      "grows)",
+      "{waste} and {waste_back}: no town, no faction colour on the land, no rebels rise there; armies can walk over "
+      "it")
+def s_wasteland(c, mod):
+    from . import regiondelete as RD
+    if not RD.can_waste(mod):
+        raise Skip("no REX / M2EX beside the game - the original exe knows no wasteland")
+    keep = {c.said.get(k) for k in ("near", "far", "split_far", "gone_into", "merged_into")}
+    tiles = mod.city_tiles(c.campaign)
+    capital = next((tiles[r] for r in towns_of(c, mod, c.new) if tiles.get(r)), (0, 0))
+    rebels = [r for r in towns_of(c, mod, "slave") if r not in keep and tiles.get(r)]
+    free = []
+    for r in sorted(rebels, key=lambda r: -(abs(tiles[r][0] - capital[0]) + abs(tiles[r][1] - capital[1]))):
+        if not RD.refusals(mod, c.campaign, [r], waste=True)[0]:
+            free.append(r)
+        if len(free) == 2:
+            break
+    if len(free) < 2:
+        raise Skip("no two rebel towns that can go (each is named by a campaign script or an event)")
+    errors, warns = RD.refusals(mod, c.campaign, free, waste=True)
+    plan = Plan(mod, "delete", "%s_and_%s" % tuple(free), {})
+    RD.delete_many(plan, c.campaign, free, warns, waste=True)
+    c.said["waste"], c.said["waste_back"] = free
+    return plan
+
+
+@step("Map editor: a wasteland gets its town again on another tile (right click its land: 'Give it its town "
+      "here...')",
+      "{waste_back} has its town {waste_town} again at {waste_tile} - a village of the rebels")
+def s_wasteland_town(c, mod):
+    from . import regiondelete as RD
+    r = c.said.get("waste_back")
+    if not r or not (mod.regions(c.campaign).get(r) or {}).get("wasteland"):
+        raise Skip("no wasteland made by the step before")
+    img = mod.region_map(c.campaign)
+    colour = mod.regions(c.campaign)[r]["colour"]
+    spot = next((xy for xy in img.find(colour) if RD.town_problem(mod, c.campaign, r, xy) is None), None)
+    if spot is None:
+        raise Skip("%s has no tile with its own land all round" % r)
+    name = "CE_" + re.sub(r"[^A-Za-z0-9_]", "", r)[:20] + "_town"
+    plan = Plan(mod, "town", r, {})
+    RD.wasteland_town(plan, c.campaign, r, spot, name, "slave", "CE Wasteland Town")
+    c.said["waste_town"], c.said["waste_tile"] = name, "%d, %d" % tuple(spot)
+    return plan
+
+
+@step("Map: a rebel village written as the rebels' town (a region descr_strat.txt has no town for - its town window "
+      "writes it)",
+      "{village}'s town is in descr_strat.txt now (a rebel village built by {village_by}): a double click on it opens "
+      "its town window with its buildings and garrison")
+def s_village_town(c, mod):
+    from .edit import map_changes
+    s = _strat(mod, c.campaign)
+    written = s.owners()
+    tiles = mod.city_tiles(c.campaign)
+    regions = mod.regions(c.campaign)
+    village = next((r for r in sorted(regions) if r not in written and tiles.get(r)), None)
+    if village is None:
+        raise Skip("every region has its town in descr_strat.txt")
+    plan = Plan(mod, "map", "village_%s" % village, {})
+    map_changes(plan, c.campaign, {"owners": {village: "slave"}})
+    by = regions[village].get("creator") or ""
+    c.said["village"] = village
+    c.said["village_by"] = by if by and s.faction(by) else "the rebels"
+    return plan
+
+
 @step("Scripts in the game: the tooltip of Avoid Growth's tick changed in the script the test mod put in "
       "(REX / M2EX)",
       "the settlement scroll's tick (still 'Avoid Growth') shows '{label}' under the mouse; afterwards Add-ons > Scripts in the game... lists every script the "
@@ -2339,6 +2408,9 @@ COVERAGE = {
     "Map editor: a town deleted with its region": ["s_delete_region"],
     "Map: two regions merged into one (Merge regions)": ["s_merge_regions"],
     "Map: many towns deleted with their regions at once (Select)": ["s_delete_many"],
+    "Map: towns deleted as wastelands, the regions kept nobody's (REX / M2EX)": ["s_wasteland"],
+    "Map: a wasteland's town written again on a picked tile": ["s_wasteland_town"],
+    "Map: a rebel village's town written (town window of a region with no town)": ["s_village_town"],
     "Map size: tiles added or cut at the edges": ["s_map_size"],
     "Mercenaries: pools of regions and their units": ["s_mercs"],
     "New region": ["s_region", "s_region_garrison"],
@@ -2477,6 +2549,15 @@ def make_mod(data, name=NAME):
     return newmod.create_mod(data, name)[0], name
 
 
+def game_of_run(mod):
+    """'rome', 'bi' or 'm2tw' - the game a test run is on (the in-game marks are per game)."""
+    from . import emergence as EM
+    from .limits import game_kind
+    if game_kind(mod) == "medieval2":
+        return "m2tw"
+    return "bi" if EM.is_bi(mod) else "rome"
+
+
 def run(data, campaign, progress=None, make=True):
     """Make the test mod from data (the loaded mod or game; make=False works on data itself) and run every step.
     Returns (the mod's data folder, [result {'step', 'see', 'status' OK | FAILED | SKIPPED | NOTHING WRITTEN,
@@ -2524,7 +2605,7 @@ def run(data, campaign, progress=None, make=True):
         before = now
         rec["seconds"] = round(time.time() - t, 1)
         results.append(rec)
-    text = report(data, campaign, names, results)
+    text = report(data, campaign, names, results, game_of_run(ModData(data)))
     with open(os.path.join(os.path.dirname(data), "CE_Test_report.txt"), "w", encoding="utf-8") as fh:
         fh.write(text)
     return data, results, text
@@ -2544,7 +2625,47 @@ def run_x3(data, campaign, progress=None):
     return data, warn
 
 
-def report(data, campaign, names, results):
+# steps SEEN WORKING IN THE GAME (the testers' runs: reports repo tester/<date>/*/summary.md, the user's own looks):
+# {step: {game: editor version}} - the report lists them as 'seen working, no need to look again' and puts every other
+# step on top as 'look at these'. A step whose feature changed after it was seen goes in CHANGED_SINCE with that
+# version - it is to look at again. (Keep both up to date with each in-game run.)
+SEEN_IN_GAME = {
+    "s_new_faction": {"rome": "0.29.2", "m2tw": "0.29.2", "bi": "0.29.2"},
+    "s_later": {"m2tw": "0.29.2"}, "s_later_way": {"m2tw": "0.29.2"},
+    "s_shadow": {"m2tw": "0.29.2", "bi": "0.29.2"}, "s_split": {"m2tw": "0.29.2", "bi": "0.29.2"},
+    "s_forts": {"rome": "0.29.2"},
+    "s_region": {"m2tw": "0.29.2", "rome": "0.29.2"}, "s_region_garrison": {"m2tw": "0.29.2", "rome": "0.29.2"},
+    "s_rename": {"m2tw": "0.29.2", "rome": "0.29.2"},
+    "s_events": {"m2tw": "0.29.2", "rome": "0.29.2", "bi": "0.29.2"},
+    "s_rules": {"m2tw": "0.29.2", "rome": "0.29.2"}, "s_campaign_start": {"m2tw": "0.29.2", "rome": "0.29.2"},
+    "s_engine_rules": {"m2tw": "0.29.2", "rome": "0.29.2"}, "s_rules_all": {"m2tw": "0.29.2", "rome": "0.29.2"},
+    "s_religion": {"bi": "0.30.0"},
+    "s_addon_diplomacy": {"rome": "0.29.2"},
+    "s_module": {"rome": "0.32.0", "m2tw": "0.29.2", "bi": "0.29.2"},
+    "s_events_more": {"rome": "0.29.2", "bi": "0.29.2"},
+    "s_delete_region": {"m2tw": "0.29.2"},
+    "s_aboard": {"m2tw": "0.29.2", "rome": "0.32.0"},
+    "s_special_type": {"m2tw": "0.29.2", "rome": "0.29.2", "bi": "0.29.2"},
+    "s_special": {"m2tw": "0.29.2", "rome": "0.29.2", "bi": "0.29.2"},
+}
+# changed after it was seen: {step: the version that changed it}
+CHANGED_SINCE = {"s_addon": "0.33.0", "s_addon_growth": "0.33.0", "s_module": "0.32.0", "s_delete_region": "0.34.0"}
+
+
+def _ver(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v or "0"))
+
+
+def seen_working(fn, game):
+    """The editor version a step was seen working in the game with, when its feature has not changed since - else
+    None (a step to look at)."""
+    v = SEEN_IN_GAME.get(fn, {}).get(game)
+    if v and _ver(CHANGED_SINCE.get(fn)) > _ver(v):
+        return None
+    return v
+
+
+def report(data, campaign, names, results, game=None):
     ok = sum(1 for r in results if r["status"] == "OK" and not r["new_problems"])
     out = ["The editor's test mod - every feature, one step each", "",
            "Mod: %s" % os.path.dirname(data), "Campaign: %s" % campaign,
@@ -2557,6 +2678,14 @@ def report(data, campaign, names, results):
            "Its add-ons and modules go into the GAME's script/modules (the engine runs them from there), not into "
            "CE_Test: when you throw the test mod away, Add-ons > Scripts in the game... takes them out with one "
            "press.", ""]
+    if game:
+        look = [(n, r) for n, r in enumerate(results, 1) if r["status"] == "OK" and not seen_working(r.get("fn"), game)]
+        seen = [(n, r) for n, r in enumerate(results, 1) if r["status"] == "OK" and seen_working(r.get("fn"), game)]
+        out.append("LOOK AT THESE IN THE GAME (%d - new, or changed since they were seen working):" % len(look))
+        out += ["  %2d. %s" % (n, r["step"]) for n, r in look]
+        out += ["", "Seen working in the game already (%d - no need to look again unless you want to):" % len(seen)]
+        out += ["  %2d. %s  (seen with %s)" % (n, r["step"], seen_working(r.get("fn"), game)) for n, r in seen]
+        out += ["", "Every step:"]
     for n, r in enumerate(results, 1):
         out.append("%2d. [%s] %s" % (n, r["status"], r["step"]))
         if r.get("error"):
@@ -2583,4 +2712,5 @@ def report(data, campaign, names, results):
     return "\n".join(out) + "\n"
 
 
-__all__ = ["STEPS", "COVERAGE", "UI", "coverage_problems", "ui_entry", "run", "run_x3", "report", "make_mod", "problems", "NAME"]
+__all__ = ["STEPS", "COVERAGE", "UI", "coverage_problems", "ui_entry", "run", "run_x3", "report", "make_mod", "problems", "NAME",
+           "SEEN_IN_GAME", "CHANGED_SINCE", "seen_working"]

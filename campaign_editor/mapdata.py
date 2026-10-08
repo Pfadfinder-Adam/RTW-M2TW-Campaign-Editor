@@ -105,7 +105,8 @@ class CampaignMap:
         parts = ["tile %d, %d" % (x, y)]
         if region:
             town = self.info.get(region, {}).get("settlement", "")
-            parts.append("%s (%s)" % (region, town))
+            parts.append("%s (%s)" % (region, "a wasteland - no town, nobody's" if self.info.get(region, {}).get(
+                "wasteland") else town))
             if owners:
                 parts.append("owner " + owners.get(region, "?"))
             rel = self.info.get(region, {}).get("religions")

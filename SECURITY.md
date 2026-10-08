@@ -7,8 +7,8 @@ Only the latest release gets fixes. Please update to it before reporting a probl
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.32.x (latest) | :white_check_mark: |
-| < 0.32   | :x:                |
+| 0.33.x (latest) | :white_check_mark: |
+| < 0.33   | :x:                |
 
 ## Where to get it
 
@@ -66,7 +66,7 @@ gets back only the author's comments on those reports and whether they are close
 (and, if you pick them, screenshots and the logs, names cut out as above) to the same report. Switch the start-up look
 off in Tools > Settings > Reports.
 
-**New versions**: when it starts (at most every 6 hours) the editor asks GitHub's public page of its own
+**New versions**: when it starts, and every 6 hours while it stays open, the editor asks GitHub's public page of its own
 repository for the number of the newest release (`api.github.com/repos/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor/releases/latest`).
-Nothing is sent with it but the request itself; a newer number shows on the GitHub button. Switch it off in
+Nothing is sent with it but the request itself; a newer number turns the GitHub button green. Switch it off in
 Tools > Settings > New versions.

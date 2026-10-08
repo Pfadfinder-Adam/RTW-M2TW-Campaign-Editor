@@ -2,8 +2,10 @@
 or cut off it, every place on the map moved with it (mapresize). The edges are dragged on the map itself (an orange
 frame with a grip on each side: out = new sea, drawn blue; in = cut off, drawn dark) or typed as numbers - both stay
 in step. What stands on the part cut off is ringed red on the map and named in the window; it goes with the cut
-after a question (mapresize.clear_cut), so the modder may move it first. One window, as Bigger map (x3)...: what happens, the four edges, a backup, and the old map back with one
-button."""
+after a question (mapresize.clear_cut), so the modder may move it first; a faction left without a town leaves this
+campaign with it (factionout - it stays in the mod). The cut is KEPT FOR APPLY, not written at once: it is made at the
+write, after every other change waiting (App.session_add build=), so a town given on the Map meanwhile counts - the
+faction that gets one stays and its family moves there. Undo this write / Restore give the old map back."""
 
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -18,16 +20,12 @@ SIDES = (("left", "Left"), ("right", "Right"), ("top", "Top"), ("bottom", "Botto
 
 def open_map_size(app, view=None):
     """The window (App.map_size_window); view = the map whose edges are dragged (the main window's by default)."""
-    from .mapresize import blocking, cut_words, places, plan_resize
+    from .mapresize import blocking, cut_words, lost_factions, places, plan_resize
     from .moddata import ModData
-    from .plan import Plan, restore_to
+    from .plan import Plan
+    from .regiondelete import can_waste
     if not app.mod:
         messagebox.showinfo(APP, "Load a mod first.")
-        return None
-    if app.pending_parts():
-        messagebox.showwarning(APP, "There are changes not written yet (%s). Apply or undo them first - the map is "
-                                    "changed from the files as they are."
-                               % ", ".join(label for _, label in app.pending_parts()))
         return None
     view = view or getattr(app, "map_view", None)
     if view is not None and not getattr(view, "cmap", None):
@@ -63,8 +61,11 @@ def open_map_size(app, view=None):
         "part cut off is ringed red on the map and named here: it goes with the cut - towns with their regions (the "
         "land of theirs that stays joins a neighbour), armies, agents, fleets, resources, forts, events - after a "
         "question, so you can move what you want to keep first; family members are never deleted, they move to "
-        "their faction's nearest town. Everything that stays moves with the map. Nothing is written until you press "
-        "the button; a backup is made first, and 'Put the old map back' gives every file back.")
+        "their faction's nearest town. A faction left without any town leaves this campaign with all its people (it "
+        "stays in the mod: its units, pictures, other campaigns). Everything that stays moves with the map. The cut "
+        "waits for Apply changes (bottom left): until then give such a faction a town that stays (Map: right click "
+        "a town > Give this town to) and it stays, its family moving into that town. A backup is made first; Undo "
+        "this write or Tools > Restore a backup gives every file back.")
               ).pack(anchor="w", fill="x", pady=(4, 0))
     grid = ttk.Frame(frm)
     grid.pack(anchor="w", pady=(10, 0))
@@ -101,6 +102,16 @@ def open_map_size(app, view=None):
             return []
         return blocking(found, w0, h0, **n)
 
+    def lost(n):
+        """{faction: its towns cut off} of the factions the cut leaves without a town - the towns given on the Map
+        and not written yet counted."""
+        if not n or not any(v < 0 for v in n.values()):
+            return {}
+        try:
+            return lost_factions(app.mod, camp, owners=app.owners_after(), **n)
+        except (OSError, ValueError):
+            return {}
+
     def after(*_):
         n = numbers()
         if n is None:
@@ -114,9 +125,12 @@ def open_map_size(app, view=None):
         if W < 1 or H < 1:
             lbl_block.configure(text="The map would have no tiles left.")
         elif hit:
+            gone = lost(n)
             lbl_block.configure(text="On the part cut off (ringed red on the map) - it goes with the cut, you are "
-                                     "asked first (or move it away before):\n%s" % "\n".join(
-                                         "- " + x for x in cut_words(hit)))
+                                     "asked first (or move it away before):\n%s%s" % (
+                                         "\n".join("- " + x for x in cut_words(hit, can_waste(app.mod))),
+                                         "".join("\n- %s keeps no town - it leaves this campaign with the cut (give "
+                                                 "it a town that stays to keep it)" % f for f in gone)))
         else:
             lbl_block.configure(text="")
         if view is not None and not done["syncing"] and getattr(view, "edge_mode", False):
@@ -157,92 +171,78 @@ def open_map_size(app, view=None):
             leave_the_map()
     w.bind("<Destroy>", closed, add="+")
 
-    def make_plan(write=False):
+    def build(n, out):
+        """The cut's plan on the files as they are at this moment (at the write: as every other part left them)."""
+        p = Plan(ModData(app.mod.data), "map", "map_size", {})
+        done["warn"] = plan_resize(p, camp, clear=any(v < 0 for v in n.values()), factions_out=out, **n)
+        return p
+
+    def make_plan(keep=False):
         n = numbers()
         if n is None:
             messagebox.showerror(APP, "Only whole numbers, please.", parent=w)
             return None
         hit = in_the_way(n)
-        p = Plan(ModData(app.mod.data), "map", "map_size", {})
-        try:
-            done["warn"] = plan_resize(p, camp, clear=bool(hit), **n)
+        gone = lost(n)
+        try:                                         # checked now on the files as they are (a refusal said at once)
+            p = build(n, tuple(gone) + tuple(lost_factions(app.mod, camp, **n)) if hit else ())
         except ValueError as e:
             v_state.set("Not possible: %s" % e)
-            log.write("Map size: not written - %s" % e)
+            log.write("Map size: not kept - %s" % e)
             messagebox.showwarning(APP, "The map's size cannot be changed like this:\n\n%s" % e, parent=w)
             return None
         # asked only once the cut is known to be possible (a refusal is said first, without a question)
-        if hit and write and not ask(
-                APP, "The cut takes these off the map with it:\n\n- %s\n\nThey are deleted from the files (a backup "
-                     "first - 'Put the old map back' gives every one back). Something to keep? Press Not now, move it "
-                     "off the part cut off on the map (Map editor), Apply, then cut." % "\n- ".join(cut_words(hit)),
-                parent=w, yes="Delete them and cut", no="Not now"):
-            v_state.set("Not written - nothing changed.")
+        if hit and keep and not ask(
+                APP, "The cut takes these off the map with it:\n\n- %s%s\n\nNothing is written now: the cut waits for "
+                     "Apply changes (a backup first; Undo this write gives every one back). Until then you can move "
+                     "what you want to keep off the part cut off on the map%s." % (
+                         "\n- ".join(cut_words(hit, can_waste(app.mod))),
+                         "".join("\n- %s keeps no town (%s) - it leaves this campaign with all its people; the "
+                                 "faction stays in the mod" % (f, ", ".join(t[:4]) + (" ..." if len(t) > 4 else ""))
+                                 for f, t in gone.items()),
+                         ", or give a faction that keeps no town a town that stays (right click a town > Give this "
+                         "town to) - then it stays and its family moves there" if gone else ""),
+                parent=w, yes="Keep the cut for Apply", no="Not now"):
+            v_state.set("Not kept - nothing changed.")
             return None
         v_state.set("Ready: %d file(s) will change%s. Nothing is written yet." % (
             len(p.changed_files()), ", %d thing(s) on the part cut off go with it" % len(hit) if hit else ""))
-        return p
+        return p, n, tuple(gone)
 
     def show_all():
-        p = make_plan()
-        if p:
-            app.show_text("Every change of the map's size - nothing written yet", p.report())
+        got = make_plan()
+        if got:
+            app.show_text("Every change of the map's size - nothing written yet", got[0].report())
 
-    def write():
-        p = make_plan(write=True)
-        if not p:
+    def keep():
+        got = make_plan(keep=True)
+        if not got:
             return
-        try:
-            bdir = p.apply()
-        except Exception as e:
-            log.write("Map size: not written - %s" % e)
-            messagebox.showerror(APP, "Not written: %s" % e, parent=w)
-            return
-        done["bdir"] = bdir
-        log.write("Map size changed (backup %s)\n%s" % (bdir, p.report()))
-        leave_the_map()
-        app.load()
-        now = ModData(app.mod.data).region_map(camp)
-        if view is not None:
-            try:
-                view.fit()
-            except tk.TclError:
-                pass
-        app.status.set("The map is %d x %d tiles now - written (backup %s)." % (now.width, now.height, bdir))
-        v_state.set("DONE: the map is %d x %d tiles now. On the first start the game builds map.rwm again (a "
-                    "while).%s\nNot happy with it? 'Put the old map back' undoes it (or later: Tools > Restore a "
-                    "backup...)." % (now.width, now.height, "".join("\n- " + x for x in done.get("warn") or ())))
-        lbl_block.configure(text="")
+        p, n, gone = got
+        W, H = w0 + n["left"] + n["right"], h0 + n["top"] + n["bottom"]
+        label = "Map size: %d x %d -> %d x %d tiles%s" % (w0, h0, W, H, "; leave the campaign: %s" % ", ".join(gone)
+                                                           if gone else "")
+
+        def written(bdir):
+            log.write("Map size changed (backup %s)%s" % (bdir, "".join("\n- " + x for x in done.get("warn") or ())))
+        app.session_add("map_size", label, None, after=written, build=lambda: build(n, gone))
+        v_state.set("KEPT for Apply: %s. Apply changes (bottom left) writes it after every other change waiting - "
+                    "a town given on the Map meanwhile counts. On the first start the game builds map.rwm again (a "
+                    "while)." % label)
         for b in bar.winfo_children():
             b.destroy()
-        ttk.Button(bar, text="Put the old map back", command=undo).pack(side="left")
+        ttk.Button(bar, text="Keep for Apply", command=keep).pack(side="left")
+        ttk.Button(bar, text="Preview", command=show_all).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Throw the cut away", command=throw).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Close", command=w.destroy).pack(side="left", padx=(6, 0))
 
-    def undo():
-        bdir = done.get("bdir")
-        if not bdir or not ask(APP, "Put the old map back? Every file the new size changed is put "
-                                    "back as it was (and every change made after it).", parent=w,
-                               yes='Put the old map back', no='Cancel'):
-            return
-        try:
-            restore_to(ModData(app.mod.data), bdir)
-        except (ValueError, OSError) as e:
-            messagebox.showerror(APP, "Not undone: %s" % e, parent=w)
-            return
-        log.write("Map size undone (backup %s restored)" % bdir)
-        app.load()
-        if view is not None:
-            try:
-                view.fit()
-            except tk.TclError:
-                pass
-        app.status.set("The old map is back (backup %s restored)." % bdir)
-        v_state.set("The old map is back - every file as it was before.")
-        for b in bar.winfo_children():
-            b.destroy()
-        ttk.Button(bar, text="Close", command=w.destroy).pack(side="left")
+    def throw():
+        app.session_drop("map_size")
+        v_state.set("The kept change of the map's size is thrown away - nothing will be written for it.")
 
-    ttk.Button(bar, text="Write it in", command=write).pack(side="left")
+    if app.session_kept("map_size"):
+        v_state.set("A change of the map's size is kept for Apply already - Keep for Apply replaces it.")
+    ttk.Button(bar, text="Keep for Apply", command=keep).pack(side="left")
     ttk.Button(bar, text="Preview", command=show_all).pack(side="left", padx=(6, 0))
     ttk.Button(bar, text="Close", command=w.destroy).pack(side="left", padx=(6, 0))
     return w

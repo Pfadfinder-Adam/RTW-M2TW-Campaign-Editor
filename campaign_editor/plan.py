@@ -16,6 +16,9 @@ BACKUP_DIRS = (BACKUP_DIR, OLD_BACKUP_DIR)
 
 # listeners told of every finished write: fn(backup folder, the plan) - the window's 'Undo this write' button
 WRITTEN = []
+# asked before every write, nothing written yet: fn(the plan) may raise WriteError to stop it (the window's 'make your
+# own mod folder first?' - asked once per mod the editor did not make)
+BEFORE = []
 
 class _Owned(dict):
     """A dict of paths whose keys are the mod's own places: a file of the game's data under a mod that holds only
@@ -94,6 +97,44 @@ class Plan:
 
     def warn(self, f, msg):
         self.warnings.append((self.mod.rel(f.path) if f is not None else "", msg))
+
+    MAP_FILES = ("descr_regions.txt", "descr_terrain.txt")
+
+    def _whole_map_folders(self):
+        """A mod that holds only its changes (ModData.under, a thin New mod folder): the first time it gets its own
+        copy of a map file (map_*.tga, descr_regions, descr_terrain, .hgt), every other file of that map folder of the
+        game comes into the mod with it - but map.rwm - as the mod's own copies (Restore removes them). The game then
+        reads the whole changed map from the mod and builds map.rwm there, as for a mod made whole (the editor's test
+        mod in the game) - never the mod's new map with the game's old map.rwm."""
+        under = getattr(self.mod, "under", None)
+        if not under:
+            return
+        folders = set()
+        written = {os.path.normcase(os.path.abspath(p)) for p in self.changed_files()}
+        for mine in self.borrowed:
+            if os.path.normcase(os.path.abspath(mine)) not in written:
+                continue                            # read for the change but left as it is: still the game's
+            rel = os.path.relpath(mine, self.mod.data).replace("\\", "/").lower()
+            name = os.path.basename(rel)
+            if rel.startswith("world/maps/") and (name.startswith("map_") or name in self.MAP_FILES or
+                                                  name.endswith(".hgt")):
+                folders.add(os.path.dirname(mine))
+        taken = written | {os.path.normcase(os.path.abspath(d)) for _, d in self.copies}
+        for folder in sorted(folders):
+            src = os.path.join(under, os.path.relpath(folder, self.mod.data))
+            if not os.path.isdir(src):
+                continue
+            n = 0
+            for name in sorted(os.listdir(src)):
+                s, d = os.path.join(src, name), os.path.join(folder, name)
+                if not os.path.isfile(s) or name.lower() == "map.rwm" or os.path.exists(d) or \
+                        os.path.normcase(os.path.abspath(d)) in taken:
+                    continue
+                self.copies.append((s, d))
+                n += 1
+            if n:
+                self.notes.append((self.mod.rel(folder), "%d more file(s) of the game's map folder copied into the mod "
+                                   "with it (all but map.rwm - the game builds that again from the mod's map)" % n))
 
     def binary(self, path, data):
         """A whole new content for a (binary) file, backed up like any edit (a file of the game's data under a mod
@@ -203,8 +244,11 @@ class Plan:
     # ---- disk ----
     def apply(self):
         from .limits import keep_up
+        for fn in list(BEFORE):              # may stop the write before anything is done (WriteError)
+            fn(self)
         keep_up(self)                       # REX / M2EX: max_factions follows the factions, silently (limits.py)
         self.stale_bins()
+        self._whole_map_folders()
         sm = self.mod.file("sm_factions")
         if sm and sm in self.files:         # Rome: a 'faction destroyed' picture for every faction (eventimages.py)
             from . import eventimages

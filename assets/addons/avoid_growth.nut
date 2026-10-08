@@ -581,11 +581,13 @@ function ag_draw() {
     } catch (err) {
     }
     // the words first, the box right of them - as the scroll's own 'Automanage [ ]' and Medieval II's ticks
-    ui.pushFont(face, false, size)
-    ui.layoutAt(x, y + (box - tw[1]) / 2)
     local ink = art.m2 ? AG_INK : AG_INK_ROME
-    ui.textColoured(words, ink[0], ink[1], ink[2], ink[3])
-    ui.popFont()
+    // the engine closes the font scope itself, also when the body throws (a scope left open would draw the
+    // console and every later text of the frame in our font)
+    ui.pushFont(face, false, size, function() {
+        ui.layoutAt(x, y + (box - tw[1]) / 2)
+        ui.textColoured(words, ink[0], ink[1], ink[2], ink[3])
+    })
     local bx = x + tw[0] + (AG_GAP * k).tointeger()
     local bw = box
     if (!art.m2) {                  // in Automanage's column, as wide as its box
