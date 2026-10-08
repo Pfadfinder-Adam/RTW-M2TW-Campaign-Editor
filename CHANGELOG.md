@@ -3,12 +3,28 @@
 ## Unreleased
 
 ### Added
+- **A deleted town's region can stay as a wasteland** (Rome with REX, Medieval II with M2EX): *Delete this town with
+  its region* and *Delete the N selected towns* ask where its land goes - **stays as a wasteland** (the default with
+  an engine) or **goes to a neighbour** (as before; the only way of the original exes). A wasteland keeps the region
+  and its land but has no town, no owner, no rebels and no economy: the AI never goes for it, no victory counts it,
+  no neighbour grows, armies can still walk over it. An island can go too now. The engines' own way (REX's
+  `wasteland` keyword in descr_regions), in place of the old trick of a town hidden behind a river ring.
+- **The way back**: right click a wasteland's land on the Map - *Give it its town here...* writes its town on that
+  tile again (its name, the name players see, its owner; a village as the game makes it), with a backup.
+- **Map size**: a cut that takes a town off but leaves part of its land keeps that region as a wasteland (with an
+  engine) instead of giving the land to a neighbour.
 - **Map size: a cut that takes a faction's last town takes the faction out of this campaign** (both games), after a
   question that names it - its people, its place in the faction lists, its diplomacy, its victory conditions and the
   events that make it rise; it stays in the mod (its units, pictures and other campaigns keep it). Script lines naming
   it are listed to change by hand. It was a refusal ('... would keep no town').
 
 ### Changed
+- **Faster on a big mod** (a tester's HLR, 749 regions): deleting 48 towns at once took about 21 seconds before the
+  window could write - every file is now read once for all of them (1.6 s); the town window opens about 5 times
+  faster (its garrison cards are made when the Garrison tab is first shown, one town is read instead of all of them)
+  and its first look never lays 500 unit cards out in one column.
+- **The town window is smaller** (960 x 680 at first instead of the screen's height) and opens at the size it was
+  last left at.
 - **Map size waits for Apply**: *Keep for Apply* puts the cut in the list of changes waiting; Apply changes writes it
   after every other change, so a town given on the Map meanwhile counts - a faction that gets a town that stays keeps
   its place, its family moves into that town. The window opens with other changes waiting too (it refused before).
@@ -19,6 +35,12 @@
   release's page.
 
 ### Fixed
+- **Deleting a region left its block in descr_strat's regions section** (roads, forts, watchtowers - Barbarian
+  Invasion has 16): a region given to a neighbour now hands its forts and watchtowers over to the neighbour's block;
+  a wasteland's block goes (the game takes forts and watchtowers only in a region with a town).
+- **Check mod files**: no false alarms on building levels with a '+' in their names (`grain+1`) or on upgrades with
+  conditions (`fleet_arsenal requires factions { roman, } ...`) - a tester's HLR showed 72 of them, now none. A
+  wasteland region without REX / M2EX beside the game is said.
 - **Map size**: a cut over the rebels stopped with '... is not a character of slave' when a rebel general stood in a
   rebel town on the part cut off (the town went with its garrison, then the general was looked for again). The
   rebels' characters on the part cut off now simply go with the cut, generals too (they have no town to keep).

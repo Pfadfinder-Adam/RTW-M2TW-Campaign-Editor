@@ -325,14 +325,41 @@ def _read(app):
         pass
 
 
+WASTE_WORDS = "stays as a wasteland - the region is kept, nobody's (REX / M2EX)"
+WASTE_MEANS = ("No town, no owner, no rebels, no economy: the AI never goes for it, no victory counts it, no neighbour "
+               "grows. Armies can still walk over it.")
+NO_WASTE = "Only with REX / M2EX - the original game knows no wasteland."
+
+
+def _land_choice(frm, row, waste_ok, v_land, near_widget, wrap):
+    """The two ways of a deleted region's land, one under the other: a wasteland (REX / M2EX, the default there) or a
+    neighbour's (the only way of the original exes)."""
+    box = ttk.Frame(frm)
+    box.grid(row=row, column=0, columnspan=2, sticky="we", pady=(8, 2))
+    ttk.Label(box, text="Its land", font=("", 9, "bold")).grid(row=0, column=0, sticky="w")
+    rb = ttk.Radiobutton(box, text=WASTE_WORDS, variable=v_land, value="waste")
+    rb.grid(row=1, column=0, columnspan=2, sticky="w")
+    ttk.Label(box, text=NO_WASTE if not waste_ok else WASTE_MEANS, justify="left", wraplength=wrap,
+              foreground="#777777").grid(row=2, column=0, columnspan=2, sticky="w", padx=(22, 0))
+    if not waste_ok:
+        rb.state(["disabled"])
+    ttk.Radiobutton(box, text="goes to a neighbour:" if near_widget is not None else
+                    "goes to a neighbour (each to the one it shares the longest border with - another picked on the "
+                    "map)", variable=v_land, value="near").grid(row=3, column=0, sticky="w", pady=(4, 0))
+    if near_widget is not None:
+        near_widget(box).grid(row=3, column=1, sticky="w", padx=6, pady=(4, 0))
+    return box
+
+
 def delete_town(app, region, parent):
-    """Delete a town together with its region (regiondelete: its land to a neighbour, every file that ties them),
-    asked first with the whole list of changes, written with a backup, the mod read again. The Map's right click
-    on a town opens it. While it is open the map shows it: red goes, yellow takes its land, green could take it - a
-    click on a green region gives it the land (report R-20261008-7696AA). The mod's files are read once (they were
-    read three times - slow on a big mod)."""
+    """Delete a town together with its region, asked first with the whole list of changes, written with a backup, the
+    mod read again. The Map's right click on a town opens it. Its land (report #154): under REX / M2EX it stays as a
+    WASTELAND by default - the region kept, nobody's, no neighbour grows (regiondelete waste) - or it goes to a
+    neighbour (the only way of the original exes). While it is open the map shows it: grey = stays as a wasteland,
+    red = goes, yellow takes its land, green could take it - a click on a green region gives it the land (report
+    R-20261008-7696AA). The mod's files are read once for each way (a big mod has thousands of them)."""
     from .plan import Plan
-    from .regiondelete import delete, neighbours, problems
+    from .regiondelete import can_waste, delete, neighbours, problems
     campaign = app.v_campaign.get()
     regions = app.mod.regions(campaign)
     if region not in regions:
@@ -344,12 +371,20 @@ def delete_town(app, region, parent):
                                   "would leave them pointing at nothing.", parent=parent)
         return
     town = regions[region].get("settlement") or region
-    _reading(app, town)
-    try:
-        errors, warns = problems(app.mod, campaign, region)
-    finally:
-        _read(app)
-    app.status.set("")
+    waste_ok = can_waste(app.mod)
+    asked = {}
+
+    def check(way):
+        if way not in asked:
+            _reading(app, town)
+            try:
+                asked[way] = problems(app.mod, campaign, region, waste=way == "waste")
+            finally:
+                _read(app)
+            app.status.set("")
+        return asked[way]
+    first = "waste" if waste_ok else "near"
+    errors, _ = check(first)
     if errors:
         messagebox.showerror(APP, "%s and its region cannot be deleted:\n\n- %s" % (town, "\n- ".join(errors)),
                              parent=parent)
@@ -361,35 +396,54 @@ def delete_town(app, region, parent):
     w.transient(parent)
     frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
     ttk.Label(frm, justify="left", wraplength=560, text=(
-        "The town and its region go from the campaign in every file that ties them: the region's land (and its "
-        "port) becomes a neighbour's, its block of descr_regions and its settlement of descr_strat go, the rebels "
-        "in the town go with it (a faction's characters there stay, in the field), it leaves the mercenary pools, "
-        "the win conditions and the music lists. map.rwm is removed (the game builds it again). A backup is made "
-        "first; Tools > Restore gives everything back.")).grid(row=0, column=0, columnspan=2, sticky="w")
-    ttk.Label(frm, text="Its land goes to").grid(row=1, column=0, sticky="w", pady=(8, 2))
-    labels = ["%s  (%d tiles of border)" % (r, n) for r, n in near]
+        "The town goes from the campaign in every file that ties it: its settlement of descr_strat, the rebels in the "
+        "town with it (a faction's characters there stay, in the field); the region leaves the mercenary pools and "
+        "the win conditions. map.rwm is removed (the game builds it again). A backup is made first; Tools > Restore "
+        "gives everything back.")).grid(row=0, column=0, columnspan=2, sticky="w")
+    v_land = tk.StringVar(value=first)
+    labels = ["%s  (%d tiles of border)" % (r, n) for r, n in near] or ["none - it touches no other region's land"]
     v_into = tk.StringVar(value=labels[0])
-    ttk.Combobox(frm, textvariable=v_into, values=labels, state="readonly",
-                 width=max(30, max(len(x) for x in labels) + 2)).grid(row=1, column=1, sticky="w", padx=6,
-                                                                       pady=(8, 2))
+
+    def near_box(box):
+        cb = ttk.Combobox(box, textvariable=v_into, values=labels, state="readonly" if near else "disabled",
+                          width=max(30, max(len(x) for x in labels) + 2))
+        cb.bind("<<ComboboxSelected>>", lambda e: v_land.set("near"))
+        return cb
+    _land_choice(frm, 1, waste_ok, v_land, near_box, 540)
+    hint = ttk.Label(frm, justify="left", wraplength=560)
     if view is not None:
-        ttk.Label(frm, justify="left", wraplength=560, text=(
-            "On the map: red = %s goes, yellow = the region that takes its land, green = a neighbour that could take "
-            "it - click a green one to give it the land." % town)).grid(row=2, column=0, columnspan=2, sticky="w",
-                                                                         pady=(4, 0))
-    if warns:
-        ttk.Label(frm, justify="left", wraplength=560, foreground="#8a5a00", text=(
-            "Good to know:\n- " + "\n- ".join(warns[:6]) + ("\n..." if len(warns) > 6 else ""))).grid(
-            row=3, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        hint.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+    lbl_err = ttk.Label(frm, justify="left", wraplength=560, foreground="#c0392b")
+    lbl_err.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
+    lbl_warn = ttk.Label(frm, justify="left", wraplength=560, foreground="#8a5a00")
+    lbl_warn.grid(row=4, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
     def into_now():
-        return near[labels.index(v_into.get())][0]
+        return near[labels.index(v_into.get())][0] if near else None
+
+    def way():
+        return v_land.get()
 
     def show():
+        errs, warns = check(way())
+        lbl_err.configure(text=("Cannot be deleted this way:\n- " + "\n- ".join(errs)) if errs else "")
+        lbl_warn.configure(text=("Good to know:\n- " + "\n- ".join(warns[:6]) + ("\n..." if len(warns) > 6 else ""))
+                           if warns else "")
+        for b in (b_show, b_go):
+            b.configure(state="disabled" if errs else "normal")
+        if way() == "waste":
+            hint.configure(text="On the map: grey = %s stays as a wasteland (its town goes)." % region)
+        else:
+            hint.configure(text=(
+                "On the map: red = %s goes, yellow = the region that takes its land, green = a neighbour that could "
+                "take it - click a green one to give it the land." % town))
         if view is None:
             return
-        marks = {r: "can" for r, _ in near}
-        marks.update({into_now(): "into", region: "gone"})
+        if way() == "waste":
+            marks = {region: "waste"}
+        else:
+            marks = {r: "can" for r, _ in near}
+            marks.update({into_now(): "into", region: "gone"})
         try:
             view.mark_regions(marks, clicked)
         except tk.TclError:
@@ -398,16 +452,14 @@ def delete_town(app, region, parent):
     def clicked(r):
         names = [n for n, _ in near]
         if r in names:
+            v_land.set("near")
             v_into.set(labels[names.index(r)])
         elif r == region:
-            view.readout.configure(text="%s goes - click a green neighbour to give it the land" % town)
+            view.readout.configure(text="%s - %s" % (town, "its region stays as a wasteland" if way() == "waste"
+                                                     else "goes; click a green neighbour to give it the land"))
         else:
             view.readout.configure(text="%s does not touch %s - its land can go only to a green neighbour" % (
                 r or "the sea", region))
-
-    v_into.trace_add("write", lambda *a: show())
-    _beside(app, w, view)
-    show()
 
     def unmark(e=None):
         if e is not None and e.widget is not w:
@@ -420,9 +472,12 @@ def delete_town(app, region, parent):
     w.bind("<Destroy>", unmark, add="+")
 
     def plan():
+        errs, warns = check(way())
+        if errs:
+            return None
         p = Plan(app.mod, "delete", region)
         try:
-            delete(p, campaign, region, into_now(), checked=True)     # the files were read for it already
+            delete(p, campaign, region, into_now(), checked=True, waste=way() == "waste")   # read already
         except ValueError as e:
             messagebox.showerror(APP, str(e), parent=w)
             return None
@@ -437,35 +492,48 @@ def delete_town(app, region, parent):
 
     def write():
         p = plan()
-        into = into_now() if p else None
-        if not p or not ask(APP, "%s\n\nDelete %s and its region %s now (%d file(s))? Every tile of "
-                                                 "it becomes %s's - no land is left without a region (the game wants "
-                                                 "each tile in one). A backup is made first (Tools > Restore undoes "
-                                                 "it)." % (p.report(), town, region, len(p.changed_files()), into),
-                                            parent=w, yes='Delete it', no='Keep it', danger=True):
+        if not p:
+            return
+        if way() == "waste":
+            text = ("%s\n\nDelete %s now (%d file(s))? Its region %s stays as a wasteland - nobody's land with no "
+                    "town (REX / M2EX read it so); no neighbour grows. A backup is made first (Tools > Restore undoes "
+                    "it)." % (p.report(), town, len(p.changed_files()), region))
+        else:
+            text = ("%s\n\nDelete %s and its region %s now (%d file(s))? Every tile of it becomes %s's - no land is "
+                    "left without a region (the game wants each tile in one). A backup is made first (Tools > Restore "
+                    "undoes it)." % (p.report(), town, region, len(p.changed_files()), into_now()))
+        if not ask(APP, text, parent=w, yes='Delete it', no='Keep it', danger=True):
             return
         bdir = p.apply()
-        log.write("Deleted %s with its region %s (backup %s)\n%s" % (town, region, bdir, p.report()))
+        log.write("Deleted %s with its region %s%s (backup %s)\n%s" % (
+            town, region, " - a wasteland now" if way() == "waste" else "", bdir, p.report()))
         w.destroy()
         app.load()
-        app.status.set("%s and its region %s deleted (backup %s). Start the game - it builds map.rwm again."
-                       % (town, region, bdir))
+        app.status.set("%s deleted%s (backup %s). Start the game - it builds map.rwm again." % (
+            town, " - %s is a wasteland now" % region if way() == "waste" else " with its region %s" % region, bdir))
 
     bar = ttk.Frame(frm)
-    bar.grid(row=4, column=0, columnspan=2, sticky="e", pady=(10, 0))
-    ttk.Button(bar, text="Preview", command=preview).pack(side="left")
-    ttk.Button(bar, text="Delete", command=write).pack(side="left", padx=4)
+    bar.grid(row=5, column=0, columnspan=2, sticky="e", pady=(10, 0))
+    b_show = ttk.Button(bar, text="Preview", command=preview)
+    b_show.pack(side="left")
+    b_go = ttk.Button(bar, text="Delete", command=write)
+    b_go.pack(side="left", padx=4)
     ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
+    v_land.trace_add("write", lambda *a: show())
+    v_into.trace_add("write", lambda *a: show())
+    _beside(app, w, view)
+    show()
     return w
 
 
 def delete_towns(app, picked, parent):
-    """Many towns deleted with their regions at once - the map's Select, right click (report R-20261008-7696AA):
-    the mod's files read once for all of them (regiondelete.refusals), each region's land to the neighbour that stays
-    it shares the longest border with (receivers); a row picked (or its red region clicked on the map) shows its
-    neighbours that could take its land in green - a click gives them it. One plan: one backup, one Undo."""
+    """Many towns deleted with their regions at once - the map's Select, right click (report R-20261008-7696AA): the
+    mod's files read once for all of them (regiondelete.refusals). Their land (report #154): under REX / M2EX each
+    region stays as a WASTELAND by default (nobody's, no neighbour grows); or each region's land goes to the neighbour
+    that stays it shares the longest border with (receivers) - a row picked (or its red region clicked on the map)
+    shows its neighbours that could take its land in green, a click gives them it. One plan: one backup, one Undo."""
     from .plan import Plan
-    from .regiondelete import delete_many, neighbours, receivers, refusals
+    from .regiondelete import can_waste, delete_many, neighbours, receivers, refusals
     campaign = app.v_campaign.get()
     regions = app.mod.regions(campaign)
     gone = sorted(r for r in picked if r in regions)
@@ -480,69 +548,101 @@ def delete_towns(app, picked, parent):
                                   "would leave them pointing at nothing.", parent=parent)
         return None
     town = {r: regions[r].get("settlement") or r for r in gone}
-    _reading(app, "%d towns" % len(gone))
-    try:
-        errors, warns = refusals(app.mod, campaign, gone)
-        near = {r: neighbours(app.mod, campaign, r) for r in gone}
-    finally:
-        _read(app)
-    app.status.set("")
-    state = {"chosen": {}, "sel": None}
+    waste_ok = can_waste(app.mod)
+    state = {"chosen": {}, "sel": None, "asked": {}, "near": None}
+
+    def check(way):
+        """(refusals, warnings) of a way, the files read once for it."""
+        if way not in state["asked"]:
+            _reading(app, "%d towns" % len(gone))
+            try:
+                state["asked"][way] = refusals(app.mod, campaign, gone, waste=way == "waste")
+                if way == "near" and state["near"] is None:
+                    state["near"] = {r: neighbours(app.mod, campaign, r) for r in gone}
+            finally:
+                _read(app)
+            app.status.set("")
+        return state["asked"][way]
+    first = "waste" if waste_ok else "near"
+    check(first)
     view = _map_of(app)
     w = tk.Toplevel(parent)
     w.title("Delete %d towns with their regions" % len(gone))
     w.transient(parent)
     frm = scroll_body(w, 10)
+    frm.columnconfigure(0, weight=1)
     ttk.Label(frm, justify="left", wraplength=600, text=(
-        "These towns and their regions go from the campaign in every file that ties them, as Delete this town with "
-        "its region does for one: each region's land (and port) becomes a neighbour's that stays, the rebels in the "
-        "towns go with them (a faction's characters there stay, in the field). One write, one backup: Undo this "
-        "write or Tools > Restore gives everything back.")).pack(anchor="w", fill="x")
+        "These towns go from the campaign in every file that ties them, as Delete this town with its region does for "
+        "one: the rebels in the towns go with them (a faction's characters there stay, in the field); the regions "
+        "leave the mercenary pools and the win conditions. One write, one backup: Undo this write or Tools > Restore "
+        "gives everything back.")).grid(row=0, column=0, columnspan=2, sticky="w")
+    v_land = tk.StringVar(value=first)
+    _land_choice(frm, 1, waste_ok, v_land, None, 580)
     tree = ttk.Treeview(frm, columns=("land",), height=min(12, len(gone)), selectmode="browse")
     tree.heading("#0", text="Town (region) - goes")
-    tree.heading("land", text="Its land goes to")
+    tree.heading("land", text="Its land")
     tree.column("#0", width=280)
     tree.column("land", width=300)
-    tree.pack(anchor="w", fill="x", pady=(8, 0))
+    tree.grid(row=2, column=0, columnspan=2, sticky="we", pady=(8, 0))
+    hint = ttk.Label(frm, justify="left", wraplength=600)
     if view is not None:
-        ttk.Label(frm, justify="left", wraplength=600, text=(
-            "On the map: red = goes, yellow = takes land. Pick a row (or click a red region): it turns orange and the "
-            "neighbours that could take its land green - click a green one to give it the land.")).pack(
-            anchor="w", fill="x", pady=(4, 0))
+        hint.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
     lbl_err = ttk.Label(frm, justify="left", wraplength=600, foreground="#c0392b")
-    lbl_err.pack(anchor="w", fill="x", pady=(6, 0))
-    if warns:
-        ttk.Label(frm, justify="left", wraplength=600, foreground="#8a5a00", text=(
-            "Good to know:\n- " + "\n- ".join(warns[:6]) + ("\n..." if len(warns) > 6 else ""))).pack(
-            anchor="w", fill="x", pady=(6, 0))
+    lbl_err.grid(row=4, column=0, columnspan=2, sticky="w", pady=(6, 0))
+    lbl_warn = ttk.Label(frm, justify="left", wraplength=600, foreground="#8a5a00")
+    lbl_warn.grid(row=5, column=0, columnspan=2, sticky="w", pady=(6, 0))
     bar = ttk.Frame(frm)
-    bar.pack(anchor="e", pady=(10, 0))
+    bar.grid(row=6, column=0, columnspan=2, sticky="e", pady=(10, 0))
+
+    def way():
+        return v_land.get()
 
     def worked_out():
-        return receivers(near, gone, state["chosen"])
+        if way() == "waste":
+            return {r: None for r in gone}, []
+        return receivers(state["near"], gone, state["chosen"])
 
     def refresh():
+        errors, warns = check(way())
         into, stuck = worked_out()
+        near = state["near"] or {}
         for r in gone:
-            words = ("%s  (%d tiles of border)" % (into[r], dict(near[r]).get(into[r], 0)) if into[r] in dict(near[r])
-                     else "%s  (with the regions deleted beside it)" % into[r]) if r in into else "nowhere - see below"
+            if way() == "waste":
+                words = "stays - a wasteland, nobody's"
+            elif r in into:
+                words = ("%s  (%d tiles of border)" % (into[r], dict(near[r]).get(into[r], 0))
+                         if into[r] in dict(near[r]) else "%s  (with the regions deleted beside it)" % into[r])
+            else:
+                words = "nowhere - see below"
             label = "%s (%s)" % (town[r], r) if town[r] != r else r
             if tree.exists(r):
                 tree.item(r, text=label, values=(words,))
             else:
                 tree.insert("", "end", iid=r, text=label, values=(words,))
         bad = list(errors) + ["%s touches no region that stays (an island, or only regions deleted with it) - its "
-                              "land would belong to no region; leave it out of the selection or give its land to a "
-                              "neighbour first (Edit regions)" % r for r in stuck]
+                              "land would belong to no region; leave it out of the selection, give its land to a "
+                              "neighbour first (Edit regions) or keep it as a wasteland (REX / M2EX)" % r
+                              for r in stuck]
         lbl_err.configure(text=("Cannot be deleted like this:\n- " + "\n- ".join(bad)) if bad else "")
+        lbl_warn.configure(text=("Good to know:\n- " + "\n- ".join(warns[:6]) + ("\n..." if len(warns) > 6 else ""))
+                           if warns else "")
         b_go.configure(state="disabled" if bad else "normal")
         b_show.configure(state="disabled" if bad else "normal")
+        hint.configure(text=(
+            "On the map: grey = stays as a wasteland (its town goes). Pick a row (or click a grey region) to find it."
+            if way() == "waste" else
+            "On the map: red = goes, yellow = takes land. Pick a row (or click a red region): it turns orange and the "
+            "neighbours that could take its land green - click a green one to give it the land."))
         if view is not None:
-            marks = {r: "gone" for r in gone}
-            marks.update({t: "into" for t in into.values()})
             sel = state["sel"]
+            if way() == "waste":
+                marks = {r: "waste" for r in gone}
+            else:
+                marks = {r: "gone" for r in gone}
+                marks.update({t: "into" for t in into.values()})
+                if sel:
+                    marks.update({n: "can" for n, _ in near[sel] if n not in gone and n != into.get(sel)})
             if sel:
-                marks.update({n: "can" for n, _ in near[sel] if n not in gone and n != into.get(sel)})
                 marks[sel] = "this"
             try:
                 view.mark_regions(marks, clicked)
@@ -560,11 +660,12 @@ def delete_towns(app, picked, parent):
             tree.selection_set(r)
             tree.see(r)
             return
-        if sel and r and r in dict(near[sel]):
+        if way() == "near" and sel and r and r in dict(state["near"][sel]):
             state["chosen"][sel] = r
             refresh()
             return
         view.readout.configure(text=(
+            "%s is not one of the towns deleted" % (r or "the sea")) if way() == "waste" else (
             "%s does not touch %s - click a green neighbour" % (r or "the sea", sel)) if sel else
             "pick a town first - a row of the list or a red region")
 
@@ -581,12 +682,13 @@ def delete_towns(app, picked, parent):
     w.bind("<Destroy>", unmark, add="+")
 
     def plan():
+        errors, warns = check(way())
         into, stuck = worked_out()
         if stuck or errors:
             return None
         p = Plan(app.mod, "delete", "%d_regions" % len(gone))
         try:
-            delete_many(p, campaign, into, warns)
+            delete_many(p, campaign, into, warns, waste=way() == "waste")
         except ValueError as e:
             messagebox.showerror(APP, str(e), parent=w)
             return None
@@ -602,25 +704,112 @@ def delete_towns(app, picked, parent):
         if not got:
             return
         p, into = got
-        lines = "\n".join("- %s -> %s" % (r, into[r]) for r in gone)
-        if not ask(APP, "Delete these %d towns with their regions now (%d file(s))? Their land goes:\n%s\n\nA backup "
-                        "is made first (Undo this write or Tools > Restore undoes it)." % (
-                            len(gone), len(p.changed_files()), lines),
-                   parent=w, yes="Delete them", no="Keep them", danger=True):
+        if way() == "waste":
+            text = ("Delete these %d towns now (%d file(s))? Their regions stay as wastelands - nobody's land with no "
+                    "town (REX / M2EX read it so); no neighbour grows.\n\nA backup is made first (Undo this write or "
+                    "Tools > Restore undoes it)." % (len(gone), len(p.changed_files())))
+        else:
+            text = ("Delete these %d towns with their regions now (%d file(s))? Their land goes:\n%s\n\nA backup is "
+                    "made first (Undo this write or Tools > Restore undoes it)." % (
+                        len(gone), len(p.changed_files()), "\n".join("- %s -> %s" % (r, into[r]) for r in gone)))
+        if not ask(APP, text, parent=w, yes="Delete them", no="Keep them", danger=True):
             return
         bdir = p.apply()
-        log.write("Deleted %d towns with their regions (backup %s): %s\n%s" % (
-            len(gone), bdir, ", ".join("%s -> %s" % (r, into[r]) for r in gone), p.report()))
+        log.write("Deleted %d towns (backup %s), %s\n%s" % (
+            len(gone), bdir, "their regions wastelands now: " + ", ".join(gone) if way() == "waste" else
+            "with their regions: " + ", ".join("%s -> %s" % (r, into[r]) for r in gone), p.report()))
         w.destroy()
         app.load()
-        app.status.set("%d towns and their regions deleted (backup %s). Start the game - it builds map.rwm again."
-                       % (len(gone), bdir))
+        app.status.set("%d towns deleted%s (backup %s). Start the game - it builds map.rwm again." % (
+            len(gone), " - their regions are wastelands now" if way() == "waste" else " with their regions", bdir))
 
     b_show = ttk.Button(bar, text="Preview", command=preview)
     b_show.pack(side="left")
     b_go = ttk.Button(bar, text="Delete them", command=write)
     b_go.pack(side="left", padx=4)
     ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
+    v_land.trace_add("write", lambda *a: refresh())
     _beside(app, w, view)
     refresh()
+    return w
+
+
+def wasteland_town(app, region, xy, parent):
+    """The opposite of a town deleted as a wasteland: the wasteland gets its town on the tile right-clicked on the Map
+    (regiondelete.wasteland_town - its descr_regions block, the town pixel, a village in descr_strat for the owner
+    picked, the names). Asked with Preview, written with a backup (Tools > Restore takes it back), the mod read
+    again."""
+    from .gui_mapadd import factions_here
+    from .gui_util import FactionBox
+    from .plan import Plan
+    from .regiondelete import town_problem
+    from .regiondelete import wasteland_town as write_town
+    campaign = app.v_campaign.get()
+    if app.pending_parts():
+        messagebox.showerror(APP, "Other changes wait for Apply. Apply (or undo) them first.", parent=parent)
+        return None
+    why = town_problem(app.mod, campaign, region, xy)
+    if why:
+        messagebox.showerror(APP, "%s cannot get its town at %d, %d: %s" % (region, xy[0], xy[1], why), parent=parent)
+        return None
+    w = tk.Toplevel(parent)
+    w.title("%s gets its town" % region)
+    w.transient(parent)
+    frm = scroll_body(w, 10)
+    ttk.Label(frm, justify="left", wraplength=520, text=(
+        "%s is a wasteland now - no town, nobody's. Its town goes on tile %d, %d: the region's block of "
+        "descr_regions names it again, the map gets its town pixel, descr_strat a village of the owner below (400 "
+        "people, no buildings, as the game makes it). map.rwm is removed (the game builds it again)." % (
+            region, xy[0], xy[1]))).grid(row=0, column=0, columnspan=3, sticky="w")
+    base = region[:-2] if region.endswith("_R") else region[:-9] if region.endswith("_Province") else region + "_town"
+    v_name = tk.StringVar(value=base)
+    v_label = tk.StringVar(value=base.replace("_", " "))
+    ttk.Label(frm, text="Its name in the files").grid(row=1, column=0, sticky="w", pady=(8, 2))
+    ttk.Entry(frm, textvariable=v_name, width=28).grid(row=1, column=1, sticky="w", padx=6, pady=(8, 2))
+    ttk.Label(frm, text="The name players see").grid(row=2, column=0, sticky="w")
+    ttk.Entry(frm, textvariable=v_label, width=28).grid(row=2, column=1, sticky="w", padx=6)
+    facs = factions_here(app)
+    v_owner = tk.StringVar(value="slave" if "slave" in facs else (facs[0] if facs else ""))
+    ttk.Label(frm, text="Owner").grid(row=3, column=0, sticky="w", pady=2)
+    shown = app.shown_names() if hasattr(app, "shown_names") else {}
+    FactionBox(frm, v_owner, facs, shown, state="readonly", width=28).grid(row=3, column=1, sticky="w", padx=6, pady=2)
+    lbl = ttk.Label(frm, foreground="#c0392b", justify="left", wraplength=520)
+    lbl.grid(row=4, column=0, columnspan=3, sticky="w", pady=(4, 0))
+
+    def plan():
+        name = v_name.get().strip()
+        why = town_problem(app.mod, campaign, region, xy, name)
+        lbl.configure(text=why or "")
+        if why:
+            return None
+        p = Plan(app.mod, "town", region)
+        try:
+            write_town(p, campaign, region, xy, name, v_owner.get(), v_label.get().strip() or None)
+        except ValueError as e:
+            lbl.configure(text=str(e))
+            return None
+        return p
+
+    def preview():
+        p = plan()
+        if p:
+            app.show_text("%s gets its town - nothing written yet" % region, p.report())
+
+    def write():
+        p = plan()
+        if not p:
+            return
+        bdir = p.apply()
+        log.write("%s got its town %s at %d, %d (backup %s)\n%s" % (region, v_name.get().strip(), xy[0], xy[1], bdir,
+                                                                    p.report()))
+        w.destroy()
+        app.load()
+        app.status.set("%s has its town %s again (backup %s) - double click it on the Map to change it. Start the "
+                       "game - it builds map.rwm again." % (region, v_name.get().strip(), bdir))
+
+    bar = ttk.Frame(frm)
+    bar.grid(row=5, column=0, columnspan=3, sticky="e", pady=(10, 0))
+    ttk.Button(bar, text="Preview", command=preview).pack(side="left")
+    ttk.Button(bar, text="Write its town", command=write).pack(side="left", padx=4)
+    ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
     return w

@@ -10,6 +10,7 @@ runs on vanilla and on any mod."""
 
 import os
 import random
+import re
 import time
 import traceback
 
@@ -1806,6 +1807,53 @@ def s_delete_many(c, mod):
     raise Skip("no two neighbouring rebel towns that can go together")
 
 
+@step("Map editor: two rebel towns deleted as WASTELANDS (REX / M2EX - the regions stay, nobody's; no neighbour "
+      "grows)",
+      "{waste} and {waste_back}: no town, no faction colour on the land, no rebels rise there; armies can walk over "
+      "it")
+def s_wasteland(c, mod):
+    from . import regiondelete as RD
+    if not RD.can_waste(mod):
+        raise Skip("no REX / M2EX beside the game - the original exe knows no wasteland")
+    keep = {c.said.get(k) for k in ("near", "far", "split_far", "gone_into", "merged_into")}
+    tiles = mod.city_tiles(c.campaign)
+    capital = next((tiles[r] for r in towns_of(c, mod, c.new) if tiles.get(r)), (0, 0))
+    rebels = [r for r in towns_of(c, mod, "slave") if r not in keep and tiles.get(r)]
+    free = []
+    for r in sorted(rebels, key=lambda r: -(abs(tiles[r][0] - capital[0]) + abs(tiles[r][1] - capital[1]))):
+        if not RD.refusals(mod, c.campaign, [r], waste=True)[0]:
+            free.append(r)
+        if len(free) == 2:
+            break
+    if len(free) < 2:
+        raise Skip("no two rebel towns that can go (each is named by a campaign script or an event)")
+    errors, warns = RD.refusals(mod, c.campaign, free, waste=True)
+    plan = Plan(mod, "delete", "%s_and_%s" % tuple(free), {})
+    RD.delete_many(plan, c.campaign, free, warns, waste=True)
+    c.said["waste"], c.said["waste_back"] = free
+    return plan
+
+
+@step("Map editor: a wasteland gets its town again on another tile (right click its land: 'Give it its town "
+      "here...')",
+      "{waste_back} has its town {waste_town} again at {waste_tile} - a village of the rebels")
+def s_wasteland_town(c, mod):
+    from . import regiondelete as RD
+    r = c.said.get("waste_back")
+    if not r or not (mod.regions(c.campaign).get(r) or {}).get("wasteland"):
+        raise Skip("no wasteland made by the step before")
+    img = mod.region_map(c.campaign)
+    colour = mod.regions(c.campaign)[r]["colour"]
+    spot = next((xy for xy in img.find(colour) if RD.town_problem(mod, c.campaign, r, xy) is None), None)
+    if spot is None:
+        raise Skip("%s has no tile with its own land all round" % r)
+    name = "CE_" + re.sub(r"[^A-Za-z0-9_]", "", r)[:20] + "_town"
+    plan = Plan(mod, "town", r, {})
+    RD.wasteland_town(plan, c.campaign, r, spot, name, "slave", "CE Wasteland Town")
+    c.said["waste_town"], c.said["waste_tile"] = name, "%d, %d" % tuple(spot)
+    return plan
+
+
 @step("Map: a rebel village written as the rebels' town (a region descr_strat.txt has no town for - its town window "
       "writes it)",
       "{village}'s town is in descr_strat.txt now (a rebel village built by {village_by}): a double click on it opens "
@@ -2360,6 +2408,8 @@ COVERAGE = {
     "Map editor: a town deleted with its region": ["s_delete_region"],
     "Map: two regions merged into one (Merge regions)": ["s_merge_regions"],
     "Map: many towns deleted with their regions at once (Select)": ["s_delete_many"],
+    "Map: towns deleted as wastelands, the regions kept nobody's (REX / M2EX)": ["s_wasteland"],
+    "Map: a wasteland's town written again on a picked tile": ["s_wasteland_town"],
     "Map: a rebel village's town written (town window of a region with no town)": ["s_village_town"],
     "Map size: tiles added or cut at the edges": ["s_map_size"],
     "Mercenaries: pools of regions and their units": ["s_mercs"],

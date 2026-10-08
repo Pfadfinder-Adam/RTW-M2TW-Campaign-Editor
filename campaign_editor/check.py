@@ -245,7 +245,12 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
             bad("region '%s' has no town pixel (black) in map_regions.tga" % r)
     waste = [r for r in regions if regions[r].get("wasteland")]
     if waste:
+        from .limits import engine_of
         say("    wasteland regions (REX / M2EX: no town, no owner): %d - %s" % (len(waste), ", ".join(waste[:5])))
+        if not engine_of(mod):
+            bad("%d wasteland region(s) (%s) but no REX / M2EX beside the game - the original exe knows no "
+                "wasteland: put the engine in, or give them towns (right click their land on the Map)" % (
+                    len(waste), ", ".join(waste[:5])))
     no_pixel = [r for r in regions if r not in tiles and not regions[r].get("wasteland")]
     if no_pixel:
         bad("%d region(s) without a town pixel: %s" % (len(no_pixel), ", ".join(no_pixel[:5])))
@@ -511,8 +516,15 @@ def building_tree_problems(mod):
             elif depth == 3 and t[0] == "convert_to" and len(t) > 1 and t[1].isdigit():
                 converts.append((n, cur, None, int(t[1])))
             elif depth == 4 and in_up:
-                upgrades.extend((n, cur, w) for w in t if w not in ("{", "}"))
-        for m in re.finditer(r"\bbuilding_present_min_level\s+(\w+)\s+(\w+)|\bbuilding_present\s+(\w+)", code):
+                # 'fleet_arsenal requires factions { roman, } and hidden_resource river' (HLR): the level, then
+                # its conditions - only the words before 'requires' are levels
+                words = [w for w in t if w not in ("{", "}")]
+                if "requires" in words:
+                    words = words[:words.index("requires")]
+                upgrades.extend((n, cur, w) for w in words)
+        # level names may hold '+' / '-' (HLR's granary: grain+1 .. grain+4)
+        for m in re.finditer(r"\bbuilding_present_min_level\s+([\w+\-]+)\s+([\w+\-]+)|\bbuilding_present\s+([\w+\-]+)",
+                             code):
             presents.append((n, m.group(1) or m.group(3), m.group(2)))
         depth += code.count("{") - code.count("}")
         if depth < 3:

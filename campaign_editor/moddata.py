@@ -393,8 +393,19 @@ class ModData:
     def regions(self, campaign):
         """{region: {'settlement', 'creator', 'rebels', 'colour', 'resources', 'triumph', 'farming', 'wasteland'
         (, 'religions')}} from descr_regions.txt (see region_entries); a wasteland region (REX / M2EX) has no
-        settlement ('')."""
+        settlement ('').
+        Read once while the file stays the same (report #154: deleting 48 towns of HLR read its 749 regions 150
+        times); each call gets its own copy to change."""
         f = self.load(self.campaign_file(campaign, "descr_regions.txt"))
+        sig = hash("\n".join(f.raw))
+        got = self._cache.get(("regions", id(f)))
+        if not got or got[0] != sig:
+            got = (sig, self._read_regions(f))
+            self._cache[("regions", id(f))] = got
+        return {k: dict(v) for k, v in got[1].items()}
+
+    @staticmethod
+    def _read_regions(f):
         out = {}
         for name, e in region_entries(f).items():
             v = {k: val for k, (_, val) in e.items()}

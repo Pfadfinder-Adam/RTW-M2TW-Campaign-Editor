@@ -29,7 +29,16 @@ warnings: they simply never fire there again.
 
 Many at once (the map's Select, report R-20261008-7696AA): refusals() reads the files once for all of them (the
 last towns of a faction counted together), receivers() gives each region the neighbour that stays (one ringed by
-regions deleted with it follows them), delete_many() writes them in one plan - one backup, one Undo."""
+regions deleted with it follows them), delete_many() writes them in one plan - one backup, one Undo. Every file is
+read and changed once for all of them (report #154: 48 towns of HLR took 14 s, descr_strat read again per town).
+
+A WASTELAND instead (REX / M2EX - report #154, the user: 'deleting must not give its land to anyone'; REX's
+modding/wasteland_regions.md): the region stays, its land nobody's - no town, owner, rebels or economy, the AI never
+goes for it, no victory counts it, nobody grows. descr_regions: the settlement line says `wasteland` (the other lines
+stay, read but ignored by the engines); map_regions: only the town and port pixels take the region's colour; its
+settlement, the rebels on its tile, its mercenary pools and hold_regions go as above; the music lists and bad harvests
+keep it (the region is still there). No neighbour is needed - an island can go too. The original exes know no
+wasteland (can_waste)."""
 
 import os
 import re
@@ -42,6 +51,20 @@ N4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
 
 def _word(name):
     return re.compile(r"(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])" % re.escape(name))
+
+
+def _words(names):
+    """One pattern for all the names (whole words): a file is searched once, not once per name (48 towns of HLR = 96
+    names over 83 files took 5 s)."""
+    alts = "|".join(re.escape(n) for n in sorted(set(names), key=lambda n: (-len(n), n)))
+    return re.compile(r"(?<![A-Za-z0-9_])(?:%s)(?![A-Za-z0-9_])" % alts)
+
+
+def can_waste(mod):
+    """Whether the game that runs this mod reads a wasteland region: REX (Rome) and M2EX (Medieval II) do, the
+    original exes do not."""
+    from .limits import engine_of
+    return bool(engine_of(mod))
 
 
 def sharing(mod, campaign):
@@ -107,27 +130,28 @@ def _hits(path, names):
     from .regionrename import FACTION_BEFORE, PERSON_BEFORE, _split
     from .scan import _read_text
     text = _read_text(path)
-    if text is None or not any(n in text for n in names):
+    if text is None or not names or not any(n in text for n in names):
         return []
     out = []
-    rxs = [_word(n) for n in names]
+    rx = _words(names)
     for i, line in enumerate(text.splitlines()):
+        if not rx.search(line):
+            continue
         code, _ = _split(path, line)
-        for rx in rxs:
-            m = next((m for m in rx.finditer(code) if not FACTION_BEFORE.search(code[:m.start()])
-                      and not PERSON_BEFORE.search(code[:m.start()])), None)
-            if m:
-                out.append((i + 1, line.strip()))
-                break
+        if any(not FACTION_BEFORE.search(code[:m.start()]) and not PERSON_BEFORE.search(code[:m.start()])
+               for m in rx.finditer(code)):
+            out.append((i + 1, line.strip()))
     return out
 
 
-def problems(mod, campaign, region, into=None, land=True):
+def problems(mod, campaign, region, into=None, land=True, waste=False):
     """([refusals], [warnings]) in plain words. land=False: the region's land goes off the map with it (a cut of the
-    map's edge) - no neighbour needed for it."""
+    map's edge) - no neighbour needed for it; waste: it stays as a wasteland - no neighbour needed either."""
     regions = mod.regions(campaign)
     if region not in regions:
         return ["%s is no region of this campaign" % region], []
+    if waste:
+        return refusals(mod, campaign, [region], waste=True)
     errors = []
     near = neighbours(mod, campaign, region) if land else [(into, 1)] if into else []
     if land and not near:
@@ -140,15 +164,16 @@ def problems(mod, campaign, region, into=None, land=True):
     return errors + more, warns
 
 
-def refusals(mod, campaign, gone, last_town=True):
+def refusals(mod, campaign, gone, last_town=True, waste=False):
     """([refusals], [warnings]) for the regions `gone` deleted together, every file read once for all of them (a big
     mod has tens of thousands): a faction left without a town (unless last_town is False - the caller says it its own
     way), a faction rising in one by an event, a campaign script naming one (refused); other files naming one -
-    trait / ancillary conditions, REX / M2EX scripts (warned: they never fire there again)."""
+    trait / ancillary conditions, REX / M2EX scripts (warned: they never fire there again). waste: the regions stay
+    (as wastelands) - only their towns' names are gone, so only those are looked for."""
     regions = mod.regions(campaign)
     gone = [r for r in gone if r in regions]
     town = {r: regions[r].get("settlement") or "" for r in gone}
-    names = [n for r in gone for n in (r, town[r]) if n]
+    names = [n for r in gone for n in ((town[r],) if waste else (r, town[r])) if n]
     errors, warns = [], []
 
     def named(got):
@@ -268,81 +293,126 @@ def _drop_block(f, start):
     del f.raw[start:end]
 
 
-def delete(plan, campaign, region, into=None, land=True, checked=False):
+def delete(plan, campaign, region, into=None, land=True, checked=False, waste=False):
     """Write the deletion into the plan (see the module text). Returns the region the land went to. land=False (a cut
     of the map's edge takes all its land off the map): its pixels are left for the cut, given to no one (None).
-    checked: the caller has asked problems / refusals already (and says their warnings) - the files are not read
-    again (a big mod's thousands of them)."""
+    waste: the region stays as a wasteland, its land nobody's (None). checked: the caller has asked problems /
+    refusals already (and says their warnings) - the files are not read again (a big mod's thousands of them)."""
     mod = plan.mod
-    errors, warns = ([], []) if checked else problems(mod, campaign, region, into, land)
+    errors, warns = ([], []) if checked else problems(mod, campaign, region, into, land, waste)
     if errors:
         raise ValueError("; ".join(errors))
-    regions = mod.regions(campaign)
-    town = regions[region].get("settlement") or ""
-    path = mod.campaign_file(campaign, "map_regions.tga")
-    if land:
+    if waste:
+        into = None
+    elif land:
         into = into or neighbours(mod, campaign, region)[0][0]
-        # the map: the land, the town and the port go to the neighbour
-        colour = regions[into]["colour"]
-        px = region_pixels(mod, campaign, region)
-        plan.patch_tga(path, {xy: colour for xy in px})
-        plan.notes.append((mod.rel(path), "%d tile(s) of %s, its town and port pixels with them -> %s" % (
-            len(px), region, into)))
     else:
         into = None
-        plan.notes.append((mod.rel(path), "%s: all its land goes off the map with the cut" % region))
+    _delete(plan, campaign, {region: (into, land)}, {region} if waste else ())
+    for w in warns:
+        plan.warn(None, w)
+    return into
+
+
+def delete_many(plan, campaign, into, warns=(), waste=False):
+    """Many towns deleted with their regions in one plan (one backup, one Undo): into = {region: the region that
+    stays and takes its land} as receivers() gives it - or, waste, the regions that stay as wastelands (a list, or a
+    dict whose values are not read). Refusals asked already - their warnings in warns."""
+    gone = sorted(into)
+    _delete(plan, campaign, {r: (None if waste else into[r], True) for r in gone}, gone if waste else ())
+    for w in warns:
+        plan.warn(None, w)
+
+
+def _delete(plan, campaign, gone, waste=()):
+    """The deletion of every region in gone = {region: (the region that takes its land or None, land)} written into
+    the plan, each file read and changed once for all of them; the regions in waste stay as wastelands."""
+    from .mapedit import ports
+    from .moddata import region_entries
+    mod = plan.mod
+    waste = set(waste)
+    regions = mod.regions(campaign)
+    tiles = mod.city_tiles(campaign)
+    harbour = ports(mod, campaign)
+    path = mod.campaign_file(campaign, "map_regions.tga")
+    paint = {}
+    for region in sorted(gone):
+        into, land = gone[region]
+        if region in waste:
+            # the town and port pixels take the region's own colour: no town, its land stays its own
+            px = [tuple(p) for p in (tiles.get(region), harbour.get(region)) if p]
+            paint.update({xy: regions[region]["colour"] for xy in px})
+            plan.notes.append((mod.rel(path), "%s stays as a wasteland - its town%s pixel%s painted with its own "
+                               "colour, its %d tile(s) of land nobody's" % (
+                                   region, " and port" if region in harbour else "", "s" if region in harbour else "",
+                                   sum(1 for _ in mod.region_map(campaign).find(regions[region]["colour"])))))
+        elif land:
+            # the map: the land, the town and the port go to the neighbour
+            px = region_pixels(mod, campaign, region)
+            paint.update({xy: regions[into]["colour"] for xy in px})
+            plan.notes.append((mod.rel(path), "%d tile(s) of %s, its town and port pixels with them -> %s" % (
+                len(px), region, into)))
+        else:
+            plan.notes.append((mod.rel(path), "%s: all its land goes off the map with the cut" % region))
+    if paint:
+        plan.patch_tga(path, paint)
     for folder in {os.path.dirname(path), os.path.join(mod.data, "world", "maps", "base")}:
         plan.delete(os.path.join(folder, "map.rwm"), "the game rebuilds it from the changed map on the next start")
-    # descr_regions.txt
+    # descr_regions.txt: a wasteland's settlement line says so (no line moves); then the other blocks go, bottom up
     dr = plan.edit(mod.campaign_file(campaign, "descr_regions.txt"))
-    at = next(i for i in range(len(dr.raw)) if strip_comment(dr.text(i)).strip() == region and
-              not dr.text(i)[:1].isspace())
-    _drop_block(dr, at)
-    plan.note(dr, "region %s (%s) out" % (region, town or "no town"))
-    tile = mod.city_tiles(campaign).get(region)
+    entries = region_entries(dr)
+    for region in sorted(waste):
+        if "settlement" not in entries.get(region, {}):
+            continue                                # a wasteland already: nothing to change in its block
+        at, town = entries[region]["settlement"]
+        line = dr.text(at)
+        dr.set(at, line[:len(line) - len(line.lstrip())] + "wasteland" + line[line.index(town) + len(town):])
+        plan.note(dr, "region %s: wasteland (its town %s gone; no owner, no rebels, no economy - REX / M2EX)" % (
+            region, town))
+    starts = {}
+    for i in range(len(dr.raw)):
+        if not dr.text(i)[:1].isspace():
+            name = strip_comment(dr.text(i)).strip()
+            if name in gone and name not in waste and name not in starts:
+                starts[name] = i
+    for region, at in sorted(starts.items(), key=lambda kv: -kv[1]):
+        _drop_block(dr, at)
+        plan.note(dr, "region %s (%s) out" % (region, regions[region].get("settlement") or "no town"))
     music = _ci_file(mod.base, "descr_sounds_music_types.txt")
+    out = [r for r in sorted(gone) if r not in waste]           # regions that leave every file
     done = set()
     for c in sharing(mod, campaign):
         tag = "" if c == campaign else " (%s)" % c
         sp = mod.campaign_file(c, "descr_strat.txt")
         if sp and sp not in done:
             done.add(sp)
-            _strat(plan, sp, region, tile, tag)
+            _strat(plan, sp, sorted(gone), tiles, tag, {r: (None if r in waste else gone[r][0]) for r in gone})
         hp = mod.campaign_file(c, "descr_harvests.txt")
-        if hp and hp not in done:
+        if hp and hp not in done and out:
             done.add(hp)
-            _harvests(plan, hp, region, tag)
+            for region in out:
+                _harvests(plan, hp, region, tag)
         for name, key in (("descr_mercenaries.txt", "regions"), ("descr_win_conditions.txt", "hold_regions")):
             p = mod.campaign_file(c, name)
             if not p or p in done:
                 continue
             done.add(p)
             f = plan.edit(p)
-            empty = _drop_word(plan, f, key, region, tag)
-            if name == "descr_mercenaries.txt":
-                for i in sorted(empty, reverse=True):        # a pool left without a region goes
-                    start = next((k for k in range(i, -1, -1) if strip_comment(f.text(k)).split()[:1] == ["pool"]),
-                                 None)
-                    if start is not None:
-                        pool = strip_comment(f.text(start)).split()[1:2]
-                        _drop_block(f, start)
-                        plan.note(f, "pool %s had no region left - it goes" % (pool[0] if pool else "?"))
-    if music:
+            for region in sorted(gone):
+                empty = _drop_word(plan, f, key, region, tag)
+                if name == "descr_mercenaries.txt":
+                    for i in sorted(empty, reverse=True):        # a pool left without a region goes
+                        start = next((k for k in range(i, -1, -1)
+                                      if strip_comment(f.text(k)).split()[:1] == ["pool"]), None)
+                        if start is not None:
+                            pool = strip_comment(f.text(start)).split()[1:2]
+                            _drop_block(f, start)
+                            plan.note(f, "pool %s had no region left - it goes" % (pool[0] if pool else "?"))
+    if music and out:
         f = plan.edit(music)
-        for i in sorted(_drop_word(plan, f, "regions", region, ""), reverse=True):
-            del f.raw[i]
-    for w in warns:
-        plan.warn(None, w)
-    return into
-
-
-def delete_many(plan, campaign, into, warns=()):
-    """Many towns deleted with their regions in one plan (one backup, one Undo): into = {region: the region that
-    stays and takes its land} as receivers() gives it (refusals asked already - its warnings in warns)."""
-    for region in sorted(into):
-        delete(plan, campaign, region, into[region], checked=True)
-    for w in warns:
-        plan.warn(None, w)
+        for region in out:
+            for i in sorted(_drop_word(plan, f, "regions", region, ""), reverse=True):
+                del f.raw[i]
 
 
 def _harvests(plan, path, region, tag):
@@ -366,27 +436,201 @@ def _ci_file(folder, name):
     return _ci(folder, name) if os.path.isdir(folder) else None
 
 
-def _strat(plan, path, region, tile, tag):
-    """descr_strat.txt: the settlement block out; the rebels standing on the town's tile with it."""
+BLOCK_WORDS = ("road_level", "farming_level", "famine_threat", "fort", "watchtower")
+
+
+def _region_blocks(f, start):
+    """{region: (its `region R` line, the end)} of descr_strat's regions section (after the diplomacy): an unindented
+    `region R` and its road / farming / famine lines, forts and watchtowers (Barbarian Invasion's 16 blocks, a mod's
+    forts); the comments and blank lines before the next block are not its."""
+    out, cur = {}, None
+    if start is None:
+        return out
+
+    def close(end):
+        while end > cur[1] + 1 and not strip_comment(f.text(end - 1)).strip():
+            end -= 1
+        out.setdefault(cur[0], (cur[1], end))
+    for i in range(start, len(f.raw)):
+        code = strip_comment(f.text(i))
+        t = code.split()
+        if not t:
+            continue
+        if t[0] == "region" and len(t) > 1 and code[:1] not in (" ", "\t"):
+            if cur:
+                close(i)
+            cur = (t[1], i)
+        elif cur and t[0] not in BLOCK_WORDS and code[:1] not in (" ", "\t"):
+            close(i)
+            cur = None
+    if cur:
+        close(len(f.raw))
+    return out
+
+
+def _strat(plan, path, gone, tiles, tag, into=None):
+    """descr_strat.txt: the settlement blocks of the regions in gone out, the rebels standing on their towns' tiles
+    with them - the file read once for all of them. Their blocks of the regions section (roads, forts, watchtowers):
+    into = {region: the region that takes its land, or None}: its forts / watchtowers move to that region's block (its
+    own block renamed when that one has none); with no region taking its land (a wasteland, a cut) the block goes -
+    the game takes forts and watchtowers only in a region with a town ('You are trying to place a fort or watchtower
+    in this region, but it doesn't have a settlement')."""
     f = plan.edit(path)
     s = Strat(f)
-    st = s.settlement_of(region)
-    gone = []
-    if tile:
-        for fb in s.factions:
-            if fb.name != "slave":
-                continue
-            for ch in fb.characters:
-                if ch.xy and tuple(ch.xy) == tuple(tile):
-                    gone.append(ch)
-    cuts = ([(st.start, st.end, "settlement of %s" % region)] if st else []) + \
-        [(ch.start, ch.end, "rebel %s on its tile" % ch.name) for ch in gone]
-    for a, b, what in sorted(cuts, reverse=True):
-        del f.raw[a:b]
-        plan.note(f, "%s out%s" % (what, tag))
-    if st and st.owner != "slave":
-        left = [r for r, o in Strat(f).owners().items() if o == st.owner]
-        if left:
-            plan.note(f, "%s keeps %d town(s); its first, %s, is its capital" % (st.owner, len(left), left[0]))
-        else:                                       # only when it leaves the campaign (a cut, the modder's yes)
-            plan.note(f, "%s keeps no town" % st.owner)
+    into = into or {}
+    cuts, losers = [], []
+    at = {tuple(tiles[r]): r for r in gone if tiles.get(r)}
+    for region in gone:
+        st = s.settlement_of(region)
+        if st:
+            cuts.append((st.start, st.end, "settlement of %s" % region))
+            if st.owner != "slave" and st.owner not in losers:
+                losers.append(st.owner)
+    for fb in s.factions:
+        if fb.name != "slave":
+            continue
+        for ch in fb.characters:
+            if ch.xy and tuple(ch.xy) in at:
+                cuts.append((ch.start, ch.end, "rebel %s on its tile" % ch.name))
+    blocks = _region_blocks(f, s.diplomacy_start)
+    adds = []
+    for region in gone:
+        if region not in blocks:
+            continue
+        a, b = blocks[region]
+        to = into.get(region)
+        lines = [f.text(i) for i in range(a + 1, b) if strip_comment(f.text(i)).split()[:1] in (["fort"], ["watchtower"])]
+        if to and lines and to in blocks and to not in gone:
+            adds.append((blocks[to][1], lines, to))
+            cuts.append((a, b, "its block of the regions section (%d fort / watchtower line(s) to %s's)" % (
+                len(lines), to)))
+        elif to and lines:
+            line = f.text(a)
+            f.set(a, line.replace(region, to, 1))
+            plan.note(f, "the regions section's block of %s is %s's now (its forts / watchtowers go with the land)%s"
+                      % (region, to, tag))
+        else:
+            cuts.append((a, b, "the regions section's block of %s%s" % (
+                region, " with its %d fort / watchtower line(s) - the game takes them only in a region with a town"
+                % len(lines) if lines else "")))
+    ops = [(a, 1, (b, what)) for a, b, what in cuts] + [(i, 0, (lines, to)) for i, lines, to in adds]
+    for i, kind, x in sorted(ops, key=lambda o: (-o[0], -o[1])):
+        if kind:
+            del f.raw[i:x[0]]
+            plan.note(f, "%s out%s" % (x[1], tag))
+        else:
+            f.raw[i:i] = [f.make(t) for t in x[0]]
+            plan.note(f, "%d fort / watchtower line(s) into %s's block of the regions section%s" % (len(x[0]), x[1], tag))
+    if losers:
+        owners = Strat(f).owners()
+        for fac in losers:
+            left = [r for r, o in owners.items() if o == fac]
+            if left:
+                plan.note(f, "%s keeps %d town(s); its first, %s, is its capital" % (fac, len(left), left[0]))
+            else:                                   # only when it leaves the campaign (a cut, the modder's yes)
+                plan.note(f, "%s keeps no town" % fac)
+
+
+def town_problem(mod, campaign, region, xy, name=None):
+    """None, or why a wasteland region may not get its town on tile xy (named name)."""
+    from .mapedit import CITY, PORT
+    regions = mod.regions(campaign)
+    info = regions.get(region)
+    if not info:
+        return "%s is not a region of this map" % region
+    if not info.get("wasteland"):
+        return "%s is no wasteland - it has its town" % region
+    img = mod.region_map(campaign)
+    x, y = xy
+    if not (1 <= x < img.width - 1 and 1 <= y < img.height - 1):
+        return "too near the map's edge"
+    if img.get(x, y) in (CITY, PORT):
+        return "another town or port stands there"
+    if any(img.get(x + dx, y + dy) != info["colour"] for dx, dy in N4 + ((0, 0),)):
+        return "pick a tile inside %s's land (its land all round it)" % region
+    why = mod.land_problem(campaign, (x, y))
+    if why:
+        return why
+    if name is not None:
+        if not re.match(r"^[A-Za-z0-9_\-]+$", name or ""):
+            return "the town's name in the files may use letters, digits, _ and - (no spaces)"
+        if name == region:
+            return "the town needs a name other than its region's"
+        taken = {v.get("settlement") for v in regions.values()} | set(regions)
+        if name in taken:
+            return "%s is a region or town of this map already" % name
+    return None
+
+
+def wasteland_town(plan, campaign, region, xy, name, owner="slave", label=None):
+    """The opposite of a wasteland (delete(..., waste=True)): the region gets its town again on tile xy - its
+    descr_regions settlement line names the town (a short 3-line wasteland entry gets the whole block, its creator,
+    rebels, resources and farming as the neighbour it shares the longest border with), the town pixel on the map, a
+    village of owner in descr_strat (400 people, no buildings, as the game makes it), the town's name in the names
+    text and the lookup when they lack it. map.rwm is removed (the game builds it again)."""
+    from .mapedit import CITY
+    from .moddata import region_entries, religions_line
+    from .regionedit import religions_for
+    from .strat import village_block
+    mod = plan.mod
+    why = town_problem(mod, campaign, region, xy, name)
+    if why:
+        raise ValueError("%s cannot get its town at %d, %d: %s" % (region, xy[0], xy[1], why))
+    regions = mod.regions(campaign)
+    donor = next((r for r, _ in neighbours(mod, campaign, region) if not regions[r].get("wasteland")), None)
+    d = regions.get(donor) or {}
+    dr = plan.edit(mod.campaign_file(campaign, "descr_regions.txt"))
+    e = region_entries(dr)[region]
+    at, _ = e["wasteland"]
+    creator = owner if owner != "slave" else (d.get("creator") or owner)
+    if e.get("colour") and e["colour"][0] - at > 1:                 # the long form: only the town's line changes
+        line = dr.text(at)
+        dr.set(at, line.replace("wasteland", name, 1))
+        plan.note(dr, "region %s: its town %s again (no wasteland)" % (region, name))
+    else:                                                           # the short form: the whole block
+        lines = ["\t" + name, "\t" + creator, "\t" + (d.get("rebels") or "Rebels")]
+        after = ["\t" + (d.get("resources") or "none"), "\t" + (d.get("triumph") or "5"),
+                 "\t" + (d.get("farming") or "3")]
+        if d.get("legion"):
+            lines.insert(0, "\t" + d["legion"])
+        if d.get("beliefs"):
+            after.append("\t" + " ".join("%s %d" % (k, n) for k, n in d["beliefs"].items()))
+        if any(v.get("religions") for v in regions.values()):
+            after.append("\t" + religions_line(religions_for(regions, None, donor)))
+        colour_at = e["colour"][0] if e.get("colour") else at + 1
+        dr.raw[colour_at + 1:colour_at + 1] = [dr.make(t) for t in after]
+        dr.raw[at:at + 1] = [dr.make(t) for t in lines]
+        plan.note(dr, "region %s: its town %s again, the rest as %s (built by %s, rebels %s)" % (
+            region, name, donor or "the usual", creator, d.get("rebels") or "Rebels"))
+    path = mod.campaign_file(campaign, "map_regions.tga")
+    plan.patch_tga(path, {tuple(xy): CITY})
+    plan.notes.append((mod.rel(path), "the town pixel of %s at %d, %d" % (region, xy[0], xy[1])))
+    for folder in {os.path.dirname(path), os.path.join(mod.data, "world", "maps", "base")}:
+        plan.delete(os.path.join(folder, "map.rwm"), "the game rebuilds it from the changed map on the next start")
+    sf = plan.edit(mod.campaign_file(campaign, "descr_strat.txt"))
+    fb = Strat(sf).faction(owner)
+    if fb is None:
+        raise ValueError("descr_strat.txt has no block for %s" % owner)
+    block = village_block(region, creator)
+    at = fb.settlements[-1].end if fb.settlements else \
+        next((i + 1 for i in range(fb.start, fb.end) if sf.text(i).split()[:1] == ["denari"]), fb.start + 1)
+    sf.raw[at:at] = [sf.make(t) for t in block]
+    plan.note(sf, "%s: a village of %s" % (region, owner))
+    lk = mod.campaign_file(campaign, "descr_regions_and_settlement_name_lookup.txt")
+    if lk:
+        f = plan.edit(lk)
+        if name not in {strip_comment(f.text(i)).strip() for i in range(len(f.raw))}:
+            while f.raw and not f.text(len(f.raw) - 1).strip():
+                del f.raw[-1]
+            f.raw.extend([f.make(name), f.make("")])
+            plan.note(f, "%s added" % name)
+    labels = mod.region_labels_file(campaign)
+    if labels:
+        f = plan.edit(labels)
+        if not any(f.text(i).lstrip().startswith("{%s}" % name) for i in range(len(f.raw))):
+            while f.raw and not f.text(len(f.raw) - 1).strip():
+                del f.raw[-1]
+            f.raw.extend([f.make("{%s}\t\t\t%s" % (name, label or name.replace("_", " "))), f.make("")])
+            plan.note(f, "the name players see for %s: %s" % (name, label or name.replace("_", " ")))
+    else:
+        plan.warn(None, "no %s_regions_and_settlement_names.txt found - the town's name shows as its key" % campaign)

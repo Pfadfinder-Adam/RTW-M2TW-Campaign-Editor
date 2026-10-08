@@ -3545,6 +3545,34 @@ building smith
         restore(mod, bdir)
         self.assertEqual(tree_hash(self.root), before)
 
+    def test_map_cut_leaves_a_wasteland_under_an_engine(self):
+        """A cut that takes a town off but leaves part of its land (report #154): without an engine the land left joins
+        the neighbour; under REX / M2EX the region stays on it as a wasteland - nobody's, no neighbour grows."""
+        from campaign_editor import mapresize as MR
+        from campaign_editor.plan import Plan, restore
+        self._three_towns()
+        mod = ModData(self.root)
+        plan = Plan(mod, "map", "map_size", {})
+        MR.plan_resize(plan, "test", right=-1, clear=True)
+        bdir = plan.apply()
+        mod = ModData(self.root)
+        self.assertNotIn("C_R", mod.regions("test"))                # its land left joined B_R
+        restore(mod, bdir)
+        write(os.path.join(self.root, "data", "descr_ex.txt"), "max_factions 21\n")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        plan = Plan(mod, "map", "map_size", {})
+        MR.plan_resize(plan, "test", right=-1, clear=True)
+        bdir = plan.apply()
+        mod = ModData(self.root)
+        self.assertTrue(mod.regions("test")["C_R"]["wasteland"])
+        self.assertNotIn("C_R", mod.city_tiles("test"))
+        self.assertEqual(sum(1 for _ in mod.region_map("test").find((0, 255, 0))), 4)    # its column left, its own
+        self.assertNotIn("C_R", Strat(mod.load(mod.campaign_file("test", "descr_strat.txt"))).owners())
+        restore(mod, bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_")},
+                         {k: v for k, v in before.items() if not k.startswith("CampaignEditor_")})
+
     def test_check_problems_worst_first_with_the_place_to_fix(self):
         """Check mod files groups its problems by when the game meets them - would not start, campaign loads with
         something lost, battle, play - and names the place each is put right in."""
@@ -8245,9 +8273,137 @@ building smith
         write(camp, REGIONS + "Sahara\n\twasteland\n\t9 9 9\n")
         mod = ModData(self.root)
         self.assertTrue(mod.regions("test")["Sahara"]["wasteland"])
-        rep = check_mod(mod, "test")
+        found = []
+        rep = check_mod(mod, "test", found=found)
         self.assertNotIn("without a town pixel", rep)
         self.assertIn("wasteland regions", rep)
+        # the original exe knows no wasteland: said (report #154)
+        self.assertTrue(any("no REX / M2EX" in x for x in found), found)
+        write(os.path.join(self.root, "data", "descr_ex.txt"), "max_factions 21\n")
+        found = []
+        check_mod(ModData(self.root), "test", found=found)
+        self.assertFalse(any("no REX / M2EX" in x for x in found), found)
+
+    def test_delete_as_a_wasteland_and_back(self):
+        """Report #154 ('deleting a region must not merge it into others'): under REX / M2EX a town deleted with its
+        region leaves the region as a WASTELAND - its descr_regions line says so, its town pixel takes the region's
+        colour, its settlement, the rebels in it, its hold_regions and its regions-section block (a watchtower there:
+        the game takes them only in a region with a town) go; no neighbour grows; an island can go. The way back
+        writes its town on a picked tile (the long form and the short 3-line form). The other way (a neighbour) moves
+        its watchtowers to the neighbour's block. Restore byte for byte."""
+        from campaign_editor import regiondelete as RD
+        from campaign_editor.moddata import region_entries
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        R, B, G, Y, k = (255, 0, 0), (0, 0, 255), (0, 255, 0), (255, 255, 0), (0, 0, 0)
+        write_tga(os.path.join(camp, "map_regions.tga"), 10, 7, [
+            [R, R, B, B, G, G, G, G, G, G],
+            [R, k, B, B, G, Y, Y, Y, Y, G],
+            [R, R, k, B, G, Y, Y, Y, Y, G],
+            [R, R, B, B, G, Y, Y, k, Y, G],
+            [R, R, B, B, G, Y, Y, Y, Y, G],
+            [R, R, B, B, G, G, G, G, k, G],
+            [R, R, B, B, G, G, G, G, G, G]])
+        write(os.path.join(camp, "descr_regions.txt"), REGIONS +
+              "C_R\n\tCtown\n\tslave\n\tRebels\n\t0 255 0\n\tnone\n\t5\n\t1\n"
+              "D_R\n\tDtown\n\tslave\n\tRebels\n\t255 255 0\n\tnone\n\t5\n\t1\n")
+        towns = "".join("settlement\n{\n\tlevel village\n\tregion %s\n\tpopulation 400\n}\n\n" % r
+                        for r in ("C_R", "D_R"))
+        write(os.path.join(camp, "descr_strat.txt"), STRAT.replace(";;\tBtown", towns + ";;\tBtown") +
+              "\n; >>>> start of regions section <<<<\n\nregion C_R\nroad_level 0\nfarming_level 0\nfamine_threat 0\n"
+              "watchtower \t5 5\n\nregion D_R\nroad_level 0\nfarming_level 0\nfamine_threat 0\nwatchtower \t6 1\n\n"
+              "watchtower \t8 4\n")
+        write(os.path.join(camp, "descr_win_conditions.txt"), "alpha\nhold_regions A_R D_R\ntake_regions 10\n")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertFalse(RD.can_waste(mod))                 # the original exe: a neighbour only
+        write(os.path.join(self.root, "data", "descr_ex.txt"), "max_factions 21\n")
+        with_engine = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertTrue(RD.can_waste(mod))
+        self.assertEqual(mod.city_tiles("test")["D_R"], (7, 3))
+        self.assertEqual(RD.problems(mod, "test", "D_R", waste=True), ([], []))
+        plan = Plan(mod, "delete", "D_R", {})
+        self.assertIsNone(RD.delete(plan, "test", "D_R", waste=True))
+        plan.apply()
+        mod = ModData(self.root)
+        regs = mod.regions("test")
+        self.assertTrue(regs["D_R"]["wasteland"])                       # the region stays, nobody's
+        self.assertEqual(region_entries(mod.load(mod.campaign_file("test", "descr_regions.txt")))["D_R"]["wasteland"][1],
+                         "wasteland")
+        self.assertNotIn("D_R", mod.city_tiles("test"))
+        img = mod.region_map("test")
+        self.assertEqual(img.get(7, 3), Y)                              # its town pixel is its land now
+        self.assertEqual(sum(1 for _ in img.find(Y)), 16)               # no tile of it went to a neighbour
+        self.assertEqual(sum(1 for _ in img.find(G)), 25)
+        s = Strat(mod.load(mod.campaign_file("test", "descr_strat.txt")))
+        self.assertNotIn("D_R", s.owners())
+        self.assertEqual([f.xy for f in s.forts], [(5, 5)])            # D_R's watchtowers went with its block
+        with open(os.path.join(camp, "descr_strat.txt")) as fh:
+            self.assertNotIn("region D_R", fh.read())
+        with open(os.path.join(camp, "descr_win_conditions.txt")) as fh:
+            self.assertIn("hold_regions A_R\n", fh.read())
+        # the way back: its town on a tile inside its land
+        self.assertIn("inside D_R's land", RD.town_problem(mod, "test", "D_R", (5, 2)))
+        self.assertIn("already", RD.town_problem(mod, "test", "D_R", (6, 2), "Ctown"))
+        self.assertIsNone(RD.town_problem(mod, "test", "D_R", (6, 2), "Dnew"))
+        plan = Plan(mod, "town", "D_R", {})
+        RD.wasteland_town(plan, "test", "D_R", (6, 2), "Dnew", "slave")
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertFalse(mod.regions("test")["D_R"]["wasteland"])
+        self.assertEqual(mod.regions("test")["D_R"]["settlement"], "Dnew")
+        self.assertEqual(mod.city_tiles("test")["D_R"], (6, 2))
+        self.assertEqual(Strat(mod.load(mod.campaign_file("test", "descr_strat.txt"))).owners()["D_R"], "slave")
+        self.assertIn("{Dnew}", "".join(TextFile.load(mod.region_labels_file("test")).texts()))
+        for b in backups(mod):
+            restore(mod, b)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_")},
+                         with_engine)
+        # the short 3-line form gets its whole block back, as its neighbour's
+        write(os.path.join(camp, "descr_regions.txt"), REGIONS + "C_R\n\tCtown\n\tslave\n\tRebels\n\t0 255 0\n"
+              "\tnone\n\t5\n\t1\nD_R\n\twasteland\n\t255 255 0\n")
+        write_tga(os.path.join(camp, "map_regions.tga"), 10, 7, [[Y if c == k and x == 7 else c for x, c in enumerate(row)]
+                                                                 for row in [
+            [R, R, B, B, G, G, G, G, G, G], [R, k, B, B, G, Y, Y, Y, Y, G], [R, R, k, B, G, Y, Y, Y, Y, G],
+            [R, R, B, B, G, Y, Y, k, Y, G], [R, R, B, B, G, Y, Y, Y, Y, G], [R, R, B, B, G, G, G, G, k, G],
+            [R, R, B, B, G, G, G, G, G, G]]])
+        write(os.path.join(camp, "descr_strat.txt"), STRAT.replace(";;\tBtown", towns.split("settlement")[0] +
+                                                                    "settlement" + towns.split("settlement")[1] +
+                                                                    ";;\tBtown"))
+        mod = ModData(self.root)
+        self.assertTrue(mod.regions("test")["D_R"]["wasteland"])
+        plan = Plan(mod, "town", "D_R", {})
+        RD.wasteland_town(plan, "test", "D_R", (6, 2), "Dnew", "slave")
+        plan.apply()
+        mod = ModData(self.root)
+        e = mod.regions("test")["D_R"]
+        self.assertEqual((e["settlement"], e["creator"], e["rebels"], e["colour"], e["triumph"], e["farming"]),
+                         ("Dnew", "slave", "Rebels", Y, "5", "1"))
+        # the other way: its land to a neighbour, its watchtowers to that neighbour's block
+        write(os.path.join(camp, "descr_regions.txt"), REGIONS +
+              "C_R\n\tCtown\n\tslave\n\tRebels\n\t0 255 0\n\tnone\n\t5\n\t1\n"
+              "D_R\n\tDtown\n\tslave\n\tRebels\n\t255 255 0\n\tnone\n\t5\n\t1\n")
+        write_tga(os.path.join(camp, "map_regions.tga"), 10, 7, [
+            [R, R, B, B, G, G, G, G, G, G], [R, k, B, B, G, Y, Y, Y, Y, G], [R, R, k, B, G, Y, Y, Y, Y, G],
+            [R, R, B, B, G, Y, Y, k, Y, G], [R, R, B, B, G, Y, Y, Y, Y, G], [R, R, B, B, G, G, G, G, k, G],
+            [R, R, B, B, G, G, G, G, G, G]])
+        write(os.path.join(camp, "descr_strat.txt"), STRAT.replace(";;\tBtown", towns + ";;\tBtown") +
+              "\n; >>>> start of regions section <<<<\n\nregion C_R\nroad_level 0\nfarming_level 0\nfamine_threat 0\n"
+              "watchtower \t5 5\n\nregion D_R\nroad_level 0\nfarming_level 0\nfamine_threat 0\nwatchtower \t6 1\n\n"
+              "watchtower \t8 4\n")
+        mod = ModData(self.root)
+        plan = Plan(mod, "delete", "D_R", {})
+        self.assertEqual(RD.delete(plan, "test", "D_R"), "C_R")
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertNotIn("D_R", mod.regions("test"))
+        with open(os.path.join(camp, "descr_strat.txt")) as fh:
+            text = fh.read()
+        self.assertNotIn("region D_R", text)
+        self.assertEqual(sorted(f.xy for f in Strat(mod.load(mod.campaign_file("test", "descr_strat.txt"))).forts),
+                         [(5, 5), (6, 1), (8, 4)])
+        self.assertLess(text.index("watchtower \t5 5"), text.index("watchtower \t6 1"))
+        del before
 
     def test_path_guard(self):
         """Every write of a Plan and every Restore stays inside the mod's / game's folder: '../', a link that leads

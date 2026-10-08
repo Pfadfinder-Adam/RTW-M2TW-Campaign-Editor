@@ -4989,6 +4989,14 @@ class App(tk.Tk):
                     self.lb_build.selection_set(self.chosen.index(region))
                     self.load_buildings()
                 items.append(("Its buildings...  (Buildings)", buildings))
+        elif self._cmap and cid is None:
+            # a wasteland's land (REX / M2EX: no town, nobody's): the way back - its town on this tile
+            land = self._cmap.region_at(*xy)
+            if land and self._cmap.info.get(land, {}).get("wasteland"):
+                from .gui_settlements import wasteland_town
+                items.append(("%s - a wasteland (no town, nobody's)" % land, None))
+                items.append(("Give %s its town here..." % land, self.once(
+                    "wasteland_town:%s" % land, lambda: wasteland_town(self, land, tuple(xy), self))))
         port = getattr(self.map_view, "menu_port", None)
         if port and port not in self.ports_gone:
             def delete_port(port=port):
@@ -5118,7 +5126,7 @@ class App(tk.Tk):
                     self.show_map()
                 items.append(("Delete %s from the map" % c["name"], delete_own))
         land = region or (self._cmap.region_at(*xy) if self._cmap else None)
-        if cid is None and land:
+        if cid is None and land and not (self._cmap and self._cmap.info.get(land, {}).get("wasteland")):  # it hires none
             if items:
                 items.append((None, None))
             items.append(("Mercenaries for hire in %s..." % land, lambda: self.mercenaries_window(region=land)))

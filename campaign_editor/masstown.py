@@ -20,12 +20,13 @@ def known_buildings(mod):
     return {b.name: b for b in read_buildings(mod.load(edb))} if edb else {}
 
 
-def towns(mod, campaign):
+def towns(mod, campaign, only=None):
     """[{'region', 'name', 'owner', 'level', 'kind' ('city' | 'castle', None in a game without castles),
     'buildings' [(chain, level)], 'units' (in the army on the town), 'upkeep', 'port', 'unit_names', 'population',
     'army' (its leader's name), 'inside' (the units are the town's own garrison, no captain), 'tile' (x, y), 'near' [(character, faction, (x, y))] - armies of any faction on its tile
     or the 8 tiles round it that do not hold it (with no army of the owner on the tile the town starts empty: a garrison
-    standing beside it is outside the walls - said plainly, a tester's mod showed none)}] in descr_strat's order."""
+    standing beside it is outside the walls - said plainly, a tester's mod showed none)}] in descr_strat's order.
+    only: that region's town alone (the town window - HLR has 749)."""
     from .mapedit import ports
     from .start import unit_upkeep
     f = mod.load(mod.campaign_file(campaign, "descr_strat.txt"))
@@ -44,6 +45,8 @@ def towns(mod, campaign):
     out = []
     for fb in s.factions:
         for st in fb.settlements:
+            if only is not None and st.region != only:
+                continue
             lines = s.lines[st.start:st.end]
             level, items = settlement_info(lines)
             xy = tiles.get(st.region)
