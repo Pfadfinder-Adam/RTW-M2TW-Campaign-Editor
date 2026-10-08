@@ -1124,6 +1124,9 @@ building smith
         self.assertEqual(town_ring_problems(mod, "test"), [])
         # Rome: warned, not refused
         self.assertIsNone(place_problem(mod, "test", "city", "B_R", (3, 2)))
+        # dragged away and then back onto its own tile: allowed (the callers pass the moves without this one)
+        home = tuple(mod.city_tiles("test")["B_R"])
+        self.assertIsNone(place_problem(mod, "test", "city", "B_R", home, {}))
         plan = Plan(mod, "map", "map", {})
         apply_places(plan, "test", [{"what": "city", "region": "B_R", "to": (3, 2)}])
         self.assertTrue(any("touches A_R's land" in w for _, w in plan.warnings))
