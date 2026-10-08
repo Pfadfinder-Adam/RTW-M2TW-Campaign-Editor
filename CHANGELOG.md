@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+- **Map size**: a cut over the rebels stopped with '... is not a character of slave' when a rebel general stood in a
+  rebel town on the part cut off (the town went with its garrison, then the general was looked for again). The
+  rebels' characters on the part cut off now simply go with the cut, generals too (they have no town to keep).
+
 ### Changed
 - **A new version of the editor is seen at once**: the editor looks on GitHub on every start, and again every 6 hours
   while it stays open (it looked at most once in 6 hours, only on start - a release made after the day's first start

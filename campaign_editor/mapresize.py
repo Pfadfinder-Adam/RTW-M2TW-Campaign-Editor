@@ -302,7 +302,7 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0):
         for c in fb.characters:
             if not c.xy or not gone(c.xy):
                 continue
-            if not c.named:
+            if not c.named or fb.name == "slave":      # the rebels' generals go too: they have no town to keep
                 remove.setdefault(fb.name, []).append({"name": c.name, "from": list(c.xy)})
                 continue
             army = _has_army(s0.lines[c.start:c.end])
@@ -332,10 +332,14 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0):
             if c.xy and gone(c.xy) and not c.named and {"name": c.name, "from": list(c.xy)} not in \
                     remove.get(fb.name, []):
                 remove.setdefault(fb.name, []).append({"name": c.name, "from": list(c.xy)})
-    left_out = {fac: [m for m in items if any(c.name == m["name"] and list(c.xy or ()) == m["from"]
-                                              for c in (s.faction(fac).characters if s.faction(fac) else []))]
-                for fac, items in remove.items()}
-    map_changes(plan, campaign, {"remove": {k: v for k, v in left_out.items() if v}, "moves": moves})
+    # only those still there: a town's deletion took the rebels standing in it (its garrison) with it
+    def still(items):
+        return {fac: [m for m in ms if any(c.name == m["name"] and list(c.xy or ()) == m["from"]
+                                           for c in (s.faction(fac).characters if s.faction(fac) else []))]
+                for fac, ms in items.items()}
+    left_out, moves = still(remove), still(moves)
+    map_changes(plan, campaign, {"remove": {k: v for k, v in left_out.items() if v},
+                                 "moves": {k: v for k, v in moves.items() if v}})
     f = plan.edit(strat_path)
     res = [r.index for r in res_read(f) if gone(r.xy)]
     forts = [fo.line for fo in Strat(f).forts if fo.xy and gone(fo.xy)]
