@@ -386,4 +386,7 @@ def _strat(plan, path, region, tile, tag):
         plan.note(f, "%s out%s" % (what, tag))
     if st and st.owner != "slave":
         left = [r for r, o in Strat(f).owners().items() if o == st.owner]
-        plan.note(f, "%s keeps %d town(s); its first, %s, is its capital" % (st.owner, len(left), left[0]))
+        if left:
+            plan.note(f, "%s keeps %d town(s); its first, %s, is its capital" % (st.owner, len(left), left[0]))
+        else:                                       # only when it leaves the campaign (a cut, the modder's yes)
+            plan.note(f, "%s keeps no town" % st.owner)

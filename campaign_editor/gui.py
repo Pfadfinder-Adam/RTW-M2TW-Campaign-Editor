@@ -5654,7 +5654,9 @@ class App(tk.Tk):
                 out.append((key, "%s: %d change(s)" % (name, ed.pending())))
         if self.faction_pending():
             out.append(("faction", self._faction_label()))
-        for key, part in self.session_parts().items():     # the own windows' changes, kept for the one write
+        # the own windows' changes, kept for the one write; a part built at the write (a map cut) last of all: it is
+        # made on the files as every other part leaves them (towns given meanwhile count)
+        for key, part in sorted(self.session_parts().items(), key=lambda kv: bool(kv[1].get("build"))):
             out.append((key, part["label"]))
         return out
 
@@ -5668,14 +5670,16 @@ class App(tk.Tk):
             parts = self._session = {}
         return {k: v for k, v in parts.items() if v["mod"] == here}
 
-    def session_add(self, key, label, plan, after=None):
+    def session_add(self, key, label, plan, after=None, build=None):
         """A window's changes (its plan, made on the files as they are now) go into the session's list; kept again
         they replace the first. At the write each is laid over the files as the parts before it left them
-        (plan.rebased: line by line; the same lines changed twice are refused in words). after(bdir) once written."""
+        (plan.rebased: line by line; the same lines changed twice are refused in words). after(bdir) once written.
+        build (plan None): a part made only at the write, on the files as every other part left them - written
+        last (Map size: a cut counts the towns given on the Map meanwhile)."""
         from .plan import keep
         self.session_parts()
-        self._session[key] = {"label": label, "plan": keep(plan), "after": after,
-                              "mod": os.path.normcase(os.path.abspath(self.mod.data))}
+        self._session[key] = {"label": label, "plan": keep(plan) if plan is not None else None, "after": after,
+                              "build": build, "mod": os.path.normcase(os.path.abspath(self.mod.data))}
         self._mark_work()
         self.update_actions()
         n = len(self.pending_parts())
@@ -5692,6 +5696,8 @@ class App(tk.Tk):
 
     def _part_plan(self, key):
         part = (getattr(self, "_session", None) or {}).get(key)
+        if part is not None and part.get("build"):
+            return part["build"]()
         if part is not None:
             from .plan import rebased
             return rebased(part["plan"])

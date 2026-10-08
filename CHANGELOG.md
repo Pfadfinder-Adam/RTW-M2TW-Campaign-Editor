@@ -2,16 +2,26 @@
 
 ## Unreleased
 
-### Fixed
-- **Map size**: a cut over the rebels stopped with '... is not a character of slave' when a rebel general stood in a
-  rebel town on the part cut off (the town went with its garrison, then the general was looked for again). The
-  rebels' characters on the part cut off now simply go with the cut, generals too (they have no town to keep).
+### Added
+- **Map size: a cut that takes a faction's last town takes the faction out of this campaign** (both games), after a
+  question that names it - its people, its place in the faction lists, its diplomacy, its victory conditions and the
+  events that make it rise; it stays in the mod (its units, pictures and other campaigns keep it). Script lines naming
+  it are listed to change by hand. It was a refusal ('... would keep no town').
 
 ### Changed
+- **Map size waits for Apply**: *Keep for Apply* puts the cut in the list of changes waiting; Apply changes writes it
+  after every other change, so a town given on the Map meanwhile counts - a faction that gets a town that stays keeps
+  its place, its family moves into that town. The window opens with other changes waiting too (it refused before).
+  Undo this write / Restore give the old map back.
 - **A new version of the editor is seen at once**: the editor looks on GitHub on every start, and again every 6 hours
   while it stays open (it looked at most once in 6 hours, only on start - a release made after the day's first start
   was not seen that day). The GitHub button turns **green** with the new number (`GitHub (new 0.34)`) and opens that
   release's page.
+
+### Fixed
+- **Map size**: a cut over the rebels stopped with '... is not a character of slave' when a rebel general stood in a
+  rebel town on the part cut off (the town went with its garrison, then the general was looked for again). The
+  rebels' characters on the part cut off now simply go with the cut, generals too (they have no town to keep).
 
 ## 0.33.0 - 2026-10-08
 

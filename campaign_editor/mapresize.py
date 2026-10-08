@@ -236,7 +236,24 @@ def cut_words(hit):
     return lines
 
 
-def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0):
+def lost_factions(mod, campaign, left=0, bottom=0, right=0, top=0, owners=None):
+    """{faction: [its towns on the part cut off]} of the factions (rebels aside) the cut would leave without a town.
+    owners: {region: owner} as they will be (the changes not written yet), else descr_strat's."""
+    from .strat import Strat
+    img = mod.region_map(campaign)
+    W, H = img.width + left + right, img.height + bottom + top
+    if owners is None:
+        owners = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))).owners()
+    tiles = mod.city_tiles(campaign)
+    cut = {r for r, t in tiles.items() if not (0 <= t[0] + left < W and 0 <= t[1] + bottom < H)}
+    out = {}
+    for fac in sorted({owners.get(r) for r in cut} - {None, "slave"}):
+        if not [r for r, o in owners.items() if o == fac and r not in cut]:
+            out[fac] = sorted(r for r in cut if owners.get(r) == fac)
+    return out
+
+
+def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0, factions_out=()):
     """Everything standing on the part a cut takes off, taken off first, in the plan (the modder said yes to it):
     - a town: its region goes everywhere (regiondelete.delete); the part of its land that stays joins the neighbour
       that stays it shares the longest border with; a region all on the cut part goes with its land;
@@ -245,7 +262,9 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0):
       nearest town his faction keeps; every other character - armies, agents, fleets, rebels - goes with his army;
     - resources, forts, watchtowers, wonders: their lines go;
     - an event placed there goes;
-    - lines of the campaign's scripts naming tiles there are left as they are (returned as warnings).
+    - lines of the campaign's scripts naming tiles there are left as they are (returned as warnings);
+    - a faction left without a town, when it is in factions_out (the modder said yes): taken out of the campaign
+      with all its people (factionout.take_out - it stays in the mod).
     Refused before anything is written (ValueError, every reason in plain words): a faction left without a town, a
     region a campaign script or a faction's rising names (regiondelete.refusals), a town whose land partly stays but
     touches no region that stays, a family member whose faction keeps no town to go to, a faction's rising placed on
@@ -267,9 +286,12 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0):
     owners = s0.owners()
     tiles = mod.city_tiles(campaign)
     cut = sorted(r for r, t in tiles.items() if gone(t))
-    errors, warn = [], []
+    errors, warn, out = [], [], []
     for fac in sorted({owners.get(r) for r in cut} - {None, "slave"}):
         if not [r for r, o in owners.items() if o == fac and r not in cut]:
+            if fac in factions_out:
+                out.append(fac)
+                continue
             errors.append("%s would keep no town (%s on the part cut off) - a faction without a town dies as the "
                           "campaign loads and the game crashes; give it a town that stays first" % (
                               fac, ", ".join(r for r in cut if owners.get(r) == fac)))
@@ -287,7 +309,7 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0):
     errors += errs
     ev_path = path_of(mod, campaign)
     events = [e for e in (events_read(mod.load(ev_path)) if ev_path else []) if e.get("position") and
-              gone(e["position"])]
+              gone(e["position"]) and not (e["kind"] == "emergent_faction" and e["name"] in out)]
     for e in events:
         if e["kind"] == "emergent_faction":
             errors.append("%s rises at %d, %d by an event - on the part cut off; place it elsewhere first (Events and "
@@ -298,6 +320,8 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0):
     remove, moves = {}, {}
     town_tiles = {tuple(t) for t in tiles.values()}
     for fb in s0.factions:
+        if fb.name in out:                          # it leaves the campaign with all its people
+            continue
         mine = [tiles[r] for r, o in owners.items() if o == fb.name and r not in cut and r in tiles]
         for c in fb.characters:
             if not c.xy or not gone(c.xy):
@@ -324,6 +348,9 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0):
     lost_ports = [r for r, t in ports(mod, campaign).items() if r not in cut and gone(t)]
     if lost_ports:
         _remove_ports(plan, campaign, sorted(lost_ports))
+    from .factionout import take_out
+    for fac in out:
+        warn += take_out(plan, campaign, fac)
     f = plan.edit(strat_path)
     s = Strat(f)
     # a fleet the port took out to the sea beside may stand on the cut part too
@@ -394,7 +421,7 @@ def _tiles_in(text, values):
     return out
 
 
-def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False):
+def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, factions_out=()):
     """Every file of the map grown (positive) or cut (negative) by that many tiles at each edge, in the plan.
     Returns the warnings; ValueError (with every place named) when a cut would leave something off the map -
     unless clear: then what stands on the part cut off is taken off first (clear_cut - the modder was asked)."""
@@ -403,7 +430,7 @@ def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False):
         raise ValueError("no tiles to add or cut")
     first = []
     if clear:
-        first = clear_cut(plan, campaign, left, bottom, right, top)
+        first = clear_cut(plan, campaign, left, bottom, right, top, factions_out=factions_out)
     else:
         gone = off_map(mod, campaign, left, bottom, right, top)
         if gone:
