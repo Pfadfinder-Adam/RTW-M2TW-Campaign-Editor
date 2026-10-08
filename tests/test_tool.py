@@ -3524,12 +3524,18 @@ building smith
         self.assertEqual(MR.blocking(found, img.width, img.height), [])
         self.assertEqual(MR.blocking(found, img.width, img.height, left=3, right=1, top=2, bottom=5), [])
         cut = MR.blocking(found, img.width, img.height, left=-2)            # columns 0 and 1 go
-        self.assertEqual([x[1] for x in cut], [(1, 1), (1, 1)])
-        self.assertEqual([x[2:] for x in cut], [("town", "A_R"), ("character", "family")])
+        self.assertEqual([x[1] for x in cut], [(1, 1), (2, 2), (1, 1)])    # B_R's town at column 2: the new edge
+        self.assertEqual([x[2:] for x in cut], [("town", "A_R"), ("town", "B_R"), ("character", "family")])
         self.assertIn("the town of A_R (1, 1)", cut[0][0])
-        self.assertIn("Aaron Alphid", cut[1][0])
+        self.assertIn("Aaron Alphid", cut[2][0])
         self.assertEqual(MR.off_map(mod, "test", -2, 0, 0, 0), [x[0] for x in cut])
-        self.assertEqual(MR.blocking(found, img.width, img.height, right=-1), [])      # column 3 holds nothing
+        self.assertEqual([x[2:] for x in MR.blocking(found, img.width, img.height, right=-1)],
+                         [("town", "B_R")])        # column 3 holds nothing, but B_R's town would be on the new edge
+        # report #158: a town (or port) the cut leaves on the new edge goes too - the game cannot place one there;
+        # a character there stays
+        edge = MR.blocking(found, img.width, img.height, left=-1)
+        self.assertEqual([x[2:] for x in edge], [("town", "A_R")])
+        self.assertEqual(MR.lost_factions(mod, "test", left=-1), MR.lost_factions(mod, "test", left=-2))
         with self.assertRaises(ValueError) as said:
             MR.plan_resize(Plan(mod, "map", "map_size", {}), "test", left=-2)
         self.assertIn("the town of A_R", str(said.exception))
