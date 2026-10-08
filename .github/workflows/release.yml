@@ -49,6 +49,8 @@ jobs:
               sys.exit("CHANGELOG.md has no '## %s' part with text - write it first" % version)
           with open("release_notes.md", "w", encoding="utf-8") as fh:
               fh.write(text + "\n")
+          # the Windows runner's console is cp1252: a character it lacks (a ✕) stopped the release here (0.33.0)
+          sys.stdout.reconfigure(encoding="utf-8", errors="replace")
           print(text)
       - run: python -m unittest discover -s tests
       - run: pip install pyinstaller pillow certifi
