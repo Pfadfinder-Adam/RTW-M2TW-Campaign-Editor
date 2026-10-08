@@ -6124,6 +6124,59 @@ building smith
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
         self.assertEqual(after, before)
 
+    def test_delete_many_towns_with_their_regions_at_once(self):
+        """The map's Select: many towns deleted with their regions in one write (report R-20261008-7696AA) - the
+        files read once (a faction's last towns counted together), each region's land to the neighbour that stays,
+        one ringed only by regions deleted with it follows them, a neighbour picked on the map kept; Restore byte
+        for byte."""
+        from campaign_editor import regiondelete as RD
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        R, B, G, Y, k = (255, 0, 0), (0, 0, 255), (0, 255, 0), (255, 255, 0), (0, 0, 0)
+        write_tga(os.path.join(camp, "map_regions.tga"), 8, 5, [
+            [R, R, B, B, G, G, G, G],
+            [R, k, B, B, G, Y, Y, G],
+            [R, R, k, B, G, Y, k, G],
+            [R, R, B, B, G, Y, Y, G],
+            [R, R, B, B, G, G, k, G]])
+        write(os.path.join(camp, "descr_regions.txt"), REGIONS +
+              "C_R\n\tCtown\n\tslave\n\tRebels\n\t0 255 0\n\tnone\n\t5\n\t1\n"
+              "D_R\n\tDtown\n\tslave\n\tRebels\n\t255 255 0\n\tnone\n\t5\n\t1\n")
+        towns = "".join("settlement\n{\n\tlevel village\n\tregion %s\n\tpopulation 400\n}\n\n" % r
+                        for r in ("C_R", "D_R"))
+        write(os.path.join(camp, "descr_strat.txt"), STRAT.replace(";;\tBtown", towns + ";;\tBtown"))
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertEqual(mod.city_tiles("test"), {"A_R": (1, 1), "B_R": (2, 2), "C_R": (6, 4), "D_R": (6, 2)})
+        errors, _ = RD.refusals(mod, "test", ["A_R", "B_R"])
+        self.assertTrue(any(e.startswith("Atown is the last town of alpha") for e in errors), errors)
+        near = {r: RD.neighbours(mod, "test", r) for r in ("B_R", "C_R", "D_R")}
+        self.assertEqual(RD.receivers(near, ["D_R"]), ({"D_R": "C_R"}, []))
+        # D_R touches only C_R: deleted together, D_R's land follows C_R's (to B_R, its only other neighbour)
+        self.assertEqual(RD.receivers(near, ["C_R", "D_R"]), ({"C_R": "B_R", "D_R": "B_R"}, []))
+        # a neighbour picked on the map is kept; one deleted with it is never taken
+        self.assertEqual(RD.receivers(near, ["C_R"], {"C_R": "D_R"}), ({"C_R": "D_R"}, []))
+        self.assertEqual(RD.receivers(near, ["C_R", "D_R"], {"C_R": "D_R"})[0]["C_R"], "B_R")
+        # nowhere to go (an island): said, never guessed
+        self.assertEqual(RD.receivers({"X_R": []}, ["X_R"]), ({}, ["X_R"]))
+        # B, C and D at once: B goes to A, C and D follow it step by step
+        self.assertEqual(RD.receivers(near, ["B_R", "C_R", "D_R"])[0], {"B_R": "A_R", "C_R": "A_R", "D_R": "A_R"})
+        errors, warns = RD.refusals(mod, "test", ["C_R", "D_R"])
+        self.assertEqual(errors, [])
+        into, stuck = RD.receivers(near, ["C_R", "D_R"])
+        plan = Plan(mod, "delete", "2_regions", {})
+        RD.delete_many(plan, "test", into, warns)
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual(sorted(mod.regions("test")), ["A_R", "B_R"])
+        self.assertEqual(sorted(mod.region_map("test").colours()), [k, B, R])
+        self.assertEqual(mod.city_tiles("test"), {"A_R": (1, 1), "B_R": (2, 2)})
+        s = Strat(mod.load(mod.campaign_file("test", "descr_strat.txt")))
+        self.assertEqual(sorted(s.owners()), ["A_R", "B_R"])
+        self.assertEqual(len(backups(mod)), 1)                                  # one write, one backup
+        restore(mod, backups(mod)[0])
+        after = {k2: v for k2, v in tree_hash(self.root).items() if not k2.startswith("CampaignEditor_backups")}
+        self.assertEqual(after, before)
+
     def test_scripts_in_the_game_listed_switched_set_deleted(self):
         """Add-ons > Scripts in the game: every script in the game's script/modules (the engine requires each .nut
         there) - turned off as x.nut.off and on again, its settings written in its own lines, deleted - each with

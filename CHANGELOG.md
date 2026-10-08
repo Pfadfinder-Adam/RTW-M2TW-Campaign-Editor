@@ -7,6 +7,15 @@
   that stays (yellow) and its neighbour that goes (red), then **Merge them** - the second region and its town go from
   every file, all its land joins the first, which stays as it is. One write with a backup per pair; the switch stays
   on for the next pair. For maps with more regions than wanted.
+- **Delete many towns with their regions at once** (both games): with Select on, select the towns on the map, right
+  click > **Delete the N selected town(s) with their regions...** - one window lists each town and the region its
+  land goes to (the neighbour that stays it shares the longest border with; a region ringed only by regions deleted
+  with it follows them). The map shows them: red = goes, yellow = takes land; pick a row (or click a red region) and
+  its neighbours that could take its land turn green - click one to give it the land. One write, one backup, one Undo.
+- **Delete this town with its region** shows the choice on the map: red = the town's region, yellow = the region that
+  takes its land, green = the other neighbours - a click on a green one gives it the land (the list in the window
+  follows). The window stands beside the map, the whole map in sight; the mod's files are read once (they were read
+  three times - slow on a big mod).
 - **Map size: drag the map's edges** (Change size... under the map, both games): the map's four edges become an
   orange frame with a grip on each side - drag one out to add rows or columns of deep sea (shown blue), in to cut them
   off (shown dark); the window's numbers follow the mouse, and typed numbers move the frame. What stands on the part

@@ -282,10 +282,55 @@ def merge_regions(app, keep, gone, parent=None):
     return bdir
 
 
+def _map_of(app):
+    """The map the regions are shown on while a Delete window is open: the main window's (the Map tab / Map editor),
+    when it is drawn."""
+    view = getattr(app, "map_view", None)
+    try:
+        return view if view is not None and getattr(view, "cmap", None) and view.winfo_viewable() else None
+    except tk.TclError:
+        return None
+
+
+def _beside(app, w, view, width=640):
+    """The window at the main window's right (over the legend), the whole map in sight left of it - not in the
+    middle over the regions it marks."""
+    if view is None:
+        return
+    try:
+        w._centred = True                             # the app's own centring leaves it where it is put
+        left = max(0, app.winfo_rootx() + app.winfo_width() - width)
+        w.geometry("+%d+%d" % (left, app.winfo_rooty() + 110))
+        w.attributes("-alpha", 1.0)
+        cv = view.canvas
+        view.fit_beside(free=max(0, cv.winfo_rootx() + cv.winfo_width() - left + 10), margin=10)
+    except tk.TclError:
+        pass
+
+
+def _reading(app, what):
+    """A few words while the mod's files are read for a deletion (a big mod: thousands of them)."""
+    try:
+        app.status.set("Reading the mod's files for %s..." % what)
+        app.config(cursor="watch")
+        app.update_idletasks()
+    except (tk.TclError, AttributeError):
+        pass
+
+
+def _read(app):
+    try:
+        app.config(cursor="")
+    except tk.TclError:
+        pass
+
+
 def delete_town(app, region, parent):
     """Delete a town together with its region (regiondelete: its land to a neighbour, every file that ties them),
     asked first with the whole list of changes, written with a backup, the mod read again. The Map's right click
-    on a town opens it."""
+    on a town opens it. While it is open the map shows it: red goes, yellow takes its land, green could take it - a
+    click on a green region gives it the land (report R-20261008-7696AA). The mod's files are read once (they were
+    read three times - slow on a big mod)."""
     from .plan import Plan
     from .regiondelete import delete, neighbours, problems
     campaign = app.v_campaign.get()
@@ -299,12 +344,18 @@ def delete_town(app, region, parent):
                                   "would leave them pointing at nothing.", parent=parent)
         return
     town = regions[region].get("settlement") or region
-    errors, warns = problems(app.mod, campaign, region)
+    _reading(app, town)
+    try:
+        errors, warns = problems(app.mod, campaign, region)
+    finally:
+        _read(app)
+    app.status.set("")
     if errors:
         messagebox.showerror(APP, "%s and its region cannot be deleted:\n\n- %s" % (town, "\n- ".join(errors)),
                              parent=parent)
         return
     near = neighbours(app.mod, campaign, region)
+    view = _map_of(app)
     w = tk.Toplevel(parent)
     w.title("Delete %s with its region %s" % (town, region))
     w.transient(parent)
@@ -321,19 +372,62 @@ def delete_town(app, region, parent):
     ttk.Combobox(frm, textvariable=v_into, values=labels, state="readonly",
                  width=max(30, max(len(x) for x in labels) + 2)).grid(row=1, column=1, sticky="w", padx=6,
                                                                        pady=(8, 2))
+    if view is not None:
+        ttk.Label(frm, justify="left", wraplength=560, text=(
+            "On the map: red = %s goes, yellow = the region that takes its land, green = a neighbour that could take "
+            "it - click a green one to give it the land." % town)).grid(row=2, column=0, columnspan=2, sticky="w",
+                                                                         pady=(4, 0))
     if warns:
         ttk.Label(frm, justify="left", wraplength=560, foreground="#8a5a00", text=(
             "Good to know:\n- " + "\n- ".join(warns[:6]) + ("\n..." if len(warns) > 6 else ""))).grid(
-            row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
+            row=3, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+    def into_now():
+        return near[labels.index(v_into.get())][0]
+
+    def show():
+        if view is None:
+            return
+        marks = {r: "can" for r, _ in near}
+        marks.update({into_now(): "into", region: "gone"})
+        try:
+            view.mark_regions(marks, clicked)
+        except tk.TclError:
+            pass
+
+    def clicked(r):
+        names = [n for n, _ in near]
+        if r in names:
+            v_into.set(labels[names.index(r)])
+        elif r == region:
+            view.readout.configure(text="%s goes - click a green neighbour to give it the land" % town)
+        else:
+            view.readout.configure(text="%s does not touch %s - its land can go only to a green neighbour" % (
+                r or "the sea", region))
+
+    v_into.trace_add("write", lambda *a: show())
+    _beside(app, w, view)
+    show()
+
+    def unmark(e=None):
+        if e is not None and e.widget is not w:
+            return
+        if view is not None:
+            try:
+                view.mark_regions(None)
+            except tk.TclError:
+                pass
+    w.bind("<Destroy>", unmark, add="+")
 
     def plan():
-        into = near[labels.index(v_into.get())][0]
         p = Plan(app.mod, "delete", region)
         try:
-            delete(p, campaign, region, into)
+            delete(p, campaign, region, into_now(), checked=True)     # the files were read for it already
         except ValueError as e:
             messagebox.showerror(APP, str(e), parent=w)
             return None
+        for x in warns:
+            p.warn(None, x)
         return p
 
     def preview():
@@ -343,7 +437,7 @@ def delete_town(app, region, parent):
 
     def write():
         p = plan()
-        into = near[labels.index(v_into.get())][0] if p else None
+        into = into_now() if p else None
         if not p or not ask(APP, "%s\n\nDelete %s and its region %s now (%d file(s))? Every tile of "
                                                  "it becomes %s's - no land is left without a region (the game wants "
                                                  "each tile in one). A backup is made first (Tools > Restore undoes "
@@ -358,7 +452,175 @@ def delete_town(app, region, parent):
                        % (town, region, bdir))
 
     bar = ttk.Frame(frm)
-    bar.grid(row=3, column=0, columnspan=2, sticky="e", pady=(10, 0))
+    bar.grid(row=4, column=0, columnspan=2, sticky="e", pady=(10, 0))
     ttk.Button(bar, text="Preview", command=preview).pack(side="left")
     ttk.Button(bar, text="Delete", command=write).pack(side="left", padx=4)
     ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
+    return w
+
+
+def delete_towns(app, picked, parent):
+    """Many towns deleted with their regions at once - the map's Select, right click (report R-20261008-7696AA):
+    the mod's files read once for all of them (regiondelete.refusals), each region's land to the neighbour that stays
+    it shares the longest border with (receivers); a row picked (or its red region clicked on the map) shows its
+    neighbours that could take its land in green - a click gives them it. One plan: one backup, one Undo."""
+    from .plan import Plan
+    from .regiondelete import delete_many, neighbours, receivers, refusals
+    campaign = app.v_campaign.get()
+    regions = app.mod.regions(campaign)
+    gone = sorted(r for r in picked if r in regions)
+    if len(gone) == 1:
+        return delete_town(app, gone[0], parent)
+    if not gone:
+        messagebox.showerror(APP, "None of the selected regions is in the campaign's files yet - Apply the changes "
+                                  "first.", parent=parent)
+        return None
+    if app.pending_parts():
+        messagebox.showerror(APP, "Other changes wait for Apply. Apply (or undo) them first - a deleted region "
+                                  "would leave them pointing at nothing.", parent=parent)
+        return None
+    town = {r: regions[r].get("settlement") or r for r in gone}
+    _reading(app, "%d towns" % len(gone))
+    try:
+        errors, warns = refusals(app.mod, campaign, gone)
+        near = {r: neighbours(app.mod, campaign, r) for r in gone}
+    finally:
+        _read(app)
+    app.status.set("")
+    state = {"chosen": {}, "sel": None}
+    view = _map_of(app)
+    w = tk.Toplevel(parent)
+    w.title("Delete %d towns with their regions" % len(gone))
+    w.transient(parent)
+    frm = scroll_body(w, 10)
+    ttk.Label(frm, justify="left", wraplength=600, text=(
+        "These towns and their regions go from the campaign in every file that ties them, as Delete this town with "
+        "its region does for one: each region's land (and port) becomes a neighbour's that stays, the rebels in the "
+        "towns go with them (a faction's characters there stay, in the field). One write, one backup: Undo this "
+        "write or Tools > Restore gives everything back.")).pack(anchor="w", fill="x")
+    tree = ttk.Treeview(frm, columns=("land",), height=min(12, len(gone)), selectmode="browse")
+    tree.heading("#0", text="Town (region) - goes")
+    tree.heading("land", text="Its land goes to")
+    tree.column("#0", width=280)
+    tree.column("land", width=300)
+    tree.pack(anchor="w", fill="x", pady=(8, 0))
+    if view is not None:
+        ttk.Label(frm, justify="left", wraplength=600, text=(
+            "On the map: red = goes, yellow = takes land. Pick a row (or click a red region): it turns orange and the "
+            "neighbours that could take its land green - click a green one to give it the land.")).pack(
+            anchor="w", fill="x", pady=(4, 0))
+    lbl_err = ttk.Label(frm, justify="left", wraplength=600, foreground="#c0392b")
+    lbl_err.pack(anchor="w", fill="x", pady=(6, 0))
+    if warns:
+        ttk.Label(frm, justify="left", wraplength=600, foreground="#8a5a00", text=(
+            "Good to know:\n- " + "\n- ".join(warns[:6]) + ("\n..." if len(warns) > 6 else ""))).pack(
+            anchor="w", fill="x", pady=(6, 0))
+    bar = ttk.Frame(frm)
+    bar.pack(anchor="e", pady=(10, 0))
+
+    def worked_out():
+        return receivers(near, gone, state["chosen"])
+
+    def refresh():
+        into, stuck = worked_out()
+        for r in gone:
+            words = ("%s  (%d tiles of border)" % (into[r], dict(near[r]).get(into[r], 0)) if into[r] in dict(near[r])
+                     else "%s  (with the regions deleted beside it)" % into[r]) if r in into else "nowhere - see below"
+            label = "%s (%s)" % (town[r], r) if town[r] != r else r
+            if tree.exists(r):
+                tree.item(r, text=label, values=(words,))
+            else:
+                tree.insert("", "end", iid=r, text=label, values=(words,))
+        bad = list(errors) + ["%s touches no region that stays (an island, or only regions deleted with it) - its "
+                              "land would belong to no region; leave it out of the selection or give its land to a "
+                              "neighbour first (Edit regions)" % r for r in stuck]
+        lbl_err.configure(text=("Cannot be deleted like this:\n- " + "\n- ".join(bad)) if bad else "")
+        b_go.configure(state="disabled" if bad else "normal")
+        b_show.configure(state="disabled" if bad else "normal")
+        if view is not None:
+            marks = {r: "gone" for r in gone}
+            marks.update({t: "into" for t in into.values()})
+            sel = state["sel"]
+            if sel:
+                marks.update({n: "can" for n, _ in near[sel] if n not in gone and n != into.get(sel)})
+                marks[sel] = "this"
+            try:
+                view.mark_regions(marks, clicked)
+            except tk.TclError:
+                pass
+
+    def picked_row(e=None):
+        sel = tree.selection()
+        state["sel"] = sel[0] if sel else None
+        refresh()
+
+    def clicked(r):
+        sel = state["sel"]
+        if r in gone:
+            tree.selection_set(r)
+            tree.see(r)
+            return
+        if sel and r and r in dict(near[sel]):
+            state["chosen"][sel] = r
+            refresh()
+            return
+        view.readout.configure(text=(
+            "%s does not touch %s - click a green neighbour" % (r or "the sea", sel)) if sel else
+            "pick a town first - a row of the list or a red region")
+
+    tree.bind("<<TreeviewSelect>>", picked_row)
+
+    def unmark(e=None):
+        if e is not None and e.widget is not w:
+            return
+        if view is not None:
+            try:
+                view.mark_regions(None)
+            except tk.TclError:
+                pass
+    w.bind("<Destroy>", unmark, add="+")
+
+    def plan():
+        into, stuck = worked_out()
+        if stuck or errors:
+            return None
+        p = Plan(app.mod, "delete", "%d_regions" % len(gone))
+        try:
+            delete_many(p, campaign, into, warns)
+        except ValueError as e:
+            messagebox.showerror(APP, str(e), parent=w)
+            return None
+        return p, into
+
+    def preview():
+        got = plan()
+        if got:
+            app.show_text("Delete %d towns with their regions - nothing written yet" % len(gone), got[0].report())
+
+    def write():
+        got = plan()
+        if not got:
+            return
+        p, into = got
+        lines = "\n".join("- %s -> %s" % (r, into[r]) for r in gone)
+        if not ask(APP, "Delete these %d towns with their regions now (%d file(s))? Their land goes:\n%s\n\nA backup "
+                        "is made first (Undo this write or Tools > Restore undoes it)." % (
+                            len(gone), len(p.changed_files()), lines),
+                   parent=w, yes="Delete them", no="Keep them", danger=True):
+            return
+        bdir = p.apply()
+        log.write("Deleted %d towns with their regions (backup %s): %s\n%s" % (
+            len(gone), bdir, ", ".join("%s -> %s" % (r, into[r]) for r in gone), p.report()))
+        w.destroy()
+        app.load()
+        app.status.set("%d towns and their regions deleted (backup %s). Start the game - it builds map.rwm again."
+                       % (len(gone), bdir))
+
+    b_show = ttk.Button(bar, text="Preview", command=preview)
+    b_show.pack(side="left")
+    b_go = ttk.Button(bar, text="Delete them", command=write)
+    b_go.pack(side="left", padx=4)
+    ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
+    _beside(app, w, view)
+    refresh()
+    return w

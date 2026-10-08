@@ -4789,6 +4789,10 @@ class App(tk.Tk):
         if nr:
             items.append(("Delete the %d selected resource(s) / fort(s) from the map" % nr,
                           lambda: self.delete_selected_res(set(mv.sel_res))))
+        if n:
+            from .gui_settlements import delete_towns       # many at once (report R-20261008-7696AA)
+            items.append(("Delete the %d selected town(s) with their regions..." % n,
+                          self.once("delete_towns", lambda: delete_towns(self, sorted(picked), self))))
         if n or nc or nr:
             items.append((None, None))
         if region:

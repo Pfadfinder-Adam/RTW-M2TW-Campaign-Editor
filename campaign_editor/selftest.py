@@ -1779,6 +1779,33 @@ def s_merge_regions(c, mod):
 
 
 
+@step("Map editor: two rebel towns deleted with their regions at once (the map's Select, one write)",
+      "{gone_many} are not on the map any more: their land is {gone_many_into}'s")
+def s_delete_many(c, mod):
+    from . import regiondelete as RD
+    keep = {c.said.get("near"), c.said.get("far"), c.said.get("split_far"), c.said.get("gone_into"),
+            c.said.get("merged_into")}
+    tiles = mod.city_tiles(c.campaign)
+    capital = next((tiles[r] for r in towns_of(c, mod, c.new) if tiles.get(r)), (0, 0))
+    rebels = [r for r in towns_of(c, mod, "slave") if r not in keep and tiles.get(r)]
+    for a in sorted(rebels, key=lambda r: -(abs(tiles[r][0] - capital[0]) + abs(tiles[r][1] - capital[1]))):
+        near_a = RD.neighbours(mod, c.campaign, a)
+        b = next((n for n, _ in near_a if n in rebels), None)
+        if b is None:
+            continue
+        errors, warns = RD.refusals(mod, c.campaign, [a, b])
+        near = {a: near_a, b: RD.neighbours(mod, c.campaign, b)}
+        into, stuck = RD.receivers(near, [a, b])
+        if errors or stuck or set(into.values()) & keep:
+            continue
+        plan = Plan(mod, "delete", "%s_and_%s" % (a, b), {})
+        RD.delete_many(plan, c.campaign, into, warns)
+        c.said["gone_many"] = "%s and %s" % (a, b)
+        c.said["gone_many_into"] = " / ".join(sorted(set(into.values())))
+        return plan
+    raise Skip("no two neighbouring rebel towns that can go together")
+
+
 @step("Scripts in the game: the tooltip of Avoid Growth's tick changed in the script the test mod put in "
       "(REX / M2EX)",
       "the settlement scroll's tick (still 'Avoid Growth') shows '{label}' under the mouse; afterwards Add-ons > Scripts in the game... lists every script the "
@@ -2311,6 +2338,7 @@ COVERAGE = {
     "Map editor: any faction's army moved, its units": ["s_map_any"],
     "Map editor: a town deleted with its region": ["s_delete_region"],
     "Map: two regions merged into one (Merge regions)": ["s_merge_regions"],
+    "Map: many towns deleted with their regions at once (Select)": ["s_delete_many"],
     "Map size: tiles added or cut at the edges": ["s_map_size"],
     "Mercenaries: pools of regions and their units": ["s_mercs"],
     "New region": ["s_region", "s_region_garrison"],

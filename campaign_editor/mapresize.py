@@ -247,7 +247,7 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0):
     - an event placed there goes;
     - lines of the campaign's scripts naming tiles there are left as they are (returned as warnings).
     Refused before anything is written (ValueError, every reason in plain words): a faction left without a town, a
-    region a campaign script or a faction's rising names (regiondelete.problems), a town whose land partly stays but
+    region a campaign script or a faction's rising names (regiondelete.refusals), a town whose land partly stays but
     touches no region that stays, a family member whose faction keeps no town to go to, a faction's rising placed on
     the cut part. Returns the warnings."""
     from . import regiondelete as RD
@@ -283,8 +283,8 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0):
                               r, len(stays)))
             continue
         into[r] = (near[0] if stays else None, bool(stays))
-        errs, _ = RD.problems(mod, campaign, r, *into[r])
-        errors += [e for e in errs if " is the last town of " not in e]
+    errs, said = RD.refusals(mod, campaign, cut, last_town=False)     # the files read once for every town cut
+    errors += errs
     ev_path = path_of(mod, campaign)
     events = [e for e in (events_read(mod.load(ev_path)) if ev_path else []) if e.get("position") and
               gone(e["position"])]
@@ -318,7 +318,9 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0):
     if errors:
         raise ValueError("the cut cannot take these off the map:\n- " + "\n- ".join(dict.fromkeys(errors)))
     for r in cut:
-        RD.delete(plan, campaign, r, *into[r])
+        RD.delete(plan, campaign, r, *into[r], checked=True)
+    for w in said:
+        plan.warn(None, w)
     lost_ports = [r for r, t in ports(mod, campaign).items() if r not in cut and gone(t)]
     if lost_ports:
         _remove_ports(plan, campaign, sorted(lost_ports))
