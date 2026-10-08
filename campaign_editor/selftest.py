@@ -2196,6 +2196,21 @@ def s_own_model(c, mod):
     raise Skip("no unit of %s whose model's files are on disk" % c.edited)
 
 
+@step("A unit made from nothing: 'CE Nothing Guard', horsemen who charge, for {new} - every line written new with "
+      "the mod's usual numbers, its cost and men set, plain cards drawn, recruited where such units usually are",
+      "the unit in the recruitment list of {new}'s stables / barracks, its plain 'CN' card; in battle it looks like "
+      "the usual horsemen's model")
+def s_unit_nothing(c, mod):
+    from . import fromnothing as FN
+    kind = "horse_melee" if FN.units_of_kind(mod, "horse_melee") else "foot_melee"
+    plan = Plan(mod, "nothing", "nothing", {})
+    FN.new_unit(plan, kind, "ce nothing guard", "ce_nothing_guard", [c.new],
+                values={("stat_cost", 1): "999", ("soldier", 1): "30"},
+                texts={"name": "CE Nothing Guard", "descr": "A unit the editor made from nothing (test mod)."},
+                recruit=FN.usual_levels(mod, kind, [c.new]))
+    return plan
+
+
 @step("Map size: the map grown by 2 tiles of deep sea at the right and at the top (the last step - grown at the "
       "left or the bottom every place would move, and the test mod's engine scripts name tiles by number)",
       "the campaign map is 2 tiles wider and higher: open water at its right and top edges; every town, army and "
@@ -2257,6 +2272,7 @@ COVERAGE = {
     "Unit editor: new unit step by step": ["s_units"],
     "Unit editor: replace the battle model": ["s_model"],
     "Unit editor: your own files for a battle model (texture, model file)": ["s_own_model"],
+    "Unit editor: a new unit made from nothing": ["s_unit_nothing"],
     "Unit editor: voice": ["s_voice"],
     "Building editor: lines": ["s_building_fields"],
     "Building editor: new building step by step": ["s_buildings"],

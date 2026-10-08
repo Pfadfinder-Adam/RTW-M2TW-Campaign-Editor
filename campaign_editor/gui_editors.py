@@ -322,8 +322,9 @@ class RecordEditor(ttk.Frame):
             key = self._sort_key((name, a, b))
             note = "   [%s]" % (key[0] or "-") if self.v_sort.get() not in ("file order", "name") else ""
             self.lb.insert("end", name + mark + note)
-        for src, new, _ in self.copy_ops:
-            self.lb.insert("end", "%s  (new, from %s - on Apply)" % (new, src))
+        for src, new, d in self.copy_ops:
+            self.lb.insert("end", "%s  (new, %s - on Apply)" % (new, "made from nothing" if d.get("nothing") else
+                                                                "from %s" % src))
         self.lbl_count.configure(text="%d of %d" % (len(self.shown), len(self.blocks)))
 
     def show(self):
@@ -1931,7 +1932,11 @@ class RecordEditor(ttk.Frame):
             E.set_text_values(plan, mod.text_file("export_buildings.txt" if self.kind == "building" else
                                                   "export_units.txt"), dict(self.text_edits))
         for src, new, d in self.copy_ops:                 # after the field changes: copies add lines
-            if self.kind == "unit":
+            if d.get("nothing"):
+                from . import fromnothing as FN
+                FN.new_unit(plan, d["nothing"], new, d["dict"], d["owners"], d["model"], d["mount"], d["values"],
+                            d["texts"], d["pictures"], d["recruit"])
+            elif self.kind == "unit":
                 E.copy_unit(plan, src, new, d["dict"], d["recruit"], texts=d.get("texts"), owners=d.get("owners"),
                             values=d.get("values"), pictures=d.get("pictures"))
             else:

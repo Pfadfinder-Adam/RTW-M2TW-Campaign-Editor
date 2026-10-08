@@ -66,15 +66,23 @@ class NewRecordWizard(StepWindow):
         facs = [n for n, _ in self.mod.factions()]
         cults = sorted({c for _, c in self.mod.factions() if c})
         self.choices = facs + [c for c in cults if c not in facs] + ["all"]
-        self.v = {"src": tk.StringVar(value=start if start in self.names else (self.names[0] if self.names else ""))}
+        self.v = {"src": tk.StringVar(value=start if start in self.names else (self.names[0] if self.names else "")),
+                  "mode": tk.StringVar(value="copy"), "kind": tk.StringVar(value="")}
         self.state = {}                      # what each step holds, filled when the source is chosen
         self.finish_text = "Add to the %s editor" % self.kind
-        self.make_steps([("Start from", self.s_start), ("Names and texts", self.s_names), ("Who has it", self.s_who),
-                       ("Numbers", self.s_values), ("Pictures", self.s_pictures), ("Check and add", self.s_check)]
-                      if self.kind == "unit" else
-                      [("Start from", self.s_start), ("Names and texts", self.s_names),
-                       ("Who may build it", self.s_who), ("Pictures", self.s_pictures),
-                       ("Check and add", self.s_check)])
+        self.steps_copy = ([("Start from", self.s_start), ("Names and texts", self.s_names),
+                            ("Who has it", self.s_who), ("Numbers", self.s_values), ("Pictures", self.s_pictures),
+                            ("Check and add", self.s_check)]
+                           if self.kind == "unit" else
+                           [("Start from", self.s_start), ("Names and texts", self.s_names),
+                            ("Who may build it", self.s_who), ("Pictures", self.s_pictures),
+                            ("Check and add", self.s_check)])
+        # a unit made from nothing (fromnothing.py): the modder says what it is, every line is written new
+        self.steps_nothing = [("Start from", self.s_start), ("Names and texts", self.s_names),
+                              ("Who has it", self.s_who), ("Numbers and look", self.s_nothing_values),
+                              ("Where it is recruited", self.s_where), ("Pictures", self.s_pictures),
+                              ("Check and add", self.s_check)]
+        self.make_steps(self.steps_copy)
         self.load_source()
         self.show()
 
@@ -133,15 +141,60 @@ class NewRecordWizard(StepWindow):
         return name or _text_value(self.mod, "export_buildings.txt", lv), desc
 
     # ---- moving between steps (gui_util.StepWindow) ----
+    def nothing(self):
+        return self.kind == "unit" and self.v["mode"].get() == "nothing"
+
+    def load_nothing(self):
+        """A unit made from nothing: what is usual for the kind in this mod, the names left to the modder."""
+        from . import fromnothing as FN
+        kind = self.v["kind"].get()
+        if self.state.get("mode") == "nothing" and self.state.get("kind") == kind:
+            return True
+        try:
+            typ = FN.typical(self.mod, kind)
+        except ValueError as e:
+            from tkinter import messagebox
+            messagebox.showerror("New unit", str(e), parent=self)
+            return False
+        facs = [n for n, _ in self.mod.factions() if n != "slave"]
+        self.state = {"mode": "nothing", "kind": kind, "typ": typ, "type": "", "dict": "", "name": "",
+                      "descr": "", "descr_short": "", "owners": facs[:1], "recruit": True,
+                      "values": {(k, i): v for _, k, i, v, _, _, _ in FN.fields(kind, typ)},
+                      "model": typ["model"], "mount": typ["mount"],
+                      "levels": None, "pictures": {"card": "", "info": ""}}
+        return True
+
     def leaving(self, step):
         if step == 0:
-            self.load_source()
+            if self.nothing():
+                if not self.v["kind"].get():
+                    from tkinter import messagebox
+                    messagebox.showinfo("New unit", "Pick what kind of unit it is.", parent=self)
+                    return False
+                if not self.load_nothing():
+                    return False
+                self.steps = self.steps_nothing
+            else:
+                self.steps = self.steps_copy
+                self.load_source()
 
     def finish(self):
         return self.add()
 
     # ---- step 1 ----
     def s_start(self):
+        if self.kind == "unit":
+            top = ttk.Frame(self.body)
+            top.pack(fill="x", pady=(0, 6))
+            def mode():
+                self.steps = self.steps_nothing if self.nothing() else self.steps_copy
+                self.show()
+            ttk.Radiobutton(top, text="A copy of a unit of the mod", variable=self.v["mode"], value="copy",
+                            command=mode).pack(side="left")
+            ttk.Radiobutton(top, text="Nothing - I say what it is, the editor writes every line",
+                            variable=self.v["mode"], value="nothing", command=mode).pack(side="left", padx=12)
+            if self.nothing():
+                return self._start_nothing()
         self._note("A new %s starts as a copy of one that already works in the game - pick the one closest to "
                    "what you want. Every later step changes the copy; the %s you pick stays as it is." % (
                        self.kind, self.kind))
@@ -186,12 +239,28 @@ class NewRecordWizard(StepWindow):
         lb.bind("<<ListboxSelect>>", pick)
         fill()
 
+    def _start_nothing(self):
+        from . import fromnothing as FN
+        self._note("Say what kind of unit it is. The editor writes every line of it new, in the form this mod's units "
+                   "of that kind have; its numbers start at what is usual for such a unit in this mod (the middle "
+                   "of them all) and you set each one in a later step. A siege crew, a ship, an elephant or a "
+                   "chariot needs an engine or an animal of its own - make those as a copy.")
+        box = ttk.Frame(self.body)
+        box.pack(fill="x", anchor="w")
+        for key, words, *_ in FN.KINDS:
+            n = len(FN.units_of_kind(self.mod, key))
+            rb = ttk.Radiobutton(box, variable=self.v["kind"], value=key, text="%s   (%d in this mod)" % (words, n))
+            rb.pack(anchor="w", pady=2)
+            if not n:
+                rb.state(["disabled"])
+
     # ---- step 2 ----
     def s_names(self):
         st = self.state
         if self.kind == "unit":
             self._note("The name in the files (type) is what descr_strat and the buildings use; the dictionary "
-                       "name keys its cards and texts (no spaces). Players see the name and descriptions.")
+                       "name keys its cards and texts (no spaces). Players see the name and descriptions.%s" % (
+                           " Empty descriptions are written as its name." if self.nothing() else ""))
         else:
             self._note("Only names and the texts players read are written here. Everything the building does - "
                        "bonuses, the units it trains, what it needs, costs, its pictures - is copied whole from %s "
@@ -275,7 +344,9 @@ class NewRecordWizard(StepWindow):
         st = self.state
         if self.kind == "unit":
             self._note("Who owns the unit (export_descr_unit's ownership line): factions, cultures (every faction "
-                       "of that culture) or 'all'. Picked from the copy; new owners get a copy of its cards.")
+                       "of that culture) or 'all'. %s" % (
+                           "Each of their factions gets its cards and a texture on its model." if self.nothing() else
+                           "Picked from the copy; new owners get a copy of its cards."))
             picked = st["owners"]
         else:
             self._note("Who may build every level of the new chain (the factions list of each level's requires "
@@ -295,10 +366,11 @@ class NewRecordWizard(StepWindow):
         side = ttk.Frame(top, padding=(12, 0))
         side.pack(side="left", fill="both", expand=True)
         v_extra = tk.BooleanVar(value=st["recruit"] if self.kind == "unit" else st["keep_factions"])
-        ttk.Checkbutton(side, variable=v_extra, text=(
-            "recruited wherever %s is (a recruit line next to each of its own)" % st["src"]
-            if self.kind == "unit" else "keep each level's own list (the picks on the left are not used)")).pack(
-            anchor="w")
+        if not self.nothing():
+            ttk.Checkbutton(side, variable=v_extra, text=(
+                "recruited wherever %s is (a recruit line next to each of its own)" % st["src"]
+                if self.kind == "unit" else "keep each level's own list (the picks on the left are not used)")).pack(
+                anchor="w")
         lbl = ttk.Label(side, wraplength=380, justify="left", foreground="#555")
         lbl.pack(anchor="w", pady=(8, 0))
 
@@ -340,14 +412,95 @@ class NewRecordWizard(StepWindow):
                 st["values"][k] = v.get().strip()
         self._collect = collect
 
+    # ---- a unit made from nothing: its numbers, model and mount; where it is recruited ----
+    def s_nothing_values(self):
+        from . import fromnothing as FN
+        from . import models as MO
+        st = self.state
+        typ = st["typ"]
+        self._note("Every number starts at what is usual for such a unit in this mod (the middle of its %d units of "
+                   "the kind); beside it the lowest and highest the mod has. Every other line (formation, ground, "
+                   "heat, the weapons' kinds and sounds) is written as such units usually have it - change any of "
+                   "them later in the Unit editor (Every line of the block)." % typ["count"])
+        g = ttk.Frame(self.body)
+        g.pack(fill="x")
+        vs = {}
+        for r, (label, key, i, _, rng, choices, help_) in enumerate(FN.fields(st["kind"], typ)):
+            ttk.Label(g, text=label).grid(row=r, column=0, sticky="w", pady=1)
+            vs[(key, i)] = v = tk.StringVar(value=st["values"].get((key, i), ""))
+            if choices:
+                ttk.Combobox(g, textvariable=v, values=choices, state="readonly", width=14).grid(
+                    row=r, column=1, sticky="w", padx=6)
+            else:
+                ttk.Entry(g, textvariable=v, width=10).grid(row=r, column=1, sticky="w", padx=6)
+            rtxt = "usual %s, in this mod %s - %s" % (FN.nice(rng[1]), FN.nice(rng[0]), FN.nice(rng[2])) if rng \
+                else ""
+            ttk.Label(g, text=("%s;  %s" % (help_, rtxt)) if rtxt else help_, foreground="#666").grid(
+                row=r, column=2, sticky="w")
+        look = ttk.LabelFrame(self.body, text="How it looks", padding=6)
+        look.pack(fill="x", pady=(8, 0))
+        seat = "horse" if st["kind"].startswith("horse") else "none"
+        cat = MO.catalogue(self.mod)
+        models = sorted(i.name for i in cat.values() if not [p for p in MO.fit_problems(self.mod, i, seat)
+                                                              if "made" in p[1]])
+        ttk.Label(look, text="Battle model").grid(row=0, column=0, sticky="w")
+        v_model = tk.StringVar(value=st["model"])
+        ttk.Combobox(look, textvariable=v_model, values=models, width=34).grid(row=0, column=1, sticky="w", padx=6)
+        ttk.Label(look, foreground="#666", wraplength=420, justify="left", text=(
+            "a model of the mod made to sit %s; your own files (texture, .cas / .mesh) go in afterwards with the "
+            "Unit editor's Your own files..." % MO.SEAT_WORDS.get(seat))).grid(row=0, column=2, sticky="w")
+        v_mount = tk.StringVar(value=st["mount"] or "")
+        if st["kind"].startswith("horse"):
+            mounts = sorted(m for m, c in MO.mount_classes(self.mod).items() if c in FN.RIDDEN)
+            ttk.Label(look, text="It rides").grid(row=1, column=0, sticky="w", pady=(4, 0))
+            ttk.Combobox(look, textvariable=v_mount, values=mounts, state="readonly", width=34).grid(
+                row=1, column=1, sticky="w", padx=6, pady=(4, 0))
+
+        def collect():
+            for k, v in vs.items():
+                st["values"][k] = v.get().strip()
+            st["model"] = v_model.get().strip()
+            st["mount"] = v_mount.get().strip() or None
+        self._collect = collect
+
+    def s_where(self):
+        from . import fromnothing as FN
+        st = self.state
+        levels = sorted(FN.recruit_levels(self.mod))
+        if st["levels"] is None:
+            st["levels"] = FN.usual_levels(self.mod, st["kind"], st["owners"])
+        self._note("The building levels that train it: a recruit line is written in each one picked, letting in "
+                   "its owners. First picked: where this mod trains such units most. None picked = it is recruited "
+                   "nowhere yet (Roster or the Building editor can add it later).")
+        box = ttk.Frame(self.body)
+        box.pack(fill="both", expand=True)
+        lb = tk.Listbox(box, selectmode="multiple", exportselection=False, height=18, width=60)
+        sb = ttk.Scrollbar(box, command=lb.yview)
+        lb.configure(yscrollcommand=sb.set)
+        for i, (chain, level, n) in enumerate(levels):
+            lb.insert("end", "%s / %s   (trains %d unit(s) now)" % (chain, level, n))
+            if (chain, level) in st["levels"]:
+                lb.selection_set(i)
+        lb.pack(side="left", fill="y")
+        sb.pack(side="left", fill="y")
+
+        def collect():
+            st["levels"] = [levels[i][:2] for i in lb.curselection()]
+        self._collect = collect
+
     # ---- pictures ----
     def s_pictures(self):
         st = self.state
         pics = st["pictures"]
-        if self.kind == "unit":
+        if self.kind == "unit" and self.nothing():
+            self._note("Without a picture of your own the editor draws a plain card and description picture (the "
+                       "unit's initials) so the game has one. A picture of yours (PNG, JPG, TGA...) is put in the "
+                       "size and format this mod's cards have.")
+        elif self.kind == "unit":
             self._note("Without a picture of your own the new unit shows %s's card and description picture (a "
                        "copy under its own name). A picture of yours (PNG, JPG, TGA...) is put in the size and "
                        "format this mod's cards have." % st["src"])
+        if self.kind == "unit":
             rows = [("card", "Unit card", E.unit_picture_need(self.mod)),
                     ("info", "Picture in the description", E.unit_picture_need(self.mod, True))]
         else:
@@ -451,6 +604,12 @@ class NewRecordWizard(StepWindow):
     # ---- the last step ----
     def op(self):
         st = self.state
+        if self.nothing():
+            return "", st["type"], {"nothing": st["kind"], "dict": st["dict"], "owners": st["owners"],
+                                    "model": st["model"], "mount": st["mount"], "values": dict(st["values"]),
+                                    "texts": {k: st[k] for k in ("name", "descr", "descr_short")},
+                                    "pictures": {k: v for k, v in st["pictures"].items() if v},
+                                    "recruit": list(st["levels"] or [])}
         if self.kind == "unit":
             d = {"dict": st["dict"], "recruit": st["recruit"],
                  "texts": {k: (st[k] if st[k] != st["orig"][k] else None) for k in ("name", "descr", "descr_short")},
@@ -471,6 +630,12 @@ class NewRecordWizard(StepWindow):
     def problems(self):
         st = self.state
         out = []
+        if self.nothing():
+            from . import fromnothing as FN
+            out = FN.problems(self.mod, st["kind"], st["type"], st["dict"], st["owners"], st["model"],
+                              st["mount"], st["values"])
+            out += ["picture not found: %s" % v for v in st["pictures"].values() if v and not os.path.isfile(v)]
+            return out
         if self.kind == "unit":
             if not st["type"]:
                 out.append("the unit needs a name in the files")
@@ -498,7 +663,11 @@ class NewRecordWizard(StepWindow):
             from .plan import Plan
             try:
                 plan = Plan(ModData(self.mod.data), "new_" + self.kind, "new_" + self.kind, {})
-                if self.kind == "unit":
+                if d.get("nothing"):
+                    from . import fromnothing as FN
+                    FN.new_unit(plan, d["nothing"], new, d["dict"], d["owners"], d["model"], d["mount"],
+                                d["values"], d["texts"], d["pictures"], d["recruit"])
+                elif self.kind == "unit":
                     E.copy_unit(plan, src, new, d["dict"], d["recruit"], texts=d["texts"], owners=d["owners"],
                                 values=d["values"], pictures=d["pictures"])
                 else:
@@ -513,9 +682,10 @@ class NewRecordWizard(StepWindow):
             self.b_next.state(["disabled"])
             return
         self.b_next.state(["!disabled"])
-        self._note("%s %s from %s. Nothing is written yet: Add puts it into the %s editor's changes, written "
+        self._note("%s %s %s. Nothing is written yet: Add puts it into the %s editor's changes, written "
                    "with a backup on Apply (Restore undoes it). Below: every file it will change and how." % (
-                       "New unit" if self.kind == "unit" else "New building chain", new, src, self.kind))
+                       "New unit" if self.kind == "unit" else "New building chain", new,
+                       "made from nothing" if d.get("nothing") else "from %s" % src, self.kind))
         box = ttk.Frame(self.body)
         box.pack(fill="both", expand=True)
         t = tk.Text(box, wrap="none", height=20)
@@ -532,6 +702,6 @@ class NewRecordWizard(StepWindow):
         op = self.op()
         self.ed.copy_ops.append(op)
         self.ed.fill_list()
-        self.ed.app.status.set("New %s %s from %s waits in the %s editor - Preview, then Apply." % (
-            self.kind, op[1], op[0], self.kind))
+        self.ed.app.status.set("New %s %s %s waits in the %s editor - Preview, then Apply." % (
+            self.kind, op[1], "made from nothing" if op[2].get("nothing") else "from %s" % op[0], self.kind))
         self.destroy()

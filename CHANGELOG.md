@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+- **A unit from nothing** (both games): New unit step by step > Start from: *Nothing*. Say what it is (foot soldiers
+  who fight hand to hand, with spears, or who shoot; horsemen who charge or who shoot) and the editor writes every
+  line itself in the form this mod's units of that kind have, each number starting at what is usual for such a
+  unit in this mod (the middle of them, the mod's lowest and highest shown beside it). Then its model and mount,
+  owners, the building levels that train it (first guess: where such units are trained most), and its pictures -
+  plain cards with its initials are drawn when you have none.
 - **Your own files for a battle model** (Unit editor > Battle model > **Your own files...**, both games): a texture
   you made elsewhere for every faction or one faction (PNG, TGA, DDS, JPG - made the game's form: Rome `.tga.dds`,
   Medieval II `.texture`), Medieval II's weapons and shields texture, and the model file itself (Rome `.cas`,

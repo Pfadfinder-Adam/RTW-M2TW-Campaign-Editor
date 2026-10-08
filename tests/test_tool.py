@@ -7278,6 +7278,73 @@ building smith
             MO.replace(Plan(ModData(self.root), "model", "model", {}), "alpha general", "soldier", 0, "foot_model",
                        src_mod=ModData(os.path.join(other, "mod")))
 
+    def test_a_unit_made_from_nothing(self):
+        """A unit from nothing: its kind's usual form and middle numbers in this mod (words most such units share,
+        never one unit's quirk or a general's), the modder's numbers on top, cards drawn when none are given,
+        recruited in the levels picked for its owners only; a taken name, a missing owner or a word for a number
+        refused; Restore byte for byte."""
+        from campaign_editor import fromnothing as FN
+        from campaign_editor import models as MO
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+
+        def unit(name, attack, cost, extra=""):
+            return ("type             %s\ndictionary       %s\ncategory         infantry\nclass            heavy\n"
+                    "voice_type       Heavy_1\nsoldier          foot_model, 40, 0, 1\n"
+                    "attributes       sea_faring, hide_forest%s\nformation        1, 2, 2, 3, 4, square\n"
+                    "stat_health      1, 0\nstat_pri         %d, 2, no, 0, 0, melee, blade, piercing, sword, 25 ,1\n"
+                    "stat_pri_attr    no\nstat_sec         0, 0, no, 0, 0, no, no, no, none, 25 ,1\n"
+                    "stat_sec_attr    no\nstat_pri_armour  5, 4, 5, metal\nstat_sec_armour  0, 1, flesh\n"
+                    "stat_heat        3\nstat_ground      2, 0, 0, 0\nstat_mental      6, normal, trained\n"
+                    "stat_charge_dist 30\nstat_fire_delay  0\nstat_food        60, 300\n"
+                    "stat_cost        1, %d, 170, 50, 70, %d\nownership        alpha\n\n" % (
+                        name, name.replace(" ", "_"), extra, attack, cost, cost))
+        write(os.path.join(d, "export_descr_unit.txt"), unit("foot one", 8, 300) + unit("foot two", 10, 500, ", warcry")
+              + unit("foot three", 12, 700) + unit("foot guard", 20, 900, ", general_unit"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\tfoot_model\nskeleton\t\tfs_swordsman\ntexture\t\talpha, data/models_unit/textures/f.tga\n"
+              "model_flexi\t\tdata/models_unit/f.cas, max\n")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, }\n"
+              "        {\n            capability\n            {\n                recruit \"foot one\"  0  "
+              "requires factions { alpha, }\n            }\n        }\n    }\n}\n")
+        write(os.path.join(d, "text", "export_units.txt"), "{foot_one}Foot One\n", utf16=True)
+        mod = ModData(self.root)
+        typ = FN.typical(mod, "foot_melee")
+        self.assertEqual(typ["count"], 3)                                  # the general's bodyguard is not usual
+        lines = dict((k, v) for k, _, v in typ["lines"])
+        self.assertEqual(lines["stat_pri"][0], "10")                       # the middle attack
+        self.assertEqual(lines["attributes"], ["sea_faring", "hide_forest"])   # warcry is one unit's
+        with self.assertRaises(ValueError):
+            FN.typical(mod, "horse_melee")                                 # no such unit here to learn from
+        self.assertEqual(FN.usual_levels(mod, "foot_melee", ["alpha"]), [("barracks", "hall")])
+        self.assertTrue(FN.problems(mod, "foot_melee", "foot one", "x_y", ["alpha"]))       # the name is taken
+        self.assertTrue(FN.problems(mod, "foot_melee", "new one", "x y", ["alpha"]))        # two words
+        self.assertTrue(FN.problems(mod, "foot_melee", "new one", "new_one", []))           # no owner
+        self.assertTrue(FN.problems(mod, "foot_melee", "new one", "new_one", ["alpha"],
+                                    values={("stat_cost", 1): "lots"}))
+        before = tree_hash(self.root)
+        plan = Plan(mod, "nothing", "nothing", {})
+        out = FN.new_unit(plan, "foot_melee", "new  one", "new_one", ["alpha"], values={
+            ("stat_cost", 1): "640", ("soldier", 1): "32"}, texts={"name": "New One"}, recruit=[("barracks", "hall")])
+        self.assertIn("stat_cost        1, 640, 170, 50, 70, 640", out)        # the custom price follows the cost
+        self.assertIn("soldier          foot_model, 32, 0, 1", out)
+        bdir = plan.apply()
+        m2 = ModData(self.root)
+        self.assertEqual(FN.kind_of(m2, MO.unit_lines(m2, "new one")), "foot_melee")
+        with open(m2.file("edb")) as fh:
+            self.assertIn('recruit "new one"  0  requires factions { alpha, }', fh.read())
+        with open(m2.text_file("export_units.txt"), "rb") as fh:
+            self.assertRegex(fh.read().decode("utf-16"), r"\{new_one_descr\}\s*New One")
+        try:
+            import PIL  # noqa: F401
+            self.assertTrue(os.path.exists(os.path.join(d, "ui", "units", "alpha", "#new_one.tga")))
+        except ImportError:
+            pass
+        restore(ModData(self.root), bdir)
+        after = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
+        self.assertEqual(after, before)
+
     def test_own_files_for_a_battle_model(self):
         """The modder's own texture (any picture, made the game's form) and own model file put in place of a unit's
         model: a model only this unit uses changes in place for a texture alone; a model shared with another unit
