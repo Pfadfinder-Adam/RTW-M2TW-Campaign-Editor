@@ -25,6 +25,9 @@
   `wasteland` keyword in descr_regions), in place of the old trick of a town hidden behind a river ring.
 - **The way back**: right click a wasteland's land on the Map - *Give it its town here...* writes its town on that
   tile again (its name, the name players see, its owner; a village as the game makes it), with a backup.
+- **Map size: the minimap follows the cut** (both games): the campaign's minimap pictures (radar_map1 / radar_map2.tga,
+  pictures of their own size) are cut or grown in the same proportion as the map - before, the old picture stayed
+  and the game drew the real borders over the wrong land.
 - **Map size**: a cut that takes a town off deletes its region from every file, and nothing more - the part of its
   land that stays on the map is left as it is, given to no one; the question before the cut and the result name it,
   and you paint it into the regions you want (Edit regions). The cut no longer refuses a town whose land left
