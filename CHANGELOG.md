@@ -25,6 +25,8 @@
   `wasteland` keyword in descr_regions), in place of the old trick of a town hidden behind a river ring.
 - **The way back**: right click a wasteland's land on the Map - *Give it its town here...* writes its town on that
   tile again (its name, the name players see, its owner; a village as the game makes it), with a backup.
+- **Fix: a town (or port) dragged away can be dragged back onto its own tile** - the map refused it as if another
+  town stood there; now the move is simply undone.
 - **Map size: the minimap follows the cut** (both games): the campaign's minimap pictures (radar_map1 / radar_map2.tga,
   pictures of their own size) are cut or grown in the same proportion as the map - before, the old picture stayed
   and the game drew the real borders over the wrong land.

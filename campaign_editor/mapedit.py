@@ -38,10 +38,13 @@ def place_problem(mod, campaign, what, region, xy, moved=None, painted=None):
     now = current(mod, campaign, what, region, moved)
     if now is None and what == "city":
         return "%s has no town on the map" % region
-    if now is not None and tuple(xy) == tuple(now):
-        return "already there"                         # a region without a port gets a new one (now is None)
     here = orig(mod, campaign, what, region)
     here = tuple(here) if here else None
+    if here is not None and tuple(xy) == here:
+        return None                                    # back on its own tile (a drag undone): always allowed - the
+        # callers pass the moves without this one, so it read 'already there' / 'a town stands there' (the user)
+    if now is not None and tuple(xy) == tuple(now):
+        return "already there"                         # a region without a port gets a new one (now is None)
     # the tile as it would be: freed spots of other moves count as the region's own land
     px = colour_at(x, y)
     for (w, r), to in moved.items():
