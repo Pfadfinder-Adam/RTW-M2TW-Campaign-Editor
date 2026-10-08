@@ -2,7 +2,7 @@
 
 **An editor for the campaigns of Rome: Total War (with REX) and Medieval II: Total War (with M2EX)** - factions,
 the campaign map, towns, armies, characters, units, buildings, diplomacy, texts and pictures, in a window, with a
-preview of every change and a backup you can always go back to. Version **0.32.0**.
+preview of every change and a backup you can always go back to. Version **0.33.0**.
 
 [![Download](https://img.shields.io/github/v/release/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor?label=Download&style=for-the-badge)](../../releases)
 [![Wiki](https://img.shields.io/badge/Guide-Wiki-2b6cb0?style=for-the-badge)](../../wiki)

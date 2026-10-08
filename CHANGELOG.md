@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.33.0 - 2026-10-08
 
 ### Added
 - **Merge regions** (a switch on the map's bar, both games): only the regions and town names drawn; click the region
