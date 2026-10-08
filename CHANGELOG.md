@@ -51,6 +51,10 @@
   release's page.
 
 ### Fixed
+- **Place its town / Place its port for a region of the map** (Edit regions): they worked only for a new region and
+  said 'pick a new region first'. Now, for the region in *Paint with*: a **wasteland** gets its town on the tile
+  clicked (the same window as its right-click *Give it its town here*; its port after that), a region's town or port
+  **moves** there (kept for Apply, as a drag on the map would).
 - **Deleting a region left its block in descr_strat's regions section** (roads, forts, watchtowers - Barbarian
   Invasion has 16): a region given to a neighbour now hands its forts and watchtowers over to the neighbour's block;
   a wasteland's block goes (the game takes forts and watchtowers only in a region with a town).
