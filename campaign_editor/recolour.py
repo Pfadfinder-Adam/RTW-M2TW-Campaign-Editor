@@ -128,6 +128,18 @@ def masks(im, source, others=(), plain=True):
         # and hair tone is kept; with copies only the paler skin (an orange-red caparison is the faction's)
         informative = any(not any(_like(source[k], c) for c in cols) for _, cols in diffs)
         skin = None if _skin_colour(source[k]) else _skin(H, S, V, broad=not informative)
+        use = [dd for dd, cols in diffs if not any(_like(source[k], c) for c in cols)]
+        proven = None                            # differs from every such copy: the faction's colour
+        if use:
+            proven = use[0]
+            for dd in use[1:]:
+                proven = ImageChops.multiply(proven, dd)
+            if not 0 < proven.histogram()[255] / float(im.size[0] * im.size[1]) <= DIFF_MOST:
+                proven = None                    # the copies are other pictures: they prove nothing
+        if skin is not None and proven is not None:
+            # a face is the same in every copy; what differs in all of them is cloth in the faction's colour, also
+            # where its shade is skin-like (a red hood's brown folds stayed red in a black recolour: speckles)
+            skin = ImageChops.subtract(skin, proven)
         if skin is not None:
             m = ImageChops.subtract(m, skin)
         # any coloured pixel of the hue - taken only where the other factions' copies show it is the faction's
@@ -142,13 +154,13 @@ def masks(im, source, others=(), plain=True):
             closer = closer.point(lambda x: 255 if x == 0 else 0)
             m = ImageChops.multiply(m, closer)
             loose = ImageChops.multiply(loose, closer)
-        use = [dd for dd, cols in diffs if not any(_like(source[k], c) for c in cols)]
         same = None
         strict = m
         if use:
-            diff = use[0]
-            for dd in use[1:]:
-                diff = ImageChops.multiply(diff, dd)
+            diff = proven if proven is not None else use[0]
+            if proven is None:
+                for dd in use[1:]:
+                    diff = ImageChops.multiply(diff, dd)
             share = diff.histogram()[255] / float(im.size[0] * im.size[1])
             if 0 < share <= DIFF_MOST:
                 # differs from most copies (two in three): one other faction whose cloak happens to be of a like
@@ -277,6 +289,29 @@ def _shift(im, src, dst):
     return Image.merge("HSV", (H, S, V)).convert("RGB")
 
 
+PLAIN_LIGHT = {"dark": 0.22, "light": 0.77}      # the lightness the games' artists give a black / a white part
+
+
+def _to_plain(im, mask, dst):
+    """A coloured part made black / white / grey (dst has no hue) the way the games' own textures do it: no hue, the
+    part's average light set to the artists' black (0.22) or white (0.77) - grey: dst's own - and every fold kept (each
+    pixel as far from the average as it was). A flat black (lightness scaled to near 0) lost every fold: black shields
+    and hoods like holes in battle."""
+    from PIL import Image, ImageStat
+    H, S, V = im.convert("RGB").convert("HSV").split()
+    kind = _plain(dst)
+    goal = PLAIN_LIGHT.get(kind, hsv(dst)[2]) * 255.0
+    ref = max(ImageStat.Stat(V, mask).mean[0], 12.0)
+    S = Image.new("L", im.size, 0)
+    if kind == "dark":       # measured against the HRE's own copies: the light scaled down is nearest the artists' black
+        k = goal / ref
+        V = V.point(lambda v: max(8, min(255, int(v * k))))
+    else:                    # against Poland's: the folds kept as they were (moved up) is nearest their white
+        add = goal - ref
+        V = V.point(lambda v: max(8, min(255, int(v + add))))
+    return Image.merge("HSV", (H, S, V)).convert("RGB")
+
+
 def _shift_plain(im, mask, dst):
     """A black / white / grey part moved to colour dst: dst's hue and saturation, its brightness set by the pixel's
     light against the part's average light (the folds kept; a black coat does not stay black when made red)."""
@@ -313,7 +348,13 @@ def recolour(im, source, target, others=(), edits=None, plain=True):
     for m, src, dst in zip(ms, source, target):
         if not dst or not m.getbbox():
             continue
-        out.paste(_shift_plain(rgb, m, dst) if _plain(src) else _shift(rgb, src or dst, dst), (0, 0), m)
+        if _plain(src):
+            part = _shift_plain(rgb, m, dst)
+        elif _plain(dst):
+            part = _to_plain(rgb, m, dst)
+        else:
+            part = _shift(rgb, src or dst, dst)
+        out.paste(part, (0, 0), m)
         n += m.histogram()[255]
     if im.mode in ("RGBA", "LA", "P"):
         a = im.convert("RGBA").split()[3]
