@@ -133,8 +133,8 @@ class RecolourWindow(tk.Toplevel):
         self.tree.tag_configure("skip", foreground=theme.ink("#888", "field"))
         panes.add(left, weight=1)
         right = ttk.Frame(panes, padding=(8, 0, 0, 0))
-        self.lbl_pic = ttk.Label(right, text="", foreground="#333", wraplength=520, justify="left")
-        self.lbl_pic.pack(anchor="w")
+        from .gui_modbuilder import wrapping           # a long path wraps at the panel's width, never cut
+        self.lbl_pic = wrapping(ttk.Label(right, text="", foreground="#333", justify="left"))
         pics = ttk.Frame(right)
         pics.pack(anchor="w", pady=6)
         self.before = tk.Label(pics, relief="sunken")
@@ -349,9 +349,10 @@ class RecolourWindow(tk.Toplevel):
         a.create_image(0, 0, image=self._photos[1], anchor="nw")
         a.configure(scrollregion=(0, 0, big[0], big[1]))
         by = self._by.get(self._key(it))
-        self.lbl_pic.configure(text="%s\n%s - %.0f%% of it is the faction's colour%s%s" % (
-            it["label"], it["rel"], 100 * share, ("\nleft as it is: " + it["skip"]) if it["skip"] else "",
-            ("\nmade from %s's texture of the model (shown before): its colours are nearest" % by) if by else ""))
+        how = ("made from %s's texture of the model (shown as 'now'): its colours are nearest; %.0f%% of it "
+               "recoloured on top" % (by, 100 * share)) if by else "%.0f%% of it is the faction's colour" % (100 * share)
+        self.lbl_pic.configure(text="%s\n%s - %s%s" % (
+            it["label"], it["rel"], how, ("\nleft as it is: " + it["skip"]) if it["skip"] else ""))
 
     # ---- touch-ups ----
     def _paint(self, e):
