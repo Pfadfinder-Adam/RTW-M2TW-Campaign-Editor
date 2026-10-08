@@ -2549,6 +2549,15 @@ def make_mod(data, name=NAME):
     return newmod.create_mod(data, name)[0], name
 
 
+def game_of_run(mod):
+    """'rome', 'bi' or 'm2tw' - the game a test run is on (the in-game marks are per game)."""
+    from . import emergence as EM
+    from .limits import game_kind
+    if game_kind(mod) == "medieval2":
+        return "m2tw"
+    return "bi" if EM.is_bi(mod) else "rome"
+
+
 def run(data, campaign, progress=None, make=True):
     """Make the test mod from data (the loaded mod or game; make=False works on data itself) and run every step.
     Returns (the mod's data folder, [result {'step', 'see', 'status' OK | FAILED | SKIPPED | NOTHING WRITTEN,
@@ -2596,7 +2605,7 @@ def run(data, campaign, progress=None, make=True):
         before = now
         rec["seconds"] = round(time.time() - t, 1)
         results.append(rec)
-    text = report(data, campaign, names, results)
+    text = report(data, campaign, names, results, game_of_run(ModData(data)))
     with open(os.path.join(os.path.dirname(data), "CE_Test_report.txt"), "w", encoding="utf-8") as fh:
         fh.write(text)
     return data, results, text
@@ -2616,7 +2625,47 @@ def run_x3(data, campaign, progress=None):
     return data, warn
 
 
-def report(data, campaign, names, results):
+# steps SEEN WORKING IN THE GAME (the testers' runs: reports repo tester/<date>/*/summary.md, the user's own looks):
+# {step: {game: editor version}} - the report lists them as 'seen working, no need to look again' and puts every other
+# step on top as 'look at these'. A step whose feature changed after it was seen goes in CHANGED_SINCE with that
+# version - it is to look at again. (Keep both up to date with each in-game run.)
+SEEN_IN_GAME = {
+    "s_new_faction": {"rome": "0.29.2", "m2tw": "0.29.2", "bi": "0.29.2"},
+    "s_later": {"m2tw": "0.29.2"}, "s_later_way": {"m2tw": "0.29.2"},
+    "s_shadow": {"m2tw": "0.29.2", "bi": "0.29.2"}, "s_split": {"m2tw": "0.29.2", "bi": "0.29.2"},
+    "s_forts": {"rome": "0.29.2"},
+    "s_region": {"m2tw": "0.29.2", "rome": "0.29.2"}, "s_region_garrison": {"m2tw": "0.29.2", "rome": "0.29.2"},
+    "s_rename": {"m2tw": "0.29.2", "rome": "0.29.2"},
+    "s_events": {"m2tw": "0.29.2", "rome": "0.29.2", "bi": "0.29.2"},
+    "s_rules": {"m2tw": "0.29.2", "rome": "0.29.2"}, "s_campaign_start": {"m2tw": "0.29.2", "rome": "0.29.2"},
+    "s_engine_rules": {"m2tw": "0.29.2", "rome": "0.29.2"}, "s_rules_all": {"m2tw": "0.29.2", "rome": "0.29.2"},
+    "s_religion": {"bi": "0.30.0"},
+    "s_addon_diplomacy": {"rome": "0.29.2"},
+    "s_module": {"rome": "0.32.0", "m2tw": "0.29.2", "bi": "0.29.2"},
+    "s_events_more": {"rome": "0.29.2", "bi": "0.29.2"},
+    "s_delete_region": {"m2tw": "0.29.2"},
+    "s_aboard": {"m2tw": "0.29.2", "rome": "0.32.0"},
+    "s_special_type": {"m2tw": "0.29.2", "rome": "0.29.2", "bi": "0.29.2"},
+    "s_special": {"m2tw": "0.29.2", "rome": "0.29.2", "bi": "0.29.2"},
+}
+# changed after it was seen: {step: the version that changed it}
+CHANGED_SINCE = {"s_addon": "0.33.0", "s_addon_growth": "0.33.0", "s_module": "0.32.0", "s_delete_region": "0.34.0"}
+
+
+def _ver(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v or "0"))
+
+
+def seen_working(fn, game):
+    """The editor version a step was seen working in the game with, when its feature has not changed since - else
+    None (a step to look at)."""
+    v = SEEN_IN_GAME.get(fn, {}).get(game)
+    if v and _ver(CHANGED_SINCE.get(fn)) > _ver(v):
+        return None
+    return v
+
+
+def report(data, campaign, names, results, game=None):
     ok = sum(1 for r in results if r["status"] == "OK" and not r["new_problems"])
     out = ["The editor's test mod - every feature, one step each", "",
            "Mod: %s" % os.path.dirname(data), "Campaign: %s" % campaign,
@@ -2629,6 +2678,14 @@ def report(data, campaign, names, results):
            "Its add-ons and modules go into the GAME's script/modules (the engine runs them from there), not into "
            "CE_Test: when you throw the test mod away, Add-ons > Scripts in the game... takes them out with one "
            "press.", ""]
+    if game:
+        look = [(n, r) for n, r in enumerate(results, 1) if r["status"] == "OK" and not seen_working(r.get("fn"), game)]
+        seen = [(n, r) for n, r in enumerate(results, 1) if r["status"] == "OK" and seen_working(r.get("fn"), game)]
+        out.append("LOOK AT THESE IN THE GAME (%d - new, or changed since they were seen working):" % len(look))
+        out += ["  %2d. %s" % (n, r["step"]) for n, r in look]
+        out += ["", "Seen working in the game already (%d - no need to look again unless you want to):" % len(seen)]
+        out += ["  %2d. %s  (seen with %s)" % (n, r["step"], seen_working(r.get("fn"), game)) for n, r in seen]
+        out += ["", "Every step:"]
     for n, r in enumerate(results, 1):
         out.append("%2d. [%s] %s" % (n, r["status"], r["step"]))
         if r.get("error"):
@@ -2655,4 +2712,5 @@ def report(data, campaign, names, results):
     return "\n".join(out) + "\n"
 
 
-__all__ = ["STEPS", "COVERAGE", "UI", "coverage_problems", "ui_entry", "run", "run_x3", "report", "make_mod", "problems", "NAME"]
+__all__ = ["STEPS", "COVERAGE", "UI", "coverage_problems", "ui_entry", "run", "run_x3", "report", "make_mod", "problems", "NAME",
+           "SEEN_IN_GAME", "CHANGED_SINCE", "seen_working"]

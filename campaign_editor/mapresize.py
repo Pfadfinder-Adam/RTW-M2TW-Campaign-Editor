@@ -194,16 +194,19 @@ def off_map(mod, campaign, left, bottom, right, top):
     return [x[0] for x in blocking(places(mod, campaign), img.width, img.height, left, bottom, right, top)]
 
 
-def cut_words(hit):
-    """What a cut takes off, in a few plain lines (the question before it): blocking()'s list grouped."""
+def cut_words(hit, waste=False):
+    """What a cut takes off, in a few plain lines (the question before it): blocking()'s list grouped. waste: REX /
+    M2EX beside the game - the land that stays of a town cut off stays its region's, a wasteland (clear_cut)."""
     by = {}
     for label, xy, kind, what in hit:
         by.setdefault(kind, []).append((label, xy, what))
     lines = []
     if by.get("town"):
         towns = sorted({w for _, _, w in by["town"]})
-        lines.append("%d town(s) with their regions: %s%s - the land of theirs that stays joins the neighbour region "
-                     "that stays" % (len(towns), ", ".join(towns[:8]), " ..." if len(towns) > 8 else ""))
+        lines.append("%d town(s) with their regions: %s%s - %s" % (
+            len(towns), ", ".join(towns[:8]), " ..." if len(towns) > 8 else "",
+            "the land of theirs that stays stays their regions', as wastelands nobody owns (REX / M2EX)" if waste
+            else "the land of theirs that stays joins the neighbour region that stays"))
     if by.get("port"):
         ports_ = sorted({w for _, _, w in by["port"]} - {w for _, _, w in by.get("town", [])})
         if ports_:

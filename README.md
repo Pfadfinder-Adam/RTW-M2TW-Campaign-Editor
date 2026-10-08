@@ -27,7 +27,9 @@ preview of every change and a backup you can always go back to. Version **0.33.0
 I'm building a tool that finally lets us improve the games of our childhood ourselves - without digging through files
 every time, without the fear of breaking something, and without everything falling apart because we forgot one step.
 The editor is free and stays free. It is built with the help of AI, which costs money every month; if the tool saves
-you time, a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) keeps new features coming. Thank you!
+you time, a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) keeps new features coming. I'm building this on my own on
+an old laptop: a small contribution would also help me finally get a proper gaming PC, a childhood dream, and give the
+editor more time and faster testing (big mods and both games load slowly on the old machine). Thank you!
 
 ## 🤝 Made a mod with it?
 
@@ -59,6 +61,37 @@ It is for anyone who mods:
 What it is not: a 3D modelling program. Models can be viewed and swapped between units, but making or editing
 models is left to the tools built for that. The one exception: recolouring the faction colour painted on a unit's
 texture (vanilla-style uniforms), so a new faction's troops wear its own colour (Art tab > Recolour).
+
+## 🚀 Quick start
+
+1. **Download** `RTW-M2TW-Campaign-Editor.exe` from [Releases](../../releases) and put it into the **game's folder**
+   (beside `RomeTW.exe` / `medieval2.exe`; REX or M2EX beside it is best - see *Works with*).
+2. **Start it** and pick the game or the mod you build on (**Mod** at the top, or **Browse...** to its `data` folder).
+3. **Make your own mod folder: New mod folder...** - the game (or the mod you build on) stays clean, its update never
+   takes your work, and deleting your folder takes everything back. On the plain game it holds only what you change.
+4. **Change something** - drag a town on the **Map editor**, edit a faction, a unit, a building...
+5. **Preview changes**, then **Apply changes** (a backup is made first).
+6. **Start the game** with the green button (it names the mod it starts). Something wrong? **Undo this write**, or
+   **Tools > Restore a backup** gives every byte back.
+
+## 🧩 Works with
+
+| Game | With the original exe | With the engine beside it |
+|---|---|---|
+| **Rome: Total War** (Gold / Steam) | `RomeTW.exe` - the game's own limits apply (21 factions, 200 regions...) | **REX** - no limits at all, wastelands, add-ons and your own modules |
+| **Barbarian Invasion**, **Alexander** | `RomeTW-BI.exe`, `RomeTW-ALX.exe` | REX (`-bi`, `-alx`) |
+| **Medieval II: Total War** (and its Kingdoms campaigns) | `medieval2.exe` / `kingdoms.exe` | **M2EX** - no limits, wastelands, add-ons and your own modules |
+
+Any mod of these games loads - a whole one (HLR) or one that holds only the files it changes (the game reads the rest
+from its own `data`, and so does the editor). Medieval II keeps its data packed: the editor offers to unpack it once,
+with the game's own unpacker.
+
+## ✨ What's new
+
+**0.33.0** ([release](../../releases/tag/v0.33.0)): units, buildings and religions made from nothing; your own files
+for a unit's battle model; the map's size changed by dragging its edges; regions merged; many towns deleted at once;
+a town's own garrison. **Coming next** (in the newest test builds): a deleted town's region kept as a wasteland,
+thin mods from New mod folder, much faster on big mods. Everything: [CHANGELOG.md](CHANGELOG.md).
 
 ## 🗺️ Rescale the whole campaign map 3 x
 
@@ -135,7 +168,7 @@ All on my YouTube channel **[Pfadfinder](https://www.youtube.com/channel/UC8j5rv
 </tr>
 <tr>
 <td align="center"><a href="docs/images/view_in_3d_rome.png"><img src="docs/images/view_in_3d_rome.png" alt="View in 3D, Rome"></a><br><b>View in 3D, Rome</b> - a Rome battle model (.cas) with its faction's texture</td>
-<td align="center"></td>
+<td align="center"><a href="docs/images/module_builder_blocks.png"><img src="docs/images/module_builder_blocks.png" alt="Module builder"></a><br><b>Module builder</b> - your own game scripts made of blocks, like Scratch</td>
 </tr>
 <tr>
 <td align="center"><a href="docs/images/campaign_rules.png"><img src="docs/images/campaign_rules.png" alt="Campaign rules"></a><br><b>Campaign rules</b> - every setting of the campaign in plain words</td>
@@ -143,9 +176,20 @@ All on my YouTube channel **[Pfadfinder](https://www.youtube.com/channel/UC8j5rv
 </tr>
 </table>
 
-**Why support?** I'm building this on my own on an old laptop. If the tool helps you, a small contribution on **[Ko-fi](https://ko-fi.com/pfadfinder)** would mean a lot - it would help me finally get a proper gaming PC, a childhood dream, and give the editor more time and faster testing (big mods and both games load slowly on the old machine).
+## 🧰 What it can do - at a glance
 
-A campaign editor for games on the **Rome: Total War engine**: Rome: Total War (with Barbarian Invasion and Alexander, plain or modded, on REX or the original exe) and **Medieval II: Total War** (with Kingdoms, on M2EX or the original exe) - every feature for both games. It works on the game's or mod's own data files, shows every change before writing it, keeps a backup and can undo it byte for byte.
+| Area | What you do there |
+|---|---|
+| **Factions** | a new faction cloned from another (or edited): names, colours, money, towns, leader and heir, garrisons, buildings, diplomacy, victory conditions; a faction renamed everywhere |
+| **Campaign map** | towns, ports, armies, agents and fleets dragged; regions painted, renamed, merged or deleted (a wasteland with REX / M2EX); the map grown, cut or made 3 x bigger; terrain, rivers, climates and heights painted |
+| **Units and buildings** | every line as a field; new ones step by step or from nothing; models swapped, your own textures and models put in, voices heard; brought from another mod or a unit pack |
+| **Characters** | traits, retinue, ages, names; the family tree as the game draws it |
+| **Pictures** | every picture of a faction replaced, recoloured to its colours, its emblem and banners made |
+| **Rules and scripts** | every campaign setting in plain words; add-ons (Sack Settlement, Avoid Growth, Player Diplomacy) and your own modules made of blocks, like Scratch |
+| **Safety** | a mod folder of your own, a preview of every change, backups with Restore, Undo / Redo, Check mod files, a log |
+
+<details>
+<summary><b>Every feature in detail</b> (click to open)</summary>
 
 Medieval II: the tool loads and edits it (factions, towns, map, its agents such as merchants, priests and princesses, religions, character lines as Medieval II writes them). Medieval II keeps most data in `packs`: load the game folder (or a Kingdoms campaign's folder, such as `mods/british_isles`) and the tool offers to unpack it with the game's own unpacker (its `unpack_all.bat`, or the campaign's own `unpack_britannia.bat` and the like; it copies the two DLLs the unpacker needs, `msvcp71.dll` and `msvcr71.dll`, from the game folder next to it). Set-up problems that stop the game from starting (M2EX's `vegetation_source text` without the raw vegetation maps) are found on Load and fixed with a yes.
 
@@ -169,6 +213,8 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 - **Terrain editor** (the Map editor's Terrain tab): paint the campaign map's ground (fertility, forest, hills, mountains, swamp, seas), rivers, fords, cliffs and climates, and the land's heights with a spray brush (raise, lower, smooth, level) - checked in the game on Rome and Medieval II.
 - **Character editor**: any faction's characters - names, ages, traits, ancillaries - shown as the game's character panel (portrait, attributes as pips, traits by the names players see, the retinue as picture cards), the family tree a click away, **Traits and retinue...** to edit the traits and ancillaries themselves (what each level gives, the names and texts players see, the retinue's pictures, new ones as copies), the portraits the game shows, a portrait library per culture to add new portraits to; Medieval II characters get portraits of their own (Replace...).
 - **Safe**: a separate mod folder in one click, preview of every file and line, backups with Restore, Undo/Redo in the window, Check mod files, and a log.
+
+</details>
 
 <a id="something-went-wrong"></a>
 
@@ -194,7 +240,7 @@ more words or a screenshot, to the same report. No account needed.
 
 A step-by-step guide is in the [Wiki](../../wiki); [ROADMAP.md](ROADMAP.md) says what it does, what is being tested and what comes next, [CHANGELOG.md](CHANGELOG.md) what is in each version and what has been tested in the game.
 
-Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HLR`) running on REX. It reads the mod's own files and doesn't assume their contents, so other RTW / BI-format mods should work too. Reports are welcome.
+Tested on the plain games - Rome: Total War (with REX), Barbarian Invasion, Medieval II: Total War (with M2EX) - and on testers' mods (Barbarian Empires REX Ultimate Edition / HLR, Kirsi's Bigger Map and others). It reads a mod's own files and assumes nothing about their contents, so other mods of these games should work too. Reports are welcome.
 
 ## Download
 
@@ -223,7 +269,7 @@ Built and tested on **Barbarian Empires REX Ultimate Edition 1.0.6** (folder `HL
 7. Press **Preview changes** to see every file and edit. Nothing is written yet.
 8. Press **Create faction**. Then start a **new** campaign; old saves don't know the faction.
 
-**A separate mod (recommended):** press **New mod folder...** after loading the mod you build on (for example `HLR\data`). The tool makes `<game>\HLR_Saba\` next to it and loads it; the faction goes there, and `Start_HLR_Saba.bat` (your base mod's start script with `-mod:HLR_Saba`) starts it. The green **Start the game** button (bottom right, beside Tools; it names the mod it starts, amber when no mod is loaded) starts it from the editor, after checking that the start script's exe is there and a Medieval II `.cfg` names the mod's folder. The base is never touched. The game reads one `-mod:` folder and falls back to the game's own `data`, so a mod built on HLR holds all of HLR: every file is copied, so the new mod stands on its own (to share or zip). For a mod you keep to yourself, tick **Hard links instead of copies**: text files are copied, everything else is a hard link (the same file on disk under a second name - no extra space, same drive only); deleting the new mod folder never touches the game, but don't overwrite a linked texture in place from an image editor. Medieval II: the new mod goes into `<game>\mods\<name>` with `<name>.cfg` (`[features] mod = mods/<name>`) and `Start_<name>.bat`, which starts the game with that .cfg (under M2EX: `M2EX.exe --features.mod=mods/<name>`, like M2EX's own mods). A mod built on the plain game can be slimmed to the changed files afterwards (`slim` on the command line).
+**A separate mod (recommended):** press **New mod folder...** after loading the mod you build on (for example `HLR\data`). The tool makes `<game>\HLR_Saba\` next to it and loads it; the faction goes there, and `Start_HLR_Saba.bat` (your base mod's start script with `-mod:HLR_Saba`) starts it. The green **Start the game** button (bottom right, beside Tools; it names the mod it starts, amber when no mod is loaded) starts it from the editor, after checking that the start script's exe is there and a Medieval II `.cfg` names the mod's folder. The base is never touched. The game reads one `-mod:` folder and falls back to the game's own `data`, so a mod built on HLR holds all of HLR: every file is copied, so the new mod stands on its own (to share or zip). For a mod you keep to yourself, tick **Hard links instead of copies**: text files are copied, everything else is a hard link (the same file on disk under a second name - no extra space, same drive only); deleting the new mod folder never touches the game, but don't overwrite a linked texture in place from an image editor. Medieval II: the new mod goes into `<game>\mods\<name>` with `<name>.cfg` (`[features] mod = mods/<name>`) and `Start_<name>.bat`, which starts the game with that .cfg (under M2EX: `M2EX.exe --features.mod=mods/<name>`, like M2EX's own mods). A mod built on the **plain game** is a **thin** mod: nothing is copied (made at once, no disk space) - it holds only what you change, the game reads every other file from its own `data`; the editor puts a game file into it the first time you change it, and the whole map folder (all but `map.rwm`, which the game builds again there) the first time you change the map. Before the first write into the game's own data or a mod it did not make, the editor asks once whether to make your own mod folder first.
 
 **Garrisons by hand:** the **Units & armies** tab lists your chosen towns (or select one in **Chosen** and press **Garrison...**); pick a town and fill its garrison: the template's units as the game's own cards (upkeep under each, the full line on hover), click to add, click the garrison to take one out, **Suggest** for the balanced pick, **Automatic** to leave the town to the 'Leader's army' / 'Old garrisons' rules on the same tab. The leader's or heir's bodyguard comes on top in the towns they hold; elsewhere the old garrison's captain (or a new one from the name list) leads it. Pictures need Pillow (`pip install pillow`; the exe has it).
 
@@ -362,6 +408,20 @@ python campaign_editor.py selfcheck report.txt          # the editor checks itse
 **Where a faction is named** (in **Check mod files** when a faction is picked; on the command line `scan`) reads every text file of the mod (not only `data`) and lists where the faction is named: places the tool does **not** handle (check these by hand), places it does, files and folders named after the faction, and files the faction's models, textures and unit cards point at that do not exist. It tells every file apart - the game's own (unchanged), changed by the mod, REX's, or the mod's own - from the game manifests that come inside the tool (a manifest made on your PC with **Game manifest...** wins). It writes nothing. Folders and files you want it to skip go in `CampaignEditor_ignore.txt` next to `data` (button **Ignore list...** in the Check mod files window; one rule per line: `folder/`, `name/` for that folder name anywhere, or a mask like `*.bak`). The list only affects the scan.
 
 The Windows `.exe` is the window only. Use Python for the command line.
+
+## ❓ FAQ
+
+- **Does it work with my mod?** Very likely: it reads the mod's own files and assumes nothing about them (tested on
+  the plain games and on testers' mods such as HLR and Kirsi's Bigger Map). Load it, press **Check mod files** - if
+  something is off, **Report a bug / Suggest** sends the logs.
+- **Do I need REX / M2EX?** No, but they are best: without them the original exes' limits apply (21 factions in Rome,
+  200 regions...) and some things need them (wastelands, add-ons, your own modules). With them the editor knows no
+  limits at all.
+- **Should I make my own mod folder?** Yes - **New mod folder...** first: the game or the mod you build on stays
+  clean. The editor asks once before it writes into a mod it did not make.
+- **Windows warns about the exe.** It is not signed yet (see *Code signing policy*). Download it only from
+  [Releases](../../releases); Windows SmartScreen may ask once - *More info > Run anyway*.
+- **How do I go back?** **Undo this write** right after a write, or **Tools > Restore a backup** - every byte back.
 
 ## Known limits
 

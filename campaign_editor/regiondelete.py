@@ -60,6 +60,11 @@ def _words(names):
     return re.compile(r"(?<![A-Za-z0-9_])(?:%s)(?![A-Za-z0-9_])" % alts)
 
 
+def _shown(mod, path):
+    """A file's name in the report as it will be written: a game file under a thin mod is written as the mod's copy."""
+    return mod.rel(mod.own(path) if hasattr(mod, "own") else path)
+
+
 def can_waste(mod):
     """Whether the game that runs this mod reads a wasteland region: REX (Rome) and M2EX (Medieval II) do, the
     original exes do not."""
@@ -342,7 +347,7 @@ def _delete(plan, campaign, gone, waste=()):
             # the town and port pixels take the region's own colour: no town, its land stays its own
             px = [tuple(p) for p in (tiles.get(region), harbour.get(region)) if p]
             paint.update({xy: regions[region]["colour"] for xy in px})
-            plan.notes.append((mod.rel(path), "%s stays as a wasteland - its town%s pixel%s painted with its own "
+            plan.notes.append((_shown(mod, path), "%s stays as a wasteland - its town%s pixel%s painted with its own "
                                "colour, its %d tile(s) of land nobody's" % (
                                    region, " and port" if region in harbour else "", "s" if region in harbour else "",
                                    sum(1 for _ in mod.region_map(campaign).find(regions[region]["colour"])))))
@@ -350,10 +355,10 @@ def _delete(plan, campaign, gone, waste=()):
             # the map: the land, the town and the port go to the neighbour
             px = region_pixels(mod, campaign, region)
             paint.update({xy: regions[into]["colour"] for xy in px})
-            plan.notes.append((mod.rel(path), "%d tile(s) of %s, its town and port pixels with them -> %s" % (
+            plan.notes.append((_shown(mod, path), "%d tile(s) of %s, its town and port pixels with them -> %s" % (
                 len(px), region, into)))
         else:
-            plan.notes.append((mod.rel(path), "%s: all its land goes off the map with the cut" % region))
+            plan.notes.append((_shown(mod, path), "%s: all its land goes off the map with the cut" % region))
     if paint:
         plan.patch_tga(path, paint)
     for folder in {os.path.dirname(path), os.path.join(mod.data, "world", "maps", "base")}:
@@ -604,7 +609,7 @@ def wasteland_town(plan, campaign, region, xy, name, owner="slave", label=None):
             region, name, donor or "the usual", creator, d.get("rebels") or "Rebels"))
     path = mod.campaign_file(campaign, "map_regions.tga")
     plan.patch_tga(path, {tuple(xy): CITY})
-    plan.notes.append((mod.rel(path), "the town pixel of %s at %d, %d" % (region, xy[0], xy[1])))
+    plan.notes.append((_shown(mod, path), "the town pixel of %s at %d, %d" % (region, xy[0], xy[1])))
     for folder in {os.path.dirname(path), os.path.join(mod.data, "world", "maps", "base")}:
         plan.delete(os.path.join(folder, "map.rwm"), "the game rebuilds it from the changed map on the next start")
     sf = plan.edit(mod.campaign_file(campaign, "descr_strat.txt"))

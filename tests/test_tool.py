@@ -915,10 +915,15 @@ building smith
         with self.assertRaises(ValueError):
             create_mod(os.path.join(hlr, "data"), "HLR_Beta")        # exists already
 
-    def test_new_mod_on_the_game_slims_to_the_changes(self):
+    def test_new_mod_on_the_game_is_thin(self):
+        """New mod folder on the plain game makes a THIN mod (nothing copied - the game reads the rest from its own
+        data): a faction added writes only what it changes and adds; slim finds nothing more to take away."""
         game, _ = self._game()
         data, st = create_mod(os.path.join(game, "data"), "Beta")
         self.assertEqual(st["base"], "(game)")
+        self.assertTrue(st["thin"])
+        self.assertEqual([n for _, _, fs in os.walk(data) for n in fs], [])     # nothing copied
+        self.assertEqual(os.path.normcase(ModData(data).under), os.path.normcase(os.path.join(game, "data")))
         with open(os.path.join(game, "Beta", "Start_Beta.bat"), "rb") as f:
             bat = f.read()
         self.assertIn(b"REX.exe -nm -show_err -mod:Beta", bat)
@@ -928,10 +933,37 @@ building smith
         removed = slim(data)
         left = sorted(os.path.relpath(os.path.join(d, n), data).replace(os.sep, "/")
                       for d, _, fs in os.walk(data) for n in fs)
-        self.assertGreater(removed, 0)
+        self.assertEqual(removed, 0)                                    # thin from the start
         self.assertIn("descr_sm_factions.txt", left)
         self.assertIn("ui/units/beta/#alpha_general.tga", left)
         self.assertNotIn("ui/units/alpha/#alpha_general.tga", left)     # unchanged: the game has it
+
+    def test_thin_mod_gets_its_whole_map_folder_on_a_map_change(self):
+        """A thin mod's first map change (a town deleted with its region) brings the game's whole map folder into the
+        mod - but map.rwm, which the game builds again from the mod's map; the game's files are never written; Restore
+        takes the mod back to nothing."""
+        from campaign_editor import regiondelete as RD
+        game, _ = self._game()
+        camp_game = os.path.join(game, "data", "world", "maps", "campaign", "test")
+        write(os.path.join(camp_game, "map.rwm"), "old map cache")
+        write(os.path.join(camp_game, "descr_events.txt"), "; no events\n")
+        game_before = tree_hash(os.path.join(game, "data"))
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        mod = ModData(data)
+        plan = Plan(mod, "delete", "B_R", {})
+        RD.delete(plan, "test", "B_R", "A_R")
+        plan.apply()
+        camp = os.path.join(data, "world", "maps", "campaign", "test")
+        have = sorted(os.listdir(camp))
+        for name in ("map_regions.tga", "descr_regions.txt", "descr_strat.txt", "descr_events.txt",
+                     "descr_win_conditions.txt"):
+            self.assertIn(name, have)
+        self.assertNotIn("map.rwm", have)                               # built again by the game from the mod's map
+        self.assertEqual(tree_hash(os.path.join(game, "data")), game_before)     # the game's own files untouched
+        self.assertNotIn("B_R", ModData(data).regions("test"))
+        for b in backups(ModData(data)):
+            restore(ModData(data), b)
+        self.assertEqual([n for _, _, fs in os.walk(data) for n in fs], [])
 
     def test_new_mod_under_m2ex_starts_with_features_mod(self):
         # M2EX's own Teutonic.bat: start "" "%~dp0M2EX.exe" --features.mod=mods/teutonic
@@ -6980,6 +7012,11 @@ building smith
                     if m.getpixel((x, y)) == (200, 0, 0, 255)]
             self.assertTrue(hits)
             self.assertTrue(all(src.getpixel(EE.to_source(st, src.size, h))[:3] == (200, 0, 0) for h in hits))
+        # Recolour's quick select: the area of like colour joined to a click, the picture itself not changed
+        area = EE.like_area(src, (160, 20), 20)
+        self.assertEqual(len(area), 41 * 41)
+        self.assertEqual(src.getpixel((160, 20)), (200, 0, 0, 255))
+        self.assertEqual(len(EE.like_area(src, (500, 5), 20)), 0)
         n = EE.flood(src, (5, 5), 20)                                  # the magic wand on the white
         self.assertEqual(n, 200 * 100 - 41 * 41)
         self.assertEqual(src.getpixel((5, 5))[3], 0)
@@ -7145,6 +7182,27 @@ building smith
         with open(path, newline="") as fh:
             self.assertEqual(fh.read(), text.replace("age_of_manhood 16", "age_of_manhood 14").replace(
                 "60 200 255", "1 2 3"))
+
+    def test_test_mod_report_puts_steps_to_look_at_first(self):
+        """The test mod's report (the user, 2026-10-08: 'drop the steps that always work?' - kept, but marked): steps
+        seen working in the game are listed as such, the new or changed ones on top as 'look at these'; the marks are
+        per game, and a feature changed after it was seen is to look at again."""
+        from campaign_editor import selftest as ST
+        names = {fn.__name__ for _, _, fn in ST.STEPS}
+        self.assertEqual(sorted(set(ST.SEEN_IN_GAME) - names), [])            # no mark for a step that is gone
+        self.assertEqual(sorted(set(ST.CHANGED_SINCE) - names), [])
+        self.assertEqual(ST.seen_working("s_new_faction", "m2tw"), "0.29.2")
+        self.assertIsNone(ST.seen_working("s_module", "m2tw"))               # changed in 0.32.0, seen with 0.29.2
+        self.assertEqual(ST.seen_working("s_module", "rome"), "0.32.0")
+        self.assertIsNone(ST.seen_working("s_wasteland", "rome"))            # new: never seen yet
+        res = [{"step": t, "see": "", "files": [], "warnings": [], "new_problems": [], "status": "OK", "fn": n}
+               for t, n in (("New faction", "s_new_faction"), ("Wastelands", "s_wasteland"))]
+        text = ST.report("/x/data", "test", {k: "x" for k in ("template", "edited", "other", "new", "later", "split",
+                                                             "shadow", "foreign")}, res, "m2tw")
+        top = text[text.index("LOOK AT THESE"):text.index("Seen working")]
+        self.assertIn("Wastelands", top)
+        self.assertNotIn("New faction", top)
+        self.assertIn("New faction  (seen with 0.29.2)", text)
 
     def test_test_mod_covers_every_feature(self):
         """The test mod covers the whole editor: every work button, tab and Tools entry of the window names a feature

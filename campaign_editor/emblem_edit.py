@@ -89,6 +89,35 @@ def compose(src, state, size=MASTER):
     return out
 
 
+def like_area(im, xy, tolerance):
+    """The quick select of every picture editor: the set of pixels (x, y) of the area of like colour joined to xy by
+    its sides (each colour channel within tolerance of the clicked pixel; clear pixels only join clear ones) - the
+    picture itself is not changed (Recolour's touch-ups paint that area)."""
+    w, h = im.size
+    x0, y0 = int(xy[0]), int(xy[1])
+    if not (0 <= x0 < w and 0 <= y0 < h):
+        return set()
+    rgba = im.convert("RGBA")
+    px = rgba.load()
+    ref = px[x0, y0]
+
+    def like(c):
+        if ref[3] == 0:
+            return c[3] == 0
+        return c[3] > 0 and all(abs(c[i] - ref[i]) <= tolerance for i in range(3))
+    got, todo, seen = set(), [(x0, y0)], {(x0, y0)}
+    while todo:
+        x, y = todo.pop()
+        if not like(px[x, y]):
+            continue
+        got.add((x, y))
+        for a, b in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= a < w and 0 <= b < h and (a, b) not in seen:
+                seen.add((a, b))
+                todo.append((a, b))
+    return got
+
+
 def flood(im, xy, tolerance, fill=None):
     """The magic wand / paint bucket on a picture (RGBA, changed in place): the area of like colour joined to xy
     (each channel within tolerance of the clicked pixel, edges by sides) made clear (fill None) or filled with fill

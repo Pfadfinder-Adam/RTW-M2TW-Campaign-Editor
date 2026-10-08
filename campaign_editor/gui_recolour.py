@@ -152,17 +152,30 @@ class RecolourWindow(tk.Toplevel):
             ttk.Radiobutton(tools, text=text, value=val, variable=self.v_brush).pack(side="left", padx=(0, 8))
         row2 = ttk.Frame(right)
         row2.pack(anchor="w", pady=(4, 0))
-        ttk.Label(row2, text="brush (pixels)").pack(side="left")
+        # the tool: a brush, or the quick select of every picture editor - a click takes the whole area of like
+        # colour (a hood, a shield's field) and paints it at once (the user, 2026-10-08: 'an auto-pick of the area')
+        self.v_tool = tk.StringVar(value="brush")
+        ttk.Radiobutton(row2, text="brush", value="brush", variable=self.v_tool).pack(side="left")
         self.v_size = tk.IntVar(value=2)
         ttk.Spinbox(row2, from_=1, to=40, textvariable=self.v_size, width=4).pack(side="left", padx=2)
-        ttk.Button(row2, text="Clear my touch-ups", command=self.clear_edits).pack(side="left", padx=8)
+        ttk.Label(row2, text="px").pack(side="left", padx=(0, 10))
+        ttk.Radiobutton(row2, text="area of like colour (a click)", value="area", variable=self.v_tool).pack(
+            side="left")
+        self.v_tol = tk.IntVar(value=24)
+        ttk.Spinbox(row2, from_=0, to=120, textvariable=self.v_tol, width=4).pack(side="left", padx=2)
+        ttk.Label(row2, text="alike").pack(side="left")
         row3 = ttk.Frame(right)                     # on a line of its own: beside the buttons it was cut at the edge
         row3.pack(anchor="w", pady=(2, 0))
+        ttk.Button(row3, text="Clear my touch-ups", command=self.clear_edits).pack(side="left", padx=(0, 8))
         ttk.Label(row3, text="wheel: zoom, right drag: move", foreground="#666").pack(side="left")
         hint(row3, "Left drag on the 'after' picture paints: 'new primary' / 'new secondary' recolours what you "
                     "paint (a red line the test missed), 'keep as it was' gives the old pixels back (a face or a "
-                    "horse it took). The brush size is in the picture's own pixels. Mouse wheel: zoom. The touch-ups "
-                    "are kept for that picture until Keep for Apply or Clear.").pack(side="left")
+                    "horse it took). The brush size is in the picture's own pixels. 'Area of like colour': a click "
+                    "takes the whole patch of the picture's own colour joined to that point (a hood, a shield's "
+                    "field) and paints it at once - 'alike' is how far a colour may differ and still belong (bigger "
+                    "= a bigger area); click again to add more, 'keep as it was' + a click gives an area back. Mouse "
+                    "wheel: zoom. The touch-ups are kept for that picture until Keep for Apply or Clear.").pack(
+            side="left")
         self.edits, self.zoom = {}, {}
         a = self.after
         a.bind("<ButtonPress-1>", self._paint)
@@ -350,11 +363,46 @@ class RecolourWindow(tk.Toplevel):
             return
         a = self.after
         x, y = a.canvasx(e.x), a.canvasy(e.y)
+        if self.v_tool.get() == "area":
+            if str(e.type) in ("ButtonPress", "4"):             # one click = one area (a drag adds nothing)
+                self._area(it, (x / self.k, y / self.k))
+            return
         r = max(1, self.v_size.get()) * self.k / 2.0
         colour = {"p": _hex(self.target[0]), "s": _hex(self.target[1] or (255, 255, 255))}.get(
             self.v_brush.get(), "#ff00ff")
         a.create_oval(x - r, y - r, x + r, y + r, outline=colour, fill=colour, tags="stroke")
         self._stroke = getattr(self, "_stroke", []) + [(x / self.k, y / self.k)]
+
+    def _area(self, it, xy):
+        """The quick select: the area of like colour of the picture joined to xy painted with the tool's colour."""
+        from PIL import Image
+        from .emblem_edit import like_area
+        try:
+            im = self._pair(it)[0]
+        except Exception:
+            return
+        got = like_area(im, xy, max(0, int(self.v_tol.get() or 0)))
+        if not got:
+            return
+        key = self._key(it)
+        ed = self.edits.setdefault(key, {})
+        which = self.v_brush.get()
+        for name in ("p", "s", "keep"):
+            m = ed.get(name) or Image.new("L", im.size, 0)
+            px = m.load()
+            v = 255 if name == which else 0
+            for p in got:
+                px[p] = v
+            ed[name] = m
+        it["edits"] = ed
+        self.status.configure(text="%d pixel(s) of like colour taken%s" % (
+            len(got), "" if which != "keep" else " back as they were"))
+        iid = "i%d" % self.items.index(it)
+        if iid in self.ticked and not self.ticked[iid]:
+            self.ticked[iid] = True
+            self.tree.item(iid, text=self._mark(iid))
+        self._cache.pop(key, None)
+        self.show()
 
     def _painted(self):
         pts = getattr(self, "_stroke", [])

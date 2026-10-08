@@ -3,6 +3,20 @@
 ## Unreleased
 
 ### Added
+- **New mod folder on the plain game makes a thin mod**: nothing is copied (made at once, no disk space) - the mod
+  holds only what you change, the game reads every other file from its own data. The editor puts a game file into the
+  mod the first time you change it, and the whole map folder (all but map.rwm, which the game builds again there) the
+  first time you change the map. A mod built on another mod (HLR) still holds all of it - the game takes one mod
+  folder, never a chain.
+- **Recolour: an area of like colour in one click** (the touch-ups' new tool beside the brush): a click on the
+  'after' picture takes the whole patch of the picture's own colour joined to that point - a hood, a shield's field -
+  and paints it the new primary or secondary colour; 'keep as it was' + a click gives an area back; *alike* says how
+  far a colour may differ and still belong.
+- **The test mod's report puts what to look at first**: the steps that were already seen working in the game (per
+  game) are listed as such, the new or changed ones on top - 'look at these in the game'.
+- **Your own mod folder first?** Before the first write into the game's own data or a mod the editor did not make,
+  the editor asks once: *Make my own mod folder* (nothing is written, New mod folder opens) or *Write here* (not asked
+  again for that mod; a backup is made before every write anyway).
 - **A deleted town's region can stay as a wasteland** (Rome with REX, Medieval II with M2EX): *Delete this town with
   its region* and *Delete the N selected towns* ask where its land goes - **stays as a wasteland** (the default with
   an engine) or **goes to a neighbour** (as before; the only way of the original exes). A wasteland keeps the region
@@ -19,6 +33,8 @@
   it are listed to change by hand. It was a refusal ('... would keep no town').
 
 ### Changed
+- **README**: a quick start, what it works with, what is new, the features at a glance (the long list folds away), a
+  short FAQ.
 - **Faster on a big mod** (a tester's HLR, 749 regions): deleting 48 towns at once took about 21 seconds before the
   window could write - every file is now read once for all of them (1.6 s); the town window opens about 5 times
   faster (its garrison cards are made when the Garrison tab is first shown, one town is read instead of all of them)

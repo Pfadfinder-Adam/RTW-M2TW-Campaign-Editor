@@ -827,6 +827,8 @@ class App(tk.Tk):
         self._undo_bdir = None
         from . import plan as _plan
         _plan.WRITTEN.append(lambda bdir, p: self.after_idle(lambda: self._written(bdir, p)))
+        _plan.BEFORE.append(self._own_folder_first)
+        self._own_folder_asked = set()
         self.status_line = ttk.Label(srow, anchor="w", justify="left")
         self.status_line.pack(side="left", fill="x", expand=True)
         # long work (over a second or two): a moving bar and the seconds beside the message (NN/g: feedback while
@@ -4096,8 +4098,45 @@ class App(tk.Tk):
         self.load()
         self.status.set("Set-up fixed: %s (backup made)." % ", ".join(p["id"] for p in found))
 
+    def _own_folder_first(self, plan):
+        """Before the first write into a mod the editor did not make (the game's own data, a downloaded mod - no
+        CampaignEditor_mod.json): asked once, 'Make your own mod folder first?' (recommended: the game / that mod stays
+        clean, its update never takes your work, deleting your folder takes everything back). 'Write here' is
+        remembered for that mod (settings own_folder_ok); 'Make my own mod folder' stops this write and opens New mod
+        folder."""
+        from . import gui_util, settings as _settings
+        from .newmod import game_root_of, marker
+        from .textio import NotWritten
+        import threading
+        if self.mod is None or plan.mod is not self.mod or threading.current_thread() is not threading.main_thread():
+            return                                   # another mod's plan (the test mod makes its own), or no window
+        root = os.path.dirname(os.path.abspath(self.mod.data))
+        key = os.path.normcase(root)
+        said = list(_settings.get("own_folder_ok", []) or [])
+        if marker(root) or key in said or key in self._own_folder_asked:
+            return
+        _, base = game_root_of(self.mod.data)
+        what = ("the game's own data folder - your changes would go into the game itself" if not base else
+                "%s, a mod the editor did not make - your changes would go into it" % base)
+        pick = gui_util.ask_choice(self, APP, (
+            "This is %s.\n\nBetter: a mod folder of your own (New mod folder...) - the game%s stays clean, an update "
+            "of %s never takes your work, and deleting your folder takes everything back. On the plain game it holds "
+            "only what you change.\n\nMake your own mod folder first? (Write here: not asked again for this mod - "
+            "a backup is made before every write anyway.)" % (what, " and %s" % base if base else "",
+                                                               base or "the game")),
+            ["Make my own mod folder", "Write here"], default=0, cancel=1)
+        if pick == 0:
+            self.after_idle(self.new_mod)
+            raise NotWritten("Nothing was written: make your own mod folder first - the New mod folder window is "
+                             "open; it is loaded when made, then do the change again there.")
+        if pick == 1:
+            _settings.put("own_folder_ok", said + [key])
+        else:                                        # the question closed: not asked again in this session
+            self._own_folder_asked.add(key)
+
     def new_mod(self):
-        """Make <game>/<name> from the loaded mod (every file copied; hard links on a tick), then load it."""
+        """Make <game>/<name> from the loaded mod (every file copied; hard links on a tick) - on the plain game a
+        THIN mod (nothing copied: only what changes goes into it), then load it."""
         if not self.mod:
             messagebox.showerror(APP, "load the mod (or the game's data folder) to build on first")
             return
@@ -4116,19 +4155,28 @@ class App(tk.Tk):
         v_name = tk.StringVar(value=(base or ("M2" if m2 else "RTW")) + "_" + (self.v["name"].get().strip().capitalize() or "New"))
         ttk.Entry(frm, textvariable=v_name, width=30).grid(row=3, column=0, sticky="we", padx=(0, 6))
         v_links = tk.BooleanVar(value=False)            # copies by default: a mod one shares stands on its own
-        ttk.Checkbutton(frm, text="Hard links instead of copies (no extra disk space - for a mod you keep to "
-                                  "yourself)", variable=v_links).grid(row=4, column=0, columnspan=2, sticky="w", pady=4)
-        ttk.Label(frm, justify="left", wraplength=560, text=(
+        if base:                                        # the plain game: a thin mod, nothing to copy or link
+            ttk.Checkbutton(frm, text="Hard links instead of copies (no extra disk space - for a mod you keep to "
+                                      "yourself)", variable=v_links).grid(row=4, column=0, columnspan=2, sticky="w",
+                                                                         pady=4)
+        thin_words = (
+            "The game stays untouched. The new mod holds only what you change (a 'thin' mod): nothing is copied now "
+            "- made at once, no disk space; the game reads every other file from its own data, and the editor puts "
+            "a game file into the mod the first time you change it (the whole map folder at the first change of the "
+            "map, so the game builds its map again there). The mod stays small - easy to share and to zip. "
+            "Deleting the new mod folder never touches the game.\n")
+        full_words = (
             "The base stays untouched. Every file is copied: the new mod stands on its own - to share, to zip, "
             "to change in any program (it takes the disk space of the base's files).\n"
             "Hard links (the tick above) are for a mod you keep to yourself: text files are still copied, models, "
             "textures and sounds become the same files on the disk as the base's under a second name - no extra "
             "space, Explorer still shows their full size. Only a program that overwrites such a file in place (a "
             "texture editor saving over a .dds, say) changes the base's file too - the tool itself never does. "
-            "Deleting the new mod folder never touches the game or the base mod.\n" +
-            ("It goes into the game's mods folder with %s.cfg and Start_%s.bat (Medieval II starts a mod "
-             "from its .cfg)." % ("<name>", "<name>") if m2 else
-             "A start script Start_<name>.bat is written into the new folder."))).grid(
+            "Deleting the new mod folder never touches the game or the base mod.\n")
+        start_words = ("It goes into the game's mods folder with %s.cfg and Start_%s.bat (Medieval II starts a mod "
+                       "from its .cfg)." % ("<name>", "<name>") if m2 else
+                       "A start script Start_<name>.bat is written into the new folder.")
+        ttk.Label(frm, justify="left", wraplength=560, text=(full_words if base else thin_words) + start_words).grid(
             row=5, column=0, columnspan=2, sticky="w", pady=(4, 8))
 
         def go():
@@ -4160,10 +4208,12 @@ class App(tk.Tk):
                 self.v_path.set(result["data"])
                 self.load()
                 messagebox.showinfo(APP, (
-                    "Made %s\n\n%d file(s) linked, %d copied (%.0f MB really written)%s.\n\n%s"
-                    "It is loaded now: the faction you create goes into it. Start the game with %s." % (
-                        st["target"], st["linked"], st["copied"], st["bytes_copied"] / 1048576.0,
-                        "" if st["hard_links"] else " - every file copied",
+                    "Made %s\n\n%s.\n\n%s"
+                    "It is loaded now: what you change goes into it. Start the game with %s." % (
+                        st["target"], "A thin mod: nothing copied - the game reads every file you do not change from "
+                        "its own data" if st.get("thin") else "%d file(s) linked, %d copied (%.0f MB really written)%s"
+                        % (st["linked"], st["copied"], st["bytes_copied"] / 1048576.0,
+                           "" if st["hard_links"] else " - every file copied"),
                         ("The linked files show full size in Explorer but take no disk space: they are the "
                          "base's own files under a second name. Deleting this folder never touches the "
                          "game.\n\n") if st["hard_links"] and st["linked"] else "",
@@ -6270,7 +6320,11 @@ class App(tk.Tk):
     def report_callback_exception(self, exc, val, tb):
         """A crash inside the window: logged with its traceback and shown, never silent."""
         text = "".join(traceback.format_exception(exc, val, tb))
-        from .textio import WriteError
+        from .textio import NotWritten, WriteError
+        if isinstance(val, NotWritten):           # the modder's own choice (own mod folder first): said, no error box
+            log.write("Not written: %s" % val)
+            self.status.set(str(val))
+            return
         if isinstance(val, WriteError):           # the system refused a file (held, read-only, disk full): no bug
             log.write("Writing refused\n" + text)
             messagebox.showerror(APP, str(val))

@@ -4,11 +4,14 @@ are never touched. Rome: <game>/<name>, started with -mod:<name>; Medieval II:
 
 The game takes one -mod:<folder> and falls back to the game's own data for
 every file that folder lacks - there is no chain "my mod -> HLR -> game". So a
-mod built on HLR must hold all of HLR. Text files (what the tool edits) are
-real copies; everything else (models, textures, sounds) is a hard link: the
-same file on disk under a second name, no extra space, made at once. A mod
-built on the plain game only needs the files that differ, so after a faction
-is added the files still identical to the game's are removed again (slim).
+mod built on HLR must hold all of HLR: every file is copied (the window's
+default), or, asked for, everything but the text files (what the tool edits)
+is a hard link - the same file on disk under a second name, no extra space.
+A mod built on the plain game holds only what changes (a THIN mod): nothing is
+copied, the editor writes the mod's own copy of a game file at its first
+change (ModData.under, Plan.borrowed) and the whole map folder at the first
+change of the map (Plan._whole_map_folders - the game then builds map.rwm
+there). slim() still takes a whole older copy back to the files that differ.
 
 Hard links need the new folder on the same drive (NTFS); otherwise, or with
 copy_all, every file is copied."""
@@ -177,12 +180,14 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
     if base_name and base_name.lower() == name.lower():
         raise ValueError("the new mod needs a name other than its base")
     base_dir = os.path.dirname(os.path.abspath(data_dir)) if base_name else game
-    # the plain game: only its data folder; a mod: the whole mod folder
-    sources = [(os.path.join(game, "data"), os.path.join(target, "data"))] if not base_name \
-        else [(base_dir, target)]
-    stats = {"linked": 0, "copied": 0, "renamed": 0, "bytes_copied": 0}
+    # the plain game: a thin mod - nothing copied (an empty text folder marks its data folder, ModData.thin_mod);
+    # a mod: the whole mod folder
+    sources = [] if not base_name else [(base_dir, target)]
+    stats = {"linked": 0, "copied": 0, "renamed": 0, "bytes_copied": 0, "thin": not base_name}
     link_ok = [not copy_all]
     os.makedirs(target)
+    if not base_name:
+        os.makedirs(os.path.join(target, "data", "text"))
     try:
         starts = _m2_start(game, base_dir, base_name, name) if m2 else _bats(base_dir, base_name, name, game)
         for src_root, dst_root in sources:

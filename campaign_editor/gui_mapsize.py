@@ -23,6 +23,7 @@ def open_map_size(app, view=None):
     from .mapresize import blocking, cut_words, lost_factions, places, plan_resize
     from .moddata import ModData
     from .plan import Plan
+    from .regiondelete import can_waste
     if not app.mod:
         messagebox.showinfo(APP, "Load a mod first.")
         return None
@@ -127,7 +128,7 @@ def open_map_size(app, view=None):
             gone = lost(n)
             lbl_block.configure(text="On the part cut off (ringed red on the map) - it goes with the cut, you are "
                                      "asked first (or move it away before):\n%s%s" % (
-                                         "\n".join("- " + x for x in cut_words(hit)),
+                                         "\n".join("- " + x for x in cut_words(hit, can_waste(app.mod))),
                                          "".join("\n- %s keeps no town - it leaves this campaign with the cut (give "
                                                  "it a town that stays to keep it)" % f for f in gone)))
         else:
@@ -195,7 +196,7 @@ def open_map_size(app, view=None):
                 APP, "The cut takes these off the map with it:\n\n- %s%s\n\nNothing is written now: the cut waits for "
                      "Apply changes (a backup first; Undo this write gives every one back). Until then you can move "
                      "what you want to keep off the part cut off on the map%s." % (
-                         "\n- ".join(cut_words(hit)),
+                         "\n- ".join(cut_words(hit, can_waste(app.mod))),
                          "".join("\n- %s keeps no town (%s) - it leaves this campaign with all its people; the "
                                  "faction stays in the mod" % (f, ", ".join(t[:4]) + (" ..." if len(t) > 4 else ""))
                                  for f, t in gone.items()),

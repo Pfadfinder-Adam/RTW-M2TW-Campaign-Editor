@@ -23,6 +23,10 @@ class WriteError(OSError):
     """A file the system would not let the tool write, said in plain words."""
 
 
+class NotWritten(WriteError):
+    """Not an error: the modder chose not to write here (e.g. 'make my own mod folder first') - nothing was written."""
+
+
 def make_writable(path):
     """Take a file's read-only mark off (Windows' Read-only box; mods unpacked from some archives or copied from a
     disc carry it, and Windows then refuses to replace or remove the file). True when it was read-only."""
