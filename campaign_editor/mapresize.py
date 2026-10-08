@@ -444,6 +444,27 @@ def _tiles_in(text, values):
     return out
 
 
+def radar_resized(data, w, h, left, bottom, right, top):
+    """A minimap picture (radar_map1 / radar_map2 / map_radar2.tga, its own size) cut or grown in the proportion of
+    the map's W x H tiles: (TGA bytes, (new w, new h)), or None without Pillow. New parts take the colour of the
+    picture's top-left corner (the sea round the world)."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    import io
+    pic = Image.open(io.BytesIO(data))
+    pic.load()
+    sx, sy = pic.width / float(w), pic.height / float(h)
+    nw = max(1, int(round((w + left + right) * sx)))
+    nh = max(1, int(round((h + bottom + top) * sy)))
+    out = Image.new(pic.mode, (nw, nh), pic.getpixel((0, 0)))
+    out.paste(pic, (int(round(left * sx)), int(round(top * sy))))   # the picture is top row first
+    buf = io.BytesIO()
+    out.save(buf, format="TGA")
+    return buf.getvalue(), (nw, nh)
+
+
 def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, factions_out=()):
     """Every file of the map grown (positive) or cut (negative) by that many tiles at each edge, in the plan.
     Returns the warnings; ValueError (with every place named) when a cut would leave something off the map -
@@ -482,6 +503,17 @@ def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, f
             want = {"tiles": (img.width, img.height), "corners": (2 * img.width + 1, 2 * img.height + 1),
                     "double": (2 * img.width, 2 * img.height)}[kind]
             if (pw, ph) != want:                    # a picture of its own size (Medieval II's radar maps, a
+                if name.startswith(("radar_map", "map_radar")):
+                    # the campaign map's minimap: a picture of its own size, but of THE map - the game lays the
+                    # real borders over it, so it is cut / grown in the same proportion (report: Rome HLR's minimap
+                    # kept its old picture after a cut, the borders drawn over the wrong land)
+                    got = radar_resized(data, img.width, img.height, left, bottom, right, top)
+                    if got:
+                        plan.binary(p, got[0])
+                        plan.note(None, "%s %s in proportion (%d x %d -> %d x %d)" % (name, words, pw, ph, *got[1]))
+                    else:
+                        warn.append("%s could not be cut with the map (no Pillow) - paint it again by hand" % name)
+                    continue
                 plan.note(None, "%s left as it is (%d x %d - not tied to the map's tiles)" % (name, pw, ph))
                 continue                            # disasters.tga left from Rome) is not the map's: left alone
             plan.binary(p, shifted(data, kind, left, bottom, right, top, fill, p))

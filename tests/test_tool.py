@@ -3512,6 +3512,26 @@ building smith
         from campaign_editor import upscale as U
         self.assertEqual(U.move_script_line("  reveal_tile 10, 20", values, xy)[0], "  reveal_tile 12, 21")
 
+    def test_map_size_cuts_the_minimap_picture_in_proportion(self):
+        """The minimap pictures (radar_map1 / radar_map2.tga, their own size) are cut / grown with the map in the same
+        proportion - the game lays the real borders over them (a tester's Rome HLR: the old picture stayed)."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        import io
+        from campaign_editor import mapresize as MR
+        pic = Image.new("RGB", (40, 20), (0, 0, 200))
+        pic.putpixel((39, 10), (255, 0, 0))                          # the map's right column, 4 px per tile
+        buf = io.BytesIO()
+        pic.save(buf, format="TGA")
+        data, size = MR.radar_resized(buf.getvalue(), 10, 5, 0, 0, -2, 1)   # 10 x 5 tiles: cut 2 right, add 1 top
+        self.assertEqual(size, (32, 24))
+        out = Image.open(io.BytesIO(data))
+        self.assertEqual(out.size, (32, 24))
+        self.assertEqual(out.convert("RGB").getpixel((0, 0)), (0, 0, 200))
+        self.assertNotIn((255, 0, 0), [c for _, c in out.convert("RGB").getcolors(4096)])   # cut off with the column
+
     def test_map_size_names_what_stands_on_the_part_cut_off(self):
         """Map size: the places are read once and any cut checked against them at once (the window checks each
         dragged edge and rings them red on the map) - a town and the character in it on the columns cut off are
