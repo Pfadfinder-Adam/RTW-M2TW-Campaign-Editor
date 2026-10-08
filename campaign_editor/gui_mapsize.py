@@ -23,7 +23,6 @@ def open_map_size(app, view=None):
     from .mapresize import blocking, cut_words, lost_factions, places, plan_resize
     from .moddata import ModData
     from .plan import Plan
-    from .regiondelete import can_waste
     if not app.mod:
         messagebox.showinfo(APP, "Load a mod first.")
         return None
@@ -59,7 +58,8 @@ def open_map_size(app, view=None):
         "A number above 0 adds that many rows or columns of tiles at that edge - deep sea, as the map's own deepest "
         "water; paint land on it with the Map editor and the Terrain tab. Below 0 cuts them off. What stands on the "
         "part cut off is ringed red on the map and named here: it goes with the cut - towns with their regions (the "
-        "land of theirs that stays joins a neighbour), armies, agents, fleets, resources, forts, events - after a "
+        "land of theirs that stays is left with no region: paint it into one yourself, Edit regions), armies, agents, "
+        "fleets, resources, forts, events - after a "
         "question, so you can move what you want to keep first; family members are never deleted, they move to "
         "their faction's nearest town. A faction left without any town leaves this campaign with all its people (it "
         "stays in the mod: its units, pictures, other campaigns). Everything that stays moves with the map. The cut "
@@ -128,7 +128,7 @@ def open_map_size(app, view=None):
             gone = lost(n)
             lbl_block.configure(text="On the part cut off (ringed red on the map) - it goes with the cut, you are "
                                      "asked first (or move it away before):\n%s%s" % (
-                                         "\n".join("- " + x for x in cut_words(hit, can_waste(app.mod))),
+                                         "\n".join("- " + x for x in cut_words(hit)),
                                          "".join("\n- %s keeps no town - it leaves this campaign with the cut (give "
                                                  "it a town that stays to keep it)" % f for f in gone)))
         else:
@@ -196,7 +196,7 @@ def open_map_size(app, view=None):
                 APP, "The cut takes these off the map with it:\n\n- %s%s\n\nNothing is written now: the cut waits for "
                      "Apply changes (a backup first; Undo this write gives every one back). Until then you can move "
                      "what you want to keep off the part cut off on the map%s." % (
-                         "\n- ".join(cut_words(hit, can_waste(app.mod))),
+                         "\n- ".join(cut_words(hit)),
                          "".join("\n- %s keeps no town (%s) - it leaves this campaign with all its people; the "
                                  "faction stays in the mod" % (f, ", ".join(t[:4]) + (" ..." if len(t) > 4 else ""))
                                  for f, t in gone.items()),

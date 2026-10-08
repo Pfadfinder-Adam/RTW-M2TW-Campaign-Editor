@@ -25,8 +25,10 @@
   `wasteland` keyword in descr_regions), in place of the old trick of a town hidden behind a river ring.
 - **The way back**: right click a wasteland's land on the Map - *Give it its town here...* writes its town on that
   tile again (its name, the name players see, its owner; a village as the game makes it), with a backup.
-- **Map size**: a cut that takes a town off but leaves part of its land keeps that region as a wasteland (with an
-  engine) instead of giving the land to a neighbour.
+- **Map size**: a cut that takes a town off deletes its region from every file, and nothing more - the part of its
+  land that stays on the map is left as it is, given to no one; the question before the cut and the result name it,
+  and you paint it into the regions you want (Edit regions). The cut no longer refuses a town whose land left
+  touches no other region.
 - **Map size: a cut that takes a faction's last town takes the faction out of this campaign** (both games), after a
   question that names it - its people, its place in the faction lists, its diplomacy, its victory conditions and the
   events that make it rise; it stays in the mod (its units, pictures and other campaigns keep it). Script lines naming
@@ -54,7 +56,7 @@
 - **Map size: a cut that left a town on the map's new edge** made the game stop while loading (it builds the map
   again and cannot place a town on the edge row - it needs land all round). A town or port that would stand on an
   edge the cut makes now counts as cut off: it is named in the question before the cut and goes with it (its land
-  that stays a wasteland under REX / M2EX), or move it one tile in first.
+  that stays is left for you to paint into a region), or move it one tile in first.
 - **Place its town / Place its port for a region of the map** (Edit regions): they worked only for a new region and
   said 'pick a new region first'. Now, for the region in *Paint with*: a **wasteland** gets its town on the tile
   clicked (the same window as its right-click *Give it its town here*; its port after that), a region's town or port
