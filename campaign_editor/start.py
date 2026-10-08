@@ -65,6 +65,38 @@ def template_pool(strat, template, upkeep):
     return sorted(pool.values(), key=lambda e: (upkeep.get(unit_name(e[0]), 0), unit_name(e[0])))
 
 
+def _own_garrison(plan, f, s, template, region, st, block_raw, start, own_held):
+    """A town taken with its own garrison ('garrisoned_army' + unit lines in its block, no captain - both games read
+    it): a garrison picked by hand goes there; else its units give way to the new faction's own, as an army's do
+    (start['garrison'] == 'keep' leaves them). An emptied one goes whole (Rome refuses 'garrisoned_army' with no
+    unit). Returns the block's raw lines."""
+    texts = f.texts()[st.start:st.end]
+    a, b = st.garrison_at - st.start, st.garrison_end - st.start
+    old = texts[a:b]
+    pad = next((u[:len(u) - len(u.lstrip())] for u in old if tokens(u)[:1] == ["unit"]), "\t")
+    picked = (start.get("garrisons") or {}).get(region)
+    if picked is not None:
+        lines = ["unit\t%s\t\t\texp 0 armour 0 weapon_lvl 0" % u for u in picked][:MAX_UNITS]
+        why = "your garrison of %d unit(s) holds the town (its own garrison, no captain)" % len(lines)
+    elif start.get("garrison", "replace") == "keep":
+        own_held.add(region)
+        return block_raw
+    else:
+        edu = plan.files.get(plan.mod.file("edu")) if plan.mod.file("edu") else None
+        lines = [u.strip() for u in cheap_garrison(s, template, unit_upkeep(edu) if edu is not None else {},
+                                                   len(st.garrison))]
+        if not lines:
+            own_held.add(region)
+            return block_raw
+        why = "%d unit(s) of %s's own instead of the old garrison (the town's own, no captain)" % (len(lines),
+                                                                                                    template)
+    new = [old[0]] + [pad + u for u in lines] if lines else []
+    plan.note(f, "%s: %s" % (region, why if lines else "its old garrison leaves - the town is empty"))
+    if lines:
+        own_held.add(region)
+    return block_raw[:a] + [f.make(x) for x in new] + block_raw[b:]
+
+
 def cheap_garrison(strat, template, upkeep, n):
     """n unit lines from the template pool: the cheapest few, one of each in turn."""
     order = [e[0] for e in template_pool(strat, template, upkeep)][:3]
@@ -222,6 +254,7 @@ def build_start(plan, campaign, start):
     picked_buildings = {r: [tuple(x) for x in v] for r, v in (start.get("buildings") or {}).items()}
     sizes = start.get("sizes") or {}
     moved_blocks = []          # raw lines of settlement blocks
+    own_held = set()           # towns their own garrison holds (garrisoned_army in the block, no captain)
     joined = {}                # region -> raw character chunks that join with the town
     removals = []              # (start, end) ranges to delete
     edits = {}                 # line index -> new text (relocated characters)
@@ -240,6 +273,8 @@ def build_start(plan, campaign, start):
             if st.owner == new:
                 continue
             block_raw = list(f.raw[st.start:st.end])
+            if st.garrison_at is not None:
+                block_raw = _own_garrison(plan, f, s, t, r, st, block_raw, start, own_held)
         if r in picked_buildings or r in sizes or r in (plan.opts.get("kinds") or {}):
             block_raw = _with_buildings(plan, f, r, block_raw, picked_buildings.get(r), sizes.get(r))
         moved_blocks.append(block_raw)
@@ -395,6 +430,8 @@ def build_start(plan, campaign, start):
     for r, lines in custom.items():
         agents = [j for j in joined.get(r, []) if not _has_army(j[2])]
         armies = [j for j in joined.get(r, []) if _has_army(j[2])]
+        if r in own_held and r in (start.get("garrisons") or {}):
+            continue                    # the picked units went into the town's own garrison (_own_garrison)
         for name, kind, chunk in (armies if r in held else armies[1:]):
             plan.note(f, "%s: %s (%s) and his old garrison leave - your garrison holds the town" % (r, name, kind))
         if r in held:

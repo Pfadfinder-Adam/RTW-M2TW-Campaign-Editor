@@ -118,16 +118,17 @@ def _hits(path, names):
     return out
 
 
-def problems(mod, campaign, region, into=None):
-    """([refusals], [warnings]) in plain words."""
+def problems(mod, campaign, region, into=None, land=True):
+    """([refusals], [warnings]) in plain words. land=False: the region's land goes off the map with it (a cut of the
+    map's edge) - no neighbour needed for it."""
     regions = mod.regions(campaign)
     if region not in regions:
         return ["%s is no region of this campaign" % region], []
     town = regions[region].get("settlement") or ""
     names = [n for n in (region, town) if n]
     errors, warns = [], []
-    near = neighbours(mod, campaign, region)
-    if not near:
+    near = neighbours(mod, campaign, region) if land else [(into, 1)] if into else []
+    if land and not near:
         errors.append("%s touches no other region's land (an island) - its land would belong to no region; give it to "
                       "a neighbour on the Map with Edit regions instead" % region)
     elif into and into not in dict(near):
@@ -215,22 +216,27 @@ def _drop_block(f, start):
     del f.raw[start:end]
 
 
-def delete(plan, campaign, region, into=None):
-    """Write the deletion into the plan (see the module text). Returns the region the land went to."""
+def delete(plan, campaign, region, into=None, land=True):
+    """Write the deletion into the plan (see the module text). Returns the region the land went to. land=False (a cut
+    of the map's edge takes all its land off the map): its pixels are left for the cut, given to no one (None)."""
     mod = plan.mod
-    errors, warns = problems(mod, campaign, region, into)
+    errors, warns = problems(mod, campaign, region, into, land)
     if errors:
         raise ValueError("; ".join(errors))
     regions = mod.regions(campaign)
     town = regions[region].get("settlement") or ""
-    into = into or neighbours(mod, campaign, region)[0][0]
-    # the map: the land, the town and the port go to the neighbour
     path = mod.campaign_file(campaign, "map_regions.tga")
-    colour = regions[into]["colour"]
-    px = region_pixels(mod, campaign, region)
-    plan.patch_tga(path, {xy: colour for xy in px})
-    plan.notes.append((mod.rel(path), "%d tile(s) of %s, its town and port pixels with them -> %s" % (
-        len(px), region, into)))
+    if land:
+        into = into or neighbours(mod, campaign, region)[0][0]
+        # the map: the land, the town and the port go to the neighbour
+        colour = regions[into]["colour"]
+        px = region_pixels(mod, campaign, region)
+        plan.patch_tga(path, {xy: colour for xy in px})
+        plan.notes.append((mod.rel(path), "%d tile(s) of %s, its town and port pixels with them -> %s" % (
+            len(px), region, into)))
+    else:
+        into = None
+        plan.notes.append((mod.rel(path), "%s: all its land goes off the map with the cut" % region))
     for folder in {os.path.dirname(path), os.path.join(mod.data, "world", "maps", "base")}:
         plan.delete(os.path.join(folder, "map.rwm"), "the game rebuilds it from the changed map on the next start")
     # descr_regions.txt

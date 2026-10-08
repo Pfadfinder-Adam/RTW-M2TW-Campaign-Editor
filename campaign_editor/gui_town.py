@@ -36,6 +36,7 @@ class TownWindow(tk.Toplevel):
         town = next((t for t in MT.towns(self.mod, self.campaign) if t["region"] == region), None)
         for w in self.body.winfo_children():
             w.destroy()
+        self.town = town                                   # None: nothing to change - closing asks nothing
         if town is None:
             ttk.Label(self.body, text="%s has no town in descr_strat.txt (a rebel village the game makes by itself) - "
                                       "give it to a faction first (right click on the Map > Give this town to)."
@@ -43,6 +44,10 @@ class TownWindow(tk.Toplevel):
             ttk.Button(self.body, text="Close", command=self.close).pack(anchor="e", pady=10)
             return
         self.town = town
+        if not town.get("army") and town.get("near"):        # said in the log too: a report shows it
+            from . import log
+            log.write("Town %s: no army on its tile %s; beside it: %s" % (region, town.get("tile"), ", ".join(
+                "%s (%s) %s" % x for x in town["near"])))
         self.known = MT.known_buildings(self.mod)
         self.title("%s - %s (%s)" % (TITLE, town["name"], region))
         b = self.body
@@ -56,7 +61,7 @@ class TownWindow(tk.Toplevel):
                    "Buildings and Units & armies tabs look). Preview shows every line; Keep for Apply puts the changes in "
                    "the session's list - Apply changes in the main window writes them all at once (a backup first; "
                    "Undo this write puts them back).", width=520).pack(side="left")
-        self.lbl_view = ttk.Label(head, foreground="#666", text="")
+        self.lbl_view = ttk.Label(head, foreground="#666", text="", wraplength=430, justify="left")
         self.lbl_view.pack(side="left", padx=10)
         top = ttk.Frame(b, padding=(0, 2))
         top.pack(fill="x")
@@ -141,9 +146,24 @@ class TownWindow(tk.Toplevel):
             t = self.town
             self.lbl_view.configure(text=("the army in the town: %s%s" % (t.get("army") or "a captain",
                                     " (his bodyguard stays)" if t.get("army_named") else "")) if t.get("army")
-                                    else "nobody holds the town: units picked here get a captain")
+                                    else ("the town's own garrison, no captain (garrisoned_army in its block): %d "
+                                          "unit(s)" % len(t.get("unit_names") or [])) if t.get("inside")
+                                    else self._nobody())
         else:
             self.lbl_view.configure(text="click a level to build it; the governor's building follows the level")
+
+    def _nobody(self):
+        """No army of the owner on the town's tile: the town starts empty - and who stands beside it (a garrison one
+        tile off is outside the walls; a tester's mod showed none in the town window)."""
+        t = self.town
+        near = t.get("near") or []
+        if not near:
+            return "nobody holds the town: units picked here get a captain"
+        tile = t.get("tile") or ("?", "?")
+        return ("nobody stands on the town's tile (%s, %s) - the game starts it empty. Beside it, outside the walls: "
+                "%s. To make one the garrison, drag him onto the town on the Map; or pick units here (a captain gets "
+                "them)." % (tile[0], tile[1], "; ".join("%s (%s) at %d, %d" % (n, f, xy[0], xy[1])
+                                                         for n, f, xy in near[:3])))
 
     def _owner(self):
         return self.v_owner.get() or self.town["owner"]
@@ -279,7 +299,7 @@ class TownWindow(tk.Toplevel):
         return True
 
     def preview(self):
-        if self._fresh():
+        if self.town is None or self._fresh():
             return
         try:
             plan = self._plan()
@@ -294,7 +314,7 @@ class TownWindow(tk.Toplevel):
     def write(self):
         """Keep for Apply: the town's changes go into the session's list, written by the main window's Apply changes
         with everything else (one write, one Undo)."""
-        if self._fresh():
+        if self.town is None or self._fresh():
             return False
         from .gui_util import keep_for_apply
         region, name = self.region, self.town["name"]
@@ -311,6 +331,8 @@ class TownWindow(tk.Toplevel):
     def _unwritten(self):
         """Words of what is neither written nor kept for the write, or '' (the close guard asks before throwing it
         away)."""
+        if self.town is None:                             # a region without a town: nothing could change
+            return ""
         from .gui_util import kept_or_not
         return kept_or_not(self.app, "town:%s" % self.region, self._plan)
 

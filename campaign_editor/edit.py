@@ -8,7 +8,7 @@ from .build import template_display, validate
 from .clone import FE_NAMES, description_key, entry_end
 from .plan import Plan
 from .start import MAX_UNITS, _has_army, _units, unit_name
-from .strat import first_names, RE_XY, Strat, character_line, village_block
+from .strat import first_names, RE_XY, Character, Settlement, Strat, character_line, village_block
 from .textio import tokens
 
 RE_RGB = re.compile(r"red\s*(\d+)\s*,\s*green\s*(\d+)\s*,\s*blue\s*(\d+)")
@@ -157,7 +157,7 @@ def edit(mod, campaign, faction, opts):
         tiles = plan_tiles(plan, campaign)
         fb = s.faction(faction)
         held = {c.xy for c in fb.characters if c.xy and _has_army(s.lines[c.start:c.end])}
-        empty = [st.region for st in fb.settlements if tiles.get(st.region) not in held]
+        empty = [st.region for st in fb.settlements if tiles.get(st.region) not in held and not st.garrison]
         if empty and plan.changed_files():
             plan.warn(plan.files[sp], "no army in %s - the town(s) start without a garrison"
                       % ", ".join(empty))
@@ -720,6 +720,7 @@ def _garrisons(plan, f, s, campaign, faction=None, picked=None, add=False):
         if give_names(plan, faction):
             pool = plan.name_pool(faction) or {}
     used = {c.name.split()[0] for x in s.factions for c in x.characters if c.name}
+    taken = {c.name for x in s.factions for c in x.characters if c.name}       # whole names (a first + a surname)
     # the faction's family records too (egypt's Heruben is a character_record: a captain Heruben is skipped
     # by the game as a duplicate), and the names of characters this edit adds (a new army named Heruben: no captain Heruben too)
     from .strat import faction_names
@@ -733,16 +734,37 @@ def _garrisons(plan, f, s, campaign, faction=None, picked=None, add=False):
             raise ValueError("%s is not a town of %s" % (region, faction))
         xy = tiles.get(region)
         holder = next((c for c in fb.characters if c.xy == xy and _has_army(s.lines[c.start:c.end])), None)
-        if add and holder is not None:
+        st = next(x for x in fb.settlements if x.region == region)
+        if holder is None and st.garrison_at is not None:
+            holder = st                                 # the town's own garrison (garrisoned_army, no captain)
+        if add and isinstance(holder, Settlement):
+            room = MAX_UNITS - len(holder.garrison)
+        elif add and holder is not None:
             room = MAX_UNITS - len(_units(s.lines[holder.start:holder.end]))
         else:
-            room = MAX_UNITS - (1 if holder is not None and holder.named else 0)
+            room = MAX_UNITS - (1 if isinstance(holder, Character) and holder.named else 0)
         if len(types) > room:
             plan.warn(f, "%s: only %d of the %d unit(s) fit - an army holds %d at most" % (
                 region, max(room, 0), len(types), MAX_UNITS))
         lines = ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % t for t in types][:room]
         jobs.append((region, holder, lines, xy))
-    for region, holder, lines, xy in sorted(jobs, key=lambda j: -(j[1].start if j[1] else fb.end)):
+    def at(job):                                        # bottom up: every line above keeps its place
+        h = job[1]
+        return h.garrison_at if isinstance(h, Settlement) else h.start if h else fb.end
+    for region, holder, lines, xy in sorted(jobs, key=lambda j: -at(j)):
+        if isinstance(holder, Settlement):              # the town's own garrison: its unit lines in its block
+            old = f.texts()[holder.garrison_at:holder.garrison_end]
+            pad = next((u[:len(u) - len(u.lstrip())] for u in old if tokens(u)[:1] == ["unit"]), "\t")
+            keep = [u for u in old if tokens(u)[:1] == ["unit"]] if add else []
+            new = keep + [pad + u.strip() for u in lines]
+            if not new:                                 # never an empty one (Rome: 'must add at least one unit')
+                del f.raw[holder.garrison_at:holder.garrison_end]
+                plan.note(f, "%s: its own garrison leaves - the town is empty" % region)
+                continue
+            head = old[0]
+            f.raw[holder.garrison_at:holder.garrison_end] = [f.make(x) for x in [head] + new]
+            plan.note(f, "%s: %d unit(s) in the town's own garrison (no captain)" % (region, len(new)))
+            continue
         if not lines:                                   # emptied by hand
             if holder is None or add:
                 continue
@@ -770,12 +792,22 @@ def _garrisons(plan, f, s, campaign, faction=None, picked=None, add=False):
             if rebels:
                 from .strat import rebel_look
                 sub = rebel_look(s, xy, plan.mod, campaign)
-                men = first_names(plan.name_pool(sub) or {}, "general")
+                pool = plan.name_pool(sub) or {}
+                men = first_names(pool, "general")
                 picks = [n for n in men if n not in used]
-                if not picks:
-                    raise ValueError("%s: no free name in %s's name list for a rebel captain" % (region, sub))
-                name = picks[0]
-                used.add(name)
+                if picks:
+                    name = picks[0]
+                    used.add(name)
+                else:
+                    # every first name of the list is taken (a map with hundreds of rebel towns): a first name with a
+                    # surname of the same list - both in descr_names.txt, so the game finds them; the pair new
+                    name = next((a + " " + b for b in pool.get("surnames", []) if b.strip() and " " not in b.strip()
+                                 for a in men if (a + " " + b) not in taken), None)
+                    if name is None:
+                        raise ValueError("%s: no free name in %s's name list for a rebel captain (every first name "
+                                         "and first name + surname is taken) - add names to descr_names.txt" % (
+                                             region, sub))
+                taken.add(name)
             else:
                 if not captains:
                     raise ValueError("%s: a garrison needs a captain, and %s has no men's names in descr_names.txt "

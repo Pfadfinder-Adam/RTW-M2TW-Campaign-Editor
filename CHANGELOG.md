@@ -11,7 +11,13 @@
   orange frame with a grip on each side - drag one out to add rows or columns of deep sea (shown blue), in to cut them
   off (shown dark); the window's numbers follow the mouse, and typed numbers move the frame. What stands on the part
   cut off - a town, port, army, agent, resource, fort, an event's place or a script's tile - is ringed red on the map
-  and named in the window before anything is written. The window stands beside the map, the whole map in sight.
+  and named in the window. **It goes with the cut, after a question** (*Delete them and cut* / *Not now*, to move
+  things first): a town with its region in every file (the part of its land that stays joins the neighbour region
+  that stays), armies, agents and fleets, resources, forts and watchtowers, events placed there; family members are
+  never deleted - they move to the nearest town their faction keeps. What cannot go is said before any question and
+  nothing is written: a faction's last town, a town or region the campaign's script names, a family member with
+  nowhere to go. Script lines that name tiles there are listed to change by hand. The window stands beside the map,
+  the whole map in sight.
 - **A religion from nothing** (Medieval II, Barbarian Invasion): New religion needs no other religion any more - its
   symbol drawn by the editor (its first letter on a disc of the colour picked, in the game's own size; Barbarian
   Invasion's order / unrest pips: the same full-size symbol with the game's own green / red arrow laid on it) - and **Temples of its own** makes a temple chain
@@ -63,6 +69,19 @@
   test mod.
 
 ### Fixed
+- The town window of a region with no town of its own (a rebel village the game makes by itself) failed when it was
+  closed ('TownWindow' object has no attribute 'town'). It closes now.
+- **A town's own garrison, with no captain** (both games): a garrison written inside the town's own block -
+  `garrisoned_army` with its `unit` lines, a form both games' engines read and some mods use for every town - was
+  not seen: the town window, Units & armies and Many towns showed no garrison. It is read now, shown as the town's
+  own garrison and changed in place (no captain is added; an emptied one goes whole, as the game refuses one with no
+  unit); a new faction taking such a town gives it its own units there; Check mod files names unknown units in it and
+  an empty `garrisoned_army`.
+- A town with no army at all showed simply no garrison. Its Garrison view now says the town starts empty and names
+  who stands beside it, outside the walls (drag him onto the town on the Map to make him its garrison).
+- A rebel garrison for a new town on a map with hundreds of rebel towns was refused when every first name of the
+  rebels' name list was taken ('no free name for a rebel captain'). The captain now takes a first name with a
+  surname of the same list.
 - **Map size** said a refused cut only in a line at the bottom of its window, and nothing on the map: a cut over a
   town or an army looked as if it was written and did nothing. It is said in a message now, written in the editor's
   log, and what is in the way is ringed red on the map.

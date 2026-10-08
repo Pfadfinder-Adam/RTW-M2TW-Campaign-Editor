@@ -308,6 +308,12 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
             if fb.name != "slave" and first and c.name and c.name.split()[0] not in first and c.named:
                 bad_names.append("%s (%s)" % (c.name, fb.name))
         for st in fb.settlements:
+            for u in st.garrison:                   # the town's own garrison (garrisoned_army, no captain)
+                if u not in types:
+                    unknown_units.add(u)
+            if st.garrison_at is not None and not st.garrison:
+                bad("%s: 'garrisoned_army' with no unit under it - the game stops ('must add at least one unit "
+                    "to the garrison army'); give it units or take the line out" % st.region)
             _, bs = settlement_info(s.lines[st.start:st.end])
             temples = [c for c, _ in bs if is_temple(c)]
             if len(temples) > 1:

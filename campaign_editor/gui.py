@@ -5217,6 +5217,9 @@ class App(tk.Tk):
             if holder is not None:
                 now = [unit_name(l) for l in self.strat.lines[holder.start:holder.end] if tokens(l)[:1] == ["unit"]]
                 now = now[1:] if holder.named else now                 # without the bodyguard
+            else:                                      # the town's own garrison (garrisoned_army, no captain)
+                st = self.strat.settlement_of(region) if self.strat else None
+                now = list(st.garrison) if st is not None else []
             units = self._with_types(units, now)
 
         def auto():

@@ -3467,14 +3467,58 @@ building smith
         self.assertEqual(MR.blocking(found, img.width, img.height), [])
         self.assertEqual(MR.blocking(found, img.width, img.height, left=3, right=1, top=2, bottom=5), [])
         cut = MR.blocking(found, img.width, img.height, left=-2)            # columns 0 and 1 go
-        self.assertEqual([xy for _, xy in cut], [(1, 1), (1, 1)])
+        self.assertEqual([x[1] for x in cut], [(1, 1), (1, 1)])
+        self.assertEqual([x[2:] for x in cut], [("town", "A_R"), ("character", "family")])
         self.assertIn("the town of A_R (1, 1)", cut[0][0])
         self.assertIn("Aaron Alphid", cut[1][0])
-        self.assertEqual(MR.off_map(mod, "test", -2, 0, 0, 0), [label for label, _ in cut])
+        self.assertEqual(MR.off_map(mod, "test", -2, 0, 0, 0), [x[0] for x in cut])
         self.assertEqual(MR.blocking(found, img.width, img.height, right=-1), [])      # column 3 holds nothing
         with self.assertRaises(ValueError) as said:
             MR.plan_resize(Plan(mod, "map", "map_size", {}), "test", left=-2)
         self.assertIn("the town of A_R", str(said.exception))
+
+    def test_map_cut_takes_off_what_stands_there_after_a_yes(self):
+        """A cut asked to clear its part (the modder said yes): the town there goes with its region everywhere (all its
+        land was on the part cut off), an agent there goes, a family member moves into the nearest town his faction
+        keeps; a faction that would keep no town is refused before anything is written. Restore gives every byte
+        back."""
+        from campaign_editor import mapresize as MR
+        from campaign_editor.plan import Plan, restore
+        self._three_towns()
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "descr_strat.txt"), STRAT.replace(
+            "\ncharacter\tAaron Alphid, named character, leader, age 40, , x 1, y 1",
+            "\nsettlement\n{\n\tlevel village\n\tregion C_R\n\tpopulation 400\n}\n\n"
+            "character\tAaron Alphid, named character, leader, age 40, , x 5, y 1").replace(
+            ";#####<\n\n;#####>\nfaction\tslave",
+            "character\tSilus, spy, age 30, , x 4, y 2\n;#####<\n\n;#####>\nfaction\tslave", 1))
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertEqual(MR.places(mod, "test")[-2][2:], ("character", "spy"))
+        img = mod.region_map("test")
+        hit = MR.blocking(MR.places(mod, "test"), img.width, img.height, right=-2)
+        words = " | ".join(MR.cut_words(hit))
+        for want in ("1 town(s) with their regions: C_R", "1 army / fleet / agent (1 spy)", "1 family member(s)"):
+            self.assertIn(want, words)
+        with self.assertRaises(ValueError) as said:                 # without the yes: refused, as before
+            MR.plan_resize(Plan(mod, "map", "map_size", {}), "test", right=-2)
+        self.assertIn("the town of C_R", str(said.exception))
+        with self.assertRaises(ValueError) as said:                 # both of alpha's towns on the parts cut off
+            MR.plan_resize(Plan(mod, "map", "map_size", {}), "test", left=-2, right=-2, clear=True)
+        self.assertIn("alpha would keep no town", str(said.exception))
+        plan = Plan(mod, "map", "map_size", {})
+        MR.plan_resize(plan, "test", right=-2, clear=True)
+        bdir = plan.apply()
+        mod = ModData(self.root)
+        self.assertEqual((mod.region_map("test").width, mod.region_map("test").height), (4, 4))
+        self.assertNotIn("C_R", mod.regions("test"))
+        with open(os.path.join(camp, "descr_strat.txt"), encoding="latin-1") as fh:
+            strat = fh.read()
+        self.assertNotIn("region C_R", strat)
+        self.assertNotIn("Silus", strat)
+        self.assertIn("Aaron Alphid, named character, leader, age 40, , x 1, y 1", strat)
+        restore(mod, bdir)
+        self.assertEqual(tree_hash(self.root), before)
 
     def test_check_problems_worst_first_with_the_place_to_fix(self):
         """Check mod files groups its problems by when the game meets them - would not start, campaign loads with
@@ -9243,6 +9287,70 @@ building shrine
         self.assertFalse(any(l.startswith("fort") for l in s.lines[aaron.start:aaron.end]))  # not the leader's line
         self.assertIn((3, 1), s.taken_tiles())
         self.assertIn("fort stands there", mod.tile_problem("test", (3, 1), "named character", True) or "")
+
+    def test_town_garrison_beside_the_tile_and_rebel_captain_with_a_surname(self):
+        """A rebel town with no army on its tile shows who stands beside it (outside the walls - a tester's mod showed
+        no garrison); a new rebel captain takes a first name + surname of the list when every first name is taken (a
+        map with hundreds of rebel towns ran out of names)."""
+        from campaign_editor import masstown as MT
+        from campaign_editor.edit import edit
+        self._three_towns()
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        p = os.path.join(camp, "descr_strat.txt")
+        with open(p, encoding="latin-1") as fh:
+            text = fh.read()
+        write(p, text.replace(";;\tBtown", "character,\tsub_faction alpha, Boris, general, age 30, , x 4, y 1\narmy\n"
+                                            "unit\t\trebel spear\t\texp 0 armour 0 weapon_lvl 0\n\n;;\tBtown", 1))
+        mod = ModData(self.root)
+        towns = {t["region"]: t for t in MT.towns(mod, "test")}
+        self.assertEqual((towns["C_R"]["army"], towns["C_R"]["tile"]), (None, (5, 1)))
+        self.assertEqual(towns["C_R"]["near"], [("Boris", "slave", (4, 1))])
+        self.assertEqual((towns["B_R"]["army"], towns["B_R"]["near"]), ("Grog", []))
+        plan = edit(mod, "test", "slave", {"garrisons": {"C_R": ["rebel spear"]}})     # Aaron, Boris, Grog taken
+        made = plan.files[p].dump().decode("latin-1")
+        self.assertIn("sub_faction alpha, Boris Alphid, general", made)
+
+    def test_a_towns_own_garrison_without_a_captain(self):
+        """'garrisoned_army' + unit lines inside a settlement block (both games' engines read it; a tester's Medieval
+        II map held 934 towns so, no character on any): read as the town's garrison (a repeated garrisoned_army line
+        too), changed in place - never a captain added, an emptied one goes whole - and a new faction taking the town
+        gives it its own units there."""
+        from campaign_editor import masstown as MT
+        from campaign_editor.edit import edit
+        from campaign_editor.strat import Strat
+        p = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        own = ("\tgarrisoned_army\n\tgarrisoned_army\n\tunit\trebel spear\t\texp 0 armour 0 weapon_lvl 0\n"
+               "\tunit\trebel spear\t\texp 0 armour 0 weapon_lvl 0\n")
+        text = STRAT.replace("\tregion B_R\n\tpopulation 800\n", "\tregion B_R\n\tpopulation 800\n" + own, 1)
+        text = text.replace("unit\t\talpha general\t\texp 1 armour 0 weapon_lvl 0\n",
+                            "unit\t\talpha general\t\texp 1 armour 0 weapon_lvl 0\n\ncharacter\tBoris, general, age 30, "
+                            ", x 0, y 0\narmy\nunit\t\talpha general\t\texp 0 armour 0 weapon_lvl 0\n", 1)
+        write(p, text.replace("x 2, y 2", "x 3, y 3"))                 # Grog leaves the town's tile
+        mod = ModData(self.root)
+        st = Strat(mod.load(p)).settlement_of("B_R")
+        self.assertEqual(st.garrison, ["rebel spear", "rebel spear"])
+        town = next(t for t in MT.towns(mod, "test") if t["region"] == "B_R")
+        self.assertEqual((town["army"], town["inside"], town["unit_names"], town["near"]),
+                         (None, True, ["rebel spear", "rebel spear"], []))
+        def block_of(made):
+            a = made.index("region B_R")
+            return made[a:made.index("}", a)]
+        plan = edit(mod, "test", "slave", {"garrisons": {"B_R": ["rebel spear"]}})
+        made = plan.files[p].dump().decode("latin-1")
+        self.assertEqual(block_of(made).count("garrisoned_army"), 1)   # the repeated header folds into one
+        self.assertEqual(block_of(made).count("rebel spear"), 1)
+        self.assertEqual(made.count("character"), text.count("character"))       # no captain added
+        plan = edit(mod, "test", "slave", {"garrisons": {"B_R": []}})
+        made = plan.files[p].dump().decode("latin-1")
+        self.assertNotIn("garrisoned_army", made)                    # never an empty one
+        plan = build(mod, "test", "alpha", "beta", {
+            "display_name": "Betan League", "short_name": "Beta", "adjective": "Betan",
+            "start": {"regions": ["B_R"], "leader": {"name": "Boris Alphid", "age": 35}, "denari": 500}})
+        made = plan.files[p].dump().decode("latin-1")
+        block = block_of(made)
+        self.assertIn("garrisoned_army", block)
+        self.assertNotIn("rebel spear", block)                       # the new faction's own units hold it
+        self.assertIn("alpha general", block)
 
     def test_rebels_are_edited_like_a_faction(self):
         # the rebels (slave) in Edit faction: a new rebel army and a captain for an empty rebel town

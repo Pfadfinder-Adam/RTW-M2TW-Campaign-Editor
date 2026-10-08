@@ -129,47 +129,243 @@ def _texts(path):
 
 
 def places(mod, campaign):
-    """Every place on the map a cut must not leave off it: [('file line N: what (x, y)', (x, y))] - towns and ports
-    from map_regions, characters / resources / forts in descr_strat.txt, events' places, the campaign scripts' tiles.
-    Read once; blocking() then checks any cut against it at once (the Map size window, as the edges are dragged)."""
+    """Every place on the map a cut must not leave off it unasked: [(label, (x, y), kind, what)] - label 'file line N:
+    what (x, y)'; kind town / port (what = the region), character (what = 'family' for a named character, else its
+    kind: general, admiral, spy ...), resource, fort (what = fort / watchtower / landmark), event (what = its kind),
+    script (what = the file). Read once; blocking() then checks any cut against it at once (the Map size window, as
+    the edges are dragged)."""
     out = []
     for region, t in sorted(mod.city_tiles(campaign).items()):
-        out.append(("map_regions.tga: the town of %s (%d, %d)" % (region, t[0], t[1]), tuple(t)))
+        out.append(("map_regions.tga: the town of %s (%d, %d)" % (region, t[0], t[1]), tuple(t), "town", region))
     from .mapedit import ports
     for region, t in sorted(ports(mod, campaign).items()):
-        out.append(("map_regions.tga: the port of %s (%d, %d)" % (region, t[0], t[1]), tuple(t)))
+        out.append(("map_regions.tga: the port of %s (%d, %d)" % (region, t[0], t[1]), tuple(t), "port", region))
     camp = os.path.dirname(mod.campaign_file(campaign, "descr_strat.txt"))
-    files = [(mod.campaign_file(campaign, "descr_strat.txt"), (U.RE_CHAR_XY, U.RE_RESOURCE, U.RE_FORT))]
+    strat = mod.campaign_file(campaign, "descr_strat.txt")
+    for i, text in enumerate(_texts(strat)):
+        code = text.split(";")[0]
+        for rx, kind in ((U.RE_CHAR_XY, "character"), (U.RE_RESOURCE, "resource"), (U.RE_FORT, "fort")):
+            m = rx.search(code)
+            if not m:
+                continue
+            p = (int(m.group(2)), int(m.group(4)))
+            if kind == "character":
+                parts = [x.strip() for x in code.split(",")]
+                what = next((k for k in parts if k in CHARACTER_KINDS), "character")
+                what = "family" if what == "named character" else what
+            elif kind == "fort":
+                what = code.split()[0]
+            else:
+                what = ""
+            out.append(("descr_strat.txt line %d: %s (%d, %d)" % (i + 1, code.strip()[:60], p[0], p[1]), p, kind, what))
+            break
     ev = os.path.join(camp, "descr_events.txt")
     if os.path.isfile(ev):
-        files.append((ev, (U.RE_POSITION,)))
-    for path, patterns in files:
-        for i, text in enumerate(_texts(path)):
-            seen = []
-            U._move_line(text, patterns, lambda x, y: seen.append((x, y)) or (x, y))
-            for p in seen:
-                out.append(("%s line %d: %s (%d, %d)" % (os.path.basename(path), i + 1,
-                                                          text.split(";")[0].strip()[:60], p[0], p[1]), p))
+        what = ""
+        for i, text in enumerate(_texts(ev)):
+            code = text.split(";")[0]
+            t = code.split()
+            if t[:1] == ["event"]:
+                what = t[1] if len(t) > 1 else ""
+            m = U.RE_POSITION.search(code)
+            if m:
+                p = (int(m.group(2)), int(m.group(4)))
+                out.append(("descr_events.txt line %d: %s (%d, %d)" % (i + 1, code.strip()[:60], p[0], p[1]), p,
+                            "event", what))
     _, same = _mover(0, 0)
     for path in U.script_files(mod, campaign):
         for i, text in enumerate(_texts(path)):
             code = text.split(";")[0]
             for p in _tiles_in(text, same) + [(int(m.group(2)), int(m.group(4))) for m in U.RE_CHAR_XY.finditer(code)]:
                 out.append(("%s line %d: %s (%d, %d)" % (os.path.basename(path), i + 1, code.strip()[:60], p[0], p[1]),
-                            p))
+                            p, "script", os.path.basename(path)))
     return out
 
 
 def blocking(found, width, height, left=0, bottom=0, right=0, top=0):
-    """Of places() those a cut would leave off a width x height map: [(label, (x, y))], (x, y) as now."""
+    """Of places() those a cut would leave off a width x height map, as places() gives them ((x, y) as now)."""
     W, H = width + left + right, height + bottom + top
-    return [(label, p) for label, p in found if not (0 <= p[0] + left < W and 0 <= p[1] + bottom < H)]
+    return [x for x in found if not (0 <= x[1][0] + left < W and 0 <= x[1][1] + bottom < H)]
 
 
 def off_map(mod, campaign, left, bottom, right, top):
     """What a cut would leave off the map: ['file line N: what (x, y)']. Towns and ports from map_regions."""
     img = read_tga(mod.campaign_file(campaign, "map_regions.tga"))
-    return [label for label, _ in blocking(places(mod, campaign), img.width, img.height, left, bottom, right, top)]
+    return [x[0] for x in blocking(places(mod, campaign), img.width, img.height, left, bottom, right, top)]
+
+
+def cut_words(hit):
+    """What a cut takes off, in a few plain lines (the question before it): blocking()'s list grouped."""
+    by = {}
+    for label, xy, kind, what in hit:
+        by.setdefault(kind, []).append((label, xy, what))
+    lines = []
+    if by.get("town"):
+        towns = sorted({w for _, _, w in by["town"]})
+        lines.append("%d town(s) with their regions: %s%s - the land of theirs that stays joins the neighbour region "
+                     "that stays" % (len(towns), ", ".join(towns[:8]), " ..." if len(towns) > 8 else ""))
+    if by.get("port"):
+        ports_ = sorted({w for _, _, w in by["port"]} - {w for _, _, w in by.get("town", [])})
+        if ports_:
+            lines.append("%d port(s) of regions that stay: %s (their harbour buildings with them)" % (
+                len(ports_), ", ".join(ports_[:8]) + (" ..." if len(ports_) > 8 else "")))
+    chars = by.get("character", [])
+    family = [x for x in chars if x[2] == "family"]
+    rest = [x for x in chars if x[2] != "family"]
+    if rest:
+        kinds = {}
+        for _, _, w in rest:
+            kinds[w or "character"] = kinds.get(w or "character", 0) + 1
+        lines.append("%d army / fleet / agent (%s) - with their soldiers and ships" % (
+            len(rest), ", ".join("%d %s" % (n, k) for k, n in sorted(kinds.items(), key=lambda kv: -kv[1]))))
+    if family:
+        lines.append("%d family member(s) (never deleted) move to the nearest town their faction keeps" % len(family))
+    if by.get("resource"):
+        lines.append("%d resource(s)" % len(by["resource"]))
+    if by.get("fort"):
+        kinds = {}
+        for _, _, w in by["fort"]:
+            kinds[w] = kinds.get(w, 0) + 1
+        lines.append(", ".join("%d %s(s)" % (n, k) for k, n in sorted(kinds.items())))
+    if by.get("event"):
+        lines.append("%d event(s) placed there (%s)" % (len(by["event"]), ", ".join(sorted({w for _, _, w in
+                                                                                         by["event"]}))))
+    if by.get("script"):
+        lines.append("%d line(s) of the campaign's scripts name tiles there - left as they are: change them by hand "
+                     "(the game may stop at them)" % len(by["script"]))
+    return lines
+
+
+def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0):
+    """Everything standing on the part a cut takes off, taken off first, in the plan (the modder said yes to it):
+    - a town: its region goes everywhere (regiondelete.delete); the part of its land that stays joins the neighbour
+      that stays it shares the longest border with; a region all on the cut part goes with its land;
+    - the port of a region that stays: taken off with the harbour buildings (mapedit._remove_ports);
+    - a member of a faction's family (a named character: the leader, the heir, the family tree) moves into the
+      nearest town his faction keeps; every other character - armies, agents, fleets, rebels - goes with his army;
+    - resources, forts, watchtowers, wonders: their lines go;
+    - an event placed there goes;
+    - lines of the campaign's scripts naming tiles there are left as they are (returned as warnings).
+    Refused before anything is written (ValueError, every reason in plain words): a faction left without a town, a
+    region a campaign script or a faction's rising names (regiondelete.problems), a town whose land partly stays but
+    touches no region that stays, a family member whose faction keeps no town to go to, a faction's rising placed on
+    the cut part. Returns the warnings."""
+    from . import regiondelete as RD
+    from .edit import _has_army, map_changes
+    from .events import apply as events_apply, path_of, read as events_read
+    from .mapedit import _remove_ports, ports
+    from .resources import apply as res_apply, read as res_read
+    from .strat import Strat
+    mod = plan.mod
+    img = mod.region_map(campaign)
+    W, H = img.width + left + right, img.height + bottom + top
+
+    def gone(p):
+        return not (0 <= p[0] + left < W and 0 <= p[1] + bottom < H)
+    strat_path = mod.campaign_file(campaign, "descr_strat.txt")
+    s0 = Strat(mod.load(strat_path))
+    owners = s0.owners()
+    tiles = mod.city_tiles(campaign)
+    cut = sorted(r for r, t in tiles.items() if gone(t))
+    errors, warn = [], []
+    for fac in sorted({owners.get(r) for r in cut} - {None, "slave"}):
+        if not [r for r, o in owners.items() if o == fac and r not in cut]:
+            errors.append("%s would keep no town (%s on the part cut off) - a faction without a town dies as the "
+                          "campaign loads and the game crashes; give it a town that stays first" % (
+                              fac, ", ".join(r for r in cut if owners.get(r) == fac)))
+    into = {}
+    for r in cut:
+        stays = [p for p in RD.region_pixels(mod, campaign, r) if not gone(p)]
+        near = [n for n, _ in RD.neighbours(mod, campaign, r) if n not in cut]
+        if stays and not near:
+            errors.append("the town of %s is on the part cut off, but %d tile(s) of its land stay and touch no "
+                          "region that stays - move its town onto the land that stays, or cut all of it" % (
+                              r, len(stays)))
+            continue
+        into[r] = (near[0] if stays else None, bool(stays))
+        errs, _ = RD.problems(mod, campaign, r, *into[r])
+        errors += [e for e in errs if " is the last town of " not in e]
+    ev_path = path_of(mod, campaign)
+    events = [e for e in (events_read(mod.load(ev_path)) if ev_path else []) if e.get("position") and
+              gone(e["position"])]
+    for e in events:
+        if e["kind"] == "emergent_faction":
+            errors.append("%s rises at %d, %d by an event - on the part cut off; place it elsewhere first (Events and "
+                          "later factions)" % (e["name"], e["position"][0], e["position"][1]))
+    # where each family member on the cut part goes: the nearest town his faction keeps that may take him
+    armies = {c.xy for fb in s0.factions for c in fb.characters if c.xy and _has_army(s0.lines[c.start:c.end])}
+    armies -= {c.xy for fb in s0.factions for c in fb.characters if c.xy and gone(c.xy)}
+    remove, moves = {}, {}
+    town_tiles = {tuple(t) for t in tiles.values()}
+    for fb in s0.factions:
+        mine = [tiles[r] for r, o in owners.items() if o == fb.name and r not in cut and r in tiles]
+        for c in fb.characters:
+            if not c.xy or not gone(c.xy):
+                continue
+            if not c.named:
+                remove.setdefault(fb.name, []).append({"name": c.name, "from": list(c.xy)})
+                continue
+            army = _has_army(s0.lines[c.start:c.end])
+            to = next((t for t in _spots(mine, c.xy, town_tiles, gone)
+                       if not mod.tile_problem(campaign, t, c.kind, army, armies)), None)
+            if to is None:
+                errors.append("%s (%s's family) stands on the part cut off and %s keeps no town he could go to - move "
+                              "him first" % (c.name, fb.name, fb.name))
+                continue
+            if army:
+                armies.add(tuple(to))
+            moves.setdefault(fb.name, []).append({"name": c.name, "from": list(c.xy), "to": list(to)})
+    if errors:
+        raise ValueError("the cut cannot take these off the map:\n- " + "\n- ".join(dict.fromkeys(errors)))
+    for r in cut:
+        RD.delete(plan, campaign, r, *into[r])
+    lost_ports = [r for r, t in ports(mod, campaign).items() if r not in cut and gone(t)]
+    if lost_ports:
+        _remove_ports(plan, campaign, sorted(lost_ports))
+    f = plan.edit(strat_path)
+    s = Strat(f)
+    # a fleet the port took out to the sea beside may stand on the cut part too
+    for fb in s.factions:
+        for c in fb.characters:
+            if c.xy and gone(c.xy) and not c.named and {"name": c.name, "from": list(c.xy)} not in \
+                    remove.get(fb.name, []):
+                remove.setdefault(fb.name, []).append({"name": c.name, "from": list(c.xy)})
+    left_out = {fac: [m for m in items if any(c.name == m["name"] and list(c.xy or ()) == m["from"]
+                                              for c in (s.faction(fac).characters if s.faction(fac) else []))]
+                for fac, items in remove.items()}
+    map_changes(plan, campaign, {"remove": {k: v for k, v in left_out.items() if v}, "moves": moves})
+    f = plan.edit(strat_path)
+    res = [r.index for r in res_read(f) if gone(r.xy)]
+    forts = [fo.line for fo in Strat(f).forts if fo.xy and gone(fo.xy)]
+    if res or forts:
+        res_apply(plan, campaign, {"removed": res, "forts": {"removed": forts}})
+    if events:
+        events_apply(plan, campaign, {"remove": [e["id"] for e in events]})
+    hit = [x for x in places(mod, campaign) if x[2] == "script" and gone(x[1])]
+    if hit:
+        warn.append("%d line(s) of the campaign's scripts name tiles the cut takes off - left as they are, change "
+                    "them by hand (the game may stop at them): %s%s" % (
+                        len(hit), "; ".join(x[0] for x in hit[:6]), " ..." if len(hit) > 6 else ""))
+    return warn
+
+
+def _spots(towns, xy, town_tiles, gone, reach=3):
+    """Where a family member from the cut part may go: his faction's towns that stay, the nearest first, each
+    followed by the land beside it (a town holds one army - its own general may be in it), never another town's tile
+    nor the part cut off."""
+    for t in sorted(towns, key=lambda t: abs(t[0] - xy[0]) + abs(t[1] - xy[1])):
+        t = tuple(t)
+        yield t
+        ring = [(t[0] + dx, t[1] + dy) for dx in range(-reach, reach + 1) for dy in range(-reach, reach + 1)
+                if (dx, dy) != (0, 0)]
+        for p in sorted(ring, key=lambda p: (max(abs(p[0] - t[0]), abs(p[1] - t[1])),
+                                             abs(p[0] - t[0]) + abs(p[1] - t[1]))):
+            if p not in town_tiles and not gone(p):
+                yield p
+
+
+CHARACTER_KINDS = ("named character", "general", "admiral", "spy", "assassin", "diplomat", "merchant", "priest",
+                   "princess", "heretic", "witch", "inquisitor", "captain")
 
 
 def _tiles_in(text, values):
@@ -192,32 +388,40 @@ def _tiles_in(text, values):
     return out
 
 
-def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0):
+def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False):
     """Every file of the map grown (positive) or cut (negative) by that many tiles at each edge, in the plan.
-    Returns the warnings; ValueError (with every place named) when a cut would leave something off the map."""
+    Returns the warnings; ValueError (with every place named) when a cut would leave something off the map -
+    unless clear: then what stands on the part cut off is taken off first (clear_cut - the modder was asked)."""
     mod = plan.mod
     if not any((left, bottom, right, top)):
         raise ValueError("no tiles to add or cut")
-    gone = off_map(mod, campaign, left, bottom, right, top)
-    if gone:
-        raise ValueError("the cut would leave %d place(s) off the map - move them first:\n%s" % (
-            len(gone), "\n".join(gone[:30]) + ("\n... and %d more" % (len(gone) - 30) if len(gone) > 30 else "")))
+    first = []
+    if clear:
+        first = clear_cut(plan, campaign, left, bottom, right, top)
+    else:
+        gone = off_map(mod, campaign, left, bottom, right, top)
+        if gone:
+            raise ValueError("the cut would leave %d place(s) off the map - move them first:\n%s" % (
+                len(gone), "\n".join(gone[:30]) + ("\n... and %d more" % (len(gone) - 30) if len(gone) > 30
+                                                    else "")))
     regions_path = mod.campaign_file(campaign, "map_regions.tga")
     img = read_tga(regions_path)
     W, H = img.width + left + right, img.height + bottom + top
-    fill = deepest_sea(mod, campaign)
+    fill = deepest_sea(mod, campaign) if max(left, bottom, right, top) > 0 else (0, 0)   # a cut adds no point
     xy, values = _mover(left, bottom)
     words = _words(left, bottom, right, top)
     base = os.path.dirname(regions_path)
     camp = os.path.dirname(mod.campaign_file(campaign, "descr_strat.txt"))
-    warn = []
+    warn = list(first)
     for folder, pictures in ((base, U.BASE_PICTURES), (camp, U.CAMPAIGN_PICTURES)):
         for name, kind in pictures.items():
             p = os.path.join(folder, name)
             if not os.path.isfile(p):
                 continue
-            with open(p, "rb") as fh:
-                data = fh.read()
+            data = plan.binaries.get(p)             # map_regions.tga as the cut's clearing left it
+            if data is None:
+                with open(p, "rb") as fh:
+                    data = fh.read()
             pw, ph = struct.unpack_from("<HH", data, 12)
             want = {"tiles": (img.width, img.height), "corners": (2 * img.width + 1, 2 * img.height + 1),
                     "double": (2 * img.width, 2 * img.height)}[kind]

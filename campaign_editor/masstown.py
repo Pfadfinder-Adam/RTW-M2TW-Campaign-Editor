@@ -23,7 +23,9 @@ def known_buildings(mod):
 def towns(mod, campaign):
     """[{'region', 'name', 'owner', 'level', 'kind' ('city' | 'castle', None in a game without castles),
     'buildings' [(chain, level)], 'units' (in the army on the town), 'upkeep', 'port', 'unit_names', 'population',
-    'army' (its leader's name)}] in descr_strat's order."""
+    'army' (its leader's name), 'inside' (the units are the town's own garrison, no captain), 'tile' (x, y), 'near' [(character, faction, (x, y))] - armies of any faction on its tile
+    or the 8 tiles round it that do not hold it (with no army of the owner on the tile the town starts empty: a garrison
+    standing beside it is outside the walls - said plainly, a tester's mod showed none)}] in descr_strat's order."""
     from .mapedit import ports
     from .start import unit_upkeep
     f = mod.load(mod.campaign_file(campaign, "descr_strat.txt"))
@@ -37,6 +39,8 @@ def towns(mod, campaign):
     edu = mod.file("edu")
     upkeep = unit_upkeep(mod.load(edu)) if edu else {}
     castles = castles_allowed(mod, known_buildings(mod))
+    armies = [(c, x.name) for x in s.factions for c in x.characters if c.xy and _has_army(s.lines[c.start:c.end])]
+    on_towns = {tuple(t) for t in tiles.values()}
     out = []
     for fb in s.factions:
         for st in fb.settlements:
@@ -45,13 +49,18 @@ def towns(mod, campaign):
             xy = tiles.get(st.region)
             army = next((c for c in fb.characters if xy and c.xy == xy and _has_army(s.lines[c.start:c.end])),
                         None)
-            units = [unit_name(l) for l in _units(s.lines[army.start:army.end])] if army else []
+            units = [unit_name(l) for l in _units(s.lines[army.start:army.end])] if army else list(st.garrison)
+            near = [] if army or st.garrison or not xy else [            # never another town's own garrison
+                (c.name, owner, tuple(c.xy)) for c, owner in armies
+                if max(abs(c.xy[0] - xy[0]), abs(c.xy[1] - xy[1])) <= 1 and (c.xy == xy or c.xy not in on_towns)]
             out.append({"region": st.region, "name": (regions.get(st.region) or {}).get("settlement") or st.region,
                         "owner": fb.name, "culture": _culture(mod, fb.name), "level": level,
                         "kind": settlement_kind(lines) if castles else None, "buildings": items,
                         "units": len(units), "upkeep": sum(upkeep.get(u, 0) for u in units),
                         "port": st.region in port, "unit_names": units, "population": population_of(lines),
-                        "army": army.name if army else None,
+                        "army": army.name if army else None, "tile": tuple(xy) if xy else None, "near": near,
+                        # the town's own garrison (no captain: 'garrisoned_army' in its block)
+                        "inside": bool(not army and st.garrison),
                         # a named character holds it: his first unit is his bodyguard (kept by any garrison change)
                         "army_named": bool(army and army.named), "army_role": (army.role or "general") if army and
                         army.named else None})

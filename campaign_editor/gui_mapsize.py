@@ -1,8 +1,8 @@
 """Map size... (the button beside the map's size under the map): tiles added at an edge of the campaign map (deep sea)
 or cut off it, every place on the map moved with it (mapresize). The edges are dragged on the map itself (an orange
 frame with a grip on each side: out = new sea, drawn blue; in = cut off, drawn dark) or typed as numbers - both stay
-in step. What stands on the part cut off is ringed red on the map and named in the window before anything is
-written. One window, as Bigger map (x3)...: what happens, the four edges, a backup, and the old map back with one
+in step. What stands on the part cut off is ringed red on the map and named in the window; it goes with the cut
+after a question (mapresize.clear_cut), so the modder may move it first. One window, as Bigger map (x3)...: what happens, the four edges, a backup, and the old map back with one
 button."""
 
 import tkinter as tk
@@ -14,12 +14,11 @@ from . import log
 
 APP = "RTW & M2TW Campaign Editor"
 SIDES = (("left", "Left"), ("right", "Right"), ("top", "Top"), ("bottom", "Bottom"))
-SHOWN = 6                                     # places on the cut part named in the window (all of them on the map)
 
 
 def open_map_size(app, view=None):
     """The window (App.map_size_window); view = the map whose edges are dragged (the main window's by default)."""
-    from .mapresize import blocking, places, plan_resize
+    from .mapresize import blocking, cut_words, places, plan_resize
     from .moddata import ModData
     from .plan import Plan, restore_to
     if not app.mod:
@@ -60,10 +59,12 @@ def open_map_size(app, view=None):
               justify="left", wraplength=480).pack(anchor="w", fill="x", pady=(6, 0))
     ShortHint(frm, text=(
         "A number above 0 adds that many rows or columns of tiles at that edge - deep sea, as the map's own deepest "
-        "water; paint land on it with the Map editor and the Terrain tab. Below 0 cuts them off - not while a town, "
-        "port, army, agent, resource, fort or an event's place stands there (each is ringed red on the map and named "
-        "here; move or delete it first). Towns, armies, agents, resources, forts, events and the campaign's scripts "
-        "move with the map. Nothing is written until you press the button; a backup is made first.")
+        "water; paint land on it with the Map editor and the Terrain tab. Below 0 cuts them off. What stands on the "
+        "part cut off is ringed red on the map and named here: it goes with the cut - towns with their regions (the "
+        "land of theirs that stays joins a neighbour), armies, agents, fleets, resources, forts, events - after a "
+        "question, so you can move what you want to keep first; family members are never deleted, they move to "
+        "their faction's nearest town. Everything that stays moves with the map. Nothing is written until you press "
+        "the button; a backup is made first, and 'Put the old map back' gives every file back.")
               ).pack(anchor="w", fill="x", pady=(4, 0))
     grid = ttk.Frame(frm)
     grid.pack(anchor="w", pady=(10, 0))
@@ -95,11 +96,10 @@ def open_map_size(app, view=None):
         return out
 
     def in_the_way(n):
-        """What stands on the part a cut takes off: ['what (x, y)'], their tiles for the map."""
+        """What stands on the part a cut takes off, as mapresize.places gives it."""
         if found is None or not n:
-            return [], []
-        hit = blocking(found, w0, h0, **n)
-        return [label for label, _ in hit], [xy for _, xy in hit]
+            return []
+        return blocking(found, w0, h0, **n)
 
     def after(*_):
         n = numbers()
@@ -110,18 +110,17 @@ def open_map_size(app, view=None):
         if not done.get("bdir"):
             v_state.set("")                          # an older 'Not possible' / 'Ready' no longer holds
         v_after.set("after: %d x %d tiles" % (W, H) + ("" if any(n.values()) else " (as it is)"))
-        names, tiles = in_the_way(n)
+        hit = in_the_way(n)
         if W < 1 or H < 1:
             lbl_block.configure(text="The map would have no tiles left.")
-        elif names:
-            lbl_block.configure(text="%d place(s) stand on the part cut off (ringed red on the map) - move or delete "
-                                     "them first, or cut less:\n%s" % (
-                                         len(names), "\n".join("- " + x for x in names[:SHOWN])
-                                         + ("\n... and %d more" % (len(names) - SHOWN) if len(names) > SHOWN else "")))
+        elif hit:
+            lbl_block.configure(text="On the part cut off (ringed red on the map) - it goes with the cut, you are "
+                                     "asked first (or move it away before):\n%s" % "\n".join(
+                                         "- " + x for x in cut_words(hit)))
         else:
             lbl_block.configure(text="")
         if view is not None and not done["syncing"] and getattr(view, "edge_mode", False):
-            view.set_edges(n, blocked=tiles)
+            view.set_edges(n, blocked=[x[1] for x in hit])
 
     def from_the_map(edges):
         """An edge dragged on the map: its numbers into the boxes (and the check above)."""
@@ -158,20 +157,30 @@ def open_map_size(app, view=None):
             leave_the_map()
     w.bind("<Destroy>", closed, add="+")
 
-    def make_plan():
+    def make_plan(write=False):
         n = numbers()
         if n is None:
             messagebox.showerror(APP, "Only whole numbers, please.", parent=w)
             return None
+        hit = in_the_way(n)
         p = Plan(ModData(app.mod.data), "map", "map_size", {})
         try:
-            done["warn"] = plan_resize(p, camp, **n)
+            done["warn"] = plan_resize(p, camp, clear=bool(hit), **n)
         except ValueError as e:
             v_state.set("Not possible: %s" % e)
             log.write("Map size: not written - %s" % e)
             messagebox.showwarning(APP, "The map's size cannot be changed like this:\n\n%s" % e, parent=w)
             return None
-        v_state.set("Ready: %d file(s) will change. Nothing is written yet." % len(p.changed_files()))
+        # asked only once the cut is known to be possible (a refusal is said first, without a question)
+        if hit and write and not ask(
+                APP, "The cut takes these off the map with it:\n\n- %s\n\nThey are deleted from the files (a backup "
+                     "first - 'Put the old map back' gives every one back). Something to keep? Press Not now, move it "
+                     "off the part cut off on the map (Map editor), Apply, then cut." % "\n- ".join(cut_words(hit)),
+                parent=w, yes="Delete them and cut", no="Not now"):
+            v_state.set("Not written - nothing changed.")
+            return None
+        v_state.set("Ready: %d file(s) will change%s. Nothing is written yet." % (
+            len(p.changed_files()), ", %d thing(s) on the part cut off go with it" % len(hit) if hit else ""))
         return p
 
     def show_all():
@@ -180,7 +189,7 @@ def open_map_size(app, view=None):
             app.show_text("Every change of the map's size - nothing written yet", p.report())
 
     def write():
-        p = make_plan()
+        p = make_plan(write=True)
         if not p:
             return
         try:

@@ -17,6 +17,35 @@ class Settlement:
         self.start, self.end = start, end          # line range [start, end)
         self.region = region
         self.owner = owner
+        # the town's own garrison, no captain: 'garrisoned_army' + its 'unit' lines inside the block (both games'
+        # engines read it - a tester's Medieval II map held 900 towns so; Rome: 'must add at least one unit to the
+        # garrison army of %s'). garrison_at = the garrisoned_army line or None; garrison_units = its unit lines
+        self.garrison_at, self.garrison_units, self.garrison, self.garrison_end = None, [], [], None
+
+
+def unit_of(line):
+    """'unit   Town Militia   exp 0 armour 0 weapon_lvl 0' -> 'Town Militia'."""
+    body = strip_comment(line).strip()[len("unit"):].strip()
+    return re.split(r"\s+exp\s+\d+", body)[0].strip()
+
+
+def garrison_lines(lines, start, end):
+    """(index of a settlement block's 'garrisoned_army' line, [indexes of the unit lines after it], the index after
+    the last of them) or (None, [], None). A repeated 'garrisoned_army' line (a tester's map has one) belongs to it."""
+    for k in range(start, end):
+        if tokens(lines[k])[:1] == ["garrisoned_army"]:
+            units, j, last = [], k + 1, k
+            while j < end:
+                t = tokens(lines[j])
+                if t and t[0] not in ("unit", "garrisoned_army"):
+                    break
+                if t:
+                    last = j
+                    if t[0] == "unit":
+                        units.append(j)
+                j += 1
+            return k, units, last + 1
+    return None, [], None
 
 
 class Character:
@@ -142,7 +171,10 @@ class Strat:
                     if len(t) >= 2 and t[0] == "region":
                         region = t[1]
                         break
-                fb.settlements.append(Settlement(i, j, region, fb.name))
+                st = Settlement(i, j, region, fb.name)
+                st.garrison_at, st.garrison_units, st.garrison_end = garrison_lines(lines, i, j)
+                st.garrison = [unit_of(lines[k]) for k in st.garrison_units]
+                fb.settlements.append(st)
                 i = j
                 continue
             if h in ("character", "character_record", "relative", "fort", "watchtower"):
