@@ -2355,15 +2355,42 @@ class App(tk.Tk):
                         "round it become %s's, then the brush is in your hand to paint more." % (name, name))
         self.show_map()
 
+    def _old_region(self, name):
+        """The region of the map (not a new one) named in 'Paint with', its info, or None."""
+        return None if self._new_region(name) or not self._cmap else self._cmap.info.get(name)
+
     def region_point(self, what):
-        """The next click on the map puts the town (or port) of the new region being painted."""
+        """The next click on the map puts the town (or port) of the region picked in 'Paint with': a new region's;
+        a region of the map's moves there (Keep for Apply, as a drag on the Map would); a wasteland's town is given
+        there (its own window - a wasteland has no port before its town, report #157)."""
         name = self.v_paint.get().replace("  (new)", "").strip()
-        if not self._new_region(name):
-            messagebox.showerror(APP, "pick a new region in 'Paint with' first (New region... makes one)")
+        old = self._old_region(name)
+        if not self._new_region(name) and old is None:
+            messagebox.showerror(APP, "pick a region in 'Paint with' first - right click its land, or New region... "
+                                      "makes one")
+            return
+        if old and old.get("wasteland") and what == "port":
+            messagebox.showerror(APP, "%s is a wasteland - no town, so no port. 'Place its town' first, then its "
+                                      "port." % name)
             return
         self._region_point = (what, name)
-        self.status.set("Click the tile for the %s of %s (on its own land%s)." % (
-            "town" if what == "city" else "port", name, ", by the sea" if what == "port" else ""))
+        self.status.set("Click the tile for the %s of %s (on its own land%s)%s." % (
+            "town" if what == "city" else "port", name, ", by the sea" if what == "port" else "",
+            " - a wasteland gets its town there" if old and old.get("wasteland") else
+            " - it moves there" if old else ""))
+        self.show_map()
+
+    def place_moved(self, what, region, xy):
+        """A town / port of a region of the map moved to xy (dragged, the legend's port, Place its town / port),
+        kept for Apply; back on its own tile = no move."""
+        self.remember()
+        if tuple(xy) == tuple(place_orig(self.mod, self.v_campaign.get(), what, region) or ()):
+            self.place_moves.pop((what, region), None)
+        else:
+            self.place_moves[(what, region)] = xy
+        self.status.set("%s of %s to %d, %d - %d town(s)/port(s) moved; Preview, then %s." % (
+            "Town" if what == "city" else "Port", region, xy[0], xy[1], len(self.place_moves),
+            "Apply changes" if self.editing() or self.map_only() else "Create faction"))
         self.show_map()
 
     def _region_point_gone(self):
@@ -2371,7 +2398,7 @@ class App(tk.Tk):
         region was dropped meanwhile), or None. A map drawn before that still carries the old click handler."""
         if not self._region_point:
             return "no town or port is waiting to be placed - pick 'Place its town' again"
-        if not self._new_region(self._region_point[1]):
+        if not self._new_region(self._region_point[1]) and self._old_region(self._region_point[1]) is None:
             return "the new region %s is gone (dropped) - nothing to place" % self._region_point[1]
         return None
 
@@ -2380,6 +2407,13 @@ class App(tk.Tk):
         if gone:
             return gone
         what, name = self._region_point
+        old = self._old_region(name)
+        if old is not None:                             # a region of the map: the same checks as a drag / the menu
+            if old.get("wasteland"):
+                from .regiondelete import town_problem
+                return town_problem(self.mod, self.v_campaign.get(), name, tuple(xy))
+            return place_problem(self.mod, self.v_campaign.get(), what, name, tuple(xy),
+                                 {k: v for k, v in self.place_moves.items() if k != (what, name)}, self.region_paint)
         cm = self._cmap
         if not (0 <= xy[0] < cm.w and 0 <= xy[1] < cm.h):
             return "off the map"
@@ -2425,6 +2459,20 @@ class App(tk.Tk):
             self.show_map()                             # the map forgets the old click handler
             return None
         what, name = self._region_point
+        old = self._old_region(name)
+        if old is not None:
+            why = self.region_point_problem(xy)
+            if why:
+                return why
+            self._region_point, self._town_auto = None, False
+            self.map_view.set_tool(None)
+            if old.get("wasteland"):
+                from .gui_settlements import wasteland_town
+                self.show_map()
+                wasteland_town(self, name, tuple(xy), self)
+            else:
+                self.place_moved(what, name, tuple(xy))
+            return None
         before = None
         if self._town_auto and what == "city":
             self.remember()
@@ -3506,16 +3554,7 @@ class App(tk.Tk):
                                  {k: v for k, v in self.place_moves.items() if k != (what, region)},
                                  self.region_paint)
 
-        def place_moved(what, region, xy):
-            self.remember()
-            if xy == place_orig(self.mod, self.v_campaign.get(), what, region):
-                self.place_moves.pop((what, region), None)
-            else:
-                self.place_moves[(what, region)] = xy
-            self.status.set("%s of %s to %d, %d - %d town(s)/port(s) moved; Preview, then %s." % (
-                "Town" if what == "city" else "Port", region, xy[0], xy[1], len(self.place_moves),
-                "Apply changes" if self.editing() or self.map_only() else "Create faction"))
-            self.show_map()
+        place_moved = self.place_moved
         region_kw = self._region_view(place)
         out = getattr(self, "_taking_out", None)
         if out is not None and out not in self._map_chars:
