@@ -106,6 +106,10 @@
   release's page.
 
 ### Fixed
+- **Terrain editor: the coast's brushes at size 1 showed a square on the points' grid**: the shape brush, Smooth the
+  coast and the coast pen at size 1 now show their circle round the mouse, as at every other size - what they take
+  is centred where the mouse is, not on the nearest point. And after the shape brush or the pen, picking Heights
+  without the map being drawn again kept the coast's brush on the mouse - now the Heights brush is on at once.
 - **Add-ons: 'font autoscale: game font ...' in the script console** (Medieval II with M2EX; Rome with REX the same):
   the add-ons' button, tick and box now draw a game font at the size the game baked (font scaling off on their own
   canvas, as the engines ask), so the warning is not written and no text of theirs is scaled.
