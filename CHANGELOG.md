@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **Add-ons: Delete from the editor...** (once Remove from the list): deletes an add-on you added or a module you
+  made; when it is put into the loaded game it asks whether to take it out of the game too (with a backup).
 - **The campaign-select map and the leader's face on the faction tab**: Edit faction and New faction show them
   beside the description, as the game's start screen does - each with Replace..., Save a copy... and Keep the
   current one (Preview, then Apply writes it). A faction without one says so (in Rome only a faction with a

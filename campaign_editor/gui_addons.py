@@ -167,7 +167,7 @@ class AddonsPanel(SettingsForm, ttk.Frame):
         self.lb.bind("<<ListboxSelect>>", lambda e: self.show())
         ttk.Label(side, text="scripts that add something\nnew to the game", foreground="#666").pack(anchor="w")
         for text, cmd in (("Add an add-on...", self.add), ("Share...", self.share),
-                          ("Remove from the list", self.drop), ("New module (no code)...", self.builder)):
+                          ("Delete from the editor...", self.drop), ("New module (no code)...", self.builder)):
             ttk.Button(side, text=text, command=cmd).pack(fill="x", pady=(4, 0))
         ttk.Button(side, text="Scripts in the game...", command=self.scripts).pack(fill="x", pady=(10, 0))
         ttk.Label(side, foreground="#666", justify="left", wraplength=190, text=(
@@ -292,14 +292,32 @@ class AddonsPanel(SettingsForm, ttk.Frame):
             return None
 
     def drop(self):
+        """An add-on someone added or made (a Module builder module) deleted from the editor's list - and, when it is
+        put into the loaded game, out of the game too if wanted (a tester made a module by mistake and found no
+        way to delete it: 'Remove from the list' said nothing of the game's copy)."""
         a = self.addon()
         if not a.own:
             messagebox.showinfo("Add-ons", "%s is built in - it stays in the list." % a.title, parent=self)
             return
-        if not ask("Add-ons", "Take %s off the list? (If it is put into a game it stays there - "
-                                              "Take it out does that.)" % a.title, parent=self, yes='Take it off the list', no='Keep it'):
+        from .packs import game_kind
+        put_in = bool(self.mod) and a.fits(game_kind(self.mod)) and AD.installed(self.mod, a) is not None
+        if put_in:
+            from .gui_util import ask_choice
+            k = ask_choice(self, "Add-ons", "Delete %s from the editor?\n\nIt is also put into this game (%s). "
+                                            "Taking it out of the game makes a backup first (Restore puts it back)."
+                           % (a.title, AD.target(self.mod, a)),
+                           ["From the editor and the game", "From the editor only", "Keep it"],
+                           default=0, cancel=2)
+            if k not in (0, 1):
+                return
+            if k == 0:
+                self._apply(self._plan(remove=True), "taken out")
+        elif not ask("Add-ons", "Delete %s from the editor? It is not put into the loaded game." % a.title,
+                     parent=self, yes='Delete it', no='Keep it'):
             return
         AD.remove_from_library(a)
+        self.app.status.set("%s deleted from the editor%s." % (a.title, " and taken out of the game" if put_in and
+                                                                k == 0 else ""))
         self.fill()
         self.show()
 
