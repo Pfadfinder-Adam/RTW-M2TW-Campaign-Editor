@@ -666,6 +666,14 @@ class _Kinds(dict):
 KINDS = _Kinds({"army": ("general", True), "fleet": ("admiral", True)})
 
 
+def general_here(c, lines, owner):
+    """A new army's leader 'made a general' (Map > New army here): a NAMED CHARACTER on no relative line - descr_strat's
+    'general' is only a captain, whatever unit he leads ('Captain <name>' in the game - a tester, 2026-10-09). Not for
+    Rome's rebels: vanilla Rome has no rebel named character to show the game takes one (they stay 'general')."""
+    from .strat import medieval
+    return bool(c.get("general")) and (owner != "slave" or medieval(lines))
+
+
 def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
     """Lines for descr_strat for start['characters'] / opts['characters']:
     [{'kind': army|spy|assassin|diplomat|fleet, 'name', 'age', 'units', 'xy'}].
@@ -678,6 +686,8 @@ def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
         if kind not in KINDS:
             raise ValueError("character %d: unknown kind %r" % (n, kind))
         rtw_kind, army = KINDS[kind]
+        if kind == "army" and general_here(c, f, owner):
+            rtw_kind = "named character"
         name = (c.get("name") or "").strip()
         if not name:
             raise ValueError("%s %d needs a name" % (kind, n))

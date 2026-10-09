@@ -502,7 +502,8 @@ def s_map(c, mod):
         units = [guard] + [u for u in units if u != guard]
     plan = Plan(mod, "map", "map", {})
     map_changes(plan, c.campaign, {"characters": {c.other: [
-        {"kind": "army", "name": free_names(c, mod, c.other, 1)[0], "age": 30, "units": units, "xy": free}]}})
+        {"kind": "army", "name": free_names(c, mod, c.other, 1)[0], "age": 30, "units": units, "xy": free,
+         "general": bool(guard)}]}})
     return plan
 
 

@@ -3585,9 +3585,12 @@ class App(tk.Tk):
         for fac, cs in self.map_chars.items():           # placed on the Map for other factions, written on Apply
             for i, fc in enumerate(cs):
                 rtw_kind, army = KINDS[fc["kind"]]
-                chars.append({"id": "map:%s:%d" % (fac, i), "faction": fac, "name": fc["name"], "kind": rtw_kind,
+                from .start import general_here
+                gen = fc["kind"] == "army" and general_here(fc, self.strat.lines, fac)   # a general's star
+                chars.append({"id": "map:%s:%d" % (fac, i), "faction": fac, "name": fc["name"],
+                              "kind": "named character" if gen else rtw_kind,
                               "xy": tuple(fc["xy"]), "army": army, "units": len(fc["units"]),
-                              "unit_names": list(fc["units"]), "from": None})
+                              "unit_names": list(fc["units"]), "from": None, "family": False})
                 if army:
                     armies_at.add(tuple(fc["xy"]))
         mine = [ch["id"] for ch in chars]   # Maps moves every faction's characters
@@ -5386,7 +5389,8 @@ class App(tk.Tk):
         if str(cid).startswith("map:"):
             _, f, k = str(cid).split(":")
             entry = self.map_chars[f][int(k)]
-            current, named = list(entry["units"]), False
+            named = bool(entry.get("general")) and bool(entry["units"])   # 'made a general': his bodyguard stays
+            current = list(entry["units"][1:] if named else entry["units"])
         else:
             named = bool(ch.get("named"))
             start = ch["unit_names"][1:] if named else ch["unit_names"]
@@ -5404,7 +5408,7 @@ class App(tk.Tk):
         def changed(types):
             self.remember()
             if entry is not None:
-                entry["units"] = list(types)
+                entry["units"] = (entry["units"][:1] if named else []) + list(types)
             elif list(types) == list(start):
                 self.map_units.pop(cid, None)
             else:

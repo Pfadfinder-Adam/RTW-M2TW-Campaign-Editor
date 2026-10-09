@@ -182,6 +182,10 @@
   release's page.
 
 ### Fixed
+- **New army here - 'Make him a general' gave a captain**: he was written as descr_strat's `general`, which the game
+  always shows as 'Captain <name>', whatever unit he leads. Now he is a named character outside the family tree
+  with the general's bodyguard - a general, with a star on the map (Rome's rebels keep a captain: the game has no
+  rebel general to copy). His bodyguard stays when you change the army's units.
 - **The Bigger map (x3) and Map size windows opened far taller than what they hold** (a third of the x3 window was
   empty): they now open as high as their contents, never higher than the screen.
 - **Mod folders that keep only what they change** (New mod folder on the plain game): the editor now reads the

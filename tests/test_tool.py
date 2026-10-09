@@ -7582,7 +7582,7 @@ building smith
 
     def test_new_army_made_a_general(self):
         """Map > New army, 'Make him a general': his army starts with the faction's general's bodyguard (general_unit
-        in the unit file), so the game shows him as a general with his own name, not a captain."""
+        in the unit file), and he is a named character (on no relative line) - the game shows a general, not a captain."""
         from campaign_editor.edit import bodyguard_unit
         mod = ModData(self.root)
         self.assertIsNone(bodyguard_unit(mod, "test", "alpha"))        # no general_unit: nothing to give
@@ -7595,6 +7595,30 @@ building smith
         self.assertEqual(bodyguard_unit(mod, "test", "alpha"), "alpha bodyguard")   # the plain one before an upgrade
         self.assertEqual(bodyguard_unit(mod, "test", "slave"), "alpha bodyguard")   # one the rebels may own
         self.assertIsNone(bodyguard_unit(mod, "test", "beta"))
+        # written as a NAMED CHARACTER: descr_strat's 'general' is a captain whatever he leads - the game showed
+        # 'Captain <name>' for one 'made a general' (a tester, 2026-10-09); without the tick he stays 'general'
+        from campaign_editor.edit import map_changes
+        from campaign_editor.plan import Plan
+        from campaign_editor.start import general_here
+        taken = set(mod.city_tiles("test").values()) | {(1, 1), (2, 2)}
+        free = mod.free_tile("test", "A_R", taken)
+        other = mod.free_tile("test", "A_R", taken | {free})
+        plan = Plan(mod, "map", "map", {})
+        map_changes(plan, "test", {"characters": {"alpha": [
+            {"kind": "army", "name": "Boris", "age": 30, "units": ["alpha bodyguard"], "xy": free, "general": True},
+            {"kind": "army", "name": "Aaron", "age": 30, "units": ["alpha bodyguard"], "xy": other}]}})
+        bdir = plan.apply()
+        st = Strat(ModData(self.root).load(ModData(self.root).campaign_file("test", "descr_strat.txt")))
+        kinds = {c.name: c.kind for c in st.faction("alpha").characters}
+        self.assertEqual(kinds["Boris"], "named character")
+        self.assertEqual(kinds["Aaron"], "general")
+        restore(ModData(self.root), bdir)
+        rome = ["character\tBrennus, general, age 30, , x 1, y 1"]
+        m2 = ["character\tRobert, general, male, age 30, x 1, y 1"]
+        self.assertFalse(general_here({"general": True}, rome, "slave"))     # Rome's rebels: no named one to copy
+        self.assertTrue(general_here({"general": True}, m2, "slave"))        # Medieval II's have them (El Cid)
+        self.assertTrue(general_here({"general": True}, rome, "alpha"))
+        self.assertFalse(general_here({}, m2, "alpha"))
 
     def test_recolour_keeps_a_bright_colour_of_its_own(self):
         # a tester's emblem: a gold wolf and laurel on red turned red - the rim growth took bright gold for red
