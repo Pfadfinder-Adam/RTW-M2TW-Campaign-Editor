@@ -968,6 +968,35 @@ building smith
         self.assertIn("ui/units/alpha/#alpha_general.tga", files)
         _, files = PK.collect_buildings(ModData(data), ["barracks"])
         self.assertIn("ui/roman/buildings/#roman_hut.tga", files)
+        # the Art tab and the faction tab's campaign-select pictures: the game's, under the same names
+        from campaign_editor import factionart as FA
+        import struct
+        with open(os.path.join(gd, "world", "maps", "campaign", "test", "leader_pic_alpha.tga"), "wb") as fh:
+            fh.write(struct.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, 69, 96, 24, 0) + b"\0" * (69 * 96 * 3))
+        os.makedirs(os.path.join(data, "world", "maps", "campaign", "test"), exist_ok=True)   # the mod's own, empty
+        mod = ModData(data)
+        rels = {e["rel"] for e in FA.start_pictures(mod, "test", "alpha")}
+        self.assertEqual(rels, {"world/maps/campaign/test/leader_pic_alpha.tga", "world/maps/campaign/test/map_alpha.tga"})
+        rels = {e["rel"] for e in FA.faction_pictures(mod, "test", "alpha")}
+        self.assertIn("world/maps/campaign/test/leader_pic_alpha.tga", rels)
+        self.assertFalse(any(r.startswith("..") for r in rels))
+
+    def test_rename_region_reaches_the_games_files_in_a_thin_mod(self):
+        """A region renamed in a mod folder that keeps only what it changes: a file only the game's data has that names
+        it (here its mercenary pool) is renamed too - as the mod's own copy, the game's untouched."""
+        from campaign_editor import regionrename as RR
+        game, _ = self._game()
+        gd = os.path.join(game, "data")
+        merc = os.path.join(gd, "world", "maps", "campaign", "test", "descr_mercenaries.txt")
+        write(merc, "pool p1\n    regions B_R\n    unit rebel spear\texp 0 cost 100 replenish 0.1 - 0.2 max 2 initial 1\n")
+        before = open(merc).read()
+        data, _ = create_mod(gd, "Beta")
+        plan = Plan(ModData(data), "rename", "B_R", {})
+        RR.rename(plan, "test", "B_R", "B_R2")
+        plan.apply()
+        self.assertEqual(open(merc).read(), before)
+        mine = open(os.path.join(data, "world", "maps", "campaign", "test", "descr_mercenaries.txt")).read()
+        self.assertIn("regions B_R2", mine)
 
     def test_rename_faction_reaches_glued_names_and_the_games_files(self):
         """Report R-20261009-CDDAF0 (the test mod on Medieval II with M2EX): venice renamed venice_ce, then the game

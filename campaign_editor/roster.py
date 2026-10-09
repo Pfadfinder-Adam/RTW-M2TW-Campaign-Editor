@@ -266,10 +266,10 @@ def copy_cards(plan, faction, dictionary_name, owners=()):
     for info, sub, pattern in ((False, "units", "#%s.tga"), (True, "unit_info", "%s_info.tga")):
         folder = os.path.join(mod.data, "ui", sub)
         own = _ci(folder, faction)
-        if own and _ci(own, pattern % dictionary_name):
+        if mod.find("ui/%s/%s/%s" % (sub, faction, pattern % dictionary_name)):    # its own card, mod's or game's
             continue
-        src = next((p for p in (_ci(_ci(folder, o) or "", pattern % dictionary_name) for o in owners) if p),
-                   None) or card_path(mod, faction, dictionary_name, info)
+        src = next((p for p in (mod.find("ui/%s/%s/%s" % (sub, o, pattern % dictionary_name)) for o in owners)
+                    if p), None) or card_path(mod, faction, dictionary_name, info)
         if not src:
             plan.warn(None, "%s: no %s picture anywhere to copy for %s - add one in Units"
                       % (dictionary_name, "card" if not info else "description", faction))
@@ -401,7 +401,7 @@ def set_level(plan, faction, chain, level, give=True, campaign=None):
         # its picture comes from the faction's culture folder (ui/<culture>/buildings)
         # none there: the picture of a culture that has one is copied in (the building as it is)
         from .buildings import BuildingPictures
-        if culture and os.path.isdir(os.path.join(mod.data, "ui")):
+        if culture and mod.dirs("ui"):                          # the mod's ui or the game's under it
             bp = BuildingPictures(mod)
             if not bp.find(culture, level):
                 got = None

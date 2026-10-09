@@ -89,25 +89,29 @@ def _files(mod, campaign):
     campaign folders only this campaign's and those without a map of their own (a campaign with its own
     descr_regions.txt - a prologue - has its own places, even when they share a name); of the names texts
     likewise."""
-    from .moddata import _ci
-    camp_root = os.path.join(mod.data, "world", "maps", "campaign")
-    own_map = set()
-    if os.path.isdir(camp_root):
-        for c in os.listdir(camp_root):
-            if c.lower() != campaign.lower() and _ci(os.path.join(camp_root, c), "descr_regions.txt"):
-                own_map.add(c.lower())
-    for dirpath, dirnames, filenames in os.walk(mod.data):
-        dirnames[:] = [d for d in dirnames if d not in BACKUP_DIRS and not (
-            os.path.normcase(dirpath) == os.path.normcase(camp_root) and d.lower() in own_map)]
-        for n in filenames:
-            low = n.lower()
-            if not low.endswith(TEXT_EXT) or any(low.startswith(c + "_regions_and_settlement_names")
-                                                 for c in own_map):
-                continue
-            p = os.path.join(dirpath, n)
-            rel = os.path.relpath(p, os.path.dirname(mod.data)).replace("\\", "/")
-            if not SKIP.search(rel) and not PROSE.search(rel) and not PEOPLE.search(rel):
-                yield p
+    own_map = {c.lower() for c, _ in mod.listing("world/maps/campaign")
+               if c.lower() != campaign.lower() and mod.find("world/maps/campaign/%s/descr_regions.txt" % c)}
+    # the mod's files, and the game's data under a mod folder that keeps only what it changes (renamed there as the
+    # mod's own copies - a place the mod has not copied yet is still named by the game's files)
+    seen = set()
+    for root in (mod.roots() if hasattr(mod, "roots") else [mod.data]):
+        camp_root = os.path.join(root, "world", "maps", "campaign")
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d not in BACKUP_DIRS and not (
+                os.path.normcase(dirpath) == os.path.normcase(camp_root) and d.lower() in own_map)]
+            for n in filenames:
+                low = n.lower()
+                if not low.endswith(TEXT_EXT) or any(low.startswith(c + "_regions_and_settlement_names")
+                                                     for c in own_map):
+                    continue
+                p = os.path.join(dirpath, n)
+                key = os.path.relpath(p, root).replace("\\", "/").lower()
+                if key in seen:
+                    continue                            # the mod's own copy hides the game's
+                seen.add(key)
+                rel = "data/" + key
+                if not SKIP.search(rel) and not PROSE.search(rel) and not PEOPLE.search(rel):
+                    yield p
 
 
 def _split(path, line):
@@ -122,8 +126,8 @@ def _split(path, line):
 
 def _is_strings(mod, path):
     """A string table of data/text ({KEY} text lines): only its keys are renamed."""
-    rel = os.path.relpath(path, mod.data).replace("\\", "/").lower()
-    return rel.startswith("text/")
+    rel = (mod.data_rel(path) if hasattr(mod, "data_rel") else os.path.relpath(path, mod.data)).lower()
+    return rel.replace("\\", "/").startswith("text/")
 
 
 def rename(plan, campaign, region, new_region, new_town=None):

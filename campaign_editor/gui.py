@@ -3610,13 +3610,11 @@ class App(tk.Tk):
                 ch["name"], ch["faction"], xy[0], xy[1], len(self.map_moves)))
             self.show_map()
         symbols = {}
-        folder = os.path.join(self.mod.data, "menu", "symbols", "FE_buttons_24")
-        if os.path.isdir(folder):
-            for n in os.listdir(folder):
-                low = n.lower()
-                if low.startswith("symbol24_") and low.endswith(".tga") and "_grey" not in low and \
-                        "_roll" not in low and "_select" not in low:
-                    symbols[low[9:-4]] = os.path.join(folder, n)
+        for n, path in self.mod.listing("menu/symbols/FE_buttons_24"):      # the mod's and the game's under it
+            low = n.lower()
+            if low.startswith("symbol24_") and low.endswith(".tga") and "_grey" not in low and \
+                    "_roll" not in low and "_select" not in low:
+                symbols[low[9:-4]] = path
         def check_place(what, region, xy):              # land painted and not written yet counts (one go)
             return place_problem(self.mod, self.v_campaign.get(), what, region, xy,
                                  {k: v for k, v in self.place_moves.items() if k != (what, region)},

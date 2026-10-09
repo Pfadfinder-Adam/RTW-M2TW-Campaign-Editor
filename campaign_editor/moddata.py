@@ -359,6 +359,16 @@ class ModData:
         """data/text/<campaign>_regions_and_settlement_names.txt, or None."""
         return self.text_file("%s_regions_and_settlement_names.txt" % campaign)
 
+    def data_rel(self, path):
+        """'ui/x/y.tga': the path under its own data folder - the mod's, or the game's data under a mod folder that
+        keeps only what it changes (the same place in the mod is where a changed copy goes)."""
+        a = os.path.abspath(path)
+        for root in self.roots():
+            r = os.path.abspath(root)
+            if os.path.normcase(a).startswith(os.path.normcase(r) + os.sep):
+                return os.path.relpath(a, r).replace("\\", "/")
+        return os.path.relpath(a, self.data).replace("\\", "/")
+
     def rel(self, path):
         if self.under and path:
             a, u = os.path.abspath(path), os.path.abspath(self.under)

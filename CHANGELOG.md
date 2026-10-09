@@ -166,6 +166,13 @@
   release's page.
 
 ### Fixed
+- **Mod folders that keep only what they change** (New mod folder on the plain game): the editor now reads the
+  game's own pictures and files under such a mod everywhere, as the game does. Fixed with it: a copied unit, a
+  renamed unit and a copied building got no cards / pictures from the game; unit and building packs left them out;
+  the Art tab listed only the mod's own pictures (and a replaced picture lost the game's size and format); the
+  faction tab's campaign-select map and leader's face, the factions' icons on the map, a unit given to a faction
+  (Roster) and a renamed region missed what only the game's data holds. The changed copies still go into the mod;
+  the game's files are never written.
 - **Avoid Growth on Medieval II's town scroll**: its words started on top of Recruitment's tick and its box was a
   flat pink square. It now stands after Recruitment with the game's own gap, in the same small bevelled box and
   tick the scroll's Auto-manage / Construction / Recruitment use, its words as high as theirs. Load offers to

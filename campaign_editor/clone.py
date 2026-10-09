@@ -948,7 +948,7 @@ def _own_xml_pictures(plan, line):
         ref = m.group(2)
         if not re.search(r"(?i)(^|[^a-z0-9])%s([^a-z0-9]|$)" % re.escape(t), ref.replace("\\", "/").split("/")[-1]):
             return m.group(0)
-        got = picture_file(mod.data, ref)
+        got = next((g for g in (picture_file(d, ref) for d in mod.roots()) if g), None)
         if not got:
             return m.group(0)                                  # not on disk (packed): the template's stays
         own = own_picture_ref(ref, t, new)
