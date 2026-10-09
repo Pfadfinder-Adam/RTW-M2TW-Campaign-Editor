@@ -2124,6 +2124,9 @@ SPECIAL_MODELS = {("rome", "resource"): "resource_lion.cas", ("rome", "engine"):
 SPECIAL_TYPE = "ce_test_special"
 SPECIAL_ENGINE = "ce_test_special_engine.cas"
 SPECIAL_SCRIPT = "ce_test_special_models.nut"
+SPECIAL_MONEY = 100                     # what the test's special building gives its region's owner each turn
+SPECIAL_PICTURE = {"rome": "data/ui/wonders/artemis.tga",          # the window's picture, one each game has loose
+                   "medieval2": "data/ui/eastern_european/buildings/#eastern_european_academy.tga"}
 
 
 def _special_model(mod, route):
@@ -2183,19 +2186,50 @@ def s_special_type(c, mod):
     return plan
 
 
-SPECIAL_NUT = r"""// @title CE Test special models
-// @summary The editor's test mod: draws a model of the game's own (copied as %(model)s) beside ce_test's capital
-// @summary at %(x)d, %(y)d - the engine way (REX / M2EX) of putting a building's model on the map. Does nothing in
-// @summary a campaign without the faction ce_test.
+SPECIAL_NUT = r"""// @title CE Test special building
+// @summary The editor's test mod: a special building of our own beside ce_test's capital at %(x)d, %(y)d - its model
+// @summary (a copy of %(model)s) drawn by the engine (REX / M2EX), a click on it opens its window (title, picture,
+// @summary text, what it gives, who holds it), and its owner gets %(money)d a turn. Every call is written to the game's
+// @summary log as [CE_SPECIAL] (which ways of the engines' calls work). Does nothing without the faction ce_test.
 local PREFIX = "[CE_SPECIAL] "
 local MODEL = "data/models_strat/%(model)s"
 local MODEL_ID = 9177
 local AT_X = %(x)d
 local AT_Y = %(y)d
+local MONEY = %(money)d
+local TITLE = "%(title)s"
+local TEXT = "%(text)s"
+local PICTURE = "%(picture)s"
 local done = false
+local win = { open = false, img = null, tried = false, logged = false }
+local said = {}
+
+local function parts(text) {                        // the text's lines ('|' between them)
+    local out = []
+    local rest = text
+    local i = rest.indexof("|")
+    while (i != null) {
+        out.append(rest.slice(0, i))
+        rest = rest.slice(i + 1)
+        i = rest.indexof("|")
+    }
+    out.append(rest)
+    return out
+}
+
+local function near(a, b) {
+    return a - b <= 1 && b - a <= 1
+}
 
 local function log(message) {
     println(PREFIX + message)
+}
+
+local function once(key, message) {
+    if (!(key in said)) {
+        said[key] <- true
+        log(message)
+    }
 }
 
 local function get(o, field) {
@@ -2217,20 +2251,19 @@ local function has_test_faction() {
         return false
     }
     for (local i = 0; i < n; i++) {
-        local f = null
         try {
-            f = ::game.faction(i)
+            if (::game.faction(i).name == "ce_test") {
+                return true
+            }
         } catch (err) {
-        }
-        if (get(f, "name") == "ce_test") {
-            return true
         }
     }
     return false
 }
 
 // the argument order of models.add / drawAt is not in the engines' strings: each way is tried, the one that works
-// is written to the game's log
+// is written to the game's log (2026-10-04: models.add(path, number, false) worked, drawAt wants four arguments -
+// most likely EOP's startDrawModelAt(number, x, y, size))
 local function try_calls(label, calls) {
     foreach (i, call in calls) {
         try {
@@ -2254,15 +2287,208 @@ local function draw(...) {
         return
     }
     if (!try_calls("models.add", [
+            function() { return models.add(MODEL, MODEL_ID, false) },
             function() { return models.add(MODEL, MODEL_ID) },
-            function() { return models.add(MODEL_ID, MODEL) },
-            function() { return models.add(MODEL, MODEL_ID, false) }])) {
+            function() { return models.add(MODEL_ID, MODEL) }])) {
         return
     }
     try_calls("models.drawAt", [
-        function() { return models.drawAt(MODEL_ID, AT_X, AT_Y) },
-        function() { return models.drawAt(AT_X, AT_Y, MODEL_ID) }])
+        function() { return models.drawAt(MODEL_ID, AT_X, AT_Y, 1.0) },
+        function() { return models.drawAt(MODEL_ID, AT_X, AT_Y, 1) },
+        function() { return models.drawAt(AT_X, AT_Y, MODEL_ID, 1.0) },
+        function() { return models.drawAt(MODEL_ID, MODEL_ID, AT_X, AT_Y) }])
     done = true
+}
+
+// the region the building stands in, and who holds it (the map's own tile: its factionId)
+local function owner() {
+    try {
+        local t = ::stratMap.tile(AT_X, AT_Y)
+        local id = get(t, "factionId")
+        if (id != null && id >= 0) {
+            return ::game.faction(id)
+        }
+    } catch (err) {
+        once("owner", "the tile's owner could not be read: " + err)
+    }
+    return null
+}
+
+local function money_of(f) {
+    local m = get(f, "money")
+    return m != null ? m : get(f, "treasury")
+}
+
+local function give(f, n) {
+    local before = money_of(f)
+    try {
+        f.money = before + n
+    } catch (err) {
+    }
+    if (money_of(f) == before) {
+        try {
+            ::game.runConsoleCommand("add_money", get(f, "name") + " " + n)
+        } catch (err) {
+            log("add_money failed: " + err)
+        }
+    }
+    log("income: " + get(f, "name") + " holds the special building's region - money " + before + " -> " + money_of(f))
+}
+
+local function on_turn(e) {
+    if (!has_test_faction()) {
+        return
+    }
+    local f = get(e, "faction")
+    local o = owner()
+    if (f == null || o == null || get(f, "id") != get(o, "id")) {
+        return
+    }
+    give(f, MONEY)
+}
+
+// ---- its window: a left click on its tile (not on a panel of the game) opens it, the next click closes it ----
+local function ex_font() {
+    try {
+        local root = getroottable()
+        if ("EX" in root && "fonts" in root.EX && "body" in root.EX.fonts) {
+            return root.EX.fonts.body
+        }
+    } catch (err) {
+    }
+    return null
+}
+
+local function text_at(ui, x, y, words, size, r, g, b) {
+    local face = ex_font()
+    if (face != null) {
+        ui.drawText(x, y, words, face, r, g, b, 255, size)
+    } else {
+        ui.drawText(x, y, words, "tnr_med", r, g, b, 255, 0)
+    }
+}
+
+local function draw_window() {
+    if (!win.open) {
+        return
+    }
+    local ui = ::UI
+    local sw = 1920
+    local sh = 1080
+    try {
+        local s = ui.screenSize()
+        sw = s[0]
+        sh = s[1]
+    } catch (err) {
+    }
+    local at = null
+    try {
+        at = ui.tileToScreen(AT_X, AT_Y)
+    } catch (err) {
+        once("tts", "tileToScreen failed: " + err)
+    }
+    local w = 460
+    local h = 300
+    local x = at != null ? (at[0] - w / 2).tointeger() : (sw - w) / 2
+    local y = at != null ? (at[1] - h - 30).tointeger() : (sh - h) / 2
+    x = x < 10 ? 10 : (x + w > sw - 10 ? sw - 10 - w : x)
+    y = y < 10 ? 10 : (y + h > sh - 10 ? sh - 10 - h : y)
+    ui.drawRoundedRect(x - 3, y - 3, w + 6, h + 6, 8, 70, 45, 20, 255)
+    ui.drawRoundedRect(x, y, w, h, 8, 226, 208, 164, 250)
+    text_at(ui, x + 18, y + 14, TITLE, 26, 70, 30, 10)
+    local left = x + 18
+    if (!win.tried) {
+        win.tried = true
+        try {
+            local t = ui.loadTexture(PICTURE)
+            if (t != null && get(t, "img") != 0) {
+                win.img = t.img
+            }
+            log("picture " + PICTURE + (win.img != null ? " loaded" : " not loaded"))
+        } catch (err) {
+            log("picture " + PICTURE + " could not be loaded: " + err)
+        }
+    }
+    if (win.img != null) {
+        ui.image(win.img, 160, 120, x + 18, y + 56)
+        left = x + 192
+    }
+    local line = y + 58
+    foreach (part in parts(TEXT)) {
+        text_at(ui, left, line, part, 17, 40, 25, 10)
+        line += 24
+    }
+    local o = owner()
+    text_at(ui, x + 18, y + h - 62, "Gives: +" + MONEY + " a turn to whoever holds this region", 17, 20, 70, 20)
+    text_at(ui, x + 18, y + h - 36, "Held by: " + (o != null ? get(o, "name") : "-") + "    (click to close)", 17,
+        40, 25, 10)
+    if (!win.logged) {
+        win.logged = true
+        log("window drawn at " + x + "," + y + " " + w + "x" + h + " (the tile on the screen at "
+            + (at != null ? at[0] + "," + at[1] : "-") + ", screen " + sw + "x" + sh + ")")
+    }
+}
+
+local function on_frame() {
+    local ui = ::UI
+    if (!ui.mouse.clicked(ui.mouse.left)) {
+        return
+    }
+    if (win.open) {
+        win.open = false
+        log("window closed")
+        return
+    }
+    if (ui.cursorOverGameUi()) {
+        return
+    }
+    local t = ::stratMap.hoveredTile()
+    if (t == null) {
+        return
+    }
+    local tx = get(t, "x")
+    local ty = get(t, "y")
+    once("hover", "a click on the map: hoveredTile gives " + tx + "," + ty + " (the building stands at " + AT_X + ","
+        + AT_Y + ")")
+    if (tx != null && ty != null && near(tx, AT_X) && near(ty, AT_Y)) {
+        win.open = true
+        win.logged = false
+        log("clicked the special building - its window is open")
+    }
+}
+
+local function arm_ui() {
+    if ("armed" in said || !has_test_faction()) {
+        return
+    }
+    said.armed <- true
+    local ui = ::UI
+    try {
+        ui.onFrame(function() {
+            try {
+                on_frame()
+            } catch (err) {
+                once("frame", "click check failed: " + err)
+            }
+        })
+        local canvas = ui.canvas("##ce_special_canvas", 0, 0, 4, 4)
+        foreach (cap in ["autoScaleCanvas", "autoScale", "autoScaleFonts"]) {
+            try {
+                ui.setWidgetStyle(canvas, ui.Cap[cap], 0)
+            } catch (err) {
+            }
+        }
+        ui.onDraw(canvas, function() {
+            try {
+                draw_window()
+            } catch (err) {
+                once("draw", "window drawing failed: " + err)
+            }
+        })
+        log("click and window armed")
+    } catch (err) {
+        log("the window could not be armed: " + err)
+    }
 }
 
 local function listen(name, handler) {
@@ -2273,8 +2499,8 @@ local function listen(name, handler) {
     }
 }
 
-listen("FactionTurnStart", function(...) { if (!done) { draw() } })
-listen("GameReloaded", function(...) { done = false; draw() })
+listen("FactionTurnStart", function(e) { if (!done) { draw() } arm_ui(); on_turn(e) })
+listen("GameReloaded", function(...) { done = false; draw(); arm_ui() })
 log("module loaded")
 """
 
@@ -2282,8 +2508,10 @@ log("module loaded")
 @step("Own buildings on the map 2/2: three ways side by side beside {new}'s capital - a wonder of the game's own "
       "(Rome), the new resource type with its own model, and a model drawn by an engine script (REX / M2EX)",
       "near {new}'s capital: {special_wonder}a lion / elephants model = the resource way (hover: its name only), "
-      "{special_engine} = the engine way (the log's [CE_SPECIAL] lines say which call worked); the new resource's hover "
-      "text is the copied type's name (Medieval II keeps resource names in its compiled strat.txt.strings.bin)")
+      "{special_engine} = the engine way - a CLICK on it opens its own window (The Test Lighthouse: picture, text, "
+      "+100 a turn, who holds it) and its region's owner gets 100 every turn (the log's [CE_SPECIAL] lines say which "
+      "calls worked); the new resource's hover text is the copied type's name (Medieval II keeps resource names in "
+      "its compiled strat.txt.strings.bin)")
 def s_special(c, mod):
     import types as _types
     from . import addons as AD, forts as FT, resources as RS
@@ -2317,7 +2545,12 @@ def s_special(c, mod):
     src = _special_model(mod, "engine")
     if src:
         plan.copy(src, os.path.join(mod.data, "models_strat", SPECIAL_ENGINE))
-        text = SPECIAL_NUT % {"model": SPECIAL_ENGINE, "x": picked[2][0], "y": picked[2][1]} + TEST_MARK + "\n"
+        from .packs import game_kind
+        picture = SPECIAL_PICTURE["medieval2" if game_kind(mod) == "medieval2" else "rome"]
+        text = SPECIAL_NUT % {"model": SPECIAL_ENGINE, "x": picked[2][0], "y": picked[2][1], "money": SPECIAL_MONEY,
+                              "title": "The Test Lighthouse", "picture": picture,
+                              "text": "A special building of our own, drawn by the|engine's script: its model, this window|"
+                                      "and its gift come from the editor."} + TEST_MARK + "\n"
         plan.binary(AD.target(mod, _types.SimpleNamespace(file=SPECIAL_SCRIPT)), text.encode("utf-8"))
         c.said["special_engine"] = "the %s model at %d, %d" % (os.path.basename(src).rsplit(".", 1)[0], *picked[2])
     else:
@@ -2723,7 +2956,8 @@ SEEN_IN_GAME = {
     "s_special": {"m2tw": "0.29.2", "rome": "0.29.2", "bi": "0.29.2"},
 }
 # changed after it was seen: {step: the version that changed it}
-CHANGED_SINCE = {"s_addon": "0.33.0", "s_addon_growth": "0.33.0", "s_module": "0.32.0", "s_delete_region": "0.34.0"}
+CHANGED_SINCE = {"s_addon": "0.33.0", "s_addon_growth": "0.33.0", "s_module": "0.32.0", "s_delete_region": "0.34.0",
+                 "s_special": "0.34.0"}
 
 
 def _ver(v):

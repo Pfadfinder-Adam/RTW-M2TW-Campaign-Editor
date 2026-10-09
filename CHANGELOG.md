@@ -84,6 +84,10 @@
   it are listed to change by hand. It was a refusal ('... would keep no town').
 
 ### Changed
+- **The test mod's special building** (Rome with REX, Medieval II with M2EX - the engine way of putting a model on the
+  map): a click on it now opens its own window (its title, picture, text, what it gives and who holds it), and the
+  region's owner gets 100 every turn - a first try of special buildings of one's own; the game's log says which of
+  the engines' calls worked.
 - **README**: a quick start, what it works with, what is new, the features at a glance (the long list folds away), a
   short FAQ.
 - **Faster on a big mod** (a tester's HLR, 749 regions): deleting 48 towns at once took about 21 seconds before the
