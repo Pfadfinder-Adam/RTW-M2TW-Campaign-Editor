@@ -5295,15 +5295,15 @@ class App(tk.Tk):
                 self.garrisons[region] = []            # every unit taken out: the town is left empty
             else:
                 self.garrisons.pop(region, None)
-                if self.editing():                     # 'Automatic': back to the town as it stands
+                if self.editing():                     # 'As it was': back to the town as it stands
                     self.after_idle(self.load_garrison)
             self.refresh_chosen(keep_units_selection=True)
         if self.editing() and region not in self.garrisons:
             self.garrison_editor.load(self.mod, template, region, units, now, changed, auto=auto, held=held,
-                                      unchanged=True, automatic=True)
+                                      unchanged=True, as_was=True)
             return
         self.garrison_editor.load(self.mod, template, region, units, self.garrisons.get(region, []),
-                                  changed, auto=auto, held=held, automatic=True)
+                                  changed, auto=auto, held=held, as_was=self.editing())
 
     def char_window(self, cid):
         """A double click on a character on the Map: an army or fleet opens its units in a window of its own; an agent
@@ -5425,7 +5425,7 @@ class App(tk.Tk):
             else:
                 pool = MT.garrison_pool(self.mod, fac)
             return MT.random_garrison(pool, lo, hi, cap, random.Random())
-        # no Automatic here: an army on the map has no 'the tool picks' - it emptied the army (a tester)
+        # no 'As it was' here: an army's units go back by Undo (Automatic emptied the army - a tester)
         ed.load(self.mod, fac, "%s %s of %s" % (ch["kind"], ch["name"], fac), units, current, changed,
                 held=named, unchanged=entry is None and cid not in self.map_units, auto=suggest)
         ttk.Button(top, text="Close", command=top.destroy).pack(anchor="e", padx=6, pady=6)

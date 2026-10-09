@@ -279,7 +279,7 @@ class TownWindow(tk.Toplevel):
         units = self.app._with_types(units, now) if hasattr(self.app, "_with_types") else units
 
         def changed(types):
-            if getattr(self.ged, "cleared", False):            # 'Automatic': back to the town as it stands
+            if getattr(self.ged, "cleared", False):            # 'As it was': back to the town as it stands
                 self.garrison = None
                 self.after_idle(self.load_garrison)
             else:
@@ -290,7 +290,7 @@ class TownWindow(tk.Toplevel):
             pool = MT.town_pool(self.mod, t, MT.garrison_pool(self.mod, owner))
             return MT.random_garrison(pool, lo, hi, cap, random.Random())
         self.ged.load(self.mod, owner, "%s (%s)" % (t["name"], self.region), units,
-                      self.garrison if self.garrison is not None else now, changed, auto=suggest,
+                      self.garrison if self.garrison is not None else now, changed, auto=suggest, as_was=True,
                       held=(t.get("army_role") or True) if named else False, unchanged=self.garrison is None)
 
     def _owner_changed(self):

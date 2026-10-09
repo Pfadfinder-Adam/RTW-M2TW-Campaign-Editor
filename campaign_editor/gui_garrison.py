@@ -116,12 +116,14 @@ class GarrisonEditor(ttk.Frame):
         self.total.bind("<Configure>", lambda e: self.total.configure(wraplength=max(120, e.width - 4)), add="+")
         # Suggest draws a garrison / an army by the numbers beside it - how many units, their upkeep together at
         # most (a tester, 2026-10-09: 'Suggest does nothing, and we cannot say how much upkeep'); kept for next time.
-        # Automatic (empty = the tool picks when it builds) only where that means something: New / Edit faction
+        # 'As it was' (once 'Automatic' - a tester: 'with Suggest, why Automatic?'): back to the garrison as it stands
+        # in the files - only where there is one (an existing town); in New faction an empty garrison already means
+        # 'the tool picks' (take every card out)
         from . import settings
         self.v_lo = tk.StringVar(value=str(settings.get("suggest_units_lo", 3)))
         self.v_hi = tk.StringVar(value=str(settings.get("suggest_units_hi", 6)))
         self.v_cap = tk.StringVar(value=str(settings.get("suggest_upkeep", 2000)))
-        self.b_auto = ttk.Button(bar, text="Automatic", command=self.clear)
+        self.b_auto = ttk.Button(bar, text="As it was", command=self.clear)
         self.b_auto.pack(side="right", padx=4)
         self.sugg = ttk.Frame(bar)
         self.sugg.pack(side="right", padx=4)
@@ -138,14 +140,15 @@ class GarrisonEditor(ttk.Frame):
         from .gui_util import tip
         tip(b, "A garrison drawn at random from the units this faction trains: that many units, their upkeep "
                "together at most this much (0: no limit). Press again for another.")
-        first(self.b_auto, self.sugg)             # Automatic, Suggest before the total
+        tip(self.b_auto, "Back to the garrison as it stands in the game's files now (your changes to it dropped).")
+        first(self.b_auto, self.sugg)             # As it was, Suggest before the total
 
     def load(self, mod, faction, region, units, current, on_change, auto=None, held=False, unchanged=False,
-             automatic=False):
+             as_was=False):
         """unchanged: current is what stands in the town now, shown until the first click. auto(lo, hi, cap): the
-        unit types Suggest draws (none: no Suggest); automatic: the Automatic button (empty = the tool picks)."""
+        unit types Suggest draws (none: no Suggest); as_was: the As it was button (back to the town as it stands)."""
         self.unchanged = unchanged
-        if automatic:
+        if as_was:
             self.b_auto.pack(side="right", padx=4, before=self.sugg)
         else:
             self.b_auto.pack_forget()
@@ -281,7 +284,7 @@ class GarrisonEditor(ttk.Frame):
         self.changed()
 
     def clear(self):
-        self.cleared = True                        # 'Automatic': back to the town as it stands
+        self.cleared = True                        # 'As it was': back to the town as it stands
         self.garrison = []
         self.changed()
         self.cleared = False

@@ -5,8 +5,9 @@
 ### Added
 - **Suggest with numbers**: in an army's or a fleet's units (a double click on the map), a town's garrison and the
   faction's garrisons, **Suggest** draws by the numbers beside it - from how many to how many units, their upkeep
-  together at most (0: no limit) - kept for next time. In an army's window it did nothing; there **Automatic** is
-  gone (it emptied the army - an army on the map has no 'the tool picks').
+  together at most (0: no limit) - kept for next time. In an army's window it did nothing. **Automatic** is gone:
+  it emptied an army; in New faction an empty garrison already means 'the editor picks' (take every card out), and
+  for a town that is in the game it is now **As it was** (back to the garrison as it stands in the files).
 - **The Maps bar tidied up**: **Layers** is a panel that stays open while you tick (the menu closed and blinked at
   every tick) and closes on a second press of its button or a click aside - the same for Select's **what...**; the
   colours are only in Layers (the list of their own beside it said the same twice); ports are always drawn (no tick);

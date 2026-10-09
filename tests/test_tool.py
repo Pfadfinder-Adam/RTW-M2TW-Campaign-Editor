@@ -10143,7 +10143,7 @@ building smith
                 return MT.random_garrison(pool, lo, hi, cap, random.Random(1))
             ed.load(None, "england", "army", units, ["knights"], lambda t: None, auto=draw)
             root.update()
-            self.assertFalse(ed.b_auto.winfo_ismapped())          # an army: no Automatic
+            self.assertFalse(ed.b_auto.winfo_ismapped())          # an army: no As it was (Automatic emptied it)
             ed.v_lo.set("4")
             ed.v_hi.set("4")
             ed.v_cap.set("800")
@@ -10156,9 +10156,10 @@ building smith
             ed.v_cap.set("0")                                      # 0: no limit
             ed.suggest()
             self.assertEqual(asked[-1], (3, 20, None))
-            ed.load(None, "england", "town", units, [], lambda t: None, auto=draw, automatic=True)
+            ed.load(None, "england", "town", units, [], lambda t: None, auto=draw, as_was=True)
             root.update()
-            self.assertTrue(ed.b_auto.winfo_ismapped())           # New / Edit faction's garrisons keep it
+            self.assertTrue(ed.b_auto.winfo_ismapped())           # an existing town: back to as it stands
+            self.assertEqual(ed.b_auto.cget("text"), "As it was")
             self.assertEqual(settings.get("suggest_upkeep"), 0)      # kept for next time
         finally:
             settings._data, settings._path = saved
