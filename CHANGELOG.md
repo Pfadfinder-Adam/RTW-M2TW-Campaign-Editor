@@ -166,6 +166,10 @@
   release's page.
 
 ### Fixed
+- **Rename a faction: Medieval II closed at start after it** ("Unknown attribute type(Combat_V_Faction_Venice)"):
+  the traits' effect against a faction glues its name on (`Combat_V_Faction_Venice`) and was left with the old
+  name - it now follows. In a mod folder that keeps only what it changes, the files only the game's data has are
+  renamed too, as the mod's own copies (the game's files untouched).
 - **Recolour left a new faction in its template's colours in a mod folder of its own** (cards, battle textures
   and the rest stayed the template's red): a mod folder keeps only what it changes, so the template's cards lie in
   the game's data - Recolour did not look there, took the copied cards for the faction's own colours and moved

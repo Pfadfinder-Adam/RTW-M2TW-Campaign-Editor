@@ -938,6 +938,31 @@ building smith
         self.assertIn("ui/units/beta/#alpha_general.tga", left)
         self.assertNotIn("ui/units/alpha/#alpha_general.tga", left)     # unchanged: the game has it
 
+    def test_rename_faction_reaches_glued_names_and_the_games_files(self):
+        """Report R-20261009-CDDAF0 (the test mod on Medieval II with M2EX): venice renamed venice_ce, then the game
+        closed at start - 'Unknown attribute type(Combat_V_Faction_Venice)': the trait effect glues the faction's
+        name to Combat_V_Faction_ and was not taken for its name. And in a thin mod a file only the game's data has
+        must be renamed too - into the mod's own copy, the game's file untouched."""
+        from campaign_editor import factionrename as FR
+        game, _ = self._game()
+        traits = os.path.join(game, "data", "export_descr_character_traits.txt")
+        write(traits, "Trait Fearsalpha\n    Characters family\n\n    Level Afraid\n"
+                      "        Effect Combat_V_Faction_Alpha -1 \n        Effect Combat_V_Faction_alphabet 1\n"
+                      ";------------------------------------------\nTrigger t1\n    WhenToTest PreBattle\n"
+                      "    Condition FactionType alpha\n")
+        before = open(traits).read()
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        mod = ModData(data)
+        plan = Plan(mod, "rename", "alpha_ce", {})
+        FR.plan_rename(plan, "test", "alpha", "alpha_ce")
+        plan.apply()
+        self.assertEqual(open(traits).read(), before)                       # the game's own file untouched
+        mine = open(os.path.join(data, "export_descr_character_traits.txt")).read()
+        self.assertIn("Effect Combat_V_Faction_Alpha_ce -1", mine)          # the case as written
+        self.assertIn("Combat_V_Faction_alphabet 1", mine)                 # another name, left
+        self.assertIn("Condition FactionType alpha_ce", mine)
+        self.assertIn("Trait Fearsalpha", mine)                            # a trait's own name stays
+
     def test_recolour_finds_the_templates_cards_under_a_thin_mod(self):
         """Report R-20261009-4D53CB (the test mod on Rome with REX): a clone's cards stayed its template's red after
         Recolour - in a thin mod the template's cards lie in the game's data only, so none was found to compare with

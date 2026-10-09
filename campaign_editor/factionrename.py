@@ -52,20 +52,27 @@ def _is_script(path):
 
 
 def _text_files(mod, campaign):
-    """Every text file of the data folder but the string tables, scripts apart."""
-    out, scripts = [], []
+    """Every text file of the data folder but the string tables, scripts apart - the mod's, and the game's own data
+    under a mod folder that keeps only what it changes (a file only the game has is read from there; the edit is
+    written as the mod's own copy). A file the mod has hides the game's of the same place."""
+    out, scripts, seen = [], [], set()
     script_names = {os.path.normcase(p) for p in _strat_scripts(mod)}
-    for dirpath, dirs, files in os.walk(mod.data):
-        rel = os.path.relpath(dirpath, mod.data).replace("\\", "/").lower()
-        if rel.split("/")[0] in SKIP_DIRS:
-            dirs[:] = []
-            continue
-        for n in files:
-            p = os.path.join(dirpath, n)
-            if os.path.normcase(p) in script_names or _is_script(p):
-                scripts.append(p)
-            elif n.lower().endswith(TEXT_EXT):
-                out.append(p)
+    for root in (mod.roots() if hasattr(mod, "roots") else [mod.data]):
+        for dirpath, dirs, files in os.walk(root):
+            rel = os.path.relpath(dirpath, root).replace("\\", "/").lower()
+            if rel.split("/")[0] in SKIP_DIRS:
+                dirs[:] = []
+                continue
+            for n in files:
+                p = os.path.join(dirpath, n)
+                key = os.path.normcase(os.path.relpath(p, root))
+                if key in seen:
+                    continue
+                seen.add(key)
+                if os.path.normcase(p) in script_names or _is_script(p):
+                    scripts.append(p)
+                elif n.lower().endswith(TEXT_EXT):
+                    out.append(p)
     return sorted(out), sorted(scripts)
 
 
@@ -98,6 +105,9 @@ def plan_rename(plan, campaign, old, new):
     moved.sort(key=lambda m: -len(m[0]))
     rx = _word(old)
     rx_xml = re.compile(r'(\bfaction\s*=\s*")(%s)(")' % re.escape(old), re.I)
+    # the traits' effect against a faction glues its name on, in any case: Combat_V_Faction_Venice (a report: the
+    # game closed at start - 'Unknown attribute type(Combat_V_Faction_Venice)' after venice was renamed)
+    rx_glued = re.compile(r"(\bCombat_V_Faction_)(%s)(?![A-Za-z0-9_])" % re.escape(old), re.I)
     files, scripts = _text_files(mod, campaign)
     total = 0
     for p in files:
@@ -114,6 +124,7 @@ def plan_rename(plan, campaign, old, new):
         for i in range(len(f.raw)):
             t = f.text(i)
             new_t = rx.sub(new, t)
+            new_t = rx_glued.sub(lambda m: m.group(1) + (new.capitalize() if m.group(2)[:1].isupper() else new), new_t)
             if p.lower().endswith(".xml"):            # Medieval II's XML lists: Faction="Milan" - any case
                 new_t = rx_xml.sub(lambda m: m.group(1) + (new.capitalize() if m.group(2)[:1].isupper() else new)
                                    + m.group(3), new_t)
