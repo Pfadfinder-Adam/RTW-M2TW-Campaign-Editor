@@ -2409,7 +2409,36 @@ local function wrapped(text, width, size) {
     return out
 }
 
+local function on_building() {                      // the mouse on the building's tile (not on a panel of the game)
+    if (::UI.cursorOverGameUi()) {
+        return false
+    }
+    local t = ::stratMap.hoveredTile()
+    if (t == null) {
+        return false
+    }
+    local tx = get(t, "x")
+    local ty = get(t, "y")
+    return tx != null && ty != null && near(tx, AT_X) && near(ty, AT_Y)
+}
+
+// the mouse resting on it: its name in a tooltip, as the game's own resources and towns have
+local function draw_tip() {
+    if (win.open || !on_building()) {
+        return
+    }
+    try {
+        local m = ::UI.mouse.pos()
+        ::UI.tooltipAt(m[0] - 8, m[1] - 8, 16, 16)
+        ::UI.tooltip(0, TITLE + " (double click: more)")
+        once("tip", "tooltip shown")
+    } catch (err) {
+        once("tipfail", "tooltip failed: " + err)
+    }
+}
+
 local function draw_window() {
+    draw_tip()
     if (!win.open) {
         return
     }
@@ -2470,28 +2499,33 @@ local function draw_window() {
     }
 }
 
+// a DOUBLE click opens the window (a single one would open it at every click near a model put beside a town or a
+// farm - a tester); any click closes it
+local function double_clicked(ui) {
+    try {
+        return ui.mouse.doubleClicked(ui.mouse.left)
+    } catch (err) {
+        once("dbl", "mouse.doubleClicked failed: " + err)
+    }
+    return false
+}
+
 local function on_frame() {
     local ui = ::UI
-    if (!ui.mouse.clicked(ui.mouse.left)) {
-        return
-    }
     if (win.open) {
-        win.open = false
-        log("window closed")
+        if (ui.mouse.clicked(ui.mouse.left)) {
+            win.open = false
+            log("window closed")
+        }
         return
     }
-    if (ui.cursorOverGameUi()) {
+    if (!double_clicked(ui)) {
         return
     }
     local t = ::stratMap.hoveredTile()
-    if (t == null) {
-        return
-    }
-    local tx = get(t, "x")
-    local ty = get(t, "y")
-    once("hover", "a click on the map: hoveredTile gives " + tx + "," + ty + " (the building stands at " + AT_X + ","
-        + AT_Y + ")")
-    if (tx != null && ty != null && near(tx, AT_X) && near(ty, AT_Y)) {
+    once("hover", "a double click on the map: hoveredTile gives " + (t != null ? get(t, "x") + "," + get(t, "y") :
+        "nothing") + " (the building stands at " + AT_X + "," + AT_Y + ")")
+    if (on_building()) {
         win.open = true
         win.logged = false
         log("clicked the special building - its window is open")
@@ -2549,7 +2583,7 @@ log("module loaded")
 @step("Own buildings on the map 2/2: three ways side by side beside {new}'s capital - a wonder of the game's own "
       "(Rome), the new resource type with its own model, and a model drawn by an engine script (REX / M2EX)",
       "near {new}'s capital: {special_wonder}a lion / elephants model = the resource way (hover: its name only), "
-      "{special_engine} = the engine way - a CLICK on it opens its own window (The Test Lighthouse: picture, text, "
+      "{special_engine} = the engine way - its name on a hover, a DOUBLE CLICK on it opens its own window (The Test Lighthouse: picture, text, "
       "+100 a turn, who holds it) and its region's owner gets 100 every turn (the log's [CE_SPECIAL] lines say which "
       "calls worked); the new resource's hover text is the copied type's name (Medieval II keeps resource names in "
       "its compiled strat.txt.strings.bin)")

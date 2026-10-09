@@ -938,6 +938,20 @@ building smith
         self.assertIn("ui/units/beta/#alpha_general.tga", left)
         self.assertNotIn("ui/units/alpha/#alpha_general.tga", left)     # unchanged: the game has it
 
+    def test_recolour_finds_the_templates_cards_under_a_thin_mod(self):
+        """Report R-20261009-4D53CB (the test mod on Rome with REX): a clone's cards stayed its template's red after
+        Recolour - in a thin mod the template's cards lie in the game's data only, so none was found to compare with
+        and the cards were taken for the clone's own colours. The game's own data counts too."""
+        from campaign_editor import recolour as R
+        game, _ = self._game()
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        build(ModData(data), "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}}).apply()
+        cards = [it for it in R.targets(ModData(data), "test", "beta")
+                 if not isinstance(it, str) and it["group"] == "unit cards" and it["rel"].endswith("#alpha_general.tga")]
+        self.assertTrue(cards)
+        self.assertIn("alpha", cards[0]["of"])
+        self.assertTrue(cards[0]["others"][cards[0]["of"].index("alpha")][0].startswith(os.path.join(game, "data")))
+
     def test_thin_mod_gets_its_whole_map_folder_on_a_map_change(self):
         """A thin mod's first map change (a town deleted with its region) brings the game's whole map folder into the
         mod - but map.rwm, which the game builds again from the mod's map; the game's files are never written; Restore

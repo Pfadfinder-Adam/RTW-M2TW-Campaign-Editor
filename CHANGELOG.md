@@ -166,8 +166,14 @@
   release's page.
 
 ### Fixed
+- **Recolour left a new faction in its template's colours in a mod folder of its own** (cards, battle textures
+  and the rest stayed the template's red): a mod folder keeps only what it changes, so the template's cards lie in
+  the game's data - Recolour did not look there, took the copied cards for the faction's own colours and moved
+  nothing. It now compares with the game's own data too.
 - **The test mod's own building on the map: its window's text ran past the window's edge** - the lines are now cut
-  to the window's width as the engine measures them.
+  to the window's width as the engine measures them. A **double** click opens its window (a single click no longer
+  does - a model set beside a town would open it at every click), and the mouse resting on it shows its name in a
+  tooltip, as the game's resources do.
 - **The test mod's Upkeep x 2 step failed in the exe** ("No module named upkeep"): the exe now surely carries it,
   and its own self-check tries every add-on's code.
 - **Add-ons: a click on Upkeep x 2 crashed the page** ("can only concatenate str"): it now shows like the others -
