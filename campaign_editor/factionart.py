@@ -95,6 +95,42 @@ def where_shown(rel):
     return _picture_kind(rel)[3]
 
 
+# the campaign-select screen's own pictures of a faction: shown on the Edit / New faction tab beside the faction's
+# description (as the game shows them there), not in the Art tab's list
+START_KINDS = ("campaign-select map (its land lit)", "leader picture (campaign select)")
+
+
+def start_kind(e):
+    """START_KINDS' entry a picture of faction_pictures / start_pictures is, or None (not shown on the faction tab)."""
+    kind = _picture_kind(e["rel"])[2]
+    return kind if kind in START_KINDS else None
+
+
+def is_start_picture(e):
+    return start_kind(e) is not None
+
+
+def start_pictures(mod, campaign, faction):
+    """The faction's campaign-select map (map_<faction>.tga) and leader's face (Rome's leader_pic_<faction>.tga) -
+    the same entries faction_pictures gives, read from the campaign folder and data/menu only (quick: no walk
+    through data/ui)."""
+    out = []
+    longer = longer_names([n for n, _ in mod.factions()], faction)
+    for root in (mod.campaign_dir(campaign), os.path.join(mod.data, "menu")):
+        if not root or not os.path.isdir(root):
+            continue
+        for n in sorted(os.listdir(root)):
+            p = os.path.join(root, n)
+            if not (n.lower().endswith(PICTURE_EXT) and _token_hit(n, faction, longer) and os.path.isfile(p)):
+                continue
+            rel = os.path.relpath(p, mod.data).replace("\\", "/")
+            e = {"path": p, "rel": rel, "label": label_of(rel), "where": where_shown(rel), "size": picture_info(p)}
+            if is_start_picture(e):
+                out.append(e)
+    out.sort(key=lambda e: (START_KINDS.index(start_kind(e)), e["rel"]))
+    return out
+
+
 def faction_pictures(mod, campaign, faction):
     """[{'path', 'rel', 'label', 'size': (w, h, bpp) or None}] of every picture file
     named after the faction under data/ui, data/menu, data/loading_screen, the

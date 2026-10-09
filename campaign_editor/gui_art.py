@@ -150,10 +150,46 @@ class ArtEditor(ttk.Frame):
         except Exception:
             return ttk.Label(parent, text="(none)", width=10, relief="sunken")
         self._photos.append(ph)
-        return tk.Label(parent, image=ph, relief="sunken")
+        lbl = tk.Label(parent, image=ph, relief="sunken")
+        lbl.photo = ph                               # kept while the label lives (the faction tab's cards too)
+        return lbl
+
+    def load_start(self):
+        """The campaign-select screen's own pictures - the map with the faction's land lit, the leader's face - on
+        the faction tab beside the description, as the game shows them there (app.start_pics); the Art list leaves
+        them out. Replace... there waits for Apply like every picture."""
+        host = getattr(self.app, "start_pics", None)
+        if host is None:
+            return
+        for w in host.winfo_children():
+            w.destroy()
+        a = self.app
+        src_faction, new = self._names() if a.mod else (None, None)
+        if not src_faction:
+            ttk.Label(host, foreground="#666", wraplength=300, justify="left", text=(
+                "The faction's campaign-select map and leader's face show here once it is picked.")).pack(anchor="w")
+            return
+        kinds = set()
+        for p in FA.start_pictures(a.mod, a.v_campaign.get(), src_faction):
+            kind = FA.start_kind(p)
+            kinds.add(kind)
+            leader = kind == FA.START_KINDS[1]
+            self.card(host, p, src_faction, new, box=(69, 96) if leader else (192, 120), wrap=250,
+                      short=True).pack(
+                fill="x", pady=(0, 4))
+        from .packs import game_kind
+        missing = []
+        if FA.START_KINDS[0] not in kinds:
+            missing.append("no campaign-select map of its own in this campaign (map_%s.tga)" % src_faction)
+        if FA.START_KINDS[1] not in kinds and game_kind(a.mod) == "rome":
+            missing.append("no leader's face: the campaign-select screen shows one only for a faction with a "
+                           "leader_pic_<faction>.tga (vanilla Rome has them for the three Roman families)")
+        for m in missing:
+            ttk.Label(host, text=m, foreground="#666", wraplength=330, justify="left").pack(anchor="w")
 
     def load(self):
         a = self.app
+        self.load_start()
         for w in self.inner.winfo_children():
             w.destroy()
         self._photos = []
@@ -166,79 +202,86 @@ class ArtEditor(ttk.Frame):
             self.draw_map()
             return
         self.fill_figures(src_faction, new)
-        pics = FA.faction_pictures(a.mod, a.v_campaign.get(), src_faction)
+        pics = [p for p in FA.faction_pictures(a.mod, a.v_campaign.get(), src_faction) if not FA.is_start_picture(p)]
         if not pics:
             ttk.Label(self.inner, text="No pictures named after %s were found." % src_faction).grid(row=0, column=0)
-        self.cells = []
-        for i, p in enumerate(pics):
-            target = FA.picture_target(p, src_faction, new or src_faction)
-            row = ttk.Frame(self.inner, padding=3, relief="groove")
-            self.cells.append(row)
-            pick = a.art_replace.get(target)
-            pending = FA.art_source(pick) if pick else None
-            self._thumb(row, pending or p["path"], crop=None if pending else p.get("crop")).grid(
-                row=0, column=0, rowspan=4, sticky="n")
-            ttk.Label(row, text=p["label"], font=("", 9, "bold"), wraplength=self.CELL - 110).grid(
-                row=0, column=1, sticky="w", padx=6)
-            if p.get("where"):
-                ttk.Label(row, text="in the game: " + p["where"], wraplength=self.CELL - 110, justify="left").grid(
-                    row=1, column=1, sticky="w", padx=6)
-            note = p.get("note") or ""
-            if p.get("symbol") and new and new != src_faction:
-                note = note.split(" - ")[0]              # the template's sheet; the new faction's own is below
-            text = "%s\n%s" % (note if p.get("symbol") else target, self._need(p["size"], target))
-            if p.get("symbol") and new and new != src_faction:
-                text += "\n%s gets a copy of its own (%s's until you replace it)" % (new, src_faction)
-            if note and not p.get("symbol"):
-                text += "\n" + note
-            if p.get("link"):
-                text += "\nnamed in %s (%s)" % (os.path.basename(a.mod.file(p["link"][0]) or ""), p["link"][1])
-                if target != p["rel"]:
-                    text += "\n" + ("shared with %s - Replace gives %s a copy of its own under this name" % (
-                        ", ".join(p["shared"]), new or src_faction) if p.get("shared") else
-                        "%s's own copy, made from %s" % (new, p["rel"]))
-            if pick:
-                text += "\nnew: %s (not written yet)" % (
-                    "the original, as it was" if isinstance(pick, dict) and pick.get("exact") else
-                    os.path.basename(pending))
-            ttk.Label(row, foreground="#555", justify="left", wraplength=self.CELL - 110, text=text).grid(
-                row=2, column=1, sticky="w", padx=6)
-            bar = ttk.Frame(row)
-            bar.grid(row=3, column=1, sticky="w", padx=6)
-            link = p.get("link") if target != p["rel"] else None
-            if p.get("locked"):
-                # shared with other factions: Replace gives this faction a copy of its own (Edit faction - a new
-                # faction's lines are not written yet); Save a copy always (a tester: no buttons on some)
-                if p.get("extra") and (not new or new == src_faction):
-                    ttk.Button(bar, text="Replace (its own copy)...", command=lambda t=target, s=p["size"],
-                               l=p["label"], x=p["extra"]: self.replace(t, s, l, extra=[x["kind"], x["ref"]])).pack(
-                        side="left")
-                if os.path.isfile(p["path"]):
-                    from .gui_util import save_copy
-                    ttk.Button(bar, text="Save a copy...", command=lambda n=p["path"], l=p["label"]:
-                               save_copy(self, n, l)).pack(side="left", padx=4)
-                if pick:
-                    ttk.Button(bar, text="Keep the current one", command=lambda t=target: self.unreplace(t)).pack(
-                        side="left", padx=4)
-                continue
-            ttk.Button(bar, text="Replace...", command=lambda t=target, s=p["size"], l=p["label"], k=link:
-                       self.replace(t, s, l, k)).pack(side="left")
-            now = os.path.join(a.mod.data, target) if not target.startswith("symbol:") else None
-            if not pick and now and os.path.isfile(now):
+        self.cells = [self.card(self.inner, p, src_faction, new) for p in pics]
+        self._reflow(force=True)
+        self.draw_map()
+
+    def card(self, parent, p, src_faction, new, box=(72, 72), wrap=None, short=False):
+        """One picture's card: its picture (the one picked to replace it, if any), what it is, where the game shows
+        it, what it needs, and Replace... / Save a copy... / Keep the current one / Back to the original. short:
+        the file's name without its folders (a narrow card)."""
+        a = self.app
+        wrap = wrap or self.CELL - 110
+        target = FA.picture_target(p, src_faction, new or src_faction)
+        row = ttk.Frame(parent, padding=3, relief="groove")
+        pick = a.art_replace.get(target)
+        pending = FA.art_source(pick) if pick else None
+        self._thumb(row, pending or p["path"], box=box, crop=None if pending else p.get("crop")).grid(
+            row=0, column=0, rowspan=4, sticky="n")
+        ttk.Label(row, text=p["label"], font=("", 9, "bold"), wraplength=wrap).grid(
+            row=0, column=1, sticky="w", padx=6)
+        if p.get("where"):
+            ttk.Label(row, text="in the game: " + p["where"], wraplength=wrap, justify="left").grid(
+                row=1, column=1, sticky="w", padx=6)
+        note = p.get("note") or ""
+        if p.get("symbol") and new and new != src_faction:
+            note = note.split(" - ")[0]              # the template's sheet; the new faction's own is below
+        text = "%s\n%s" % (note if p.get("symbol") else os.path.basename(target) if short else target,
+                           self._need(p["size"], target))
+        if p.get("symbol") and new and new != src_faction:
+            text += "\n%s gets a copy of its own (%s's until you replace it)" % (new, src_faction)
+        if note and not p.get("symbol"):
+            text += "\n" + note
+        if p.get("link"):
+            text += "\nnamed in %s (%s)" % (os.path.basename(a.mod.file(p["link"][0]) or ""), p["link"][1])
+            if target != p["rel"]:
+                text += "\n" + ("shared with %s - Replace gives %s a copy of its own under this name" % (
+                    ", ".join(p["shared"]), new or src_faction) if p.get("shared") else
+                    "%s's own copy, made from %s" % (new, p["rel"]))
+        if pick:
+            text += "\nnew: %s (not written yet)" % (
+                "the original, as it was" if isinstance(pick, dict) and pick.get("exact") else
+                os.path.basename(pending))
+        ttk.Label(row, foreground="#555", justify="left", wraplength=wrap, text=text).grid(
+            row=2, column=1, sticky="w", padx=6)
+        bar = ttk.Frame(row)
+        bar.grid(row=3, column=1, sticky="w", padx=6)
+        link = p.get("link") if target != p["rel"] else None
+        if p.get("locked"):
+            # shared with other factions: Replace gives this faction a copy of its own (Edit faction - a new
+            # faction's lines are not written yet); Save a copy always (a tester: no buttons on some)
+            if p.get("extra") and (not new or new == src_faction):
+                ttk.Button(bar, text="Replace (its own copy)...", command=lambda t=target, s=p["size"],
+                           l=p["label"], x=p["extra"]: self.replace(t, s, l, extra=[x["kind"], x["ref"]])).pack(
+                    side="left")
+            if os.path.isfile(p["path"]):
                 from .gui_util import save_copy
-                ttk.Button(bar, text="Save a copy...", command=lambda n=now, l=p["label"]: save_copy(self, n, l)).pack(
-                    side="left", padx=4)
+                ttk.Button(bar, text="Save a copy...", command=lambda n=p["path"], l=p["label"]:
+                           save_copy(self, n, l)).pack(side="left", padx=4)
             if pick:
                 ttk.Button(bar, text="Keep the current one", command=lambda t=target: self.unreplace(t)).pack(
                     side="left", padx=4)
-            else:
-                orig = FA.original_picture(a.mod, target) if os.path.exists(os.path.join(a.mod.data, target)) \
-                    else None
-                if orig and not _same(orig, os.path.join(a.mod.data, target)):
-                    ttk.Button(bar, text="Back to the original", command=lambda t=target, o=orig, k=link:
-                               self.revert(t, o, k)).pack(side="left", padx=4)
-        self._reflow(force=True)
-        self.draw_map()
+            return row
+        ttk.Button(bar, text="Replace...", command=lambda t=target, s=p["size"], l=p["label"], k=link:
+                   self.replace(t, s, l, k)).pack(side="left")
+        now = os.path.join(a.mod.data, target) if not target.startswith("symbol:") else None
+        if not pick and now and os.path.isfile(now):
+            from .gui_util import save_copy
+            ttk.Button(bar, text="Save a copy...", command=lambda n=now, l=p["label"]: save_copy(self, n, l)).pack(
+                side="left", padx=4)
+        if pick:
+            ttk.Button(bar, text="Keep the current one", command=lambda t=target: self.unreplace(t)).pack(
+                side="left", padx=4)
+        else:
+            orig = FA.original_picture(a.mod, target) if os.path.exists(os.path.join(a.mod.data, target)) \
+                else None
+            if orig and not _same(orig, os.path.join(a.mod.data, target)):
+                ttk.Button(bar, text="Back to the original", command=lambda t=target, o=orig, k=link:
+                           self.revert(t, o, k)).pack(side="left", padx=4)
+        return row
 
     def fill_figures(self, faction, new):
         """A row per character type of the faction: its figure (a strat model of descr_model_strat.txt, one per

@@ -660,6 +660,10 @@ class App(tk.Tk):
         self.t_long = tk.Text(texts, width=34, height=7, wrap="word")
         self.t_long.grid(row=1, column=1, sticky="we", padx=4, pady=2)
         texts.columnconfigure(1, weight=1)
+        # beside the description, as the game shows them: the campaign-select map and the leader's face (filled by
+        # ArtEditor.load_start - the Art tab's list leaves them out)
+        self.start_pics = ttk.LabelFrame(texts, text="On the campaign-select screen", padding=4)
+        self.start_pics.grid(row=0, column=2, rowspan=2, sticky="nw", padx=(8, 0))
 
         # --- leaders
         lf2 = self.lf2 = ttk.LabelFrame(side, text="Leader and heir (names come from the faction's name list)")
@@ -1421,6 +1425,7 @@ class App(tk.Tk):
                 self.v_work.set(side)
                 self.work_changed()
             self._form_to(side)
+            self.art_editor.load_start()
             self.show_family_button()
             if self._family_open:
                 self.family_editor.load()
@@ -4597,6 +4602,7 @@ class App(tk.Tk):
                     self.v[role + "_first"].set("")
                     self.v[role + "_last"].set("")
         self.load_victory(t)
+        self.art_editor.load_start()
         disp = template_display(self.mod, t, self.v_campaign.get())
         if self.editing():
             self._baseline = self._faction_state()      # what 'not changed yet' looks like

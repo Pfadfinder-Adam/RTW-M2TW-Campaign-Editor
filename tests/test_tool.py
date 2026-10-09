@@ -9463,6 +9463,36 @@ building smith
         with open(edu_path) as fh:
             self.assertIn("stat_cost\t1, 400, 170", fh.read())
 
+    def test_start_screen_pictures_on_the_faction_tab(self):
+        """The campaign-select map and the leader's face go from the Art list to the faction tab, beside the
+        description (the user, 2026-10-09: 'as in the game'): start_pictures finds just those two (campaign
+        folder and data/menu), map first; faction_pictures still has them, flagged, so Art leaves them out."""
+        import struct
+        from campaign_editor import factionart as FA
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        menu = os.path.join(self.root, "data", "menu")
+        os.makedirs(menu, exist_ok=True)
+
+        def tga(path, w, h):
+            with open(path, "wb") as fh:
+                fh.write(struct.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, w, h, 24, 0) + b"\0" * (w * h * 3))
+        tga(os.path.join(camp, "map_alpha.tga"), 8, 8)
+        tga(os.path.join(camp, "leader_pic_alpha.tga"), 69, 96)
+        tga(os.path.join(menu, "leader_pic_alpha.tga"), 69, 96)
+        tga(os.path.join(camp, "vc_alpha.tga"), 8, 8)            # the victory map stays in Art
+        tga(os.path.join(camp, "leader_pic_alphabet.tga"), 69, 96)   # not alpha's
+        mod = ModData(self.root)
+        got = FA.start_pictures(mod, "test", "alpha")
+        self.assertEqual([e["rel"] for e in got], ["world/maps/campaign/test/map_alpha.tga",
+                                                   "menu/leader_pic_alpha.tga",
+                                                   "world/maps/campaign/test/leader_pic_alpha.tga"])
+        self.assertEqual([FA.start_kind(e) for e in got], [FA.START_KINDS[0]] + [FA.START_KINDS[1]] * 2)
+        self.assertEqual(got[1]["size"], (69, 96, 24))
+        everything = FA.faction_pictures(mod, "test", "alpha")
+        self.assertEqual({e["rel"] for e in everything if FA.is_start_picture(e)}, {e["rel"] for e in got})
+        self.assertTrue(any(e["rel"].endswith("vc_alpha.tga") and not FA.is_start_picture(e) for e in everything))
+        self.assertEqual(FA.start_pictures(mod, "test", "gamma"), [])
+
     def test_faction_art_and_select_map(self):
         try:
             from PIL import Image

@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **The campaign-select map and the leader's face on the faction tab**: Edit faction and New faction show them
+  beside the description, as the game's start screen does - each with Replace..., Save a copy... and Keep the
+  current one (Preview, then Apply writes it). A faction without one says so (in Rome only a faction with a
+  `leader_pic_<faction>.tga` shows a face there). The Art tab's list no longer repeats them.
 - **Avoid Growth on Rome's town scroll matches Automanage closer**: the tick is stretched over its box as the game's
   own (it looked narrower), the box 1 px narrower on the left (it stood out), every place counted with one rounding,
   and its size and place follow the scroll's own governor panel - so it stays with the scroll at any screen size.
