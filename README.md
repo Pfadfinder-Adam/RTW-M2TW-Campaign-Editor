@@ -258,6 +258,8 @@ Tested on the plain games - Rome: Total War (with REX), Barbarian Invasion, Medi
 
 ## Using it
 
+**No scrollbars**: every list, table, page and read-only text scrolls by the mouse wheel, by **dragging** it with the left button (it follows the mouse, up / down and left / right) and by the **middle button**: press the wheel and move the mouse - the further from where you pressed, the faster it scrolls, both ways (held: it stops when you let go; a click: it goes on until the next click or Esc). A text you can type in keeps the left drag for selecting words. The map is as before (the right button moves it).
+
 1. **Close the game** and press **Browse...** to pick the mod's `data` folder (for example `...\Rome Total War Gold\HLR\data`).
 2. Pick the **campaign** (usually `imperial_campaign`).
 3. Pick a **template**. The new faction gets its culture, units, buildings, character models, name lists, trait triggers and art.

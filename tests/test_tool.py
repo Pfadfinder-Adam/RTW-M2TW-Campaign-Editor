@@ -7820,6 +7820,63 @@ building smith
         places, _ = flow_places(items, 300)
         self.assertEqual(places[3][0] + 60, 300)            # a wrapped right row still ends at the right edge
 
+    def test_lists_scroll_by_dragging_with_no_scrollbar(self):
+        """No scrollbar anywhere (it only took room): a list, a table or a read-only text follows a left-button drag
+        both ways, the rows picked before stay picked; an editable text keeps the drag for selecting its words."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display (CI): the window is not tested here
+            self.skipTest("no window: %s" % e)
+        from campaign_editor.gui_util import install_window_helpers
+        try:
+            root.geometry("400x300+0+0")
+            install_window_helpers(root)
+            tv = ttk.Treeview(root, columns=("a", "b"), show="tree headings", height=6)
+            for c in ("#0", "a", "b"):
+                tv.column(c, width=300, stretch=False)
+            rows = [tv.insert("", "end", text="row %d" % i, values=(i, i)) for i in range(200)]
+            sb = ttk.Scrollbar(root, command=tv.yview)
+            sb.pack(side="right", fill="y")
+            tv.pack(fill="both", expand=True)
+            text = tk.Text(root, height=3)
+            text.pack(fill="x")
+            text.insert("1.0", "\n".join(str(i) for i in range(100)))
+            root.update()
+
+            def drag(w, x, y, dx, dy):
+                w.event_generate("<ButtonPress-1>", x=x, y=y)
+                for k in range(1, 6):
+                    w.event_generate("<B1-Motion>", x=x + dx * k // 5, y=y + dy * k // 5, state=0x100)
+                w.event_generate("<ButtonRelease-1>", x=x + dx, y=y + dy)
+                root.update()
+            self.assertFalse(sb.winfo_ismapped())
+            tv.selection_set(rows[3])
+            drag(tv, 200, 100, -120, -60)
+            self.assertGreater(tv.yview()[0], 0)
+            self.assertGreater(tv.xview()[0], 0)
+            self.assertEqual(tv.selection(), (rows[3],))
+            drag(text, 40, 20, 0, -30)
+            self.assertEqual(text.yview()[0], 0)            # editable: the drag selected words
+        finally:
+            root.destroy()
+
+    def test_middle_button_autoscroll_speed(self):
+        """The middle button's autoscroll: still round the press point, faster the further the mouse goes, down
+        for below and up for above."""
+        try:
+            from campaign_editor.gui_util import AUTO_DEAD, auto_speed
+        except ImportError:                                # no tkinter here (the CI test job has it)
+            return
+        self.assertEqual(auto_speed(0), 0)
+        self.assertEqual(auto_speed(AUTO_DEAD), 0)
+        self.assertEqual(auto_speed(-AUTO_DEAD), 0)
+        self.assertGreater(auto_speed(AUTO_DEAD + 1), 0)
+        self.assertLess(auto_speed(-AUTO_DEAD - 1), 0)
+        self.assertGreater(auto_speed(300), auto_speed(100))
+        self.assertEqual(auto_speed(-200), -auto_speed(200))
+
     def test_dds_written_with_the_games_own_header(self):
         """A compressed DDS (Rome .tga.dds, the DDS inside a Medieval II .texture) keeps the top level's byte size
         in its header (DDSD_LINEARSIZE): Pillow wrote a row pitch there (4108 for 1024 x 1024 DXT5) and Medieval II
