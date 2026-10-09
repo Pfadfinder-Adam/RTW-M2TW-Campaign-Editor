@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **Avoid Growth on Rome's town scroll matches Automanage closer**: the tick is stretched over its box as the game's
+  own (it looked narrower), the box 1 px narrower on the left (it stood out), every place counted with one rounding,
+  and its size and place follow the scroll's own governor panel - so it stays with the scroll at any screen size.
+  Load offers to update the add-on in the game.
 - **The top row by topic, shorter names**: **Maps** · Bigger map (x3)... | **Factions** · Recolour... |
   **Settlements** · Many towns... · Mercenaries... | **Units** | **Buildings** | **Characters** · Traits and
   retinue... | **Religions** | **Add-ons** · Module builder... · Campaign rules... · Events... - each tool beside its

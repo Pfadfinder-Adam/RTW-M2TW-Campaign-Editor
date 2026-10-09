@@ -47,9 +47,10 @@ local AG_INK = [96, 82, 62, 255]
 // take M2EX's own Verdana (script/core/fonts.nut, ::EX.fonts.body) at AG_M2_TEXT of the box's height
 local AG_M2_TEXT = 0.58
 // Rome's Automanage, measured on a tester's screenshot (report R-20261007-8A29B4): its words (128, 119, 97), its box
-// 25 x 18 units (wider than high) standing 98 units right of where its words start - ours stands in that column too
+// 24 x 18 units (wider than high) standing 99 units right of where its words start - ours stands in that column too
+// (a tester's photo, 2026-10-09: with 98 / 25 our box stood out 1 px on the left, its right edge even)
 local AG_INK_ROME = [128, 119, 97, 255]
-local AG_ROME_BOX = [98, 25]
+local AG_ROME_BOX = [99, 24]
 local AG_KEY = "avoid_growth"        // this add-on's place in the saved game (persistent.avoid_growth)
 // The game's own tick pieces, the first found: [box, tick, their size in 1024 x 768 units] - the pieces of the
 // scroll's own Auto-manage tick: Medieval II's bevelled box, Rome's (and Barbarian Invasion's) thin one
@@ -84,6 +85,10 @@ local AG_M2_GAP = 307
 // the panel [898,96 631x124], Automanage's box 996-1020 x 314-336, the tabs from 373).
 local AG_ROME_BELOW = 107
 local AG_ROME_X = -13
+// The governor panel's own size in 1024 x 768 units (the same tester's scroll: 631 x 124 px at 900 px high): the
+// tick's sizes and places on Rome's scroll are scaled by the panel as the game draws it, so they stay with the
+// scroll at any screen size or shape (the user: it must never drift from Automanage when the resolution changes).
+local AG_ROME_GOV_W = 538.5
 // Where the tick goes: the first of these parts of the settlement scroll that is open, and where beside it.
 local AG_ANCHORS = [
     ["settlement_details_population_stats", "below"],
@@ -390,6 +395,23 @@ function ag_tab_open() {
     return !known
 }
 
+// The nearest whole pixel, for a positive or negative number (tointeger() cuts towards 0: -15.2 and 114.8 made
+// Automanage's column 1 px off).
+function ag_round(v) {
+    return v < 0 ? -((-v + 0.5).tointeger()) : (v + 0.5).tointeger()
+}
+
+// Screen px per 1024 x 768 unit on Rome's scroll: from the governor panel's width as the game draws it (it scales
+// its scroll its own way), else the screen's (ag_scale).
+function ag_rome_scale(k) {
+    local gov = ag_rect(ag_game_element("own_settlement_governor_info_panel"))
+    if (gov == null) {
+        return k
+    }
+    local kp = gov[2] / AG_ROME_GOV_W
+    return kp > k * 0.5 && kp < k * 2.0 ? kp : k                   // a panel of another size: the screen's
+}
+
 function ag_scale(ui) {
     try {
         local v = ui.virtualScale()
@@ -502,8 +524,8 @@ function ag_place(box, m2, k) {
         // figures are on screen too, and the tick belongs under Automanage, not there
         local gov = ag_rect(ag_game_element("own_settlement_governor_info_panel"))
         if (gov != null) {
-            return [gov[0] + (AG_ROME_X * k).tointeger(), gov[1] + gov[3] + (AG_ROME_BELOW * k + 0.5).tointeger(),
-                    "own_settlement_governor_info_panel (Rome: under Automanage)"]
+            return [gov[0] + ag_round(AG_ROME_X * k), gov[1] + gov[3] + ag_round(AG_ROME_BELOW * k),
+                    "own_settlement_governor_info_panel (Rome: under Automanage)", gov[0]]
         }
     }
     foreach (a in AG_ANCHORS) {
@@ -516,8 +538,8 @@ function ag_place(box, m2, k) {
                     a[0] + " (Medieval II tick row)"]
         }
         if (!m2 && a[0] == "own_settlement_governor_info_panel") {
-            return [r[0] + (AG_ROME_X * k).tointeger(), r[1] + r[3] + (AG_ROME_BELOW * k + 0.5).tointeger(),
-                    a[0] + " (Rome: under Automanage)"]
+            return [r[0] + ag_round(AG_ROME_X * k), r[1] + r[3] + ag_round(AG_ROME_BELOW * k),
+                    a[0] + " (Rome: under Automanage)", r[0]]
         }
         if (a[1] == "below") {
             return [r[0], r[1] + r[3] + box / 4, a[0]]
@@ -544,6 +566,9 @@ function ag_draw() {
     }
     local k = ag_scale(ui)
     local art = ag_load_art(ui)
+    if (!art.m2) {
+        k = ag_rome_scale(k)
+    }
     local box = (art.size * k + 0.5).tointeger()
     local tick = box
     local at = ag_place(box, art.m2, k)
@@ -557,7 +582,7 @@ function ag_draw() {
             local r = ag_rect(ag_game_element(a[0]))
             line += " " + a[0] + (r == null ? " -" : " [" + r[0] + "," + r[1] + " " + r[2] + "x" + r[3] + "]")
         }
-        ag_log(line + "; the tick at " + at[0] + "," + at[1] + " beside " + at[2] + ", font "
+        ag_log(line + "; the tick at " + at[0] + "," + at[1] + " beside " + at[2] + ", " + k + " px a unit, font "
             + (art.m2 && ag_ex_font() != null ? "M2EX's Verdana" : ag_face(ui)))
     }
     local x = at[0] + (AG_OFFSET_X * k).tointeger()
@@ -590,9 +615,10 @@ function ag_draw() {
     })
     local bx = x + tw[0] + (AG_GAP * k).tointeger()
     local bw = box
-    if (!art.m2) {                  // in Automanage's column, as wide as its box
-        bw = (AG_ROME_BOX[1] * k + 0.5).tointeger()
-        local col = x + (AG_ROME_BOX[0] * k).tointeger()
+    if (!art.m2) {                  // in Automanage's column, as wide as its box (one rounding: no pixel off)
+        bw = ag_round(AG_ROME_BOX[1] * k)
+        local col = at.len() > 3 ? at[3] + ag_round((AG_ROME_X + AG_ROME_BOX[0]) * k) + ag_round(AG_OFFSET_X * k)
+                                 : x + ag_round(AG_ROME_BOX[0] * k)
         bx = bx > col ? bx : col
     }
     if (art.box != null) {
@@ -601,7 +627,9 @@ function ag_draw() {
         ui.drawRect(bx, y, bw, box, 230, 220, 190, 255)
     }
     if (on) {
-        if (art.tick != null) {
+        if (art.tick != null && !art.m2) {
+            ui.image(art.tick.img, bw, box, bx, y)     // Rome: the tick stretched over its box, as Automanage's
+        } else if (art.tick != null) {
             ui.image(art.tick.img, tick, tick, bx + (bw - tick) / 2, y + (box - tick) / 2)
         } else {
             ui.drawRect(bx + bw / 4, y + box / 4, bw / 2, box / 2, 40, 30, 20, 255)
