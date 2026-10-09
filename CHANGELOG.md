@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **Calmer coloured buttons**: Start the game, Discord, YouTube and Ko-fi a fifth less bright and saturated - they
+  glowed too much.
 - **The map is the Map editor's alone**: the Faction editor has no Map tab any more. A faction's towns are picked
   with **Towns on the map...** (under Capital): the Map editor opens, a click on a town adds it (yellow ring),
   another takes it out, **Done** brings you back to the faction - nothing you typed is lost. **Capital on the
