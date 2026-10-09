@@ -285,10 +285,10 @@ class TownWindow(tk.Toplevel):
             else:
                 self.garrison = list(types)
             self.lbl_why.configure(text="")
-        def suggest():                                  # the units the town's owner trains, under a sensible upkeep
+        def suggest(lo, hi, cap):                       # the units the town's owner trains, by the numbers by Suggest
             import random
             pool = MT.town_pool(self.mod, t, MT.garrison_pool(self.mod, owner))
-            return MT.random_garrison(pool, 3, 6, 2000, random.Random())
+            return MT.random_garrison(pool, lo, hi, cap, random.Random())
         self.ged.load(self.mod, owner, "%s (%s)" % (t["name"], self.region), units,
                       self.garrison if self.garrison is not None else now, changed, auto=suggest,
                       held=(t.get("army_role") or True) if named else False, unchanged=self.garrison is None)

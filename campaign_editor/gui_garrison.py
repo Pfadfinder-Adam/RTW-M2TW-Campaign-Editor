@@ -114,14 +114,45 @@ class GarrisonEditor(ttk.Frame):
         self.total = ttk.Label(bar, text="", font=("", 10, "bold"), justify="left")
         self.total.pack(side="left", fill="x", expand=True)
         self.total.bind("<Configure>", lambda e: self.total.configure(wraplength=max(120, e.width - 4)), add="+")
-        ttk.Button(bar, text="Automatic", command=self.clear).pack(side="right", padx=4)
-        b = ttk.Button(bar, text="Suggest", command=self.suggest)
-        b.pack(side="right", padx=4)
-        first(b, bar.pack_slaves()[1])            # Automatic, Suggest before the total
+        # Suggest draws a garrison / an army by the numbers beside it - how many units, their upkeep together at
+        # most (a tester, 2026-10-09: 'Suggest does nothing, and we cannot say how much upkeep'); kept for next time.
+        # Automatic (empty = the tool picks when it builds) only where that means something: New / Edit faction
+        from . import settings
+        self.v_lo = tk.StringVar(value=str(settings.get("suggest_units_lo", 3)))
+        self.v_hi = tk.StringVar(value=str(settings.get("suggest_units_hi", 6)))
+        self.v_cap = tk.StringVar(value=str(settings.get("suggest_upkeep", 2000)))
+        self.b_auto = ttk.Button(bar, text="Automatic", command=self.clear)
+        self.b_auto.pack(side="right", padx=4)
+        self.sugg = ttk.Frame(bar)
+        self.sugg.pack(side="right", padx=4)
+        ttk.Label(self.sugg, text="units").pack(side="left")
+        for v, w in ((self.v_lo, 3), (self.v_hi, 3)):
+            ttk.Spinbox(self.sugg, from_=1, to=MAX_UNITS, textvariable=v, width=w).pack(side="left", padx=(2, 0))
+            if v is self.v_lo:
+                ttk.Label(self.sugg, text="to").pack(side="left", padx=(2, 0))
+        ttk.Label(self.sugg, text="  upkeep up to").pack(side="left")
+        ttk.Spinbox(self.sugg, from_=0, to=100000, increment=100, textvariable=self.v_cap, width=7).pack(
+            side="left", padx=(2, 4))
+        b = ttk.Button(self.sugg, text="Suggest", command=self.suggest)
+        b.pack(side="left")
+        from .gui_util import tip
+        tip(b, "A garrison drawn at random from the units this faction trains: that many units, their upkeep "
+               "together at most this much (0: no limit). Press again for another.")
+        first(self.b_auto, self.sugg)             # Automatic, Suggest before the total
 
-    def load(self, mod, faction, region, units, current, on_change, auto=None, held=False, unchanged=False):
-        """unchanged: current is what stands in the town now, shown until the first click."""
+    def load(self, mod, faction, region, units, current, on_change, auto=None, held=False, unchanged=False,
+             automatic=False):
+        """unchanged: current is what stands in the town now, shown until the first click. auto(lo, hi, cap): the
+        unit types Suggest draws (none: no Suggest); automatic: the Automatic button (empty = the tool picks)."""
         self.unchanged = unchanged
+        if automatic:
+            self.b_auto.pack(side="right", padx=4, before=self.sugg)
+        else:
+            self.b_auto.pack_forget()
+        if auto:
+            self.sugg.pack(side="right", padx=4)
+        else:
+            self.sugg.pack_forget()
         self.mod, self.faction, self.units = mod, faction, units
         self.by_type = {u.type: u for u in units}
         self.garrison = [t for t in current if t in self.by_type]
@@ -255,7 +286,30 @@ class GarrisonEditor(ttk.Frame):
         self.changed()
         self.cleared = False
 
+    def limits(self):
+        """(lo, hi, cap) from the fields by Suggest - wrong or empty numbers read as the defaults, lo <= hi, hi
+        within the room (a named general's bodyguard takes one); cap None for no limit. Kept for next time."""
+        def num(v, default):
+            try:
+                return max(0, int(float(v.get())))
+            except (ValueError, tk.TclError):
+                return default
+        room = MAX_UNITS - (1 if self.held else 0)
+        lo, hi, cap = num(self.v_lo, 3), num(self.v_hi, 6), num(self.v_cap, 2000)
+        hi = max(1, min(hi, room))
+        lo = max(1, min(lo, hi))
+        from . import settings
+        for k, v in (("suggest_units_lo", lo), ("suggest_units_hi", hi), ("suggest_upkeep", cap)):
+            settings.put(k, v)
+        return lo, hi, (cap or None)
+
     def suggest(self):
         if self.auto:
-            self.garrison = [t for t in self.auto() if t in self.by_type]
+            got = [t for t in self.auto(*self.limits()) if t in self.by_type]
+            if not got:
+                self.bell()
+                self.total.configure(text="Suggest found nothing to draw from: no unit of this faction trains, or "
+                                          "none fits under the upkeep limit")
+                return
+            self.garrison = got
             self.changed()

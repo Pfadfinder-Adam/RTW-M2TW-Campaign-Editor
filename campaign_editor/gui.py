@@ -29,7 +29,7 @@ from .gui_garrison import GarrisonEditor, Pictures
 from .gui_map import MapView
 from .plan import Plan, backup_label, backups, restore_to
 from .scan import IGNORE_HELP, ignore_path, make_manifest, scan as scan_mod
-from .start import balanced_army, unit_name
+from .start import unit_name
 from .strat import Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
@@ -5276,12 +5276,11 @@ class App(tk.Tk):
                 now = list(st.garrison) if st is not None else []
             units = self._with_types(units, now)
 
-        def auto():
+        def auto(lo, hi, cap):                         # Suggest: the template's units, by the numbers beside it
+            import random
+            from . import masstown as MT
             try:
-                strat = Strat(self.mod.load(self.mod.campaign_file(self.v_campaign.get(), "descr_strat.txt")))
-                upkeep = {u.type: u.upkeep for u in read_units(self.mod.load(self.mod.file("edu")))}
-                lines, _, _ = balanced_army(strat, template, len(self.chosen), upkeep, [])
-                return [unit_name(l) for l in lines[1:]]           # without the bodyguard
+                return MT.random_garrison(MT.garrison_pool(self.mod, template), lo, hi, cap, random.Random())
             except Exception:
                 return []
 
@@ -5298,10 +5297,10 @@ class App(tk.Tk):
             self.refresh_chosen(keep_units_selection=True)
         if self.editing() and region not in self.garrisons:
             self.garrison_editor.load(self.mod, template, region, units, now, changed, auto=auto, held=held,
-                                      unchanged=True)
+                                      unchanged=True, automatic=True)
             return
         self.garrison_editor.load(self.mod, template, region, units, self.garrisons.get(region, []),
-                                  changed, auto=auto, held=held)
+                                  changed, auto=auto, held=held, automatic=True)
 
     def char_window(self, cid):
         """A double click on a character on the Map: an army or fleet opens its units in a window of its own; an agent
@@ -5414,8 +5413,17 @@ class App(tk.Tk):
                 ch["kind"], ch["name"], fac, len(types), " + his bodyguard" if named else ""))
             self._mark_work()
             self.show_map()
+        def suggest(lo, hi, cap):                      # the units this faction trains (a fleet: its ships)
+            import random
+            from . import masstown as MT
+            if fleet:
+                pool = [(u.type, u.upkeep) for u in units if u.category == "ship"]
+            else:
+                pool = MT.garrison_pool(self.mod, fac)
+            return MT.random_garrison(pool, lo, hi, cap, random.Random())
+        # no Automatic here: an army on the map has no 'the tool picks' - it emptied the army (a tester)
         ed.load(self.mod, fac, "%s %s of %s" % (ch["kind"], ch["name"], fac), units, current, changed,
-                held=named, unchanged=entry is None and cid not in self.map_units)
+                held=named, unchanged=entry is None and cid not in self.map_units, auto=suggest)
         ttk.Button(top, text="Close", command=top.destroy).pack(anchor="e", padx=6, pady=6)
         return top
 

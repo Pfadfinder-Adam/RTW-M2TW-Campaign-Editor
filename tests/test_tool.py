@@ -10088,6 +10088,58 @@ building smith
         finally:
             root.destroy()
 
+    def test_army_window_suggest_by_units_and_upkeep(self):
+        """An army's units (a double click on the map; a tester, 2026-10-09): Suggest did nothing (no draw was given
+        to it) and Automatic emptied the army. Now Suggest draws by the numbers beside it - how many units, their
+        upkeep together at most - and Automatic shows only where 'the tool picks' means something."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display (CI): the window is not tested here
+            self.skipTest("no window: %s" % e)
+        import random
+        from campaign_editor import masstown as MT, settings
+        from campaign_editor.gui_garrison import GarrisonEditor
+        from campaign_editor.units import Unit
+        units = []
+        for name, up in (("peasants", 100), ("spears", 300), ("knights", 900)):
+            u = Unit(name)
+            u.cost = [1, up * 2, up]
+            units.append(u)
+        pool = [(u.type, u.upkeep) for u in units]
+        saved = (settings._data, settings._path)
+        settings._data, settings._path = {}, lambda: None    # the numbers kept in memory only, not the real file
+        try:
+            ed = GarrisonEditor(root)
+            ed.pack()
+            asked = []
+
+            def draw(lo, hi, cap):
+                asked.append((lo, hi, cap))
+                return MT.random_garrison(pool, lo, hi, cap, random.Random(1))
+            ed.load(None, "england", "army", units, ["knights"], lambda t: None, auto=draw)
+            root.update()
+            self.assertFalse(ed.b_auto.winfo_ismapped())          # an army: no Automatic
+            ed.v_lo.set("4")
+            ed.v_hi.set("4")
+            ed.v_cap.set("800")
+            ed.suggest()
+            self.assertEqual(asked[-1], (4, 4, 800))
+            self.assertEqual(len(ed.garrison), 4)
+            self.assertLessEqual(sum(dict(pool)[t] for t in ed.garrison), 800)
+            ed.v_hi.set("99")                                      # past the room: as many as fit
+            ed.v_lo.set("x")                                       # not a number: the default
+            ed.v_cap.set("0")                                      # 0: no limit
+            ed.suggest()
+            self.assertEqual(asked[-1], (3, 20, None))
+            ed.load(None, "england", "town", units, [], lambda t: None, auto=draw, automatic=True)
+            root.update()
+            self.assertTrue(ed.b_auto.winfo_ismapped())           # New / Edit faction's garrisons keep it
+            self.assertEqual(settings.get("suggest_upkeep"), 0)      # kept for next time
+        finally:
+            settings._data, settings._path = saved
+            root.destroy()
+
     def test_closing_the_editor_when_a_command_is_already_gone(self):
         """Closing the editor once showed 'can't delete Tcl command' and then, while it reported that, a Windows box
         'application has been destroyed' (a tester, 0.32.0): a window keeps the names of its callbacks to delete them
