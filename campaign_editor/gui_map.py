@@ -2261,9 +2261,11 @@ class MapView(ttk.Frame):
             return
         if self._spray:
             self._spray = (e.x, e.y)
+            self._outline(e.x, e.y)             # the brush's outline goes with the mouse while it paints (a report)
             return
         if self._painting:
             self._paint_at(e)
+            self._outline(e.x, e.y)
             return
         if self._rdrag:
             rid, lx, ly, started = self._rdrag

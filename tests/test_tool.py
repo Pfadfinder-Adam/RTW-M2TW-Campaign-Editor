@@ -2307,6 +2307,57 @@ building smith
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "_backups" not in k}, before)
 
+    def test_land_brush_coast_is_smooth_not_in_steps(self):
+        """A report ('where is the smoothing?'): the land brush made land tile by tile, its coast ran in tile-sized
+        steps. The coast round the brush's tiles now follows a smooth curve at half-tile level, as the games' own
+        maps do; a tile's middle never changes side, a lone land tile keeps land round its middle (no drowned islet)."""
+        from campaign_editor import terrain as T
+
+        class Pic:
+            def __init__(self, w, h, c):
+                self.width, self.height = w, h
+                self.px = {(x, y): c for x in range(w) for y in range(h)}
+
+            def get(self, x, y):
+                return self.px[(x, y)]
+
+            def set(self, x, y, c):
+                self.px[(x, y)] = c
+        n = 12
+        land = {(x, y) for x in range(n) for y in range(n) if x + y <= 9} | {(9, 9)}     # a stair + a 1-tile islet
+        heights = Pic(2 * n + 1, 2 * n + 1, (0, 0, 253))
+        ground = Pic(2 * n + 1, 2 * n + 1, T.SHALLOW_SEA)
+        for x, y in land:                                             # today's brush: whole 3 x 3 blocks
+            for a in range(3):
+                for b in range(3):
+                    heights.set(2 * x + a, 2 * y + b, (8, 8, 8))
+                    ground.set(2 * x + a, 2 * y + b, T.NEW_LAND_GROUND)
+        got = T.coast_smoothed(heights, ground, lambda x, y: (x, y) in land, sorted(land))
+        for p, c in got["heights"].items():
+            heights.set(*p, c)
+        for x in range(n):
+            for y in range(n):
+                self.assertNotIn((2 * x + 1, 2 * y + 1), got["heights"])          # no tile's middle touched
+
+        def wet(p):
+            return not T.is_land_height(heights.get(*p))
+        self.assertTrue(wet((10, 12)))                                 # the outer corner of a step: sea now
+        self.assertFalse(wet((2, 4)))                                  # inland stays land
+        self.assertFalse(wet((20, 19)) and wet((19, 20)))              # the islet keeps land round its middle
+        self.assertFalse(wet((19, 19)))
+        # the waterline: most straight runs one point long (vanilla 62 %), not tile-long steps
+        runs = []
+        for py in range(2 * n):
+            k = 0
+            for px in range(2 * n + 1):
+                if wet((px, py)) != wet((px, py + 1)):
+                    k += 1
+                elif k:
+                    runs.append(k)
+                    k = 0
+        self.assertGreater(sum(1 for r in runs if r == 1) / float(len(runs)), 0.5, runs)
+        self.assertEqual(got["ground"][(10, 12)], T.SHALLOW_SEA)       # the ground follows the water
+
     def test_coast_brush_land_and_sea(self):
         """The land / sea brush: a sea tile made land joins the nearest region and gets a land ground and a low
         shore in the heights (and in map_heights.hgt); a land tile made sea gets the sea's colour, shallow sea and a

@@ -42,7 +42,14 @@
   town stood there; now the move is simply undone.
 - **Map size: the minimap follows the cut** (both games): the campaign's minimap pictures (radar_map1 / radar_map2.tga,
   pictures of their own size) are cut or grown in the same proportion as the map - before, the old picture stayed
-  and the game drew the real borders over the wrong land.
+  and the game drew the real borders over the wrong land. Medieval II's winter minimap keeps its thin blue border at
+  the new edge, and new parts take the deep sea's colour (a grown map showed a blue band).
+- **Fix: no black band across the map after it is grown** (Medieval II): the fog picture's dark frame
+  (map_fog.tga) moves to the new edge instead of staying where the old edge was.
+- **Land and sea brush: a smooth coast** - new land's coast follows a smooth curve at half-tile level, the way the
+  games' own maps are drawn, instead of tile-sized steps; one-tile islets stay small ovals of land and one-tile
+  straits stay open. Every tile stays what it was painted (region, town, port).
+- **Fix: the brush's outline follows the mouse while painting** with the button held (it stood still).
 - **Map size**: a cut that takes a town off deletes its region from every file, and nothing more - the part of its
   land that stays on the map is left as it is, given to no one; the question before the cut and the result name it,
   and you paint it into the regions you want (Edit regions). The cut no longer refuses a town whose land left

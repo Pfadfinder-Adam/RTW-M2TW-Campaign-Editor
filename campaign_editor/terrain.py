@@ -12,6 +12,7 @@ its own. Nothing a town, a port or a character stands on is made a tile the game
 for them (the rules of moddata.land_problem)."""
 
 import os
+from collections import Counter
 
 
 # map_ground_types.tga colours (Rome and Medieval II; the impassable ones Medieval II's and the engines', the black one
@@ -517,6 +518,90 @@ def shore_rise(heights, pixels):
     return out
 
 
+COAST_BLUR = 1.6                # tiles: how far the smooth coast looks round a point (rules.md 'HOW THE GAMES' OWN COASTS')
+
+
+def coast_smoothed(heights, ground, is_land, tiles, blur=COAST_BLUR):
+    """{'heights': {(px, py): colour}, 'ground': {...}} putting the coast round the land brush's tiles on a smooth
+    curve, the way the games' own maps are made (measured: the coast is decided at half-tile level - the points
+    between a land and a sea tile half land, half sea - and follows a curve through the tiles, not their squares; a
+    report: 'where is the smoothing?', the brush's coast ran in tile-sized steps). Each point of the changed tiles'
+    blocks takes the land share of the tiles round it (a soft blur of `blur` tiles); land where it is over a half.
+    A tile's middle never changes side (its region, town, port stay) and pulls the points next to it to its side -
+    a 1-tile island or cape stays an oval of land, a 1-tile strait stays open (the blur alone drowned Dalmatia's
+    islets). Heights
+    follow the share near the waterline (grey 1 - 16, blue 254 - 223), so the game's cut falls on the curve.
+    is_land(x, y): the tile is land (map_regions)."""
+    import math
+    W, H = heights.width, heights.height
+    reach = int(2 * blur) + 1
+    sigma2 = 2 * (blur / 1.4) ** 2
+    memo = {}
+
+    def land_tile(x, y):
+        if (x, y) not in memo:
+            memo[(x, y)] = bool(is_land(x, y)) if 0 <= 2 * x + 1 < W and 0 <= 2 * y + 1 < H else None
+        return memo[(x, y)]
+
+    def share(px, py):
+        num = den = 0.0
+        cx, cy = (px - 1) // 2, (py - 1) // 2
+        for x in range(cx - reach, cx + reach + 2):
+            for y in range(cy - reach, cy + reach + 2):
+                t = land_tile(x, y)
+                if t is None:
+                    continue
+                dx, dy = (2 * x + 1 - px) / 2.0, (2 * y + 1 - py) / 2.0
+                d2 = dx * dx + dy * dy
+                if d2 < (2 * blur) ** 2:
+                    w = math.exp(-d2 / sigma2)
+                    num += w * t
+                    den += w
+        return num / den if den else 0.0
+    points = {(px, py) for x, y in tiles for px in range(2 * x, 2 * x + 3) for py in range(2 * y, 2 * y + 3)
+              if 0 <= px < W and 0 <= py < H}
+    lone = {}
+
+    def alone(x, y, t):                               # how much a tile stands among the other kind (0 .. 1)
+        if (x, y) not in lone:
+            lone[(x, y)] = abs(share(2 * x + 1, 2 * y + 1) - t)
+        return lone[(x, y)]
+
+    def pull(px, py):                                 # each tile's middle pulls the points next to it to its side,
+        best = {True: 0.0, False: 0.0}                # harder the more it stands alone (a 1-tile islet, a strait)
+        for x in ((px - 1) // 2, (px - 1) // 2 + 1, (px - 2) // 2):
+            for y in ((py - 1) // 2, (py - 1) // 2 + 1, (py - 2) // 2):
+                t = land_tile(x, y)
+                if t is None:
+                    continue
+                d2 = ((2 * x + 1 - px) ** 2 + (2 * y + 1 - py) ** 2) / 4.0
+                best[t] = max(best[t], 0.6 * (1 + 2 * alone(x, y, t)) * math.exp(-d2 / 0.5))
+        return best[True] - best[False]
+    out = {"heights": {}, "ground": {}}
+    for px, py in sorted(points):
+        if px % 2 and py % 2:
+            continue                                  # a tile's middle: the tile itself
+        s = share(px, py) - 0.5 + pull(px, py)
+        c = heights.get(px, py)
+        was = is_land_height(c)
+        if s > 0:
+            g = max(1, min(INLAND, int(round(s * 28))))
+            if not was or c[0] > g:
+                out["heights"][(px, py)] = (g, g, g)
+            if not was and ground is not None and 0 <= px < ground.width and 0 <= py < ground.height:
+                near = Counter(ground.get(px + a, py + b) for a in (-1, 0, 1) for b in (-1, 0, 1)
+                               if 0 <= px + a < ground.width and 0 <= py + b < ground.height)
+                kind = next((k for k, _ in near.most_common() if k not in SEA), NEW_LAND_GROUND)
+                out["ground"][(px, py)] = kind
+        else:
+            b = max(1, min(32, int(round(-s * 60))))
+            if was:
+                out["heights"][(px, py)] = (0, 0, 255 - b)
+                if ground is not None and 0 <= px < ground.width and 0 <= py < ground.height:
+                    out["ground"][(px, py)] = SHALLOW_SEA
+    return out
+
+
 def min_sea_height(mod, campaign):
     """descr_terrain.txt's min_sea_height, else vanilla RTW's -3122.256."""
     import re
@@ -611,4 +696,4 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
 
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "ground_brushes", "FEATURE_BRUSHES", "paint_problem",
            "river_warnings", "river_shapes", "bridge_warnings", "feature_brushes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray", "max_land_height", "hgt_patched",
-           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "shore_rise", "min_sea_height", "hgt_value", "apply"]
+           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "shore_rise", "coast_smoothed", "min_sea_height", "hgt_value", "apply"]

@@ -389,6 +389,19 @@ class TerrainEditor(ttk.Frame):
                 self.cpx["heights"][p] = c
                 heights.set(p[0], p[1], c)
                 self.cmap.set_height(p[0], p[1], c[0])
+        if took and heights is not None:                  # the coast on a smooth curve, not in tile-sized steps
+            ground = self._img("map_ground_types.tga")
+            got = T.coast_smoothed(heights, ground, lambda x, y: not self.cmap.is_sea(x, y), [t for t, _ in took])
+            for name, img in (("heights", heights), ("ground", ground)):
+                for p, c in got[name].items():
+                    self.cbase.setdefault((name, p), img.get(*p))
+                    if self.cbase[(name, p)] == c:
+                        self.cpx[name].pop(p, None)
+                    else:
+                        self.cpx[name][p] = c
+                    img.set(p[0], p[1], c)
+                    if name == "heights" and c[0] == c[1] == c[2]:
+                        self.cmap.set_height(p[0], p[1], c[0])
         if took:
             self.cmap.__dict__.pop("_backgrounds", None)
             self.cmap._hpil = None
