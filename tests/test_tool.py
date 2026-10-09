@@ -2358,6 +2358,29 @@ building smith
         self.assertGreater(sum(1 for r in runs if r == 1) / float(len(runs)), 0.5, runs)
         self.assertEqual(got["ground"][(10, 12)], T.SHALLOW_SEA)       # the ground follows the water
 
+    def test_coast_pen_draws_points_not_tile_middles(self):
+        """The coast pen (the user: 'why can't we just draw on the heights map - it is all pixels?'): the points under
+        it turn land (a low shore) or water, their ground follows; a tile's middle is left to the tile."""
+        from campaign_editor import terrain as T
+
+        class Pic:
+            def __init__(self, w, h, c):
+                self.width, self.height = w, h
+                self.px = {(x, y): c for x in range(w) for y in range(h)}
+
+            def get(self, x, y):
+                return self.px[(x, y)]
+        heights, ground = Pic(9, 9, (0, 0, 253)), Pic(9, 9, T.SHALLOW_SEA)
+        got = T.pen_points(heights, ground, (4, 4), 1.0, True)
+        self.assertEqual(got["heights"][(4, 4)], (T.COAST_LAND,) * 3)
+        self.assertIn((4, 3), got["heights"])
+        self.assertNotIn((3, 3), got["heights"])                         # a tile's middle: the tile's own
+        self.assertEqual(got["ground"][(4, 4)], T.NEW_LAND_GROUND)
+        heights.px[(4, 4)] = (9, 9, 9)
+        back = T.pen_points(heights, ground, (4, 4), 0.4, False)          # size 1: the one point, made water
+        self.assertEqual(back["heights"], {(4, 4): (0, 0, 250)})
+        self.assertEqual(back["ground"][(4, 4)], T.SHALLOW_SEA)
+
     def test_coast_brush_land_and_sea(self):
         """The land / sea brush: a sea tile made land joins the nearest region and gets a land ground and a low
         shore in the heights (and in map_heights.hgt); a land tile made sea gets the sea's colour, shallow sea and a

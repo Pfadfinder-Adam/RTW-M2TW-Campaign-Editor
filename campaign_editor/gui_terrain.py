@@ -55,6 +55,7 @@ class TerrainEditor(ttk.Frame):
         ttk.Label(top, text="   brush").pack(side="left")
         self.v_brush = tk.IntVar(value=1)
         self.v_brush.trace_add("write", lambda *_: self._brush_changed())     # typed too, not only the arrows
+        self.v_coast.trace_add("write", lambda *_: self._spray_hook())
         ttk.Spinbox(top, from_=1, to=12, width=3, textvariable=self.v_brush,
                     command=lambda: setattr(self.view, "brush", self.v_brush.get())).pack(side="left", padx=2)
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
@@ -124,7 +125,8 @@ class TerrainEditor(ttk.Frame):
         return h.hexdigest()
 
     def dirty(self):
-        return bool(self.ground or self.features or self.climate or self.heights or self.coast)
+        return bool(self.ground or self.features or self.climate or self.heights or self.coast or
+                    self.cpx["heights"] or self.cpx["ground"])
 
     def pending(self):
         return len(self.ground) + len(self.features) + len(self.climate) + (1 if self.heights else 0) + \
@@ -155,7 +157,7 @@ class TerrainEditor(ttk.Frame):
         mod = ModData(self.mod.data)
         plan = Plan(mod, "terrain", "terrain", {})
         T.apply(plan, self.app.v_campaign.get(), self.ground, self.features, self.climate, self.heights,
-                dict(self.cpx, tiles=self.coast) if self.coast else None)
+                dict(self.cpx, tiles=self.coast) if self.coast or self.cpx["heights"] or self.cpx["ground"] else None)
         broken = T.river_warnings(self._features_now(), self.cmap.w, self.cmap.h, self.cmap.is_sea) \
             if self.features else []
         for x, y, n in broken[:20]:
@@ -204,7 +206,15 @@ class TerrainEditor(ttk.Frame):
         self.view.brush = self.v_brush.get()
         self.view.load(self.cmap, {}, {}, region_mode=True, on_paint=self.paint, on_pick=self.pick,
                        brush=self.v_brush.get(), plain=True)
-        self.view.on_spray = self.spray if self.v_what.get() == "heights" else None
+        self._spray_hook()
+
+    def _spray_hook(self):
+        """The heights brush and the coast pen work point by point (map_heights), the other brushes by tile."""
+        if getattr(self, "view", None) is None:
+            return
+        what = self.v_what.get()
+        self.view.on_spray = self.spray if what == "heights" else \
+            self.pen if what == "coast" and self.v_coast.get().startswith("pen") else None
 
     def _brush_changed(self):
         try:
@@ -322,9 +332,16 @@ class TerrainEditor(ttk.Frame):
             self._rtiles = c
         return self._rtiles
 
-    def paint_coast(self, tiles):
+    def paint_coast(self, tiles, mode=None):
         """The land / sea brush: each tile turned with its regions pixel, the ground and heights round it."""
-        to_land = self.v_coast.get() == "land"
+        mode = mode or self.v_coast.get()
+        if mode == "smooth":
+            return self.smooth_coast(tiles)
+        if mode.startswith("pen") and mode not in ("pen_land", "pen_sea"):
+            return []
+        if mode in ("pen_land", "pen_sea") and self.v_coast.get() == mode and not getattr(self, "_pen_tiles", False):
+            return []                                   # the pen draws by point (pen()), not by the tile brush
+        to_land = mode in ("land", "pen_land")
         camp = self.app.v_campaign.get()
         reg_img = self.mod.region_map(camp)
         if not hasattr(self, "_sea"):
@@ -389,7 +406,7 @@ class TerrainEditor(ttk.Frame):
                 self.cpx["heights"][p] = c
                 heights.set(p[0], p[1], c)
                 self.cmap.set_height(p[0], p[1], c[0])
-        if took and heights is not None:                  # the coast on a smooth curve, not in tile-sized steps
+        if took and heights is not None and not mode.startswith("pen"):   # the coast on a smooth curve (the pen: by hand)
             ground = self._img("map_ground_types.tga")
             got = T.coast_smoothed(heights, ground, lambda x, y: not self.cmap.is_sea(x, y), [t for t, _ in took])
             for name, img in (("heights", heights), ("ground", ground)):
@@ -409,6 +426,66 @@ class TerrainEditor(ttk.Frame):
                              % len(self.coast)) + ("   (not here: %s)" % why if why else ""))
         self.app._mark_work()
         return took
+
+    def _coast_points(self, got):
+        """Pixels of map_heights / map_ground_types the coast changes, kept as the land brush keeps its own (Undo,
+        Preview, Apply)."""
+        imgs = {"heights": self._img("map_heights.tga"), "ground": self._img("map_ground_types.tga")}
+        for name, img in imgs.items():
+            if img is None:
+                continue
+            for p, c in got.get(name, {}).items():
+                self.cbase.setdefault((name, p), img.get(*p))
+                if self.cbase[(name, p)] == c:
+                    self.cpx[name].pop(p, None)
+                else:
+                    self.cpx[name][p] = c
+                img.set(p[0], p[1], c)
+                if name == "heights" and c[0] == c[1] == c[2]:
+                    self.cmap.set_height(p[0], p[1], c[0])
+        if got.get("heights") or got.get("ground"):
+            self.cmap.__dict__.pop("_backgrounds", None)
+            self.cmap._hpil = None
+            self.app.status.set("Terrain: %d point(s) of the coast changed - Preview, then Apply changes."
+                                % len(self.cpx["heights"]))
+            self.app._mark_work()
+
+    def smooth_coast(self, tiles):
+        """'Smooth the coast': an old blocky coast under the brush put on the same smooth curve the land brush draws
+        (terrain.coast_smoothed) - no tile changes side, only the points between tiles."""
+        heights = self._img("map_heights.tga")
+        if heights is None:
+            self.app.status.set("This campaign has no map_heights.tga.")
+            return []
+        got = T.coast_smoothed(heights, self._img("map_ground_types.tga"),
+                               lambda x, y: not self.cmap.is_sea(x, y), [tuple(t) for t in tiles])
+        self._coast_points(got)
+        return []
+
+    def pen(self, px, py):
+        """The coast pen: the map_heights points under it made land (a low shore) or water, as modders draw the coast
+        by hand on map_heights; a tile's middle point stays its tile's (change a tile with Land / Sea)."""
+        heights = self._img("map_heights.tga")
+        if heights is None or not self._bound():
+            return False
+        to_land = self.v_coast.get() == "pen_land"
+        r = max(0.5, self.v_brush.get() - 0.5)
+        # a tile's middle under the pen: the tile itself turns (its region pixel too), as the Land / Sea brush does
+        middles = [((mx - 1) // 2, (my - 1) // 2) for mx in range(int(px - r) - 1, int(px + r) + 2)
+                   for my in range(int(py - r) - 1, int(py + r) + 2)
+                   if mx % 2 and my % 2 and ((mx - px) ** 2 + (my - py) ** 2) ** 0.5 <= r]
+        middles = [t for t in middles if 0 <= t[0] < self.cmap.w and 0 <= t[1] < self.cmap.h and
+                   self.cmap.is_sea(*t) == to_land]
+        turned = []
+        if middles:
+            self._pen_tiles = True
+            try:
+                turned = self.paint_coast(middles, "pen_land" if to_land else "pen_sea")
+            finally:
+                self._pen_tiles = False
+        got = T.pen_points(heights, self._img("map_ground_types.tga"), (px, py), r, to_land)
+        self._coast_points(got)
+        return bool(got["heights"] or turned)
 
     def spray(self, px, py):
         """One puff of the heights brush at map_heights pixel (px, py); True when a pixel changed."""
@@ -606,6 +683,10 @@ class TerrainEditor(ttk.Frame):
         ttk.Label(box, text="brush:").pack(side="left", padx=(8, 2))
         ttk.Radiobutton(box, text="Land", value="land", variable=self.v_coast).pack(side="left", padx=3)
         ttk.Radiobutton(box, text="Sea", value="sea", variable=self.v_coast).pack(side="left", padx=3)
+        ttk.Radiobutton(box, text="Smooth the coast", value="smooth", variable=self.v_coast).pack(side="left", padx=3)
+        ttk.Label(box, text="  coast pen:").pack(side="left", padx=(8, 2))
+        ttk.Radiobutton(box, text="land point", value="pen_land", variable=self.v_coast).pack(side="left", padx=3)
+        ttk.Radiobutton(box, text="water point", value="pen_sea", variable=self.v_coast).pack(side="left", padx=3)
         ttk.Label(box, text="   new land joins").pack(side="left", padx=(12, 2))
         names = sorted(self.cmap.info) if self.cmap is not None else []
         ttk.Combobox(box, textvariable=self.v_coast_region, values=[NEAREST] + names, width=24,

@@ -518,6 +518,35 @@ def shore_rise(heights, pixels):
     return out
 
 
+def pen_points(heights, ground, centre, radius, to_land):
+    """{'heights': {...}, 'ground': {...}}: the coast pen - map_heights points within radius (points; below 1 the
+    one under the mouse) made land (grey COAST_LAND, the low shore modders give the coastline) or water (blue 250,
+    shallow), their ground following (the land ground round it / shallow sea). Tile middles left: they are their
+    tiles (map_regions)."""
+    cx, cy = centre
+    r = max(0.5, float(radius))
+    out = {"heights": {}, "ground": {}}
+    for py in range(int(cy - r) - 1, int(cy + r) + 2):
+        for px in range(int(cx - r) - 1, int(cx + r) + 2):
+            if not (0 <= px < heights.width and 0 <= py < heights.height) or (px % 2 and py % 2):
+                continue
+            if ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5 > r:
+                continue
+            land = is_land_height(heights.get(px, py))
+            if to_land and not land:
+                out["heights"][(px, py)] = (COAST_LAND,) * 3
+                if ground is not None:
+                    near = Counter(ground.get(px + a, py + b) for a in (-1, 0, 1) for b in (-1, 0, 1)
+                                   if 0 <= px + a < ground.width and 0 <= py + b < ground.height)
+                    out["ground"][(px, py)] = next((k for k, _ in near.most_common() if k not in SEA),
+                                                   NEW_LAND_GROUND)
+            elif not to_land and land:
+                out["heights"][(px, py)] = (0, 0, 250)
+                if ground is not None:
+                    out["ground"][(px, py)] = SHALLOW_SEA
+    return out
+
+
 COAST_BLUR = 1.6                # tiles: how far the smooth coast looks round a point (rules.md 'HOW THE GAMES' OWN COASTS')
 
 
@@ -717,7 +746,8 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
     heights = {tuple(k): int(v) for k, v in (heights or {}).items()}
     coast = coast or {}
     ctiles = coast.get("tiles") or {}
-    if not ground and not features and not climate and not heights and not ctiles:
+    if not ground and not features and not climate and not heights and not ctiles and \
+            not coast.get("heights") and not coast.get("ground"):
         return
     from collections import Counter
     climate_names = {c: n for n, c, _ in climates(mod)}
@@ -734,7 +764,7 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
     for name, tiles, names, changes in (("map_ground_types.tga", gtiles, GROUND, gchanges),
                                         ("map_features.tga", features, FEATURES, features),
                                         ("map_climates.tga", climate, climate_names, ground_changes(climate))):
-        if not tiles:
+        if not tiles and not changes:
             continue
         path = mod.campaign_file(campaign, name)
         if not path:
@@ -742,7 +772,8 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
         plan.patch_tga(path, changes)
         count = Counter(names.get(c, str(c)) for c in tiles.values())
         plan.notes.append((mod.rel(path), "%d tile(s): %s" % (len(tiles), ", ".join(
-            "%d %s" % (n, k) for k, n in count.most_common()))))
+            "%d %s" % (n, k) for k, n in count.most_common())) if tiles else
+            "%d point(s) of the coast (the coast pen / smoothing)" % len(changes)))
     cheights = {tuple(k): tuple(v) for k, v in (coast.get("heights") or {}).items()}
     if heights or cheights:
         path = mod.campaign_file(campaign, "map_heights.tga")
@@ -814,4 +845,4 @@ def _radar_follows(plan, mod, campaign, tiles, gchanges):
 
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "ground_brushes", "FEATURE_BRUSHES", "paint_problem",
            "river_warnings", "river_shapes", "bridge_warnings", "feature_brushes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray", "max_land_height", "hgt_patched",
-           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "shore_rise", "coast_smoothed", "min_sea_height", "hgt_value", "radar_painted", "apply"]
+           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "shore_rise", "coast_smoothed", "pen_points", "min_sea_height", "hgt_value", "radar_painted", "apply"]
