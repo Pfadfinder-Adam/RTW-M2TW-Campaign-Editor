@@ -4453,6 +4453,67 @@ building smith
         self.assertIsNone(T.paint_problem(Map(), "ground", (0, 2), T.BEACH, set()))        # inland too
         self.assertIsNotNone(T.paint_problem(Map(), "ground", (2, 2), T.BEACH, set()))     # the sea: no
 
+    def test_coast_pull_and_push(self):
+        """The user (2026-10-09): 'grab a point of the border and pull it - draw shapes that way; push from outside or
+        inside to make the line nicer; the relief and the rest follow by itself' (like a painter's liquify). Pull:
+        the coast under the brush goes with the mouse, most in its middle, the coast far away stays; Push: from the
+        land the land grows, from the water the water does; tiles follow by their middles."""
+        from collections import Counter
+        from campaign_editor import terrain as T
+        from campaign_editor.tga import Image
+        W, H = 14, 12                                                       # tiles; land on x < 5
+        red, sea = (200, 0, 0), (41, 140, 233)
+
+        def world():
+            regions = Image(W, H, [(red if x < 5 else sea) for y in range(H) for x in range(W)])
+
+            class Map:
+                w, h, ports, info = W, H, {}, {"red_r": {"colour": red}}
+
+                def is_sea(self, x, y):
+                    return regions.get(x, y) == sea
+
+                def region_at(self, x, y):
+                    return "red_r" if 0 <= x < W and 0 <= y < H and regions.get(x, y) == red else None
+            PW, PH = 2 * W + 1, 2 * H + 1
+            heights = Image(PW, PH, [((3, 3, 3) if px <= 10 else (0, 0, 253)) for py in range(PH) for px in range(PW)])
+            ground = Image(PW, PH, [((0, 128, 0) if px <= 10 else (64, 0, 0)) for py in range(PH) for px in range(PW)])
+            sc = T.ShapeCoast(heights, ground, Map(), set(), {}, Counter({"red_r": 5 * H}), sea, 7511.272, -3406.782)
+
+            def lay(got):
+                for q, c in got["heights"].items():
+                    heights.set(*q, c)
+                for q, c in got["ground"].items():
+                    ground.set(*q, c)
+                for t, c in got["regions"].items():
+                    regions.set(*t, c)
+                return got
+            return sc, lay, regions
+
+        def shore_x(sc, y):                                                 # the game's shore along row y
+            xs = [x for a, b in T.shore_segments(sc.metres, 0, y - 1, 2 * W, y + 1)
+                  for (x, yy) in (a, b) if abs(yy - y) < 0.6]
+            return max(xs) if xs else None
+        sc, lay, regions = world()
+        self.assertAlmostEqual(shore_x(sc, 12), 10.5, delta=0.3)
+        got = None
+        for k in range(8):                                                  # grab the coast, drag it 4 points out
+            got = lay(sc.pull((10.5 + 0.5 * k, 12.0), (11.0 + 0.5 * k, 12.0), 4.0))
+        self.assertGreater(shore_x(sc, 12), 13.5)                           # the middle went with the mouse
+        self.assertAlmostEqual(shore_x(sc, 2), 10.5, delta=0.3)             # far away: as it was
+        self.assertEqual(regions.get(6, 5), red)                            # middle (13, 11): land now
+        self.assertTrue(got["hgt"])
+        self.assertEqual(sc.pull((12.0, 12.0), (12.0, 12.0), 4.0)["heights"], {})   # no move, no change
+        sc, lay, regions = world()
+        for _ in range(6):
+            lay(sc.push((9.0, 12.0), 3.0, True))                            # pushed from the land: it grows
+        self.assertGreater(shore_x(sc, 12), 11.5)
+        self.assertAlmostEqual(shore_x(sc, 2), 10.5, delta=0.3)
+        sc, lay, regions = world()
+        for _ in range(6):
+            lay(sc.push((11.0, 12.0), 3.0, False))                          # from the water: the water grows
+        self.assertLess(shore_x(sc, 12), 9.5)
+
     def test_coast_as_a_shape(self):
         """The user (2026-10-09, his bay and island in the game: stairs at 90 / 45 degrees, 'can you propose a
         solution'): the game cuts every square of 4 heights points into 2 triangles and lays the water at 0, so the

@@ -652,6 +652,71 @@ def s_coast(c, mod):
 @step("Land and sea: a round cape drawn with the shape brush (the coast as a shape, exact heights in map_heights.hgt)",
       "a small round cape - its shore smooth, not in steps")
 def s_coast_shape(c, mod):
+    from . import terrain as T
+    cmap, standing, counts, sc = _shape_coast(c, mod)
+    for y in range(4, cmap.h - 4, 5):
+        for x in range(4, cmap.w - 4, 5):
+            if not cmap.is_sea(x, y) or T.coast_problem(cmap, (x, y), True, standing, {}, counts, cmap.ports):
+                continue
+            land = next(((x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                         if cmap.region_at(x + dx, y + dy) and (x + dx, y + dy) not in standing), None)
+            if not land:
+                continue
+            got = sc.stroke((2 * land[0] + 1, 2 * land[1] + 1), (2 * x + 1, 2 * y + 1), 1.6, True)
+            if not got["tiles"]:
+                continue
+            plan = Plan(mod, "terrain", "terrain")
+            T.apply(plan, c.campaign, coast={k: got[k] for k in ("tiles", "regions", "ground", "heights", "hgt")})
+            return plan
+    raise Skip("no sea tile beside the land to draw a cape on")
+
+
+@step("Land and sea: a cape pulled out of the coast (Pull, like a painter's liquify) and the coast pushed (Push)",
+      "a small cape pulled out into the sea, and a little land pushed out beside it")
+def s_coast_pull(c, mod):
+    from . import terrain as T
+    cmap, standing, counts, sc = _shape_coast(c, mod)
+    for y in range(6, cmap.h - 6, 5):
+        for x in range(6, cmap.w - 6, 5):
+            if not cmap.is_sea(x, y) or T.coast_problem(cmap, (x, y), True, standing, {}, counts, cmap.ports):
+                continue
+            land = next(((x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                         if cmap.region_at(x + dx, y + dy) and (x + dx, y + dy) not in standing), None)
+            if not land:
+                continue
+            a = (land[0] + x + 1.0, land[1] + y + 1.0)                 # the shore between the two middles
+            step_ = (x - land[0], y - land[1])
+            got = {k: {} for k in ("tiles", "regions", "ground", "heights", "hgt")}
+            for k in range(6):                                          # drag it 3 points out, half a point a time
+                part = sc.pull((a[0] + 0.5 * k * step_[0], a[1] + 0.5 * k * step_[1]),
+                               (a[0] + 0.5 * (k + 1) * step_[0], a[1] + 0.5 * (k + 1) * step_[1]), 2.5)
+                _lay_coast(sc, cmap, part, got)
+            side = (a[0] - 2 * step_[1], a[1] + 2 * step_[0])           # beside it: the land pushed out a little
+            for _ in range(4):
+                _lay_coast(sc, cmap, sc.push((side[0] - 0.5 * step_[0], side[1] - 0.5 * step_[1]), 2.0, True), got)
+            if not got["tiles"]:
+                continue
+            plan = Plan(mod, "terrain", "terrain")
+            T.apply(plan, c.campaign, coast=got)
+            return plan
+    raise Skip("no sea tile beside the land to pull a cape out on")
+
+
+def _lay_coast(sc, cmap, part, got):
+    """One pull / push laid into the pictures ShapeCoast reads (a copy of the mod's, never written) and gathered."""
+    for p, col in part["heights"].items():
+        sc.heights.set(*p, col)
+    if sc.ground is not None:
+        for p, col in part["ground"].items():
+            sc.ground.set(*p, col)
+    for t, col in part["regions"].items():
+        cmap.regions_img.set(*t, col)
+    for k in got:
+        got[k].update(part[k])
+
+
+def _shape_coast(c, mod):
+    """(cmap, standing, counts, ShapeCoast) of the test campaign, as the Terrain editor makes them."""
     import os
     from collections import Counter
     from . import terrain as T
@@ -670,21 +735,7 @@ def s_coast_shape(c, mod):
                       mod._optional_map(c.campaign, "map_ground_types.tga"), cmap, standing, {}, counts, sea,
                       T.max_land_height(mod, c.campaign), T.min_sea_height(mod, c.campaign),
                       T.read_hgt(os.path.join(os.path.dirname(hp), "map_heights.hgt")))
-    for y in range(4, cmap.h - 4, 5):
-        for x in range(4, cmap.w - 4, 5):
-            if not cmap.is_sea(x, y) or T.coast_problem(cmap, (x, y), True, standing, {}, counts, cmap.ports):
-                continue
-            land = next(((x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
-                         if cmap.region_at(x + dx, y + dy) and (x + dx, y + dy) not in standing), None)
-            if not land:
-                continue
-            got = sc.stroke((2 * land[0] + 1, 2 * land[1] + 1), (2 * x + 1, 2 * y + 1), 1.6, True)
-            if not got["tiles"]:
-                continue
-            plan = Plan(mod, "terrain", "terrain")
-            T.apply(plan, c.campaign, coast={k: got[k] for k in ("tiles", "regions", "ground", "heights", "hgt")})
-            return plan
-    raise Skip("no sea tile beside the land to draw a cape on")
+    return cmap, standing, counts, sc
 
 
 @step("Land and sea: the ground put right under the heights ('Find ground on the wrong side of the coast')",
@@ -2724,6 +2775,7 @@ COVERAGE = {
     "Land and sea": ["s_coast"],
     "Land and sea: the ground put right under the heights": ["s_ground_coast"],
     "Land and sea: the shape brush and Smooth the coast (the coast as a shape)": ["s_coast_shape"],
+    "Land and sea: Pull and Push the coast": ["s_coast_pull"],
     "Family: a son": ["s_family"],
     "Family: a daughter, a man tied to no one": ["s_family_more"],
     "Character editor: traits and retinue of a character": ["s_character"],

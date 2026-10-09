@@ -11,7 +11,7 @@ from tkinter import ttk
 from . import terrain as T, theme
 
 NEAREST = "(the nearest region)"
-POINT_BRUSHES = ("pen", "shape", "smooth")       # the coast brushes that work by map_heights point, not by tile
+POINT_BRUSHES = ("pen", "shape", "smooth", "pull", "push")       # the coast brushes that work by map_heights point, not by tile
 
 
 
@@ -269,10 +269,10 @@ class TerrainEditor(ttk.Frame):
         self.view.spray_points = ((lambda px, py, b: T.spray_footprint((px, py), b)[2]) if what == "heights" else None)
         if what == "coast" and mode.startswith("pen"):
             self.view.on_spray = self.pen
-        elif what == "coast" and mode.startswith(("shape", "smooth")):
+        elif what == "coast" and mode.startswith(("shape", "smooth", "pull", "push")):
             self.view.on_spray = self.shape
         # the coast's point brushes follow the mouse at every size, size 1 too: the outline is the circle they work
-        smooth = what == "coast" and mode == "smooth"
+        smooth = what == "coast" and mode in ("smooth", "pull", "push")      # these work at least a point round
         self.view.spray_radius = ((lambda b: max(1.0 if smooth else 0.5, b - 0.5))
                                   if what == "coast" and self.view.on_spray else None)
 
@@ -602,6 +602,17 @@ class TerrainEditor(ttk.Frame):
         r = max(0.5, self.v_brush.get() - 0.5)          # in points, 2 a tile: size 1 = half a point round the mouse
         if mode == "smooth":
             got = sc.smooth((px, py), max(1.0, r))
+        elif mode == "pull":                            # the coast grabbed where the press began goes with the mouse
+            last = getattr(self, "_shape_last", None)
+            self._shape_last = (px, py)
+            if last is None or last == (px, py):
+                return False
+            got = sc.pull(last, (px, py), max(1.0, r))
+        elif mode == "push":                            # pushed from the side the press began on
+            if getattr(self, "_push_land", None) is None:
+                m = sc.metres(int(round(px)), int(round(py)))
+                self._push_land = m is not None and m > 0
+            got = sc.push((px, py), max(1.0, r), self._push_land)
         else:
             last = getattr(self, "_shape_last", None)
             if last == (px, py):
@@ -699,7 +710,7 @@ class TerrainEditor(ttk.Frame):
 
     def _stroke(self):
         self._last_river = None
-        self._shape_last = None
+        self._shape_last = self._push_land = None
         self._undo.append(self._state())
         del self._undo[:-100]
         self._redo = []                          # a new stroke drops the strokes undone before it
@@ -864,9 +875,17 @@ class TerrainEditor(ttk.Frame):
         ttk.Label(more, text="shape brush (a smooth coast where you draw):").pack(side="left", padx=(8, 2))
         ttk.Radiobutton(more, text="land", value="shape_land", variable=self.v_coast).pack(side="left", padx=3)
         ttk.Radiobutton(more, text="water", value="shape_sea", variable=self.v_coast).pack(side="left", padx=3)
+        from .gui_util import tip
+        tip(ttk.Radiobutton(more, text="pull", value="pull", variable=self.v_coast),
+            "Pull the coast, like a painter's liquify: press on the coast and drag - the coast under the brush goes "
+            "with the mouse, most in its middle, softly less to its edge; the heights, the tiles and the ground "
+            "follow. Draw capes and bays that way.").pack(side="left", padx=3)
+        tip(ttk.Radiobutton(more, text="push", value="push", variable=self.v_coast),
+            "Push the coast: press on the land beside the coast and the land grows into the water; press on the "
+            "water and the water eats into the land - the longer you hold, the further; most in the brush's "
+            "middle. Evens a ragged line.").pack(side="left", padx=3)
         ttk.Button(more, text="Find ground on the wrong side of the coast", command=self.ground_check).pack(
             side="left", padx=(16, 0))
-        from .gui_util import tip
         tip(ttk.Checkbutton(more, text="Shore line", variable=self.v_shore, command=self._shore_toggled),
             "Close up, a light line shows the shore exactly as the game will draw it (in every mode of this tab): "
             "the game cuts every square of four heights points into two triangles and lays the water at height 0 - "
@@ -879,7 +898,9 @@ class TerrainEditor(ttk.Frame):
             "the brush sets the heights near the water by their distance from the edge - the game's shore then "
             "falls on it, not on the points' grid (equal heights make stairs at 90 / 45 degrees). The tiles follow "
             "by their middles (new land joins a region), the ground by its points; towns, ports, characters, forts, "
-            "rivers keep a little land round them. Smooth the coast rounds what is under it, the longer you hold "
+            "rivers keep a little land round them. PULL grabs the coast under the brush and drags it with the "
+            "mouse; PUSH, pressed on the land, grows the land into the water (on the water: the water into the "
+            "land). Smooth the coast rounds what is under it, the longer you hold "
             "the more (no town lost); the light Shore line shows the shore as the game will draw it. The exact "
             "heights go into map_heights.hgt (the game reads it). "
             "Land / Sea turn whole tiles: sea into land (a new island, a longer coast) or land into sea (a bay, a "

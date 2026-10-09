@@ -836,8 +836,8 @@ def shore_segments(metres, x0, y0, x1, y1):
 
 
 class ShapeCoast:
-    """The coast as a shape on one campaign's pictures - the Terrain editor's shape brush and 'Smooth the coast', the
-    test mod. stroke() / smooth() return what to change: {'regions': {(x, y): colour}, 'heights': {(px, py): colour},
+    """The coast as a shape on one campaign's pictures - the Terrain editor's shape brush, 'Smooth the coast', Pull and
+    Push, the test mod. stroke() / smooth() / pull() / push() return what to change: {'regions': {(x, y): colour}, 'heights': {(px, py): colour},
     'hgt': {(px, py): metres}, 'ground': {(px, py): colour}, 'tiles': {(x, y): 'land' | 'sea'}, 'kept': [why]}; the
     caller lays them into the pictures (read live from them) and keeps 'hgt' in `exact` (the heights written to
     map_heights.hgt exactly - the game reads them there; the picture only has 29 m grey steps, which left ripples). cmap: the CampaignMap over the same map_regions picture; standing, features (.get),
@@ -937,6 +937,66 @@ class ShapeCoast:
                     num += w * q
                     den += w
             new[p] = s + k * min(1.0, r + 0.5 - d) * (num / den - s)
+        return self._settle(old, new)
+
+    @staticmethod
+    def _falloff(d, radius):
+        """How much of a pull / push a point takes at distance d from the brush's middle: all of it there, softly
+        less outwards, none at the brush's edge."""
+        t = d / radius
+        return (1.0 - t * t) ** 2 if t < 1.0 else 0.0
+
+    def pull(self, a, b, radius):
+        """'Pull the coast' (like a painter's liquify): the coast under a round brush grabbed at point a and dragged to
+        point b - the shape moves with the mouse, most in the brush's middle, softly less to its edge; the rest of
+        the coast stays. Each point takes the shape from where it was pulled from: s(p) = s_old(p - w(p) * move)."""
+        import math
+        r = max(1.0, float(radius))
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        dist = math.hypot(dx, dy)
+        if dist < 1e-6:
+            return self._settle({}, {})
+        steps = max(1, int(math.ceil(dist / (r / 3.0))))  # a long jump of the mouse in small steps: never folded
+        old = self.field((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, r + dist / 2.0 + SHAPE_BAND + 3,
+                         SHAPE_BAND + 0.5)
+        cur = dict(old)
+
+        def at(x, y):                                   # the shape between the points (bilinear)
+            x0, y0 = int(math.floor(x)), int(math.floor(y))
+            fx, fy = x - x0, y - y0
+            num = den = 0.0
+            for i, j, w in ((0, 0, (1 - fx) * (1 - fy)), (1, 0, fx * (1 - fy)), (0, 1, (1 - fx) * fy),
+                            (1, 1, fx * fy)):
+                v = cur.get((x0 + i, y0 + j))
+                if v is not None and w > 0:
+                    num += w * v
+                    den += w
+            return num / den if den else None
+        for k in range(steps):
+            cx, cy = a[0] + dx * k / steps, a[1] + dy * k / steps
+            mx, my = dx / steps, dy / steps
+            nxt = dict(cur)
+            for p in cur:
+                w = self._falloff(math.hypot(p[0] - cx, p[1] - cy), r)
+                if w > 0:
+                    v = at(p[0] - w * mx, p[1] - w * my)
+                    if v is not None:
+                        nxt[p] = v
+            cur = nxt
+        return self._settle(old, cur)
+
+    def push(self, centre, radius, grow_land, k=0.35):
+        """'Push the coast': the coast under a round brush pushed outwards from the side the press began on - from
+        the land the land grows into the water, from the water the water eats into the land; most in the brush's
+        middle, softly less to its edge; held longer, it pushes further."""
+        import math
+        r = max(1.0, float(radius))
+        old = self.field(centre[0], centre[1], r + SHAPE_BAND + 2, SHAPE_BAND + 0.5)
+        new = dict(old)
+        for p, s in old.items():
+            w = self._falloff(math.hypot(p[0] - centre[0], p[1] - centre[1]), r)
+            if w > 0:
+                new[p] = s + k * w if grow_land else s - k * w
         return self._settle(old, new)
 
     def tga_colour(self, m):
