@@ -527,6 +527,38 @@ def radar_resized(data, w, h, left, bottom, right, top, fill_tile=None):
     import io
     pic = Image.open(io.BytesIO(data))
     pic.load()
+    t, b, lft, r, edge = radar_frame(pic)
+    inner = pic.crop((lft, t, pic.width - r, pic.height - b)) if (t, b, lft, r) != (0, 0, 0, 0) else pic
+    sx, sy = inner.width / float(w), inner.height / float(h)
+    if fill_tile is not None:
+        fx = min(inner.width - 1, max(0, int((fill_tile[0] + 0.5) * sx)))
+        fy = min(inner.height - 1, max(0, int((h - 1 - fill_tile[1] + 0.5) * sy)))     # the picture is top row first
+        fill = inner.getpixel((fx, fy))
+    else:
+        fill = inner.getpixel((0, 0))
+    iw = max(1, int(round((w + left + right) * sx)))
+    ih = max(1, int(round((h + bottom + top) * sy)))
+    body = Image.new(pic.mode, (iw, ih), fill)
+    body.paste(inner, (int(round(left * sx)), int(round(top * sy))))
+    nw, nh = iw + lft + r, ih + t + b
+    out = Image.new(pic.mode, (nw, nh), fill)
+    out.paste(body, (lft, t))
+    for i, c in enumerate(edge["top"] if t else []):
+        out.paste(c, (0, i, nw, i + 1))
+    for i, c in enumerate(edge["bottom"] if b else []):
+        out.paste(c, (0, nh - 1 - i, nw, nh - i))
+    for i, c in enumerate(edge["left"] if lft else []):
+        out.paste(c, (i, 0, i + 1, nh))
+    for i, c in enumerate(edge["right"] if r else []):
+        out.paste(c, (nw - 1 - i, 0, nw - i, nh))
+    buf = io.BytesIO()
+    out.save(buf, format="TGA")
+    return buf.getvalue(), (nw, nh)
+
+
+def radar_frame(pic):
+    """(top, bottom, left, right, {side: [colour of each border line]}) of a minimap picture (a Pillow image): its
+    one-colour border lines (Medieval II's radar_map2: a blue line along the top and the right), not the map."""
     px = pic.load()
 
     def border(line):                               # (nearly) one colour all along - a texture never is
@@ -554,34 +586,9 @@ def radar_resized(data, w, h, left, bottom, right, top, fill_tile=None):
             got = []                                # one colour on and on: the picture's own (flat sea), no border
         edge[side] = got
     t, b, lft, r = (len(edge[k]) for k in ("top", "bottom", "left", "right"))
-    inner = pic.crop((lft, t, pic.width - r, pic.height - b)) if pic.width > lft + r and pic.height > t + b else pic
-    if inner is pic:
-        t = b = lft = r = 0
-    sx, sy = inner.width / float(w), inner.height / float(h)
-    if fill_tile is not None:
-        fx = min(inner.width - 1, max(0, int((fill_tile[0] + 0.5) * sx)))
-        fy = min(inner.height - 1, max(0, int((h - 1 - fill_tile[1] + 0.5) * sy)))     # the picture is top row first
-        fill = inner.getpixel((fx, fy))
-    else:
-        fill = inner.getpixel((0, 0))
-    iw = max(1, int(round((w + left + right) * sx)))
-    ih = max(1, int(round((h + bottom + top) * sy)))
-    body = Image.new(pic.mode, (iw, ih), fill)
-    body.paste(inner, (int(round(left * sx)), int(round(top * sy))))
-    nw, nh = iw + lft + r, ih + t + b
-    out = Image.new(pic.mode, (nw, nh), fill)
-    out.paste(body, (lft, t))
-    for i, c in enumerate(edge["top"] if t else []):
-        out.paste(c, (0, i, nw, i + 1))
-    for i, c in enumerate(edge["bottom"] if b else []):
-        out.paste(c, (0, nh - 1 - i, nw, nh - i))
-    for i, c in enumerate(edge["left"] if lft else []):
-        out.paste(c, (i, 0, i + 1, nh))
-    for i, c in enumerate(edge["right"] if r else []):
-        out.paste(c, (nw - 1 - i, 0, nw - i, nh))
-    buf = io.BytesIO()
-    out.save(buf, format="TGA")
-    return buf.getvalue(), (nw, nh)
+    if pic.width <= lft + r or pic.height <= t + b:
+        return 0, 0, 0, 0, {k: [] for k in edge}
+    return t, b, lft, r, edge
 
 
 def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, factions_out=()):

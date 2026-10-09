@@ -3614,6 +3614,40 @@ building smith
                 self.assertEqual(at(x, h // 2), B, (sides, x))
             self.assertEqual(at(8 + left, h // 2), C, sides)
 
+    def test_minimap_follows_painted_land_by_its_ground(self):
+        """The user (2026-10-09): 'if I painted land there - can the minimap draw the land, by its type?' A changed
+        tile takes the minimap's own pixels from the nearest tile of the same ground; its border line stays."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        import io
+        from campaign_editor import terrain as T
+        SEA_K, MEAD, FOREST = (64, 0, 0), (96, 160, 64), (0, 64, 0)
+        BLUE, GREEN, DARK, LINE = (20, 40, 160), (90, 170, 60), (10, 60, 20), (0, 0, 255)
+        kinds = {(x, y): (SEA_K if x < 5 else MEAD) for x in range(10) for y in range(5)}
+        kinds[(8, 1)] = FOREST
+        pic = Image.new("RGB", (20, 11), LINE)                       # 2 px a tile + a blue line along the top
+        for (x, y), k in kinds.items():
+            c = {SEA_K: BLUE, MEAD: GREEN, FOREST: DARK}[k]
+            for a in range(2):
+                for b in range(2):
+                    pic.putpixel((2 * x + a, 1 + 2 * (4 - y) + b), c)
+        buf = io.BytesIO()
+        pic.save(buf, format="TGA")
+        kinds.update({(2, 2): MEAD, (3, 3): FOREST, (7, 2): SEA_K})   # painted: land, a forest, a bay
+        got = T.radar_painted(buf.getvalue(), 10, 5, lambda x, y: kinds[(x, y)], [(2, 2), (3, 3), (7, 2)])
+        out = Image.open(io.BytesIO(got)).convert("RGB")
+
+        def at(x, y):
+            return out.getpixel((2 * x, 1 + 2 * (4 - y)))
+        self.assertEqual(at(2, 2), GREEN)                             # new land: the meadow's look
+        self.assertEqual(at(3, 3), DARK)                              # a forest: the nearest forest's
+        self.assertEqual(at(7, 2), BLUE)                              # new sea: the sea's
+        self.assertEqual(at(1, 1), BLUE)                              # the rest as it was
+        self.assertEqual(out.getpixel((5, 0)), LINE)                  # the border line kept
+        self.assertIsNone(T.radar_painted(buf.getvalue(), 10, 5, lambda x, y: kinds[(x, y)], []))
+
     def test_map_size_cuts_the_minimap_picture_in_proportion(self):
         """The minimap pictures (radar_map1 / radar_map2.tga, their own size) are cut / grown with the map in the same
         proportion - the game lays the real borders over them (a tester's Rome HLR: the old picture stayed)."""

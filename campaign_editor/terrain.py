@@ -622,6 +622,88 @@ def hgt_value(colour, top, low):
     return low * (255 - colour[2]) / 255.0
 
 
+def radar_painted(data, map_w, map_h, kind_of, changed):
+    """A minimap picture (radar_map1 / radar_map2.tga) with the changed tiles drawn again by their new ground (the
+    user, 2026-10-09: 'and if I painted land there - can it draw the land, by its type?'): each changed tile takes
+    the picture's own pixels from the nearest unchanged tile of the same ground (a forest from a forest, the sea
+    from the sea - its texture and its season kept: snow on the winter map where the land round it is white), else
+    the nearest land / sea. kind_of(x, y): the tile's ground colour after the change. (TGA bytes) or None without
+    Pillow or with nothing to change."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    import io
+    from .mapresize import radar_frame
+    changed = {tuple(t) for t in changed if 0 <= t[0] < map_w and 0 <= t[1] < map_h}
+    if not changed:
+        return None
+    pic = Image.open(io.BytesIO(data))
+    pic.load()
+    t, b, lft, r, _ = radar_frame(pic)
+    iw, ih = pic.width - lft - r, pic.height - t - b
+    sx, sy = iw / float(map_w), ih / float(map_h)
+
+    def box(x, y):                                    # the tile's pixels (the picture is top row first)
+        row = map_h - 1 - y
+        x0, y0 = lft + int(x * sx), t + int(row * sy)
+        return x0, y0, max(x0 + 1, lft + int((x + 1) * sx)), max(y0 + 1, t + int((row + 1) * sy))
+    step = 1 if map_w * map_h <= 120000 else 2         # a huge map: every second tile is source enough
+    cell = 8
+    kinds = {}
+
+    def kind(x, y):
+        if (x, y) not in kinds:
+            kinds[(x, y)] = kind_of(x, y)
+        return kinds[(x, y)]
+    # sources: tiles deep inside their own ground (all 8 round them the same, none changed) - a coastal tile's
+    # pixels carry sand and foam; the coastal ones only when a ground has no inside at all
+    inner = ({}, {True: {}, False: {}})
+    edge = ({}, {True: {}, False: {}})
+    for x in range(0, map_w, step):
+        for y in range(0, map_h, step):
+            if (x, y) in changed:
+                continue
+            k = kind(x, y)
+            deep = all(0 <= x + a < map_w and 0 <= y + bb < map_h and (x + a, y + bb) not in changed and
+                       kind(x + a, y + bb) == k for a in (-1, 0, 1) for bb in (-1, 0, 1))
+            by_kind, by_sea = inner if deep else edge
+            key = (x // cell, y // cell)
+            by_kind.setdefault(k, {}).setdefault(key, []).append((x, y))
+            by_sea[k in SEA].setdefault(key, []).append((x, y))
+
+    def nearest(buckets, x, y):
+        if not buckets:
+            return None
+        cx, cy = x // cell, y // cell
+        for ring in range(0, max(map_w, map_h) // cell + 2):
+            found = []
+            for a in range(cx - ring, cx + ring + 1):
+                for bb in (cy - ring, cy + ring) if ring else (cy,):
+                    found += buckets.get((a, bb), [])
+                for bb in range(cy - ring + 1, cy + ring) if ring else ():
+                    if a in (cx - ring, cx + ring):
+                        found += buckets.get((a, bb), [])
+            if found:
+                return min(found, key=lambda q: (q[0] - x) ** 2 + (q[1] - y) ** 2)
+        return None
+    out = pic.copy()
+    for x, y in sorted(changed):
+        k = kind(x, y)
+        src = (nearest(inner[0].get(k), x, y) or nearest(edge[0].get(k), x, y) or
+               nearest(inner[1][k in SEA], x, y) or nearest(edge[1][k in SEA], x, y))
+        if src is None:
+            continue
+        x0, y0, x1, y1 = box(x, y)
+        patch = pic.crop(box(*src))
+        if patch.size != (x1 - x0, y1 - y0):
+            patch = patch.resize((x1 - x0, y1 - y0), Image.NEAREST)
+        out.paste(patch, (x0, y0))
+    buf = io.BytesIO()
+    out.save(buf, format="TGA")
+    return buf.getvalue()
+
+
 def apply(plan, campaign, ground=None, features=None, climate=None, heights=None, coast=None):
     """Write the painted tiles: ground {(x, y): colour} into map_ground_types.tga, features
     {(x, y): colour} into map_features.tga, climate {(x, y): colour} into map_climates.tga (the same
@@ -689,11 +771,47 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
             plan.binary(hgt, hgt_patched(hgt, img, relative, step, absolute))
             plan.notes.append((mod.rel(hgt), "the same %d pixel(s) changed (the game reads this copy of the heights "
                                              "while it is there; %.2f per grey step)" % (len(final), step)))
+    if gtiles:                                        # the minimap follows the new land / sea / ground
+        _radar_follows(plan, mod, campaign, gtiles, gchanges)
     for folder in {os.path.dirname(mod.campaign_file(campaign, "map_regions.tga")),
                    os.path.join(mod.data, "world", "maps", "base")}:
         plan.delete(os.path.join(folder, "map.rwm"), "the game builds the map again from the changed pictures")
 
 
+def _radar_follows(plan, mod, campaign, tiles, gchanges):
+    """The campaign's minimap pictures repainted on the tiles whose ground (or land / sea) changed."""
+    from .upscale import CAMPAIGN_PICTURES
+    strat = mod.campaign_file(campaign, "descr_strat.txt")
+    regions = mod.campaign_file(campaign, "map_regions.tga")
+    if not strat or not regions:
+        return
+    import struct
+    with open(regions, "rb") as fh:
+        w, h = struct.unpack_from("<HH", fh.read(18), 12)
+    g = mod._optional_map(campaign, "map_ground_types.tga")
+
+    def kind_of(x, y):
+        p = (2 * x + 1, 2 * y + 1)
+        return gchanges.get(p) or (g.get(*p) if g is not None else None)
+    for name in CAMPAIGN_PICTURES:
+        if not name.startswith(("radar_map", "map_radar")):
+            continue
+        p = os.path.join(os.path.dirname(strat), name)
+        if not os.path.isfile(p):
+            continue
+        data = plan.binaries.get(p)
+        if data is None:
+            with open(p, "rb") as fh:
+                data = fh.read()
+        got = radar_painted(data, w, h, kind_of, tiles)
+        if got is None:
+            plan.notes.append((mod.rel(p), "not repainted (no Pillow) - the minimap still shows the old land and sea"))
+            continue
+        plan.binary(p, got)
+        plan.notes.append((mod.rel(p), "the minimap drawn again on the %d changed tile(s) from the nearest tiles "
+                                       "of the same ground" % len(tiles)))
+
+
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "ground_brushes", "FEATURE_BRUSHES", "paint_problem",
            "river_warnings", "river_shapes", "bridge_warnings", "feature_brushes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray", "max_land_height", "hgt_patched",
-           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "shore_rise", "coast_smoothed", "min_sea_height", "hgt_value", "apply"]
+           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "shore_rise", "coast_smoothed", "min_sea_height", "hgt_value", "radar_painted", "apply"]

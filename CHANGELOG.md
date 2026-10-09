@@ -49,6 +49,9 @@
 - **Land and sea brush: a smooth coast** - new land's coast follows a smooth curve at half-tile level, the way the
   games' own maps are drawn, instead of tile-sized steps; one-tile islets stay small ovals of land and one-tile
   straits stay open. Every tile stays what it was painted (region, town, port).
+- **The minimap follows painted land, sea and ground**: on Apply, the campaign's minimap pictures (radar_map1 /
+  radar_map2.tga) are drawn again on every tile whose land, sea or ground you changed - from the nearest tile of the
+  same ground (a forest from a forest, the sea from the sea), so its look and season fit. Needs Pillow (else a note).
 - **Fix: the brush's outline follows the mouse while painting** with the button held (it stood still).
 - **Map size**: a cut that takes a town off deletes its region from every file, and nothing more - the part of its
   land that stays on the map is left as it is, given to no one; the question before the cut and the result name it,
