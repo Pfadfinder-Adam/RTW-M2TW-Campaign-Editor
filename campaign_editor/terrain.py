@@ -729,6 +729,265 @@ def hgt_value(colour, top, low):
     return low * (255 - colour[2]) / 255.0
 
 
+# ---- the coast as a shape (rules.md 'WHY A COAST PAINTED BY TILES LOOKS LIKE STAIRS') ----
+# The game cuts each square of four map_heights points into two triangles and lays the water at height 0: the shore
+# runs where the height crosses 0, at h_land / (h_land - h_water) of the way from a land point to a water point.
+# Equal numbers everywhere put every crossing at the same place - the shore can only run along the points' grid and
+# its diagonals (stairs at 90 / 45 degrees). So the coast is kept as a SHAPE - each point's signed distance from the
+# shore in points (land +, water -) - and the heights near the water are made proportional to it, one slope on both
+# sides: the game's crossing then falls on the shore meant. Tiles (map_regions) follow by their middles, the ground
+# by its points (the user's yes, 2026-10-09: 'coast as a shape').
+SHAPE_SLOPE = 118.0         # metres a point on both sides of the waterline (4 of vanilla's 29.45 m grey steps)
+SHAPE_BAND = 1.5            # points from the waterline that follow the slope (a shore's two points are <= 1.42 apart)
+SHAPE_RISE = 60.0           # new land further in rises this much a point, up to INLAND (vanilla's inland grey)
+SEA_KEEP = 253              # new open water further out: vanilla's usual blue
+
+
+def tga_colour(m, top, low):
+    """map_heights.tga's colour nearest to height m (metres; land grey 1 or more, water blue 254 or less)."""
+    if m > 0:
+        g = max(1, min(255, int(round(m * 255.0 / top))))
+        return (g, g, g)
+    b = max(1, min(254, int(round(m * 255.0 / low))))
+    return (0, 0, 255 - b)
+
+
+def read_hgt(path):
+    """(w, h, floats) of map_heights.hgt (bottom-up rows, little-endian float32), or None."""
+    import struct
+    import sys
+    from array import array
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except (OSError, TypeError):
+        return None
+    if len(data) < 8:
+        return None
+    w, h = struct.unpack_from("<II", data, 0)
+    if len(data) != 8 + w * h * 4:
+        return None
+    a = array("f")
+    a.frombytes(data[8:])
+    if sys.byteorder != "little":
+        a.byteswap()
+    return w, h, a
+
+
+def seg_dist(p, a, b):
+    """The distance from point p to the line from a to b."""
+    import math
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    n = dx * dx + dy * dy
+    t = 0.0 if n == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / n))
+    return math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy)
+
+
+def shore_segments(metres, x0, y0, x1, y1):
+    """The game's waterline among the points x0..x1, y0..y1 (map_heights, bottom-up): [((ax, ay), (bx, by))] in
+    points. Each square of four points is cut into two triangles along its (px, py) - (px + 1, py + 1) diagonal (which
+    diagonal the game takes is not known: the line differs only in a square with land and water crosswise); the
+    water lies under height 0. metres(px, py) -> the height there, None off the map."""
+    out = []
+
+    def cut(tri):
+        pts = []
+        for (a, ha), (b, hb) in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
+            if (ha > 0) != (hb > 0):
+                t = ha / (ha - hb)
+                pts.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+        if len(pts) == 2:
+            out.append((pts[0], pts[1]))
+    for py in range(y0, y1):
+        for px in range(x0, x1):
+            hs = (metres(px, py), metres(px + 1, py), metres(px, py + 1), metres(px + 1, py + 1))
+            if None in hs or sum(1 for v in hs if v > 0) in (0, 4):
+                continue
+            a, b, c, d = ((px, py), hs[0]), ((px + 1, py), hs[1]), ((px, py + 1), hs[2]), ((px + 1, py + 1), hs[3])
+            cut((a, b, d))
+            cut((a, d, c))
+    return out
+
+
+class ShapeCoast:
+    """The coast as a shape on one campaign's pictures - the Terrain editor's shape brush and 'Smooth the coast', the
+    test mod. stroke() / smooth() return what to change: {'regions': {(x, y): colour}, 'heights': {(px, py): colour},
+    'hgt': {(px, py): metres}, 'ground': {(px, py): colour}, 'tiles': {(x, y): 'land' | 'sea'}, 'kept': [why]}; the
+    caller lays them into the pictures (read live from them) and keeps 'hgt' in `exact` (the heights written to
+    map_heights.hgt exactly - the game reads them there; the picture only has 29 m grey steps, which left ripples). cmap: the CampaignMap over the same map_regions picture; standing, features (.get),
+    counts ({region: land tiles}, kept up to date here), as coast_problem takes them; sea: the sea's colour in
+    map_regions; region: the region new land joins (None: the nearest); hgt: read_hgt() of map_heights.hgt (the
+    heights the game reads) or None."""
+
+    def __init__(self, heights, ground, cmap, standing, features, counts, sea, top, low, hgt=None, region=None,
+                 exact=None):
+        self.heights, self.ground, self.cmap = heights, ground, cmap
+        self.exact = exact if exact is not None else {}
+        self.standing, self.features, self.counts, self.sea = standing, features, counts, sea
+        self.top, self.low, self.region = top, low, region
+        self.grey, self.blue = top / 255.0, -low / 255.0
+        self.hgt = hgt if hgt and (hgt[0], hgt[1]) == (heights.width, heights.height) else None
+
+    def metres(self, px, py):
+        """The height at point (px, py) as the game reads it: map_heights.hgt's own value while the picture still
+        agrees with it (an unchanged point), else the picture's; land never 0 (0 reads as water)."""
+        h = self.heights
+        if not (0 <= px < h.width and 0 <= py < h.height):
+            return None
+        c = h.get(px, py)
+        e = self.exact.get((px, py))
+        if e is not None and self.tga_colour(e) == c:     # written by the shape brush (and not changed since)
+            return e
+        land = is_land_height(c)
+        v = hgt_value(c, self.top, self.low)
+        if self.hgt is not None:
+            f = self.hgt[2][py * h.width + px]
+            if (f > 0) == land and abs(f - v) <= 1.5 * (self.grey if land else self.blue):
+                return f
+        return max(v, 1.0) if land else v
+
+    def field(self, cx, cy, reach, cap):
+        """{(px, py): signed distance in points from the game's waterline (land +, water -), at most cap} of the points
+        within reach of (cx, cy)."""
+        import math
+        x0, x1 = int(math.floor(cx - reach)), int(math.ceil(cx + reach))
+        y0, y1 = int(math.floor(cy - reach)), int(math.ceil(cy + reach))
+        memo = {}
+
+        def mt(px, py):
+            if (px, py) not in memo:
+                memo[(px, py)] = self.metres(px, py)
+            return memo[(px, py)]
+        g = int(math.ceil(cap + 0.75))
+        cells = {}
+        for s in shore_segments(mt, x0 - g, y0 - g, x1 + g, y1 + g):
+            k = (int(math.floor((s[0][0] + s[1][0]) / 2.0)), int(math.floor((s[0][1] + s[1][1]) / 2.0)))
+            cells.setdefault(k, []).append(s)
+        out = {}
+        for py in range(y0, y1 + 1):
+            for px in range(x0, x1 + 1):
+                v = mt(px, py)
+                if v is None:
+                    continue
+                best = cap
+                for i in range(px - g, px + g + 1):
+                    for j in range(py - g, py + g + 1):
+                        for a, b in cells.get((i, j), ()):
+                            d = seg_dist((px, py), a, b)
+                            if d < best:
+                                best = d
+                out[(px, py)] = best if v > 0 else -best
+        return out
+
+    def stroke(self, a, b, radius, to_land):
+        """The shape brush moved from point a to point b (fractions allowed): the land (to_land) or the water grows by
+        the round-ended band of `radius` points along that line."""
+        import math
+        r = max(0.5, float(radius))
+        reach = r + math.hypot(b[0] - a[0], b[1] - a[1]) / 2.0 + SHAPE_BAND + 1
+        old = self.field((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, reach, SHAPE_BAND + 0.5)
+        new = {}
+        for p, s in old.items():
+            d = r - seg_dist(p, a, b)                 # + inside the brush's band
+            new[p] = max(s, d) if to_land else min(s, -d)
+        return self._settle(old, new)
+
+    def smooth(self, centre, radius, k=0.5):
+        """'Smooth the coast' under a round brush: the shape blurred a little each time (corners rounded, small bays
+        and capes eased - like the sea wearing a coast down); held longer, it smooths more."""
+        import math
+        r = max(1.0, float(radius))
+        old = self.field(centre[0], centre[1], r + SHAPE_BAND + 3, SHAPE_BAND + 2.5)
+        kern = [(i, j, math.exp(-(i * i + j * j) / 2.0)) for i in range(-2, 3) for j in range(-2, 3)]
+        new = dict(old)
+        for p, s in old.items():
+            d = math.hypot(p[0] - centre[0], p[1] - centre[1])
+            if d > r + 0.5 or abs(s) > SHAPE_BAND + 0.5:
+                continue
+            num = den = 0.0
+            for i, j, w in kern:
+                q = old.get((p[0] + i, p[1] + j))
+                if q is not None:
+                    num += w * q
+                    den += w
+            new[p] = s + k * min(1.0, r + 0.5 - d) * (num / den - s)
+        return self._settle(old, new)
+
+    def tga_colour(self, m):
+        return tga_colour(m, self.top, self.low)
+
+    def _height(self, s, was):
+        """(colour, metres) for signed distance s (points) - metres None where the point keeps its own; was: its
+        colour now."""
+        if s > SHAPE_BAND:                              # further in: new land rises, old land stays as high
+            m = SHAPE_SLOPE * SHAPE_BAND + SHAPE_RISE * (s - SHAPE_BAND)
+            c = self.tga_colour(min(m, INLAND * self.grey))
+            if is_land_height(was) and was[0] >= c[0]:
+                return was, None
+            return c, None
+        if s < -SHAPE_BAND:                             # further out: old water stays, new water is vanilla's usual
+            return (was, None) if not is_land_height(was) else ((0, 0, SEA_KEEP), None)
+        m = SHAPE_SLOPE * s if s <= 0 else max(0.5, SHAPE_SLOPE * s)   # land never 0 (it reads as water)
+        return self.tga_colour(m), m
+
+    def _settle(self, old, new):
+        import math
+        out = {"regions": {}, "heights": {}, "hgt": {}, "ground": {}, "tiles": {}, "kept": []}
+        flips = {}
+        for (px, py), s in new.items():                 # tiles whose middle changes side
+            if px % 2 and py % 2 and (s > 0) != (old[(px, py)] > 0):
+                flips[((px - 1) // 2, (py - 1) // 2)] = s > 0
+        for t, to_land in sorted(flips.items()):
+            if not (0 <= t[0] < self.cmap.w and 0 <= t[1] < self.cmap.h) or self.cmap.is_sea(*t) != to_land:
+                continue                                # map_regions already says so (a lake in the heights only)
+            why = coast_problem(self.cmap, t, to_land, self.standing, self.features, self.counts, self.cmap.ports)
+            region = None
+            if not why and to_land:
+                region = self.region if self.region in self.cmap.info else nearest_region(self.cmap, t)
+                if not region:
+                    why = "no region near enough to join - pick one in 'new land joins'"
+            if why:                                     # it keeps its side: a little land / water round its middle
+                out["kept"].append(why)
+                m = (2 * t[0] + 1, 2 * t[1] + 1)
+                for p in new:
+                    d = math.hypot(p[0] - m[0], p[1] - m[1])
+                    if d < 1.6:
+                        new[p] = min(new[p], d - 0.75) if to_land else max(new[p], 0.75 - d)
+                continue
+            was = self.cmap.region_at(*t)
+            out["regions"][t] = self.cmap.info[region]["colour"] if to_land else self.sea
+            out["tiles"][t] = "land" if to_land else "sea"
+            if to_land:
+                self.counts[region] = self.counts.get(region, 0) + 1
+            elif was:
+                self.counts[was] = self.counts.get(was, 0) - 1
+        g = self.ground
+        for p, s in new.items():
+            o = old[p]
+            flip = (s > 0) != (o > 0)
+            if not flip and (abs(s - o) < 0.02 or abs(s) > SHAPE_BAND):
+                continue
+            was = self.heights.get(*p)
+            c, m = self._height(s, was)
+            if c != was:
+                out["heights"][p] = c
+            if m is not None:
+                out["hgt"][p] = m
+                self.exact[p] = m
+            else:
+                self.exact.pop(p, None)
+            if g is None or not (0 <= p[0] < g.width and 0 <= p[1] < g.height):
+                continue
+            now = g.get(*p)
+            if s > 0 and not is_land_ground(now):       # the ground follows: the land round it ...
+                near = Counter(g.get(p[0] + a, p[1] + b) for a in (-1, 0, 1) for b in (-1, 0, 1)
+                               if 0 <= p[0] + a < g.width and 0 <= p[1] + b < g.height)
+                out["ground"][p] = next((k for k, _ in near.most_common() if is_land_ground(k)), NEW_LAND_GROUND)
+            elif s <= 0 and (is_land_ground(now) or (s >= -2 * SHAPE_BAND and now in DEEPER_SEA)):
+                out["ground"][p] = SHALLOW_SEA          # ... and shallow water along the shore
+        return out
+
+
 def radar_painted(data, map_w, map_h, kind_of, changed):
     """A minimap picture (radar_map1 / radar_map2.tga) with the changed tiles drawn again by their new ground (the
     user, 2026-10-09: 'and if I painted land there - can it draw the land, by its type?'): each changed tile takes
@@ -825,7 +1084,7 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
     coast = coast or {}
     ctiles = coast.get("tiles") or {}
     if not ground and not features and not climate and not heights and not ctiles and \
-            not coast.get("heights") and not coast.get("ground"):
+            not coast.get("heights") and not coast.get("ground") and not coast.get("hgt"):
         return
     from collections import Counter
     climate_names = {c: n for n, c, _ in climates(mod)}
@@ -836,6 +1095,7 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
         plan.notes.append((mod.rel(path), "%d tile(s) made land, %d made sea" % (n_land, len(ctiles) - n_land)))
     gchanges = {tuple(k): tuple(v) for k, v in (coast.get("ground") or {}).items()}
     cheights = {tuple(k): tuple(v) for k, v in (coast.get("heights") or {}).items()}
+    exact = {tuple(k): float(v) for k, v in (coast.get("hgt") or {}).items()}
     # the painted ground stays on its side of the waterline (the heights as they will be written)
     land_at = land_points(mod._optional_map(campaign, "map_heights.tga"), cheights) if ground else None
     gchanges.update(ground_changes(ground, land_at))
@@ -856,7 +1116,7 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
             "%d %s" % (n, k) for k, n in count.most_common())) if tiles else
             "%d point(s) of the coast (the coast pen, Smooth the coast or the ground put right under the "
             "heights)" % len(changes)))
-    if heights or cheights:
+    if heights or cheights or exact:
         path = mod.campaign_file(campaign, "map_heights.tga")
         if not path:
             raise ValueError("this campaign has no map_heights.tga")
@@ -866,23 +1126,29 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
             raise ValueError("heights painted on the sea at %d, %d - the brush changes land only" % bad[0])
         final = dict(cheights)
         final.update({p: (v, v, v) for p, v in heights.items()})
-        plan.patch_tga(path, final)
+        if final:
+            plan.patch_tga(path, final)
         if heights:
             up = sum(1 for p, v in heights.items() if is_land_height(img.get(*p)) and v > img.get(*p)[0])
             plan.notes.append((mod.rel(path), "%d pixel(s) of land: %d raised, %d lowered" % (
                 len(heights), up, len(heights) - up)))
         if cheights:
-            plan.notes.append((mod.rel(path), "%d pixel(s) turned from sea to land or land to sea (the coast brush)"
-                               % len(cheights)))
+            plan.notes.append((mod.rel(path), "%d pixel(s) of the coast: turned land or water, or set on the shore's "
+                                              "slope (the coast brushes)" % len(cheights)))
         hgt = os.path.join(os.path.dirname(path), "map_heights.hgt")
         if os.path.isfile(hgt):
             top, low = max_land_height(mod, campaign), min_sea_height(mod, campaign)
             step = top / 255.0
             relative = {p: (img.get(*p)[0], v) for p, v in heights.items() if p not in cheights}
             absolute = {p: hgt_value(final[p], top, low) for p in cheights}
+            # the shape brush's exact heights, where the picture still has the colour they were written with
+            for p, m in exact.items():
+                if p not in heights and tga_colour(m, top, low) == final.get(p, img.get(*p)):
+                    absolute[p] = m
             plan.binary(hgt, hgt_patched(hgt, img, relative, step, absolute))
-            plan.notes.append((mod.rel(hgt), "the same %d pixel(s) changed (the game reads this copy of the heights "
-                                             "while it is there; %.2f per grey step)" % (len(final), step)))
+            plan.notes.append((mod.rel(hgt), "%d pixel(s) changed (the game reads this copy of the heights while it "
+                                             "is there; %.2f per grey step; the shape brush's to the metre)"
+                               % (len(set(relative) | set(absolute)), step)))
     if gtiles:                                        # the minimap follows the new land / sea / ground
         _radar_follows(plan, mod, campaign, gtiles, gchanges)
     for folder in {os.path.dirname(mod.campaign_file(campaign, "map_regions.tga")),
@@ -926,5 +1192,6 @@ def _radar_follows(plan, mod, campaign, tiles, gchanges):
 
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "ground_brushes", "FEATURE_BRUSHES", "paint_problem",
            "river_warnings", "river_shapes", "bridge_warnings", "feature_brushes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray", "max_land_height", "hgt_patched",
-           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "shore_rise", "coast_smoothed", "pen_points", "min_sea_height", "hgt_value", "radar_painted", "apply",
-           "is_land_ground", "land_points", "ground_off_heights", "ground_under_heights"]
+           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "shore_rise", "coast_smoothed", "pen_points", "min_sea_height", "hgt_value", "radar_painted", "apply", "tga_colour",
+           "is_land_ground", "land_points", "ground_off_heights", "ground_under_heights", "read_hgt", "seg_dist",
+           "shore_segments", "ShapeCoast", "SHAPE_SLOPE", "SHAPE_BAND"]

@@ -4453,6 +4453,98 @@ building smith
         self.assertIsNone(T.paint_problem(Map(), "ground", (0, 2), T.BEACH, set()))        # inland too
         self.assertIsNotNone(T.paint_problem(Map(), "ground", (2, 2), T.BEACH, set()))     # the sea: no
 
+    def test_coast_as_a_shape(self):
+        """The user (2026-10-09, his bay and island in the game: stairs at 90 / 45 degrees, 'can you propose a
+        solution'): the game cuts every square of 4 heights points into 2 triangles and lays the water at 0, so the
+        coast is kept as a shape - each point's distance from the shore - and the heights near the water follow it
+        on one slope: the game's own cut then falls on the edge the brush drew. Tiles follow by their middles (new
+        land joins the nearest region), the ground follows, a town keeps land round it; Smooth eases a stair; Apply
+        writes the exact heights into map_heights.hgt."""
+        import math
+        import struct
+        from collections import Counter
+        from campaign_editor import terrain as T
+        from campaign_editor.plan import Plan
+        from campaign_editor.tga import Image, read_tga
+        W, H = 12, 10                                                       # tiles; land on x < 5
+        red, sea = (200, 0, 0), (41, 140, 233)
+        regions = Image(W, H, [(red if x < 5 else sea) for y in range(H) for x in range(W)])
+
+        class Map:
+            w, h, ports, info = W, H, {}, {"red_r": {"colour": red}}
+
+            def is_sea(self, x, y):
+                return regions.get(x, y) == sea
+
+            def region_at(self, x, y):
+                return "red_r" if 0 <= x < W and 0 <= y < H and regions.get(x, y) == red else None
+        PW, PH = 2 * W + 1, 2 * H + 1
+        heights = Image(PW, PH, [((3, 3, 3) if px <= 10 else (0, 0, 253)) for py in range(PH) for px in range(PW)])
+        ground = Image(PW, PH, [((0, 128, 0) if px <= 10 else (64, 0, 0)) for py in range(PH) for px in range(PW)])
+        top, low = 7511.272, -3406.782
+        town = (4, 8)
+        sc = T.ShapeCoast(heights, ground, Map(), {town}, {}, Counter({"red_r": 5 * H}), sea, top, low)
+
+        def lay(got):
+            for p, c in got["heights"].items():
+                heights.set(*p, c)
+            for p, c in got["ground"].items():
+                ground.set(*p, c)
+            for t, c in got["regions"].items():
+                regions.set(*t, c)
+        a, b = (10.0, 6.0), (17.0, 6.0)                                     # a cape out into the sea, 2 points wide
+        got = sc.stroke(a, b, 2.0, True)
+        lay(got)
+        self.assertIn((7, 2), got["tiles"])                                  # middle (15, 5) inside the cape
+        self.assertEqual(regions.get(7, 2), red)
+        self.assertTrue(got["hgt"] and all(isinstance(v, float) for v in got["hgt"].values()))
+        segs = T.shore_segments(sc.metres, 8, 0, 22, 14)
+        for k in range(12):                                                  # the game's shore on the brush's edge
+            ang = math.pi / 2 + k * math.pi / 11                             # round the far end and along the sides
+            q = (b[0] + 2.0 * math.cos(ang - math.pi), b[1] + 2.0 * math.sin(ang - math.pi))
+            if q[0] > 11.5:
+                self.assertLess(min(T.seg_dist(q, s0, s1) for s0, s1 in segs), 0.25, q)
+        self.assertTrue(T.is_land_ground(ground.get(15, 6)))                 # the ground followed
+        self.assertEqual(ground.get(15, 3), T.SHALLOW_SEA)                   # shallow water along the new shore
+        # the sea brush over the town: it keeps land round its middle, the rest of its coast goes
+        got = sc.stroke((9.0, 17.0), (9.0, 17.0), 2.5, False)
+        lay(got)
+        self.assertTrue(got["kept"])
+        self.assertTrue(T.is_land_height(heights.get(9, 17)))               # the town's middle
+        self.assertEqual(regions.get(*town), red)
+        # Smooth the coast: a stair of tiles (the old tile brush's look) gets shorter, no tile middle lost
+        for x, y in ((5, 6), (5, 7), (6, 7)):
+            for i in range(3):
+                for j in range(3):
+                    heights.set(2 * x + i, 2 * y + j, (3, 3, 3))
+            regions.set(x, y, red)
+
+        def length():
+            return sum(math.hypot(q[0] - p[0], q[1] - p[1]) for p, q in T.shore_segments(sc.metres, 9, 11, 17, 19))
+        before = length()
+        for _ in range(4):
+            lay(sc.smooth((12.0, 14.0), 3.0))
+        self.assertLess(length(), before * 0.9)
+        self.assertTrue(T.is_land_height(heights.get(9, 17)))
+        # Apply: the exact heights go into map_heights.hgt where the picture still has the colour they were made with
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        rows = [[(3, 3, 3) if px <= 10 else (0, 0, 253) for px in range(PW)] for py in range(PH)]
+        write_tga(os.path.join(camp, "map_heights.tga"), PW, PH, rows)
+        with open(os.path.join(camp, "map_heights.hgt"), "wb") as fh:
+            fh.write(struct.pack("<II", PW, PH) + b"".join(struct.pack("<f", T.hgt_value(c, top, low))
+                                                           for r in rows for c in r))
+        write(os.path.join(camp, "descr_terrain.txt"), "max_land_height %.3f\nmin_sea_height %.3f\n" % (top, low))
+        mod = ModData(self.root)
+        m = 0.37 * T.SHAPE_SLOPE
+        plan = Plan(mod, "terrain", "terrain")
+        T.apply(plan, "test", coast={"tiles": {}, "regions": {}, "ground": {}, "heights": {(11, 4): T.tga_colour(
+            m, top, low)}, "hgt": {(11, 4): m, (3, 3): 999.0}})
+        plan.apply()
+        w, h, fl = T.read_hgt(os.path.join(camp, "map_heights.hgt"))
+        self.assertAlmostEqual(fl[4 * w + 11], m, places=3)                  # exact
+        self.assertAlmostEqual(fl[3 * w + 3], T.hgt_value((3, 3, 3), top, low), places=3)   # stale: left alone
+        self.assertEqual(read_tga(os.path.join(camp, "map_heights.tga")).get(11, 4), T.tga_colour(m, top, low))
+
     def test_ground_on_the_wrong_side_of_the_coast(self):
         """The user (2026-10-09): 'textures crawled onto the water though the tile is not, and the other way round
         holes in the land'. A land ground on a water point of map_heights or a sea ground on a land point is found
