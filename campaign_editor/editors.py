@@ -561,7 +561,7 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
                     lines[i] = with_factions(text, list(factions))
                 elif len(groups) > 1:
                     plan.warn(f, "%s: its requires line has %d factions groups (REX) - left as it is, change "
-                                 "it in the Building editor" % (head[0], len(groups)))
+                                 "it in Buildings" % (head[0], len(groups)))
     f.insert(src[2], [""] + lines)
     plan.note(f, "building %s copied from %s: levels %s" % (
         new_chain, src_chain, ", ".join("%s -> %s" % kv for kv in level_names.items())))

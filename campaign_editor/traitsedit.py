@@ -16,7 +16,7 @@ keys <level>_desc / <level>_effects_desc ... An ancillary's name is the key of i
 Medieval II ships its string tables compiled (text/<name>.txt.strings.bin). A text written where only the .bin lies
 becomes a .txt made from the .bin with the change in it, and the .bin goes (Plan.stale_bins: the game reads a .bin
 beside the .txt instead of it - a tester's run showed the old texts - and builds it again).
-Triggers (what gives a trait) are not touched: a new trait is given to characters in the Character editor."""
+Triggers (what gives a trait) are not touched: a new trait is given to characters in Characters."""
 
 import os
 import re
@@ -279,7 +279,7 @@ def copy_block(plan, kind, src, new):
     f.insert(e, [nl_blank, ";------------------------------------------"] + out)
     plan.note(f, "%s %s: a copy of %s" % (kind, new, src))
     if kind == "trait":
-        plan.warn(f, "no trigger gives %s yet: give it to characters in the Character editor (their traits), or "
+        plan.warn(f, "no trigger gives %s yet: give it to characters in Characters (their traits), or "
                      "copy a trigger of %s in the file" % (new, src))
     return keys
 

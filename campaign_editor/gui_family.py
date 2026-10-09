@@ -1,9 +1,9 @@
-"""The family on the Faction tab (Edit faction) and the Character editor (its own work, any faction):
+"""The family on the Faction tab (Edit faction) and Characters (its own work, any faction):
 every character of a faction - on the map with their traits, ancillaries and portrait,
 and the family members off the map (character_record) - and the family tree drawn the
 way the game shows it: portraits, couples side by side, their children in the row below.
 On the Family tab the picks are kept by the window (App.family_set, with Undo) and written
-with the faction; the Character editor keeps its own per faction and writes them itself
+with the faction; Characters keeps its own per faction and writes them itself
 (the editors' dirty / pending / make_plan / rebind, like the unit and building editors).
 Both write through family.apply."""
 
@@ -29,7 +29,7 @@ class FamilyEditor(ttk.Frame):
     def __init__(self, master, app, standalone=False):
         super().__init__(master, padding=4)
         self.app, self.standalone = app, standalone
-        self.states = {}                       # Character editor: {faction: family opts}
+        self.states = {}                       # Characters: {faction: family opts}
         self.mod, self._sig = None, None
         self._imgs = {}                        # PhotoImages kept alive: {(path, w, h): image}
         self.fam, self.faction, self._for = None, None, None
@@ -59,14 +59,14 @@ class FamilyEditor(ttk.Frame):
                 side="right", padx=(0, 6))
         from .gui_util import first
         first(*[w for w in top.pack_slaves() if w.pack_info().get("side") == "right"][::-1])
-        self.lib_adds = []                     # Character editor: [{'culture', 'group', 'pics': {age: src}}]
+        self.lib_adds = []                     # Characters: [{'culture', 'group', 'pics': {age: src}}]
         ShortHint(self, foreground="#555", justify="left", wraplength=1100, text=(
             "Everyone of the faction: characters on the map (name, age, traits, ancillaries) and family members "
             "off the map (name, sex, age). The tree is drawn like the game's: a couple side by side, their "
             "children below. Click a card or a row to edit that person. Names come from the faction's name lists "
             "(the game crashes on a name it has no string for); a renamed person is renamed on the tree too.")
                   ).pack(fill="x", pady=(2, 6))
-        # people | tree side by side, in the Character editor and on the Faction tab alike
+        # people | tree side by side, in Characters and on the Faction tab alike
         # (a tester: the tree on the right in Edit faction too - on top it left too little room)
         panes = ttk.Panedwindow(self, orient="horizontal")
         panes.pack(fill="both", expand=True)
@@ -190,7 +190,7 @@ class FamilyEditor(ttk.Frame):
         right_click(self.lb_an, self.remove_anc)
         self.char_parts = [tr, an]
 
-        # the Character editor: the person as the game's character panel shows him, the family tree behind a
+        # Characters: the person as the game's character panel shows him, the family tree behind a
         # switch of its own (the user: the tree hidden by default, the button clearly visible)
         self.panel = None
         if standalone:
@@ -225,7 +225,7 @@ class FamilyEditor(ttk.Frame):
         wheel(self.cv, scroll_y(self.cv))
 
     def _view_changed(self):
-        """Character / Family tree on the right of the Character editor."""
+        """Character / Family tree on the right of Characters."""
         if self.v_view.get() == "tree":
             self.panel.pack_forget()
             self.tree_box.pack(fill="both", expand=True)
@@ -236,7 +236,7 @@ class FamilyEditor(ttk.Frame):
             self.show_panel()
 
     def show_panel(self):
-        """The picked person on the character panel (the Character editor only)."""
+        """The picked person on the character panel (Characters only)."""
         if self.panel is None or not self.winfo_exists():
             return
         p = self.person(self.sel) if self.sel else None
@@ -302,7 +302,7 @@ class FamilyEditor(ttk.Frame):
             self.fam, self.faction = None, None
             self.title.configure(text="Edit faction: pick the faction above" if app.editing() else
                                  "A new faction's family is its template's (copied on Apply) - change it then in "
-                                 "Edit faction or the Character editor")
+                                 "Edit faction or Characters")
             self.redraw()
             return
         path = self.path()
@@ -323,7 +323,7 @@ class FamilyEditor(ttk.Frame):
         self.title.configure(text=("  people and family" if self.standalone else "People and family of %s" % faction))
         self.redraw()
 
-    # ---- as an editor of its own (Character editor), like the unit and building editors ----
+    # ---- as an editor of its own (Characters), like the unit and building editors ----
     def _signature(self):
         p = self.path()
         try:
@@ -363,7 +363,7 @@ class FamilyEditor(ttk.Frame):
         if not self.mod:
             raise ValueError("load a mod first")
         if not self.dirty():
-            raise ValueError("nothing changed in the Character editor")
+            raise ValueError("nothing changed in Characters")
         mod = ModData(self.mod.data)
         plan = Plan(mod, "characters", "characters", {})
         f = plan.edit(mod.campaign_file(self.campaign(), "descr_strat.txt"))
@@ -377,13 +377,13 @@ class FamilyEditor(ttk.Frame):
 
     def open_library(self):
         if not self.standalone:
-            # the Family tab writes with the faction; new pool pictures are the Character editor's own write
+            # the Family tab writes with the faction; new pool pictures are Characters' own write
             app = self.app
             app.v_work.set("characters")
             app.work_changed()
             ed = app.editor()
             if ed is not None and ed.mod:
-                app.status.set("Portrait library: new pictures are written with the Character editor's Apply.")
+                app.status.set("Portrait library: new pictures are written with Characters' Apply.")
                 PortraitLibrary(ed)
             return
         if not self.mod:
@@ -509,13 +509,13 @@ class FamilyEditor(ttk.Frame):
 
     def changed(self):
         self.app.status.set("%s: changes waiting - Preview, then Apply changes." % (
-            "Character editor" if self.standalone else "Family"))
+            "Characters" if self.standalone else "Family"))
         self.redraw()
         if self.standalone:
             self.app._mark_work()
 
     def _before(self):
-        if not self.standalone:                 # the Character editor's own changes are not in the window's Undo
+        if not self.standalone:                 # Characters' own changes are not in the window's Undo
             self.app.remember()
 
     def _own_tree(self):

@@ -711,7 +711,7 @@ def _recruit(plan, manifest, names, owners, recruit_map=None):
                      "%s" % ", ".join(gone))
     for m in sorted(missing):
         plan.warn(f, "not recruited at %s (not in this mod or left out): recruit the units by hand where you want "
-                     "them (Building editor: Add line)" % m)
+                     "them (Buildings: Add line)" % m)
 
 
 __all__ = ["recruit_levels", "default_recruit_map", "collect_buildings", "building_names", "import_buildings",
@@ -883,7 +883,7 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
                     text = with_factions(text, who)
                 else:
                     plan.warn(f, "%s: a line with several factions groups (REX) kept as it is - check it in the "
-                                 "Building editor" % (head[0] if head else "?"))
+                                 "Buildings" % (head[0] if head else "?"))
             text, out_ = fit_line(text, conds)
             gone += [c for c in out_ if c not in gone]
             if text is None:
@@ -901,7 +901,7 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
                      "in Roster first): %s" % (", ".join(factions), ", ".join(unowned)))
     if dropped:
         plan.warn(f, "recruit line(s) left out - the unit is not in this mod: %s (bring the unit too, or add a "
-                     "recruit line in the Building editor)" % ", ".join(dropped))
+                     "recruit line in Buildings)" % ", ".join(dropped))
     # what the levels need from this mod: other chains named in their requires lines
     have_chains = {b[0] for b in blocks} | set(chain_names.values())
     for bd in manifest["buildings"]:
@@ -909,12 +909,12 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
             m = _re.match(r"\s*convert_to\s+([A-Za-z_][A-Za-z0-9_]*)\s*$", strip_comment(text))
             if m and m.group(1) not in have_chains:
                 plan.warn(f, "%s turns into '%s' when a city becomes a castle (or back) - this mod has no such "
-                             "building; change its convert_to line in the Building editor" % (
+                             "building; change its convert_to line in Buildings" % (
                                  chain_names.get(bd["chain"], bd["chain"]), m.group(1)))
             for m in _re.finditer(r"building_present(?:_min_level)?\s+([A-Za-z0-9_]+)", strip_comment(text)):
                 if m.group(1) not in have_chains and m.group(1) not in chain_names:
                     plan.warn(f, "%s needs the building '%s', which this mod has not - the game may refuse it; "
-                                 "change that requires line in the Building editor" % (
+                                 "change that requires line in Buildings" % (
                                      chain_names.get(bd["chain"], bd["chain"]), m.group(1)))
     # texts
     table = mod.text_file("export_buildings.txt")

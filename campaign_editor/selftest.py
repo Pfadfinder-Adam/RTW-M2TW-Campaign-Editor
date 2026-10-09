@@ -2788,6 +2788,9 @@ COVERAGE = {
 UI = {
     "New faction": "New faction", "Edit faction": "Edit faction (names, colours, money, towns, garrisons)",
     "Faction editor": "Edit faction (names, colours, money, towns, garrisons)",
+    "Factions": "Edit faction (names, colours, money, towns, garrisons)",
+    "Maps": "Map editor: any faction's army moved, its units", "Units": "Unit editor: lines",
+    "Characters": "Character editor: traits and retinue of a character",
     "Unit editor": "Unit editor: lines", "Building editor": "Building editor: lines",
     "Character editor": "Character editor: traits and retinue of a character",
     "Terrain editor": "Terrain editor: ground and heights", "Add-ons": "Add-ons",

@@ -1,4 +1,4 @@
-"""The Settlements window (Settlements..., top row): every region and its town of the campaign - the names in the files, the names players see,
+"""Settlements (a work of the top row): every region and its town of the campaign - the names in the files, the names players see,
 the owner, names by culture - and the places to change them: the names players see (quick, as on the Map), the names
 in the files (regionrename: everywhere the mod names them, Preview, a backup), names by the owner's culture (REX /
 M2EX). Both games."""
@@ -10,94 +10,210 @@ from .gui_util import ask
 from .gui_util import ShortHint
 from .gui_util import scroll_body
 from . import log
+from . import theme
 
 APP = "RTW & M2TW Campaign Editor"
 
 
 class SettlementsPanel(ttk.Frame):
+    """Settlements (a work of the top row): every region and its town - the names in the files, the names players
+    see, the owner, and one column for each culture's name of the town (REX / M2EX rename a town by its owner's
+    culture; once a window of its own, Culture names...). A culture's cell is typed in place; the changes wait for
+    Apply like the rest of the campaign's work."""
+    kind = "settlements"
+    EMPTY = "-"
+
     def __init__(self, master, app):
         super().__init__(master, padding=4)
-        self.app = app
-        self.rows = []
+        self.app, self.mod = app, None
+        self.rows, self.cultures, self.saved, self.foreign = [], [], {}, {}
+        self.sort, self.edit = ("region", False), None
         top = ttk.Frame(self)
         top.pack(fill="x")
         ttk.Label(top, text="Settlements", font=("", 10, "bold")).pack(side="left")
         ttk.Label(top, text="   Find").pack(side="left")
         self.v_find = tk.StringVar()
-        ttk.Entry(top, textvariable=self.v_find, width=24).pack(side="left", padx=4)
-        self.v_find.trace_add("write", lambda *a: self.fill())
+        ttk.Entry(top, textvariable=self.v_find, width=20).pack(side="left", padx=4)
+        ttk.Label(top, text="Culture").pack(side="left", padx=(10, 0))
+        self.v_cult = tk.StringVar(value="(all)")
+        self.cb_cult = ttk.Combobox(top, textvariable=self.v_cult, state="readonly", width=16)
+        self.cb_cult.pack(side="left", padx=4)
+        ttk.Label(top, text="Show").pack(side="left", padx=(10, 0))
+        self.v_show = tk.StringVar(value="every town")
+        ttk.Combobox(top, textvariable=self.v_show, state="readonly", width=30, values=[
+            "every town", "with a name for this culture", "without a name for this culture",
+            "with any name by culture", "without any", "changed, waiting for Apply",
+            "renamed by the mod's own script"]).pack(side="left", padx=4)
+        ttk.Label(top, text="Owner's culture").pack(side="left", padx=(10, 0))
+        self.v_owner = tk.StringVar(value="(all)")
+        self.cb_owner = ttk.Combobox(top, textvariable=self.v_owner, state="readonly", width=14)
+        self.cb_owner.pack(side="left", padx=4)
+        for v in (self.v_find, self.v_cult, self.v_show, self.v_owner):
+            v.trace_add("write", lambda *a: self.fill())
         self.lbl_n = ttk.Label(top, foreground="#666")
         self.lbl_n.pack(side="left", padx=6)
-        ShortHint(self, foreground="#666", wraplength=1100, justify="left", text=(
-            "Every region and its town. The names players see are quick to change (also on the Map: Edit region). "
-            "The names in the files tie the game's files together - renaming them changes every file of the mod "
-            "that names the place (shown before anything is written). Tip: keep the name players see and the name "
-            "in the files alike - one name for a place everywhere is easiest to read and fix.")).pack(
-            anchor="w", pady=(4, 4))
+        self.hint = ShortHint(self, foreground="#666", wraplength=1100, justify="left", text="")
+        self.hint.pack(anchor="w", pady=(4, 4))
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
-        cols = ("town", "shown", "town_shown", "owner", "culture")
-        self.tv = ttk.Treeview(body, columns=cols, show="tree headings", height=20)
-        for c, text, w in (("#0", "Region (in the files)", 170), ("town", "Town (in the files)", 140),
-                           ("shown", "Region - players see", 170), ("town_shown", "Town - players see", 150),
-                           ("owner", "Owner", 140), ("culture", "Names by culture", 120)):
-            self.tv.heading(c, text=text)
-            self.tv.column(c, width=w)
-        sb = ttk.Scrollbar(body, orient="vertical", command=self.tv.yview)
-        self.tv.configure(yscrollcommand=sb.set)
-        self.tv.pack(side="left", fill="both", expand=True)
-        sb.pack(side="left", fill="y")
-        self.tv.bind("<Double-1>", lambda e: self.shown_names() if self.tv.identify_row(e.y) else None)
         side = ttk.Frame(body, padding=(8, 0))
-        side.pack(side="left", fill="y")
+        side.pack(side="right", fill="y")
         for text, cmd in (("Names players see...", self.shown_names),
                           ("Rename in the files...", self.rename_files),
                           ("Names by culture...", self.by_culture),
-                          ("All towns' names...", lambda: self.app.culture_names_table()),
+                          ("Clear the town's names", self.clear_town),
                           ("Show on the map", self.show_on_map)):
             ttk.Button(side, text=text, command=cmd).pack(anchor="w", pady=2)
         ttk.Label(side, foreground="#666", wraplength=200, justify="left", text=(
-            "double click: the names players see\nNames by culture: REX (Rome) / M2EX (Medieval II) rename a town "
-            "by its owner's culture while the campaign runs")).pack(anchor="w", pady=(10, 0))
+            "double click a culture's cell: type the town's name for that culture (Enter keeps it, Esc drops it, "
+            "empty = none); elsewhere: the names players see")).pack(anchor="w", pady=(10, 0))
+        self.tv = ttk.Treeview(body, show="tree headings")
+        self.tv.pack(side="left", fill="both", expand=True)
+        self.tv.tag_configure("changed", foreground=theme.ink("#1a6fd0", "field"))
+        self.tv.tag_configure("foreign", foreground=theme.ink("#999", "field"))
+        self.tv.bind("<Double-1>", self.dbl)
+
+    # ---- what the window asks of a work ----
+    def rebind(self, mod):
+        self.mod = mod
+        self.load()
+        return 0
+
+    def dirty(self):
+        return False                          # its changes sit in the campaign work (Apply writes them with it)
+
+    def pending(self):
+        return 0
+
+    def make_plan(self):
+        return self.app._faction_plan()
 
     # ---- reading ----
     def load(self):
+        from . import culturenames as CN
         app = self.app
         self.rows = []
         if not app.mod or not app.strat:
             self.fill()
             return
-        from .culturenames import read as read_cultures
-        from .regionedit import shown_labels
-        campaign = app.v_campaign.get()
-        regions = app.mod.regions(campaign)
-        keys = list(regions) + [v.get("settlement") for v in regions.values() if v.get("settlement")]
-        shown = shown_labels(app.mod, campaign, keys)
-        owners = app.strat.owners()
-        try:
-            table = read_cultures(app.mod, campaign)
-        except Exception:
-            table = {}
-        labels = app.shown_names() if hasattr(app, "shown_names") else {}
-        from .build import faction_label
-        for r in sorted(regions, key=str.lower):
-            town = regions[r].get("settlement") or ""
-            owner = owners.get(r)
-            self.rows.append((r, town, shown.get(r, ""), shown.get(town, ""),
-                              faction_label(owner, labels.get(owner)) if owner else "rebels (village)",
-                              ", ".join(sorted(table.get(town, {}))) if town in table else ""))
+        camp = app.v_campaign.get()
+        self.cultures = CN.cultures(app.mod)
+        self.cols = [CN.DEFAULT] + self.cultures
+        self.saved = CN.read(app.mod, camp)                # what the campaign's script holds now
+        self.foreign = CN.foreign(app.mod, camp)
+        self.cb_cult["values"] = ["(all)", "every other"] + self.cultures
+        self.cb_owner["values"] = ["(all)"] + self.cultures
+        eng, rex = CN.engine(app.mod)
+        self.hint.lbl.configure(foreground="#666" if rex else "#a33")
+        self.hint.configure(text=(
+            "Every region and its town. The names players see are quick to change; the names in the files tie the "
+            "game's files together - renaming them changes every file of the mod that names the place (shown "
+            "before anything is written). Each culture's column: the town's name when an owner of that culture "
+            "holds it - %s renames it when it changes hands ('every other' for the cultures with no name of their "
+            "own); Shown now = the name under its owner as the next Apply leaves it; grey rows are renamed by the "
+            "mod's own campaign script." % eng) if rex else (
+            "Every region and its town. The names by culture need %s: the game folder has no %s.exe, so they are "
+            "not written - the table still shows and keeps them." % (eng, eng)))
+        heads = [("town", "Town (in the files)", 120), ("shown", "Region - players see", 150),
+                 ("town_shown", "Town - players see", 130), ("owner", "Owner", 170), ("oc", "Owner's culture", 100),
+                 ("now", "Shown now", 120)] + \
+                [("c:" + c, "every other" if c == CN.DEFAULT else c, 95) for c in self.cols]
+        import tkinter.font as tkfont
+        bold = tkfont.nametofont("TkHeadingFont")
+        fit = lambda text, width: max(width, bold.measure(text) + 24)     # a heading never cut
+        self.tv.configure(columns=[k for k, _, _ in heads])
+        self.tv.heading("#0", text="Region (in the files)", command=lambda: self.sort_by("region"))
+        self.tv.column("#0", width=fit("Region (in the files)", 150), stretch=False)
+        for k, text, width in heads:
+            self.tv.heading(k, text=text, command=lambda k=k: self.sort_by(k))
+            self.tv.column(k, width=fit(text, width), stretch=False)
         self.fill()
 
+    def _table(self):
+        t = {k: dict(v) for k, v in self.saved.items()}
+        for k, v in self.app.culture_names.items():
+            if v:
+                t[k] = dict(v)
+            else:
+                t.pop(k, None)
+        return t
+
+    def _rows(self):
+        from . import culturenames as CN
+        from .regionedit import shown_labels
+        from .build import faction_label
+        app = self.app
+        camp = app.v_campaign.get()
+        me = app.v["template"].get().strip() if app.editing() else (app.v["name"].get().strip().lower() or "(new)")
+        owners = app.owners_after(me)                      # the towns as the next Apply leaves them
+        cultures = dict(app.mod.factions())
+        if me not in cultures:                             # the new faction: its template's culture
+            cultures[me] = cultures.get(app.v["template"].get().strip())
+        towns = {r: i.get("settlement") or "" for r, i in app.regions.items()}
+        towns.update({r["name"]: r.get("settlement") or "" for r in app.new_regions})
+        shown = shown_labels(app.mod, camp, list(towns) + [t for t in towns.values() if t])
+        labels = app.shown_names() if hasattr(app, "shown_names") else {}
+        table = self._table()
+        out = []
+        for region, town in towns.items():
+            owner = owners.get(region) or "slave"
+            oc = cultures.get(owner) or ""
+            names = table.get(town) or {}
+            now = (CN.name_for(names, oc) or CN.shown_name(app.mod, camp, town)) if town else ""
+            out.append({"region": region, "town": town, "shown": shown.get(region, ""),
+                        "town_shown": shown.get(town, "") if town else "",
+                        "owner": faction_label(owner, labels.get(owner)) if owner != "slave" else "rebels",
+                        "oc": oc, "now": now, "names": names, "changed": town in app.culture_names,
+                        "foreign": town in self.foreign})
+        return out
+
     def fill(self):
-        q = self.v_find.get().strip().lower()
-        self.tv.delete(*self.tv.get_children())
-        n = 0
-        for row in self.rows:
-            if q and not any(q in str(x).lower() for x in row):
+        from . import culturenames as CN
+        tv = getattr(self, "tv", None)
+        if tv is None or not tv.winfo_exists():
+            return
+        tv.delete(*tv.get_children())
+        if not self.app.mod or not self.app.strat:
+            self.lbl_n.configure(text="")
+            return
+        cult = self.v_cult.get()
+        key = CN.DEFAULT if cult == "every other" else (None if cult == "(all)" else cult)
+        show, oc, q = self.v_show.get(), self.v_owner.get(), self.v_find.get().lower().strip()
+        every = self._rows()
+        rows = []
+        for r in every:
+            names = r["names"]
+            if oc != "(all)" and r["oc"] != oc:
                 continue
-            self.tv.insert("", "end", iid=row[0], text=row[0], values=row[1:])
-            n += 1
-        self.lbl_n.configure(text="%d of %d" % (n, len(self.rows)))
+            if q and not any(q in str(x).lower() for x in (r["region"], r["town"], r["shown"], r["town_shown"],
+                                                           r["owner"], r["now"], *names.values())):
+                continue
+            has = bool(names.get(key)) if key else bool(names)
+            if (show == "with a name for this culture" and not has or
+                    show == "without a name for this culture" and has or
+                    show == "with any name by culture" and not names or show == "without any" and names or
+                    show == "changed, waiting for Apply" and not r["changed"] or
+                    show == "renamed by the mod's own script" and not r["foreign"]):
+                continue
+            rows.append(r)
+        k, rev = self.sort
+        if k.startswith("c:"):
+            c = k[2:]
+            rows.sort(key=lambda r: (not r["names"].get(c), (r["names"].get(c) or "").lower(), r["region"]),
+                      reverse=rev)
+        else:
+            rows.sort(key=lambda r: (str(r[k]).lower(), r["region"].lower()), reverse=rev)
+        for r in rows:
+            vals = [r["town"], r["shown"], r["town_shown"], r["owner"], r["oc"], r["now"]] + \
+                   [r["names"].get(c) or self.EMPTY for c in self.cols]
+            tags = ("foreign",) if r["foreign"] else ("changed",) if r["changed"] else ()
+            tv.insert("", "end", iid=r["region"], text=r["region"], values=vals, tags=tags)
+        self.lbl_n.configure(text="%d of %d; %d name change(s) wait for Apply" % (
+            len(rows), len(every), len(self.app.culture_names)))
+
+    def sort_by(self, k):
+        self.sort = (k, not self.sort[1] if self.sort[0] == k else False)
+        self.fill()
 
     def picked(self):
         sel = self.tv.selection()
@@ -106,16 +222,107 @@ class SettlementsPanel(ttk.Frame):
             return None
         return sel[0]
 
+    # ---- editing ----
+    def dbl(self, e):
+        row, col = self.tv.identify_row(e.y), self.tv.identify_column(e.x)
+        if not row:
+            return
+        cols = self.tv["columns"]
+        i = int(col[1:]) - 1 if col and col != "#0" else -1
+        k = cols[i] if 0 <= i < len(cols) else ""
+        if not k.startswith("c:"):
+            self.tv.selection_set(row)
+            self.shown_names()
+            return
+        town = self.tv.set(row, "town")
+        if not town:
+            return
+        if town in self.foreign:
+            self.lbl_n.configure(text="%s is renamed by the mod's own campaign script (%d line(s)) - change it "
+                                      "there, not here" % (town, self.foreign[town]))
+            return
+        self.cell(row, k, town)
+
+    def _after_dialog(self):
+        """Fills the table again once the dialog a button opened is closed."""
+        if not self.winfo_exists():
+            return
+        if any(isinstance(x, tk.Toplevel) and x.winfo_exists() and x.winfo_viewable()
+               for x in self.app.winfo_children()):
+            self.after(300, self._after_dialog)
+            return
+        self.fill()
+
+    def cell(self, row, k, town):
+        if self.edit:
+            self.edit.destroy()
+        self.tv.see(row)
+        box = self.tv.bbox(row, k)
+        if not box:
+            return
+        x, y, wd, ht = box
+        v = tk.StringVar(value=(self._table().get(town) or {}).get(k[2:], ""))
+        en = self.edit = ttk.Entry(self.tv, textvariable=v)
+        en.place(x=x, y=y, width=max(wd, 120), height=ht)
+        en.focus_set()
+        en.select_range(0, "end")
+
+        def keep(*a):
+            if self.edit is en:
+                self.edit = None
+                self.set_name(town, k[2:], v.get().strip())
+            en.destroy()
+
+        def drop(*a):
+            self.edit = None
+            en.destroy()
+        en.bind("<Return>", keep)
+        en.bind("<KP_Enter>", keep)
+        en.bind("<Escape>", drop)
+        en.bind("<FocusOut>", keep)
+
+    def set_name(self, town, culture, name):
+        from . import culturenames as CN
+        names = dict(self._table().get(town) or {})
+        if (names.get(culture) or "") == name:
+            return
+        if name:
+            names[culture] = name
+        else:
+            names.pop(culture, None)
+        bad = CN.problems(self.app.mod, {town: names}) if names else []
+        if bad:
+            self.lbl_n.configure(text="; ".join(bad), foreground=theme.ink("#a33"))
+            return
+        self.lbl_n.configure(foreground="#666")
+        self.app.remember()
+        self.app.culture_names[town] = names          # {} = the town's names are dropped with the next Apply
+        self.app.fill_towns()
+        self.app._mark_work()
+        self.fill()
+
+    def clear_town(self):
+        for row in self.tv.selection():
+            town = self.tv.set(row, "town")
+            if town and town not in self.foreign:
+                self.app.remember()
+                self.app.culture_names[town] = {}
+        self.app.fill_towns()
+        self.app._mark_work()
+        self.fill()
+
     # ---- actions ----
     def shown_names(self):
         region = self.picked()
         if region:
             self.app.new_region_dialog(edit=region)
+            self.after(300, self._after_dialog)
 
     def by_culture(self):
         region = self.picked()
         if region:
             self.app.culture_names_dialog(region)
+            self.after(300, self._after_dialog)
 
     def show_on_map(self):
         region = self.picked()
@@ -123,9 +330,8 @@ class SettlementsPanel(ttk.Frame):
             return
         app = self.app
         xy = app.mod.city_tiles(app.v_campaign.get()).get(region)
-        app.v_work.set("map")                            # the Map editor (whatever work was on, nothing is lost)
+        app.v_work.set("map")                            # Maps (whatever work was on, nothing is lost)
         app.work_changed()
-        app.lift()
         app.update()
         if xy:
             app.map_view.centre_on(tuple(xy), zoom=6)
@@ -173,7 +379,7 @@ def rename_now(app, campaign, region, new_region, new_town, parent):
 def rename_in_files(app, region, parent):
     """The region's and its town's names in the files, changed everywhere the mod names them: a window with the
     new names, Preview (every file and line), then written with a backup at once and the mod read again. The
-    Settlements... and the Map editor (Edit regions) open it."""
+    Settlements... and Maps (Edit regions) open it."""
     if region not in app.mod.regions(app.v_campaign.get()):
         messagebox.showerror(APP, "%s is not in the campaign's files yet - a new region takes its names in Edit "
                                   "region...; after Apply it can be renamed here." % region, parent=parent)
@@ -283,7 +489,7 @@ def merge_regions(app, keep, gone, parent=None):
 
 
 def _map_of(app):
-    """The map the regions are shown on while a Delete window is open: the main window's (the Map tab / Map editor),
+    """The map the regions are shown on while a Delete window is open: the main window's (the Map tab / Maps),
     when it is drawn."""
     view = getattr(app, "map_view", None)
     try:

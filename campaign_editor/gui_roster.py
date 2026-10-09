@@ -121,7 +121,7 @@ class RosterEditor(ttk.Frame):
             places = u["recruit"] if st != "give" else u["recruit_any"]
             where = ", ".join("%s/%s" % x for x in places[:3]) + (" ..." if len(places) > 3 else "")
             if st == "give":
-                where = ("on Apply: " + where) if where else "no building recruits it (Building editor: Add line)"
+                where = ("on Apply: " + where) if where else "no building recruits it (Buildings: Add line)"
             has = HAS[u["has"]] + {"give": "  -> give", "take": "  -> take away"}.get(st, "")
             tv.insert("", "end", iid=key, values=(u["type"], u["category"], has,
                                                   where or ("-" if u["has"] else "")),

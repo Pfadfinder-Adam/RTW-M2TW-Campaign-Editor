@@ -55,7 +55,7 @@ def open_upscale(app):
               ).pack(anchor="w", pady=(4, 0))
     ShortHint(frm, text=(
         "Every tile becomes a block of 3 x 3 tiles, in five steps: the grid, smoothing, heights, rivers, objects. "
-        "Each step is written with a backup and checked; between the steps the map is in the Map editor - look at "
+        "Each step is written with a backup and checked; between the steps the map is in Maps - look at "
         "it, fix what you want by hand (borders after step 2, the coast before step 3, the ground after step 3), "
         "then do the next step. Towns, ports, armies, agents, resources and forts keep their places (in the middle "
         "of their blocks), and the campaign's scripts and events move with the map. 'Put the old map back' undoes "
@@ -181,7 +181,7 @@ def open_upscale(app):
         found = check_step(ModData(app.mod.data), camp, k, st)
         w.config(cursor="")
         img = ModData(app.mod.data).region_map(camp)
-        text = "Step %d done - the map is %d x %d tiles; look at it in the Map editor (Map and Terrain tabs)." % (
+        text = "Step %d done - the map is %d x %d tiles; look at it in Maps (Map and Terrain tabs)." % (
             k + 1, img.width, img.height)
         text += ("\nThe check after it: fine." if not found else
                  "\nThe check after it found:\n- " + "\n- ".join(found) + "\nFix it by hand, or go on.")

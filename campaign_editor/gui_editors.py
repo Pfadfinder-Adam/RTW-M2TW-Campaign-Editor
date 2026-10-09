@@ -1,4 +1,4 @@
-"""The Unit editor and Building editor tabs: pick a unit (a building chain) on
+"""Units and Buildings tabs: pick a unit (a building chain) on
 the left, change any line of its block on the right, and import its pictures -
 the tool puts them where the game reads them, in the mod's own format."""
 

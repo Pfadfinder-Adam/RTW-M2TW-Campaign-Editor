@@ -1,6 +1,6 @@
 """What the game's character panel shows, read from the files (both games): the attributes the traits and the
 retinue give (drawn as pips 0 - 10), the traits by the level names players see (export_VnVs), the retinue with its
-pictures (ui/ancillaries) and names (export_ancillaries). The Character editor draws it beside the person's form.
+pictures (ui/ancillaries) and names (export_ancillaries). Characters draws it beside the person's form.
 
 M2TW keeps its string tables as text/<name>.txt and / or the compiled text/<name>.txt.strings.bin: u16 2, u16 2048,
 u32 count, then per entry a u16-counted UTF-16 key and a u16-counted UTF-16 text. The .txt is read when both lie
@@ -142,7 +142,7 @@ def ancillary_picture(mod, image, culture=None):
 
 
 def panel(mod, person, trait_defs, anc_defs, culture=None):
-    """What the panel shows for a person of the Character editor: {'name', 'line' (kind, role), 'age',
+    """What the panel shows for a person of Characters: {'name', 'line' (kind, role), 'age',
     'attributes': [(name, value)], 'traits': [(level name shown, trait, level, effects text)], 'retinue':
     [(name shown, ancillary, picture or None, effects text)]}."""
     from .limits import game_kind

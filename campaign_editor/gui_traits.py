@@ -32,7 +32,7 @@ class TraitsWindow(tk.Toplevel):
             "The traits and the retinue themselves (export_descr_character_traits.txt, export_descr_ancillaries.txt). "
             "Pick one on the left: each level's name and description as players see them, the points it needs "
             "(Threshold) and what it gives (Effects, like 'Command 1, Loyalty -2'). New... makes a copy of the "
-            "picked one under a new name - then give it to characters in the Character editor. Preview, then "
+            "picked one under a new name - then give it to characters in Characters. Preview, then "
             "Keep for Apply - Apply changes in the main window writes it (a backup first; Undo this write puts it back).")).pack(fill="x")
         self.nb = ttk.Notebook(top)
         self.nb.pack(fill="both", expand=True, pady=6)
@@ -411,7 +411,7 @@ class TraitsWindow(tk.Toplevel):
         bdir = plan.apply()
         from . import log
         log.write("Traits and retinue changed (backup %s)\n%s" % (bdir, plan.report()))
-        self.app.load()                                     # everything reads the new files (Character editor too)
+        self.app.load()                                     # everything reads the new files (Characters too)
         self.mod = self.app.mod
         self.app.status.set("Traits and retinue written (backup %s) - start the game to see them." % bdir)
         return bdir

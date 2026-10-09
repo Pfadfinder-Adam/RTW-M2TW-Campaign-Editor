@@ -170,7 +170,7 @@ def add_at(app, kind, xy, preset=None, faction=None):
                 messagebox.showerror(APP, "This mod's unit file gives %s no general's bodyguard (a unit marked "
                                           "general_unit - the one its family members ride with too), so the editor "
                                           "cannot tell which unit is his. Give the bodyguard unit %s in its "
-                                          "ownership in the Unit editor, or untick 'Make him a general'." % (fac, fac),
+                                          "ownership in Units, or untick 'Make him a general'." % (fac, fac),
                                      parent=w)
                 return
         if fac == app.field_faction() and not app.map_only():

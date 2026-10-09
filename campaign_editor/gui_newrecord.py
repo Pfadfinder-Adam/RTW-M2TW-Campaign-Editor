@@ -1,4 +1,4 @@
-"""New unit / New building, step by step (the Unit and Building editors' "New ... step by step" button).
+"""New unit / New building, step by step (the Unit and Buildingss' "New ... step by step" button).
 
 A new unit or building chain starts as a copy of one that surely works in the game (like a new faction starts
 from a template); each step changes one side of it, Back and Next go between the steps and keep what was typed,
@@ -300,7 +300,7 @@ class NewRecordWizard(StepWindow):
         else:
             self._note("Only names and the texts players read are written here. Everything the building does - "
                        "bonuses, the units it trains, what it needs, costs, its pictures - is copied whole from %s "
-                       "(shown in grey under each level); change those later in the Building editor. A text you "
+                       "(shown in grey under each level); change those later in Buildings. A text you "
                        "write here is shown for every culture; one left as it is stays the copied one." % st["src"])
         g = ttk.Frame(self.body)
         g.pack(fill="both", expand=True)
@@ -432,7 +432,7 @@ class NewRecordWizard(StepWindow):
     # ---- step 4 (units) ----
     def s_values(self):
         st = self.state
-        self._note("The copy's main lines - change what should differ (the Unit editor has every other line "
+        self._note("The copy's main lines - change what should differ (Units has every other line "
                    "afterwards). Left as it is = as %s has it." % st["src"])
         g = ttk.Frame(self.body)
         g.pack(fill="both", expand=True)
@@ -462,7 +462,7 @@ class NewRecordWizard(StepWindow):
         self._note("Every number starts at what is usual for such a unit in this mod (the middle of its %d units of "
                    "the kind); beside it the lowest and highest the mod has. Every other line (formation, ground, "
                    "heat, the weapons' kinds and sounds) is written as such units usually have it - change any of "
-                   "them later in the Unit editor (Every line of the block)." % typ["count"])
+                   "them later in Units (Every line of the block)." % typ["count"])
         g = ttk.Frame(self.body)
         g.pack(fill="x")
         vs = {}
@@ -489,7 +489,7 @@ class NewRecordWizard(StepWindow):
         ttk.Combobox(look, textvariable=v_model, values=models, width=34).grid(row=0, column=1, sticky="w", padx=6)
         ttk.Label(look, foreground="#666", wraplength=420, justify="left", text=(
             "a model of the mod made to sit %s; your own files (texture, .cas / .mesh) go in afterwards with the "
-            "Unit editor's Your own files..." % MO.SEAT_WORDS.get(seat))).grid(row=0, column=2, sticky="w")
+            "Units' Your own files..." % MO.SEAT_WORDS.get(seat))).grid(row=0, column=2, sticky="w")
         v_mount = tk.StringVar(value=st["mount"] or "")
         if st["kind"].startswith("horse"):
             mounts = sorted(m for m, c in MO.mount_classes(self.mod).items() if c in FN.RIDDEN)
@@ -512,7 +512,7 @@ class NewRecordWizard(StepWindow):
             st["levels"] = FN.usual_levels(self.mod, st["kind"], st["owners"])
         self._note("The building levels that train it: a recruit line is written in each one picked, letting in "
                    "its owners. First picked: where this mod trains such units most. None picked = it is recruited "
-                   "nowhere yet (Roster or the Building editor can add it later).")
+                   "nowhere yet (Roster or Buildings can add it later).")
         box = ttk.Frame(self.body)
         box.pack(fill="both", expand=True)
         lb = tk.Listbox(box, selectmode="multiple", exportselection=False, height=18, width=60)

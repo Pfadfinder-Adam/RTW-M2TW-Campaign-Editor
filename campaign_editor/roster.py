@@ -271,7 +271,7 @@ def copy_cards(plan, faction, dictionary_name, owners=()):
         src = next((p for p in (_ci(_ci(folder, o) or "", pattern % dictionary_name) for o in owners) if p),
                    None) or card_path(mod, faction, dictionary_name, info)
         if not src:
-            plan.warn(None, "%s: no %s picture anywhere to copy for %s - add one in the Unit editor"
+            plan.warn(None, "%s: no %s picture anywhere to copy for %s - add one in Units"
                       % (dictionary_name, "card" if not info else "description", faction))
             continue
         dst = os.path.join(own or os.path.join(folder, faction), pattern % dictionary_name)
@@ -313,7 +313,7 @@ def give_unit(plan, faction, unit):
         if added:
             plan.note(e, "%s recruited by %s in %s" % (unit, faction, ", ".join(added)))
         if not lines:
-            plan.warn(e, "%s: no building recruits it - add a recruit line in the Building editor" % unit)
+            plan.warn(e, "%s: no building recruits it - add a recruit line in Buildings" % unit)
         elif not reachable:
             plan.warn(e, "%s: recruited only in %s, which %s cannot build - give it one of those levels"
                       % (unit, ", ".join(sorted({"%s/%s" % (c, l) for _, _, c, l in lines})), faction))
@@ -343,7 +343,7 @@ def take_unit(plan, faction, unit, campaign=None):
                 new = drop_faction(e.text(i), faction) if rest else None
                 if rest and new is None:
                     plan.warn(e, "%s/%s: %s is a faction group of its own on a recruit line with several groups - "
-                                 "rewrite that line in the Building editor" % (chain, level, faction))
+                                 "rewrite that line in Buildings" % (chain, level, faction))
                     continue
                 if rest:
                     e.set(i, new)
@@ -417,11 +417,11 @@ def set_level(plan, faction, chain, level, give=True, campaign=None):
                         got = got or src
                 if got:
                     plan.note(e, "%s/%s: the %s culture had no picture of it - the one of %s copied in (import "
-                                 "another in the Building editor)" % (chain, level, culture,
+                                 "another in Buildings)" % (chain, level, culture,
                                                                       os.path.basename(got).split("_")[0][1:]))
                 else:
                     plan.warn(e, "%s/%s: no picture for the %s culture (ui/%s/buildings/#%s_%s.tga) - import one "
-                                 "in the Building editor" % (chain, level, culture, culture, culture, level))
+                                 "in Buildings" % (chain, level, culture, culture, culture, level))
         return True
     if not now:
         return False

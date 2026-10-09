@@ -1,4 +1,4 @@
-"""The Character editor's panel: the picked person as the game's character panel shows him - the portrait in a
+"""Characters' panel: the picked person as the game's character panel shows him - the portrait in a
 frame, name, who he is, age, the attributes as pips, the traits by the names players see, the retinue as picture
 cards (charpanel reads it all from the files). It only shows; the form beside it edits."""
 

@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Added
+- **The top row by topic, shorter names**: **Maps** · Bigger map (x3)... | **Factions** · Recolour... |
+  **Settlements** · Many towns... · Mercenaries... | **Units** | **Buildings** | **Characters** · Traits and
+  retinue... | **Religions** | **Add-ons** · Module builder... · Campaign rules... · Events... - each tool beside its
+  work, a thin line between the topics (once Map editor, Faction editor, Unit editor...).
+- **Settlements is a work of its own, with the names by culture in it**: every region and its town - the names in
+  the files, the names players see, the owner, the owner's culture, the name shown now - and one column for each
+  culture (drag the table sideways to see them all); double click a culture's cell to type the town's name for it.
+  Filters by culture, by what is set, by the owner's culture. The separate Culture names... window is gone.
+- **Factions opens faster** when you come back to it: its kept work is put back without reading the faction's
+  files again.
 - **Calmer coloured buttons**: Start the game, Discord, YouTube and Ko-fi a fifth less bright and saturated - they
   glowed too much.
 - **The map is the Map editor's alone**: the Faction editor has no Map tab any more. A faction's towns are picked

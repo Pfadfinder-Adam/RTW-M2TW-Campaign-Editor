@@ -921,7 +921,7 @@ class MapView(ttk.Frame):
             head("Towns and ports")
             red = "#%02x%02x%02x" % self.LEGEND_RED
             row("a town (its owner's colour)", town(red, "black", 1), "town")
-            if not getattr(self, "everyone", False):          # the Map editor: no faction is 'yours'
+            if not getattr(self, "everyone", False):          # Maps: no faction is 'yours'
                 row("one of your towns", town(red, "#ffd400", 3))
             row("rebel village (no town yet)", town("", "black", 1, hollow=True))
             row("an army in it: a flag on its roof", lambda x, yy: self._roof_flag(x - 6, yy + 5, 13, "__legend__", ()))
@@ -992,7 +992,7 @@ class MapView(ttk.Frame):
              resources=None, check_res=None, on_res_move=None, on_res_click=None, res_sel=None, new_land=None,
              plain=False, labels=None, forts=None, tint=None, tint_legend=None, everyone=False):
         """chars: [{id, faction, name, kind, xy, army, units}]; draggable: ids that may be moved;
-        everyone: the Map editor - every faction's things may be moved, none is 'yours' (no yellow edge: a map of
+        everyone: Maps - every faction's things may be moved, none is 'yours' (no yellow edge: a map of
         yellow rings and flags looked as if all of it were selected - reports #99 #101);
         check_tile(id, xy) -> None or why not; on_char_move(id, xy) after a valid drop;
         symbols: {faction: path of its small symbol picture}."""
@@ -1554,7 +1554,7 @@ class MapView(ttk.Frame):
 
     def fort_spots(self):
         """{tile: the tags of its sign} of every fort and watchtower where it stands now (moved ones, added ones in
-        the Map editor - drawn there as movable signs)."""
+        Maps - drawn there as movable signs)."""
         if self._marks_on():
             return {tuple(r["xy"]): ("res", "res:%s" % r["id"]) for r in self.resources
                     if r.get("kind") in ("fort", "watchtower")}
@@ -1865,7 +1865,7 @@ class MapView(ttk.Frame):
         line = self._fort_line_under(e.x, e.y)
         fo = next((f for f in (self.forts or []) if f.line == line), None) if line is not None else None
         if fo is None:                                   # drawn as a movable sign (forts are always movable on the
-            rid = self._res_under(e.x, e.y)              # Map editor): its resource-layer id, f<line> / g<new one>
+            rid = self._res_under(e.x, e.y)              # Maps): its resource-layer id, f<line> / g<new one>
             r = next((r for r in self.resources if r["id"] == rid), None) if rid and rid[:1] in ("f", "g") else None
             if r is not None:
                 fo = next((f for f in (self.forts or []) if "f%d" % f.line == rid), None)

@@ -1,4 +1,4 @@
-"""Medieval II battle models (.mesh) read and drawn in 3D for the Unit editor - with Pillow alone.
+"""Medieval II battle models (.mesh) read and drawn in 3D for Units - with Pillow alone.
 
 A .mesh is a Boost binary archive (a 4-byte length + "serialization::archive", then 03 04 04 04 08 01). What the
 tool reads of it (worked out on the 3336 vanilla unit meshes; nothing else is needed to draw a man):

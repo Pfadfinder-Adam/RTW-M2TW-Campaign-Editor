@@ -56,7 +56,7 @@ def open_map_size(app, view=None):
               justify="left", wraplength=480).pack(anchor="w", fill="x", pady=(6, 0))
     ShortHint(frm, text=(
         "A number above 0 adds that many rows or columns of tiles at that edge - deep sea, as the map's own deepest "
-        "water; paint land on it with the Map editor and the Terrain tab. Below 0 cuts them off. What stands on the "
+        "water; paint land on it with Maps and the Terrain tab. Below 0 cuts them off. What stands on the "
         "part cut off is ringed red on the map and named here: it goes with the cut - towns with their regions (the "
         "land of theirs that stays is left with no region: paint it into one yourself, Edit regions), armies, agents, "
         "fleets, resources, forts, events - after a "

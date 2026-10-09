@@ -1,4 +1,4 @@
-"""The Unit editor's 3D view of a battle model (meshview.py draws it) - Medieval II's .mesh and Rome's .cas: turn it
+"""Units' 3D view of a battle model (meshview.py draws it) - Medieval II's .mesh and Rome's .cas: turn it
 with the mouse, zoom with the wheel, see it in each faction's texture, one man after another (Medieval II mixes the
 model's heads, arms, legs ...)."""
 
