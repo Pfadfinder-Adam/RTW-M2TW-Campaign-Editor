@@ -330,6 +330,7 @@ class App(tk.Tk):
         self.regions = {}
         self.chosen = []
         self.garrisons = {}             # region -> [unit type] picked by hand
+        self._kept_sides = {}           # 'new' / 'edit': that work's state while another work is on show
         self.field = []                 # [{kind, name, age, units, xy}] armies/agents/fleets to place
         self.removed_existing = []      # Edit: [{name, from}] characters taken off the map
         self.place_moves = {}           # {('city' | 'port', region): (x, y)} towns and ports moved on the map
@@ -1466,8 +1467,77 @@ class App(tk.Tk):
         """The Faction editor's tabs: Edit faction / New faction."""
         self.v_work.set(self.v_side.get())
         self.work_changed()
-        if self.v_work.get() in ("new", "edit"):
-            self.v_side.set(self.v_work.get())          # 'Stay' on the drop-the-changes question: back
+
+    def _side_bar_shown(self, on):
+        """Edit faction / New faction on the tabs' own row, before Faction, Units & armies...: the tabs move right
+        to make room (no row of their own - it took room)."""
+        if not on:
+            self.side_bar.place_forget()
+            self.nb.configure(style="TNotebook")
+            return
+        self.side_bar.update_idletasks()
+        st = ttk.Style(self)
+        top, right, bottom = (list(st.lookup("TNotebook", "tabmargins") or (2, 2, 2, 0)) + [2, 2, 0])[1:4]
+        st.configure("Faction.TNotebook", tabmargins=(self.side_bar.winfo_reqwidth() + 10, top, right, bottom))
+        self.nb.configure(style="Faction.TNotebook")
+        self.side_bar.place(in_=self.nb, x=0, y=0)
+        self.side_bar.lift()
+
+    SIDE_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "char_moves", "field", "removed_existing",
+                 "dip_set", "name_list", "art_replace", "sel_map", "figures", "roster_set", "family_set")
+    SIDE_VARS = ("v_give", "v_playable", "v_triggers", "v_art", "v_dip", "v_way", "v_way_of", "v_way_date",
+                 "v_way_region", "v_way_back", "v_army", "v_garrison")
+
+    def _side_state(self):
+        """New / Edit faction's own work (the form, its towns, garrisons, buildings, armies, diplomacy, art...),
+        kept while another work is on show; the map's changes are not in it (shared by every work)."""
+        st = {k: copy.deepcopy(getattr(self, k)) for k in self.SIDE_KEYS}
+        st["fields"] = {k: v.get() for k, v in self.v.items()}
+        st["vars"] = {k: getattr(self, k).get() for k in self.SIDE_VARS}
+        st["texts"] = (self.t_descr.get("1.0", "end-1c"), self.t_long.get("1.0", "end-1c"))
+        st["colours"] = dict(self.colours)
+        st["editing_now"] = copy.deepcopy(self.editing_now)
+        st["baseline"] = getattr(self, "_baseline", None)
+        st["victory"] = (self.victory.faction, copy.deepcopy(self.victory.cond))
+        return st
+
+    def _bring_side(self, st):
+        """Puts back the work _side_state kept."""
+        for k, val in st["fields"].items():
+            self.v[k].set(val)
+        for k, val in st["vars"].items():
+            getattr(self, k).set(val)
+        for t, text in zip((self.t_descr, self.t_long), st["texts"]):
+            t.delete("1.0", "end")
+            t.insert("1.0", text)
+        for key, b in (("primary", self.b_primary), ("secondary", self.b_secondary)):
+            self.colours[key] = st["colours"].get(key)
+            if self.colours[key]:
+                theme.paint(b, self.colours[key])
+        for k in self.SIDE_KEYS:
+            if k == "dip_set":                            # the diplomacy tab holds this very dict
+                self.dip_set.clear()
+                self.dip_set.update(st[k])
+            else:
+                setattr(self, k, st[k])
+        self.editing_now, self._baseline = st["editing_now"], st["baseline"]
+        t = self.v["template"].get().strip()
+        if t:
+            self.load_victory(t)
+            fac, cond = st["victory"]
+            if cond is not None and fac == self.victory.faction:
+                self.victory.cond = cond
+                self.victory.show()
+        self.way_changed()
+        self.roster_editor.forget()
+        self.family_editor.forget()
+        self.refresh_name_combos()
+        self.refresh_field()
+        self.refresh_chosen()
+        self.fill_towns()
+        self.show_family_button()
+        self.update_actions()
+        self._mark_work()
 
     def work_changed(self):
         """New / Edit faction share the campaign tabs; the unit and building editors
@@ -1475,9 +1545,8 @@ class App(tk.Tk):
         w = self.v_work.get()
         if w in ("new", "edit"):
             self._faction_side = w
-            self.side_bar.pack(fill="x", padx=6, pady=(3, 0), after=self.bottom_bar)
         else:
-            self.side_bar.pack_forget()
+            self._side_bar_shown(False)
         if w == "terrain":                              # a tab of the Map editor now
             self.v_work.set("map")
             self.work_changed()
@@ -1488,17 +1557,20 @@ class App(tk.Tk):
         if w in ("map", "new", "edit"):
             for ed in self.editors.values():
                 ed.pack_forget()
-            if self.v_mode.get() != w and self.undo_stack and self.v_mode.get() != "map" and not ask(
-                    APP, "Switch to %s? The faction's changes not written yet (its towns, garrisons, diplomacy...) "
-                         "are dropped; the map's changes stay." % self.WORK_TITLES[w], yes='Switch, drop them', no='Stay', danger=True):
-                self.v_work.set(self.v_mode.get())         # stay where the work is
-                return
             self._map_tab_only(w == "map")
-            self.nb.pack(fill="both", expand=True, padx=6, pady=3,
-                         after=self.side_bar if w in ("new", "edit") else self.bottom_bar)
+            self.nb.pack(fill="both", expand=True, padx=6, pady=3, after=self.bottom_bar)
+            self._side_bar_shown(w in ("new", "edit"))
             if self.v_mode.get() != w:
+                # nothing is dropped on a switch (the author: 'freedom first, one session'): New and Edit faction
+                # each keep their work not written yet and find it again on the way back; the map's changes are
+                # shared by all three
+                was = self.v_mode.get()
+                if was in ("new", "edit"):
+                    self._kept_sides[was] = self._side_state()
                 self.v_mode.set(w)
                 self.mode_changed()
+                if w in self._kept_sides:
+                    self._bring_side(self._kept_sides.pop(w))
             if w == "map":
                 self.select_tab("Map")
                 self.show_map()
@@ -4343,6 +4415,7 @@ class App(tk.Tk):
         self.kinds = {}
         self.field, self._placing = [], None
         self.editing_now, self.char_moves = None, {}
+        self._kept_sides = {}                            # another campaign: New / Edit faction's kept work goes
         self.place_moves = {}
         self.ports_gone = []
         self.map_owners, self.map_chars, self.map_removed = {}, {}, {}
