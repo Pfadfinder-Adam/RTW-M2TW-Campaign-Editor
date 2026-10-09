@@ -87,6 +87,7 @@ class FileAddon(Addon):
 
     def code(self):
         from importlib import import_module
+        from . import upkeep  # noqa: F401 - named, so the exe surely carries it (a test-mod run lacked it)
         return import_module("campaign_editor." + self.module)
 
 

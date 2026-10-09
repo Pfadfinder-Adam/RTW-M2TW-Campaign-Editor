@@ -2213,16 +2213,20 @@ local done = false
 local win = { open = false, img = null, tried = false, logged = false }
 local said = {}
 
-local function parts(text) {                        // the text's lines ('|' between them)
+local function words_of(text) {                     // the text's words (spaces between them)
     local out = []
     local rest = text
-    local i = rest.indexof("|")
+    local i = rest.indexof(" ")
     while (i != null) {
-        out.append(rest.slice(0, i))
+        if (i > 0) {
+            out.append(rest.slice(0, i))
+        }
         rest = rest.slice(i + 1)
-        i = rest.indexof("|")
+        i = rest.indexof(" ")
     }
-    out.append(rest)
+    if (rest.len() > 0) {
+        out.append(rest)
+    }
     return out
 }
 
@@ -2377,6 +2381,34 @@ local function text_at(ui, x, y, words, size, r, g, b) {
     }
 }
 
+local function text_width(words, size) {         // in px as the engine draws it; a guess if it cannot say
+    local face = ex_font()
+    try {
+        return ::UI.textSize(words, face != null ? face : "tnr_med", size)[0]
+    } catch (err) {
+    }
+    return (words.len() * size * 0.55).tointeger()
+}
+
+// the text cut into lines no wider than `width` (a tester: the hand-cut lines ran past the window's edge)
+local function wrapped(text, width, size) {
+    local out = []
+    local line = ""
+    foreach (word in words_of(text)) {
+        local more = line.len() > 0 ? line + " " + word : word
+        if (line.len() > 0 && text_width(more, size) > width) {
+            out.append(line)
+            line = word
+        } else {
+            line = more
+        }
+    }
+    if (line.len() > 0) {
+        out.append(line)
+    }
+    return out
+}
+
 local function draw_window() {
     if (!win.open) {
         return
@@ -2423,7 +2455,7 @@ local function draw_window() {
         left = x + 192
     }
     local line = y + 58
-    foreach (part in parts(TEXT)) {
+    foreach (part in wrapped(TEXT, x + w - 18 - left, 17)) {
         text_at(ui, left, line, part, 17, 40, 25, 10)
         line += 24
     }
@@ -2558,8 +2590,8 @@ def s_special(c, mod):
         picture = SPECIAL_PICTURE["medieval2" if game_kind(mod) == "medieval2" else "rome"]
         text = SPECIAL_NUT % {"model": SPECIAL_ENGINE, "x": picked[2][0], "y": picked[2][1], "money": SPECIAL_MONEY,
                               "title": "The Test Lighthouse", "picture": picture,
-                              "text": "A special building of our own, drawn by the|engine's script: its model, this window|"
-                                      "and its gift come from the editor."} + TEST_MARK + "\n"
+                              "text": "A special building of our own, drawn by the engine's script: its model, "
+                                      "this window and its gift come from the editor."} + TEST_MARK + "\n"
         plan.binary(AD.target(mod, _types.SimpleNamespace(file=SPECIAL_SCRIPT)), text.encode("utf-8"))
         c.said["special_engine"] = "the %s model at %d, %d" % (os.path.basename(src).rsplit(".", 1)[0], *picked[2])
     else:

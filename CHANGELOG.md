@@ -166,6 +166,10 @@
   release's page.
 
 ### Fixed
+- **The test mod's own building on the map: its window's text ran past the window's edge** - the lines are now cut
+  to the window's width as the engine measures them.
+- **The test mod's Upkeep x 2 step failed in the exe** ("No module named upkeep"): the exe now surely carries it,
+  and its own self-check tries every add-on's code.
 - **Add-ons: a click on Upkeep x 2 crashed the page** ("can only concatenate str"): it now shows like the others -
   it needs nothing, no engine (it changes the mod's own files).
 - **Map editor: towns whose garrison has no captain showed no army** (a big Medieval II map writes every garrison so,

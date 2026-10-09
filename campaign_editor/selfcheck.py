@@ -90,6 +90,7 @@ def _bundled(ok, fail):
     try:
         for a in AD.ADDONS:
             if AD.is_files(a):
+                a.code()                        # its module is in the exe (a test-mod run: 'No module named upkeep')
                 continue
             text = a.template()
             if not text.strip() or AD.from_script(text, a.file) is None:
