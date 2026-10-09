@@ -6491,6 +6491,18 @@ building smith
         img = tga.Image(5, 5, [(50, 50, 50)] * 25)
         got = T.height_spray(img, (2.2, 1.8), 0.5, "raise", 10, {})
         self.assertEqual(list(got), [(2, 2)])
+        # size n = n pixels across, round, snapped to the pixels (the user, 2026-10-09: even sizes too, 2 = 2 x 2)
+        for n, count in ((1, 1), (2, 4), (3, 9), (4, 12), (5, 21), (6, 32)):
+            c, r, pts = T.spray_footprint((10.3, 7.8), n)
+            self.assertEqual(len(pts), count, n)
+            self.assertEqual(max(x for x, _ in pts) - min(x for x, _ in pts) + 1, n)       # n pixels across
+            self.assertEqual(max(y for _, y in pts) - min(y for _, y in pts) + 1, n)
+        self.assertEqual(sorted(T.spray_footprint((10.3, 7.8), 2)[2]), [(10, 7), (10, 8), (11, 7), (11, 8)])
+        self.assertEqual(T.spray_footprint((10.6, 7.4), 1)[2], [(11, 7)])                   # the pixel under the mouse
+        img = tga.Image(9, 9, [(50, 50, 50)] * 81)
+        c, r, pts = T.spray_footprint((4.2, 4.7), 2)
+        got = T.height_spray(img, c, r, "raise", 10, {}, dome=True)
+        self.assertEqual(sorted(got), sorted(pts))                                           # exactly those, all raised
 
     def test_mercenary_pools(self):
         """Mercenaries window: pools read with every unit's numbers; a new pool of regions takes them out of their old

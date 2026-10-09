@@ -84,6 +84,10 @@
   it are listed to change by hand. It was a refusal ('... would keep no town').
 
 ### Changed
+- **Terrain editor: the Heights brush in even sizes too**: size n is now n points of the heights picture across,
+  round and snapped to the points like a pixel-art pencil - 1 one point, 2 a square of 2 x 2, 3 a 3 x 3, 4 a round
+  4 x 4 (before: only 1, 3, 5... points across). The outline under the mouse shows exactly the points it takes; the
+  brush goes up to 24 (the old 12 was 23 points across).
 - **Map editor: a Coast & heights tab beside Terrain**: the Terrain panel had grown too full - Terrain keeps Ground,
   Rivers / cliffs / volcanoes and Climates, the new Coast & heights tab has Land and sea and Heights (one editor in
   two tabs: the strokes, Undo / Redo and Apply are shared). The Map tab's own switches (Layers, Colours, Edit

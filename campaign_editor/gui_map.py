@@ -294,6 +294,9 @@ class MapView(ttk.Frame):
         # spray_radius(brush size) -> the radius in points it works (the coast's point brushes); None = the heights
         # spray, whose size 1 is the one point under the mouse
         self.spray_radius = None
+        # spray_points(px, py, brush size) -> the map_heights pixels the brush takes there (the heights brush): the
+        # outline then follows those pixels' edges exactly
+        self.spray_points = None
         self.chars, self.draggable, self.symbols = [], set(), {}
         self.on_char_move = self.check_tile = None
         # resources: [{id, kind, xy}]; check_res(id, xy) -> None or why; on_res_move(id, xy); on_res_click(id)
@@ -1995,7 +1998,18 @@ class MapView(ttk.Frame):
             px, py = self.heights_px(sx, sy)
             mx, my = (px / 2.0 - self.ox) * z, (self.cmap.h - py / 2.0 - self.oy) * z    # the point's middle
             rad = getattr(self, "spray_radius", None)
-            if b == 1 and not rad:
+            pts = getattr(self, "spray_points", None)
+            if pts:                                     # the very pixels, outlined along their outer edges
+                fx, fy = self._spray_at(sx, sy)
+                taken = set(pts(fx, fy, b))
+                q = z / 4.0                             # half a pixel on the screen (2 pixels a tile)
+                for px, py in taken:
+                    cx, cy = (px / 2.0 - self.ox) * z, (self.cmap.h - py / 2.0 - self.oy) * z
+                    for dx, dy, line in ((-1, 0, (cx - q, cy - q, cx - q, cy + q)), (1, 0, (cx + q, cy - q, cx + q, cy + q)),
+                                         (0, 1, (cx - q, cy - q, cx + q, cy - q)), (0, -1, (cx - q, cy + q, cx + q, cy + q))):
+                        if (px + dx, py + dy) not in taken:
+                            c.create_line(*line, fill="white", width=width, tags="tile_outline")
+            elif b == 1 and not rad:
                 c.create_rectangle(mx - z / 4, my - z / 4, mx + z / 4, my + z / 4, outline="white", width=width,
                                    tags="tile_outline")
             else:                                       # round brushes work round the mouse itself, not a point

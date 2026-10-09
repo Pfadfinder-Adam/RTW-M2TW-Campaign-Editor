@@ -347,11 +347,32 @@ def is_land_height(c):
     return c is not None and c[0] == c[1] == c[2]
 
 
-def height_spray(img, centre, radius, tool, strength, values, level=None):
+def spray_footprint(centre, size):
+    """The heights brush of size n, n map_heights pixels across and round, snapped to the pixels like a pixel-art
+    pencil (the user, 2026-10-09: 'odd sizes only - make even ones too: 1 = one pixel, 2 = 2 x 2'): an odd size
+    centred on the pixel under the mouse, an even one on the corner between the 4 pixels nearest to it. Returns
+    (centre, radius, [(px, py)]) - the radius as height_spray takes it."""
+    import math
+    n = max(1, int(size))
+    if n % 2:
+        c = (float(math.floor(centre[0] + 0.5)), float(math.floor(centre[1] + 0.5)))
+    else:
+        c = (math.floor(centre[0]) + 0.5, math.floor(centre[1]) + 0.5)
+    r = n / 2.0
+    k = int(math.ceil(r))
+    pts = [(x, y) for x in range(int(math.floor(c[0])) - k, int(math.floor(c[0])) + k + 2)
+           for y in range(int(math.floor(c[1])) - k, int(math.floor(c[1])) + k + 2)
+           if (x - c[0]) ** 2 + (y - c[1]) ** 2 <= r * r + 1e-9]
+    return c, r, pts
+
+
+def height_spray(img, centre, radius, tool, strength, values, level=None, dome=False):
     """One puff of the heights brush, like a spray can: held longer, it does more. img: map_heights.tga
     (tga.Image, bottom-up); centre: (px, py) in its pixels, fractions allowed; radius in pixels; strength
     1..10; values: {(px, py): float} - the running heights of pixels touched so far (kept between puffs,
-    so small steps add up), updated here. Returns {(px, py): int} of the pixels whose grey changed."""
+    so small steps add up), updated here. dome: the strength falls off as a dome to just past the edge (the pixel
+    brush of spray_footprint: its edge pixels still take some), else from the middle to nothing at the edge.
+    Returns {(px, py): int} of the pixels whose grey changed."""
     cx, cy = centre
     out = {}
     if float(radius) < 1.0:                      # size 1: the one point under the mouse, the whole strength
@@ -382,7 +403,12 @@ def height_spray(img, centre, radius, tool, strength, values, level=None):
             v = now(x, y)
             if v is None:                               # the sea: left alone
                 continue
-            w = (1 - d / r) ** 2 if r >= 1 else 1.0     # soft edge: the middle gets the most
+            if r < 1:
+                w = 1.0
+            elif dome:
+                w = 1 - (d / (r + 0.5)) ** 2            # the edge pixels of a small brush still take a good part
+            else:
+                w = (1 - d / r) ** 2                    # soft edge: the middle gets the most
             if tool == "raise":
                 nv = v + 4.0 * k * w
             elif tool == "lower":

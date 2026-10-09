@@ -61,7 +61,7 @@ class TerrainEditor(ttk.Frame):
         self._paint_end.pack(side="left")
         self.v_brush = tk.IntVar(value=1)
         self.v_brush.trace_add("write", lambda *_: self._brush_changed())     # typed too, not only the arrows
-        ttk.Spinbox(top, from_=1, to=12, width=3, textvariable=self.v_brush,
+        ttk.Spinbox(top, from_=1, to=24, width=3, textvariable=self.v_brush,
                     command=lambda: setattr(self.view, "brush", self.v_brush.get())).pack(side="left", padx=2)
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
         self.v_grid_here = tk.BooleanVar(value=True)
@@ -265,6 +265,8 @@ class TerrainEditor(ttk.Frame):
             return
         what, mode = self.v_what.get(), self.v_coast.get()
         self.view.on_spray = self.spray if what == "heights" else None
+        # the heights brush's outline: exactly the pixels it takes
+        self.view.spray_points = ((lambda px, py, b: T.spray_footprint((px, py), b)[2]) if what == "heights" else None)
         if what == "coast" and mode.startswith("pen"):
             self.view.on_spray = self.pen
         elif what == "coast" and mode.startswith(("shape", "smooth")):
@@ -655,11 +657,11 @@ class TerrainEditor(ttk.Frame):
             self.app.status.set("This campaign has no map_heights.tga.")
             return False
         tool = self.v_tool.get()
-        # the brush in points of map_heights (a tile is 2 x 2 of them): size 1 = the one point under the mouse,
-        # size 2 a point and its ring (about one tile across), each size one point wider
-        radius = self.v_brush.get() - 0.5
-        got = T.height_spray(img, (px, py), radius, tool, max(1, min(10, self.v_strength.get())), self._hvals,
-                             level=self.v_level.get())
+        # the brush in pixels of map_heights (a tile is 2 x 2 of them): size n = n pixels across, round, snapped to
+        # the pixels (terrain.spray_footprint) - 1 the pixel under the mouse, 2 a square of 2 x 2
+        c, radius, _ = T.spray_footprint((px, py), self.v_brush.get())
+        got = T.height_spray(img, c, radius, tool, max(1, min(10, self.v_strength.get())), self._hvals,
+                             level=self.v_level.get(), dome=True)
         for p, v in got.items():
             self.hbase.setdefault(p, img.get(*p)[0])
             self._set_px(img, p[0], p[1], (v, v, v))
