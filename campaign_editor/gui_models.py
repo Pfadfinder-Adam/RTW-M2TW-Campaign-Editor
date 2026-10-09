@@ -24,9 +24,10 @@ class ModelsEditor(ttk.Frame):
         from .gui_art import CardGrid
         a = self.app
         if self.grid_ is None:
-            self.head = ttk.Label(self, text="", foreground="#555", justify="left")
-            self.head.pack(fill="x", anchor="w", pady=(0, 4))
-            self.head.bind("<Configure>", lambda e: self.head.configure(wraplength=max(120, e.width - 4)), add="+")
+            # one short line, the rest on its '?' (a tester: the top part takes room for nothing)
+            from .gui_util import ShortHint
+            self.head = ShortHint(self)
+            self.head.pack(anchor="w", pady=(0, 2))
             self.grid_ = CardGrid(self, a.art_editor.CELL + 60)
             self.grid_.pack(fill="both", expand=True)
         g = self.grid_
@@ -44,9 +45,9 @@ class ModelsEditor(ttk.Frame):
             g.say("%s has no character types in descr_character.txt." % src_faction)
             return
         self.head.configure(text=(
-            "Who %s's characters are on the campaign map: each type's figure (a strat model of "
+            "%s's figures on the campaign map, one card per character type. Each type's figure is a strat model of "
             "descr_model_strat.txt - pick another in its list; Preview, then Apply writes descr_character.txt; a "
-            "faction sharing its line with others gets a line of its own), 3D shows it with the faction's texture, "
+            "faction sharing its line with others gets a line of its own. 3D shows it with the faction's texture, "
             "and its texture below it to Replace... A model the faction has no texture in gets a line with the "
             "model's first texture; its picture shows here after Apply." % src_faction))
         pics = {}                                         # model -> its texture pictures of this faction
