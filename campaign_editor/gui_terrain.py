@@ -527,7 +527,8 @@ class TerrainEditor(ttk.Frame):
                 "A tile's ground decides movement, farming and what may stand there; land stays land and sea stays "
                 "sea here - to turn sea into land or land into sea, use 'Land and sea' above. Mountains, high mountains, dense "
                 "forest and impassable land / sea are refused under towns, ports and characters (the game refuses them "
-                "there); impassable: no army walks or sails there (Medieval II; Rome with REX only). "
+                "there); impassable: no army walks or sails there (Medieval II; Rome with REX only); impassable, always black: "
+                "never walked and never seen - a wasteland's land hidden for good (REX / M2EX). "
                 "On Apply: map_ground_types.tga written, map.rwm deleted - the game builds its map again."))
         elif what == "climate":
             found = T.climates(self.mod) if self.mod else []

@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **Terrain editor: impassable land, always black**: a new ground brush (Rome with REX, Medieval II with M2EX - the
+  engines' ground type impassable_shrouded): no army walks there and the land stays black all game, for a
+  wasteland's land you want hidden. Towns, ports and characters are refused on it, as on the other impassable ground.
 - **A report carries the mod's file list**: with a mod loaded, Report a bug / Suggest adds `mod_files.txt` (a tick,
   on by default) - every file of the mod's data folder and the files beside it, with its size and date and whether
   the game has it with the same size (new / other size). Never the files' contents; the hidden words are cut out

@@ -2359,6 +2359,11 @@ building smith
         self.assertIn(imp, T.ground_brushes("medieval2")[0])
         self.assertIn(imp, T.ground_brushes("rome", "REX.exe")[0])
         self.assertNotIn(imp, T.ground_brushes("rome")[0])
+        black = (32, 32, 32)                     # impassable_shrouded: with REX / M2EX only, both games
+        self.assertIn(black, T.ground_brushes("medieval2", "M2EX.exe")[0])
+        self.assertIn(black, T.ground_brushes("rome", "REX.exe")[0])
+        self.assertNotIn(black, T.ground_brushes("medieval2")[0])
+        self.assertIn(black, T.GROUND)
         reg = mod.region_map("test")
         self.assertEqual(T.sea_colour(reg, [red, blue]), sea)
         heights = mod._optional_map("test", "map_heights.tga")

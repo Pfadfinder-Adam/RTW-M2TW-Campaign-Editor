@@ -14,7 +14,8 @@ for them (the rules of moddata.land_problem)."""
 import os
 
 
-# map_ground_types.tga colours (Rome and Medieval II; the last two are Medieval II's)
+# map_ground_types.tga colours (Rome and Medieval II; the impassable ones Medieval II's and the engines', the black one
+# only the engines' - REX / M2EX's ground type impassable_shrouded)
 GROUND = {
     (101, 124, 0): "low fertility", (96, 160, 64): "medium fertility", (0, 128, 0): "high fertility",
     (0, 0, 0): "wilderness", (0, 64, 0): "dense forest", (0, 128, 128): "sparse forest",
@@ -22,6 +23,7 @@ GROUND = {
     (0, 255, 128): "swamp", (255, 255, 255): "beach", (64, 0, 0): "ocean",
     (128, 0, 0): "deep sea", (196, 0, 0): "shallow sea",
     (64, 64, 64): "impassable land", (128, 128, 128): "impassable sea",
+    (32, 32, 32): "impassable land, always black",
 }
 SEA = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (128, 128, 128)}
 LAND_BRUSHES = [(101, 124, 0), (96, 160, 64), (0, 128, 0), (0, 0, 0), (0, 128, 128), (0, 64, 0), (128, 128, 64),
@@ -42,15 +44,21 @@ VOLCANO, LAND_BRIDGE = (255, 0, 0), (0, 255, 0)
 
 
 IMPASSABLE_LAND, IMPASSABLE_SEA = (64, 64, 64), (128, 128, 128)
+SHROUDED = (32, 32, 32)          # impassable_shrouded: no army walks there and it is never seen (black) - REX / M2EX
 BEACH = (255, 255, 255)
 
 
 def ground_brushes(game, engine=None):
     """(land, sea) ground colours the Terrain editor paints: impassable land / sea (no army walks or sails there)
     on Medieval II (its vanilla map is full of them) and on Rome only with REX (REX names the ground types
-    IMPASSABLE_LAND / IMPASSABLE_SEA, the original RomeTW.exe does not - not tried in the game yet)."""
-    extra = game == "medieval2" or bool(engine and engine.lower().startswith("rex"))
-    return (LAND_BRUSHES + ([IMPASSABLE_LAND] if extra else []), SEA_BRUSHES + ([IMPASSABLE_SEA] if extra else []))
+    IMPASSABLE_LAND / IMPASSABLE_SEA, the original RomeTW.exe does not - not tried in the game yet); the black
+    impassable land (impassable_shrouded - a wasteland's land hidden for good) with REX or M2EX, both games (REX's
+    wasteland_regions.md)."""
+    engine = (engine or "").lower()
+    extra = game == "medieval2" or engine.startswith("rex")
+    black = engine.startswith(("rex", "m2ex"))
+    return (LAND_BRUSHES + ([IMPASSABLE_LAND] if extra else []) + ([SHROUDED] if black else []),
+            SEA_BRUSHES + ([IMPASSABLE_SEA] if extra else []))
 
 
 def feature_brushes(game):

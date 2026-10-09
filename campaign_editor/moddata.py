@@ -95,7 +95,8 @@ DATA_FILES = {
 # fine. Rivers, fords and cliffs (map_features.tga) refuse one too ("invalid tile").
 BLOCKED_GROUND = {(64, 0, 0): "sea", (128, 0, 0): "sea", (196, 0, 0): "sea",
                   (98, 65, 65): "mountains", (196, 128, 128): "high mountains", (0, 64, 0): "dense forest",
-                  (64, 64, 64): "impassable land", (128, 128, 128): "impassable sea"}     # Medieval II's
+                  (64, 64, 64): "impassable land", (128, 128, 128): "impassable sea",     # Medieval II's
+                  (32, 32, 32): "impassable land"}                                       # REX / M2EX's black
 
 
 def parse_religions(text):
