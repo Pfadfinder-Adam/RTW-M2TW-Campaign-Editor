@@ -115,6 +115,10 @@
   release's page.
 
 ### Fixed
+- **Map editor: towns whose garrison has no captain showed no army** (a big Medieval II map writes every garrison so,
+  the rebels' too - `garrisoned_army` with its units inside the town's own block): such a town now shows the army
+  flag on its roof like any garrisoned town, and the line under the map says how many units its own garrison has.
+  The town window already showed them.
 - **Terrain editor: the coast's brushes at size 1 showed a square on the points' grid**: the shape brush, Smooth the
   coast and the coast pen at size 1 now show their circle round the mouse, as at every other size - what they take
   is centred where the mouse is, not on the nearest point. And after the shape brush or the pen, picking Heights

@@ -298,6 +298,7 @@ class MapView(ttk.Frame):
         # outline then follows those pixels' edges exactly
         self.spray_points = None
         self.chars, self.draggable, self.symbols = [], set(), {}
+        self.inside = {}                 # {region: units} of a town's own garrison with no captain (garrisoned_army)
         self.on_char_move = self.check_tile = None
         # resources: [{id, kind, xy}]; check_res(id, xy) -> None or why; on_res_move(id, xy); on_res_click(id)
         self.resources, self.check_res, self.on_res_move, self.on_res_click = [], None, None, None
@@ -1543,6 +1544,15 @@ class MapView(ttk.Frame):
                 seen[(x, y)] = n + 1
                 sx += n * one * 0.5
             self._draw_char(ch_, sx, sy, one)
+        for region, n in (getattr(self, "inside", None) or {}).items():
+            xy = self.places.get(("city", region), cm.cities.get(region))     # its own garrison: the town's flag
+            if xy is None or tuple(xy) in flags or not n:
+                continue
+            sx, sy = self.to_screen(*xy)
+            if -30 < sx < cw + 30 and -30 < sy < ch + 30:
+                flags.add(tuple(xy))
+                self._roof_flag(sx + size / 2, sy - size / 2, max(tile * 0.8, 8), self.owners.get(region, "slave"),
+                                ("city", "city:" + region))
 
     def fort_spots(self):
         """{tile: the tags of its sign} of every fort and watchtower where it stands now (moved ones, added ones in
@@ -2626,6 +2636,10 @@ class MapView(ttk.Frame):
                 here.sort(key=lambda c: not c["army"])
                 text += "   in it: " + ", ".join("%s (%s%s)" % (c["name"], c["kind"], ", %d units" % c["units"]
                                                              if c["army"] else "") for c in here)
+            town = next((r for r, xy in self.cmap.cities.items()
+                         if tuple(self.places.get(("city", r), xy)) == (x, y)), None)
+            if town and (getattr(self, "inside", None) or {}).get(town):
+                text += "   its own garrison (no captain): %d units" % self.inside[town]
             if getattr(self.cmap, "show_heights", False):      # the heights: the point under the mouse, exact
                 text += "   " + self.cmap.height_point(*self.heights_px(e.x, e.y))
             self.readout.configure(text=text)

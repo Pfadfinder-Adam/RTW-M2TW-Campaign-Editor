@@ -3683,6 +3683,10 @@ class App(tk.Tk):
         self.map_view.res_types = list(_res_types(self.mod))
         if self.map_view.v_rel.get():                # Religion colours: each region in its main religion's colour
             region_kw["tint"], region_kw["tint_legend"] = self.religion_tint()
+        # a town's own garrison with no captain ('garrisoned_army' in its block - a big map writes every garrison so,
+        # the rebels' too: report #167) shows the same flag on the roof as an army in it
+        self.map_view.inside = {st.region: len(st.garrison) for fb in self.strat.factions for st in fb.settlements
+                                if st.garrison}
         self.map_view.load(self._cmap, owners, colours, me, self.chosen,
                            on_city=None if self.map_work() else self.map_city, chars=chars,
                            labels=self._map_labels,
