@@ -4604,6 +4604,20 @@ building smith
         self.assertEqual(g.get(4, 5), hills)                            # made land by the coast in the same Apply
         self.assertEqual(T.ground_off_heights(read_tga(os.path.join(camp, "map_heights.tga")), g), [])
 
+    def test_map_view_keeps_its_inside_check(self):
+        """Report R-20261009-5458EC: a right click on the map crashed ('dict' object is not callable) - a field named
+        'inside' (the towns' own garrisons) hid MapView.inside(), the is-it-on-the-map check of every click."""
+        try:
+            import tkinter  # noqa: F401
+            import inspect
+            from campaign_editor.gui_map import MapView
+        except ImportError:
+            self.skipTest("no tkinter")
+        self.assertTrue(inspect.isfunction(MapView.inside))
+        import campaign_editor.gui as G
+        for src in (inspect.getsource(MapView), inspect.getsource(G)):
+            self.assertNotRegex(src, r"\.inside\s*=[^=]")      # nothing writes over the method
+
     def test_upkeep_addon_doubles_and_takes_out_exactly(self):
         """Upkeep x 2 as an add-on of its own (the user, 2026-10-09: 'no huge armies - put in and taken out, on any
         mod'): every unit's upkeep (stat_cost's third number) doubled, the old numbers kept beside the file; Take it

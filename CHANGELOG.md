@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **Fix: a right click on the map crashed** ('dict' object is not callable) and the context menu did not open -
+  a newer field had taken the name of the map's own check of where a click lands.
 - **One Faction editor**: New faction and Edit faction are one button at the top now - **Faction editor**, with
   two tabs: **Edit faction** (first, where the editor opens) and **New faction**. One button less in the top row.
 - **Add-on: Upkeep x 2** (both games, any mod, no engine needed) - every unit's upkeep multiplied (x 2 or any
