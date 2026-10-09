@@ -26,7 +26,6 @@ import os
 import re
 import zipfile
 
-from .moddata import _ci
 from .textio import strip_comment, tokens
 
 PACK_VERSION = 1
@@ -209,14 +208,11 @@ def collect(mod, unit_types):
                 if val is not None:
                     manifest["texts"][key] = val
             for sub, pattern in (("units", "#%s.tga"), ("unit_info", "%s_info.tga")):
-                folder = os.path.join(mod.data, "ui", sub)
-                if not os.path.isdir(folder):
-                    continue
-                for fac in sorted(os.listdir(folder)):
-                    p = _ci(os.path.join(folder, fac), pattern % d) if os.path.isdir(os.path.join(folder, fac)) else None
+                for fac, _ in mod.listing("ui/" + sub):             # the mod's folders and the game's under it
+                    p = mod.find("ui/%s/%s/%s" % (sub, fac, pattern % d))     # the card in either
                     if p:
                         with open(p, "rb") as fh:
-                            files[os.path.relpath(p, mod.data).replace("\\", "/")] = fh.read()
+                            files["ui/%s/%s/%s" % (sub, fac, os.path.basename(p))] = fh.read()
     manifest["recruit"] = _recruit_places(mod, unit_types)
     return g.done()
 
@@ -739,7 +735,7 @@ def collect_buildings(mod, chains):
             s = s.lstrip()
             if s.startswith("{") and "}" in s:
                 keys.append(s[1:s.index("}")])
-    ui = os.path.join(mod.data, "ui")
+    cultures = [c for c, _ in mod.listing("ui") if mod.dirs("ui/%s/buildings" % c)]    # the mod's and the game's
     for ch in chains:
         blk = blocks.get(ch)
         if blk is None:
@@ -759,17 +755,14 @@ def collect_buildings(mod, chains):
                 val = _text_entry(mod, "export_buildings.txt", k)
                 if val is not None:
                     man["texts"][k] = val
-        if os.path.isdir(ui):
-            for cult in sorted(os.listdir(ui)):
-                folder = os.path.join(ui, cult, "buildings")
-                if not os.path.isdir(folder):
-                    continue
-                for lv in levels:
-                    for tail in (".tga", "_constructed.tga"):
-                        p = _ci(folder, "#%s_%s%s" % (cult, lv, tail))
-                        if p:
-                            with open(p, "rb") as fh:
-                                files[os.path.relpath(p, mod.data).replace("\\", "/")] = fh.read()
+        for cult in cultures:
+            pics = {n.lower(): (n, p) for n, p in mod.listing("ui/%s/buildings" % cult)}
+            for lv in levels:
+                for tail in (".tga", "_constructed.tga"):
+                    got = pics.get(("#%s_%s%s" % (cult, lv, tail)).lower())
+                    if got:
+                        with open(got[1], "rb") as fh:
+                            files["ui/%s/buildings/%s" % (cult, got[0])] = fh.read()
     return man, files
 
 
@@ -934,8 +927,7 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
         tf.raw.append(tf.make(""))
         plan.note(tf, "%d building name(s) and description(s) added" % n)
     # pictures: under each culture they came from; the cultures of the new owners get one too
-    ui = os.path.join(mod.data, "ui")
-    cults_here = {c.lower(): c for c in os.listdir(ui)} if os.path.isdir(ui) else {}
+    cults_here = {c.lower(): c for c, _ in mod.listing("ui")}       # the mod's culture folders and the game's
     owners_cults = set()
     for o in factions:
         owners_cults.add(o if o in cults_here.values() else mod.culture(o) or "")

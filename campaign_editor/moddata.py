@@ -228,6 +228,27 @@ class ModData:
                 return p
         return None
 
+    def dirs(self, rel):
+        """Every folder data/<rel> there is (any case) - the mod's own first, then the game's under it. A mod folder
+        keeps only what it changes: a reader that walks a folder walks all of these (Recolour once looked in the mod's
+        alone and found no template cards - a tester's test mod)."""
+        out = []
+        for root in self.roots():
+            p = ci_path(root, rel) if rel else root
+            if p and os.path.isdir(p):
+                out.append(p)
+        return out
+
+    def listing(self, rel):
+        """[(name, path)] of what data/<rel> holds, in the mod and in the game's data under it, by name without case -
+        the mod's own wins, as the game reads it - sorted by name. A SUBFOLDER both hold is named once with the mod's
+        path: look a file inside it up with find('<rel>/<name>/<file>'), which reads both."""
+        got = {}
+        for d in self.dirs(rel):
+            for n in os.listdir(d):
+                got.setdefault(n.lower(), (n, os.path.join(d, n)))
+        return [got[k] for k in sorted(got)]
+
     def own(self, path):
         """Where a write of this file goes: the mod's own copy of a file read from the game's data (the same place
         under the mod's data folder); any other path as it is."""

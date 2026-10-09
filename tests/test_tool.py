@@ -938,6 +938,37 @@ building smith
         self.assertIn("ui/units/beta/#alpha_general.tga", left)
         self.assertNotIn("ui/units/alpha/#alpha_general.tga", left)     # unchanged: the game has it
 
+    def test_thin_mod_readers_find_the_games_pictures(self):
+        """A mod folder keeps only what it changes (thin): every reader that walks a picture folder walks the game's
+        data under it too (the Recolour miss of a tester's test mod, audited 2026-10-09). A copied unit gets the cards
+        the game holds, a renamed dictionary too, a copied building its pictures; the game's files untouched."""
+        from campaign_editor import editors as E
+        game, _ = self._game()
+        gd = os.path.join(game, "data")
+        write(os.path.join(gd, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels hut house\n    {\n        hut requires factions { alpha, }\n"
+              "        {\n        }\n        house requires factions { alpha, }\n        {\n        }\n    }\n}\n")
+        write(os.path.join(gd, "ui", "roman", "buildings", "#roman_hut.tga"), "hut picture")
+        before = tree_hash(gd)
+        data, _ = create_mod(gd, "Beta")
+        mod = ModData(data)
+        self.assertEqual([n for n, _ in mod.listing("ui/units")], ["alpha"])          # the game's, seen from the mod
+        plan = Plan(mod, "u", "u", {})
+        E.copy_unit(plan, "alpha general", "alpha guard", "alpha_guard")
+        E.rename_dictionary(plan, "alpha_general", "alpha_general2")
+        E.copy_building(plan, "barracks", "camp", {"hut": "tent", "house": "hall"})
+        plan.apply()
+        for rel in ("ui/units/alpha/#alpha_guard.tga", "ui/unit_info/alpha/alpha_guard_info.tga",
+                    "ui/units/alpha/#alpha_general2.tga", "ui/roman/buildings/#roman_tent.tga"):
+            self.assertTrue(os.path.isfile(os.path.join(data, rel)), rel)
+        self.assertEqual(tree_hash(gd), before)
+        # a unit pack and a building pack from the thin mod carry the game's cards and pictures
+        from campaign_editor import packs as PK
+        _, files = PK.collect(ModData(data), ["alpha general"])
+        self.assertIn("ui/units/alpha/#alpha_general.tga", files)
+        _, files = PK.collect_buildings(ModData(data), ["barracks"])
+        self.assertIn("ui/roman/buildings/#roman_hut.tga", files)
+
     def test_rename_faction_reaches_glued_names_and_the_games_files(self):
         """Report R-20261009-CDDAF0 (the test mod on Medieval II with M2EX): venice renamed venice_ce, then the game
         closed at start - 'Unknown attribute type(Combat_V_Faction_Venice)': the trait effect glues the faction's
