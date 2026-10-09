@@ -5731,9 +5731,11 @@ building smith
                      '"verdana_sml"', '"BEVEL_TL"', "AG_M2_ROW", "root.persistent", '"SettlementTurnStart"',
                      "settlementScroll", "rawdelete"):
             self.assertIn(part, text)
-        # the box of the scroll's own Auto-manage tick first (a tester: 'make the squares the same as the game's'),
-        # the small plain one where it is missing
-        self.assertLess(text.index('["CHECKBOX_BG"'), text.index('"PLAIN_CHECKBOX_BG"'))
+        # the scroll's own ticks are the small bevelled PLAIN_CHECKBOX pieces in BOTH games (a tester's Medieval II
+        # screen, 2026-10-09: CHECKBOX_BG drew a flat pink square beside them); the words as high as the game's
+        m2 = text[text.index("local AG_SPRITES_M2"):text.index("local AG_SPRITES_ROME")]
+        self.assertLess(m2.index('"PLAIN_CHECKBOX_BG"'), m2.index('"CHECKBOX_BG"'))
+        self.assertIn("local AG_M2_TEXT = 14", text)
         self.assertNotIn("delete ", text.replace("rawdelete", ""))         # the engines forbid 'delete'
         got = A.read_settings(a, text)
         self.assertEqual(A.render(a, text, got), text)
@@ -8709,6 +8711,10 @@ building smith
         attrs = CP.attributes("medieval2", "named character", "leader", [("GoodCommander", 1)], td,
                               ["shieldbearer"], ad)
         self.assertEqual(attrs, [("Command", 3), ("Dread", 3), ("Authority", 0), ("Piety", 0)])
+        # the heir keeps Loyalty - the game shows Authority for the faction leader alone (a tester's Army Details of
+        # Medieval II's heir, Prince Edward with 'Heir Apparent': Command, Dread, Loyalty, Piety)
+        self.assertEqual([a for a, _ in CP.attributes("medieval2", "named character", "heir", [], td, [], ad)],
+                         ["Command", "Chivalry", "Loyalty", "Piety"])
         self.assertEqual(CP.attributes("rome", "spy", "", [], td, [], ad), [("Subterfuge", 0)])
         got = CP.panel(mod, {"name": "Aaron", "age": 40, "kind": "named character", "role": "leader", "source": "map",
                              "traits": [("GoodCommander", 1)], "ancillaries": ["shieldbearer"]}, td, ad)

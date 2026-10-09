@@ -166,6 +166,12 @@
   release's page.
 
 ### Fixed
+- **Avoid Growth on Medieval II's town scroll**: its words started on top of Recruitment's tick and its box was a
+  flat pink square. It now stands after Recruitment with the game's own gap, in the same small bevelled box and
+  tick the scroll's Auto-manage / Construction / Recruitment use, its words as high as theirs. Load offers to
+  update the add-on in the game.
+- **Character editor (Medieval II): the heir showed Authority** - the game shows Authority for the faction leader
+  alone; the heir keeps Loyalty, as on the game's own scroll.
 - **Rename a faction: Medieval II closed at start after it** ("Unknown attribute type(Combat_V_Faction_Venice)"):
   the traits' effect against a faction glues its name on (`Combat_V_Faction_Venice`) and was left with the old
   name - it now follows. In a mod folder that keeps only what it changes, the files only the game's data has are

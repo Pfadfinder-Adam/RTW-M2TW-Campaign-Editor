@@ -28,8 +28,8 @@ def panel_kind(kind):
 
 def attributes(game, kind, role, traits, trait_defs, ancs, anc_defs):
     """[(attribute, value)] the panel shows: every effect of the character's traits (at their levels) and
-    retinue added up, for the attributes of his kind (Medieval II: Authority for the leader and the heir in place
-    of Loyalty, Dread when the chivalry is below 0)."""
+    retinue added up, for the attributes of his kind (Medieval II: Authority for the faction leader in place of
+    Loyalty - the heir keeps Loyalty, as a tester's Army Details shows - Dread when the chivalry is below 0)."""
     total = {}
     for t, n in traits:
         eff = (trait_defs.get(t) or {}).get("effects") or []
@@ -42,7 +42,7 @@ def attributes(game, kind, role, traits, trait_defs, ancs, anc_defs):
     names = list(PANEL.get(game, PANEL["rome"]).get(panel_kind(kind), ()))
     out = []
     for name in names:
-        if game == "medieval2" and name == "Loyalty" and role in ("leader", "heir"):
+        if game == "medieval2" and name == "Loyalty" and role == "leader":       # the heir keeps Loyalty
             name = "Authority"
         value = total.get(name, 0)
         if name == "Chivalry" and value < 0:

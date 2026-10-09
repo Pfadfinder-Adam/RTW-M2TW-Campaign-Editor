@@ -44,8 +44,8 @@ local AG_FACES = ["verdana_sml", "tnr_sml", "verdana"]
 local AG_INK = [96, 82, 62, 255]
 // Medieval II writes its ticks' words (Auto-manage, Construction, Recruitment) in a plain Verdana-like face as big as
 // about half their box - M2EX's game faces draw at a fixed small size (a tester's screen: ours stood out), so the words
-// take M2EX's own Verdana (script/core/fonts.nut, ::EX.fonts.body) at AG_M2_TEXT of the box's height
-local AG_M2_TEXT = 0.58
+// take M2EX's own Verdana (script/core/fonts.nut, ::EX.fonts.body) AG_M2_TEXT units high
+local AG_M2_TEXT = 14                // units: the words' height, as the scroll's own tick words
 // Rome's Automanage, measured on a tester's screenshot (report R-20261007-8A29B4): its words (128, 119, 97), its box
 // 24 x 18 units (wider than high) standing 99 units right of where its words start - ours stands in that column too
 // (a tester's photo, 2026-10-09: with 98 / 25 our box stood out 1 px on the left, its right edge even)
@@ -53,10 +53,11 @@ local AG_INK_ROME = [128, 119, 97, 255]
 local AG_ROME_BOX = [99, 24]
 local AG_KEY = "avoid_growth"        // this add-on's place in the saved game (persistent.avoid_growth)
 // The game's own tick pieces, the first found: [box, tick, their size in 1024 x 768 units] - the pieces of the
-// scroll's own Auto-manage tick: Medieval II's bevelled box, Rome's (and Barbarian Invasion's) thin one
+// scroll's own Auto-manage tick. Medieval II's are the small bevelled PLAIN_CHECKBOX ones too (a tester's screen,
+// 2026-10-09: CHECKBOX_BG is a flat pink square, nothing like the scroll's Auto-manage / Construction / Recruitment)
 local AG_SPRITES_M2 = [
-    ["CHECKBOX_BG", "TICK_GADGET", 24],
     ["PLAIN_CHECKBOX_BG", "PLAIN_CHECKBOX_TICK", 18],
+    ["CHECKBOX_BG", "TICK_GADGET", 24],
 ]
 local AG_SPRITES_ROME = [
     ["PLAIN_CHECKBOX_BG", "PLAIN_CHECKBOX_TICK", 18],
@@ -69,8 +70,9 @@ local CE_GAME = "auto"
 local AG_GAP = 4
 // Medieval II's settlement scroll: the row of its own ticks (Auto-manage, Construction, Recruitment) - the free
 // place right of Recruitment, from the bottom-left of settlement_details_population_stats (measured on the game's
-// scroll at 1600 x 900): the box's top-left 448 units right and 59 below.
-local AG_M2_ROW = [448, 59]
+// scroll at 1600 x 900): the words start 472 units right and the box's top 59 below - the game's own gap after
+// Recruitment's box (a tester's screen, 2026-10-09: at 448 the words started on Recruitment's box).
+local AG_M2_ROW = [472, 59]
 // Medieval II's settlement scroll in M2EX builds with one Auto-manage tick under the town's figures (measured on
 // the game's scroll at 1600 x 900): its box's right edge 129 units right of own_settlement_governor_info_panel's
 // left and its middle 71 below the panel's bottom; from own_settlement_info_scroll's top-left: 175 right, 279 down.
@@ -79,7 +81,7 @@ local AG_M2_ROW = [448, 59]
 // moves.
 local AG_M2_AUTO = [129, 71]
 local AG_M2_AUTO_SCROLL = [175, 279]
-local AG_M2_GAP = 307
+local AG_M2_GAP = 331                // 307 put the words on Recruitment's box (a tester's screen, 2026-10-09)
 // Rome's (and Barbarian Invasion's) settlement scroll: the free line under Automanage, left of the build policy
 // arrows, from the bottom-left of own_settlement_governor_info_panel (measured on a tester's scroll at 1600 x 900:
 // the panel [898,96 631x124], Automanage's box 996-1020 x 314-336, the tabs from 373).
@@ -598,7 +600,7 @@ function ag_draw() {
     local size = 0
     if (art.m2 && ag_ex_font() != null) {
         face = ag_ex_font()
-        size = (box * AG_M2_TEXT + 0.5).tointeger()
+        size = (AG_M2_TEXT * k + 0.5).tointeger()
     }
     local tw = [words.len() * 7, 14]
     try {
