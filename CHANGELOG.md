@@ -10,8 +10,8 @@
 - **Fix: a right click on the map crashed** ('dict' object is not callable) and the context menu did not open -
   a newer field had taken the name of the map's own check of where a click lands.
 - **One Faction editor**: New faction and Edit faction are one button at the top now - **Faction editor**, with
-  two tabs: **Edit faction** (first, where the editor opens) and **New faction**, on the row of the tabs below
-  (Faction, Units & armies...) - no row of their own. One button less in the top row. **Switching never drops
+  its first two tabs **New faction** and **Edit faction** (the old Faction tab renamed; the editor opens there),
+  in the same row and look as Units & armies, Buildings... - no row of their own. One button less in the top row. **Switching never drops
   work**: New faction and Edit faction each keep what you did, not written yet, while you go to the Map editor,
   the other side or any other editor, and find it again on the way back (no more 'Switch, drop them').
 - **Add-on: Upkeep x 2** (both games, any mod, no engine needed) - every unit's upkeep multiplied (x 2 or any

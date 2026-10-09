@@ -474,20 +474,16 @@ class App(tk.Tk):
         self._theme_label()
         self.editors = {}
 
-        # the Faction editor's two tabs: Edit faction first, New faction second (shown only in that work)
-        self.side_bar = ttk.Frame(self)
-        self.v_side = tk.StringVar(value="new")
-        for val, text in (("edit", "Edit faction"), ("new", "New faction")):
-            sb = ttk.Radiobutton(self.side_bar, text=text, value=val, variable=self.v_side, style="Toolbutton",
-                                 cursor="hand2", command=lambda: self._side_pressed())
-            sb.pack(side="left", padx=(0, theme.BUTTON_GAP))
-            tip(sb, self.WORK_HINTS.get(val, ""))
-        self.v_mode.trace_add("write", lambda *_: self.v_side.set(self.v_mode.get())
-                              if self.v_mode.get() in ("new", "edit") else None)
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill="both", expand=True, **pad)
-        body = ttk.Frame(self.nb, padding=4)
-        self.nb.add(body, text="  Faction  ")
+        # the Faction editor's first two tabs, as the author asked: New faction, then Edit faction (the old 'Faction'
+        # tab renamed; the editor opens on it) - both show the faction's form (moved into the one picked), the tabs
+        # after them work on that side
+        self.side_pages = {}
+        for side in ("new", "edit"):
+            page = self.side_pages[side] = ttk.Frame(self.nb)
+            self.nb.add(page, text="  %s  " % self.SIDE_TABS[side])
+        body = self.faction_body = ttk.Frame(self.nb, padding=4)
         # the Faction tab is the faction itself: the form, and its family tree beside it. Its towns are given and
         # taken on the Map (a click on a town), their buildings on Buildings, garrisons on Units & armies - the
         # old town list (below) is kept only as the window's own record of the picked towns, never shown
@@ -1411,7 +1407,12 @@ class App(tk.Tk):
         if tab == "Roster":
             self.roster_editor.load()
             return
-        if tab == "Faction":
+        if tab in self.FACTION_TABS:
+            side = "edit" if tab == self.SIDE_TABS["edit"] else "new"
+            if self.v_work.get() != side:               # the tab picks the side: Edit faction or New faction
+                self.v_work.set(side)
+                self.work_changed()
+            self._form_to(side)
             self.show_family_button()
             if self._family_open:
                 self.family_editor.load()
@@ -1463,25 +1464,15 @@ class App(tk.Tk):
         self.v_work.set(self._faction_side if b == "faction" else b)
         self.work_changed()
 
-    def _side_pressed(self):
-        """The Faction editor's tabs: Edit faction / New faction."""
-        self.v_work.set(self.v_side.get())
-        self.work_changed()
+    SIDE_TABS = {"edit": "Edit faction", "new": "New faction"}
+    FACTION_TABS = tuple(SIDE_TABS.values())
 
-    def _side_bar_shown(self, on):
-        """Edit faction / New faction on the tabs' own row, before Faction, Units & armies...: the tabs move right
-        to make room (no row of their own - it took room)."""
-        if not on:
-            self.side_bar.place_forget()
-            self.nb.configure(style="TNotebook")
-            return
-        self.side_bar.update_idletasks()
-        st = ttk.Style(self)
-        top, right, bottom = (list(st.lookup("TNotebook", "tabmargins") or (2, 2, 2, 0)) + [2, 2, 0])[1:4]
-        st.configure("Faction.TNotebook", tabmargins=(self.side_bar.winfo_reqwidth() + 10, top, right, bottom))
-        self.nb.configure(style="Faction.TNotebook")
-        self.side_bar.place(in_=self.nb, x=0, y=0)
-        self.side_bar.lift()
+    def _form_to(self, side):
+        """The faction's form into its side's tab (Edit faction / New faction)."""
+        page = self.side_pages[side]
+        if self.faction_body.winfo_manager() != "pack" or self.faction_body.pack_info().get("in") is not page:
+            self.faction_body.pack(in_=page, fill="both", expand=True)
+            self.faction_body.lift(page)
 
     SIDE_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "char_moves", "field", "removed_existing",
                  "dip_set", "name_list", "art_replace", "sel_map", "figures", "roster_set", "family_set")
@@ -1545,8 +1536,6 @@ class App(tk.Tk):
         w = self.v_work.get()
         if w in ("new", "edit"):
             self._faction_side = w
-        else:
-            self._side_bar_shown(False)
         if w == "terrain":                              # a tab of the Map editor now
             self.v_work.set("map")
             self.work_changed()
@@ -1559,7 +1548,10 @@ class App(tk.Tk):
                 ed.pack_forget()
             self._map_tab_only(w == "map")
             self.nb.pack(fill="both", expand=True, padx=6, pady=3, after=self.bottom_bar)
-            self._side_bar_shown(w in ("new", "edit"))
+            if w in ("new", "edit"):
+                self._form_to(w)
+                if self.tab_name() in self.FACTION_TABS and self.tab_name() != self.SIDE_TABS[w]:
+                    self.select_tab(self.SIDE_TABS[w])
             if self.v_mode.get() != w:
                 # nothing is dropped on a switch (the author: 'freedom first, one session'): New and Edit faction
                 # each keep their work not written yet and find it again on the way back; the map's changes are
@@ -1725,7 +1717,7 @@ class App(tk.Tk):
         self.refresh_chosen()
         if edit and self.v["template"].get() and self.strat and self.strat.faction(self.v["template"].get().strip()):
             self.template_changed()
-        if self.tab_name() == "Faction" and self._family_open:
+        if self.tab_name() in self.FACTION_TABS and self._family_open:
             self.family_editor.load()
         self.status.set(self.MAP_EDITOR_HINT if self.map_work() else
                         "Edit: pick the faction to change; untouched fields stay as they are." if edit else
@@ -1861,7 +1853,7 @@ class App(tk.Tk):
             self.load_diplomacy()
         elif tab == "Roster":
             self.roster_editor.redraw()
-        elif tab == "Faction" and self._family_open:
+        elif tab in self.FACTION_TABS and self._family_open:
             self.family_editor.redraw()
 
     def roster_changed(self):
@@ -4607,7 +4599,7 @@ class App(tk.Tk):
                         return                        # not written (refused or failed): stay
                     self.v["template"].set(t)
             self.load_existing()
-        if self.tab_name() == "Faction" and self._family_open:     # the family tree open in the form's place
+        if self.tab_name() in self.FACTION_TABS and self._family_open:     # the family tree open in the form's place
             self.family_editor.load()
         self.show_family_button()
         fb = self.strat.faction(t) if self.strat else None
