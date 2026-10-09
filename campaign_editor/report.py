@@ -313,6 +313,72 @@ def about(mod=None, version=""):
     return info
 
 
+MOD_FILES = "mod_files.txt"
+MOD_FILES_CAP = 60000           # lines - a whole game folder picked as the 'mod' stays a list, not megabytes
+
+
+def mod_files(mod, words=()):
+    """The mod's file list for a report (a manifest of names, sizes and dates): every
+    file of its data folder and the files beside it (configuration.cfg, a .bat) - path, size, date, and how it stands
+    to the game's / REX's manifest by name and size (new = not a file of a clean install, other size = the
+    game has it with another size). No contents, no
+    reading of the files (a walk, under a second on a big mod). None without a mod."""
+    if mod is None or not getattr(mod, "data", None) or not os.path.isdir(mod.data):
+        return None
+    import time
+    root = os.path.dirname(os.path.abspath(mod.data))
+    try:
+        from .scan import Origins
+        origins = Origins.for_mod(mod)
+    except Exception:
+        origins = None
+
+    def tag(rel, size):
+        if origins is None:
+            return ""
+        low = rel.replace(os.sep, "/").lower()
+        known = [e for e in (origins.game.get(low), origins.rex.get(low)) if e]
+        if not known:
+            return "new"
+        return "" if any(e[0] == size for e in known) else "other size"
+
+    rows, total, counts = [], 0, {"new": 0, "other size": 0}
+
+    def add(path, rel):
+        nonlocal total
+        try:
+            st = os.stat(path)
+        except OSError:
+            return
+        total += st.st_size
+        t = tag(rel, st.st_size)
+        if t:
+            counts[t] += 1
+        rows.append("%s\t%d\t%s\t%s" % (rel.replace(os.sep, "/"), st.st_size,
+                                          time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)), t))
+    try:
+        for name in sorted(os.listdir(root)):
+            if os.path.isfile(os.path.join(root, name)):
+                add(os.path.join(root, name), name)
+    except OSError:
+        pass
+    for here, dirs, names in os.walk(mod.data):
+        dirs.sort()
+        for name in sorted(names):
+            path = os.path.join(here, name)
+            add(path, os.path.relpath(path, root))
+    head = ["The mod's files (no contents): path, size in bytes, last changed, and against %s: new = not a file "
+            "of a clean install (Medieval II keeps its own data in .pack files, so files unpacked from them are new "
+            "too), other size = the game has it with another size, empty = the game's size." % (
+                origins.label() if origins is not None else "no game manifest (none found)"),
+            "%d files, %d MB; %d new, %d other size." % (len(rows), total // (1024 * 1024), counts["new"],
+                                                         counts["other size"]), ""]
+    if len(rows) > MOD_FILES_CAP:
+        head.append("(only the first %d of %d listed)" % (MOD_FILES_CAP, len(rows)))
+        rows = rows[:MOD_FILES_CAP]
+    return scrub("\n".join(head + rows) + "\n", words)
+
+
 def build_zip(texts, message="", contact="", info=None, pictures=(), words=()):
     """The report's zip as bytes: report.txt (what happened, the contact, the set-up), the scrubbed logs, the
     pictures (as they are - the user picked them)."""

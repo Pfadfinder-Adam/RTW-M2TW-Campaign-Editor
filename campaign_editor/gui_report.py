@@ -86,6 +86,11 @@ def open_report(app, message="", kind="bug", tab=None):
         ttk.Checkbutton(box, variable=v, text="%s - %s (%d KB)%s" % (
             name, what, os.path.getsize(f) // 1024, " - already sent with %s, not changed since" % sent if sent
             else "")).pack(anchor="w")
+    # the mod's file list (names, sizes, dates - no contents): what the mod has and changes against the game
+    v_files = tk.BooleanVar(value=app.mod is not None)
+    if app.mod is not None:
+        ttk.Checkbutton(box, variable=v_files, text="%s - the list of the mod's files: name, size, date, new / "
+                        "other size than the game's (no contents)" % report.MOD_FILES).pack(anchor="w")
     if not any(n.endswith("system.log.txt") for _, n, _ in files):
         row = ttk.Frame(box)
         row.pack(anchor="w", fill="x")
@@ -172,6 +177,9 @@ def open_report(app, message="", kind="bug", tab=None):
         picked = [f for v, f in ticks if v.get()]
         hide = report.hidden_words(picked, words())
         texts = report.contents(picked, hide)
+        listing = report.mod_files(app.mod, hide) if v_files.get() else None
+        if listing:
+            texts.append((report.MOD_FILES, listing))
         info = dict(kind=v_kind.get(), **report.about(app.mod, _version()))
         msg = txt.get("1.0", "end").strip()
         data = report.build_zip(texts, msg, v_contact.get(), info, pictures, hide)

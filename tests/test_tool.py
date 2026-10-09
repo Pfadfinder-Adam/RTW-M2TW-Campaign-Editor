@@ -6510,6 +6510,40 @@ building smith
             self.assertIn(word, text)
         self.assertNotIn("not read", text.split("own files")[0].split("map")[0])
 
+    def test_report_carries_the_mods_file_list(self):
+        """The user (2026-10-08): 'the manifest should go with a report too' - every file of the mod with its size and
+        date, own / changed against the game's manifest by name and size, no contents, the names hidden."""
+        import io
+        import types
+        import zipfile
+        from unittest import mock
+        from campaign_editor import report
+        from campaign_editor.scan import Origins
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        data = os.path.join(root, "data")
+        os.makedirs(os.path.join(data, "world"))
+        for rel, body in (("configuration.cfg", b"[io]"), ("data/export_units.txt", b"abc"),
+                          ("data/world/bob_town.txt", b"12345"), ("data/descr_sm_factions.txt", b"xy")):
+            with open(os.path.join(root, rel), "wb") as fh:
+                fh.write(body)
+        mod = types.SimpleNamespace(data=data)
+        game = Origins({"data/export_units.txt": (3, "m"), "data/descr_sm_factions.txt": (9, "m")}, {}, ["a manifest"])
+        with mock.patch.object(Origins, "for_mod", return_value=game):
+            got = report.mod_files(mod, ["bob"])
+        lines = got.splitlines()
+        self.assertIn("4 files", got)
+        self.assertIn("2 new, 1 other size", got)
+        row = {ln.split("\t")[0]: ln.split("\t") for ln in lines if "\t" in ln}
+        self.assertEqual(row["data/export_units.txt"][1:2], ["3"])
+        self.assertEqual(row["data/export_units.txt"][3], "")            # the game's size: the game's
+        self.assertEqual(row["data/descr_sm_factions.txt"][3], "other size")
+        self.assertEqual(row["configuration.cfg"][3], "new")
+        self.assertNotIn("bob", got.lower())                             # the hidden words go here too
+        self.assertIsNone(report.mod_files(None))
+        z = zipfile.ZipFile(io.BytesIO(report.build_zip([(report.MOD_FILES, got)], "x")))
+        self.assertIn(report.MOD_FILES, z.namelist())
+
     def test_report_leaves_out_logs_it_sent_already(self):
         """The author: a log the program has sent is not sent again - a finished log (the game's) sent unchanged is
         left out (unticked, 'already sent with R-...'), the editor's own log goes only from where the last report

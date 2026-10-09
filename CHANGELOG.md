@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **A report carries the mod's file list**: with a mod loaded, Report a bug / Suggest adds `mod_files.txt` (a tick,
+  on by default) - every file of the mod's data folder and the files beside it, with its size and date and whether
+  the game has it with the same size (new / other size). Never the files' contents; the hidden words are cut out
+  of it too.
 - **New mod folder on the plain game makes a thin mod**: nothing is copied (made at once, no disk space) - the mod
   holds only what you change, the game reads every other file from its own data. The editor puts a game file into the
   mod the first time you change it, and the whole map folder (all but map.rwm, which the game builds again there) the

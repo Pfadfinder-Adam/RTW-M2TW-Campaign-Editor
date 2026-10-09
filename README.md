@@ -221,8 +221,8 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 > [!IMPORTANT]
 > ### ⚠️ Something went wrong? Send the logs - and a video or screenshot ⚠️
 > When the game crashes, the tool shows an error, or something looks wrong, please send:
-> 1. **The logs:** in the tool, **Report a bug / Suggest** (bottom right) sends them to the author in one click - no
->    account needed, your names cut out first (Windows user name, computer name, e-mail, Steam ID, the player's
+> 1. **The logs:** in the tool, **Report a bug / Suggest** (bottom right) sends them (and the list of the mod's files -
+>    names and sizes, no contents) to the author in one click - no account needed, your names cut out first (Windows user name, computer name, e-mail, Steam ID, the player's
 >    name), and you see exactly what goes before you press Send ([video](https://youtu.be/7MbYR9ywNsI)). Or **Tools -> Save logs (zip)** - the same logs,
 >    names cut out, as one `.zip` in `CampaignEditor_logs` next to the exe, to send yourself.
 > 2. **A video or a screenshot** of what you did and what went wrong.
