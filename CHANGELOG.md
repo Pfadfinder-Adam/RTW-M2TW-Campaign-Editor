@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **Click a picture to look at it closely**: every picture in Art and the faction tab's campaign-select map and
+  leader's face open big in a window of their own - the wheel zooms (small ones pixel by pixel, sharp), drag to move,
+  a checkerboard where they are see-through, the file, its size and format under it; Fit and 1 : 1.
 - **Add-ons: Delete from the editor...** (once Remove from the list): deletes an add-on you added or a module you
   made; when it is put into the loaded game it asks whether to take it out of the game too (with a backup).
 - **The campaign-select map and the leader's face on the faction tab**: Edit faction and New faction show them

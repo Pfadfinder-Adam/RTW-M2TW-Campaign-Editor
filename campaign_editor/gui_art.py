@@ -150,8 +150,12 @@ class ArtEditor(ttk.Frame):
         except Exception:
             return ttk.Label(parent, text="(none)", width=10, relief="sunken")
         self._photos.append(ph)
-        lbl = tk.Label(parent, image=ph, relief="sunken")
+        lbl = tk.Label(parent, image=ph, relief="sunken", cursor="hand2")
         lbl.photo = ph                               # kept while the label lives (the faction tab's cards too)
+        from .gui_picview import view_picture       # a click: the picture big in a window of its own
+        lbl.bind("<Button-1>", lambda e, p=path, c=crop: view_picture(self, p, crop=c))
+        from .gui_util import tip
+        tip(lbl, "Click to look at it closely: big, wheel to zoom, drag to move.")
         return lbl
 
     def load_start(self):

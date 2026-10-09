@@ -9568,6 +9568,22 @@ building smith
         with open(edu_path) as fh:
             self.assertIn("stat_cost\t1, 400, 170", fh.read())
 
+    def test_picture_viewer_zoom(self):
+        """A click on a picture opens it big (the user, 2026-10-09): a small one enlarged by whole steps (sharp), a big
+        one made smaller to fit; the wheel walks the steps; the line under it names file, size and format."""
+        try:
+            import tkinter  # noqa: F401
+        except ImportError:
+            self.skipTest("no tkinter")
+        from campaign_editor import gui_picview as PV
+        self.assertEqual(PV.first_zoom(24, 24, 1000, 700), 24)            # a 24 px button: 24 times, every pixel sharp
+        self.assertEqual(PV.first_zoom(2048, 2048, 1000, 700), 0.25)
+        self.assertEqual(PV.first_zoom(69, 96, 1000, 700), 6)
+        self.assertEqual(PV.next_zoom(1, True), 1.5)
+        self.assertEqual(PV.next_zoom(1, False), 0.75)
+        self.assertEqual(PV.next_zoom(32, True), 32)
+        self.assertEqual(PV.next_zoom(0.125, False), 0.125)
+
     def test_start_screen_pictures_on_the_faction_tab(self):
         """The campaign-select map and the leader's face go from the Art list to the faction tab, beside the
         description (the user, 2026-10-09: 'as in the game'): start_pictures finds just those two (campaign
