@@ -199,17 +199,19 @@ class CampaignMap:
         return 20, 40 + (d - 145) // 3 if d > 145 else 30, 60 + (d - 100) // 2 if d > 100 else 50
 
     def heights_view(self):
-        """map_heights.tga as drawn (height_look), at 2 px per tile like background(); kept and changed
-        pixel by pixel (set_height) while the heights brush sprays."""
+        """map_heights.tga as drawn (height_look), at 4 px per tile: each point a square CENTRED on its place - a
+        tile's middle point on the tile's middle, its side and corner points on its edges and corners (at 2 px a
+        tile every point sat half a point off: the user, 2026-10-09, 'show the map by points'); kept and changed
+        pixel by pixel (set_height) while the brushes work."""
         if getattr(self, "_hpil", None) is None:
             t = self.mod._optional_map(self.campaign, "map_heights.tga")
             if t is None:
                 return self._tiles().resize((2 * self.w, 2 * self.h), Image.NEAREST)
             self._hpil = self._height_picture(t)
         im = self._hpil
-        view = im.crop((0, 1, 2 * self.w, 2 * self.h + 1)) if im.size == (2 * self.w + 1, 2 * self.h + 1) else \
-            im.resize((2 * self.w, 2 * self.h), Image.BILINEAR)
-        return view
+        if im.size != (2 * self.w + 1, 2 * self.h + 1):
+            return im.resize((2 * self.w, 2 * self.h), Image.BILINEAR)
+        return im.resize((2 * im.width, 2 * im.height), Image.NEAREST).crop((1, 1, 4 * self.w + 1, 4 * self.h + 1))
 
     def _height_picture(self, t):
         """height_look() of every pixel of map_heights.tga t, top-down - done by Pillow per channel (grey land
@@ -224,10 +226,11 @@ class CampaignMap:
         return Image.composite(sea, land, other)
 
     def set_height(self, px, py, value):
-        """The drawn heights picture follows one changed pixel (px, py bottom-up, grey value)."""
+        """The drawn heights picture follows one changed pixel (px, py bottom-up; a grey value or a colour)."""
         im = getattr(self, "_hpil", None)
         if im is not None and 0 <= px < im.width and 0 <= py < im.height:
-            im.putpixel((px, im.height - 1 - py), self.height_look((value, value, value)))
+            c = (value, value, value) if isinstance(value, int) else tuple(value)
+            im.putpixel((px, im.height - 1 - py), self.height_look(c))
 
     def height_point(self, px, py):
         """map_heights pixel (px, py) (bottom-up, 2 per tile, 2W+1 x 2H+1) in plain words: land grey and metres, or

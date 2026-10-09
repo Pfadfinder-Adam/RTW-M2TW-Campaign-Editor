@@ -1100,8 +1100,13 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
     land_at = land_points(mod._optional_map(campaign, "map_heights.tga"), cheights) if ground else None
     gchanges.update(ground_changes(ground, land_at))
     gtiles = dict(ground)
-    for xy, v in ctiles.items():
-        gtiles.setdefault(tuple(xy), (SHALLOW_SEA if v == "sea" else NEW_LAND_GROUND))
+    gimg = mod._optional_map(campaign, "map_ground_types.tga") if ctiles else None
+    for xy, v in ctiles.items():                    # a turned tile's ground: its middle's, as written
+        xy = tuple(xy)
+        mid = (2 * xy[0] + 1, 2 * xy[1] + 1)
+        now = gimg.get(*mid) if gimg is not None and mid[0] < gimg.width and mid[1] < gimg.height else None
+        gtiles.setdefault(xy, gchanges.get(mid) or (now if now and (now in SEA) == (v == "sea") else None) or
+                          (SHALLOW_SEA if v == "sea" else NEW_LAND_GROUND))
     for name, tiles, names, changes in (("map_ground_types.tga", gtiles, GROUND, gchanges),
                                         ("map_features.tga", features, FEATURES, features),
                                         ("map_climates.tga", climate, climate_names, ground_changes(climate))):

@@ -49,8 +49,18 @@
 - **Land and sea brush: a smooth coast** - new land's coast follows a smooth curve at half-tile level, the way the
   games' own maps are drawn, instead of tile-sized steps; one-tile islets stay small ovals of land and one-tile
   straits stay open. Every tile stays what it was painted (region, town, port).
-- **Land and sea: 'Smooth the coast' and the coast pen** - 'Smooth the coast' puts an old stepped coast under the
-  brush on the same smooth curve, no tile changing side; the coast pen draws the coast point by point on the heights
+- **Land and sea: the shape brush - a coast drawn where you want it, smooth in the game**: the game cuts every
+  square of four heights points into two triangles and lays the water at height 0, so a coast whose heights are the
+  same numbers everywhere can only run in steps of 90 and 45 degrees (a stepped bay or island in the game). The
+  shape brush keeps the coast as a shape: round, not tied to the tiles, and the heights near the water set by
+  their distance from its edge on one slope - the game's shore falls on the edge you drew; the exact heights go
+  into map_heights.hgt. Tiles follow by their middles (new land joins a region), the ground point by point (shallow
+  water along the shore), a town, port, character, fort, resource or river keeps a little land round it.
+- **The map by points and the Shore line**: while a point brush is picked the Terrain map shows map_heights point
+  by point, each point centred on its place; close up a light line shows the shore exactly as the game will draw
+  it (Shore line, on by default).
+- **Land and sea: 'Smooth the coast' and the coast pen** - 'Smooth the coast' rounds the coast under the brush as
+  a shape (the longer you hold, the smoother; tiles follow, towns keep their land); the coast pen draws the coast point by point on the heights
   (land point / water point), the way modders draw it by hand - the map is shown point by point while it is picked
   (land grey, water blue), and touching a tile's middle turns the whole tile with its region. The ground of every
   point follows, so no land texture on the water and no holes in the land.
@@ -92,6 +102,8 @@
   release's page.
 
 ### Fixed
+- **Terrain: the map by points sat half a point off** (each heights point drawn beside its place, the brushes
+  aimed to match): every point is drawn centred where it lies - a tile's middle point on the tile's middle.
 - **Terrain: the Ground brush laid its ground over the coast**: a tile's ground is the 3 x 3 block of points round
   its middle, and on the coast that block reaches over the waterline (the heights' coast runs between the tiles) -
   a land ground painted on a coastal tile lay on the water, a sea ground made holes in the land. The brush now paints

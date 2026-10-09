@@ -30,12 +30,16 @@ MODES = (("political", "Political (the owners)"), ("diplomacy", "Diplomacy (towa
 
 
 
-def view_of(base, box, size, resample, field=(0, 0, 0)):
-    """The part of base (2 px per tile) under the view box (in tiles) drawn at size: only the pixels on the
-    map are taken (a view far wider than a big map once asked Pillow for a 1.3-billion-pixel crop), the rest
-    is the empty field around the map (the map is a free canvas), with a thin line along the map's edge."""
+SHORE_ZOOM = 8                  # pixels a tile from which the Terrain editor draws the shore as the game does
+
+
+def view_of(base, box, size, resample, field=(0, 0, 0), per_tile=2):
+    """The part of base (per_tile px a tile: 2, or 4 for the map by points) under the view box (in tiles) drawn at
+    size: only the pixels on the map are taken (a view far wider than a big map once asked Pillow for a
+    1.3-billion-pixel crop), the rest is the empty field around the map (the map is a free canvas), with a thin
+    line along the map's edge."""
     from PIL import ImageDraw
-    x0, y0, x1, y1 = (v * 2 for v in box)
+    x0, y0, x1, y1 = (v * per_tile for v in box)
     w, h = size
     out = Image.new(base.mode, size, field if base.mode == "RGB" else None)
     sx, sy = w / max(x1 - x0, 1e-9), h / max(y1 - y0, 1e-9)
@@ -182,6 +186,7 @@ class MapView(ttk.Frame):
         self.merge, self.on_merge, self._before_merge = [None, None], None, None
         self.region_marks, self.on_region_click = {}, None    # mark_regions: a window's regions coloured, clicks to it
         self.point_marks = []                                 # mark_points: points a check found, ringed
+        self.shore = None                 # (map_heights picture, metres(px, py)): the shore drawn as the game cuts it
         tip(ttk.Checkbutton(lbar, text="Merge regions", variable=self.v_merge, command=self._merge_toggled),
             "Join two regions into one (a map with too many regions): click the region that stays (yellow), then "
             "its neighbour that goes (red), then 'Merge them' under the map - the second region's town and region "
@@ -747,6 +752,46 @@ class MapView(ttk.Frame):
         if self.cmap:
             self.render()
 
+    def _per_tile(self, base):
+        """How many pixels a tile the background picture has (2, or 4 for the map by points)."""
+        return max(1, int(round(base.width / float(self.cmap.w)))) if self.cmap else 2
+
+    def _shore_line(self, cw, ch):
+        """The shore as the game draws it (the Terrain editor, close up): each square of four map_heights points cut
+        into two triangles, the water under height 0 (terrain.shore_segments) - a light line with a dark edge, so
+        what the tiles and points show can be told from what the game will draw."""
+        from . import terrain as T
+        img, metres = self.shore
+        if img is None:
+            return
+        z, h = self.z, self.cmap.h
+        px0 = max(0, int(2 * self.ox) - 1)
+        px1 = min(img.width - 1, int(2 * (self.ox + cw / z)) + 2)
+        py0 = max(0, int(2 * (h - self.oy - ch / z)) - 1)
+        py1 = min(img.height - 1, int(2 * (h - self.oy)) + 2)
+        if px1 <= px0 or py1 <= py0:
+            return
+        raw, W = img.raw, img.width
+        rows = {}
+
+        def land(py):                                   # the row's land / water at once from the picture's bytes
+            if py not in rows:
+                r = raw[3 * (py * W + px0):3 * (py * W + px1 + 1)]
+                rows[py] = [r[i] == r[i + 1] == r[i + 2] for i in range(0, len(r), 3)]
+            return rows[py]
+        lines = []
+        for py in range(py0, py1):
+            a, b = land(py), land(py + 1)
+            for i in range(px1 - px0):
+                if a[i] == a[i + 1] == b[i] == b[i + 1]:
+                    continue
+                lines += T.shore_segments(metres, px0 + i, py, px0 + i + 1, py + 1)
+        c = self.canvas
+        for wid, col in ((4, "#1b2430"), (2, "#fff4c2")):
+            for (ax, ay), (bx, by) in lines:
+                c.create_line((ax / 2.0 - self.ox) * z, (h - ay / 2.0 - self.oy) * z, (bx / 2.0 - self.ox) * z,
+                              (h - by / 2.0 - self.oy) * z, fill=col, width=wid, capstyle="round", tags=("shore",))
+
     def mark_points(self, points=None):
         """Points of the map's 2 x + 1 pictures (map_heights / map_ground_types: (px, py), bottom row first - a tile's
         middle is (2x + 1, 2y + 1)) ringed on the map for a check that found them (the Terrain editor's ground on the
@@ -1125,13 +1170,15 @@ class MapView(ttk.Frame):
         base = self._base()                                           # 2 px per tile, colours laid on once
         # sharp tiles always, still or dragged: the smoothed picture at rest looked blurred beside the sharp one while
         # dragging (report #100) - the map is by tiles, as the game's files are
-        pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field())
+        pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
         self._photo = ImageTk.PhotoImage(pic)
         c.create_image(0, 0, anchor="nw", image=self._photo, tags=("bg",))
         self._drawn_at = (self.ox, self.oy)
         if self.v_grid.get() and self.z >= 10:
             self._grid(cw, ch)
         self._markers(cw, ch)
+        if self.shore is not None and self.z >= SHORE_ZOOM:
+            self._shore_line(cw, ch)
         if self.point_marks:
             self._point_marks(cw, ch)
         if self.edge_mode:
@@ -1155,7 +1202,8 @@ class MapView(ttk.Frame):
         self._clamp()
         cw, ch = c.winfo_width(), c.winfo_height()
         box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
-        pic = view_of(self._base(), box, (cw, ch), Image.NEAREST, self._field())
+        base = self._base()
+        pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
         self._photo = ImageTk.PhotoImage(pic)
         c.itemconfigure("bg", image=self._photo)
         ox, oy = self._drawn_at
@@ -1178,8 +1226,8 @@ class MapView(ttk.Frame):
             if not path:
                 return None
         pic = self._base().convert("RGB")
-        k = self.PICTURE_PX // 2                          # the base is 2 px a tile
-        pic = pic.resize((pic.width * k, pic.height * k), Image.NEAREST)
+        k = self.PICTURE_PX / float(self._per_tile(pic))  # the base is 2 px a tile (4 by points)
+        pic = pic.resize((int(pic.width * k), int(pic.height * k)), Image.NEAREST)
         pic.save(path)
         self.readout.configure(text="the map saved as a picture: %s (%d x %d px)" % (path, pic.width, pic.height))
         return path
@@ -1940,14 +1988,13 @@ class MapView(ttk.Frame):
         b = max(1, int(getattr(self, "brush", 1) or 1))
         if self.region_mode and getattr(self, "on_spray", None):
             px, py = self.heights_px(sx, sy)
-            fx0, fr0 = px / 2.0, (2 * self.cmap.h - 1 - py) / 2.0        # the point's square, in tiles
-            x0, y0 = (fx0 - self.ox) * z, (fr0 - self.oy) * z
+            mx, my = (px / 2.0 - self.ox) * z, (self.cmap.h - py / 2.0 - self.oy) * z    # the point's middle
             if b == 1:
-                c.create_rectangle(x0, y0, x0 + z / 2, y0 + z / 2, outline="white", width=width, tags="tile_outline")
-            else:
+                c.create_rectangle(mx - z / 4, my - z / 4, mx + z / 4, my + z / 4, outline="white", width=width,
+                                   tags="tile_outline")
+            else:                                       # round brushes work round the mouse itself, not a point
                 r = (b - 0.5) / 2.0 * z                                 # radius in points, 2 points a tile
-                mx, my = x0 + z / 4, y0 + z / 4
-                c.create_oval(mx - r, my - r, mx + r, my + r, outline="white", width=width, tags="tile_outline")
+                c.create_oval(sx - r, sy - r, sx + r, sy + r, outline="white", width=width, tags="tile_outline")
         else:
             x, y = self.to_tile(sx, sy)
             cx, cy = self.to_screen(x, y)
@@ -2242,18 +2289,17 @@ class MapView(ttk.Frame):
         self._drag = (e.x, e.y, self.ox, self.oy, False)
 
     def _spray_at(self, sx, sy):
-        """Canvas point -> map_heights pixel (bottom-up, with fractions): the heights picture is drawn 2 points a
-        tile (heights_view), point px over 2 * x in [px, px + 1) - its middle at px + 0.5, so - 0.5 here makes the
-        brush's middle the point under the mouse (it sat half a point off)."""
+        """Canvas point -> map_heights point (bottom-up, with fractions): point px lies px / 2 tiles from the map's
+        left edge (a tile's middle 2x + 1 on its middle, its sides and corners on its edges - heights_view draws each
+        point centred there), py at py / 2 tiles from the bottom."""
         fx = self.ox + sx / self.z
         fr = self.oy + sy / self.z
-        return 2 * fx - 0.5, 2 * (self.cmap.h - fr) - 0.5
+        return 2 * fx, 2 * (self.cmap.h - fr)
 
     def heights_px(self, sx, sy):
-        """The map_heights point (px, py, bottom-up) drawn under canvas point (sx, sy)."""
-        fx = self.ox + sx / self.z
-        fr = self.oy + sy / self.z
-        return int(math.floor(2 * fx)), 2 * self.cmap.h - 1 - int(math.floor(2 * fr))
+        """The map_heights point (px, py, bottom-up) nearest to canvas point (sx, sy)."""
+        fx, fy = self._spray_at(sx, sy)
+        return int(math.floor(fx + 0.5)), int(math.floor(fy + 0.5))
 
     def _spray_tick(self):
         if not self._spray or not self.cmap or not self.on_spray:
@@ -2270,9 +2316,14 @@ class MapView(ttk.Frame):
             return self.render()
         cw, ch = c.winfo_width(), c.winfo_height()
         box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
-        pic = view_of(self._base(), box, (cw, ch), Image.NEAREST, self._field())
+        base = self._base()
+        pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
         self._photo = ImageTk.PhotoImage(pic)
         c.itemconfigure("bg", image=self._photo)
+        if self.shore is not None:                      # the brush changed the coast: its line again
+            c.delete("shore")
+            if self.z >= SHORE_ZOOM:
+                self._shore_line(cw, ch)
 
     def _move(self, e):
         if self._edrag:

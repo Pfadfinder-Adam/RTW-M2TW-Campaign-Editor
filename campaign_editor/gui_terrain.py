@@ -11,6 +11,7 @@ from tkinter import ttk
 from . import terrain as T, theme
 
 NEAREST = "(the nearest region)"
+POINT_BRUSHES = ("pen", "shape", "smooth")       # the coast brushes that work by map_heights point, not by tile
 
 
 
@@ -40,7 +41,8 @@ class TerrainEditor(ttk.Frame):
         self.base = {}                  # what the files have there: {('ground'|'features'|'climate', xy): colour}
         self.hbase = {}                 # map_heights pixels as the file has them: {(px, py): grey}
         self.coast = {}                 # tiles made land or sea: {(x, y): 'land' | 'sea'}
-        self.cpx = {"regions": {}, "ground": {}, "heights": {}}     # the pixels those tiles change
+        self.cpx = {"regions": {}, "ground": {}, "heights": {}, "hgt": {}}   # the pixels those tiles change (hgt: the
+        #                                                 shape brush's exact heights for map_heights.hgt)
         self.cbase = {}                 # those pixels as the files have them: {(file, (x, y)): colour}
         self._undo, self._redo = [], []
         self._last_river = None         # the last river tile of the stroke: the next one joins it side to side
@@ -62,6 +64,7 @@ class TerrainEditor(ttk.Frame):
         ttk.Checkbutton(top, text="Grid", variable=self.v_grid_here, command=self._grid_toggled).pack(
             side="left", padx=(16, 0))
         ttk.Button(top, text="Redo stroke", command=self.redo_stroke).pack(side="right", padx=(0, 4))
+        self.v_shore = tk.BooleanVar(value=True)       # the shore as the game draws it (Land and sea's 2nd row)
         ttk.Button(top, text="Undo stroke", command=self.undo_stroke).pack(side="right", padx=4)
         from .gui_util import first
         first(*[w for w in top.pack_slaves() if w.pack_info().get("side") == "right"][::-1])
@@ -75,7 +78,7 @@ class TerrainEditor(ttk.Frame):
         self.v_tool = tk.StringVar(value="raise")       # the heights brush
         self.v_strength = tk.IntVar(value=4)
         self.v_level = tk.IntVar(value=40)
-        self.v_coast = tk.StringVar(value="land")          # the land / sea brush
+        self.v_coast = tk.StringVar(value="shape_land")    # the land / sea brushes: the shape brush first
         self.v_coast.trace_add("write", lambda *_: self._coast_mode())
         self.v_coast_region = tk.StringVar(value=NEAREST)
         from .gui_util import ShortHint
@@ -126,7 +129,7 @@ class TerrainEditor(ttk.Frame):
 
     def dirty(self):
         return bool(self.ground or self.features or self.climate or self.heights or self.coast or
-                    self.cpx["heights"] or self.cpx["ground"])
+                    self.cpx["heights"] or self.cpx["ground"] or self.cpx.get("hgt"))
 
     def pending(self):
         return len(self.ground) + len(self.features) + len(self.climate) + (1 if self.heights else 0) + \
@@ -140,9 +143,10 @@ class TerrainEditor(ttk.Frame):
             self.ground, self.features, self.climate, self.base = {}, {}, {}, {}
             self.heights, self._hvals, self.hbase = {}, {}, {}
             self.coast, self.cbase = {}, {}
-            self.cpx = {"regions": {}, "ground": {}, "heights": {}}
+            self.cpx = {"regions": {}, "ground": {}, "heights": {}, "hgt": {}}
             self._undo, self._redo = [], []
         self._off_said = ""                             # a check's finding belongs to the files it looked at
+        self._sc = self._shape_ctx = None
         if getattr(self, "view", None) is not None:
             self.view.point_marks = []
         from .moddata import ModData
@@ -160,7 +164,8 @@ class TerrainEditor(ttk.Frame):
         mod = ModData(self.mod.data)
         plan = Plan(mod, "terrain", "terrain", {})
         T.apply(plan, self.app.v_campaign.get(), self.ground, self.features, self.climate, self.heights,
-                dict(self.cpx, tiles=self.coast) if self.coast or self.cpx["heights"] or self.cpx["ground"] else None)
+                dict(self.cpx, tiles=self.coast) if self.coast or self.cpx["heights"] or self.cpx["ground"] or
+                self.cpx.get("hgt") else None)
         broken = T.river_warnings(self._features_now(), self.cmap.w, self.cmap.h, self.cmap.is_sea) \
             if self.features else []
         for x, y, n in broken[:20]:
@@ -207,14 +212,26 @@ class TerrainEditor(ttk.Frame):
         self.cmap.show_climates = self.v_what.get() == "climate"
         self.cmap.show_heights = self._by_points()
         self.view.brush = self.v_brush.get()
+        self.view.shore = self._shore() if self.v_shore.get() else None
         self.view.load(self.cmap, {}, {}, region_mode=True, on_paint=self.paint, on_pick=self.pick,
                        brush=self.v_brush.get(), plain=True)
         self._spray_hook()
 
+    def _shore(self):
+        """(map_heights picture, metres) for the map's shore line (MapView._shore_line)."""
+        sc = self._shape_coast()
+        return (self._img("map_heights.tga"), sc.metres) if sc is not None else None
+
+    def _shore_toggled(self):
+        self.view.shore = self._shore() if self.v_shore.get() else None
+        self.view.render()
+
     def _by_points(self):
-        """The map drawn point by point (map_heights: land grey, water blue, 2 x 2 points a tile): the heights brush
-        and the coast pen - the coast is drawn between the tiles, so its points must be seen (the user, 2026-10-09)."""
-        return self.v_what.get() == "heights" or (self.v_what.get() == "coast" and self.v_coast.get().startswith("pen"))
+        """The map drawn point by point (map_heights: land grey, water blue, each point centred on its place): the
+        heights brush and the coast's point brushes (the shape brush, Smooth the coast, the pen) - the coast runs
+        between the tiles, so its points must be seen (the user, 2026-10-09: 'show the map by points')."""
+        return self.v_what.get() == "heights" or (self.v_what.get() == "coast" and
+                                                  self.v_coast.get().startswith(POINT_BRUSHES))
 
     def _coast_mode(self):
         """Land / Sea / Smooth / the pen picked: the pen draws by point on the map drawn by point."""
@@ -227,9 +244,12 @@ class TerrainEditor(ttk.Frame):
         """The heights brush and the coast pen work point by point (map_heights), the other brushes by tile."""
         if getattr(self, "view", None) is None:
             return
-        what = self.v_what.get()
-        self.view.on_spray = self.spray if what == "heights" else \
-            self.pen if what == "coast" and self.v_coast.get().startswith("pen") else None
+        what, mode = self.v_what.get(), self.v_coast.get()
+        self.view.on_spray = self.spray if what == "heights" else None
+        if what == "coast" and mode.startswith("pen"):
+            self.view.on_spray = self.pen
+        elif what == "coast" and mode.startswith(("shape", "smooth")):
+            self.view.on_spray = self.shape
 
     def _brush_changed(self):
         try:
@@ -355,8 +375,8 @@ class TerrainEditor(ttk.Frame):
     def paint_coast(self, tiles, mode=None):
         """The land / sea brush: each tile turned with its regions pixel, the ground and heights round it."""
         mode = mode or self.v_coast.get()
-        if mode == "smooth":
-            return self.smooth_coast(tiles)
+        if mode.startswith(("shape", "smooth")):
+            return []                                   # point brushes: shape()
         if mode.startswith("pen") and mode not in ("pen_land", "pen_sea"):
             return []
         if mode in ("pen_land", "pen_sea") and self.v_coast.get() == mode and not getattr(self, "_pen_tiles", False):
@@ -461,11 +481,10 @@ class TerrainEditor(ttk.Frame):
                 else:
                     self.cpx[name][p] = c
                 img.set(p[0], p[1], c)
-                if name == "heights" and c[0] == c[1] == c[2]:
-                    self.cmap.set_height(p[0], p[1], c[0])
-        if got.get("heights") or got.get("ground"):
+                if name == "heights":
+                    self.cmap.set_height(p[0], p[1], c)
+        if got.get("heights") or got.get("ground") or got.get("regions"):
             self.cmap.__dict__.pop("_backgrounds", None)
-            self.cmap._hpil = None
             self.app.status.set("Terrain: %d point(s) of the coast changed - Preview, then Apply changes."
                                 % len(set(self.cpx["heights"]) | set(self.cpx["ground"])))
             self.app._mark_work()
@@ -514,17 +533,70 @@ class TerrainEditor(ttk.Frame):
                       "stroke takes it back)." % len(wrong))
         self.view.render()
 
-    def smooth_coast(self, tiles):
-        """'Smooth the coast': an old blocky coast under the brush put on the same smooth curve the land brush draws
-        (terrain.coast_smoothed) - no tile changes side, only the points between tiles."""
+    def _shape_coast(self):
+        """The coast as a shape over the pictures being painted (terrain.ShapeCoast), kept while they stay the same
+        (made again after an Undo, a Load, a new campaign)."""
+        if self.mod is None or self.cmap is None:
+            return None
         heights = self._img("map_heights.tga")
         if heights is None:
+            return None
+        exact = self.cpx.setdefault("hgt", {})
+        pick = self.v_coast_region.get()
+        sc = getattr(self, "_sc", None)
+        if sc is not None and sc.heights is heights and sc.exact is exact:
+            sc.region = pick if pick in self.cmap.info else None
+            return sc
+        camp = self.app.v_campaign.get()
+        ctx = getattr(self, "_shape_ctx", None)
+        if ctx is None or ctx[0] != (self.mod.data, camp):
+            import os
+            path = self.mod.campaign_file(camp, "map_heights.tga")
+            ctx = ((self.mod.data, camp), T.max_land_height(self.mod, camp), T.min_sea_height(self.mod, camp),
+                   T.read_hgt(os.path.join(os.path.dirname(path), "map_heights.hgt")) if path else None)
+            self._shape_ctx = ctx
+        if not hasattr(self, "_sea"):
+            self._sea = T.sea_colour(self.mod.region_map(camp), [v["colour"] for v in self.cmap.info.values()])
+        self._sc = T.ShapeCoast(heights, self._img("map_ground_types.tga"), self.cmap, self.standing,
+                                _FeatureLookup(self._img("map_features.tga")), self._region_tiles(), self._sea,
+                                ctx[1], ctx[2], ctx[3], pick if pick in self.cmap.info else None, exact)
+        return self._sc
+
+    def shape(self, px, py):
+        """The shape brush (land / water) and 'Smooth the coast' at map_heights point (px, py), fractions kept: the
+        coast is a shape and the heights near it follow its distance, so the game's shore falls where the brush's
+        edge went (terrain.ShapeCoast); the tiles follow by their middles, the ground by its points. True when
+        anything changed."""
+        if not self._bound():
+            return None
+        sc = self._shape_coast()
+        if sc is None:
             self.app.status.set("This campaign has no map_heights.tga.")
-            return []
-        got = T.coast_smoothed(heights, self._img("map_ground_types.tga"),
-                               lambda x, y: not self.cmap.is_sea(x, y), [tuple(t) for t in tiles])
+            return False
+        mode = self.v_coast.get()
+        r = max(0.5, self.v_brush.get() - 0.5)          # in points, 2 a tile: size 1 = half a point round the mouse
+        if mode == "smooth":
+            got = sc.smooth((px, py), max(1.0, r))
+        else:
+            last = getattr(self, "_shape_last", None)
+            if last == (px, py):
+                return False                            # the mouse held still: the same band again changes nothing
+            got = sc.stroke(last or (px, py), (px, py), r, mode == "shape_land")
+            self._shape_last = (px, py)
+        reg = self.mod.region_map(self.app.v_campaign.get())
+        for t, c in got["regions"].items():
+            self.cbase.setdefault(("regions", t), reg.get(*t))
+            if self.cbase[("regions", t)] == c:
+                self.cpx["regions"].pop(t, None)
+                self.coast.pop(t, None)
+            else:
+                self.cpx["regions"][t] = c
+                self.coast[t] = got["tiles"][t]
+            reg.set(t[0], t[1], c)
         self._coast_points(got)
-        return []
+        if got["kept"]:
+            self.app.status.set(self.app.status.get() + "   (kept: %s)" % got["kept"][-1])
+        return bool(got["heights"] or got["ground"] or got["regions"] or got["hgt"])
 
     def pen(self, px, py):
         """The coast pen: the map_heights points under it made land (a low shore) or water, as modders draw the coast
@@ -602,6 +674,7 @@ class TerrainEditor(ttk.Frame):
 
     def _stroke(self):
         self._last_river = None
+        self._shape_last = None
         self._undo.append(self._state())
         del self._undo[:-100]
         self._redo = []                          # a new stroke drops the strokes undone before it
@@ -626,6 +699,8 @@ class TerrainEditor(ttk.Frame):
             self._set_px(imgs[name], p[0], p[1], c)
         self.coast = dict(coast or {})
         self.cpx = {k: dict(v) for k, v in (cpx or {"regions": {}, "ground": {}, "heights": {}}).items()}
+        self.cpx.setdefault("hgt", {})
+        self._sc = None
         self._rtiles = None
         self.ground, self.features, self.climate = ground, features, climate
         self.heights = dict(heights or {})
@@ -758,12 +833,29 @@ class TerrainEditor(ttk.Frame):
                      state="readonly").pack(side="left")
         more = ttk.Frame(rows)
         more.pack(side="top", fill="x", pady=(4, 0))
+        ttk.Label(more, text="shape brush (a smooth coast where you draw):").pack(side="left", padx=(8, 2))
+        ttk.Radiobutton(more, text="land", value="shape_land", variable=self.v_coast).pack(side="left", padx=3)
+        ttk.Radiobutton(more, text="water", value="shape_sea", variable=self.v_coast).pack(side="left", padx=3)
         ttk.Button(more, text="Find ground on the wrong side of the coast", command=self.ground_check).pack(
-            side="left", padx=(8, 0))
+            side="left", padx=(16, 0))
+        from .gui_util import tip
+        tip(ttk.Checkbutton(more, text="Shore line", variable=self.v_shore, command=self._shore_toggled),
+            "Close up, a light line shows the shore exactly as the game will draw it (in every mode of this tab): "
+            "the game cuts every square of four heights points into two triangles and lays the water at height 0 - "
+            "so the shore runs between the points, not along the tiles.").pack(side="left", padx=(12, 0))
         from .gui_modbuilder import wrapping
         self.lbl_off = wrapping(ttk.Label(more, text=getattr(self, "_off_said", "")), side="left", expand=True, padx=8)
         self.hint.configure(text=(
-            "Turn sea into land (a new island, a longer coast) or land into sea (a bay, a strait). Land and sea are "
+            "The SHAPE BRUSH draws the coast where the brush's edge goes, smooth like the games' own coasts: the "
+            "game cuts every square of four heights points into two triangles and lays the water at height 0, so "
+            "the brush sets the heights near the water by their distance from the edge - the game's shore then "
+            "falls on it, not on the points' grid (equal heights make stairs at 90 / 45 degrees). The tiles follow "
+            "by their middles (new land joins a region), the ground by its points; towns, ports, characters, forts, "
+            "rivers keep a little land round them. Smooth the coast rounds what is under it, the longer you hold "
+            "the more (no town lost); the light Shore line shows the shore as the game will draw it. The exact "
+            "heights go into map_heights.hgt (the game reads it). "
+            "Land / Sea turn whole tiles: sea into land (a new island, a longer coast) or land into sea (a bay, a "
+            "strait). Land and sea are "
             "written in three places that must agree, so each tile changes all of them: map_regions.tga (the "
             "region's colour or the sea's), map_ground_types.tga (a land ground like its neighbours', or shallow "
             "sea) and map_heights.tga with map_heights.hgt (a low shore, or the sea's depth). New land joins the "
