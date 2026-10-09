@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **One Faction editor**: New faction and Edit faction are one button at the top now - **Faction editor**, with
+  two tabs: **Edit faction** (first, where the editor opens) and **New faction**. One button less in the top row.
 - **Add-on: Upkeep x 2** (both games, any mod, no engine needed) - every unit's upkeep multiplied (x 2 or any
   number), so only a big income keeps a big army; the game shows the real numbers. Take it out puts back exactly the
   old ones.

@@ -370,6 +370,8 @@ class App(tk.Tk):
         self.editing_now = None
         self.char_moves = {}            # "faction:index" -> (x, y) dragged on the map (Edit)
         self._build()
+        self.v_work.set("edit")         # the Faction editor opens on its first tab, Edit faction (the user, 2026-10-09)
+        self.work_changed()
 
     def _set_icon(self):
         """The window's (and every dialog's) icon; the exe carries the same picture for Explorer."""
@@ -433,12 +435,19 @@ class App(tk.Tk):
         self.work_row = HScroll(work)
         self.work_row.pack(side="left", fill="x", expand=True)
         self.v_work = tk.StringVar(value="new")
+        # the bar's buttons: New faction and Edit faction are ONE 'Faction editor' (the user, 2026-10-09: 'one window,
+        # its first tab Edit faction, the second New faction - one button less at the top'); v_work keeps 'new' /
+        # 'edit' inside, v_bar is what the bar shows
+        self.v_bar = tk.StringVar(value="faction")
+        self._faction_side = "edit"
+        self.v_work.trace_add("write", lambda *_: self.v_bar.set(
+            "faction" if self.v_work.get() in ("new", "edit") else self.v_work.get()))
         self.work_buttons = {}
         for val, text in self.WORK_TITLES.items():
-            if val == "terrain":
-                continue                                 # a tab of the Map editor now, not a work of its own
-            b = ttk.Radiobutton(self.work_row.inner, text=text, value=val, variable=self.v_work, style="Toolbutton",
-                                command=self.work_changed, cursor="hand2")   # a button like every other one
+            if val in ("terrain", "new", "edit"):
+                continue                                 # Terrain: a tab of the Map editor; new / edit: Faction editor
+            b = ttk.Radiobutton(self.work_row.inner, text=text, value=val, variable=self.v_bar, style="Toolbutton",
+                                command=self._bar_pressed, cursor="hand2")   # a button like every other one
             b.pack(side="left", padx=(0, theme.BUTTON_GAP))
             self.work_row.grab(b)
             self.work_buttons[val] = b
@@ -464,6 +473,16 @@ class App(tk.Tk):
         self._theme_label()
         self.editors = {}
 
+        # the Faction editor's two tabs: Edit faction first, New faction second (shown only in that work)
+        self.side_bar = ttk.Frame(self)
+        self.v_side = tk.StringVar(value="new")
+        for val, text in (("edit", "Edit faction"), ("new", "New faction")):
+            sb = ttk.Radiobutton(self.side_bar, text=text, value=val, variable=self.v_side, style="Toolbutton",
+                                 cursor="hand2", command=lambda: self._side_pressed())
+            sb.pack(side="left", padx=(0, theme.BUTTON_GAP))
+            tip(sb, self.WORK_HINTS.get(val, ""))
+        self.v_mode.trace_add("write", lambda *_: self.v_side.set(self.v_mode.get())
+                              if self.v_mode.get() in ("new", "edit") else None)
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill="both", expand=True, **pad)
         body = ttk.Frame(self.nb, padding=4)
@@ -1423,28 +1442,49 @@ class App(tk.Tk):
         ("mercs", "Mercenaries...", "mercenaries_window", "who is for hire in which regions: pools of regions and "
                                                           "their units"),
     ]
-    WORK_TITLES = {"map": "Map editor", "new": "New faction", "edit": "Edit faction", "units": "Unit editor",
+    WORK_TITLES = {"map": "Map editor", "faction": "Faction editor", "new": "New faction", "edit": "Edit faction",
+                   "units": "Unit editor",
                    "buildings": "Building editor", "characters": "Character editor",
                    "terrain": "Terrain editor", "addons": "Add-ons", "religions": "Religions"}
     WORK_HINTS = {"map": "the campaign map alone, no faction to pick: drag any faction's towns, ports, armies, agents and "
                          "fleets, give towns to anyone, change any army's units, resources, forts, regions",
                   "religions": "the game's religions and each region's shares (Medieval II)", "addons": "ready-made scripts that add something new to the game (Sack Settlement...)","new": "make a new faction from a template", "edit": "change a faction that is in the game",
+                  "faction": "Edit faction: change a faction that is in the game; New faction: make a new one from a "
+                             "template - the two tabs at the top of it",
                   "units": "every line of a unit in export_descr_unit.txt, its card and picture",
                   "buildings": "every line of a building chain in export_descr_buildings.txt, its pictures",
                   "characters": "any faction's characters: names, ages, traits, ancillaries, portraits, family tree",
                   "terrain": "paint the campaign map's ground, rivers, fords and cliffs"}
 
+    def _bar_pressed(self):
+        """A work button: the Faction editor opens on the tab it was on (Edit faction the first time)."""
+        b = self.v_bar.get()
+        self.v_work.set(self._faction_side if b == "faction" else b)
+        self.work_changed()
+
+    def _side_pressed(self):
+        """The Faction editor's tabs: Edit faction / New faction."""
+        self.v_work.set(self.v_side.get())
+        self.work_changed()
+        if self.v_work.get() in ("new", "edit"):
+            self.v_side.set(self.v_work.get())          # 'Stay' on the drop-the-changes question: back
+
     def work_changed(self):
         """New / Edit faction share the campaign tabs; the unit and building editors
         take the window's middle instead."""
         w = self.v_work.get()
+        if w in ("new", "edit"):
+            self._faction_side = w
+            self.side_bar.pack(fill="x", padx=6, pady=(3, 0), after=self.bottom_bar)
+        else:
+            self.side_bar.pack_forget()
         if w == "terrain":                              # a tab of the Map editor now
             self.v_work.set("map")
             self.work_changed()
             self.select_tab("Terrain")
             return
-        if w in self.work_buttons:
-            self.work_row.show(self.work_buttons[w])
+        if self.v_bar.get() in self.work_buttons:
+            self.work_row.show(self.work_buttons[self.v_bar.get()])
         if w in ("map", "new", "edit"):
             for ed in self.editors.values():
                 ed.pack_forget()
@@ -1454,7 +1494,8 @@ class App(tk.Tk):
                 self.v_work.set(self.v_mode.get())         # stay where the work is
                 return
             self._map_tab_only(w == "map")
-            self.nb.pack(fill="both", expand=True, padx=6, pady=3, after=self.bottom_bar)
+            self.nb.pack(fill="both", expand=True, padx=6, pady=3,
+                         after=self.side_bar if w in ("new", "edit") else self.bottom_bar)
             if self.v_mode.get() != w:
                 self.v_mode.set(w)
                 self.mode_changed()
@@ -5820,7 +5861,8 @@ class App(tk.Tk):
         keys = {k for k, _ in self.pending_parts()} if self.mod else set()
         for val, b in getattr(self, "work_buttons", {}).items():
             base = self.WORK_TITLES[val]
-            mine = val in keys or val == self.v_mode.get() and "faction" in keys or val == "map" and "terrain" in keys
+            mine = val in keys or val == "faction" and self.v_mode.get() in ("new", "edit") and "faction" in keys \
+                or val == "map" and "terrain" in keys
             b.configure(text=base + ("  *" if mine else ""))
 
     def _faction_plan(self):
@@ -5844,10 +5886,10 @@ class App(tk.Tk):
                 picked = self.v["template"].get().strip()
                 if picked:                  # a faction picked in New faction mode: most likely meant to be edited
                     raise ValueError(
-                        "Nothing was written: you are in \"New faction\" (top left), where %s is only the "
-                        "template a NEW faction is copied from.\n\n"
-                        "- To change %s itself (its garrisons, towns, armies...): press \"Edit faction\" at the "
-                        "top, pick %s there and make the changes again.\n"
+                        "Nothing was written: you are on the Faction editor's \"New faction\" tab, where %s is only "
+                        "the template a NEW faction is copied from.\n\n"
+                        "- To change %s itself (its garrisons, towns, armies...): its \"Edit faction\" tab, pick %s "
+                        "there and make the changes again.\n"
                         "- To make a new faction from it: type the new faction's name on the Faction tab."
                         % (picked, picked, picked))
                 raise ValueError("Nothing to write yet. Pick what to do at the top: \"Edit faction\" to change a "
