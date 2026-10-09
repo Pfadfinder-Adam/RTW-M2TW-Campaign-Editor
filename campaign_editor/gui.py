@@ -59,11 +59,11 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
                                   armies, agents, fleets), Map (click towns, drag characters)
   change the campaign map ....... Map tab (move towns and ports, paint regions, resources)
                                   and Maps' Terrain tab (ground, rivers, climates, heights)
-  a building / garrisons in many  Many towns... (top row), or the Map:
-    towns at once ............... Select, drag a box (left button), right click
+  a building / garrisons in many  Maps: Select, drag a box (left button), right click
+    towns at once ............... (or Edit faction's Buildings: Many towns at once...)
   join two regions into one ..... Map: Merge regions - the one that stays, then the one that goes
   grow or cut the map ........... Map: Change size... under the map - drag its edges out (sea)
-                                  or in (cut); Bigger map (x3)... for 3 x the tiles
+                                  or in (cut); Bigger map (x3)... beside the zoom for 3 x the tiles
   change a unit or a building ... Units / Buildings
   make a new unit or building ... Unit / Buildings: New unit (New building) step by step...
   change a unit's look .......... Units: Battle model - View in 3D..., Replace model...
@@ -105,7 +105,7 @@ THE TABS
   Maps   (the top row) the wheel zooms;
                left drag moves characters, towns and ports, right drag moves the map;
                Find: type a town, army, unit, fort or resource and jump to it;
-               Layers: what is shown; Legend: what every sign means.
+               Layers: what is shown; Signs and tools: what every sign means.
                Edit regions: paint borders, New region, Edit region..., Religions... and
                New religion... (Medieval II; also in Tools). Resources: place, move, delete.
                Characters stand on any land but sea, mountains, dense forest and rivers;
@@ -820,6 +820,11 @@ class App(tk.Tk):
         self.map_view.on_fort_double = self.fort_window   # ... a fort: the army in it
         self.map_view.on_wonder = lambda t: __import__("campaign_editor.gui_wonders", fromlist=["show"]).show(self, self.mod, t)
         self.map_view.on_pick_menu = self.pick_menu
+        # Bigger map (x3) on the map's own bar, beside its zoom (once on the top row)
+        from .gui_util import tip as _tip
+        _tip(ttk.Button(self.map_view.zoom_bar, text="Bigger map (x3)...", command=self.once(
+            "upscale_map", lambda: self.upscale_map())), "make the campaign map 3 x bigger (beta)").pack(
+            side="right", padx=(0, 12), after=self.map_view.lbl_zoom)
         self.map_view.on_tool = self.map_tool
         self.map_view.on_resize = self.map_size_window    # Change size... beside the map's size
         self.v_borders = self.map_view.v_borders
@@ -1448,14 +1453,14 @@ class App(tk.Tk):
         ("builder", "Module builder...", "module_builder", "a new add-on made of blocks, no code (REX / M2EX)"),
         ("recolour", "Recolour...", "recolour_window", "a faction's pictures in its colours: cards, textures, "
                                                        "symbols"),
-        ("towns", "Many towns...", "mass_towns", "buildings and garrisons for many towns at once"),
-        ("bigger", "Bigger map (x3)...", "upscale_map", "make the campaign map 3 x bigger (beta)"),
         ("mercs", "Mercenaries...", "mercenaries_window", "who is for hire in which regions: pools of regions and "
                                                           "their units"),
     ]
     # the top row by topic (the author, 2026-10-09), each tool with a window of its own beside its work; the row
     # scrolls when the window is narrower - drag it with the left button
-    WORK_ROW = (("map", "bigger"), ("faction", "recolour"), ("settlements", "towns", "mercs"), ("units",),
+    # Bigger map (x3) is on the Maps bar beside the zoom, Many towns in the map's Select + right click (a tester,
+    # 2026-10-09: 'not needed as buttons of their own up there')
+    WORK_ROW = (("map",), ("faction", "recolour"), ("settlements", "mercs"), ("units",),
                 ("buildings",), ("characters", "traits"), ("religions",), ("addons", "builder", "rules", "events"))
     WORK_TITLES = {"map": "Maps", "faction": "Factions", "new": "New faction", "edit": "Edit faction",
                    "settlements": "Settlements", "units": "Units",

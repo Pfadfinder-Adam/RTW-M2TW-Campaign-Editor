@@ -114,45 +114,33 @@ class MapView(ttk.Frame):
                                       "rivers": self.v_rivers.get(), "grid": self.v_grid.get()})
             self.render()
         relayer = lambda: self.on_layers() if self.on_layers else self.render()
-        lb = ttk.Menubutton(lbar, text="Layers")
-        lm = tk.Menu(lb, tearoff=False)
         self._relayer = relayer
-        for key, label in MODES:
-            lm.add_radiobutton(label="Colours: " + label, variable=self.v_mode, value=key,
-                               command=self._mode_changed)
-        self._menu = lm
-        lm.add_separator()
+        # Layers: the colours and what is drawn, in one panel that stays open while it is clicked (a second press of
+        # the button or a click aside closes it). The colours once had a list of their own beside it - the same
+        # choice twice (a tester); ports are always drawn (no tick: they belong to the towns)
+        self._mode_radios = {}
 
-        def stay(cmd):
-            """A tick in Layers keeps the menu open (it closed after each one): done, the menu is shown again
-            where it was, below its button."""
-            def run():
-                cmd()
-
-                def again():
-                    try:
-                        if lb.winfo_ismapped():
-                            lm.post(lb.winfo_rootx(), lb.winfo_rooty() + lb.winfo_height())
-                    except tk.TclError:
-                        pass
-                lb.after(30, again)
-            return run
-        for label, var, cmd in (("Borders", self.v_borders, relayer),
-                                ("Town names", self.v_names, self.render), ("Ports", self.v_ports, self.render),
-                                ("Characters", self.v_chars, self.render), ("Resources", self.v_res, relayer)):
-            lm.add_checkbutton(label=label, variable=var, command=stay(cmd))
-        lm.add_separator()
-        for label, var in (("Relief (map_heights)", self.v_relief),
-                           ("Rivers, fords, cliffs (map_features)", self.v_rivers),
-                           ("Tile grid when zoomed in", self.v_grid)):
-            lm.add_checkbutton(label=label, variable=var, command=stay(look_changed))
-        lb["menu"] = lm
+        def build_layers(f):
+            ttk.Label(f, text="Colours", font=("", 9, "bold")).pack(anchor="w")
+            for key, label in MODES:
+                r = ttk.Radiobutton(f, text=label, variable=self.v_mode, value=key, command=self._mode_changed)
+                r.pack(anchor="w")
+                self._mode_radios[key] = r
+            ttk.Separator(f).pack(fill="x", pady=4)
+            ttk.Label(f, text="Shown", font=("", 9, "bold")).pack(anchor="w")
+            for label, var, cmd in (("Borders", self.v_borders, relayer), ("Town names", self.v_names, self.render),
+                                    ("Characters", self.v_chars, self.render), ("Resources", self.v_res, relayer)):
+                ttk.Checkbutton(f, text=label, variable=var, command=cmd).pack(anchor="w")
+            ttk.Separator(f).pack(fill="x", pady=4)
+            for label, var in (("Relief (map_heights)", self.v_relief),
+                               ("Rivers, fords, cliffs (map_features)", self.v_rivers),
+                               ("Tile grid when zoomed in", self.v_grid)):
+                ttk.Checkbutton(f, text=label, variable=var, command=look_changed).pack(anchor="w")
+            self._fill_modes()
+        from .gui_util import DropPanel
+        lb = ttk.Button(lbar, text="Layers \u25be")
         lb.pack(side="left")
-        # the colour mode, in sight on the bar (also in Layers)
-        ttk.Label(lbar, text="Colours").pack(side="left", padx=(10, 2))
-        self.cb_mode = ttk.Combobox(lbar, state="readonly", width=19)
-        self.cb_mode.pack(side="left")
-        self.cb_mode.bind("<<ComboboxSelected>>", lambda e: self._mode_picked())
+        self._layers_panel = DropPanel(lb, build_layers)
         self._fill_modes()
         # the two modes that change what a click does, as switches of their own
         ttk.Checkbutton(lbar, text="Edit regions", variable=self.v_regions,
@@ -174,12 +162,13 @@ class MapView(ttk.Frame):
             "them all (a building, garrisons or another owner for the towns, "
             "the characters or resources taken off the map). The right button drags the map meanwhile.").pack(
             side="left", padx=(4, 0))
-        mb = ttk.Menubutton(lbar, text="what...")
-        menu = tk.Menu(mb, tearoff=0)
-        for k, _ in SELECT_KINDS:
-            menu.add_checkbutton(label=k, variable=self.v_sel[k], command=self._sel_kinds_changed)
-        mb["menu"] = menu
+        mb = ttk.Button(lbar, text="what... \u25be")
         mb.pack(side="left", padx=(2, 4))
+
+        def build_what(f):
+            for k, _ in SELECT_KINDS:
+                ttk.Checkbutton(f, text=k, variable=self.v_sel[k], command=self._sel_kinds_changed).pack(anchor="w")
+        self._what_panel = DropPanel(mb, build_what)
         # Merge regions (big maps with too many regions): the first region clicked keeps everything (yellow), the
         # second goes and all its land joins the first (red); only the regions and town names are drawn meanwhile
         self.v_merge = tk.BooleanVar(value=False)
@@ -206,6 +195,7 @@ class MapView(ttk.Frame):
         # the zoom as a browser shows it: 100% = the whole map in the window (Fit) (report #127)
         self.lbl_zoom = ttk.Label(bar, text="", width=6, anchor="e")
         self.lbl_zoom.pack(side="right", padx=(0, 4))
+        self.zoom_bar = bar                              # the window that holds the map adds its own (Bigger map)
         from .gui_util import first
         first(b, self.lbl_zoom, *bar.pack_slaves()[-4:-2][::-1])  # the zoom buttons keep their room
         from .gui_util import hint
@@ -214,7 +204,9 @@ class MapView(ttk.Frame):
                   "be done there.").pack(side="right", padx=4)
         from . import settings
         self.v_legend = tk.BooleanVar(value=bool(settings.get("map_legend", True)))
-        ttk.Checkbutton(lbar, text="Legend", variable=self.v_legend, command=self._legend_toggled).pack(
+        # 'Signs and tools' (once 'Legend' - a tester: 'is it a legend?'): what every sign means AND the palette its
+        # rows with a + are (a click picks one, the next click on the map puts it there)
+        ttk.Checkbutton(lbar, text="Signs and tools", variable=self.v_legend, command=self._legend_toggled).pack(
             side="left", padx=(4, 0), before=self.lbl_layers)
         # Find: a town, port, army, agent, fleet, unit, fort or resource by any part of its name
         self.v_find = tk.StringVar()
@@ -242,13 +234,11 @@ class MapView(ttk.Frame):
         self.legend = ttk.Frame(body, padding=(6, 0, 0, 0))
         self.legend_canvas = tk.Canvas(self.legend, width=250, background="#f4f1ea", highlightthickness=1,
                                        highlightbackground="#bbb")
-        lsb = ttk.Scrollbar(self.legend, orient="vertical", command=self.legend_canvas.yview)
-        self.legend_canvas.configure(yscrollcommand=lsb.set)
-        lsb.pack(side="right", fill="y")
         self.legend_canvas.pack(side="left", fill="y", expand=True)
-        for seq, step in (("<MouseWheel>", None), ("<Button-4>", -1), ("<Button-5>", 1)):
-            self.legend_canvas.bind(seq, lambda e, st=step: self.legend_canvas.yview_scroll(
-                st if st is not None else int(-e.delta / 120), "units"))
+        # no scrollbar: the wheel, a left drag and the middle button scroll it as every list (a wheel bound on the
+        # canvas itself made it 'its own mouse' and the drag never came - a tester: 'it scrolls, but does not')
+        from .gui_util import wheel, scroll_y
+        wheel(self.legend_canvas, scroll_y(self.legend_canvas))
         lc = self.legend_canvas
         lc.tag_bind("tool", "<Button-1>", self._tool_click)
         lc.tag_bind("tool", "<Enter>", lambda e: lc.configure(cursor="hand2"))
@@ -359,18 +349,12 @@ class MapView(ttk.Frame):
 
     def _fill_modes(self):
         modes = self._modes()
-        self.cb_mode["values"] = [l for _, l in modes]
         if self.v_mode.get() not in dict(modes):
             self.v_mode.set("political")
             self._mode_changed(redraw=False)
-        self.cb_mode.set(dict(modes)[self.v_mode.get()])
-        end = self._menu.index("end")
-        for i in range(end + 1):                         # Layers: the religion item only where there are religions
-            try:
-                if self._menu.entrycget(i, "value") == "religion":
-                    self._menu.entryconfigure(i, state="normal" if self._religion_ok else "disabled")
-            except tk.TclError:
-                pass
+        r = getattr(self, "_mode_radios", {}).get("religion")
+        if r is not None:                               # Layers: the religion colours only where there are religions
+            r.configure(state="normal" if self._religion_ok else "disabled")
 
     def allow_religion(self, ok):
         """Religion colours only where the game has religions (Medieval II)."""
@@ -378,17 +362,10 @@ class MapView(ttk.Frame):
             self._religion_ok = bool(ok)
             self._fill_modes()
 
-    def _mode_picked(self):
-        label = self.cb_mode.get()
-        self.v_mode.set(next(k for k, l in self._modes() if l == label))
-        self._mode_changed()
-
     def _mode_changed(self, redraw=True):
         m = self.v_mode.get()
         self.v_pol.set(m != "none")
         self.v_rel.set(m == "religion")
-        if hasattr(self, "cb_mode"):
-            self.cb_mode.set(dict(self._modes()).get(m, ""))
         self._legend_key = None
         if redraw:
             self._relayer()
@@ -397,7 +374,7 @@ class MapView(ttk.Frame):
         mode = {"political": "political", "religion": "religion"}.get(
             self.v_mode.get()) if self.v_pol.get() else None
         on = ([mode] if mode else []) + [n for n, v in (
-            ("borders", self.v_borders), ("names", self.v_names), ("ports", self.v_ports),
+            ("borders", self.v_borders), ("names", self.v_names),
             ("characters", self.v_chars), ("resources", self.v_res)) if v.get()]
         self.lbl_layers.configure(text="shown: " + (", ".join(on) or "the ground only"))
 
@@ -979,7 +956,10 @@ class MapView(ttk.Frame):
                         lc.create_text(x, yy, text=k[:2].capitalize(), font=("", 8, "bold"),
                                        fill=self.text_on(self.res_colour(k)))
                     row(k, d, "res:" + k)
-            lc.configure(scrollregion=(0, 0, 250, y[0] + 10))
+            # as wide as its longest line (a long one was cut at the right edge - a tester: 'the window ate some')
+            bb = lc.bbox("all")
+            wide = max(250, (bb[2] + 8) if bb else 0)
+            lc.configure(scrollregion=(0, 0, wide, y[0] + 10), width=wide)
         finally:
             self.canvas, self.colours = main, colours
 

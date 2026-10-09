@@ -92,7 +92,7 @@ class TerrainEditor(ttk.Frame):
         self.view = MapView(self, status=None, on_layers=self.show)
         self.view.pack(fill="both", expand=True)
         self.view.on_stroke = self._stroke
-        # the campaign map's own switches (Layers, Colours, Edit regions, Select, Merge regions, Legend, Find) do not
+        # the campaign map's own switches (Layers, Edit regions, Select, Merge regions, Signs and tools, Find) do not
         # belong here - nothing of the map's towns, armies or regions is worked here (the user, 2026-10-09); the
         # zoom stays
         self.view.lbar.pack_forget()

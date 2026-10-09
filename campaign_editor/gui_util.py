@@ -1482,3 +1482,63 @@ def keep_for_apply(win, key, label, make_plan, after=None, title=None):
         return False
     win.app.session_add(key, label, plan, after)
     return True
+
+
+class DropPanel:
+    """A drop-down panel under a button, for ticks and choices (the map's Layers, Select's 'what...'): the button opens
+    it and a second press closes it, it stays open while things in it are clicked (a Tk menu closed at every tick and
+    had to be opened again - it blinked), a click anywhere else or Esc closes it. build(frame) fills it once."""
+
+    def __init__(self, button, build):
+        self.button, self.build, self.top = button, build, None
+        button.configure(command=self.toggle)
+        root = button.winfo_toplevel()
+        root.bind_all("<ButtonPress>", self._press_anywhere, add="+")
+        root.bind("<Configure>", lambda e: self.hide() if e.widget is root else None, add="+")
+
+    def shown(self):
+        try:
+            return self.top is not None and bool(self.top.winfo_ismapped())
+        except tk.TclError:
+            return False
+
+    def toggle(self):
+        if self.shown():
+            self.hide()
+        else:
+            self.show()
+
+    def show(self):
+        if self.top is None:
+            self.top = tk.Toplevel(self.button)
+            self.top.overrideredirect(True)
+            self.top.withdraw()
+            frame = ttk.Frame(self.top, padding=8, relief="solid", borderwidth=1)
+            frame.pack(fill="both", expand=True)
+            self.build(frame)
+            self.top.bind("<Escape>", lambda e: self.hide())
+        b = self.button
+        self.top.geometry("+%d+%d" % (b.winfo_rootx(), b.winfo_rooty() + b.winfo_height()))
+        self.top.deiconify()
+        self.top.lift()
+        self.top.focus_set()
+
+    def hide(self):
+        if self.top is not None:
+            try:
+                self.top.withdraw()
+            except tk.TclError:
+                pass
+
+    def _press_anywhere(self, e):
+        if not self.shown():
+            return
+        w = e.widget
+        if isinstance(w, str):
+            return
+        try:
+            inside = str(w).startswith(str(self.top)) or w is self.button
+        except tk.TclError:
+            inside = False
+        if not inside:
+            self.hide()

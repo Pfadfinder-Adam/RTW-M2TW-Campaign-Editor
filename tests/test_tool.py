@@ -10049,6 +10049,45 @@ building smith
         finally:
             root.destroy()
 
+    def test_drop_panel_stays_open_and_toggles(self):
+        """The map's Layers and Select's 'what...' (a tester, 2026-10-09): a Tk menu closed at every tick and blinked
+        when it was opened again, and a second press of its button did not close it. Now a panel: open on a press,
+        open while things in it are clicked, closed by a second press or a click aside."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display (CI): the window is not tested here
+            self.skipTest("no window: %s" % e)
+        from campaign_editor.gui_util import DropPanel
+        try:
+            b = ttk.Button(root, text="Layers")
+            b.pack()
+            aside = tk.Frame(root, width=200, height=200)
+            aside.pack()
+            v = tk.BooleanVar(value=False)
+            got = []
+            p = DropPanel(b, lambda f: got.append(ttk.Checkbutton(f, text="Borders", variable=v)) or got[-1].pack())
+            root.update()
+            b.invoke()
+            root.update()
+            self.assertTrue(p.shown())
+            got[0].invoke()                           # a tick: it stays open
+            root.update()
+            self.assertTrue(p.shown())
+            self.assertTrue(v.get())
+            b.invoke()                                # the second press closes it
+            root.update()
+            self.assertFalse(p.shown())
+            b.invoke()
+            root.update()
+            aside.event_generate("<ButtonPress-1>", x=5, y=5)       # a click aside closes it
+            root.update()
+            self.assertFalse(p.shown())
+            self.assertEqual(len(got), 1)             # built once
+        finally:
+            root.destroy()
+
     def test_closing_the_editor_when_a_command_is_already_gone(self):
         """Closing the editor once showed 'can't delete Tcl command' and then, while it reported that, a Windows box
         'application has been destroyed' (a tester, 0.32.0): a window keeps the names of its callbacks to delete them

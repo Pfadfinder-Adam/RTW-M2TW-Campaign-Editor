@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **The Maps bar tidied up**: **Layers** is a panel that stays open while you tick (the menu closed and blinked at
+  every tick) and closes on a second press of its button or a click aside - the same for Select's **what...**; the
+  colours are only in Layers (the list of their own beside it said the same twice); ports are always drawn (no tick);
+  **Legend** is called **Signs and tools** (it is also the palette: a row with + puts that sign on the map), scrolls
+  by a drag as every list and is as wide as its longest line (one was cut); **Bigger map (x3)...** sits beside the
+  zoom, and **Many towns...** left the top row (the map's Select + right click does it; Many towns at once... stays on
+  the Buildings tab).
 - **Click a picture to look at it closely**: every picture in Art and the faction tab's campaign-select map and
   leader's face open big in a window of their own - the wheel zooms (small ones pixel by pixel, sharp), drag to move,
   a checkerboard where they are see-through, the file, its size and format under it; Fit and 1 : 1.
@@ -16,8 +23,8 @@
   own (it looked narrower), the box 1 px narrower on the left (it stood out), every place counted with one rounding,
   and its size and place follow the scroll's own governor panel - so it stays with the scroll at any screen size.
   Load offers to update the add-on in the game.
-- **The top row by topic, shorter names**: **Maps** · Bigger map (x3)... | **Factions** · Recolour... |
-  **Settlements** · Many towns... · Mercenaries... | **Units** | **Buildings** | **Characters** · Traits and
+- **The top row by topic, shorter names**: **Maps** | **Factions** · Recolour... |
+  **Settlements** · Mercenaries... | **Units** | **Buildings** | **Characters** · Traits and
   retinue... | **Religions** | **Add-ons** · Module builder... · Campaign rules... · Events... - each tool beside its
   work, a thin line between the topics (once Map editor, Faction editor, Unit editor...).
 - **Settlements is a work of its own, with the names by culture in it**: every region and its town - the names in
