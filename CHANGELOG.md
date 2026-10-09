@@ -49,6 +49,11 @@
 - **Land and sea brush: a smooth coast** - new land's coast follows a smooth curve at half-tile level, the way the
   games' own maps are drawn, instead of tile-sized steps; one-tile islets stay small ovals of land and one-tile
   straits stay open. Every tile stays what it was painted (region, town, port).
+- **Land and sea: 'Smooth the coast' and the coast pen** - 'Smooth the coast' puts an old stepped coast under the
+  brush on the same smooth curve, no tile changing side; the coast pen draws the coast point by point on the heights
+  (land point / water point), the way modders draw it by hand - the map is shown point by point while it is picked
+  (land grey, water blue), and touching a tile's middle turns the whole tile with its region. The ground of every
+  point follows, so no land texture on the water and no holes in the land.
 - **The minimap follows painted land, sea and ground**: on Apply, the campaign's minimap pictures (radar_map1 /
   radar_map2.tga) are drawn again on every tile whose land, sea or ground you changed - from the nearest tile of the
   same ground (a forest from a forest, the sea from the sea), so its look and season fit. Needs Pillow (else a note).

@@ -55,7 +55,6 @@ class TerrainEditor(ttk.Frame):
         ttk.Label(top, text="   brush").pack(side="left")
         self.v_brush = tk.IntVar(value=1)
         self.v_brush.trace_add("write", lambda *_: self._brush_changed())     # typed too, not only the arrows
-        self.v_coast.trace_add("write", lambda *_: self._spray_hook())
         ttk.Spinbox(top, from_=1, to=12, width=3, textvariable=self.v_brush,
                     command=lambda: setattr(self.view, "brush", self.v_brush.get())).pack(side="left", padx=2)
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
@@ -77,6 +76,7 @@ class TerrainEditor(ttk.Frame):
         self.v_strength = tk.IntVar(value=4)
         self.v_level = tk.IntVar(value=40)
         self.v_coast = tk.StringVar(value="land")          # the land / sea brush
+        self.v_coast.trace_add("write", lambda *_: self._coast_mode())
         self.v_coast_region = tk.StringVar(value=NEAREST)
         from .gui_util import ShortHint
         self.hint = ShortHint(self)                      # one line; the whole explanation on its '?'
@@ -202,11 +202,23 @@ class TerrainEditor(ttk.Frame):
                 pass
             self._apply_memory()
         self.cmap.show_climates = self.v_what.get() == "climate"
-        self.cmap.show_heights = self.v_what.get() == "heights"
+        self.cmap.show_heights = self._by_points()
         self.view.brush = self.v_brush.get()
         self.view.load(self.cmap, {}, {}, region_mode=True, on_paint=self.paint, on_pick=self.pick,
                        brush=self.v_brush.get(), plain=True)
         self._spray_hook()
+
+    def _by_points(self):
+        """The map drawn point by point (map_heights: land grey, water blue, 2 x 2 points a tile): the heights brush
+        and the coast pen - the coast is drawn between the tiles, so its points must be seen (the user, 2026-10-09)."""
+        return self.v_what.get() == "heights" or (self.v_what.get() == "coast" and self.v_coast.get().startswith("pen"))
+
+    def _coast_mode(self):
+        """Land / Sea / Smooth / the pen picked: the pen draws by point on the map drawn by point."""
+        self._spray_hook()
+        if getattr(self, "cmap", None) is not None and self.v_what.get() == "coast" and \
+                getattr(self.cmap, "show_heights", False) != self._by_points():
+            self.show()
 
     def _spray_hook(self):
         """The heights brush and the coast pen work point by point (map_heights), the other brushes by tile."""
@@ -631,7 +643,7 @@ class TerrainEditor(ttk.Frame):
                 "This mod has no descr_climates.txt, so its climates are not known here."))
         elif what == "coast":
             self._coast_palette()
-            if self.cmap is not None and (getattr(self.cmap, "show_heights", False) or
+            if self.cmap is not None and (getattr(self.cmap, "show_heights", False) != self._by_points() or
                                           getattr(self.cmap, "show_climates", False)):
                 self.show()
             return
