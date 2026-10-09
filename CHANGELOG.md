@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **Art in tabs, and a Models tab**: Art's pictures are sorted into **Icons and buttons**, **Flags and banners**,
+  **Maps** and **Other**, each tab with how many it holds (the last one looked at opens again). The figures on the
+  campaign map - who is shown by which model, 3D - left Art for a **Models** tab of their own, with their textures
+  below them (each with 3D, Replace..., Save a copy...).
 - **Suggest with numbers**: in an army's or a fleet's units (a double click on the map), a town's garrison and the
   faction's garrisons, **Suggest** draws by the numbers beside it - from how many to how many units, their upkeep
   together at most (0: no limit) - kept for next time. In an army's window it did nothing. **Automatic** is gone:

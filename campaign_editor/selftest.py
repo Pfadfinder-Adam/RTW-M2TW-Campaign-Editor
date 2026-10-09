@@ -2863,7 +2863,7 @@ UI = {
     "Terrain editor": "Terrain editor: ground and heights", "Add-ons": "Add-ons",
     "Religions": "Religions (Medieval II, Barbarian Invasion)",
     "Faction": "Edit faction (names, colours, money, towns, garrisons)",
-    "Map": "Map: a town moved", "Map editor": "Map editor: any faction's army moved, its units", "Diplomacy": "Diplomacy: feelings", "Art": "Art: replace a picture",
+    "Map": "Map: a town moved", "Map editor": "Map editor: any faction's army moved, its units", "Diplomacy": "Diplomacy: feelings", "Art": "Art: replace a picture", "Models": "Campaign-map figures",
     "Roster": "Roster: give", "Settlements": "Edit region: rebels, resources, farming, names players see",
     "Units & armies": "Armies, agents and fleets placed by hand",
     "Buildings": "Many towns: a building, random garrisons",

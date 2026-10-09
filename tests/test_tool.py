@@ -10165,6 +10165,29 @@ building smith
             settings._data, settings._path = saved
             root.destroy()
 
+    def test_art_pictures_sorted_into_tabs(self):
+        """Art in sub-tabs (the user, 2026-10-09: 'everything sorted, nothing mixed'): icons and buttons, flags and
+        banners, maps, other; the campaign-map figures' textures go to the Models tab with the figures."""
+        from campaign_editor.factionart import art_group, ART_GROUPS
+        self.assertEqual([k for k, _ in ART_GROUPS], ["icons", "flags", "maps", "other"])
+        cases = {
+            "symbol:logo": "icons", "symbol:small_logo": "icons", "symbol:flag": "flags",
+            "menu/symbols/FE_buttons_48/symbol48_england_roll.tga": "icons",
+            "loading_screen/symbols/symbol128_julii.tga": "icons", "ui/faction_symbols/england.tga": "icons",
+            "banners/textures/royal_banner_england.texture": "flags",
+            "models/textures/standard_julii.tga.dds": "flags",
+            "models_building/textures/##standard_julii.tga.dds": "flags",
+            "models_strat/textures/#banner_symbol_england.tga.dds": "flags",
+            "world/maps/campaign/imperial_campaign/vcs_england.tga": "maps",
+            "models_strat/textures/spy_england.tga.dds": "models",
+            "ui/captain banners/captain_card_england.tga": "other",
+        }
+        for rel, want in cases.items():
+            self.assertEqual(art_group({"rel": rel}), want, rel)
+        # a unit's battle texture a campaign figure uses: named by the figure's line, so the Models tab's
+        self.assertEqual(art_group({"rel": "models_unit/textures/unit_roman_legionary_II_julii.tga.dds",
+                                    "link": ["model_strat", "texture:sm_roman_lesser_general"]}), "models")
+
     def test_closing_the_editor_when_a_command_is_already_gone(self):
         """Closing the editor once showed 'can't delete Tcl command' and then, while it reported that, a Windows box
         'application has been destroyed' (a tester, 0.32.0): a window keeps the names of its callbacks to delete them

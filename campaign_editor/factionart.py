@@ -110,6 +110,31 @@ def is_start_picture(e):
     return start_kind(e) is not None
 
 
+# Art's sub-tabs (the user, 2026-10-09: 'everything sorted, nothing mixed'): (key, tab title); the campaign-map
+# figures' textures are on the Models tab with the figures themselves, not in Art
+ART_GROUPS = (("icons", "Icons and buttons"), ("flags", "Flags and banners"), ("maps", "Maps"), ("other", "Other"))
+
+
+def art_group(e):
+    """Where a picture of faction_pictures goes: 'models' (a campaign-map figure's texture - the Models tab), or one
+    of ART_GROUPS' keys."""
+    rel = e["rel"].replace("\\", "/").lower()
+    link = (e.get("link") or [None])[0]
+    if link == "model_strat":
+        return "models"
+    if rel in ("symbol:logo", "symbol:small_logo") or rel.startswith(("menu/symbols/", "loading_screen/symbols/",
+                                                                      "ui/faction_symbols/")):
+        return "icons"
+    if link == "banners" or rel == "symbol:flag" or rel.startswith("banners/") or "/standard" in rel or \
+            "#standard" in rel or "#banner_symbol" in rel or "/banners/" in rel:
+        return "flags"
+    if rel.startswith("world/maps/"):
+        return "maps"
+    if rel.startswith("models_strat/"):
+        return "models"
+    return "other"
+
+
 def start_pictures(mod, campaign, faction):
     """The faction's campaign-select map (map_<faction>.tga) and leader's face (Rome's leader_pic_<faction>.tga) -
     the same entries faction_pictures gives, read from the campaign folder and data/menu only (quick: no walk

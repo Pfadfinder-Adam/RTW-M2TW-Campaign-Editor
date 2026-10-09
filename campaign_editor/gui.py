@@ -850,6 +850,12 @@ class App(tk.Tk):
         self.nb.add(tab, text="  Art  ")
         self.art_editor = ArtEditor(tab, self)
         self.art_editor.pack(fill="both", expand=True)
+        # the faction's figures on the campaign map, their textures, 3D - out of Art (the user, 2026-10-09)
+        from .gui_models import ModelsEditor
+        tab = ttk.Frame(self.nb)
+        self.nb.add(tab, text="  Models  ")
+        self.models_editor = ModelsEditor(tab, self)
+        self.models_editor.pack(fill="both", expand=True)
         from .gui_roster import RosterEditor
         tab = ttk.Frame(self.nb)
         self.nb.add(tab, text="  Roster  ")
@@ -1420,6 +1426,9 @@ class App(tk.Tk):
             return
         if tab == "Art":
             self.art_editor.load()
+            return
+        if tab == "Models":
+            self.models_editor.load()
             return
         if tab == "Roster":
             self.roster_editor.load()
