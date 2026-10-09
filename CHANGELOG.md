@@ -54,6 +54,12 @@
   (land point / water point), the way modders draw it by hand - the map is shown point by point while it is picked
   (land grey, water blue), and touching a tile's middle turns the whole tile with its region. The ground of every
   point follows, so no land texture on the water and no holes in the land.
+- **Land and sea: find ground on the wrong side of the coast** - a button under the Land and sea brushes finds every
+  point where `map_ground_types.tga` and `map_heights.tga` disagree: a land ground on the water (the land's texture
+  lies on the water in the game) or a sea ground in the land (holes of sea), rings them on the map and says how
+  many of each. On a yes each point takes the ground round it on its own side - the heights lead and are not
+  changed; kept until Apply, Undo stroke takes it back. The games' own maps have next to none (Rome 0, Medieval II
+  18 by lakes in the hills).
 - **The minimap follows painted land, sea and ground**: on Apply, the campaign's minimap pictures (radar_map1 /
   radar_map2.tga) are drawn again on every tile whose land, sea or ground you changed - from the nearest tile of the
   same ground (a forest from a forest, the sea from the sea), so its look and season fit. Needs Pillow (else a note).
@@ -86,6 +92,14 @@
   release's page.
 
 ### Fixed
+- **Terrain: the Ground brush laid its ground over the coast**: a tile's ground is the 3 x 3 block of points round
+  its middle, and on the coast that block reaches over the waterline (the heights' coast runs between the tiles) -
+  a land ground painted on a coastal tile lay on the water, a sea ground made holes in the land. The brush now paints
+  only the points on its own side of the waterline. Undo of a ground or climate stroke gives every point its own
+  colour back (it gave the whole block the tile's middle colour).
+- **Terrain: the beach is land**: both games lay the beach on the land tiles along the coast (every one of them in
+  both vanilla maps); the editor had it as a sea brush, painted on sea tiles - sand on the water. The beach is now
+  among the land brushes and goes on land, inland too.
 - **Map size: a cut that left a town on the map's new edge** made the game stop while loading (it builds the map
   again and cannot place a town on the edge row - it needs land all round). A town or port that would stand on an
   edge the cut makes now counts as cut off: it is named in the question before the cut and goes with it (its land

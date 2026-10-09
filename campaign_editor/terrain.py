@@ -27,11 +27,12 @@ GROUND = {
     (32, 32, 32): "impassable land, always black",
 }
 SEA = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (128, 128, 128)}
+# the beach (white) is LAND: both games' own maps lay it on land tiles along the coast (map_regions: M2TW 503 of 503,
+# Rome 580 of 580; touching the sea by a side 482 / 439), every beach point on land heights (measured 2026-10-09) -
+# painted with the land's brushes (it was a sea brush: its sand lay on the water)
 LAND_BRUSHES = [(101, 124, 0), (96, 160, 64), (0, 128, 0), (0, 0, 0), (0, 128, 128), (0, 64, 0), (128, 128, 64),
-                (98, 65, 65), (196, 128, 128), (0, 255, 128)]
-# the beach (white): the sea's tiles along the coast, one wide, as both games' own maps draw it (M2TW 502 on the sea,
-# 1 inland; Rome 571 / 9) - painted with the sea's brushes
-SEA_BRUSHES = [(196, 0, 0), (64, 0, 0), (128, 0, 0), (255, 255, 255)]
+                (98, 65, 65), (196, 128, 128), (0, 255, 128), (255, 255, 255)]
+SEA_BRUSHES = [(196, 0, 0), (64, 0, 0), (128, 0, 0)]
 
 # map_features.tga colours (one pixel per tile; black = nothing)
 FEATURES = {
@@ -114,14 +115,7 @@ def paint_problem(cmap, what, xy, colour, standing):
             return "the sea keeps its climate - climates are painted on land"
         return None
     if what == "ground":
-        if colour == BEACH:                           # the sea's edge along the coast, one tile wide
-            if not sea:
-                return "the beach is the sea's edge along the coast - paint it on a sea tile beside the land"
-            if not any(0 <= x + dx < cmap.w and 0 <= y + dy < cmap.h and not cmap.is_sea(x + dx, y + dy)
-                       for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy):
-                return "the beach is one tile wide along the coast - this sea tile does not touch the land"
-            return None
-        if (colour in SEA) != sea:
+        if (colour in SEA) != sea:                    # the beach is a land ground (on the land tiles along the coast)
             return "land and sea are not swapped with the ground brush - use 'Land and sea' (it changes the regions and heights too)"
         if xy in standing and colour in BLOCKED_GROUND:
             return "a town, port or character stands there - the game refuses %s under them" % GROUND.get(colour)
@@ -241,13 +235,97 @@ def climates(mod):
     return [tuple(x) for x in out]
 
 
-def ground_changes(ground_tiles):
-    """{(px, py): colour} for map_ground_types.tga: each painted tile's 3 x 3 block."""
+def ground_changes(ground_tiles, land_at=None):
+    """{(px, py): colour} for map_ground_types.tga: each painted tile's 3 x 3 block. With land_at ((px, py) -> True
+    for a land point of map_heights, False for water, None off the picture - land_points()) only the block's points
+    on the ground's own side of the waterline: a coastal tile's block reaches over the coast, which runs between the
+    tiles - its land ground lay on the water in the game and a sea ground made holes in the land (the heights lead)."""
     out = {}
     for (x, y), c in ground_tiles.items():
+        land = is_land_ground(c)
         for dx in (0, 1, 2):
             for dy in (0, 1, 2):
-                out[(2 * x + dx, 2 * y + dy)] = tuple(c)
+                p = (2 * x + dx, 2 * y + dy)
+                if land_at is not None and land_at(*p) not in (None, land):
+                    continue
+                out[p] = tuple(c)
+    return out
+
+
+def is_land_ground(c):
+    """A map_ground_types colour of the land (the beach too - the games lay it on land)."""
+    return c is not None and tuple(c[:3]) not in SEA
+
+
+def land_points(heights, changed=None):
+    """(px, py) -> True for a land point of map_heights (grey), False for water (blue), None off the picture;
+    changed: {(px, py): colour} laid over the picture (the coast brush's points not written yet)."""
+    if heights is None:
+        return None
+    changed = changed or {}
+
+    def land(px, py):
+        c = changed.get((px, py))
+        if c is None:
+            if not (0 <= px < heights.width and 0 <= py < heights.height):
+                return None
+            c = heights.get(px, py)
+        return is_land_height(c)
+    return land
+
+
+def ground_off_heights(heights, ground):
+    """[(px, py, 'water' | 'land')]: the points of map_ground_types on the other side of the waterline than
+    map_heights says - 'water': a land ground (the beach too) on a water point, the land's texture lies on the water
+    in the game; 'land': a sea ground on a land point, a hole of sea in the land (the user, 2026-10-09: 'textures
+    crawled onto the water though the tile is not, and the other way round holes in the land'). The games' own maps
+    have nearly none (measured 2026-10-09: Rome, BI, sons_of_mars, norman_prologue 0, Medieval II 18 (lakes in the
+    hills), HLR 17). [] when the two pictures are not the same size (then they do not belong together anyway)."""
+    if heights is None or ground is None or (heights.width, heights.height) != (ground.width, ground.height):
+        return []
+    w = heights.width
+    out = []
+    hr, gr = getattr(heights, "raw", None), getattr(ground, "raw", None)
+    if hr is not None and gr is not None:            # the whole map at once - a big mod's 1.3 million points
+        hs = zip(hr[0::3], hr[1::3], hr[2::3])
+        for i, (h, g) in enumerate(zip(hs, zip(gr[0::3], gr[1::3], gr[2::3]))):
+            land_h = h[0] == h[1] == h[2]
+            if land_h == (g not in SEA):
+                continue
+            out.append((i % w, i // w, "land" if land_h else "water"))
+        return out
+    for py in range(heights.height):
+        for px in range(w):
+            land_h = is_land_height(heights.get(px, py))
+            if land_h != is_land_ground(ground.get(px, py)):
+                out.append((px, py, "land" if land_h else "water"))
+    return out
+
+
+def ground_under_heights(heights, ground, wrong):
+    """{(px, py): colour}: the ground put right under the heights at the points ground_off_heights found (wrong): a
+    water point takes the sea ground most common round it, a land point the land ground most common round it (the
+    beach too), looking one point out, then two; points that are wrong themselves are not counted. None near: shallow
+    sea / medium fertility."""
+    bad = {(px, py) for px, py, _ in wrong}
+    out = {}
+    for px, py, side in wrong:
+        land = side == "land"
+        pick = None
+        for reach in (1, 2):
+            near = Counter()
+            for a in range(-reach, reach + 1):
+                for b in range(-reach, reach + 1):
+                    q = (px + a, py + b)
+                    if q in bad or not (0 <= q[0] < ground.width and 0 <= q[1] < ground.height):
+                        continue
+                    c = ground.get(*q)
+                    if is_land_ground(c) == land:
+                        near[c] += 1
+            if near:
+                pick = near.most_common(1)[0][0]
+                break
+        out[(px, py)] = tuple(pick) if pick else (NEW_LAND_GROUND if land else SHALLOW_SEA)
     return out
 
 
@@ -757,7 +835,10 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
         n_land = sum(1 for v in ctiles.values() if v == "land")
         plan.notes.append((mod.rel(path), "%d tile(s) made land, %d made sea" % (n_land, len(ctiles) - n_land)))
     gchanges = {tuple(k): tuple(v) for k, v in (coast.get("ground") or {}).items()}
-    gchanges.update(ground_changes(ground))
+    cheights = {tuple(k): tuple(v) for k, v in (coast.get("heights") or {}).items()}
+    # the painted ground stays on its side of the waterline (the heights as they will be written)
+    land_at = land_points(mod._optional_map(campaign, "map_heights.tga"), cheights) if ground else None
+    gchanges.update(ground_changes(ground, land_at))
     gtiles = dict(ground)
     for xy, v in ctiles.items():
         gtiles.setdefault(tuple(xy), (SHALLOW_SEA if v == "sea" else NEW_LAND_GROUND))
@@ -773,8 +854,8 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
         count = Counter(names.get(c, str(c)) for c in tiles.values())
         plan.notes.append((mod.rel(path), "%d tile(s): %s" % (len(tiles), ", ".join(
             "%d %s" % (n, k) for k, n in count.most_common())) if tiles else
-            "%d point(s) of the coast (the coast pen / smoothing)" % len(changes)))
-    cheights = {tuple(k): tuple(v) for k, v in (coast.get("heights") or {}).items()}
+            "%d point(s) of the coast (the coast pen, Smooth the coast or the ground put right under the "
+            "heights)" % len(changes)))
     if heights or cheights:
         path = mod.campaign_file(campaign, "map_heights.tga")
         if not path:
@@ -845,4 +926,5 @@ def _radar_follows(plan, mod, campaign, tiles, gchanges):
 
 __all__ = ["GROUND", "SEA", "FEATURES", "LAND_BRUSHES", "SEA_BRUSHES", "ground_brushes", "FEATURE_BRUSHES", "paint_problem",
            "river_warnings", "river_shapes", "bridge_warnings", "feature_brushes", "river_path", "climates", "HEIGHT_TOOLS", "is_land_height", "height_spray", "max_land_height", "hgt_patched",
-           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "shore_rise", "coast_smoothed", "pen_points", "min_sea_height", "hgt_value", "radar_painted", "apply"]
+           "sea_colour", "nearest_region", "coast_problem", "coast_pixels", "shore_rise", "coast_smoothed", "pen_points", "min_sea_height", "hgt_value", "radar_painted", "apply",
+           "is_land_ground", "land_points", "ground_off_heights", "ground_under_heights"]

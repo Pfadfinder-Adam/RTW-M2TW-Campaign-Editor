@@ -4433,9 +4433,10 @@ building smith
         open(os.path.join(camp, "data", "descr_sm_factions.txt"), "w").close()
         self.assertIsNone(gamefix.unpack_needed(camp))              # unpacked: nothing to offer
 
-    def test_beach_is_painted_on_the_coast_only(self):
-        # the beach (white ground) lies on the sea's tiles along the coast, one wide, in both games' maps: painted
-        # with the sea's brushes, on a sea tile touching land only
+    def test_beach_is_land_as_in_both_games(self):
+        # the beach (white ground) lies on LAND tiles along the coast in both games' own maps (M2TW 503 of 503, Rome
+        # 580 of 580; every beach point on land heights) - it was a sea brush allowed on sea tiles only, so its sand
+        # lay on the water; now a land brush, refused on the sea like any land ground, inland allowed (Rome has 126)
         from campaign_editor import terrain as T
 
         class Map:
@@ -4443,11 +4444,73 @@ building smith
 
             def is_sea(self, x, y):
                 return x >= 2
-        self.assertIn(T.BEACH, T.SEA_BRUSHES)
+        self.assertIn(T.BEACH, T.LAND_BRUSHES)
+        self.assertNotIn(T.BEACH, T.SEA_BRUSHES)
+        self.assertIn(T.BEACH, T.ground_brushes("medieval2", "m2ex")[0])
         self.assertEqual(T.GROUND[T.BEACH], "beach")
-        self.assertIsNone(T.paint_problem(Map(), "ground", (2, 2), T.BEACH, set()))
-        self.assertIsNotNone(T.paint_problem(Map(), "ground", (4, 2), T.BEACH, set()))     # open sea
-        self.assertIsNotNone(T.paint_problem(Map(), "ground", (1, 2), T.BEACH, set()))     # land
+        self.assertTrue(T.is_land_ground(T.BEACH))
+        self.assertIsNone(T.paint_problem(Map(), "ground", (1, 2), T.BEACH, set()))        # the land by the sea
+        self.assertIsNone(T.paint_problem(Map(), "ground", (0, 2), T.BEACH, set()))        # inland too
+        self.assertIsNotNone(T.paint_problem(Map(), "ground", (2, 2), T.BEACH, set()))     # the sea: no
+
+    def test_ground_on_the_wrong_side_of_the_coast(self):
+        """The user (2026-10-09): 'textures crawled onto the water though the tile is not, and the other way round
+        holes in the land'. A land ground on a water point of map_heights or a sea ground on a land point is found
+        and put right under the heights (the ground round it on its own side; the heights lead); the ground brush
+        keeps a coastal tile's ground on its side of the waterline (its 3 x 3 block reaches over the coast); Apply
+        does the same with the heights it writes."""
+        from campaign_editor import terrain as T
+        from campaign_editor.plan import Plan
+        from campaign_editor.tga import Image, read_tga
+        farm, hills = (0, 128, 0), (128, 128, 64)
+        n = 9                                                           # points: land left of x = 4, water from 4
+        heights = Image(n, n, [((5, 5, 5) if x < 4 else (0, 0, 253)) for y in range(n) for x in range(n)])
+        ground = Image(n, n, [(farm if x < 4 else T.SHALLOW_SEA) for y in range(n) for x in range(n)])
+        self.assertEqual(T.ground_off_heights(heights, ground), [])
+        ground.set(5, 2, hills)                                         # land texture on the water
+        ground.set(1, 6, (64, 0, 0))                                    # a hole of sea (ocean) in the land
+        ground.set(6, 6, T.BEACH)                                       # sand on the water
+        wrong = T.ground_off_heights(heights, ground)
+        self.assertEqual(sorted(wrong), [(1, 6, "land"), (5, 2, "water"), (6, 6, "water")])
+        fixed = T.ground_under_heights(heights, ground, wrong)
+        self.assertEqual(fixed, {(5, 2): T.SHALLOW_SEA, (1, 6): farm, (6, 6): T.SHALLOW_SEA})
+        for p, c in fixed.items():
+            ground.set(*p, c)
+        self.assertEqual(T.ground_off_heights(heights, ground), [])
+        # the same without the fast path (pictures with get() only), and pictures of two sizes: nothing compared
+
+        class Pic:
+            def __init__(self, img):
+                self.width, self.height, self.get = img.width, img.height, img.get
+        ground.set(5, 2, hills)
+        self.assertEqual(T.ground_off_heights(Pic(heights), Pic(ground)), [(5, 2, "water")])
+        self.assertEqual(T.ground_off_heights(heights, Image(3, 3)), [])
+        # the ground brush on the coastal land tile 1 (points 2..4): point 4 is water - it keeps its sea ground
+        land_at = T.land_points(heights)
+        block = T.ground_changes({(1, 1): hills}, land_at)
+        self.assertNotIn((4, 3), block)
+        self.assertEqual(block[(3, 3)], hills)
+        self.assertEqual(len(T.ground_changes({(1, 1): hills})), 9)                  # no heights: the whole block
+        self.assertNotIn((3, 3), T.ground_changes({(1, 1): T.SHALLOW_SEA}, land_at))  # nor sea in the land
+        self.assertFalse(land_at(4, 3))
+        self.assertTrue(T.land_points(heights, {(4, 3): (2, 2, 2)})(4, 3))           # the coast's points first
+        self.assertIsNone(land_at(-1, 0))
+        # Apply: the painted ground stays off the water; the coast's new land point under it takes it
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        rows = lambda img: [[img.get(x, y) for x in range(n)] for y in range(n)]      # noqa: E731
+        ground.set(5, 2, T.SHALLOW_SEA)
+        write_tga(os.path.join(camp, "map_ground_types.tga"), n, n, rows(ground))
+        write_tga(os.path.join(camp, "map_heights.tga"), n, n, rows(heights))
+        mod = ModData(self.root)
+        plan = Plan(mod, "terrain", "terrain")
+        T.apply(plan, "test", {(1, 1): hills, (1, 2): hills},
+                coast={"tiles": {}, "regions": {}, "ground": {}, "heights": {(4, 5): (2, 2, 2)}})
+        plan.apply()
+        g = read_tga(os.path.join(camp, "map_ground_types.tga"))
+        self.assertEqual(g.get(3, 3), hills)
+        self.assertEqual(g.get(4, 3), T.SHALLOW_SEA)                    # water: not painted
+        self.assertEqual(g.get(4, 5), hills)                            # made land by the coast in the same Apply
+        self.assertEqual(T.ground_off_heights(read_tga(os.path.join(camp, "map_heights.tga")), g), [])
 
     def test_rules_that_broke_the_game_are_kept(self):
         # a rule a change of which broke the game in a test (recruitment slots lowered to 0: no town recruited) is

@@ -142,6 +142,9 @@ class TerrainEditor(ttk.Frame):
             self.coast, self.cbase = {}, {}
             self.cpx = {"regions": {}, "ground": {}, "heights": {}}
             self._undo, self._redo = [], []
+        self._off_said = ""                             # a check's finding belongs to the files it looked at
+        if getattr(self, "view", None) is not None:
+            self.view.point_marks = []
         from .moddata import ModData
         self.mod = ModData(mod.data)                 # its own copy: the pictures are changed in memory
         self._sig = self._signature()
@@ -251,16 +254,16 @@ class TerrainEditor(ttk.Frame):
     def _apply_memory(self):
         """The painted tiles laid into the in-memory pictures the map is drawn from."""
         g, f = self._img("map_ground_types.tga"), self._img("map_features.tga")
-        for (px, py), c in T.ground_changes(self.ground).items():
+        h = self._img("map_heights.tga")
+        for (px, py), c in self.cpx["heights"].items():             # the coast's heights first: the ground
+            self._set_px(h, px, py, c)                               # follows them
+        for (px, py), c in T.ground_changes(self.ground, T.land_points(h)).items():
             self._set_px(g, px, py, c)
         cl = self._img("map_climates.tga")
         for (px, py), c in T.ground_changes(self.climate).items():
             self._set_px(cl, px, py, c)
         for (x, y), c in self.features.items():
             self._set_px(f, x, y, c)
-        h = self._img("map_heights.tga")
-        for (px, py), c in self.cpx["heights"].items():
-            self._set_px(h, px, py, c)
         for (px, py), c in self.cpx["ground"].items():
             self._set_px(g, px, py, c)
         if self.cpx["regions"]:
@@ -317,8 +320,13 @@ class TerrainEditor(ttk.Frame):
                 store[t] = colour
             if what in ("ground", "climate"):
                 img = self._img("map_ground_types.tga" if what == "ground" else "map_climates.tga")
-                for (px, py), c in T.ground_changes({t: colour}).items():
-                    self._set_px(img, px, py, c)
+                # a ground stays on its side of the waterline (the heights lead); each point's own colour kept
+                # for Undo - the tile's block is not one colour on the coast
+                land_at = T.land_points(self._img("map_heights.tga")) if what == "ground" else None
+                for (px, py), c in T.ground_changes({t: colour}, land_at).items():
+                    if img is not None and 0 <= px < img.width and 0 <= py < img.height:
+                        self.cbase.setdefault((what, (px, py)), img.get(px, py))
+                        img.set(px, py, c)
             else:
                 self._set_px(self._img("map_features.tga"), t[0], t[1], colour)
             from .mapdata import GROUND_LOOK, CampaignMap
@@ -459,8 +467,52 @@ class TerrainEditor(ttk.Frame):
             self.cmap.__dict__.pop("_backgrounds", None)
             self.cmap._hpil = None
             self.app.status.set("Terrain: %d point(s) of the coast changed - Preview, then Apply changes."
-                                % len(self.cpx["heights"]))
+                                % len(set(self.cpx["heights"]) | set(self.cpx["ground"])))
             self.app._mark_work()
+
+    def _say_off(self, text):
+        self._off_said = text                       # kept when the palette is drawn again
+        if getattr(self, "lbl_off", None) is not None and self.lbl_off.winfo_exists():
+            self.lbl_off.configure(text=text)
+        self.app.status.set("Terrain: " + text)
+
+    def ground_check(self):
+        """'Find ground on the wrong side of the coast' (the user, 2026-10-09: 'textures crawled onto the water though
+        the tile is not, and the other way round holes in the land'): every map_ground_types point on the other side
+        of the waterline than map_heights says, ringed on the map; on a yes each gets the ground round it on its own
+        side - the heights lead (terrain.ground_off_heights / ground_under_heights). Kept with the coast's points:
+        Undo stroke, Preview, Apply."""
+        if not self._bound():
+            return
+        heights, ground = self._img("map_heights.tga"), self._img("map_ground_types.tga")
+        if heights is None or ground is None:
+            self._say_off("this campaign has no map_heights.tga or map_ground_types.tga - nothing to compare.")
+            return
+        wrong = T.ground_off_heights(heights, ground)
+        self.view.mark_points(wrong)
+        if not wrong:
+            self._say_off("the ground and the heights agree everywhere - no land ground on the water, no sea in the "
+                          "land.")
+            return
+        water = sum(1 for w in wrong if w[2] == "water")
+        self._say_off("%d point(s) on the wrong side of the coast, ringed on the map: %d land ground on the water, "
+                      "%d sea ground in the land." % (len(wrong), water, len(wrong) - water))
+        from .gui_util import ask
+        if not ask("Terrain editor", (
+                "%d point(s) of map_ground_types.tga lie on the other side of the coast than map_heights.tga says:\n"
+                "  - %d land ground on the water (the land's texture shows on the water in the game)\n"
+                "  - %d sea ground in the land (holes of sea in the land)\n\n"
+                "They are ringed on the map. Put the ground right under the heights? Each point takes the ground "
+                "round it on its own side - the sea's on the water, the land's on the land; the heights stay as "
+                "they are. Kept until Apply; Undo stroke takes it back." % (len(wrong), water, len(wrong) - water)),
+                yes="Put the ground right", no="Only show them", parent=self):
+            return
+        self._stroke()                                  # one step back with Undo stroke
+        self._coast_points({"ground": T.ground_under_heights(heights, ground, wrong)})
+        self.view.mark_points(None)
+        self._say_off("%d point(s) of the ground put right under the heights - Preview, then Apply changes (Undo "
+                      "stroke takes it back)." % len(wrong))
+        self.view.render()
 
     def smooth_coast(self, tiles):
         """'Smooth the coast': an old blocky coast under the brush put on the same smooth curve the land brush draws
@@ -563,18 +615,13 @@ class TerrainEditor(ttk.Frame):
         g, f = self._img("map_ground_types.tga"), self._img("map_features.tga")
         cl = self._img("map_climates.tga")
         for (what, t), c in self.base.items():
-            if c is None:
-                continue
-            if what in ("ground", "climate"):
-                for (px, py), cc in T.ground_changes({t: c}).items():
-                    self._set_px(g if what == "ground" else cl, px, py, cc)
-            else:
+            if c is not None and what == "features":          # ground and climate: by point, in cbase
                 self._set_px(f, t[0], t[1], c)
         h = self._img("map_heights.tga")
         for (px, py), v in self.hbase.items():
             self._set_px(h, px, py, (v, v, v))
         imgs = {"regions": self.mod.region_map(self.app.v_campaign.get()) if self.mod else None,
-                "ground": g, "heights": h}
+                "ground": g, "heights": h, "climate": cl}
         for (name, p), c in self.cbase.items():
             self._set_px(imgs[name], p[0], p[1], c)
         self.coast = dict(coast or {})
@@ -627,7 +674,10 @@ class TerrainEditor(ttk.Frame):
             self.hint.configure(text=(
                 "Left drag paints the picked ground, right click picks a tile's own, right drag moves the map. "
                 "A tile's ground decides movement, farming and what may stand there; land stays land and sea stays "
-                "sea here - to turn sea into land or land into sea, use 'Land and sea' above. Mountains, high mountains, dense "
+                "sea here - to turn sea into land or land into sea, use 'Land and sea' above. On the coast a tile's "
+                "ground stays on its own side of the waterline (map_heights: the coast runs between the tiles' "
+                "middles), so no land texture is laid on the water. The beach is land: both games lay it on the "
+                "land tiles along the coast. Mountains, high mountains, dense "
                 "forest and impassable land / sea are refused under towns, ports and characters (the game refuses them "
                 "there); impassable: no army walks or sails there (Medieval II; Rome with REX only); impassable, always black: "
                 "never walked and never seen - a wasteland's land hidden for good (REX / M2EX). "
@@ -689,9 +739,12 @@ class TerrainEditor(ttk.Frame):
             self.show()
 
     def _coast_palette(self):
-        """The land / sea brush: which one, and the region new land joins."""
-        box = ttk.Frame(self.palette)
-        box.pack(side="left")
+        """The land / sea brush: which one, and the region new land joins; under it the check of the ground along the
+        coast."""
+        rows = ttk.Frame(self.palette)
+        rows.pack(side="left", fill="x")
+        box = ttk.Frame(rows)
+        box.pack(side="top", anchor="w")
         ttk.Label(box, text="brush:").pack(side="left", padx=(8, 2))
         ttk.Radiobutton(box, text="Land", value="land", variable=self.v_coast).pack(side="left", padx=3)
         ttk.Radiobutton(box, text="Sea", value="sea", variable=self.v_coast).pack(side="left", padx=3)
@@ -703,6 +756,12 @@ class TerrainEditor(ttk.Frame):
         names = sorted(self.cmap.info) if self.cmap is not None else []
         ttk.Combobox(box, textvariable=self.v_coast_region, values=[NEAREST] + names, width=24,
                      state="readonly").pack(side="left")
+        more = ttk.Frame(rows)
+        more.pack(side="top", fill="x", pady=(4, 0))
+        ttk.Button(more, text="Find ground on the wrong side of the coast", command=self.ground_check).pack(
+            side="left", padx=(8, 0))
+        from .gui_modbuilder import wrapping
+        self.lbl_off = wrapping(ttk.Label(more, text=getattr(self, "_off_said", "")), side="left", expand=True, padx=8)
         self.hint.configure(text=(
             "Turn sea into land (a new island, a longer coast) or land into sea (a bay, a strait). Land and sea are "
             "written in three places that must agree, so each tile changes all of them: map_regions.tga (the "
@@ -710,7 +769,12 @@ class TerrainEditor(ttk.Frame):
             "sea) and map_heights.tga with map_heights.hgt (a low shore, or the sea's depth). New land joins the "
             "region of the nearest land, or the one picked here - move borders later on the Map (Regions). Refused: "
             "drowning a town, port, character, fort or resource, a region's last land, a river (rub it out first) "
-            "or a port's last land. On Apply: those files written, map.rwm deleted (the game builds its map again)."))
+            "or a port's last land. On Apply: those files written, map.rwm deleted (the game builds its map again). "
+            "'Find ground on the wrong side of the coast' rings every point where map_ground_types and map_heights "
+            "disagree - a land ground on the water (the land's texture lies on the water in the game) or a sea "
+            "ground in the land (holes of sea) - and, on a yes, gives each the ground round it on its own side: "
+            "the heights lead, they are not changed. The games' own maps have next to none (Rome 0, Medieval II "
+            "18 by lakes in the hills)."))
 
     def _heights_palette(self):
         """The heights brush: what it does, how strong, and the height 'Level' brings the land to."""

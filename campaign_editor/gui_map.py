@@ -181,6 +181,7 @@ class MapView(ttk.Frame):
         self.v_merge = tk.BooleanVar(value=False)
         self.merge, self.on_merge, self._before_merge = [None, None], None, None
         self.region_marks, self.on_region_click = {}, None    # mark_regions: a window's regions coloured, clicks to it
+        self.point_marks = []                                 # mark_points: points a check found, ringed
         tip(ttk.Checkbutton(lbar, text="Merge regions", variable=self.v_merge, command=self._merge_toggled),
             "Join two regions into one (a map with too many regions): click the region that stays (yellow), then "
             "its neighbour that goes (red), then 'Merge them' under the map - the second region's town and region "
@@ -746,6 +747,30 @@ class MapView(ttk.Frame):
         if self.cmap:
             self.render()
 
+    def mark_points(self, points=None):
+        """Points of the map's 2 x + 1 pictures (map_heights / map_ground_types: (px, py), bottom row first - a tile's
+        middle is (2x + 1, 2y + 1)) ringed on the map for a check that found them (the Terrain editor's ground on the
+        wrong side of the coast); none: cleared."""
+        self.point_marks = [tuple(p[:2]) for p in (points or [])]
+        if self.cmap:
+            self.render()
+
+    def _point_marks(self, cw, ch):
+        """The marked points: a yellow ring with a dark edge (seen on any ground, like a found tile's), still a few
+        pixels wide with the whole map in view; only the ones on the screen, at most 5000."""
+        c, z = self.canvas, self.z
+        r = max(4.0, z * 0.3)
+        n = 0
+        for px, py in self.point_marks:
+            sx, sy = self.to_screen((px - 1) / 2.0, (py - 1) / 2.0)
+            if not (-r <= sx <= cw + r and -r <= sy <= ch + r):
+                continue
+            c.create_oval(sx - r, sy - r, sx + r, sy + r, outline="#000000", width=3, tags=("pointmark",))
+            c.create_oval(sx - r, sy - r, sx + r, sy + r, outline="#ffd400", width=1, tags=("pointmark",))
+            n += 1
+            if n >= 5000:
+                break
+
     def merged(self):
         """After a merge was written (the map read again): nothing picked, the mode stays on for the next pair."""
         self.merge = [None, None]
@@ -1107,6 +1132,8 @@ class MapView(ttk.Frame):
         if self.v_grid.get() and self.z >= 10:
             self._grid(cw, ch)
         self._markers(cw, ch)
+        if self.point_marks:
+            self._point_marks(cw, ch)
         if self.edge_mode:
             self._draw_edges()
         if self.v_pick.get() and (self.sel_chars or self.sel_res):

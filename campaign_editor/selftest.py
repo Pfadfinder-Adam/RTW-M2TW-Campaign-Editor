@@ -649,6 +649,21 @@ def s_coast(c, mod):
     raise Skip("no sea tile to fill")
 
 
+@step("Land and sea: the ground put right under the heights ('Find ground on the wrong side of the coast')",
+      "no land texture on the water and no holes of sea in the land along the coasts")
+def s_ground_coast(c, mod):
+    from . import terrain as T
+    h = mod._optional_map(c.campaign, "map_heights.tga")
+    g = mod._optional_map(c.campaign, "map_ground_types.tga")
+    wrong = T.ground_off_heights(h, g)
+    if not wrong:
+        raise Skip("the map's ground and heights agree everywhere - nothing to put right (Rome's own map has none)")
+    plan = Plan(mod, "terrain", "terrain")
+    T.apply(plan, c.campaign, coast={"tiles": {}, "regions": {}, "heights": {},
+                                     "ground": T.ground_under_heights(h, g, wrong)})
+    return plan
+
+
 @step("Family: a new son for {edited}'s leader", "the family tree shows the boy")
 def s_family(c, mod):
     from . import family as FM
@@ -2436,6 +2451,7 @@ COVERAGE = {
     "Terrain editor: ground and heights": ["s_terrain"],
     "Terrain editor: features and climates": ["s_features"],
     "Land and sea": ["s_coast"],
+    "Land and sea: the ground put right under the heights": ["s_ground_coast"],
     "Family: a son": ["s_family"],
     "Family: a daughter, a man tied to no one": ["s_family_more"],
     "Character editor: traits and retinue of a character": ["s_character"],
