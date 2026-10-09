@@ -156,7 +156,7 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
                               mod)
             if why:
                 bad("%s (%s): %s - the game stops reading descr_strat.txt there (towns, armies and diplomacy after "
-                    "it are lost); set the population or the level on the Settlements tab" % (st.region, fb.name, why))
+                    "it are lost); set the population or the level on the Buildings tab or in the town's window" % (st.region, fb.name, why))
     from .family import children_order_problems, read as read_family, records_too_old
     for fb in s.factions:                           # children oldest first, as the games want them
         try:

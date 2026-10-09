@@ -25,8 +25,8 @@ def zoom_setting(key):
     except (TypeError, ValueError):
         v = ZOOM_SETTINGS[key]
     return v if v > 0 else ZOOM_SETTINGS[key]
-MODES = (("political", "Political (the owners)"), ("diplomacy", "Diplomacy (towards the faction)"),
-         ("religion", "Religion (Medieval II)"), ("none", "None (the ground only)"))
+MODES = (("political", "Political (the owners)"), ("religion", "Religion (Medieval II)"),
+         ("none", "None (the ground only)"))
 
 
 
@@ -92,10 +92,9 @@ class MapView(ttk.Frame):
         # forts, watchtowers and wonders: always picked, moved (right drag) and deleted (right click) on the Map; new
         # ones come from the legend (fort, watchtower) or the right click (a wonder) - no mode of their own (the user)
         self.v_forts = tk.BooleanVar(value=True)
-        self.v_dip = tk.BooleanVar(value=False)
         self.v_rel = tk.BooleanVar(value=False)         # religion colours (Medieval II)
         self.v_regions = tk.BooleanVar(value=False)
-        # the land's colours: one mode at a time (they would hide each other): political / diplomacy / religion
+        # the land's colours: one mode at a time (they would hide each other): political / religion
         self.v_mode = tk.StringVar(value="political")
         self.tint, self.tint_legend, self._religion_ok = None, [], False
         # the legend is a palette too: a click on a sign picks it as a tool (the next click on the map makes one);
@@ -196,7 +195,7 @@ class MapView(ttk.Frame):
             "once with a backup (Undo this write / Tools > Restore).").pack(side="left", padx=(4, 4))
         self.lbl_layers = ttk.Label(lbar, text="", foreground="#666")
         self.lbl_layers.pack(side="left", padx=8)
-        for v in (self.v_pol, self.v_borders, self.v_names, self.v_ports, self.v_chars, self.v_res, self.v_dip,
+        for v in (self.v_pol, self.v_borders, self.v_names, self.v_ports, self.v_chars, self.v_res,
                   self.v_regions, self.v_mode):
             v.trace_add("write", lambda *a: self._layers_label())
         self._layers_label()
@@ -387,7 +386,6 @@ class MapView(ttk.Frame):
     def _mode_changed(self, redraw=True):
         m = self.v_mode.get()
         self.v_pol.set(m != "none")
-        self.v_dip.set(m == "diplomacy")
         self.v_rel.set(m == "religion")
         if hasattr(self, "cb_mode"):
             self.cb_mode.set(dict(self._modes()).get(m, ""))
@@ -396,7 +394,7 @@ class MapView(ttk.Frame):
             self._relayer()
 
     def _layers_label(self):
-        mode = {"political": "political", "diplomacy": "diplomacy", "religion": "religion"}.get(
+        mode = {"political": "political", "religion": "religion"}.get(
             self.v_mode.get()) if self.v_pol.get() else None
         on = ([mode] if mode else []) + [n for n, v in (
             ("borders", self.v_borders), ("names", self.v_names), ("ports", self.v_ports),
@@ -1373,7 +1371,7 @@ class MapView(ttk.Frame):
                 continue
             owner = self.owners.get(region)
             rgb = REBELS if owner in (None, "slave") else self.colours.get(owner, REBELS)
-            mine = region in self.chosen and not getattr(self, "everyone", False)
+            mine = region in self.chosen                 # the towns picked for a faction (Towns on the map...)
             picking = self.v_pick.get()
             if picking:                                  # Pick towns: the picked ones yellow, the ring is theirs
                 mine = region in self.picked

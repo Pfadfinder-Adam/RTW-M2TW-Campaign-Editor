@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Added
+- **The map is the Map editor's alone**: the Faction editor has no Map tab any more. A faction's towns are picked
+  with **Towns on the map...** (under Capital): the Map editor opens, a click on a town adds it (yellow ring),
+  another takes it out, **Done** brings you back to the faction - nothing you typed is lost. **Capital on the
+  map...** the same for the capital: one click and you are back. New armies, agents and fleets: in the Map editor
+  (right click the map, for any faction - a new faction once it is created); a double click on one of the faction's
+  armies in Units & armies opens the Map editor on it. The map's colour mode *Diplomacy (towards the faction)* went
+  with it.
+- **Settlements...** moved from the faction's tabs to the top row: every region and its town in a window of its
+  own - the names in the files and the names players see, the owner, names by culture.
 - **Fix: the Shore line showed on the Terrain tab** when zoomed in - it belongs to **Coast & heights** only (its tick
   there), and switching tabs now turns it on and off.
 - **No scrollbars**: every list, table, page and read-only text scrolls by the mouse wheel, by **dragging** it with the left button (it follows the mouse, up / down and left / right) and by the **middle button**: press the wheel and move the mouse - the further from where you pressed, the faster it scrolls, both ways (held: it stops when you let go; a click: it goes on until the next click or Esc).

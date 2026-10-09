@@ -38,8 +38,6 @@ def taken_names(app, faction):
     from .strat import faction_names
     names = set(faction_names(app.strat, faction)) if app.strat else set()
     names |= {c["name"] for c in app.map_chars.get(faction, [])}
-    if faction == app.field_faction():
-        names |= set(app._faction_names())
     return names
 
 

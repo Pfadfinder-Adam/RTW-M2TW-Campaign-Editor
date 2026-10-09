@@ -1,4 +1,4 @@
-"""The Settlements tab: every region and its town of the campaign - the names in the files, the names players see,
+"""The Settlements window (Settlements..., top row): every region and its town of the campaign - the names in the files, the names players see,
 the owner, names by culture - and the places to change them: the names players see (quick, as on the Map), the names
 in the files (regionrename: everywhere the mod names them, Preview, a backup), names by the owner's culture (REX /
 M2EX). Both games."""
@@ -123,9 +123,9 @@ class SettlementsPanel(ttk.Frame):
             return
         app = self.app
         xy = app.mod.city_tiles(app.v_campaign.get()).get(region)
-        tabs = [app.nb.tab(t, "text").strip() for t in app.nb.tabs()]
-        app.nb.select(tabs.index("Map"))
-        app.show_map()
+        app.v_work.set("map")                            # the Map editor (whatever work was on, nothing is lost)
+        app.work_changed()
+        app.lift()
         app.update()
         if xy:
             app.map_view.centre_on(tuple(xy), zoom=6)
@@ -165,7 +165,7 @@ def rename_now(app, campaign, region, new_region, new_town, parent):
     log.write("Renamed in the files: %s / %s -> %s / %s (backup %s)\n%s" % (
         region, town, new_region, new_town, bdir, p.report()))
     app.load()
-    app.status.set("Renamed in the files (backup %s). Check the names players see (Settlements tab), then "
+    app.status.set("Renamed in the files (backup %s). Check the names players see (Settlements...), then "
                    "start the game - it builds map.rwm again." % bdir)
     return True
 
@@ -173,7 +173,7 @@ def rename_now(app, campaign, region, new_region, new_town, parent):
 def rename_in_files(app, region, parent):
     """The region's and its town's names in the files, changed everywhere the mod names them: a window with the
     new names, Preview (every file and line), then written with a backup at once and the mod read again. The
-    Settlements tab and the Map (Edit regions) open it."""
+    Settlements... and the Map editor (Edit regions) open it."""
     if region not in app.mod.regions(app.v_campaign.get()):
         messagebox.showerror(APP, "%s is not in the campaign's files yet - a new region takes its names in Edit "
                                   "region...; after Apply it can be renamed here." % region, parent=parent)
