@@ -162,6 +162,8 @@
   release's page.
 
 ### Fixed
+- **Add-ons: a click on Upkeep x 2 crashed the page** ("can only concatenate str"): it now shows like the others -
+  it needs nothing, no engine (it changes the mod's own files).
 - **Map editor: towns whose garrison has no captain showed no army** (a big Medieval II map writes every garrison so,
   the rebels' too - `garrisoned_army` with its units inside the town's own block): such a town now shows the army
   flag on its roof like any garrisoned town, and the line under the map says how many units its own garrison has.

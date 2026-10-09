@@ -4658,6 +4658,15 @@ building smith
         self.assertFalse(os.path.isfile(UK.mark_path(mod)))
         self.assertIsNone(AD.installed(ModData(self.root), a))
 
+    def test_every_addon_says_what_it_needs_in_words(self):
+        """Report R-20261009-30F6C9 (Rome with REX, BI): a click on Upkeep x 2 in Add-ons crashed - its 'needs' was
+        an empty list and the page writes 'Needs: ' + needs (Share's README too). Every add-on says it in words."""
+        from campaign_editor import addons as AD
+        for a in AD.ADDONS:
+            self.assertIsInstance(a.needs, str, a.key)
+            self.assertTrue(a.needs.strip(), a.key)
+        self.assertIn("no engine", AD.by_key("upkeep_x2").needs)
+
     def test_rules_that_broke_the_game_are_kept(self):
         # recruitment slots lowered to 0 stopped all recruiting in a test - no crash, so the field stays free (FREEDOM
         # FIRST, 2026-10-09): what happened is said in its tip, any value is taken
