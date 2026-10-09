@@ -654,6 +654,12 @@ function ag_arm() {
             ui.setWidgetStyle(ag_canvas, ui.Cap.autoScale, 0)
         } catch (err) {
         }
+        // fonts not scaled either: a game face draws at the size the game baked, and in a subtree that scales
+        // fonts the engine writes 'font autoscale: game font N ...' into the script console
+        try {
+            ui.setWidgetStyle(ag_canvas, ui.Cap.autoScaleFonts, 0)
+        } catch (err) {
+        }
         local logged = { err = false }
         ui.onDraw(ag_canvas, function() {
             try {

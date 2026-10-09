@@ -114,6 +114,24 @@ def problems(mod):
                                "The fix: each such faction gets the weapons texture the model's other factions wear "
                                "(the mercenaries', else the first), nothing else changed."
                                % (len(text) + len(db), first[0], ", ".join(first[1][:3]))})
+    try:                                            # add-ons in the game older than this editor's
+        from . import addons as AD
+        found = AD.outdated(mod)
+    except Exception:
+        found = []
+    if found:
+        import hashlib
+        names = [o["addon"].title for o in found]
+        # the id carries the versions: a 'Not now' is not remembered past the next editor with other scripts
+        key = hashlib.md5("".join(o["addon"].template() for o in found).encode("utf-8")).hexdigest()[:8]
+        one = len(found) == 1
+        out.append({"id": "old_addons_" + key, "addons": found, "line": 0,
+                    "why": "%s in the game %s an older version than this editor's - an older one could draw the "
+                           "game's script console in its own font and write 'font autoscale: game font ...' there. "
+                           "The fix: %s put in again in this version, with the settings %s has now (Add-ons > "
+                           "Update it does the same, one at a time)."
+                           % (", ".join(names), "is" if one else "are", "it is" if one else "they are",
+                              "it" if one else "each")})
     old = _old_culture_module(mod)
     if old:
         out.append({"id": "old_culture_names", "file": old[0], "table": old[1],
@@ -235,6 +253,10 @@ def fix_plan(mod, found):
         if p["id"] == "faction_defeated":
             from . import eventimages
             eventimages.keep_up(plan)
+            continue
+        if p["id"].startswith("old_addons"):
+            from . import addons as AD
+            AD.plan_update(plan, p["addons"], mod)
             continue
         if p["id"] == "old_culture_names":
             from . import culturenames as CN

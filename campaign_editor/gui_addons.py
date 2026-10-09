@@ -180,8 +180,16 @@ class AddonsPanel(SettingsForm, ttk.Frame):
     def fill(self, pick=None):
         self.addons = AD.library()
         self.lb.delete(0, "end")
+        old = set()
+        if getattr(self, "mod", None) is not None:
+            try:
+                old = {o["addon"].key for o in AD.outdated(self.mod)}
+            except Exception:
+                old = set()
         for a in self.addons:
-            self.lb.insert("end", a.title + ("   (added)" if a.own else ""))
+            # '(old)': an older version is in the game - the page says what Update it does (a longer word was cut
+            # at the list's edge)
+            self.lb.insert("end", a.title + ("   (added)" if a.own else "") + (" (old)" if a.key in old else ""))
         keys = [a.key for a in self.addons]
         self.lb.selection_clear(0, "end")
         self.lb.selection_set(keys.index(pick) if pick in keys else self._first_fitting())
@@ -197,6 +205,8 @@ class AddonsPanel(SettingsForm, ttk.Frame):
     # ---- what the window asks of a work ----
     def rebind(self, mod):
         self.mod = mod
+        sel = self.lb.curselection()
+        self.fill(self.addons[sel[0]].key if sel else None)     # the list says again which ones are older
         sel = self.lb.curselection()
         if mod is not None and (not sel or not self.addons[sel[0]].fits(__import__(
                 "campaign_editor.limits", fromlist=["game_kind"]).game_kind(mod))):
@@ -315,10 +325,14 @@ class AddonsPanel(SettingsForm, ttk.Frame):
         dst = AD.target(self.mod, a)
         now = AD.installed(self.mod, a)
         stray = AD.stray_copies(self.mod, a) if now is not None else []
-        ttk.Label(inner, foreground="#2a7a1f" if now is not None else "#b60", wraplength=760, justify="left", text=(
+        older = now is not None and any(o["addon"].key == a.key for o in AD.outdated(self.mod))
+        ttk.Label(inner, foreground="#2a7a1f" if now is not None and not older else "#b60", wraplength=760,
+                  justify="left", text=(
             "In the game as an older copy: %s - not where the engine runs add-ons from. Update it puts it into %s "
             "(the old copy goes); Take it out takes it away. The settings below are the ones it has now."
             % (stray[0], dst) if stray and not os.path.isfile(dst) else
+            "Put in: %s - an OLDER version than this editor's (an older one may draw the game's script console in "
+            "its own font). Update it puts this version in, the settings below kept." % dst if older else
             "Put in: %s - the settings below are the ones it has now." % dst if now is not None else
             "Not put in yet. It goes to %s - pick the settings, then Put it in." % dst)).grid(
             row=3, column=0, columnspan=3, sticky="w", pady=(6, 8))
@@ -394,6 +408,7 @@ class AddonsPanel(SettingsForm, ttk.Frame):
         from . import log
         log.write("Add-on %s %s (backup %s)\n%s" % (self.addon().title, what, bdir, plan.report()))
         self.app.status.set("%s %s (backup %s) - start the campaign to use it." % (self.addon().title, what, bdir))
+        self.fill(self.addon().key)
         self.show()
 
 

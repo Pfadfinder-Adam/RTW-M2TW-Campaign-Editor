@@ -102,6 +102,13 @@
   release's page.
 
 ### Fixed
+- **Add-ons: 'font autoscale: game font ...' in the script console** (Medieval II with M2EX; Rome with REX the same):
+  the add-ons' button, tick and box now draw a game font at the size the game baked (font scaling off on their own
+  canvas, as the engines ask), so the warning is not written and no text of theirs is scaled.
+- **Add-ons put in by an earlier version stayed old**: Update it brought one add-on up to date at a time and nothing
+  said which ones were old (an older Avoid Growth could draw the script console in its own font). Now Load finds every
+  add-on in the game that is not what this version writes with the same settings, names it, and offers to put them
+  in again (one yes, their settings kept, a backup first); the Add-ons list marks them **(old)**.
 - **Terrain: the map by points sat half a point off** (each heights point drawn beside its place, the brushes
   aimed to match): every point is drawn centred where it lies - a tile's middle point on the tile's middle.
 - **Terrain: the Ground brush laid its ground over the coast**: a tile's ground is the 3 x 3 block of points round

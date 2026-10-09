@@ -643,6 +643,15 @@ function raze_style(ui, handle, token, value) {
     }
 }
 
+// Our boxes are drawn in physical pixels, their fonts too: a game face draws at the size the game baked, and in a
+// subtree that scales fonts the engine writes 'font autoscale: game font N ...' into the script console.
+function raze_fonts_fixed(ui, handle) {
+    try {
+        ui.setWidgetStyle(handle, ui.Cap.autoScaleFonts, 0)
+    } catch (err) {
+    }
+}
+
 // The first of `names` the game has as a font face, else `fallback`.
 function raze_pick_face(ui, names, fallback) {
     try {
@@ -791,6 +800,7 @@ function raze_build_window(ui, id, body_text, on_yes, on_no) {
     try {
         raze_style(ui, handle, ui.Cap.autoScale, 0)
         raze_style(ui, handle, ui.Cap.autoScaleCanvas, 0)
+        raze_fonts_fixed(ui, handle)
         local scroll = raze_ex(["shared", "images", "tileable_scroll"])
         if (raze_art_ok(scroll)) {
             raze_style(ui, handle, ui.Surface.window, scroll)
@@ -1352,6 +1362,7 @@ function raze_button_arm() {
         raze_button_canvas = ui.canvas("##sack_capture_canvas", 0, 0, 4, 4)
         raze_style(ui, raze_button_canvas, ui.Cap.autoScaleCanvas, 0)
         raze_style(ui, raze_button_canvas, ui.Cap.autoScale, 0)
+        raze_fonts_fixed(ui, raze_button_canvas)
         local logged = { err = false }
         ui.onDraw(raze_button_canvas, function() {
             try {

@@ -2517,6 +2517,9 @@ COVERAGE = {
     "Campaign start (descr_strat.txt)": ["s_campaign_start"],
     "Engine settings (REX / M2EX)": ["s_engine_rules"],
     "Add-ons": ["s_addon", "s_addon_diplomacy", "s_addon_growth"],
+    "Add-ons: an older version in the game put right on Load (its settings kept)":
+        "offered on Load only when an older copy is in the game - the test mod puts this version in (the unit test "
+        "test_older_addons_are_put_right_on_load writes an older one and takes the offer)",
     "Module builder": ["s_module"],
     "Experiment: an army starting aboard its fleet": ["s_aboard"],
     "Own buildings on the map: a wonder, a new resource type, an engine model": ["s_special_type", "s_special"],

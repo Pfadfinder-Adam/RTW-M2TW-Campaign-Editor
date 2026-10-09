@@ -8963,6 +8963,58 @@ building smith
             self.assertLessEqual(len(bare), 1, name)
             self.assertEqual(text.count("popStyle()"), 2 * len(bare), name)
 
+    def test_addons_draw_game_fonts_unscaled(self):
+        """The user's M2EX console (2026-10-09): 'font autoscale: game font 5 draws at the size its font manager baked
+        ... turn UI.Cap.autoScaleFonts off for this subtree' - every canvas and box our add-ons draw on turns the
+        font scaling off too (both engines know the switch; it is set in a try for an engine that does not)."""
+        import re
+        folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "addons")
+        for name in sorted(os.listdir(folder)):
+            with open(os.path.join(folder, name), encoding="utf-8") as fh:
+                text = fh.read()
+            made = len(re.findall(r"\bui\.(canvas|modal)\(", text))
+            if made:
+                self.assertGreaterEqual(text.count("autoScaleFonts"), 1, name)
+                calls = len(re.findall(r"(?<!function )raze_fonts_fixed\(ui, ", text)) + \
+                    len(re.findall(r"setWidgetStyle\(\w+, ui\.Cap\.autoScaleFonts, 0\)", text)) - \
+                    (1 if "function raze_fonts_fixed" in text else 0)        # the helper's own body
+                self.assertEqual(calls, made, name)
+
+    def test_older_addons_are_put_right_on_load(self):
+        """The user (2026-10-09): 'still the same error in the console ... let it fix it for those who have it now'.
+        An add-on in the game that is not what this editor writes with the same settings is an older version: Load
+        offers to put it in again (gamefix 'old_addons_...'), its settings and the test mod's mark kept; the Add-ons
+        window says so. The same version is never offered."""
+        from campaign_editor import addons as AD, gamefix
+        from campaign_editor.scriptmods import TEST_MARK
+        game = tempfile.mkdtemp()
+        open(os.path.join(game, "M2EX.exe"), "wb").close()
+        write(os.path.join(game, "script", "main.nut"),
+              'foreach (name in ::scripting.listModules("modules")) { require(name) }\n')
+        data = os.path.join(game, "data")
+        make_minimod(game)
+        mod = ModData(data)
+        a = AD.by_key("avoid_growth")
+        values = dict(AD.read_settings(a, a.template()), AG_LABEL="Stay as it is")
+        now = AD.with_game(AD.render(a, a.template(), values), mod)
+        dst = AD.target(mod, a)
+        self.assertEqual(os.path.dirname(dst), os.path.join(game, "script", "modules"))
+        old = now.replace("ui.Cap.autoScaleFonts", "ui.Cap.autoScale")         # an older version, say
+        write(dst, old.replace("\n", "\r\n") + TEST_MARK + "\r\n")
+        found = [p for p in gamefix.problems(mod) if p["id"].startswith("old_addons")]
+        self.assertEqual(len(found), 1)
+        self.assertIn("Avoid Growth", found[0]["why"])
+        gamefix.fix_plan(mod, found).apply()
+        with open(dst, encoding="utf-8") as fh:
+            got = fh.read()
+        self.assertIn("autoScaleFonts", got)
+        self.assertIn('local AG_LABEL = "Stay as it is"', got)            # its settings kept
+        self.assertIn(TEST_MARK, got)                                       # still the test mod's own copy
+        self.assertEqual(AD.outdated(ModData(data)), [])
+        self.assertEqual([p for p in gamefix.problems(ModData(data)) if p["id"].startswith("old_addons")], [])
+        write(dst, now)                                                     # this version, by hand: nothing to do
+        self.assertEqual(AD.outdated(ModData(data)), [])
+
     def test_addon_goes_where_rex_loads_it(self):
         """REX's own script/main.nut (squi) requires every .nut of the game's script/modules; a mod with a script
         plugin of its own (HLR: manifest.nut + main.nut, no module loading) would never run one put beside it - so

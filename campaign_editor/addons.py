@@ -661,6 +661,63 @@ def with_game(text, mod):
                          text, count=1)
 
 
+def _same_script(have, want):
+    """The two scripts alike but for line ends, trailing spaces and the test mod's mark line."""
+    def norm(t):
+        return "\n".join(l.rstrip() for l in t.replace("\r\n", "\n").split("\n")
+                         if "@put_in_by CE_Test" not in l).strip()
+    return norm(have) == norm(want)
+
+
+def outdated(mod):
+    """[{'addon', 'path', 'values', 'mark'}]: the built-in add-ons in the game (where the engine runs them, or an
+    older copy beside) whose file is not what this version of the editor writes with the same settings - an older
+    version. The user (2026-10-09): 'still the same error in the console' - an older Avoid Growth drew the script
+    console in its own font and wrote 'font autoscale: game font ...' there; Update it fixed one add-on at a time,
+    and nothing said which ones were old. Offered on Load (gamefix 'old_addons') and named in the Add-ons window."""
+    from .limits import game_kind
+    from .scriptmods import TEST_MARK
+    try:
+        kind = game_kind(mod)
+    except Exception:
+        return []
+    out = []
+    for a in ADDONS:
+        if not a.fits(kind):
+            continue
+        p = target(mod, a)
+        if not os.path.isfile(p):
+            strays = stray_copies(mod, a)
+            if not strays:
+                continue
+            p = strays[0]
+        try:
+            with open(p, "rb") as fh:
+                text = fh.read().decode("utf-8", "replace")
+            values = read_settings(a, text)
+            want = with_game(render(a, a.template(), values), mod)
+        except (OSError, ValueError):
+            continue
+        if _same_script(text, want) and p == target(mod, a):
+            continue
+        out.append({"addon": a, "path": p, "values": values,
+                    "mark": TEST_MARK if TEST_MARK.split(" - ")[0] in text else None})
+    return out
+
+
+def plan_update(plan, found, mod=None):
+    """Every older add-on of outdated() put in again in this version, its settings kept (a setting this version no
+    longer takes falls back to its default - said in the notes); the test mod's mark kept on its own copies."""
+    for o in found:
+        a = o["addon"]
+        try:
+            plan_install(plan, a, o["values"], mod, mark=o["mark"])
+        except ValueError as e:
+            plan_install(plan, a, read_settings(a, a.template()), mod, mark=o["mark"])
+            plan.note(None, "%s: its settings could not be kept (%s) - put in with this version's defaults"
+                      % (a.title, e))
+
+
 def plan_install(plan, addon, values, mod=None, mark=None):
     """The add-on put into the script/modules folder the engine runs (target). mark: one comment line written at
     its end (the test mod's scriptmods.TEST_MARK, so Scripts in the game can find and take out what it put in)."""
