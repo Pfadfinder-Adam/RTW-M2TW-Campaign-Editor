@@ -3520,6 +3520,49 @@ building smith
         from campaign_editor import upscale as U
         self.assertEqual(U.move_script_line("  reveal_tile 10, 20", values, xy)[0], "  reveal_tile 12, 21")
 
+    def test_map_size_moves_the_fog_frame_to_the_new_edge(self):
+        """Medieval II's map_fog.tga: clear inside, a dark ragged frame at the edges. A report (grown 17 tiles at the
+        top): the old frame stayed inside as a black band across the map. Now the frame goes to the new edge, the new
+        points are clear; a deep dark side (vanilla's hidden west) stays and grows with the edge."""
+        import tempfile as tf
+        from campaign_editor import mapresize as MR
+        from campaign_editor.tga import _decode
+        W0, H0 = 21, 11                                              # a 10 x 5 tile map: 2W+1 x 2H+1 points
+        B, C = (0, 0, 0), (255, 255, 255)
+
+        def px(x, y):
+            if x < 8:
+                return B                                             # a hidden west, 8 points deep
+            if y == H0 - 1 or (y == H0 - 2 and x % 2) or y == 0 or x == W0 - 1:
+                return B                                             # the frame, ragged at the top
+            return C
+        d = tf.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        path = os.path.join(d, "map_fog.tga")
+        write_tga(path, W0, H0, [[px(x, y) for x in range(W0)] for y in range(H0)])
+        with open(path, "rb") as fh:
+            old = fh.read()
+        MR.FRAME_MAX, keep = 6, MR.FRAME_MAX
+        self.addCleanup(setattr, MR, "FRAME_MAX", keep)
+        for sides in ((0, 0, 0, 3), (2, 0, 0, 0), (0, -1, -2, 0)):
+            new = MR.fog_framed(old, MR.shifted(old, "corners", *sides, (5, 2), path), *sides, path)
+            w, h, step, td, _, raw = _decode(new, path)
+
+            def at(x, y):
+                o = (((h - 1 - y) if td else y) * w + x) * step
+                return tuple(raw[o:o + 3][::-1])                     # stored BGR
+            left = 2 * sides[0]
+            self.assertEqual(at(w // 2 + 1, h - 1), B, sides)        # the frame at the new top ...
+            self.assertEqual(at(w // 2 + 1, h - 2), B, sides)        # ... ragged as it was
+            self.assertEqual(at(w // 2, h - 2), C, sides)
+            self.assertEqual(at(w // 2, 0), B, sides)                # at the new bottom
+            self.assertEqual(at(w - 1, h // 2), B, sides)            # at the new right side
+            for y in range(1, h - 2):                                # no dark band inside
+                self.assertEqual(at(w // 2, y), C, (sides, y))
+            for x in range(0, 8 + left):                             # the hidden west grows with the edge
+                self.assertEqual(at(x, h // 2), B, (sides, x))
+            self.assertEqual(at(8 + left, h // 2), C, sides)
+
     def test_map_size_cuts_the_minimap_picture_in_proportion(self):
         """The minimap pictures (radar_map1 / radar_map2.tga, their own size) are cut / grown with the map in the same
         proportion - the game lays the real borders over them (a tester's Rome HLR: the old picture stayed)."""
@@ -3539,6 +3582,22 @@ building smith
         self.assertEqual(out.size, (32, 24))
         self.assertEqual(out.convert("RGB").getpixel((0, 0)), (0, 0, 200))
         self.assertNotIn((255, 0, 0), [c for _, c in out.convert("RGB").getcolors(4096)])   # cut off with the column
+        # Medieval II's radar_map2: a blue line along the top and the right - it goes to the new edge, the new part
+        # takes the deep sea's colour (a report: grown at the top, a blue band on the minimap)
+        pic = Image.new("RGB", (41, 21), (0, 0, 255))
+        for x in range(40):
+            for y in range(1, 21):
+                pic.putpixel((x, y), (20 + (x * 7 + y * 3) % 40, 60, 120) if x > 4 else (90, 140, 60))
+        buf = io.BytesIO()
+        pic.save(buf, format="TGA")
+        data, size = MR.radar_resized(buf.getvalue(), 10, 5, 0, 0, 0, 2, (8, 2))   # 2 tiles more at the top
+        out = Image.open(io.BytesIO(data)).convert("RGB")
+        self.assertEqual(size, (41, 29))
+        self.assertEqual(out.getpixel((20, 0)), (0, 0, 255))                    # the border at the new top
+        self.assertEqual(out.getpixel((40, 15)), (0, 0, 255))                   # and still on the right
+        self.assertNotEqual(out.getpixel((20, 9)), (0, 0, 255))                 # no band where it was
+        self.assertEqual(out.getpixel((20, 4)), out.getpixel((20, 5)))          # the new part: one sea colour
+        self.assertNotEqual(out.getpixel((20, 4)), (90, 140, 60))               # the sea's, not the land's
 
     def test_map_size_names_what_stands_on_the_part_cut_off(self):
         """Map size: the places are read once and any cut checked against them at once (the window checks each

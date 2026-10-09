@@ -88,6 +88,76 @@ def shifted(data, kind, left, bottom, right, top, fill_tile, path="(picture)"):
     return U._write(data, W, H, step, out)
 
 
+FRAME_MAX = 30                  # points: a fog edge deeper than this is a hidden part of the map, not the frame
+
+
+def fog_framed(old, new, left, bottom, right, top, path="map_fog.tga"):
+    """map_fog.tga after a resize (Medieval II): its dark ragged frame stays at the map's edge, like a picture's frame
+    moves with the canvas. The game's own fog is clear in the middle with a frame 1 - 14 points deep on the sides (a
+    report: grown 17 tiles at the top, the old frame stayed inside as a black band across the map). On every changed
+    side each line's frame (the points from the edge up to the first clear one, soft grey ones with it) goes to the
+    new edge and its old place turns clear; a line dark deeper than FRAME_MAX (vanilla's hidden west, 35 tiles) is a
+    hidden part of the map - it stays and the new points of that line take its dark. new: shifted()'s bytes."""
+    w, h, step, td, _, raw = _decode(old, path)
+    W, H, _, ntd, _, nraw = _decode(new, path)
+    dx, dy = 2 * left, 2 * bottom
+
+    def at(buf, width, height, down, x, y):           # bottom-up x, y
+        o = (((height - 1 - y) if down else y) * width + x) * step
+        return bytes(buf[o:o + step])
+    clear = max((bytes(raw[o:o + step]) for o in range(0, w * h * step, step)), key=sum)    # the clearest point
+    out = bytearray(nraw)
+
+    def put(x, y, v):
+        o = (((H - 1 - y) if ntd else y) * W + x) * step
+        out[o:o + step] = v
+
+    def frame(line):                                  # the points from the edge up to the first clear one
+        got = []
+        for v in line:
+            if v == clear:
+                break
+            got.append(v)
+        return got
+
+    def side(n_lines, length, new_len, shift, old_line, new_xy, grow_at):
+        for i in range(n_lines):
+            seq = frame(old_line(i))
+            if not seq:
+                continue
+            if len(seq) > FRAME_MAX:                  # a hidden part: its dark goes on over the new points
+                for j in grow_at:
+                    put(*new_xy(i, j), seq[0])
+                continue
+            for j in grow_at:                         # the new points clear (whatever the deep sea's fog was)
+                put(*new_xy(i, j), clear)
+            for k in range(len(seq)):                 # its old place turns clear ...
+                j = k + shift
+                if 0 <= j < new_len:
+                    put(*new_xy(i, j), clear)
+            for k, v in enumerate(seq):               # ... and the frame goes to the new edge
+                put(*new_xy(i, k), v)
+
+    def col(X):
+        return min(max(X - dx, 0), w - 1)
+
+    def row(Y):
+        return min(max(Y - dy, 0), h - 1)
+    if top:
+        side(W, h, H, H - h - dy, lambda X: [at(raw, w, h, td, col(X), h - 1 - k) for k in range(h)],
+             lambda X, j: (X, H - 1 - j), range(max(0, H - h - dy)))
+    if bottom:
+        side(W, h, H, dy, lambda X: [at(raw, w, h, td, col(X), k) for k in range(h)],
+             lambda X, j: (X, j), range(max(0, dy)))
+    if left:
+        side(H, w, W, dx, lambda Y: [at(raw, w, h, td, k, row(Y)) for k in range(w)],
+             lambda Y, j: (j, Y), range(max(0, dx)))
+    if right:
+        side(H, w, W, W - w - dx, lambda Y: [at(raw, w, h, td, w - 1 - k, row(Y)) for k in range(w)],
+             lambda Y, j: (W - 1 - j, Y), range(max(0, W - w - dx)))
+    return U._write(new, W, H, step, out)
+
+
 def hgt_shifted(raw, left, bottom, right, top, fill_tile):
     """map_heights.hgt (uint32 w, h, then w * h float32 bottom-up) moved as the 2W+1 picture."""
     w, h = struct.unpack_from("<II", raw)
@@ -444,10 +514,12 @@ def _tiles_in(text, values):
     return out
 
 
-def radar_resized(data, w, h, left, bottom, right, top):
+def radar_resized(data, w, h, left, bottom, right, top, fill_tile=None):
     """A minimap picture (radar_map1 / radar_map2 / map_radar2.tga, its own size) cut or grown in the proportion of
-    the map's W x H tiles: (TGA bytes, (new w, new h)), or None without Pillow. New parts take the colour of the
-    picture's top-left corner (the sea round the world)."""
+    the map's W x H tiles: (TGA bytes, (new w, new h)), or None without Pillow. New parts take the picture's colour at
+    fill_tile (the map's deep sea; else its top-left corner). A one-colour border line of the picture (Medieval II's
+    radar_map2: a blue line along the top and the right) goes to the new edge, not left inside (a report: grown at
+    the top, the minimap got a blue band)."""
     try:
         from PIL import Image
     except ImportError:
@@ -455,11 +527,58 @@ def radar_resized(data, w, h, left, bottom, right, top):
     import io
     pic = Image.open(io.BytesIO(data))
     pic.load()
-    sx, sy = pic.width / float(w), pic.height / float(h)
-    nw = max(1, int(round((w + left + right) * sx)))
-    nh = max(1, int(round((h + bottom + top) * sy)))
-    out = Image.new(pic.mode, (nw, nh), pic.getpixel((0, 0)))
-    out.paste(pic, (int(round(left * sx)), int(round(top * sy))))   # the picture is top row first
+    px = pic.load()
+
+    def border(line):                               # (nearly) one colour all along - a texture never is
+        first = line[0]
+        if not isinstance(first, tuple):
+            first = (first,)
+
+        def near(v):
+            v = v if isinstance(v, tuple) else (v,)
+            return all(abs(a - b) <= 8 for a, b in zip(v, first))
+        return line[0] if sum(1 for v in line if near(v)) >= 0.75 * len(line) else None
+    edge = {}                                       # side -> [colour of each border line, outermost first]
+    lines = {"top": lambda i: [px[x, i] for x in range(pic.width)],
+             "bottom": lambda i: [px[x, pic.height - 1 - i] for x in range(pic.width)],
+             "left": lambda i: [px[i, y] for y in range(pic.height)],
+             "right": lambda i: [px[pic.width - 1 - i, y] for y in range(pic.height)]}
+    for side, line in lines.items():
+        got = []
+        while len(got) < 3:
+            c = border(line(len(got)))
+            if c is None:
+                break
+            got.append(c)
+        if got and (len(got) == 3 or border(line(len(got))) is not None):
+            got = []                                # one colour on and on: the picture's own (flat sea), no border
+        edge[side] = got
+    t, b, lft, r = (len(edge[k]) for k in ("top", "bottom", "left", "right"))
+    inner = pic.crop((lft, t, pic.width - r, pic.height - b)) if pic.width > lft + r and pic.height > t + b else pic
+    if inner is pic:
+        t = b = lft = r = 0
+    sx, sy = inner.width / float(w), inner.height / float(h)
+    if fill_tile is not None:
+        fx = min(inner.width - 1, max(0, int((fill_tile[0] + 0.5) * sx)))
+        fy = min(inner.height - 1, max(0, int((h - 1 - fill_tile[1] + 0.5) * sy)))     # the picture is top row first
+        fill = inner.getpixel((fx, fy))
+    else:
+        fill = inner.getpixel((0, 0))
+    iw = max(1, int(round((w + left + right) * sx)))
+    ih = max(1, int(round((h + bottom + top) * sy)))
+    body = Image.new(pic.mode, (iw, ih), fill)
+    body.paste(inner, (int(round(left * sx)), int(round(top * sy))))
+    nw, nh = iw + lft + r, ih + t + b
+    out = Image.new(pic.mode, (nw, nh), fill)
+    out.paste(body, (lft, t))
+    for i, c in enumerate(edge["top"] if t else []):
+        out.paste(c, (0, i, nw, i + 1))
+    for i, c in enumerate(edge["bottom"] if b else []):
+        out.paste(c, (0, nh - 1 - i, nw, nh - i))
+    for i, c in enumerate(edge["left"] if lft else []):
+        out.paste(c, (i, 0, i + 1, nh))
+    for i, c in enumerate(edge["right"] if r else []):
+        out.paste(c, (nw - 1 - i, 0, nw - i, nh))
     buf = io.BytesIO()
     out.save(buf, format="TGA")
     return buf.getvalue(), (nw, nh)
@@ -507,7 +626,7 @@ def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, f
                     # the campaign map's minimap: a picture of its own size, but of THE map - the game lays the
                     # real borders over it, so it is cut / grown in the same proportion (report: Rome HLR's minimap
                     # kept its old picture after a cut, the borders drawn over the wrong land)
-                    got = radar_resized(data, img.width, img.height, left, bottom, right, top)
+                    got = radar_resized(data, img.width, img.height, left, bottom, right, top, fill)
                     if got:
                         plan.binary(p, got[0])
                         plan.note(None, "%s %s in proportion (%d x %d -> %d x %d)" % (name, words, pw, ph, *got[1]))
@@ -516,7 +635,12 @@ def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, f
                     continue
                 plan.note(None, "%s left as it is (%d x %d - not tied to the map's tiles)" % (name, pw, ph))
                 continue                            # disasters.tga left from Rome) is not the map's: left alone
-            plan.binary(p, shifted(data, kind, left, bottom, right, top, fill, p))
+            got = shifted(data, kind, left, bottom, right, top, fill, p)
+            if name.lower() == "map_fog.tga":       # its dark frame goes to the new edge (no band across the map)
+                plan.binary(p, fog_framed(data, got, left, bottom, right, top, p))
+                plan.note(None, "%s %s (its dark frame moved to the new edge)" % (name, words))
+                continue
+            plan.binary(p, got)
             plan.note(None, "%s %s (new tiles: the map's deep sea)" % (name, words))
     hgt = os.path.join(base, "map_heights.hgt")
     hpath = os.path.join(base, "map_heights.tga")
