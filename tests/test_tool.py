@@ -7862,6 +7862,20 @@ building smith
         finally:
             root.destroy()
 
+    def test_shore_line_only_on_coast_and_heights(self):
+        """The game's shore line is drawn on the Coast & heights tab (its tick), never on the Terrain tab - zoomed in
+        there it showed up."""
+        try:
+            from campaign_editor.gui_terrain import TerrainEditor
+        except ImportError:                                # no tkinter here (the CI test job has it)
+            return
+        from types import SimpleNamespace
+        tick = SimpleNamespace(get=lambda: True)
+        self.assertFalse(TerrainEditor._shore_wanted(SimpleNamespace(group="terrain", v_shore=tick)))
+        self.assertTrue(TerrainEditor._shore_wanted(SimpleNamespace(group="heights", v_shore=tick)))
+        self.assertFalse(TerrainEditor._shore_wanted(SimpleNamespace(group="heights",
+                                                                     v_shore=SimpleNamespace(get=lambda: False))))
+
     def test_middle_button_autoscroll_speed(self):
         """The middle button's autoscroll: still round the press point, faster the further the mouse goes, down
         for below and up for above."""

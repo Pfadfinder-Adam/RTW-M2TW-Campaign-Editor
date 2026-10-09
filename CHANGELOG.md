@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **Fix: the Shore line showed on the Terrain tab** when zoomed in - it belongs to **Coast & heights** only (its tick
+  there), and switching tabs now turns it on and off.
 - **No scrollbars**: every list, table, page and read-only text scrolls by the mouse wheel, by **dragging** it with the left button (it follows the mouse, up / down and left / right) and by the **middle button**: press the wheel and move the mouse - the further from where you pressed, the faster it scrolls, both ways (held: it stops when you let go; a click: it goes on until the next click or Esc).
   A text you can type in keeps the left drag for selecting words. The map is as before (the right button moves it).
 - **Fix: a right click on the map crashed** ('dict' object is not callable) and the context menu did not open -
