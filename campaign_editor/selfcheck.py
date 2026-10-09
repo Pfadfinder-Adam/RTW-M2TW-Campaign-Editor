@@ -89,6 +89,8 @@ def _bundled(ok, fail):
     from . import addons as AD
     try:
         for a in AD.ADDONS:
+            if AD.is_files(a):
+                continue
             text = a.template()
             if not text.strip() or AD.from_script(text, a.file) is None:
                 raise ValueError("%s is empty" % a.file)

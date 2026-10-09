@@ -350,6 +350,9 @@ class AddonsPanel(SettingsForm, ttk.Frame):
             ttk.Button(bar, text="Change it in the Module builder...",
                        command=lambda: self.builder(recipe)).pack(side="left", padx=6)
         ttk.Label(inner, foreground="#555", wraplength=760, justify="left", text=(
+            "Every write makes a backup first (Tools > Restore a backup undoes it). It changes the mod's own files - "
+            "no script, no engine needed; the game shows the new numbers as soon as the campaign starts."
+            if AD.is_files(a) else
             "Every write makes a backup first (Tools > Restore a backup undoes it). Then start the campaign: the "
             "script console says " + (LOADED[a.key] if a.key in LOADED else "that the module %s was "
                                       "loaded (or why not)." % os.path.splitext(a.file)[0]) +
