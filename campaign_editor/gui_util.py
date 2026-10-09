@@ -423,6 +423,18 @@ def window_body(w, width=700, height=640, padding=12):
                 except (tk.TclError, ValueError):
                     pass
     sf.canvas.bind("<Configure>", lambda e: (sf._resize(), rewrap()), add="+")
+
+    def fit():
+        # once built: no taller than what it holds (a tester's x3 window stood 760 high with a third of it empty);
+        # a window whose contents need more keeps the height asked and scrolls
+        try:
+            w.update_idletasks()
+            need = frm.winfo_reqheight() + bar.winfo_reqheight() + 8
+            if 0 < need < w.winfo_height():
+                w.geometry("%dx%d" % (w.winfo_width(), max(need, min(300, sh - 100))))
+        except tk.TclError:
+            pass                                    # closed before it was shown
+    w.after(120, fit)
     return frm, bar
 
 

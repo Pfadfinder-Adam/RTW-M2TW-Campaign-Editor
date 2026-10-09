@@ -168,6 +168,8 @@
   release's page.
 
 ### Fixed
+- **The Bigger map (x3) and Map size windows opened far taller than what they hold** (a third of the x3 window was
+  empty): they now open as high as their contents, never higher than the screen.
 - **Mod folders that keep only what they change** (New mod folder on the plain game): the editor now reads the
   game's own pictures and files under such a mod everywhere, as the game does. Fixed with it: a copied unit, a
   renamed unit and a copied building got no cards / pictures from the game; unit and building packs left them out;
