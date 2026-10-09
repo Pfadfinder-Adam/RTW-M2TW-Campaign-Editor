@@ -250,6 +250,10 @@ class TerrainEditor(ttk.Frame):
             self.view.on_spray = self.pen
         elif what == "coast" and mode.startswith(("shape", "smooth")):
             self.view.on_spray = self.shape
+        # the coast's point brushes follow the mouse at every size, size 1 too: the outline is the circle they work
+        smooth = what == "coast" and mode == "smooth"
+        self.view.spray_radius = ((lambda b: max(1.0 if smooth else 0.5, b - 0.5))
+                                  if what == "coast" and self.view.on_spray else None)
 
     def _brush_changed(self):
         try:
@@ -768,12 +772,14 @@ class TerrainEditor(ttk.Frame):
                 "This mod has no descr_climates.txt, so its climates are not known here."))
         elif what == "coast":
             self._coast_palette()
+            self._spray_hook()          # the brush follows the pick even when the map needs no new drawing
             if self.cmap is not None and (getattr(self.cmap, "show_heights", False) != self._by_points() or
                                           getattr(self.cmap, "show_climates", False)):
                 self.show()
             return
         elif what == "heights":
             self._heights_palette()
+            self._spray_hook()
             if self.cmap is not None and not getattr(self.cmap, "show_heights", False):
                 self.show()
             return
@@ -809,6 +815,7 @@ class TerrainEditor(ttk.Frame):
                 first = first or "%d,%d,%d" % c
         if first and self.v_colour.get() not in swatches:
             self.v_colour.set(first)
+        self._spray_hook()
         if self.cmap is not None and (getattr(self.cmap, "show_climates", False) != (what == "climate") or
                                       getattr(self.cmap, "show_heights", False)):
             self.show()

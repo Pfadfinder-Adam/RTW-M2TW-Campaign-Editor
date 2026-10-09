@@ -290,6 +290,9 @@ class MapView(ttk.Frame):
         # a spray brush (the Terrain editor's heights): on_spray(px, py) is called again and again while the
         # left button is held - the longer, the more it does; px, py = map_heights pixels (bottom-up, fractions)
         self.on_spray, self._spray = None, None
+        # spray_radius(brush size) -> the radius in points it works (the coast's point brushes); None = the heights
+        # spray, whose size 1 is the one point under the mouse
+        self.spray_radius = None
         self.chars, self.draggable, self.symbols = [], set(), {}
         self.on_char_move = self.check_tile = None
         # resources: [{id, kind, xy}]; check_res(id, xy) -> None or why; on_res_move(id, xy); on_res_click(id)
@@ -1979,7 +1982,8 @@ class MapView(ttk.Frame):
     def _outline(self, sx, sy):
         """What the brush will take, outlined under the mouse (like a block outline in Minecraft): the one tile with
         no brush; a painting brush - its whole square of tiles (size n: 2n - 1 across); the heights spray - the
-        one point of map_heights under the mouse at size 1 (a tile has 2 x 2 of them), else the circle it raises."""
+        one point of map_heights under the mouse at size 1 (a tile has 2 x 2 of them), else the circle it raises; the
+        coast's point brushes (shape, Smooth, pen) - their circle round the mouse at every size, size 1 too."""
         c = self.canvas
         c.delete("tile_outline")
         if not self.cmap or self.z < 3:
@@ -1989,11 +1993,12 @@ class MapView(ttk.Frame):
         if self.region_mode and getattr(self, "on_spray", None):
             px, py = self.heights_px(sx, sy)
             mx, my = (px / 2.0 - self.ox) * z, (self.cmap.h - py / 2.0 - self.oy) * z    # the point's middle
-            if b == 1:
+            rad = getattr(self, "spray_radius", None)
+            if b == 1 and not rad:
                 c.create_rectangle(mx - z / 4, my - z / 4, mx + z / 4, my + z / 4, outline="white", width=width,
                                    tags="tile_outline")
             else:                                       # round brushes work round the mouse itself, not a point
-                r = (b - 0.5) / 2.0 * z                                 # radius in points, 2 points a tile
+                r = (rad(b) if rad else b - 0.5) / 2.0 * z              # radius in points, 2 points a tile
                 c.create_oval(sx - r, sy - r, sx + r, sy + r, outline="white", width=width, tags="tile_outline")
         else:
             x, y = self.to_tile(sx, sy)
