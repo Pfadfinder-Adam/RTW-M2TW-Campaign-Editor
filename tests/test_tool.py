@@ -10188,6 +10188,38 @@ building smith
         self.assertEqual(art_group({"rel": "models_unit/textures/unit_roman_legionary_II_julii.tga.dds",
                                     "link": ["model_strat", "texture:sm_roman_lesser_general"]}), "models")
 
+    def test_new_regions_town_and_port_can_be_dragged(self):
+        """Report #173: a new region's town and port, once placed (not written yet), stayed fixed - they had no tag
+        the drag knows. Now they are picked like any town / port and the move lands in the new region itself."""
+        try:
+            import tkinter as tk
+            from campaign_editor.gui import App
+            from campaign_editor.gui_map import MapView
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / display / Pillow (CI): not tested here
+            self.skipTest("no window: %s" % e)
+        try:
+            v = MapView(root)
+            v.pack()
+            root.update()
+            v.canvas.create_rectangle(10, 10, 30, 30, fill="red", tags=("newtown", "new:city:New_Land"))
+            v.canvas.create_oval(60, 60, 80, 80, fill="blue", tags=("newport", "new:port:New_Land"))
+            self.assertEqual(v._place_under(20, 20), ("city", "New_Land"))
+            self.assertEqual(v._place_under(70, 70), ("port", "New_Land"))
+        finally:
+            root.destroy()
+        from types import SimpleNamespace
+        said = []
+        app = SimpleNamespace(new_regions=[{"name": "New_Land", "city": (5, 5), "port": (6, 7)}], place_moves={},
+                              remember=lambda: None, editing=lambda: True, map_only=lambda: False,
+                              show_map=lambda: None, status=SimpleNamespace(set=said.append), _cmap=None)
+        app._new_region = lambda n: App._new_region(app, n)
+        app._old_region = lambda n: App._old_region(app, n)
+        App.place_moved(app, "city", "New_Land", (8, 9))
+        self.assertEqual(app.new_regions[0]["city"], (8, 9))
+        self.assertEqual(app.place_moves, {})                 # not a move of a region of the map
+        self.assertIn("new region New_Land", said[-1])
+
     def test_closing_the_editor_when_a_command_is_already_gone(self):
         """Closing the editor once showed 'can't delete Tcl command' and then, while it reported that, a Windows box
         'application has been destroyed' (a tester, 0.32.0): a window keeps the names of its callbacks to delete them

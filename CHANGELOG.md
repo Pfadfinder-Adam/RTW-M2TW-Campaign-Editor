@@ -187,6 +187,8 @@
   release's page.
 
 ### Fixed
+- **A new region's town and port can be moved again**: once placed (before Apply) they stayed where they were -
+  now drag them like any town or port (on the new region's own land; a port beside the sea).
 - **New army here - 'Make him a general' gave a captain**: he was written as descr_strat's `general`, which the game
   always shows as 'Captain <name>', whatever unit he leads. Now he is a named character outside the family tree
   with the general's bodyguard - a general, with a star on the map (Rome's rebels keep a captain: the game has no

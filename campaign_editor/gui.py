@@ -2384,7 +2384,7 @@ class App(tk.Tk):
         for r in self.new_regions:
             for what in ("city", "port"):
                 if r.get(what):
-                    points.append((tuple(r[what]), what, tuple(r["colour"])))
+                    points.append((tuple(r[what]), what, tuple(r["colour"]), r["name"]))
         if on:
             self.region_bar.pack(fill="x", before=self.map_view)
         else:
@@ -2535,7 +2535,17 @@ class App(tk.Tk):
 
     def place_moved(self, what, region, xy):
         """A town / port of a region of the map moved to xy (dragged, the legend's port, Place its town / port),
-        kept for Apply; back on its own tile = no move."""
+        kept for Apply; back on its own tile = no move. A NEW region's (not written yet) moves where it is kept -
+        once placed it stayed fixed (report #173: 'they can't be repositioned anymore')."""
+        new = self._new_region(region)
+        if new is not None and self._old_region(region) is None:
+            self.remember()
+            new[what] = tuple(xy)
+            self.status.set("%s of the new region %s to %d, %d - Preview, then %s." % (
+                "Town" if what == "city" else "Port", region, xy[0], xy[1],
+                "Apply changes" if self.editing() or self.map_only() else "Create faction"))
+            self.show_map()
+            return
         self.remember()
         if tuple(xy) == tuple(place_orig(self.mod, self.v_campaign.get(), what, region) or ()):
             self.place_moves.pop((what, region), None)
@@ -2555,11 +2565,14 @@ class App(tk.Tk):
             return "the new region %s is gone (dropped) - nothing to place" % self._region_point[1]
         return None
 
-    def region_point_problem(self, xy):
-        gone = self._region_point_gone()
-        if gone:
-            return gone
-        what, name = self._region_point
+    def region_point_problem(self, xy, point=None):
+        """Why the town / port waiting for a click (or point = (what, region): a new region's town / port dragged
+        to another tile) cannot stand at xy, or None."""
+        if point is None:
+            gone = self._region_point_gone()
+            if gone:
+                return gone
+        what, name = point or self._region_point
         old = self._old_region(name)
         if old is not None:                             # a region of the map: the same checks as a drag / the menu
             if old.get("wasteland"):
@@ -2573,7 +2586,7 @@ class App(tk.Tk):
         if cm.regions_img.get(*xy) in ((0, 0, 0), (255, 255, 255)):
             return "another town or port stands there"
         own = self.region_paint.get(tuple(xy)) or cm.region_at(*xy)
-        if what == "city" and self._town_auto:          # from the legend: it takes its tile and the 8 round it
+        if what == "city" and self._town_auto and point is None:    # from the legend: its tile and the 8 round it
             if own is None:
                 return "the sea - a town stands on land"
         elif own != name:
@@ -3633,6 +3646,8 @@ class App(tk.Tk):
                     "_roll" not in low and "_select" not in low:
                 symbols[low[9:-4]] = path
         def check_place(what, region, xy):              # land painted and not written yet counts (one go)
+            if self._new_region(region) is not None and self._old_region(region) is None:
+                return self.region_point_problem(xy, (what, region))        # a new region's town / port
             return place_problem(self.mod, self.v_campaign.get(), what, region, xy,
                                  {k: v for k, v in self.place_moves.items() if k != (what, region)},
                                  self.region_paint)

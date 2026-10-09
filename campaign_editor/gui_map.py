@@ -991,7 +991,7 @@ class MapView(ttk.Frame):
         self.places = dict(places or {})
         self.check_place, self.on_place_move = check_place, on_place_move
         # Regions mode: paint_overlay {(x, y): (r, g, b)} tiles given to another region;
-        # on_paint([tiles]) -> the tiles it took; on_pick(xy); region_points [(xy, 'city'|'port', rgb)]
+        # on_paint([tiles]) -> the tiles it took; on_pick(xy); region_points [(xy, 'city'|'port', rgb, region)]
         self.region_mode, self.paint_overlay = region_mode, dict(paint_overlay or {})
         self.on_paint, self.on_pick, self.brush = on_paint, on_pick, brush
         self.region_points = list(region_points)
@@ -1291,19 +1291,22 @@ class MapView(ttk.Frame):
         """Tiles given to another region, in that region's colour, and the new towns and ports."""
         c, z = self.canvas, self.z                      # painted tiles are in the regions layer itself
         size = max(4, min(z * 0.9, 60))
-        for (x, y), what, rgb in self.region_points:
+        for p in self.region_points:
+            (x, y), what, rgb = p[:3]
             sx, sy = self.to_screen(x, y)
             r = size / 2
+            # 'new:city:<region>': dragged like any town / port (report #173 - once placed they stayed fixed)
+            tags = ("newtown" if what == "city" else "newport", "new:%s:%s" % (what, p[3] if len(p) > 3 else ""))
             if what == "city":
                 c.create_rectangle(sx - r, sy - r, sx + r, sy + r, fill="#%02x%02x%02x" % rgb, outline="#ffd400",
-                                   width=3)
+                                   width=3, tags=tags)
                 if r >= 6:
-                    self._hall(sx, sy, r, rgb, ("newtown",))
+                    self._hall(sx, sy, r, rgb, tags)
             else:
                 c.create_oval(sx - r * 0.9, sy - r * 0.9, sx + r * 0.9, sy + r * 0.9, fill="#2a6fdb", outline="#ffd400",
-                              width=3)
+                              width=3, tags=tags)
                 if r >= 5:
-                    self._anchor(sx, sy, r * 0.9, ("newport",))
+                    self._anchor(sx, sy, r * 0.9, tags)
 
     def _paint_at(self, e):
         x, y = self.to_tile(e.x, e.y)
@@ -2155,6 +2158,8 @@ class MapView(ttk.Frame):
                     return None
                 if tag.startswith(("city:", "port:")):
                     return tag[:4], tag[5:]
+                if tag.startswith("new:") and tag.count(":") >= 2 and not tag.endswith(":"):
+                    return tuple(tag[4:].split(":", 1))           # a new region's town / port (not written yet)
         return None
 
     def _show_menu(self, e):
@@ -2374,6 +2379,7 @@ class MapView(ttk.Frame):
                 return
             self._grow(None)
             self.canvas.move("%s:%s" % (what, region), e.x - lx, e.y - ly)
+            self.canvas.move("new:%s:%s" % (what, region), e.x - lx, e.y - ly)     # a new region's (not written)
             self._pdrag = [what, region, e.x, e.y, True]
             x, y = self.to_tile(e.x, e.y)
             why = self.check_place(what, region, (x, y)) if self.check_place else None
