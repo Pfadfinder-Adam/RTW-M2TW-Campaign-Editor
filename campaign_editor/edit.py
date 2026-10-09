@@ -141,6 +141,9 @@ def edit(mod, campaign, faction, opts):
         tuple(opts["primary_colour"]) != tuple(now.get("primary_colour") or ())
     given = set(opts.get("give") or {})
     towns = [r for r in now["regions"] if r not in given] + [r for r in opts.get("take") or [] if r not in now["regions"]]
+    if now["regions"] and not towns and faction != "slave":
+        from .emergence import keep_townless
+        keep_townless(plan, faction)                   # REX / M2EX: it lives on without towns; else refused
     apply_art(plan, campaign, faction, towns, opts.get("primary_colour") or now.get("primary_colour"),
               towns_changed=bool(opts.get("take") or given))
     sp = mod.campaign_file(campaign, "descr_strat.txt")

@@ -6585,6 +6585,16 @@ building smith
         self.assertEqual(RD.neighbours(mod, "test", "B_R")[0][0], "A_R")
         errors, _ = RD.problems(mod, "test", "A_R")
         self.assertTrue(any("last town of alpha" in e for e in errors), errors)
+        # REX / M2EX (descr_ex.txt comes only with them): a faction may keep no town - can_homeless, no refusal
+        # (the user, 2026-10-09: 'factions without towns at the start - try it')
+        write(os.path.join(self.root, "data", "descr_ex.txt"), "max_factions 31\n")
+        errors, _ = RD.problems(ModData(self.root), "test", "A_R")
+        self.assertFalse(any("last town of alpha" in e for e in errors), errors)
+        os.remove(os.path.join(self.root, "data", "descr_ex.txt"))
+        from campaign_editor.emergence import keep_townless
+        from campaign_editor.plan import Plan
+        with self.assertRaises(ValueError):                       # the plain games: refused (they crash)
+            keep_townless(Plan(mod, "t", "t"), "alpha")
         errors, _ = RD.problems(mod, "test", "B_R")
         self.assertTrue(any("campaign_script.txt names B_R / Btown on line 2" in e for e in errors), errors)
         os.remove(os.path.join(camp, "campaign_script.txt"))

@@ -190,7 +190,8 @@ def refusals(mod, campaign, gone, last_town=True, waste=False):
     for c in sharing(mod, campaign):
         p = mod.campaign_file(c, "descr_strat.txt")
         owners = Strat(mod.load(p)).owners() if p else {}
-        for fac in sorted({owners.get(r) for r in gone} - {None, "slave"}) if last_town else ():
+        from .limits import engine_of
+        for fac in sorted({owners.get(r) for r in gone} - {None, "slave"}) if last_town and not engine_of(mod) else ():
             if [r for r, o in owners.items() if o == fac and r not in gone]:
                 continue
             mine = [town[r] or r for r in gone if owners.get(r) == fac]
@@ -532,8 +533,12 @@ def _strat(plan, path, gone, tiles, tag, into=None):
             left = [r for r, o in owners.items() if o == fac]
             if left:
                 plan.note(f, "%s keeps %d town(s); its first, %s, is its capital" % (fac, len(left), left[0]))
-            else:                                   # only when it leaves the campaign (a cut, the modder's yes)
+            else:                                   # it leaves the campaign (a cut), or lives on (REX / M2EX)
                 plan.note(f, "%s keeps no town" % fac)
+                from .limits import engine_of
+                if engine_of(plan.mod) and Strat(f).faction(fac) is not None and fac != "slave":
+                    from .emergence import keep_townless
+                    keep_townless(plan, fac)
 
 
 def town_problem(mod, campaign, region, xy, name=None):

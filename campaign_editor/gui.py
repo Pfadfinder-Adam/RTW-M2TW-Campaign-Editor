@@ -5586,8 +5586,7 @@ class App(tk.Tk):
         if not v["template"]:
             raise ValueError("pick the faction to edit")
         had = list((self.editing_now or {}).get("regions", []))
-        if had and not self.chosen:
-            raise ValueError("the faction would be left without towns - keep or give it at least one (a click on a town on the Map)")
+        # no town kept: REX / M2EX let it live on (can_homeless, edit.edit); the plain games refuse it there
 
         def person(role):
             if not v[role + "_first"]:
