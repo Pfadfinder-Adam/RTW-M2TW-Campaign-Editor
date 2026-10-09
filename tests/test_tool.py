@@ -5795,7 +5795,11 @@ building smith
         # screen, 2026-10-09: CHECKBOX_BG drew a flat pink square beside them); the words as high as the game's
         m2 = text[text.index("local AG_SPRITES_M2"):text.index("local AG_SPRITES_ROME")]
         self.assertLess(m2.index('"PLAIN_CHECKBOX_BG"'), m2.index('"CHECKBOX_BG"'))
-        self.assertIn("local AG_M2_TEXT = 14", text)
+        # measured on a tester's PrintScreen (1596 x 900): the game's words lighter, smaller, spaced wider; its box
+        # 24 x 17 units, wider than high; the row 66 units under the population figures
+        for part in ("local AG_M2_TEXT = 12.5", "local AG_M2_TRACK = 1.3", "local AG_M2_BOX = [24, 17]",
+                     "local AG_INK_M2 = [147, 131, 107, 255]", "local AG_M2_ROW = [472, 66]"):
+            self.assertIn(part, text)
         self.assertNotIn("delete ", text.replace("rawdelete", ""))         # the engines forbid 'delete'
         got = A.read_settings(a, text)
         self.assertEqual(A.render(a, text, got), text)

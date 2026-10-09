@@ -45,7 +45,15 @@ local AG_INK = [96, 82, 62, 255]
 // Medieval II writes its ticks' words (Auto-manage, Construction, Recruitment) in a plain Verdana-like face as big as
 // about half their box - M2EX's game faces draw at a fixed small size (a tester's screen: ours stood out), so the words
 // take M2EX's own Verdana (script/core/fonts.nut, ::EX.fonts.body) AG_M2_TEXT units high
-local AG_M2_TEXT = 14                // units: the words' height, as the scroll's own tick words
+// Medieval II's own tick words and boxes, measured on a tester's PrintScreen (1596 x 900, 2026-10-09: ours stood 8 px
+// too high, its words darker, bigger and closer together, its box square): the words' em AG_M2_TEXT units in the
+// scroll's light ink, AG_M2_TRACK units between letters (the game's face is wider than Verdana), AG_M2_GAP from the
+// words to the box, the box AG_M2_BOX units wide x high (wider than high, the tick stretched over it)
+local AG_M2_TEXT = 12.5
+local AG_M2_TRACK = 1.3
+local AG_M2_GAP_BOX = 10
+local AG_M2_BOX = [24, 17]
+local AG_INK_M2 = [147, 131, 107, 255]
 // Rome's Automanage, measured on a tester's screenshot (report R-20261007-8A29B4): its words (128, 119, 97), its box
 // 24 x 18 units (wider than high) standing 99 units right of where its words start - ours stands in that column too
 // (a tester's photo, 2026-10-09: with 98 / 25 our box stood out 1 px on the left, its right edge even)
@@ -70,9 +78,10 @@ local CE_GAME = "auto"
 local AG_GAP = 4
 // Medieval II's settlement scroll: the row of its own ticks (Auto-manage, Construction, Recruitment) - the free
 // place right of Recruitment, from the bottom-left of settlement_details_population_stats (measured on the game's
-// scroll at 1600 x 900): the words start 472 units right and the box's top 59 below - the game's own gap after
-// Recruitment's box (a tester's screen, 2026-10-09: at 448 the words started on Recruitment's box).
-local AG_M2_ROW = [472, 59]
+// scroll at 1600 x 900): the words start 472 units right and the box's top 66 below - the game's own gap after
+// Recruitment's box (a tester's screen, 2026-10-09: at 448 the words started on Recruitment's box; at 59 the box
+// stood 8 px above the game's).
+local AG_M2_ROW = [472, 66]
 // Medieval II's settlement scroll in M2EX builds with one Auto-manage tick under the town's figures (measured on
 // the game's scroll at 1600 x 900): its box's right edge 129 units right of own_settlement_governor_info_panel's
 // left and its middle 71 below the panel's bottom; from own_settlement_info_scroll's top-left: 175 right, 279 down.
@@ -551,6 +560,20 @@ function ag_place(box, m2, k) {
     return null
 }
 
+// [width of each letter] of words in face at size (a letter's own width; the game spaces its tick words wider).
+function ag_letter_widths(ui, words, face, size) {
+    local out = []
+    for (local i = 0; i < words.len(); i++) {
+        local t = [7, 14]
+        try {
+            t = ui.textSize(words.slice(i, i + 1), face, size)
+        } catch (err) {
+        }
+        out.append(t[0])
+    }
+    return out
+}
+
 // The tooltip's words with the ceiling put in for {cap}.
 function ag_fill(text, cap) {
     local at = text.indexof("{cap}")
@@ -572,6 +595,9 @@ function ag_draw() {
         k = ag_rome_scale(k)
     }
     local box = (art.size * k + 0.5).tointeger()
+    if (art.m2 && art.size == 18) {             // Medieval II: the scroll's own box, wider than high
+        box = ag_round(AG_M2_BOX[1] * k)
+    }
     local tick = box
     local at = ag_place(box, art.m2, k)
     if (at == null) {
@@ -608,15 +634,34 @@ function ag_draw() {
     } catch (err) {
     }
     // the words first, the box right of them - as the scroll's own 'Automanage [ ]' and Medieval II's ticks
-    local ink = art.m2 ? AG_INK : AG_INK_ROME
+    local ink = art.m2 ? AG_INK_M2 : AG_INK_ROME
+    local track = art.m2 ? AG_M2_TRACK * k : 0
+    local widths = track > 0 ? ag_letter_widths(ui, words, face, size) : null
+    if (widths != null) {                       // Medieval II: letter by letter, spaced as the game's words
+        local w = 0
+        foreach (i, lw in widths) {
+            w += lw + (i < widths.len() - 1 ? track : 0)
+        }
+        tw = [w.tointeger(), tw[1]]
+    }
+    local ty = y + (box - tw[1]) / 2
     // the engine closes the font scope itself, also when the body throws (a scope left open would draw the
     // console and every later text of the frame in our font)
     ui.pushFont(face, false, size, function() {
-        ui.layoutAt(x, y + (box - tw[1]) / 2)
-        ui.textColoured(words, ink[0], ink[1], ink[2], ink[3])
+        if (widths == null) {
+            ui.layoutAt(x, ty)
+            ui.textColoured(words, ink[0], ink[1], ink[2], ink[3])
+            return
+        }
+        local cx = x * 1.0
+        foreach (i, lw in widths) {
+            ui.layoutAt(cx.tointeger(), ty)
+            ui.textColoured(words.slice(i, i + 1), ink[0], ink[1], ink[2], ink[3])
+            cx += lw + track
+        }
     })
-    local bx = x + tw[0] + (AG_GAP * k).tointeger()
-    local bw = box
+    local bx = x + tw[0] + ((art.m2 ? AG_M2_GAP_BOX : AG_GAP) * k).tointeger()
+    local bw = art.m2 && art.size == 18 ? ag_round(AG_M2_BOX[0] * k) : box
     if (!art.m2) {                  // in Automanage's column, as wide as its box (one rounding: no pixel off)
         bw = ag_round(AG_ROME_BOX[1] * k)
         local col = at.len() > 3 ? at[3] + ag_round((AG_ROME_X + AG_ROME_BOX[0]) * k) + ag_round(AG_OFFSET_X * k)
@@ -629,8 +674,8 @@ function ag_draw() {
         ui.drawRect(bx, y, bw, box, 230, 220, 190, 255)
     }
     if (on) {
-        if (art.tick != null && !art.m2) {
-            ui.image(art.tick.img, bw, box, bx, y)     // Rome: the tick stretched over its box, as Automanage's
+        if (art.tick != null && (!art.m2 || art.size == 18)) {
+            ui.image(art.tick.img, bw, box, bx, y)     // the tick stretched over its box, as the game's own
         } else if (art.tick != null) {
             ui.image(art.tick.img, tick, tick, bx + (bw - tick) / 2, y + (box - tick) / 2)
         } else {

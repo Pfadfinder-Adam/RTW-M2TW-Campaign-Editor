@@ -181,8 +181,9 @@
   (Roster) and a renamed region missed what only the game's data holds. The changed copies still go into the mod;
   the game's files are never written.
 - **Avoid Growth on Medieval II's town scroll**: its words started on top of Recruitment's tick and its box was a
-  flat pink square. It now stands after Recruitment with the game's own gap, in the same small bevelled box and
-  tick the scroll's Auto-manage / Construction / Recruitment use, its words as high as theirs. Load offers to
+  flat pink square. It now stands after Recruitment on the line of the game's own ticks, in the same bevelled box
+  (as wide as theirs, the tick across it), its words in their light ink, size and letter spacing - measured on a
+  tester's screenshot of the scroll. Load offers to
   update the add-on in the game.
 - **Character editor (Medieval II): the heir showed Authority** - the game shows Authority for the faction leader
   alone; the heir keeps Loyalty, as on the game's own scroll.
