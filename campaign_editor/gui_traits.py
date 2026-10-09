@@ -210,7 +210,7 @@ class TraitsWindow(tk.Toplevel):
             lp = pend.get("levels", {}).get(lv["name"], {})
             th_now = lv["threshold"][1] if lv["threshold"] else None
             v_th = tk.StringVar(value=str(lp.get("threshold", th_now if th_now is not None else "")))
-            ttk.Spinbox(r, from_=0, to=100, textvariable=v_th, width=6).pack(side="left")
+            ttk.Spinbox(r, from_=0, to=9999, textvariable=v_th, width=6).pack(side="left")
             v_th.trace_add("write", lambda *a, ln=lv["name"], v=v_th, now=th_now: self._level_set(
                 name, ln, "threshold", v.get(), now))
             r = self._row(box, "Effects")

@@ -3042,7 +3042,7 @@ class App(tk.Tk):
         ttk.Label(frm, text="Temples of its own").grid(row=4, column=0, sticky="w", pady=(6, 0))
         tem = ttk.Frame(frm)
         tem.grid(row=4, column=1, columnspan=2, sticky="w", pady=(6, 0))
-        ttk.Spinbox(tem, from_=0, to=9, textvariable=v["temples"], width=4).pack(side="left", anchor="n")
+        ttk.Spinbox(tem, from_=0, to=99, textvariable=v["temples"], width=4).pack(side="left", anchor="n")
         ttk.Label(tem, foreground="#666", wraplength=420, justify="left", text="levels, made from nothing with the "
                   "usual numbers of this mod's temples (0 = none); built by the factions picked below, all if "
                   "none").pack(side="left", padx=4)
@@ -5586,8 +5586,7 @@ class App(tk.Tk):
         if not v["template"]:
             raise ValueError("pick the faction to edit")
         had = list((self.editing_now or {}).get("regions", []))
-        if had and not self.chosen:
-            raise ValueError("the faction would be left without towns - keep or give it at least one (a click on a town on the Map)")
+        # no town kept: REX / M2EX let it live on (can_homeless, edit.edit); the plain games refuse it there
 
         def person(role):
             if not v[role + "_first"]:

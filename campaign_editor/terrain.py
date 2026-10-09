@@ -110,9 +110,7 @@ def paint_problem(cmap, what, xy, colour, standing):
     if not (0 <= x < cmap.w and 0 <= y < cmap.h):
         return "off the map"
     sea = cmap.is_sea(x, y)
-    if what == "climate":
-        if sea:
-            return "the sea keeps its climate - climates are painted on land"
+    if what == "climate":                             # the sea too (FREEDOM FIRST - the game reads every point)
         return None
     if what == "ground":
         if (colour in SEA) != sea:                    # the beach is a land ground (on the land tiles along the coast)

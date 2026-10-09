@@ -405,6 +405,21 @@ def homeless_place(f, start, end):
     return at
 
 
+def keep_townless(plan, faction):
+    """A faction left with no town at the start (the user, 2026-10-09: 'factions without towns at the start - try
+    it'): with REX / M2EX it lives on - 'can_homeless yes' written (its armies and agents stay on the map; with none
+    left the game ends it). The plain games end such a faction as the campaign loads and crash - refused there, in
+    plain words."""
+    from .limits import engine_of
+    if not engine_of(plan.mod):
+        raise ValueError("%s would keep no town - the game without REX / M2EX ends such a faction as the campaign "
+                         "loads and crashes; give it a town, or put REX / M2EX beside the game (with them it lives "
+                         "on without towns)" % faction)
+    set_homeless(plan, faction, True)
+    plan.warn(None, "%s starts with no town (can_homeless yes): its armies and agents on the map keep it alive - "
+                    "with none left the game ends it" % faction)
+
+
 def set_homeless(plan, faction, on):
     """descr_sm_factions.txt: 'can_homeless yes' in the faction's block (on) or out of it. REX's and M2EX's own word
     (their exes: 'the faction may exist with zero settlements without becoming a horde'); the original exes do not

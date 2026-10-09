@@ -152,6 +152,8 @@ class RulesWindow(tk.Toplevel):
             v.set(rule.value)
             e.configure(state="disabled")
             tip(e, why_not)
+        elif CR.careful(rule):
+            tip(e, CR.careful(rule))
         hint = CR.explain(rule)
         game = self._game(rule)
         hl = ttk.Label(inner, text=hint, foreground="#555", wraplength=360, justify="left")
