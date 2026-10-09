@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **Add-on: Upkeep x 2** (both games, any mod, no engine needed) - every unit's upkeep multiplied (x 2 or any
+  number), so only a big income keeps a big army; the game shows the real numbers. Take it out puts back exactly the
+  old ones.
 - **A faction may start with no town** (Rome with REX, Medieval II with M2EX): Edit (giving its last town away) and
   Delete region (its last town) no longer refuse - the faction gets `can_homeless yes` and lives on with its armies
   and agents (with none left on the map the game ends it). Without an engine it is still refused: the plain games

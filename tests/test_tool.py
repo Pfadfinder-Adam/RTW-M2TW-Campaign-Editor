@@ -4665,6 +4665,46 @@ building smith
         self.assertEqual(g.get(4, 5), hills)                            # made land by the coast in the same Apply
         self.assertEqual(T.ground_off_heights(read_tga(os.path.join(camp, "map_heights.tga")), g), [])
 
+    def test_upkeep_addon_doubles_and_takes_out_exactly(self):
+        """Upkeep x 2 as an add-on of its own (the user, 2026-10-09: 'no huge armies - put in and taken out, on any
+        mod'): every unit's upkeep (stat_cost's third number) doubled, the old numbers kept beside the file; Take it
+        out puts the file back byte for byte; a unit changed since is left and named."""
+        import re as _re
+        from campaign_editor import addons as AD, upkeep as UK
+        from campaign_editor.plan import Plan
+        mod = ModData(self.root)
+        edu = mod.file("edu")
+        with open(edu, "ab") as fh:                              # two units with their costs (Rome's 6 numbers)
+            fh.write(b"\r\ntype             test spear\r\nstat_cost        1, 400, 150, 50, 60, 400\r\n"
+                     b"\r\ntype             test horse\r\nstat_cost        2,  690,  215 , 80, 70, 690 ; a comment\r\n")
+        with open(edu, "rb") as fh:
+            before = fh.read()
+
+        def upkeeps():
+            with open(edu, encoding="latin-1") as fh:
+                return [int(m.group(1)) for m in _re.finditer(r"^\s*stat_cost\s+[^,]+,[^,]+,\s*(\d+)", fh.read(), _re.M)]
+        old = upkeeps()
+        self.assertTrue(old)
+        a = AD.by_key("upkeep_x2")
+        self.assertIsNone(AD.installed(mod, a))
+        plan = Plan(mod, "addon", a.key, {})
+        AD.plan_install(plan, a, {"FACTOR": 2.0}, mod)
+        plan.apply()
+        self.assertEqual(upkeeps(), [2 * v for v in old])
+        self.assertEqual(AD.installed(ModData(self.root), a), {"FACTOR": 2.0})
+        self.assertTrue(os.path.isfile(UK.mark_path(mod)))
+        plan = Plan(ModData(self.root), "addon", a.key, {})
+        AD.plan_install(plan, a, {"FACTOR": 3.0}, mod)          # again with x 3: from the old numbers, not x 6
+        plan.apply()
+        self.assertEqual(upkeeps(), [3 * v for v in old])
+        plan = Plan(ModData(self.root), "addon", a.key, {})
+        AD.plan_remove(plan, a, mod)
+        plan.apply()
+        with open(edu, "rb") as fh:
+            self.assertEqual(fh.read(), before)                 # byte for byte
+        self.assertFalse(os.path.isfile(UK.mark_path(mod)))
+        self.assertIsNone(AD.installed(ModData(self.root), a))
+
     def test_rules_that_broke_the_game_are_kept(self):
         # recruitment slots lowered to 0 stopped all recruiting in a test - no crash, so the field stays free (FREEDOM
         # FIRST, 2026-10-09): what happened is said in its tip, any value is taken

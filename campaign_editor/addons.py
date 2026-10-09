@@ -71,6 +71,28 @@ class Addon:
             return f.read().decode("utf-8")
 
 
+class FileAddon(Addon):
+    """An add-on that changes the mod's own files instead of putting a script in (no engine needed): its module has
+    installed(mod), plan_install(plan, **values), plan_remove(plan). Its settings live in a short stand-in text, so
+    the Add-ons page shows, previews and fills them as it does a script's."""
+    files = True
+
+    def __init__(self, key, title, module, summary, settings, defaults):
+        super().__init__(key, title, "both", key + ".files", summary, settings, [])
+        self.module, self.defaults = module, defaults
+
+    def template(self):
+        return "".join("local %s = %s\n" % (k, v) for k, v in self.defaults.items())
+
+    def code(self):
+        from importlib import import_module
+        return import_module("campaign_editor." + self.module)
+
+
+def is_files(addon):
+    return getattr(addon, "files", False)
+
+
 ADDONS = [
     Addon("sack_settlement", "Sack Settlement (Rome)", "rome", "sack_settlement.nut",
           "A 4th choice on the capture scroll, under Occupy / Enslave / Exterminate: Sack Settlement. The town is "
@@ -166,6 +188,13 @@ ADDONS = [
                    "still join a big alliance against you")],
           "REX (Rome: Total War), its campaign AI hook (calculateLtgd). Vanilla Rome has no scripts - the add-on "
           "then does nothing."),
+    FileAddon("upkeep_x2", "Upkeep x 2 (no huge armies)", "upkeep",
+              "Every unit's upkeep multiplied (x 2 by default), on any mod of both games - no engine needed. Big "
+              "armies cost what they should: only a big income keeps them. The game reads the upkeep from "
+              "export_descr_unit.txt, so it shows the real, higher numbers everywhere. Take it out puts back exactly "
+              "the old numbers (kept in CampaignEditor_upkeep.json beside that file).",
+              [Setting("FACTOR", "float", "Upkeep x", "2 doubles it, 1.5 adds half, 3 triples it")],
+              {"FACTOR": "2.0"})
 ]
 
 
@@ -473,6 +502,8 @@ def check(addon, values, mod=None):
     chain or a rebel unit the mod does not have would do nothing (the governor's chain would then be torn down);
     and the add-on's own code already pasted into the mod's scripts is refused (it would run twice)."""
     out = []
+    if is_files(addon):
+        return out
     if mod is not None:
         strays = stray_copies(mod, addon)
         dup = [p for p in already_in_scripts(mod, addon) if p not in strays]
@@ -555,6 +586,15 @@ def loads_modules(folder):
 
 
 def target(mod, addon):
+    if is_files(addon):
+        try:
+            return addon.code().mark_path(mod)
+        except ValueError:
+            return os.path.join(mod.data, "export_descr_unit.txt")
+    return _script_target(mod, addon)
+
+
+def _script_target(mod, addon):
     """Where the add-on goes: <game>/script/modules/<file> - REX's own scripts (script/main.nut, the squi plugin)
     require every .nut there for whatever mod runs (a tester's HLR has a script plugin of its own whose main.nut
     loads no modules: an add-on in the mod's script/modules never ran). The mod's own script/modules only when the
@@ -612,6 +652,8 @@ def stray_copies(mod, addon):
     there by hand. Put it in moves it where the engine runs add-ons, Take it out takes it away, and the Add-ons page
     says it is in the game (a tester: 'it is in my game, the page says not put in, and there is no button to take it
     out' - the install was refused: it would run twice)."""
+    if is_files(addon):
+        return []
     name = addon.file.lower()
     return [p for p in already_in_scripts(mod, addon) if os.path.basename(p).lower() == name]
 
@@ -637,6 +679,8 @@ def plan_mod(mod, addon):
 def installed(mod, addon):
     """{var: value} of the add-on as it is installed (also an older copy outside script/modules - stray_copies),
     or None."""
+    if is_files(addon):
+        return addon.code().installed(mod)
     p = target(mod, addon)
     if not os.path.isfile(p):
         strays = stray_copies(mod, addon)
@@ -683,7 +727,7 @@ def outdated(mod):
         return []
     out = []
     for a in ADDONS:
-        if not a.fits(kind):
+        if not a.fits(kind) or is_files(a):
             continue
         p = target(mod, a)
         if not os.path.isfile(p):
@@ -721,6 +765,9 @@ def plan_update(plan, found, mod=None):
 def plan_install(plan, addon, values, mod=None, mark=None):
     """The add-on put into the script/modules folder the engine runs (target). mark: one comment line written at
     its end (the test mod's scriptmods.TEST_MARK, so Scripts in the game can find and take out what it put in)."""
+    if is_files(addon):
+        addon.code().plan_install(plan, **{k.lower(): v for k, v in values.items()})
+        return target(plan.mod, addon)
     problems = check(addon, values, mod)
     if problems:
         raise ValueError("; ".join(problems))
@@ -746,6 +793,9 @@ def plan_install(plan, addon, values, mod=None, mark=None):
 
 
 def plan_remove(plan, addon, mod=None):
+    if is_files(addon):
+        addon.code().plan_remove(plan)
+        return target(plan.mod, addon)
     dst = target(plan.mod, addon)
     plan.delete(dst, "the %s add-on taken out" % addon.title)
     for p in stray_copies(mod or plan.mod, addon):
