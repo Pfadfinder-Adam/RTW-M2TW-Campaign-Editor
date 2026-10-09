@@ -2289,7 +2289,7 @@ building smith
                          [(2, 2, 1)])
         plan = Plan(mod, "terrain", "terrain")
         self.assertEqual(T.climates(mod), [("test_climate", (236, 0, 140), 1), ("sandy_desert", (102, 45, 145), 4)])
-        self.assertTrue(T.paint_problem(Map(), "climate", (3, 0), (102, 45, 145), set()))    # the sea keeps its own
+        self.assertIsNone(T.paint_problem(Map(), "climate", (3, 0), (102, 45, 145), set()))  # the sea too (freedom)
         self.assertIsNone(T.paint_problem(Map(), "climate", (1, 1), (102, 45, 145), {(1, 1)}))
         T.apply(plan, "test", {(1, 2): (128, 128, 64)}, {(0, 0): (0, 0, 255)}, {(2, 1): (102, 45, 145)})
         self.assertTrue(any("1 sandy_desert" in n for _, n in plan.notes))
@@ -4605,12 +4605,13 @@ building smith
         self.assertEqual(T.ground_off_heights(read_tga(os.path.join(camp, "map_heights.tga")), g), [])
 
     def test_rules_that_broke_the_game_are_kept(self):
-        # a rule a change of which broke the game in a test (recruitment slots lowered to 0: no town recruited) is
-        # greyed out in Campaign rules: any other value is refused, its own value stays fine
+        # recruitment slots lowered to 0 stopped all recruiting in a test - no crash, so the field stays free (FREEDOM
+        # FIRST, 2026-10-09): what happened is said in its tip, any value is taken
         from campaign_editor import campaignrules as CR
         r = CR.Rule("descr_caps_ex.txt", "engine", "default_recruitment_slots", "value", "1", "uint", 0, 0, 1)
-        self.assertTrue(CR.blocked(r))
-        self.assertIsNotNone(CR.check(r, "0"))
+        self.assertIsNone(CR.blocked(r))
+        self.assertIn("0", CR.careful(r))
+        self.assertIsNone(CR.check(r, "0"))
         self.assertIsNone(CR.check(r, "1"))
         other = CR.Rule("descr_ex.txt", "engine", "max_age", "value", "120", "uint", 0, 0, 3)
         self.assertIsNone(CR.blocked(other))

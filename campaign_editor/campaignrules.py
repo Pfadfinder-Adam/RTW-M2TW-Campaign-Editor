@@ -334,15 +334,23 @@ def files(mod, campaign=None):
 
 # Rules a change of which broke the game in a test: shown greyed out in Campaign rules and kept as they are for now
 # (key -> what happened, in plain words). Taken off the list once the cause is found and guarded.
-BLOCKED = {
-    "default_recruitment_slots": "Lowered to 0 in a test, no town could recruit any more (the recruitment queue "
-                                 "stood still with a red 0) - Rome with REX, Barbarian Invasion.",
+BLOCKED = {}
+# Rules a change of which did something the modder should know before (FREEDOM FIRST, 2026-10-09: no crash, so
+# not greyed out - said in the field's tip)
+CAREFUL = {
+    "default_recruitment_slots": "Careful with 0: lowered to 0 in a test, no town could recruit any more (the "
+                                 "recruitment queue stood still with a red 0) - Rome with REX, Barbarian Invasion.",
 }
 
 
 def blocked(rule):
     """What happened when this rule was changed in a test (then it is greyed out and kept as it is), or None."""
     return BLOCKED.get(rule.key)
+
+
+def careful(rule):
+    """What the modder should know before changing this rule (shown, the field stays free), or None."""
+    return CAREFUL.get(rule.key)
 
 
 def check(rule, text):

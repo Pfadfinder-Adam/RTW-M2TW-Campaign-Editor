@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- **A faction may start with no town** (Rome with REX, Medieval II with M2EX): Edit (giving its last town away) and
+  Delete region (its last town) no longer refuse - the faction gets `can_homeless yes` and lives on with its armies
+  and agents (with none left on the map the game ends it). Without an engine it is still refused: the plain games
+  crash on a faction with no town.
+- **Fewer made-up limits**: Campaign rules' recruitment slots can be changed (its tip says what 0 did in a test);
+  a new building chain can have up to 99 levels (the plain games' 9 is still warned); climates can be painted on
+  the sea; the arrows of temples, trait levels, ages and trait thresholds go higher (typing any number worked
+  before too).
 - **Terrain editor: impassable land, always black**: a new ground brush (Rome with REX, Medieval II with M2EX - the
   engines' ground type impassable_shrouded): no army walks there and the land stays black all game, for a
   wasteland's land you want hidden. Towns, ports and characters are refused on it, as on the other impassable ground.

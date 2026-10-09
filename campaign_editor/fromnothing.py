@@ -482,7 +482,7 @@ BUILDING_KINDS = [
 ]
 BUILDING_KIND_WORDS = dict(BUILDING_KINDS)
 SETTLEMENT_LEVELS = B.SETTLEMENT_LEVELS
-MAX_LEVELS = 20                                 # the spin box's top; the original exes take 9 (building_problems)
+MAX_LEVELS = 99                                 # the spin box's top; the original exes take 9 (building_problems warns)
 NOT_EFFECTS = ("recruit", "recruit_pool", "retrain", "retrain_pool")    # units are picked on their own
 SPECIAL_CHAINS = ("core_", "convert_to_", "guild_")                     # never what a new chain learns from
 LEVEL_KEYS = ("settlement_min", "cost", "construction", "material")

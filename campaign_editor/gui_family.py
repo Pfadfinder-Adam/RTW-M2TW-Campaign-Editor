@@ -116,7 +116,7 @@ class FamilyEditor(ttk.Frame):
         self.cb_last = ttk.Combobox(r, textvariable=self.v_last, width=16)
         self.cb_last.grid(row=0, column=2, padx=2)
         ttk.Label(r, text="Age").grid(row=0, column=3, padx=(8, 2))
-        ttk.Spinbox(r, from_=0, to=120, textvariable=self.v_age, width=5).grid(row=0, column=4)
+        ttk.Spinbox(r, from_=0, to=999, textvariable=self.v_age, width=5).grid(row=0, column=4)
         self.sex_box = ttk.Frame(r)
         self.sex_box.grid(row=1, column=1, columnspan=3, sticky="w", pady=2)
         for s in ("male", "female"):
@@ -170,7 +170,7 @@ class FamilyEditor(ttk.Frame):
         self.v_trait, self.v_level = tk.StringVar(), tk.StringVar(value="1")
         self.cb_trait = ttk.Combobox(tb, textvariable=self.v_trait, width=22)
         self.cb_trait.pack(side="left")
-        ttk.Spinbox(tb, from_=1, to=10, textvariable=self.v_level, width=4).pack(side="left", padx=2)
+        ttk.Spinbox(tb, from_=1, to=99, textvariable=self.v_level, width=4).pack(side="left", padx=2)
         ttk.Button(tb, text="Add / set", command=self.add_trait).pack(side="left", padx=2)
         ttk.Label(tb, text="right click: remove", foreground="#666").pack(side="left", padx=4)
         right_click(self.tv_tr, self.remove_trait)
@@ -1290,7 +1290,7 @@ class _PersonDialog(simpledialog.Dialog):
         c.grid(row=1, column=0, padx=2)
         ttk.Combobox(m, textvariable=self.v2, values=self.surnames, width=18).grid(row=1, column=1, padx=2)
         ttk.Label(m, text="Age").grid(row=2, column=0, sticky="w", pady=(6, 0))
-        ttk.Spinbox(m, from_=0, to=100, textvariable=self.va, width=6).grid(row=2, column=1, sticky="w", pady=(6, 0))
+        ttk.Spinbox(m, from_=0, to=999, textvariable=self.va, width=6).grid(row=2, column=1, sticky="w", pady=(6, 0))
         return c
 
     def validate(self):
