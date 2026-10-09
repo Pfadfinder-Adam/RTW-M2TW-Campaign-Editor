@@ -84,6 +84,11 @@
   it are listed to change by hand. It was a refusal ('... would keep no town').
 
 ### Changed
+- **Map editor: a Coast & heights tab beside Terrain**: the Terrain panel had grown too full - Terrain keeps Ground,
+  Rivers / cliffs / volcanoes and Climates, the new Coast & heights tab has Land and sea and Heights (one editor in
+  two tabs: the strokes, Undo / Redo and Apply are shared). The Map tab's own switches (Layers, Colours, Edit
+  regions, Select, Merge regions, Legend, Find) are no longer shown over the terrain's map - nothing of the map's
+  towns or armies is worked there.
 - **The test mod's special building** (Rome with REX, Medieval II with M2EX - the engine way of putting a model on the
   map): a click on it now opens its own window (its title, picture, text, what it gives and who holds it), and the
   region's owner gets 100 every turn - a first try of special buildings of one's own; the game's log says which of

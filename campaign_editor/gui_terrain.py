@@ -50,11 +50,15 @@ class TerrainEditor(ttk.Frame):
         top.pack(fill="x")
         ttk.Label(top, text="Paint", font=("", 10, "bold")).pack(side="left")
         self.v_what = tk.StringVar(value="ground")
+        self.group, self._last_of = "terrain", {}
+        self._what_buttons = {}
         for val, text in (("ground", "Ground"), ("features", "Rivers, cliffs, volcanoes..."),
                           ("climate", "Climates"), ("heights", "Heights"), ("coast", "Land and sea")):
-            ttk.Radiobutton(top, text=text, value=val, variable=self.v_what, command=self.fill_palette).pack(
-                side="left", padx=4)
-        ttk.Label(top, text="   brush").pack(side="left")
+            self._what_buttons[val] = ttk.Radiobutton(top, text=text, value=val, variable=self.v_what,
+                                                      command=self.fill_palette)
+            self._what_buttons[val].pack(side="left", padx=4)
+        self._paint_end = ttk.Label(top, text="   brush")       # the Paint radios of the tab on show go before it
+        self._paint_end.pack(side="left")
         self.v_brush = tk.IntVar(value=1)
         self.v_brush.trace_add("write", lambda *_: self._brush_changed())     # typed too, not only the arrows
         ttk.Spinbox(top, from_=1, to=12, width=3, textvariable=self.v_brush,
@@ -88,17 +92,32 @@ class TerrainEditor(ttk.Frame):
         self.view = MapView(self, status=None, on_layers=self.show)
         self.view.pack(fill="both", expand=True)
         self.view.on_stroke = self._stroke
-        # the campaign's own switches (regions, resources, the towns legend, political layers) do not
-        # belong here: only the ground, its relief and the rivers are drawn
-        bar = self.view.winfo_children()[0]
-        for w in bar.winfo_children():
-            if w.winfo_class() == "TCheckbutton" or w is self.view.lbl_layers:
-                w.pack_forget()
-            elif w.winfo_class() == "TLabel" and str(w.cget("text")).startswith("wheel"):
-                w.configure(text="wheel: zoom   left drag: paint   right click: pick that tile's   right drag: map")
+        # the campaign map's own switches (Layers, Colours, Edit regions, Select, Merge regions, Legend, Find) do not
+        # belong here - nothing of the map's towns, armies or regions is worked here (the user, 2026-10-09); the
+        # zoom stays
+        self.view.lbar.pack_forget()
         self.view.legend.pack_forget()
         self.v_grid_here.set(self.view.v_grid.get())
         self.fill_palette()
+
+    GROUPS = {"terrain": ("ground", "features", "climate"), "heights": ("coast", "heights")}
+
+    def set_group(self, group):
+        """Terrain (ground, rivers, climates) or Coast & heights (land and sea, heights): only that tab's brushes on
+        the Paint row; the one picked last in that tab comes back."""
+        if group not in self.GROUPS:
+            return
+        if self.group != group:
+            self._last_of[self.group] = self.v_what.get()
+        self.group = group
+        mine = self.GROUPS[group]
+        for val, b in self._what_buttons.items():
+            b.pack_forget()
+        for val in mine:
+            self._what_buttons[val].pack(side="left", padx=4, before=self._paint_end)
+        if self.v_what.get() not in mine:
+            self.v_what.set(self._last_of.get(group) or mine[0])
+            self.fill_palette()
 
     def _grid_toggled(self):
         """The lines between the tiles up close, on or off (the same switch as Layers > grid, kept)."""

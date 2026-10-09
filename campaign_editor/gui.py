@@ -792,6 +792,11 @@ class App(tk.Tk):
         self.terrain_tab = ttk.Frame(self.nb, padding=0)
         self.nb.add(self.terrain_tab, text="  Terrain  ")
         self.nb.hide(self.terrain_tab)                  # shown with the Map editor (_map_tab_only)
+        # everything of map_heights - Land and sea (the coast) and Heights - in a tab of its own (the user, 2026-10-09:
+        # the Terrain panel had grown too fat); the same Terrain editor shows its other half there: one Undo, one Apply
+        self.heights_tab = ttk.Frame(self.nb, padding=0)
+        self.nb.add(self.heights_tab, text="  %s  " % self.HEIGHTS_TAB)
+        self.nb.hide(self.heights_tab)
         tab = ttk.Frame(self.nb, padding=4)
         self.nb.add(tab, text="  Diplomacy  ")
         self.dip_editor = DiplomacyEditor(tab)
@@ -1352,7 +1357,9 @@ class App(tk.Tk):
         """The Map editor: the map alone, no faction picked - every faction's things alike."""
         return getattr(self, "v_mode", None) is not None and self.v_mode.get() == "map"
 
-    MAP_TABS = ("Map", "Terrain")                   # the Map editor's own tabs
+    HEIGHTS_TAB = "Coast & heights"
+    TERRAIN_TABS = ("Terrain", HEIGHTS_TAB)         # both show the one Terrain editor, each its own brushes
+    MAP_TABS = ("Map",) + TERRAIN_TABS              # the Map editor's own tabs
 
     def _map_tab_only(self, on):
         """The Map editor shows its Map and Terrain tabs alone; New / Edit faction all the others again (Terrain is
@@ -1372,7 +1379,7 @@ class App(tk.Tk):
         if tab == "Map":
             self.show_map()
             return
-        if tab == "Terrain":
+        if tab in self.TERRAIN_TABS:
             self.open_terrain()
             return
         if tab == "Diplomacy":
@@ -1471,12 +1478,17 @@ class App(tk.Tk):
         self._mark_work()
 
     def open_terrain(self):
-        """The Terrain editor in the Map editor's Terrain tab: made the first time, on the mod loaded now."""
+        """The Terrain editor in the tab on show - Terrain (ground, rivers, climates) or Coast & heights (land and
+        sea, heights): one editor (its strokes, Undo, Apply shared) moved into that tab, its brushes those of the
+        tab; made the first time, on the mod loaded now."""
         ed = self.editors.get("terrain")
         if ed is None:
             from .gui_terrain import TerrainEditor
-            ed = self.editors["terrain"] = TerrainEditor(self.terrain_tab, self)
-            ed.pack(fill="both", expand=True)
+            ed = self.editors["terrain"] = TerrainEditor(self.nb, self)     # the notebook's child: packed into a tab
+        here = self.heights_tab if self.tab_name() == self.HEIGHTS_TAB else self.terrain_tab
+        ed.pack(in_=here, fill="both", expand=True)
+        ed.lift(here)
+        ed.set_group("heights" if here is self.heights_tab else "terrain")
         if self.mod and ed.mod is not self.mod:
             self._rebind(ed)
         self.update_actions()
@@ -3987,7 +3999,7 @@ class App(tk.Tk):
         ed = self.editor()
         if ed is not None:
             self._rebind(ed)
-        if self.editors.get("terrain") is not None and self.tab_name() == "Terrain":
+        if self.editors.get("terrain") is not None and self.tab_name() in self.TERRAIN_TABS:
             self.open_terrain()                 # written and loaded again: the tab on show reads the new files (a
             #                                     brush stroke after an Apply painted on nothing - report #141)
         self._mark_work()

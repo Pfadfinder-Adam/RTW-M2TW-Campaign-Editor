@@ -81,6 +81,7 @@ class MapView(ttk.Frame):
         # the switches wrap onto a second row when the window is narrow (the zoom buttons stay on the right)
         lbar = ttk.Frame(bar)
         lbar.pack(side="left", fill="x", expand=True)
+        self.lbar = lbar                                # the map's own switches (the Terrain editor hides them)
         # the layers, in one menu: what is drawn on the map
         self.v_pol = tk.BooleanVar(value=True)
         self.v_borders = tk.BooleanVar(value=True)
