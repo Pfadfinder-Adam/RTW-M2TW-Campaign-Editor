@@ -28,6 +28,27 @@ class ModelsEditor(ttk.Frame):
             from .gui_util import ShortHint
             self.head = ShortHint(self)
             self.head.pack(anchor="w", pady=(0, 2))
+            # every figure at once like a culture's or a faction's (the user, 2026-10-10: a copy of a faction, its
+            # culture changed, every figure follows; a faction - its colours too)
+            bar = ttk.Frame(self)
+            bar.pack(anchor="w", pady=(0, 4))
+            ttk.Label(bar, text="Every figure as the culture").pack(side="left")
+            self.v_culture = tk.StringVar()
+            self.cb_culture = ttk.Combobox(bar, textvariable=self.v_culture, width=14, state="readonly")
+            self.cb_culture.pack(side="left", padx=(4, 12))
+            self.cb_culture.bind("<<ComboboxSelected>>", lambda e: self.take_all("culture", self.v_culture.get()))
+            ttk.Label(bar, text="or as the faction").pack(side="left")
+            self.v_like = tk.StringVar()
+            self.cb_like = ttk.Combobox(bar, textvariable=self.v_like, width=22, state="readonly")
+            self.cb_like.pack(side="left", padx=(4, 12))
+            self.cb_like.bind("<<ComboboxSelected>>", lambda e: self.take_all("faction", self.v_like.get()))
+            ttk.Button(bar, text="As it was", command=self.as_it_was).pack(side="left")
+            from .gui_util import hint
+            hint(bar, "Every figure of this faction on the campaign map at once: 'as the culture' - the figure each "
+                      "character type of that culture's factions shows most, with the texture of the first faction "
+                      "that shows it; 'as the faction' - that faction's figures and its textures (its colours). "
+                      "Waits for Preview / Apply like a figure picked by hand; As it was takes them back.").pack(
+                side="left")
             self.grid_ = CardGrid(self, a.art_editor.CELL + 60)
             self.grid_.pack(fill="both", expand=True)
         g = self.grid_
@@ -41,6 +62,10 @@ class ModelsEditor(ttk.Frame):
             return
         from . import stratmodels as SM
         figs = SM.figures(a.mod, src_faction)
+        facs = a.mod.factions()
+        self.cb_culture.configure(values=sorted({c for _, c in facs if c}))
+        self.cb_like.configure(values=[n for n, _ in facs if n not in (src_faction, "slave")])
+        self._figs, self._faction = figs, src_faction
         if not figs:
             g.say("%s has no character types in descr_character.txt." % src_faction)
             return
@@ -88,11 +113,51 @@ class ModelsEditor(ttk.Frame):
         for p in pics:
             a.art_editor.card(box, p, faction, new, wrap=a.art_editor.CELL - 60).pack(fill="x", pady=(4, 0))
         if not pics:
+            src = (getattr(a, "figures_like", None) or {}).get(model)
             ttk.Label(box, foreground="#555", wraplength=a.art_editor.CELL, justify="left", text=(
-                "no texture of %s's for this figure yet - it gets the model's first one with Apply, then shows "
-                "here to Replace" % faction if model != now else "its texture is not named after %s (the model's "
-                "own, shared by every faction that uses it)" % faction)).pack(anchor="w", pady=(4, 0))
+                "no texture of %s's for this figure yet - it gets %s with Apply, then shows here to Replace" % (
+                    faction, "%s's (its colours)" % src if src else "the model's first one")
+                if model != now or src else "its texture is not named after %s (the model's own, shared by every "
+                "faction that uses it)" % faction)).pack(anchor="w", pady=(4, 0))
         return box
+
+    def take_all(self, how, name):
+        """Every figure the faction shows taken from a culture's factions or from one faction (stratmodels), with
+        their textures; kept for Apply in app.figures / app.figures_like."""
+        from . import stratmodels as SM
+        a = self.app
+        if not name or not getattr(self, "_figs", None):
+            return
+        figs, like = (SM.culture_figures if how == "culture" else SM.faction_figures)(a.mod, name)
+        a.remember()
+        took = []
+        for fg in self._figs:
+            models = figs.get(fg["type"])
+            if not models:
+                continue
+            want = list(models[:len(fg["models"])]) + list(fg["models"][len(models):])
+            if want == list(fg["models"]):
+                a.figures.pop(fg["type"], None)
+            else:
+                a.figures[fg["type"]] = want
+            took.append(fg["type"])
+        a.figures_like = {m: f for m, f in like.items() if f != self._faction}
+        (self.v_like if how == "culture" else self.v_culture).set("")
+        a.status.set("%s's figures as %s %s: %s - Preview, then Apply." % (
+            self._faction, "the culture" if how == "culture" else "the faction", name,
+            ", ".join(took) or "nothing of theirs fits its character types"))
+        self.load()
+
+    def as_it_was(self):
+        a = self.app
+        if not a.figures and not a.figures_like:
+            return
+        a.remember()
+        a.figures, a.figures_like = {}, {}
+        self.v_culture.set("")
+        self.v_like.set("")
+        a.status.set("The figures as they are in the files again.")
+        self.load()
 
     def pick_figure(self, ctype, level, model, now):
         a = self.app

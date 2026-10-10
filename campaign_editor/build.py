@@ -129,9 +129,9 @@ def build(mod, campaign, template, new, opts):
     if opts.get("victory"):
         from .wincond import apply_opts as apply_victory
         apply_victory(plan, campaign, new, opts["victory"], opts)
-    if opts.get("figures"):                   # before the art: a figure's new texture line may get a picture
+    if opts.get("figures") or opts.get("figures_like"):   # before the art: a new texture line may get a picture
         from .stratmodels import apply as apply_figures
-        apply_figures(plan, new, opts["figures"])
+        apply_figures(plan, new, opts["figures"], opts.get("figures_like"))
     from .factionart import apply_opts as apply_art
     try:
         primary = opts.get("primary_colour") or tuple(

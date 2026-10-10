@@ -358,6 +358,7 @@ class App(tk.Tk):
         self._res_placing, self._res_sel = None, None
         self.art_replace, self.sel_map = {}, {}      # Art tab: {path under data: picture}, {on, colour}
         self.figures = {}                           # Art tab: {character type: [strat model per level]}
+        self.figures_like = {}                      # Models tab's switches: {strat model: faction whose texture}
         self.family_set = {}            # Family tab: {'people': {key: changes}, 'new': [...], 'remove': [...], 'tree'}
         self.roster_set = {}            # Roster tab: {'unit:<type>' | 'building:<chain>:<level>': give?}
         self._region_point = None       # ('city' | 'port', region) waiting for a click
@@ -1538,7 +1539,8 @@ class App(tk.Tk):
             self.faction_body.lift(page)
 
     SIDE_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "char_moves", "field", "removed_existing",
-                 "dip_set", "name_list", "art_replace", "sel_map", "figures", "roster_set", "family_set")
+                 "dip_set", "name_list", "art_replace", "sel_map", "figures", "figures_like", "roster_set",
+                 "family_set")
     SIDE_VARS = ("v_give", "v_playable", "v_triggers", "v_art", "v_dip", "v_way", "v_way_of", "v_way_date",
                  "v_way_region", "v_way_back", "v_army", "v_garrison")
 
@@ -1785,6 +1787,7 @@ class App(tk.Tk):
         self.kinds = {}
         self.art_replace, self.sel_map = {}, {}
         self.figures = {}
+        self.figures_like = {}
         self.roster_set = {}
         self.family_set = {}
         self.editing_now = None
@@ -1884,7 +1887,7 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ undo / redo
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "place_moves", "ports_gone", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions", "new_religions", "region_edits",
-                 "culture_names", "name_list", "res_moves", "res_removed", "res_added", "region_tags", "fort_moves", "fort_removed", "fort_added", "art_replace", "sel_map", "figures", "roster_set",
+                 "culture_names", "name_list", "res_moves", "res_removed", "res_added", "region_tags", "fort_moves", "fort_removed", "fort_added", "art_replace", "sel_map", "figures", "figures_like", "roster_set",
                  "family_set", "map_owners", "map_chars", "map_removed", "map_moves", "map_units")
 
     def snapshot(self):
@@ -4506,6 +4509,7 @@ class App(tk.Tk):
         self._res_placing, self._res_sel, self._res_cache = None, None, None
         self.art_replace, self.sel_map = {}, {}
         self.figures = {}
+        self.figures_like = {}
         self.roster_set = {}
         self.family_set = {}
         self._cmap_for = None                  # the map is read again: after Apply towns may stand elsewhere
@@ -5637,6 +5641,7 @@ class App(tk.Tk):
             "relations": self._relations(),
             "art": dict(self.art_replace), "select_map": self.select_map_opts(),
             "figures": {k: list(v) for k, v in self.figures.items()},
+            "figures_like": dict(self.figures_like),
             "regions": self._regions_opts(),
             "resources": self._resources_opts(),
             "names": self.name_list.get("(new)"),
@@ -5681,6 +5686,7 @@ class App(tk.Tk):
             "relations": self._relations(),
             "art": dict(self.art_replace), "select_map": self.select_map_opts(),
             "figures": {k: list(v) for k, v in self.figures.items()},
+            "figures_like": dict(self.figures_like),
             "regions": self._regions_opts(),
             "resources": self._resources_opts(),
             "sizes": {r: dict(v) for r, v in self.sizes.items() if r in self.chosen},

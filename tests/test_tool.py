@@ -8039,6 +8039,45 @@ building smith
         mod = ModData(os.path.join(game, "mods", "m", "data"))
         self.assertEqual(SM.type_models(mod, "spy"), ["my_general", "northern_spy"])
 
+    def test_models_tab_takes_every_figure_of_a_culture_or_a_faction(self):
+        """The Models tab's two switches (the user, 2026-10-10: 'a copy of a faction, its culture changed, and every
+        figure follows it; the same with a faction - its colours'): every figure the faction shows takes the culture's
+        most common one, or a faction's own - and its texture (the picture) is that faction's."""
+        from campaign_editor import stratmodels as SM
+        from campaign_editor.plan import Plan
+        data = os.path.join(self.root, "data")
+        write(os.path.join(data, "descr_sm_factions.txt"), "".join(
+            "faction\t\t%s\nculture\t\t%s\n;;;;\n\n" % fc for fc in (
+                ("alpha", "eastern"), ("beta", "barbarian"), ("gamma", "barbarian"), ("delta", "barbarian"),
+                ("slave", "barbarian"))))
+        write(os.path.join(data, "descr_character.txt"),
+              "type named character\nactions x\nwage_base 0\nfaction alpha\nstrat_model east_general\n"
+              "faction beta, gamma\nstrat_model barb_general\nfaction delta\nstrat_model odd_general\n"
+              "type spy\nactions x\nfaction alpha, beta, gamma, delta\nstrat_model any_spy\n")
+        write(os.path.join(data, "descr_model_strat.txt"),
+              "type east_general\ntexture alpha, models_strat/textures/east_alpha.tga\n"
+              "model_flexi models_strat/east.cas, max\n"
+              "type barb_general\ntexture beta, models_strat/textures/barb_beta.tga\n"
+              "texture gamma, models_strat/textures/barb_gamma.tga\nmodel_flexi models_strat/barb.cas, max\n"
+              "type odd_general\ntexture delta, models_strat/textures/odd.tga\nmodel_flexi models_strat/odd.cas, max\n"
+              "type any_spy\ntexture alpha, models_strat/textures/spy.tga\nmodel_flexi models_strat/spy.cas, max\n")
+        before = tree_hash(self.root)
+        mod = ModData(data)
+        figs, like = SM.culture_figures(mod, "barbarian")
+        self.assertEqual(figs, {"named character": ["barb_general"], "spy": ["any_spy"]})
+        self.assertEqual(like["barb_general"], "beta")
+        figs, like = SM.faction_figures(mod, "gamma")
+        self.assertEqual(like, {"barb_general": "gamma", "any_spy": "gamma"})
+        plan = Plan(mod, "edit", "edit")
+        SM.apply(plan, "alpha", figs, like)
+        plan.apply()
+        mod = ModData(data)
+        self.assertEqual([fg["models"] for fg in SM.figures(mod, "alpha")], [["barb_general"], ["any_spy"]])
+        self.assertEqual(SM.model_types(mod)["barb_general"]["textures"]["alpha"],
+                         "models_strat/textures/barb_gamma.tga")          # gamma's picture: its colours
+        restore(mod, backups(mod)[0])
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_a_mount_alone_takes_its_whole_texture(self):
         """A Medieval II mount's parts lay their u over the whole picture (no man's half / weapons' half): shown alone
         it takes one picture - half the horse was drawn white (a tester); a man's body under the middle keeps two."""

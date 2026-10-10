@@ -199,10 +199,68 @@ def _texture_for(plan, faction, model, kinds):
             return
 
 
-def apply(plan, faction, wanted):
-    """opts['figures'] = {character type: [strat model per level]}."""
+def faction_figures(mod, source, load=None):
+    """The figures of another faction to take whole (the Models tab's 'as the faction'): ({character type: [strat
+    model per level]}, {strat model: source} - whose texture each takes, its colours)."""
+    figs = {fg["type"]: list(fg["models"]) for fg in figures(mod, source, load)}
+    return figs, {m: source for ms in figs.values() for m in ms}
+
+
+def culture_figures(mod, culture, load=None):
+    """The figures a culture's factions show most (the Models tab's 'as the culture' - the user, 2026-10-10: 'a
+    copy of a faction, its culture changed, and every figure follows it'): ({character type: [strat model per
+    level]}, {strat model: the first faction of the culture that shows it - its texture is taken})."""
+    facs = [n for n, c in mod.factions() if c == culture and n != "slave"]
+    count, first = {}, {}
+    for fac in facs:
+        for fg in figures(mod, fac, load):
+            key = (fg["type"], tuple(fg["models"]))
+            count[key] = count.get(key, 0) + 1
+            first.setdefault(key, fac)
+    figs, like = {}, {}
+    for (ctype, models), n in sorted(count.items(), key=lambda kv: -kv[1]):
+        if ctype in figs:
+            continue
+        figs[ctype] = list(models)
+        for m in models:
+            like.setdefault(m, first[(ctype, models)])
+    return figs, like
+
+
+def apply(plan, faction, wanted, like=None):
+    """opts['figures'] = {character type: [strat model per level]}; like = {strat model: faction} - the faction's
+    texture in each of those models becomes that faction's (its colours), taken whole from it."""
     for ctype, models in sorted((wanted or {}).items()):
         set_figure(plan, faction, ctype, list(models))
+    if like:
+        shown = {m for fg in figures(plan.mod, faction, plan.edit) for m in fg["models"]}
+        for model, src in sorted(like.items()):
+            if model in shown and src != faction:
+                _texture_like(plan, faction, model, src)
+
+
+def _texture_like(plan, faction, model, src):
+    """The faction's texture line in the strat model names src's picture (a line of its own made when it has none)."""
+    info = model_types(plan.mod, plan.edit).get(model)
+    if not info or src not in info["textures"]:
+        return
+    f = plan.edit(plan.mod.file("model_strat"))
+    a, b = info["span"]
+    lines = [(i, tokens(f.text(i))) for i in range(a, b)]
+    srcl = next((i for i, t in lines if t[:1] == ["texture"] and len(t) >= 3 and t[1] == src), None)
+    mine = next((i for i, t in lines if t[:1] == ["texture"] and len(t) >= 3 and t[1] == faction), None)
+    ref = tokens(f.text(srcl))[2]
+    if mine is not None:
+        now = tokens(f.text(mine))[2]
+        if now != ref:
+            f.set(mine, f.text(mine).replace(now, ref, 1))
+            plan.note(f, "%s: %s's texture is %s's now (%s, was %s)" % (model, faction, src, ref, now))
+        return
+    raw = f.raw[srcl]
+    code = strip_comment(raw.rstrip("\r\n"))
+    at = code.find(src, code.find("texture") + len("texture"))
+    f.insert_raw(srcl + 1, [raw[:at] + faction + raw[at + len(src):]])
+    plan.note(f, "%s: a texture line for %s - %s's picture (%s)" % (model, faction, src, ref))
 
 
 def mesh_info(mod, model, load=None):

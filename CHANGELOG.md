@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **Models: every figure at once, as a culture or as a faction**: two lists at the top of the Models tab - **Every
+  figure as the culture** gives each character type the figure that culture's factions show most; **or as the
+  faction** takes that faction's figures with their textures (its colours). For a copy of a faction whose culture
+  you changed, or to borrow another faction's look; **As it was** takes them back. Waits for Preview / Apply.
 - **The name of the man under the mouse on the map**, beside it, as the game shows it: a general's or a family
   member's name; an army or a fleet with no named man at its head - its captain (**Captain <name>**); an agent - his
   name and what he is.
