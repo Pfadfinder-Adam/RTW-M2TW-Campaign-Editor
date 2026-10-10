@@ -2606,6 +2606,36 @@ building smith
         restore(mod, backups(mod)[0])
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_barbarian_invasion_beliefs_per_region(self):
+        """Barbarian Invasion's regions start with their shares of the beliefs (the last line of the block, 'pagan 90
+        christianity 10', 100 in all - the notes once said it had none): they are read as Medieval II's religions,
+        set the same way (one region or many - the same shares), only the beliefs line changes, a belief at 0 is
+        left out as the game's own file does."""
+        from campaign_editor.plan import Plan
+        from campaign_editor.regionedit import religions_for, set_religions, shares_of
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        bi = ("A_R\n\tlegion: Prima\n\tAtown\n\talpha\n\tRebels\n\t255 0 0\n\tnone\n\t5\n\t1\n"
+              "\tpagan 90 christianity 10\nB_R\n\tlegion: Prima\n\tBtown\n\tslave\n\tRebels\n\t0 0 255\n\tnone\n"
+              "\t5\n\t1\n\tpagan 100\n")
+        write(os.path.join(camp, "descr_regions.txt"), bi)
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        regions = mod.regions("test")
+        self.assertEqual(shares_of(regions["A_R"]), {"pagan": 90, "christianity": 10})
+        self.assertEqual(religions_for(regions, None, "B_R"), {"pagan": 100})
+        plan = Plan(mod, "map", "religions")
+        both = {"pagan": 50, "christianity": 50}
+        set_religions(plan, "test", {"A_R": both, "B_R": dict(both, zoroastrian=0)})
+        plan.apply()
+        with open(os.path.join(camp, "descr_regions.txt"), encoding="latin-1") as fh:
+            self.assertEqual(fh.read(), bi.replace("pagan 90 christianity 10", "pagan 50 christianity 50").replace(
+                "pagan 100", "pagan 50 christianity 50"))
+        with self.assertRaises(ValueError):
+            set_religions(Plan(ModData(self.root), "map", "religions"), "test", {"A_R": {"pagan": 90}})
+        mod = ModData(self.root)
+        restore(mod, backups(mod)[0])
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_heights_spray_and_restore(self):
         """Heights brush: a spray on land raises the middle most, never touches the sea (blue), puffs add up;
         written into map_heights.tga, map_heights.hgt (the game's copy that wins over the picture) and map.rwm

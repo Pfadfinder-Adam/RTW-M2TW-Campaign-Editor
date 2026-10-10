@@ -174,14 +174,14 @@ def donor_of(mod, campaign, painted, new):
 
 
 def religions_for(regions, given, donor):
-    """The religions a new region is written with (Medieval II): those given when they add up
-    to 100, else the donor's, else the campaign's most common line - never a broken or empty
-    one (the game may not start with it)."""
+    """The religions (Medieval II) or beliefs (Barbarian Invasion) a new region is written with: those given when
+    they add up to 100, else the donor's, else the campaign's most common line - never a broken or empty one (the
+    game may not start with it)."""
     if given and sum(int(v) for v in given.values()) == 100:
         return {k: int(v) for k, v in given.items()}
-    if (regions.get(donor) or {}).get("religions"):
-        return dict(regions[donor]["religions"])
-    lines = [tuple(sorted(v["religions"].items())) for v in regions.values() if v.get("religions")]
+    if shares_of(regions.get(donor)):
+        return dict(shares_of(regions[donor]))
+    lines = [tuple(sorted(shares_of(v).items())) for v in regions.values() if shares_of(v)]
     return dict(max(set(lines), key=lines.count)) if lines else {}
 
 
@@ -249,10 +249,11 @@ def apply_regions(plan, campaign, painted, new_regions):
             # region most of its land came from (every region of BI's own file has both)
             legion = d.get("legion") or next(v["legion"] for v in regions.values() if v.get("legion"))
             lines.insert(1, "\t" + legion)
-            beliefs = d.get("beliefs") or next((v["beliefs"] for v in regions.values() if v.get("beliefs")), {})
+            beliefs = religions_for(regions, r.get("religions"), donor)          # given, else the donor's
             if beliefs:
-                lines.append("\t" + " ".join("%s %d" % (k, n) for k, n in beliefs.items()))
-            plan.note(dr, "%s: %s, beliefs as %s" % (r["name"], legion, donor))
+                lines.append("\t" + " ".join("%s %d" % (k, n) for k, n in beliefs.items() if n))
+            plan.note(dr, "%s: %s, beliefs %s" % (r["name"], legion, " ".join(
+                "%s %d" % (k, n) for k, n in beliefs.items() if n)))
         if any("religions" in v for v in regions.values()):
             # Medieval II: a ninth line, the religions; given, else the region most land came from
             rel = religions_for(regions, r.get("religions"), donor)
@@ -384,11 +385,20 @@ def _grown_block(plan, block, level, region, sf):
     return block[:-1] + ["\tbuilding", "\t{", "\t\ttype core_building %s" % lv.name, "\t}", "}"]
 
 
+def shares_of(info):
+    """{religion: percent} of a region as descr_regions gives it: Medieval II's 'religions { catholic 80 ... }' line
+    or Barbarian Invasion's beliefs line ('pagan 90 christianity 10' - the shares a region starts with; its buildings
+    and characters move them during the game, as Medieval II's do); {} in Rome."""
+    info = info or {}
+    return info.get("religions") or info.get("beliefs") or {}
+
+
 def set_religions(plan, campaign, religions):
-    """religions = {region: {religion: percent}}: the regions' religions lines in
-    descr_regions.txt (Medieval II) set; other lines keep their bytes."""
+    """religions = {region: {religion: percent}}: the regions' religions lines in descr_regions.txt (Medieval II)
+    or their beliefs lines (Barbarian Invasion) set; other lines keep their bytes."""
     if not religions:
         return
+    from .moddata import region_entries
     mod = plan.mod
     known = mod.regions(campaign)
     f = plan.edit(mod.campaign_file(campaign, "descr_regions.txt"))
@@ -409,6 +419,21 @@ def set_religions(plan, campaign, religions):
                 f.set(i, new)
                 plan.note(f, "%s: %s" % (cur, religions_line(rel)))
             done.add(cur)
+    entries = region_entries(f) if set(religions) - done else {}
+    for r in sorted(set(religions) - done):
+        if "beliefs" not in entries.get(r, {}):
+            continue
+        rel = {k: int(v) for k, v in religions[r].items()}
+        if sum(rel.values()) != 100:
+            raise ValueError("%s: the beliefs add up to %d, not 100" % (r, sum(rel.values())))
+        i = entries[r]["beliefs"][0]
+        line = f.text(i)
+        words = " ".join("%s %d" % (k, v) for k, v in rel.items() if v) or "%s 100" % next(iter(rel))
+        new = line[:len(line) - len(line.lstrip())] + words
+        if new != line.rstrip("\r\n"):
+            f.set(i, new)
+            plan.note(f, "%s: %s" % (r, words))
+        done.add(r)
     for r in religions:
         if r not in done:
             raise ValueError("%s: no religions line in descr_regions.txt%s" % (

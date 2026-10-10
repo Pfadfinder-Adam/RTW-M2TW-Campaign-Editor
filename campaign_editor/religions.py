@@ -3,9 +3,10 @@ beliefs (Rome's official expansion; plain Rome has neither).
 
 Barbarian Invasion (bi/data, and a mod made from it): descr_beliefs.txt holds 7 lines a belief - its tag, the paths
 of its order / unrest / level pips, and the labels of its name, unrest and order texts (text/expanded_bi.txt).
-A town's beliefs come from its buildings (`religious_belief <tag> <n>` in export_descr_buildings.txt) and its
-characters' traits - there are no region shares; a new belief is written with its pips and texts, and matters once
-a temple carries it (the test mod copies the Christian church chain).
+Each region starts with its shares in descr_regions.txt (its last line, 'pagan 90 christianity 10' - 100 in all, as
+Medieval II's religions line); its buildings (`religious_belief <tag> <n>` in export_descr_buildings.txt) and its
+characters' traits move them during the game. A new belief is written with its pips and texts, and spreads once a
+temple carries it (the test mod copies the Christian church chain) or a region is given a share of it.
 
 Medieval II:
 
@@ -622,7 +623,8 @@ def apply(plan, specs):
                         rf.set(i, indent + religions_line(rel))
                         n += 1
             if n:
-                plan.note(rf, "%d region(s) name %s at 0 %% (set its share with Religions...)" % (n, name))
+                plan.note(rf, "%d region(s) name %s at 0 %% (set its share: a town's right click on the Map, "
+                              "Religions of...)" % (n, name))
             plan.delete(os.path.join(os.path.dirname(rp), "map.rwm"), "the game rebuilds it on the next start")
         _factions(plan, name, spec.get("factions") or [])
         _temples(plan, spec)

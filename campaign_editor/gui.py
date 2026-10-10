@@ -106,8 +106,9 @@ THE TABS
                left drag moves characters, towns and ports, right drag moves the map;
                Find: type a town, army, unit, fort or resource and jump to it;
                Layers: what is shown; Signs and tools: what every sign means.
-               Edit regions: paint borders, New region, Edit region..., Religions... and
-               New religion... (Medieval II; also in Tools). Resources: place, move, delete.
+               Edit regions: paint borders, New region, Edit region... Right click a town:
+               its religions, New religion..., its names by culture; with Select, the
+               religions of every selected region at once. Resources: place, move, delete.
                Characters stand on any land but sea, mountains, dense forest and rivers;
                dropped on a bad tile they go to the nearest good one.
   Diplomacy    how the faction and every other one feel about each other at the start.
@@ -786,10 +787,8 @@ class App(tk.Tk):
         ttk.Button(rb, text="Place its town", command=lambda: self.region_point("city")).pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Button(rb, text="Place its port", command=lambda: self.region_point("port")).pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Button(rb, text="Delete this new region", command=self.drop_region).pack(side="left", padx=(0, theme.BUTTON_GAP))
-        ttk.Button(rb, text="Religions...", command=self.religions_dialog).pack(side="left", padx=(0, theme.BUTTON_GAP))
-        ttk.Button(rb, text="New religion...", command=self.new_religion_dialog).pack(side="left", padx=(0, theme.BUTTON_GAP))
-        ttk.Button(rb, text="Names by culture...", command=lambda: self.culture_names_dialog(
-            self.v_paint.get().replace("  (new)", "").strip())).pack(side="left", padx=(0, theme.BUTTON_GAP))
+        # Religions..., New religion..., Names by culture... left this bar for the Map's right click (the user,
+        # 2026-10-10: too many buttons here; Edit regions' own right click stays 'pick the region to paint with')
         ttk.Label(rb, text="left drag paints, right click picks a region, right drag moves the map",
                   foreground="#666").pack(side="left", padx=10)
         flow(rb)
@@ -3019,49 +3018,27 @@ class App(tk.Tk):
         ttk.Button(bar, text="All towns...", command=lambda: (w.destroy(), self.culture_names_table())).pack(
             side="left", padx=(16, 0))
 
-    def religions_from_menu(self, new):
-        """New religion / Religions of a region (once Tools entries, now the Religions work's own buttons): the same dialogs as on the Map (Edit regions), reached
-        without knowing where they live - the Map is opened with Edit regions on, so the shares can be painted
-        region by region afterwards."""
-        if not self.mod:
-            messagebox.showerror(APP, "Load a mod first.")
-            return
-        from . import religions as RL
-        if not RL.names(self.mod):
-            messagebox.showinfo(APP, "Rome has no religions (the game has no descr_religions.txt) - they are "
-                                     "Medieval II's.")
-            return
-        self.v_work.set("map")                      # Maps: its regions and their shares
-        self.work_changed()
-        if not self.map_view.v_regions.get():
-            self.map_view.v_regions.set(True)
-            self.show_map()
-        if new:
-            self.new_religion_dialog()
-        elif not self.v_paint.get().strip():
-            self.status.set("Right click a region on the map (or pick it in 'Paint with'), then Religions... above "
-                            "the map.")
-        else:
-            self.religions_dialog()
-
-    def religions_dialog(self):
-        """Medieval II: the religions of the region in 'Paint with' (percent, 100 in all)."""
+    def religions_dialog(self, regions=None):
+        """The religions of a region - or of many at once (the map's Select: the same shares for each) - in percent,
+        100 in all: Medieval II's religions, Barbarian Invasion's beliefs (the shares a region starts with; its
+        buildings and characters move them in the game). regions: the names; else the region in 'Paint with'."""
         if not self.mod or not self.strat:
             return
-        known = {k: v["religions"] for k, v in self.regions.items() if "religions" in v}
+        from .regionedit import shares_of
+        known = {k: shares_of(v) for k, v in self.regions.items() if shares_of(v)}
         if not known:
-            messagebox.showinfo(APP, "This game's regions have no religions line (Rome has none; "
-                                     "Medieval II has one per region).")
+            messagebox.showinfo(APP, "This game's regions have no religions (Rome has none; Medieval II and "
+                                     "Barbarian Invasion give each region its shares).")
             return
-        name = self.v_paint.get().replace("  (new)", "").strip()
+        many = [r for r in (regions or []) if r in self.regions or self._new_region(r)]
+        if len(many) > 1:
+            return self._religions_of_many(many, known)
+        name = many[0] if many else self.v_paint.get().replace("  (new)", "").strip()
         new = self._new_region(name)
         if not new and name not in self.regions:
             messagebox.showerror(APP, "pick a region in 'Paint with' first (or right click it on the map)")
             return
-        names = list(next(iter(known.values())).keys())
-        for v in known.values():
-            names += [k for k in v if k not in names]
-        names += [r["name"] for r in self.new_religions if r["name"] not in names]   # waiting for Apply
+        names = self._religion_names(known)
         now = (new or {}).get("religions") or self.region_religions.get(name) or known.get(name)
         if not now:
             # a new region: those of the region its land is cut from (what Apply writes when
@@ -3082,12 +3059,52 @@ class App(tk.Tk):
             head += "  (%s)" % name
         if town:
             head += "  -  town %s" % (shown.get(town) or town)
+        self._shares_window("Religions of %s" % (shown.get(name) or name), head, names, now,
+                            lambda rel: self._set_shares([name], rel, known))
+
+    def _religion_names(self, known):
+        """Every religion (belief) the regions name, the game's order first, then the new ones waiting for Apply."""
+        names = list(next(iter(known.values())).keys())
+        for v in known.values():
+            names += [k for k in v if k not in names]
+        from . import religions as RL
+        names += [n for n in RL.names(self.mod) if n not in names]           # one no region has yet
+        return names + [r["name"] for r in self.new_religions if r["name"] not in names]
+
+    def _religions_of_many(self, regions, known):
+        """The same shares for every region picked on the map (Select) - shown as the first one's now."""
+        names = self._religion_names(known)
+        first = regions[0]
+        now = (self._new_region(first) or {}).get("religions") or self.region_religions.get(first) or \
+            known.get(first) or {k: 0 for k in names}
+        head = "%d regions: %s%s" % (len(regions), ", ".join(regions[:8]), " ..." if len(regions) > 8 else "")
+        self._shares_window("Religions of %d regions" % len(regions), head, names, now,
+                            lambda rel: self._set_shares(regions, rel, known),
+                            "the same shares for each of them - shown as %s's now" % first)
+
+    def _set_shares(self, regions, rel, known):
+        """The shares kept for Apply (a new region's in itself); a region given back its own drops out."""
+        self.remember()
+        for name in regions:
+            new = self._new_region(name)
+            if new:
+                new["religions"] = dict(rel)
+            elif rel == known.get(name):
+                self.region_religions.pop(name, None)
+            else:
+                self.region_religions[name] = dict(rel)
+        self.status.set("%s: %s - Preview, then Apply changes." % (
+            regions[0] if len(regions) == 1 else "%d regions" % len(regions),
+            ", ".join("%s %d%%" % (k, v) for k, v in rel.items() if v)))
+
+    def _shares_window(self, title, head, names, now, keep, about="percent of the region's people, 100 in all"):
         w = tk.Toplevel(self)
-        w.title("Religions of %s" % (shown.get(name) or name))
+        w.title(title)
         w.transient(self)
         frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
-        ttk.Label(frm, text=head, font=("", 10, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
-        ttk.Label(frm, text="percent of the region's people, 100 in all", foreground="#666").grid(
+        ttk.Label(frm, text=head, font=("", 10, "bold"), wraplength=520, justify="left").grid(
+            row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(frm, text=about, foreground="#666").grid(
             row=1, column=0, columnspan=2, sticky="w", pady=(0, 6))
         frm = ttk.Frame(frm)
         frm.grid(row=2, column=0, columnspan=2, sticky="w")
@@ -3117,16 +3134,8 @@ class App(tk.Tk):
             if sum(rel.values()) != 100:
                 messagebox.showerror(APP, "the religions must add up to 100", parent=w)
                 return
-            self.remember()
-            if new:
-                new["religions"] = rel
-            elif rel == known.get(name):
-                self.region_religions.pop(name, None)
-            else:
-                self.region_religions[name] = rel
+            keep(rel)
             w.destroy()
-            self.status.set("%s: %s - Preview, then Apply changes." % (
-                name, ", ".join("%s %d%%" % (k, v) for k, v in rel.items() if v)))
         bar = ttk.Frame(frm)
         bar.grid(row=len(names) + 1, column=0, columnspan=2, sticky="e", pady=(8, 0))
         ttk.Button(bar, text="OK", command=ok).pack(side="left")
@@ -3134,7 +3143,7 @@ class App(tk.Tk):
 
     def new_religion_dialog(self):
         """Medieval II: a new religion (e.g. Judaism) written everywhere the game needs it on Apply;
-        its shares per region are set with Religions... afterwards."""
+        its shares per region are set afterwards (a town's right click on the Map: Religions of...)."""
         if not self.mod:
             messagebox.showerror(APP, "Load a mod first.")
             return
@@ -3144,7 +3153,7 @@ class App(tk.Tk):
             messagebox.showinfo(APP, "This game has no religions - Medieval II's and Barbarian Invasion's have them "
                                      "(plain Rome has none).")
             return
-        bi = bool(RL.beliefs_path(self.mod))          # Barbarian Invasion: beliefs, no region shares
+        bi = bool(RL.beliefs_path(self.mod))          # Barbarian Invasion: beliefs (descr_beliefs.txt)
         w = tk.Toplevel(self)
         w.title("New religion")
         w.transient(self)
@@ -3162,11 +3171,13 @@ class App(tk.Tk):
                  "%d of %d religions in this mod (the original game's limit)" % (len(have), RL.MAX_RELIGIONS))
         about = ("Barbarian Invasion: %d beliefs in this mod%s. A new one is written to descr_beliefs.txt, its three "
                  "pips (ui/pips: the order and unrest pips copied, the level pip your picture) and its texts "
-                 "(expanded_bi.txt). A town follows it through the buildings that carry it (religious_belief) - "
-                 "Temples of its own below makes them." % (
+                 "(expanded_bi.txt). A region starts with the share you give it (a town's right click on the Map: "
+                 "Religions of...); the buildings that carry it (religious_belief) spread it - Temples of its own "
+                 "below makes them." % (
                      len(have), ", %d waiting" % len(self.new_religions) if self.new_religions else "")) if bi else (
             "%s%s. A new one is written to descr_religions.txt, its lookup, text/religions.txt, its symbol (ui/pips) "
-            "and every region's religions line (0 %% until you set its share with Religions...); map.rwm is "
+            "and every region's religions line (0 %% until you set its share: a town's right click on the Map, "
+            "Religions of...); map.rwm is "
             "removed." % (count, ", %d waiting" % len(self.new_religions) if self.new_religions else ""))
         ttk.Label(frm, text=about,
                   wraplength=520, justify="left").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
@@ -3245,8 +3256,8 @@ class App(tk.Tk):
             self.remember()
             self.new_religions.append(spec)
             w.destroy()
-            self.status.set("New religion %s waits for Apply - give it regions with Religions... (Map tab, "
-                            "Regions), then Preview and Apply changes." % spec["name"])
+            self.status.set("New religion %s waits for Apply - give it its shares: a town's right click on the Map, "
+                            "Religions of... (with Select: many at once), then Preview and Apply changes." % spec["name"])
         bar = ttk.Frame(frm)
         bar.grid(row=6, column=0, columnspan=3, sticky="e", pady=(10, 0))
         ttk.Button(bar, text="OK", command=ok).pack(side="left")
@@ -4955,6 +4966,9 @@ class App(tk.Tk):
                       (lambda: self.mass_towns(sorted(picked), "town")) if n else None))
         items.append(("New mercenary pool from the %d selected region(s)..." % n,
                       (lambda: self.mercenaries_window(new_from=sorted(picked))) if n else None))
+        if n > 1 and self._has_shares():
+            items.append(("Religions of the %d selected regions..." % n,
+                          lambda: self.religions_dialog(sorted(picked))))
         items.append(("Unselect all", (lambda: mv.pick_many(None)) if n or nc or nr else None))
         return items
 
@@ -5087,7 +5101,24 @@ class App(tk.Tk):
             self.v_paint.set(name + "  (new)")
             self.drop_region()
             self.status.set("%s (new) taken away - nothing of it is written; Undo brings it back." % name)
+        items += [(None, None)] + self._region_faith_items([name], town)
         items += [(None, None), ("Delete this new region (nothing of it is written yet)", drop)]
+        return items
+
+    def _has_shares(self):
+        """Whether this game's regions have religion shares (Medieval II, Barbarian Invasion; not Rome)."""
+        from .regionedit import shares_of
+        return any(shares_of(v) for v in (self.regions or {}).values())
+
+    def _region_faith_items(self, regions, town):
+        """The right-click items of a town's region: its religions, a new religion, its names by culture."""
+        from . import religions as RL
+        items = []
+        if self._has_shares():
+            items.append(("Religions of %s..." % town, lambda: self.religions_dialog(list(regions))))
+        if RL.names(self.mod):
+            items.append(("New religion...", self.new_religion_dialog))
+        items.append(("Names of %s by culture..." % town, lambda: self.culture_names_dialog(regions[0])))
         return items
 
     def map_menu(self, xy, region, cid):
@@ -5125,6 +5156,8 @@ class App(tk.Tk):
             from .gui_settlements import delete_town
             items.append(("Delete this town with its region...", self.once(
                 "delete_town:%s" % region, lambda: delete_town(self, region, self))))
+            items.append((None, None))                  # once buttons of Edit regions' bar (the user, 2026-10-10)
+            items += self._region_faith_items([region], town)
         elif self._cmap and cid is None:
             # a wasteland's land (REX / M2EX: no town, nobody's): the way back - its town on this tile
             land = self._cmap.region_at(*xy)

@@ -847,9 +847,10 @@ def faith_symbol(path):
 
 @step("Religions (Medieval II, Barbarian Invasion): a new religion 'Test Faith' in every file, with its own symbol "
       "(a magenta disc, a yellow star) and its own temples (Christianity's church chain copied: ce_faith_shrine ...); "
-      "Medieval II: {new} follows it, a region's shares changed; Barbarian Invasion: a new belief (its pips and texts)",
-      "'Test Faith' with the magenta star in the region's religion bar (Medieval II) / a town's beliefs once its "
-      "Test Faith shrine stands (Barbarian Invasion); {new}'s towns can build the Test Faith shrine")
+      "Medieval II: {new} follows it, a region's shares changed; Barbarian Invasion: a new belief (its pips and texts), "
+      "a region of {new} starting with 40 % of it",
+      "'Test Faith' with the magenta star in the region's religion bar (Medieval II) / in a town of {new}'s beliefs "
+      "(Barbarian Invasion); {new}'s towns can build the Test Faith shrine")
 def s_religion(c, mod):
     import tempfile
     from . import religions as RL
@@ -863,7 +864,10 @@ def s_religion(c, mod):
             pic = os.path.join(d, "ce_faith.png")
             spec = {"name": "ce_faith", "shown": "Test Faith", "picture": pic if faith_symbol(pic) else None,
                     "pip_from": "christianity" if "christianity" in names else names[0]}
-            apply_opts(plan, c.campaign, {"new_religions": [spec]})
+            # a region starts with a share of it (its beliefs line in descr_regions, as Medieval II's religions)
+            region = (towns_of(c, mod, c.new) or towns_of(c, mod, c.edited))[0]
+            apply_opts(plan, c.campaign, {"new_religions": [spec], "religions": {
+                region: {names[0]: 60, "ce_faith": 40}}})
         faith_temples(plan, c.new)
         return plan
     with tempfile.TemporaryDirectory() as d:

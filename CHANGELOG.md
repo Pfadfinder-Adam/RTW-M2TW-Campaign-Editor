@@ -182,6 +182,14 @@
   it are listed to change by hand. It was a refusal ('... would keep no town').
 
 ### Changed
+- **Edit regions' bar is shorter**: **Religions...**, **New religion...** and **Names by culture...** left it for
+  a town's right click on the Map (**Religions of <town>...**, **New religion...**, **Names of <town> by
+  culture...**; a new region's town too); the right click of Edit regions still picks the region to paint with.
+- **Religions of many regions at once**: with **Select**, the right click gives **Religions of the N selected
+  regions...** - the same shares for each; in the Religions work several lines can be picked (Ctrl / Shift click).
+- **Barbarian Invasion's beliefs per region**: each region's starting shares (the last line of its block in
+  `descr_regions.txt`, e.g. `pagan 90 christianity 10`) are shown in the Religions work and set like Medieval II's
+  religions (a new region takes the ones you give it).
 - **The Module builder opens in the main window** (its button in the top row stays where it was): no window
   of its own any more - it takes the window's middle like Maps or Factions, and a module not saved yet stays while
   you look at other works (closing the editor asks about it). Add-ons' New module (no code)... and Change it in

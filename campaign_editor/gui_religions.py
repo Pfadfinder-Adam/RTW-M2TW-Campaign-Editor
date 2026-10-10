@@ -1,5 +1,5 @@
 """The Religions work (Medieval II; Barbarian Invasion's beliefs): the game's religions and every region's shares in one place - the same state the
-Map's Religions... / New religion... dialogs keep (App.region_religions, App.new_religions), written by the bottom
+Map's right-click Religions... / New religion... dialogs keep (App.region_religions, App.new_religions), written by the bottom
 Apply with the rest of the campaign work. Rome has no religions: the page says so."""
 
 import tkinter as tk
@@ -22,10 +22,11 @@ class ReligionsPanel(ttk.Frame):
         self.lbl = ttk.Label(top, foreground="#666")
         self.lbl.pack(side="left", padx=8)
         ShortHint(self, foreground="#666", wraplength=1100, justify="left", text=(
-            "Medieval II: the religions of the game and how many of each region's people follow each (100 in all); "
-            "Barbarian Invasion: its beliefs (a town follows them by its buildings - no region shares). "
-            "A new religion is written everywhere the game needs it; its shares are set region by region. The same "
-            "as Religions... / New religion... on the Map - Preview, then Apply changes writes them.")).pack(
+            "The religions of the game and how many of each region's people follow each at the start (100 in all) "
+            "- Medieval II's religions, Barbarian Invasion's beliefs; in the game temples and characters move them. "
+            "Pick several lines (Ctrl / Shift click) to give them the same shares. A new religion is written "
+            "everywhere the game needs it. The same as a town's right click on the Map - Preview, then Apply "
+            "changes writes them.")).pack(
             anchor="w", pady=(4, 4))
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
@@ -34,12 +35,12 @@ class ReligionsPanel(ttk.Frame):
         ttk.Label(side, text="Religions of the game").pack(anchor="w")
         self.lb = tk.Listbox(side, width=34, height=12, exportselection=False)
         self.lb.pack(fill="y")
-        for text, cmd in (("New religion...", self.new_religion), ("Shares of the region...", self.shares),
+        for text, cmd in (("New religion...", self.new_religion), ("Shares of the regions picked...", self.shares),
                           ("Show on the map", self.show_on_map)):
             ttk.Button(side, text=text, command=cmd).pack(fill="x", pady=(4, 0))
         right = ttk.Frame(body)
         right.pack(side="left", fill="both", expand=True)
-        self.tv = ttk.Treeview(right, show="tree headings", height=22)
+        self.tv = ttk.Treeview(right, show="tree headings", height=22, selectmode="extended")
         sb = ttk.Scrollbar(right, orient="vertical", command=self.tv.yview)
         self.tv.configure(yscrollcommand=sb.set)
         self.tv.pack(side="left", fill="both", expand=True)
@@ -70,8 +71,9 @@ class ReligionsPanel(ttk.Frame):
     def shares_of(self, region):
         app = self.app
         new = app._new_region(region) if hasattr(app, "_new_region") else None
+        from .regionedit import shares_of
         return (new or {}).get("religions") or app.region_religions.get(region) or \
-            (app.regions.get(region) or {}).get("religions") or {}
+            shares_of(app.regions.get(region))
 
     def fill(self):
         self.lb.delete(0, "end")
@@ -111,24 +113,22 @@ class ReligionsPanel(ttk.Frame):
             len(names), len(regions), (" - %d changed, not written yet" % len(changed)) if changed else ""))
 
     def picked(self):
-        sel = self.tv.selection()
+        sel = list(self.tv.selection())
         if not sel:
             messagebox.showerror(APP, "Pick a region in the list first (a click on its line).", parent=self)
-            return None
-        return sel[0]
+        return sel
 
     def shares(self):
-        region = self.picked()
-        if not region:
+        regions = self.picked()
+        if not regions:
             return
-        self.app.v_paint.set(region)
-        self.app.religions_dialog()
+        self.app.religions_dialog(regions)
         w = [c for c in self.app.winfo_children() if isinstance(c, tk.Toplevel)]
         if w:
             self.wait_window(w[-1])
         self.fill()
-        self.tv.selection_set(region)
-        self.tv.see(region)
+        self.tv.selection_set(regions)
+        self.tv.see(regions[0])
 
     def new_religion(self):
         self.app.new_religion_dialog()
