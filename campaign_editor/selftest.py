@@ -1419,6 +1419,49 @@ def s_unit_pack(c, mod):
     return plan
 
 
+@step("Units: a card and a description picture of one of {new}'s units made from its 3D model (View in 3D > Make a "
+      "card... / Make a picture...: its stand animation, the game's framing, a see-through ground)",
+      "that unit's card in {new}'s recruitment list and army: the man from his head to his thighs, on the card's "
+      "own ground; its description picture the whole man")
+def s_card_from_3d(c, mod):
+    from . import cardmaker as CM
+    from . import editors as E
+    from . import models as MO
+    from .units import faction_units
+    if not _pillow():
+        raise Skip("Pillow is not installed")
+    cat = MO.catalogue(mod)
+    for u in faction_units(mod, c.new):
+        lines = MO.unit_lines(mod, u.type)
+        slots = MO.unit_slots(lines) if lines else []
+        info = cat.get(slots[0][2].lower()) if slots else None
+        if info is None or not u.dictionary:
+            continue
+        try:
+            fig, box = CM.model_figure(mod, info, c.new)
+        except (ValueError, OSError):
+            continue
+        plan = Plan(mod, "units", "card_from_3d", {})
+        for info_pic in (False, True):
+            size = CM.picture_size(MO.game_kind(mod), E.unit_picture_need(mod, info_pic), info_pic)
+            pic = CM.frame(fig, size, CM.PICTURE_PART if info_pic else CM.CARD_PART,
+                           box=None if info_pic else box)
+            src = os.path.join(c.work, "ce_test_%s_from_3d.png" % ("info" if info_pic else "card"))
+            pic.save(src)
+            E.import_picture(plan, src, E.unit_picture_targets(mod, u.dictionary, [c.new], info_pic), size)
+        plan.warn(None, "%s's card and description picture made from its model %s" % (u.type, info.name))
+        return plan
+    raise Skip("no unit of %s with a model the editor can draw" % c.new)
+
+
+def _pillow():
+    try:
+        import PIL  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 @step("Check and install a pack: a small pack (a unit card for {new}) checked and installed",
       "the card in {new}'s unit list")
 def s_modpack(c, mod):
@@ -2833,6 +2876,7 @@ COVERAGE = {
         "offered on Load only when an older copy is in the game - the test mod puts this version in (the unit test "
         "test_older_addons_are_put_right_on_load writes an older one and takes the offer)",
     "Module builder": ["s_module"],
+    "A unit's card and description picture made from its 3D model (View in 3D > Make a card...)": ["s_card_from_3d"],
     "Experiment: an army starting aboard its fleet": ["s_aboard"],
     "Own buildings on the map: a wonder, a new resource type, an engine model": ["s_special_type", "s_special"],
     "Scripts in the game (script/modules: settings, off / on, delete, the test mod's taken out)": ["s_scripts"],

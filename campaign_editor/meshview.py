@@ -660,12 +660,13 @@ def chariot(crew, crew_groups, car, horse, horses, riders):
 
 
 def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, attach=None, groups=None,
-           quality=2, background=BACK, textured=True, more=None):
+           quality=2, background=BACK, textured=True, more=None, fit=None):
     """The mesh drawn as a Pillow picture, turned by yaw (round the up axis) and pitch (degrees) and lit from the
     upper left. textured: the pictures laid on every triangle (a still picture); else one colour per triangle
     (quick, for turning it with the mouse). texture = the man's picture, attach = weapons and shields; a part
     without its picture is plain grey. quality 2 draws twice as big and shrinks it (smooth edges). The game's
-    space is left-handed, so x is mirrored to show the man as he stands in the game."""
+    space is left-handed, so x is mirrored to show the man as he stands in the game. fit: the groups the view is
+    sized and centred on (default the ones drawn) - two drawings of other parts then lie on each other."""
     from PIL import Image, ImageChops, ImageDraw
     groups = groups if groups is not None else mesh.shown()
     W, H = size[0] * quality, size[1] * quality
@@ -674,10 +675,11 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
     if not used:
         return img.resize(size) if quality > 1 else img
     P = mesh.positions
-    lo = [min(P[i][k] for i in used) for k in range(3)]
-    hi = [max(P[i][k] for i in used) for k in range(3)]
+    sized = sorted({i for g in fit for i in g.tris}) if fit else used
+    lo = [min(P[i][k] for i in sized) for k in range(3)]
+    hi = [max(P[i][k] for i in sized) for k in range(3)]
     c = [(lo[k] + hi[k]) / 2 for k in range(3)]
-    radius = max(math.sqrt(sum((P[i][k] - c[k]) ** 2 for k in range(3))) for i in used) or 1.0
+    radius = max(math.sqrt(sum((P[i][k] - c[k]) ** 2 for k in range(3))) for i in sized) or 1.0
     scale = zoom * 0.95 * min(W, H) / (2 * radius)
     cy, sy = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
     cp, sp = math.cos(math.radians(pitch)), math.sin(math.radians(pitch))

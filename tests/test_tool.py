@@ -7850,6 +7850,40 @@ building smith
         self.assertFalse(MV.whole_picture(man))
         self.assertTrue(all(g.one for g in MV.one_picture(horse.groups)))
 
+    def test_cards_made_from_the_3d_view(self):
+        """Make a card / picture: the view drawn on black and on white gives the figure with its see-through ground
+        (edges part see-through, their colour kept); framed as the games' cards - a part from the head down, the
+        whole man in the middle - at the mod's size; laid on a colour or a picture, or left see-through."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from campaign_editor import cardmaker as CM
+        black, white = Image.new("RGB", (100, 200), (0, 0, 0)), Image.new("RGB", (100, 200), (255, 255, 255))
+        for im in (black, white):
+            im.paste((200, 40, 40), (40, 20, 60, 180))                  # a man 20 wide, 160 tall
+            im.putpixel((39, 100), (100, 20, 20) if im is black else (227, 147, 147))     # an edge half see-through
+        fig = CM.cut_out(black, white)
+        self.assertEqual(fig.getpixel((50, 50)), (200, 40, 40, 255))
+        self.assertEqual(fig.getpixel((5, 5))[3], 0)
+        self.assertEqual(fig.getpixel((39, 100))[3], 128)
+        self.assertLess(abs(fig.getpixel((39, 100))[0] - 199), 3)          # its own colour back, not darkened
+        card = CM.frame(fig, (48, 64), "thighs")
+        self.assertEqual(card.size, (48, 64))
+        top = min(y for y in range(64) if any(card.getpixel((x, y))[3] > 128 for x in range(48)))
+        self.assertLessEqual(top, 4)                                       # the head at the top
+        self.assertTrue(any(card.getpixel((x, 63))[3] > 128 for x in range(48)))     # cut at the bottom
+        whole = CM.frame(fig, (160, 210), "whole")
+        rows = [y for y in range(210) if any(whole.getpixel((x, y))[3] > 128 for x in range(160))]
+        self.assertTrue(rows[0] > 0 and rows[-1] < 209)                    # all of him, room above and below
+        self.assertEqual(CM.on_ground(card, (10, 20, 30)).getpixel((0, 0)), (10, 20, 30, 255))
+        self.assertEqual(CM.on_ground(card, Image.new("RGB", (7, 9), (5, 6, 7))).getpixel((0, 0)), (5, 6, 7, 255))
+        self.assertEqual(CM.on_ground(card).getpixel((0, 0))[3], 0)
+        body = CM.frame(fig, (48, 64), "thighs", box=(40, 100, 60, 180))  # framed by a box: lower on him
+        self.assertNotEqual(list(body.getdata()), list(card.getdata()))
+        self.assertEqual(CM.picture_size("medieval2", None, True), (256, 384))
+        self.assertEqual(CM.picture_size("rome", (52, 70, 32), False), (52, 70))
+
     def test_battle_animations_from_the_packs(self):
         """The games' animation packs (pack.idx + pack.dat): each animation's frames, bones and kind, every bone's turn
         per frame and the offsets of its first `kind` bones; descr_skeleton's animations per skeleton, a Medieval II

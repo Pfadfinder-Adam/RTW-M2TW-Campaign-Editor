@@ -16,12 +16,13 @@ NO_ANIM = "(none)"
 
 
 class ModelViewer(tk.Toplevel):
-    def __init__(self, parent, mod, info, factions=(), mount=None, title="Battle model in 3D"):
+    def __init__(self, parent, mod, info, factions=(), mount=None, title="Battle model in 3D", make=None):
         """mount: (its ModelInfo, mount type[, chariot]) - the unit's horse, camel ...: shown standing beside the
         rider; a Rome chariot (models.chariot_of, with 'horse_info'): the car, its horses and the crew put together
         as the game sets them."""
         super().__init__(parent)
         self.mod, self.info, self.mount = mod, info, mount
+        self.make = make                # a unit's: make(info picture?, RGBA picture) - the card / picture it gets
         self.mount_mesh = self.horse_mesh = None
         self.chariot = mount[2] if mount and len(mount) > 2 else None
         self.title("%s - %s" % (title, info.name))
@@ -69,6 +70,12 @@ class ModelViewer(tk.Toplevel):
         self.b_look.pack(anchor="w", pady=(8, 0))
         ttk.Button(side, text="Front", command=lambda: self.turn_to(0)).pack(anchor="w", pady=(8, 0))
         ttk.Button(side, text="Back", command=lambda: self.turn_to(180)).pack(anchor="w")
+        if make is not None:             # the unit's own card and description picture from this view
+            mk = ttk.Frame(side)
+            mk.pack(anchor="w", pady=(8, 0))
+            ttk.Button(mk, text="Make a card...", command=lambda: self.make_picture(False)).pack(side="left")
+            ttk.Button(mk, text="Make a picture...", command=lambda: self.make_picture(True)).pack(
+                side="left", padx=4)
         # short lines, the long words on their '?' (the user, 2026-10-10: the grey text stretched the window), and
         # only this game's words (a Medieval II model's window spoke of Rome)
         from .gui_util import ShortHint
@@ -83,7 +90,10 @@ class ModelViewer(tk.Toplevel):
             "whole. One texture for the man and his weapons.") + (
             " Animation: any of its skeleton's moves from the game's animation packs - Play / Pause, then the "
             "frame line (drag it, or the < > buttons / the arrow keys) to go a frame back or on, like a video; "
-            "the mount stays still." if self.anims else "")).pack(anchor="w", pady=(6, 0))
+            "the mount stays still." if self.anims else "") + (
+            " Make a card... / Make a picture...: the unit's own card and description picture from this view - "
+            "framed as the game's own, on the ground you pick." if make is not None else "")).pack(
+            anchor="w", pady=(6, 0))
         self.canvas.bind("<ButtonPress-1>", self._press)
         self.canvas.bind("<B1-Motion>", self._move)
         self.canvas.bind("<ButtonRelease-1>", lambda e: self.draw())
@@ -303,11 +313,11 @@ class ModelViewer(tk.Toplevel):
             self._tex[rel] = MO.texture_image(self.mod, rel) if rel else None
         return self._tex[rel]
 
-    def draw(self, quick=False):
-        if self.mesh is None:
-            return
-        from PIL import ImageTk
-        groups = self.mesh.shown(self.look, self.v_weapons.get())
+    def _scene(self, weapons=None):
+        """What the view draws now: (mesh, groups, texture, attachment texture, more pictures, why, whole) - the
+        man posed in the animation's frame, on his mount when that is ticked; weapons False: without his weapons and
+        shield whatever the tick says."""
+        groups = self.mesh.shown(self.look, self.v_weapons.get() if weapons is None else weapons)
         tex, att = self._texture(self.info.textures), self._texture(self.info.attach)
         if tex is None and self.mesh.texture_ref:       # Rome: no texture line - the one the .cas names
             tex = self._texture({"": self.mesh.texture_ref})
@@ -336,6 +346,28 @@ class ModelViewer(tk.Toplevel):
         whole = not riding and not self.info.attach and MV.whole_picture(man)
         if whole:
             groups = MV.one_picture(groups)          # a mount alone: its whole texture (half was drawn white)
+        return mesh, groups, tex, att, more, why, whole
+
+    def snapshot(self, size=(640, 800)):
+        """The view as it stands (turn, zoom, frame, mount), drawn big and cut out of its ground: (an RGBA picture
+        (cardmaker.cut_out), the box of his body alone) - what Make a card... / Make a picture... frame: by the body
+        (and the mount), so a spear held high does not make the man small (the games' cards cut it)."""
+        from . import cardmaker as CM
+        mesh, groups, tex, att, more, _, _ = self._scene()
+        shots = [MV.render(mesh, size, self.yaw, self.pitch, self.zoom, tex, att, groups, quality=2,
+                           background=bg, more=more) for bg in ((0, 0, 0), (255, 255, 255))]
+        bmesh, bgroups, *_ = self._scene(weapons=False)
+        body = CM.cut_out(*[MV.render(bmesh, size, self.yaw, self.pitch, self.zoom, None, None, bgroups, quality=1,
+                                      background=bg, textured=False, fit=groups)
+                                for bg in ((0, 0, 0), (255, 255, 255))])
+        box = body.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
+        return CM.cut_out(*shots), box
+
+    def draw(self, quick=False):
+        if self.mesh is None:
+            return
+        from PIL import ImageTk
+        mesh, groups, tex, att, more, why, whole = self._scene()
         img = MV.render(mesh, SIZE, self.yaw, self.pitch, self.zoom, tex, att, groups,
                         quality=1 if quick else 2, textured=not quick or quick == "play", more=more)
         self._photo = ImageTk.PhotoImage(img)
@@ -354,6 +386,14 @@ class ModelViewer(tk.Toplevel):
             size = "%d triangles, %d points." % (n, self.mesh.count)
             self.info_lbl.configure(text=(", ".join(said) + ". " + size if said else size) + (
                 (" Variants shown: " + ", ".join("%s %d of %d" % p for p in parts) + ".") if parts else ""))
+
+    def make_picture(self, info):
+        """Make a card... / Make a picture...: the view as it stands, framed as the game's own (gui_cardmaker)."""
+        if self.mesh is None:
+            return
+        self._stop()
+        from .gui_cardmaker import CardMaker
+        CardMaker(self, info)
 
     def next_look(self):
         self.look += 1
