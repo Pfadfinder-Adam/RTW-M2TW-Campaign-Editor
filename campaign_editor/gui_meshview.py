@@ -92,8 +92,7 @@ class ModelViewer(tk.Toplevel):
             " Animation: any of its skeleton's moves from the game's animation packs - Play / Pause, then the "
             "frame line (drag it, or the < > buttons / the arrow keys) to go a frame back or on, like a video. "
             "A rider in an animation sits on his mount and it plays the same move, as in the game (with none he "
-            "stands beside it in the T pose). While it plays the man is drawn in his texture's colours, quicker; "
-            "paused, in the whole texture." if self.anims else "") + (
+            "stands beside it in the T pose)." if self.anims else "") + (
             " Make a card... / Make a picture...: the unit's own card and description picture from this view - "
             "framed as the game's own, on the ground you pick." if make is not None else "")).pack(
             anchor="w", pady=(6, 0))
@@ -456,7 +455,8 @@ class ModelViewer(tk.Toplevel):
         from PIL import ImageTk
         mesh, groups, tex, att, more, why, whole = self._scene()
         img = MV.render(mesh, SIZE, self.yaw, self.pitch, self.zoom, tex, att, groups,
-                        quality=1 if quick else 2, textured=not quick, more=more)
+                        quality=1 if quick else 2, more=more,
+                        textured=not quick or (quick == "play" and MV._fast is not None))   # NumPy: whole texture
         if quick == "play" and self._photo is not None and getattr(self, "_shown", None) is not None and \
                 (self._photo.width(), self._photo.height()) == img.size:
             self._photo.paste(img)                  # the play: the same picture filled again (quicker than a new one)

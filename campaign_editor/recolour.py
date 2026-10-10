@@ -9,7 +9,7 @@ texture in another faction's colours), only the pixels that differ between them 
 stay as they are. The new colour takes the target's hue; saturation and brightness move by the ratio between the
 target and the source colour, so a dark fold of a red cloak becomes a dark fold of a blue one.
 
-Pillow only (the exe has no numpy): the work is done on whole bands with lookup tables, a 1024 x 1024 texture in
+Pillow only (written before the exe had NumPy): the work is done on whole bands with lookup tables, a 1024 x 1024 texture in
 well under a second."""
 
 import colorsys

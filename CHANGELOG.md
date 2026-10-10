@@ -262,8 +262,10 @@
   23 bones now (saddle, spine, neck, head, four legs, tail), and with no animation it stands as in its standing move
   (its file's own pose has the legs stiff and the tail out).
 - **View in 3D: the animations played hurried and jerky**: a slow drawing jumped whole frames. The moments between
-  two frames are drawn between them now, at the game's speed, and a playing frame is drawn about three times
-  quicker (in the texture's colours while it plays; paused, in the whole texture).
+  two frames are drawn between them now, at the game's speed, in the whole texture.
+- **View in 3D on NumPy** (the exe carries it now, 20-30 MB more): the man posed on his bones and drawn with his
+  textures on arrays - a playing frame of a knight on his horse about five times quicker (129 -> 26 ms on the
+  build machine), a still picture about twice. Run from the source without NumPy it draws as before, slower.
 - **Battle models a mod wrote by hand** (Medieval II): two numbers with no space between them (`0-1`) stopped the
   Unit editor with "'0-1' is not a count" - they are read now as the game reads them (0, then -1).
 - **Check mod files** (Medieval II) names a faction whose `ai_label` in `descr_strat.txt` is not in

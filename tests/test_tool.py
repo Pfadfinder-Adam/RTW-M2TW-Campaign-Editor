@@ -8263,6 +8263,48 @@ building smith
         for got, want in zip(MV.seat_of(rider, horse, (0, 0, 1)), (1, 0.4, 2)):    # forward turned to straight down
             self.assertAlmostEqual(got, want, places=6)
 
+    def test_the_3d_view_on_numpy_matches_the_pure_python_one(self):
+        """With NumPy (the exe has it) a mesh is posed and drawn on arrays (fastmesh) - the same points to the last
+        digit and the same picture as the pure-Python ways a Python without NumPy keeps."""
+        from campaign_editor import meshview as MV
+        if MV._fast is None:
+            self.skipTest("no NumPy")
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        import math
+        # a little box man: 8 points on two bones (pelvis, right thigh), one weapon point held by the hand
+        pts = [(x, y, z) for x in (-0.3, 0.3) for y in (0.0, 1.0) for z in (-0.2, 0.2)]
+        faces = (0, 1, 3, 0, 3, 2, 4, 6, 7, 4, 7, 5, 0, 4, 5, 0, 5, 1, 2, 3, 7, 2, 7, 6, 0, 2, 6, 0, 6, 4, 1, 5, 7, 1,
+                 7, 3)
+        mesh = MV.Mesh([MV.Group("body", "m", faces, False)], pts + [(0.5, 1.2, 0.0)],
+                       [((i % 4) / 4 + 0.1, (i // 4) / 2 + 0.2) for i in range(9)])
+        mesh.skin = [(0, 1, 0.7, 0.3) if p[1] > 0.5 else (1, 0, 1.0, 0.0) for p in pts] + [(20, 12, 1.0, 0.0)]
+        rot = [(0.0, 0.0, 0.0, 1.0)] * 20
+        off = [(0.0, 1.0, 0.0)] + [(0.0, 0.0, 0.3)] * 19
+        turned = list(rot)
+        turned[1] = (math.sin(0.3), 0.0, 0.0, math.cos(0.3))
+        turned[12] = (0.0, math.sin(0.5), 0.0, math.cos(0.5))
+        held = {20: (1.0, 0.0, 0.0, 0.0)}
+        fast = MV.pose_mesh(mesh, MV.Pose(turned, off), (rot, off), held)
+        mesh.pure = True
+        pure = MV.pose_mesh(mesh, MV.Pose(turned, off), (rot, off), held)
+        for a, b in zip(fast.positions, pure.positions):
+            for k in range(3):
+                self.assertAlmostEqual(a[k], b[k], places=9)
+        tex = Image.new("RGB", (8, 8), (200, 40, 40))
+        for i in range(8):
+            tex.putpixel((i, i), (20, 200, 20))
+        pics = []
+        for flag in (False, True):
+            pure.pure = flag
+            pics.append(MV.render(pure, (60, 80), 30, 10, 1.0, tex, None, pure.groups, quality=1))
+        a, b = (list(zip(*[iter(p.tobytes())] * 3)) for p in pics)
+        near = sum(1 for x, y in zip(a, b) if max(abs(x[k] - y[k]) for k in range(3)) <= 40)
+        self.assertGreater(near / len(a), 0.95)                       # the same picture, edges aside
+        self.assertNotEqual(len(set(a)), 1)                             # something was drawn
+
     def test_a_horse_is_posed_on_its_own_bones(self):
         """A Medieval II horse (fs_horse: 23 bones - saddle, spine, neck, head, four legs, tail) is posed on its own
         tree, not a man's (its animation looked broken); a mesh listing its bones by name in another order gets its

@@ -24,6 +24,11 @@ import os
 import re
 import struct
 
+try:                                    # the heavy 3D work on arrays when NumPy is there (the exe has it)
+    from . import fastmesh as _fast
+except ImportError:                     # a Python without NumPy: the pure-Python ways below
+    _fast = None
+
 HEADER = b"serialization::archive"
 KNOWN = {0, 1, 2, 3, 4, 10, 11}                     # stream kinds seen in the vanilla meshes
 SIZES = {0: (12,), 1: (8,), 4: (8,), 2: (4,), 3: (4, 12), 10: (4, 12), 11: (4, 12)}
@@ -52,7 +57,12 @@ class Mesh:
     over one picture (Rome) instead of the man's and the attachment texture side by side (Medieval II)."""
 
     def __init__(self, groups, positions, uvs):
-        self.groups, self.positions, self.uvs = groups, positions, uvs
+        self.groups, self.uvs = groups, uvs
+        self._pos, self._arr = None, None
+        if _fast is not None and isinstance(positions, _fast.np.ndarray):
+            self._arr = positions               # posed on NumPy: kept as the array, a list only when asked for
+        else:
+            self._pos = positions
         self.count = len(positions)
         self.one_texture = False
         self.texture_ref = None
@@ -61,6 +71,24 @@ class Mesh:
         self.joints = None              # posed: every bone's place in the model (pose_mesh)
         self.turns = None               # posed: every bone's turn in the model
         self.bone_names = {}            # Medieval II: {bone number: name} as the file lists them
+
+    @property
+    def positions(self):
+        """[(x, y, z)] of every point (made from the array once when the points were posed on NumPy)."""
+        if self._pos is None:
+            self._pos = list(map(tuple, self._arr.tolist()))
+        return self._pos
+
+    @positions.setter
+    def positions(self, value):
+        self._pos, self._arr = value, None
+
+    @property
+    def arr(self):
+        """The points as an (n, 3) NumPy array (made once) - None without NumPy."""
+        if self._arr is None and _fast is not None:
+            self._arr = _fast.np.asarray(self._pos, dtype=_fast.np.float64).reshape(-1, 3)
+        return self._arr
 
     def parts(self):
         """{part name: [its variants]} in file order."""
@@ -590,6 +618,34 @@ def pose_mesh(mesh, pose, base, held=None):
         bw = bwhere[b]
         mats[b] = m + tuple(where[b][k] - (m[3 * k] * bw[0] + m[3 * k + 1] * bw[1] + m[3 * k + 2] * bw[2])
                             for k in range(3))
+    if _fast is not None and not getattr(mesh, "pure", False):
+        held_mats = {}
+        for wb, h in _weapon_pairs(mesh, n):
+            if held and wb in held:
+                q = _qmul(_qmul(rot[h], (-brot[h][0], -brot[h][1], -brot[h][2], brot[h][3])), held[wb])
+                m3, bw = _qmat(q), bwhere[h]
+                held_mats[(wb, h)] = m3 + tuple(where[h][k] - (m3[3 * k] * bw[0] + m3[3 * k + 1] * bw[1] +
+                                                               m3[3 * k + 2] * bw[2]) for k in range(3))
+        out = _fast.pose(mesh, n, mats, held_mats)
+    else:
+        out = _pose_points(mesh, n, mats, held, rot, brot, where, bwhere)
+    m = Mesh(mesh.groups, out, mesh.uvs)
+    m.one_texture, m.texture_ref, m.skin, m.parents = mesh.one_texture, mesh.texture_ref, mesh.skin, mesh.parents
+    m.bone_names = mesh.bone_names
+    m.joints, m.turns = where, rot
+    return m
+
+
+def _weapon_pairs(mesh, n):
+    """The (weapon bone, the hand holding it) pairs of a mesh's points, found once."""
+    got = getattr(mesh, "_pairs", None)
+    if got is None or got[0] != n:
+        got = mesh._pairs = (n, sorted({(b0, b1 if b1 < n else 0) for b0, b1, _, _ in mesh.skin if b0 >= n}))
+    return got[1]
+
+
+def _pose_points(mesh, n, mats, held, rot, brot, where, bwhere):
+    """pose_mesh's points one by one (no NumPy)."""
     out = []
     for v, (b0, b1, w0, w1) in zip(mesh.positions, mesh.skin):
         if b0 >= n and held and b0 in held:          # a weapon with a move of its own in the hand holding it
@@ -624,10 +680,7 @@ def pose_mesh(mesh, pose, base, held=None):
         out.append((p * (a[0] * x + a[1] * y + a[2] * z + a[9]) + r * (c[0] * x + c[1] * y + c[2] * z + c[9]),
                     p * (a[3] * x + a[4] * y + a[5] * z + a[10]) + r * (c[3] * x + c[4] * y + c[5] * z + c[10]),
                     p * (a[6] * x + a[7] * y + a[8] * z + a[11]) + r * (c[6] * x + c[7] * y + c[8] * z + c[11])))
-    m = Mesh(mesh.groups, out, mesh.uvs)
-    m.one_texture, m.texture_ref, m.skin, m.parents = mesh.one_texture, mesh.texture_ref, mesh.skin, mesh.parents
-    m.joints, m.turns = where, rot
-    return m
+    return out
 
 
 _CACHE = {}
@@ -764,7 +817,10 @@ def combine(rider, rider_groups, mount, mount_groups, mount_one=None, seat=None)
         dx = max(p[0] for p in MP) - min(p[0] for p in RP) + 0.15
         dy = min(p[1] for p in MP) - min(p[1] for p in RP)
         dz = (min(p[2] for p in MP) + max(p[2] for p in MP)) / 2 - (min(p[2] for p in RP) + max(p[2] for p in RP)) / 2
-    pos = [(x + dx, y + dy, z + dz) for x, y, z in rider.positions] + list(mount.positions)
+    if _fast is not None:
+        pos = _fast.np.concatenate([rider.arr + (dx, dy, dz), mount.arr])
+    else:
+        pos = [(x + dx, y + dy, z + dz) for x, y, z in rider.positions] + list(mount.positions)
     n = rider.count
     # the parts and the u v are the same at every frame of a play: made once (render keeps its colours by them)
     key = (id(rider.uvs), id(mount.uvs), tuple(id(g) for g in rider_groups), tuple(id(g) for g in mount_groups),
@@ -852,6 +908,12 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
     from PIL import Image, ImageChops, ImageDraw
     groups = groups if groups is not None else mesh.shown()
     W, H = size[0] * quality, size[1] * quality
+    if _fast is not None and not getattr(mesh, "pure", False):
+        pics = {0: texture, 1: attach}
+        pics.update(more or {})
+        arr = _fast.draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, LIGHT, PLAIN)
+        img = Image.fromarray(arr, "RGB")
+        return img.reduce(quality) if quality > 1 else img      # each 2 x 2 averaged: the smooth edges
     img = Image.new("RGB", (W, H), background)
     used = sorted({i for g in groups for i in g.tris})
     if not used:

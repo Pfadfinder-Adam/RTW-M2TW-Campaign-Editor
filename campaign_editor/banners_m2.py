@@ -9,8 +9,8 @@ So the white template is taken from the mod's own sheets, whatever mod it is: pe
 measured against its own neighbourhood (the cloth's colour taken out, its folds and stitching kept), and the MEDIAN
 of all sheets - each faction's heraldry is somewhere else, so it vanishes, while what all sheets share (the tooth
 edges, the holes, the folds) stays. Pixels alike in nearly every sheet (the wood, the glass finials, the trim) are
-kept in their colour. The cloth = what the banner meshes show of the sheet, less those. Pillow alone (the exe has
-no numpy): about a second for 23 sheets, kept per mod while the files are unchanged.
+kept in their colour. The cloth = what the banner meshes show of the sheet, less those. Pillow alone (written before
+the exe had NumPy): about a second for 23 sheets, kept per mod while the files are unchanged.
 
 The right half of the sheet holds the small pennants (MiniMesh, 'experience' in the game's own test banner): four
 kinds, each four times - the mesh shows the first, the game moves it a quarter across and half down for the others

@@ -16,7 +16,8 @@ REFERENCE = ("rtw_gold_steam_manifest.json.gz", "rex_manifest.json.gz", "m2tw_ma
              "engine_catalogue.json.gz")
 MIN_MODULES = 40                     # fewer found means the module list itself could not be read
 WINDOW_ONLY = ("theme",)             # modules of the window not named gui*: they need tkinter
-OPTIONAL = ("PIL", "tkinter")        # a Python may lack them (pictures / the window); the exe must have both
+OPTIONAL = ("PIL", "tkinter", "numpy")   # a Python may lack them (pictures / the window / the quick 3D view);
+                                         # the exe must have all three
 
 
 def run(window=True):
@@ -55,12 +56,12 @@ def _modules(ok, fail, window):
             done += 1
         except ModuleNotFoundError as e:
             if (e.name or "").split(".")[0] in OPTIONAL and not getattr(sys, "frozen", False):
-                lacking.append(n)                           # this Python lacks Pillow / tkinter; the exe never does
+                lacking.append(n)                           # this Python lacks Pillow / tkinter / NumPy; the exe never does
             else:
                 fail("module %s" % n, "%s: %s" % (type(e).__name__, e))
         except Exception as e:                              # noqa: BLE001 - every failure is reported
             fail("module %s" % n, "%s: %s" % (type(e).__name__, e))
-    ok("%d modules import" % done + (" (not tried: %s - this Python lacks Pillow / tkinter)" % ", ".join(lacking)
+    ok("%d modules import" % done + (" (not tried: %s - this Python lacks Pillow / tkinter / NumPy)" % ", ".join(lacking)
                                       if lacking else ""))
 
 
