@@ -41,8 +41,8 @@ class CardMaker(tk.Toplevel):
         from .gui_util import ShortHint
         ShortHint(frm, text=(
             "The man as the 3D view shows him now. Turn him, zoom, pick an animation and stop it on the frame you like "
-            "in the 3D view, then 'Take the 3D view again'. The frame on the man (left) is what becomes the picture: "
-            "pick how much of him, or drag the frame anywhere on him, its corner to size it (the wheel too). The game's own cards are the man alone on a see-through "
+            "in the 3D view, then 'Take the 3D view again'. What the lit frame (left) holds becomes the picture: "
+            "pick how much of him, or drag him under it and bring him nearer with the wheel, as a photo is cut. The game's own cards are the man alone on a see-through "
             "ground (the game draws the card's frame and ground behind him) - from his head to his thighs, a "
             "horseman with the front of his horse; the description pictures show the whole man. Use it gives it to "
             "the unit: Preview, then Apply writes it into every faction folder the unit's card goes to (a backup "
@@ -57,7 +57,7 @@ class CardMaker(tk.Toplevel):
                   font=("", 10, "bold")).pack(anchor="w")
         ttk.Button(side, text="Take the 3D view again", command=self.take).pack(anchor="w", pady=(6, 0))
         ttk.Label(side, text="How much of him").pack(anchor="w", pady=(8, 0))
-        for key, words, _ in CM.PARTS + (("own", "my own frame (drag it on the man)", None),):
+        for key, words, _ in CM.PARTS + (("own", "my own (drag the man under the frame)", None),):
             ttk.Radiobutton(side, text=words, value=key, variable=self.v_part, command=self._part_picked).pack(
                 anchor="w")
         for label, var, lo, hi in (("Nearer / farther", self.v_scale, 50, 200), ("Up / down", self.v_up, -50, 50),
@@ -87,7 +87,7 @@ class CardMaker(tk.Toplevel):
         # him (the user, 2026-10-10: 'let us choose which part becomes the card ourselves - that freedom')
         self.canvas.bind("<ButtonPress-1>", self._press)
         self.canvas.bind("<B1-Motion>", self._drag)
-        self.canvas.bind("<ButtonRelease-1>", lambda e: setattr(self, "_grab", None))
+        self.canvas.bind("<ButtonRelease-1>", lambda e: (setattr(self, "_grab", None), self.show()))
         self.canvas.bind("<MouseWheel>", lambda e: self._wheel(1 if e.delta > 0 else -1))
         self.canvas.bind("<Button-4>", lambda e: self._wheel(1))
         self.canvas.bind("<Button-5>", lambda e: self._wheel(-1))
@@ -145,38 +145,24 @@ class CardMaker(tk.Toplevel):
             self.area = None
         self.show()
 
-    def _own(self, area):
+    def _own(self, area, quick=False):
         self.area = area
         self.v_part.set("own")
-        self.show()
+        self.show(quick)
 
     def _press(self, e):
-        a, fit = self.current(), self._fit
-        if not a or not fit:
+        """A press on the man's side: he follows the mouse under the frame (the frame stays where it is)."""
+        a, view = self.current(), self._fit
+        if not a or not view or e.x > view[3]:
             return
-        k, ox, oy = fit
-        x0, y0, x1, y1 = ox + a[0] * k, oy + a[1] * k, ox + (a[0] + a[2]) * k, oy + (a[1] + a[3]) * k
-        if abs(e.x - x1) <= 10 and abs(e.y - y1) <= 10:
-            self._grab = ("size", e.x, e.y, a)
-        elif x0 <= e.x <= x1 and y0 <= e.y <= y1:
-            self._grab = ("move", e.x, e.y, a)
-        else:                                       # a click on the man outside it: the frame comes there
-            self._grab = ("move", e.x, e.y, (a[0] + ((e.x - ox) / k - (a[0] + a[2] / 2)),
-                                             a[1] + ((e.y - oy) / k - (a[1] + a[3] / 2)), a[2], a[3]))
-            self._own(self._grab[3])
+        self._grab = (e.x, e.y, a)
 
     def _drag(self, e):
         if not self._grab or not self._fit:
             return
-        how, sx, sy, a = self._grab
+        sx, sy, a = self._grab
         k = self._fit[0]
-        dx, dy = (e.x - sx) / k, (e.y - sy) / k
-        if how == "move":
-            self._own((a[0] + dx, a[1] + dy, a[2], a[3]))
-        else:                                       # the corner: bigger / smaller, the picture's shape kept
-            aspect = self.size[0] / self.size[1]
-            h = max(8.0, a[3] + max(dy, dx / aspect))
-            self._own((a[0], a[1], h * aspect, h))
+        self._own((a[0] - (e.x - sx) / k, a[1] - (e.y - sy) / k, a[2], a[3]), quick=True)
 
     def _wheel(self, step):
         a = self.current()
@@ -233,7 +219,10 @@ class CardMaker(tk.Toplevel):
         return pic
 
     # ---- seeing it ----
-    def show(self):
+    def show(self, quick=False):
+        """Left: the frame, standing still and lit, the man under it - dragged and zoomed (the wheel) as a photo is
+        cut on a phone (the user, 2026-10-10: 'the frame lit, and we move the unit, not the frame'); right: the
+        picture at its size and bigger."""
         from PIL import Image, ImageTk
         c = self.canvas
         c.delete("all")
@@ -243,32 +232,30 @@ class CardMaker(tk.Toplevel):
             c.create_text(20, 20, anchor="nw", fill="#ddd", text="nothing drawn in the 3D view")
             return
         W, H = max(50, c.winfo_width()), max(50, c.winfo_height())
-        # left: the whole man with the frame on him; right: the picture at its size and bigger
-        fw = max(60, int(W * 0.42))
-        fig = self.figure
-        bb = fig.getchannel("A").getbbox() or (0, 0, fig.width, fig.height)      # the man and a little room round
-        pad = 0.12 * max(bb[2] - bb[0], bb[3] - bb[1])
-        vx0, vy0 = max(0, int(bb[0] - pad)), max(0, int(bb[1] - pad))
-        vx1, vy1 = min(fig.width, int(bb[2] + pad)), min(fig.height, int(bb[3] + pad))
-        view = fig.crop((vx0, vy0, vx1, vy1))
-        k = min((fw - 20) / view.width, (H - 34) / view.height)
-        shown = view.resize((max(1, int(view.width * k)), max(1, int(view.height * k))), Image.LANCZOS)
-        ph = ImageTk.PhotoImage(shown)
-        self._photos.append(ph)
-        ox, oy = 10 - vx0 * k, 24 - vy0 * k              # a point of the figure: (ox + x * k, oy + y * k)
-        self._fit = (k, ox, oy)
-        c.create_image(10, 24, anchor="nw", image=ph)
-        c.create_text(10, 6, anchor="nw", fill="#ddd", text="drag the frame")
+        PW, PH = max(60, int(W * 0.42)), max(60, H - 34)
+        aspect = self.size[0] / self.size[1]
+        fh = PH * 0.82
+        fw = fh * aspect
+        if fw > PW * 0.86:
+            fw = PW * 0.86
+            fh = fw / aspect
+        fx0, fy0 = 10 + (PW - fw) / 2, 24 + (PH - fh) / 2
         a = self.current()
-        if a:
-            x0, y0, x1, y1 = ox + a[0] * k, oy + a[1] * k, ox + (a[0] + a[2]) * k, oy + (a[1] + a[3]) * k
-            cl = lambda v, lo, hi: max(lo, min(hi, v))           # kept on the man's side of the window
-            right, low = 10 + shown.width, 24 + shown.height
-            c.create_rectangle(cl(x0, 2, right), cl(y0, 2, low), cl(x1, 2, right), cl(y1, 2, low),
-                               outline="#ffd24a", width=2)
-            if x1 <= right + 6 and y1 <= low + 6:
-                c.create_rectangle(x1 - 6, y1 - 6, x1 + 6, y1 + 6, outline="#ffd24a", fill="#ffd24a")
-        left = fw + 10
+        k = fw / a[2]                                   # screen pixels a figure pixel
+        self._fit = (k, fx0, fy0, 10 + PW)
+        seen = CM.cut(self.figure, (a[0] - (fx0 - 10) / k, a[1] - (fy0 - 24) / k, PW / k, PH / k), (PW, PH)) \
+            if not quick else self._quick_cut(a, k, fx0, fy0, PW, PH)
+        ground = Image.new("RGBA", (PW, PH), (46, 48, 54, 255))
+        ground.alpha_composite(seen)
+        ph = ImageTk.PhotoImage(ground)
+        self._photos.append(ph)
+        c.create_image(10, 24, anchor="nw", image=ph)
+        x1, y1 = fx0 + fw, fy0 + fh
+        for box in ((10, 24, 10 + PW, fy0), (10, y1, 10 + PW, 24 + PH), (10, fy0, fx0, y1), (x1, fy0, 10 + PW, y1)):
+            c.create_rectangle(*box, fill="#000000", stipple="gray50", outline="")    # outside the frame: dimmed
+        c.create_rectangle(fx0, fy0, x1, y1, outline="#ffd24a", width=2)
+        c.create_text(10, 6, anchor="nw", fill="#ddd", text="drag him, wheel: nearer")
+        left = PW + 20
         big = max(1, min((W - left - pic.width - 40) // pic.width, (H - 34) // pic.height))  # pixel by pixel, sharp
         x = left
         for k, label in [(1, "its size")] + ([(big, "x %d" % big)] if big > 1 else []):
@@ -280,6 +267,17 @@ class CardMaker(tk.Toplevel):
             c.create_image(x, 24, anchor="nw", image=ph)
             c.create_text(x, 6, anchor="nw", fill="#ddd", text=label)
             x += im.width + 20
+
+    def _quick_cut(self, a, k, fx0, fy0, PW, PH):
+        """cut() while dragging: the same picture, a quicker resize."""
+        from PIL import Image
+        rx, ry, rw, rh = a[0] - (fx0 - 10) / k, a[1] - (fy0 - 24) / k, PW / k, PH / k
+        left, upper, right, lower = int(rx), int(ry), int(rx + rw), int(ry + rh)
+        canvas = Image.new("RGBA", (max(1, right - left), max(1, lower - upper)), (0, 0, 0, 0))
+        f = self.figure
+        canvas.paste(f.crop((max(0, left), max(0, upper), min(f.width, right), min(f.height, lower))),
+                     (max(0, -left), max(0, -upper)))
+        return canvas.resize((PW, PH), Image.BILINEAR)
 
     def _board(self, size):
         """A checkerboard: where the picture is see-through."""

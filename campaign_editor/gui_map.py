@@ -315,6 +315,8 @@ class MapView(ttk.Frame):
         c.bind("<Double-Button-1>", self._double)          # a wonder opens its window, as in the game
         self.on_wonder = None                            # (type) -> the wonder's window
         self.on_town = None                              # (region) -> the town's own page (a double click)
+        self.on_new_town = None                          # (new region) -> its names and data (a double click)
+        self.menu_new = None                             # ('city' | 'port', new region) under the last right click
         self.on_char_double = None                       # (char id) -> its units' window (a double click)
         self.on_place_stop = None                        # () -> what hangs under the mouse is dropped (Esc / right)
         self.waiting = False                             # something picked waits for its click (Edit regions too)
@@ -1302,6 +1304,13 @@ class MapView(ttk.Frame):
                                    width=3, tags=tags)
                 if r >= 6:
                     self._hall(sx, sy, r, rgb, tags)
+                # its name, as every town's (a tester: a new town showed none until Apply)
+                name = p[4] if len(p) > 4 else (p[3] if len(p) > 3 else "")
+                if name and self.v_names.get() and self.z >= 4:
+                    font = ("", max(7, min(11, int(size * 0.5))), "bold")
+                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1)):
+                        c.create_text(sx + r + 2 + dx, sy + dy, text=name, anchor="w", fill="black", font=font)
+                    c.create_text(sx + r + 2, sy, text=name, anchor="w", fill="white", font=font)
             else:
                 c.create_oval(sx - r * 0.9, sy - r * 0.9, sx + r * 0.9, sy + r * 0.9, fill="#2a6fdb", outline="#ffd400",
                               width=3, tags=tags)
@@ -1837,6 +1846,10 @@ class MapView(ttk.Frame):
         self._doubled = True                             # its release must not pick the town back (on_city)
         if self.on_region_click:                         # a window's regions are being picked (mark_regions)
             return
+        new = self._new_under(e.x, e.y)
+        if new and self.on_new_town and not self.v_pick.get():
+            self.on_new_town(new[1])                     # a new region's town: its names and data (before Apply)
+            return
         town = self._town_under(e.x, e.y)
         if town and self.on_town and not self.v_pick.get():
             self.on_town(town[0])                        # a town: straight to its own window (a tester)
@@ -2162,12 +2175,22 @@ class MapView(ttk.Frame):
                     return tuple(tag[4:].split(":", 1))           # a new region's town / port (not written yet)
         return None
 
+    def _new_under(self, sx, sy):
+        """('city' | 'port', region) of a NEW region's town / port under the mouse (not written yet), or None."""
+        for item in reversed(self.canvas.find_overlapping(sx - 2, sy - 2, sx + 2, sy + 2)):
+            for tag in self.canvas.gettags(item):
+                if tag.startswith("new:") and tag.count(":") >= 2 and not tag.endswith(":"):
+                    return tuple(tag[4:].split(":", 1))
+        return None
+
     def _show_menu(self, e):
         """The right-click menu: what can be done at that spot (a town, a character, an empty tile)."""
         xy = self.to_tile(e.x, e.y)
         if not self.inside(xy):
             return
-        town = self._town_under(e.x, e.y)
+        # a new region's town / port (not written yet) has a menu of its own - all of it at once, before Apply
+        self.menu_new = self._new_under(e.x, e.y)
+        town = self._town_under(e.x, e.y) if not self.menu_new else None
         if self.v_pick.get() and self.on_pick_menu:
             items = self.on_pick_menu(self.picked, town[0] if town else None) or []
         else:
@@ -2175,7 +2198,7 @@ class MapView(ttk.Frame):
             self.menu_res = self._res_under(e.x, e.y)          # a resource / fort / tower under the mouse
             self.menu_fort = self._fort_line_under(e.x, e.y)        # a fort / tower / wonder sign (also when not editing)
             under = self._place_under(e.x, e.y)
-            self.menu_port = under[1] if under and under[0] == "port" else None
+            self.menu_port = under[1] if under and under[0] == "port" and not self.menu_new else None
             items = self.on_menu(town[1] if town else xy, town[0] if town else None, cid) or []
         m = tk.Menu(self, tearoff=0)
         for label, fn in items:

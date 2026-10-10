@@ -821,6 +821,7 @@ class App(tk.Tk):
         self.map_view = MapView(tab, on_layers=lambda: self.show_map())
         self.map_view.on_menu = self.map_menu
         self.map_view.on_town = self.town_window          # a double click: the town's own window
+        self.map_view.on_new_town = lambda name: self.new_region_dialog(edit=name)   # a new one: its names, data
         self.map_view.on_char_double = self.char_window   # ... an army or fleet: its units
         self.map_view.on_fort_double = self.fort_window   # ... a fort: the army in it
         self.map_view.on_wonder = lambda t: __import__("campaign_editor.gui_wonders", fromlist=["show"]).show(self, self.mod, t)
@@ -2395,7 +2396,8 @@ class App(tk.Tk):
         for r in self.new_regions:
             for what in ("city", "port"):
                 if r.get(what):
-                    points.append((tuple(r[what]), what, tuple(r["colour"]), r["name"]))
+                    points.append((tuple(r[what]), what, tuple(r["colour"]), r["name"],
+                                   r.get("settlement_label") or r.get("settlement") or r["name"]))
         if on:
             self.region_bar.pack(fill="x", before=self.map_view)
         else:
@@ -5051,11 +5053,47 @@ class App(tk.Tk):
         self.status.set("%s (%s, %s): level, population, city or castle and buildings here; its garrison on Units "
                         "& armies. Preview, then Apply changes." % (town, region, owner))
 
+    def _new_town_menu(self, what, name):
+        """A new region's town or port (not written yet): what can be done with it at once, before Apply (a tester:
+        'its name did not show and its menu did not work - we want to do everything at once')."""
+        r = self._new_region(name)
+        town = r.get("settlement_label") or r.get("settlement") or name
+        items = [("%s (%s) - new, written with the next Apply" % (town, name), None),
+                 ("Its names, owner, level, resources...  (double click)",
+                  lambda: self.new_region_dialog(edit=name))]
+        me = self.v["template"].get().strip()
+        if self.editing() and r.get("owner") == me and name in self.chosen:
+            items.append(("Edit this town in Edit faction (garrison, buildings)", lambda: self.open_town(name)))
+
+        def port_here():
+            self.v_paint.set(name + "  (new)")
+            self.region_point("port")
+        if what == "city":
+            items.append(("Place its port - then click a coast tile" if not r.get("port") else
+                          "Move its port - then click a coast tile", port_here))
+        else:
+            def no_port():
+                self.remember()
+                r["port"] = None
+                self.status.set("%s has no port now - written with the next Apply." % name)
+                self.show_map()
+            items.append(("Take its port away", no_port))
+
+        def drop():
+            self.v_paint.set(name + "  (new)")
+            self.drop_region()
+            self.status.set("%s (new) taken away - nothing of it is written; Undo brings it back." % name)
+        items += [(None, None), ("Delete this new region (nothing of it is written yet)", drop)]
+        return items
+
     def map_menu(self, xy, region, cid):
         """The Map's right-click menu: [(label, command)] for what can be done at that spot."""
         if not self.mod:
             return []
         items = []
+        new = getattr(self.map_view, "menu_new", None)
+        if new and self._new_region(new[1]):
+            return self._new_town_menu(*new)
         if region:
             town = self._cmap.info.get(region, {}).get("settlement", region) if self._cmap else region
             items.append(("%s (%s)" % (town, region), None))
