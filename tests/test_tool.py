@@ -10540,6 +10540,30 @@ building smith
         self.assertEqual(app.place_moves, {})                 # not a move of a region of the map
         self.assertIn("new region New_Land", said[-1])
 
+    def test_map_drawn_again_after_it_is_dragged(self):
+        """Signs, borders and names did not come back after the map was dragged until a zoom (the user, 2026-10-10,
+        on every map): while dragging only the background is cut again and the signs shifted (_pan); the release
+        asks for the whole drawing, but a _pan still waiting kept it from being asked - and nothing drew them. Now
+        the release's render() replaces a waiting _pan."""
+        try:
+            import tkinter as tk
+            from campaign_editor.gui_map import MapView
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / display / Pillow (CI): not tested here
+            self.skipTest("no window: %s" % e)
+        try:
+            v = MapView(root)
+            drawn = []
+            v._render = lambda: drawn.append("all")
+            v._pan = lambda: drawn.append("pan")
+            v._pending, v._pending_pan = v.after(15, v._pan), True      # the drag's last move, not yet drawn
+            v.render()                                                  # the button let go
+            root.after(60, root.quit)
+            root.mainloop()
+            self.assertEqual(drawn, ["all"])
+        finally:
+            root.destroy()
+
     def test_closing_the_editor_when_a_command_is_already_gone(self):
         """Closing the editor once showed 'can't delete Tcl command' and then, while it reported that, a Windows box
         'application has been destroyed' (a tester, 0.32.0): a window keeps the names of its callbacks to delete them

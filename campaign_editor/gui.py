@@ -826,11 +826,15 @@ class App(tk.Tk):
         self.map_view.on_fort_double = self.fort_window   # ... a fort: the army in it
         self.map_view.on_wonder = lambda t: __import__("campaign_editor.gui_wonders", fromlist=["show"]).show(self, self.mod, t)
         self.map_view.on_pick_menu = self.pick_menu
-        # Bigger map (x3) on the map's own bar, beside its zoom (once on the top row)
-        from .gui_util import tip as _tip
+        # Bigger map (x3) on the map's own bar, left of its zoom (- 100% + Fit stay together), with its own '?'
+        # saying what it does (once on the top row; a tester: 'not between the zoom's plus and minus')
+        from .gui_util import hint as _hint, tip as _tip
+        from .gui_upscale import WHAT_HAPPENS
+        q = _hint(self.map_view.zoom_bar, WHAT_HAPPENS, width=520)
+        q.pack(side="right", padx=(0, 12), after=self.map_view.zoom_minus)
         _tip(ttk.Button(self.map_view.zoom_bar, text="Bigger map (x3)...", command=self.once(
             "upscale_map", lambda: self.upscale_map())), "make the campaign map 3 x bigger (beta)").pack(
-            side="right", padx=(0, 12), after=self.map_view.lbl_zoom)
+            side="right", padx=(12, 0), after=q)
         self.map_view.on_tool = self.map_tool
         self.map_view.on_resize = self.map_size_window    # Change size... beside the map's size
         self.v_borders = self.map_view.v_borders

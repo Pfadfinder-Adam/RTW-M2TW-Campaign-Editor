@@ -220,6 +220,10 @@
   release's page.
 
 ### Fixed
+- **The map's signs, borders and names come back after the map is dragged** (on every map): they stayed missing
+  where the map was moved until a zoom in and out.
+- **Bigger map (x3)... no longer sits inside the zoom** (between its - and its 100%): it stands left of the zoom
+  with a **?** of its own that says what the x3 does.
 - **Medieval II (with M2EX) crashed at the campaign's start after a map cut** that took towns off ('Region has no
   descr_regions.txt entry', then a crash): the land the cut left of their regions kept their colours with no region.
   It now goes to the common wasteland (or, with the original game, to the neighbour region).

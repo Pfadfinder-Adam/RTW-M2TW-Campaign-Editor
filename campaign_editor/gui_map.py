@@ -196,6 +196,7 @@ class MapView(ttk.Frame):
         self.lbl_zoom = ttk.Label(bar, text="", width=6, anchor="e")
         self.lbl_zoom.pack(side="right", padx=(0, 4))
         self.zoom_bar = bar                              # the window that holds the map adds its own (Bigger map)
+        self.zoom_minus = b                              # ... to the left of the zoom, never inside it
         from .gui_util import first
         first(b, self.lbl_zoom, *bar.pack_slaves()[-4:-2][::-1])  # the zoom buttons keep their room
         from .gui_util import hint
@@ -1139,7 +1140,13 @@ class MapView(ttk.Frame):
         lab.configure(text="%d%%" % round(100 * self.z / fit) if fit else "")
 
     def render(self):
+        """The whole map drawn again (soon, once for many asks). A drag's _pan still waiting gives way to it: it only
+        shifts the signs drawn before, so the ones it left out (off the old view) never came until a zoom."""
+        if self._pending is not None and getattr(self, "_pending_pan", False):
+            self.after_cancel(self._pending)
+            self._pending = None
         if self._pending is None:
+            self._pending_pan = False
             self._pending = self.after(15, self._render)
 
     def _render(self):
@@ -2438,7 +2445,7 @@ class MapView(ttk.Frame):
             self._drag = (x0, y0, ox, oy, True)
             self.ox, self.oy = ox - (e.x - x0) / self.z, oy - (e.y - y0) / self.z
             if self._pending is None:
-                self._pending = self.after(15, self._pan)
+                self._pending, self._pending_pan = self.after(15, self._pan), True
 
     def _resize(self):
         """Change size...: the map's own window; a map without one of its own (the Terrain tab's) takes the main

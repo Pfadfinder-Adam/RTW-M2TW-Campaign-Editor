@@ -12,6 +12,15 @@ from .gui_util import ask
 from . import log
 
 APP = "RTW & M2TW Campaign Editor"
+# what the x3 does - the window's hint and the '?' beside its button on the Maps bar (one text, one place)
+WHAT_HAPPENS = (
+    "Every tile becomes a block of 3 x 3 tiles, in five steps: the grid, smoothing, heights, rivers, objects. "
+    "Each step is written with a backup and checked; between the steps the map is in Maps - look at "
+    "it, fix what you want by hand (borders after step 2, the coast before step 3, the ground after step 3), "
+    "then do the next step. Towns, ports, armies, agents, resources and forts keep their places (in the middle "
+    "of their blocks), and the campaign's scripts and events move with the map. 'Put the old map back' undoes "
+    "every step at once. You may close this window between the steps: opened again, it goes on where it "
+    "stopped. The map is never 100 % right after it: look it over by hand.")
 def _game_words(mod):
     from .limits import engine_of, game_kind
     game = "Medieval II" if game_kind(mod) == "medieval2" else "Rome"
@@ -53,14 +62,7 @@ def open_upscale(app):
                                      "\nThe map now: %d x %d tiles  ->  after: %d x %d tiles" % (
                                          size[0], size[1], size[0] * FACTOR, size[1] * FACTOR)) if size else "")
               ).pack(anchor="w", pady=(4, 0))
-    ShortHint(frm, text=(
-        "Every tile becomes a block of 3 x 3 tiles, in five steps: the grid, smoothing, heights, rivers, objects. "
-        "Each step is written with a backup and checked; between the steps the map is in Maps - look at "
-        "it, fix what you want by hand (borders after step 2, the coast before step 3, the ground after step 3), "
-        "then do the next step. Towns, ports, armies, agents, resources and forts keep their places (in the middle "
-        "of their blocks), and the campaign's scripts and events move with the map. 'Put the old map back' undoes "
-        "every step at once. You may close this window between the steps: opened again, it goes on where it "
-        "stopped.")).pack(anchor="w", fill="x", pady=(8, 0))
+    ShortHint(frm, text=WHAT_HAPPENS).pack(anchor="w", fill="x", pady=(8, 0))
     ttk.Label(frm, text="Values (the shore by the water is the game's own and stays as it is)",
               font=("", 10, "bold")).pack(anchor="w", pady=(10, 0))
     grid = ttk.Frame(frm)
