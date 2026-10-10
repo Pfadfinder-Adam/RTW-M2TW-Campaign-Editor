@@ -2,7 +2,7 @@
 
 **An editor for the campaigns of Rome: Total War (with REX) and Medieval II: Total War (with M2EX)** - factions,
 the campaign map, towns, armies, characters, units, buildings, diplomacy, texts and pictures, in a window, with a
-preview of every change and a backup you can always go back to. Version **0.33.0**.
+preview of every change and a backup you can always go back to. Version **0.34.0**.
 
 [![Download](https://img.shields.io/github/v/release/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor?label=Download&style=for-the-badge)](../../releases)
 [![Wiki](https://img.shields.io/badge/Guide-Wiki-2b6cb0?style=for-the-badge)](../../wiki)
@@ -88,10 +88,10 @@ with the game's own unpacker.
 
 ## ✨ What's new
 
-**0.33.0** ([release](../../releases/tag/v0.33.0)): units, buildings and religions made from nothing; your own files
-for a unit's battle model; the map's size changed by dragging its edges; regions merged; many towns deleted at once;
-a town's own garrison. **Coming next** (in the newest test builds): a deleted town's region kept as a wasteland,
-thin mods from New mod folder, much faster on big mods. Everything: [CHANGELOG.md](CHANGELOG.md).
+**0.34.0** ([release](../../releases/tag/v0.34.0)): **View in 3D** plays the game's animations - riders on their
+horses, siege engines, a unit's card and picture made from the 3D view; a deleted town's region kept as a
+**wasteland** and one common wasteland for free land; **Pull and Push the coast**; thin mods from New mod folder;
+much faster on big mods; every picture opens big on a click; reports carry screenshots made smaller. Everything: [CHANGELOG.md](CHANGELOG.md).
 
 ## 🗺️ Rescale the whole campaign map 3 x
 

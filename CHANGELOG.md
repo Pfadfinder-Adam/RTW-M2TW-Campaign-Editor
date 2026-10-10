@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.34.0 - 2026-10-10
 
 ### Added
 - **View in 3D: the right mouse button held moves the view** (the left turns it round its point) - to pick an
