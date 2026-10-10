@@ -1770,6 +1770,9 @@ def s_rules_all(c, mod):
             if CR.blocked(r):
                 left.setdefault("greyed out in Campaign rules - a change broke the game in a test", []).append(r.key)
                 continue
+            if r.off:
+                left.setdefault("switched off in the file - the engine's default holds", []).append(r.key)
+                continue
             new, why = rule_changed(r, now)
             if new is not None and new != r.value and CR.check(r, new) is None:
                 ch[r] = new

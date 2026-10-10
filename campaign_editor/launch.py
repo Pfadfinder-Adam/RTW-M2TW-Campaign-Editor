@@ -45,7 +45,7 @@ def _own_script(game, base, mod_dir):
     extender's own line does."""
     eng = _engine(game)
     uses = re.compile(r"(?<![a-z])%s\b" % re.escape(eng), re.I) if eng else None   # %~dp0REX.exe too
-    names = [re.compile(r"-mod:\s*\"?%s\b" % re.escape(base), re.I),
+    names = [re.compile(r"-mod:\s*\"?(?:mods[/\\]+)?%s\b" % re.escape(base), re.I),
              re.compile(r"mods[/\\]+%s\b" % re.escape(base), re.I)]
     flag = EXPANSIONS.get(base.lower(), (None,))[0]
     if flag:
@@ -105,15 +105,18 @@ def start_line(data):
             args = ["@mods\\%s\\%s.cfg" % (base, base)]
     else:
         low = (base or "").lower()
+        # -mod: is the mod folder's path from the game folder: 'HLR' beside the exe, 'mods/my_r2' one folder deeper
+        # (report #177: -mod:my_r2 for a mod in mods/my_r2 started the plain game)
+        where = os.path.relpath(mod_dir, game).replace(os.sep, "/") if base else None
         if os.path.isfile(os.path.join(game, "REX.exe")):
             exe = "REX.exe"
-            args = [EXPANSIONS[low][0]] if low in EXPANSIONS else (["-nm", "-show_err", "-mod:%s" % base]
+            args = [EXPANSIONS[low][0]] if low in EXPANSIONS else (["-nm", "-show_err", "-mod:%s" % where]
                                                                    if base else [])
         else:
             exe = EXPANSIONS[low][1] if low in EXPANSIONS else "RomeTW.exe"
             if not os.path.isfile(os.path.join(game, exe)):
                 raise ValueError("no game exe (REX.exe, %s) in %s" % (exe, game))
-            args = ["-nm", "-show_err", "-mod:%s" % base] if base and low not in EXPANSIONS else []
+            args = ["-nm", "-show_err", "-mod:%s" % where] if base and low not in EXPANSIONS else []
     return {"exe": os.path.join(game, exe), "args": args, "cwd": game, "words": " ".join([exe] + args)}
 
 

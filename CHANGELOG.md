@@ -187,6 +187,19 @@
   release's page.
 
 ### Fixed
+- **A mod of Medieval II (with M2EX) closed at start after the editor's set-up fix** ('Could not find soldier battle
+  model for unit type ...'): the fix that gives a mod the engine's settings files copied the game's
+  `descr_caps_ex.txt` as it is - its `model_battle_source text` made the engine read the battle models from the
+  game's `descr_model_battle.txt` and miss the mod's own `battle_models.modeldb` (its other switches changed
+  recruitment, items and sprites too). Now the copy has **every setting switched off** (a `;` before it): the mod
+  runs exactly as before, and each setting can be switched on there. Only `descr_ex.txt` and `descr_caps_ex.txt`
+  are offered (the lighting, day types and AI files change how the game reads its own files, so they are not
+  copied). A mod that already has the game's line is found on Load: **model_battle_source modeldb** with a yes.
+  Campaign rules does the same: a change in a mod without its own file puts the copy in with only that line on, and
+  shows a switched-off setting as such (a change switches it on).
+- **Start Rome for a mod in `mods\<name>` started the plain game**: it was started with `-mod:<name>`; now with the
+  mod folder's path from the game folder (`-mod:mods/<name>`), as for a mod beside the game's exe (`-mod:<name>`).
+- **The report window's text box can be made bigger**: it grows with the window, and by the strip under it.
 - **A new region's town and port can be moved again**: once placed (before Apply) they stayed where they were -
   now drag them like any town or port (on the new region's own land; a port beside the sea).
 - **New army here - 'Make him a general' gave a captain**: he was written as descr_strat's `general`, which the game

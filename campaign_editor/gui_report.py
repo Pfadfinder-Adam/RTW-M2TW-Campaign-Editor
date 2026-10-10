@@ -51,10 +51,27 @@ def open_report(app, message="", kind="bug", tab=None):
                "suggestion": "Your idea: what should the editor do, and what would it help you with?"}
     lbl_prompt = ttk.Label(frm, text=PROMPTS[kind])
     lbl_prompt.pack(anchor="w", pady=(6, 2))
+    # the box grows with the window and by its grip under it (report #176: 'make the text window resizable')
     txt = tk.Text(frm, width=70, height=6, wrap="word")
-    txt.pack(fill="x")
+    txt.pack(fill="both", expand=True)
     if message:
         txt.insert("1.0", message)
+    grip = ttk.Frame(frm, height=7, cursor="sb_v_double_arrow")
+    grip.pack(fill="x")
+    held = {}
+
+    def grip_press(ev):
+        held.update(y=ev.y_root, lines=int(txt.cget("height")))
+
+    def grip_drag(ev):
+        if not held:
+            return
+        import tkinter.font as tkfont
+        step = max(1, tkfont.Font(font=txt.cget("font")).metrics("linespace"))
+        txt.configure(height=max(3, min(60, held["lines"] + (ev.y_root - held["y"]) // step)))
+    grip.bind("<ButtonPress-1>", grip_press)
+    grip.bind("<B1-Motion>", grip_drag)
+    w.resizable(True, True)
 
     grid = ttk.Frame(frm)
     grid.pack(fill="x", pady=(8, 0))

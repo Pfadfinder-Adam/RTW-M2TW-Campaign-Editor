@@ -3996,6 +3996,11 @@ building smith
         self.assertEqual(os.path.basename(launch.start_line(hlr)["bat"]), "Start_mod.bat")
         put(os.path.join(rome, "HLR", "Start_HLR.bat"), "start REX.exe -mod:HLR\r\n")
         self.assertEqual(os.path.basename(launch.start_line(hlr)["bat"]), "Start_HLR.bat")
+        deeper = data(rome, "mods", "my_r2")            # report #177: a Rome mod in mods/<name>
+        self.assertEqual(launch.start_line(deeper)["args"], ["-nm", "-show_err", "-mod:mods/my_r2"])
+        self.assertEqual(launch.what(deeper), ("Rome", "my_r2"))
+        put(os.path.join(rome, "my_r2.bat"), "start REX.exe -nm -mod:mods/my_r2\r\n")
+        self.assertEqual(launch.start_line(deeper)["bat"], os.path.join(rome, "my_r2.bat"))
         m2 = os.path.join(self.root, "m2")
         put(os.path.join(m2, "M2EX.exe"))
         put(os.path.join(m2, "Teutonic.bat"), 'start "" "%~dp0M2EX.exe" --features.mod=mods/teutonic\r\n')
@@ -4973,6 +4978,64 @@ building smith
         self.assertEqual(gamefix.missing_engine_files(ModData(mod.data)), [])
         restore(ModData(mod.data), backups(ModData(mod.data))[0])
         self.assertFalse(os.path.exists(os.path.join(mod.data, "descr_ex.txt")))
+
+    def test_engine_files_copied_with_every_setting_off(self):
+        """Report #174: the game's descr_caps_ex.txt copied into a mod as it was switched M2EX to
+        model_battle_source text - the mod's own battle_models.modeldb went unread and the game closed at start
+        ('Could not find soldier battle model'). The copy now has every setting switched off (the mod runs on the
+        engine's defaults, as before); the lighting / AI *_ex files are not copied at all."""
+        from campaign_editor import gamefix, modeldb, symbols
+        game = os.path.join(self.root, "game")
+        write(os.path.join(game, "medieval2.exe"), "x")
+        write(os.path.join(game, "M2EX.exe"), "x")
+        write(os.path.join(game, "data", "descr_caps_ex.txt"),
+              "; header\nsprite_format  xml\n\nmodel_battle_source  text ; the game's own\n  ;x\n")
+        write(os.path.join(game, "data", "descr_strategy_lighting_ex.txt"), "exposure 1.0\n")
+        write(os.path.join(game, "data", "descr_campaign_ai_db_ex.xml"), "<root/>\n")
+        write(os.path.join(game, "data", "descr_religions.txt"), "x\n")
+        write(os.path.join(game, "data", "descr_sm_factions.txt"), SM)
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "mods", "m", "data"))
+        mod = ModData(os.path.join(game, "mods", "m", "data"))
+        found = [p for p in gamefix.problems(mod) if p["id"] == "engine_files"]
+        self.assertEqual(found[0]["names"], ["descr_caps_ex.txt"])
+        gamefix.fix_plan(mod, found).apply()
+        with open(os.path.join(mod.data, "descr_caps_ex.txt"), "rb") as fh:
+            self.assertEqual(fh.read(), b"; header\r\n;sprite_format  xml\r\n\r\n;model_battle_source  text ; "
+                                        b"the game's own\r\n  ;x\r\n")
+        mod = ModData(mod.data)
+        self.assertFalse(modeldb.text_source(mod))
+        self.assertEqual(symbols.sprite_mode(mod), "sd")
+        self.assertFalse(os.path.exists(os.path.join(mod.data, "descr_strategy_lighting_ex.txt")))
+
+    def test_model_battle_text_without_the_mods_own_text_file(self):
+        """Report #174: a mod with its own battle_models.modeldb, no descr_model_battle.txt of its own and
+        model_battle_source text in its descr_caps_ex.txt closes M2EX at start - offered: modeldb."""
+        from campaign_editor import gamefix, modeldb
+        game = os.path.join(self.root, "game")
+        write(os.path.join(game, "medieval2.exe"), "x")
+        write(os.path.join(game, "M2EX.exe"), "x")
+        write(os.path.join(game, "data", "descr_religions.txt"), "x\n")
+        write(os.path.join(game, "data", "descr_sm_factions.txt"), SM)
+        write(os.path.join(game, "data", "descr_model_battle.txt"), "type x\n")
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "mods", "m", "data"))
+        data = os.path.join(game, "mods", "m", "data")
+        write(os.path.join(data, "descr_ex.txt"), "max_factions 31\n")
+        write(os.path.join(data, "descr_caps_ex.txt"), "sprite_format  xml\nmodel_battle_source  text\n")
+        mod = ModData(data)
+        self.assertFalse([p for p in gamefix.problems(mod) if p["id"] == "model_battle_source"])   # no modeldb
+        write(os.path.join(data, "unit_models", "battle_models.modeldb"), "22 serialization::archive 3 0 0 0 0 0\n")
+        mod = ModData(data)
+        found = [p for p in gamefix.problems(mod) if p["id"] == "model_battle_source"]
+        self.assertEqual(len(found), 1)
+        gamefix.fix_plan(mod, found).apply()
+        with open(os.path.join(data, "descr_caps_ex.txt"), "rb") as fh:
+            self.assertEqual(fh.read(), b"sprite_format  xml\r\nmodel_battle_source  modeldb\r\n")
+        mod = ModData(data)
+        self.assertFalse(modeldb.text_source(mod))
+        self.assertFalse([p for p in gamefix.problems(mod) if p["id"] == "model_battle_source"])
+        write(os.path.join(data, "descr_caps_ex.txt"), "model_battle_source  text\n")
+        write(os.path.join(data, "descr_model_battle.txt"), "type x\n")       # its own text file: left alone
+        self.assertFalse([p for p in gamefix.problems(ModData(data)) if p["id"] == "model_battle_source"])
 
     def test_engine_settings_come_from_the_mods_own_files_only(self):
         """REX / M2EX read a mod's descr_ex.txt / descr_caps_ex.txt from the mod alone ("Mods that don't ship this
@@ -7816,7 +7879,11 @@ building smith
         with open(path, "w", newline="") as fh:
             fh.write(text)
         rules = {r.key: r for r in CR.read(path)}
-        self.assertEqual(sorted(rules), ["age_of_manhood", "max_factions", "range_indicator_colour"])
+        self.assertEqual(sorted(rules), ["age_of_manhood", "max_factions", "range_indicator_colour",
+                                         "unit_group_mode"])
+        self.assertTrue(rules["unit_group_mode"].off)                      # ';unit_group_mode vanilla': off
+        self.assertIn("Switched off", CR.explain(rules["unit_group_mode"]))
+        self.assertIsNone(rules["age_of_manhood"].off)
         self.assertEqual(rules["max_factions"].section, "Extended settings")
         self.assertEqual(CR.explain(rules["max_factions"]), "Maximum number of factions\nIncrease for mods")
         self.assertEqual(rules["age_of_manhood"].section, "Family and ageing")
@@ -7829,6 +7896,28 @@ building smith
         with open(path, newline="") as fh:
             self.assertEqual(fh.read(), text.replace("age_of_manhood 16", "age_of_manhood 14").replace(
                 "60 200 255", "1 2 3"))
+        rules = {r.key: r for r in CR.read(path)}
+        plan = Plan(ModData(self.root), "rules", "rules")
+        CR.apply(plan, "descr_ex.txt", {rules["unit_group_mode"]: "new"}, path, None)    # switched on
+        plan.apply()
+        with open(path, newline="") as fh:
+            self.assertIn("\r\nunit_group_mode new\r\n", fh.read())
+
+    def test_engine_settings_put_in_a_mod_by_campaign_rules(self):
+        """Report #174: a rule changed in a mod without its own descr_caps_ex.txt puts the game's copy in with that
+        line on and every other setting switched off - the game's model_battle_source text no longer comes along."""
+        from campaign_editor import campaignrules as CR
+        from campaign_editor.plan import Plan
+        base = os.path.join(self.root, "game", "data", "descr_caps_ex.txt")
+        os.makedirs(os.path.dirname(base))
+        with open(base, "w", newline="") as fh:
+            fh.write("; switches\r\nmodel_battle_source  text\r\ndefault_recruitment_slots  0\r\n")
+        rules = {r.key: r for r in CR.read(base)}
+        plan = Plan(ModData(self.root), "rules", "rules")
+        CR.apply(plan, "descr_caps_ex.txt", {rules["default_recruitment_slots"]: "2"}, None, base)
+        plan.apply()
+        with open(os.path.join(self.root, "data", "descr_caps_ex.txt"), newline="") as fh:
+            self.assertEqual(fh.read(), "; switches\r\n;model_battle_source  text\r\ndefault_recruitment_slots  2\r\n")
 
     def test_test_mod_report_puts_steps_to_look_at_first(self):
         """The test mod's report (the user, 2026-10-08: 'drop the steps that always work?' - kept, but marked): steps
