@@ -75,7 +75,10 @@ def scrub(text, words=()):
 
 HEAD_CAP = 512 * 1024           # a long log's start: the game reading the mod's files (where load errors are)
 MIDDLE_CAP = 256 * 1024         # ... its errors and warnings from the part left out
-IMPORTANT = re.compile(rb"\[(?:error|fatal|warning|critical)\]|\bERROR\b|\bWARNING\b|ASSERT|[Ee]xception|crash")
+# ... and the test mod's own lines ([CE_CONDITIONS], [CE_SPECIAL]...: what the test asks the game - report #186 lost
+# them in the 4 MB of the middle left out)
+IMPORTANT = re.compile(rb"\[(?:error|fatal|warning|critical)\]|\bERROR\b|\bWARNING\b|ASSERT|[Ee]xception|crash|"
+                       rb"\[CE_[A-Z_]+\]")
 
 
 def _read_tail(path, cap=TEXT_CAP):

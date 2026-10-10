@@ -74,6 +74,29 @@ def types(mod):
     return out
 
 
+def shown_name(mod, kind):
+    """The resource's name as players see it (the user, 2026-10-10: 'hover a resource - just its name'): Medieval
+    II's descr_sm_resources `localised_name` key, else SMT_RESOURCE_<TYPE>, looked up in strat.txt (or its
+    .strings.bin); else the type made readable."""
+    key = ("resource_names",)
+    if key not in mod._cache:
+        names = {}
+        p = mod.file("resources")
+        if p:
+            cur = None
+            for l in mod.load(p).texts():
+                t = strip_comment(l).split()
+                if len(t) >= 2 and t[0] == "type":
+                    cur = t[1]
+                elif len(t) >= 2 and t[0] == "localised_name" and cur:
+                    names[cur] = t[1]
+        mod._cache[key] = names
+    from .strtables import strings
+    table = strings(mod, "strat.txt")
+    got = table.get((mod._cache[key].get(kind) or "SMT_RESOURCE_" + kind).upper())
+    return got or kind.replace("_", " ").capitalize()
+
+
 def problem(mod, campaign, xy, taken=()):
     """Why a resource may not lie on tile xy, or None: it needs land (a town's tile
     is fine - HLR keeps its slaves there) and a tile of its own (no file has two)."""
@@ -112,8 +135,10 @@ def on_wasteland(mod, campaign, have):
 
 
 def drop_on(plan, campaign, tiles, why, tag=""):
-    """Medieval II: the resource lines of descr_strat.txt on tiles (land becoming a wasteland's) taken out, each
-    noted - the game refuses a resource in a region without a town (report #186). Rome: nothing (see on_wasteland)."""
+    """Medieval II: the resource lines of descr_strat.txt on tiles (land becoming a wasteland's) - the game refuses a
+    resource in a region without a town (report #186). Each found goes into plan.on_wasteland (the window asks once:
+    the user, 2026-10-10 'ask once - keep them or delete them'); taken out, each noted, unless
+    plan.wasteland_resources_out is False (then kept, with a warning). Rome: nothing (see on_wasteland)."""
     from .limits import game_kind
     if game_kind(plan.mod) != "medieval2" or not tiles:
         return
@@ -122,10 +147,15 @@ def drop_on(plan, campaign, tiles, why, tag=""):
         return
     tiles = {tuple(t) for t in tiles}
     f = plan.edit(sp)
-    for r in reversed(read(f)):
-        if tuple(r.xy) in tiles:
-            del f.raw[r.line]
-            plan.note(f, "resource %s at %d, %d out - %s%s" % (r.kind, r.xy[0], r.xy[1], why, tag))
+    hit = [r for r in read(f) if tuple(r.xy) in tiles]
+    plan.on_wasteland += ["%s at %d, %d%s" % (r.kind, r.xy[0], r.xy[1], tag) for r in hit]
+    if hit and getattr(plan, "wasteland_resources_out", None) is False:
+        plan.warn(f, "%d resource(s) kept on a wasteland's land (%s) - %s%s" % (
+            len(hit), ", ".join("%s at %d, %d" % (r.kind, r.xy[0], r.xy[1]) for r in hit[:6]), WASTE_WORDS, tag))
+        return
+    for r in reversed(hit):
+        del f.raw[r.line]
+        plan.note(f, "resource %s at %d, %d out - %s%s" % (r.kind, r.xy[0], r.xy[1], why, tag))
 
 
 def _moved_line(text, xy):

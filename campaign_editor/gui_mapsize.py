@@ -177,6 +177,7 @@ def open_map_size(app, view=None):
     def build(n, out):
         """The cut's plan on the files as they are at this moment (at the write: as every other part left them)."""
         p = Plan(ModData(app.mod.data), "map", "map_size", {})
+        p.wasteland_resources_out = done.get("res_out")    # the one answer about resources left on the wasteland
         done["warn"] = plan_resize(p, camp, clear=any(v < 0 for v in n.values()), factions_out=out, **n)
         return p
 
@@ -208,6 +209,11 @@ def open_map_size(app, view=None):
                 parent=w, yes="Keep the cut for Apply", no="Not now"):
             v_state.set("Not kept - nothing changed.")
             return None
+        if keep and p.on_wasteland and done.get("res_out") is None:     # asked once, after the cut's own question
+            from .gui_settlements import ask_wasteland_resources
+            done["res_out"] = ask_wasteland_resources(w, p)
+            if not done["res_out"]:
+                p = build(n, tuple(gone) + tuple(lost_factions(app.mod, camp, **n)) if hit else ())
         v_state.set("Ready: %d file(s) will change%s. Nothing is written yet." % (
             len(p.changed_files()), ", %d thing(s) on the part cut off go with it" % len(hit) if hit else ""))
         return p, n, tuple(gone)
@@ -241,6 +247,7 @@ def open_map_size(app, view=None):
 
     def throw():
         app.session_drop("map_size")
+        done.pop("res_out", None)                    # the next cut asks again
         v_state.set("The kept change of the map's size is thrown away - nothing will be written for it.")
 
     if app.session_kept("map_size"):

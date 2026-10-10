@@ -450,14 +450,18 @@ def set_homeless(plan, faction, on):
 
 
 def set_event_texts(plan, faction):
-    """The emergence event's title and text in historic_events.txt ({FACTION_TITLE}, {FACTION_BODY}): Medieval II
-    with M2EX asked for them ('Couldn't find title string for historic event ...'); one the mod has stays."""
+    """The emergence event's title and text in historic_events.txt: {FACTION_TITLE} / {FACTION_BODY} (Medieval II
+    with M2EX asked for them: 'Couldn't find title string for historic event ...') AND the games' own form
+    {THE_FACTION_EMERGE_TITLE} / _BODY - the only one vanilla has (Medieval II's THE_MONGOLS_EMERGE_*,
+    THE_TIMURIDS_EMERGE_*, Barbarian Invasion's THE_SLAVS_EMERGE_*): every test run still asked with the first form
+    alone (report #186). One the mod has stays."""
     from .build import display_names
     from .strtables import strings, write_texts
     have = strings(plan.mod, "historic_events.txt")
     shown = display_names(plan.mod).get(faction) or faction.replace("_", " ").title()
-    want = {"%s_TITLE" % faction.upper(): "%s rises" % shown,
-            "%s_BODY" % faction.upper(): "A new power has risen: %s." % shown}
+    want = {}
+    for key in (faction.upper(), "THE_%s_EMERGE" % faction.upper()):
+        want.update({key + "_TITLE": "%s rises" % shown, key + "_BODY": "A new power has risen: %s." % shown})
     want = {k: v for k, v in want.items() if not have.get(k)}
     if want:
         write_texts(plan, "historic_events.txt", want)

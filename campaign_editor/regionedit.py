@@ -185,6 +185,39 @@ def religions_for(regions, given, donor):
     return dict(max(set(lines), key=lines.count)) if lines else {}
 
 
+MUSIC = "world/maps/base/descr_sounds_music_types.txt"
+
+
+def music_join(plan, region, like=None):
+    """Medieval II: descr_sounds_music_types.txt lists every region in one music type - a new one missing there and
+    the game logs 'music_types: wrong number of regions (108 vs 110 in region_db' (report #186). The region goes on
+    the regions line of like (the region most of its land came from), else on the first one; nothing when it is
+    listed already or the game has no such file (Rome)."""
+    from .textio import strip_comment
+    path = plan.mod.find(MUSIC)
+    if not path:
+        return
+    f = plan.edit(path)
+    first = at = None
+    for i in range(len(f.raw)):
+        w = strip_comment(f.text(i)).split()
+        if w[:1] != ["regions"]:
+            continue
+        if region in w[1:]:
+            return
+        first = i if first is None else first
+        if like and like in w[1:] and at is None:
+            at = i
+    i = at if at is not None else first
+    if i is None:
+        return
+    t = f.text(i)
+    code = strip_comment(t)
+    rest = t[len(code):]
+    f.set(i, code.rstrip() + " " + region + (" " + rest if rest else ""))
+    plan.note(f, "%s: music of %s" % (region, like if at is not None else "the first music type"))
+
+
 def apply_regions(plan, campaign, painted, new_regions):
     """Write the changes (see the module text). painted keys may be lists (from JSON)."""
     mod = plan.mod
@@ -225,6 +258,7 @@ def apply_regions(plan, campaign, painted, new_regions):
         c = colours[r["name"]]
         res = ", ".join(r.get("resources") or [])
         donor = donor_of(mod, campaign, painted, r)
+        music_join(plan, r["name"], donor)
         if not res:
             # no resources given: the donor's (no region in the game files has none; in HLR
             # they are the hidden resources that open local units)

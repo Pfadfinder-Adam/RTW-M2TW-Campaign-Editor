@@ -658,11 +658,15 @@ def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, f
     for folder, pictures in ((base, U.BASE_PICTURES), (camp, U.CAMPAIGN_PICTURES)):
         for name, kind in pictures.items():
             p = os.path.join(folder, name)
-            if not os.path.isfile(p):
-                continue
+            src = p
+            if not os.path.isfile(p):               # a mod keeping only what it changes: the game's picture, written
+                rel = os.path.relpath(p, mod.data)  # as the mod's own (report #186: the minimap kept its old size)
+                src = mod.find(rel) if hasattr(mod, "find") and not rel.startswith("..") else None
+                if not src:
+                    continue
             data = plan.binaries.get(p)             # map_regions.tga as the cut's clearing left it
             if data is None:
-                with open(p, "rb") as fh:
+                with open(src, "rb") as fh:
                     data = fh.read()
             pw, ph = struct.unpack_from("<HH", data, 12)
             want = {"tiles": (img.width, img.height), "corners": (2 * img.width + 1, 2 * img.height + 1),

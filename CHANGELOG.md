@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **A resource's name beside the mouse on the map**, as players see it (Silk, Iron...), as a man's name is shown.
 - **View in 3D: Rome's horsemen ride too**: pick any of the rider's moves and he sits in the saddle (where Rome's
   `descr_mount.txt` puts him from the horse's saddle bone) while the horse plays the move of the same name when it
   has one, else stands; Rome's riders have their own few moves (the upper body), so the horse mostly stands.
@@ -261,6 +262,21 @@
   release's page.
 
 ### Fixed
+- **Medieval II: resources left on a wasteland's land** (the game says *resource silk positioned on 289,70 which is
+  an invalid tile*): deleting a town as a wasteland, or a map cut whose leftover land becomes the wasteland, asks
+  once whether to delete those resources or keep them; Check mod files names any left there.
+- **A renamed faction stayed in the campaign script** (`I_LocalFaction venice` - the game wrote *'venice' is not a
+  known faction* thousands of times): the campaign script follows the new name now; Lua / Squirrel scripts are still
+  only listed.
+- **Medieval II: a new region and the common wasteland had no music** (*music_types: wrong number of regions*): each
+  joins the music of the region its land came from (the wasteland the first one); in a mod that keeps only what it
+  changes, deleting a region also takes it out of the game's music list (as the mod's own copy).
+- **A later faction's message had no title or text** (*Couldn't find title string for historic event*): its texts are
+  written in the games' own form too (`THE_<FACTION>_EMERGE_TITLE` / `_BODY`, as the Mongols' and the Slavs').
+- **The map's size in a mod that keeps only what it changes**: the minimap pictures the mod did not have yet stayed
+  the old size - they are taken from the game and written as the mod's own.
+- **A report's long game log lost the test mod's own lines** (`[CE_CONDITIONS]`...) from its middle - they are kept
+  now; the test mod's count says the same in its report and the status line (skipped steps named).
 - **A report could not carry the game's log and a couple of screenshots**: screenshots now go made smaller (a JPEG
   of at most 2560 pixels - a 3 MB screenshot becomes a few hundred KB), and a picture up to 40 MB can be added. The
   report window says what of a big log goes: a 5 MB game log is cut to its start, its errors and its end and packed -

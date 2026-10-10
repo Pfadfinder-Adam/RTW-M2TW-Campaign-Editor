@@ -65,6 +65,10 @@ class Plan:
         self.notes = []          # (rel path or "", message)
         self.warnings = []
         self.faction_count = None
+        # Medieval II: resources left on a wasteland's land (resources.drop_on) - found ['silk at 289, 70'], and the
+        # modder's answer to the one question (the user, 2026-10-10): None / True = they go, False = they stay
+        self.on_wasteland = []
+        self.wasteland_resources_out = None
 
     # ---- building ----
     def edit(self, path):

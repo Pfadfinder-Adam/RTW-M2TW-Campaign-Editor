@@ -677,11 +677,14 @@ def delete_town(app, region, parent):
                 pass
     w.bind("<Destroy>", unmark, add="+")
 
+    res = {"out": None}                              # the one answer about resources left on the wasteland
+
     def plan():
         errs, warns = check(way())
         if errs:
             return None
         p = Plan(app.mod, "delete", region)
+        p.wasteland_resources_out = res["out"]
         try:
             delete(p, campaign, region, into_now(), checked=True, waste=way() == "waste")   # read already
         except ValueError as e:
@@ -700,6 +703,10 @@ def delete_town(app, region, parent):
         p = plan()
         if not p:
             return
+        if p.on_wasteland and res["out"] is None:      # asked once
+            res["out"] = ask_wasteland_resources(w, p)
+            if not res["out"]:
+                p = plan()
         if way() == "waste":
             text = ("%s\n\nDelete %s now (%d file(s))? Its region %s stays as a wasteland - nobody's land with no "
                     "town (REX / M2EX read it so); no neighbour grows. A backup is made first (Tools > Restore undoes "
@@ -887,12 +894,15 @@ def delete_towns(app, picked, parent):
                 pass
     w.bind("<Destroy>", unmark, add="+")
 
+    res = {"out": None}                              # the one answer about resources left on the wastelands
+
     def plan():
         errors, warns = check(way())
         into, stuck = worked_out()
         if stuck or errors:
             return None
         p = Plan(app.mod, "delete", "%d_regions" % len(gone))
+        p.wasteland_resources_out = res["out"]
         try:
             delete_many(p, campaign, into, warns, waste=way() == "waste")
         except ValueError as e:
@@ -909,6 +919,10 @@ def delete_towns(app, picked, parent):
         got = plan()
         if not got:
             return
+        if got[0].on_wasteland and res["out"] is None:  # asked once
+            res["out"] = ask_wasteland_resources(w, got[0])
+            if not res["out"]:
+                got = plan()
         p, into = got
         if way() == "waste":
             text = ("Delete these %d towns now (%d file(s))? Their regions stay as wastelands - nobody's land with no "
@@ -1019,3 +1033,14 @@ def wasteland_town(app, region, xy, parent):
     ttk.Button(bar, text="Write its town", command=write).pack(side="left", padx=4)
     ttk.Button(bar, text="Cancel", command=w.destroy).pack(side="left")
     return w
+
+
+def ask_wasteland_resources(parent, plan):
+    """The one question (the user, 2026-10-10: 'resources left in wastelands - ask once: keep them or delete them'):
+    True = they go, False = they stay; asked only when the plan found some (Medieval II, resources.drop_on)."""
+    from .resources import WASTE_WORDS
+    found = plan.on_wasteland
+    return ask(APP, "%d resource(s) lie on land that becomes a wasteland:\n- %s%s\n\nIn Medieval II %s. Delete them, "
+                    "or keep them (Check mod files will name them)?" % (
+                        len(found), "\n- ".join(found[:8]), "\n- ..." if len(found) > 8 else "", WASTE_WORDS),
+               parent=parent, yes="Delete them", no="Keep them")

@@ -4721,7 +4721,7 @@ class App(tk.Tk):
 
     def rename_faction(self):
         """Edit faction > Rename...: the faction's code name changed in every file of the mod (factionrename) -
-        one write, one backup; Preview first, scripts naming it listed (not changed)."""
+        one write, one backup; Preview first, the campaign scripts follow, Lua / Squirrel scripts naming it listed (not changed)."""
         from tkinter import simpledialog
         from . import factionrename as FR
         from .plan import Plan
@@ -6306,9 +6306,8 @@ class App(tk.Tk):
             self.busy(False)
             log.write("Test mod\n" + result["text"])
             folder = os.path.dirname(result["data"]) if result.get("data") else None
-            fine = sum(1 for r in result.get("results", []) if r["status"] in ("OK", "SKIPPED") and not r["new_problems"])
-            self.status.set("Test mod: %d of %d steps fine - %s" % (fine, len(result.get("results", [])),
-                                                                     folder or "stopped"))
+            from .selftest import fine_words
+            self.status.set("Test mod: %s - %s" % (fine_words(result.get("results", [])), folder or "stopped"))
             from .gui_settings import open_folder
             self.show_text("Test mod - every feature (for the author)", result["text"], wrap="word",
                            extra=[("Open the mod's folder", lambda: open_folder(folder))] if folder else ())

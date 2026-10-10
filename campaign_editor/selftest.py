@@ -3194,14 +3194,21 @@ def seen_working(fn, game):
     return v
 
 
-def report(data, campaign, names, results, game=None):
+def fine_words(results):
+    """'86 of 87 steps fine, 1 skipped (not for this game)' - the ONE count the report and the status line say
+    (report #186: the report said 86 of 87, the status line 87 of 87 - a skip counted fine there)."""
     ok = sum(1 for r in results if r["status"] == "OK" and not r["new_problems"])
+    skipped = sum(1 for r in results if r["status"] == "SKIPPED")
+    return "%d of %d steps fine%s" % (ok, len(results), ", %d skipped (not for this game)" % skipped if skipped else "")
+
+
+def report(data, campaign, names, results, game=None):
     out = ["The editor's test mod - every feature, one step each", "",
            "Mod: %s" % os.path.dirname(data), "Campaign: %s" % campaign,
            "Factions: clone %(template)s -> %(new)s, edited %(edited)s, later %(later)s, split %(split)s, "
            "shadow of %(new)s %(shadow)s, "
            "units moved from %(foreign)s, other %(other)s" % names,
-           "%d of %d steps fine (written, no new problem in Check mod files)" % (ok, len(results)), "",
+           "%s (written, no new problem in Check mod files)" % fine_words(results), "",
            "Start the mod in the game (its Start .bat), play a few turns and a battle, look at what each step says, "
            "then send Report a bug with the game's log ticked.",
            "Its add-ons and modules go into the GAME's script/modules (the engine runs them from there), not into "

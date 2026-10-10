@@ -1041,7 +1041,8 @@ building smith
         """Report R-20261009-CDDAF0 (the test mod on Medieval II with M2EX): venice renamed venice_ce, then the game
         closed at start - 'Unknown attribute type(Combat_V_Faction_Venice)': the trait effect glues the faction's
         name to Combat_V_Faction_ and was not taken for its name. And in a thin mod a file only the game's data has
-        must be renamed too - into the mod's own copy, the game's file untouched."""
+        must be renamed too - into the mod's own copy, the game's file untouched. Report #186: the campaign script
+        named venice still ('venice' is not a known faction, thousands of times) - it follows now."""
         from campaign_editor import factionrename as FR
         game, _ = self._game()
         traits = os.path.join(game, "data", "export_descr_character_traits.txt")
@@ -1050,11 +1051,21 @@ building smith
                       ";------------------------------------------\nTrigger t1\n    WhenToTest PreBattle\n"
                       "    Condition FactionType alpha\n")
         before = open(traits).read()
+        camp = os.path.join(game, "data", "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "campaign_script.txt"), "script\n\tif I_LocalFaction alpha\n\t\tset_counter "
+              "alpha_intro 1\n\tend_if\nend_script\n")
+        write(os.path.join(game, "data", "scripts_alpha.nut"), "local f = \"alpha\";\n")
         data, _ = create_mod(os.path.join(game, "data"), "Beta")
         mod = ModData(data)
         plan = Plan(mod, "rename", "alpha_ce", {})
         FR.plan_rename(plan, "test", "alpha", "alpha_ce")
+        # report #186: the campaign script follows (a word of its own; alpha_intro is another name); a Squirrel
+        # script is only named
+        self.assertTrue(any("scripts_alpha.nut" in w for _, w in plan.warnings), plan.warnings)
         plan.apply()
+        with open(os.path.join(data, "world", "maps", "campaign", "test", "campaign_script.txt")) as fh:
+            self.assertEqual(fh.read(), "script\n\tif I_LocalFaction alpha_ce\n\t\tset_counter alpha_intro 1\n"
+                                        "\tend_if\nend_script\n")
         self.assertEqual(open(traits).read(), before)                       # the game's own file untouched
         mine = open(os.path.join(data, "export_descr_character_traits.txt")).read()
         self.assertIn("Effect Combat_V_Faction_Alpha_ce -1", mine)          # the case as written
@@ -3990,6 +4001,34 @@ building smith
         self.assertNotEqual(out.getpixel((20, 9)), (0, 0, 255))                 # no band where it was
         self.assertEqual(out.getpixel((20, 4)), out.getpixel((20, 5)))          # the new part: one sea colour
         self.assertNotEqual(out.getpixel((20, 4)), (90, 140, 60))               # the sea's, not the land's
+
+    def test_map_size_takes_the_games_minimap_into_a_thin_mod(self):
+        """Report #186: a mod keeping only what it changes had its own campaign files but not the minimap - the
+        map grew and radar_map1.tga stayed the game's old size. The game's picture is read and written as the mod's
+        own, the game's file untouched."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import mapresize as MR
+        game, _ = self._game()
+        gcamp = os.path.join(game, "data", "world", "maps", "campaign", "test")
+        Image.new("RGB", (40, 20), (0, 0, 200)).save(os.path.join(gcamp, "radar_map1.tga"))
+        with open(os.path.join(gcamp, "radar_map1.tga"), "rb") as fh:
+            old = fh.read()
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        mcamp = os.path.join(data, "world", "maps", "campaign", "test")
+        os.makedirs(mcamp, exist_ok=True)
+        for n in ("descr_strat.txt", "map_regions.tga"):           # the mod's own copies, the minimap not
+            shutil.copy(os.path.join(gcamp, n), os.path.join(mcamp, n))
+        mod = ModData(data)
+        plan = Plan(mod, "map", "map_size", {})
+        MR.plan_resize(plan, "test", top=-1, clear=True)           # a cut of the top row (a map with no sea)
+        mine = os.path.join(mcamp, "radar_map1.tga")
+        self.assertIn(mine, plan.binaries)
+        self.assertNotEqual(plan.binaries[mine], old)
+        with open(os.path.join(gcamp, "radar_map1.tga"), "rb") as fh:
+            self.assertEqual(fh.read(), old)
 
     def test_map_size_names_what_stands_on_the_part_cut_off(self):
         """Map size: the places are read once and any cut checked against them at once (the window checks each
@@ -9777,10 +9816,60 @@ building smith
         check_mod(ModData(self.root), "test", found=found)
         self.assertFalse(any("no REX / M2EX" in x for x in found), found)
 
+    def test_new_region_joins_a_music_type(self):
+        """Report #186: Medieval II lists every region in descr_sounds_music_types.txt ('music_types: wrong number of
+        regions (108 vs 110 in region_db') - a new region goes on the line of the region its land came from, the
+        common wasteland on the first line, one listed already stays as it is; no file (Rome): nothing."""
+        from campaign_editor.regionedit import music_join, MUSIC
+        mod = ModData(self.root)
+        plan = Plan(mod, "music", "music", {})
+        music_join(plan, "New_R", "B_R")
+        self.assertEqual(plan.files, {})                                 # Rome: no such file
+        path = os.path.join(self.root, "data", *MUSIC.split("/"))
+        write(path, "music_type north\n\tregions A_R ; alpha\n\tregions B_R\n\tfactions alpha\n")
+        mod = ModData(self.root)
+        plan = Plan(mod, "music", "music", {})
+        music_join(plan, "New_R", "B_R")
+        music_join(plan, "Wasteland")
+        music_join(plan, "A_R", "B_R")
+        self.assertEqual(plan.files[path].texts()[:3], ["music_type north", "\tregions A_R Wasteland ; alpha",
+                                                        "\tregions B_R New_R"])
+        os.remove(path)
+
+    def test_emerging_faction_texts_in_the_games_own_form(self):
+        """Report #186: 'Couldn't find title string for historic event ce_test_later' on every run - the games' own
+        texts for a rising faction are THE_<FACTION>_EMERGE_TITLE / _BODY (Medieval II's mongols, BI's slavs); both
+        forms are written, one the mod has stays."""
+        from campaign_editor.emergence import set_event_texts
+        from campaign_editor.strtables import strings
+        write(os.path.join(self.root, "data", "text", "historic_events.txt"),
+              "{THE_BETA_EMERGE_TITLE}\tThe Beta are here\n", utf16=True)
+        plan = Plan(ModData(self.root), "t", "t", {})
+        set_event_texts(plan, "beta")
+        plan.apply()
+        got = strings(ModData(self.root), "historic_events.txt")
+        self.assertEqual(got["THE_BETA_EMERGE_TITLE"], "The Beta are here")      # the mod's own stays
+        for k in ("THE_BETA_EMERGE_BODY", "BETA_TITLE", "BETA_BODY"):
+            self.assertTrue(got.get(k), k)
+
+    def test_resource_name_beside_the_mouse(self):
+        """The map shows a resource's name beside the mouse, as players see it (the user, 2026-10-10): Medieval II's
+        localised_name key, else SMT_RESOURCE_<TYPE>, from strat.txt; a type with no text made readable."""
+        from campaign_editor import resources as RS
+        write(os.path.join(self.root, "data", "descr_sm_resources.txt"),
+              "type\tsilk\nitem\tx.cas\n\ntype\twine\nlocalised_name\tSMT_RESOURCE_VINES\n\ntype\tsea_salt\n")
+        write(os.path.join(self.root, "data", "text", "strat.txt"),
+              "{SMT_RESOURCE_SILK}\tSilk\n{SMT_RESOURCE_VINES}\tWine\n", utf16=True)
+        mod = ModData(self.root)
+        self.assertEqual([RS.shown_name(mod, k) for k in ("silk", "wine", "sea_salt")], ["Silk", "Wine", "Sea salt"])
+        os.remove(os.path.join(self.root, "data", "descr_sm_resources.txt"))
+        os.remove(os.path.join(self.root, "data", "text", "strat.txt"))
+
     def test_no_resource_on_a_wasteland_in_medieval2(self):
         """Report #186: Medieval II (with M2EX) refuses a resource in a region without a town ('resource silk
         positioned on 289,70 which is an invalid tile') - a region made a wasteland loses the resource lines on its
-        land (noted), the others stay; Check mod files names one left there; Rome keeps them (its REX wants slaves in
+        land (noted), the others stay - unless the modder answers the one question 'keep them' (then warned); Check
+        mod files names one left there; Rome keeps them (its REX wants slaves in
         every region - not known for a wasteland). Restore byte for byte."""
         from campaign_editor import regiondelete as RD, resources as RS
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
@@ -9802,6 +9891,13 @@ building smith
             kinds = [r.kind for r in RS.read(plan.files[sp])]
             self.assertEqual(kinds, ["iron"] if kind == "medieval2" else ["silk", "iron"], kind)
             self.assertEqual(any("resource silk at" in n for _, n in plan.notes), kind == "medieval2")
+            self.assertEqual(plan.on_wasteland, ["silk at %d, %d" % b_land[0]] if kind == "medieval2" else [])
+            if kind == "medieval2":                        # the modder's answer 'keep them': they stay, warned
+                keep = Plan(mod, "delete", "B_R", {})
+                keep.wasteland_resources_out = False
+                RD.delete(keep, "test", "B_R", waste=True)
+                self.assertEqual([r.kind for r in RS.read(keep.files[sp])], ["silk", "iron"])
+                self.assertTrue(any("kept on a wasteland's land (silk at" in w for _, w in keep.warnings))
             bdir = plan.apply()
             mod = ModData(self.root)
             self.assertEqual(RS.on_wasteland(mod, "test", RS.read(mod.load(sp))), [])
@@ -10803,6 +10899,8 @@ building smith
                 fh.write("10:00:01.%03d [ai.agents] [info] thinking %d\n" % (k % 1000, k))
                 if k % 500 == 0:
                     fh.write("10:00:02.%03d [core.assert] [fatal] ERROR: settlement.cpp(4326)\n" % (k % 1000))
+                if k == 1200:          # the test mod's own lines are kept too (report #186)
+                    fh.write("10:00:02.500 [script] [info] [CE_CONDITIONS] form 5: true\n")
                 if k == 1700:          # the game's words come on the next line - kept with the error
                     fh.write("10:00:03.000 [script.err] [error] Script Error in descr_strat.txt, at line 3071\n"
                              "Population of 2600 is too high for a village - max is 1500\n")
@@ -10811,6 +10909,7 @@ building smith
         self.assertIn("unknown faction", got)                          # the start
         self.assertRegex(got, r"settlement\.cpp\(4326\)  \(x5\)")       # the middle's errors, once, counted
         self.assertIn("at line 3071  |  Population of 2600 is too high for a village", got)
+        self.assertIn("[CE_CONDITIONS] form 5: true", got)
         self.assertIn("the newest line", got)                          # the end
         self.assertLess(len(got), 40000)
         data = report.build_zip(list(texts.items()), "it crashed at C:\\Users\\Bob\\x", "disc#1",

@@ -438,7 +438,8 @@ def _delete(plan, campaign, gone, waste=()):
     for region, at in sorted(starts.items(), key=lambda kv: -kv[1]):
         _drop_block(dr, at)
         plan.note(dr, "region %s (%s) out" % (region, regions[region].get("settlement") or "no town"))
-    music = _ci_file(mod.base, "descr_sounds_music_types.txt")
+    from .regionedit import MUSIC
+    music = mod.find(MUSIC)                                     # a thin mod: the game's file, written as the mod's
     out = [r for r in sorted(gone) if r not in waste]           # regions that leave every file
     done = set()
     for c in sharing(mod, campaign):
@@ -507,11 +508,6 @@ def _harvests(plan, path, region, tag):
             gone += 1
     if gone:
         plan.note(f, "%d bad-harvest entr%s of %s out%s" % (gone, "y" if gone == 1 else "ies", region, tag))
-
-
-def _ci_file(folder, name):
-    from .moddata import _ci
-    return _ci(folder, name) if os.path.isdir(folder) else None
 
 
 BLOCK_WORDS = ("road_level", "farming_level", "famine_threat", "fort", "watchtower")
@@ -764,6 +760,8 @@ def make_wasteland(plan, campaign, name, colour, tiles=(), land=False):
     plan.note(dr, "region %s: the common wasteland, colour %d %d %d - nobody's land (REX / M2EX)" % ((name,) +
                                                                                                     tuple(colour)))
     _names_known(plan, campaign, name)
+    from .regionedit import music_join
+    music_join(plan, name)                               # Medieval II lists every region in a music type
     tiles = sorted({tuple(t) for t in tiles})
     sf = plan.edit(mod.campaign_file(campaign, "descr_strat.txt"))
     have = R.read(sf)

@@ -2692,6 +2692,9 @@ class MapView(ttk.Frame):
             res = next((r for r in self.resources if r["id"] == rid), None) if rid else None
             if res:
                 x, y = res["xy"]
+                if getattr(self.cmap, "mod", None) is not None:   # its name beside the mouse, as for a man on the map
+                    from .resources import shown_name
+                    self._name_tip(e.x, e.y, shown_name(self.cmap.mod, res["kind"]))
                 self.readout.configure(text="%s at %d, %d - %s   (click: pick it; right drag: move it)" % (
                     res["kind"], x, y, self.cmap.region_at(x, y) or next(
                         (r for r, t in self.cmap.cities.items() if t == (x, y)), "no region")))

@@ -13,8 +13,10 @@ What follows the new name, in one plan (Preview lists every line; one backup, Re
 - the string tables: every key holding the faction's name ({EGYPT}, {IMPERIAL_CAMPAIGN_EGYPT_TITLE}) copied under the
   new name (clone.text_strings), the old keys stay;
 - Medieval II's battle_models.modeldb: its texture entries for the faction renamed.
-Not changed, only listed: campaign scripts and Lua / Squirrel scripts naming it (a script is read as code - a
-blind change there can break it)."""
+- the campaign scripts (campaign_script.txt and the like - the game's own script words): the name as a word of its
+  own, as in the data files (report #186: venice renamed, 'I_LocalFaction venice' left - the game logged
+  "'venice' is not a known faction" thousands of times);
+Not changed, only listed: Lua / Squirrel scripts naming it (code - a blind change there can break it)."""
 
 import os
 import re
@@ -157,7 +159,7 @@ def plan_rename(plan, campaign, old, new):
         if k:
             plan.binary(dst, db.dump().encode("latin-1"))
             plan.notes.append((mod.rel(dst), "%d texture entr(ies) of %s renamed %s" % (k, old, new)))
-    # 4. scripts: listed, not changed
+    # 4. the campaign scripts follow (the game's script words); Lua / Squirrel scripts: listed, not changed
     left = []
     for p in scripts:
         try:
@@ -165,11 +167,18 @@ def plan_rename(plan, campaign, old, new):
                 hits = [i + 1 for i, line in enumerate(fh) if rx.search(line)]
         except OSError:
             continue
-        if hits:
+        if hits and not p.lower().endswith((".lua", ".nut")):
+            f = plan.edit(p)
+            for i in hits:
+                f.set(i - 1, rx.sub(new, f.text(i - 1)))
+            plan.note(f, "%d line(s) of the campaign script: %s -> %s" % (len(hits), old, new))
+            total += len(hits)
+        elif hits:
             left.append("%s: line(s) %s" % (mod.rel(p), ", ".join(str(h) for h in hits[:12]) +
                                              (" ..." if len(hits) > 12 else "")))
     if left:
-        plan.warn(None, "scripts name %s - not changed (code is changed by hand): %s" % (old, "; ".join(left[:8])))
+        plan.warn(None, "Lua / Squirrel scripts name %s - not changed (code is changed by hand): %s" % (
+            old, "; ".join(left[:8])))
     plan.note(None, "%s renamed %s: %d line(s) in the data files, its pictures copied under the new name, the "
                     "string tables' keys copied" % (old, new, total))
     return left
