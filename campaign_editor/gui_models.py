@@ -86,8 +86,9 @@ class ModelsEditor(ttk.Frame):
                 cells.append(self._type_card(g.inner, fg, lv, model, now, pics.get(model, []), src_faction, new))
                 shown.add(model)
         for model, ps in pics.items():                  # a texture no type shows now (another was picked)
-            if model not in shown:
-                cells += [a.art_editor.card(g.inner, p, src_faction, new) for p in ps]
+            if model not in shown:                      # - seen in 3D too (the user: 'a texture I cannot see in 3D')
+                cells += [a.art_editor.card(g.inner, p, src_faction, new, buttons=[
+                    ("3D", lambda m=model: self.view_figure(m, src_faction))]) for p in ps]
         g.fill(cells)
 
     def _type_card(self, parent, fg, lv, model, now, pics, faction, new):

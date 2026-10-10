@@ -123,7 +123,8 @@ def _make_triangles(mesh, groups):
     return np.concatenate(tris), np.concatenate(pic), np.concatenate(one)
 
 
-def draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, light, plain):
+def draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, light, plain, frame=None,
+         pan=(0.0, 0.0)):
     """The model drawn as an (H, W, 3) uint8 array; pics {picture number: PIL picture or None} (0 / 1 the man's
     texture and attachment, 2 / 3 a mount's ...). textured False: one colour per triangle (its texture's colour at
     the middle and the corners, as the quick look always was).
@@ -144,16 +145,19 @@ def draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, 
     sized = np.unique(ft[0]) if ft is not None else used
     if not len(sized):
         sized = used
-    S = P[sized]
-    c = (S.min(axis=0) + S.max(axis=0)) / 2
-    radius = float(np.sqrt(((S - c) ** 2).sum(axis=1)).max()) or 1.0
+    if frame is not None:                       # kept by the window while an animation plays (meshview.frame_of)
+        c, radius = np.asarray(frame[0], dtype=np.float64), float(frame[1])
+    else:
+        S = P[sized]
+        c = (S.min(axis=0) + S.max(axis=0)) / 2
+        radius = float(np.sqrt(((S - c) ** 2).sum(axis=1)).max()) or 1.0
     scale = zoom * 0.95 * min(W, H) / (2 * radius)
     cy, sy = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
     cp, sp = math.cos(math.radians(pitch)), math.sin(math.radians(pitch))
     x, y, z = c[0] - P[:, 0], P[:, 1] - c[1], P[:, 2] - c[2]        # x mirrored: left-handed to right-handed
     x, z = x * cy + z * sy, -x * sy + z * cy
     y, z = y * cp - z * sp, y * sp + z * cp
-    sx, sy_, sz = W / 2 + x * scale, H / 2 - y * scale, z
+    sx, sy_, sz = W / 2 + pan[0] + x * scale, H / 2 + pan[1] - y * scale, z
     A, B, C = T[:, 0], T[:, 1], T[:, 2]
     ux, uy, uz = sx[B] - sx[A], sy_[A] - sy_[B], sz[B] - sz[A]
     vx, vy, vz = sx[C] - sx[A], sy_[A] - sy_[C], sz[C] - sz[A]

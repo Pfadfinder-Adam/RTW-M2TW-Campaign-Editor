@@ -156,13 +156,14 @@ class ArtEditor(ttk.Frame):
                 "The faction's campaign-select map and leader's face show here once it is picked.")).pack(anchor="w")
             return
         kinds = set()
+        row = ttk.Frame(host)                  # the map and the leader's face side by side, as the screen shows them
+        row.pack(anchor="w")                   # (the user, 2026-10-10: 'the leader's portrait beside the map')
         for p in FA.start_pictures(a.mod, a.v_campaign.get(), src_faction):
             kind = FA.start_kind(p)
             kinds.add(kind)
             leader = kind == FA.START_KINDS[1]
-            self.card(host, p, src_faction, new, box=(69, 96) if leader else (192, 120), wrap=250,
-                      short=True).pack(
-                fill="x", pady=(0, 4))
+            self.card(row, p, src_faction, new, box=(69, 96) if leader else (192, 120), wrap=150 if leader else 200,
+                      short=True).pack(side="left", anchor="nw", padx=(0, 8))
         from .packs import game_kind
         missing = []
         if FA.START_KINDS[0] not in kinds:

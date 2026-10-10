@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **View in 3D: the right mouse button held moves the view** (the left turns it round its point) - to pick an
+  angle; Front / Back put it in the middle again.
+- **A ship unit in the Unit editor shows its fleet on the campaign map in 3D** (the faction's admiral figure) - a ship
+  has no battle model.
 - **A resource's name beside the mouse on the map**, as players see it (Silk, Iron...), as a man's name is shown.
 - **View in 3D: Rome's horsemen ride too**: pick any of the rider's moves and he sits in the saddle (where Rome's
   `descr_mount.txt` puts him from the horse's saddle bone) while the horse plays the move of the same name when it
@@ -262,6 +266,13 @@
   release's page.
 
 ### Fixed
+- **View in 3D: the camera jerked while an animation played** - each frame was sized anew; the view now keeps its
+  place and size while it plays (sized again for another animation, the mount or the weapons).
+- **Unit editor: France picked in Show, England's colours shown** - the card, the battle model's texture and the 3D
+  view now take the faction picked in Show first.
+- **Models: a figure's texture left from the old figure could not be seen in 3D** - it has its 3D button.
+- **Art: the soldiers' picture of the faction screen stood among the icons** - it is under Other; the leader's
+  portrait stands beside the campaign-select map on the faction tab.
 - **View in 3D: most Medieval II siege crews held a spear in the second hand beside their dagger**: a weapon's
   number (`primaryactive0`, `primaryactive1`) marks variants of ONE weapon, not two - the game gives each man one;
   **Another man** steps through them.

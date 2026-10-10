@@ -8529,6 +8529,35 @@ building smith
         im = MV.render(m, (200, 240), texture=Image.new("RGB", (8, 8), (200, 30, 30)))
         self.assertTrue(len([p for p in im.getdata() if p[0] > 60 and p[0] > 2 * p[1]]) > 200)
 
+    def test_3d_view_keeps_its_frame_and_moves_with_the_right_button(self):
+        """The user, 2026-10-10: the camera jerked while an animation played (each frame fitted anew) - a frame kept
+        (meshview.frame_of) leaves the picture where it was when the model moves; the right button's drag (pan)
+        shifts the picture by its pixels. Both drawings (pure Python and NumPy)."""
+        try:
+            from PIL import Image  # noqa: F401
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from campaign_editor import meshview as MV
+        tri = [MV.Group("Body", "m", [0, 1, 2], False)]
+
+        def mesh(dx):
+            return MV.Mesh(tri, [(dx - 1.0, 0.0, 0.0), (dx + 1.0, 0.0, 0.0), (dx, 2.0, 0.0)], [(0, 0)] * 3)
+
+        def left_edge(im):
+            cols = [x for x in range(im.width) if any(im.getpixel((x, y)) != MV.BACK for y in range(im.height))]
+            return cols[0] if cols else None
+        a, b = mesh(0.0), mesh(0.5)
+        frame = MV.frame_of(a, tri)
+        fitted = [left_edge(MV.render(m, (80, 80), 0, 0, 1.0, None, None, tri, quality=1, textured=False))
+                  for m in (a, b)]
+        self.assertEqual(fitted[0], fitted[1])                           # fitted anew: the same place - the jerk
+        kept = [left_edge(MV.render(m, (80, 80), 0, 0, 1.0, None, None, tri, quality=1, textured=False, frame=frame))
+                for m in (a, b)]
+        self.assertNotEqual(kept[0], kept[1])                            # kept: the model moves in a still view
+        panned = left_edge(MV.render(a, (80, 80), 0, 0, 1.0, None, None, tri, quality=1, textured=False,
+                                     frame=frame, pan=(10, 0)))
+        self.assertAlmostEqual(panned - kept[0], 10, delta=1)
+
     def test_engine_settings_in_campaign_rules(self):
         """descr_ex.txt / descr_caps_ex.txt (REX, M2EX): each 'key value' line a value, its section the banner heading,
         its explanation the comment above; a write changes the value's characters only."""
@@ -11100,6 +11129,7 @@ building smith
             "world/maps/campaign/imperial_campaign/vcs_england.tga": "maps",
             "models_strat/textures/spy_england.tga.dds": "models",
             "ui/captain banners/captain_card_england.tga": "other",
+            "menu/symbols/fe_faction_units/england.tga": "other",       # the soldiers' picture: no icon
         }
         for rel, want in cases.items():
             self.assertEqual(art_group({"rel": rel}), want, rel)

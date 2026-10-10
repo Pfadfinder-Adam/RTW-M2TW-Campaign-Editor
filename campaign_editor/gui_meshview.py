@@ -59,6 +59,7 @@ class ModelViewer(tk.Toplevel):
         self.chariot = mount[2] if mount and len(mount) > 2 else None
         self.title("%s - %s" % (title, info.name))
         self.yaw, self.pitch, self.zoom, self.look = 35.0, 8.0, 1.0, 0
+        self._frame, self.pan = None, [0.0, 0.0]   # the view's middle + size kept while it plays; the right drag
         self._drag, self._tex, self._photo, self.mesh = None, {}, None, None
         self.path, self.anim, self.frame, self._play, self._base = None, None, 0, None, {}
         self.anim_key, self._moves = None, {}      # the animation's name ('run'); a mount's moves read once
@@ -94,12 +95,12 @@ class ModelViewer(tk.Toplevel):
         self._anim_box(side)
         self.v_weapons = tk.BooleanVar(value=True)
         ttk.Checkbutton(side, text="Weapons and shield", variable=self.v_weapons,
-                        command=self.draw).pack(anchor="w", pady=(8, 0))
+                        command=self.reframe).pack(anchor="w", pady=(8, 0))
         self.v_mount = tk.BooleanVar(value=bool(mount))
         if mount:
             ttk.Checkbutton(side, text=("On its chariot (%s)" if self.chariot else "Its mount (%s)")
                             % mount[1], variable=self.v_mount,
-                            command=self.draw).pack(anchor="w")
+                            command=self.reframe).pack(anchor="w")
         self.b_look = ttk.Button(side, text="Another man", command=self.next_look)
         self.b_look.pack(anchor="w", pady=(8, 0))
         ttk.Button(side, text="Front", command=lambda: self.turn_to(0)).pack(anchor="w", pady=(8, 0))
@@ -116,7 +117,7 @@ class ModelViewer(tk.Toplevel):
         self.info_lbl = ShortHint(side)
         self.info_lbl.pack(anchor="w", pady=(10, 0))
         m2 = MO.game_kind(mod) == "medieval2"
-        ShortHint(side, text="Drag to turn it, the wheel zooms. " + (
+        ShortHint(side, text="Drag to turn it, the right button held moves it, the wheel zooms. " + (
             "The model as it stands in the files (arms out). The game gives each man one of the model's heads, "
             "arms, bodies ... - 'Another man' shows the next mix; the weapons and shield take the attachment "
             "texture." if m2 else
@@ -132,6 +133,10 @@ class ModelViewer(tk.Toplevel):
         self.canvas.bind("<ButtonPress-1>", self._press)
         self.canvas.bind("<B1-Motion>", self._move)
         self.canvas.bind("<ButtonRelease-1>", lambda e: self.draw())
+        # the right button held moves the view (the left turns it round its point) - to pick an angle (the user)
+        self.canvas.bind("<ButtonPress-3>", self._press)
+        self.canvas.bind("<B3-Motion>", self._pan)
+        self.canvas.bind("<ButtonRelease-3>", lambda e: self.draw())
         self.canvas.bind("<MouseWheel>", lambda e: self._wheel(1 if e.delta > 0 else -1))
         self.canvas.bind("<Button-4>", lambda e: self._wheel(1))
         self.canvas.bind("<Button-5>", lambda e: self._wheel(-1))
@@ -196,8 +201,14 @@ class ModelViewer(tk.Toplevel):
         self.v_anim.set(NO_ANIM)
         self._anim_changed()
 
+    def reframe(self):
+        """The view sized and centred again on what it shows (a mount, the weapons, another animation or detail)."""
+        self._frame = None
+        self.draw()
+
     def _anim_changed(self):
         self._stop()
+        self._frame = None
         labels = self._labels()
         i = labels.index(self.v_anim.get()) if self.v_anim.get() in labels else 0
         self.anim, self.frame, self.anim_key = None, 0, None
@@ -396,6 +407,7 @@ class ModelViewer(tk.Toplevel):
         return "%d - %s" % (i, "closest" if i == 0 else "farther") if i < len(self.info.meshes) else "-"
 
     def load(self):
+        self._frame = None
         i = int((self.v_lod.get() or "0").split()[0]) if self.lods else 0
         rel = self.lods[i] if i < len(self.lods) else None
         self.mesh = None
@@ -510,8 +522,10 @@ class ModelViewer(tk.Toplevel):
             return
         from PIL import ImageTk
         mesh, groups, tex, att, more, why, whole = self._scene()
+        if self._frame is None:                 # sized once - an animation playing keeps it (no jerking camera)
+            self._frame = MV.frame_of(mesh, groups)
         img = MV.render(mesh, SIZE, self.yaw, self.pitch, self.zoom, tex, att, groups,
-                        quality=1 if quick else 2, more=more,
+                        quality=1 if quick else 2, more=more, frame=self._frame, pan=self.pan,
                         textured=not quick or (quick == "play" and MV._fast is not None))   # NumPy: whole texture
         if quick == "play" and self._photo is not None and getattr(self, "_shown", None) is not None and \
                 (self._photo.width(), self._photo.height()) == img.size:
@@ -548,7 +562,16 @@ class ModelViewer(tk.Toplevel):
 
     def turn_to(self, yaw):
         self.yaw, self.pitch = float(yaw), 8.0
+        self.pan = [0.0, 0.0]                   # Front / Back: the model in the middle again
         self.draw()
+
+    def _pan(self, e):
+        if not self._drag:
+            return
+        self.pan[0] += e.x - self._drag[0]
+        self.pan[1] += e.y - self._drag[1]
+        self._drag = (e.x, e.y)
+        self.draw(quick=True)
 
     def _press(self, e):
         self._drag = (e.x, e.y)

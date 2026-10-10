@@ -50,7 +50,7 @@ class RecordEditor(ttk.Frame):
         self.v_show = tk.StringVar(value="all")
         self.cb_show = ttk.Combobox(fl, textvariable=self.v_show, values=["all"], state="readonly", width=26)
         self.cb_show.grid(row=0, column=1, sticky="we")
-        self.cb_show.bind("<<ComboboxSelected>>", lambda ev: self.fill_list())
+        self.cb_show.bind("<<ComboboxSelected>>", lambda ev: self._show_changed())
         ttk.Label(fl, text="Sort", width=5).grid(row=1, column=0, sticky="w", pady=(2, 0))
         self.v_sort = tk.StringVar(value="file order")
         sorts = ["file order", "name", "owner", "category", "class"] if kind == "unit" else \
@@ -751,11 +751,25 @@ class RecordEditor(ttk.Frame):
         from .gui_picview import zoomable           # a click: the picture big in a window of its own
         return zoomable(tk.Label(parent, image=ph, relief="sunken"), path)
 
+    def _show_changed(self):
+        """Show picked: the list again, and the pictures of the unit on show in that faction's colours."""
+        self.fill_list()
+        if getattr(self, "current", None) and self.kind == "unit":
+            self.show_pictures()
+
     def _factions_of(self):
         """The faction folders a unit's card goes to: the factions its ownership names,
         and those of a culture it names."""
         from .units import owner_factions
-        return owner_factions(self.mod, self.value("ownership").replace(",", " ").split())
+        facs = owner_factions(self.mod, self.value("ownership").replace(",", " ").split())
+        # the faction picked in Show first: its card, its texture, its colours in 3D (the user, 2026-10-10: 'I picked
+        # France and the colours were England's' - same-looking units, each faction's own texture)
+        want = self.v_show.get() if hasattr(self, "v_show") else ""
+        if want.startswith("faction: "):
+            picked = want.partition(": ")[2].split(" - ")[0]
+            if picked in facs:
+                facs = [picked] + [f for f in facs if f != picked]
+        return facs
 
     def show_pictures(self):
         for w in self.pics.winfo_children():
@@ -891,6 +905,17 @@ class RecordEditor(ttk.Frame):
                 "A ship: the game fights sea battles by itself (auto-resolve), so a ship has no battle model. Its "
                 "soldier line (%s) is only there because the file's form asks for one." % (
                     ", ".join(m for _, _, m in MO.unit_slots(lines)) or "none"))).grid(sticky="w")
+            # what the player sees of it: the faction's fleet on the campaign map (its admiral's figure) - in 3D
+            # too (the user, 2026-10-10: 'ships - only the campaign map's can be seen in 3D, not the units')
+            from . import stratmodels as SM
+            for fac in self._factions_of()[:1]:
+                fleet = next((fg["models"][0] for fg in SM.figures(self.mod, fac) if fg["type"] == "admiral"), None)
+                if fleet:
+                    row = ttk.Frame(box)
+                    row.grid(sticky="w", pady=(4, 0))
+                    ttk.Label(row, text="On the campaign map: %s's fleet, %s" % (fac, fleet)).pack(side="left")
+                    ttk.Button(row, text="View in 3D...", command=lambda m=fleet, f=fac: self._view_strat(m, f)).pack(
+                        side="left", padx=6)
             return
         seat = MO.unit_seat(self.mod, lines)
         slots = MO.unit_slots(lines)
@@ -947,7 +972,8 @@ class RecordEditor(ttk.Frame):
         if kind:
             r = len(slots)
             info = minfo
-            tex = next(iter(info.textures.values()), None) if info and info.textures else None
+            tex = (next((info.textures[f] for f in facs if f in info.textures), None) or
+                   next(iter(info.textures.values()), None)) if info and info.textures else None
             self._texture_thumb(box, self.mod, tex).grid(row=r, column=0, sticky="nw", pady=2)
             cell = ttk.Frame(box)
             cell.grid(row=r, column=1, sticky="nw", padx=6)
@@ -1170,6 +1196,16 @@ class RecordEditor(ttk.Frame):
         self.show_pictures()
         self.app.status.set("%s has its own name call for %s now (backup %s) - start the game to hear it." % (
             unit, uv.key, bdir))
+
+    def _view_strat(self, model, faction):
+        """A campaign-map figure (a ship unit's fleet) in 3D, with the faction's texture."""
+        from . import stratmodels as SM
+        from .gui_meshview import ModelViewer
+        info = SM.mesh_info(self.mod, model)
+        if info is None or not info.meshes:
+            messagebox.showinfo("3D", "%s names no model file (.cas) in descr_model_strat.txt." % model, parent=self)
+            return
+        ModelViewer(self, self.mod, info, (faction,), title="Campaign map figure in 3D")
 
     def view_model(self, info, mod=None, mount=None, unit=False):
         """View in 3D...; unit: the unit's soldier model - Make a card... / Make a picture... there give the unit on

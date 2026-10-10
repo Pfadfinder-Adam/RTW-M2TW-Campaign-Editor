@@ -957,21 +957,37 @@ def chariot(crew, crew_groups, car, horse, horses, riders):
     return assemble(pieces)
 
 
+def frame_of(mesh, groups):
+    """(middle, radius) the view is sized and centred on for these groups - kept by the 3D window while an animation
+    plays (the user, 2026-10-10: 'the camera jerks while the animation plays' - each frame was fitted anew)."""
+    used = sorted({i for g in groups for i in g.tris})
+    if not used:
+        return None
+    P = mesh.positions
+    lo = [min(P[i][k] for i in used) for k in range(3)]
+    hi = [max(P[i][k] for i in used) for k in range(3)]
+    c = tuple((lo[k] + hi[k]) / 2 for k in range(3))
+    return c, max(math.sqrt(sum((P[i][k] - c[k]) ** 2 for k in range(3))) for i in used) or 1.0
+
+
 def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, attach=None, groups=None,
-           quality=2, background=BACK, textured=True, more=None, fit=None):
+           quality=2, background=BACK, textured=True, more=None, fit=None, frame=None, pan=(0.0, 0.0)):
     """The mesh drawn as a Pillow picture, turned by yaw (round the up axis) and pitch (degrees) and lit from the
     upper left. textured: the pictures laid on every triangle (a still picture); else one colour per triangle
     (quick, for turning it with the mouse). texture = the man's picture, attach = weapons and shields; a part
     without its picture is plain grey. quality 2 draws twice as big and shrinks it (smooth edges). The game's
     space is left-handed, so x is mirrored to show the man as he stands in the game. fit: the groups the view is
-    sized and centred on (default the ones drawn) - two drawings of other parts then lie on each other."""
+    sized and centred on (default the ones drawn) - two drawings of other parts then lie on each other; frame:
+    (middle, radius) given (frame_of) - the view stays put while the model moves; pan: (x, y) the picture shifted, in
+    pixels of size (the right mouse button's drag)."""
     from PIL import Image, ImageChops, ImageDraw
     groups = groups if groups is not None else mesh.shown()
     W, H = size[0] * quality, size[1] * quality
     if _fast is not None and not getattr(mesh, "pure", False):
         pics = {0: texture, 1: attach}
         pics.update(more or {})
-        arr = _fast.draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, LIGHT, PLAIN)
+        arr = _fast.draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, LIGHT, PLAIN,
+                         frame, (pan[0] * quality, pan[1] * quality))
         img = Image.fromarray(arr, "RGB")
         return img.reduce(quality) if quality > 1 else img      # each 2 x 2 averaged: the smooth edges
     img = Image.new("RGB", (W, H), background)
@@ -979,12 +995,9 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
     if not used:
         return img.resize(size) if quality > 1 else img
     P = mesh.positions
-    sized = sorted({i for g in fit for i in g.tris}) if fit else used
-    lo = [min(P[i][k] for i in sized) for k in range(3)]
-    hi = [max(P[i][k] for i in sized) for k in range(3)]
-    c = [(lo[k] + hi[k]) / 2 for k in range(3)]
-    radius = max(math.sqrt(sum((P[i][k] - c[k]) ** 2 for k in range(3))) for i in sized) or 1.0
+    c, radius = frame or (frame_of(mesh, fit) if fit else None) or frame_of(mesh, groups)
     scale = zoom * 0.95 * min(W, H) / (2 * radius)
+    ox, oy = W / 2 + pan[0] * quality, H / 2 + pan[1] * quality
     cy, sy = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
     cp, sp = math.cos(math.radians(pitch)), math.sin(math.radians(pitch))
     view = {}
@@ -992,7 +1005,7 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
         x, y, z = c[0] - P[i][0], P[i][1] - c[1], P[i][2] - c[2]        # x mirrored: left-handed to right-handed
         x, z = x * cy + z * sy, -x * sy + z * cy                    # yaw
         y, z = y * cp - z * sp, y * sp + z * cp                    # pitch
-        view[i] = (W / 2 + x * scale, H / 2 - y * scale, z)
+        view[i] = (ox + x * scale, oy - y * scale, z)
     L = LIGHT
     ln = math.sqrt(sum(a * a for a in L))
     L = [a / ln for a in L]

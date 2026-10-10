@@ -122,6 +122,8 @@ def art_group(e):
     link = (e.get("link") or [None])[0]
     if link == "model_strat":
         return "models"
+    if "fe_faction_units" in rel or "battlefield_pics" in rel:
+        return "other"              # the soldiers' picture is no icon (the user, 2026-10-10: 'it goes to Other')
     if rel in ("symbol:logo", "symbol:small_logo") or rel.startswith(("menu/symbols/", "loading_screen/symbols/",
                                                                       "ui/faction_symbols/")):
         return "icons"
