@@ -148,8 +148,13 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     from .campaignrules import strat_order_problems
     for why in strat_order_problems(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))):
         bad(why)
-    from .buildings import pop_problem, population_of, settlement_info, settlement_kind
+    from .buildings import core_problem, pop_problem, population_of, settlement_info, settlement_kind
+    from .masstown import known_buildings
     strat_f = mod.load(mod.campaign_file(campaign, "descr_strat.txt"))
+    try:
+        core_known = known_buildings(mod)
+    except Exception:
+        core_known = {}
     for fb in s.factions:
         for st in fb.settlements:
             lines = [l.rstrip("\r\n") for l in strat_f.texts()[st.start:st.end]]
@@ -158,6 +163,12 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
             if why:
                 bad("%s (%s): %s - the game stops reading descr_strat.txt there (towns, armies and diplomacy after "
                     "it are lost); set the population or the level on the Buildings tab or in the town's window" % (st.region, fb.name, why))
+            why = core_problem(lines, core_known)
+            if why:
+                bad("%s (%s): %s - the game stops at the campaign's start ('The castle core building level should be "
+                    "EQUAL the settlement level!' / 'The core building level should be one less than the settlement "
+                    "level!'); set its level or its governor's building in the town's window" % (st.region, fb.name,
+                                                                                                   why))
     from .family import children_order_problems, read as read_family, records_too_old
     for fb in s.factions:                           # children oldest first, as the games want them
         try:
@@ -286,6 +297,8 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad(m)
     if len(serious) > 8:
         bad("... and %d more town / port placement problem(s) of the same kind" % (len(serious) - 8))
+    for m in port_sea_problems(mod, campaign):
+        bad(m)
     light = [m for s_, m in ring if not s_]
     if light:
         say("    note: %d town(s) touch another region's land (vanilla never does; the game may still run - "
@@ -702,6 +715,21 @@ def town_ring_problems(mod, campaign):
     from .mapedit import owner_of, ports, ring_problems
     towns = mod.city_tiles(campaign)
     return ring_problems(mod, campaign, owner_of(mod, campaign), towns, ports(mod, campaign))
+
+
+def port_sea_problems(mod, campaign):
+    """Ports with no sea on any of their four sides (report #181, Medieval II with M2EX: two ports dragged, then their
+    land painted round them - 'Port at region 8 ... has no sea-adjacent dock - rejecting port', and the campaign
+    crashed as it started). Every port of both games' own campaigns and HLR's 314 touch the sea by a side."""
+    from .mapedit import ports
+    out = []
+    for r, xy in sorted(ports(mod, campaign).items()):
+        if xy and not any(mod.is_sea(campaign, (xy[0] + dx, xy[1] + dy)) for dx, dy in ((1, 0), (-1, 0), (0, 1),
+                                                                                        (0, -1))):
+            out.append("the port of %s at %d, %d touches no sea on its four sides - the game rejects it ('has no "
+                       "sea-adjacent dock') and the town's harbour stands without a port (a crash seen at the "
+                       "campaign's start); drag the port onto the coast on the Map" % (r, xy[0], xy[1]))
+    return out
 
 
 def slaves_problems(mod, regions):

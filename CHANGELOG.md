@@ -252,6 +252,10 @@
   Unit editor with "'0-1' is not a count" - they are read now as the game reads them (0, then -1).
 - **Check mod files** (Medieval II) names a faction whose `ai_label` in `descr_strat.txt` is not in
   `descr_campaign_ai_db.xml` - the game stops at the campaign's start with "Could not link faction ... to AI label".
+- **Check mod files** names two more things that stopped a Medieval II campaign as it started: a town whose
+  governor's building does not fit its size (a castle the size of a town still holding its village castle's
+  motte and bailey - "The castle core building level should be EQUAL the settlement level!"), and a port with no sea
+  on any of its four sides (land painted round it - "has no sea-adjacent dock - rejecting port").
 - **Keep for Apply pressed again kept the same change again** (five presses, five times in the list): the very same
   change is kept once, in every window.
 - **A change kept for Apply is seen at once**: Many towns at once (add a building, garrisons, city / castle) shows

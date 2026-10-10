@@ -290,6 +290,26 @@ def core_settlement(b, name):
     return SETTLEMENT_LEVELS[min(names.index(name) + core_offset(b), len(SETTLEMENT_LEVELS) - 1)]
 
 
+def core_problem(lines, known):
+    """Why a settlement block's governor's building does not fit it, or None (report #181: two changes kept for one
+    write made a castle of a town-sized settlement keep its village castle's motte_and_bailey - the game stopped:
+    "The castle core building level should be EQUAL the settlement level!"; a city's must be one level below)."""
+    level, items = settlement_info(lines)
+    kind = settlement_kind(lines)
+    for c, lv in items:
+        b = known.get(c)
+        if b is None or not c.lower().startswith("core") or not b.levels:
+            continue
+        castle = "castle" in b.name.lower()
+        if castle != (kind == "castle"):
+            return "a %s with the governor's building of a %s (%s %s)" % (kind, "castle" if castle else "city", c, lv)
+        want = core_settlement(b, lv)
+        if want is not None and want != level:
+            return "its governor's building %s %s belongs to a %s %s, it is a %s" % (
+                c, lv, want.replace("_", " "), kind, level.replace("_", " "))
+    return None
+
+
 def core_level_for(b, settlement_level):
     """The level of core chain b a settlement of this level has; None when it has none."""
     i = rank(settlement_level) - core_offset(b)

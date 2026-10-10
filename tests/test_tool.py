@@ -325,6 +325,21 @@ building smith
         # the user's Inverness: wooden_wall for a large_town was refitted to the file's town (0.15.x)
         self.assertEqual(convert([("core_building", "wooden_wall")], "city", known, "town", fit_core=False)[0],
                          [("core_building", "wooden_wall")])
+        # report #181 (HMA): a castle of a town's size kept its village castle's motte_and_bailey - the game stopped
+        # ('The castle core building level should be EQUAL the settlement level!'); Check mod files names it
+        from campaign_editor.buildings import core_problem
+
+        def block(kind, level, chain, lv):
+            return ["settlement" + (" castle" if kind == "castle" else ""), "{", "\tlevel " + level,
+                    "\tbuilding", "\t{", "\t\ttype %s %s" % (chain, lv), "\t}", "}"]
+        self.assertIn("motte_and_bailey belongs to a village castle, it is a town",
+                      core_problem(block("castle", "town", "core_castle_building", "motte_and_bailey"), known))
+        self.assertIsNone(core_problem(block("castle", "town", "core_castle_building", "wooden_castle"), known))
+        self.assertIsNone(core_problem(block("city", "large_town", "core_building", "wooden_wall"), known))
+        self.assertIn("belongs to a town city", core_problem(block("city", "large_town", "core_building",
+                                                                   "wooden_pallisade"), known))
+        self.assertIn("a castle with the governor's building of a city",
+                      core_problem(block("castle", "town", "core_building", "wooden_pallisade"), known))
         self.assertTrue(kind_problem(known, "castle", "city"))           # castles stop at large_town here
         self.assertIsNone(kind_problem(known, "castle", "large_town"))
         raw = ["settlement\r\n", "{\r\n", "\tlevel town\r\n", "}\r\n"]
@@ -1245,6 +1260,19 @@ building smith
         mod = ModData(self.root)
         self.assertEqual(mod.city_tiles("test"), {"A_R": (1, 1), "B_R": (4, 1)})
         self.assertEqual(town_ring_problems(mod, "test"), [])
+        # a port with no sea on its four sides (report #181: 'has no sea-adjacent dock - rejecting port', a crash)
+        from campaign_editor.check import port_sea_problems
+        W = (255, 255, 255)
+        moved = [row[:] for row in px]
+        moved[1][5] = W                                  # on the coast: fine
+        write_tga(os.path.join(camp, "map_regions.tga"), 7, 5, moved)
+        self.assertEqual(port_sea_problems(ModData(self.root), "test"), [])
+        moved[1][5], moved[3][4] = B, W                  # inland
+        write_tga(os.path.join(camp, "map_regions.tga"), 7, 5, moved)
+        got = port_sea_problems(ModData(self.root), "test")
+        self.assertEqual(len(got), 1)
+        self.assertIn("port of B_R at 4, 3 touches no sea", got[0])
+        write_tga(os.path.join(camp, "map_regions.tga"), 7, 5, px)
         # Rome: warned, not refused
         self.assertIsNone(place_problem(mod, "test", "city", "B_R", (3, 2)))
         # dragged away and then back onto its own tile: allowed (the callers pass the moves without this one)
