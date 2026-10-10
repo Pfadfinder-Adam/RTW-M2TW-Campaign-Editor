@@ -23,9 +23,13 @@ Both games (Rome with REX or without, Medieval II with M2EX or without). Audited
   win conditions treatment.
 
 Refused, in plain words: the last town of a faction that is alive (it would die as the campaign loads and the game
-crash - a tester's Rome with REX), a faction rising there by an event, a campaign script that names the town or the
-region (the script would stop). Trait / ancillary conditions and REX / M2EX scripts that name it are listed as
-warnings: they simply never fire there again.
+crash - a tester's Rome with REX), a faction rising there by an event. A campaign script that names the town or the
+region is no refusal (report #179: vanilla Medieval II's names Baghdad and Mosul, so its right edge could never be
+cut - a wrong name stops the SCRIPT, not the game): its list entries (`region X` of an invasion's add_events) and
+one-line commands (settlement_flash_start / stop, console_command) naming it are commented out with ';' in the same
+write - as the game's own authors took Tbilisi out of that list - and a condition naming it is named in a warning
+(change it by hand). Trait / ancillary conditions and REX / M2EX scripts that name it are listed as warnings: they
+simply never fire there again.
 
 Many at once (the map's Select, report R-20261008-7696AA): refusals() reads the files once for all of them (the
 last towns of a faction counted together), receivers() gives each region the neighbour that stays (one ringed by
@@ -149,6 +153,48 @@ def _hits(path, names):
     return out
 
 
+SCRIPT_LINES = ("region", "settlement_flash_start", "settlement_flash_stop", "console_command")
+
+
+def _script_split(path, names):
+    """([(line number, line)] that can be commented out - a list entry or a one-line command naming one of names -,
+    [(line number, line)] that cannot: a condition, a block's head)."""
+    com, other = [], []
+    for n, line in _hits(path, names):
+        words = strip_comment(line).split()
+        (com if words and words[0].lower() in SCRIPT_LINES else other).append((n, line))
+    return com, other
+
+
+def _comment_script(plan, path, names):
+    """The script's lines naming one of names that can go commented out with '; ' (their indent kept); a list of
+    an event left with no region is named in a warning."""
+    com, _ = _script_split(path, names)
+    if not com:
+        return
+    f = plan.edit(path)
+    rel = plan.mod.rel(path)
+    for n, line in com:
+        i = n - 1
+        text = f.text(i)
+        cut = len(text) - len(text.lstrip())
+        f.set(i, text[:cut] + "; " + text[cut:])
+        plan.note(f, "line %d commented out (it names a place deleted): %s" % (n, line[:70]))
+    gone = {n - 1 for n, _ in com}
+    head, had, left = None, False, False
+    for i in range(len(f.raw) + 1):
+        words = strip_comment(f.text(i)).split() if i < len(f.raw) else ["end_add_events"]
+        if words and words[0] in ("event", "end_add_events"):
+            if head is not None and had and not left:
+                plan.warn(f, "%s: the event at line %d (%s) has no region left in its list - it rises nowhere; give "
+                             "it one by hand" % (rel, head + 1, " ".join(strip_comment(f.text(head)).split()[1:3])))
+            head, had, left = (i if words[0] == "event" else None), False, False
+        elif head is not None and words and words[0] == "region":
+            left = True
+        elif head is not None and i in gone and strip_comment(f.text(i)) == "":
+            had = True
+
+
 def problems(mod, campaign, region, into=None, land=True, waste=False):
     """([refusals], [warnings]) in plain words. land=False: the region's land goes off the map with it (a cut of the
     map's edge) - no neighbour needed for it; waste: it stays as a wasteland - no neighbour needed either."""
@@ -204,11 +250,19 @@ def refusals(mod, campaign, gone, last_town=True, waste=False):
                 errors.append("%s rises in %s by an event (descr_events.txt%s) - pick another region for it first "
                               "(Events and later factions)" % (fac, e["region"], "" if c == campaign else " of %s" % c))
         for path in _script_files(mod, c):
-            got = _hits(path, names)
-            if got:
-                errors.append("%s names %s on line%s %s (%s) - the script would stop; change those lines first" % (
-                    mod.rel(path), " / ".join(named(got)), "s" if len(got) > 1 else "",
-                    ", ".join(str(n) for n, _ in got[:8]) + (" ..." if len(got) > 8 else ""), got[0][1][:60]))
+            com, other = _script_split(path, names)
+            if com:
+                warns.append("%s: line%s %s naming %s will be commented out with ';' (an invasion's region list, an "
+                             "advisor's flashing town - as the game's own authors did); Restore puts them back" % (
+                                 mod.rel(path), "s" if len(com) > 1 else "",
+                                 ", ".join(str(n) for n, _ in com[:8]) + (" ..." if len(com) > 8 else ""),
+                                 " / ".join(named(com))))
+            if other:
+                warns.append("%s names %s on line%s %s (%s) - a condition the campaign script stops at (the game "
+                             "goes on without its script); change it by hand" % (
+                                 mod.rel(path), " / ".join(named(other)), "s" if len(other) > 1 else "",
+                                 ", ".join(str(n) for n, _ in other[:8]) + (" ..." if len(other) > 8 else ""),
+                                 other[0][1][:60]))
     for path, got in _other_mentions(mod, campaign, names):
         warns.append("%s names %s on line%s %s - it never fires there again" % (
             mod.rel(path), " / ".join(named(got)), "s" if len(got) > 1 else "",
@@ -419,6 +473,17 @@ def _delete(plan, campaign, gone, waste=()):
         for region in out:
             for i in sorted(_drop_word(plan, f, "regions", region, ""), reverse=True):
                 del f.raw[i]
+    # the campaign scripts' list entries and one-line commands naming a place deleted: commented out (report #179);
+    # a wasteland keeps its region - only its town's name is gone
+    names = sorted({n for r in gone for n in ((regions.get(r, {}).get("settlement"),) if r in waste else
+                                             (r, regions.get(r, {}).get("settlement"))) if n})
+    seen = set()
+    for c in sharing(mod, campaign):
+        for sp in _script_files(mod, c):
+            key = os.path.normcase(os.path.abspath(sp))
+            if key not in seen:
+                seen.add(key)
+                _comment_script(plan, sp, names)
 
 
 def _harvests(plan, path, region, tag):
