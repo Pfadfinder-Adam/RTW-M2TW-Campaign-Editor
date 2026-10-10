@@ -248,6 +248,10 @@
   release's page.
 
 ### Fixed
+- **Battle models a mod wrote by hand** (Medieval II): two numbers with no space between them (`0-1`) stopped the
+  Unit editor with "'0-1' is not a count" - they are read now as the game reads them (0, then -1).
+- **Check mod files** (Medieval II) names a faction whose `ai_label` in `descr_strat.txt` is not in
+  `descr_campaign_ai_db.xml` - the game stops at the campaign's start with "Could not link faction ... to AI label".
 - **Keep for Apply pressed again kept the same change again** (five presses, five times in the list): the very same
   change is kept once, in every window.
 - **A change kept for Apply is seen at once**: Many towns at once (add a building, garrisons, city / castle) shows

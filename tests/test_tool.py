@@ -193,6 +193,11 @@ class ToolTest(unittest.TestCase):
         # spaces between the values read as the game reads them; the file written back in the game's own form
         edited = text.replace(" 6 spears ", "\r\n6 spears  ").replace(" 3 0 0", "\t3\t0 0", 1) + "\r\n"
         self.assertEqual(MDB.ModelDB(edited).dump(), text)
+        # two numbers with no space between (report #180, Silmarillion: "modeldb: '0-1' is not a count"): the game
+        # reads a number as a C++ stream does - '0-1' is 0, then -1; '1e-005' stays one number
+        self.assertIn(" 0 -1 0 0 ", text)
+        glued = MDB.ModelDB(text.replace(" 0 -1 0 0 ", " 0-1 0 0 ", 1).replace(" 1.12 ", " 1.12e-005 ", 1))
+        self.assertEqual(glued.dump(), text.replace(" 1.12 ", " 1.12e-005 ", 1))
         # a model added by hand after the count at the top was left as it was (a tester: "modeldb: 1585 characters
         # left after 872 models"): the game reads only the counted ones - read, said, kept byte for byte
         extra = text + " " + " ".join(MDB.ModelDB.dump_models([model("archers", ["alpha"])]))
@@ -222,6 +227,25 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(MDB.ModelDB(got.dump()).dump(), got.dump())
         restore(ModData(self.root), backups(ModData(self.root))[0])
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
+    def test_check_finds_an_ai_label_the_ai_db_lacks(self):
+        """Report #180 (Medieval II with M2EX, Silmarillion): 'Could not link faction House of Beor to AI label
+        greek' - a faction's ai_label in descr_strat.txt that descr_campaign_ai_db.xml does not declare is told."""
+        from campaign_editor.check import ai_label_problems
+        data = os.path.join(self.root, "data")
+        write(os.path.join(data, "descr_campaign_ai_db.xml"),
+              '<root>\n<faction_ai_label name="default">\n</faction_ai_label>\n'
+              '<faction_ai_label name = "catholic">\n</faction_ai_label>\n</root>\n')
+        p = os.path.join(data, "descr_strat.txt")
+        write(p, "faction alpha, balanced smith\nai_label catholic\ndenari 10\n"
+                 "faction beta, balanced smith\nai_label greek ; a comment\ndenari 10\n"
+                 "faction gamma, balanced smith\ndenari 10\n")
+        got = ai_label_problems(ModData(data), TextFile.load(p))
+        self.assertEqual(len(got), 1)
+        self.assertTrue(got[0].startswith("beta: ai_label greek"))
+        self.assertIn("catholic, default", got[0])
+        os.remove(os.path.join(data, "descr_campaign_ai_db.xml"))       # no file found: nothing said
+        self.assertEqual(ai_label_problems(ModData(data), TextFile.load(p)), [])
 
     def test_medieval_city_and_castle(self):
         # M2: a castle = `settlement castle` + castle levels; the game converts by each level's convert_to

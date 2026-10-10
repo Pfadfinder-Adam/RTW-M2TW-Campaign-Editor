@@ -193,6 +193,8 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
                         bad("%s: %s has %d children, descr_campaign_db.xml max_number_of_children is %d - the game "
                             "stops reading descr_strat.txt at that family's relative line; raise the number (Campaign rules... "
                             "at the top) or take a child out" % (fb.name, father, len(kids), most_allowed))
+        for why in ai_label_problems(mod, strat_f):
+            bad(why)
     no_culture = [n for n, c in facs if not c]
     if no_culture:
         bad("no culture line for: %s" % ", ".join(no_culture))
@@ -390,6 +392,37 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         say("No problems found.")
     say("(%.1f s)" % (time.time() - t0))
     return "\n".join(out)
+
+
+def ai_label_problems(mod, strat_f):
+    """Medieval II: a faction's `ai_label` in descr_strat.txt that descr_campaign_ai_db.xml has no
+    <faction_ai_label name=...> for (report #180: M2EX stopped at the campaign's start with 'Could not link faction
+    ... to AI label greek'; modding_knowledge: a crash on that faction's turn). [] when the file is not found."""
+    import re
+    from .campaignrules import game_data
+    from .moddata import _ci
+    gd = game_data(mod)
+    db = mod.find("descr_campaign_ai_db.xml")
+    where = mod.rel(db) if db else "(the game's) data/descr_campaign_ai_db.xml"
+    db = db or (_ci(gd, "descr_campaign_ai_db.xml") if gd else None)
+    if not db:
+        return []
+    try:
+        with open(db, "rb") as fh:
+            names = re.findall(r"<\s*faction_ai_label\s+name\s*=\s*[\"']([^\"']+)", fh.read().decode("latin-1"))
+    except OSError:
+        return []
+    known = {n.lower() for n in names}
+    out = []
+    for fb in Strat(strat_f).factions:
+        for i in range(fb.start + 1, fb.end):
+            t = tokens(strip_comment(strat_f.text(i)))
+            if len(t) > 1 and t[0] == "ai_label" and t[1].lower() not in known:
+                out.append("%s: ai_label %s in descr_strat.txt is not in %s (it has %s) - the game stops with "
+                           "'Could not link faction ... to AI label %s'; pick one of those for it, or add that label "
+                           "to the file" % (fb.name, t[1], where, ", ".join(sorted(set(names))) or "none", t[1]))
+                break
+    return out
 
 
 def weapons_texture_problems(mod):

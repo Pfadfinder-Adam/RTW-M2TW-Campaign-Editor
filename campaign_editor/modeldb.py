@@ -20,6 +20,7 @@ new faction gets copies of its template's entries. Numbers are kept as the file 
 
 import copy
 import os
+import re
 
 from .moddata import _ci
 
@@ -47,8 +48,13 @@ class _Reader:
             e += 1
         if e == p:
             raise ModelDBError("modeldb: a number expected at %d, the file ends there" % p)
+        glued = self.GLUED.match(t, p, e)
+        if glued:                  # '0-1': the game reads numbers as a C++ stream does - 0, then -1 (report #180)
+            e = glued.end(1)
         self.p = e
         return t[p:e]
+
+    GLUED = re.compile(r"([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)[+-]")
 
     def int(self):
         v = self.tok()
