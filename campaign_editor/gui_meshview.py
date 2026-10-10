@@ -69,15 +69,21 @@ class ModelViewer(tk.Toplevel):
         self.b_look.pack(anchor="w", pady=(8, 0))
         ttk.Button(side, text="Front", command=lambda: self.turn_to(0)).pack(anchor="w", pady=(8, 0))
         ttk.Button(side, text="Back", command=lambda: self.turn_to(180)).pack(anchor="w")
-        self.info_lbl = ttk.Label(side, foreground="#555", justify="left", wraplength=230)
+        # short lines, the long words on their '?' (the user, 2026-10-10: the grey text stretched the window), and
+        # only this game's words (a Medieval II model's window spoke of Rome)
+        from .gui_util import ShortHint
+        self.info_lbl = ShortHint(side)
         self.info_lbl.pack(anchor="w", pady=(10, 0))
-        ttk.Label(side, foreground="#555", justify="left", wraplength=230, text=(
-            "Drag to turn it, mouse wheel to zoom. Medieval II: as it stands in the files (arms out); Rome: the T "
-            "pose, or as the file stands (Pose) - a chariot with its horses and crew, a siege engine whole. Medieval II: the "
-            "game gives each man one of the model's heads, arms, bodies ... - 'Another man' shows the next mix; "
-            "the weapons and shield take the attachment texture. Rome: one texture for the man and his "
-            "weapons. Animation: any of its skeleton's moves from the game's animation packs - Play / Pause, or "
-            "drag the frame; the mount stays still.")).pack(anchor="w", pady=(10, 0))
+        m2 = MO.game_kind(mod) == "medieval2"
+        ShortHint(side, text="Drag to turn it, the wheel zooms. " + (
+            "The model as it stands in the files (arms out). The game gives each man one of the model's heads, "
+            "arms, bodies ... - 'Another man' shows the next mix; the weapons and shield take the attachment "
+            "texture." if m2 else
+            "Pose: the T pose (arms out), or as the file stands - a chariot with its horses and crew, a siege engine "
+            "whole. One texture for the man and his weapons.") + (
+            " Animation: any of its skeleton's moves from the game's animation packs - Play / Pause, then the "
+            "frame line (drag it, or the < > buttons / the arrow keys) to go a frame back or on, like a video; "
+            "the mount stays still." if self.anims else "")).pack(anchor="w", pady=(6, 0))
         self.canvas.bind("<ButtonPress-1>", self._press)
         self.canvas.bind("<B1-Motion>", self._move)
         self.canvas.bind("<ButtonRelease-1>", lambda e: self.draw())
@@ -112,7 +118,7 @@ class ModelViewer(tk.Toplevel):
         self.cb_anim = ttk.Combobox(side, textvariable=self.v_anim, state="readonly", width=22, height=24)
         self.cb_anim.pack(anchor="w")
         self.cb_anim.bind("<<ComboboxSelected>>", lambda e: self._anim_changed())
-        self.lbl_file = ttk.Label(side, foreground="#555", justify="left", wraplength=230)
+        self.lbl_file = ttk.Label(side, foreground="#555")
         self.lbl_file.pack(anchor="w")
         row = ttk.Frame(side)
         row.pack(anchor="w", pady=(4, 0), fill="x")
@@ -120,10 +126,21 @@ class ModelViewer(tk.Toplevel):
         self.b_play.pack(side="left")
         self.lbl_frame = ttk.Label(row, foreground="#555")
         self.lbl_frame.pack(side="left", padx=6)
-        self.sc_frame = ttk.Scale(side, from_=0, to=1, orient="horizontal", length=230,
-                                  command=lambda v: self._seek(int(float(v))))
-        self.sc_frame.pack(anchor="w")
-        self.sc_frame.state(["disabled"])
+        # the frame line: drag it back and on like a video's (it pauses the play), < > a frame at a time
+        line = ttk.Frame(side)
+        line.pack(anchor="w")
+        self.b_back = ttk.Button(line, text="<", width=2, command=lambda: self._step(-1))
+        self.b_back.pack(side="left")
+        self.sc_frame = ttk.Scale(line, from_=0, to=1, orient="horizontal", length=190,
+                                  command=lambda v: self._seek(int(round(float(v)))))
+        self.sc_frame.pack(side="left", padx=2)
+        self.b_on = ttk.Button(line, text=">", width=2, command=lambda: self._step(1))
+        self.b_on.pack(side="left")
+        for w in (self.sc_frame, self.b_back, self.b_on):
+            w.state(["disabled"])
+        self.bind("<Left>", lambda e: self._step(-1))
+        self.bind("<Right>", lambda e: self._step(1))
+        self.bind("<space>", lambda e: self._toggle())
         self._skel_changed()
 
     def _labels(self):
@@ -149,7 +166,8 @@ class ModelViewer(tk.Toplevel):
             self.lbl_file.configure(text=f.replace("\\", "/").rsplit("/", 1)[-1])
         on = self.anim is not None and self.anim.frames > 1
         self.b_play.state(["!disabled"] if on else ["disabled"])
-        self.sc_frame.state(["!disabled"] if on else ["disabled"])
+        for w in (self.sc_frame, self.b_back, self.b_on):
+            w.state(["!disabled"] if on else ["disabled"])
         self.sc_frame.configure(to=max(1, (self.anim.frames - 1) if self.anim else 1))
         self.sc_frame.set(0)
         self._frame_words()
@@ -162,9 +180,21 @@ class ModelViewer(tk.Toplevel):
     def _seek(self, k):
         if self.anim is None or k == self.frame:
             return
+        if self._play is not None:                 # the line dragged while it plays: it stops on that frame
+            self._stop()
         self.frame = max(0, min(self.anim.frames - 1, k))
         self._frame_words()
-        self.draw(quick="play" if self._play is not None else False)
+        self.draw()
+
+    def _step(self, d):
+        """A frame back or on (the < > buttons, the arrow keys) - paused there."""
+        if self.anim is None or self.anim.frames < 2:
+            return
+        self._stop()
+        self.frame = (self.frame + d) % self.anim.frames
+        self.sc_frame.set(self.frame)
+        self._frame_words()
+        self.draw()
 
     def _toggle(self):
         if self._play is not None:
@@ -303,7 +333,8 @@ class ModelViewer(tk.Toplevel):
                     3: self._texture(mi.attach) if mi.attach else None}
             if more[2] is None and self.mount_mesh.texture_ref:
                 more[2] = self._texture({"": self.mount_mesh.texture_ref})
-        if not riding and not self.info.attach and MV.whole_picture(man):
+        whole = not riding and not self.info.attach and MV.whole_picture(man)
+        if whole:
             groups = MV.one_picture(groups)          # a mount alone: its whole texture (half was drawn white)
         img = MV.render(mesh, SIZE, self.yaw, self.pitch, self.zoom, tex, att, groups,
                         quality=1 if quick else 2, textured=not quick or quick == "play", more=more)
@@ -316,13 +347,13 @@ class ModelViewer(tk.Toplevel):
                 self.info_lbl.configure(text="the mount's mesh file is not in this mod or the game")
                 return
             parts = self.mesh.variants(self.look, self.v_weapons.get())
-            self.info_lbl.configure(text="%s%s%d triangles, %d points%s%s" % (
-                (why + "\n") if why else "",
-                ("variants shown: " + ", ".join("%s %d of %d" % p for p in parts) + "\n") if parts else "",
-                n, self.mesh.count,
-                "" if tex is not None else "\nno texture file found for the man",
-                "" if att is not None or not self.v_weapons.get() or self.mesh.one_texture else
-                "\nno attachment texture found - weapons in grey"))
+            said = [w for w in (why, None if tex is not None else "no texture file found for the man",
+                                None if att is not None or not self.v_weapons.get() or self.mesh.one_texture or
+                                whole else "no attachment texture found: weapons in grey") if w]
+            # what needs seeing first (a problem, else the size), the variants on the '?'
+            size = "%d triangles, %d points." % (n, self.mesh.count)
+            self.info_lbl.configure(text=(", ".join(said) + ". " + size if said else size) + (
+                (" Variants shown: " + ", ".join("%s %d of %d" % p for p in parts) + ".") if parts else ""))
 
     def next_look(self):
         self.look += 1
