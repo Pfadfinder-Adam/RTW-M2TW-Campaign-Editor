@@ -1,4 +1,4 @@
-"""Settings: everything the tool keeps between starts, in one window (CampaignEditor_settings.json beside the exe)
+"""Settings: everything the tool keeps between starts, in one window (CampaignEditor_settings.json in its own folder)
  - the look, the language, the game folder and the mod opened last, the map's look, what a report says about
 you, the set-up fixes you said no to, and the tool's own folders. Each change is kept at once."""
 
@@ -207,8 +207,8 @@ class SettingsWindow(tk.Toplevel):
 
     def _folders(self, body):
         _, row = self._box(body, "Folders", "The exe is meant to lie in the game's folder (beside RomeTW.exe / "
-                                            "medieval2.exe). Beside the exe: CampaignEditor_settings.json (these "
-                                            "settings) and CampaignEditor_logs (the log, and on every close the "
+                                            "medieval2.exe). Beside it, in its own folder CampaignEditor: "
+                                            "CampaignEditor_settings.json (these settings) and CampaignEditor_logs (the log, and on every close the "
                                             "session's log with a copy of the game's system.log.txt as "
                                             "game_system.log.txt in sessions/). A mod's backups (Restore) lie beside "
                                             "its data folder in CampaignEditor_backups (older versions' "

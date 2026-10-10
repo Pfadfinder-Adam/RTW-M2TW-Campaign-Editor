@@ -307,8 +307,8 @@ def library_dir():
     home = log.home()
     if not home:
         return None
-    new = os.path.join(home, log.SHORT + "_addons")              # beside the exe, apart from the game's own folders
-    old = os.path.join(home, log.FOLDER, "addons")                # up to 0.28: in RTW-M2TW-Campaign-Editor-files
+    new = os.path.join(home, log.SHORT + "_addons")              # in the editor's own place, apart from the game's
+    old = os.path.join(log.exe_dir(), log.FOLDER, "addons")       # up to 0.28: in RTW-M2TW-Campaign-Editor-files
     if os.path.isdir(old) and not os.path.exists(new):
         try:
             os.replace(old, new)

@@ -20,7 +20,7 @@ editor's Preview show what a pack would write before you apply it.
 ## What the tool does on your PC
 
 RTW & M2TW Campaign Editor only reads and writes the game or mod folder you load, plus its own files
-next to the exe (`CampaignEditor_settings.json`, `CampaignEditor_logs` with the log and the saved sessions,
+in its folder next to the exe, `CampaignEditor` (`CampaignEditor_settings.json`, `CampaignEditor_logs` with the log and the saved sessions,
 `CampaignEditor_addons` with add-ons you added) and files you pick in a save
 dialog. Started outside the game's folder, it offers (with a question) to copy itself into the game folder you pick,
 with its settings, and to make a desktop shortcut (Windows) - nothing of that without a yes. The code enforces it: every write to the game goes through one guard that refuses a path outside the mod's

@@ -182,6 +182,9 @@
   it are listed to change by hand. It was a refusal ('... would keep no town').
 
 ### Changed
+- **The editor's own files in a folder of their own**: its settings, logs and add-ons go into `CampaignEditor`
+  beside the exe, not among the game's files. Files an older version left beside the exe keep working there; the
+  editor asks once whether to move them in (a yes moves them, nothing lost; a no and nothing changes).
 - **New region / Edit region: region tags from a drop-down** - the arrow beside the box lists the mod's own tags:
   a click adds one, a click again takes it out (several at once); a new tag can still be typed. Every field's long
   grey text is one line now with a **?** for the rest - the window stays narrow.

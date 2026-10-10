@@ -1,5 +1,5 @@
 """Small window settings kept between starts (the legend shown or hidden...), in
-CampaignEditor_settings.json beside the exe (log.home(); older versions' faction_tool_settings.json is moved
+CampaignEditor_settings.json in the editor's own folder beside the exe (log.home(); older versions' faction_tool_settings.json is moved
 in once). Never raises: a missing or broken
 file means the defaults. A value of another kind than this version keeps there (written by a newer or an older
 version) reads as not there - going back to an older editor never fails on a newer one's settings."""

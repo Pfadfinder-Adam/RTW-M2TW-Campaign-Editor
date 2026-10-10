@@ -974,6 +974,7 @@ class App(tk.Tk):
         self.update_actions()
         self.after(50, self.load_last)
         self.after(700, self.offer_move)
+        self.after(900, self.offer_own_folder)
         self.after(4000, self.check_report_answers)
         self.after(6000, self.check_new_version)
 
@@ -1023,6 +1024,29 @@ class App(tk.Tk):
             check_on_start(self)
         except Exception as e:
             log.write("Answers to my reports not checked: %s" % e)
+
+    def offer_own_folder(self):
+        """Once a version, when an older version's files lie right beside the exe among the game's files: move them
+        into the editor's own folder, CampaignEditor/ (the user, 2026-10-10: one question; a no and the editor keeps
+        working as it is)."""
+        beside = log.beside_exe()
+        if not beside or settings.get("own_folder_asked") == VERSION:
+            return
+        if not messagebox.askyesno(APP, "The editor keeps its own files right beside the game's files:\n\n%s\n\n"
+                                        "Move them into a folder of their own, %s, beside the editor? Nothing is "
+                                        "lost, nothing else changes. No: the editor keeps working as it is (asked "
+                                        "again with the next version)." % (
+                                            "\n".join("- " + n for n in beside),
+                                            os.path.join(log.exe_dir(), log.OWN)), parent=self):
+            settings.put("own_folder_asked", VERSION)
+            return
+        moved = log.move_into_own_folder()
+        left = log.beside_exe()
+        log.write("The editor's files moved into %s: %s%s" % (log.home(), ", ".join(moved) or "none",
+                                                              "; left: " + ", ".join(left) if left else ""))
+        self.status.set("The editor's files are in %s now%s." % (
+            log.home(), " (%s could not be moved - in use? it is tried again next time)" % ", ".join(left)
+            if left else ""))
 
     def offer_move(self, force=False):
         """Once per version, when the exe lies outside every game folder (the Downloads folder, the desktop): offer to

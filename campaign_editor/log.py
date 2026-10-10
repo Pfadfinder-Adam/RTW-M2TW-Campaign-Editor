@@ -1,12 +1,15 @@
 """The tool's own log and its folder. The exe is meant to lie in the game's folder (beside RomeTW.exe /
-medieval2.exe - it then finds the game and every mod by itself); beside it the tool keeps two things of its own:
+medieval2.exe - it then finds the game and every mod by itself); beside it, in a folder of its own, CampaignEditor/
+(not among the game's files - the user, 2026-10-10), the tool keeps what is its own:
 
     CampaignEditor_logs/           its log (CampaignEditor.log), the logs zips (Save logs) and sessions/: on every
                                    close the session's part of the log and the game's newest system.log.txt
     CampaignEditor_settings.json   what it keeps between starts
+    CampaignEditor_addons/         add-ons someone added (addons.library_dir)
 
-When run from the source the same two lie beside campaign_editor.py; where the exe's folder cannot be written
-(Program Files) in %APPDATA%/RTW-M2TW-Campaign-Editor. Older versions' files (RTW-M2TW-Campaign-Editor-files/,
+Versions up to 0.33 kept them right beside the exe: there they keep working until the user says yes to moving them
+in (move_into_own_folder - asked once a version by the window). When run from the source the same lie beside
+campaign_editor.py; where the exe's folder cannot be written (Program Files) in %APPDATA%/RTW-M2TW-Campaign-Editor. Older versions' files (RTW-M2TW-Campaign-Editor-files/,
 faction_tool.log, faction_tool_settings.json) are moved in once, nothing lost. Kept small: over 1 MB the log
 moves to CampaignEditor.log.old."""
 
@@ -27,6 +30,8 @@ GAME_LOG = "game_system.log.txt"                 # the game's own system.log.txt
 KEEP_SESSIONS = 30
 SESSIONS_CAP = 40 * 1024 * 1024                  # the sessions folder at most (a game's log can grow to 60 MB)
 APPDATA_NAME = "RTW-M2TW-Campaign-Editor"
+OWN = SHORT                                      # the folder of its own beside the exe: CampaignEditor/
+BESIDE = (LOGS, SETTINGS_NAME, SHORT + "_addons")  # what versions up to 0.33 kept right beside the exe
 
 FOLDER = "RTW-M2TW-Campaign-Editor-files"      # 0.9.2 - 0.28: the tool's folder beside the exe
 OLD_FOLDERS = ("RTW-Campaign-Editor-files",)     # its name before 0.9.2
@@ -41,8 +46,16 @@ def exe_dir():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def beside_exe():
+    """[names] of the tool's own files an older version left right beside the exe (among the game's files)."""
+    d = exe_dir()
+    return [n for n in BESIDE if os.path.exists(os.path.join(d, n))]
+
+
 def _candidates():
-    yield exe_dir()
+    d = exe_dir()
+    own = os.path.join(d, OWN)
+    yield d if beside_exe() and not os.path.isdir(own) else own     # an older version's place keeps working
     base = os.environ.get("APPDATA") or os.path.expanduser("~")
     yield os.path.join(base, APPDATA_NAME)
     yield os.path.join(base, "RTW Faction Tool")                    # where older versions fell back to
@@ -57,12 +70,14 @@ def _move(src, dst):
         pass
 
 
-def _move_old(home):
+def _move_old(home, beside=None):
     """Older versions' files into the new places once: the folder RTW-M2TW-Campaign-Editor-files (its settings,
-    its logs/ with faction_tool.log and the zips), faction_tool.log / faction_tool_settings.json beside the exe, and
-    the settings an older version kept in the user's APPDATA ('RTW Faction Tool', 'RTW-M2TW-Campaign-Editor') when
-    the exe's folder was not writable - copied, so nothing set there is lost."""
+    its logs/ with faction_tool.log and the zips), faction_tool.log / faction_tool_settings.json beside the exe
+    (beside: the exe's folder, home's own when not given), and the settings an older version kept in the user's
+    APPDATA ('RTW Faction Tool', 'RTW-M2TW-Campaign-Editor') when the exe's folder was not writable - copied, so
+    nothing set there is lost."""
     logs = os.path.join(home, LOGS)
+    beside = beside or home
     base = os.environ.get("APPDATA") or os.path.expanduser("~")
     for d in (os.path.join(base, "RTW Faction Tool"), os.path.join(base, APPDATA_NAME)):
         if os.path.normcase(os.path.abspath(d)) == os.path.normcase(os.path.abspath(home)):
@@ -76,7 +91,7 @@ def _move_old(home):
                 except OSError:
                     pass
     for folder in (FOLDER,) + OLD_FOLDERS + ("",):
-        d = os.path.join(home, folder) if folder else home
+        d = os.path.join(beside, folder) if folder else beside
         if folder and not os.path.isdir(d):
             continue
         _move(os.path.join(d, OLD_SETTINGS), os.path.join(home, SETTINGS_NAME))
@@ -98,6 +113,36 @@ def _move_old(home):
                     pass
 
 
+def move_into_own_folder():
+    """The tool's files an older version left right beside the exe moved into CampaignEditor/ (the user said yes) ->
+    [names moved]. A name the folder has already is merged in piece by piece, nothing written over; what the system
+    keeps (a file in use) stays where it is - the tool then goes on with its own folder."""
+    global _home, _path
+    d = exe_dir()
+    own = os.path.join(d, OWN)
+    os.makedirs(own, exist_ok=True)
+    moved = []
+    for n in beside_exe():
+        src, dst = os.path.join(d, n), os.path.join(own, n)
+        try:
+            if not os.path.exists(dst):
+                os.replace(src, dst)
+            elif os.path.isdir(src):
+                for sub in os.listdir(src):
+                    if not os.path.exists(os.path.join(dst, sub)):
+                        os.replace(os.path.join(src, sub), os.path.join(dst, sub))
+                os.rmdir(src)
+            else:
+                continue
+            moved.append(n)
+        except OSError:
+            continue
+    _home, _path = None, None                    # found again: the own folder now
+    from . import settings
+    settings._data = None
+    return moved
+
+
 def home():
     """The tool's own place (the first one we may write to): the settings and the logs folder lie there."""
     global _home
@@ -105,7 +150,8 @@ def home():
         for d in _candidates():
             try:
                 os.makedirs(os.path.join(d, LOGS), exist_ok=True)
-                _move_old(d)                             # before the probe below makes an empty log
+                # before the probe below makes an empty log; an older version's files lie beside the exe
+                _move_old(d, os.path.dirname(d) if os.path.basename(d) == OWN else d)
                 probe = os.path.join(d, LOGS, LOG_NAME)
                 with open(probe, "a", encoding="utf-8"):
                     pass

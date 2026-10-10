@@ -4,6 +4,7 @@ build/
 dist/
 *.spec
 # what the editor makes beside itself and beside a mod (older versions' names too)
+CampaignEditor/
 CampaignEditor_backups/
 CampaignEditor_logs/
 CampaignEditor_settings.json

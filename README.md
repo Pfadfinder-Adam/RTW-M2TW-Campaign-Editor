@@ -224,7 +224,7 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 > 1. **The logs:** in the tool, **Report a bug / Suggest** (bottom right) sends them (and the list of the mod's files -
 >    names and sizes, no contents) to the author in one click - no account needed, your names cut out first (Windows user name, computer name, e-mail, Steam ID, the player's
 >    name), and you see exactly what goes before you press Send ([video](https://youtu.be/7MbYR9ywNsI)). Or **Tools -> Save logs (zip)** - the same logs,
->    names cut out, as one `.zip` in `CampaignEditor_logs` next to the exe, to send yourself.
+>    names cut out, as one `.zip` in `CampaignEditor\CampaignEditor_logs` next to the exe, to send yourself.
 > 2. **A video or a screenshot** of what you did and what went wrong.
 >
 > With these the cause is usually found and fixed **the same day** (the logs name the file, line and
@@ -353,7 +353,7 @@ Tested on the plain games - Rome: Total War (with REX), Barbarian Invasion, Medi
 
 **Undo, keys, help:** **Undo** / **Redo** (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z) step back through towns picked, garrisons, buildings, settlement sizes, map moves, armies and diplomacy. Ctrl+P preview, Ctrl+S apply, F5 load again, Ctrl+1..5 the tabs, F1 or **Tools > Help** for a short guide. Far out on the map only towns are drawn; ports and characters show from zoom 4.
 
-**Log:** the tool keeps `CampaignEditor.log` in `CampaignEditor_logs` next to the exe, together with the logs zips and the sessions (or in `%APPDATA%\RTW-M2TW-Campaign-Editor` where the exe's folder cannot be written): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
+**Log:** the tool keeps `CampaignEditor.log` in `CampaignEditor\CampaignEditor_logs` next to the exe (its own folder; versions up to 0.33 kept it right beside the exe - the editor asks once to move it in), together with the logs zips and the sessions (or in `%APPDATA%\RTW-M2TW-Campaign-Editor` where the exe's folder cannot be written): what was loaded, previewed and written, and every error with its details. The **Log** button shows it; send it along with the game's `system.log.txt` when something goes wrong.
 
 **Undo:** press **Restore a backup...** Backups sit in `CampaignEditor_backups` next to `data` (older versions' backups are listed too). Pick the write to go back to: it and every later one are undone in one go.
 

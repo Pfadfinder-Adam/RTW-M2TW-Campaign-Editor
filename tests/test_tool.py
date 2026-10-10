@@ -1952,13 +1952,52 @@ building smith
                 self.assertEqual(new, os.path.join(game, "RTW-M2TW-Campaign-Editor.exe"))
                 with open(new) as fh:
                     self.assertEqual(fh.read(), "new editor")             # the older copy replaced
-                with open(os.path.join(game, "CampaignEditor_settings.json")) as fh:
-                    self.assertIn("dark", fh.read())                       # the settings came along
+                with open(os.path.join(game, "CampaignEditor", "CampaignEditor_settings.json")) as fh:
+                    self.assertIn("dark", fh.read())                       # the settings came along, in its folder
                 self.assertTrue(os.path.isfile(exe))                       # the started copy stays where it was
                 with mock.patch.object(sys, "executable", new):
                     self.assertFalse(relocate.should_offer("10.0"))         # in the game folder: never asks
         finally:
             log._candidates, log._home, log._path, settings._data = saved
+
+    def test_editor_files_in_a_folder_of_their_own(self):
+        """The editor's own files (settings, logs, add-ons) go into a folder of their own beside the exe -
+        CampaignEditor/ - not among the game's files (the user, 2026-10-10). Files an older version left right beside
+        the exe keep working there until the user says yes to one question; then they are moved in, nothing lost."""
+        from unittest import mock
+        from campaign_editor import log, settings
+        game = os.path.join(self.root, "game")
+        write(os.path.join(game, "RomeTW.exe"), "exe")
+        saved = (log._home, log._path, settings._data)
+        try:
+            with mock.patch.object(log, "exe_dir", lambda: game):
+                log._home, log._path, settings._data = None, None, None
+                sub = os.path.join(game, "CampaignEditor")
+                self.assertEqual(log.home(), sub)                               # a new place: its own folder
+                self.assertEqual(settings._path(), os.path.join(sub, "CampaignEditor_settings.json"))
+                self.assertEqual(log.beside_exe(), [])
+                import shutil
+                shutil.rmtree(sub)
+                # an older version's files right beside the exe: used there, the question asked
+                write(os.path.join(game, "CampaignEditor_settings.json"), '{"theme": "dark"}')
+                write(os.path.join(game, "CampaignEditor_logs", "CampaignEditor.log"), "old entry\n")
+                write(os.path.join(game, "CampaignEditor_addons", "mine.nut"), "x")
+                log._home, log._path, settings._data = None, None, None
+                self.assertEqual(log.home(), game)
+                self.assertEqual(settings.get("theme"), "dark")
+                self.assertEqual(log.beside_exe(), ["CampaignEditor_logs", "CampaignEditor_settings.json",
+                                                    "CampaignEditor_addons"])
+                self.assertEqual(log.move_into_own_folder(),
+                                 ["CampaignEditor_logs", "CampaignEditor_settings.json", "CampaignEditor_addons"])
+                self.assertEqual(log.home(), sub)
+                self.assertEqual(log.beside_exe(), [])
+                self.assertEqual(settings.get("theme"), "dark")
+                self.assertTrue(os.path.isfile(os.path.join(sub, "CampaignEditor_addons", "mine.nut")))
+                with open(log.path()) as fh:
+                    self.assertIn("old entry", fh.read())
+                self.assertEqual(sorted(os.listdir(game)), ["CampaignEditor", "RomeTW.exe"])
+        finally:
+            log._home, log._path, settings._data = saved
 
     def test_log_in_logs_folder(self):
         """Beside the exe (in the game's folder): CampaignEditor_logs/ (the log, the zips, sessions/) and

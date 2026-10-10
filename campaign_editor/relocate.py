@@ -1,5 +1,6 @@
 """Putting the editor into the game's folder: the place it is meant to lie (beside RomeTW.exe / medieval2.exe), where
-it finds the game and every mod by itself and keeps its settings and logs in one place.
+it finds the game and every mod by itself and keeps its settings and logs in one place (its own folder there,
+CampaignEditor/).
 
 Offered once per version to whoever starts the exe somewhere else (the Downloads folder, the desktop, a mod's
 folder): the user picks the game's folder - nothing is guessed -, the folder is checked (the game's exe must lie
@@ -72,15 +73,18 @@ def move_to(folder, exe=None, home=None):
         replace_file(target, fh.read())
     home = home or log.home()
     if home:
+        # into the editor's own folder there (log.OWN), unless an older editor there keeps its files beside its exe
+        own = folder if any(os.path.exists(os.path.join(folder, n)) for n in log.BESIDE) else \
+            os.path.join(folder, log.OWN)
         src = os.path.join(home, log.SETTINGS_NAME)
-        dst = os.path.join(folder, log.SETTINGS_NAME)
+        dst = os.path.join(own, log.SETTINGS_NAME)
         if os.path.isfile(src) and not os.path.exists(dst):
             with open(src, "rb") as fh:
                 replace_file(dst, fh.read())
-        addons = os.path.join(home, "CampaignEditor_addons")
-        if os.path.isdir(addons) and not os.path.exists(os.path.join(folder, "CampaignEditor_addons")):
+        addons = os.path.join(home, log.SHORT + "_addons")
+        if os.path.isdir(addons) and not os.path.exists(os.path.join(own, log.SHORT + "_addons")):
             import shutil
-            shutil.copytree(addons, os.path.join(folder, "CampaignEditor_addons"))
+            shutil.copytree(addons, os.path.join(own, log.SHORT + "_addons"))
     log.write("The editor copied into the game's folder: %s (from %s)" % (target, exe))
     return target
 
