@@ -2573,6 +2573,39 @@ building smith
         restore(mod, backups(mod)[0])
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_terrain_land_joins_the_common_wasteland(self):
+        """The Terrain tab's Land brush, 'new land joins (nobody - the wasteland)' (REX / M2EX - the user,
+        2026-10-10: 'all the free land into ONE common wasteland region'): the land painted goes to one wasteland
+        region, written on Apply with its 3-line block (Name / wasteland / r g b) when the map has none; the next
+        painting joins the same one. Without an engine there is none to join (the original exes know no wasteland).
+        Restore gives every byte back."""
+        from campaign_editor import regiondelete as RD
+        from campaign_editor import terrain as T
+        from campaign_editor.plan import Plan
+        self.assertIsNone(RD.common_wasteland(ModData(self.root), "test"))
+        write(os.path.join(self.root, "data", "descr_ex.txt"), "max_factions 21\n")
+        w, h = ModData(self.root).region_map("test").width, ModData(self.root).region_map("test").height
+        write_tga(os.path.join(self.root, "data", "world", "maps", "campaign", "test", "map_ground_types.tga"),
+                  2 * w + 1, 2 * h + 1, [[(0, 128, 128)] * (2 * w + 1) for _ in range(2 * h + 1)])
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        name, colour, new = RD.common_wasteland(mod, "test")
+        self.assertEqual((name, new), ("Wasteland", True))
+        self.assertNotIn(colour, mod.region_map("test").colours())
+        img = mod.region_map("test")
+        sea = next((x, y) for y in range(img.height) for x in range(img.width)      # a tile the brush turns (the
+                   if img.get(x, y) not in ((0, 0, 0), (255, 255, 255)))               # test map has no sea)
+        plan = Plan(mod, "terrain", "terrain")
+        T.apply(plan, "test", coast={"tiles": {sea: "land"}, "regions": {sea: colour}, "ground": {}, "heights": {}},
+                wasteland=(name, colour))
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertTrue(mod.regions("test")["Wasteland"]["wasteland"])
+        self.assertEqual(mod.region_map("test").get(*sea), colour)
+        self.assertEqual(RD.common_wasteland(mod, "test"), ("Wasteland", colour, False))     # never a second one
+        restore(mod, backups(mod)[0])
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_heights_spray_and_restore(self):
         """Heights brush: a spray on land raises the middle most, never touches the sea (blue), puffs add up;
         written into map_heights.tga, map_heights.hgt (the game's copy that wins over the picture) and map.rwm
@@ -3877,11 +3910,14 @@ building smith
         restore(mod, bdir)
         self.assertEqual(tree_hash(self.root), before)
 
-    def test_map_cut_deletes_the_region_of_a_town_it_takes(self):
-        """A cut that takes a town off but leaves part of its land: the region goes from the files and its land left is
-        left as it is, given to no one, with or without an engine (the user, 2026-10-08: 'just delete the region, the
-        modder fills the gap himself')."""
+    def test_map_cut_gives_the_land_left_of_a_town_it_takes_to_the_wasteland(self):
+        """A cut that takes a town off but leaves part of its land: the region goes from the files and the land left
+        never stays without a region (report #178: 'Region has no descr_regions.txt entry', then a crash). With REX /
+        M2EX it goes to the ONE common wasteland (the user, 2026-10-10: 'variant B - all the free land into ONE
+        common wasteland region'), made once and kept for the next; without an engine to the neighbour that stays
+        (the original exes know no wasteland); land with no neighbour to go to is refused in words."""
         from campaign_editor import mapresize as MR
+        from campaign_editor import regiondelete as RD
         from campaign_editor.plan import Plan, restore
         self._three_towns()
         for engine in (False, True):
@@ -3889,12 +3925,25 @@ building smith
                 write(os.path.join(self.root, "data", "descr_ex.txt"), "max_factions 21\n")
             before = tree_hash(self.root)
             mod = ModData(self.root)
+            self.assertEqual(RD.common_wasteland(mod, "test") is not None, engine)
             plan = Plan(mod, "map", "map_size", {})
             MR.plan_resize(plan, "test", right=-1, clear=True)
             bdir = plan.apply()
             mod = ModData(self.root)
-            self.assertNotIn("C_R", mod.regions("test"))            # the region is gone from the files
-            self.assertEqual(sum(1 for _ in mod.region_map("test").find((0, 255, 0))), 4)    # its land left as it is
+            regions = mod.regions("test")
+            self.assertNotIn("C_R", regions)                         # the region is gone from the files
+            img = mod.region_map("test")
+            self.assertEqual(sum(1 for _ in img.find((0, 255, 0))), 0)          # none of its colour left
+            known = {v["colour"] for v in regions.values()} | {(0, 0, 0), (255, 255, 255)}
+            self.assertEqual({img.get(x, y) for x in range(img.width) for y in range(img.height)} - known, set())
+            if engine:
+                self.assertTrue(regions["Wasteland"]["wasteland"])
+                self.assertEqual(sum(1 for _ in img.find(regions["Wasteland"]["colour"])), 4)
+                # the next free land joins the same one: no second wasteland is made
+                self.assertEqual(RD.common_wasteland(mod, "test")[:1] + RD.common_wasteland(mod, "test")[2:],
+                                 ("Wasteland", False))
+            else:
+                self.assertEqual(sum(1 for _ in img.find((0, 0, 255))), 7 + 4)    # B_R took the 4 tiles left
             restore(mod, bdir)
             self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_")},
                              {k: v for k, v in before.items() if not k.startswith("CampaignEditor_")})

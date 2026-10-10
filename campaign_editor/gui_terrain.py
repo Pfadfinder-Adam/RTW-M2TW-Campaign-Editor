@@ -11,6 +11,7 @@ from tkinter import ttk
 from . import terrain as T, theme
 
 NEAREST = "(the nearest region)"
+WASTE = "(nobody - the wasteland)"           # REX / M2EX: the ONE common wasteland (regiondelete)
 POINT_BRUSHES = ("pen", "shape", "smooth", "pull", "push")       # the coast brushes that work by map_heights point, not by tile
 
 
@@ -158,6 +159,7 @@ class TerrainEditor(ttk.Frame):
 
     def rebind(self, mod):
         lost = 0
+        fresh = self.mod is None or mod.data != self.mod.data
         if self.mod is not None and self.dirty() and mod.data == self.mod.data and self._signature() != self._sig:
             lost = self.pending()
         if lost or self.mod is None or mod.data != self.mod.data or not self.dirty():
@@ -166,6 +168,7 @@ class TerrainEditor(ttk.Frame):
             self.coast, self.cbase = {}, {}
             self.cpx = {"regions": {}, "ground": {}, "heights": {}, "hgt": {}}
             self._undo, self._redo = [], []
+            self._waste = None                          # the common wasteland: asked again (made on the last Apply?)
         self._off_said = ""                             # a check's finding belongs to the files it looked at
         self._sc = self._shape_ctx = None
         if getattr(self, "view", None) is not None:
@@ -173,6 +176,12 @@ class TerrainEditor(ttk.Frame):
         from .moddata import ModData
         self.mod = ModData(mod.data)                 # its own copy: the pictures are changed in memory
         self._sig = self._signature()
+        from .regiondelete import can_waste
+        if not can_waste(self.mod):                     # the original exes know no wasteland
+            if self.v_coast_region.get() == WASTE:
+                self.v_coast_region.set(NEAREST)
+        elif fresh and self.v_coast_region.get() == NEAREST:
+            self.v_coast_region.set(WASTE)              # with an engine free land is nobody's by default
         self.cmap = None
         self.show()
         return lost
@@ -184,9 +193,10 @@ class TerrainEditor(ttk.Frame):
             raise ValueError("nothing painted in the Terrain editor")
         mod = ModData(self.mod.data)
         plan = Plan(mod, "terrain", "terrain", {})
+        w = getattr(self, "_waste", None)
         T.apply(plan, self.app.v_campaign.get(), self.ground, self.features, self.climate, self.heights,
                 dict(self.cpx, tiles=self.coast) if self.coast or self.cpx["heights"] or self.cpx["ground"] or
-                self.cpx.get("hgt") else None)
+                self.cpx.get("hgt") else None, wasteland=w[:2] if w and w[2] else None)
         broken = T.river_warnings(self._features_now(), self.cmap.w, self.cmap.h, self.cmap.is_sea) \
             if self.features else []
         for x, y, n in broken[:20]:
@@ -230,6 +240,7 @@ class TerrainEditor(ttk.Frame):
             except Exception:
                 pass
             self._apply_memory()
+            self._waste_on_map()                        # land painted for a wasteland not written yet reads as its
         self.cmap.show_climates = self.v_what.get() == "climate"
         self.cmap.show_heights = self._by_points()
         self.view.brush = self.v_brush.get()
@@ -432,8 +443,7 @@ class TerrainEditor(ttk.Frame):
                 continue
             region = None
             if to_land:
-                pick = self.v_coast_region.get()
-                region = pick if pick in self.cmap.info else T.nearest_region(self.cmap, t)
+                region = self._joins() or T.nearest_region(self.cmap, t)
                 if not region:
                     why = "no region to join near here - pick one in 'new land joins'"
                     continue
@@ -573,10 +583,9 @@ class TerrainEditor(ttk.Frame):
         if heights is None:
             return None
         exact = self.cpx.setdefault("hgt", {})
-        pick = self.v_coast_region.get()
         sc = getattr(self, "_sc", None)
         if sc is not None and sc.heights is heights and sc.exact is exact:
-            sc.region = pick if pick in self.cmap.info else None
+            sc.region = self._joins()
             return sc
         camp = self.app.v_campaign.get()
         ctx = getattr(self, "_shape_ctx", None)
@@ -590,8 +599,35 @@ class TerrainEditor(ttk.Frame):
             self._sea = T.sea_colour(self.mod.region_map(camp), [v["colour"] for v in self.cmap.info.values()])
         self._sc = T.ShapeCoast(heights, self._img("map_ground_types.tga"), self.cmap, self.standing,
                                 _FeatureLookup(self._img("map_features.tga")), self._region_tiles(), self._sea,
-                                ctx[1], ctx[2], ctx[3], pick if pick in self.cmap.info else None, exact)
+                                ctx[1], ctx[2], ctx[3], self._joins(), exact)
         return self._sc
+
+    def _joins(self):
+        """The region new land joins as picked in 'new land joins': a region, the common wasteland (REX / M2EX - the
+        user, 2026-10-10: 'all the free land into ONE common wasteland region'; one not written yet joins the map's
+        regions here and is made on Apply), or None = the nearest region's."""
+        pick = self.v_coast_region.get()
+        if self.cmap is None:
+            return None
+        if pick == WASTE:
+            return self._waste_on_map(True)
+        return pick if pick in self.cmap.info else None
+
+    def _waste_on_map(self, ask=False):
+        """The common wasteland's name (ask: found or chosen now - regiondelete.common_wasteland), a new one (not
+        written yet) put among the map's regions so its painted land reads as its own; None when there is none."""
+        if ask and getattr(self, "_waste", None) is None and self.mod is not None:
+            from .regiondelete import common_wasteland
+            self._waste = common_wasteland(self.mod, self.app.v_campaign.get())
+        if not getattr(self, "_waste", None) or self.cmap is None:
+            return None
+        name, colour = self._waste[:2]
+        if name not in self.cmap.info:                  # copies: ModData keeps its own list of the regions
+            self.cmap.info = dict(self.cmap.info)
+            self.cmap.info[name] = {"colour": colour, "wasteland": True}
+            self.cmap.by_colour = dict(self.cmap.by_colour)
+            self.cmap.by_colour[colour] = name
+        return name
 
     def shape(self, px, py):
         """The shape brush (land / water) and 'Smooth the coast' at map_heights point (px, py), fractions kept: the
@@ -873,9 +909,16 @@ class TerrainEditor(ttk.Frame):
         ttk.Radiobutton(box, text="land point", value="pen_land", variable=self.v_coast).pack(side="left", padx=3)
         ttk.Radiobutton(box, text="water point", value="pen_sea", variable=self.v_coast).pack(side="left", padx=3)
         ttk.Label(box, text="   new land joins").pack(side="left", padx=(12, 2))
-        names = sorted(self.cmap.info) if self.cmap is not None else []
-        ttk.Combobox(box, textvariable=self.v_coast_region, values=[NEAREST] + names, width=24,
-                     state="readonly").pack(side="left")
+        from .regiondelete import can_waste
+        waste = can_waste(self.mod) if self.mod is not None else False
+        joined = self._waste_on_map(True) if waste else None        # one choice once: never also by its name
+        names = sorted(n for n in (self.cmap.info if self.cmap is not None else ()) if n != joined)
+        from .gui_util import tip
+        tip(ttk.Combobox(box, textvariable=self.v_coast_region, values=[NEAREST] + ([WASTE] if waste else []) +
+                         names, width=24, state="readonly"),
+            "Which region the land you paint joins. (nobody - the wasteland): with REX / M2EX - the land stays "
+            "nobody's: no town, no owner; all of it goes into ONE wasteland region, made on Apply when the map has "
+            "none. (the nearest region): the region of the nearest land grows. Or pick a region.").pack(side="left")
         more = ttk.Frame(rows)
         more.pack(side="top", fill="x", pady=(4, 0))
         ttk.Label(more, text="shape brush (a smooth coast where you draw):").pack(side="left", padx=(8, 2))
@@ -903,7 +946,8 @@ class TerrainEditor(ttk.Frame):
             "game cuts every square of four heights points into two triangles and lays the water at height 0, so "
             "the brush sets the heights near the water by their distance from the edge - the game's shore then "
             "falls on it, not on the points' grid (equal heights make stairs at 90 / 45 degrees). The tiles follow "
-            "by their middles (new land joins a region), the ground by its points; towns, ports, characters, forts, "
+            "by their middles (new land joins the region picked in 'new land joins'), the ground by its points; "
+            "towns, ports, characters, forts, "
             "rivers keep a little land round them. PULL grabs the coast under the brush and drags it with the "
             "mouse; PUSH, pressed on the land, grows the land into the water (on the water: the water into the "
             "land). Smooth the coast rounds what is under it, the longer you hold "
@@ -914,7 +958,9 @@ class TerrainEditor(ttk.Frame):
             "written in three places that must agree, so each tile changes all of them: map_regions.tga (the "
             "region's colour or the sea's), map_ground_types.tga (a land ground like its neighbours', or shallow "
             "sea) and map_heights.tga with map_heights.hgt (a low shore, or the sea's depth). New land joins the "
-            "region of the nearest land, or the one picked here - move borders later on the Map (Regions). Refused: "
+            "region picked in 'new land joins': with REX / M2EX by default nobody - ONE wasteland region of free land, "
+            "no town, no owner (made on Apply when the map has none); or the nearest region, or one picked - move "
+            "borders later on the Map (Regions). Refused: "
             "drowning a town, port, character, fort or resource, a region's last land, a river (rub it out first) "
             "or a port's last land. On Apply: those files written, map.rwm deleted (the game builds its map again). "
             "'Find ground on the wrong side of the coast' rings every point where map_ground_types and map_heights "

@@ -3,6 +3,17 @@
 ## Unreleased
 
 ### Added
+- **New land that joins nobody: one common wasteland** (Rome with REX, Medieval II with M2EX): in the Coast &
+  heights tab, *new land joins* has **(nobody - the wasteland)**, the default with an engine - the land you paint
+  stays nobody's (no town, no owner, no faction grows) and all of it goes into ONE wasteland region, `Wasteland`,
+  made on Apply when the map has none (its three lines in `descr_regions.txt`, its name in the names text); the
+  next painting and a map cut's leftover land join the same one. With the original game the choice is not there
+  (it knows no wasteland).
+- **Pull and Push the coast** (Coast & heights, shape brush): **pull** grabs the coast under the brush and drags it
+  with the mouse, like a painter's liquify - most in the brush's middle, softly less to its edge - to draw capes
+  and bays; **push**, pressed on the land beside the coast, grows the land into the water (on the water: the water
+  into the land), the longer you hold the further. The heights, the tiles and the ground follow, as with the shape
+  brush.
 - **Make a unit's card and description picture from its 3D model**: in Units, the soldier model's **View in 3D...**
   has **Make a card...** and **Make a picture...** - turn the man, zoom, play an animation and stop it on the frame
   you like, and the editor frames him the way the game's own are (a card from his head to his thighs, a spear held
@@ -161,10 +172,10 @@
   radar_map2.tga) are drawn again on every tile whose land, sea or ground you changed - from the nearest tile of the
   same ground (a forest from a forest, the sea from the sea), so its look and season fit. Needs Pillow (else a note).
 - **Fix: the brush's outline follows the mouse while painting** with the button held (it stood still).
-- **Map size**: a cut that takes a town off deletes its region from every file, and nothing more - the part of its
-  land that stays on the map is left as it is, given to no one; the question before the cut and the result name it,
-  and you paint it into the regions you want (Edit regions). The cut no longer refuses a town whose land left
-  touches no other region.
+- **Map size**: a cut that takes a town off deletes its region from every file; the part of its land that stays on
+  the map goes to the common wasteland - nobody's land - in Rome (with REX) and Medieval II (with M2EX), or, with
+  the original game, to the neighbour region (a cut that would leave such land touching no region that stays is
+  refused, in words). The question before the cut and the result name it.
 - **Map size: a cut that takes a faction's last town takes the faction out of this campaign** (both games), after a
   question that names it - its people, its place in the faction lists, its diplomacy, its victory conditions and the
   events that make it rise; it stays in the mod (its units, pictures and other campaigns keep it). Script lines naming
@@ -209,6 +220,9 @@
   release's page.
 
 ### Fixed
+- **Medieval II (with M2EX) crashed at the campaign's start after a map cut** that took towns off ('Region has no
+  descr_regions.txt entry', then a crash): the land the cut left of their regions kept their colours with no region.
+  It now goes to the common wasteland (or, with the original game, to the neighbour region).
 - **A new town on the map shows its name and has its own right-click menu** before Apply: its names, owner,
   level and resources (a double click too), its port placed or taken away, its garrison and buildings when its
   faction is the one edited, Delete this new region - all of it at once, before the write.

@@ -1154,12 +1154,13 @@ def radar_painted(data, map_w, map_h, kind_of, changed):
     return buf.getvalue()
 
 
-def apply(plan, campaign, ground=None, features=None, climate=None, heights=None, coast=None):
+def apply(plan, campaign, ground=None, features=None, climate=None, heights=None, coast=None, wasteland=None):
     """Write the painted tiles: ground {(x, y): colour} into map_ground_types.tga, features
     {(x, y): colour} into map_features.tga, climate {(x, y): colour} into map_climates.tga (the same
     3 x 3 block per tile as the ground); coast {'tiles': {(x, y): 'land' | 'sea'}, 'regions' / 'ground' /
     'heights': pixels (coast_pixels)} into map_regions, map_ground_types (the painted ground on top),
-    map_heights and map_heights.hgt; map.rwm deleted so the game builds the map again."""
+    map_heights and map_heights.hgt; map.rwm deleted so the game builds the map again. wasteland: (name, colour) of
+    the common wasteland not written yet (regiondelete.common_wasteland) - made when land of its colour is painted."""
     mod = plan.mod
     ground = {tuple(k): tuple(v) for k, v in (ground or {}).items()}
     features = {tuple(k): tuple(v) for k, v in (features or {}).items()}
@@ -1177,6 +1178,11 @@ def apply(plan, campaign, ground=None, features=None, climate=None, heights=None
         plan.patch_tga(path, {tuple(k): tuple(v) for k, v in coast["regions"].items()})
         n_land = sum(1 for v in ctiles.values() if v == "land")
         plan.notes.append((mod.rel(path), "%d tile(s) made land, %d made sea" % (n_land, len(ctiles) - n_land)))
+        if wasteland:
+            mine = [tuple(k) for k, v in coast["regions"].items() if tuple(v) == tuple(wasteland[1])]
+            if mine:
+                from .regiondelete import make_wasteland
+                make_wasteland(plan, campaign, wasteland[0], wasteland[1], mine, land=True)
     gchanges = {tuple(k): tuple(v) for k, v in (coast.get("ground") or {}).items()}
     cheights = {tuple(k): tuple(v) for k, v in (coast.get("heights") or {}).items()}
     exact = {tuple(k): float(v) for k, v in (coast.get("hgt") or {}).items()}

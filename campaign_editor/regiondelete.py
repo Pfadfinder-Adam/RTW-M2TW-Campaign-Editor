@@ -626,6 +626,12 @@ def wasteland_town(plan, campaign, region, xy, name, owner="slave", label=None):
         next((i + 1 for i in range(fb.start, fb.end) if sf.text(i).split()[:1] == ["denari"]), fb.start + 1)
     sf.raw[at:at] = [sf.make(t) for t in block]
     plan.note(sf, "%s: a village of %s" % (region, owner))
+    _names_known(plan, campaign, name, label, "the town's name shows as its key")
+
+
+def _names_known(plan, campaign, name, label=None, missing="the name shows as its key"):
+    """The name in the campaign's lookup and its label in the names text (each added only when missing)."""
+    mod = plan.mod
     lk = mod.campaign_file(campaign, "descr_regions_and_settlement_name_lookup.txt")
     if lk:
         f = plan.edit(lk)
@@ -643,4 +649,62 @@ def wasteland_town(plan, campaign, region, xy, name, owner="slave", label=None):
             f.raw.extend([f.make("{%s}\t\t\t%s" % (name, label or name.replace("_", " "))), f.make("")])
             plan.note(f, "the name players see for %s: %s" % (name, label or name.replace("_", " ")))
     else:
-        plan.warn(None, "no %s_regions_and_settlement_names.txt found - the town's name shows as its key" % campaign)
+        plan.warn(None, "no %s_regions_and_settlement_names.txt found - %s" % (campaign, missing))
+
+
+WASTE_NAME = "Wasteland"
+_WASTE_RE = re.compile(r"^%s(_\d+)?$" % WASTE_NAME)
+
+
+def common_wasteland(mod, campaign):
+    """The ONE wasteland every piece of free land goes to - the land a map cut leaves of a town it takes, the land the
+    Terrain brush paints when 'new land joins' says nobody (the user, 2026-10-10: 'variant B - not many wasteland
+    regions, ALL the free land goes into ONE common wasteland region'): (name, colour, new). The one made before (a
+    wasteland region named Wasteland, Wasteland_2, ...), else a new one: a free name, a colour no pixel of
+    map_regions.tga has (make_wasteland writes it). None without REX / M2EX - the original exes know no wasteland
+    (land with no region is a crash there: 'Region has no descr_regions.txt entry', report #178)."""
+    if not can_waste(mod):
+        return None
+    regions = mod.regions(campaign)
+    made = sorted((r for r, v in regions.items() if v.get("wasteland") and _WASTE_RE.match(r)),
+                  key=lambda r: (len(r), r))
+    if made:
+        return made[0], tuple(regions[made[0]]["colour"]), False
+    from .regionedit import free_colour
+    taken = set(regions) | {v.get("settlement") for v in regions.values()}
+    name = next(n for n in [WASTE_NAME] + ["%s_%d" % (WASTE_NAME, k) for k in range(2, 1000)] if n not in taken)
+    return name, free_colour(mod, campaign, [v["colour"] for v in regions.values()]), True
+
+
+def make_wasteland(plan, campaign, name, colour, tiles=(), land=False):
+    """The common wasteland written (common_wasteland gave it as new): its 3-line block at the end of descr_regions
+    (Name / wasteland / r g b - REX's and M2EX's short form: no town, owner, rebels or economy), its name in the
+    lookup and the names text (the engines still want the name's key). Rome wants a 'resource slaves' in every
+    region (regionedit._slave_resources) - one goes on its land when none lies there (tiles: its land, already
+    painted with colour by the caller; land: all of them land as they will be written - the Terrain brush's new land,
+    sea in the files still)."""
+    from . import resources as R
+    mod = plan.mod
+    dr = plan.edit(mod.campaign_file(campaign, "descr_regions.txt"))
+    while dr.raw and not dr.text(len(dr.raw) - 1).strip():
+        del dr.raw[-1]
+    dr.raw.extend(dr.make(t) for t in (name, "\twasteland", "\t%d %d %d" % tuple(colour), ""))
+    plan.note(dr, "region %s: the common wasteland, colour %d %d %d - nobody's land (REX / M2EX)" % ((name,) +
+                                                                                                    tuple(colour)))
+    _names_known(plan, campaign, name)
+    tiles = sorted({tuple(t) for t in tiles})
+    sf = plan.edit(mod.campaign_file(campaign, "descr_strat.txt"))
+    have = R.read(sf)
+    slaves = [r for r in have if r.kind == "slaves"]
+    if not tiles or len(slaves) < 0.9 * len(mod.regions(campaign)) or \
+            any(tuple(r.xy) in set(tiles) for r in slaves):
+        return
+    taken = {tuple(r.xy) for r in have}
+    cells = [t for t in tiles if t not in taken and (land or not R.problem(mod, campaign, t, taken))]
+    if not cells:
+        plan.warn(sf, "%s has no free land tile for its slaves resource - Rome needs one in every region" % name)
+        return
+    cx, cy = sum(x for x, _ in cells) / len(cells), sum(y for _, y in cells) / len(cells)
+    xy = min(cells, key=lambda p: ((p[0] - cx) ** 2 + (p[1] - cy) ** 2, p))
+    R.apply(plan, campaign, {"added": [{"type": "slaves", "xy": xy}]})
+    plan.note(sf, "%s: a slaves resource at %d, %d (Rome needs one in every region)" % (name, xy[0], xy[1]))

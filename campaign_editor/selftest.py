@@ -703,6 +703,43 @@ def s_coast_pull(c, mod):
     raise Skip("no sea tile beside the land to pull a cape out on")
 
 
+@step("Land and sea: new land that joins nobody - the common wasteland (REX / M2EX: one region of free land, no "
+      "town, no owner)",
+      "a new bit of coast at {waste_land} with no faction colour; its region on the map's hover: Wasteland")
+def s_coast_waste(c, mod):
+    from collections import Counter
+    from . import regiondelete as RD
+    from . import resources as RS
+    from . import terrain as T
+    from .mapdata import CampaignMap
+    from .tga import read_tga
+    wl = RD.common_wasteland(mod, c.campaign)
+    if wl is None:
+        raise Skip("no REX / M2EX beside the game - the original exe knows no wasteland")
+    cmap = CampaignMap(mod, c.campaign)
+    standing = set(cmap.cities.values()) | set(cmap.ports.values()) | _strat(mod, c.campaign).taken_tiles() | \
+        {r.xy for r in RS.read(mod.load(mod.campaign_file(c.campaign, "descr_strat.txt")))}
+    counts = Counter(r for y in range(cmap.h) for x in range(cmap.w) for r in [cmap.region_at(x, y)] if r)
+    hp = mod.campaign_file(c.campaign, "map_heights.tga")
+    heights = read_tga(hp) if hp else None
+    sea = T.sea_colour(mod.region_map(c.campaign), [v["colour"] for v in cmap.info.values()])
+    for y in range(cmap.h - 3, 2, -3):                 # from the other end of the map than s_coast
+        for x in range(cmap.w - 3, 2, -3):
+            if not cmap.is_sea(x, y) or \
+                    sum(1 for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)) if not cmap.is_sea(x + dx, y + dy)) < 2:
+                continue
+            if T.coast_problem(cmap, (x, y), True, standing, {}, counts, cmap.ports):
+                continue
+            px = T.coast_pixels(cmap, (x, y), True, wl[1], heights, sea)
+            plan = Plan(mod, "terrain", "terrain")
+            T.apply(plan, c.campaign, coast={"tiles": {(x, y): "land"}, "regions": px["regions"],
+                                            "ground": px["ground"], "heights": px["heights"]},
+                    wasteland=wl[:2] if wl[2] else None)
+            c.said["waste_land"] = "%d, %d" % (x, y)
+            return plan
+    raise Skip("no sea tile to fill")
+
+
 def _lay_coast(sc, cmap, part, got):
     """One pull / push laid into the pictures ShapeCoast reads (a copy of the mod's, never written) and gathered."""
     for p, col in part["heights"].items():
@@ -2898,6 +2935,7 @@ COVERAGE = {
     "Land and sea: the ground put right under the heights": ["s_ground_coast"],
     "Land and sea: the shape brush and Smooth the coast (the coast as a shape)": ["s_coast_shape"],
     "Land and sea: Pull and Push the coast": ["s_coast_pull"],
+    "Land and sea: new land joins nobody - the common wasteland (REX / M2EX)": ["s_coast_waste"],
     "Family: a son": ["s_family"],
     "Family: a daughter, a man tied to no one": ["s_family_more"],
     "Character editor: traits and retinue of a character": ["s_character"],
