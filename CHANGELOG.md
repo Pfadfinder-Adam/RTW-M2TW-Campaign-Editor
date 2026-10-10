@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Battle models move: animations in View in 3D**: pick any of the model's moves - stand, walk, run, the attacks,
+  shooting, dying... (its skeleton's list in `descr_skeleton.txt`) - and the man takes it, read straight from the
+  game's animation packs (`data/animations/pack.idx` + `pack.dat`, the mod's own first) in Rome, Barbarian Invasion
+  and Medieval II alike. **Play** / **Pause** (20 frames a second), or drag the frame. Medieval II's weapons stay in
+  the hand, the shield on the arm, the quiver on the back. The mount stays still for now.
 - **Art in tabs, and a Models tab**: Art's pictures are sorted into **Icons and buttons**, **Flags and banners**,
   **Maps** and **Other**, each tab with how many it holds (the last one looked at opens again). The figures on the
   campaign map left Art for a **Models** tab of their own: one card per character type with its figure's list, 3D

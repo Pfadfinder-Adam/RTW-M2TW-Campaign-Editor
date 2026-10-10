@@ -7814,6 +7814,53 @@ building smith
                     short_name="Epirus")
         self.assertEqual(swap(rome, "the Kingdom of Macedon"), "the Kingdom of Epirus")
 
+    def test_battle_animations_from_the_packs(self):
+        """The games' animation packs (pack.idx + pack.dat): each animation's frames, bones and kind, every bone's turn
+        per frame and the offsets of its first `kind` bones; descr_skeleton's animations per skeleton, a Medieval II
+        skeleton's parent's taken over; a Medieval II mesh posed from its base pose by its points' bones."""
+        import struct
+        from campaign_editor import animations as AN, meshview as MV
+
+        def record(frames, bones, kind, turn, offset):
+            return struct.pack("<HHB", frames, bones, kind) + b"".join(
+                struct.pack("<4f", *turn) for _ in range(frames * bones)) + b"".join(
+                struct.pack("<3f", *offset) for _ in range(frames * kind)) + b"\x00" * 40
+        anims = [("data/animations/MTW2_Bowman/base.cas", record(1, 20, 1, (0, 0, 0, 1), (0, 1, 0))),
+                 ("data/animations/MTW2_Bowman/stand.cas", record(3, 20, 20, (0, 0, 0, 1), (0, 0.5, 0))),
+                 ("data/animations/MTW2_Bowman/turn.cas", record(2, 20, 20, (0, 1, 0, 0), (0, 0.5, 0)))]
+        idx = bytearray(b"ANIM.PACK\x00\x00\x00" + struct.pack("<II", 9, len(anims)))
+        dat = bytearray(idx)
+        for name, rec in anims:
+            idx += struct.pack("<IIIfHHB", len(name) + 10, len(dat), len(rec), 1.0, *struct.unpack_from("<HHB", rec))
+            idx += name.encode() + b"\x00"
+            dat += rec
+        folder = os.path.join(self.root, "data", "animations")
+        os.makedirs(folder)
+        for n, b in (("pack.idx", idx), ("pack.dat", dat)):
+            with open(os.path.join(folder, n), "wb") as fh:
+                fh.write(bytes(b))
+        write(os.path.join(self.root, "data", "descr_skeleton.txt"),
+              "type MTW2_Bowman\nanim default data/animations/MTW2_Bowman/base.cas ; the base pose\n"
+              "anim stand_a_idle data/animations/MTW2_Bowman/stand.cas -fr -evt:x.evt\n"
+              "anim missing data/animations/MTW2_Bowman/none.cas\n"
+              "type MTW2_Fast_Bowman\nparent MTW2_Bowman\nanim stand_a_idle data\\animations\\MTW2_Bowman\\turn.cas\n")
+        mod = ModData(os.path.join(self.root, "data"))
+        self.assertEqual([(e.name, e.frames, e.bones, e.kind) for e in AN.read_index(bytes(idx))][1],
+                         ("data/animations/MTW2_Bowman/stand.cas", 3, 20, 20))
+        a = AN.find(mod, "DATA/animations/mtw2_bowman/STAND.cas")
+        self.assertEqual((a.frames, len(a.rotations(2)), a.offsets(1)[19]), (3, 20, (0, 0.5, 0)))
+        self.assertEqual([w for w, _ in AN.of_skeleton(mod, "mtw2_bowman")], ["default", "stand_a_idle"])
+        self.assertEqual(AN.of_skeleton(mod, "MTW2_Fast_Bowman")[1],
+                         ("stand_a_idle", "data\\animations\\MTW2_Bowman\\turn.cas"))
+        rot, off = AN.base_pose(mod, "MTW2_Bowman")
+        self.assertEqual((len(rot), off[0], off[5]), (20, (0, 1, 0), (0, 0.5, 0)))   # the others' offsets filled in
+        mesh = MV.Mesh([MV.Group("Body", "x", (0, 1, 2), False)], [(1, 1, 0), (0, 1, 1), (0, 1, 0)], None)
+        mesh.skin = [(0, 4, 1.0, 0.0), (20, 16, 1.0, 0.0), (0, 0, 0.0, 0.0)]       # a weapon point: its hand holds it
+        turned = MV.pose_mesh(mesh, MV.Pose.of(AN.find(mod, "data/animations/MTW2_Bowman/turn.cas"), 0), (rot, off))
+        for got, want in zip(turned.positions[0], (-1, 0.5, 0)):          # half round the up axis at the pelvis
+            self.assertAlmostEqual(got, want, places=5)
+        self.assertIsNone(MV.pose_mesh(MV.Mesh(mesh.groups, mesh.positions, None), MV.Pose(rot, off), (rot, off)))
+
     def test_read_and_draw_a_rome_cas(self):
         """A Rome .cas laid out as the vanilla ones (3.05): header with the bone count and parents, frame times, bone
         records, rest places, a shield hanging on a bone and a body whose points hang on a bone. Read back, put
@@ -7857,6 +7904,10 @@ building smith
         for got, want in zip(m.positions[15], (0.1, 1.1, 0.1)):             # the body on the pelvis, 1 up
             self.assertAlmostEqual(got, want, places=5)
         self.assertEqual(len(m.shown(weapons=False)), 1)                     # the shield hidden
+        # an animation's frame: the pelvis turned half round the up axis and 2 up - its points follow
+        posed = MV.read_cas(data, MV.Pose([(0, 1, 0, 0)], [(0, 2, 0)]))
+        for got, want in zip(posed.positions[15], (-0.1, 2.1, -0.1)):
+            self.assertAlmostEqual(got, want, places=5)
         with self.assertRaises(MV.MeshError):
             MV.read_cas(b"\x00" * 80)
         try:

@@ -27,7 +27,7 @@ import struct
 HEADER = b"serialization::archive"
 KNOWN = {0, 1, 2, 3, 4, 10, 11}                     # stream kinds seen in the vanilla meshes
 SIZES = {0: (12,), 1: (8,), 4: (8,), 2: (4,), 3: (4, 12), 10: (4, 12), 11: (4, 12)}
-POS, UV, NORMAL = 0, 4, 3
+POS, UV, NORMAL, BONES, WEIGHTS = 0, 4, 3, 2, 1
 LIGHT = (-0.35, 0.55, 0.76)
 BACK = (46, 48, 54)
 PLAIN = (150, 144, 132)                             # a part with no texture: dull steel / leather
@@ -56,6 +56,7 @@ class Mesh:
         self.count = len(positions)
         self.one_texture = False
         self.texture_ref = None
+        self.skin = None                # Medieval II: [(primary bone, secondary bone, weight, weight)] per point
 
     def parts(self):
         """{part name: [its variants]} in file order."""
@@ -229,7 +230,13 @@ def read(data):
         uvs = list(struct.iter_unpack("<2f", data[st[UV]:st[UV] + 8 * count]))
     if any(not all(math.isfinite(x) and abs(x) < 1e4 for x in v) for v in pos):
         raise MeshError("the mesh's vertex positions do not look right")
-    return Mesh(groups, pos, uvs)
+    m = Mesh(groups, pos, uvs)
+    if BONES in st and WEIGHTS in st and st[BONES] + 4 * count <= len(data) and st[WEIGHTS] + 8 * count <= len(data):
+        # each point's two bones (bytes 0, secondary, primary, 0) and their weights (primary, secondary)
+        b = data[st[BONES]:st[BONES] + 4 * count]
+        w = list(struct.iter_unpack("<2f", data[st[WEIGHTS]:st[WEIGHTS] + 8 * count]))
+        m.skin = [(b[4 * i + 2], b[4 * i + 1], w[i][0], w[i][1]) for i in range(count)]
+    return m
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +350,18 @@ def _qmul(a, b):
 POSES = ("t", "frame")                              # Rome: the T pose (the skeleton at rest), the file's first frame
 
 
+class Pose:
+    """A frame of an animation (animations.Anim): each bone's own turn and the offsets of its first bones (Rome: the
+    pelvis alone, as a rule) - the bones in the animation's order (Rome: the model's without its Scene Root)."""
+
+    def __init__(self, rotations, offsets=()):
+        self.rotations, self.offsets = list(rotations), list(offsets)
+
+    @classmethod
+    def of(cls, anim, frame):
+        return cls(anim.rotations(frame), anim.offsets(frame))
+
+
 def read_cas(data, pose="t"):
     """A Mesh from a Rome .cas file's bytes (worked out on the 807 vanilla unit, mount and animal models, versions
     2.22 to 3.2 in the first 4 bytes as a float). The file: a header (the bone count, then each bone's parent),
@@ -391,6 +410,10 @@ def read_cas(data, pose="t"):
     for i, (nq, npos, qo, po) in enumerate(bones):
         q = struct.unpack_from("<4f", data, base + qo) if nq and pose == "frame" else (0.0, 0.0, 0.0, 1.0)
         t = struct.unpack_from("<3f", data, base + po) if npos else rest[i]
+        if isinstance(pose, Pose) and 1 <= i <= len(pose.rotations):   # an animation's frame: bone 0 = Scene Root
+            q = pose.rotations[i - 1]
+            if i - 1 < len(pose.offsets):
+                t = pose.offsets[i - 1]
         par = parents[i] if i and parents[i] < i else None
         if par is None:
             rot.append(q)
@@ -427,7 +450,77 @@ def read_cas(data, pose="t"):
     return m
 
 
+# Medieval II's 20 animated bones (pelvis, rthigh, rlowerleg, rfoot, abs, torso, head, jaw, eyebrow, rclavical,
+# rupperarm, relbow, rhand, lclavical, lupperarm, lelbow, lhand, lthigh, llowerleg, lfoot) and each one's parent;
+# a mesh's bones 20 on (weapons, shield) are held by the hand each of their points names as its second bone
+M2_PARENTS = (-1, 0, 1, 2, 0, 4, 5, 6, 6, 5, 9, 10, 11, 5, 13, 14, 15, 0, 17, 18)
+
+
+def _world(rotations, offsets):
+    """Every bone's turn and place in the model from their own turns and offsets (Medieval II's tree)."""
+    rot, where = [], []
+    for b, par in enumerate(M2_PARENTS):
+        q, t = rotations[b], offsets[b]
+        if par < 0:
+            rot.append(q)
+            where.append(t)
+        else:
+            o = _qrot(rot[par], t)
+            where.append(tuple(where[par][k] + o[k] for k in range(3)))
+            rot.append(_qmul(rot[par], q))
+    return rot, where
+
+
+def pose_mesh(mesh, pose, base):
+    """A Medieval II mesh in an animation's frame (a Pose): each point taken from its bones' place in the base pose
+    (base = (rotations, offsets): the skeleton's default animation, the pose the mesh is made in) to their place in
+    the frame, by its two weights. None when the mesh has no bones or the animation another skeleton's count."""
+    n = len(M2_PARENTS)
+    if not mesh.skin or len(pose.rotations) < n or len(base[0]) < n or len(base[1]) < n:
+        return None
+    offsets = list(pose.offsets[:n]) + list(base[1][len(pose.offsets):n])    # bones the frame does not move
+    brot, bwhere = _world(base[0], base[1])
+    rot, where = _world(pose.rotations, offsets)
+    back = [(-q[0], -q[1], -q[2], q[3]) for q in brot]
+    out = []
+    for v, (b0, b1, w0, w1) in zip(mesh.positions, mesh.skin):
+        if b0 >= n:                                  # a weapon's or the shield's point: the hand holding it
+            b0 = b1 if b1 < n else 0
+        if b1 >= n:
+            b1 = b0
+        if w0 <= 0 and w1 <= 0:                      # no weights (a shield, a quiver): all on its bone
+            w0 = 1.0
+        acc = [0.0, 0.0, 0.0]
+        for b, w in ((b0, w0), (b1, w1)):
+            if w <= 0:
+                continue
+            o = _qrot(rot[b], _qrot(back[b], (v[0] - bwhere[b][0], v[1] - bwhere[b][1], v[2] - bwhere[b][2])))
+            acc[0] += w * (where[b][0] + o[0])
+            acc[1] += w * (where[b][1] + o[1])
+            acc[2] += w * (where[b][2] + o[2])
+        tw = (w0 if w0 > 0 else 0) + (w1 if w1 > 0 else 0)
+        out.append(tuple(a / tw for a in acc) if tw > 0 else v)
+    m = Mesh(mesh.groups, out, mesh.uvs)
+    m.one_texture, m.texture_ref, m.skin = mesh.one_texture, mesh.texture_ref, mesh.skin
+    return m
+
+
 _CACHE = {}
+_BYTES = {}
+
+
+def read_posed(path, pose):
+    """A Rome .cas in an animation's frame (a Pose) - the file's bytes kept while it is unchanged."""
+    k = os.path.normcase(os.path.abspath(path))
+    stamp = os.path.getmtime(path)
+    if k not in _BYTES or _BYTES[k][0] != stamp:
+        with open(path, "rb") as fh:
+            _BYTES[k] = (stamp, fh.read())
+        while len(_BYTES) > 8:
+            _BYTES.pop(next(iter(_BYTES)))
+    m = read_cas(_BYTES[k][1], pose)
+    m.texture_ref = read_file(path).texture_ref
+    return m
 
 
 def read_file(path, pose="t"):
