@@ -1153,20 +1153,11 @@ class App(tk.Tk):
             self.lb_units.selection_clear(0, "end"), self.load_field()))
         self.lb_field.bind("<Double-1>", lambda e: self.field_on_map())
         right_click(self.lb_field.tv, self.remove_field)
-        opts = self.units_opts = ttk.LabelFrame(side, text="Towns without a garrison of your own", padding=6)
-        opts.pack(side="bottom", fill="x", pady=(10, 0), before=split)
-        ttk.Label(opts, text="Leader's army").grid(row=0, column=0, sticky="w")
+        # 'Towns without a garrison of your own' (Leader's army, Old garrisons) is gone from the tab (the user,
+        # 2026-10-10: 'no sense in it any more - there is Suggest on the right; more room'): what the tool does for a
+        # town left empty stays its default - a balanced leader's army, old garrisons replaced (start.py)
         self.v_army = tk.StringVar(value="balanced")
-        ttk.Combobox(opts, textvariable=self.v_army, state="readonly", width=12,
-                     values=("balanced", "template", "bodyguard")).grid(row=0, column=1, sticky="w", padx=4)
-        ttk.Label(opts, text="balanced = sized like similar factions", foreground="#666").grid(
-            row=1, column=0, columnspan=2, sticky="w")
-        ttk.Label(opts, text="Old garrisons").grid(row=2, column=0, sticky="w", pady=(6, 0))
         self.v_garrison = tk.StringVar(value="replace")
-        gf = ttk.Frame(opts)
-        gf.grid(row=3, column=0, columnspan=2, sticky="w")
-        ttk.Radiobutton(gf, text="replace with own units", value="replace", variable=self.v_garrison).pack(side="left")
-        ttk.Radiobutton(gf, text="keep", value="keep", variable=self.v_garrison).pack(side="left")
         self.garrison_editor = GarrisonEditor(panes, pictures=self.pictures)
         panes.add(self.garrison_editor, weight=1)
 
@@ -1776,11 +1767,6 @@ class App(tk.Tk):
         else:
             for w in self.give_row:
                 w.grid_remove()
-        for w in self.units_opts.winfo_children():
-            try:
-                w.configure(state="disabled" if edit else "normal")
-            except tk.TclError:
-                pass
         self.update_actions()
         self.garrison_editor.auto_text = ("unchanged - the town keeps its garrison" if edit else None)
         self.chosen, self.garrisons, self.buildings_picked, self.sizes = [], {}, {}, {}

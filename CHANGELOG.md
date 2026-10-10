@@ -189,6 +189,9 @@
   it are listed to change by hand. It was a refusal ('... would keep no town').
 
 ### Changed
+- **Units & armies: the 'Towns without a garrison of your own' box is gone** (Leader's army, Old garrisons) - more
+  room for the lists; **Suggest** fills a garrison by the numbers. A town left empty still gets the tool's own: a
+  leader's army sized like similar factions', old garrisons replaced.
 - **No question about the engine's settings files on every Load**: a mod without its own `descr_ex.txt` /
   `descr_caps_ex.txt` runs on the engine's defaults - not a fault - so Load no longer asks; **Check mod files** names
   it with a **Copy them in** button, and **New mod folder** puts them into the new mod at once, every setting

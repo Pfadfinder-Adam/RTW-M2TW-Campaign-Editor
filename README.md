@@ -379,8 +379,8 @@ How the chosen towns are moved in `descr_strat.txt`:
 
 - The whole `settlement { }` block moves, so no region ends up with two settlements.
 - A settlement holds **one army** at the start. The leader holds the capital; the heir holds the second chosen town, or stands next to the capital when there is only one.
-- **Leader's army** `balanced` (default): sized like the leader armies of factions with about as many towns (median size and upkeep), from the template's bodyguard and the cheapest units of its own starting armies. `template` copies the template leader's army, `bodyguard` gives the bodyguard alone.
-- **Old garrisons** `replace` (default): the capital's old garrison leaves; in other towns its captain stays with the template's cheapest units. `keep` folds the old units into the new armies instead.
+- **The leader's army** (a town left with no garrison of your own - or press **Suggest**): sized like the leader armies of factions with about as many towns (median size and upkeep), from the template's bodyguard and the cheapest units of its own starting armies.
+- **Old garrisons**: the capital's old garrison leaves; in other towns its captain stays with the template's cheapest units.
 - A general or agent of the previous owner is moved to one of that owner's other towns, or next to it when that town already has an army.
 - "Next to" is the flattest free tile of the town's region within 4 tiles: no river, ford or cliff (`map_features.tga`), no sea or mountain (`map_ground_types.tga`), a height range inside the tile of at most 25 (`map_heights.tga`).
 
