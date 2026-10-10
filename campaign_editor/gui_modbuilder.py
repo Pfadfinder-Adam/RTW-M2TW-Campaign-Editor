@@ -87,9 +87,12 @@ class ModuleBuilder(ttk.Frame):
         self.lb = tk.Listbox(left, width=36, height=22, exportselection=False)
         self.lb.pack(fill="both", expand=True)
         self.lb.bind("<<ListboxSelect>>", lambda e: self.pick_entry())
+        # a right click on one of my modules deletes it (the user, 2026-10-10: 'modules cannot be deleted from this
+        # list - a basic thing'); the examples are built in
+        self.lb.bind("<Button-3>", self._row_menu)
         ttk.Label(left, foreground="#666", wraplength=250, justify="left", text=(
             "An example is made for the loaded mod: its names (a unit, a building, a town) are the mod's own - "
-            "change any of them.")).pack(anchor="w", pady=(4, 0))
+            "change any of them. A right click on one of your modules deletes it.")).pack(anchor="w", pady=(4, 0))
         self.sf = ScrollFrame(body)
         from .gui_modscratch import ScratchView
         self.scratch = ScratchView(body, self)
@@ -130,6 +133,35 @@ class ModuleBuilder(ttk.Frame):
             for a, r in mine:
                 self.entries.append(("mine", r))
                 self.lb.insert("end", r.get("title") or a.title)
+
+    def _row_menu(self, e):
+        """Right click on the list: my module -> Open it / Delete it...; an example says it is built in."""
+        i = self.lb.nearest(e.y)
+        if i < 0 or i >= len(self.entries):
+            return
+        kind, r = self.entries[i]
+        if kind != "mine":
+            return
+        self.lb.selection_clear(0, "end")
+        self.lb.selection_set(i)
+        m = tk.Menu(self, tearoff=0)
+        m.add_command(label="Open it", command=self.pick_entry)
+        m.add_command(label="Delete it...", command=lambda: self.delete_mine(r))
+        m.tk_popup(e.x_root, e.y_root)
+
+    def delete_mine(self, recipe):
+        """One of my modules deleted from the editor (and from the game, if it is put in and that is wanted) - the
+        same as Add-ons' Delete from the editor... (gui_addons.delete_addon)."""
+        from .gui_addons import delete_addon
+        a = next((a for a, r in MB.my_modules() if r is recipe or r == recipe), None)
+        if a is None or not delete_addon(self, self.app, self.mod, a):
+            return
+        if self.recipe == recipe:                 # still on show: not saved anywhere now - asked before closing
+            self.changed = True
+        self.fill_list()
+        addons = self.app.editors.get("addons")
+        if addons is not None:                    # the Add-ons page's list says the same
+            addons.fill()
 
     def pick_entry(self):
         sel = self.lb.curselection()

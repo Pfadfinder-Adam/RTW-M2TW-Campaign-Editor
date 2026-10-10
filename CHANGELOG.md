@@ -165,6 +165,9 @@
   of its own any more - it takes the window's middle like Maps or Factions, and a module not saved yet stays while
   you look at other works (closing the editor asks about it). Add-ons' New module (no code)... and Change it in
   the Module builder... open it there too.
+- **Module builder: your own modules can be deleted from its list** - a right click on one: Open it / Delete it...
+  (the same as Add-ons' Delete from the editor...: from the game too, if it is put in, with a backup). The examples
+  are built in and stay.
 - **Terrain editor: the Heights brush in even sizes too**: size n is now n points of the heights picture across,
   round and snapped to the points like a pixel-art pencil - 1 one point, 2 a square of 2 x 2, 3 a 3 x 3, 4 a round
   4 x 4 (before: only 1, 3, 5... points across). The outline under the mouse shows exactly the points it takes; the

@@ -292,34 +292,10 @@ class AddonsPanel(SettingsForm, ttk.Frame):
             return None
 
     def drop(self):
-        """An add-on someone added or made (a Module builder module) deleted from the editor's list - and, when it is
-        put into the loaded game, out of the game too if wanted (a tester made a module by mistake and found no
-        way to delete it: 'Remove from the list' said nothing of the game's copy)."""
-        a = self.addon()
-        if not a.own:
-            messagebox.showinfo("Add-ons", "%s is built in - it stays in the list." % a.title, parent=self)
-            return
-        from .packs import game_kind
-        put_in = bool(self.mod) and a.fits(game_kind(self.mod)) and AD.installed(self.mod, a) is not None
-        if put_in:
-            from .gui_util import ask_choice
-            k = ask_choice(self, "Add-ons", "Delete %s from the editor?\n\nIt is also put into this game (%s). "
-                                            "Taking it out of the game makes a backup first (Restore puts it back)."
-                           % (a.title, AD.target(self.mod, a)),
-                           ["From the editor and the game", "From the editor only", "Keep it"],
-                           default=0, cancel=2)
-            if k not in (0, 1):
-                return
-            if k == 0:
-                self._apply(self._plan(remove=True), "taken out")
-        elif not ask("Add-ons", "Delete %s from the editor? It is not put into the loaded game." % a.title,
-                     parent=self, yes='Delete it', no='Keep it'):
-            return
-        AD.remove_from_library(a)
-        self.app.status.set("%s deleted from the editor%s." % (a.title, " and taken out of the game" if put_in and
-                                                                k == 0 else ""))
-        self.fill()
-        self.show()
+        """Delete from the editor... - delete_addon, the one place both this page and the Module builder use."""
+        if delete_addon(self, self.app, self.mod, self.addon()):
+            self.fill()
+            self.show()
 
     def show(self):
         inner = self.sf.inner
@@ -431,6 +407,38 @@ class AddonsPanel(SettingsForm, ttk.Frame):
         self.app.status.set("%s %s (backup %s) - start the campaign to use it." % (self.addon().title, what, bdir))
         self.fill(self.addon().key)
         self.show()
+
+
+def delete_addon(parent, app, mod, a):
+    """An add-on someone added or made (a Module builder module) deleted from the editor's list - and, when it is
+    put into the loaded game, out of the game too if wanted (a tester made a module by mistake and found no way to
+    delete it: 'Remove from the list' said nothing of the game's copy). True when it was deleted."""
+    if not a.own:
+        messagebox.showinfo("Add-ons", "%s is built in - it stays in the list." % a.title, parent=parent)
+        return False
+    from .packs import game_kind
+    put_in = bool(mod) and a.fits(game_kind(mod)) and AD.installed(mod, a) is not None
+    k = None
+    if put_in:
+        from .gui_util import ask_choice
+        k = ask_choice(parent, "Add-ons", "Delete %s from the editor?\n\nIt is also put into this game (%s). "
+                                          "Taking it out of the game makes a backup first (Restore puts it back)."
+                       % (a.title, AD.target(mod, a)),
+                       ["From the editor and the game", "From the editor only", "Keep it"], default=0, cancel=2)
+        if k not in (0, 1):
+            return False
+        if k == 0:
+            plan = Plan(AD.plan_mod(mod, a), "addon", a.key, {})
+            AD.plan_remove(plan, a, mod)
+            bdir = plan.apply()
+            from . import log
+            log.write("Add-on %s taken out (backup %s)\n%s" % (a.title, bdir, plan.report()))
+    elif not ask("Add-ons", "Delete %s from the editor? It is not put into the loaded game." % a.title,
+                 parent=parent, yes='Delete it', no='Keep it'):
+        return False
+    AD.remove_from_library(a)
+    app.status.set("%s deleted from the editor%s." % (a.title, " and taken out of the game" if k == 0 else ""))
+    return True
 
 
 def a_picks(panel, s):
