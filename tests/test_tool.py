@@ -8182,6 +8182,44 @@ building smith
         self.assertEqual(CM.picture_size("medieval2", None, True), (256, 384))
         self.assertEqual(CM.picture_size("rome", (52, 70, 32), False), (52, 70))
 
+    def test_the_games_card_grounds_and_picture_frame(self):
+        """The games' own interface pieces for Make a card / a picture (the user: 'take the frames and the card grounds
+        the games have'): cut from a sheet's page - the faction's culture's page first, else any culture's; a card
+        laid on the card ground; Medieval II's PORTRAIT_FRAME laid round a picture as nine pieces (corners kept)."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import cardmaker as CM
+        ui = os.path.join(self.root, "data", "ui")
+        write(os.path.join(ui, "shared.sd.xml"),
+              '<sprite_definitions version="7">\n  <page file="sharedpage_01.tga" w="64" h="64">\n'
+              '    <sprite name="STRAT_CARD_BACKGROUND" x="0" y="0" w="12" h="16" alpha="0"/>\n'
+              '    <sprite name="PORTRAIT_FRAME" x="20" y="0" w="10" h="10" alpha="1"/>\n'
+              '    <sprite name="PORTRAIT_FRAME_INT" x="40" y="0" w="6" h="6" alpha="1"/>\n  </page>\n'
+              '</sprite_definitions>\n')
+        for culture, colour in (("northern_european", (90, 90, 95)), ("greek", (200, 180, 120))):
+            os.makedirs(os.path.join(ui, culture, "interface"))
+            page = Image.new("RGBA", (64, 64), colour + (255,))
+            page.paste((255, 0, 0, 255), (20, 0, 22, 2))               # the frame's top left corner: red
+            page.save(os.path.join(ui, culture, "interface", "sharedpage_01.tga"))
+        mod = ModData(os.path.join(self.root, "data"))
+        ground = CM.game_sprite(mod, "strat_card_background", "greek")
+        self.assertEqual((ground.size, ground.getpixel((3, 3))), ((12, 16), (200, 180, 120, 255)))
+        self.assertIsNotNone(CM.game_sprite(mod, "STRAT_CARD_BACKGROUND", "mesoamerican"))   # any culture's page
+        self.assertIsNone(CM.game_sprite(mod, "BATTLE_CARD_BACKGROUND"))
+        card = Image.new("RGBA", (48, 64), (0, 0, 0, 0))
+        card.paste((10, 200, 10, 255), (20, 20, 28, 40))
+        on = CM.on_ground(card, ground)
+        self.assertEqual(on.getpixel((2, 2)), (200, 180, 120, 255))     # the game's ground behind the man
+        self.assertEqual(on.getpixel((24, 30)), (10, 200, 10, 255))
+        frame = CM.game_sprite(mod, "PORTRAIT_FRAME", "northern_european")
+        pic = Image.new("RGBA", (40, 60), (0, 0, 255, 255))
+        got = CM.framed(pic, frame, CM.game_sprite(mod, "PORTRAIT_FRAME_INT").size, scale=2)
+        self.assertEqual(got.size, (40, 60))
+        self.assertEqual(got.getpixel((0, 0)), (255, 0, 0, 255))        # the corner kept, twice its size
+        self.assertEqual(got.getpixel((20, 30)), (0, 0, 255, 255))      # the picture inside untouched
+
     def test_battle_animations_from_the_packs(self):
         """The games' animation packs (pack.idx + pack.dat): each animation's frames, bones and kind, every bone's turn
         per frame and the offsets of its first `kind` bones; descr_skeleton's animations per skeleton, a Medieval II

@@ -9,6 +9,8 @@ bottom; the description pictures (Rome 160 x 210, Medieval II 256 x 384) the who
 The cut: the same view drawn twice, on black and on white - where the two differ the picture is see-through (the
 smoothed edges keep their part-see-through), so no colour of the model is ever taken for the ground."""
 
+import os
+
 # how much of the figure, from the top, each framing keeps
 PARTS = (("whole", "the whole man", 1.0), ("knees", "to the knees", 0.78), ("thighs", "to the thighs", 0.64),
          ("waist", "to the waist", 0.5))
@@ -108,6 +110,80 @@ def on_ground(picture, ground=None):
         base = g.crop((left, upper, left + W, upper + H))
     base.alpha_composite(picture)
     return base
+
+
+# the games' interface sheets (data/ui/*.sd.xml: each page a picture in ui/<culture>/interface/, each sprite a box on it)
+SHEETS = ("shared.sd.xml", "battle.sd.xml", "strategy.sd.xml", "shared2.sd.xml", "battle3.sd.xml", "strat3.sd.xml")
+CARD_GROUNDS = (("STRAT_CARD_BACKGROUND", "the game's card ground (campaign)"),
+                ("BATTLE_CARD_BACKGROUND", "the game's card ground (battle)"))
+PICTURE_FRAME = "PORTRAIT_FRAME"            # Medieval II's frame round a unit's picture (the user, 2026-10-10)
+
+
+def game_sprite(mod, name, culture=None):
+    """A piece of the game's own interface (STRAT_CARD_BACKGROUND, PORTRAIT_FRAME ...) as an RGBA picture, cut from
+    its sheet's page - the culture's own page first (ui/<culture>/interface/), else any culture's - or None."""
+    import re
+    from PIL import Image
+    from .moddata import ci_path
+    want = name.upper()
+    for sheet in SHEETS:
+        path = mod.find("ui/" + sheet)
+        if not path:
+            continue
+        page = None
+        with open(path, "rb") as fh:
+            text = fh.read().decode("latin-1")
+        for line in text.splitlines():
+            m = re.search(r'<page\s+file="([^"]+)"', line)
+            if m:
+                page = m.group(1)
+            m = re.search(r'<sprite\s+name="([^"]+)"\s+x="(\d+)"\s+y="(\d+)"\s+w="(\d+)"\s+h="(\d+)"', line)
+            if not m or not page or m.group(1).upper() != want:
+                continue
+            x, y, w, h = (int(v) for v in m.groups()[1:])
+            found = mod.find("ui/%s/interface/%s" % (culture, page)) if culture else None
+            for root in ([] if found else mod.roots()):
+                ui = ci_path(root, "ui")
+                for d in sorted(os.listdir(ui)) if ui and os.path.isdir(ui) else ():
+                    found = ci_path(os.path.join(ui, d), "interface/" + page)
+                    if found:
+                        break
+                if found:
+                    break
+            if not found:
+                return None
+            try:
+                with Image.open(found) as im:
+                    return im.convert("RGBA").crop((x, y, x + w, y + h))
+            except (OSError, ValueError):
+                return None
+    return None
+
+
+def framed(picture, frame, inner=None, scale=1):
+    """The picture with a frame of the game's laid round its edge: the frame's four corners kept, its sides
+    stretched along the picture (a nine-piece frame, as the game draws its own at any size); inner = the size of the
+    frame's opening (Medieval II's PORTRAIT_FRAME_INT) - the border's width; scale: the border drawn that many
+    times its size."""
+    from PIL import Image
+    W, H = picture.size
+    fw, fh = frame.size
+    iw, ih = inner or (fw - 2 * max(1, fw // 8), fh - 2 * max(1, fh // 8))
+    bx, by = max(1, (fw - iw) // 2), max(1, (fh - ih) // 2)
+    sx, sy = min(bx * scale, W // 3), min(by * scale, H // 3)
+    out = picture.convert("RGBA").copy()
+
+    def piece(box, size):
+        return frame.crop(box).resize((max(1, size[0]), max(1, size[1])), Image.LANCZOS)
+    for box, at, size in (
+            ((0, 0, bx, by), (0, 0), (sx, sy)), ((fw - bx, 0, fw, by), (W - sx, 0), (sx, sy)),
+            ((0, fh - by, bx, fh), (0, H - sy), (sx, sy)), ((fw - bx, fh - by, fw, fh), (W - sx, H - sy), (sx, sy)),
+            ((bx, 0, fw - bx, by), (sx, 0), (W - 2 * sx, sy)), ((bx, fh - by, fw - bx, fh), (sx, H - sy), (W - 2 * sx, sy)),
+            ((0, by, bx, fh - by), (0, sy), (sx, H - 2 * sy)), ((fw - bx, by, fw, fh - by), (W - sx, sy), (sx, H - 2 * sy))):
+        if size[0] > 0 and size[1] > 0:
+            p = piece(box, size)
+            out.alpha_composite(p, at)
+    return out
 
 
 def model_figure(mod, info, faction=None, size=(640, 800), yaw=35.0, pitch=8.0, stand=("stand", "stand_a_idle")):

@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **Make a card... / Make a picture...: the game's own pieces**: a card's ground can be **the game's card ground**
+  (the campaign's or the battle's - Medieval II's grey stone, Rome's parchment, the faction's culture's own), and a
+  Medieval II picture can have **the game's frame round it** (the frame of a unit's picture in the game, laid round
+  any size with its corners kept).
 - **View in 3D: the rider on his horse** (Medieval II): pick any animation of a horseman and he sits in the saddle
   (where `descr_mount.txt`'s `rider_offset` puts him) while the horse plays the same move - the games make them as
   pairs (a knight's *run* and his horse's *run*, the same frames). With no animation he stands in the T pose beside

@@ -35,6 +35,17 @@ class CardMaker(tk.Toplevel):
         self.v_ground = tk.StringVar(value=settings.get("card_ground", "clear"))
         self.colour = tuple(settings.get("card_colour", [58, 64, 52]))[:3]
         self.ground_pic = None
+        # the game's own pieces (the user, 2026-10-10): its card grounds for a card, Medieval II's frame round a
+        # unit's picture - from the faction's culture's interface pages
+        fac = viewer.v_fac.get() if hasattr(viewer, "v_fac") else ""
+        self.culture = dict(viewer.mod.factions()).get(fac) if fac else None
+        self.game_grounds = {} if info else {
+            key: CM.game_sprite(viewer.mod, key, self.culture) for key, _ in CM.CARD_GROUNDS}
+        self.frame_pic = CM.game_sprite(viewer.mod, CM.PICTURE_FRAME, self.culture) \
+            if info and game_kind(viewer.mod) == "medieval2" else None
+        inner = CM.game_sprite(viewer.mod, CM.PICTURE_FRAME + "_INT", self.culture) if self.frame_pic else None
+        self.frame_inner = inner.size if inner is not None else None
+        self.v_frame = tk.BooleanVar(value=bool(settings.get("picture_frame", False)))
 
         frm = ttk.Frame(self, padding=10)
         frm.pack(fill="both", expand=True)
@@ -67,7 +78,9 @@ class CardMaker(tk.Toplevel):
                       command=lambda v: self._slid()).pack(anchor="w")
         ttk.Button(side, text="Back to the start", command=self.reset).pack(anchor="w", pady=(4, 0))
         ttk.Label(side, text="Ground").pack(anchor="w", pady=(8, 0))
-        for key, words in GROUNDS:
+        grounds = list(GROUNDS) + [("game:" + key, words) for key, words in CM.CARD_GROUNDS
+                                   if self.game_grounds.get(key) is not None]
+        for key, words in grounds:
             row = ttk.Frame(side)
             row.pack(anchor="w", fill="x")
             ttk.Radiobutton(row, text=words, value=key, variable=self.v_ground, command=self.show).pack(side="left")
@@ -77,6 +90,9 @@ class CardMaker(tk.Toplevel):
                 ttk.Button(row, text="Pick...", command=self.pick_ground).pack(side="left", padx=4)
         self.lbl_ground = ttk.Label(side, foreground="#555")
         self.lbl_ground.pack(anchor="w")
+        if self.frame_pic is not None:              # Medieval II's own frame round a unit's picture
+            ttk.Checkbutton(side, text="The game's frame round it", variable=self.v_frame,
+                            command=self.show).pack(anchor="w", pady=(6, 0))
         bar = ttk.Frame(frm)
         bar.pack(fill="x", pady=(8, 0))
         ttk.Button(bar, text="Use it for %s" % make.get("unit", "the unit"), command=self.use).pack(side="left")
@@ -213,9 +229,16 @@ class CardMaker(tk.Toplevel):
         g = self.v_ground.get()
         settings.put("card_ground", g)
         if g == "colour":
-            return CM.on_ground(pic, self.colour)
+            pic = CM.on_ground(pic, self.colour)
         if g == "picture" and self.ground_pic is not None:
-            return CM.on_ground(pic, self.ground_pic)
+            pic = CM.on_ground(pic, self.ground_pic)
+        elif g.startswith("game:") and self.game_grounds.get(g[5:]) is not None:
+            pic = CM.on_ground(pic, self.game_grounds[g[5:]])
+        if self.frame_pic is not None and self.v_frame.get():
+            settings.put("picture_frame", True)
+            pic = CM.framed(pic, self.frame_pic, self.frame_inner, scale=max(1, pic.width // 128))
+        elif self.frame_pic is not None:
+            settings.put("picture_frame", False)
         return pic
 
     # ---- seeing it ----
