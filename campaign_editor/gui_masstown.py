@@ -22,7 +22,8 @@ def _level(t):
 class MassTownWindow(tk.Toplevel):
     def __init__(self, app, picked=(), tab="building"):
         super().__init__(app)
-        self.app, self.mod, self.camp = app, app.mod, app.v_campaign.get()
+        # the towns as the changes kept for Apply leave them (a building kept is seen, never added twice)
+        self.app, self.mod, self.camp = app, app.kept_view(), app.v_campaign.get()
         self.title(TITLE)
         self.transient(app)
         self.geometry("1180x720")
@@ -512,7 +513,7 @@ class MassTownWindow(tk.Toplevel):
             from . import log
             log.write("%s (backup %s)" % (TITLE, bdir))
             if self.winfo_exists():
-                self.mod = self.app.mod
+                self.mod = self.app.kept_view()
                 self._read()
                 self.garrisons = {}
                 self.fill_all()
@@ -520,7 +521,14 @@ class MassTownWindow(tk.Toplevel):
                 self.status.configure(text="written for %d town(s) (backup %s)" % (n, bdir))
         if keep_for_apply(self, "towns:%d" % App._towns_kept, "%s: %d town(s)" % (TITLE, n), lambda: plan, after,
                           TITLE):
-            self.status.configure(text="kept for %d town(s) - Apply changes in the main window writes it" % n)
+            self.mod = self.app.kept_view()               # the towns as kept: the change is seen in the lists
+            self.pools = {}
+            self._read()
+            self.garrisons = {}
+            self.fill_all()
+            self.fill_chosen()
+            self.status.configure(text="kept for %d town(s) - shown in the lists; Apply changes in the main window "
+                                       "writes it" % n)
             return True
         return False
 

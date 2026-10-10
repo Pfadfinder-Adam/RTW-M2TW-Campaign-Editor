@@ -248,6 +248,11 @@
   release's page.
 
 ### Fixed
+- **Keep for Apply pressed again kept the same change again** (five presses, five times in the list): the very same
+  change is kept once, in every window.
+- **A change kept for Apply is seen at once**: Many towns at once (add a building, garrisons, city / castle) shows
+  its towns as the kept changes leave them - a Market kept for them is in their buildings before the write, and
+  is not offered again; a town's window shows what the other windows kept.
 - **Coast & heights brushes about 3 x quicker with the Shore line on**: each touch of the brush drew the whole
   view's shore line again (thousands of pieces - about 0.1 s a touch on Medieval II's map); now only the part round
   what the brush changed is drawn again (the line is the same).

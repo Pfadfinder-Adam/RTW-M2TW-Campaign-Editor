@@ -105,7 +105,10 @@ class TownWindow(tk.Toplevel):
     def load(self, region):
         """Show region's town as the files hold it now (also when the window is reused for another town)."""
         self.region = region
-        self.mod, self.campaign = self.app.mod, self.app.v_campaign.get()
+        # the town as the other windows' kept changes leave it (its own kept part not: keeping again replaces it)
+        self._read_from = self.app.mod
+        self.mod = self.app.kept_view(but="town:%s" % region) if hasattr(self.app, "kept_view") else self.app.mod
+        self.campaign = self.app.v_campaign.get()
         town = next(iter(MT.towns(self.mod, self.campaign, only=region)), None)      # one town, not all 749
         for w in self.body.winfo_children():
             w.destroy()
@@ -366,7 +369,7 @@ class TownWindow(tk.Toplevel):
     def _fresh(self):
         """The main window read the mod again (an Apply there): this window's town is read again too, so a write
         never builds on files as they were before - True when it was (the modder looks again, then writes)."""
-        if self.app.mod is self.mod:
+        if self.app.mod is getattr(self, "_read_from", self.mod):
             return False
         self.load(self.region)
         messagebox.showinfo(TITLE, "The mod was written and read again in the main window - this town is shown "
@@ -398,7 +401,6 @@ class TownWindow(tk.Toplevel):
             from . import log
             log.write("Town %s changed (backup %s)" % (region, bdir))
             if self.winfo_exists() and self.region == region:
-                self.mod = self.app.mod
                 self.load(region)
         return keep_for_apply(self, "town:%s" % region, "Town %s: buildings / garrison / owner" % name, self._plan,
                               after, TITLE)

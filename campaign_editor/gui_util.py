@@ -1480,6 +1480,14 @@ def keep_for_apply(win, key, label, make_plan, after=None, title=None):
     if not plan.changed_files():
         messagebox.showinfo(title or label, "Nothing changed yet.", parent=win)
         return False
+    # the same change kept again is not added again (the user, 2026-10-10: five presses stood five times in the list)
+    same = _plan_content(plan)
+    parts = win.app.session_parts() if hasattr(win.app, "session_parts") else {}
+    twin = next((k for k, p in parts.items() if p.get("plan") is not None and _plan_content(p["plan"]) == same),
+                None)
+    if twin is not None:
+        win.app.status.set("%s - this very change is kept already; Apply changes (bottom left) writes it." % label)
+        return True
     win.app.session_add(key, label, plan, after)
     return True
 

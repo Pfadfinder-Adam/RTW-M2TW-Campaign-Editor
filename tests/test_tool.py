@@ -10793,6 +10793,48 @@ building smith
         finally:
             root.destroy()
 
+    def test_kept_changes_seen_before_the_write_and_never_kept_twice(self):
+        """Keep for Apply (the user, 2026-10-10): pressed five times, the same change stood five times in the list;
+        and the window did not show what it had kept (a Market added to many towns was not seen in them). The files
+        as the kept parts will leave them are read in memory (plan.kept_texts - each part laid over the ones before
+        it), and the same change kept again is not added again."""
+        from campaign_editor.plan import Plan, kept_texts
+        from campaign_editor.textio import TextFile
+        mod = ModData(self.root)
+        path = mod.campaign_file("test", "descr_strat.txt")
+        with open(path, "rb") as fh:
+            disk = fh.read()
+        first, second = Plan(mod, "a", "a"), Plan(mod, "b", "b")
+        f = first.edit(path)
+        f.raw.insert(0, f.make("; kept one"))
+        g = second.edit(path)
+        g.raw.append(g.make("; kept two"))
+        got = kept_texts([first, second])[path].texts()
+        self.assertEqual((got[0], got[-1]), ("; kept one", "; kept two"))
+        self.assertEqual(got[1:-1], TextFile.from_bytes(path, disk).texts())
+        with open(path, "rb") as fh:
+            self.assertEqual(fh.read(), disk)                       # nothing written
+        try:
+            import tkinter  # noqa: F401
+            from types import SimpleNamespace
+            from campaign_editor.gui_util import keep_for_apply
+        except Exception as e:                        # no tkinter (CI's python3): the rest not tested here
+            self.skipTest("no window: %s" % e)
+        parts = {}
+        said = []
+        app = SimpleNamespace(session_parts=lambda: parts, status=SimpleNamespace(set=said.append),
+                              session_add=lambda k, label, plan, after=None: parts.__setitem__(k, {"plan": plan}))
+
+        def make():
+            p = Plan(mod, "t", "t")
+            p.edit(path).raw.insert(0, p.edit(path).make("; market"))
+            return p
+        win = SimpleNamespace(app=app)
+        for k in range(5):
+            keep_for_apply(win, "towns:%d" % k, "towns", make)
+        self.assertEqual(len(parts), 1)
+        self.assertIn("kept already", said[-1])
+
     def test_closing_the_editor_when_a_command_is_already_gone(self):
         """Closing the editor once showed 'can't delete Tcl command' and then, while it reported that, a Windows box
         'application has been destroyed' (a tester, 0.32.0): a window keeps the names of its callbacks to delete them

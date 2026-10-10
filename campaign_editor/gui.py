@@ -5854,6 +5854,17 @@ class App(tk.Tk):
         self.status.set("%s - kept. %d change(s) wait for the write: Apply changes (bottom left) writes them all, "
                         "Preview changes shows them." % (label, n))
 
+    def kept_view(self, but=None):
+        """The mod as the changes kept for Apply will leave it, read in memory (plan.kept_texts) - a window shows
+        what it and the others kept before the write (the user, 2026-10-10: a Market kept for many towns was not
+        seen in them). but: a part left out (a window's own, which it replaces when it keeps again)."""
+        from .plan import kept_texts
+        view = ModData(self.mod.data)
+        plans = [p["plan"] for k, p in self.session_parts().items() if k != but and p.get("plan") is not None]
+        for path, f in kept_texts(plans).items():
+            view._cache[path] = f
+        return view
+
     def session_kept(self, key):
         return key in self.session_parts()
 

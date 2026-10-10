@@ -625,6 +625,27 @@ def rebased(plan):
     return plan
 
 
+def kept_texts(plans):
+    """{path: TextFile} - the text files as the kept plans (in their order) will leave them, read in memory: each
+    laid over the ones before it the way the write does it (merge_lines); nothing written. A part that clashes with
+    the ones before it is left out here (the write says it in words). The windows read the mod so (App.kept_view):
+    what was kept for Apply is seen in them before the write."""
+    out = {}
+    for plan in plans:
+        for path, f in plan.files.items():
+            cur = out.get(path)
+            if cur is None:
+                now = _read(path) if os.path.exists(path) else plan.originals[path]
+                cur = TextFile.from_bytes(path, now)
+            base = TextFile.from_bytes(path, plan.originals[path]).raw
+            try:
+                lines = merge_lines(base, TextFile.from_bytes(path, f.dump()).raw, cur.raw)
+            except ValueError:
+                continue
+            out[path] = TextFile(path, lines, cur.encoding, cur.bom)
+    return out
+
+
 def keep(plan):
     """Mark a plan as kept for a later write: what its pictures are on the disk now (rebased checks it)."""
     plan.disk_before = {p: (_read(p) if os.path.exists(p) else None) for p in plan.binaries}
