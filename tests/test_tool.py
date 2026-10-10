@@ -9408,6 +9408,13 @@ building smith
                        [g("shield0", "s%d" % i) for i in range(8)], [(0, 0, 0)] * 3, [(0, 0)] * 3)
         self.assertEqual(mesh.variants(0), [("Head", 1, 4), ("weapon", 1, 3), ("shield", 1, 8)])
         self.assertEqual(mesh.variants(5, weapons=False), [("Head", 2, 4)])
+        # a weapon's number is no second weapon (the user: a siege crew held a dagger AND a spear - the game shows
+        # one): primaryactive0 and primaryactive1 are variants of one weapon, one shown at a time
+        crew = MV.Mesh([g("Body", "b"), g("primaryactive0", "d1"), g("primaryactive0", "d2"), g("primaryactive1", "s")],
+                       [(0, 0, 0)] * 3, [(0, 0)] * 3)
+        self.assertEqual(crew.variants(0), [("weapon", 1, 3)])
+        self.assertEqual([x.material for x in crew.shown(0)], ["b", "d1"])
+        self.assertEqual([x.material for x in crew.shown(2)], ["b", "s"])
 
     def test_label_table_few_colours(self):
         """The political map's palette table on a map with fewer than 256 colours (a tester's map would not open:

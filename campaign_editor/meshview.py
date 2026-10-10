@@ -91,10 +91,16 @@ class Mesh:
         return self._arr
 
     def parts(self):
-        """{part name: [its variants]} in file order."""
+        """{part name: [its variants]} in file order. A weapon's or shield's number is no second weapon: primaryactive0
+        and primaryactive1 are variants of ONE weapon, the game gives each man one (vanilla Mongol crews keep their
+        long tool as primaryactive0's fourth variant, the other crews as primaryactive1 - drawn as a second weapon,
+        a spear in the left hand beside the dagger the game shows - the user)."""
         out = {}
         for g in self.groups:
-            out.setdefault(g.name, []).append(g)
+            name = g.name
+            if name.lower().startswith(WEAPON_PARTS) and name[-1:].isdigit():
+                name = name.rstrip("0123456789")
+            out.setdefault(name, []).append(g)
         return out
 
     def shown(self, look=0, weapons=True, secondary=False):

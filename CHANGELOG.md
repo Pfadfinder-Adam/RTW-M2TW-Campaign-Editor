@@ -262,6 +262,9 @@
   release's page.
 
 ### Fixed
+- **View in 3D: most Medieval II siege crews held a spear in the second hand beside their dagger**: a weapon's
+  number (`primaryactive0`, `primaryactive1`) marks variants of ONE weapon, not two - the game gives each man one;
+  **Another man** steps through them.
 - **Medieval II: resources left on a wasteland's land** (the game says *resource silk positioned on 289,70 which is
   an invalid tile*): deleting a town as a wasteland, or a map cut whose leftover land becomes the wasteland, asks
   once whether to delete those resources or keep them; Check mod files names any left there.
