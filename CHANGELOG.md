@@ -182,6 +182,9 @@
   it are listed to change by hand. It was a refusal ('... would keep no town').
 
 ### Changed
+- **New region / Edit region: region tags from a drop-down** - the arrow beside the box lists the mod's own tags:
+  a click adds one, a click again takes it out (several at once); a new tag can still be typed. Every field's long
+  grey text is one line now with a **?** for the rest - the window stays narrow.
 - **Edit regions' bar is shorter**: **Religions...**, **New religion...** and **Names by culture...** left it for
   a town's right click on the Map (**Religions of <town>...**, **New religion...**, **Names of <town> by
   culture...**; a new region's town too); the right click of Edit regions still picks the region to paint with.

@@ -14,6 +14,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 from .gui_util import right_click
 from .gui_util import ask, ask_choice
 from .gui_util import scroll_body
+from .gui_util import ManyPick, ShortHint
 from . import emergence as EM, log, settings, theme
 from .build import build, template_display
 from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need, core_settlement, population_of, rank,
@@ -2731,11 +2732,12 @@ class App(tk.Tk):
                    "who rises up / holds it as rebels (a rebel type of this mod); by default those of "
                    "the region its land is cut from"),
                   ("Region tags (hidden resources)", "resources", "",
-                   "comma list; empty = those of the land it is cut from. Not the goods drawn on the map: "
-                   "tags buildings ask for ('resource' / 'hidden_resource' in export_descr_buildings), "
-                   "which open buildings and local units"),
+                   "The tags its buildings and local units ask for. Pick them with the arrow (a click adds one, a "
+                   "click again takes it out) or type a comma list - a new tag too; empty = those of the land it is "
+                   "cut from. Not the goods drawn on the map: the names buildings ask for with 'resource' / "
+                   "'hidden_resource' in export_descr_buildings.txt, which open buildings and local units."),
                   ("Triumph value", "triumph", "5", "how much taking it counts for a triumph; most use 5"),
-                  ("Farming level", "farming", "3", "food from the land: 1 poor ... 5 rich; most use 2-4"),
+                  ("Farming level", "farming", "3", "food from the land, from 1 poor to 5 rich; most use 2-4"),
                   ("Owner at the start", "owner", "(rebel village - no settlement written)",
                    "a faction gets a settlement; none = the game makes a rebel village"),
                   ("Town size at the start", "level", "village", "for an owner only")]
@@ -2757,7 +2759,7 @@ class App(tk.Tk):
             given = {k: (", ".join(was[k]) if isinstance(was.get(k), list) else str(was.get(k) or ""))
                      for k in SHOWN + EDITABLE}
             fields = [(a, k, given[k], "the name players see - best keep it like the name in the files"
-                       if k in SHOWN else h.split(";")[0].replace("by default ", ""))
+                       if k in SHOWN else h.split("; empty")[0].split(";")[0].replace("by default ", ""))
                       for a, k, _, h in fields if k in SHOWN + EDITABLE]
             files_hint = ("letters, digits, _ ; a change is written at once in every file that names it, "
                           "with a backup (asked first)")
@@ -2773,16 +2775,15 @@ class App(tk.Tk):
                            "(the rebels, slave, too) to write its town" if village else
                            "who holds the town at the start (descr_strat.txt); a change is written with the next "
                            "Apply"))
-            ttk.Label(frm, text="%s - town %s. The names in the files are changed at once in every file (with a "
+            ShortHint(frm, text="The names in the files are changed at once in every file of %s - town %s (with a "
                                 "backup); the rest is written with the next Apply (descr_regions.txt, the owner in "
-                                "descr_strat.txt, the names players see in the campaign's names text). Tip: give the name players see and the "
-                                "name in the files the same spelling (Latium / Latium) - a mod is easier to read, "
-                                "search and fix when a place has one name everywhere."
-                                % (edit, town), font=("", 9, "bold"), wraplength=620, justify="left"
-                      ).grid(row=99, column=0, columnspan=3, sticky="w", pady=(6, 0))
+                                "descr_strat.txt, the names players see in the campaign's names text). Tip: give the "
+                                "name players see and the name in the files the same spelling (Latium / Latium) - a "
+                                "mod is easier to read, search and fix when a place has one name everywhere."
+                      % (edit, town)).grid(row=99, column=0, columnspan=3, sticky="w", pady=(6, 0))
         vs = {}
         for i, (label, key, default, hint) in enumerate(fields):
-            ttk.Label(frm, text=hint, foreground="#666", wraplength=420, justify="left").grid(row=i, column=2, sticky="w")
+            ShortHint(frm, text=hint).grid(row=i, column=2, sticky="w")   # one line + '?' (the window kept narrow)
             ttk.Label(frm, text=label).grid(row=i, column=0, sticky="w", pady=1)
             v = tk.StringVar(value=default)
             vs[key] = v
@@ -2794,14 +2795,13 @@ class App(tk.Tk):
             elif key == "rebels":
                 ttk.Combobox(frm, textvariable=v, values=[AS_LAND] + rebels,
                              width=34).grid(row=i, column=1, sticky="we", padx=6)
+            elif key == "resources":                     # the mod's tags under the arrow, several picked
+                ManyPick(frm, v, res, width=34).grid(row=i, column=1, sticky="we", padx=6)
             elif key == "level":
                 ttk.Combobox(frm, textvariable=v, values=SETTLEMENT_LEVELS, state="readonly",
                              width=34).grid(row=i, column=1, sticky="we", padx=6)
             else:
                 ttk.Entry(frm, textvariable=v, width=36).grid(row=i, column=1, sticky="we", padx=6)
-        ttk.Label(frm, text="region tags in this mod (descr_regions line 6 and the buildings' requirements): " +
-                  ", ".join(res), foreground="#666", wraplength=620,
-                  justify="left").grid(row=len(fields), column=0, columnspan=3, sticky="w", pady=(4, 0))
 
         def ok():
             from .regionedit import _ok_name

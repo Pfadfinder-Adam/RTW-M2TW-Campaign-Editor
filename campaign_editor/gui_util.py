@@ -1542,3 +1542,49 @@ class DropPanel:
             inside = False
         if not inside:
             self.hide()
+
+
+def split_list(text):
+    """'a, b,c' -> ['a', 'b', 'c'] (a comma list as the files write it, empty parts dropped)."""
+    return [x.strip() for x in str(text or "").split(",") if x.strip()]
+
+
+class ManyPick(ttk.Frame):
+    """A comma list typed in its box, or picked from a drop-down of ticks under the arrow beside it (the region tags
+    of a mod - the user, 2026-10-10: 'click 1, 2, 3, 4 and they are added; a click again on the same takes it out').
+    The box stays free: a name not in the list may be typed. var: the StringVar of the box."""
+
+    def __init__(self, master, var, names, width=36, columns=None):
+        super().__init__(master)
+        self.var, self.names = var, list(names)
+        ttk.Entry(self, textvariable=var, width=width).pack(side="left", fill="x", expand=True)
+        b = ttk.Button(self, text="▾", width=2)
+        b.pack(side="left", padx=(2, 0))
+        self.columns = columns or max(1, min(10, (len(self.names) + 15) // 16))     # at most ~16 rows, 10 across
+        self.ticks = {}
+        self.panel = DropPanel(b, self._build)
+        var.trace_add("write", lambda *_: self._sync())
+
+    def _build(self, frame):
+        if not self.names:
+            ttk.Label(frame, text="none in this mod - type one in the box").pack()
+            return
+        ttk.Label(frame, text="a click adds it, a click again takes it out", foreground="#666").grid(
+            row=0, column=0, columnspan=self.columns, sticky="w", pady=(0, 4))
+        rows = (len(self.names) + self.columns - 1) // self.columns
+        for i, n in enumerate(self.names):
+            v = tk.BooleanVar(value=n in split_list(self.var.get()))
+            self.ticks[n] = v
+            ttk.Checkbutton(frame, text=n, variable=v, command=lambda n=n: self.toggle(n)).grid(
+                row=1 + i % rows, column=i // rows, sticky="w", padx=(0, 10))
+
+    def toggle(self, name):
+        """The name added to the box's list, or taken out when it is there."""
+        now = split_list(self.var.get())
+        self.var.set(", ".join([x for x in now if x != name] if name in now else now + [name]))
+
+    def _sync(self):
+        now = set(split_list(self.var.get()))
+        for n, v in self.ticks.items():
+            if v.get() != (n in now):
+                v.set(n in now)

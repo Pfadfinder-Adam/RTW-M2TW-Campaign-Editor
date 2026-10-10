@@ -10594,6 +10594,34 @@ building smith
         finally:
             root.destroy()
 
+    def test_region_tags_picked_from_a_drop_down(self):
+        """New region / Edit region: the region tags are picked from the mod's own under an arrow (the user,
+        2026-10-10: 'click 1, 2, 3, 4 and they are added; a click again takes it out'); the box stays free to type
+        a new one, and the ticks follow what is typed."""
+        try:
+            import tkinter as tk
+            from campaign_editor.gui_util import ManyPick, split_list
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / display (CI without one): not tested here
+            self.skipTest("no window: %s" % e)
+        self.assertEqual(split_list(" a, b,,c "), ["a", "b", "c"])
+        try:
+            v = tk.StringVar(value="slaves")
+            m = ManyPick(root, v, ["slaves", "timber", "rome", "italy"])
+            m.pack()
+            m.panel.show()
+            root.update()
+            m.toggle("rome")
+            m.toggle("italy")
+            self.assertEqual(v.get(), "slaves, rome, italy")
+            m.toggle("rome")                                       # a click again takes it out
+            self.assertEqual(v.get(), "slaves, italy")
+            self.assertEqual([n for n, t in m.ticks.items() if t.get()], ["slaves", "italy"])
+            v.set("timber, my_own_tag")                            # typed: a new tag too, the ticks follow
+            self.assertEqual([n for n, t in m.ticks.items() if t.get()], ["timber"])
+        finally:
+            root.destroy()
+
     def test_closing_the_editor_when_a_command_is_already_gone(self):
         """Closing the editor once showed 'can't delete Tcl command' and then, while it reported that, a Windows box
         'application has been destroyed' (a tester, 0.32.0): a window keeps the names of its callbacks to delete them
