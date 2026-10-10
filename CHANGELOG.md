@@ -261,6 +261,15 @@
   release's page.
 
 ### Fixed
+- **A report could not carry the game's log and a couple of screenshots**: screenshots now go made smaller (a JPEG
+  of at most 2560 pixels - a 3 MB screenshot becomes a few hundred KB), and a picture up to 40 MB can be added. The
+  report window says what of a big log goes: a 5 MB game log is cut to its start, its errors and its end and packed -
+  it goes as about 100 KB (it showed only its full size, which looked too big to send).
+- **Pictures in the Unit and Building editors did not open big on a click** (the faction's Art did): every picture
+  shown - cards, building pictures, the battle model's textures, a town's buildings, traits' pictures - opens big in
+  a window of its own on a click.
+- **View in 3D pressed twice opened a second window just the same**: the open one comes forward now; another model
+  still opens beside it.
 - **Medieval II's right edge could not be cut, and a town a campaign script names could not be deleted**: the
   vanilla campaign script names Baghdad and Mosul (the Mongols' and Timurids' invasion lists), so the map cut and
   *Delete this town with its region* refused. Now the script's lines that only list the place (`region ...` of an

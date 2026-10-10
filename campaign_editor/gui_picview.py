@@ -46,9 +46,27 @@ def describe(path, im):
     return "%s - %s, %s" % (os.path.basename(path), size, kind)
 
 
-def view_picture(parent, path, title=None, crop=None):
+ZOOM_TIP = "Click to look at it closely: big, wheel to zoom, drag to move."
+
+
+def zoomable(widget, path, crop=None, image=None, title=None):
+    """The ONE place a shown picture becomes clickable (the user, 2026-10-10: 'not every picture enlarges - the Unit
+    and Building editors' do not'): a click opens it big (view_picture), the hand cursor and the hover hint say so.
+    image: a callable giving the Pillow picture when path is no plain file (a texture inside Rome's packs).
+    Returns widget."""
+    if not path:
+        return widget
+    widget.configure(cursor="hand2")
+    widget.bind("<Button-1>", lambda e: view_picture(widget, path, title=title, crop=crop, image=image), add="+")
+    from .gui_util import tip
+    tip(widget, ZOOM_TIP)
+    return widget
+
+
+def view_picture(parent, path, title=None, crop=None, image=None):
     """Open path (crop = (x, y, w, h) of a sheet) big in a window of its own; the open one of the same picture comes
-    forward. Returns the window, or None when the picture cannot be read (said in the window's place)."""
+    forward. image: a callable giving the picture (Pillow) when path cannot be read as a file. Returns the window,
+    or None when the picture cannot be read (said in the window's place)."""
     key = (os.path.normcase(os.path.abspath(path)), tuple(crop) if crop else None)
     old = _OPEN.get(key)
     if old is not None:
@@ -62,7 +80,7 @@ def view_picture(parent, path, title=None, crop=None):
     try:
         from PIL import ImageTk
         from .recolour import read_picture
-        im = read_picture(path).convert("RGBA")
+        im = (image() if image is not None else read_picture(path)).convert("RGBA")
         if crop:
             x, y, w, h = crop
             im = im.crop((x, y, x + w, y + h))

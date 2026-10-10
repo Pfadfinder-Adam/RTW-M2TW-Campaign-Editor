@@ -15,12 +15,44 @@ POSE_WORDS = ("T pose (arms out)", "standing (the file's first frame)")
 NO_ANIM = "(none)"
 
 
+def _viewer_key(mod, info, mount=None, title="", make=None):
+    """What makes two View in 3D windows the same: the model (its name and files), its mount, the window's kind and
+    the unit a card would be made for - pressed again, that window comes forward instead of a copy (the user,
+    2026-10-10: 'a second press opens a second window just the same - duplicates again'); another model opens beside
+    it (to compare)."""
+    return (getattr(mod, "data", None), title, info.name, tuple(info.meshes),
+            mount[1] if mount and len(mount) > 1 else None, (make or {}).get("unit") if isinstance(make, dict) else None)
+
+
 class ModelViewer(tk.Toplevel):
+    _open = {}                                # _viewer_key -> its open window
+
+    def __new__(cls, parent, mod, info, factions=(), mount=None, title="Battle model in 3D", make=None):
+        w = cls._open.get(_viewer_key(mod, info, mount, title, make))
+        try:
+            if w is not None and w.winfo_exists():
+                w._reused = True
+                return w
+        except tk.TclError:
+            pass
+        return tk.Toplevel.__new__(cls)
+
     def __init__(self, parent, mod, info, factions=(), mount=None, title="Battle model in 3D", make=None):
         """mount: (its ModelInfo, mount type[, chariot]) - the unit's horse, camel ...: shown standing beside the
         rider; a Rome chariot (models.chariot_of, with 'horse_info'): the car, its horses and the crew put together
-        as the game sets them."""
+        as the game sets them. The same model's window open already: it comes forward (_viewer_key)."""
+        if self.__dict__.pop("_reused", False):
+            try:
+                self.deiconify()
+                self.lift()
+                self.focus_force()
+            except tk.TclError:
+                pass
+            return
         super().__init__(parent)
+        key = _viewer_key(mod, info, mount, title, make)
+        ModelViewer._open[key] = self
+        self.bind("<Destroy>", lambda e: ModelViewer._open.pop(key, None) if e.widget is self else None, add="+")
         self.mod, self.info, self.mount = mod, info, mount
         self.make = make                # a unit's: make(info picture?, RGBA picture) - the card / picture it gets
         self.mount_mesh = self.horse_mesh = None

@@ -10325,6 +10325,68 @@ building smith
         self.assertEqual(PV.next_zoom(32, True), 32)
         self.assertEqual(PV.next_zoom(0.125, False), 0.125)
 
+    def test_every_picture_opens_big_and_one_3d_window_a_model(self):
+        """The user, 2026-10-10: the Unit / Building editors' pictures did not open big, and View in 3D pressed twice
+        opened a second window just the same. zoomable is the one place a shown picture gets its click (a texture
+        inside a pack through its own reader); the same model's 3D window comes forward, another model opens beside
+        it."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display (CI): the window is not tested here
+            self.skipTest("no window: %s" % e)
+        try:
+            root.withdraw()
+            from campaign_editor import gui_picview as PV
+            lbl = tk.Label(root, text="x")
+            self.assertIs(PV.zoomable(lbl, ""), lbl)                       # nothing to show: no click
+            self.assertEqual(lbl.bind("<Button-1>"), "")
+            PV.zoomable(lbl, os.path.join(self.root, "card.tga"))
+            self.assertEqual(str(lbl.cget("cursor")), "hand2")
+            self.assertTrue(lbl.bind("<Button-1>"))
+            for name in ("gui_editors", "gui_traits", "gui_buildings", "gui_art"):   # every picture goes through it
+                with open(os.path.join(os.path.dirname(PV.__file__), name + ".py")) as fh:
+                    self.assertIn("zoomable(", fh.read(), name)
+            from campaign_editor.gui_meshview import _viewer_key
+            from campaign_editor.models import ModelInfo
+            a, b = ModelInfo("archer"), ModelInfo("spearman")
+            a.meshes, b.meshes = ["a.mesh"], ["b.mesh"]
+            self.assertEqual(_viewer_key(None, a, title="t"), _viewer_key(None, a, title="t"))
+            self.assertNotEqual(_viewer_key(None, a, title="t"), _viewer_key(None, b, title="t"))
+            self.assertNotEqual(_viewer_key(None, a, title="t", make={"unit": "x"}),
+                                _viewer_key(None, a, title="t", make={"unit": "y"}))   # a card for another unit
+        finally:
+            root.destroy()
+
+    def test_report_pictures_made_smaller(self):
+        """The user, 2026-10-10: the game's log and two screenshots did not fit the 4 MB a report takes - a big
+        screenshot goes as a JPEG of at most 2560 px (its name .jpg), a small one as it is; the window says a big log
+        goes cut and packed."""
+        import io
+        import zipfile
+        from campaign_editor import report
+        small = os.path.join(self.root, "small.png")
+        with open(small, "wb") as fh:
+            fh.write(b"\x89PNG small")
+        self.assertEqual(report.small_picture(small), ("small.png", b"\x89PNG small"))
+        self.assertIn("goes cut", report.size_words(5400 * 1024))
+        self.assertEqual(report.size_words(20 * 1024), "20 KB")
+        try:
+            from PIL import Image
+        except ImportError:                           # no Pillow: pictures go as they are
+            return
+        big = os.path.join(self.root, "shot.png")
+        Image.frombytes("RGB", (3000, 1500), os.urandom(3000 * 1500 * 3)).save(big)
+        name, data = report.small_picture(big)
+        self.assertEqual(name, "shot.jpg")
+        self.assertLess(len(data), os.path.getsize(big))
+        with Image.open(io.BytesIO(data)) as im:
+            self.assertEqual(im.size, (2560, 1280))
+        z = zipfile.ZipFile(io.BytesIO(report.build_zip([], "x", pictures=[big, small])))
+        self.assertEqual(sorted(n for n in z.namelist() if n.startswith("pictures/")),
+                         ["pictures/shot.jpg", "pictures/small.png"])
+        self.assertIsNone(report.picture_problem(big))
+
     def test_start_screen_pictures_on_the_faction_tab(self):
         """The campaign-select map and the leader's face go from the Art list to the faction tab, beside the
         description (the user, 2026-10-09: 'as in the game'): start_pictures finds just those two (campaign

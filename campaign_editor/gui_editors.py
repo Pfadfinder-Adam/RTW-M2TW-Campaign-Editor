@@ -748,7 +748,8 @@ class RecordEditor(ttk.Frame):
         except Exception:
             return ttk.Label(parent, text="(none)", width=12, relief="sunken")
         self._photos.append(ph)
-        return tk.Label(parent, image=ph, relief="sunken")
+        from .gui_picview import zoomable           # a click: the picture big in a window of its own
+        return zoomable(tk.Label(parent, image=ph, relief="sunken"), path)
 
     def _factions_of(self):
         """The faction folders a unit's card goes to: the factions its ownership names,
@@ -863,7 +864,11 @@ class RecordEditor(ttk.Frame):
             return ttk.Label(parent, text="(no texture\nfile here)", width=11, relief="sunken", anchor="center")
         ph = ImageTk.PhotoImage(im)
         self._photos.append(ph)
-        return tk.Label(parent, image=ph, relief="sunken")
+        from .gui_picview import zoomable           # a click: the whole texture big (read again - the cache is small)
+        from .meshview import on_disk
+        got = on_disk(mod, rel)
+        return zoomable(tk.Label(parent, image=ph, relief="sunken"), got[1] if got else os.path.join(mod.data, rel),
+                        image=lambda: MO.texture_image(mod, rel), title=rel)
 
     def _unit_lines(self):
         name, a, b = self.current

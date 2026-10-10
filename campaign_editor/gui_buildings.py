@@ -162,7 +162,8 @@ class BuildingsEditor(ttk.Frame):
         names = [NONE] + [l.name for l in shown]
         if now and now not in names:
             names.append(now)
-        img = self.pics.get(self.bpics.find(self.culture, now), PICTURE) if now else None
+        shown_path = self.bpics.find(self.culture, now) if now else None
+        img = self.pics.get(shown_path, PICTURE) if now else None
         missing = bool(now) and img is None
         if img is None:                   # an empty slot the picture's size (a Label's width is in characters otherwise)
             if not hasattr(self, "_blank"):
@@ -170,6 +171,9 @@ class BuildingsEditor(ttk.Frame):
             img = self._blank
         pic = tk.Label(f, image=img, relief="sunken" if img is getattr(self, "_blank", None) else "flat")
         pic.image = img
+        if not missing and img is not getattr(self, "_blank", None):
+            from .gui_picview import zoomable       # a click: the picture big in a window of its own
+            zoomable(pic, shown_path)
         pic.grid(row=0, column=0, rowspan=2)
         ttk.Label(f, text=b.name, font=("", 9, "bold")).grid(row=0, column=1, sticky="w", padx=4)
         v = tk.StringVar(value=now or NONE)

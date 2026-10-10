@@ -23,7 +23,10 @@ from . import log
 # the relay's address (worker/README.md); a settings value 'report_url' overrides it (a test relay)
 REPORT_URL = "https://rtw-m2tw-campaign-editor-reports.aldam-dubaev.workers.dev/"
 TEXT_CAP = 1536 * 1024          # a log's newest 1.5 MB (the game's system.log.txt can grow to hundreds of MB)
-PICTURE_CAP = 3 * 1024 * 1024   # a picked picture
+PICTURE_CAP = 3 * 1024 * 1024   # a picked picture that goes as it is (no Pillow to make it smaller)
+BIG_PICTURE_CAP = 40 * 1024 * 1024   # ... one made smaller on the way (small_picture)
+PICTURE_SIDE = 2560             # a screenshot's longer side at most, in the report
+PICTURE_KEEP = 400 * 1024       # a picture this small goes as it is
 PICTURES = 10                   # the zip's 4 MB is the real cap (ZIP_CAP)
 ZIP_CAP = 4 * 1024 * 1024       # the relay refuses more
 PICTURE_EXT = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")
@@ -392,16 +395,62 @@ def build_zip(texts, message="", contact="", info=None, pictures=(), words=()):
         for name, text in texts:
             z.writestr(name, text)
         for p in list(pictures)[:PICTURES]:
-            z.write(p, "pictures/" + scrub(os.path.basename(p), words))
+            name, data = small_picture(p)
+            z.writestr("pictures/" + scrub(name, words), data)
     return buf.getvalue()
+
+
+def size_words(size):
+    """A log's size in the report window, with what of it goes (the user, 2026-10-10: a 5400 KB game log looked too
+    big to send - it goes cut and packed, about a twentieth)."""
+    if size <= TEXT_CAP:
+        return "%d KB, packed smaller" % (size // 1024) if size > 64 * 1024 else "%d KB" % (size // 1024)
+    return "%d KB - goes cut to its start, its errors and its end (%d KB at most), packed smaller" % (
+        size // 1024, TEXT_CAP // 1024)
+
+
+def small_picture(path):
+    """(name, bytes) of a picked picture for the zip - made small enough that a few screenshots fit the 4 MB the
+    service takes (the user, 2026-10-10: 'I could not add the game's log and two screenshots'): one over
+    PICTURE_KEEP goes as a JPEG of at most PICTURE_SIDE pixels (quality 85 - a 3 MB PNG screenshot becomes about
+    300 KB, its words still readable); a small one, or with no Pillow, as it is."""
+    name = os.path.basename(path)
+    with open(path, "rb") as fh:
+        data = fh.read()
+    if len(data) <= PICTURE_KEEP:
+        return name, data
+    try:
+        from PIL import Image
+        with Image.open(io.BytesIO(data)) as im:
+            im.load()
+            if im.mode in ("RGBA", "LA", "P"):
+                im = im.convert("RGBA")
+                ground = Image.new("RGB", im.size, (255, 255, 255))
+                ground.paste(im, mask=im.split()[-1])
+                im = ground
+            elif im.mode != "RGB":
+                im = im.convert("RGB")
+            im.thumbnail((PICTURE_SIDE, PICTURE_SIDE))
+            out = io.BytesIO()
+            im.save(out, "JPEG", quality=85, optimize=True)
+    except Exception:
+        return name, data
+    if out.tell() >= len(data):
+        return name, data
+    return os.path.splitext(name)[0] + ".jpg", out.getvalue()
 
 
 def picture_problem(path):
     """Why a picked picture cannot go, or None."""
     if not path.lower().endswith(PICTURE_EXT):
         return "%s is not a picture (png, jpg, bmp, gif, webp)" % os.path.basename(path)
-    if os.path.getsize(path) > PICTURE_CAP:
-        return "%s is over %d MB" % (os.path.basename(path), PICTURE_CAP // (1024 * 1024))
+    try:
+        import PIL  # noqa: F401  - pictures are made smaller on the way (small_picture)
+        cap = BIG_PICTURE_CAP
+    except ImportError:
+        cap = PICTURE_CAP
+    if os.path.getsize(path) > cap:
+        return "%s is over %d MB" % (os.path.basename(path), cap // (1024 * 1024))
     return None
 
 

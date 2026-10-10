@@ -100,9 +100,9 @@ def open_report(app, message="", kind="bug", tab=None):
         # the logs go along (an idea too) - untick to leave out; one already sent unchanged stays out (a tester's wish)
         v = tk.BooleanVar(value=not sent)
         ticks.append((v, (f, name, what)))
-        ttk.Checkbutton(box, variable=v, text="%s - %s (%d KB)%s" % (
-            name, what, os.path.getsize(f) // 1024, " - already sent with %s, not changed since" % sent if sent
-            else "")).pack(anchor="w")
+        ttk.Checkbutton(box, variable=v, text="%s - %s (%s)%s" % (
+            name, what, report.size_words(os.path.getsize(f)), " - already sent with %s, not changed since" % sent
+            if sent else "")).pack(anchor="w")
     # the mod's file list (names, sizes, dates - no contents): what the mod has and changes against the game
     v_files = tk.BooleanVar(value=app.mod is not None)
     if app.mod is not None:

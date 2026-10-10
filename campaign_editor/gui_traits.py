@@ -261,7 +261,8 @@ class TraitsWindow(tk.Toplevel):
             ttk.Label(parent, text="(no picture)", width=14, relief="sunken").pack(side="left")
             return
         self._photos.append(ph)
-        tk.Label(parent, image=ph, relief="sunken").pack(side="left")
+        from .gui_picview import zoomable           # a click: the picture big in a window of its own
+        zoomable(tk.Label(parent, image=ph, relief="sunken"), path).pack(side="left")
 
     # ---- keeping the changes ----
     def _set(self, kind, name, key, value, now):
