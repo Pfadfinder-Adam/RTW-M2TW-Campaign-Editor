@@ -468,6 +468,13 @@ def _delete(plan, campaign, gone, waste=()):
                             pool = strip_comment(f.text(start)).split()[1:2]
                             _drop_block(f, start)
                             plan.note(f, "pool %s had no region left - it goes" % (pool[0] if pool else "?"))
+    # Medieval II: the resources on a wasteland's land go - its game refuses each one (report #186)
+    if waste:
+        from . import resources as RS
+        dead = [p for r in sorted(waste) for p in region_pixels(mod, campaign, r)]
+        for c in sharing(mod, campaign):
+            RS.drop_on(plan, c, dead, "its region is a wasteland now; " + RS.WASTE_WORDS,
+                       "" if c == campaign else " (%s)" % c)
     if music and out:
         f = plan.edit(music)
         for region in out:

@@ -88,6 +88,46 @@ def problem(mod, campaign, xy, taken=()):
     return None
 
 
+WASTE_WORDS = ("the game takes no resource in a region without a town ('resource ... positioned on x,y which is an "
+               "invalid tile' - Medieval II with M2EX, report #186)")
+
+
+def wasteland_at(mod, campaign, xy):
+    """The wasteland region (REX / M2EX: no town) tile xy lies in, or None."""
+    img = mod.region_map(campaign)
+    x, y = xy
+    if not (0 <= x < img.width and 0 <= y < img.height):
+        return None
+    r = mod.region_colours(campaign).get(img.get(x, y))
+    return r if r and mod.regions(campaign)[r].get("wasteland") else None
+
+
+def on_wasteland(mod, campaign, have):
+    """[(Resource, region)] of have lying on a wasteland's land - Medieval II only: its game refuses each one (report
+    #186); Rome's REX wants a 'slaves' resource in every region, not known for a wasteland (kept)."""
+    from .limits import game_kind
+    if game_kind(mod) != "medieval2":
+        return []
+    return [(r, w) for r in have for w in (wasteland_at(mod, campaign, r.xy),) if w]
+
+
+def drop_on(plan, campaign, tiles, why, tag=""):
+    """Medieval II: the resource lines of descr_strat.txt on tiles (land becoming a wasteland's) taken out, each
+    noted - the game refuses a resource in a region without a town (report #186). Rome: nothing (see on_wasteland)."""
+    from .limits import game_kind
+    if game_kind(plan.mod) != "medieval2" or not tiles:
+        return
+    sp = plan.mod.campaign_file(campaign, "descr_strat.txt")
+    if not sp:
+        return
+    tiles = {tuple(t) for t in tiles}
+    f = plan.edit(sp)
+    for r in reversed(read(f)):
+        if tuple(r.xy) in tiles:
+            del f.raw[r.line]
+            plan.note(f, "resource %s at %d, %d out - %s%s" % (r.kind, r.xy[0], r.xy[1], why, tag))
+
+
 def _moved_line(text, xy):
     """text with x, y set (layout, quantity and comment kept)."""
     body, sep, comment = text.partition(";")

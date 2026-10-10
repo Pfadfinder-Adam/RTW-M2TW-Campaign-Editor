@@ -265,6 +265,12 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
             bad("%d wasteland region(s) (%s) but no REX / M2EX beside the game - the original exe knows no "
                 "wasteland: put the engine in, or give them towns (right click their land on the Map)" % (
                     len(waste), ", ".join(waste[:5])))
+        from . import resources as RS
+        on = RS.on_wasteland(mod, campaign, RS.read(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))))
+        if on:
+            bad("%d resource(s) of descr_strat.txt lie on a wasteland's land (%s) - %s; take them out or move them "
+                "(Map: drag, right click)" % (len(on), ", ".join("%s at %d, %d in %s" % (r.kind, r.xy[0], r.xy[1], w)
+                                                                 for r, w in on[:4]), RS.WASTE_WORDS))
     no_pixel = [r for r in regions if r not in tiles and not regions[r].get("wasteland")]
     if no_pixel:
         bad("%d region(s) without a town pixel: %s" % (len(no_pixel), ", ".join(no_pixel[:5])))

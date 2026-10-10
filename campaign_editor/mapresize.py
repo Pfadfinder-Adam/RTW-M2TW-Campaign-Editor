@@ -449,6 +449,10 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0, factions_out=())
         plan.patch_tga(path, paint)
         if wl and wl[2]:
             RD.make_wasteland(plan, campaign, wl[0], wl[1], paint)
+        if wl:                                       # Medieval II: no resource on a wasteland's land (report #186)
+            from . import resources as RS
+            RS.drop_on(plan, campaign, paint, "the land left by the cut is %s, the common wasteland; %s" % (
+                wl[0], RS.WASTE_WORDS))
         for r, px in sorted(leftover.items()):
             plan.notes.append((RD._shown(mod, path), "%d tile(s) of %s left by the cut -> %s" % (
                 len(px), r, "%s, the common wasteland - nobody's land (REX / M2EX)" % wl[0] if wl else given[r])))

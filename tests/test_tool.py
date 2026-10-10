@@ -9777,6 +9777,44 @@ building smith
         check_mod(ModData(self.root), "test", found=found)
         self.assertFalse(any("no REX / M2EX" in x for x in found), found)
 
+    def test_no_resource_on_a_wasteland_in_medieval2(self):
+        """Report #186: Medieval II (with M2EX) refuses a resource in a region without a town ('resource silk
+        positioned on 289,70 which is an invalid tile') - a region made a wasteland loses the resource lines on its
+        land (noted), the others stay; Check mod files names one left there; Rome keeps them (its REX wants slaves in
+        every region - not known for a wasteland). Restore byte for byte."""
+        from campaign_editor import regiondelete as RD, resources as RS
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        write(os.path.join(self.root, "data", "descr_ex.txt"), "max_factions 31\n")
+        mod = ModData(self.root)
+        b_land = sorted(set(RD.region_pixels(mod, "test", "B_R")) - {mod.city_tiles("test")["B_R"]})
+        a_land = sorted(set(RD.region_pixels(mod, "test", "A_R")) - {mod.city_tiles("test")["A_R"]})
+        sp = os.path.join(camp, "descr_strat.txt")
+        with open(sp) as fh:
+            strat = fh.read()
+        write(sp, strat + "\nresource\tsilk,\t%d,\t%d\nresource\tiron,\t%d,\t%d\n" % (b_land[0] + a_land[0]))
+        for kind in ("rome", "medieval2"):
+            if kind == "medieval2":
+                write(os.path.join(self.root, "data", "descr_religions.txt"), "religions\n{\n\tcatholic\n}\n")
+            before = tree_hash(self.root)
+            mod = ModData(self.root)
+            plan = Plan(mod, "delete", "B_R", {})
+            RD.delete(plan, "test", "B_R", waste=True)
+            kinds = [r.kind for r in RS.read(plan.files[sp])]
+            self.assertEqual(kinds, ["iron"] if kind == "medieval2" else ["silk", "iron"], kind)
+            self.assertEqual(any("resource silk at" in n for _, n in plan.notes), kind == "medieval2")
+            bdir = plan.apply()
+            mod = ModData(self.root)
+            self.assertEqual(RS.on_wasteland(mod, "test", RS.read(mod.load(sp))), [])
+            if kind == "medieval2":                        # one put back by hand: Check mod files names it
+                have = [RS.Resource(0, 0, "silk", b_land[0])]
+                self.assertEqual([w for _, w in RS.on_wasteland(mod, "test", have)], ["B_R"])
+            restore_to(mod, bdir)
+            self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_")},
+                             {k: v for k, v in before.items() if not k.startswith("CampaignEditor_")})
+        os.remove(os.path.join(self.root, "data", "descr_religions.txt"))
+        os.remove(os.path.join(self.root, "data", "descr_ex.txt"))
+        write(sp, strat)
+
     def test_delete_as_a_wasteland_and_back(self):
         """Report #154 ('deleting a region must not merge it into others'): under REX / M2EX a town deleted with its
         region leaves the region as a WASTELAND - its descr_regions line says so, its town pixel takes the region's
