@@ -144,6 +144,26 @@ def _wheel_up(w, step):
     return False
 
 
+def box_step(w, step):
+    """A closed list box turned by the wheel: the next (step 1) or last (-1) of its choices, told as a pick
+    (<<ComboboxSelected>>); nothing when it is disabled, has no choices or is at the end."""
+    try:
+        if isinstance(w, str):
+            return
+        if not step or w.instate(["disabled"]):
+            return
+        values = w.tk.splitlist(w.cget("values"))
+        if not values:
+            return
+        i = w.current()
+        n = max(0, min(len(values) - 1, (i if i >= 0 else -1 if step > 0 else len(values)) + step))
+        if n != i:
+            w.current(n)
+            w.event_generate("<<ComboboxSelected>>")
+    except (tk.TclError, AttributeError):
+        pass
+
+
 def _route(e):
     step = _step(e)
     w = _under(e) if step else None
@@ -900,10 +920,14 @@ def install_window_helpers(root):
         cb.after(1, later)
     root.bind_class("TCombobox", "<Button-1>", widen, add="+")
 
-    # the wheel over a closed list box scrolls the page it sits in and never changes the value: a column of boxes
-    # (the Bring window's 'The units they recruit') turned each box it passed and the page never moved (report #109)
+    # the wheel over a closed list box scrolls the page it sits in when the page can scroll: a column of boxes (the
+    # Bring window's 'The units they recruit') turned each box it passed and the page never moved (report #109).
+    # Where nothing scrolls it turns the box to the next / last choice, as Tk's own boxes do (the user, 2026-10-10:
+    # 'the wheel changed the choice of a drop-down under the mouse - it was very handy, bring it back')
     def box_wheel(e):
-        _route(e)
+        if _route(e) == "break":
+            return "break"
+        box_step(e.widget, _step(e))
         return "break"
     for seq in WHEEL_KEYS:
         root.bind_class("TCombobox", seq, box_wheel)

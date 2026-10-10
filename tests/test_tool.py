@@ -2240,6 +2240,37 @@ building smith
             rgb = fill if isinstance(fill, tuple) else tuple(int(fill[i:i + 2], 16) for i in (1, 3, 5))
             self.assertGreaterEqual(theme.contrast(rgb, ink), 4.5)
 
+    def test_the_wheel_turns_a_drop_down_where_nothing_scrolls(self):
+        """The wheel over a closed drop-down turns it to the next / last choice (the user: 'it was very handy, bring
+        it back') - a pick the window hears; at the ends and when disabled nothing changes."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            from campaign_editor.gui_util import box_step
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        try:
+            root.withdraw()
+            cb = ttk.Combobox(root, values=["walk", "run", "charge"], state="readonly")
+            picked = []
+            cb.bind("<<ComboboxSelected>>", lambda e: picked.append(cb.get()))
+            box_step(cb, 1)
+            self.assertEqual(cb.get(), "walk")                          # nothing picked yet: the first
+            box_step(cb, 1)
+            box_step(cb, 1)
+            box_step(cb, 1)                                             # at the end: stays
+            self.assertEqual(cb.get(), "charge")
+            box_step(cb, -1)
+            root.update()
+            self.assertEqual(cb.get(), "run")
+            self.assertEqual(picked, ["walk", "run", "charge", "run"])
+            cb.state(["disabled"])
+            box_step(cb, -1)
+            self.assertEqual(cb.get(), "run")
+        finally:
+            root.destroy()
+
     def test_text_is_readable_on_its_ground_in_either_look(self):
         """The dark look showed light text on the Module builder's light IF block, dark red / dark blue on its dark
         grey: theme.readable makes any text colour readable (4.5:1) on the ground it stands on, keeping its hue."""
@@ -8198,6 +8229,20 @@ building smith
         for got, want in zip(turned.positions[0], (-1, 0.5, 0)):          # half round the up axis at the pelvis
             self.assertAlmostEqual(got, want, places=5)
         self.assertIsNone(MV.pose_mesh(MV.Mesh(mesh.groups, mesh.positions, None), MV.Pose(rot, off), (rot, off)))
+        # a weapon's own move in the hand (its skeleton's animation of the same name): half round at the hand - a
+        # javelin turned point first for the throw (it was thrown blunt end first)
+        hand = MV._world(rot, off)[1][16]
+        flipped = MV.pose_mesh(mesh, MV.Pose(rot, off), (rot, off), held={20: (1.0, 0.0, 0.0, 0.0)})
+        v = mesh.positions[1]
+        for got, want in zip(flipped.positions[1], (v[0], 2 * hand[1] - v[1], 2 * hand[2] - v[2])):
+            self.assertAlmostEqual(got, want, places=5)
+        self.assertEqual(MV.pose_mesh(mesh, MV.Pose(rot, off), (rot, off)).positions[1], tuple(v))   # none: as held
+        self.assertEqual(MV.weapon_turn(type("W", (), {"frames": 1, "rotations": lambda s, k: [(0, 0, 0, 1),
+                                                       (1, 0, 0, 0)], "offsets": lambda s, k: [(0, 0, 0)]})(), 0),
+                         (1, 0, 0, 0))
+        named = MV.Mesh([], [], None)
+        named.bone_names = {0: "bone_pelvis", 20: "bone_weapon01", 21: "bone_weapon02", 22: "bone_shield"}
+        self.assertEqual(MV.weapon_bones(named), {"weapon": [20, 21], "shield": [22]})
         # a moment between two frames is drawn between them (the play looked hurried and jerky drawing whole
         # frames only): half way from unturned to half round the up axis = a quarter round; past the last frame
         # it blends into the first
@@ -8214,6 +8259,9 @@ building smith
         for got, want in zip(MV.seat_of(rider, horse, (0, 0.38, 0.7)), (1, 1.78, 2.7)):
             self.assertAlmostEqual(got, want, places=6)
         self.assertIsNone(MV.seat_of(MV.Mesh([], [], None), horse))
+        horse.turns = [(math.sqrt(0.5), 0, 0, math.sqrt(0.5))]          # the saddle tipped a quarter round
+        for got, want in zip(MV.seat_of(rider, horse, (0, 0, 1)), (1, 0.4, 2)):    # forward turned to straight down
+            self.assertAlmostEqual(got, want, places=6)
 
     def test_a_horse_is_posed_on_its_own_bones(self):
         """A Medieval II horse (fs_horse: 23 bones - saddle, spine, neck, head, four legs, tail) is posed on its own
@@ -8254,6 +8302,15 @@ building smith
         mod = ModData(os.path.join(self.root, "data"))
         self.assertEqual(MO.rider_offset(mod, "Heavy Horse"), (0.0, 0.38, 0.70))
         self.assertEqual(MO.rider_offset(mod, "camel"), (0.0, 0.0, 0.0))
+        # the weapons' own skeletons per man's skeleton (their moves in the hand), from the text file
+        write(os.path.join(self.root, "data", "descr_model_battle.txt"),
+              "type\t\tjavelinmen\nskeleton\t\tMTW2_Fast_Javelin, MTW2_Fast_Swordsman\n"
+              "skeleton_attachment_primary\tMTW2_Javelin_primary\nskeleton_attachment_primary\tfs_test_shield\n"
+              "skeleton_attachment_secondary\tMTW2_Sword_Primary\n"
+              "mesh\t\tunit_models/x/javelinmen_lod0.mesh, 11\n\n")
+        got = MO._text_models(ModData(os.path.join(self.root, "data")))["javelinmen"].weapons
+        self.assertEqual(got, {"mtw2_fast_javelin": ["MTW2_Javelin_primary", "fs_test_shield"],
+                               "mtw2_fast_swordsman": ["MTW2_Sword_Primary"]})
 
     def test_read_and_draw_a_rome_cas(self):
         """A Rome .cas laid out as the vanilla ones (3.05): header with the bone count and parents, frame times, bone

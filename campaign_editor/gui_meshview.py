@@ -268,8 +268,33 @@ class ModelViewer(tk.Toplevel):
         base = self._base[sk]
         if base is None:
             return None, "no base pose (the skeleton's 'default' animation) - the model stays as it is"
-        got = MV.pose_mesh(self.mesh, pose, base)
+        got = MV.pose_mesh(self.mesh, pose, base, self._held(sk, anim, frame))
         return (got, None) if got is not None else (None, "the animation does not fit the model's bones")
+
+    def _held(self, skeleton, anim, frame):
+        """{weapon bone: turn} - each weapon's and the shield's own move in the hand, from its skeleton's animation
+        of the same name as the man's (the modeldb / descr_model_battle names those skeletons per man's skeleton):
+        a skirmisher's javelin turns point first for the throw."""
+        held = (getattr(self.info, "weapons", {}) or {}).get((skeleton or "").lower())
+        if not held or anim is None or not self.mesh.bone_names:
+            return None
+        key = (self.anim_key or "stand_a_idle").lower() if self.anim is not None else "stand_a_idle"
+        parts = MV.weapon_bones(self.mesh)
+        shield = next((h for h in held if "shield" in h.lower()), None)
+        weapon = next((h for h in held if h is not shield), None)
+        out = {}
+        for wsk, bones in ((weapon, parts["weapon"]), (shield, parts["shield"])):
+            f = self._moves_of(wsk).get(key) if wsk else None
+            try:
+                wa = AN.find(self.mod, f) if f else None
+            except (OSError, ValueError):
+                wa = None
+            if wa is None or not bones:
+                continue
+            q = MV.weapon_turn(wa, frame * wa.frames / max(1, anim.frames))
+            for b in bones:
+                out[b] = q
+        return out or None
 
     def _moves_of(self, skeleton):
         """{animation name: file} of a skeleton, read once."""

@@ -252,6 +252,12 @@
   release's page.
 
 ### Fixed
+- **View in 3D: a javelin thrown blunt end first** (Medieval II): the weapons and the shield now take their own moves
+  in the hand - each has a skeleton of its own (`skeleton_attachment_primary` / the modeldb's weapons) with an
+  animation of the same name as the man's; the throw turns the javelin point first, as in the game.
+- **View in 3D: a rider sank into a rearing horse**: where he sits now turns with the saddle (he himself stays upright).
+- **The wheel over a drop-down changes its choice again** where nothing scrolls (the 3D view's animation list, the
+  texture list ...); over a page that scrolls it still scrolls the page (a column of drop-downs is never turned by it).
 - **View in 3D: a horse's animations were broken** (Medieval II): it was bent on a man's bones - it moves on its own
   23 bones now (saddle, spine, neck, head, four legs, tail), and with no animation it stands as in its standing move
   (its file's own pose has the legs stiff and the tail out).

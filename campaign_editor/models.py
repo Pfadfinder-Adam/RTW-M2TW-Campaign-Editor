@@ -41,6 +41,7 @@ class ModelInfo:
         self.sprites = {}               # Medieval II: {faction: its far-away sprite (unit_sprites/....spr)}
         self.meshes = []
         self.skeletons = []
+        self.weapons = {}               # Medieval II: {skeleton (lower): [its weapons' and shield's skeletons]}
         self.seats = set()
         self.exact = False
 
@@ -115,6 +116,10 @@ def _text_models(mod):
         for v in _values(lines, "skeleton"):                  # the main one (a general's: its foot seat)
             m.skeletons += [x for x in v if x]
             m.seats |= skeleton_seats(v[0])
+        for i, part in enumerate(("primary", "secondary")):   # the weapons' own skeletons (their moves in the hand)
+            held = [v[0] for v in _values(lines, "skeleton_attachment_" + part) if v and v[0]]
+            if held and i < len(m.skeletons):
+                m.weapons.setdefault(m.skeletons[i].lower(), held)
         for seat in ("horse", "camel", "elephant", "chariot"):  # a general's other seats
             if _values(lines, "skeleton_" + seat):
                 m.seats.add(seat)
@@ -143,6 +148,9 @@ def _modeldb_models(mod):
             t = mt["type"].lower()
             m.seats.add(t if t in SEATS else "none")
             m.skeletons += [x for x in (mt["primary"], mt["secondary"]) if x]
+            for sk, held in ((mt["primary"], mt["weapons"]), (mt["secondary"], mt["weapons2"])):
+                if sk and held:
+                    m.weapons.setdefault(sk.lower(), [x for x in held if x])
         out[dm.name.lower()] = m
     return out
 

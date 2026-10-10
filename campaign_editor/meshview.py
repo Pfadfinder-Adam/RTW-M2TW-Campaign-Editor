@@ -59,6 +59,8 @@ class Mesh:
         self.skin = None                # Medieval II: [(primary bone, secondary bone, weight, weight)] per point
         self.parents = None             # Medieval II: its skeleton's bone tree (None: a man's, M2_PARENTS)
         self.joints = None              # posed: every bone's place in the model (pose_mesh)
+        self.turns = None               # posed: every bone's turn in the model
+        self.bone_names = {}            # Medieval II: {bone number: name} as the file lists them
 
     def parts(self):
         """{part name: [its variants]} in file order."""
@@ -238,7 +240,8 @@ def read(data):
         b = data[st[BONES]:st[BONES] + 4 * count]
         w = list(struct.iter_unpack("<2f", data[st[WEIGHTS]:st[WEIGHTS] + 8 * count]))
         m.skin = [(b[4 * i + 2], b[4 * i + 1], w[i][0], w[i][1]) for i in range(count)]
-        _animal_tree(m, _bone_names(data))
+        m.bone_names = _bone_names(data)
+        _animal_tree(m, m.bone_names)
     return m
 
 
@@ -384,6 +387,31 @@ def _qmul(a, b):
     bx, by, bz, bw = b
     return (aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
             aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz)
+
+
+def weapon_turn(anim, frame):
+    """A weapon skeleton's animation (2 bones: its grip and the weapon) at a frame as one turn in the hand - the
+    javelin's throw holds the weapon bone half round (1, 0, 0, 0): point first. Its offsets are not used (the grip
+    stays in the hand: its 'default' puts it at the base pose's right hand)."""
+    p = Pose.of(anim, frame)
+    q = (0.0, 0.0, 0.0, 1.0)
+    for r in p.rotations[:2]:
+        q = _qmul(q, r)
+    return q
+
+
+def weapon_bones(mesh):
+    """{'weapon': [bone numbers], 'shield': [...]} of a man's mesh from its bone names (bone_weapon01 / 02 / 03,
+    bone_shield...; the numbers a file gives two names keep the shield's)."""
+    out = {"weapon": [], "shield": []}
+    shields = {k for k, nm in mesh.bone_names.items() if "shield" in nm.lower()}
+    for k, nm in sorted(mesh.bone_names.items()):
+        if k < len(M2_PARENTS):
+            continue
+        part = "shield" if k in shields else "weapon"
+        if k not in out[part]:
+            out[part].append(k)
+    return out
 
 
 def _qmat(q):
@@ -539,10 +567,13 @@ def _world(rotations, offsets, parents=M2_PARENTS):
     return rot, where
 
 
-def pose_mesh(mesh, pose, base):
+def pose_mesh(mesh, pose, base, held=None):
     """A Medieval II mesh in an animation's frame (a Pose): each point taken from its bones' place in the base pose
     (base = (rotations, offsets): the skeleton's default animation, the pose the mesh is made in) to their place in
-    the frame, by its two weights. None when the mesh has no bones or the animation another skeleton's count."""
+    the frame, by its two weights. None when the mesh has no bones or the animation another skeleton's count.
+    held {weapon bone number (20 on): turn}: a weapon's own move in the hand (its skeleton's animation of the same
+    name - weapon_turn), laid on it at the hand: a javelin turned point first for the throw (without it a
+    skirmisher threw it blunt end first - the user). A weapon bone not in held stays as the hand holds it."""
     parents = mesh.parents or M2_PARENTS
     n = len(parents)
     if not mesh.skin or len(pose.rotations) < n or len(base[0]) < n or len(base[1]) < n:
@@ -552,15 +583,27 @@ def pose_mesh(mesh, pose, base):
     rot, where = _world(pose.rotations, offsets, parents)
     # each bone's move from the base pose to the frame as one matrix + shift, made once (the point by point
     # quaternion turns took twice as long - the play has to be quick)
-    mats = []
+    mats = {}
     for b in range(n):
         q = _qmul(rot[b], (-brot[b][0], -brot[b][1], -brot[b][2], brot[b][3]))
         m = _qmat(q)
         bw = bwhere[b]
-        mats.append(m + tuple(where[b][k] - (m[3 * k] * bw[0] + m[3 * k + 1] * bw[1] + m[3 * k + 2] * bw[2])
-                              for k in range(3)))
+        mats[b] = m + tuple(where[b][k] - (m[3 * k] * bw[0] + m[3 * k + 1] * bw[1] + m[3 * k + 2] * bw[2])
+                            for k in range(3))
     out = []
     for v, (b0, b1, w0, w1) in zip(mesh.positions, mesh.skin):
+        if b0 >= n and held and b0 in held:          # a weapon with a move of its own in the hand holding it
+            h = b1 if b1 < n else 0
+            a = mats.get((b0, h))
+            if a is None:
+                q = _qmul(_qmul(rot[h], (-brot[h][0], -brot[h][1], -brot[h][2], brot[h][3])), held[b0])
+                m3, bw = _qmat(q), bwhere[h]
+                a = mats[(b0, h)] = m3 + tuple(where[h][k] - (m3[3 * k] * bw[0] + m3[3 * k + 1] * bw[1] +
+                                                              m3[3 * k + 2] * bw[2]) for k in range(3))
+            x, y, z = v
+            out.append((a[0] * x + a[1] * y + a[2] * z + a[9], a[3] * x + a[4] * y + a[5] * z + a[10],
+                        a[6] * x + a[7] * y + a[8] * z + a[11]))
+            continue
         if b0 >= n:                                  # a weapon's or the shield's point: the hand holding it
             b0 = b1 if b1 < n else 0
         if b1 >= n:
@@ -583,7 +626,7 @@ def pose_mesh(mesh, pose, base):
                     p * (a[6] * x + a[7] * y + a[8] * z + a[11]) + r * (c[6] * x + c[7] * y + c[8] * z + c[11])))
     m = Mesh(mesh.groups, out, mesh.uvs)
     m.one_texture, m.texture_ref, m.skin, m.parents = mesh.one_texture, mesh.texture_ref, mesh.skin, mesh.parents
-    m.joints = where
+    m.joints, m.turns = where, rot
     return m
 
 
@@ -769,12 +812,14 @@ def seat_of(rider, mount, rider_offset=(0.0, 0.0, 0.0)):
     """Where a posed rider goes on his posed mount (pose_mesh of both, the same animation key and frame): his
     pelvis (which the riding animations keep at nought) on the mount's saddle bone, moved by descr_mount's
     rider_offset (x, up, forward) - seen right on a mailed knight's horse (0, 0.38, 0.70): without the forward part
-    he sat on its rump, without the up part sunk into it. Only moved, never turned with the saddle: a horse falling
-    dead turned him head down. None when either is not posed."""
+    he sat on its rump, without the up part sunk into it. The offset turns with the saddle (a rearing horse's back
+    slopes up: an unturned offset sank him into it - the user), the rider himself is only moved, never turned with
+    it (a horse falling dead turned him head down). None when either is not posed."""
     if not rider.joints or not mount.joints:
         return None
     s, p = mount.joints[0], rider.joints[0]
-    return tuple(s[k] + rider_offset[k] - p[k] for k in range(3))
+    o = _qrot(mount.turns[0], rider_offset) if mount.turns else tuple(rider_offset)
+    return tuple(s[k] + o[k] - p[k] for k in range(3))
 
 
 def chariot(crew, crew_groups, car, horse, horses, riders):
