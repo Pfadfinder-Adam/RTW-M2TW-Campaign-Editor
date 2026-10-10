@@ -264,6 +264,25 @@ def chariot_of(mod, lines):
             "riders": [tuple(nums(v)[:3]) for v in _values(bl, "rider_offset") if len(nums(v)) >= 3]}
 
 
+def rider_offset(mod, kind):
+    """descr_mount.txt's rider_offset (x, up, forward) of a mount type ('heavy horse'): where its rider sits from
+    its saddle bone - (0, 0, 0) when not given (the 3D view's riding animations, meshview.seat_of)."""
+    from .packs import _block_lines, _values, type_blocks
+    path = mod.find("descr_mount.txt")
+    if not path or not kind:
+        return (0.0, 0.0, 0.0)
+    f = mod.load(path)
+    span = next((sp for name, sp in type_blocks(f).items() if name.lower() == kind.lower()), None)
+    for v in _values(_block_lines(f, span), "rider_offset") if span else ():
+        try:
+            got = [float(t) for t in " ".join(v).replace(",", " ").split()[:3]]
+        except ValueError:
+            continue
+        if len(got) == 3:
+            return tuple(got)
+    return (0.0, 0.0, 0.0)
+
+
 def engine_of(mod, lines):
     """The siege engine the unit's crew works (Rome EDU `engine <type>`, descr_engines.txt): a ModelInfo of its
     'normal' models (engine_model lines, closest first), or None."""

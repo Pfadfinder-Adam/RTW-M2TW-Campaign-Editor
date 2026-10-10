@@ -8155,6 +8155,7 @@ building smith
         """The games' animation packs (pack.idx + pack.dat): each animation's frames, bones and kind, every bone's turn
         per frame and the offsets of its first `kind` bones; descr_skeleton's animations per skeleton, a Medieval II
         skeleton's parent's taken over; a Medieval II mesh posed from its base pose by its points' bones."""
+        import math
         import struct
         from campaign_editor import animations as AN, meshview as MV
 
@@ -8197,6 +8198,62 @@ building smith
         for got, want in zip(turned.positions[0], (-1, 0.5, 0)):          # half round the up axis at the pelvis
             self.assertAlmostEqual(got, want, places=5)
         self.assertIsNone(MV.pose_mesh(MV.Mesh(mesh.groups, mesh.positions, None), MV.Pose(rot, off), (rot, off)))
+        # a moment between two frames is drawn between them (the play looked hurried and jerky drawing whole
+        # frames only): half way from unturned to half round the up axis = a quarter round; past the last frame
+        # it blends into the first
+        stand = AN.find(mod, "data/animations/MTW2_Bowman/stand.cas")
+        half = MV.Pose.of(type("A", (), {"frames": 2, "rotations": lambda s, k: [(0, 0, 0, 1)] * 20 if k == 0 else
+                                         [(0, 1, 0, 0)] * 20, "offsets": lambda s, k: [(0, k, 0)] * 20})(), 0.5)
+        for got, want in zip(half.rotations[0], (0, math.sqrt(0.5), 0, math.sqrt(0.5))):
+            self.assertAlmostEqual(got, want, places=5)
+        self.assertEqual(half.offsets[0], (0, 0.5, 0))
+        self.assertEqual(MV.Pose.of(stand, 2.5).offsets[0], (0, 0.5, 0))
+        # the rider's pelvis on the mount's saddle bone, moved by descr_mount's rider_offset - not turned with it
+        rider, horse = MV.Mesh([], [], None), MV.Mesh([], [], None)
+        rider.joints, horse.joints = [(0, 0.1, 0)], [(1, 1.5, 2)]
+        for got, want in zip(MV.seat_of(rider, horse, (0, 0.38, 0.7)), (1, 1.78, 2.7)):
+            self.assertAlmostEqual(got, want, places=6)
+        self.assertIsNone(MV.seat_of(MV.Mesh([], [], None), horse))
+
+    def test_a_horse_is_posed_on_its_own_bones(self):
+        """A Medieval II horse (fs_horse: 23 bones - saddle, spine, neck, head, four legs, tail) is posed on its own
+        tree, not a man's (its animation looked broken); a mesh listing its bones by name in another order gets its
+        points' bone numbers put in the animations' order. descr_mount's rider_offset is read per mount type."""
+        import math
+        import struct
+        from campaign_editor import meshview as MV, models as MO
+
+        def names(order):
+            return struct.pack("<I", len(order)) + b"".join(
+                struct.pack("<I", len(n)) + n.encode() + struct.pack("<I", i) for i, n in enumerate(order))
+        alpha = sorted(MV.HORSE_BONES)
+        got = MV._bone_names(b"\x00" * 50 + names(alpha) + b"\x00" * 8)
+        self.assertEqual(got[0], "bone_H_Saddle")
+        self.assertEqual(got[1], "bone_Head")
+        mesh = MV.Mesh([], [(0, 0, 0)], None)
+        mesh.skin = [(alpha.index("bone_Head"), alpha.index("bone_Neck"), 1.0, 0.0)]
+        MV._animal_tree(mesh, got)
+        self.assertEqual(mesh.skin[0][:2], (4, 3))                     # Head, Neck in the animations' order
+        self.assertEqual(mesh.parents, MV.HORSE_PARENTS)
+        man = MV.Mesh([], [(0, 0, 0)], None)
+        man.skin = [(0, 0, 1.0, 0.0)]
+        MV._animal_tree(man, {0: "bone_pelvis", 1: "bone_rthigh"})
+        self.assertIsNone(man.parents)                                  # a man keeps the man's tree
+        # posed on the horse's tree: the head follows the neck turned at Spine1, not a man's arm chain
+        rot = [(0, 0, 0, 1)] * 23
+        off = [(0, 1, 0)] + [(0, 0, 0.5)] * 22
+        mesh.positions = [MV._world(rot, off, MV.HORSE_PARENTS)[1][4]]   # a point on the head
+        turned = list(rot)
+        turned[2] = (0, math.sqrt(0.5), 0, math.sqrt(0.5))              # Spine1 a quarter round the up axis
+        posed = MV.pose_mesh(mesh, MV.Pose(turned, off), (rot, off))
+        self.assertAlmostEqual(posed.positions[0][0], 1.0, places=5)   # the neck and head swung sideways
+        self.assertEqual(len(posed.joints), 23)
+        write(os.path.join(self.root, "data", "descr_mount.txt"),
+              "type heavy horse\nclass horse\nmodel Mount_Heavy_Horse\n;rider_offset 0.0, 0.45, 0.35\n"
+              "rider_offset\t\t0.0, 0.38, 0.70\n\ntype camel\nclass camel\n")
+        mod = ModData(os.path.join(self.root, "data"))
+        self.assertEqual(MO.rider_offset(mod, "Heavy Horse"), (0.0, 0.38, 0.70))
+        self.assertEqual(MO.rider_offset(mod, "camel"), (0.0, 0.0, 0.0))
 
     def test_read_and_draw_a_rome_cas(self):
         """A Rome .cas laid out as the vanilla ones (3.05): header with the bone count and parents, frame times, bone

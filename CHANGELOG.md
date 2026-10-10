@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **View in 3D: the rider on his horse** (Medieval II): pick any animation of a horseman and he sits in the saddle
+  (where `descr_mount.txt`'s `rider_offset` puts him) while the horse plays the same move - the games make them as
+  pairs (a knight's *run* and his horse's *run*, the same frames). With no animation he stands in the T pose beside
+  it, as before.
 - **Models: two switches, Culture and Faction**, change every figure at once: **Culture** takes the figures and
   textures of that culture's first faction in the list, **Faction** those of the faction picked (its colours) - for
   a copy of a faction whose culture you changed, or another faction's look; **As it was** takes them back. Waits
@@ -35,7 +39,7 @@
   shooting, dying... (its skeleton's list in `descr_skeleton.txt`) - and the man takes it, read straight from the
   game's animation packs (`data/animations/pack.idx` + `pack.dat`, the mod's own first) in Rome, Barbarian Invasion
   and Medieval II alike. **Play** / **Pause** (20 frames a second); paused, drag the frame line back and on like a video's, or go a frame at a time with **<** **>** (or the arrow keys; space plays / pauses). The window's help is one short line with its '?', and speaks only of the game loaded. Medieval II's weapons stay in
-  the hand, the shield on the arm, the quiver on the back. The mount stays still for now.
+  the hand, the shield on the arm, the quiver on the back.
 - **Art in tabs, and a Models tab**: Art's pictures are sorted into **Icons and buttons**, **Flags and banners**,
   **Maps** and **Other**, each tab with how many it holds (the last one looked at opens again). The figures on the
   campaign map left Art for a **Models** tab of their own: one card per character type with its figure's list, 3D
@@ -248,6 +252,12 @@
   release's page.
 
 ### Fixed
+- **View in 3D: a horse's animations were broken** (Medieval II): it was bent on a man's bones - it moves on its own
+  23 bones now (saddle, spine, neck, head, four legs, tail), and with no animation it stands as in its standing move
+  (its file's own pose has the legs stiff and the tail out).
+- **View in 3D: the animations played hurried and jerky**: a slow drawing jumped whole frames. The moments between
+  two frames are drawn between them now, at the game's speed, and a playing frame is drawn about three times
+  quicker (in the texture's colours while it plays; paused, in the whole texture).
 - **Battle models a mod wrote by hand** (Medieval II): two numbers with no space between them (`0-1`) stopped the
   Unit editor with "'0-1' is not a count" - they are read now as the game reads them (0, then -1).
 - **Check mod files** (Medieval II) names a faction whose `ai_label` in `descr_strat.txt` is not in

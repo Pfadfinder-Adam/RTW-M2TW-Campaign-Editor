@@ -57,6 +57,8 @@ class Mesh:
         self.one_texture = False
         self.texture_ref = None
         self.skin = None                # Medieval II: [(primary bone, secondary bone, weight, weight)] per point
+        self.parents = None             # Medieval II: its skeleton's bone tree (None: a man's, M2_PARENTS)
+        self.joints = None              # posed: every bone's place in the model (pose_mesh)
 
     def parts(self):
         """{part name: [its variants]} in file order."""
@@ -236,7 +238,44 @@ def read(data):
         b = data[st[BONES]:st[BONES] + 4 * count]
         w = list(struct.iter_unpack("<2f", data[st[WEIGHTS]:st[WEIGHTS] + 8 * count]))
         m.skin = [(b[4 * i + 2], b[4 * i + 1], w[i][0], w[i][1]) for i in range(count)]
+        _animal_tree(m, _bone_names(data))
     return m
+
+
+def _bone_names(data):
+    """{bone number: name} from the mesh's list of its skeleton's bones near its end (each a 4-byte length, the name,
+    its 4-byte number)."""
+    out = {}
+    for hit in re.finditer(rb"bone_[A-Za-z0-9_]+", data[-6000:]):
+        s, e = hit.start() + len(data) - min(len(data), 6000), hit.end() + len(data) - min(len(data), 6000)
+        if s < 4 or e + 4 > len(data) or struct.unpack_from("<I", data, s - 4)[0] != e - s:
+            continue
+        k = struct.unpack_from("<I", data, e)[0]
+        if k < 256:
+            out.setdefault(k, data[s:e].decode("latin-1"))
+    return out
+
+
+# Medieval II's horses (fs_horse and its children): the 23 bones in the animations' order (as the mount meshes list
+# them) and each one's parent - worked out on a mailed horse running (the leg roots on Spine1 / the saddle stretch
+# the mesh least: 0.05 against 0.24 on a man's tree)
+HORSE_BONES = ("bone_H_Saddle", "bone_Spine", "bone_Spine1", "bone_Neck", "bone_Head", "bone_RightArm",
+               "bone_RightForeArm", "bone_RightHand", "bone_RightFingerBase", "bone_LeftArm", "bone_LeftForeArm",
+               "bone_LeftHand", "bone_LeftFingerBase", "bone_Tail1", "bone_Tail2", "bone_RightUpLeg", "bone_RightLeg",
+               "bone_RightFoot", "bone_RightToeBase", "bone_LeftUpLeg", "bone_LeftLeg", "bone_LeftFoot",
+               "bone_LeftToeBase")
+HORSE_PARENTS = (-1, 0, 1, 2, 3, 2, 5, 6, 7, 2, 9, 10, 11, 0, 13, 0, 15, 16, 17, 0, 19, 20, 21)
+
+
+def _animal_tree(mesh, names):
+    """A horse's mesh gets the horse's bone tree, its points' bone numbers put in the animations' order (some files
+    list the bones by name - mailed_horse_lod0 - not in that order)."""
+    by_name = {n.lower(): k for k, n in names.items()}
+    if not all(b.lower() in by_name for b in HORSE_BONES):
+        return
+    to = {by_name[b.lower()]: i for i, b in enumerate(HORSE_BONES)}
+    mesh.skin = [(to.get(b0, 0), to.get(b1, 0), w0, w1) for b0, b1, w0, w1 in mesh.skin]
+    mesh.parents = HORSE_PARENTS
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +386,14 @@ def _qmul(a, b):
             aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz)
 
 
+def _qmat(q):
+    """A turn (quaternion) as a 3 x 3 matrix, row by row."""
+    x, y, z, w = q
+    return (1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w),
+            2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w),
+            2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y))
+
+
 POSES = ("t", "frame")                              # Rome: the T pose (the skeleton at rest), the file's first frame
 
 
@@ -359,7 +406,27 @@ class Pose:
 
     @classmethod
     def of(cls, anim, frame):
-        return cls(anim.rotations(frame), anim.offsets(frame))
+        """Frame `frame` of the animation; a frame between two (2.4) is laid between them - the turns blended on the
+        shortest way, the offsets in a line - so the move plays smoothly at any drawing speed (past the last frame it
+        blends into the first: the walking and running ones go round)."""
+        k = int(math.floor(frame))
+        t = frame - k
+        if t < 1e-6 or anim.frames < 2:
+            return cls(anim.rotations(k), anim.offsets(k))
+        k %= anim.frames
+        n = (k + 1) % anim.frames
+        rots = [_blend(a, b, t) for a, b in zip(anim.rotations(k), anim.rotations(n))]
+        offs = [tuple(a[i] + (b[i] - a[i]) * t for i in range(3)) for a, b in zip(anim.offsets(k), anim.offsets(n))]
+        return cls(rots, offs)
+
+
+def _blend(a, b, t):
+    """Two turns (quaternions) blended by t, the shorter way round, kept a turn (length 1)."""
+    if a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3] < 0:
+        b = (-b[0], -b[1], -b[2], -b[3])
+    q = tuple(a[i] + (b[i] - a[i]) * t for i in range(4))
+    n = math.sqrt(sum(x * x for x in q)) or 1.0
+    return tuple(x / n for x in q)
 
 
 def read_cas(data, pose="t"):
@@ -456,10 +523,11 @@ def read_cas(data, pose="t"):
 M2_PARENTS = (-1, 0, 1, 2, 0, 4, 5, 6, 6, 5, 9, 10, 11, 5, 13, 14, 15, 0, 17, 18)
 
 
-def _world(rotations, offsets):
-    """Every bone's turn and place in the model from their own turns and offsets (Medieval II's tree)."""
+def _world(rotations, offsets, parents=M2_PARENTS):
+    """Every bone's turn and place in the model from their own turns and offsets (Medieval II's tree: a man's, or
+    the skeleton's own - a horse's)."""
     rot, where = [], []
-    for b, par in enumerate(M2_PARENTS):
+    for b, par in enumerate(parents):
         q, t = rotations[b], offsets[b]
         if par < 0:
             rot.append(q)
@@ -475,13 +543,22 @@ def pose_mesh(mesh, pose, base):
     """A Medieval II mesh in an animation's frame (a Pose): each point taken from its bones' place in the base pose
     (base = (rotations, offsets): the skeleton's default animation, the pose the mesh is made in) to their place in
     the frame, by its two weights. None when the mesh has no bones or the animation another skeleton's count."""
-    n = len(M2_PARENTS)
+    parents = mesh.parents or M2_PARENTS
+    n = len(parents)
     if not mesh.skin or len(pose.rotations) < n or len(base[0]) < n or len(base[1]) < n:
         return None
     offsets = list(pose.offsets[:n]) + list(base[1][len(pose.offsets):n])    # bones the frame does not move
-    brot, bwhere = _world(base[0], base[1])
-    rot, where = _world(pose.rotations, offsets)
-    back = [(-q[0], -q[1], -q[2], q[3]) for q in brot]
+    brot, bwhere = _world(base[0], base[1], parents)
+    rot, where = _world(pose.rotations, offsets, parents)
+    # each bone's move from the base pose to the frame as one matrix + shift, made once (the point by point
+    # quaternion turns took twice as long - the play has to be quick)
+    mats = []
+    for b in range(n):
+        q = _qmul(rot[b], (-brot[b][0], -brot[b][1], -brot[b][2], brot[b][3]))
+        m = _qmat(q)
+        bw = bwhere[b]
+        mats.append(m + tuple(where[b][k] - (m[3 * k] * bw[0] + m[3 * k + 1] * bw[1] + m[3 * k + 2] * bw[2])
+                              for k in range(3)))
     out = []
     for v, (b0, b1, w0, w1) in zip(mesh.positions, mesh.skin):
         if b0 >= n:                                  # a weapon's or the shield's point: the hand holding it
@@ -490,18 +567,23 @@ def pose_mesh(mesh, pose, base):
             b1 = b0
         if w0 <= 0 and w1 <= 0:                      # no weights (a shield, a quiver): all on its bone
             w0 = 1.0
-        acc = [0.0, 0.0, 0.0]
-        for b, w in ((b0, w0), (b1, w1)):
-            if w <= 0:
-                continue
-            o = _qrot(rot[b], _qrot(back[b], (v[0] - bwhere[b][0], v[1] - bwhere[b][1], v[2] - bwhere[b][2])))
-            acc[0] += w * (where[b][0] + o[0])
-            acc[1] += w * (where[b][1] + o[1])
-            acc[2] += w * (where[b][2] + o[2])
-        tw = (w0 if w0 > 0 else 0) + (w1 if w1 > 0 else 0)
-        out.append(tuple(a / tw for a in acc) if tw > 0 else v)
+        x, y, z = v
+        if w1 <= 0 or b1 == b0:
+            a = mats[b0]
+            out.append((a[0] * x + a[1] * y + a[2] * z + a[9], a[3] * x + a[4] * y + a[5] * z + a[10],
+                        a[6] * x + a[7] * y + a[8] * z + a[11]))
+            continue
+        if w0 <= 0:
+            w0 = 0.0
+        tw = w0 + w1
+        a, c = mats[b0], mats[b1]
+        p, r = w0 / tw, w1 / tw
+        out.append((p * (a[0] * x + a[1] * y + a[2] * z + a[9]) + r * (c[0] * x + c[1] * y + c[2] * z + c[9]),
+                    p * (a[3] * x + a[4] * y + a[5] * z + a[10]) + r * (c[3] * x + c[4] * y + c[5] * z + c[10]),
+                    p * (a[6] * x + a[7] * y + a[8] * z + a[11]) + r * (c[6] * x + c[7] * y + c[8] * z + c[11])))
     m = Mesh(mesh.groups, out, mesh.uvs)
-    m.one_texture, m.texture_ref, m.skin = mesh.one_texture, mesh.texture_ref, mesh.skin
+    m.one_texture, m.texture_ref, m.skin, m.parents = mesh.one_texture, mesh.texture_ref, mesh.skin, mesh.parents
+    m.joints = where
     return m
 
 
@@ -547,16 +629,45 @@ def read_file(path, pose="t"):
 # ---------------------------------------------------------------------------
 # Drawing
 # ---------------------------------------------------------------------------
-def _sampler(img, side=256):
-    """A fast colour lookup (u, v) -> (r, g, b) on a small copy of a texture."""
+_SAMPLERS = {}
+_COLOURS = {}
+_COMBINED = {}
+_RGB = {}
+
+
+def _rgb(img, big=None):
+    """The picture in RGB (no larger than `big` across), kept while the picture lives - the play draws the same
+    textures many times a second."""
     if img is None:
         return None
+    key = (id(img), big)
+    got = _RGB.get(key)
+    if got is None or got[0] is not img:
+        out = img.convert("RGB")
+        if big and max(out.size) > big:
+            out = out.resize((big, big * out.size[1] // out.size[0]))
+        _RGB[key] = got = (img, out)
+        while len(_RGB) > 16:
+            _RGB.pop(next(iter(_RGB)))
+    return got[1]
+
+
+def _sampler(img, side=256):
+    """A fast colour lookup (u, v) -> (r, g, b) on a small copy of a texture (made once per picture)."""
+    if img is None:
+        return None
+    got = _SAMPLERS.get(id(img))
+    if got is not None and got[0] is img:
+        return got[1]
     small = img.convert("RGB").resize((side, side))
     px = small.load()
     top = side - 1
 
     def get(u, v):
         return px[min(top, max(0, int(u * top))), int((v % 1.0) * top)]
+    _SAMPLERS[id(img)] = (img, get)
+    while len(_SAMPLERS) > 16:
+        _SAMPLERS.pop(next(iter(_SAMPLERS)))
     return get
 
 
@@ -595,30 +706,44 @@ def one_picture(groups):
     return out
 
 
-def combine(rider, rider_groups, mount, mount_groups, mount_one=None):
-    """One Mesh of a rider and his mount standing side by side, as the files keep them (two models, both standing:
+def combine(rider, rider_groups, mount, mount_groups, mount_one=None, seat=None):
+    """One Mesh of a rider and his mount. seat None: standing side by side, as the files keep them (the T pose:
     the game seats the rider and bends his legs with its animations - a seat drawn here only looked wrong): their
-    lowest points on one ground, the rider beside the mount's middle, a little apart. The mount's groups take
-    pictures 2 and 3 (render's `more`); mount_one: its uv over one picture (a mount with no attachment texture)."""
-    RP = [rider.positions[i] for g in rider_groups for i in g.tris] or rider.positions or [(0.0, 0.0, 0.0)]
-    MP = [mount.positions[i] for g in mount_groups for i in g.tris] or mount.positions or [(0.0, 0.0, 0.0)]
-    dx = max(p[0] for p in MP) - min(p[0] for p in RP) + 0.15
-    dy = min(p[1] for p in MP) - min(p[1] for p in RP)
-    dz = (min(p[2] for p in MP) + max(p[2] for p in MP)) / 2 - (min(p[2] for p in RP) + max(p[2] for p in RP)) / 2
+    lowest points on one ground, the rider beside the mount's middle, a little apart. seat (x, y, z): the rider in a
+    riding animation's frame, his pelvis put there (the mount's saddle in the same frame + descr_mount's
+    rider_offset - seat_of). The mount's groups take pictures 2 and 3 (render's `more`); mount_one: its uv over one
+    picture (a mount with no attachment texture)."""
+    if seat is not None:
+        dx, dy, dz = seat
+    else:
+        RP = [rider.positions[i] for g in rider_groups for i in g.tris] or rider.positions or [(0.0, 0.0, 0.0)]
+        MP = [mount.positions[i] for g in mount_groups for i in g.tris] or mount.positions or [(0.0, 0.0, 0.0)]
+        dx = max(p[0] for p in MP) - min(p[0] for p in RP) + 0.15
+        dy = min(p[1] for p in MP) - min(p[1] for p in RP)
+        dz = (min(p[2] for p in MP) + max(p[2] for p in MP)) / 2 - (min(p[2] for p in RP) + max(p[2] for p in RP)) / 2
     pos = [(x + dx, y + dy, z + dz) for x, y, z in rider.positions] + list(mount.positions)
     n = rider.count
-    ru = rider.uvs or [(0.0, 0.0)] * rider.count
-    mu = mount.uvs or [(0.0, 0.0)] * mount.count
-    groups = []
-    for g in rider_groups:
-        h = Group(g.name, g.material, g.tris, g.attachment)
-        h.pic, h.one = 0, rider.one_texture
-        groups.append(h)
-    for g in mount_groups:
-        h = Group(g.name, g.material, [i + n for i in g.tris], g.attachment)
-        h.pic, h.one = 2, mount.one_texture if mount_one is None else mount_one
-        groups.append(h)
-    out = Mesh(groups, pos, ru + mu)
+    # the parts and the u v are the same at every frame of a play: made once (render keeps its colours by them)
+    key = (id(rider.uvs), id(mount.uvs), tuple(id(g) for g in rider_groups), tuple(id(g) for g in mount_groups),
+           n, mount.count, rider.one_texture, mount.one_texture, mount_one)
+    got = _COMBINED.get(key)
+    if got is None or got[0] is not rider.uvs or got[1] is not mount.uvs:
+        ru = rider.uvs or [(0.0, 0.0)] * rider.count
+        mu = mount.uvs or [(0.0, 0.0)] * mount.count
+        groups = []
+        for g in rider_groups:
+            h = Group(g.name, g.material, g.tris, g.attachment)
+            h.pic, h.one = 0, rider.one_texture
+            groups.append(h)
+        for g in mount_groups:
+            h = Group(g.name, g.material, [i + n for i in g.tris], g.attachment)
+            h.pic, h.one = 2, mount.one_texture if mount_one is None else mount_one
+            groups.append(h)
+        got = _COMBINED[key] = (rider.uvs, mount.uvs, groups, ru + mu, rider_groups, mount_groups)
+        while len(_COMBINED) > 8:
+            _COMBINED.pop(next(iter(_COMBINED)))
+    groups = got[2]
+    out = Mesh(groups, pos, got[3])
     out.texture_ref = rider.texture_ref
     return out
 
@@ -638,6 +763,18 @@ def assemble(pieces):
     out = Mesh(groups, pos, uvs)
     out.one_texture = True
     return out
+
+
+def seat_of(rider, mount, rider_offset=(0.0, 0.0, 0.0)):
+    """Where a posed rider goes on his posed mount (pose_mesh of both, the same animation key and frame): his
+    pelvis (which the riding animations keep at nought) on the mount's saddle bone, moved by descr_mount's
+    rider_offset (x, up, forward) - seen right on a mailed knight's horse (0, 0.38, 0.70): without the forward part
+    he sat on its rump, without the up part sunk into it. Only moved, never turned with the saddle: a horse falling
+    dead turned him head down. None when either is not posed."""
+    if not rider.joints or not mount.joints:
+        return None
+    s, p = mount.joints[0], rider.joints[0]
+    return tuple(s[k] + rider_offset[k] - p[k] for k in range(3))
 
 
 def chariot(crew, crew_groups, car, horse, horses, riders):
@@ -692,18 +829,14 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
     L = LIGHT
     ln = math.sqrt(sum(a * a for a in L))
     L = [a / ln for a in L]
-    pics = {0: texture.convert("RGB") if texture is not None else None,
-            1: attach.convert("RGB") if attach is not None else None}
+    big = 512 if textured else None
+    pics = {0: _rgb(texture, big), 1: _rgb(attach, big)}
     for k, im in (more or {}).items():                   # a mount's texture (2) and attachment (3)
-        pics[k] = im.convert("RGB") if im is not None else None
-    if textured:
-        for k, im in pics.items():
-            if im is not None and max(im.size) > 512:
-                pics[k] = im.resize((512, 512 * im.size[1] // im.size[0]))
+        pics[k] = _rgb(im, big)
     getters = {k: _sampler(im) for k, im in pics.items()}
     uvs = mesh.uvs
     tris = []
-    for g in groups:
+    for gi, g in enumerate(groups):
         t = g.tris
         base, one = getattr(g, "pic", 0), getattr(g, "one", mesh.one_texture)
         for j in range(0, len(t) - 2, 3):
@@ -725,23 +858,35 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
                     half = 1 if (ua[0] + ub[0] + uc[0]) / 3 >= 0.5 else 0      # which of the two pictures
                     src = [(q[0] * 2 - half, q[1]) for q in (ua, ub, uc)]
                 half += base
-            tris.append((a[2] + b[2] + e[2], ((a[0], a[1]), (b[0], b[1]), (e[0], e[1])), shade, half, src))
+            tris.append((a[2] + b[2] + e[2], ((a[0], a[1]), (b[0], b[1]), (e[0], e[1])), shade, half, src, (gi, j)))
     tris.sort(key=lambda x: x[0])
     draw = ImageDraw.Draw(img)
     if not textured:
-        for _, pts, shade, half, src in tris:
-            get = getters.get(half)
-            col = PLAIN
-            if get and src:
-                mu, mv = sum(q[0] for q in src) / 3, sum(q[1] for q in src) / 3
-                cols = [get(mu, mv)] + [get((mu * 2 + q[0]) / 3, (mv * 2 + q[1]) / 3) for q in src]
-                col = tuple(sum(cc[k] for cc in cols) // 4 for k in range(3))
-            col = tuple(min(255, int(v * shade)) for v in col)
+        # a triangle's colour from its texture does not change with the pose: worked out once per model and
+        # pictures (the play draws the same man many times a second)
+        key = (id(mesh.uvs), tuple(id(g) for g in groups), tuple(sorted((k, id(v)) for k, v in pics.items())))
+        cache = _COLOURS.get(key)
+        if cache is None or cache[0] is not mesh.uvs:
+            cache = _COLOURS[key] = (mesh.uvs, {})
+            while len(_COLOURS) > 8:
+                _COLOURS.pop(next(iter(_COLOURS)))
+        known = cache[1]
+        for _, pts, shade, half, src, at in tris:
+            col = known.get(at)
+            if col is None:
+                get = getters.get(half)
+                col = PLAIN
+                if get and src:
+                    mu, mv = sum(q[0] for q in src) / 3, sum(q[1] for q in src) / 3
+                    cols = [get(mu, mv)] + [get((mu * 2 + q[0]) / 3, (mv * 2 + q[1]) / 3) for q in src]
+                    col = tuple(sum(cc[k] for cc in cols) // 4 for k in range(3))
+                known[at] = col
+            col = (min(255, int(col[0] * shade)), min(255, int(col[1] * shade)), min(255, int(col[2] * shade)))
             draw.polygon(pts, fill=col, outline=col)
     else:
         light = Image.new("L", (W, H), 255)
         ldraw = ImageDraw.Draw(light)
-        for _, pts, shade, half, src in tris:
+        for _, pts, shade, half, src, _at in tris:
             pic = pics.get(half)
             x0, y0 = int(min(p[0] for p in pts)), int(min(p[1] for p in pts))
             x1, y1 = int(max(p[0] for p in pts)) + 2, int(max(p[1] for p in pts)) + 2

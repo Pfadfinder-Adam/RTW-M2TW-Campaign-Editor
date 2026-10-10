@@ -29,6 +29,7 @@ class ModelViewer(tk.Toplevel):
         self.yaw, self.pitch, self.zoom, self.look = 35.0, 8.0, 1.0, 0
         self._drag, self._tex, self._photo, self.mesh = None, {}, None, None
         self.path, self.anim, self.frame, self._play, self._base = None, None, 0, None, {}
+        self.anim_key, self._moves = None, {}      # the animation's name ('run'); a mount's moves read once
         facs = [f for f in info.textures if f] or [""]
         first = next((f for f in factions if f in info.textures), facs[0])
         frm = ttk.Frame(self, padding=8)
@@ -63,7 +64,7 @@ class ModelViewer(tk.Toplevel):
                         command=self.draw).pack(anchor="w", pady=(8, 0))
         self.v_mount = tk.BooleanVar(value=bool(mount))
         if mount:
-            ttk.Checkbutton(side, text=("On its chariot (%s)" if self.chariot else "Its mount beside him (%s)")
+            ttk.Checkbutton(side, text=("On its chariot (%s)" if self.chariot else "Its mount (%s)")
                             % mount[1], variable=self.v_mount,
                             command=self.draw).pack(anchor="w")
         self.b_look = ttk.Button(side, text="Another man", command=self.next_look)
@@ -89,8 +90,10 @@ class ModelViewer(tk.Toplevel):
             "Pose: the T pose (arms out), or as the file stands - a chariot with its horses and crew, a siege engine "
             "whole. One texture for the man and his weapons.") + (
             " Animation: any of its skeleton's moves from the game's animation packs - Play / Pause, then the "
-            "frame line (drag it, or the < > buttons / the arrow keys) to go a frame back or on, like a video; "
-            "the mount stays still." if self.anims else "") + (
+            "frame line (drag it, or the < > buttons / the arrow keys) to go a frame back or on, like a video. "
+            "A rider in an animation sits on his mount and it plays the same move, as in the game (with none he "
+            "stands beside it in the T pose). While it plays the man is drawn in his texture's colours, quicker; "
+            "paused, in the whole texture." if self.anims else "") + (
             " Make a card... / Make a picture...: the unit's own card and description picture from this view - "
             "framed as the game's own, on the ground you pick." if make is not None else "")).pack(
             anchor="w", pady=(6, 0))
@@ -165,10 +168,11 @@ class ModelViewer(tk.Toplevel):
         self._stop()
         labels = self._labels()
         i = labels.index(self.v_anim.get()) if self.v_anim.get() in labels else 0
-        self.anim, self.frame = None, 0
+        self.anim, self.frame, self.anim_key = None, 0, None
         self.lbl_file.configure(text="")
         if i:
             what, f = self.anims[self.v_skel.get()][i - 1]
+            self.anim_key = what
             try:
                 self.anim = AN.find(self.mod, f)
             except (OSError, ValueError):
@@ -184,11 +188,11 @@ class ModelViewer(tk.Toplevel):
         self.draw()
 
     def _frame_words(self):
-        self.lbl_frame.configure(text="frame %d of %d (%d a second)" % (self.frame + 1, self.anim.frames, AN.FPS)
+        self.lbl_frame.configure(text="frame %d of %d (%d a second)" % (int(self.frame) + 1, self.anim.frames, AN.FPS)
                                  if self.anim else "")
 
     def _seek(self, k):
-        if self.anim is None or k == self.frame:
+        if self.anim is None or k == int(self.frame):        # the line set by the play itself
             return
         if self._play is not None:                 # the line dragged while it plays: it stops on that frame
             self._stop()
@@ -201,7 +205,7 @@ class ModelViewer(tk.Toplevel):
         if self.anim is None or self.anim.frames < 2:
             return
         self._stop()
-        self.frame = (self.frame + d) % self.anim.frames
+        self.frame = (int(round(self.frame)) + d) % self.anim.frames
         self.sc_frame.set(self.frame)
         self._frame_words()
         self.draw()
@@ -217,17 +221,19 @@ class ModelViewer(tk.Toplevel):
             self._tick()
 
     def _tick(self):
-        """The next frame by the clock (a slow drawing skips frames, the move keeps its speed)."""
+        """The move at the clock's time: a moment between two frames is drawn between them (meshview.Pose.of
+        blends them), so it plays smoothly at the game's speed however quickly the view draws (drawn whole frames
+        only, a slow drawing jumped frames - it looked hurried and jerky)."""
         if self.anim is None or not self.winfo_exists():
             self._play = None
             return
         import time
         t0, f0 = self._clock
-        self.frame = (f0 + 1 + int((time.monotonic() - t0) * AN.FPS)) % self.anim.frames
-        self.sc_frame.set(self.frame)
+        self.frame = (f0 + (time.monotonic() - t0) * AN.FPS) % self.anim.frames
+        self.sc_frame.set(int(self.frame))
         self._frame_words()
-        self.draw(quick="play")                     # textured, at half the smoothing
-        self._play = self.after(int(1000 / AN.FPS), self._tick)
+        self.draw(quick="play")                     # the texture's colours per triangle: quick
+        self._play = self.after(5, self._tick)
 
     def _stop(self):
         if self._play is not None:
@@ -240,10 +246,17 @@ class ModelViewer(tk.Toplevel):
             self.b_play.configure(text="Play")
 
     def _posed(self):
-        """The man in the animation's frame (None: as loaded); a reason when the animation does not fit."""
-        if self.anim is None or self.mesh is None:
+        """The man in the animation's frame (None: as loaded); a reason when the animation does not fit. An animal
+        (a horse's mesh) with no animation picked stands as in its idle move - its file's own pose has the legs
+        stiff and the tail out (the user: 'the horse's legs stand oddly')."""
+        if self.mesh is None:
             return None, None
-        pose = MV.Pose.of(self.anim, self.frame)
+        anim, frame = self.anim, self.frame
+        if anim is None and self.mesh.parents:
+            anim, frame = self._idle(self.v_skel.get()), 0
+        if anim is None:
+            return None, None
+        pose = MV.Pose.of(anim, frame)
         if self.path and self.path.lower().endswith(".cas"):
             try:
                 return MV.read_posed(self.path, pose), None
@@ -257,6 +270,50 @@ class ModelViewer(tk.Toplevel):
             return None, "no base pose (the skeleton's 'default' animation) - the model stays as it is"
         got = MV.pose_mesh(self.mesh, pose, base)
         return (got, None) if got is not None else (None, "the animation does not fit the model's bones")
+
+    def _moves_of(self, skeleton):
+        """{animation name: file} of a skeleton, read once."""
+        if skeleton not in self._moves:
+            try:
+                self._moves[skeleton] = {w.lower(): f for w, f in AN.of_skeleton(self.mod, skeleton)}
+            except (OSError, ValueError):
+                self._moves[skeleton] = {}
+        return self._moves[skeleton]
+
+    def _idle(self, skeleton):
+        f = self._moves_of(skeleton).get("stand_a_idle") if skeleton else None
+        try:
+            return AN.find(self.mod, f) if f else None
+        except (OSError, ValueError):
+            return None
+
+    def _mount_posed(self):
+        """The mount in the same move and moment as the rider (the games make them as pairs: the same names, the
+        same frame count - a knight's 'run' and his horse's), in its idle move when the rider has none or the mount
+        lacks it; as the file stands when it cannot be posed (Rome's .cas mounts, no animations)."""
+        mm = self.mount_mesh
+        if mm is None or not mm.skin:
+            return mm
+        sk = next((k for k in self.mount[0].skeletons if self._moves_of(k)), None)
+        if sk is None:
+            return mm
+        if sk not in self._base:
+            self._base[sk] = AN.base_pose(self.mod, sk)
+        base = self._base[sk]
+        anim, frame = None, 0
+        f = self._moves_of(sk).get((self.anim_key or "").lower()) if self.anim is not None else None
+        if f:
+            try:
+                anim = AN.find(self.mod, f)
+            except (OSError, ValueError):
+                anim = None
+            if anim is not None:
+                frame = self.frame * anim.frames / max(1, self.anim.frames)
+        if anim is None:
+            anim = self._idle(sk)
+        if anim is None or base is None:
+            return mm
+        return MV.pose_mesh(mm, MV.Pose.of(anim, frame), base) or mm
 
     def _lod_name(self, i):
         return "%d - %s" % (i, "closest" if i == 0 else "farther") if i < len(self.info.meshes) else "-"
@@ -299,6 +356,7 @@ class ModelViewer(tk.Toplevel):
                     self.horse_mesh = None
         if msg:
             self.canvas.delete("all")
+            self._shown = None
             self.canvas.create_text(SIZE[0] // 2, SIZE[1] // 2, text=msg, fill="#ddd", width=SIZE[0] - 40)
             self.info_lbl.configure(text="")
             return
@@ -336,8 +394,12 @@ class ModelViewer(tk.Toplevel):
                         if self.horse_mesh is not None and self.horse_mesh.texture_ref else None)}
         elif riding:
             mi = self.mount[0]
-            mesh = MV.combine(man, groups, self.mount_mesh, self.mount_mesh.shown(0, True),
-                              mount_one=True if not mi.attach else None)
+            horse = self._mount_posed()
+            seat = None
+            if self.anim is not None and man.joints:          # riding: seated on the saddle, as the game does
+                seat = MV.seat_of(man, horse, MO.rider_offset(self.mod, self.mount[1]))
+            mesh = MV.combine(man, groups, horse, horse.shown(0, True),
+                              mount_one=True if not mi.attach else None, seat=seat)
             groups = mesh.groups
             more = {2: self._texture(mi.textures) if mi.textures else None,
                     3: self._texture(mi.attach) if mi.attach else None}
@@ -369,10 +431,14 @@ class ModelViewer(tk.Toplevel):
         from PIL import ImageTk
         mesh, groups, tex, att, more, why, whole = self._scene()
         img = MV.render(mesh, SIZE, self.yaw, self.pitch, self.zoom, tex, att, groups,
-                        quality=1 if quick else 2, textured=not quick or quick == "play", more=more)
-        self._photo = ImageTk.PhotoImage(img)
-        self.canvas.delete("all")
-        self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
+                        quality=1 if quick else 2, textured=not quick, more=more)
+        if quick == "play" and self._photo is not None and getattr(self, "_shown", None) is not None and \
+                (self._photo.width(), self._photo.height()) == img.size:
+            self._photo.paste(img)                  # the play: the same picture filled again (quicker than a new one)
+        else:
+            self._photo = ImageTk.PhotoImage(img)
+            self.canvas.delete("all")
+            self._shown = self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
         if not quick:
             n = sum(len(g.tris) // 3 for g in groups)
             if self.mount and self.v_mount.get() and self.mount_mesh is None:
