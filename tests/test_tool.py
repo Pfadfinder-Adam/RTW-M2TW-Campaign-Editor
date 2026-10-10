@@ -8394,6 +8394,20 @@ building smith
         mod = ModData(os.path.join(self.root, "data"))
         self.assertEqual(MO.rider_offset(mod, "Heavy Horse"), (0.0, 0.38, 0.70))
         self.assertEqual(MO.rider_offset(mod, "camel"), (0.0, 0.0, 0.0))
+        # Rome: the rider's pelvis and the horse's saddle are the .cas's bone 1 (bone 0 the Scene Root)
+        rider, horse = MV.Mesh([], [], None), MV.Mesh([], [], None)
+        rider.one_texture = horse.one_texture = True
+        rider.joints, horse.joints = [(9, 9, 9), (0, 0.9, 0)], [(9, 9, 9), (0, 1.6, 0.1)]
+        for got, want in zip(MV.seat_of(rider, horse, (0.0, 0.15, 0.0)), (0, 0.85, 0.1)):
+            self.assertAlmostEqual(got, want, places=6)
+        # Medieval II's siege engines: engine_mesh lines (Rome's engine_model) and the engine's skeleton
+        write(os.path.join(self.root, "data", "descr_engines.txt"),
+              "type catapult\nengine_model_group normal\nengine_skeleton catapult\n"
+              "engine_mesh siege_engines/catapult.mesh, 40.0\nengine_mesh siege_engines/lods/catapult_low.mesh, max\n"
+              "engine_model_group dying\nengine_mesh siege_engines/destroyed/catapult_dead.mesh, max\n")
+        eng = MO.engine_of(ModData(os.path.join(self.root, "data")), ["engine catapult"])
+        self.assertEqual((eng.meshes, eng.skeletons),
+                         (["siege_engines/catapult.mesh", "siege_engines/lods/catapult_low.mesh"], ["catapult"]))
         # the weapons' own skeletons per man's skeleton (their moves in the hand), from the text file
         write(os.path.join(self.root, "data", "descr_model_battle.txt"),
               "type\t\tjavelinmen\nskeleton\t\tMTW2_Fast_Javelin, MTW2_Fast_Swordsman\n"

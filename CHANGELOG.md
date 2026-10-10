@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **View in 3D: Rome's horsemen ride too**: pick any of the rider's moves and he sits in the saddle (where Rome's
+  `descr_mount.txt` puts him from the horse's saddle bone) while the horse plays the move of the same name when it
+  has one, else stands; Rome's riders have their own few moves (the upper body), so the horse mostly stands.
+- **View in 3D: Medieval II's siege engines**: a siege unit's engine (`descr_engines.txt`'s `engine_mesh`) opens in 3D
+  with the texture its file names - before, only Rome's did.
 - **Make a card... / Make a picture...: the game's own pieces**: a card's ground can be **the game's card ground**
   (the campaign's or the battle's - Medieval II's grey stone, Rome's parchment, the faction's culture's own), and a
   Medieval II picture can have **the game's frame round it** (the frame of a unit's picture in the game, laid round

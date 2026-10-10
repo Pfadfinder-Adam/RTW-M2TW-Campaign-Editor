@@ -30,6 +30,7 @@ class ModelViewer(tk.Toplevel):
         self._drag, self._tex, self._photo, self.mesh = None, {}, None, None
         self.path, self.anim, self.frame, self._play, self._base = None, None, 0, None, {}
         self.anim_key, self._moves = None, {}      # the animation's name ('run'); a mount's moves read once
+        self.mount_path = None
         facs = [f for f in info.textures if f] or [""]
         first = next((f for f in factions if f in info.textures), facs[0])
         frm = ttk.Frame(self, padding=8)
@@ -311,7 +312,8 @@ class ModelViewer(tk.Toplevel):
         return self._moves[skeleton]
 
     def _idle(self, skeleton):
-        f = self._moves_of(skeleton).get("stand_a_idle") if skeleton else None
+        moves = self._moves_of(skeleton) if skeleton else {}
+        f = moves.get("stand_a_idle") or moves.get("stand")          # Medieval II's / Rome's standing move
         try:
             return AN.find(self.mod, f) if f else None
         except (OSError, ValueError):
@@ -319,17 +321,21 @@ class ModelViewer(tk.Toplevel):
 
     def _mount_posed(self):
         """The mount in the same move and moment as the rider (the games make them as pairs: the same names, the
-        same frame count - a knight's 'run' and his horse's), in its idle move when the rider has none or the mount
-        lacks it; as the file stands when it cannot be posed (Rome's .cas mounts, no animations)."""
+        same frame count - a knight's 'run' and his horse's; Rome's riders have their own few moves, the horse plays
+        the same name when it has it, at the same speed), in its standing move when the rider has none or the mount
+        lacks it; as the file stands when it cannot be posed (no animations)."""
         mm = self.mount_mesh
-        if mm is None or not mm.skin:
+        cas = bool(self.mount_path) and self.mount_path.lower().endswith(".cas")
+        if mm is None or not (mm.skin or cas):
             return mm
         sk = next((k for k in self.mount[0].skeletons if self._moves_of(k)), None)
         if sk is None:
             return mm
-        if sk not in self._base:
-            self._base[sk] = AN.base_pose(self.mod, sk)
-        base = self._base[sk]
+        base = None
+        if not cas:
+            if sk not in self._base:
+                self._base[sk] = AN.base_pose(self.mod, sk)
+            base = self._base[sk]
         anim, frame = None, 0
         f = self._moves_of(sk).get((self.anim_key or "").lower()) if self.anim is not None else None
         if f:
@@ -338,10 +344,19 @@ class ModelViewer(tk.Toplevel):
             except (OSError, ValueError):
                 anim = None
             if anim is not None:
-                frame = self.frame * anim.frames / max(1, self.anim.frames)
+                frame = self.frame * anim.frames / max(1, self.anim.frames) if anim.frames == self.anim.frames or \
+                    not cas else self.frame % anim.frames          # Rome: its own length, the same clock
         if anim is None:
             anim = self._idle(sk)
-        if anim is None or base is None:
+            frame = self.frame % anim.frames if anim is not None and self.anim is not None and cas else 0
+        if anim is None:
+            return mm
+        if cas:                                         # Rome: the .cas posed on its own bones
+            try:
+                return MV.read_posed(self.mount_path, MV.Pose.of(anim, frame))
+            except Exception:
+                return mm
+        if base is None:
             return mm
         return MV.pose_mesh(mm, MV.Pose.of(anim, frame), base) or mm
 
@@ -372,6 +387,7 @@ class ModelViewer(tk.Toplevel):
         if self.mount:                                  # the mount's mesh at the same detail (or its closest)
             ms = self.mount[0].meshes
             mp = MV.mesh_path(self.mod, ms[min(i, len(ms) - 1)]) if ms else None
+            self.mount_path = mp
             try:
                 self.mount_mesh = MV.read_file(mp, self._pose()) if mp else None
             except Exception:

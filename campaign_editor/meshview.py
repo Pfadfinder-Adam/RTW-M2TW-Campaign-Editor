@@ -277,6 +277,13 @@ def read(data):
         m.skin = [(b[4 * i + 2], b[4 * i + 1], w[i][0], w[i][1]) for i in range(count)]
         m.bone_names = _bone_names(data)
         _animal_tree(m, m.bone_names)
+    # the texture the file itself names (a siege engine's: siege_engines/textures/siege_catapult.texture - its
+    # descr_engines block has no texture line); bump maps and overlays left out
+    for hit in re.finditer(rb"[A-Za-z0-9_ /\\.-]{4,160}?\.texture", data[-20000:]):
+        name = hit.group().decode("latin-1").replace("\\", "/")
+        if not re.search(r"(_bump|_normal|_norm|overlay)\.texture$", name, re.I):
+            m.texture_ref = name
+            break
     return m
 
 
@@ -572,6 +579,7 @@ def read_cas(data, pose="t"):
         raise MeshError("no parts found in the model")
     m = Mesh(groups, positions, uvs)
     m.one_texture = True
+    m.joints, m.turns = where, rot      # bone 0 the Scene Root, 1 the pelvis / a horse's saddle (riding: seat_of)
     # the texture the file itself names (textures\x.tga, from models_unit): the game's pick when the model's
     # descr_model_battle block has no texture line (the female peasants)
     for hit in re.finditer(rb"[ -~]{1,120}?\.tga\x00", data[-400:]):
@@ -837,7 +845,7 @@ def combine(rider, rider_groups, mount, mount_groups, mount_one=None, seat=None,
         dy = min(p[1] for p in MP) - min(p[1] for p in RP)
         dz = (min(p[2] for p in MP) + max(p[2] for p in MP)) / 2 - (min(p[2] for p in RP) + max(p[2] for p in RP)) / 2
     c, s_ = math.cos(turn), math.sin(turn)
-    px, _, pz = rider.joints[0] if turn and rider.joints else (0.0, 0.0, 0.0)
+    px, _, pz = rider.joints[_root(rider)] if turn and rider.joints else (0.0, 0.0, 0.0)
     if _fast is not None:
         r = rider.arr
         if turn:
@@ -902,9 +910,15 @@ def seat_of(rider, mount, rider_offset=(0.0, 0.0, 0.0)):
     it (a horse falling dead turned him head down). None when either is not posed."""
     if not rider.joints or not mount.joints:
         return None
-    s, p = mount.joints[0], rider.joints[0]
-    o = _qrot(mount.turns[0], rider_offset) if mount.turns else tuple(rider_offset)
+    s, p = mount.joints[_root(mount)], rider.joints[_root(rider)]
+    o = _qrot(mount.turns[_root(mount)], rider_offset) if mount.turns else tuple(rider_offset)
     return tuple(s[k] + o[k] - p[k] for k in range(3))
+
+
+def _root(mesh):
+    """The bone a rider sits with / a mount carries him on: Medieval II's first (the pelvis, the saddle); Rome's
+    .cas second (bone 0 is its Scene Root; descr_mount: 'relative to horse or camel root node')."""
+    return 1 if mesh.one_texture and mesh.joints and len(mesh.joints) > 1 else 0
 
 
 def seat_turn(mount):
@@ -914,7 +928,7 @@ def seat_turn(mount):
     them, a horse falling dead turned him head down)."""
     if not mount.turns:
         return 0.0
-    f = _qrot(mount.turns[0], (0.0, 0.0, 1.0))
+    f = _qrot(mount.turns[_root(mount)], (0.0, 0.0, 1.0))
     return math.atan2(f[0], f[2])
 
 

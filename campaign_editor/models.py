@@ -292,8 +292,9 @@ def rider_offset(mod, kind):
 
 
 def engine_of(mod, lines):
-    """The siege engine the unit's crew works (Rome EDU `engine <type>`, descr_engines.txt): a ModelInfo of its
-    'normal' models (engine_model lines, closest first), or None."""
+    """The siege engine the unit's crew works (EDU `engine <type>`, descr_engines.txt): a ModelInfo of its 'normal'
+    models (Rome's engine_model / Medieval II's engine_mesh lines, closest first; Medieval II's engine_skeleton), or
+    None. Medieval II's meshes name their own texture (meshview.read: texture_ref)."""
     from .packs import _values
     eng = _values(lines, "engine")
     if not eng or not eng[0] or not eng[0][0]:
@@ -311,9 +312,14 @@ def engine_of(mod, lines):
             cur, group = (t[1] if len(t) > 1 else None), None
         elif t[0] == "engine_model_group":
             group = t[1] if len(t) > 1 else None
-        elif t[0] == "engine_model" and cur and cur.lower() == kind.lower() and group in (None, "normal"):
-            info = info or ModelInfo(kind)
+        elif t[0] in ("engine_model", "engine_mesh") and cur and cur.lower() == kind.lower() and \
+                group in (None, "normal") and len(t) > 1:
+            info = info or ModelInfo(kind)              # Rome's engine_model .cas, Medieval II's engine_mesh .mesh
             info.meshes.append(t[1])
+        elif t[0] == "engine_skeleton" and cur and cur.lower() == kind.lower() and group in (None, "normal") and \
+                len(t) > 1:
+            info = info or ModelInfo(kind)
+            info.skeletons.append(t[1])
     return info
 
 
