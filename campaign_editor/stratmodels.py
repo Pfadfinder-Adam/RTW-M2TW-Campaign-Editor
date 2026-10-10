@@ -17,7 +17,6 @@ line gets an entry of its own first (the others keep theirs). A strat model the 
 one (a copy of the model's first texture line, the faction's name in it) - the Art tab then gives the faction a
 picture of its own on Replace. The textures themselves are pictures the Art tab lists (clone.picture_links)."""
 
-import os
 import re
 
 from .textio import strip_comment, tokens
@@ -96,34 +95,6 @@ def figures(mod, faction, load=None):
             out.append({"type": e["type"], "models": [m for _, m in e["models"]],
                         "shared": [x for x in e["factions"] if x != faction]})
     return out
-
-
-def type_models(mod, ctype, load=None):
-    """The strat models a character type's list offers (the user, 2026-10-10: 'a general's list only generals, a
-    spy's only spies - not everything mixed, not Rome's'): the ones descr_character.txt gives this type for any
-    faction, and the mod's own new models no type uses yet (in its descr_model_strat.txt, not in the game's own) -
-    never the leftovers no type uses (Medieval II's own file still carries Rome's sm_roman_general, pontus_general
-    ... that no character shows)."""
-    path = mod.file("character")
-    if not path:
-        return []
-    used, out = set(), set()
-    for e in _entries((load or mod.load)(path)):
-        for _, m in e["models"]:
-            used.add(m)
-            if e["type"] == ctype:
-                out.add(m)
-    mine = model_types(mod, load)
-    try:
-        from .moddata import ModData, _ci
-        from .newmod import game_of
-        gdata = _ci(game_of(mod.data), "data")
-        same = gdata and os.path.normcase(os.path.abspath(gdata)) == os.path.normcase(os.path.abspath(mod.data))
-        game = set(model_types(ModData(gdata))) if gdata and not same else set(mine)
-    except Exception:
-        game = set(mine)
-    out |= {m for m in mine if m not in used and m not in game}
-    return sorted(out, key=str.lower)
 
 
 def _own_entry(f, e, faction):
@@ -206,25 +177,17 @@ def faction_figures(mod, source, load=None):
     return figs, {m: source for ms in figs.values() for m in ms}
 
 
-def culture_figures(mod, culture, load=None):
-    """The figures a culture's factions show most (the Models tab's 'as the culture' - the user, 2026-10-10: 'a
-    copy of a faction, its culture changed, and every figure follows it'): ({character type: [strat model per
-    level]}, {strat model: the first faction of the culture that shows it - its texture is taken})."""
-    facs = [n for n, c in mod.factions() if c == culture and n != "slave"]
-    count, first = {}, {}
-    for fac in facs:
-        for fg in figures(mod, fac, load):
-            key = (fg["type"], tuple(fg["models"]))
-            count[key] = count.get(key, 0) + 1
-            first.setdefault(key, fac)
-    figs, like = {}, {}
-    for (ctype, models), n in sorted(count.items(), key=lambda kv: -kv[1]):
-        if ctype in figs:
-            continue
-        figs[ctype] = list(models)
-        for m in models:
-            like.setdefault(m, first[(ctype, models)])
-    return figs, like
+def culture_factions(mod, culture, but=None):
+    """The culture's factions in descr_sm_factions.txt's order (the rebels and `but` left out)."""
+    return [n for n, c in mod.factions() if c == culture and n not in ("slave", but)]
+
+
+def culture_figures(mod, culture, load=None, but=None):
+    """The figures of a culture (the Models tab's culture switch - the user, 2026-10-10: 'the culture: simply the
+    first faction of it in the list'): faction_figures of the culture's first faction (but: the faction being
+    changed, never its own source); ({}, {}) when the culture has none."""
+    facs = culture_factions(mod, culture, but)
+    return faction_figures(mod, facs[0], load) if facs else ({}, {})
 
 
 def apply(plan, faction, wanted, like=None):

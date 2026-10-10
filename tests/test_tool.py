@@ -8014,35 +8014,10 @@ building smith
                     short_name="Epirus")
         self.assertEqual(swap(rome, "the Kingdom of Macedon"), "the Kingdom of Epirus")
 
-    def test_models_tab_lists_only_the_types_own_models(self):
-        """The Models tab's list of a character type: the strat models descr_character.txt gives that type (any
-        faction) and the mod's own new ones no type uses - not the other types' nor the old unused entries (Medieval
-        II's file still carries Rome's sm_roman_general, a tester picked it for a general)."""
-        from campaign_editor import stratmodels as SM
-        data = os.path.join(self.root, "data")
-        write(os.path.join(data, "descr_character.txt"),
-              "type named character\nactions x\nwage_base 0\nfaction england\nstrat_model northern_general\n"
-              "faction moors\nstrat_model islamic_general\n"
-              "type spy\nactions x\nfaction england, moors\nstrat_model northern_spy\n")
-        write(os.path.join(data, "descr_model_strat.txt"),
-              "".join("type %s\nmodel_flexi models_strat/%s.cas, max\n" % (n, n) for n in (
-                  "northern_general", "islamic_general", "northern_spy", "sm_roman_general")))
-        mod = ModData(data)
-        self.assertEqual(SM.type_models(mod, "named character"), ["islamic_general", "northern_general"])
-        self.assertEqual(SM.type_models(mod, "spy"), ["northern_spy"])
-        game = os.path.join(self.root, "game")                 # a mod's own new model no type uses: offered
-        write(os.path.join(game, "medieval2.exe"), "x")
-        shutil.copytree(data, os.path.join(game, "data"))
-        shutil.copytree(data, os.path.join(game, "mods", "m", "data"))
-        with open(os.path.join(game, "mods", "m", "data", "descr_model_strat.txt"), "a") as fh:
-            fh.write("type my_general\nmodel_flexi models_strat/mine.cas, max\n")
-        mod = ModData(os.path.join(game, "mods", "m", "data"))
-        self.assertEqual(SM.type_models(mod, "spy"), ["my_general", "northern_spy"])
-
     def test_models_tab_takes_every_figure_of_a_culture_or_a_faction(self):
-        """The Models tab's two switches (the user, 2026-10-10: 'a copy of a faction, its culture changed, and every
-        figure follows it; the same with a faction - its colours'): every figure the faction shows takes the culture's
-        most common one, or a faction's own - and its texture (the picture) is that faction's."""
+        """The Models tab's two switches (the user, 2026-10-10: 'just two switches - a culture: simply the first faction
+        of it in the list; a faction: any you like'): every figure the faction shows takes that faction's - and its
+        texture (the picture), its colours."""
         from campaign_editor import stratmodels as SM
         from campaign_editor.plan import Plan
         data = os.path.join(self.root, "data")
@@ -8063,9 +8038,10 @@ building smith
               "type any_spy\ntexture alpha, models_strat/textures/spy.tga\nmodel_flexi models_strat/spy.cas, max\n")
         before = tree_hash(self.root)
         mod = ModData(data)
-        figs, like = SM.culture_figures(mod, "barbarian")
+        figs, like = SM.culture_figures(mod, "barbarian")          # the culture's first faction in the list
         self.assertEqual(figs, {"named character": ["barb_general"], "spy": ["any_spy"]})
-        self.assertEqual(like["barb_general"], "beta")
+        self.assertEqual(like, {"barb_general": "beta", "any_spy": "beta"})
+        self.assertEqual(SM.culture_figures(mod, "barbarian", but="beta")[1]["barb_general"], "gamma")
         figs, like = SM.faction_figures(mod, "gamma")
         self.assertEqual(like, {"barb_general": "gamma", "any_spy": "gamma"})
         plan = Plan(mod, "edit", "edit")

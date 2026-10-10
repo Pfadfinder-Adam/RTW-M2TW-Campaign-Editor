@@ -32,22 +32,21 @@ class ModelsEditor(ttk.Frame):
             # culture changed, every figure follows; a faction - its colours too)
             bar = ttk.Frame(self)
             bar.pack(anchor="w", pady=(0, 4))
-            ttk.Label(bar, text="Every figure as the culture").pack(side="left")
+            ttk.Label(bar, text="Culture").pack(side="left")
             self.v_culture = tk.StringVar()
             self.cb_culture = ttk.Combobox(bar, textvariable=self.v_culture, width=14, state="readonly")
             self.cb_culture.pack(side="left", padx=(4, 12))
             self.cb_culture.bind("<<ComboboxSelected>>", lambda e: self.take_all("culture", self.v_culture.get()))
-            ttk.Label(bar, text="or as the faction").pack(side="left")
+            ttk.Label(bar, text="Faction").pack(side="left")
             self.v_like = tk.StringVar()
             self.cb_like = ttk.Combobox(bar, textvariable=self.v_like, width=22, state="readonly")
             self.cb_like.pack(side="left", padx=(4, 12))
             self.cb_like.bind("<<ComboboxSelected>>", lambda e: self.take_all("faction", self.v_like.get()))
             ttk.Button(bar, text="As it was", command=self.as_it_was).pack(side="left")
             from .gui_util import hint
-            hint(bar, "Every figure of this faction on the campaign map at once: 'as the culture' - the figure each "
-                      "character type of that culture's factions shows most, with the texture of the first faction "
-                      "that shows it; 'as the faction' - that faction's figures and its textures (its colours). "
-                      "Waits for Preview / Apply like a figure picked by hand; As it was takes them back.").pack(
+            hint(bar, "Every figure of this faction on the campaign map at once: Culture - the figures and textures "
+                      "of the first faction of that culture in the list; Faction - the figures and textures (its "
+                      "colours) of the faction picked. Waits for Preview / Apply; As it was takes them back.").pack(
                 side="left")
             self.grid_ = CardGrid(self, a.art_editor.CELL + 60)
             self.grid_.pack(fill="both", expand=True)
@@ -70,44 +69,36 @@ class ModelsEditor(ttk.Frame):
             g.say("%s has no character types in descr_character.txt." % src_faction)
             return
         self.head.configure(text=(
-            "%s's figures on the campaign map, one card per character type. Each type's figure is a strat model of "
-            "descr_model_strat.txt - pick another in its list; Preview, then Apply writes descr_character.txt; a "
-            "faction sharing its line with others gets a line of its own. 3D shows it with the faction's texture, "
-            "and its texture below it to Replace... A model the faction has no texture in gets a line with the "
-            "model's first texture; its picture shows here after Apply." % src_faction))
+            "%s's figures on the campaign map, one card per character type - all of them changed at once with Culture "
+            "or Faction above. Each figure is a strat model of descr_model_strat.txt; Preview, "
+            "then Apply writes descr_character.txt (a faction sharing its line with others gets a line of its own) "
+            "and its texture lines. 3D shows it with the faction's texture, its texture below it to Replace..."
+            % src_faction))
         pics = {}                                         # model -> its texture pictures of this faction
         for p in FA.faction_pictures(a.mod, a.v_campaign.get(), src_faction):
             if FA.art_group(p) == "models" and p.get("link"):
                 pics.setdefault(p["link"][1].split(":", 1)[-1], []).append(p)
-        names = {}                                        # each type's list: only the models of that type
         cells, shown = [], set()
         for fg in figs:
             want = a.figures.get(fg["type"]) or fg["models"]
-            if fg["type"] not in names:
-                names[fg["type"]] = SM.type_models(a.mod, fg["type"])
             for lv, now in enumerate(fg["models"]):
                 model = want[lv] if lv < len(want) else now
-                choice = sorted(set(names[fg["type"]]) | {model, now}, key=str.lower)
-                cells.append(self._type_card(g.inner, fg, lv, model, now, choice, pics.get(model, []),
-                                             src_faction, new))
+                cells.append(self._type_card(g.inner, fg, lv, model, now, pics.get(model, []), src_faction, new))
                 shown.add(model)
         for model, ps in pics.items():                  # a texture no type shows now (another was picked)
             if model not in shown:
                 cells += [a.art_editor.card(g.inner, p, src_faction, new) for p in ps]
         g.fill(cells)
 
-    def _type_card(self, parent, fg, lv, model, now, names, pics, faction, new):
+    def _type_card(self, parent, fg, lv, model, now, pics, faction, new):
         a = self.app
         box = ttk.Frame(parent, padding=4, relief="groove")
         top = ttk.Frame(box)
         top.pack(fill="x")
         title = fg["type"] + (" (level %d)" % (lv + 1) if len(fg["models"]) > 1 else "")
         ttk.Label(top, text=title, font=("", 10, "bold")).pack(side="left")
-        v = tk.StringVar(value=model)
-        cb = ttk.Combobox(top, textvariable=v, values=names, width=22, state="readonly")
-        cb.pack(side="left", padx=(8, 4))
-        cb.bind("<<ComboboxSelected>>", lambda e: self.pick_figure(fg["type"], lv, v.get(), fg["models"]))
-        ttk.Button(top, text="3D", command=lambda: self.view_figure(v.get(), faction)).pack(side="left")
+        ttk.Label(top, text=model, foreground="#555").pack(side="left", padx=(8, 4))   # changed by the switches above
+        ttk.Button(top, text="3D", command=lambda: self.view_figure(model, faction)).pack(side="left")
         if model != now:
             ttk.Label(box, text="was %s (not written yet)" % now, foreground="#b05a00").pack(anchor="w")
         for p in pics:
@@ -128,7 +119,8 @@ class ModelsEditor(ttk.Frame):
         a = self.app
         if not name or not getattr(self, "_figs", None):
             return
-        figs, like = (SM.culture_figures if how == "culture" else SM.faction_figures)(a.mod, name)
+        figs, like = SM.culture_figures(a.mod, name, but=self._faction) if how == "culture" else \
+            SM.faction_figures(a.mod, name)
         a.remember()
         took = []
         for fg in self._figs:
@@ -157,18 +149,6 @@ class ModelsEditor(ttk.Frame):
         self.v_culture.set("")
         self.v_like.set("")
         a.status.set("The figures as they are in the files again.")
-        self.load()
-
-    def pick_figure(self, ctype, level, model, now):
-        a = self.app
-        a.remember()
-        want = list(a.figures.get(ctype) or now)
-        want[level] = model
-        if want == list(now):
-            a.figures.pop(ctype, None)
-        else:
-            a.figures[ctype] = want
-        a.status.set("%s on the campaign map: %s - Preview, then Apply." % (ctype, ", ".join(want)))
         self.load()
 
     def view_figure(self, model, faction):
