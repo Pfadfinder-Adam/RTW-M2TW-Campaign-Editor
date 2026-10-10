@@ -6,6 +6,7 @@ first. So buttons are packed first and long hint labels last, and a form taller 
 import itertools
 import os
 import re
+import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -108,34 +109,266 @@ def _step(e):
     return 0 if not d else (-1 if d > 0 else 1)
 
 
-def _route(e):
-    step = _step(e)
-    if not step:
-        return None
+def _under(e):
+    """The widget under the mouse of event e, None for none (or an open Combobox list - no tkinter widget)."""
     root = e.widget if not isinstance(e.widget, str) else tk._default_root
     try:
-        w = root.winfo_containing(e.x_root, e.y_root)
-    except (KeyError, tk.TclError, AttributeError):       # an open Combobox list ('popdown') is no tkinter widget
+        return root.winfo_containing(e.x_root, e.y_root)
+    except (KeyError, tk.TclError, AttributeError):
         return None
-    if w is None:
-        return None
+
+
+def _scrolls_itself(w):
+    """w's own wheel ('own': a zoom), or a list / text with more to see ('self'), else None."""
     try:
         if any(w.bind(seq) for seq in WHEEL_KEYS):
-            return None                                   # its own wheel (a zoom) did it
+            return "own"
         if w.winfo_class() in SELF_SCROLLING and tuple(w.yview()) != (0.0, 1.0):
-            return None                                   # the list scrolls itself
+            return "self"
     except (tk.TclError, AttributeError):
         pass
+    return None
+
+
+def _wheel_up(w, step):
+    """Calls the nearest wheel fn at w or round it with step; True when one scrolled."""
     while w is not None:
         fn = _WHEEL.get(str(w))
         if fn is not None:
             try:
                 if w.winfo_exists() and fn(step):
-                    return "break"
+                    return True
             except tk.TclError:
                 _WHEEL.pop(str(w), None)
         w = getattr(w, "master", None)
+    return False
+
+
+def _route(e):
+    step = _step(e)
+    w = _under(e) if step else None
+    if w is None or _scrolls_itself(w):
+        return None                                       # its own wheel (a zoom) or the list's own scrolling did it
+    return "break" if _wheel_up(w, step) else None
+
+
+# ---------------------------------------------------------------------------
+# Scrolling with no scrollbars (the author, 2026-10-09: 'no scroll bar anywhere, it only takes room'): a list, a
+# table, a read-only text or a page scrolls by the wheel, by DRAGGING it with the left button (it follows the mouse,
+# both ways) and by the MIDDLE button's autoscroll as in a web browser - press the wheel and move the mouse: the
+# further from the press point, the faster it goes, both ways; held and moved it stops on the release, a plain click
+# goes on until the next click (any button) or Esc. The map keeps its own (the right button moves it).
+# ---------------------------------------------------------------------------
+DRAG_START = 6                      # pixels the left button moves before a press becomes a drag
+AUTO_DEAD = 8                       # pixels round the middle button's press point that do not scroll
+AUTO_PIXELS = 4                     # each pixel past the dead zone = this many pixels' scroll a second / 25
+AUTO_TICK = 40                      # ms between autoscroll ticks
+PLAIN = ("Frame", "TFrame", "Label", "TLabel", "Labelframe", "TLabelframe", "Message", "Canvas")
+LISTS = ("Listbox", "Treeview", "Text")
+_DRAG = {}                          # the left button's press / drag: widget, start, positions
+_AUTO = {}                          # the running autoscroll: widget, start, positions, job, cursor
+
+
+def _views(w):
+    """{axis: (lo, hi)} of the ways w can scroll now (more to see than shown)."""
+    out = {}
+    for axis in ("x", "y"):
+        try:
+            lo, hi = map(float, getattr(w, axis + "view")())
+        except (tk.TclError, AttributeError, TypeError, ValueError):
+            continue
+        if hi - lo < 0.999:
+            out[axis] = (lo, hi)
+    return out
+
+
+def _own_mouse(w):
+    """w has left-button or wheel bindings of its own (the map, a picture, a clickable label) - leave it alone."""
+    try:
+        return any(w.bind(seq) for seq in ("<Button-1>", "<B1-Motion>", "<ButtonRelease-1>") + WHEEL_KEYS)
+    except tk.TclError:
+        return True
+
+
+def scroll_target(w, middle=False):
+    """The widget a drag (or the middle button) over w scrolls: a list, a table, a read-only text (an editable one
+    keeps the left button for selecting its words), a page's canvas - w or one round it; None for none (buttons,
+    entries, the map...)."""
+    while w is not None:
+        try:
+            cls = w.winfo_class()
+        except tk.TclError:
+            return None
+        if cls in LISTS:
+            if not middle and (w.bind("<B1-Motion>") or cls == "Text" and str(w.cget("state")) != "disabled"):
+                return None                               # its own drag (ticking rows), selecting words to edit
+            if _views(w):
+                return w
+            w = getattr(w, "master", None)                # all of it shown: the page round it may scroll
+            continue
+        if cls not in PLAIN or (_own_mouse(w) and cls != "Canvas") or isinstance(w, tk.Toplevel):
+            return None
+        if cls == "Canvas":
+            if _own_mouse(w):
+                return None                               # the map, a picture: its own mouse
+            if _views(w):
+                return w
+        w = getattr(w, "master", None)
     return None
+
+
+def _moveto(w, axis, pos):
+    getattr(w, axis + "view_moveto")(max(0.0, pos))
+
+
+def _size(w, axis):
+    return max(1, w.winfo_width() if axis == "x" else w.winfo_height())
+
+
+def _press1(e):
+    _DRAG.clear()
+    w = e.widget if not isinstance(e.widget, str) else None
+    t = scroll_target(w) if w is not None else None
+    if t is None:
+        return None
+    if t.winfo_class() == "Treeview" and t.identify_region(e.x, e.y) in ("heading", "separator"):
+        return None                                       # a column's heading: sort / resize as before
+    keep = None
+    try:
+        keep = t.selection() if t.winfo_class() == "Treeview" else t.curselection() if t.winfo_class() == \
+            "Listbox" else None
+    except tk.TclError:
+        pass
+    _DRAG.update(widget=t, x0=e.x_root, y0=e.y_root, views=_views(t), dragging=False, keep=keep)
+    return None
+
+
+def _motion1(e):
+    if not _DRAG:
+        return None
+    t = _DRAG["widget"]
+    dx, dy = e.x_root - _DRAG["x0"], e.y_root - _DRAG["y0"]
+    if not _DRAG["dragging"]:
+        if abs(dx) < DRAG_START and abs(dy) < DRAG_START:
+            return None
+        _DRAG["dragging"] = True
+        try:                                              # a drag is no click: the rows picked before stay picked
+            if _DRAG["keep"] is not None and t.winfo_class() == "Treeview":
+                t.selection_set(_DRAG["keep"])
+            elif _DRAG["keep"] is not None:
+                t.selection_clear(0, "end")
+                for i in _DRAG["keep"]:
+                    t.selection_set(i)
+        except tk.TclError:
+            pass
+    try:
+        for axis, (lo, hi) in _DRAG["views"].items():    # the content follows the mouse
+            d = dx if axis == "x" else dy
+            _moveto(t, axis, lo - d * (hi - lo) / _size(t, axis))
+    except tk.TclError:
+        _DRAG.clear()
+    return "break"
+
+
+def _release1(e):
+    dragged = _DRAG.get("dragging")
+    _DRAG.clear()
+    return "break" if dragged else None
+
+
+def _auto_press(e):
+    if _AUTO:
+        auto_stop()
+        return "break"
+    w = e.widget if not isinstance(e.widget, str) else None
+    t = scroll_target(w, middle=True) if w is not None else None
+    if t is None:
+        return None
+    try:
+        cursor = t.cget("cursor")
+        t.configure(cursor="fleur")
+    except tk.TclError:
+        cursor = None
+    _AUTO.update(widget=t, x0=e.x_root, y0=e.y_root, moved=False, cursor=cursor,
+                 pos={axis: lo for axis, (lo, hi) in _views(t).items()})
+    _auto_tick()
+    return "break"
+
+
+def _auto_release(e):
+    if _AUTO and _AUTO["moved"]:                          # held and moved: the release stops it
+        auto_stop()
+    return "break" if _AUTO else None
+
+
+def auto_speed(d):
+    """Pixels a tick for a mouse d pixels past (+) or before (-) the press point: none near it, faster further."""
+    past = abs(d) - AUTO_DEAD
+    return 0.0 if past <= 0 else (1 if d > 0 else -1) * past * AUTO_PIXELS / 25.0 * (1 + past / 200.0)
+
+
+def _auto_tick():
+    t = _AUTO.get("widget")
+    try:
+        if t is None or not t.winfo_exists():
+            auto_stop()
+            return
+        d = {"x": t.winfo_pointerx() - _AUTO["x0"], "y": t.winfo_pointery() - _AUTO["y0"]}
+        if max(abs(d["x"]), abs(d["y"])) > AUTO_DEAD:
+            _AUTO["moved"] = True
+        views = _views(t)
+        for axis, pos in list(_AUTO["pos"].items()):
+            if axis not in views:
+                continue
+            lo, hi = views[axis]
+            pos = min(max(0.0, pos + auto_speed(d[axis]) * (hi - lo) / _size(t, axis)), 1.0 - (hi - lo))
+            _AUTO["pos"][axis] = pos
+            _moveto(t, axis, pos)
+    except tk.TclError:
+        auto_stop()
+        return
+    _AUTO["job"] = t.after(AUTO_TICK, _auto_tick)
+
+
+def auto_stop():
+    """Ends a middle-button autoscroll (a click, Esc, the release after a drag, its widget gone)."""
+    if not _AUTO:
+        return
+    t = _AUTO["widget"]
+    try:
+        if _AUTO.get("job"):
+            t.after_cancel(_AUTO["job"])
+        if _AUTO.get("cursor") is not None:
+            t.configure(cursor=_AUTO["cursor"])
+    except tk.TclError:
+        pass
+    _AUTO.clear()
+
+
+def _first(root, cls, seq, fn):
+    """Binds fn to seq of the widget class cls BEFORE the class's own binding (fn's 'break' stops it)."""
+    old = root.bind_class(cls, seq)
+    root.bind_class(cls, seq, fn)
+    if old:
+        root.tk.call("bind", cls, seq, "+" + old)
+
+
+def scrolling_without_bars(root):
+    """No scrollbar anywhere: every ttk.Scrollbar is made but never shown (pack / grid / place do nothing), the
+    lists, tables, texts and pages scroll by the wheel, a left-button drag and the middle button instead."""
+    for name in ("pack", "pack_configure", "grid", "grid_configure", "place", "place_configure"):
+        setattr(ttk.Scrollbar, name, lambda self, *a, **k: None)
+    if sys.platform != "darwin":                          # a Mac's Button-2 is the right button
+        root.bind_all("<Button-2>", _auto_press, add="+")
+        root.bind_all("<ButtonRelease-2>", _auto_release, add="+")
+        for seq in ("<Button-1>", "<Button-3>", "<Escape>"):
+            root.bind_all(seq, lambda e: auto_stop(), add="+")
+        for cls in ("Listbox", "Text", "Entry", "TEntry"):     # their middle drag 'scan' would scroll twice
+            root.bind_class(cls, "<B2-Motion>", "break")
+    for cls in PLAIN + LISTS:
+        _first(root, cls, "<Button-1>", _press1)
+        _first(root, cls, "<B1-Motion>", _motion1)
+        _first(root, cls, "<ButtonRelease-1>", _release1)
 
 
 class ScrollFrame(ttk.Frame):
@@ -146,27 +379,18 @@ class ScrollFrame(ttk.Frame):
     def __init__(self, parent, **kw):
         super().__init__(parent, **kw)
         self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0)
-        self.bar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=self._bar_set)
         self.canvas.pack(side="left", fill="both", expand=True)
         self.inner = ttk.Frame(self.canvas)
         self._win = self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda e: self._resize())
         self.canvas.bind("<Configure>", lambda e: self._resize())
-        wheel(self, lambda step: bool(self.bar.winfo_ismapped()) and scroll_y(self.canvas)(step))
+        wheel(self, scroll_y(self.canvas))           # no scrollbar: the wheel, a drag, the middle button
 
     def _resize(self):
         # the contents keep the height they ask for (a fixed height would not follow them when they grow)
         cw = self.canvas.winfo_width()
         self.canvas.itemconfigure(self._win, width=cw)
         self.canvas.configure(scrollregion=(0, 0, cw, self.inner.winfo_reqheight()))
-
-    def _bar_set(self, lo, hi):
-        if float(lo) <= 0.0 and float(hi) >= 1.0:
-            self.bar.pack_forget()
-        elif not self.bar.winfo_ismapped():
-            self.bar.pack(side="right", fill="y", before=self.canvas)
-        self.bar.set(lo, hi)
 
 
 
@@ -199,6 +423,18 @@ def window_body(w, width=700, height=640, padding=12):
                 except (tk.TclError, ValueError):
                     pass
     sf.canvas.bind("<Configure>", lambda e: (sf._resize(), rewrap()), add="+")
+
+    def fit():
+        # once built: no taller than what it holds (a tester's x3 window stood 760 high with a third of it empty);
+        # a window whose contents need more keeps the height asked and scrolls
+        try:
+            w.update_idletasks()
+            need = frm.winfo_reqheight() + bar.winfo_reqheight() + 8
+            if 0 < need < w.winfo_height():
+                w.geometry("%dx%d" % (w.winfo_width(), max(need, min(300, sh - 100))))
+        except tk.TclError:
+            pass                                    # closed before it was shown
+    w.after(120, fit)
     return frm, bar
 
 
@@ -590,10 +826,13 @@ def popup_text(widget, text, width=420):
 
 def install_window_helpers(root):
     """Things every window of the editor gets, in one place (the testers' reports of 2026-10-02):
+    - no scrollbars: lists, tables, texts and pages scroll by the wheel, a drag and the middle button
+      (scrolling_without_bars);
     - a new window opens in the middle of the screen (not at the top left);
     - a drop-down list is as wide as its longest line (no cut names);
     - an entry or drop-down whose text is longer than the box shows it whole when the mouse rests on it."""
     import tkinter.font as tkfont
+    scrolling_without_bars(root)
 
     def seen(w):
         try:
@@ -1243,3 +1482,63 @@ def keep_for_apply(win, key, label, make_plan, after=None, title=None):
         return False
     win.app.session_add(key, label, plan, after)
     return True
+
+
+class DropPanel:
+    """A drop-down panel under a button, for ticks and choices (the map's Layers, Select's 'what...'): the button opens
+    it and a second press closes it, it stays open while things in it are clicked (a Tk menu closed at every tick and
+    had to be opened again - it blinked), a click anywhere else or Esc closes it. build(frame) fills it once."""
+
+    def __init__(self, button, build):
+        self.button, self.build, self.top = button, build, None
+        button.configure(command=self.toggle)
+        root = button.winfo_toplevel()
+        root.bind_all("<ButtonPress>", self._press_anywhere, add="+")
+        root.bind("<Configure>", lambda e: self.hide() if e.widget is root else None, add="+")
+
+    def shown(self):
+        try:
+            return self.top is not None and bool(self.top.winfo_ismapped())
+        except tk.TclError:
+            return False
+
+    def toggle(self):
+        if self.shown():
+            self.hide()
+        else:
+            self.show()
+
+    def show(self):
+        if self.top is None:
+            self.top = tk.Toplevel(self.button)
+            self.top.overrideredirect(True)
+            self.top.withdraw()
+            frame = ttk.Frame(self.top, padding=8, relief="solid", borderwidth=1)
+            frame.pack(fill="both", expand=True)
+            self.build(frame)
+            self.top.bind("<Escape>", lambda e: self.hide())
+        b = self.button
+        self.top.geometry("+%d+%d" % (b.winfo_rootx(), b.winfo_rooty() + b.winfo_height()))
+        self.top.deiconify()
+        self.top.lift()
+        self.top.focus_set()
+
+    def hide(self):
+        if self.top is not None:
+            try:
+                self.top.withdraw()
+            except tk.TclError:
+                pass
+
+    def _press_anywhere(self, e):
+        if not self.shown():
+            return
+        w = e.widget
+        if isinstance(w, str):
+            return
+        try:
+            inside = str(w).startswith(str(self.top)) or w is self.button
+        except tk.TclError:
+            inside = False
+        if not inside:
+            self.hide()

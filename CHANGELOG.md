@@ -3,10 +3,82 @@
 ## Unreleased
 
 ### Added
+- **Make a unit's card and description picture from its 3D model**: in Units, the soldier model's **View in 3D...**
+  has **Make a card...** and **Make a picture...** - turn the man, zoom, play an animation and stop it on the frame
+  you like, and the editor frames him the way the game's own are (a card from his head to his thighs, a spear held
+  high cut at the top as on the game's cards; the description picture the whole man; or to the knees / waist),
+  nearer / farther, up / down, right / left - or **my own**: the lit frame stands still beside the picture and
+  you drag the man under it, the wheel bringing him nearer - as a photo is cut on a phone. The ground: see-through as the game's own cards (the game draws the
+  card's frame behind), a colour, or a picture of your own (kept for next time). Seen at its size and bigger, then
+  **Use it**: it waits for Preview / Apply like an imported picture and goes into every faction folder the unit's
+  card goes to (a backup first); **Save a copy...** keeps it as a PNG. Both games, sized as the mod's own
+  (48 x 64 cards; Rome's 160 x 210, Medieval II's 256 x 384 description pictures). No more recolouring old cards.
+- **Battle models move: animations in View in 3D**: pick any of the model's moves - stand, walk, run, the attacks,
+  shooting, dying... (its skeleton's list in `descr_skeleton.txt`) - and the man takes it, read straight from the
+  game's animation packs (`data/animations/pack.idx` + `pack.dat`, the mod's own first) in Rome, Barbarian Invasion
+  and Medieval II alike. **Play** / **Pause** (20 frames a second); paused, drag the frame line back and on like a video's, or go a frame at a time with **<** **>** (or the arrow keys; space plays / pauses). The window's help is one short line with its '?', and speaks only of the game loaded. Medieval II's weapons stay in
+  the hand, the shield on the arm, the quiver on the back. The mount stays still for now.
+- **Art in tabs, and a Models tab**: Art's pictures are sorted into **Icons and buttons**, **Flags and banners**,
+  **Maps** and **Other**, each tab with how many it holds (the last one looked at opens again). The figures on the
+  campaign map left Art for a **Models** tab of their own: one card per character type with its figure's list, 3D
+  and the figure's texture (Replace..., Save a copy...) - each thing once.
+- **Suggest with numbers**: in an army's or a fleet's units (a double click on the map), a town's garrison and the
+  faction's garrisons, **Suggest** draws by the numbers beside it - from how many to how many units, their upkeep
+  together at most (0: no limit) - kept for next time. In an army's window it did nothing. **Automatic** is gone:
+  it emptied an army; in New faction an empty garrison already means 'the editor picks' (take every card out), and
+  for a town that is in the game it is now **As it was** (back to the garrison as it stands in the files).
+- **The Maps bar tidied up**: **Layers** is a panel that stays open while you tick (the menu closed and blinked at
+  every tick) and closes on a second press of its button or a click aside - the same for Select's **what...**; the
+  colours are only in Layers (the list of their own beside it said the same twice); ports are always drawn (no tick);
+  **Legend** is called **Signs and tools** (it is also the palette: a row with + puts that sign on the map), scrolls
+  by a drag as every list and is as wide as its longest line (one was cut); **Bigger map (x3)...** sits beside the
+  zoom, and **Many towns...** left the top row (the map's Select + right click does it; Many towns at once... stays on
+  the Buildings tab).
+- **Click a picture to look at it closely**: every picture in Art and the faction tab's campaign-select map and
+  leader's face open big in a window of their own - the wheel zooms (small ones pixel by pixel, sharp), drag to move,
+  a checkerboard where they are see-through, the file, its size and format under it; Fit and 1 : 1.
+- **Add-ons: Delete from the editor...** (once Remove from the list): deletes an add-on you added or a module you
+  made; when it is put into the loaded game it asks whether to take it out of the game too (with a backup).
+- **The campaign-select map and the leader's face on the faction tab**: Edit faction and New faction show them
+  under Victory - each with Replace..., Save a copy... and Keep the
+  current one (Preview, then Apply writes it). A faction without one says so (in Rome only a faction with a
+  `leader_pic_<faction>.tga` shows a face there). The Art tab's list no longer repeats them.
+- **Avoid Growth on Rome's town scroll matches Automanage closer**: the tick is stretched over its box as the game's
+  own (it looked narrower), the box 1 px narrower on the left (it stood out), every place counted with one rounding,
+  and its size and place follow the scroll's own governor panel - so it stays with the scroll at any screen size.
+  Load offers to update the add-on in the game.
+- **The top row by topic, shorter names**: **Maps** | **Factions** · Recolour... |
+  **Settlements** · Mercenaries... | **Units** | **Buildings** | **Characters** · Traits and
+  retinue... | **Religions** | **Add-ons** · Module builder... · Campaign rules... · Events... - each tool beside its
+  work, a thin line between the topics (once Map editor, Faction editor, Unit editor...).
+- **Settlements is a work of its own, with the names by culture in it**: every region and its town - the names in
+  the files, the names players see, the owner, the owner's culture, the name shown now - and one column for each
+  culture (drag the table sideways to see them all); double click a culture's cell to type the town's name for it.
+  Filters by culture, by what is set, by the owner's culture. The separate Culture names... window is gone.
+- **Factions opens faster** when you come back to it: its kept work is put back without reading the faction's
+  files again.
+- **Calmer coloured buttons**: Start the game, Discord, YouTube and Ko-fi a fifth less bright and saturated - they
+  glowed too much.
+- **The map is the Map editor's alone**: the Faction editor has no Map tab any more. A faction's towns are picked
+  with **Towns on the map...** (under Capital): the Map editor opens, a click on a town adds it (yellow ring),
+  another takes it out, **Done** brings you back to the faction - nothing you typed is lost. **Capital on the
+  map...** the same for the capital: one click and you are back. New armies, agents and fleets: in the Map editor
+  (right click the map, for any faction - a new faction once it is created); a double click on one of the faction's
+  armies in Units & armies opens the Map editor on it. The map's colour mode *Diplomacy (towards the faction)* went
+  with it.
+- **Settlements...** moved from the faction's tabs to the top row: every region and its town in a window of its
+  own - the names in the files and the names players see, the owner, names by culture.
+- **Fix: the Shore line showed on the Terrain tab** when zoomed in - it belongs to **Coast & heights** only (its tick
+  there), and switching tabs now turns it on and off.
+- **No scrollbars**: every list, table, page and read-only text scrolls by the mouse wheel, by **dragging** it with the left button (it follows the mouse, up / down and left / right) and by the **middle button**: press the wheel and move the mouse - the further from where you pressed, the faster it scrolls, both ways (held: it stops when you let go; a click: it goes on until the next click or Esc).
+  A text you can type in keeps the left drag for selecting words. The map is as before (the right button moves it).
 - **Fix: a right click on the map crashed** ('dict' object is not callable) and the context menu did not open -
   a newer field had taken the name of the map's own check of where a click lands.
 - **One Faction editor**: New faction and Edit faction are one button at the top now - **Faction editor**, with
-  two tabs: **Edit faction** (first, where the editor opens) and **New faction**. One button less in the top row.
+  its first two tabs **New faction** and **Edit faction** (the old Faction tab renamed; the editor opens there),
+  in the same row and look as Units & armies, Buildings... - no row of their own. One button less in the top row. **Switching never drops
+  work**: New faction and Edit faction each keep what you did, not written yet, while you go to the Map editor,
+  the other side or any other editor, and find it again on the way back (no more 'Switch, drop them').
 - **Add-on: Upkeep x 2** (both games, any mod, no engine needed) - every unit's upkeep multiplied (x 2 or any
   number), so only a big income keeps a big army; the game shows the real numbers. Take it out puts back exactly the
   old ones.
@@ -99,6 +171,13 @@
   it are listed to change by hand. It was a refusal ('... would keep no town').
 
 ### Changed
+- **The Module builder opens in the main window** (its button in the top row stays where it was): no window
+  of its own any more - it takes the window's middle like Maps or Factions, and a module not saved yet stays while
+  you look at other works (closing the editor asks about it). Add-ons' New module (no code)... and Change it in
+  the Module builder... open it there too.
+- **Module builder: your own modules can be deleted from its list** - a right click on one: Open it / Delete it...
+  (the same as Add-ons' Delete from the editor...: from the game too, if it is put in, with a backup). The examples
+  are built in and stay.
 - **Terrain editor: the Heights brush in even sizes too**: size n is now n points of the heights picture across,
   round and snapped to the points like a pixel-art pencil - 1 one point, 2 a square of 2 x 2, 3 a 3 x 3, 4 a round
   4 x 4 (before: only 1, 3, 5... points across). The outline under the mouse shows exactly the points it takes; the
@@ -130,6 +209,69 @@
   release's page.
 
 ### Fixed
+- **A new town on the map shows its name and has its own right-click menu** before Apply: its names, owner,
+  level and resources (a double click too), its port placed or taken away, its garrison and buildings when its
+  faction is the one edited, Delete this new region - all of it at once, before the write.
+- **View in 3D: a Medieval II mount shown alone was half white** (horses, camels, elephants): it was drawn as a
+  man, whose texture is split in two halves (the man's, the weapons'); a mount lays its whole texture over itself -
+  now it takes all of it, as it already did when shown beside its rider.
+- **Models: each character type's list holds only its own figures** - a general's list the generals (of every
+  culture), a spy's the spies; it showed every model, the other types' and the old Rome entries Medieval II's own
+  `descr_model_strat.txt` still carries (no character uses them). A mod's own new model, not given to any type yet,
+  is in every list.
+- **Edit faction: Rename... sits beside 'Internal name'** (at the row's end it made the whole box wider), and the
+  campaign-select map with the leader's face fills the free room under Victory.
+- **A mod of Medieval II (with M2EX) closed at start after the editor's set-up fix** ('Could not find soldier battle
+  model for unit type ...'): the fix that gives a mod the engine's settings files copied the game's
+  `descr_caps_ex.txt` as it is - its `model_battle_source text` made the engine read the battle models from the
+  game's `descr_model_battle.txt` and miss the mod's own `battle_models.modeldb` (its other switches changed
+  recruitment, items and sprites too). Now the copy has **every setting switched off** (a `;` before it): the mod
+  runs exactly as before, and each setting can be switched on there. Only `descr_ex.txt` and `descr_caps_ex.txt`
+  are offered (the lighting, day types and AI files change how the game reads its own files, so they are not
+  copied). A mod that already has the game's line is found on Load: **model_battle_source modeldb** with a yes.
+  Campaign rules does the same: a change in a mod without its own file puts the copy in with only that line on, and
+  shows a switched-off setting as such (a change switches it on).
+- **Start Rome for a mod in `mods\<name>` started the plain game**: it was started with `-mod:<name>`; now with the
+  mod folder's path from the game folder (`-mod:mods/<name>`), as for a mod beside the game's exe (`-mod:<name>`).
+- **The report window's text box can be made bigger**: it grows with the window, and by the strip under it.
+- **A new region's town and port can be moved again**: once placed (before Apply) they stayed where they were -
+  now drag them like any town or port (on the new region's own land; a port beside the sea).
+- **New army here - 'Make him a general' gave a captain**: he was written as descr_strat's `general`, which the game
+  always shows as 'Captain <name>', whatever unit he leads. Now he is a named character outside the family tree
+  with the general's bodyguard - a general, with a star on the map (Rome's rebels keep a captain: the game has no
+  rebel general to copy). His bodyguard stays when you change the army's units.
+- **The Bigger map (x3) and Map size windows opened far taller than what they hold** (a third of the x3 window was
+  empty): they now open as high as their contents, never higher than the screen.
+- **Mod folders that keep only what they change** (New mod folder on the plain game): the editor now reads the
+  game's own pictures and files under such a mod everywhere, as the game does. Fixed with it: a copied unit, a
+  renamed unit and a copied building got no cards / pictures from the game; unit and building packs left them out;
+  the Art tab listed only the mod's own pictures (and a replaced picture lost the game's size and format); the
+  faction tab's campaign-select map and leader's face, the factions' icons on the map, a unit given to a faction
+  (Roster) and a renamed region missed what only the game's data holds. The changed copies still go into the mod;
+  the game's files are never written.
+- **Avoid Growth on Medieval II's town scroll**: its words started on top of Recruitment's tick and its box was a
+  flat pink square. It now stands after Recruitment on the line of the game's own ticks, in the same bevelled box
+  (as wide as theirs, the tick across it), its words in their light ink, size and letter spacing - measured on a
+  tester's screenshot of the scroll. Load offers to
+  update the add-on in the game.
+- **Character editor (Medieval II): the heir showed Authority** - the game shows Authority for the faction leader
+  alone; the heir keeps Loyalty, as on the game's own scroll.
+- **Rename a faction: Medieval II closed at start after it** ("Unknown attribute type(Combat_V_Faction_Venice)"):
+  the traits' effect against a faction glues its name on (`Combat_V_Faction_Venice`) and was left with the old
+  name - it now follows. In a mod folder that keeps only what it changes, the files only the game's data has are
+  renamed too, as the mod's own copies (the game's files untouched).
+- **Recolour left a new faction in its template's colours in a mod folder of its own** (cards, battle textures
+  and the rest stayed the template's red): a mod folder keeps only what it changes, so the template's cards lie in
+  the game's data - Recolour did not look there, took the copied cards for the faction's own colours and moved
+  nothing. It now compares with the game's own data too.
+- **The test mod's own building on the map: its window's text ran past the window's edge** - the lines are now cut
+  to the window's width as the engine measures them. A **double** click opens its window (a single click no longer
+  does - a model set beside a town would open it at every click), and the mouse resting on it shows its name in a
+  tooltip, as the game's resources do.
+- **The test mod's Upkeep x 2 step failed in the exe** ("No module named upkeep"): the exe now surely carries it,
+  and its own self-check tries every add-on's code.
+- **Add-ons: a click on Upkeep x 2 crashed the page** ("can only concatenate str"): it now shows like the others -
+  it needs nothing, no engine (it changes the mod's own files).
 - **Map editor: towns whose garrison has no captain showed no army** (a big Medieval II map writes every garrison so,
   the rebels' too - `garrisoned_army` with its units inside the town's own block): such a town now shows the army
   flag on its roof like any garrisoned town, and the line under the map says how many units its own garrison has.

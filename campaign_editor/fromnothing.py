@@ -885,10 +885,10 @@ def new_building(plan, kind, chain, levels, builders, numbers, castle=False, uni
     drawn = building_pictures(plan, chain, levels, builders, pictures)
     if drawn:
         plan.note(None, "%d plain picture(s) drawn for %s (the levels' initials) - put your own in any time with "
-                        "the Building editor" % (drawn, chain))
+                        "Buildings" % (drawn, chain))
     elif not any((pictures or {}).values()):
         plan.warn(None, "no pictures for %s: Pillow is missing to draw plain ones - put pictures in with the "
-                        "Building editor" % chain)
+                        "Buildings" % chain)
     return lines
 
 

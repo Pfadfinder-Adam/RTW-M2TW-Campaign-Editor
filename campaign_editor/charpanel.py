@@ -1,6 +1,6 @@
 """What the game's character panel shows, read from the files (both games): the attributes the traits and the
 retinue give (drawn as pips 0 - 10), the traits by the level names players see (export_VnVs), the retinue with its
-pictures (ui/ancillaries) and names (export_ancillaries). The Character editor draws it beside the person's form.
+pictures (ui/ancillaries) and names (export_ancillaries). Characters draws it beside the person's form.
 
 M2TW keeps its string tables as text/<name>.txt and / or the compiled text/<name>.txt.strings.bin: u16 2, u16 2048,
 u32 count, then per entry a u16-counted UTF-16 key and a u16-counted UTF-16 text. The .txt is read when both lie
@@ -28,8 +28,8 @@ def panel_kind(kind):
 
 def attributes(game, kind, role, traits, trait_defs, ancs, anc_defs):
     """[(attribute, value)] the panel shows: every effect of the character's traits (at their levels) and
-    retinue added up, for the attributes of his kind (Medieval II: Authority for the leader and the heir in place
-    of Loyalty, Dread when the chivalry is below 0)."""
+    retinue added up, for the attributes of his kind (Medieval II: Authority for the faction leader in place of
+    Loyalty - the heir keeps Loyalty, as a tester's Army Details shows - Dread when the chivalry is below 0)."""
     total = {}
     for t, n in traits:
         eff = (trait_defs.get(t) or {}).get("effects") or []
@@ -42,7 +42,7 @@ def attributes(game, kind, role, traits, trait_defs, ancs, anc_defs):
     names = list(PANEL.get(game, PANEL["rome"]).get(panel_kind(kind), ()))
     out = []
     for name in names:
-        if game == "medieval2" and name == "Loyalty" and role in ("leader", "heir"):
+        if game == "medieval2" and name == "Loyalty" and role == "leader":       # the heir keeps Loyalty
             name = "Authority"
         value = total.get(name, 0)
         if name == "Chivalry" and value < 0:
@@ -142,7 +142,7 @@ def ancillary_picture(mod, image, culture=None):
 
 
 def panel(mod, person, trait_defs, anc_defs, culture=None):
-    """What the panel shows for a person of the Character editor: {'name', 'line' (kind, role), 'age',
+    """What the panel shows for a person of Characters: {'name', 'line' (kind, role), 'age',
     'attributes': [(name, value)], 'traits': [(level name shown, trait, level, effects text)], 'retinue':
     [(name shown, ancillary, picture or None, effects text)]}."""
     from .limits import game_kind

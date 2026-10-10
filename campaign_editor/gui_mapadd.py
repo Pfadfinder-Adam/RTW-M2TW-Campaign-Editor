@@ -38,8 +38,6 @@ def taken_names(app, faction):
     from .strat import faction_names
     names = set(faction_names(app.strat, faction)) if app.strat else set()
     names |= {c["name"] for c in app.map_chars.get(faction, [])}
-    if faction == app.field_faction():
-        names |= set(app._faction_names())
     return names
 
 
@@ -97,9 +95,10 @@ def add_at(app, kind, xy, preset=None, faction=None):
         ttk.Checkbutton(frm, text="Make him a general", variable=v_general).grid(row=row, column=1, columnspan=2,
                                                                               sticky="w")
         ttk.Label(frm, foreground="#666", wraplength=420, justify="left",
-                  text="a character with his own name, not in the family tree (the game may adopt him later, "
-                       "after a great victory); his bodyguard leads his army, so the game shows him as a general, not "
-                       "a captain").grid(row=row + 1, column=1, columnspan=2, sticky="w")
+                  text="a named character with his own name, not in the family tree (the game may adopt him later, "
+                       "after a great victory), leading his army with the general's bodyguard - without the tick the "
+                       "army is led by a captain ('Captain <name>'). Rome's rebels keep a captain (the game has no "
+                       "rebel general to copy)").grid(row=row + 1, column=1, columnspan=2, sticky="w")
         row += 2
     note = ttk.Label(frm, foreground="#666", wraplength=420, justify="left")
     note.grid(row=row, column=0, columnspan=3, sticky="w", pady=(4, 0))
@@ -172,9 +171,11 @@ def add_at(app, kind, xy, preset=None, faction=None):
                 messagebox.showerror(APP, "This mod's unit file gives %s no general's bodyguard (a unit marked "
                                           "general_unit - the one its family members ride with too), so the editor "
                                           "cannot tell which unit is his. Give the bodyguard unit %s in its "
-                                          "ownership in the Unit editor, or untick 'Make him a general'." % (fac, fac),
+                                          "ownership in Units, or untick 'Make him a general'." % (fac, fac),
                                      parent=w)
                 return
+        if guard:
+            c["general"] = True                         # written as a named character (start.general_here)
         if fac == app.field_faction() and not app.map_only():
             if guard:
                 c["units"] = [guard]

@@ -340,7 +340,7 @@ def set_horde(plan, faction):
                 pick.append(kind[k].type)
     if not pick:
         plan.warn(f, "%s comes by an event: the game brings it as a horde, but it owns no unit to make one of - "
-                     "give it units (the Unit editor) or it will not come" % faction)
+                     "give it units (Units) or it will not come" % faction)
         return
     at = next((start + k + 1 for k, t in enumerate(block) if t[:1] == ["custom_battle_availability"]), None)
     if at is None:

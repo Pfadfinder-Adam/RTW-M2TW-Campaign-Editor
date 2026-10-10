@@ -1,5 +1,5 @@
 """Unit attributes the engine knows (export_descr_unit.txt), with their effect in plain
-words, so the Unit editor can offer them even when no unit of the mod uses one yet.
+words, so Units can offer them even when no unit of the mod uses one yet.
 
 REX (the 64-bit engine for Rome: Total War) and M2EX (Medieval II's) added these; the list is
 the engines' own (their builds of 2026-10-03 added the last group). A word goes on one line of the unit:

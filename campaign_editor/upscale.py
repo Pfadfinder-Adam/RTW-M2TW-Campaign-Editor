@@ -2691,7 +2691,7 @@ def look_over(warnings=()):
     text = ("The map is 3 x bigger now. Please look it over yourself before you play or share it: the new map is "
             "drawn from the old one by rules, and no rule gets every map 100 % right - here and there a coast, a "
             "river or a border can come out a pixel off.\n\n"
-            "Look in the Map editor (its Map and Terrain tabs), then in the game, at:\n"
+            "Look in Maps (its Map and Terrain tabs), then in the game, at:\n"
             "- coasts and river mouths: a stray pixel of land in the water or of water on the land\n"
             "- navigable rivers and narrow straits: still open where ships pass\n"
             "- borders that run along a river: on the river, not across it\n"

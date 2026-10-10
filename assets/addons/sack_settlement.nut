@@ -401,7 +401,7 @@ function raze_hand_to_rebels(settlement, sname) {
     local rebels = raze_find_faction("slave")
     if (rebels != null) {
         try {
-            settlement.changeOwner(rebels)
+            settlement.changeOwner(rebels, true)        // (faction, convertGarrison): the engines take exactly two
         } catch (err) {
             try {
                 settlement.owner = rebels

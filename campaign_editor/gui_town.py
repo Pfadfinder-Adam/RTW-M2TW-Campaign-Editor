@@ -1,5 +1,5 @@
 """A town's own window, straight from the Map (a double click on a town, or the right click's 'This town...'), both
-games, any owner (the Map editor too): its owner (hand it to another faction), city or castle (Medieval II), level,
+games, any owner (Maps too): its owner (hand it to another faction), city or castle (Medieval II), level,
 population, and - switched in the same window - its buildings (the Buildings tab's own editor: the pictures, a click
 builds a level) and its garrison (the Units & armies tab's card picker; a named character keeps his bodyguard).
 Preview / Keep for Apply (written by the main window's Apply with the rest of the session, a backup first); the writing is masstown.apply - the same one place the 'many
@@ -279,18 +279,18 @@ class TownWindow(tk.Toplevel):
         units = self.app._with_types(units, now) if hasattr(self.app, "_with_types") else units
 
         def changed(types):
-            if getattr(self.ged, "cleared", False):            # 'Automatic': back to the town as it stands
+            if getattr(self.ged, "cleared", False):            # 'As it was': back to the town as it stands
                 self.garrison = None
                 self.after_idle(self.load_garrison)
             else:
                 self.garrison = list(types)
             self.lbl_why.configure(text="")
-        def suggest():                                  # the units the town's owner trains, under a sensible upkeep
+        def suggest(lo, hi, cap):                       # the units the town's owner trains, by the numbers by Suggest
             import random
             pool = MT.town_pool(self.mod, t, MT.garrison_pool(self.mod, owner))
-            return MT.random_garrison(pool, 3, 6, 2000, random.Random())
+            return MT.random_garrison(pool, lo, hi, cap, random.Random())
         self.ged.load(self.mod, owner, "%s (%s)" % (t["name"], self.region), units,
-                      self.garrison if self.garrison is not None else now, changed, auto=suggest,
+                      self.garrison if self.garrison is not None else now, changed, auto=suggest, as_was=True,
                       held=(t.get("army_role") or True) if named else False, unchanged=self.garrison is None)
 
     def _owner_changed(self):

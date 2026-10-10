@@ -1,4 +1,4 @@
-"""The Terrain editor (the Map editor's Terrain tab, beside its Map): paint what each tile of the campaign map is
+"""The Terrain editor (Maps' Terrain tab, beside its Map): paint what each tile of the campaign map is
 (map_ground_types.tga), what runs across it (map_features.tga: rivers, fords, sources,
 cliffs), its climate (map_climates.tga, the climates of descr_climates.txt) and how high the land is
 (map_heights.tga, a spray brush: held longer, it raises / lowers more), on the map drawn tile by tile. Kept here until Apply, written by terrain.apply with
@@ -92,7 +92,7 @@ class TerrainEditor(ttk.Frame):
         self.view = MapView(self, status=None, on_layers=self.show)
         self.view.pack(fill="both", expand=True)
         self.view.on_stroke = self._stroke
-        # the campaign map's own switches (Layers, Colours, Edit regions, Select, Merge regions, Legend, Find) do not
+        # the campaign map's own switches (Layers, Edit regions, Select, Merge regions, Signs and tools, Find) do not
         # belong here - nothing of the map's towns, armies or regions is worked here (the user, 2026-10-09); the
         # zoom stays
         self.view.lbar.pack_forget()
@@ -118,6 +118,8 @@ class TerrainEditor(ttk.Frame):
         if self.v_what.get() not in mine:
             self.v_what.set(self._last_of.get(group) or mine[0])
             self.fill_palette()
+        if (self.view.shore is not None) != self._shore_wanted() and self.mod is not None:
+            self._shore_toggled()                         # the shore line on in Coast & heights, off in Terrain
 
     def _grid_toggled(self):
         """The lines between the tiles up close, on or off (the same switch as Layers > grid, kept)."""
@@ -231,7 +233,7 @@ class TerrainEditor(ttk.Frame):
         self.cmap.show_climates = self.v_what.get() == "climate"
         self.cmap.show_heights = self._by_points()
         self.view.brush = self.v_brush.get()
-        self.view.shore = self._shore() if self.v_shore.get() else None
+        self.view.shore = self._shore() if self._shore_wanted() else None
         self.view.load(self.cmap, {}, {}, region_mode=True, on_paint=self.paint, on_pick=self.pick,
                        brush=self.v_brush.get(), plain=True)
         self._spray_hook()
@@ -241,8 +243,12 @@ class TerrainEditor(ttk.Frame):
         sc = self._shape_coast()
         return (self._img("map_heights.tga"), sc.metres) if sc is not None else None
 
+    def _shore_wanted(self):
+        """The shore line belongs to Coast & heights (its tick on Land and sea's 2nd row): never on the Terrain tab."""
+        return self.group == "heights" and self.v_shore.get()
+
     def _shore_toggled(self):
-        self.view.shore = self._shore() if self.v_shore.get() else None
+        self.view.shore = self._shore() if self._shore_wanted() else None
         self.view.render()
 
     def _by_points(self):

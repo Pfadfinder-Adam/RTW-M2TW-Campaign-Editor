@@ -51,10 +51,8 @@ class ArtEditor(ttk.Frame):
         self._map_im, self._map_scale = None, 0
         top.bind("<Configure>", lambda e: self._fit_map(), add="+")
         self.bind("<Configure>", lambda e: self._fit_map(), add="+")        # the tab's height counts too
-        # the faction's figures on the campaign map: a strat model per character type, changed here, seen in 3D
-        self.fig_box = ttk.LabelFrame(self, text="Figures on the campaign map - who is shown by which model",
-                                      padding=6)
-        self.fig_box.pack(fill="x", pady=(6, 0))
+        # the faction's figures on the campaign map (who is shown by which model, their textures, 3D) are on the
+        # Models tab (gui_models) - here only the pictures
         self.pics_note = ttk.Label(self, text="Every picture of the faction. Replace... takes a PNG, JPG, TGA or DDS and makes it the "
                              "size and format the game's own has (a DDS stays a DDS); Preview, then Apply writes it (with a backup).",
                   foreground="#555", justify="left")
@@ -78,21 +76,20 @@ class ArtEditor(ttk.Frame):
             "colours (plain, stripes, a cross, quarters...), a symbol on it if you like, or your own drawing on the "
             "saved template. Rome: the game's blank white banners; Medieval II: a white template taken from the "
             "mod's own banner pictures, seen in 3D. Written on Apply with a backup.").pack(side="left", padx=(6, 0))
-        box = ttk.Frame(self)
-        box.pack(fill="both", expand=True)
-        canvas = self.canvas = tk.Canvas(box, highlightthickness=0)
-        sb = ttk.Scrollbar(box, orient="vertical", command=canvas.yview)
-        self.inner = ttk.Frame(canvas)
-        self.inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=self.inner, anchor="nw")
-        canvas.configure(yscrollcommand=sb.set)
-        sb.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-        from .gui_util import scroll_y, wheel
-        wheel(canvas, scroll_y(canvas))
-        # the picture cards flow into as many columns as the width takes
-        self.cells, self._cols = [], 0
-        canvas.bind("<Configure>", lambda e: self._reflow(), add="+")
+        # the pictures sorted into tabs (the user, 2026-10-09: 'everything sorted, nothing mixed'), each a grid of
+        # cards flowing into as many columns as the width takes; the tab last looked at opens again
+        self.sub = ttk.Notebook(self)
+        self.sub.pack(fill="both", expand=True)
+        self.grids = {}
+        for key, title in FA.ART_GROUPS:
+            self.grids[key] = CardGrid(self.sub, self.CELL)
+            self.sub.add(self.grids[key], text="  %s  " % title)
+        from . import settings
+        last = settings.get("art_tab", "icons")
+        keys = [k for k, _ in FA.ART_GROUPS]
+        self.sub.select(keys.index(last) if last in keys else 0)
+        self.sub.bind("<<NotebookTabChanged>>", lambda e: settings.put("art_tab", keys[self.sub.index("current")]),
+                      add="+")
         self.toggle(save=False)
 
     def toggle(self, save=True):
@@ -116,18 +113,6 @@ class ArtEditor(ttk.Frame):
 
     CELL = 400                  # a picture card's width in the grid
 
-    def _reflow(self, force=False):
-        cols = max(1, (self.canvas.winfo_width() - 8) // self.CELL)
-        if cols == self._cols and not force:
-            return
-        self._cols = cols
-        for c in range(8):
-            self.inner.columnconfigure(c, weight=0, minsize=0)
-        for c in range(cols):
-            self.inner.columnconfigure(c, weight=1, minsize=self.CELL - 8)
-        for i, w in enumerate(self.cells):
-            w.grid(row=i // cols, column=i % cols, sticky="nwe", padx=3, pady=3)
-
     # ---- what the window keeps: app.art_replace {rel: src}, app.sel_map {colour, off} ----
     def _names(self):
         """(faction the pictures belong to now, the name they will have)."""
@@ -150,163 +135,154 @@ class ArtEditor(ttk.Frame):
         except Exception:
             return ttk.Label(parent, text="(none)", width=10, relief="sunken")
         self._photos.append(ph)
-        return tk.Label(parent, image=ph, relief="sunken")
+        lbl = tk.Label(parent, image=ph, relief="sunken", cursor="hand2")
+        lbl.photo = ph                               # kept while the label lives (the faction tab's cards too)
+        from .gui_picview import view_picture       # a click: the picture big in a window of its own
+        lbl.bind("<Button-1>", lambda e, p=path, c=crop: view_picture(self, p, crop=c))
+        from .gui_util import tip
+        tip(lbl, "Click to look at it closely: big, wheel to zoom, drag to move.")
+        return lbl
+
+    def load_start(self):
+        """The campaign-select screen's own pictures - the map with the faction's land lit, the leader's face - on
+        the faction tab beside the description, as the game shows them there (app.start_pics); the Art list leaves
+        them out. Replace... there waits for Apply like every picture."""
+        host = getattr(self.app, "start_pics", None)
+        if host is None:
+            return
+        for w in host.winfo_children():
+            w.destroy()
+        a = self.app
+        src_faction, new = self._names() if a.mod else (None, None)
+        if not src_faction:
+            ttk.Label(host, foreground="#666", wraplength=300, justify="left", text=(
+                "The faction's campaign-select map and leader's face show here once it is picked.")).pack(anchor="w")
+            return
+        kinds = set()
+        for p in FA.start_pictures(a.mod, a.v_campaign.get(), src_faction):
+            kind = FA.start_kind(p)
+            kinds.add(kind)
+            leader = kind == FA.START_KINDS[1]
+            self.card(host, p, src_faction, new, box=(69, 96) if leader else (192, 120), wrap=250,
+                      short=True).pack(
+                fill="x", pady=(0, 4))
+        from .packs import game_kind
+        missing = []
+        if FA.START_KINDS[0] not in kinds:
+            missing.append("no campaign-select map of its own in this campaign (map_%s.tga)" % src_faction)
+        if FA.START_KINDS[1] not in kinds and game_kind(a.mod) == "rome":
+            missing.append("no leader's face: the campaign-select screen shows one only for a faction with a "
+                           "leader_pic_<faction>.tga (vanilla Rome has them for the three Roman families)")
+        for m in missing:
+            ttk.Label(host, text=m, foreground="#666", wraplength=330, justify="left").pack(anchor="w")
 
     def load(self):
         a = self.app
-        for w in self.inner.winfo_children():
-            w.destroy()
+        self.load_start()
+        for g in self.grids.values():
+            g.clear()
         self._photos = []
+        if getattr(a, "models_editor", None) is not None and a.tab_name() == "Models":
+            a.models_editor.load()                       # a picture replaced there: its cards anew
         if not a.mod:
             return
         src_faction, new = self._names()
         if not src_faction:
-            ttk.Label(self.inner, text="Pick the %s on the Faction tab first." % (
-                "faction" if a.editing() else "template")).grid(row=0, column=0, sticky="w")
+            for g in self.grids.values():
+                g.say("Pick the %s on the Faction tab first." % ("faction" if a.editing() else "template"))
             self.draw_map()
             return
-        self.fill_figures(src_faction, new)
-        pics = FA.faction_pictures(a.mod, a.v_campaign.get(), src_faction)
-        if not pics:
-            ttk.Label(self.inner, text="No pictures named after %s were found." % src_faction).grid(row=0, column=0)
-        self.cells = []
-        for i, p in enumerate(pics):
-            target = FA.picture_target(p, src_faction, new or src_faction)
-            row = ttk.Frame(self.inner, padding=3, relief="groove")
-            self.cells.append(row)
-            pick = a.art_replace.get(target)
-            pending = FA.art_source(pick) if pick else None
-            self._thumb(row, pending or p["path"], crop=None if pending else p.get("crop")).grid(
-                row=0, column=0, rowspan=4, sticky="n")
-            ttk.Label(row, text=p["label"], font=("", 9, "bold"), wraplength=self.CELL - 110).grid(
-                row=0, column=1, sticky="w", padx=6)
-            if p.get("where"):
-                ttk.Label(row, text="in the game: " + p["where"], wraplength=self.CELL - 110, justify="left").grid(
-                    row=1, column=1, sticky="w", padx=6)
-            note = p.get("note") or ""
-            if p.get("symbol") and new and new != src_faction:
-                note = note.split(" - ")[0]              # the template's sheet; the new faction's own is below
-            text = "%s\n%s" % (note if p.get("symbol") else target, self._need(p["size"], target))
-            if p.get("symbol") and new and new != src_faction:
-                text += "\n%s gets a copy of its own (%s's until you replace it)" % (new, src_faction)
-            if note and not p.get("symbol"):
-                text += "\n" + note
-            if p.get("link"):
-                text += "\nnamed in %s (%s)" % (os.path.basename(a.mod.file(p["link"][0]) or ""), p["link"][1])
-                if target != p["rel"]:
-                    text += "\n" + ("shared with %s - Replace gives %s a copy of its own under this name" % (
-                        ", ".join(p["shared"]), new or src_faction) if p.get("shared") else
-                        "%s's own copy, made from %s" % (new, p["rel"]))
-            if pick:
-                text += "\nnew: %s (not written yet)" % (
-                    "the original, as it was" if isinstance(pick, dict) and pick.get("exact") else
-                    os.path.basename(pending))
-            ttk.Label(row, foreground="#555", justify="left", wraplength=self.CELL - 110, text=text).grid(
-                row=2, column=1, sticky="w", padx=6)
-            bar = ttk.Frame(row)
-            bar.grid(row=3, column=1, sticky="w", padx=6)
-            link = p.get("link") if target != p["rel"] else None
-            if p.get("locked"):
-                # shared with other factions: Replace gives this faction a copy of its own (Edit faction - a new
-                # faction's lines are not written yet); Save a copy always (a tester: no buttons on some)
-                if p.get("extra") and (not new or new == src_faction):
-                    ttk.Button(bar, text="Replace (its own copy)...", command=lambda t=target, s=p["size"],
-                               l=p["label"], x=p["extra"]: self.replace(t, s, l, extra=[x["kind"], x["ref"]])).pack(
-                        side="left")
-                if os.path.isfile(p["path"]):
-                    from .gui_util import save_copy
-                    ttk.Button(bar, text="Save a copy...", command=lambda n=p["path"], l=p["label"]:
-                               save_copy(self, n, l)).pack(side="left", padx=4)
-                if pick:
-                    ttk.Button(bar, text="Keep the current one", command=lambda t=target: self.unreplace(t)).pack(
-                        side="left", padx=4)
+        groups = {k: [] for k in self.grids}
+        for p in FA.faction_pictures(a.mod, a.v_campaign.get(), src_faction):
+            k = FA.art_group(p)
+            if not FA.is_start_picture(p) and k in groups:          # the figures' textures: on the Models tab
+                groups[k].append(p)
+        keys = [k for k, _ in FA.ART_GROUPS]
+        for k, title in FA.ART_GROUPS:
+            g = self.grids[k]
+            self.sub.tab(keys.index(k), text="  %s (%d)  " % (title, len(groups[k])))
+            if not groups[k]:
+                g.say("No %s named after %s were found.%s" % (title.lower(), src_faction, (
+                    " The campaign-select map is on the faction tab, beside the description." if k == "maps" else "")))
                 continue
-            ttk.Button(bar, text="Replace...", command=lambda t=target, s=p["size"], l=p["label"], k=link:
-                       self.replace(t, s, l, k)).pack(side="left")
-            now = os.path.join(a.mod.data, target) if not target.startswith("symbol:") else None
-            if not pick and now and os.path.isfile(now):
+            g.fill([self.card(g.inner, p, src_faction, new) for p in groups[k]])
+        self.draw_map()
+
+    def card(self, parent, p, src_faction, new, box=(72, 72), wrap=None, short=False, buttons=None):
+        """One picture's card: its picture (the one picked to replace it, if any), what it is, where the game shows
+        it, what it needs, and Replace... / Save a copy... / Keep the current one / Back to the original. short:
+        the file's name without its folders (a narrow card); buttons: [(text, command)] of its own first (3D)."""
+        a = self.app
+        wrap = wrap or self.CELL - 110
+        target = FA.picture_target(p, src_faction, new or src_faction)
+        row = ttk.Frame(parent, padding=3, relief="groove")
+        pick = a.art_replace.get(target)
+        pending = FA.art_source(pick) if pick else None
+        self._thumb(row, pending or p["path"], box=box, crop=None if pending else p.get("crop")).grid(
+            row=0, column=0, rowspan=4, sticky="n")
+        ttk.Label(row, text=p["label"], font=("", 9, "bold"), wraplength=wrap).grid(
+            row=0, column=1, sticky="w", padx=6)
+        if p.get("where"):
+            ttk.Label(row, text="in the game: " + p["where"], wraplength=wrap, justify="left").grid(
+                row=1, column=1, sticky="w", padx=6)
+        note = p.get("note") or ""
+        if p.get("symbol") and new and new != src_faction:
+            note = note.split(" - ")[0]              # the template's sheet; the new faction's own is below
+        text = "%s\n%s" % (note if p.get("symbol") else os.path.basename(target) if short else target,
+                           self._need(p["size"], target))
+        if p.get("symbol") and new and new != src_faction:
+            text += "\n%s gets a copy of its own (%s's until you replace it)" % (new, src_faction)
+        if note and not p.get("symbol"):
+            text += "\n" + note
+        if p.get("link"):
+            text += "\nnamed in %s (%s)" % (os.path.basename(a.mod.file(p["link"][0]) or ""), p["link"][1])
+            if target != p["rel"]:
+                text += "\n" + ("shared with %s - Replace gives %s a copy of its own under this name" % (
+                    ", ".join(p["shared"]), new or src_faction) if p.get("shared") else
+                    "%s's own copy, made from %s" % (new, p["rel"]))
+        if pick:
+            text += "\nnew: %s (not written yet)" % (
+                "the original, as it was" if isinstance(pick, dict) and pick.get("exact") else
+                os.path.basename(pending))
+        ttk.Label(row, foreground="#555", justify="left", wraplength=wrap, text=text).grid(
+            row=2, column=1, sticky="w", padx=6)
+        bar = ttk.Frame(row)
+        bar.grid(row=3, column=1, sticky="w", padx=6)
+        for text, cmd in buttons or ():
+            ttk.Button(bar, text=text, command=cmd).pack(side="left", padx=(0, 4))
+        link = p.get("link") if target != p["rel"] else None
+        if p.get("locked"):
+            # shared with other factions: Replace gives this faction a copy of its own (Edit faction - a new
+            # faction's lines are not written yet); Save a copy always (a tester: no buttons on some)
+            if p.get("extra") and (not new or new == src_faction):
+                ttk.Button(bar, text="Replace (its own copy)...", command=lambda t=target, s=p["size"],
+                           l=p["label"], x=p["extra"]: self.replace(t, s, l, extra=[x["kind"], x["ref"]])).pack(
+                    side="left")
+            if os.path.isfile(p["path"]):
                 from .gui_util import save_copy
-                ttk.Button(bar, text="Save a copy...", command=lambda n=now, l=p["label"]: save_copy(self, n, l)).pack(
-                    side="left", padx=4)
+                ttk.Button(bar, text="Save a copy...", command=lambda n=p["path"], l=p["label"]:
+                           save_copy(self, n, l)).pack(side="left", padx=4)
             if pick:
                 ttk.Button(bar, text="Keep the current one", command=lambda t=target: self.unreplace(t)).pack(
                     side="left", padx=4)
-            else:
-                orig = FA.original_picture(a.mod, target) if os.path.exists(os.path.join(a.mod.data, target)) \
-                    else None
-                if orig and not _same(orig, os.path.join(a.mod.data, target)):
-                    ttk.Button(bar, text="Back to the original", command=lambda t=target, o=orig, k=link:
-                               self.revert(t, o, k)).pack(side="left", padx=4)
-        self._reflow(force=True)
-        self.draw_map()
-
-    def fill_figures(self, faction, new):
-        """A row per character type of the faction: its figure (a strat model of descr_model_strat.txt, one per
-        level) to pick, and View in 3D. The pick waits for Apply like every change (app.figures)."""
-        from . import stratmodels as SM
-        a = self.app
-        box = self.fig_box
-        for w in box.winfo_children():
-            w.destroy()
-        figs = SM.figures(a.mod, faction) if faction else []
-        if not figs:
-            ttk.Label(box, text="%s has no character types in descr_character.txt." % faction if faction else
-                      "Pick the faction first.", foreground="#555").grid(row=0, column=0, sticky="w")
-            return
-        names = sorted(SM.model_types(a.mod), key=str.lower)
-        cols = 3
-        r = c = 0
-        for fg in figs:
-            wide = len(fg["models"]) > 1                # levels (a priest, bishop, cardinal): a row of its own
-            if wide and c:
-                r, c = r + 1, 0
-            cell = ttk.Frame(box, padding=(0, 2, 12, 2))
-            cell.grid(row=r, column=c, columnspan=cols if wide else 1, sticky="w")
-            want = a.figures.get(fg["type"]) or fg["models"]
-            ttk.Label(cell, text=fg["type"], width=16, font=("", 9, "bold")).grid(row=0, column=0, sticky="w")
-            for lv, now in enumerate(fg["models"]):
-                v = tk.StringVar(value=want[lv] if lv < len(want) else now)
-                cb = ttk.Combobox(cell, textvariable=v, values=names, width=20, state="readonly")
-                cb.grid(row=0, column=1 + 2 * lv, padx=(0, 2))
-                cb.bind("<<ComboboxSelected>>", lambda e, t=fg["type"], lv=lv, v=v, fg=fg: self.pick_figure(
-                    t, lv, v.get(), fg["models"]))
-                ttk.Button(cell, text="3D", command=lambda v=v: self.view_figure(v.get(), faction)).grid(
-                    row=0, column=2 + 2 * lv, padx=(0, 6))
-            if fg["type"] in a.figures:
-                ttk.Label(cell, text="was %s (not written yet)" % ", ".join(fg["models"]),
-                          foreground="#b05a00").grid(row=1, column=1, columnspan=2 * len(fg["models"]), sticky="w")
-            if wide:
-                r, c = r + 1, 0
-            else:
-                r, c = (r + 1, 0) if c + 1 >= cols else (r, c + 1)
-        r += 1 if c else 0
-        ShortHint(box, foreground="#555", justify="left", wraplength=900, text=(
-            "Pick another model for a character type (the list holds every figure of descr_model_strat.txt); "
-            "Preview, then Apply writes descr_character.txt (a faction sharing its line with others gets a line "
-            "of its own). A model the faction has no texture in gets a line with the model's first texture; "
-            "its picture then shows below after Apply, to Replace. 3D shows the figure with the faction's texture.")
-        ).grid(row=r, column=0, columnspan=cols, sticky="w", pady=(4, 0))
-
-    def pick_figure(self, ctype, level, model, now):
-        a = self.app
-        a.remember()
-        want = list(a.figures.get(ctype) or now)
-        want[level] = model
-        if want == list(now):
-            a.figures.pop(ctype, None)
+            return row
+        ttk.Button(bar, text="Replace...", command=lambda t=target, s=p["size"], l=p["label"], k=link:
+                   self.replace(t, s, l, k)).pack(side="left")
+        now = a.mod.find(target) if not target.startswith("symbol:") else None    # the mod's, else the game's
+        if not pick and now and os.path.isfile(now):
+            from .gui_util import save_copy
+            ttk.Button(bar, text="Save a copy...", command=lambda n=now, l=p["label"]: save_copy(self, n, l)).pack(
+                side="left", padx=4)
+        if pick:
+            ttk.Button(bar, text="Keep the current one", command=lambda t=target: self.unreplace(t)).pack(
+                side="left", padx=4)
         else:
-            a.figures[ctype] = want
-        a.status.set("%s on the campaign map: %s - Preview, then Apply." % (ctype, ", ".join(want)))
-        self.load()
-
-    def view_figure(self, model, faction):
-        from . import stratmodels as SM
-        from .gui_meshview import ModelViewer
-        info = SM.mesh_info(self.app.mod, model)
-        if info is None or not info.meshes:
-            messagebox.showinfo("3D", "%s names no model file (.cas) in descr_model_strat.txt." % model)
-            return
-        ModelViewer(self, self.app.mod, info, (faction,), title="Campaign map figure in 3D")
+            orig = FA.original_picture(a.mod, target) if os.path.exists(os.path.join(a.mod.data, target)) \
+                else None
+            if orig and not _same(orig, os.path.join(a.mod.data, target)):
+                ttk.Button(bar, text="Back to the original", command=lambda t=target, o=orig, k=link:
+                           self.revert(t, o, k)).pack(side="left", padx=4)
+        return row
 
     @staticmethod
     def _need(size, target):
@@ -655,6 +631,45 @@ class ArtEditor(ttk.Frame):
                                               Image.LANCZOS)
         self._map_photo = ImageTk.PhotoImage(big)
         self.map_pic.configure(image=self._map_photo, text="", width=big.width, height=big.height)
+
+
+class CardGrid(ttk.Frame):
+    """Picture cards in as many columns as the width takes, scrolling up and down (no scrollbar: the wheel, a drag)
+    - one per Art sub-tab and the Models tab's textures."""
+
+    def __init__(self, master, cell):
+        super().__init__(master)
+        from .gui_util import ScrollFrame
+        self.cell, self.cells, self._cols = cell, [], 0
+        self.sf = ScrollFrame(self)
+        self.sf.pack(fill="both", expand=True)
+        self.inner = self.sf.inner
+        self.sf.canvas.bind("<Configure>", lambda e: self.reflow(), add="+")
+
+    def clear(self):
+        for w in self.inner.winfo_children():
+            w.destroy()
+        self.cells, self._cols = [], 0
+
+    def say(self, text):
+        ttk.Label(self.inner, text=text, foreground="#555").grid(row=0, column=0, sticky="w", padx=4, pady=4)
+
+    def fill(self, cells):
+        self.cells = cells
+        self.reflow(force=True)
+
+    def reflow(self, force=False):
+        cols = max(1, (self.sf.canvas.winfo_width() - 8) // self.cell)
+        if cols == self._cols and not force:
+            return
+        self._cols = cols
+        for c in range(8):
+            self.inner.columnconfigure(c, weight=0, minsize=0)
+        for c in range(cols):
+            self.inner.columnconfigure(c, weight=1, minsize=self.cell - 8)
+        for i, w in enumerate(self.cells):
+            w.grid(row=i // cols, column=i % cols, sticky="nwe", padx=3, pady=3)
+        self.sf.yview_moveto(0) if hasattr(self.sf, "yview_moveto") else None
 
 
 def _same(a, b):

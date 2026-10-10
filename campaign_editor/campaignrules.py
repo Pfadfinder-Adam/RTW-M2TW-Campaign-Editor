@@ -14,7 +14,7 @@ import os
 import re
 
 from .moddata import _ci
-from .textio import TextFile
+from .textio import TextFile, strip_comment
 
 FILES = (
     ("descr_campaign_db.xml", "Campaign rules"),
@@ -41,6 +41,7 @@ class Rule:
         self.path, self.section, self.key, self.attr = path, section, key, attr
         self.value, self.kind, self.line, self.start, self.end = value, kind, line, start, end
         self.note = note                # the file's own explanation (the comment above an engine setting)
+        self.off = None                 # an engine setting switched off by a ';': where the ';' ends
 
     @property
     def ident(self):
@@ -144,17 +145,23 @@ def read_unit_sizes(path, f):
     return rules
 
 
+OFF_NOTE = ("Switched off (a ';' before it in the file): the engine's default holds, not this value. A change "
+            "switches it on with the new value.")
+
+
 def read_ex(path, f):
     """[Rule] of an engine settings file (descr_ex.txt / descr_caps_ex.txt of REX or M2EX): 'key value' lines; the
     section is the last ';;;; / ; Heading / ;;;;' banner, the explanation the comment lines right above the key.
-    Settings left commented out are not offered (the engine's default holds)."""
+    A setting switched off by a ';' right before its key (';key value' - the editor's copies, the game's own
+    ';unit_group_mode vanilla') is offered too, marked off: the engine's default holds until a change switches it on."""
     rules, section, note, head = [], "switches" if "caps" in os.path.basename(path).lower() else "general", [], None    # head: None, 'open' (after a banner), 'in'
     for i, text in enumerate(f.texts()):
         s = text.strip()
         if not s:
             note = []
             continue
-        if s.startswith(";"):
+        off = re.match(r"\s*;(?=[A-Za-z_][\w.]*\s+[^\s;])", text)
+        if s.startswith(";") and not off:
             body = s.lstrip(";").strip()
             if not body:
                 if re.fullmatch(r";{3,}", s):     # a ';;;;' banner line: opens or closes a heading
@@ -167,15 +174,19 @@ def read_ex(path, f):
                 note.append(body)
             continue
         head = None
-        m = re.match(r"\s*([A-Za-z_][\w.]*)(\s+)([^;]*?)\s*(;.*)?$", text)
+        m = re.match(r"\s*;?([A-Za-z_][\w.]*)(\s+)([^;]*?)\s*(;.*)?$", text)
         if not m or not m.group(3):
             note = []
             continue
         value = m.group(3)
         start = m.start(3)
         kind = _kind("", value) if " " not in value and "\t" not in value else "words"
-        rules.append(Rule(path, section, m.group(1), "value", value, kind, i, start, start + len(value),
-                          "\n".join(note) or None))
+        if off:
+            note = note + [OFF_NOTE]
+        rule = Rule(path, section, m.group(1), "value", value, kind, i, start, start + len(value),
+                    "\n".join(note) or None)
+        rule.off = off.end() if off else None       # where its ';' ends
+        rules.append(rule)
         note = []
     return rules
 
@@ -423,9 +434,23 @@ def apply(plan, name, changes, own, base):
         text = f.text(rule.line)
         if text[rule.start:rule.end] != rule.value:
             raise ValueError("%s changed on disk since it was read - load again" % name)
-        f.set(rule.line, text[:rule.start] + new.strip() + text[rule.end:])
+        text = text[:rule.start] + new.strip() + text[rule.end:]
+        if getattr(rule, "off", None):              # switched on: its ';' goes
+            text = text[:rule.off - 1] + text[rule.off:]
+        f.set(rule.line, text)
         plan.note(f if own else None, "%s / %s: %s -> %s" % (rule.section, rule.key, rule.value, new.strip()))
     if not own:
+        from .gamefix import ENGINE_SETTINGS
+        if name.lower() in ENGINE_SETTINGS:         # report #174: the game's other values would change the mod
+            changed = {rule.line for rule in changes}
+            for i in range(len(f)):
+                if i not in changed and strip_comment(f.text(i)).strip():
+                    f.set(i, ";" + f.text(i))
+            plan.binary(target, f.dump())
+            plan.note(None, "%s: the mod had none - the game's copy is put in the mod with these changes on and "
+                            "every other setting switched off (';' before it: the engine's defaults, as before)"
+                      % name)
+            return
         plan.binary(target, f.dump())
         plan.note(None, "%s: the mod had none - the game's copy with these changes is put in the mod" % name)
 

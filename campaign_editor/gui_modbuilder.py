@@ -1,4 +1,5 @@
-"""The Module builder window (Module builder... in the top row, Add-ons > New module (no code)...): a new add-on put together
+"""The Module builder - a work of the main window (Module builder in the top row, Add-ons > New module (no code)...;
+the user, 2026-10-10: 'inside the main window, not a window of its own'): a new add-on put together
 from blocks - WHEN something happens, IF conditions hold, DO actions - each picked from lists in plain words, with the
 mod's own names to pick from. The sentence below says what it will do; any number or text may be made a setting the
 player changes later on the Add-ons page. Show the script / Check it / Save to my add-ons / Put it in the game (a
@@ -13,7 +14,7 @@ from .gui_util import scroll_body
 from . import addons as AD
 from . import modbuilder as MB
 from . import settings, theme
-from .gui_util import ScrollFrame, hint, one_window
+from .gui_util import ScrollFrame, hint
 from .plan import Plan
 
 TITLE = "Module builder"
@@ -42,14 +43,14 @@ HOW = ("A module is a small script the engine runs during the campaign: WHEN som
        "Each time it acts, the game's log (system.log.txt) gets a line starting with its name.")
 
 
-@one_window
-class ModuleBuilder(tk.Toplevel):
-    def __init__(self, app):
-        super().__init__(app)
+class ModuleBuilder(ttk.Frame):
+    """The builder in the main window's middle (App.editor 'builder'); a module not saved yet stays while other
+    works are shown (nothing dropped on a switch)."""
+    kind = "module builder"
+
+    def __init__(self, master, app):
+        super().__init__(master)
         self.app, self.mod = app, getattr(app, "mod", None)
-        self.title("%s - a new add-on without code" % TITLE)
-        self.geometry("1240x800")
-        self.transient(app)
         self.names = {}                  # {what: [the mod's names]} - read once per window
         self.recipe = MB.new_recipe()
         self.changed = False
@@ -86,9 +87,12 @@ class ModuleBuilder(tk.Toplevel):
         self.lb = tk.Listbox(left, width=36, height=22, exportselection=False)
         self.lb.pack(fill="both", expand=True)
         self.lb.bind("<<ListboxSelect>>", lambda e: self.pick_entry())
+        # a right click on one of my modules deletes it (the user, 2026-10-10: 'modules cannot be deleted from this
+        # list - a basic thing'); the examples are built in
+        self.lb.bind("<Button-3>", self._row_menu)
         ttk.Label(left, foreground="#666", wraplength=250, justify="left", text=(
             "An example is made for the loaded mod: its names (a unit, a building, a town) are the mod's own - "
-            "change any of them.")).pack(anchor="w", pady=(4, 0))
+            "change any of them. A right click on one of your modules deletes it.")).pack(anchor="w", pady=(4, 0))
         self.sf = ScrollFrame(body)
         from .gui_modscratch import ScratchView
         self.scratch = ScratchView(body, self)
@@ -104,11 +108,9 @@ class ModuleBuilder(tk.Toplevel):
         bar.pack(fill="x", pady=(6, 0))
         ttk.Button(bar, text="Show the script", command=self.show_script).pack(side="left")
         ttk.Button(bar, text="Check it", command=self.check).pack(side="left", padx=4)
-        ttk.Button(bar, text="Close", command=self.close).pack(side="right")
         ttk.Button(bar, text="Share...", command=self.share).pack(side="right", padx=4)
         ttk.Button(bar, text="Put it in the game...", command=self.put_in).pack(side="right")
         ttk.Button(bar, text="Save to my add-ons", command=self.save).pack(side="right", padx=4)
-        self.protocol("WM_DELETE_WINDOW", self.close)
         self.fill_list()
         self.load(self.recipe, fresh=True)
 
@@ -131,6 +133,35 @@ class ModuleBuilder(tk.Toplevel):
             for a, r in mine:
                 self.entries.append(("mine", r))
                 self.lb.insert("end", r.get("title") or a.title)
+
+    def _row_menu(self, e):
+        """Right click on the list: my module -> Open it / Delete it...; an example says it is built in."""
+        i = self.lb.nearest(e.y)
+        if i < 0 or i >= len(self.entries):
+            return
+        kind, r = self.entries[i]
+        if kind != "mine":
+            return
+        self.lb.selection_clear(0, "end")
+        self.lb.selection_set(i)
+        m = tk.Menu(self, tearoff=0)
+        m.add_command(label="Open it", command=self.pick_entry)
+        m.add_command(label="Delete it...", command=lambda: self.delete_mine(r))
+        m.tk_popup(e.x_root, e.y_root)
+
+    def delete_mine(self, recipe):
+        """One of my modules deleted from the editor (and from the game, if it is put in and that is wanted) - the
+        same as Add-ons' Delete from the editor... (gui_addons.delete_addon)."""
+        from .gui_addons import delete_addon
+        a = next((a for a, r in MB.my_modules() if r is recipe or r == recipe), None)
+        if a is None or not delete_addon(self, self.app, self.mod, a):
+            return
+        if self.recipe == recipe:                 # still on show: not saved anywhere now - asked before closing
+            self.changed = True
+        self.fill_list()
+        addons = self.app.editors.get("addons")
+        if addons is not None:                    # the Add-ons page's list says the same
+            addons.fill()
 
     def pick_entry(self):
         sel = self.lb.curselection()
@@ -761,24 +792,45 @@ class ModuleBuilder(tk.Toplevel):
         messagebox.showinfo(TITLE, "Saved %s - give it to others: Add-ons > Add an add-on... takes it, and the "
                                    "Module builder opens it again." % out, parent=self)
 
-    def close(self):
-        from .gui_util import ask_choice                  # never closes over an unsaved module silently
-        if self.changed:
-            k = ask_choice(self, TITLE, "The module is not saved yet.\n\nSave it to your add-ons now, keep working, "
-                                        "or throw it away?", ["Save to my add-ons", "Keep working", "Throw it away"],
-                           default=0, cancel=1, danger=2)
-            if k in (1, None):
-                return
-            if k == 0:
-                self.save()
-                if self.changed:
-                    return
-        self.destroy()
+    def may_close(self):
+        """The editor is closing: a module not saved yet is never thrown away silently - save, keep working (False:
+        the editor stays open) or throw it away."""
+        from .gui_util import ask_choice
+        if not self.changed:
+            return True
+        k = ask_choice(self, TITLE, "The module in the Module builder is not saved yet.\n\nSave it to your add-ons "
+                                    "now, keep working, or throw it away?",
+                       ["Save to my add-ons", "Keep working", "Throw it away"], default=0, cancel=1, danger=2)
+        if k in (1, None):
+            return False
+        if k == 0:
+            self.save()
+            return not self.changed
+        return True
+
+    # ---- a work of the main window (App.editor) ----
+    def rebind(self, mod):
+        """Another mod loaded: its names are picked from then on; the module on show stays."""
+        self.mod = mod
+        self.names = {}
+        return 0
+
+    def dirty(self):
+        return False                     # it writes on its own (Save / Put it in the game), never with Apply
+
+    def pending(self):
+        return 0
+
+    def make_plan(self):
+        raise ValueError("The Module builder writes on its own: Save to my add-ons, or Put it in the game...")
 
 
 def open_builder(app, recipe=None):
-    """The builder (one window); recipe: a module to open in it (a builder-made add-on)."""
-    w = ModuleBuilder(app)
+    """The builder shown in the main window (the 'builder' work); recipe: a module to open in it (a builder-made
+    add-on)."""
+    app.v_work.set("builder")
+    app.work_changed()
+    w = app.editors["builder"]
     if recipe is not None:
         w.load(recipe, confirm=True)
     return w
@@ -853,7 +905,7 @@ class EnginePicker(tk.Toplevel):
         self.event = cat["events"].get(getattr(self.when, "engine", None))
         self.title("Pick one of the %s - %s" % (ED.KIND_WORDS[what], MB.GAME_ENGINES.get(game, game)))
         self.geometry("1060x720")
-        self.transient(builder)
+        self.transient(builder.winfo_toplevel())
         words = ED.split_line(current)
         self.v_not = tk.BooleanVar(value=bool(words) and words[0] == "not")
         if words and words[0] == "not":

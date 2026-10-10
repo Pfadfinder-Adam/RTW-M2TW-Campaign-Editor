@@ -938,6 +938,105 @@ building smith
         self.assertIn("ui/units/beta/#alpha_general.tga", left)
         self.assertNotIn("ui/units/alpha/#alpha_general.tga", left)     # unchanged: the game has it
 
+    def test_thin_mod_readers_find_the_games_pictures(self):
+        """A mod folder keeps only what it changes (thin): every reader that walks a picture folder walks the game's
+        data under it too (the Recolour miss of a tester's test mod, audited 2026-10-09). A copied unit gets the cards
+        the game holds, a renamed dictionary too, a copied building its pictures; the game's files untouched."""
+        from campaign_editor import editors as E
+        game, _ = self._game()
+        gd = os.path.join(game, "data")
+        write(os.path.join(gd, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels hut house\n    {\n        hut requires factions { alpha, }\n"
+              "        {\n        }\n        house requires factions { alpha, }\n        {\n        }\n    }\n}\n")
+        write(os.path.join(gd, "ui", "roman", "buildings", "#roman_hut.tga"), "hut picture")
+        before = tree_hash(gd)
+        data, _ = create_mod(gd, "Beta")
+        mod = ModData(data)
+        self.assertEqual([n for n, _ in mod.listing("ui/units")], ["alpha"])          # the game's, seen from the mod
+        plan = Plan(mod, "u", "u", {})
+        E.copy_unit(plan, "alpha general", "alpha guard", "alpha_guard")
+        E.rename_dictionary(plan, "alpha_general", "alpha_general2")
+        E.copy_building(plan, "barracks", "camp", {"hut": "tent", "house": "hall"})
+        plan.apply()
+        for rel in ("ui/units/alpha/#alpha_guard.tga", "ui/unit_info/alpha/alpha_guard_info.tga",
+                    "ui/units/alpha/#alpha_general2.tga", "ui/roman/buildings/#roman_tent.tga"):
+            self.assertTrue(os.path.isfile(os.path.join(data, rel)), rel)
+        self.assertEqual(tree_hash(gd), before)
+        # a unit pack and a building pack from the thin mod carry the game's cards and pictures
+        from campaign_editor import packs as PK
+        _, files = PK.collect(ModData(data), ["alpha general"])
+        self.assertIn("ui/units/alpha/#alpha_general.tga", files)
+        _, files = PK.collect_buildings(ModData(data), ["barracks"])
+        self.assertIn("ui/roman/buildings/#roman_hut.tga", files)
+        # the Art tab and the faction tab's campaign-select pictures: the game's, under the same names
+        from campaign_editor import factionart as FA
+        import struct
+        with open(os.path.join(gd, "world", "maps", "campaign", "test", "leader_pic_alpha.tga"), "wb") as fh:
+            fh.write(struct.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, 69, 96, 24, 0) + b"\0" * (69 * 96 * 3))
+        os.makedirs(os.path.join(data, "world", "maps", "campaign", "test"), exist_ok=True)   # the mod's own, empty
+        mod = ModData(data)
+        rels = {e["rel"] for e in FA.start_pictures(mod, "test", "alpha")}
+        self.assertEqual(rels, {"world/maps/campaign/test/leader_pic_alpha.tga", "world/maps/campaign/test/map_alpha.tga"})
+        rels = {e["rel"] for e in FA.faction_pictures(mod, "test", "alpha")}
+        self.assertIn("world/maps/campaign/test/leader_pic_alpha.tga", rels)
+        self.assertFalse(any(r.startswith("..") for r in rels))
+
+    def test_rename_region_reaches_the_games_files_in_a_thin_mod(self):
+        """A region renamed in a mod folder that keeps only what it changes: a file only the game's data has that names
+        it (here its mercenary pool) is renamed too - as the mod's own copy, the game's untouched."""
+        from campaign_editor import regionrename as RR
+        game, _ = self._game()
+        gd = os.path.join(game, "data")
+        merc = os.path.join(gd, "world", "maps", "campaign", "test", "descr_mercenaries.txt")
+        write(merc, "pool p1\n    regions B_R\n    unit rebel spear\texp 0 cost 100 replenish 0.1 - 0.2 max 2 initial 1\n")
+        before = open(merc).read()
+        data, _ = create_mod(gd, "Beta")
+        plan = Plan(ModData(data), "rename", "B_R", {})
+        RR.rename(plan, "test", "B_R", "B_R2")
+        plan.apply()
+        self.assertEqual(open(merc).read(), before)
+        mine = open(os.path.join(data, "world", "maps", "campaign", "test", "descr_mercenaries.txt")).read()
+        self.assertIn("regions B_R2", mine)
+
+    def test_rename_faction_reaches_glued_names_and_the_games_files(self):
+        """Report R-20261009-CDDAF0 (the test mod on Medieval II with M2EX): venice renamed venice_ce, then the game
+        closed at start - 'Unknown attribute type(Combat_V_Faction_Venice)': the trait effect glues the faction's
+        name to Combat_V_Faction_ and was not taken for its name. And in a thin mod a file only the game's data has
+        must be renamed too - into the mod's own copy, the game's file untouched."""
+        from campaign_editor import factionrename as FR
+        game, _ = self._game()
+        traits = os.path.join(game, "data", "export_descr_character_traits.txt")
+        write(traits, "Trait Fearsalpha\n    Characters family\n\n    Level Afraid\n"
+                      "        Effect Combat_V_Faction_Alpha -1 \n        Effect Combat_V_Faction_alphabet 1\n"
+                      ";------------------------------------------\nTrigger t1\n    WhenToTest PreBattle\n"
+                      "    Condition FactionType alpha\n")
+        before = open(traits).read()
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        mod = ModData(data)
+        plan = Plan(mod, "rename", "alpha_ce", {})
+        FR.plan_rename(plan, "test", "alpha", "alpha_ce")
+        plan.apply()
+        self.assertEqual(open(traits).read(), before)                       # the game's own file untouched
+        mine = open(os.path.join(data, "export_descr_character_traits.txt")).read()
+        self.assertIn("Effect Combat_V_Faction_Alpha_ce -1", mine)          # the case as written
+        self.assertIn("Combat_V_Faction_alphabet 1", mine)                 # another name, left
+        self.assertIn("Condition FactionType alpha_ce", mine)
+        self.assertIn("Trait Fearsalpha", mine)                            # a trait's own name stays
+
+    def test_recolour_finds_the_templates_cards_under_a_thin_mod(self):
+        """Report R-20261009-4D53CB (the test mod on Rome with REX): a clone's cards stayed its template's red after
+        Recolour - in a thin mod the template's cards lie in the game's data only, so none was found to compare with
+        and the cards were taken for the clone's own colours. The game's own data counts too."""
+        from campaign_editor import recolour as R
+        game, _ = self._game()
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        build(ModData(data), "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}}).apply()
+        cards = [it for it in R.targets(ModData(data), "test", "beta")
+                 if not isinstance(it, str) and it["group"] == "unit cards" and it["rel"].endswith("#alpha_general.tga")]
+        self.assertTrue(cards)
+        self.assertIn("alpha", cards[0]["of"])
+        self.assertTrue(cards[0]["others"][cards[0]["of"].index("alpha")][0].startswith(os.path.join(game, "data")))
+
     def test_thin_mod_gets_its_whole_map_folder_on_a_map_change(self):
         """A thin mod's first map change (a town deleted with its region) brings the game's whole map folder into the
         mod - but map.rwm, which the game builds again from the mod's map; the game's files are never written; Restore
@@ -3897,6 +3996,11 @@ building smith
         self.assertEqual(os.path.basename(launch.start_line(hlr)["bat"]), "Start_mod.bat")
         put(os.path.join(rome, "HLR", "Start_HLR.bat"), "start REX.exe -mod:HLR\r\n")
         self.assertEqual(os.path.basename(launch.start_line(hlr)["bat"]), "Start_HLR.bat")
+        deeper = data(rome, "mods", "my_r2")            # report #177: a Rome mod in mods/<name>
+        self.assertEqual(launch.start_line(deeper)["args"], ["-nm", "-show_err", "-mod:mods/my_r2"])
+        self.assertEqual(launch.what(deeper), ("Rome", "my_r2"))
+        put(os.path.join(rome, "my_r2.bat"), "start REX.exe -nm -mod:mods/my_r2\r\n")
+        self.assertEqual(launch.start_line(deeper)["bat"], os.path.join(rome, "my_r2.bat"))
         m2 = os.path.join(self.root, "m2")
         put(os.path.join(m2, "M2EX.exe"))
         put(os.path.join(m2, "Teutonic.bat"), 'start "" "%~dp0M2EX.exe" --features.mod=mods/teutonic\r\n')
@@ -4719,6 +4823,15 @@ building smith
         self.assertFalse(os.path.isfile(UK.mark_path(mod)))
         self.assertIsNone(AD.installed(ModData(self.root), a))
 
+    def test_every_addon_says_what_it_needs_in_words(self):
+        """Report R-20261009-30F6C9 (Rome with REX, BI): a click on Upkeep x 2 in Add-ons crashed - its 'needs' was
+        an empty list and the page writes 'Needs: ' + needs (Share's README too). Every add-on says it in words."""
+        from campaign_editor import addons as AD
+        for a in AD.ADDONS:
+            self.assertIsInstance(a.needs, str, a.key)
+            self.assertTrue(a.needs.strip(), a.key)
+        self.assertIn("no engine", AD.by_key("upkeep_x2").needs)
+
     def test_rules_that_broke_the_game_are_kept(self):
         # recruitment slots lowered to 0 stopped all recruiting in a test - no crash, so the field stays free (FREEDOM
         # FIRST, 2026-10-09): what happened is said in its tip, any value is taken
@@ -4926,6 +5039,64 @@ building smith
         self.assertEqual(gamefix.missing_engine_files(ModData(mod.data)), [])
         restore(ModData(mod.data), backups(ModData(mod.data))[0])
         self.assertFalse(os.path.exists(os.path.join(mod.data, "descr_ex.txt")))
+
+    def test_engine_files_copied_with_every_setting_off(self):
+        """Report #174: the game's descr_caps_ex.txt copied into a mod as it was switched M2EX to
+        model_battle_source text - the mod's own battle_models.modeldb went unread and the game closed at start
+        ('Could not find soldier battle model'). The copy now has every setting switched off (the mod runs on the
+        engine's defaults, as before); the lighting / AI *_ex files are not copied at all."""
+        from campaign_editor import gamefix, modeldb, symbols
+        game = os.path.join(self.root, "game")
+        write(os.path.join(game, "medieval2.exe"), "x")
+        write(os.path.join(game, "M2EX.exe"), "x")
+        write(os.path.join(game, "data", "descr_caps_ex.txt"),
+              "; header\nsprite_format  xml\n\nmodel_battle_source  text ; the game's own\n  ;x\n")
+        write(os.path.join(game, "data", "descr_strategy_lighting_ex.txt"), "exposure 1.0\n")
+        write(os.path.join(game, "data", "descr_campaign_ai_db_ex.xml"), "<root/>\n")
+        write(os.path.join(game, "data", "descr_religions.txt"), "x\n")
+        write(os.path.join(game, "data", "descr_sm_factions.txt"), SM)
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "mods", "m", "data"))
+        mod = ModData(os.path.join(game, "mods", "m", "data"))
+        found = [p for p in gamefix.problems(mod) if p["id"] == "engine_files"]
+        self.assertEqual(found[0]["names"], ["descr_caps_ex.txt"])
+        gamefix.fix_plan(mod, found).apply()
+        with open(os.path.join(mod.data, "descr_caps_ex.txt"), "rb") as fh:
+            self.assertEqual(fh.read(), b"; header\r\n;sprite_format  xml\r\n\r\n;model_battle_source  text ; "
+                                        b"the game's own\r\n  ;x\r\n")
+        mod = ModData(mod.data)
+        self.assertFalse(modeldb.text_source(mod))
+        self.assertEqual(symbols.sprite_mode(mod), "sd")
+        self.assertFalse(os.path.exists(os.path.join(mod.data, "descr_strategy_lighting_ex.txt")))
+
+    def test_model_battle_text_without_the_mods_own_text_file(self):
+        """Report #174: a mod with its own battle_models.modeldb, no descr_model_battle.txt of its own and
+        model_battle_source text in its descr_caps_ex.txt closes M2EX at start - offered: modeldb."""
+        from campaign_editor import gamefix, modeldb
+        game = os.path.join(self.root, "game")
+        write(os.path.join(game, "medieval2.exe"), "x")
+        write(os.path.join(game, "M2EX.exe"), "x")
+        write(os.path.join(game, "data", "descr_religions.txt"), "x\n")
+        write(os.path.join(game, "data", "descr_sm_factions.txt"), SM)
+        write(os.path.join(game, "data", "descr_model_battle.txt"), "type x\n")
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "mods", "m", "data"))
+        data = os.path.join(game, "mods", "m", "data")
+        write(os.path.join(data, "descr_ex.txt"), "max_factions 31\n")
+        write(os.path.join(data, "descr_caps_ex.txt"), "sprite_format  xml\nmodel_battle_source  text\n")
+        mod = ModData(data)
+        self.assertFalse([p for p in gamefix.problems(mod) if p["id"] == "model_battle_source"])   # no modeldb
+        write(os.path.join(data, "unit_models", "battle_models.modeldb"), "22 serialization::archive 3 0 0 0 0 0\n")
+        mod = ModData(data)
+        found = [p for p in gamefix.problems(mod) if p["id"] == "model_battle_source"]
+        self.assertEqual(len(found), 1)
+        gamefix.fix_plan(mod, found).apply()
+        with open(os.path.join(data, "descr_caps_ex.txt"), "rb") as fh:
+            self.assertEqual(fh.read(), b"sprite_format  xml\r\nmodel_battle_source  modeldb\r\n")
+        mod = ModData(data)
+        self.assertFalse(modeldb.text_source(mod))
+        self.assertFalse([p for p in gamefix.problems(mod) if p["id"] == "model_battle_source"])
+        write(os.path.join(data, "descr_caps_ex.txt"), "model_battle_source  text\n")
+        write(os.path.join(data, "descr_model_battle.txt"), "type x\n")       # its own text file: left alone
+        self.assertFalse([p for p in gamefix.problems(ModData(data)) if p["id"] == "model_battle_source"])
 
     def test_engine_settings_come_from_the_mods_own_files_only(self):
         """REX / M2EX read a mod's descr_ex.txt / descr_caps_ex.txt from the mod alone ("Mods that don't ship this
@@ -5744,9 +5915,15 @@ building smith
                      '"verdana_sml"', '"BEVEL_TL"', "AG_M2_ROW", "root.persistent", '"SettlementTurnStart"',
                      "settlementScroll", "rawdelete"):
             self.assertIn(part, text)
-        # the box of the scroll's own Auto-manage tick first (a tester: 'make the squares the same as the game's'),
-        # the small plain one where it is missing
-        self.assertLess(text.index('["CHECKBOX_BG"'), text.index('"PLAIN_CHECKBOX_BG"'))
+        # the scroll's own ticks are the small bevelled PLAIN_CHECKBOX pieces in BOTH games (a tester's Medieval II
+        # screen, 2026-10-09: CHECKBOX_BG drew a flat pink square beside them); the words as high as the game's
+        m2 = text[text.index("local AG_SPRITES_M2"):text.index("local AG_SPRITES_ROME")]
+        self.assertLess(m2.index('"PLAIN_CHECKBOX_BG"'), m2.index('"CHECKBOX_BG"'))
+        # measured on a tester's PrintScreen (1596 x 900): the game's words lighter, smaller, spaced wider; its box
+        # 24 x 17 units, wider than high; the row 66 units under the population figures
+        for part in ("local AG_M2_TEXT = 12.5", "local AG_M2_TRACK = 1.3", "local AG_M2_BOX = [24, 17]",
+                     "local AG_INK_M2 = [147, 131, 107, 255]", "local AG_M2_ROW = [472, 66]"):
+            self.assertIn(part, text)
         self.assertNotIn("delete ", text.replace("rawdelete", ""))         # the engines forbid 'delete'
         got = A.read_settings(a, text)
         self.assertEqual(A.render(a, text, got), text)
@@ -7529,7 +7706,7 @@ building smith
 
     def test_new_army_made_a_general(self):
         """Map > New army, 'Make him a general': his army starts with the faction's general's bodyguard (general_unit
-        in the unit file), so the game shows him as a general with his own name, not a captain."""
+        in the unit file), and he is a named character (on no relative line) - the game shows a general, not a captain."""
         from campaign_editor.edit import bodyguard_unit
         mod = ModData(self.root)
         self.assertIsNone(bodyguard_unit(mod, "test", "alpha"))        # no general_unit: nothing to give
@@ -7542,6 +7719,30 @@ building smith
         self.assertEqual(bodyguard_unit(mod, "test", "alpha"), "alpha bodyguard")   # the plain one before an upgrade
         self.assertEqual(bodyguard_unit(mod, "test", "slave"), "alpha bodyguard")   # one the rebels may own
         self.assertIsNone(bodyguard_unit(mod, "test", "beta"))
+        # written as a NAMED CHARACTER: descr_strat's 'general' is a captain whatever he leads - the game showed
+        # 'Captain <name>' for one 'made a general' (a tester, 2026-10-09); without the tick he stays 'general'
+        from campaign_editor.edit import map_changes
+        from campaign_editor.plan import Plan
+        from campaign_editor.start import general_here
+        taken = set(mod.city_tiles("test").values()) | {(1, 1), (2, 2)}
+        free = mod.free_tile("test", "A_R", taken)
+        other = mod.free_tile("test", "A_R", taken | {free})
+        plan = Plan(mod, "map", "map", {})
+        map_changes(plan, "test", {"characters": {"alpha": [
+            {"kind": "army", "name": "Boris", "age": 30, "units": ["alpha bodyguard"], "xy": free, "general": True},
+            {"kind": "army", "name": "Aaron", "age": 30, "units": ["alpha bodyguard"], "xy": other}]}})
+        bdir = plan.apply()
+        st = Strat(ModData(self.root).load(ModData(self.root).campaign_file("test", "descr_strat.txt")))
+        kinds = {c.name: c.kind for c in st.faction("alpha").characters}
+        self.assertEqual(kinds["Boris"], "named character")
+        self.assertEqual(kinds["Aaron"], "general")
+        restore(ModData(self.root), bdir)
+        rome = ["character\tBrennus, general, age 30, , x 1, y 1"]
+        m2 = ["character\tRobert, general, male, age 30, x 1, y 1"]
+        self.assertFalse(general_here({"general": True}, rome, "slave"))     # Rome's rebels: no named one to copy
+        self.assertTrue(general_here({"general": True}, m2, "slave"))        # Medieval II's have them (El Cid)
+        self.assertTrue(general_here({"general": True}, rome, "alpha"))
+        self.assertFalse(general_here({}, m2, "alpha"))
 
     def test_recolour_keeps_a_bright_colour_of_its_own(self):
         # a tester's emblem: a gold wolf and laurel on red turned red - the rim growth took bright gold for red
@@ -7674,6 +7875,123 @@ building smith
                     short_name="Epirus")
         self.assertEqual(swap(rome, "the Kingdom of Macedon"), "the Kingdom of Epirus")
 
+    def test_models_tab_lists_only_the_types_own_models(self):
+        """The Models tab's list of a character type: the strat models descr_character.txt gives that type (any
+        faction) and the mod's own new ones no type uses - not the other types' nor the old unused entries (Medieval
+        II's file still carries Rome's sm_roman_general, a tester picked it for a general)."""
+        from campaign_editor import stratmodels as SM
+        data = os.path.join(self.root, "data")
+        write(os.path.join(data, "descr_character.txt"),
+              "type named character\nactions x\nwage_base 0\nfaction england\nstrat_model northern_general\n"
+              "faction moors\nstrat_model islamic_general\n"
+              "type spy\nactions x\nfaction england, moors\nstrat_model northern_spy\n")
+        write(os.path.join(data, "descr_model_strat.txt"),
+              "".join("type %s\nmodel_flexi models_strat/%s.cas, max\n" % (n, n) for n in (
+                  "northern_general", "islamic_general", "northern_spy", "sm_roman_general")))
+        mod = ModData(data)
+        self.assertEqual(SM.type_models(mod, "named character"), ["islamic_general", "northern_general"])
+        self.assertEqual(SM.type_models(mod, "spy"), ["northern_spy"])
+        game = os.path.join(self.root, "game")                 # a mod's own new model no type uses: offered
+        write(os.path.join(game, "medieval2.exe"), "x")
+        shutil.copytree(data, os.path.join(game, "data"))
+        shutil.copytree(data, os.path.join(game, "mods", "m", "data"))
+        with open(os.path.join(game, "mods", "m", "data", "descr_model_strat.txt"), "a") as fh:
+            fh.write("type my_general\nmodel_flexi models_strat/mine.cas, max\n")
+        mod = ModData(os.path.join(game, "mods", "m", "data"))
+        self.assertEqual(SM.type_models(mod, "spy"), ["my_general", "northern_spy"])
+
+    def test_a_mount_alone_takes_its_whole_texture(self):
+        """A Medieval II mount's parts lay their u over the whole picture (no man's half / weapons' half): shown alone
+        it takes one picture - half the horse was drawn white (a tester); a man's body under the middle keeps two."""
+        from campaign_editor import meshview as MV
+        horse = MV.Mesh([MV.Group("Body", "horse", (0, 1, 2), False)], [(0, 0, 0)] * 3, [(0.1, 0), (0.9, 0), (0.5, 1)])
+        man = MV.Mesh([MV.Group("Body", "man", (0, 1, 2), False), MV.Group("primaryactive0", "x", (3, 4, 5), True)],
+                      [(0, 0, 0)] * 6, [(0.1, 0), (0.4, 0), (0.2, 1), (0.6, 0), (0.9, 0), (0.7, 1)])
+        self.assertTrue(MV.whole_picture(horse))
+        self.assertFalse(MV.whole_picture(man))
+        self.assertTrue(all(g.one for g in MV.one_picture(horse.groups)))
+
+    def test_cards_made_from_the_3d_view(self):
+        """Make a card / picture: the view drawn on black and on white gives the figure with its see-through ground
+        (edges part see-through, their colour kept); framed as the games' cards - a part from the head down, the
+        whole man in the middle - at the mod's size; laid on a colour or a picture, or left see-through."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from campaign_editor import cardmaker as CM
+        black, white = Image.new("RGB", (100, 200), (0, 0, 0)), Image.new("RGB", (100, 200), (255, 255, 255))
+        for im in (black, white):
+            im.paste((200, 40, 40), (40, 20, 60, 180))                  # a man 20 wide, 160 tall
+            im.putpixel((39, 100), (100, 20, 20) if im is black else (227, 147, 147))     # an edge half see-through
+        fig = CM.cut_out(black, white)
+        self.assertEqual(fig.getpixel((50, 50)), (200, 40, 40, 255))
+        self.assertEqual(fig.getpixel((5, 5))[3], 0)
+        self.assertEqual(fig.getpixel((39, 100))[3], 128)
+        self.assertLess(abs(fig.getpixel((39, 100))[0] - 199), 3)          # its own colour back, not darkened
+        card = CM.frame(fig, (48, 64), "thighs")
+        self.assertEqual(card.size, (48, 64))
+        top = min(y for y in range(64) if any(card.getpixel((x, y))[3] > 128 for x in range(48)))
+        self.assertLessEqual(top, 4)                                       # the head at the top
+        self.assertTrue(any(card.getpixel((x, 63))[3] > 128 for x in range(48)))     # cut at the bottom
+        whole = CM.frame(fig, (160, 210), "whole")
+        rows = [y for y in range(210) if any(whole.getpixel((x, y))[3] > 128 for x in range(160))]
+        self.assertTrue(rows[0] > 0 and rows[-1] < 209)                    # all of him, room above and below
+        self.assertEqual(CM.on_ground(card, (10, 20, 30)).getpixel((0, 0)), (10, 20, 30, 255))
+        self.assertEqual(CM.on_ground(card, Image.new("RGB", (7, 9), (5, 6, 7))).getpixel((0, 0)), (5, 6, 7, 255))
+        self.assertEqual(CM.on_ground(card).getpixel((0, 0))[3], 0)
+        body = CM.frame(fig, (48, 64), "thighs", box=(40, 100, 60, 180))  # framed by a box: lower on him
+        self.assertNotEqual(list(body.getdata()), list(card.getdata()))
+        self.assertEqual(CM.picture_size("medieval2", None, True), (256, 384))
+        self.assertEqual(CM.picture_size("rome", (52, 70, 32), False), (52, 70))
+
+    def test_battle_animations_from_the_packs(self):
+        """The games' animation packs (pack.idx + pack.dat): each animation's frames, bones and kind, every bone's turn
+        per frame and the offsets of its first `kind` bones; descr_skeleton's animations per skeleton, a Medieval II
+        skeleton's parent's taken over; a Medieval II mesh posed from its base pose by its points' bones."""
+        import struct
+        from campaign_editor import animations as AN, meshview as MV
+
+        def record(frames, bones, kind, turn, offset):
+            return struct.pack("<HHB", frames, bones, kind) + b"".join(
+                struct.pack("<4f", *turn) for _ in range(frames * bones)) + b"".join(
+                struct.pack("<3f", *offset) for _ in range(frames * kind)) + b"\x00" * 40
+        anims = [("data/animations/MTW2_Bowman/base.cas", record(1, 20, 1, (0, 0, 0, 1), (0, 1, 0))),
+                 ("data/animations/MTW2_Bowman/stand.cas", record(3, 20, 20, (0, 0, 0, 1), (0, 0.5, 0))),
+                 ("data/animations/MTW2_Bowman/turn.cas", record(2, 20, 20, (0, 1, 0, 0), (0, 0.5, 0)))]
+        idx = bytearray(b"ANIM.PACK\x00\x00\x00" + struct.pack("<II", 9, len(anims)))
+        dat = bytearray(idx)
+        for name, rec in anims:
+            idx += struct.pack("<IIIfHHB", len(name) + 10, len(dat), len(rec), 1.0, *struct.unpack_from("<HHB", rec))
+            idx += name.encode() + b"\x00"
+            dat += rec
+        folder = os.path.join(self.root, "data", "animations")
+        os.makedirs(folder)
+        for n, b in (("pack.idx", idx), ("pack.dat", dat)):
+            with open(os.path.join(folder, n), "wb") as fh:
+                fh.write(bytes(b))
+        write(os.path.join(self.root, "data", "descr_skeleton.txt"),
+              "type MTW2_Bowman\nanim default data/animations/MTW2_Bowman/base.cas ; the base pose\n"
+              "anim stand_a_idle data/animations/MTW2_Bowman/stand.cas -fr -evt:x.evt\n"
+              "anim missing data/animations/MTW2_Bowman/none.cas\n"
+              "type MTW2_Fast_Bowman\nparent MTW2_Bowman\nanim stand_a_idle data\\animations\\MTW2_Bowman\\turn.cas\n")
+        mod = ModData(os.path.join(self.root, "data"))
+        self.assertEqual([(e.name, e.frames, e.bones, e.kind) for e in AN.read_index(bytes(idx))][1],
+                         ("data/animations/MTW2_Bowman/stand.cas", 3, 20, 20))
+        a = AN.find(mod, "DATA/animations/mtw2_bowman/STAND.cas")
+        self.assertEqual((a.frames, len(a.rotations(2)), a.offsets(1)[19]), (3, 20, (0, 0.5, 0)))
+        self.assertEqual([w for w, _ in AN.of_skeleton(mod, "mtw2_bowman")], ["default", "stand_a_idle"])
+        self.assertEqual(AN.of_skeleton(mod, "MTW2_Fast_Bowman")[1],
+                         ("stand_a_idle", "data\\animations\\MTW2_Bowman\\turn.cas"))
+        rot, off = AN.base_pose(mod, "MTW2_Bowman")
+        self.assertEqual((len(rot), off[0], off[5]), (20, (0, 1, 0), (0, 0.5, 0)))   # the others' offsets filled in
+        mesh = MV.Mesh([MV.Group("Body", "x", (0, 1, 2), False)], [(1, 1, 0), (0, 1, 1), (0, 1, 0)], None)
+        mesh.skin = [(0, 4, 1.0, 0.0), (20, 16, 1.0, 0.0), (0, 0, 0.0, 0.0)]       # a weapon point: its hand holds it
+        turned = MV.pose_mesh(mesh, MV.Pose.of(AN.find(mod, "data/animations/MTW2_Bowman/turn.cas"), 0), (rot, off))
+        for got, want in zip(turned.positions[0], (-1, 0.5, 0)):          # half round the up axis at the pelvis
+            self.assertAlmostEqual(got, want, places=5)
+        self.assertIsNone(MV.pose_mesh(MV.Mesh(mesh.groups, mesh.positions, None), MV.Pose(rot, off), (rot, off)))
+
     def test_read_and_draw_a_rome_cas(self):
         """A Rome .cas laid out as the vanilla ones (3.05): header with the bone count and parents, frame times, bone
         records, rest places, a shield hanging on a bone and a body whose points hang on a bone. Read back, put
@@ -7717,6 +8035,10 @@ building smith
         for got, want in zip(m.positions[15], (0.1, 1.1, 0.1)):             # the body on the pelvis, 1 up
             self.assertAlmostEqual(got, want, places=5)
         self.assertEqual(len(m.shown(weapons=False)), 1)                     # the shield hidden
+        # an animation's frame: the pelvis turned half round the up axis and 2 up - its points follow
+        posed = MV.read_cas(data, MV.Pose([(0, 1, 0, 0)], [(0, 2, 0)]))
+        for got, want in zip(posed.positions[15], (-0.1, 2.1, -0.1)):
+            self.assertAlmostEqual(got, want, places=5)
         with self.assertRaises(MV.MeshError):
             MV.read_cas(b"\x00" * 80)
         try:
@@ -7739,7 +8061,11 @@ building smith
         with open(path, "w", newline="") as fh:
             fh.write(text)
         rules = {r.key: r for r in CR.read(path)}
-        self.assertEqual(sorted(rules), ["age_of_manhood", "max_factions", "range_indicator_colour"])
+        self.assertEqual(sorted(rules), ["age_of_manhood", "max_factions", "range_indicator_colour",
+                                         "unit_group_mode"])
+        self.assertTrue(rules["unit_group_mode"].off)                      # ';unit_group_mode vanilla': off
+        self.assertIn("Switched off", CR.explain(rules["unit_group_mode"]))
+        self.assertIsNone(rules["age_of_manhood"].off)
         self.assertEqual(rules["max_factions"].section, "Extended settings")
         self.assertEqual(CR.explain(rules["max_factions"]), "Maximum number of factions\nIncrease for mods")
         self.assertEqual(rules["age_of_manhood"].section, "Family and ageing")
@@ -7752,6 +8078,28 @@ building smith
         with open(path, newline="") as fh:
             self.assertEqual(fh.read(), text.replace("age_of_manhood 16", "age_of_manhood 14").replace(
                 "60 200 255", "1 2 3"))
+        rules = {r.key: r for r in CR.read(path)}
+        plan = Plan(ModData(self.root), "rules", "rules")
+        CR.apply(plan, "descr_ex.txt", {rules["unit_group_mode"]: "new"}, path, None)    # switched on
+        plan.apply()
+        with open(path, newline="") as fh:
+            self.assertIn("\r\nunit_group_mode new\r\n", fh.read())
+
+    def test_engine_settings_put_in_a_mod_by_campaign_rules(self):
+        """Report #174: a rule changed in a mod without its own descr_caps_ex.txt puts the game's copy in with that
+        line on and every other setting switched off - the game's model_battle_source text no longer comes along."""
+        from campaign_editor import campaignrules as CR
+        from campaign_editor.plan import Plan
+        base = os.path.join(self.root, "game", "data", "descr_caps_ex.txt")
+        os.makedirs(os.path.dirname(base))
+        with open(base, "w", newline="") as fh:
+            fh.write("; switches\r\nmodel_battle_source  text\r\ndefault_recruitment_slots  0\r\n")
+        rules = {r.key: r for r in CR.read(base)}
+        plan = Plan(ModData(self.root), "rules", "rules")
+        CR.apply(plan, "descr_caps_ex.txt", {rules["default_recruitment_slots"]: "2"}, None, base)
+        plan.apply()
+        with open(os.path.join(self.root, "data", "descr_caps_ex.txt"), newline="") as fh:
+            self.assertEqual(fh.read(), "; switches\r\n;model_battle_source  text\r\ndefault_recruitment_slots  2\r\n")
 
     def test_test_mod_report_puts_steps_to_look_at_first(self):
         """The test mod's report (the user, 2026-10-08: 'drop the steps that always work?' - kept, but marked): steps
@@ -7880,6 +8228,77 @@ building smith
             self.assertGreater(min(y for _, y in places[2:]), max(y for _, y in places[:2]))   # right ones below
         places, _ = flow_places(items, 300)
         self.assertEqual(places[3][0] + 60, 300)            # a wrapped right row still ends at the right edge
+
+    def test_lists_scroll_by_dragging_with_no_scrollbar(self):
+        """No scrollbar anywhere (it only took room): a list, a table or a read-only text follows a left-button drag
+        both ways, the rows picked before stay picked; an editable text keeps the drag for selecting its words."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display (CI): the window is not tested here
+            self.skipTest("no window: %s" % e)
+        from campaign_editor.gui_util import install_window_helpers
+        try:
+            root.geometry("400x300+0+0")
+            install_window_helpers(root)
+            tv = ttk.Treeview(root, columns=("a", "b"), show="tree headings", height=6)
+            for c in ("#0", "a", "b"):
+                tv.column(c, width=300, stretch=False)
+            rows = [tv.insert("", "end", text="row %d" % i, values=(i, i)) for i in range(200)]
+            sb = ttk.Scrollbar(root, command=tv.yview)
+            sb.pack(side="right", fill="y")
+            tv.pack(fill="both", expand=True)
+            text = tk.Text(root, height=3)
+            text.pack(fill="x")
+            text.insert("1.0", "\n".join(str(i) for i in range(100)))
+            root.update()
+
+            def drag(w, x, y, dx, dy):
+                w.event_generate("<ButtonPress-1>", x=x, y=y)
+                for k in range(1, 6):
+                    w.event_generate("<B1-Motion>", x=x + dx * k // 5, y=y + dy * k // 5, state=0x100)
+                w.event_generate("<ButtonRelease-1>", x=x + dx, y=y + dy)
+                root.update()
+            self.assertFalse(sb.winfo_ismapped())
+            tv.selection_set(rows[3])
+            drag(tv, 200, 100, -120, -60)
+            self.assertGreater(tv.yview()[0], 0)
+            self.assertGreater(tv.xview()[0], 0)
+            self.assertEqual(tv.selection(), (rows[3],))
+            drag(text, 40, 20, 0, -30)
+            self.assertEqual(text.yview()[0], 0)            # editable: the drag selected words
+        finally:
+            root.destroy()
+
+    def test_shore_line_only_on_coast_and_heights(self):
+        """The game's shore line is drawn on the Coast & heights tab (its tick), never on the Terrain tab - zoomed in
+        there it showed up."""
+        try:
+            from campaign_editor.gui_terrain import TerrainEditor
+        except ImportError:                                # no tkinter here (the CI test job has it)
+            return
+        from types import SimpleNamespace
+        tick = SimpleNamespace(get=lambda: True)
+        self.assertFalse(TerrainEditor._shore_wanted(SimpleNamespace(group="terrain", v_shore=tick)))
+        self.assertTrue(TerrainEditor._shore_wanted(SimpleNamespace(group="heights", v_shore=tick)))
+        self.assertFalse(TerrainEditor._shore_wanted(SimpleNamespace(group="heights",
+                                                                     v_shore=SimpleNamespace(get=lambda: False))))
+
+    def test_middle_button_autoscroll_speed(self):
+        """The middle button's autoscroll: still round the press point, faster the further the mouse goes, down
+        for below and up for above."""
+        try:
+            from campaign_editor.gui_util import AUTO_DEAD, auto_speed
+        except ImportError:                                # no tkinter here (the CI test job has it)
+            return
+        self.assertEqual(auto_speed(0), 0)
+        self.assertEqual(auto_speed(AUTO_DEAD), 0)
+        self.assertEqual(auto_speed(-AUTO_DEAD), 0)
+        self.assertGreater(auto_speed(AUTO_DEAD + 1), 0)
+        self.assertLess(auto_speed(-AUTO_DEAD - 1), 0)
+        self.assertGreater(auto_speed(300), auto_speed(100))
+        self.assertEqual(auto_speed(-200), -auto_speed(200))
 
     def test_dds_written_with_the_games_own_header(self):
         """A compressed DDS (Rome .tga.dds, the DDS inside a Medieval II .texture) keeps the top level's byte size
@@ -8651,6 +9070,10 @@ building smith
         attrs = CP.attributes("medieval2", "named character", "leader", [("GoodCommander", 1)], td,
                               ["shieldbearer"], ad)
         self.assertEqual(attrs, [("Command", 3), ("Dread", 3), ("Authority", 0), ("Piety", 0)])
+        # the heir keeps Loyalty - the game shows Authority for the faction leader alone (a tester's Army Details of
+        # Medieval II's heir, Prince Edward with 'Heir Apparent': Command, Dread, Loyalty, Piety)
+        self.assertEqual([a for a, _ in CP.attributes("medieval2", "named character", "heir", [], td, [], ad)],
+                         ["Command", "Chivalry", "Loyalty", "Piety"])
         self.assertEqual(CP.attributes("rome", "spy", "", [], td, [], ad), [("Subterfuge", 0)])
         got = CP.panel(mod, {"name": "Aaron", "age": 40, "kind": "named character", "role": "leader", "source": "map",
                              "traits": [("GoodCommander", 1)], "ancillaries": ["shieldbearer"]}, td, ad)
@@ -9444,6 +9867,52 @@ building smith
         with open(edu_path) as fh:
             self.assertIn("stat_cost\t1, 400, 170", fh.read())
 
+    def test_picture_viewer_zoom(self):
+        """A click on a picture opens it big (the user, 2026-10-09): a small one enlarged by whole steps (sharp), a big
+        one made smaller to fit; the wheel walks the steps; the line under it names file, size and format."""
+        try:
+            import tkinter  # noqa: F401
+        except ImportError:
+            self.skipTest("no tkinter")
+        from campaign_editor import gui_picview as PV
+        self.assertEqual(PV.first_zoom(24, 24, 1000, 700), 24)            # a 24 px button: 24 times, every pixel sharp
+        self.assertEqual(PV.first_zoom(2048, 2048, 1000, 700), 0.25)
+        self.assertEqual(PV.first_zoom(69, 96, 1000, 700), 6)
+        self.assertEqual(PV.next_zoom(1, True), 1.5)
+        self.assertEqual(PV.next_zoom(1, False), 0.75)
+        self.assertEqual(PV.next_zoom(32, True), 32)
+        self.assertEqual(PV.next_zoom(0.125, False), 0.125)
+
+    def test_start_screen_pictures_on_the_faction_tab(self):
+        """The campaign-select map and the leader's face go from the Art list to the faction tab, beside the
+        description (the user, 2026-10-09: 'as in the game'): start_pictures finds just those two (campaign
+        folder and data/menu), map first; faction_pictures still has them, flagged, so Art leaves them out."""
+        import struct
+        from campaign_editor import factionart as FA
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        menu = os.path.join(self.root, "data", "menu")
+        os.makedirs(menu, exist_ok=True)
+
+        def tga(path, w, h):
+            with open(path, "wb") as fh:
+                fh.write(struct.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, w, h, 24, 0) + b"\0" * (w * h * 3))
+        tga(os.path.join(camp, "map_alpha.tga"), 8, 8)
+        tga(os.path.join(camp, "leader_pic_alpha.tga"), 69, 96)
+        tga(os.path.join(menu, "leader_pic_alpha.tga"), 69, 96)
+        tga(os.path.join(camp, "vc_alpha.tga"), 8, 8)            # the victory map stays in Art
+        tga(os.path.join(camp, "leader_pic_alphabet.tga"), 69, 96)   # not alpha's
+        mod = ModData(self.root)
+        got = FA.start_pictures(mod, "test", "alpha")
+        self.assertEqual([e["rel"] for e in got], ["world/maps/campaign/test/map_alpha.tga",
+                                                   "menu/leader_pic_alpha.tga",
+                                                   "world/maps/campaign/test/leader_pic_alpha.tga"])
+        self.assertEqual([FA.start_kind(e) for e in got], [FA.START_KINDS[0]] + [FA.START_KINDS[1]] * 2)
+        self.assertEqual(got[1]["size"], (69, 96, 24))
+        everything = FA.faction_pictures(mod, "test", "alpha")
+        self.assertEqual({e["rel"] for e in everything if FA.is_start_picture(e)}, {e["rel"] for e in got})
+        self.assertTrue(any(e["rel"].endswith("vc_alpha.tga") and not FA.is_start_picture(e) for e in everything))
+        self.assertEqual(FA.start_pictures(mod, "test", "gamma"), [])
+
     def test_faction_art_and_select_map(self):
         try:
             from PIL import Image
@@ -9874,6 +10343,153 @@ building smith
             self.assertFalse(set(root.tk.call("info", "commands", "ce*")) & names)
         finally:
             root.destroy()
+
+    def test_drop_panel_stays_open_and_toggles(self):
+        """The map's Layers and Select's 'what...' (a tester, 2026-10-09): a Tk menu closed at every tick and blinked
+        when it was opened again, and a second press of its button did not close it. Now a panel: open on a press,
+        open while things in it are clicked, closed by a second press or a click aside."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display (CI): the window is not tested here
+            self.skipTest("no window: %s" % e)
+        from campaign_editor.gui_util import DropPanel
+        try:
+            b = ttk.Button(root, text="Layers")
+            b.pack()
+            aside = tk.Frame(root, width=200, height=200)
+            aside.pack()
+            v = tk.BooleanVar(value=False)
+            got = []
+            p = DropPanel(b, lambda f: got.append(ttk.Checkbutton(f, text="Borders", variable=v)) or got[-1].pack())
+            root.update()
+            b.invoke()
+            root.update()
+            self.assertTrue(p.shown())
+            got[0].invoke()                           # a tick: it stays open
+            root.update()
+            self.assertTrue(p.shown())
+            self.assertTrue(v.get())
+            b.invoke()                                # the second press closes it
+            root.update()
+            self.assertFalse(p.shown())
+            b.invoke()
+            root.update()
+            aside.event_generate("<ButtonPress-1>", x=5, y=5)       # a click aside closes it
+            root.update()
+            self.assertFalse(p.shown())
+            self.assertEqual(len(got), 1)             # built once
+        finally:
+            root.destroy()
+
+    def test_army_window_suggest_by_units_and_upkeep(self):
+        """An army's units (a double click on the map; a tester, 2026-10-09): Suggest did nothing (no draw was given
+        to it) and Automatic emptied the army. Now Suggest draws by the numbers beside it - how many units, their
+        upkeep together at most - and Automatic shows only where 'the tool picks' means something."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display (CI): the window is not tested here
+            self.skipTest("no window: %s" % e)
+        import random
+        from campaign_editor import masstown as MT, settings
+        from campaign_editor.gui_garrison import GarrisonEditor
+        from campaign_editor.units import Unit
+        units = []
+        for name, up in (("peasants", 100), ("spears", 300), ("knights", 900)):
+            u = Unit(name)
+            u.cost = [1, up * 2, up]
+            units.append(u)
+        pool = [(u.type, u.upkeep) for u in units]
+        saved = (settings._data, settings._path)
+        settings._data, settings._path = {}, lambda: None    # the numbers kept in memory only, not the real file
+        try:
+            ed = GarrisonEditor(root)
+            ed.pack()
+            asked = []
+
+            def draw(lo, hi, cap):
+                asked.append((lo, hi, cap))
+                return MT.random_garrison(pool, lo, hi, cap, random.Random(1))
+            ed.load(None, "england", "army", units, ["knights"], lambda t: None, auto=draw)
+            root.update()
+            self.assertFalse(ed.b_auto.winfo_ismapped())          # an army: no As it was (Automatic emptied it)
+            ed.v_lo.set("4")
+            ed.v_hi.set("4")
+            ed.v_cap.set("800")
+            ed.suggest()
+            self.assertEqual(asked[-1], (4, 4, 800))
+            self.assertEqual(len(ed.garrison), 4)
+            self.assertLessEqual(sum(dict(pool)[t] for t in ed.garrison), 800)
+            ed.v_hi.set("99")                                      # past the room: as many as fit
+            ed.v_lo.set("x")                                       # not a number: the default
+            ed.v_cap.set("0")                                      # 0: no limit
+            ed.suggest()
+            self.assertEqual(asked[-1], (3, 20, None))
+            ed.load(None, "england", "town", units, [], lambda t: None, auto=draw, as_was=True)
+            root.update()
+            self.assertTrue(ed.b_auto.winfo_ismapped())           # an existing town: back to as it stands
+            self.assertEqual(ed.b_auto.cget("text"), "As it was")
+            self.assertEqual(settings.get("suggest_upkeep"), 0)      # kept for next time
+        finally:
+            settings._data, settings._path = saved
+            root.destroy()
+
+    def test_art_pictures_sorted_into_tabs(self):
+        """Art in sub-tabs (the user, 2026-10-09: 'everything sorted, nothing mixed'): icons and buttons, flags and
+        banners, maps, other; the campaign-map figures' textures go to the Models tab with the figures."""
+        from campaign_editor.factionart import art_group, ART_GROUPS
+        self.assertEqual([k for k, _ in ART_GROUPS], ["icons", "flags", "maps", "other"])
+        cases = {
+            "symbol:logo": "icons", "symbol:small_logo": "icons", "symbol:flag": "flags",
+            "menu/symbols/FE_buttons_48/symbol48_england_roll.tga": "icons",
+            "loading_screen/symbols/symbol128_julii.tga": "icons", "ui/faction_symbols/england.tga": "icons",
+            "banners/textures/royal_banner_england.texture": "flags",
+            "models/textures/standard_julii.tga.dds": "flags",
+            "models_building/textures/##standard_julii.tga.dds": "flags",
+            "models_strat/textures/#banner_symbol_england.tga.dds": "flags",
+            "world/maps/campaign/imperial_campaign/vcs_england.tga": "maps",
+            "models_strat/textures/spy_england.tga.dds": "models",
+            "ui/captain banners/captain_card_england.tga": "other",
+        }
+        for rel, want in cases.items():
+            self.assertEqual(art_group({"rel": rel}), want, rel)
+        # a unit's battle texture a campaign figure uses: named by the figure's line, so the Models tab's
+        self.assertEqual(art_group({"rel": "models_unit/textures/unit_roman_legionary_II_julii.tga.dds",
+                                    "link": ["model_strat", "texture:sm_roman_lesser_general"]}), "models")
+
+    def test_new_regions_town_and_port_can_be_dragged(self):
+        """Report #173: a new region's town and port, once placed (not written yet), stayed fixed - they had no tag
+        the drag knows. Now they are picked like any town / port and the move lands in the new region itself."""
+        try:
+            import tkinter as tk
+            from campaign_editor.gui import App
+            from campaign_editor.gui_map import MapView
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / display / Pillow (CI): not tested here
+            self.skipTest("no window: %s" % e)
+        try:
+            v = MapView(root)
+            v.pack()
+            root.update()
+            v.canvas.create_rectangle(10, 10, 30, 30, fill="red", tags=("newtown", "new:city:New_Land"))
+            v.canvas.create_oval(60, 60, 80, 80, fill="blue", tags=("newport", "new:port:New_Land"))
+            self.assertEqual(v._place_under(20, 20), ("city", "New_Land"))
+            self.assertEqual(v._place_under(70, 70), ("port", "New_Land"))
+        finally:
+            root.destroy()
+        from types import SimpleNamespace
+        said = []
+        app = SimpleNamespace(new_regions=[{"name": "New_Land", "city": (5, 5), "port": (6, 7)}], place_moves={},
+                              remember=lambda: None, editing=lambda: True, map_only=lambda: False,
+                              show_map=lambda: None, status=SimpleNamespace(set=said.append), _cmap=None)
+        app._new_region = lambda n: App._new_region(app, n)
+        app._old_region = lambda n: App._old_region(app, n)
+        App.place_moved(app, "city", "New_Land", (8, 9))
+        self.assertEqual(app.new_regions[0]["city"], (8, 9))
+        self.assertEqual(app.place_moves, {})                 # not a move of a region of the map
+        self.assertIn("new region New_Land", said[-1])
 
     def test_closing_the_editor_when_a_command_is_already_gone(self):
         """Closing the editor once showed 'can't delete Tcl command' and then, while it reported that, a Windows box

@@ -1,7 +1,7 @@
 """A character's own window from the Map (right click a general, a family man, the heir, the king, an agent >
-'Edit this character...', or a double click on an agent): the Character editor in a window of its own, as the town's
+'Edit this character...', or a double click on an agent): Characters in a window of its own, as the town's
 garrison and buildings have theirs - the person picked, Preview / Keep for Apply (the main window's Apply writes it with the rest, a backup first) (the writing is the
-Character editor's own: gui_family.FamilyEditor.make_plan)."""
+Characters's own: gui_family.FamilyEditor.make_plan)."""
 
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -13,7 +13,7 @@ TITLE = "Character"
 
 
 class _Editor(FamilyEditor):
-    """The Character editor inside the window: its changes are written by the window's own button."""
+    """Characters inside the window: its changes are written by the window's own button."""
 
     def changed(self):
         self.app.status.set("Character window: changes waiting - Preview, then Keep for Apply.")

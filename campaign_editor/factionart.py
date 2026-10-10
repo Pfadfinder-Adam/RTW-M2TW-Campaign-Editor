@@ -95,6 +95,69 @@ def where_shown(rel):
     return _picture_kind(rel)[3]
 
 
+# the campaign-select screen's own pictures of a faction: shown on the Edit / New faction tab beside the faction's
+# description (as the game shows them there), not in the Art tab's list
+START_KINDS = ("campaign-select map (its land lit)", "leader picture (campaign select)")
+
+
+def start_kind(e):
+    """START_KINDS' entry a picture of faction_pictures / start_pictures is, or None (not shown on the faction tab)."""
+    kind = _picture_kind(e["rel"])[2]
+    return kind if kind in START_KINDS else None
+
+
+def is_start_picture(e):
+    return start_kind(e) is not None
+
+
+# Art's sub-tabs (the user, 2026-10-09: 'everything sorted, nothing mixed'): (key, tab title); the campaign-map
+# figures' textures are on the Models tab with the figures themselves, not in Art
+ART_GROUPS = (("icons", "Icons and buttons"), ("flags", "Flags and banners"), ("maps", "Maps"), ("other", "Other"))
+
+
+def art_group(e):
+    """Where a picture of faction_pictures goes: 'models' (a campaign-map figure's texture - the Models tab), or one
+    of ART_GROUPS' keys."""
+    rel = e["rel"].replace("\\", "/").lower()
+    link = (e.get("link") or [None])[0]
+    if link == "model_strat":
+        return "models"
+    if rel in ("symbol:logo", "symbol:small_logo") or rel.startswith(("menu/symbols/", "loading_screen/symbols/",
+                                                                      "ui/faction_symbols/")):
+        return "icons"
+    if link == "banners" or rel == "symbol:flag" or rel.startswith("banners/") or "/standard" in rel or \
+            "#standard" in rel or "#banner_symbol" in rel or "/banners/" in rel:
+        return "flags"
+    if rel.startswith("world/maps/"):
+        return "maps"
+    if rel.startswith("models_strat/"):
+        return "models"
+    return "other"
+
+
+def start_pictures(mod, campaign, faction):
+    """The faction's campaign-select map (map_<faction>.tga) and leader's face (Rome's leader_pic_<faction>.tga) -
+    the same entries faction_pictures gives, read from the campaign folder and data/menu only (quick: no walk
+    through data/ui)."""
+    out = []
+    longer = longer_names([n for n, _ in mod.factions()], faction)
+    seen = set()
+    for root in mod.dirs("world/maps/campaign/" + campaign) + mod.dirs("menu"):      # the mod's, then the game's
+        for n in sorted(os.listdir(root)):
+            p = os.path.join(root, n)
+            if not (n.lower().endswith(PICTURE_EXT) and _token_hit(n, faction, longer) and os.path.isfile(p)):
+                continue
+            rel = mod.data_rel(p)
+            if rel.lower() in seen:
+                continue
+            seen.add(rel.lower())
+            e = {"path": p, "rel": rel, "label": label_of(rel), "where": where_shown(rel), "size": picture_info(p)}
+            if is_start_picture(e):
+                out.append(e)
+    out.sort(key=lambda e: (START_KINDS.index(start_kind(e)), e["rel"]))
+    return out
+
+
 def faction_pictures(mod, campaign, faction):
     """[{'path', 'rel', 'label', 'size': (w, h, bpp) or None}] of every picture file
     named after the faction under data/ui, data/menu, data/loading_screen, the
@@ -103,16 +166,17 @@ def faction_pictures(mod, campaign, faction):
     out, seen = [], {}
 
     def add(p):
-        n = os.path.normcase(os.path.abspath(p))
+        rel = mod.data_rel(p)                           # the mod's own and the game's alike: one picture a place
+        n = rel.lower()
         if n in seen or not os.path.isfile(p):
             return seen.get(n)
-        rel = os.path.relpath(p, mod.data).replace("\\", "/")
         e = {"path": p, "rel": rel, "label": label_of(rel), "where": where_shown(rel), "size": picture_info(p)}
         seen[n] = e
         out.append(e)
         return e
     longer = longer_names([n for n, _ in mod.factions()], faction)     # their files are not this faction's
-    roots = [os.path.join(mod.data, r) for r in ART_ROOTS] + [mod.campaign_dir(campaign)]
+    # the mod's folders first, then the game's data under a mod folder that keeps only what it changes
+    roots = [d for r in ART_ROOTS for d in mod.dirs(r)] + mod.dirs("world/maps/campaign/" + campaign)
     for root in roots:
         if not os.path.isdir(root):
             continue
@@ -145,7 +209,7 @@ def faction_pictures(mod, campaign, faction):
             continue
         if l["key"] == "model_strat" and l["field"].split(":", 1)[1] not in who:
             continue                                    # a figure none of its characters uses: not its picture
-        got = picture_file(mod.data, l["ref"])
+        got = next((g for g in (picture_file(d, l["ref"]) for d in mod.roots()) if g), None)
         e = add(got[1]) if got else None
         if e is not None:
             e.update(link=[l["key"], l["field"]], ref=l["ref"],
@@ -947,9 +1011,10 @@ def write_art(plan, faction, rel, pick):
         line = next((l for l in picture_links(mod, plan.edit)
                      if l["faction"] == faction and l["key"] == link[0] and l["field"] == link[1]), None)
     like = target if os.path.exists(target) else next(
-        (s for s, d in plan.copies if os.path.normcase(d) == os.path.normcase(target)), None)
+        (s for s, d in plan.copies if os.path.normcase(d) == os.path.normcase(target)), None) or \
+        mod.find(rel)                              # the game's own under a mod folder that keeps only its changes
     if like is None and line is not None:
-        got = picture_file(mod.data, line["ref"])        # the picture it shared until now
+        got = next((g for g in (picture_file(d, line["ref"]) for d in mod.roots()) if g), None)        # the picture it shared until now
         like = got[1] if got else None
     if isinstance(pick, dict) and pick.get("exact"):
         with open(src, "rb") as fh:

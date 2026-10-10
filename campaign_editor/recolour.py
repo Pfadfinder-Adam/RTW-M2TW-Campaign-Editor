@@ -529,7 +529,7 @@ def targets(mod, campaign, faction):
     """[{'path', 'rel', 'group', 'label', 'others': [(path, colours)], 'crop': box or None, 'skip': why or None}]:
     every picture of the faction that carries its colours. Groups: 'unit cards', 'unit textures', 'symbols and
     banners' (the Art tab's pictures: flags, banners, campaign-map figures, loading symbols...)."""
-    from .moddata import _ci
+    from .moddata import _ci, ci_path
     colours = faction_colours(mod)
     names = [n for n, _ in mod.factions()]
     out, seen = [], set()
@@ -553,12 +553,27 @@ def targets(mod, campaign, faction):
         own = _ci(d, faction) if d else None
         if not own:
             continue
+        # the other factions' cards of the same name: the mod's, else the game's own data (a mod folder keeps only
+        # what it changes - a clone's template's cards were not found there, so the clone's red cards were taken
+        # for its own colours and nothing was recoloured: a tester's test mod run)
+        roots = mod.roots() if hasattr(mod, "roots") else [mod.data]
+        folders = {f: [fd for fd in (ci_path(r, "ui/%s/%s" % (sub, f)) for r in roots) if fd and os.path.isdir(fd)]
+                   for f in names if f != faction and f in colours}
+
+        def theirs_of(n):
+            got = []
+            for f, fds in folders.items():
+                q = next((os.path.join(fd, n) for fd in fds if os.path.isfile(os.path.join(fd, n))), None)
+                if q:
+                    got.append((q, f))
+            return got
         for n in sorted(os.listdir(own)):
             if n.lower().endswith(PICTURE_EXT):
                 p = os.path.join(own, n)
-                fs = [f for f in names if f != faction and f in colours and os.path.isfile(os.path.join(d, f, n))]
-                add(p, "unit cards", "%s %s" % (label, n), [(os.path.join(d, f, n), colours[f]) for f in fs],
-                    of=fs, source=_copied_from(p, [(os.path.join(d, f, n), f) for f in fs], colours))
+                theirs = theirs_of(n)
+                fs = [f for _, f in theirs]
+                add(p, "unit cards", "%s %s" % (label, n), [(q, colours[f]) for q, f in theirs],
+                    of=fs, source=_copied_from(p, theirs, colours))
     # battle textures: the model's texture for this faction; a file other factions wear too is left alone
     try:
         from .models import catalogue

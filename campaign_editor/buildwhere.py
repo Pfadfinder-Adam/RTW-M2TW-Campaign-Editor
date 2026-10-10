@@ -186,7 +186,7 @@ def open_where(editor, name):
                     ed.lb.selection_set(names.index(chain))
                     ed.lb.see(names.index(chain))
                     ed.show()
-            t.window_create("end", window=ttk.Button(t, text="Open in the Building editor", command=go))
+            t.window_create("end", window=ttk.Button(t, text="Open in Buildings", command=go))
             t.insert("end", "\n")
             words = pool_words(line)
             if words:

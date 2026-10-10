@@ -1,4 +1,4 @@
-"""Bring units or buildings from another mod - step by step (the Unit and Building editors' "Bring from another
+"""Bring units or buildings from another mod - step by step (the Unit and Buildingss' "Bring from another
 mod..." button).
 
 The other mod is read straight from its folder (no pack file to make first): pick the mod, tick what to bring,
@@ -309,7 +309,7 @@ class BringWindow(StepWindow):
         else:
             self._note("The units these buildings recruit. Each one goes to a unit of THIS mod: the same one when this "
                        "mod has it; otherwise pick one, or '%s'. To bring a unit this mod lacks, bring it first with "
-                       "the Unit editor's 'Bring from another mod...'." % LEAVE_OUT)
+                       "Units' 'Bring from another mod...'." % LEAVE_OUT)
             here = list(packs.type_blocks(self.mod.load(self.mod.file("edu"))))
             rows = [(u, u, v or LEAVE_OUT) for u, v in self.unit_map.items()]
             choices = [LEAVE_OUT] + here

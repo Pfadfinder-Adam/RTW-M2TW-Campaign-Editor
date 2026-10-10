@@ -116,7 +116,7 @@ class SettingsWindow(tk.Toplevel):
 
     def _map(self, body):
         _, row = self._box(body, "Campaign map", "How the Map tab draws the ground and whether its legend shows; the "
-                                                 "same switches as the map's Layers menu and Legend box.")
+                                                 "same switches as the map's Layers panel and Signs and tools box.")
         mv = getattr(self.app, "map_view", None)
         if mv is None:
             ttk.Label(row, text="(the map is not open yet)").pack(side="left")

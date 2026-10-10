@@ -529,7 +529,7 @@ def map_changes(plan, campaign, changes):
                     c.name, fac, c.role, c.role))
             if c.named and any(t.split()[:1] == ["relative"] and c.name in t
                                for t in f.texts()[fb.start:fb.end] if t.strip()):
-                raise ValueError("%s is on %s's family tree - take him off it in the Character editor first (the "
+                raise ValueError("%s is on %s's family tree - take him off it in Characters first (the "
                                  "relative lines name him)" % (c.name, fac))
             gone.append((c.start, c.end, "%s %s (%s) at %d, %d removed with everything under him" % (
                 fac, c.name, c.kind, src[0], src[1])))
@@ -613,7 +613,7 @@ def _army_edits(plan, f, faction=None, units=None, remove=None):
 def _moves(plan, f, campaign, faction=None, moves=None):
     """opts['moves'] = [{'name', 'from': (x, y), 'to': (x, y)}]: characters of
     the faction moved on the map, checked like the window checks them (faction / moves: another faction's, the
-    Map editor)."""
+    Maps)."""
     faction = faction or plan.new
     s = Strat(f)
     fb = s.faction(faction)

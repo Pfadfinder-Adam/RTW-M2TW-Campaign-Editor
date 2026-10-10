@@ -1,4 +1,4 @@
-"""The Unit editor and Building editor tabs: pick a unit (a building chain) on
+"""Units and Buildings tabs: pick a unit (a building chain) on
 the left, change any line of its block on the right, and import its pictures -
 the tool puts them where the game reads them, in the mod's own format."""
 
@@ -933,7 +933,7 @@ class RecordEditor(ttk.Frame):
                        command=lambda k=key, i=idx, m=model: self.replace_model(k, i, m)).pack(side="left")
             if info is not None:
                 ttk.Button(bar, text="View in 3D...", command=lambda i=info, k=key: self.view_model(
-                    i, mount=mount if k == "soldier" else None)).pack(side="left", padx=4)
+                    i, mount=mount if k == "soldier" else None, unit=k == "soldier")).pack(side="left", padx=4)
                 ttk.Button(bar, text="Save its files...", command=lambda i=info: self.save_model_files(i)).pack(
                     side="left")
                 ttk.Button(bar, text="Your own files...", command=lambda k=key, i=idx, m=model: self.own_files(
@@ -1166,9 +1166,43 @@ class RecordEditor(ttk.Frame):
         self.app.status.set("%s has its own name call for %s now (backup %s) - start the game to hear it." % (
             unit, uv.key, bdir))
 
-    def view_model(self, info, mod=None, mount=None):
+    def view_model(self, info, mod=None, mount=None, unit=False):
+        """View in 3D...; unit: the unit's soldier model - Make a card... / Make a picture... there give the unit on
+        show its card / description picture from the view."""
         from .gui_meshview import ModelViewer
-        ModelViewer(self, mod or self.mod, info, self._factions_of(), mount=mount)
+        ModelViewer(self, mod or self.mod, info, self._factions_of(), mount=mount,
+                    make=self._picture_maker() if unit and mod is None else None)
+
+    def _picture_maker(self):
+        """{'unit', 'need', 'write'} for View in 3D's Make a card... / Make a picture... - the unit on show now
+        (its dictionary name and owners taken at once: the editor may show another unit by the time it is used);
+        the picture waits for Apply as an imported one."""
+        if self.kind != "unit" or not self.current:
+            return None
+        dic, facs, unit = self.value("dictionary"), self._factions_of(), self.current[0]
+        if not dic:
+            return None
+        need = {False: E.unit_picture_need(self.mod), True: E.unit_picture_need(self.mod, True)}
+
+        def write(info, picture):
+            targets = E.unit_picture_targets(self.mod, dic, facs, info)
+            if not targets:
+                raise ValueError("No faction owns %s - there is no folder for its %s." % (
+                    unit, "picture" if info else "card"))
+            from . import log
+            import time
+            folder = os.path.join(log.logs_dir() or os.path.expanduser("~"), "made_pictures")
+            os.makedirs(folder, exist_ok=True)
+            src = os.path.join(folder, "%s_%s_%s.png" % (dic, "info" if info else "card",
+                                                         time.strftime("%Y%m%d_%H%M%S")))
+            picture.save(src)
+            label = "Picture in the description" if info else "Unit card"
+            self.imports = [(s, t, z) for s, t, z in self.imports if not set(t) & set(targets)]
+            self.imports.append((src, list(targets), picture.size))
+            self.app.status.set("%s of %s made from its 3D model, for %d place(s) - Preview, then Apply." % (
+                label, unit, len(targets)))
+            self.show_pictures()
+        return {"unit": unit, "need": need, "write": write}
 
     def replace_model(self, key, idx, current):
         """Another battle model for this unit's soldiers (or an officer): from this mod or another mod folder of the

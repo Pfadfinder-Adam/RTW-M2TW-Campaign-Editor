@@ -37,6 +37,18 @@ def problems(mod):
                            "at start ('Failed to load text vegetation database'). The fix: vegetation_source "
                            "binary (the game's own vegetation.db, M2EX's default for mods).",
                     "file": caps, "line": i, "new": f.text(i).replace(m.group(0), m.group(1) + "binary", 1)})
+            m = re.match(r"^(\s*model_battle_source\s+)text\s*$", code)
+            if m and _models_only_in_modeldb(mod):
+                out.append({
+                    "id": "model_battle_source",
+                    "why": "descr_caps_ex.txt reads the battle models from text (model_battle_source text), but this "
+                           "mod keeps its own in unit_models/battle_models.modeldb and has no descr_model_battle.txt "
+                           "of its own - M2EX then reads the game's descr_model_battle.txt, misses the mod's models "
+                           "and closes at start ('Could not find soldier battle model for unit type ...'). Older "
+                           "versions of this tool put that line in with the game's copy of the file. The fix: "
+                           "model_battle_source modeldb (M2EX's default for mods), nothing else changed.",
+                    "file": caps, "line": i, "new": f.text(i).replace(m.group(0), m.group(1) + "modeldb", 1),
+                    "note": "model_battle_source: text -> modeldb (the mod's own battle_models.modeldb is read)"})
     missing = missing_engine_files(mod)
     if missing:
         from .limits import engine_of
@@ -46,7 +58,10 @@ def problems(mod):
                            "settings (the faction limit, sprites, models, AI...) only from the mod's own data "
                            "folder - its descr_caps_ex.txt says \"Mods that don't ship this file get safe defaults\", "
                            "so this mod runs on %s's built-in defaults, not on the game's settings. The fix: the "
-                           "game's copies go into the mod (they can be changed there for this mod alone)."
+                           "game's copies go into the mod with every setting line switched off (a ';' before it) - "
+                           "the mod runs exactly as now, and each setting can be switched on there for this mod "
+                           "alone (the game's own values would change how the mod reads its models, items and "
+                           "sprites, and could stop it)."
                            % (", ".join(missing), "it lies" if len(missing) == 1 else "they lie", name, name)})
     from .strat import headers_out_of_order
     for camp in mod.campaigns():
@@ -162,9 +177,32 @@ def _old_culture_module(mod):
     return path, table if isinstance(table, dict) else {}
 
 
+# the engines' settings files: each line overrides a built-in default, a missing file = every default ("This file is
+# optional - delete it to use defaults"); the other *_ex files (lighting, day types, AI) change how the game reads
+# its own files when they are there, so they are never copied into a mod
+ENGINE_SETTINGS = ("descr_ex.txt", "descr_caps_ex.txt")
+
+
+def _models_only_in_modeldb(mod):
+    """True when the mod has its own battle_models.modeldb and no descr_model_battle.txt of its own."""
+    units = _ci(mod.data, "unit_models")
+    own_db = _ci(units, "battle_models.modeldb") if units and os.path.isdir(units) else None
+    return bool(own_db) and not _ci(mod.data, "descr_model_battle.txt")
+
+
+def settings_off(raw):
+    """A settings file's bytes with every setting line switched off (';' before it); comments, blank lines and the
+    line ends kept - the engine then runs on its built-in defaults, as with no file."""
+    out = []
+    for line in raw.splitlines(True):
+        body = line.rstrip(b"\r\n")
+        out.append(b";" + line if body.split(b";", 1)[0].strip() else line)
+    return b"".join(out)
+
+
 def missing_engine_files(mod):
-    """The engine's own files (descr_ex.txt, descr_caps_ex.txt, *_ex.txt / *_ex.xml) the game's data has and this
-    mod's data lacks - only for a mod (not the game's own data) of a game with REX / M2EX."""
+    """The engine's settings files (descr_ex.txt, descr_caps_ex.txt) the game's data has and this mod's data lacks
+    - only for a mod (not the game's own data) of a game with REX / M2EX."""
     from .limits import engine_of
     from .newmod import game_of
     game = game_of(mod.data)
@@ -174,7 +212,7 @@ def missing_engine_files(mod):
     if not engine_of(mod):
         return []
     try:
-        names = sorted(n for n in os.listdir(gdata) if re.search(r"_ex\.(txt|xml)$", n, re.I)
+        names = sorted(n for n in os.listdir(gdata) if n.lower() in ENGINE_SETTINGS
                        and os.path.isfile(os.path.join(gdata, n)))
     except OSError:
         return []
@@ -192,8 +230,9 @@ def fix_plan(mod, found):
             gdata = _ci(game_of(mod.data), "data")
             for n in p["names"]:
                 with open(os.path.join(gdata, n), "rb") as fh:
-                    plan.binary(os.path.join(mod.data, n), fh.read())
-                plan.note(None, "%s copied from the game's data into the mod" % n)
+                    plan.binary(os.path.join(mod.data, n), settings_off(fh.read()))
+                plan.note(None, "%s copied from the game's data into the mod, every setting switched off (the mod "
+                                "runs on the engine's defaults, as before; remove the ';' to switch one on)" % n)
             continue
         if p["id"] == "short_campaign":
             f = plan.edit(p["file"])
@@ -266,7 +305,7 @@ def fix_plan(mod, found):
             continue
         f = plan.edit(p["file"])
         f.set(p["line"], p["new"])
-        plan.note(f, "%s: text -> binary (the game started without it closing)" % p["id"])
+        plan.note(f, p.get("note") or "%s: text -> binary (the game started without it closing)" % p["id"])
     return plan
 
 

@@ -502,7 +502,8 @@ def s_map(c, mod):
         units = [guard] + [u for u in units if u != guard]
     plan = Plan(mod, "map", "map", {})
     map_changes(plan, c.campaign, {"characters": {c.other: [
-        {"kind": "army", "name": free_names(c, mod, c.other, 1)[0], "age": 30, "units": units, "xy": free}]}})
+        {"kind": "army", "name": free_names(c, mod, c.other, 1)[0], "age": 30, "units": units, "xy": free,
+         "general": bool(guard)}]}})
     return plan
 
 
@@ -1469,6 +1470,49 @@ def s_unit_pack(c, mod):
     return plan
 
 
+@step("Units: a card and a description picture of one of {new}'s units made from its 3D model (View in 3D > Make a "
+      "card... / Make a picture...: its stand animation, the game's framing, a see-through ground)",
+      "that unit's card in {new}'s recruitment list and army: the man from his head to his thighs, on the card's "
+      "own ground; its description picture the whole man")
+def s_card_from_3d(c, mod):
+    from . import cardmaker as CM
+    from . import editors as E
+    from . import models as MO
+    from .units import faction_units
+    if not _pillow():
+        raise Skip("Pillow is not installed")
+    cat = MO.catalogue(mod)
+    for u in faction_units(mod, c.new):
+        lines = MO.unit_lines(mod, u.type)
+        slots = MO.unit_slots(lines) if lines else []
+        info = cat.get(slots[0][2].lower()) if slots else None
+        if info is None or not u.dictionary:
+            continue
+        try:
+            fig, box = CM.model_figure(mod, info, c.new)
+        except (ValueError, OSError):
+            continue
+        plan = Plan(mod, "units", "card_from_3d", {})
+        for info_pic in (False, True):
+            size = CM.picture_size(MO.game_kind(mod), E.unit_picture_need(mod, info_pic), info_pic)
+            pic = CM.frame(fig, size, CM.PICTURE_PART if info_pic else CM.CARD_PART,
+                           box=None if info_pic else box)
+            src = os.path.join(c.work, "ce_test_%s_from_3d.png" % ("info" if info_pic else "card"))
+            pic.save(src)
+            E.import_picture(plan, src, E.unit_picture_targets(mod, u.dictionary, [c.new], info_pic), size)
+        plan.warn(None, "%s's card and description picture made from its model %s" % (u.type, info.name))
+        return plan
+    raise Skip("no unit of %s with a model the editor can draw" % c.new)
+
+
+def _pillow():
+    try:
+        import PIL  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 @step("Check and install a pack: a small pack (a unit card for {new}) checked and installed",
       "the card in {new}'s unit list")
 def s_modpack(c, mod):
@@ -1819,6 +1863,9 @@ def s_rules_all(c, mod):
         for r in rules:
             if CR.blocked(r):
                 left.setdefault("greyed out in Campaign rules - a change broke the game in a test", []).append(r.key)
+                continue
+            if r.off:
+                left.setdefault("switched off in the file - the engine's default holds", []).append(r.key)
                 continue
             new, why = rule_changed(r, now)
             if new is not None and new != r.value and CR.check(r, new) is None:
@@ -2264,16 +2311,20 @@ local done = false
 local win = { open = false, img = null, tried = false, logged = false }
 local said = {}
 
-local function parts(text) {                        // the text's lines ('|' between them)
+local function words_of(text) {                     // the text's words (spaces between them)
     local out = []
     local rest = text
-    local i = rest.indexof("|")
+    local i = rest.indexof(" ")
     while (i != null) {
-        out.append(rest.slice(0, i))
+        if (i > 0) {
+            out.append(rest.slice(0, i))
+        }
         rest = rest.slice(i + 1)
-        i = rest.indexof("|")
+        i = rest.indexof(" ")
     }
-    out.append(rest)
+    if (rest.len() > 0) {
+        out.append(rest)
+    }
     return out
 }
 
@@ -2428,7 +2479,64 @@ local function text_at(ui, x, y, words, size, r, g, b) {
     }
 }
 
+local function text_width(words, size) {         // in px as the engine draws it; a guess if it cannot say
+    local face = ex_font()
+    try {
+        return ::UI.textSize(words, face != null ? face : "tnr_med", size)[0]
+    } catch (err) {
+    }
+    return (words.len() * size * 0.55).tointeger()
+}
+
+// the text cut into lines no wider than `width` (a tester: the hand-cut lines ran past the window's edge)
+local function wrapped(text, width, size) {
+    local out = []
+    local line = ""
+    foreach (word in words_of(text)) {
+        local more = line.len() > 0 ? line + " " + word : word
+        if (line.len() > 0 && text_width(more, size) > width) {
+            out.append(line)
+            line = word
+        } else {
+            line = more
+        }
+    }
+    if (line.len() > 0) {
+        out.append(line)
+    }
+    return out
+}
+
+local function on_building() {                      // the mouse on the building's tile (not on a panel of the game)
+    if (::UI.cursorOverGameUi()) {
+        return false
+    }
+    local t = ::stratMap.hoveredTile()
+    if (t == null) {
+        return false
+    }
+    local tx = get(t, "x")
+    local ty = get(t, "y")
+    return tx != null && ty != null && near(tx, AT_X) && near(ty, AT_Y)
+}
+
+// the mouse resting on it: its name in a tooltip, as the game's own resources and towns have
+local function draw_tip() {
+    if (win.open || !on_building()) {
+        return
+    }
+    try {
+        local m = ::UI.mouse.pos()
+        ::UI.tooltipAt(m[0] - 8, m[1] - 8, 16, 16)
+        ::UI.tooltip(0, TITLE + " (double click: more)")
+        once("tip", "tooltip shown")
+    } catch (err) {
+        once("tipfail", "tooltip failed: " + err)
+    }
+}
+
 local function draw_window() {
+    draw_tip()
     if (!win.open) {
         return
     }
@@ -2474,7 +2582,7 @@ local function draw_window() {
         left = x + 192
     }
     local line = y + 58
-    foreach (part in parts(TEXT)) {
+    foreach (part in wrapped(TEXT, x + w - 18 - left, 17)) {
         text_at(ui, left, line, part, 17, 40, 25, 10)
         line += 24
     }
@@ -2489,28 +2597,33 @@ local function draw_window() {
     }
 }
 
+// a DOUBLE click opens the window (a single one would open it at every click near a model put beside a town or a
+// farm - a tester); any click closes it
+local function double_clicked(ui) {
+    try {
+        return ui.mouse.doubleClicked(ui.mouse.left)
+    } catch (err) {
+        once("dbl", "mouse.doubleClicked failed: " + err)
+    }
+    return false
+}
+
 local function on_frame() {
     local ui = ::UI
-    if (!ui.mouse.clicked(ui.mouse.left)) {
-        return
-    }
     if (win.open) {
-        win.open = false
-        log("window closed")
+        if (ui.mouse.clicked(ui.mouse.left)) {
+            win.open = false
+            log("window closed")
+        }
         return
     }
-    if (ui.cursorOverGameUi()) {
+    if (!double_clicked(ui)) {
         return
     }
     local t = ::stratMap.hoveredTile()
-    if (t == null) {
-        return
-    }
-    local tx = get(t, "x")
-    local ty = get(t, "y")
-    once("hover", "a click on the map: hoveredTile gives " + tx + "," + ty + " (the building stands at " + AT_X + ","
-        + AT_Y + ")")
-    if (tx != null && ty != null && near(tx, AT_X) && near(ty, AT_Y)) {
+    once("hover", "a double click on the map: hoveredTile gives " + (t != null ? get(t, "x") + "," + get(t, "y") :
+        "nothing") + " (the building stands at " + AT_X + "," + AT_Y + ")")
+    if (on_building()) {
         win.open = true
         win.logged = false
         log("clicked the special building - its window is open")
@@ -2568,7 +2681,7 @@ log("module loaded")
 @step("Own buildings on the map 2/2: three ways side by side beside {new}'s capital - a wonder of the game's own "
       "(Rome), the new resource type with its own model, and a model drawn by an engine script (REX / M2EX)",
       "near {new}'s capital: {special_wonder}a lion / elephants model = the resource way (hover: its name only), "
-      "{special_engine} = the engine way - a CLICK on it opens its own window (The Test Lighthouse: picture, text, "
+      "{special_engine} = the engine way - its name on a hover, a DOUBLE CLICK on it opens its own window (The Test Lighthouse: picture, text, "
       "+100 a turn, who holds it) and its region's owner gets 100 every turn (the log's [CE_SPECIAL] lines say which "
       "calls worked); the new resource's hover text is the copied type's name (Medieval II keeps resource names in "
       "its compiled strat.txt.strings.bin)")
@@ -2609,8 +2722,8 @@ def s_special(c, mod):
         picture = SPECIAL_PICTURE["medieval2" if game_kind(mod) == "medieval2" else "rome"]
         text = SPECIAL_NUT % {"model": SPECIAL_ENGINE, "x": picked[2][0], "y": picked[2][1], "money": SPECIAL_MONEY,
                               "title": "The Test Lighthouse", "picture": picture,
-                              "text": "A special building of our own, drawn by the|engine's script: its model, this window|"
-                                      "and its gift come from the editor."} + TEST_MARK + "\n"
+                              "text": "A special building of our own, drawn by the engine's script: its model, "
+                                      "this window and its gift come from the editor."} + TEST_MARK + "\n"
         plan.binary(AD.target(mod, _types.SimpleNamespace(file=SPECIAL_SCRIPT)), text.encode("utf-8"))
         c.said["special_engine"] = "the %s model at %d, %d" % (os.path.basename(src).rsplit(".", 1)[0], *picked[2])
     else:
@@ -2815,6 +2928,7 @@ COVERAGE = {
         "offered on Load only when an older copy is in the game - the test mod puts this version in (the unit test "
         "test_older_addons_are_put_right_on_load writes an older one and takes the offer)",
     "Module builder": ["s_module"],
+    "A unit's card and description picture made from its 3D model (View in 3D > Make a card...)": ["s_card_from_3d"],
     "Experiment: an army starting aboard its fleet": ["s_aboard"],
     "Own buildings on the map: a wonder, a new resource type, an engine model": ["s_special_type", "s_special"],
     "Scripts in the game (script/modules: settings, off / on, delete, the test mod's taken out)": ["s_scripts"],
@@ -2840,12 +2954,15 @@ COVERAGE = {
 UI = {
     "New faction": "New faction", "Edit faction": "Edit faction (names, colours, money, towns, garrisons)",
     "Faction editor": "Edit faction (names, colours, money, towns, garrisons)",
+    "Factions": "Edit faction (names, colours, money, towns, garrisons)",
+    "Maps": "Map editor: any faction's army moved, its units", "Units": "Unit editor: lines",
+    "Characters": "Character editor: traits and retinue of a character",
     "Unit editor": "Unit editor: lines", "Building editor": "Building editor: lines",
     "Character editor": "Character editor: traits and retinue of a character",
     "Terrain editor": "Terrain editor: ground and heights", "Add-ons": "Add-ons",
     "Religions": "Religions (Medieval II, Barbarian Invasion)",
     "Faction": "Edit faction (names, colours, money, towns, garrisons)",
-    "Map": "Map: a town moved", "Map editor": "Map editor: any faction's army moved, its units", "Diplomacy": "Diplomacy: feelings", "Art": "Art: replace a picture",
+    "Map": "Map: a town moved", "Map editor": "Map editor: any faction's army moved, its units", "Diplomacy": "Diplomacy: feelings", "Art": "Art: replace a picture", "Models": "Campaign-map figures",
     "Roster": "Roster: give", "Settlements": "Edit region: rebels, resources, farming, names players see",
     "Units & armies": "Armies, agents and fleets placed by hand",
     "Buildings": "Many towns: a building, random garrisons",

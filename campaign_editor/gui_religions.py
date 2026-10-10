@@ -140,9 +140,8 @@ class ReligionsPanel(ttk.Frame):
     def show_on_map(self):
         region = (self.tv.selection() or [None])[0]
         app = self.app
-        app.v_work.set(app.v_mode.get())
+        app.v_work.set("map")                            # Maps: the regions and their shares
         app.work_changed()
-        app.select_tab("Map")
         if not app.map_view.v_regions.get():
             app.map_view.v_regions.set(True)
         if region:

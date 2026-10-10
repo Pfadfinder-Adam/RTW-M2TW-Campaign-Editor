@@ -26,7 +26,6 @@ import os
 import re
 import zipfile
 
-from .moddata import _ci
 from .textio import strip_comment, tokens
 
 PACK_VERSION = 1
@@ -209,14 +208,11 @@ def collect(mod, unit_types):
                 if val is not None:
                     manifest["texts"][key] = val
             for sub, pattern in (("units", "#%s.tga"), ("unit_info", "%s_info.tga")):
-                folder = os.path.join(mod.data, "ui", sub)
-                if not os.path.isdir(folder):
-                    continue
-                for fac in sorted(os.listdir(folder)):
-                    p = _ci(os.path.join(folder, fac), pattern % d) if os.path.isdir(os.path.join(folder, fac)) else None
+                for fac, _ in mod.listing("ui/" + sub):             # the mod's folders and the game's under it
+                    p = mod.find("ui/%s/%s/%s" % (sub, fac, pattern % d))     # the card in either
                     if p:
                         with open(p, "rb") as fh:
-                            files[os.path.relpath(p, mod.data).replace("\\", "/")] = fh.read()
+                            files["ui/%s/%s/%s" % (sub, fac, os.path.basename(p))] = fh.read()
     manifest["recruit"] = _recruit_places(mod, unit_types)
     return g.done()
 
@@ -711,7 +707,7 @@ def _recruit(plan, manifest, names, owners, recruit_map=None):
                      "%s" % ", ".join(gone))
     for m in sorted(missing):
         plan.warn(f, "not recruited at %s (not in this mod or left out): recruit the units by hand where you want "
-                     "them (Building editor: Add line)" % m)
+                     "them (Buildings: Add line)" % m)
 
 
 __all__ = ["recruit_levels", "default_recruit_map", "collect_buildings", "building_names", "import_buildings",
@@ -739,7 +735,7 @@ def collect_buildings(mod, chains):
             s = s.lstrip()
             if s.startswith("{") and "}" in s:
                 keys.append(s[1:s.index("}")])
-    ui = os.path.join(mod.data, "ui")
+    cultures = [c for c, _ in mod.listing("ui") if mod.dirs("ui/%s/buildings" % c)]    # the mod's and the game's
     for ch in chains:
         blk = blocks.get(ch)
         if blk is None:
@@ -759,17 +755,14 @@ def collect_buildings(mod, chains):
                 val = _text_entry(mod, "export_buildings.txt", k)
                 if val is not None:
                     man["texts"][k] = val
-        if os.path.isdir(ui):
-            for cult in sorted(os.listdir(ui)):
-                folder = os.path.join(ui, cult, "buildings")
-                if not os.path.isdir(folder):
-                    continue
-                for lv in levels:
-                    for tail in (".tga", "_constructed.tga"):
-                        p = _ci(folder, "#%s_%s%s" % (cult, lv, tail))
-                        if p:
-                            with open(p, "rb") as fh:
-                                files[os.path.relpath(p, mod.data).replace("\\", "/")] = fh.read()
+        for cult in cultures:
+            pics = {n.lower(): (n, p) for n, p in mod.listing("ui/%s/buildings" % cult)}
+            for lv in levels:
+                for tail in (".tga", "_constructed.tga"):
+                    got = pics.get(("#%s_%s%s" % (cult, lv, tail)).lower())
+                    if got:
+                        with open(got[1], "rb") as fh:
+                            files["ui/%s/buildings/%s" % (cult, got[0])] = fh.read()
     return man, files
 
 
@@ -883,7 +876,7 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
                     text = with_factions(text, who)
                 else:
                     plan.warn(f, "%s: a line with several factions groups (REX) kept as it is - check it in the "
-                                 "Building editor" % (head[0] if head else "?"))
+                                 "Buildings" % (head[0] if head else "?"))
             text, out_ = fit_line(text, conds)
             gone += [c for c in out_ if c not in gone]
             if text is None:
@@ -901,7 +894,7 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
                      "in Roster first): %s" % (", ".join(factions), ", ".join(unowned)))
     if dropped:
         plan.warn(f, "recruit line(s) left out - the unit is not in this mod: %s (bring the unit too, or add a "
-                     "recruit line in the Building editor)" % ", ".join(dropped))
+                     "recruit line in Buildings)" % ", ".join(dropped))
     # what the levels need from this mod: other chains named in their requires lines
     have_chains = {b[0] for b in blocks} | set(chain_names.values())
     for bd in manifest["buildings"]:
@@ -909,12 +902,12 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
             m = _re.match(r"\s*convert_to\s+([A-Za-z_][A-Za-z0-9_]*)\s*$", strip_comment(text))
             if m and m.group(1) not in have_chains:
                 plan.warn(f, "%s turns into '%s' when a city becomes a castle (or back) - this mod has no such "
-                             "building; change its convert_to line in the Building editor" % (
+                             "building; change its convert_to line in Buildings" % (
                                  chain_names.get(bd["chain"], bd["chain"]), m.group(1)))
             for m in _re.finditer(r"building_present(?:_min_level)?\s+([A-Za-z0-9_]+)", strip_comment(text)):
                 if m.group(1) not in have_chains and m.group(1) not in chain_names:
                     plan.warn(f, "%s needs the building '%s', which this mod has not - the game may refuse it; "
-                                 "change that requires line in the Building editor" % (
+                                 "change that requires line in Buildings" % (
                                      chain_names.get(bd["chain"], bd["chain"]), m.group(1)))
     # texts
     table = mod.text_file("export_buildings.txt")
@@ -934,8 +927,7 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
         tf.raw.append(tf.make(""))
         plan.note(tf, "%d building name(s) and description(s) added" % n)
     # pictures: under each culture they came from; the cultures of the new owners get one too
-    ui = os.path.join(mod.data, "ui")
-    cults_here = {c.lower(): c for c in os.listdir(ui)} if os.path.isdir(ui) else {}
+    cults_here = {c.lower(): c for c, _ in mod.listing("ui")}       # the mod's culture folders and the game's
     owners_cults = set()
     for o in factions:
         owners_cults.add(o if o in cults_here.values() else mod.culture(o) or "")

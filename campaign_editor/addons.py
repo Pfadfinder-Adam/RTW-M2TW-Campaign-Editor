@@ -78,7 +78,8 @@ class FileAddon(Addon):
     files = True
 
     def __init__(self, key, title, module, summary, settings, defaults):
-        super().__init__(key, title, "both", key + ".files", summary, settings, [])
+        super().__init__(key, title, "both", key + ".files", summary, settings,
+                         "nothing - no engine: it changes the mod's own files, on any mod of both games")
         self.module, self.defaults = module, defaults
 
     def template(self):
@@ -86,6 +87,7 @@ class FileAddon(Addon):
 
     def code(self):
         from importlib import import_module
+        from . import upkeep  # noqa: F401 - named, so the exe surely carries it (a test-mod run lacked it)
         return import_module("campaign_editor." + self.module)
 
 

@@ -264,8 +264,11 @@ def unit_picture_targets(mod, dictionary, factions, info=False):
 
 def unit_picture_need(mod, info=False):
     """(w, h, bpp) of the mod's own unit cards / info pictures (vanilla: 48 x 64 cards)."""
-    folder = os.path.join(mod.data, "ui", "unit_info" if info else "units")
-    return sample_size(folder, "_info.tga" if info else ".tga") if os.path.isdir(folder) else None
+    for folder in mod.dirs("ui/" + ("unit_info" if info else "units")):     # the mod's, else the game's
+        got = sample_size(folder, "_info.tga" if info else ".tga")
+        if got:
+            return got
+    return None
 
 
 def building_picture_target(mod, culture, level, constructed=False):
@@ -275,11 +278,12 @@ def building_picture_target(mod, culture, level, constructed=False):
 
 
 def building_picture_need(mod, culture, constructed=False):
-    folder = os.path.join(mod.data, "ui", culture, "buildings")
-    if not os.path.isdir(folder):
-        folder = os.path.join(mod.data, "ui")
     end = "_constructed.tga" if constructed else ".tga"
-    return sample_size(folder, end) if os.path.isdir(folder) else None
+    for folder in mod.dirs("ui/%s/buildings" % culture) + mod.dirs("ui"):   # the mod's, else the game's
+        got = sample_size(folder, end)
+        if got:
+            return got
+    return None
 
 
 def import_picture(plan, src, targets, size=None):
@@ -422,15 +426,10 @@ def copy_unit(plan, src_type, new_type, new_dict, recruit=True, texts=None, owne
             old_dict: new_dict, old_dict + "_descr": new_dict + "_descr",
             old_dict + "_descr_short": new_dict + "_descr_short"})
         for sub, pattern in (("units", "#%s.tga"), ("unit_info", "%s_info.tga")):
-            folder = os.path.join(mod.data, "ui", sub)
-            if not os.path.isdir(folder):
-                continue
-            for fac in sorted(os.listdir(folder)):
-                from .moddata import _ci
-                srcp = _ci(os.path.join(folder, fac), pattern % old_dict) if os.path.isdir(
-                    os.path.join(folder, fac)) else None
+            for fac, _ in mod.listing("ui/" + sub):             # the mod's folders and the game's under it
+                srcp = mod.find("ui/%s/%s/%s" % (sub, fac, pattern % old_dict))       # the card in either
                 if srcp:
-                    plan.copy(srcp, os.path.join(folder, fac, pattern % new_dict))
+                    plan.copy(srcp, os.path.join(mod.data, "ui", sub, fac, pattern % new_dict))
     if texts:
         set_text_values(plan, _text_file(mod, "export_units.txt"), {
             new_dict: texts.get("name"), new_dict + "_descr": texts.get("descr"),
@@ -529,7 +528,6 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
     window also gives: texts {new level: {'name', 'desc', 'desc_short'}}, factions [who may build every
     level: factions or cultures] and pictures {new level: a picture file, or {'pic': file, 'constructed': file}}."""
     import re
-    from .moddata import _ci
     from .roster import factions_groups, with_factions
     mod = plan.mod
     edb = mod.file("edb")
@@ -561,7 +559,7 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
                     lines[i] = with_factions(text, list(factions))
                 elif len(groups) > 1:
                     plan.warn(f, "%s: its requires line has %d factions groups (REX) - left as it is, change "
-                                 "it in the Building editor" % (head[0], len(groups)))
+                                 "it in Buildings" % (head[0], len(groups)))
     f.insert(src[2], [""] + lines)
     plan.note(f, "building %s copied from %s: levels %s" % (
         new_chain, src_chain, ", ".join("%s -> %s" % kv for kv in level_names.items())))
@@ -578,35 +576,35 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
                 if k.lower() == src_chain.lower() + "_name":      # the chain's own name ({market_name}): the
                     keys[k] = new_chain + "_name"                    # game asks for it ('localised string ...')
         copy_text_entries(plan, path, keys)
-    ui = os.path.join(mod.data, "ui")
-    if os.path.isdir(ui):
-        folders = {c: os.path.join(ui, c, "buildings") for c in sorted(os.listdir(ui))
-                   if os.path.isdir(os.path.join(ui, c, "buildings"))}
-        listing = {c: {n.lower(): n for n in os.listdir(f)} for c, f in folders.items()}
-
+    # the pictures of every culture folder the mod or the game's data under it holds (a mod folder keeps only
+    # what it changes); the copies go into the mod
+    cultures = [c for c, _ in mod.listing("ui") if mod.dirs("ui/%s/buildings" % c)]
+    listing = {c: {n.lower(): p for n, p in mod.listing("ui/%s/buildings" % c)} for c in cultures}
+    if cultures:
         def card(old, tail, cult):
             """The level's picture for this culture: its own, else one of another culture's - in its folder first
             (Barbarian Invasion's nomad folder holds barbarian and hun pictures), then in the others' folders."""
             own = listing[cult].get(("#%s_%s%s" % (cult, old, tail)).lower())
             if own:
-                return os.path.join(folders[cult], own)
-            for c2 in [cult] + [c for c in folders if c != cult]:
-                for c3 in folders:
-                    n = listing[c2].get(("#%s_%s%s" % (c3, old, tail)).lower())
-                    if n:
-                        return os.path.join(folders[c2], n)
+                return own
+            for c2 in [cult] + [c for c in cultures if c != cult]:
+                for c3 in cultures:
+                    p = listing[c2].get(("#%s_%s%s" % (c3, old, tail)).lower())
+                    if p:
+                        return p
             return None
-        for cult, folder in folders.items():
-            small = _ci(folder, "construction")            # Medieval II: the construction queue's small pictures
-            small_names = {n.lower(): n for n in os.listdir(small)} if small and os.path.isdir(small) else {}
+        for cult in cultures:
+            folder = os.path.join(mod.data, "ui", cult, "buildings")
+            smalls = {n.lower(): p for n, p in mod.listing("ui/%s/buildings/construction" % cult)}
             for old, new in level_names.items():
                 for tail in (".tga", "_constructed.tga"):
                     src = card(old, tail, cult)
                     if src:
                         plan.copy(src, os.path.join(folder, "#%s_%s%s" % (cult, new, tail)))
-                got = small_names.get(("#%s_%s.tga" % (cult, old)).lower())
-                if got:
-                    plan.copy(os.path.join(small, got), os.path.join(small, "#%s_%s.tga" % (cult, new)))
+                got = smalls.get(("#%s_%s.tga" % (cult, old)).lower())
+                if got:                                     # Medieval II: the construction queue's small pictures
+                    plan.copy(got, os.path.join(folder, os.path.basename(os.path.dirname(got)),
+                                                "#%s_%s.tga" % (cult, new)))
     if texts:
         # a level's name and description, and every culture's / faction's own copy of them (<level>_<culture>,
         # <level>_<culture>_desc ...): the game shows the most specific one, so all say the new text
@@ -632,20 +630,19 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
             if not pic:
                 continue
             tail = "_constructed.tga" if built else ".tga"
-            names = {("#%s_%s%s" % (c, lvl, tail)).lower() for c in (os.listdir(ui) if os.path.isdir(ui) else [])}
+            names = {("#%s_%s%s" % (c, lvl, tail)).lower() for c in cultures}
             targets = [d for _, d in plan.copies if os.path.basename(d).lower() in names]
             if not targets:
-                targets = [building_picture_target(mod, c, lvl, built) for c in sorted(os.listdir(ui))
-                           if os.path.isdir(os.path.join(ui, c, "buildings"))] if os.path.isdir(ui) else []
+                targets = [building_picture_target(mod, c, lvl, built) for c in cultures]
             plan.copies = [(a, d) for a, d in plan.copies if d not in targets]
             for t in targets:
                 cult = os.path.basename(os.path.dirname(os.path.dirname(t)))
                 import_picture(plan, pic, [t], building_picture_need(mod, cult, built))
-                small = _ci(os.path.dirname(t), "construction")
-                if not built and small and os.path.isdir(small):      # its small one in the construction queue
-                    to = os.path.join(small, os.path.basename(t))
+                smalls = mod.dirs("ui/%s/buildings/construction" % cult)
+                if not built and smalls:                                # its small one in the construction queue
+                    to = os.path.join(os.path.dirname(t), os.path.basename(smalls[0]), os.path.basename(t))
                     plan.copies = [(a, d) for a, d in plan.copies if d != to]
-                    import_picture(plan, pic, [to], sample_size(small, ".tga") or (64, 51))
+                    import_picture(plan, pic, [to], sample_size(smalls[0], ".tga") or (64, 51))
 
 
 # ---------------------------------------------------------------------------
@@ -959,14 +956,11 @@ def rename_dictionary(plan, old, new):
         old: new, old + "_descr": new + "_descr", old + "_descr_short": new + "_descr_short"})
     from .moddata import _ci
     for sub, pattern in (("units", "#%s.tga"), ("unit_info", "%s_info.tga")):
-        folder = os.path.join(mod.data, "ui", sub)
-        if not os.path.isdir(folder):
-            continue
-        for fac in sorted(os.listdir(folder)):
-            d = os.path.join(folder, fac)
-            src = _ci(d, pattern % old) if os.path.isdir(d) else None
-            if src and not _ci(d, pattern % new):
-                plan.copy(src, os.path.join(d, pattern % new))
+        for fac, _ in mod.listing("ui/" + sub):                     # the mod's folders and the game's under it
+            have = [d for d in mod.dirs("ui/%s/%s" % (sub, fac))]
+            src = next((p for p in (_ci(d, pattern % old) for d in have) if p), None)
+            if src and not any(_ci(d, pattern % new) for d in have):
+                plan.copy(src, os.path.join(mod.data, "ui", sub, fac, pattern % new))
 
 
 def rename_chain(plan, old, new):

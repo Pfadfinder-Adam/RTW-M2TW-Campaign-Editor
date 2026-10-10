@@ -1,5 +1,5 @@
 """The bigger map (x3) step by step: five steps, each written to the files with its own backup, each checked after
-it, the map shown in the editor between them - look, fix by hand with the Map editor and the Terrain tab, then the
+it, the map shown in the editor between them - look, fix by hand with Maps and the Terrain tab, then the
 next step. One step builds on what the one before wrote (and on the modder's fixes since):
 
   1 grid      every tile a 3 x 3 block (exact colours, no smoothing); towns, armies, resources, events and the
