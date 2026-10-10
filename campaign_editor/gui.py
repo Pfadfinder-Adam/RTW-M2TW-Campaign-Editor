@@ -73,7 +73,7 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   change the campaign's rules ... Campaign rules... (top row): ages, agents, towns, diplomacy, unit sizes
   add a religion ................ Religions > New religion... (Medieval II; Rome has no religions)
   add Sack Settlement ........... Add-ons (Rome + REX): who may sack, reward, what stays standing
-  make your own script, no code . Module builder... (top row; REX / M2EX): WHEN something happens, IF ...,
+  make your own script, no code . Module builder (top row; REX / M2EX): WHEN something happens, IF ...,
                                   DO ... - picked from lists; nine examples to start from
   rename a region or its town ... Edit region... (Map, or Rename... beside the towns list): the names
                                   players see and the names in the files (changed everywhere)
@@ -1464,7 +1464,6 @@ class App(tk.Tk):
                                                          "the campaign"),
         ("events", "Events...", "events_window", "events and later factions: plagues, volcanoes, historic messages"),
         ("traits", "Traits and retinue...", "traits_window", "what they give, their names, new ones"),
-        ("builder", "Module builder...", "module_builder", "a new add-on made of blocks, no code (REX / M2EX)"),
         ("recolour", "Recolour...", "recolour_window", "a faction's pictures in its colours: cards, textures, "
                                                        "symbols"),
         ("mercs", "Mercenaries...", "mercenaries_window", "who is for hire in which regions: pools of regions and "
@@ -1479,10 +1478,11 @@ class App(tk.Tk):
     WORK_TITLES = {"map": "Maps", "faction": "Factions", "new": "New faction", "edit": "Edit faction",
                    "settlements": "Settlements", "units": "Units",
                    "buildings": "Buildings", "characters": "Characters",
-                   "terrain": "Terrain editor", "addons": "Add-ons", "religions": "Religions"}
+                   "terrain": "Terrain editor", "addons": "Add-ons", "religions": "Religions",
+                   "builder": "Module builder"}
     WORK_HINTS = {"map": "the campaign map alone, no faction to pick: drag any faction's towns, ports, armies, agents and "
                          "fleets, give towns to anyone, change any army's units, resources, forts, regions",
-                  "religions": "the game's religions and each region's shares (Medieval II)", "addons": "ready-made scripts that add something new to the game (Sack Settlement...)","new": "make a new faction from a template", "edit": "change a faction that is in the game",
+                  "religions": "the game's religions and each region's shares (Medieval II)", "addons": "ready-made scripts that add something new to the game (Sack Settlement...)", "builder": "a new add-on made of blocks, no code (REX / M2EX) - here in the window, a module not saved yet stays while you look at other works","new": "make a new faction from a template", "edit": "change a faction that is in the game",
                   "faction": "Edit faction: change a faction that is in the game; New faction: make a new one from a "
                              "template - the two tabs at the top of it",
                   "settlements": "every region and its town: the names in the files and the names players see, "
@@ -1640,7 +1640,7 @@ class App(tk.Tk):
     def editor(self):
         """The unit, building or character editor on show, made the first time; None for the faction work."""
         w = self.v_work.get()
-        if w not in ("units", "buildings", "characters", "addons", "religions", "settlements"):
+        if w not in ("units", "buildings", "characters", "addons", "religions", "settlements", "builder"):
             return None                                 # (the Terrain editor is a tab of Maps now)
         if w not in self.editors:
             if w == "religions":
@@ -1652,6 +1652,9 @@ class App(tk.Tk):
             elif w == "addons":
                 from .gui_addons import AddonsPanel
                 self.editors[w] = AddonsPanel(self, self)
+            elif w == "builder":
+                from .gui_modbuilder import ModuleBuilder
+                self.editors[w] = ModuleBuilder(self, self)
             elif w == "characters":
                 from .gui_family import FamilyEditor
                 self.editors[w] = FamilyEditor(self, self, standalone=True)
@@ -5838,7 +5841,8 @@ class App(tk.Tk):
         open_traits(self)
 
     def module_builder(self):
-        """Module builder... (top row): a new REX / M2EX add-on made of WHEN / IF / DO blocks (Add-ons has it too)."""
+        """The Module builder work (top row): a new REX / M2EX add-on made of WHEN / IF / DO blocks (Add-ons has it
+        too) - in the main window."""
         from .gui_modbuilder import open_builder
         open_builder(self)
 
@@ -6433,6 +6437,11 @@ def main():
     app = App()
 
     def close():
+        builder = app.editors.get("builder")
+        if builder is not None and not builder.may_close():     # its module not saved yet: kept on a 'keep working'
+            from .gui_modbuilder import open_builder
+            open_builder(app)
+            return
         app._closing = True                       # from here a fault is only logged, no window opens
         app.save_session()
         try:
