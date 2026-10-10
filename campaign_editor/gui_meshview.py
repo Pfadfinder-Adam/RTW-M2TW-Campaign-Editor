@@ -295,6 +295,12 @@ class ModelViewer(tk.Toplevel):
                 out[b] = q
         return out or None
 
+    def _secondary(self):
+        """Whether the skeleton picked is the model's second (its second weapon in hand: a knight's sword)."""
+        sks = [k.lower() for k in self.info.skeletons]
+        sk = (self.v_skel.get() or "").lower()
+        return bool(sk) and sk in sks[1:] and sk != sks[0]
+
     def _moves_of(self, skeleton):
         """{animation name: file} of a skeleton, read once."""
         if skeleton not in self._moves:
@@ -399,7 +405,8 @@ class ModelViewer(tk.Toplevel):
         """What the view draws now: (mesh, groups, texture, attachment texture, more pictures, why, whole) - the
         man posed in the animation's frame, on his mount when that is ticked; weapons False: without his weapons and
         shield whatever the tick says."""
-        groups = self.mesh.shown(self.look, self.v_weapons.get() if weapons is None else weapons)
+        groups = self.mesh.shown(self.look, self.v_weapons.get() if weapons is None else weapons,
+                                 secondary=self._secondary())
         tex, att = self._texture(self.info.textures), self._texture(self.info.attach)
         if tex is None and self.mesh.texture_ref:       # Rome: no texture line - the one the .cas names
             tex = self._texture({"": self.mesh.texture_ref})
@@ -419,11 +426,12 @@ class ModelViewer(tk.Toplevel):
         elif riding:
             mi = self.mount[0]
             horse = self._mount_posed()
-            seat = None
+            seat, turn = None, 0.0
             if self.anim is not None and man.joints:          # riding: seated on the saddle, as the game does
                 seat = MV.seat_of(man, horse, MO.rider_offset(self.mod, self.mount[1]))
+                turn = MV.seat_turn(horse) if seat is not None else 0.0
             mesh = MV.combine(man, groups, horse, horse.shown(0, True),
-                              mount_one=True if not mi.attach else None, seat=seat)
+                              mount_one=True if not mi.attach else None, seat=seat, turn=turn)
             groups = mesh.groups
             more = {2: self._texture(mi.textures) if mi.textures else None,
                     3: self._texture(mi.attach) if mi.attach else None}

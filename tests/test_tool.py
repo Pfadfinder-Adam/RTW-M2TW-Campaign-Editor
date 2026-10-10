@@ -8278,6 +8278,13 @@ building smith
         self.assertEqual(MV.weapon_turn(type("W", (), {"frames": 1, "rotations": lambda s, k: [(0, 0, 0, 1),
                                                        (1, 0, 0, 0)], "offsets": lambda s, k: [(0, 0, 0)]})(), 0),
                          (1, 0, 0, 0))
+        # a weapon point naming only the pelvis as its second bone (a knight's lance and sword) is held by the right
+        # hand - held by the pelvis they hung in the air; a mount's tree has no hands
+        self.assertEqual((MV.hand_of(16, 20), MV.hand_of(0, 20), MV.hand_of(25, 20), MV.hand_of(0, 23)), (16, 12, 12, 0))
+        knight = MV.Mesh(mesh.groups, mesh.positions, None)
+        knight.skin = [(0, 4, 1.0, 0.0), (20, 0, 1.0, 0.0), (0, 0, 0.0, 0.0)]
+        swung = MV.Pose(rot, [(0, 0.5, 0)] + list(off[1:]))           # the man lifted: the hand goes with him
+        self.assertAlmostEqual(MV.pose_mesh(knight, swung, (rot, off)).positions[1][1], v[1] - 0.5, places=5)
         named = MV.Mesh([], [], None)
         named.bone_names = {0: "bone_pelvis", 20: "bone_weapon01", 21: "bone_weapon02", 22: "bone_shield"}
         self.assertEqual(MV.weapon_bones(named), {"weapon": [20, 21], "shield": [22]})
@@ -8291,6 +8298,11 @@ building smith
             self.assertAlmostEqual(got, want, places=5)
         self.assertEqual(half.offsets[0], (0, 0.5, 0))
         self.assertEqual(MV.Pose.of(stand, 2.5).offsets[0], (0, 0.5, 0))
+        # a turning horse carries its rider round: the saddle's heading (round the up axis) only
+        tipped = MV.Mesh([], [], None)
+        tipped.turns = [(0.0, math.sin(math.pi / 4), 0.0, math.cos(math.pi / 4))]   # a quarter round the up axis
+        self.assertAlmostEqual(MV.seat_turn(tipped), math.pi / 2, places=6)
+        self.assertEqual(MV.seat_turn(MV.Mesh([], [], None)), 0.0)
         # the rider's pelvis on the mount's saddle bone, moved by descr_mount's rider_offset - not turned with it
         rider, horse = MV.Mesh([], [], None), MV.Mesh([], [], None)
         rider.joints, horse.joints = [(0, 0.1, 0)], [(1, 1.5, 2)]

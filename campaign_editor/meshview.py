@@ -97,9 +97,11 @@ class Mesh:
             out.setdefault(g.name, []).append(g)
         return out
 
-    def shown(self, look=0, weapons=True):
+    def shown(self, look=0, weapons=True, secondary=False):
         """The groups one man shows: variant `look` (mod the count) of every part; weapons and shields when asked.
-        A man holding his primary weapon shows no secondary one (the game swaps them)."""
+        A man holding his primary weapon shows no secondary one (the game swaps them); secondary: he holds his
+        second weapon (his model's second skeleton - a knight's sword) - the 'secondaryactive' parts instead of the
+        'primaryactive' ones (both shown, his lance hung in the air beside the sword - the user)."""
         parts = self.parts()
         if self.one_texture:           # Rome: parts of one name are all worn (three shoulder pads), not variants
             parts = {id(g): [g] for g in self.groups}
@@ -114,7 +116,12 @@ class Mesh:
             # weapons and shields by their name: a file may list body parts (legs, heads) after its first
             # "Attachments" part too (vanilla peasants: Legs after Attachments3)
             if low.startswith(WEAPON_PARTS):
-                if not weapons or (primary and low.startswith("secondary")):
+                if not weapons:
+                    continue
+                if secondary and primary and low.startswith("primary") and \
+                        any(n.lower().startswith("secondary") for n in names.values()):
+                    continue
+                if not secondary and primary and low.startswith("secondary"):
                     continue
             out.append(gs[look % len(gs)])
         return out
@@ -636,11 +643,22 @@ def pose_mesh(mesh, pose, base, held=None):
     return m
 
 
+RIGHT_HAND = 12                         # bone_rhand of a man's 20
+
+
+def hand_of(second, n):
+    """The bone holding a weapon point: the hand its second bone names, else the right hand - a knight's lance and
+    sword name only the pelvis there (held by the pelvis they hung in the air - the user); not a man's tree: 0."""
+    if 0 < second < n:
+        return second
+    return RIGHT_HAND if n == len(M2_PARENTS) else 0
+
+
 def _weapon_pairs(mesh, n):
     """The (weapon bone, the hand holding it) pairs of a mesh's points, found once."""
     got = getattr(mesh, "_pairs", None)
     if got is None or got[0] != n:
-        got = mesh._pairs = (n, sorted({(b0, b1 if b1 < n else 0) for b0, b1, _, _ in mesh.skin if b0 >= n}))
+        got = mesh._pairs = (n, sorted({(b0, hand_of(b1, n)) for b0, b1, _, _ in mesh.skin if b0 >= n}))
     return got[1]
 
 
@@ -649,7 +667,7 @@ def _pose_points(mesh, n, mats, held, rot, brot, where, bwhere):
     out = []
     for v, (b0, b1, w0, w1) in zip(mesh.positions, mesh.skin):
         if b0 >= n and held and b0 in held:          # a weapon with a move of its own in the hand holding it
-            h = b1 if b1 < n else 0
+            h = hand_of(b1, n)
             a = mats.get((b0, h))
             if a is None:
                 q = _qmul(_qmul(rot[h], (-brot[h][0], -brot[h][1], -brot[h][2], brot[h][3])), held[b0])
@@ -661,7 +679,7 @@ def _pose_points(mesh, n, mats, held, rot, brot, where, bwhere):
                         a[6] * x + a[7] * y + a[8] * z + a[11]))
             continue
         if b0 >= n:                                  # a weapon's or the shield's point: the hand holding it
-            b0 = b1 if b1 < n else 0
+            b0 = hand_of(b1, n)
         if b1 >= n:
             b1 = b0
         if w0 <= 0 and w1 <= 0:                      # no weights (a shield, a quiver): all on its bone
@@ -802,13 +820,14 @@ def one_picture(groups):
     return out
 
 
-def combine(rider, rider_groups, mount, mount_groups, mount_one=None, seat=None):
+def combine(rider, rider_groups, mount, mount_groups, mount_one=None, seat=None, turn=0.0):
     """One Mesh of a rider and his mount. seat None: standing side by side, as the files keep them (the T pose:
     the game seats the rider and bends his legs with its animations - a seat drawn here only looked wrong): their
     lowest points on one ground, the rider beside the mount's middle, a little apart. seat (x, y, z): the rider in a
     riding animation's frame, his pelvis put there (the mount's saddle in the same frame + descr_mount's
-    rider_offset - seat_of). The mount's groups take pictures 2 and 3 (render's `more`); mount_one: its uv over one
-    picture (a mount with no attachment texture)."""
+    rider_offset - seat_of), turned by `turn` (radians round the up axis, round his pelvis: the saddle's heading -
+    seat_turn). The mount's groups take pictures 2 and 3 (render's `more`); mount_one: its uv over one picture (a
+    mount with no attachment texture)."""
     if seat is not None:
         dx, dy, dz = seat
     else:
@@ -817,10 +836,20 @@ def combine(rider, rider_groups, mount, mount_groups, mount_one=None, seat=None)
         dx = max(p[0] for p in MP) - min(p[0] for p in RP) + 0.15
         dy = min(p[1] for p in MP) - min(p[1] for p in RP)
         dz = (min(p[2] for p in MP) + max(p[2] for p in MP)) / 2 - (min(p[2] for p in RP) + max(p[2] for p in RP)) / 2
+    c, s_ = math.cos(turn), math.sin(turn)
+    px, _, pz = rider.joints[0] if turn and rider.joints else (0.0, 0.0, 0.0)
     if _fast is not None:
-        pos = _fast.np.concatenate([rider.arr + (dx, dy, dz), mount.arr])
+        r = rider.arr
+        if turn:
+            r = r.copy()
+            x, z = r[:, 0] - px, r[:, 2] - pz
+            r[:, 0], r[:, 2] = x * c + z * s_ + px, -x * s_ + z * c + pz
+        pos = _fast.np.concatenate([r + (dx, dy, dz), mount.arr])
     else:
-        pos = [(x + dx, y + dy, z + dz) for x, y, z in rider.positions] + list(mount.positions)
+        pts = rider.positions
+        if turn:
+            pts = [((x - px) * c + (z - pz) * s_ + px, y, -(x - px) * s_ + (z - pz) * c + pz) for x, y, z in pts]
+        pos = [(x + dx, y + dy, z + dz) for x, y, z in pts] + list(mount.positions)
     n = rider.count
     # the parts and the u v are the same at every frame of a play: made once (render keeps its colours by them)
     key = (id(rider.uvs), id(mount.uvs), tuple(id(g) for g in rider_groups), tuple(id(g) for g in mount_groups),
@@ -876,6 +905,17 @@ def seat_of(rider, mount, rider_offset=(0.0, 0.0, 0.0)):
     s, p = mount.joints[0], rider.joints[0]
     o = _qrot(mount.turns[0], rider_offset) if mount.turns else tuple(rider_offset)
     return tuple(s[k] + o[k] - p[k] for k in range(3))
+
+
+def seat_turn(mount):
+    """The heading of a posed mount's saddle (radians round the up axis): a turning horse carries its rider round
+    with it (the rider's own turning animations keep his pelvis facing ahead - he stayed facing ahead while his horse
+    turned, the user). Only the heading: the saddle's tilts are the rider's own animation's business (turned with
+    them, a horse falling dead turned him head down)."""
+    if not mount.turns:
+        return 0.0
+    f = _qrot(mount.turns[0], (0.0, 0.0, 1.0))
+    return math.atan2(f[0], f[2])
 
 
 def chariot(crew, crew_groups, car, horse, horses, riders):

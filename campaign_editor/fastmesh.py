@@ -44,7 +44,7 @@ def pose(mesh, n, mats, held_mats):
         table.append(m)
     T = np.asarray(table, dtype=np.float64)
     M, t = T[:, :9].reshape(-1, 3, 3), T[:, 9:]
-    hand = np.where(b1 < n, b1, 0)
+    hand = np.where((b1 > 0) & (b1 < n), b1, 12 if n == 20 else 0)    # meshview.hand_of
     i0 = np.where(b0 >= n, hand, b0)
     i1 = np.where(b1 >= n, i0, b1)
     if held_idx:

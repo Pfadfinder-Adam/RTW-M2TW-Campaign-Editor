@@ -256,6 +256,10 @@
   release's page.
 
 ### Fixed
+- **View in 3D: a knight's lance hung in the air beside his sword** (Medieval II): with his second skeleton (the
+  sword's) he shows his second set of weapons, not both; and a weapon that names no hand (a knight's lance and sword)
+  is held by the right hand, as in the game.
+- **View in 3D: a turning horse left its rider facing ahead**: he turns with the saddle now.
 - **View in 3D: a javelin thrown blunt end first** (Medieval II): the weapons and the shield now take their own moves
   in the hand - each has a skeleton of its own (`skeleton_attachment_primary` / the modeldb's weapons) with an
   animation of the same name as the man's; the throw turns the javelin point first, as in the game.
