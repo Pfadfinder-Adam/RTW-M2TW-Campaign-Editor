@@ -524,11 +524,18 @@ class TerrainEditor(ttk.Frame):
                 img.set(p[0], p[1], c)
                 if name == "heights":
                     self.cmap.set_height(p[0], p[1], c)
+        self._shore_dirty(set(got.get("heights") or ()) | set(got.get("hgt") or ()))
         if got.get("heights") or got.get("ground") or got.get("regions"):
             self.cmap.__dict__.pop("_backgrounds", None)
             self.app.status.set("Terrain: %d point(s) of the coast changed - Preview, then Apply changes."
                                 % len(set(self.cpx["heights"]) | set(self.cpx["ground"])))
             self.app._mark_work()
+
+    def _shore_dirty(self, points):
+        """The heights points a brush tick changed, told to the map: only the shore line round them is drawn again
+        (MapView._shore_line points=), not the whole view's."""
+        v = self.view
+        v.shore_dirty = (getattr(v, "shore_dirty", None) or set()) | {tuple(p) for p in points}
 
     def _say_off(self, text):
         self._off_said = text                       # kept when the palette is drawn again
@@ -724,6 +731,7 @@ class TerrainEditor(ttk.Frame):
             else:
                 self.heights[p] = v
         if got:
+            self._shore_dirty(got)
             self.cmap.__dict__.pop("_backgrounds", None)
             self.app.status.set("Terrain: %d pixel(s) of height changed - Preview, then Apply changes."
                                 % len(self.heights))

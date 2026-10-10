@@ -742,21 +742,48 @@ class MapView(ttk.Frame):
         """How many pixels a tile the background picture has (2, or 4 for the map by points)."""
         return max(1, int(round(base.width / float(self.cmap.w)))) if self.cmap else 2
 
-    def _shore_line(self, cw, ch):
+    SHORE_BLOCK = 8                                     # the shore line is drawn and redrawn in blocks of 8 x 8 points
+
+    def _shore_line(self, cw, ch, points=None):
         """The shore as the game draws it (the Terrain editor, close up): each square of four map_heights points cut
         into two triangles, the water under height 0 (terrain.shore_segments) - a light line with a dark edge, so
-        what the tiles and points show can be told from what the game will draw."""
-        from . import terrain as T
+        what the tiles and points show can be told from what the game will draw. points: only the blocks of these
+        changed points drawn again (a brush's tick - the user, 2026-10-10: 'only the part that was changed'; the
+        whole view's line, thousands of pieces, took 110 ms a tick on Medieval II's map)."""
         img, metres = self.shore
         if img is None:
             return
-        z, h = self.z, self.cmap.h
+        z, h, B = self.z, self.cmap.h, self.SHORE_BLOCK
         px0 = max(0, int(2 * self.ox) - 1)
         px1 = min(img.width - 1, int(2 * (self.ox + cw / z)) + 2)
         py0 = max(0, int(2 * (h - self.oy - ch / z)) - 1)
         py1 = min(img.height - 1, int(2 * (h - self.oy)) + 2)
         if px1 <= px0 or py1 <= py0:
             return
+        c = self.canvas
+        if points is not None:                          # the blocks round the changed points (a square's corners)
+            blocks = {((x + dx) // B, (y + dy) // B) for x, y in points for dx in (-1, 0) for dy in (-1, 0)}
+            for bx, by in blocks:
+                c.delete("shore@%d,%d" % (bx, by))
+            for bx, by in blocks:
+                self._shore_block(img, metres, max(px0, bx * B), min(px1, bx * B + B), max(py0, by * B),
+                                  min(py1, by * B + B))
+            return
+        for by in range(py0 // B, (py1 - 1) // B + 1):
+            for bx in range(px0 // B, (px1 - 1) // B + 1):
+                self._shore_block(img, metres, max(px0, bx * B), min(px1, bx * B + B), max(py0, by * B),
+                                  min(py1, by * B + B))
+
+    def _shore_block(self, img, metres, px0, px1, py0, py1):
+        """The shore line of the squares whose lower-left points lie in px0..px1 - 1, py0..py1 - 1 (one block)."""
+        from . import terrain as T
+        if px1 <= px0 or py1 <= py0:
+            return
+        px1, py1 = min(px1, img.width - 1), min(py1, img.height - 1)
+        if px1 <= px0 or py1 <= py0:
+            return
+        z, h = self.z, self.cmap.h
+        tag = "shore@%d,%d" % (px0 // self.SHORE_BLOCK, py0 // self.SHORE_BLOCK)
         raw, W = img.raw, img.width
         rows = {}
 
@@ -773,10 +800,12 @@ class MapView(ttk.Frame):
                     continue
                 lines += T.shore_segments(metres, px0 + i, py, px0 + i + 1, py + 1)
         c = self.canvas
-        for wid, col in ((4, "#1b2430"), (2, "#fff4c2")):
+        for wid, col, tags in ((4, "#1b2430", ("shore", tag, tag + "d")), (2, "#fff4c2", ("shore", tag))):
             for (ax, ay), (bx, by) in lines:
                 c.create_line((ax / 2.0 - self.ox) * z, (h - ay / 2.0 - self.oy) * z, (bx / 2.0 - self.ox) * z,
-                              (h - by / 2.0 - self.oy) * z, fill=col, width=wid, capstyle="round", tags=("shore",))
+                              (h - by / 2.0 - self.oy) * z, fill=col, width=wid, capstyle="round", tags=tags)
+        if lines:                                       # a block drawn again: its dark edge under every light line
+            c.tag_lower(tag + "d", "shore")
 
     def mark_points(self, points=None):
         """Points of the map's 2 x + 1 pictures (map_heights / map_ground_types: (px, py), bottom row first - a tile's
@@ -1151,6 +1180,7 @@ class MapView(ttk.Frame):
 
     def _render(self):
         self._pending = None
+        self.shore_dirty = None                         # the whole shore line is drawn again
         c = self.canvas
         c.delete("all")
         self._hot, self._hot_k = None, 1.0
@@ -2363,9 +2393,14 @@ class MapView(ttk.Frame):
         pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
         self._photo = ImageTk.PhotoImage(pic)
         c.itemconfigure("bg", image=self._photo)
-        if self.shore is not None:                      # the brush changed the coast: its line again
-            c.delete("shore")
-            if self.z >= SHORE_ZOOM:
+        dirty, self.shore_dirty = getattr(self, "shore_dirty", None), None
+        if self.shore is not None:                      # the brush changed the coast: its line again - only the
+            if self.z < SHORE_ZOOM:                     # blocks it changed when it says which (shore_dirty)
+                c.delete("shore")
+            elif dirty is not None and c.find_withtag("shore"):
+                self._shore_line(cw, ch, dirty)
+            else:
+                c.delete("shore")
                 self._shore_line(cw, ch)
 
     def _move(self, e):

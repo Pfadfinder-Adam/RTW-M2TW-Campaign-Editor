@@ -231,6 +231,9 @@
   release's page.
 
 ### Fixed
+- **Coast & heights brushes about 3 x quicker with the Shore line on**: each touch of the brush drew the whole
+  view's shore line again (thousands of pieces - about 0.1 s a touch on Medieval II's map); now only the part round
+  what the brush changed is drawn again (the line is the same).
 - **The map's signs, borders and names come back after the map is dragged** (on every map): they stayed missing
   where the map was moved until a zoom in and out.
 - **Bigger map (x3)... no longer sits inside the zoom** (between its - and its 100%): it stands left of the zoom

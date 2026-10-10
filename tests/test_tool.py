@@ -10622,6 +10622,49 @@ building smith
         finally:
             root.destroy()
 
+    def test_shore_line_redrawn_only_where_the_brush_changed(self):
+        """The Coast & heights brushes lagged (the user, 2026-10-10): every tick drew the whole view's shore line
+        again (thousands of pieces, ~110 ms on Medieval II's map). Now only the blocks round the points a tick changed
+        are drawn again - and the line is the same as a whole new drawing."""
+        try:
+            import tkinter as tk
+            from types import SimpleNamespace
+            from campaign_editor.gui_map import MapView
+            from campaign_editor.tga import Image as Tga
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / display / Pillow (CI): not tested here
+            self.skipTest("no window: %s" % e)
+        try:
+            W = H = 41
+            img = Tga(W, H)
+            for y in range(H):
+                for x in range(W):
+                    img.set(x, y, (10, 10, 10) if (x - 20) ** 2 + (y - 20) ** 2 < 100 else (0, 0, 200))
+
+            def metres(px, py):
+                if not (0 <= px < W and 0 <= py < H):
+                    return None
+                c = img.get(px, py)
+                return 5.0 if c[0] == c[1] == c[2] else -5.0
+            v = MapView(root)
+            v.cmap, v.z, v.ox, v.oy, v.shore = SimpleNamespace(h=20), 10, 0, 0, (img, metres)
+
+            def lines():
+                return sorted((tuple(round(k, 3) for k in v.canvas.coords(i)), v.canvas.itemcget(i, "fill"))
+                              for i in v.canvas.find_withtag("shore"))
+            v._shore_line(400, 400)
+            changed = [(x, y) for x in range(28, 34) for y in range(18, 23)]      # a cape grows out
+            for p in changed:
+                img.set(p[0], p[1], (10, 10, 10))
+            v._shore_line(400, 400, changed)
+            part = lines()
+            v.canvas.delete("shore")
+            v._shore_line(400, 400)
+            self.assertEqual(part, lines())
+            self.assertTrue(part)
+        finally:
+            root.destroy()
+
     def test_closing_the_editor_when_a_command_is_already_gone(self):
         """Closing the editor once showed 'can't delete Tcl command' and then, while it reported that, a Windows box
         'application has been destroyed' (a tester, 0.32.0): a window keeps the names of its callbacks to delete them
