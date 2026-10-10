@@ -7081,8 +7081,10 @@ building smith
     def test_delete_a_town_with_its_region(self):
         """Map editor: a town deleted with its region in every file that ties them - its land, town and port
         pixels to the neighbour, its descr_regions block, its settlement and the rebels on its tile, its mercenary
-        pools and win conditions; the last town of a living faction, a campaign script naming it and a faction
-        rising there are refused; a trait condition naming it is warned about; Restore byte for byte."""
+        pools and win conditions; the last town of a living faction and a faction rising there are refused; a
+        campaign script naming it is no refusal (report #179): its list entries and one-line commands are commented
+        out, a condition and an invasion left with no region warned about; a trait condition naming it is warned
+        about; Restore byte for byte."""
         from campaign_editor import regiondelete as RD
         before = tree_hash(self.root)
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
@@ -7093,7 +7095,12 @@ building smith
         write(os.path.join(camp, "descr_win_conditions.txt"), "alpha\nhold_regions A_R B_R\ntake_regions 10\n")
         write(os.path.join(camp, "descr_harvests.txt"), "; bad harvests\n\nyear 3\nregion A_R\n\nyear 4\nfaction alpha\n"
               "region B_R\n\nyear 5\nregion A_R\n")
-        write(os.path.join(camp, "campaign_script.txt"), "script\n\tsettlement_flash_start Btown\nend_script\n")
+        script = ("script\n\tsettlement_flash_start Btown\n\tif I_SettlementOwner Btown = alpha\n\tend_if\n"
+                  "\tadd_events\n\t\tevent\temergent_faction\tslave\n\t\tdate\t0\n\t\tregion \tB_R\n"
+                  "\t\tevent\tcounter\tx\n\t\tdate\t0\n\tend_add_events\n"
+                  "\tadd_events\n\t\tevent\temergent_faction\talpha\n\t\tdate\t0\n\t\tregion\tB_R\n"
+                  "\t\tregion\tA_R\n\tend_add_events\nend_script\n")
+        write(os.path.join(camp, "campaign_script.txt"), script)
         write(os.path.join(self.root, "data", "export_descr_ancillaries.txt"),
               "Trigger t1\n    WhenToTest CharacterTurnEnd\n    Condition SettlementName Btown\n")
         mod = ModData(self.root)
@@ -7110,16 +7117,22 @@ building smith
         from campaign_editor.plan import Plan
         with self.assertRaises(ValueError):                       # the plain games: refused (they crash)
             keep_townless(Plan(mod, "t", "t"), "alpha")
-        errors, _ = RD.problems(mod, "test", "B_R")
-        self.assertTrue(any("campaign_script.txt names B_R / Btown on line 2" in e for e in errors), errors)
-        os.remove(os.path.join(camp, "campaign_script.txt"))
-        mod = ModData(self.root)
         errors, warns = RD.problems(mod, "test", "B_R")
         self.assertEqual(errors, [])
+        self.assertTrue(any("campaign_script.txt: lines 2, 8, 15 naming B_R / Btown will be commented out" in w
+                            for w in warns), warns)
+        self.assertTrue(any("campaign_script.txt names B_R / Btown on line 3 (if I_SettlementOwner Btown = alpha) - a "
+                            "condition" in w for w in warns), warns)
         self.assertTrue(any("export_descr_ancillaries.txt names" in w for w in warns), warns)
         plan = Plan(mod, "delete", "B_R", {})
         self.assertEqual(RD.delete(plan, "test", "B_R"), "A_R")
+        self.assertTrue(any("the event at line 6 (emergent_faction slave) has no region left" in w
+                            for _, w in plan.warnings), plan.warnings)
+        self.assertFalse(any("(emergent_faction alpha)" in w or "(counter x)" in w for _, w in plan.warnings))
         plan.apply()
+        with open(os.path.join(camp, "campaign_script.txt")) as fh:
+            self.assertEqual(fh.read(), script.replace("\tsettlement_flash_start", "\t; settlement_flash_start")
+                             .replace("\t\tregion", "\t\t; region").replace("; region\tA_R", "region\tA_R"))
         mod = ModData(self.root)
         self.assertEqual(sorted(mod.regions("test")), ["A_R"])
         img = mod.region_map("test")
@@ -7140,6 +7153,9 @@ building smith
         os.remove(os.path.join(camp, "descr_harvests.txt"))
         os.remove(os.path.join(camp, "descr_mercenaries.txt"))
         os.remove(os.path.join(self.root, "data", "export_descr_ancillaries.txt"))
+        with open(os.path.join(camp, "campaign_script.txt")) as fh:
+            self.assertEqual(fh.read(), script)                          # Restore: the script back as it was
+        os.remove(os.path.join(camp, "campaign_script.txt"))
         write(os.path.join(camp, "descr_win_conditions.txt"), "alpha\nhold_regions A_R\ntake_regions 10\n")
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
         self.assertEqual(after, before)

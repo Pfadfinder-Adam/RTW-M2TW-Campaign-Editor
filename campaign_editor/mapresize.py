@@ -350,11 +350,12 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0, factions_out=())
       nearest town his faction keeps; every other character - armies, agents, fleets, rebels - goes with his army;
     - resources, forts, watchtowers, wonders: their lines go;
     - an event placed there goes;
-    - lines of the campaign's scripts naming tiles there are left as they are (returned as warnings);
+    - lines of the campaign's scripts naming tiles there are left as they are (returned as warnings); lines naming a
+      town or region cut: list entries and one-line commands commented out, conditions warned (report #179);
     - a faction left without a town, when it is in factions_out (the modder said yes): taken out of the campaign
       with all its people (factionout.take_out - it stays in the mod).
     Refused before anything is written (ValueError, every reason in plain words): a faction left without a town, a
-    region a campaign script or a faction's rising names (regiondelete.refusals), a family member whose faction keeps
+    region a faction's rising names (regiondelete.refusals), a family member whose faction keeps
     no town to go to, a faction's rising placed on the cut part, without an engine land left of a cut town that
     touches no region that stays. Returns the warnings."""
     from . import regiondelete as RD

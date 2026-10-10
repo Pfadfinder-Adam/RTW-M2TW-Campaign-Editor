@@ -261,6 +261,12 @@
   release's page.
 
 ### Fixed
+- **Medieval II's right edge could not be cut, and a town a campaign script names could not be deleted**: the
+  vanilla campaign script names Baghdad and Mosul (the Mongols' and Timurids' invasion lists), so the map cut and
+  *Delete this town with its region* refused. Now the script's lines that only list the place (`region ...` of an
+  invasion) or flash it (`settlement_flash_start` / `stop`, `console_command`) are commented out with `;` in the same
+  write, as the game's own authors did with Tbilisi; a condition naming it is named in a warning to change by hand,
+  and so is an invasion left with no region. Restore puts the lines back.
 - **View in 3D: a knight's lance hung in the air beside his sword** (Medieval II): with his second skeleton (the
   sword's) he shows his second set of weapons, not both; and a weapon that names no hand (a knight's lance and sword)
   is held by the right hand, as in the game.

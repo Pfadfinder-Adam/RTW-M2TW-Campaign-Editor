@@ -173,7 +173,6 @@ def _comment_script(plan, path, names):
     if not com:
         return
     f = plan.edit(path)
-    rel = plan.mod.rel(path)
     for n, line in com:
         i = n - 1
         text = f.text(i)
@@ -186,12 +185,12 @@ def _comment_script(plan, path, names):
         words = strip_comment(f.text(i)).split() if i < len(f.raw) else ["end_add_events"]
         if words and words[0] in ("event", "end_add_events"):
             if head is not None and had and not left:
-                plan.warn(f, "%s: the event at line %d (%s) has no region left in its list - it rises nowhere; give "
-                             "it one by hand" % (rel, head + 1, " ".join(strip_comment(f.text(head)).split()[1:3])))
+                plan.warn(f, "the event at line %d (%s) has no region left in its list - it rises nowhere; give "
+                             "it one by hand" % (head + 1, " ".join(strip_comment(f.text(head)).split()[1:3])))
             head, had, left = (i if words[0] == "event" else None), False, False
         elif head is not None and words and words[0] == "region":
             left = True
-        elif head is not None and i in gone and strip_comment(f.text(i)) == "":
+        elif head is not None and i in gone and not strip_comment(f.text(i)).strip():
             had = True
 
 
@@ -218,8 +217,9 @@ def problems(mod, campaign, region, into=None, land=True, waste=False):
 def refusals(mod, campaign, gone, last_town=True, waste=False):
     """([refusals], [warnings]) for the regions `gone` deleted together, every file read once for all of them (a big
     mod has tens of thousands): a faction left without a town (unless last_town is False - the caller says it its own
-    way), a faction rising in one by an event, a campaign script naming one (refused); other files naming one -
-    trait / ancillary conditions, REX / M2EX scripts (warned: they never fire there again). waste: the regions stay
+    way), a faction rising in one by an event (refused); a campaign script naming one (warned: its list entries and
+    one-line commands get commented out by _delete, a condition is left for the modder - report #179); other files
+    naming one - trait / ancillary conditions, REX / M2EX scripts (warned: they never fire there again). waste: the regions stay
     (as wastelands) - only their towns' names are gone, so only those are looked for."""
     regions = mod.regions(campaign)
     gone = [r for r in gone if r in regions]
