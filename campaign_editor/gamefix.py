@@ -19,8 +19,10 @@ def _vegetation_maps(mod):
     return False
 
 
-def problems(mod):
-    """[{'id', 'why', 'file', 'line', 'new'}] - what would stop the game and can be put right."""
+def problems(mod, on_load=False):
+    """[{'id', 'why', 'file', 'line', 'new'}] - what would stop the game and can be put right. on_load: what Load
+    asks about - not the engine's settings files a mod lacks (the game runs either way; the user, 2026-10-10:
+    Check mod files says it, New mod folder puts them in at once)."""
     out = []
     from .limits import ex_file
     caps = ex_file(mod, "descr_caps_ex.txt")
@@ -49,7 +51,7 @@ def problems(mod):
                            "model_battle_source modeldb (M2EX's default for mods), nothing else changed.",
                     "file": caps, "line": i, "new": f.text(i).replace(m.group(0), m.group(1) + "modeldb", 1),
                     "note": "model_battle_source: text -> modeldb (the mod's own battle_models.modeldb is read)"})
-    missing = missing_engine_files(mod)
+    missing = [] if on_load else missing_engine_files(mod)
     if missing:
         from .limits import engine_of
         name = engine_of(mod)[:-4]
@@ -198,6 +200,39 @@ def settings_off(raw):
         body = line.rstrip(b"\r\n")
         out.append(b";" + line if body.split(b";", 1)[0].strip() else line)
     return b"".join(out)
+
+
+def engine_files_words(mod):
+    """Check mod files' line about the engine's settings files the mod lacks ('' when none) - check.FIXES gives it
+    the button that copies them in (App.copy_engine_files)."""
+    from .limits import engine_of
+    missing = missing_engine_files(mod)
+    if not missing:
+        return ""
+    name = engine_of(mod)[:-4]
+    return ("the mod has no %s of its own (the game's data has) - %s runs it on its built-in defaults, as it does "
+            "now; copy them in to set this mod's own engine settings (every line switched off, the mod runs as "
+            "before)" % (", ".join(missing), name))
+
+
+def engine_settings_into(data, game_data):
+    """The engine's settings files (ENGINE_SETTINGS) the game's data has and data lacks, copied into data with every
+    setting switched off (settings_off - the mod runs as on the engine's defaults) -> [names]. New mod folder."""
+    out = []
+    try:
+        names = sorted(n for n in os.listdir(game_data) if n.lower() in ENGINE_SETTINGS
+                       and os.path.isfile(os.path.join(game_data, n)))
+    except OSError:
+        return out
+    for n in names:
+        if _ci(data, n):
+            continue
+        with open(os.path.join(game_data, n), "rb") as fh:
+            raw = settings_off(fh.read())
+        with open(os.path.join(data, n), "wb") as fh:
+            fh.write(raw)
+        out.append(n)
+    return out
 
 
 def missing_engine_files(mod):

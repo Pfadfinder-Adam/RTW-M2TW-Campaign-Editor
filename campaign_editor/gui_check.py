@@ -14,6 +14,8 @@ def go(app, place):
     """Open the place a problem is put right in (check.FIXES' places)."""
     if place == "load":
         app.load()
+    elif place == "engine_files":
+        app.copy_engine_files()
     elif place == "rules":
         app.campaign_rules()
     elif place == "events":

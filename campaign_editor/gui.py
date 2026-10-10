@@ -4298,7 +4298,7 @@ class App(tk.Tk):
         from . import gamefix
         self._fix_queued = False
         try:
-            found = gamefix.problems(ModData(self.mod.data))          # the files as they are now
+            found = gamefix.problems(ModData(self.mod.data), on_load=True)    # the files as they are now
         except Exception as e:
             log.write("setup check failed: %s" % e)
             return
@@ -4322,6 +4322,23 @@ class App(tk.Tk):
         log.write("Set-up fixed (backup %s)\n%s" % (bdir, plan.report()))
         self.load()
         self.status.set("Set-up fixed: %s (backup made)." % ", ".join(p["id"] for p in found))
+
+    def copy_engine_files(self):
+        """Check mod files' 'Copy them in': the engine's settings files the game has and the mod lacks, copied into
+        the mod with every setting switched off (gamefix - a backup first, Restore takes them out)."""
+        from . import gamefix
+        if not self.mod:
+            return
+        found = [p for p in gamefix.problems(ModData(self.mod.data)) if p["id"] == "engine_files"]
+        if not found:
+            self.status.set("The mod has the engine's settings files already.")
+            return
+        plan = gamefix.fix_plan(ModData(self.mod.data), found)
+        bdir = plan.apply()
+        log.write("Engine settings copied in (backup %s)\n%s" % (bdir, plan.report()))
+        self.load()
+        self.status.set("%s copied into the mod, every setting switched off (backup made) - switch one on there "
+                        "for this mod alone." % ", ".join(found[0]["names"]))
 
     def _own_folder_first(self, plan):
         """Before the first write into a mod the editor did not make (the game's own data, a downloaded mod - no

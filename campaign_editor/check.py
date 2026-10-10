@@ -48,6 +48,7 @@ def when_of(msg):
 # where a problem is put right: (words in the problem, the button's words, the place - an App work or window)
 FIXES = [
     (("load offers",), "Load the mod again (it offers the fix)", "load"),
+    (("copy them in to set this mod's own engine settings",), "Copy them in", "engine_files"),
     (("campaign rules", "max_number_of_children", "age of manhood"), "Open Campaign rules", "rules"),
     (("family tree", "children", "character_record"), "Open Characters (family tree)", "characters"),
     (("settlements tab", "population", "governor's building", "core building", "temples"),
@@ -588,11 +589,10 @@ def engine_limits(mod, campaign, regions, units, blds, img):
     if engine:                  # the user's rule: REX / M2EX = no limits at all - no fault, no warning, no count
         out = [("LIMITS: none - %s beside the game (factions, regions, religions, cultures, units, buildings: no "
                 "limit; max_factions follows the factions on every Apply)" % engine[:-4], False)]
-        from .gamefix import missing_engine_files
-        missing = missing_engine_files(mod)
-        if missing:
-            out.append(("    the mod has no %s of its own (the game's data has) - %s may run it on its built-in "
-                        "defaults; Load offers to copy them in" % (", ".join(missing), engine[:-4]), False))
+        from .gamefix import engine_files_words
+        words = engine_files_words(mod)
+        if words:                               # a problem line, so Check mod files gives it its button
+            out.append((words, True))
         return out
     out = [("LIMITS (the original %s exe: no REX / M2EX found beside the game)" % exe, False)]
     nfac = len(mod.factions())

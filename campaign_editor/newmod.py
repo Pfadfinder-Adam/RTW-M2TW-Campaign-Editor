@@ -215,6 +215,13 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
         for n, text in starts.items():
             with open(os.path.join(target, n), "wb") as f:
                 f.write(text.encode("latin-1"))
+        # the engine's settings files (REX / M2EX) the game has, every setting off: the mod runs as on the engine's
+        # defaults and Load has nothing to ask (the user, 2026-10-10)
+        from .gamefix import engine_settings_into
+        from .moddata import _ci
+        gdata = _ci(game, "data") if game else None
+        stats["engine_settings"] = engine_settings_into(os.path.join(target, "data"), gdata) if gdata and \
+            os.path.isdir(os.path.join(target, "data")) else []
         with open(os.path.join(target, MARKER), "w", encoding="utf-8") as f:
             json.dump({"base": base_name or "(game)", "linked": link_ok[0]}, f, indent=2)
     except Exception:

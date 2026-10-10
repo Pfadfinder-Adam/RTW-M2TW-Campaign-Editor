@@ -185,6 +185,10 @@
   it are listed to change by hand. It was a refusal ('... would keep no town').
 
 ### Changed
+- **No question about the engine's settings files on every Load**: a mod without its own `descr_ex.txt` /
+  `descr_caps_ex.txt` runs on the engine's defaults - not a fault - so Load no longer asks; **Check mod files** names
+  it with a **Copy them in** button, and **New mod folder** puts them into the new mod at once, every setting
+  switched off (Rome with REX, Medieval II with M2EX).
 - **The editor's own files in a folder of their own**: its settings, logs and add-ons go into `CampaignEditor`
   beside the exe, not among the game's files. Files an older version left beside the exe keep working there; the
   editor asks once whether to move them in (a yes moves them, nothing lost; a no and nothing changes).
