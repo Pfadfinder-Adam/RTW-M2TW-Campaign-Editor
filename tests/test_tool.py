@@ -10704,6 +10704,35 @@ building smith
         finally:
             root.destroy()
 
+    def test_map_names_the_character_under_the_mouse(self):
+        """The map shows the name of the man under the mouse beside it, as the game does (the user, 2026-10-10): a
+        named character his name, an army or a fleet with no named man at its head 'Captain <name>', an agent his
+        name and what he is; the box goes when the mouse leaves him."""
+        try:
+            import tkinter as tk
+            from campaign_editor.gui_map import MapView, hover_name
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / display / Pillow (CI): not tested here
+            self.skipTest("no window: %s" % e)
+        try:
+            self.assertEqual(hover_name({"name": "Flavius Julius", "kind": "named character", "named": True,
+                                         "army": True}), "Flavius Julius")
+            self.assertEqual(hover_name({"name": "Marcus", "kind": "general", "named": False, "army": True}),
+                             "Captain Marcus")
+            self.assertEqual(hover_name({"name": "Gaius", "kind": "admiral", "named": False, "army": True}),
+                             "Captain Gaius")
+            self.assertEqual(hover_name({"name": "Silus", "kind": "spy", "named": False, "army": False}),
+                             "Silus (spy)")
+            v = MapView(root)
+            v.pack()
+            root.update()
+            v._name_tip(20, 20, "Captain Marcus")
+            texts = [v.canvas.itemcget(i, "text") for i in v.canvas.find_withtag("hovername")
+                     if v.canvas.type(i) == "text"]
+            self.assertEqual(texts, ["Captain Marcus"])
+        finally:
+            root.destroy()
+
     def test_closing_the_editor_when_a_command_is_already_gone(self):
         """Closing the editor once showed 'can't delete Tcl command' and then, while it reported that, a Windows box
         'application has been destroyed' (a tester, 0.32.0): a window keeps the names of its callbacks to delete them

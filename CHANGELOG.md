@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **The name of the man under the mouse on the map**, beside it, as the game shows it: a general's or a family
+  member's name; an army or a fleet with no named man at its head - its captain (**Captain <name>**); an agent - his
+  name and what he is.
 - **New land that joins nobody: one common wasteland** (Rome with REX, Medieval II with M2EX): in the Coast &
   heights tab, *new land joins* has **(nobody - the wasteland)**, the default with an engine - the land you paint
   stays nobody's (no town, no owner, no faction grows) and all of it goes into ONE wasteland region, `Wasteland`,

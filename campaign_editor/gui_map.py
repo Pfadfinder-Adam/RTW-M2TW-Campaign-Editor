@@ -33,6 +33,19 @@ MODES = (("political", "Political (the owners)"), ("religion", "Religion (Mediev
 SHORE_ZOOM = 8                  # pixels a tile from which the Terrain editor draws the shore as the game does
 
 
+def hover_name(ch):
+    """What the map shows beside the mouse over a character, as the game does: a named character's (a general, the
+    leader, a family member) name; an army or a fleet with no named man at its head - its captain: 'Captain <name>';
+    an agent - his name and what he is."""
+    name = (ch.get("name") or "").strip()
+    kind = ch.get("kind") or ""
+    if ch.get("named") or kind == "named character":
+        return name
+    if kind in ("general", "admiral") or ch.get("army"):
+        return "Captain %s" % name if name else "Captain"
+    return "%s (%s)" % (name, kind) if kind else name
+
+
 def view_of(base, box, size, resample, field=(0, 0, 0), per_tile=2):
     """The part of base (per_tile px a tile: 2, or 4 for the map by points) under the view box (in tiles) drawn at
     size: only the pixels on the map are taken (a view far wider than a big map once asked Pillow for a
@@ -323,7 +336,7 @@ class MapView(ttk.Frame):
         self.waiting = False                             # something picked waits for its click (Edit regions too)
         self.canvas.winfo_toplevel().bind("<Escape>", self._escape, add="+")
         self.on_fort_double = None                       # (Fort) -> its garrison's window (a double click)
-        c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline")))
+        c.bind("<Leave>", lambda e: (self._grow(None), c.delete("tile_outline"), c.delete("hovername")))
         self._hot = None                                # the marker under the mouse, drawn bigger
         self._hot_k = 1.0                               # ... by how much now
 
@@ -2063,6 +2076,23 @@ class MapView(ttk.Frame):
             c.create_rectangle(cx - h, cy - h, cx + h, cy + h, outline="white", width=width, tags="tile_outline")
         c.tag_lower("tile_outline", "city") if c.find_withtag("city") else None
 
+    def _name_tip(self, sx, sy, text):
+        """The name of what is under the mouse in a small box beside it, as the game shows an army's general (the
+        user, 2026-10-10: 'just the character's name; an army alone - its captain's')."""
+        c = self.canvas
+        t = c.create_text(sx + 14, sy + 20, text=text, anchor="nw", fill="#f4ecd0", font=("", 9, "bold"),
+                          tags=("hovername",))
+        box = c.bbox(t)
+        if box:
+            x0, y0, x1, y1 = box
+            w, h = c.winfo_width(), c.winfo_height()
+            dx = min(0, w - 8 - x1) if w > 1 else 0                     # kept inside the map's window
+            dy = -(y1 - y0) - 34 if h > 1 and y1 + 4 > h - 4 else 0
+            c.move(t, dx, dy)
+            r = c.create_rectangle(x0 - 4 + dx, y0 - 2 + dy, x1 + 4 + dx, y1 + 2 + dy, fill="#2a2418",
+                                   outline="#8a7a52", tags=("hovername",))
+            c.tag_raise(t, r)
+
     def _grow(self, tag, near=1.0):
         """Draw the marker near the mouse bigger (and on top) - the nearer, the bigger, softly (near 0..1 within its
         aura); put the last one back."""
@@ -2654,6 +2684,7 @@ class MapView(ttk.Frame):
             self.readout.configure(text="drag the %s edge: out adds tiles of sea, in cuts them off" % side)
             return
         self.canvas.delete("ghost")
+        self.canvas.delete("hovername")
         self._outline(e.x, e.y)
         if self.cmap and not self._cdrag:
             self._grow(*self._marker_near(e.x, e.y))
@@ -2668,6 +2699,7 @@ class MapView(ttk.Frame):
             cid = self._char_under(e.x, e.y)
             ch_ = next((c for c in self.chars if c["id"] == cid), None) if cid else None
             if ch_:
+                self._name_tip(e.x, e.y, hover_name(ch_))
                 self.readout.configure(text="%s - %s of %s%s%s" % (
                     ch_["name"], ch_["kind"], ch_["faction"],
                     ", %d unit(s)" % ch_["units"] if ch_["army"] else "",
