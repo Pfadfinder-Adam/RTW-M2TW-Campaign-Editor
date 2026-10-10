@@ -7814,6 +7814,31 @@ building smith
                     short_name="Epirus")
         self.assertEqual(swap(rome, "the Kingdom of Macedon"), "the Kingdom of Epirus")
 
+    def test_models_tab_lists_only_the_types_own_models(self):
+        """The Models tab's list of a character type: the strat models descr_character.txt gives that type (any
+        faction) and the mod's own new ones no type uses - not the other types' nor the old unused entries (Medieval
+        II's file still carries Rome's sm_roman_general, a tester picked it for a general)."""
+        from campaign_editor import stratmodels as SM
+        data = os.path.join(self.root, "data")
+        write(os.path.join(data, "descr_character.txt"),
+              "type named character\nactions x\nwage_base 0\nfaction england\nstrat_model northern_general\n"
+              "faction moors\nstrat_model islamic_general\n"
+              "type spy\nactions x\nfaction england, moors\nstrat_model northern_spy\n")
+        write(os.path.join(data, "descr_model_strat.txt"),
+              "".join("type %s\nmodel_flexi models_strat/%s.cas, max\n" % (n, n) for n in (
+                  "northern_general", "islamic_general", "northern_spy", "sm_roman_general")))
+        mod = ModData(data)
+        self.assertEqual(SM.type_models(mod, "named character"), ["islamic_general", "northern_general"])
+        self.assertEqual(SM.type_models(mod, "spy"), ["northern_spy"])
+        game = os.path.join(self.root, "game")                 # a mod's own new model no type uses: offered
+        write(os.path.join(game, "medieval2.exe"), "x")
+        shutil.copytree(data, os.path.join(game, "data"))
+        shutil.copytree(data, os.path.join(game, "mods", "m", "data"))
+        with open(os.path.join(game, "mods", "m", "data", "descr_model_strat.txt"), "a") as fh:
+            fh.write("type my_general\nmodel_flexi models_strat/mine.cas, max\n")
+        mod = ModData(os.path.join(game, "mods", "m", "data"))
+        self.assertEqual(SM.type_models(mod, "spy"), ["my_general", "northern_spy"])
+
     def test_battle_animations_from_the_packs(self):
         """The games' animation packs (pack.idx + pack.dat): each animation's frames, bones and kind, every bone's turn
         per frame and the offsets of its first `kind` bones; descr_skeleton's animations per skeleton, a Medieval II

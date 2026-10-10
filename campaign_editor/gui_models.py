@@ -54,13 +54,16 @@ class ModelsEditor(ttk.Frame):
         for p in FA.faction_pictures(a.mod, a.v_campaign.get(), src_faction):
             if FA.art_group(p) == "models" and p.get("link"):
                 pics.setdefault(p["link"][1].split(":", 1)[-1], []).append(p)
-        names = sorted(SM.model_types(a.mod), key=str.lower)
+        names = {}                                        # each type's list: only the models of that type
         cells, shown = [], set()
         for fg in figs:
             want = a.figures.get(fg["type"]) or fg["models"]
+            if fg["type"] not in names:
+                names[fg["type"]] = SM.type_models(a.mod, fg["type"])
             for lv, now in enumerate(fg["models"]):
                 model = want[lv] if lv < len(want) else now
-                cells.append(self._type_card(g.inner, fg, lv, model, now, names, pics.get(model, []),
+                choice = sorted(set(names[fg["type"]]) | {model, now}, key=str.lower)
+                cells.append(self._type_card(g.inner, fg, lv, model, now, choice, pics.get(model, []),
                                              src_faction, new))
                 shown.add(model)
         for model, ps in pics.items():                  # a texture no type shows now (another was picked)

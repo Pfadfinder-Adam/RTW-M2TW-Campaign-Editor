@@ -541,9 +541,13 @@ class App(tk.Tk):
         self.lbl_template = lf.grid_slaves(row=row - 1, column=0)[0]
         self.e_name = ttk.Entry(lf, textvariable=self.v["name"])
         field("Internal name", self.e_name)
-        self.b_rename = ttk.Button(lf, text="Rename...", command=self.rename_faction)   # Edit faction only
-        self.b_rename.grid(row=row - 1, column=2, sticky="w")
-        self.b_rename.grid_remove()
+        # Rename... beside its label, not at the row's end (there it widened the whole box - the user, 2026-10-10)
+        name_lbl = lf.grid_slaves(row=row - 1, column=0)[0]
+        name_cell = ttk.Frame(lf)
+        name_cell.grid(row=row - 1, column=0, sticky="w", padx=4, pady=2)
+        name_lbl.grid_forget()
+        ttk.Label(name_cell, text="Internal name").pack(side="left")
+        self.b_rename = ttk.Button(name_cell, text="Rename...", command=self.rename_faction)   # Edit faction only
         field("Name (full)", ttk.Entry(lf, textvariable=self.v["display_name"]))
         field("Name (short)", ttk.Entry(lf, textvariable=self.v["short_name"]))
         # Rome only: Medieval II's texts have no short name ({ST_...}) nor the faction icon's tooltip
@@ -660,10 +664,10 @@ class App(tk.Tk):
         self.t_long = tk.Text(texts, width=34, height=7, wrap="word")
         self.t_long.grid(row=1, column=1, sticky="we", padx=4, pady=2)
         texts.columnconfigure(1, weight=1)
-        # beside the description, as the game shows them: the campaign-select map and the leader's face (filled by
-        # ArtEditor.load_start - the Art tab's list leaves them out)
-        self.start_pics = ttk.LabelFrame(texts, text="On the campaign-select screen", padding=4)
-        self.start_pics.grid(row=0, column=2, rowspan=2, sticky="nw", padx=(8, 0))
+        # the campaign-select map and the leader's face (filled by ArtEditor.load_start - the Art tab's list leaves
+        # them out): under Victory, in the room the short fields leave there (the user, 2026-10-10: 'an empty
+        # rectangle - put the picture there'), packed below once Victory is
+        self.start_pics = ttk.LabelFrame(side, text="On the campaign-select screen", padding=4)
 
         # --- leaders
         lf2 = self.lf2 = ttk.LabelFrame(side, text="Leader and heir (names come from the faction's name list)")
@@ -690,6 +694,7 @@ class App(tk.Tk):
         self.victory = VictoryBox(side, on_change=self._victory_changed, before=self.remember)
         self.victory.app = self                 # its region lists can be picked on the map
         self.victory.pack(fill="x", pady=(8, 0))
+        self.start_pics.pack(anchor="nw", pady=(8, 0))
 
         # --- towns
         tf = ttk.LabelFrame(right, text="Starting settlements")
@@ -1715,7 +1720,10 @@ class App(tk.Tk):
         self.lf2.configure(text="Leader and heir (names from the faction's name list)" if edit else
                            "Leader and heir (names must come from the template's name list)")
         self.e_name.configure(state="readonly" if edit else "normal")
-        (self.b_rename.grid if edit else self.b_rename.grid_remove)()
+        if edit:
+            self.b_rename.pack(side="left", padx=(6, 0))
+        else:
+            self.b_rename.pack_forget()
         for ws in self.extra_rows.values():             # shown again by load_existing when the faction has them
             for w in ws:
                 w.grid_remove()

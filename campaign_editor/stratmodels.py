@@ -17,6 +17,7 @@ line gets an entry of its own first (the others keep theirs). A strat model the 
 one (a copy of the model's first texture line, the faction's name in it) - the Art tab then gives the faction a
 picture of its own on Replace. The textures themselves are pictures the Art tab lists (clone.picture_links)."""
 
+import os
 import re
 
 from .textio import strip_comment, tokens
@@ -95,6 +96,34 @@ def figures(mod, faction, load=None):
             out.append({"type": e["type"], "models": [m for _, m in e["models"]],
                         "shared": [x for x in e["factions"] if x != faction]})
     return out
+
+
+def type_models(mod, ctype, load=None):
+    """The strat models a character type's list offers (the user, 2026-10-10: 'a general's list only generals, a
+    spy's only spies - not everything mixed, not Rome's'): the ones descr_character.txt gives this type for any
+    faction, and the mod's own new models no type uses yet (in its descr_model_strat.txt, not in the game's own) -
+    never the leftovers no type uses (Medieval II's own file still carries Rome's sm_roman_general, pontus_general
+    ... that no character shows)."""
+    path = mod.file("character")
+    if not path:
+        return []
+    used, out = set(), set()
+    for e in _entries((load or mod.load)(path)):
+        for _, m in e["models"]:
+            used.add(m)
+            if e["type"] == ctype:
+                out.add(m)
+    mine = model_types(mod, load)
+    try:
+        from .moddata import ModData, _ci
+        from .newmod import game_of
+        gdata = _ci(game_of(mod.data), "data")
+        same = gdata and os.path.normcase(os.path.abspath(gdata)) == os.path.normcase(os.path.abspath(mod.data))
+        game = set(model_types(ModData(gdata))) if gdata and not same else set(mine)
+    except Exception:
+        game = set(mine)
+    out |= {m for m in mine if m not in used and m not in game}
+    return sorted(out, key=str.lower)
 
 
 def _own_entry(f, e, faction):
