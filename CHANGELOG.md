@@ -192,6 +192,9 @@
   release's page.
 
 ### Fixed
+- **View in 3D: a Medieval II mount shown alone was half white** (horses, camels, elephants): it was drawn as a
+  man, whose texture is split in two halves (the man's, the weapons'); a mount lays its whole texture over itself -
+  now it takes all of it, as it already did when shown beside its rider.
 - **Models: each character type's list holds only its own figures** - a general's list the generals (of every
   culture), a spy's the spies; it showed every model, the other types' and the old Rome entries Medieval II's own
   `descr_model_strat.txt` still carries (no character uses them). A mod's own new model, not given to any type yet,

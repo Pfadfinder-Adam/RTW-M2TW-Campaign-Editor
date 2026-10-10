@@ -575,6 +575,26 @@ def _affine(src, dst):
     return tuple(out)
 
 
+def whole_picture(mesh):
+    """True when the mesh's own parts (not its weapons) lay their u past the middle of the picture - a Medieval II
+    mount: the horse takes its whole texture, not the man's half of it (a tester: horses shown half white)."""
+    if mesh.one_texture or not mesh.uvs:
+        return mesh.one_texture
+    us = [mesh.uvs[i][0] for g in mesh.groups if not g.name.lower().startswith(WEAPON_PARTS) for i in g.tris
+          if i < len(mesh.uvs)]
+    return bool(us) and max(us) > 0.55
+
+
+def one_picture(groups):
+    """Copies of groups drawn with their uv over one picture (render: Group.one)."""
+    out = []
+    for g in groups:
+        h = Group(g.name, g.material, g.tris, g.attachment)
+        h.pic, h.one = getattr(g, "pic", 0), True
+        out.append(h)
+    return out
+
+
 def combine(rider, rider_groups, mount, mount_groups, mount_one=None):
     """One Mesh of a rider and his mount standing side by side, as the files keep them (two models, both standing:
     the game seats the rider and bends his legs with its animations - a seat drawn here only looked wrong): their

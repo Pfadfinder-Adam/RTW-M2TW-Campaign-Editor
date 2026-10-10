@@ -303,6 +303,8 @@ class ModelViewer(tk.Toplevel):
                     3: self._texture(mi.attach) if mi.attach else None}
             if more[2] is None and self.mount_mesh.texture_ref:
                 more[2] = self._texture({"": self.mount_mesh.texture_ref})
+        if not riding and not self.info.attach and MV.whole_picture(man):
+            groups = MV.one_picture(groups)          # a mount alone: its whole texture (half was drawn white)
         img = MV.render(mesh, SIZE, self.yaw, self.pitch, self.zoom, tex, att, groups,
                         quality=1 if quick else 2, textured=not quick or quick == "play", more=more)
         self._photo = ImageTk.PhotoImage(img)

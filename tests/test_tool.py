@@ -7839,6 +7839,17 @@ building smith
         mod = ModData(os.path.join(game, "mods", "m", "data"))
         self.assertEqual(SM.type_models(mod, "spy"), ["my_general", "northern_spy"])
 
+    def test_a_mount_alone_takes_its_whole_texture(self):
+        """A Medieval II mount's parts lay their u over the whole picture (no man's half / weapons' half): shown alone
+        it takes one picture - half the horse was drawn white (a tester); a man's body under the middle keeps two."""
+        from campaign_editor import meshview as MV
+        horse = MV.Mesh([MV.Group("Body", "horse", (0, 1, 2), False)], [(0, 0, 0)] * 3, [(0.1, 0), (0.9, 0), (0.5, 1)])
+        man = MV.Mesh([MV.Group("Body", "man", (0, 1, 2), False), MV.Group("primaryactive0", "x", (3, 4, 5), True)],
+                      [(0, 0, 0)] * 6, [(0.1, 0), (0.4, 0), (0.2, 1), (0.6, 0), (0.9, 0), (0.7, 1)])
+        self.assertTrue(MV.whole_picture(horse))
+        self.assertFalse(MV.whole_picture(man))
+        self.assertTrue(all(g.one for g in MV.one_picture(horse.groups)))
+
     def test_battle_animations_from_the_packs(self):
         """The games' animation packs (pack.idx + pack.dat): each animation's frames, bones and kind, every bone's turn
         per frame and the offsets of its first `kind` bones; descr_skeleton's animations per skeleton, a Medieval II
