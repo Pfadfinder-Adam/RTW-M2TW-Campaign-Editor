@@ -7,7 +7,8 @@
   has **Make a card...** and **Make a picture...** - turn the man, zoom, play an animation and stop it on the frame
   you like, and the editor frames him the way the game's own are (a card from his head to his thighs, a spear held
   high cut at the top as on the game's cards; the description picture the whole man; or to the knees / waist),
-  nearer / farther, up / down, right / left. The ground: see-through as the game's own cards (the game draws the
+  nearer / farther, up / down, right / left - or **my own frame**: the frame stands on the whole man beside the
+  picture, drag it anywhere on him, its corner (or the wheel) to size it. The ground: see-through as the game's own cards (the game draws the
   card's frame behind), a colour, or a picture of your own (kept for next time). Seen at its size and bigger, then
   **Use it**: it waits for Preview / Apply like an imported picture and goes into every faction folder the unit's
   card goes to (a backup first); **Save a copy...** keeps it as a PNG. Both games, sized as the mod's own

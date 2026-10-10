@@ -25,6 +25,8 @@ class CardMaker(tk.Toplevel):
         from .models import game_kind
         self.size = CM.picture_size(game_kind(viewer.mod), (make.get("need") or {}).get(info), info)
         self.figure, self.box = None, None
+        self.area = None                # my own frame (x, y, w, h on the figure), dragged on the man; None: the preset
+        self._fit, self._grab = None, None
         self._photos = []
         self.v_part = tk.StringVar(value=CM.PICTURE_PART if info else CM.CARD_PART)
         self.v_scale = tk.DoubleVar(value=100.0)
@@ -39,7 +41,8 @@ class CardMaker(tk.Toplevel):
         from .gui_util import ShortHint
         ShortHint(frm, text=(
             "The man as the 3D view shows him now. Turn him, zoom, pick an animation and stop it on the frame you like "
-            "in the 3D view, then 'Take the 3D view again'. The game's own cards are the man alone on a see-through "
+            "in the 3D view, then 'Take the 3D view again'. The frame on the man (left) is what becomes the picture: "
+            "pick how much of him, or drag the frame anywhere on him, its corner to size it (the wheel too). The game's own cards are the man alone on a see-through "
             "ground (the game draws the card's frame and ground behind him) - from his head to his thighs, a "
             "horseman with the front of his horse; the description pictures show the whole man. Use it gives it to "
             "the unit: Preview, then Apply writes it into every faction folder the unit's card goes to (a backup "
@@ -54,13 +57,14 @@ class CardMaker(tk.Toplevel):
                   font=("", 10, "bold")).pack(anchor="w")
         ttk.Button(side, text="Take the 3D view again", command=self.take).pack(anchor="w", pady=(6, 0))
         ttk.Label(side, text="How much of him").pack(anchor="w", pady=(8, 0))
-        for key, words, _ in CM.PARTS:
-            ttk.Radiobutton(side, text=words, value=key, variable=self.v_part, command=self.show).pack(anchor="w")
+        for key, words, _ in CM.PARTS + (("own", "my own frame (drag it on the man)", None),):
+            ttk.Radiobutton(side, text=words, value=key, variable=self.v_part, command=self._part_picked).pack(
+                anchor="w")
         for label, var, lo, hi in (("Nearer / farther", self.v_scale, 50, 200), ("Up / down", self.v_up, -50, 50),
                                    ("Right / left", self.v_side, -50, 50)):
             ttk.Label(side, text=label).pack(anchor="w", pady=(6, 0))
             ttk.Scale(side, from_=lo, to=hi, variable=var, orient="horizontal", length=200,
-                      command=lambda v: self.show()).pack(anchor="w")
+                      command=lambda v: self._slid()).pack(anchor="w")
         ttk.Button(side, text="Back to the start", command=self.reset).pack(anchor="w", pady=(4, 0))
         ttk.Label(side, text="Ground").pack(anchor="w", pady=(8, 0))
         for key, words in GROUNDS:
@@ -79,6 +83,14 @@ class CardMaker(tk.Toplevel):
         ttk.Button(bar, text="Save a copy...", command=self.save_copy).pack(side="left", padx=4)
         ttk.Button(bar, text="Cancel", command=self.destroy).pack(side="right")
         self.canvas.bind("<Configure>", lambda e: self.show())
+        # the frame on the man (left): drag inside it to move it, its corner to size it, the wheel too - any part of
+        # him (the user, 2026-10-10: 'let us choose which part becomes the card ourselves - that freedom')
+        self.canvas.bind("<ButtonPress-1>", self._press)
+        self.canvas.bind("<B1-Motion>", self._drag)
+        self.canvas.bind("<ButtonRelease-1>", lambda e: setattr(self, "_grab", None))
+        self.canvas.bind("<MouseWheel>", lambda e: self._wheel(1 if e.delta > 0 else -1))
+        self.canvas.bind("<Button-4>", lambda e: self._wheel(1))
+        self.canvas.bind("<Button-5>", lambda e: self._wheel(-1))
         self.geometry("900x620")
         self._load_ground()
         self.take()
@@ -101,7 +113,78 @@ class CardMaker(tk.Toplevel):
         self.v_scale.set(100.0)
         self.v_up.set(0.0)
         self.v_side.set(0.0)
+        self.area = None
+        if self.v_part.get() == "own":
+            self.v_part.set(CM.PICTURE_PART if self.info else CM.CARD_PART)
         self.show()
+
+    # ---- the frame: a preset with its sliders, or my own dragged on the man ----
+    def current(self):
+        """The frame on the figure now (x, y, w, h), or None."""
+        if self.figure is None:
+            return None
+        if self.v_part.get() == "own" and self.area:
+            return self.area
+        part = self.v_part.get() if self.v_part.get() != "own" else (CM.PICTURE_PART if self.info else CM.CARD_PART)
+        return CM.region(self.figure, self.size, part, self.v_scale.get() / 100.0, self.v_up.get() / 100.0,
+                         self.v_side.get() / 100.0, box=self.box if part != "whole" else None)   # the whole man: his spear too
+
+    def _part_picked(self):
+        if self.v_part.get() == "own":
+            if not self.area:                       # my own starts where the preset stands
+                self.v_part.set(CM.PICTURE_PART if self.info else CM.CARD_PART)
+                self.area = self.current()
+                self.v_part.set("own")
+        else:
+            self.area = None
+        self.show()
+
+    def _slid(self):
+        if self.v_part.get() == "own":              # the sliders work on the presets: back to the last one
+            self.v_part.set(CM.PICTURE_PART if self.info else CM.CARD_PART)
+            self.area = None
+        self.show()
+
+    def _own(self, area):
+        self.area = area
+        self.v_part.set("own")
+        self.show()
+
+    def _press(self, e):
+        a, fit = self.current(), self._fit
+        if not a or not fit:
+            return
+        k, ox, oy = fit
+        x0, y0, x1, y1 = ox + a[0] * k, oy + a[1] * k, ox + (a[0] + a[2]) * k, oy + (a[1] + a[3]) * k
+        if abs(e.x - x1) <= 10 and abs(e.y - y1) <= 10:
+            self._grab = ("size", e.x, e.y, a)
+        elif x0 <= e.x <= x1 and y0 <= e.y <= y1:
+            self._grab = ("move", e.x, e.y, a)
+        else:                                       # a click on the man outside it: the frame comes there
+            self._grab = ("move", e.x, e.y, (a[0] + ((e.x - ox) / k - (a[0] + a[2] / 2)),
+                                             a[1] + ((e.y - oy) / k - (a[1] + a[3] / 2)), a[2], a[3]))
+            self._own(self._grab[3])
+
+    def _drag(self, e):
+        if not self._grab or not self._fit:
+            return
+        how, sx, sy, a = self._grab
+        k = self._fit[0]
+        dx, dy = (e.x - sx) / k, (e.y - sy) / k
+        if how == "move":
+            self._own((a[0] + dx, a[1] + dy, a[2], a[3]))
+        else:                                       # the corner: bigger / smaller, the picture's shape kept
+            aspect = self.size[0] / self.size[1]
+            h = max(8.0, a[3] + max(dy, dx / aspect))
+            self._own((a[0], a[1], h * aspect, h))
+
+    def _wheel(self, step):
+        a = self.current()
+        if not a:
+            return
+        f = 1 / 1.1 if step > 0 else 1.1             # the wheel up: nearer (a smaller frame)
+        w, h = a[2] * f, a[3] * f
+        self._own((a[0] + (a[2] - w) / 2, a[1] + (a[3] - h) / 2, w, h))
 
     def _load_ground(self):
         path = settings.get("card_picture", "")
@@ -140,9 +223,7 @@ class CardMaker(tk.Toplevel):
         """The picture as it will be given (RGBA, the mod's own size), or None."""
         if self.figure is None:
             return None
-        pic = CM.frame(self.figure, self.size, self.v_part.get(), self.v_scale.get() / 100.0,
-                       self.v_up.get() / 100.0, self.v_side.get() / 100.0,
-                       box=self.box if self.v_part.get() != "whole" else None)   # the whole man: his spear too
+        pic = CM.cut(self.figure, self.current(), self.size)
         g = self.v_ground.get()
         settings.put("card_ground", g)
         if g == "colour":
@@ -162,8 +243,34 @@ class CardMaker(tk.Toplevel):
             c.create_text(20, 20, anchor="nw", fill="#ddd", text="nothing drawn in the 3D view")
             return
         W, H = max(50, c.winfo_width()), max(50, c.winfo_height())
-        big = max(1, min((W - pic.width - 40) // pic.width, (H - 20) // pic.height))     # pixel by pixel, sharp
-        x = 10
+        # left: the whole man with the frame on him; right: the picture at its size and bigger
+        fw = max(60, int(W * 0.42))
+        fig = self.figure
+        bb = fig.getchannel("A").getbbox() or (0, 0, fig.width, fig.height)      # the man and a little room round
+        pad = 0.12 * max(bb[2] - bb[0], bb[3] - bb[1])
+        vx0, vy0 = max(0, int(bb[0] - pad)), max(0, int(bb[1] - pad))
+        vx1, vy1 = min(fig.width, int(bb[2] + pad)), min(fig.height, int(bb[3] + pad))
+        view = fig.crop((vx0, vy0, vx1, vy1))
+        k = min((fw - 20) / view.width, (H - 34) / view.height)
+        shown = view.resize((max(1, int(view.width * k)), max(1, int(view.height * k))), Image.LANCZOS)
+        ph = ImageTk.PhotoImage(shown)
+        self._photos.append(ph)
+        ox, oy = 10 - vx0 * k, 24 - vy0 * k              # a point of the figure: (ox + x * k, oy + y * k)
+        self._fit = (k, ox, oy)
+        c.create_image(10, 24, anchor="nw", image=ph)
+        c.create_text(10, 6, anchor="nw", fill="#ddd", text="drag the frame")
+        a = self.current()
+        if a:
+            x0, y0, x1, y1 = ox + a[0] * k, oy + a[1] * k, ox + (a[0] + a[2]) * k, oy + (a[1] + a[3]) * k
+            cl = lambda v, lo, hi: max(lo, min(hi, v))           # kept on the man's side of the window
+            right, low = 10 + shown.width, 24 + shown.height
+            c.create_rectangle(cl(x0, 2, right), cl(y0, 2, low), cl(x1, 2, right), cl(y1, 2, low),
+                               outline="#ffd24a", width=2)
+            if x1 <= right + 6 and y1 <= low + 6:
+                c.create_rectangle(x1 - 6, y1 - 6, x1 + 6, y1 + 6, outline="#ffd24a", fill="#ffd24a")
+        left = fw + 10
+        big = max(1, min((W - left - pic.width - 40) // pic.width, (H - 34) // pic.height))  # pixel by pixel, sharp
+        x = left
         for k, label in [(1, "its size")] + ([(big, "x %d" % big)] if big > 1 else []):
             im = pic.resize((pic.width * k, pic.height * k), Image.NEAREST) if k > 1 else pic
             board = self._board(im.size)

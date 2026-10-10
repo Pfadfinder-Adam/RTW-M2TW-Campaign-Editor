@@ -40,17 +40,17 @@ def cut_out(on_black, on_white):
     return out
 
 
-def frame(figure, size, part="whole", scale=1.0, shift=0.0, side=0.0, top=None, box=None):
-    """The figure (RGBA) cut and sized to size (w, h): `part` of it from the top (PARTS), its head near the top for a
-    part, in the middle for the whole man; scale > 1 brings it nearer, shift moves the figure up (+) or down (-) by
-    that share of the picture's height, side right (+) or left (-) by that share of its width. top: room over the
-    head (TOP_ROOM for a part). box: the (x0, y0, x1, y1) to frame by (the body without its weapons - a spear held
-    high is cut at the top as on the games' cards); else the whole figure's."""
-    from PIL import Image
+def region(figure, size, part="whole", scale=1.0, shift=0.0, side=0.0, top=None, box=None):
+    """The part of the figure picture (x, y, w, h - floats, the picture's shape) that becomes the picture: `part` of
+    the man from the top (PARTS), his head near the top for a part, in the middle for the whole man; scale > 1 brings
+    him nearer, shift moves him up (+) or down (-) by that share of the picture's height, side right (+) or left (-)
+    by that share of its width. top: room over the head (TOP_ROOM for a part). box: the (x0, y0, x1, y1) to frame by
+    (the body without its weapons - a spear held high is cut at the top as on the games' cards); else the whole
+    figure's. None when nothing is drawn."""
     W, H = size
     box = box or figure.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
     if not box:
-        return Image.new("RGBA", size, (0, 0, 0, 0))
+        return None
     x0, y0, x1, y1 = box
     keep = PART_SHARE.get(part, 1.0)
     bw, bh = x1 - x0, (y1 - y0) * keep
@@ -69,13 +69,26 @@ def frame(figure, size, part="whole", scale=1.0, shift=0.0, side=0.0, top=None, 
     rw = rh * aspect
     ry += shift * rh
     rx = cx - rw / 2 - side * rw
-    # crop with see-through round it where the region runs past the drawing
+    return rx, ry, rw, rh
+
+
+def cut(figure, area, size):
+    """The area (x, y, w, h) of the figure picture as a picture of size - see-through where it runs past it."""
+    from PIL import Image
+    if not area:
+        return Image.new("RGBA", size, (0, 0, 0, 0))
+    rx, ry, rw, rh = area
     left, upper = int(round(rx)), int(round(ry))
     right, lower = int(round(rx + rw)), int(round(ry + rh))
     canvas = Image.new("RGBA", (max(1, right - left), max(1, lower - upper)), (0, 0, 0, 0))
     canvas.paste(figure.crop((max(0, left), max(0, upper), min(figure.width, right), min(figure.height, lower))),
                  (max(0, -left), max(0, -upper)))
-    return canvas.resize((W, H), Image.LANCZOS)
+    return canvas.resize(tuple(size), Image.LANCZOS)
+
+
+def frame(figure, size, part="whole", scale=1.0, shift=0.0, side=0.0, top=None, box=None):
+    """The figure (RGBA) framed (region) and cut (cut) to size (w, h)."""
+    return cut(figure, region(figure, size, part, scale, shift, side, top, box), size)
 
 
 def on_ground(picture, ground=None):
@@ -143,4 +156,4 @@ def picture_size(kind, need, info):
     return PICTURE_SIZE.get(kind, PICTURE_SIZE["rome"]) if info else CARD_SIZE
 
 
-__all__ = ["PARTS", "CARD_PART", "PICTURE_PART", "cut_out", "frame", "on_ground", "model_figure", "picture_size"]
+__all__ = ["PARTS", "CARD_PART", "PICTURE_PART", "cut_out", "region", "cut", "frame", "on_ground", "model_figure", "picture_size"]
