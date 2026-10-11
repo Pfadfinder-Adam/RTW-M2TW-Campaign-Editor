@@ -13,6 +13,9 @@
   description, the battle model (with its mount) and the voice in battle; on a narrow window they wrap to a second
   row. The explanations (the size a card needs, where it goes, the model's seat and textures, the voice class) sit on
   a **?** beside each title; problems (red / orange) stay in sight.
+- **Models tab slimmer**: each texture card shows only its title and where the game shows it; the file, the size it
+  needs and where it is named are on the **?** beside the title. The Culture / Faction switches at the top (and As
+  it was) are gone.
 - **Tied to it** (owners, recruit places, armies at the start) folds away behind a button of its own beside **Every
   line of the block** in both editors; the editor remembers whether it was open.
 

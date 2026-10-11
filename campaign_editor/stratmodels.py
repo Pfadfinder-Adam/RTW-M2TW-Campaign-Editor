@@ -170,26 +170,6 @@ def _texture_for(plan, faction, model, kinds):
             return
 
 
-def faction_figures(mod, source, load=None):
-    """The figures of another faction to take whole (the Models tab's 'as the faction'): ({character type: [strat
-    model per level]}, {strat model: source} - whose texture each takes, its colours)."""
-    figs = {fg["type"]: list(fg["models"]) for fg in figures(mod, source, load)}
-    return figs, {m: source for ms in figs.values() for m in ms}
-
-
-def culture_factions(mod, culture, but=None):
-    """The culture's factions in descr_sm_factions.txt's order (the rebels and `but` left out)."""
-    return [n for n, c in mod.factions() if c == culture and n not in ("slave", but)]
-
-
-def culture_figures(mod, culture, load=None, but=None):
-    """The figures of a culture (the Models tab's culture switch - the user, 2026-10-10: 'the culture: simply the
-    first faction of it in the list'): faction_figures of the culture's first faction (but: the faction being
-    changed, never its own source); ({}, {}) when the culture has none."""
-    facs = culture_factions(mod, culture, but)
-    return faction_figures(mod, facs[0], load) if facs else ({}, {})
-
-
 def apply(plan, faction, wanted, like=None):
     """opts['figures'] = {character type: [strat model per level]}; like = {strat model: faction} - the faction's
     texture in each of those models becomes that faction's (its colours), taken whole from it."""

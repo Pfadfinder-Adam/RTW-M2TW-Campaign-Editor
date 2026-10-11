@@ -206,10 +206,12 @@ class ArtEditor(ttk.Frame):
             g.fill([self.card(g.inner, p, src_faction, new) for p in groups[k]])
         self.draw_map()
 
-    def card(self, parent, p, src_faction, new, box=(72, 72), wrap=None, short=False, buttons=None):
+    def card(self, parent, p, src_faction, new, box=(72, 72), wrap=None, short=False, buttons=None, slim=False):
         """One picture's card: its picture (the one picked to replace it, if any), what it is, where the game shows
         it, what it needs, and Replace... / Save a copy... / Keep the current one / Back to the original. short:
-        the file's name without its folders (a narrow card); buttons: [(text, command)] of its own first (3D)."""
+        the file's name without its folders (a narrow card); buttons: [(text, command)] of its own first (3D);
+        slim: only its title and 'in the game: ...' in sight, the file, what it needs and where it is named on a '?'
+        beside the title (the Models tab - the user, 2026-10-10)."""
         a = self.app
         wrap = wrap or self.CELL - 110
         target = FA.picture_target(p, src_faction, new or src_faction)
@@ -218,8 +220,14 @@ class ArtEditor(ttk.Frame):
         pending = FA.art_source(pick) if pick else None
         self._thumb(row, pending or p["path"], box=box, crop=None if pending else p.get("crop")).grid(
             row=0, column=0, rowspan=4, sticky="n")
-        ttk.Label(row, text=p["label"], font=("", 9, "bold"), wraplength=wrap).grid(
-            row=0, column=1, sticky="w", padx=6)
+        title = ttk.Label(row, text=p["label"], font=("", 9, "bold"), wraplength=wrap)
+        if slim:
+            head = ttk.Frame(row)
+            head.grid(row=0, column=1, sticky="w", padx=6)
+            title = ttk.Label(head, text=p["label"], font=("", 9, "bold"), wraplength=wrap - 30)
+            title.pack(side="left")
+        else:
+            title.grid(row=0, column=1, sticky="w", padx=6)
         if p.get("where"):
             ttk.Label(row, text="in the game: " + p["where"], wraplength=wrap, justify="left").grid(
                 row=1, column=1, sticky="w", padx=6)
@@ -238,12 +246,18 @@ class ArtEditor(ttk.Frame):
                 text += "\n" + ("shared with %s - Replace gives %s a copy of its own under this name" % (
                     ", ".join(p["shared"]), new or src_faction) if p.get("shared") else
                     "%s's own copy, made from %s" % (new, p["rel"]))
-        if pick:
-            text += "\nnew: %s (not written yet)" % (
-                "the original, as it was" if isinstance(pick, dict) and pick.get("exact") else
-                os.path.basename(pending))
-        ttk.Label(row, foreground="#555", justify="left", wraplength=wrap, text=text).grid(
-            row=2, column=1, sticky="w", padx=6)
+        waiting = "new: %s (not written yet)" % (
+            "the original, as it was" if isinstance(pick, dict) and pick.get("exact") else
+            os.path.basename(pending)) if pick else ""
+        if slim:
+            from .gui_util import hint
+            hint(head, text, width=480).pack(side="left")
+            if waiting:                                  # what waits for Apply stays in sight
+                ttk.Label(row, foreground="#b05a00", justify="left", wraplength=wrap, text=waiting).grid(
+                    row=2, column=1, sticky="w", padx=6)
+        else:
+            ttk.Label(row, foreground="#555", justify="left", wraplength=wrap, text=text + (
+                "\n" + waiting if waiting else "")).grid(row=2, column=1, sticky="w", padx=6)
         bar = ttk.Frame(row)
         bar.grid(row=3, column=1, sticky="w", padx=6)
         for text, cmd in buttons or ():

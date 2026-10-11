@@ -8158,10 +8158,9 @@ building smith
                     short_name="Epirus")
         self.assertEqual(swap(rome, "the Kingdom of Macedon"), "the Kingdom of Epirus")
 
-    def test_models_tab_takes_every_figure_of_a_culture_or_a_faction(self):
-        """The Models tab's two switches (the user, 2026-10-10: 'just two switches - a culture: simply the first faction
-        of it in the list; a faction: any you like'): every figure the faction shows takes that faction's - and its
-        texture (the picture), its colours."""
+    def test_figures_taken_from_another_faction_with_their_textures(self):
+        """A faction's figures on the campaign map taken from another faction (stratmodels.apply): every figure it
+        shows takes that faction's - and its texture (the picture), its colours."""
         from campaign_editor import stratmodels as SM
         from campaign_editor.plan import Plan
         data = os.path.join(self.root, "data")
@@ -8182,12 +8181,9 @@ building smith
               "type any_spy\ntexture alpha, models_strat/textures/spy.tga\nmodel_flexi models_strat/spy.cas, max\n")
         before = tree_hash(self.root)
         mod = ModData(data)
-        figs, like = SM.culture_figures(mod, "barbarian")          # the culture's first faction in the list
+        figs = {fg["type"]: list(fg["models"]) for fg in SM.figures(mod, "gamma")}
         self.assertEqual(figs, {"named character": ["barb_general"], "spy": ["any_spy"]})
-        self.assertEqual(like, {"barb_general": "beta", "any_spy": "beta"})
-        self.assertEqual(SM.culture_figures(mod, "barbarian", but="beta")[1]["barb_general"], "gamma")
-        figs, like = SM.faction_figures(mod, "gamma")
-        self.assertEqual(like, {"barb_general": "gamma", "any_spy": "gamma"})
+        like = {"barb_general": "gamma", "any_spy": "gamma"}
         plan = Plan(mod, "edit", "edit")
         SM.apply(plan, "alpha", figs, like)
         plan.apply()
