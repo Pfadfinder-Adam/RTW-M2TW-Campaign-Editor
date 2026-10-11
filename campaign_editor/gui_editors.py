@@ -1030,8 +1030,12 @@ class RecordEditor(ttk.Frame):
             ttk.Label(head, text="Siege engine: %s" % engine.name, font=("", 9, "bold")).pack(side="left")
             hint(head, "Its models %s (descr_engines.txt)." % ", ".join(m.split("/")[-1] for m in engine.meshes[:2]),
                  width=420).pack(side="left")
-            ttk.Button(cell, text="View in 3D...", command=lambda i=engine: self.view_model(i)).pack(
-                anchor="w", pady=(2, 0))
+            # Medieval II: the engine plays its moves with its crew (the unit's soldiers) at their places
+            from . import engines as EN
+            crew = cat.get(slots[0][2].lower()) if slots else None
+            eng = EN.read_engine(self.mod, engine.name) if MO.game_kind(self.mod) == "medieval2" else None
+            ttk.Button(cell, text="View in 3D...", command=lambda i=engine, e=eng, c=crew: self.view_model(
+                i, engine=(e, c) if e is not None else None)).pack(anchor="w", pady=(2, 0))
 
     def save_model_files(self, info):
         """The model's files (meshes, textures) copied into a folder the user picks, in their data/ folders - a
@@ -1244,12 +1248,12 @@ class RecordEditor(ttk.Frame):
             return
         ModelViewer(self, self.mod, info, (faction,), title="Campaign map figure in 3D")
 
-    def view_model(self, info, mod=None, mount=None, unit=False):
+    def view_model(self, info, mod=None, mount=None, unit=False, engine=None):
         """View in 3D...; unit: the unit's soldier model - Make a card... / Make a picture... there give the unit on
         show its card / description picture from the view."""
         from .gui_meshview import ModelViewer
         ModelViewer(self, mod or self.mod, info, self._factions_of(), mount=mount,
-                    make=self._picture_maker() if unit and mod is None else None)
+                    make=self._picture_maker() if unit and mod is None else None, engine=engine)
 
     def _picture_maker(self):
         """{'unit', 'need', 'write'} for View in 3D's Make a card... / Make a picture... - the unit on show now

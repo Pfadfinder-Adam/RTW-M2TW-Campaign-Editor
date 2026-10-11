@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from . import animations as AN
+from . import engines as EN
 from . import meshview as MV
 from . import models as MO
 
@@ -27,7 +28,7 @@ def _viewer_key(mod, info, mount=None, title="", make=None):
 class ModelViewer(tk.Toplevel):
     _open = {}                                # _viewer_key -> its open window
 
-    def __new__(cls, parent, mod, info, factions=(), mount=None, title="Battle model in 3D", make=None):
+    def __new__(cls, parent, mod, info, factions=(), mount=None, title="Battle model in 3D", make=None, engine=None):
         w = cls._open.get(_viewer_key(mod, info, mount, title, make))
         try:
             if w is not None and w.winfo_exists():
@@ -37,10 +38,12 @@ class ModelViewer(tk.Toplevel):
             pass
         return tk.Toplevel.__new__(cls)
 
-    def __init__(self, parent, mod, info, factions=(), mount=None, title="Battle model in 3D", make=None):
+    def __init__(self, parent, mod, info, factions=(), mount=None, title="Battle model in 3D", make=None, engine=None):
         """mount: (its ModelInfo, mount type[, chariot]) - the unit's horse, camel ...: shown standing beside the
         rider; a Rome chariot (models.chariot_of, with 'horse_info'): the car, its horses and the crew put together
-        as the game sets them. The same model's window open already: it comes forward (_viewer_key)."""
+        as the game sets them. engine: (engines.Engine, the crew's ModelInfo or None) - a Medieval II siege engine
+        playing its moves (standing, moving, loading, shooting) with its crew at their places, each man playing his
+        moves (engines.py). The same model's window open already: it comes forward (_viewer_key)."""
         if self.__dict__.pop("_reused", False):
             try:
                 self.deiconify()
@@ -64,6 +67,7 @@ class ModelViewer(tk.Toplevel):
         self.path, self.anim, self.frame, self._play, self._base = None, None, 0, None, {}
         self.anim_key, self._moves = None, {}      # the animation's name ('run'); a mount's moves read once
         self.mount_path = None
+        self.engine, self.crew_mesh = self._engine_set(mod, engine), None
         facs = [f for f in info.textures if f] or [""]
         first = next((f for f in factions if f in info.textures), facs[0])
         frm = ttk.Frame(self, padding=8)
@@ -97,6 +101,10 @@ class ModelViewer(tk.Toplevel):
         ttk.Checkbutton(side, text="Weapons and shield", variable=self.v_weapons,
                         command=self.reframe).pack(anchor="w", pady=(8, 0))
         self.v_mount = tk.BooleanVar(value=bool(mount))
+        self.v_crew = tk.BooleanVar(value=True)
+        if self.engine and self.engine["crew"] is not None:
+            ttk.Checkbutton(side, text="Its crew (%s)" % self.engine["crew"].name, variable=self.v_crew,
+                            command=self.reframe).pack(anchor="w")
         if mount:
             ttk.Checkbutton(side, text=("On its chariot (%s)" if self.chariot else "Its mount (%s)")
                             % mount[1], variable=self.v_mount,
@@ -126,7 +134,10 @@ class ModelViewer(tk.Toplevel):
             " Animation: any of its skeleton's moves from the game's animation packs - Play / Pause, then the "
             "frame line (drag it, or the < > buttons / the arrow keys) to go a frame back or on, like a video. "
             "A rider in an animation sits on his mount and it plays the same move, as in the game (with none he "
-            "stands beside it in the T pose)." if self.anims else "") + (
+            "stands beside it in the T pose)." if self.anims and not self.engine else "") + (
+            " A siege engine plays its own moves (standing, moving, loading, shooting - descr_engine_skeleton.txt) "
+            "with its crew at their places (the engine's reference points), each man playing his moves for that "
+            "state (descr_engines.txt's crew_animations), as the game sets them." if self.engine else "") + (
             " Make a card... / Make a picture...: the unit's own card and description picture from this view - "
             "framed as the game's own, on the ground you pick." if make is not None else "")).pack(
             anchor="w", pady=(6, 0))
@@ -148,7 +159,11 @@ class ModelViewer(tk.Toplevel):
         """Skeleton + Animation pickers, Play / Pause and the frame - only when the packs hold the model's skeleton's
         animations."""
         self.anims = {}                             # skeleton -> [(what, file)]
-        for sk in self.info.skeletons:
+        if self.engine:                             # a siege engine: its states (engines.STATES), loose .cas files
+            mv = self.engine["moves"]
+            self.anims[self.engine["eng"].skeleton] = [(words, est) for words, est, _, _ in EN.STATES
+                                                       if mv.get(est)]
+        for sk in ([] if self.engine else self.info.skeletons):
             try:
                 got = AN.of_skeleton(self.mod, sk)
             except (OSError, ValueError):
@@ -217,9 +232,11 @@ class ModelViewer(tk.Toplevel):
             what, f = self.anims[self.v_skel.get()][i - 1]
             self.anim_key = what
             try:
-                self.anim = AN.find(self.mod, f)
+                self.anim = EN.anim(self.mod, self.engine["moves"][f]) if self.engine else AN.find(self.mod, f)
             except (OSError, ValueError):
                 self.anim = None
+            if self.engine:
+                f = self.engine["moves"][f]
             self.lbl_file.configure(text=f.replace("\\", "/").rsplit("/", 1)[-1])
         on = self.anim is not None and self.anim.frames > 1
         self.b_play.state(["!disabled"] if on else ["disabled"])
@@ -294,6 +311,9 @@ class ModelViewer(tk.Toplevel):
         stiff and the tail out (the user: 'the horse's legs stand oddly')."""
         if self.mesh is None:
             return None, None
+        if self.engine:                                  # a siege engine on its own bones
+            return (EN.pose(self.mesh, self.anim, self.engine["base"], self.frame)
+                    if self.anim is not None else None), None
         anim, frame = self.anim, self.frame
         if anim is None and self.mesh.parents:
             anim, frame = self._idle(self.v_skel.get()), 0
@@ -403,6 +423,98 @@ class ModelViewer(tk.Toplevel):
             return mm
         return MV.pose_mesh(mm, MV.Pose.of(anim, frame), base) or mm
 
+    # -- siege engines (Medieval II) ------------------------------------------------------------------------------
+    @staticmethod
+    def _engine_set(mod, engine):
+        """{'eng', 'crew', 'moves', 'base', 'points', 'crew_moves', 'crew_base'} of a siege engine that has its moves
+        (descr_engine_skeleton.txt), else None (shown as the file stands)."""
+        if not engine or engine[0] is None:
+            return None
+        eng, crew = engine[0], engine[1] if len(engine) > 1 else None
+        mv = EN.moves(mod, eng.skeleton)
+        base = EN.anim(mod, mv.get("default")) if mv else None
+        if base is None:
+            return None
+        sk = crew.skeletons[0] if crew is not None and crew.skeletons else None
+        try:
+            known = {w.lower(): f for w, f in AN.of_skeleton(mod, sk)} if sk else {}
+        except (OSError, ValueError):
+            known = {}
+        return {"eng": eng, "crew": crew if known else None, "moves": mv, "base": base,
+                "points": EN.points_of(mod, eng), "crew_moves": known,
+                "crew_base": AN.base_pose(mod, sk) if known else None, "crew_anims": {}}
+
+    def _state(self):
+        """(engine state, crew state, where the crew stands) of the move picked (standing when none)."""
+        words = self.anim_key if self.anim is not None else None
+        st = next((x for x in EN.STATES if x[0] == words), EN.STATES[0])
+        return st[1], st[2], st[3]
+
+    def _crew_anim(self, name):
+        e = self.engine
+        if name not in e["crew_anims"]:
+            f = e["crew_moves"].get(name.lower())
+            try:
+                e["crew_anims"][name] = AN.find(self.mod, f) if f else None
+            except (OSError, ValueError):
+                e["crew_anims"][name] = None
+        return e["crew_anims"][name]
+
+    def _crew_man(self, names):
+        """The crew man in his moves `names` one after another, at the engine's clock (the frame playing now)."""
+        cm = self.crew_mesh
+        anims = [a for a in (self._crew_anim(n) for n in names) if a is not None]
+        if not anims or self.engine["crew_base"] is None:
+            return cm
+        t = self.frame if self.anim is not None else 0.0
+        t %= max(1, sum(a.frames for a in anims))
+        for a in anims:
+            if t < a.frames:
+                break
+            t -= a.frames
+        return MV.pose_mesh(cm, MV.Pose.of(a, min(t, a.frames - 1)), self.engine["crew_base"]) or cm
+
+    def _crew_ready(self):
+        e = self.engine
+        if e["crew"] is None or not self.v_crew.get():
+            return False
+        if self.crew_mesh is None:
+            p = MV.mesh_path(self.mod, e["crew"].meshes[0]) if e["crew"].meshes else None
+            try:
+                self.crew_mesh = MV.read_file(p) if p else None
+            except Exception:
+                self.crew_mesh = None
+        return self.crew_mesh is not None
+
+    def _engine_scene(self, engine_mesh, groups, why):
+        """The engine (its own texture, picture 2) and, ticked, its crew at their places playing their moves."""
+        e = self.engine
+        etex = self._texture({"": self.mesh.texture_ref}) if self.mesh.texture_ref else None
+        men = []
+        if self._crew_ready():
+            _, cst, where = self._state()
+            cg = self.crew_mesh.shown(self.look, self.v_weapons.get())
+            for place, at in EN.crew_places(e["eng"], e["points"], where):
+                names = EN.crew_moves(e["eng"], cst, place, e["crew_moves"])
+                men.append((self._crew_man(names), cg, at))
+        if not men:
+            return engine_mesh, groups, etex, None, None, why, False
+        mesh = EN.scene(engine_mesh, groups, men)
+        ci = e["crew"]
+        return mesh, mesh.groups, self._texture(ci.textures), self._texture(ci.attach) if ci.attach else None, \
+            {2: etex}, why, False
+
+    def _engine_frame(self):
+        """The view's frame on the engine and its crew standing (as loaded, no move)."""
+        groups = self.mesh.shown(0, True)
+        men = []
+        if self._crew_ready():
+            cg = self.crew_mesh.shown(0, True)
+            men = [(self.crew_mesh, cg, at) for _, at in EN.crew_places(
+                self.engine["eng"], self.engine["points"], "Engine StationPoint")]
+        mesh = EN.scene(self.mesh, groups, men) if men else self.mesh
+        return MV.frame_of(mesh, mesh.groups if men else groups)
+
     def _lod_name(self, i):
         return "%d - %s" % (i, "closest" if i == 0 else "farther") if i < len(self.info.meshes) else "-"
 
@@ -473,6 +585,8 @@ class ModelViewer(tk.Toplevel):
         man, why = self._posed()
         man = man or self.mesh
         mesh, more = man, None
+        if self.engine:
+            return self._engine_scene(man, groups, why)
         riding = self.mount and self.v_mount.get() and self.mount_mesh is not None
         if riding and self.chariot:                     # Rome: the car, its horses and the crew in their places
             ch = self.chariot
@@ -523,7 +637,8 @@ class ModelViewer(tk.Toplevel):
         from PIL import ImageTk
         mesh, groups, tex, att, more, why, whole = self._scene()
         if self._frame is None:                 # sized once - an animation playing keeps it (no jerking camera)
-            self._frame = MV.frame_of(mesh, groups)
+            # a siege engine: on the engine and its crew as they stand (its moves hide the shot far under it)
+            self._frame = MV.frame_of(mesh, groups) if not self.engine else self._engine_frame()
         img = MV.render(mesh, SIZE, self.yaw, self.pitch, self.zoom, tex, att, groups,
                         quality=1 if quick else 2, more=more, frame=self._frame, pan=self.pan,
                         textured=not quick or (quick == "play" and MV._fast is not None))   # NumPy: whole texture

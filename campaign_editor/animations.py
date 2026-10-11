@@ -130,11 +130,12 @@ def find(mod, name):
     return None
 
 
-def skeletons(mod):
+def skeletons(mod, name="descr_skeleton.txt"):
     """{skeleton (lower case): [(what, file)]} from descr_skeleton.txt - each skeleton's animations in its order; a
     skeleton with a 'parent' (Medieval II: MTW2_Fast_Bowman's parent MTW2_Bowman) has the parent's, its own lines
-    taking the place of the parent's of the same name."""
-    path = mod.find("descr_skeleton.txt")
+    taking the place of the parent's of the same name. name: another file of the same form (Medieval II's siege
+    engines: descr_engine_skeleton.txt)."""
+    path = mod.find(name)
     own, parent = {}, {}
     if not path:
         return {}

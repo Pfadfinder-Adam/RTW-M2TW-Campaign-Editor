@@ -8475,6 +8475,64 @@ building smith
         self.assertEqual(got, {"mtw2_fast_javelin": ["MTW2_Javelin_primary", "fs_test_shield"],
                                "mtw2_fast_swordsman": ["MTW2_Sword_Primary"]})
 
+    def test_siege_engine_moves_crew_places_and_bones(self):
+        """Medieval II's siege engines: a loose engine animation (data/animations/engine/*.cas, Rome's form) read with
+        its bones' keys - a physics bone's properties text after its record (a trebuchet's arm) skipped, the rest
+        places after the LAST key (two bones with the same offset: a bombard's 'moving'); the reference points (kind,
+        4 x 4 matrix, name); the descr_engines block's meshes, skeleton and crew_animations; the crew's moves at a
+        place; the engine mesh's bones put in the animation's order by their names."""
+        import struct
+        from campaign_editor import meshview as MV, engines as EN
+
+        def text(t):
+            return struct.pack("<I", len(t) + 1) + t.encode() + b"\x00"
+
+        def raw(t):                                   # a length and the letters, no closing 0
+            return struct.pack("<I", len(t)) + t.encode()
+        head = struct.pack("<f", 3.18) + b"\x00" * 46 + struct.pack("<H", 3) + struct.pack("<3I", 0, 0, 1)
+        head += struct.pack("<I3f", 3, 0.05, 0.1, 0.15)                       # three frames
+        props = "Mass = 0.000000\r\nEllasticity = 0.300000\r\nFriction = 0.300000\r\n"
+        bones = text("Scene Root") + struct.pack("<5I", 0, 0, 0, 48, 0) + b"\x01\x00\x00\x00\x00"
+        bones += text("bone_body") + struct.pack("<5I", 0, 0, 0, 48, 0) + b"\x01\x00\x00\x00\x00"
+        bones += text("bone_arm") + struct.pack("<5I", 3, 1, 0, 48, 0) + b"\x00" + raw(props)
+        keys = b"".join(struct.pack("<4f", 0.1 * k, 0, 0, 1) for k in range(3)) + struct.pack("<3f", 0, 1, 0.25)
+        rest = struct.pack("<9f", 0, 0, 0, 0, 0.5, 0, 9, 9, 9)
+        an = MV.CasAnim(head + bones + keys + rest + b"\x00" * 40, "x")
+        self.assertEqual(an.names, ["Scene Root", "bone_body", "bone_arm"])
+        self.assertEqual((an.frames, an.parents), (3, (-1, 0, 1)))
+        self.assertAlmostEqual(an.rotations(2)[2][0], 0.2, places=5)
+        self.assertEqual(an.rotations(1)[1], (0.0, 0.0, 0.0, 1.0))
+        self.assertEqual([tuple(round(v, 3) for v in o) for o in an.offsets(0)], [(0, 0, 0), (0, 0.5, 0), (0, 1, 0.25)])
+        # reference points: a count, then per point its kind, its matrix (the place in the last column), its name
+        mat = struct.pack("<16f", 1, 0, 0, 1.5, 0, 1, 0, 0, 0, 0, 1, -3.5, 0, 0, 0, 1)
+        pts = EN.read_points(raw("serialization::archive") + b"\x03\x04\x04\x04\x08\x01" + b"\x00" * 7 +
+                             struct.pack("<I", 1) + b"\x00\x02" + raw("Engine StationPoint") + mat +
+                             raw("Crew_Right"))
+        self.assertEqual(pts, {("Engine StationPoint", "Crew_Right"): (1.5, 0.0, -3.5)})
+        data = os.path.join(self.root, "data")
+        write(os.path.join(data, "descr_engines.txt"),
+              "type ram\nengine_mesh siege_engines/ram.mesh, max\nend\n"
+              "type catapult\nreference_points siege_engines/catapult.modelReferencePoints\n"
+              "engine_model_group normal\nengine_skeleton catapult\nengine_mesh siege_engines/catapult.mesh, 40.0\n"
+              "engine_model_group dying\nengine_skeleton catapult_dying\nengine_mesh siege_engines/dead.mesh, max\n"
+              "crew_animations\n    crank   Crew_Right, crew_right_load_1, crew_right_load_2, crew_right\n"
+              "    fire    Crew_Right, crew_right\nend\n")
+        eng = EN.read_engine(ModData(data), "Catapult")
+        self.assertEqual((eng.meshes, eng.skeleton), (["siege_engines/catapult.mesh"], "catapult"))
+        self.assertEqual(eng.crew["crank"], [("Crew_Right", ["crew_right_load_1", "crew_right_load_2", "crew_right"])])
+        self.assertEqual(EN.crew_places(eng, pts, "Engine StationPoint"), [("Crew_Right", (1.5, 0.0, -3.5))])
+        known = {"crew_right_load_1", "crew_right", "crew_stand"}
+        self.assertEqual(EN.crew_moves(eng, "crank", "Crew_Right", known), ["crew_right_load_1", "crew_right"])
+        self.assertEqual(EN.crew_moves(eng, None, "Crew_Right", known), ["crew_right"])      # standing: his place's
+        self.assertEqual(EN.crew_moves(eng, None, "Crew_Left", known), ["crew_stand"])
+        self.assertIsNone(EN.read_engine(ModData(data), "trebuchet"))
+        # the mesh's own bone list names its points' bones (bone_arm 0, bone_body 1): put in the animation's order
+        mesh = MV.Mesh([MV.Group("a", "", (0, 1, 1), False)], [(0, 0, 0), (0, 1, 0)], None)
+        mesh.skin, mesh.bone_names = [(0, 0, 1.0, 0.0), (1, 1, 1.0, 0.0)], {0: "bone_arm", 1: "bone_body"}
+        got = EN.rigged(mesh, an)
+        self.assertEqual([s[:2] for s in got.skin], [(2, 2), (1, 1)])
+        self.assertEqual(got.parents, (-1, 0, 1))
+
     def test_read_and_draw_a_rome_cas(self):
         """A Rome .cas laid out as the vanilla ones (3.05): header with the bone count and parents, frame times, bone
         records, rest places, a shield hanging on a bone and a body whose points hang on a bone. Read back, put

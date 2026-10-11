@@ -516,6 +516,31 @@ def read_cas(data, pose="t"):
     model (read as one, a crest floated off the helmet and a ballista fell apart: a report). pose 't': the
     skeleton at rest, every bone unturned - the T pose, arms out (the user's wish: the same for every model);
     'frame': the file's first animation frame (how the man stands). u v over the one texture of the unit."""
+    nb, parents, bones, base, rest, rest_at, _ = cas_skeleton(data)
+    rot, where = [], []
+    for i, (nq, npos, qo, po) in enumerate(bones):
+        q = struct.unpack_from("<4f", data, base + qo) if nq and pose == "frame" else (0.0, 0.0, 0.0, 1.0)
+        t = struct.unpack_from("<3f", data, base + po) if npos else rest[i]
+        if isinstance(pose, Pose) and 1 <= i <= len(pose.rotations):   # an animation's frame: bone 0 = Scene Root
+            q = pose.rotations[i - 1]
+            if i - 1 < len(pose.offsets):
+                t = pose.offsets[i - 1]
+        par = parents[i] if i and parents[i] < i else None
+        if par is None:
+            rot.append(q)
+            where.append(t)
+        else:
+            off = _qrot(rot[par], t)
+            where.append(tuple(where[par][k] + off[k] for k in range(3)))
+            rot.append(_qmul(rot[par], q))
+    return _cas_parts(data, nb, rest_at, rot, where)
+
+
+def cas_skeleton(data):
+    """A .cas file's skeleton (models and the loose animations alike: Medieval II's siege engines' moves in
+    data/animations/engine are Rome-form .cas files): (bone count, each bone's parent, each bone's record (rotation
+    frames, position frames, their offsets from `base`), base, each bone's place at rest (from its parent), where the
+    rest places start, the bones' names). MeshError when it is not one."""
     if len(data) < 60:
         raise MeshError("not a Rome model (too short)")
     root = data.find(b"Scene Root\x00")
@@ -534,37 +559,66 @@ def read_cas(data, pose="t"):
     if not nb:
         raise MeshError("the model's bone count does not look right")
     parents = struct.unpack_from("<%dI" % nb, data, at - 4 * nb)
-    p, bones = root - 4, []
+    p, bones, names = root - 4, [], []
     for _ in range(nb):
         s = _cas_string(data, p)
         if not s or s[1] + 20 > len(data):
             raise MeshError("the model's bones could not be read")
+        names.append(s[0][:-1].decode("latin-1"))
         bones.append(struct.unpack_from("<4I", data, s[1]))           # rotations, positions, their offsets
         p = s[1] + 20
-        if not _cas_string(data, p) and data[p:p + 5] == b"\x01\x00\x00\x00\x00":
-            p += 5                                                     # 3.18: 5 more bytes after each record
+        if not _cas_string(data, p) and p + 5 <= len(data) and data[p] in (0, 1):
+            # 3.18: a flag byte and a text after each record - empty, or a physics bone's properties ('Mass = ...',
+            # the siege engines' moving parts)
+            n = struct.unpack_from("<I", data, p + 1)[0]
+            if (n == 0 and data[p] == 1) or (0 < n < 4000 and p + 5 + n <= len(data) and all(
+                    32 <= c < 127 or c in (9, 10, 13, 0) for c in data[p + 5:p + 5 + n])):
+                p += 5 + n
+        if not _cas_string(data, p) and p + 4 <= len(data):
+            # the properties text straight after the record (no flag byte before it: a trebuchet's arm)
+            n = struct.unpack_from("<I", data, p)[0]
+            if 80 < n < 4000 and p + 4 + n <= len(data) and b" = " in data[p + 4:p + 4 + n] and all(
+                    32 <= c < 127 or c in (9, 10, 13, 0) for c in data[p + 4:p + 4 + n]):
+                p += 4 + n
     base = p
-    last = max(bones, key=lambda b: b[3])
-    rest_at = base + last[3] + 12 * last[1]
+    # the places at rest after the last key of any bone (two bones with the same offset: the one with keys counts -
+    # a bombard's 'moving' read its balls' keys as the rest)
+    rest_at = base + max(max(po + 12 * npos, qo + 16 * nq) for nq, npos, qo, po in bones)
     if rest_at + 12 * nb > len(data):
         raise MeshError("the model's skeleton could not be read")
     rest = [struct.unpack_from("<3f", data, rest_at + 12 * i) for i in range(nb)]
-    rot, where = [], []
-    for i, (nq, npos, qo, po) in enumerate(bones):
-        q = struct.unpack_from("<4f", data, base + qo) if nq and pose == "frame" else (0.0, 0.0, 0.0, 1.0)
-        t = struct.unpack_from("<3f", data, base + po) if npos else rest[i]
-        if isinstance(pose, Pose) and 1 <= i <= len(pose.rotations):   # an animation's frame: bone 0 = Scene Root
-            q = pose.rotations[i - 1]
-            if i - 1 < len(pose.offsets):
-                t = pose.offsets[i - 1]
-        par = parents[i] if i and parents[i] < i else None
-        if par is None:
-            rot.append(q)
-            where.append(t)
-        else:
-            off = _qrot(rot[par], t)
-            where.append(tuple(where[par][k] + off[k] for k in range(3)))
-            rot.append(_qmul(rot[par], q))
+    return nb, parents, bones, base, rest, rest_at, names
+
+
+class CasAnim:
+    """A loose .cas animation (Medieval II's siege engines' moves, data/animations/engine/*.cas): every bone of its
+    skeleton (Scene Root first) with its turn and offset from its parent in each frame - a bone with one key (or
+    none) keeps it in every frame. Read like animations.Anim (frames, bones, rotations(k), offsets(k)), with the
+    bones' names and parents."""
+
+    def __init__(self, data, name=""):
+        nb, parents, recs, base, rest, _, names = cas_skeleton(data)
+        self.name, self.names, self.bones, self.kind = name, names, nb, nb
+        self.parents = tuple(-1 if i == 0 or parents[i] >= i else parents[i] for i in range(nb))
+        self.frames = max([1] + [max(nq, npos) for nq, npos, _, _ in recs])
+        self._rot, self._off = [], []
+        for i, (nq, npos, qo, po) in enumerate(recs):
+            self._rot.append([struct.unpack_from("<4f", data, base + qo + 16 * k) for k in range(nq)] or
+                             [(0.0, 0.0, 0.0, 1.0)])
+            self._off.append([struct.unpack_from("<3f", data, base + po + 12 * k) for k in range(npos)] or [rest[i]])
+
+    def rotations(self, k):
+        k = max(0, min(self.frames - 1, int(k)))
+        return [r[min(k, len(r) - 1)] for r in self._rot]
+
+    def offsets(self, k):
+        k = max(0, min(self.frames - 1, int(k)))
+        return [o[min(k, len(o) - 1)] for o in self._off]
+
+
+def _cas_parts(data, nb, rest_at, rot, where):
+    """The parts of a .cas model after its skeleton, every point placed from its bone (rot / where: each bone's
+    turn and place in the model)."""
     positions, uvs, groups = [], [], []
     p = rest_at + 12 * nb
     while p < len(data) - 8:
