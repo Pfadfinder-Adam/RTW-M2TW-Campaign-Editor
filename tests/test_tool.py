@@ -8738,6 +8738,13 @@ building smith
             self.assertGreater(min(y for _, y in places[2:]), max(y for _, y in places[:2]))   # right ones below
         places, _ = flow_places(items, 300)
         self.assertEqual(places[3][0] + 60, 300)            # a wrapped right row still ends at the right edge
+        # boxes of different heights (the Unit editor's pictures, model and voice): top=True keeps each at the top
+        boxes = [(200, 120, 0, 12, "left"), (200, 300, 0, 12, "left"), (200, 80, 0, 0, "left")]
+        places, height = flow_places(boxes, 900, top=True)
+        self.assertEqual([y for _, y in places], [0, 0, 0])
+        self.assertEqual(height, 302)
+        places, _ = flow_places(boxes, 450, top=True)        # narrow: the third on a row of its own, at its top
+        self.assertEqual(places[2], (0, 302))
 
     def test_lists_scroll_by_dragging_with_no_scrollbar(self):
         """No scrollbar anywhere (it only took room): a list, a table or a read-only text follows a left-button drag

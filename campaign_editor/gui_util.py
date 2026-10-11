@@ -676,11 +676,12 @@ class FactionBox(ttk.Combobox):
             self._busy = False
 
 
-def flow_places(items, width, gap_y=2):
+def flow_places(items, width, gap_y=2, top=False):
     """Where flow() puts each widget: items = [(width, height, pad_left, pad_right, side)] in their order on the screen
     (side 'left' or 'right'); -> ([(x, y)] for each item, height of the whole). All on one row when they fit: the
     'left' ones from the left edge, the 'right' ones up to the right edge. Else they wrap as words in a line of text:
-    the 'left' ones from the left, then the 'right' ones from a row of their own, each row up to the right edge."""
+    the 'left' ones from the left, then the 'right' ones from a row of their own, each row up to the right edge.
+    top: each one at the top of its row (boxes of different heights side by side), not in its middle."""
     need = [w + a + b for w, _, a, b, _ in items]
     places, rows = [None] * len(items), []            # rows: [index, ...] with their side
     lefts = [i for i, it in enumerate(items) if it[4] != "right"]
@@ -706,25 +707,25 @@ def flow_places(items, width, gap_y=2):
             for i in row:
                 if items[i][4] == "right":
                     continue
-                places[i] = (x + items[i][2], y + (line - items[i][1]) // 2)
+                places[i] = (x + items[i][2], y + (0 if top else (line - items[i][1]) // 2))
                 x += need[i]
             x = width - sum(need[i] for i in row if items[i][4] == "right")
         else:
             x = 0 if side == "left" else width - sum(need[i] for i in row)
         for i in row:
             if places[i] is None:
-                places[i] = (max(x, 0) + items[i][2], y + (line - items[i][1]) // 2)
+                places[i] = (max(x, 0) + items[i][2], y + (0 if top else (line - items[i][1]) // 2))
                 x += need[i]
         y += line + gap_y
     return places, max(y, 1)
 
 
-def flow(frame):
+def flow(frame, top=False):
     """Lay the widgets packed in `frame` out in rows that wrap at the frame's width, as words in a line of text: a
     toolbar with more buttons than the window is wide goes on to a second row instead of hiding the last ones past
     the edge (and never one over another). Those packed side="right" keep to the right edge, in the order they show.
     Call it once the toolbar is built; it follows the window's width - and a button whose words change - from then
-    on (flow_places)."""
+    on (flow_places). top: boxes of different heights stand at the top of their row."""
     items = []
     lefts, rights = [], []
     for w in frame.pack_slaves():
@@ -749,7 +750,7 @@ def flow(frame):
         if key == state["key"]:
             return
         state["key"] = key
-        places, height = flow_places(sizes, width)
+        places, height = flow_places(sizes, width, top=top)
         for (w, _, _, _), (px, py) in zip(live, places):
             w.place(x=px, y=py)
         frame.configure(height=height)

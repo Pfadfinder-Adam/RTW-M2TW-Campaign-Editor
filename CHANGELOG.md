@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **Unit editor: the pictures in one row** - four alike frames side by side: the unit card, the picture in the
+  description, the battle model (with its mount) and the voice in battle; on a narrow window they wrap to a second
+  row. The explanations (the size a card needs, where it goes, the model's seat and textures, the voice class) sit on
+  a **?** beside each title; problems (red / orange) stay in sight.
+- **Tied to it** (owners, recruit places, armies at the start) folds away behind a button of its own beside **Every
+  line of the block** in both editors; the editor remembers whether it was open.
+
 ## 0.34.0 - 2026-10-10
 
 ### Added

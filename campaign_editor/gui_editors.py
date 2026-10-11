@@ -104,16 +104,21 @@ class RecordEditor(ttk.Frame):
         self.copy_ops = []                   # [(source, new name, details)] written on Apply
         self.pics = ttk.LabelFrame(right, text="Pictures", padding=6)
         self.pics.pack(fill="x", pady=(6, 6))
-        self.links = ttk.LabelFrame(right, text="Tied to it (kept in step when you change it)", padding=(6, 2))
-        self.links.pack(fill="x", pady=(0, 6))
-        self.lbl_links = ttk.Label(self.links, text="", justify="left", foreground="#333", wraplength=820)
-        self.lbl_links.pack(anchor="w")
         # the block's lines fold away behind a button (like the family tree): the pictures, model and voice
         # keep the room; open, the lines take the space below them (a tester: too little room in the editor)
         bar = ttk.Frame(right)
         bar.pack(fill="x")
         self.b_lines = ttk.Button(bar, command=self.toggle_lines)
         self.b_lines.pack(side="left")
+        # what is tied to it (owners, recruit places, armies...) folds away behind a button beside the lines' one:
+        # the pictures keep the room (the user, 2026-10-10)
+        self.b_links = ttk.Button(bar, command=self.toggle_links)
+        self.b_links.pack(side="left", padx=(theme.BUTTON_GAP, 0))
+        self.links = ttk.LabelFrame(right, text="Tied to it (kept in step when you change it)", padding=(6, 2))
+        self.lbl_links = ttk.Label(self.links, text="", justify="left", foreground="#333", wraplength=820)
+        self.lbl_links.pack(anchor="w")
+        self._links_open = bool(settings.get("editor_links_open"))
+        self._links_shown()
         ShortHint(bar, text="Every line of the block: the key on the left, what follows it on the right. "
                             "Changed fields turn yellow, lines to add green, lines to remove red (x on the left); "
                             "Preview, then Apply writes them (with a backup). A unit's line: the ? on its right says "
@@ -148,6 +153,19 @@ class RecordEditor(ttk.Frame):
         canvas.pack(side="left", fill="both", expand=True)
         from .gui_util import scroll_y, wheel
         wheel(canvas, scroll_y(canvas))
+
+    def toggle_links(self):
+        """Show what is tied to the picked one under the buttons, or fold it away (kept for the next start)."""
+        self._links_open = not self._links_open
+        settings.put("editor_links_open", self._links_open)
+        self._links_shown()
+
+    def _links_shown(self):
+        self.b_links.configure(text="Tied to it - hide" if self._links_open else "Tied to it...")
+        if self._links_open:
+            self.links.pack(fill="x", pady=(6, 0))
+        else:
+            self.links.pack_forget()
 
     def _form(self):
         if not self.form.winfo_exists():
@@ -784,64 +802,46 @@ class RecordEditor(ttk.Frame):
         return next((src for src, t, _ in self.imports if set(t) & set(targets)), None)
 
     def _unit_pictures(self):
+        from .gui_util import flow
         from .units import card_path
         dic = self.value("dictionary")
         facs = self._factions_of()
         if not dic:
             ttk.Label(self.pics, text="no dictionary line - no pictures").pack(anchor="w")
             return
-        for col, (info, label) in enumerate(((False, "Unit card"), (True, "Picture in the description"))):
-            box = ttk.Frame(self.pics)
-            box.grid(row=col, column=0, sticky="nw", pady=(0, 6))
+        # one row of four alike frames - card | description picture | battle model (+ mount) | voice - wrapping to a
+        # second row when the window is narrow; the explanations sit on '?', the problems stay in sight (the user,
+        # 2026-10-10)
+        row = ttk.Frame(self.pics)
+        row.pack(fill="x")
+        for info, label in ((False, "Unit card"), (True, "Picture in the description")):
+            box = ttk.LabelFrame(row, text=label, padding=6)
+            box.pack(side="left", padx=(0, 12))
             targets = E.unit_picture_targets(self.mod, dic, facs, info)
             pending = self._pending(targets)
             have = pending or card_path(self.mod, facs[0] if facs else "", dic, info, owners=facs,
                                         mercenary="mercenary_unit" in self.value("attributes").replace(",", " ").split())
-            self._thumb(box, have).grid(row=0, column=0, rowspan=3)
+            self._thumb(box, have).grid(row=0, column=0, columnspan=2, sticky="nw")
             need = E.unit_picture_need(self.mod, info)
-            ttk.Label(box, text=label, font=("", 9, "bold")).grid(row=0, column=1, sticky="w", padx=6)
-            ttk.Label(box, foreground="#555", justify="left", wraplength=330, text=(
-                "needs %d x %d, %d-bit TGA (as this mod's own)" % need if need else "size: as you like") +
-                "\nPNG / JPG / TGA are converted\ngoes to %s for %s" % (
-                    "ui/unit_info/<faction>/%s_info.tga" % dic if info else "ui/units/<faction>/#%s.tga" % dic,
-                    ", ".join(facs[:4]) + (" and %d more" % (len(facs) - 4) if len(facs) > 4 else "")) +
-                ("\nnew: %s (not written yet)" % os.path.basename(pending) if pending else "")).grid(
-                row=1, column=1, sticky="w", padx=6)
+            if pending:                                    # waits for Apply: said in sight
+                ttk.Label(box, foreground="#b60", wraplength=200, justify="left", text="new: %s (not written yet)"
+                          % os.path.basename(pending)).grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 0))
             bb = ttk.Frame(box)
-            bb.grid(row=2, column=1, sticky="w", padx=6)
+            bb.grid(row=2, column=0, sticky="w", pady=(4, 0))
             ttk.Button(bb, text="Import...", command=lambda t=targets, n=need, l=label: self.import_pic(t, n, l)).pack(
                 side="left")
             if have and not pending:
                 ttk.Button(bb, text="Save a copy...", command=lambda h=have, l=label: save_copy(
-                    self, h, "the %s" % l.lower())).pack(side="left", padx=4)
-        # the battle model beside the two pictures; the voice a third column when the window is wide enough (a
-        # tester: the voices were cut at the bottom while the right half stood empty), else under the model
-        self._unit_models(0, 1)
-        self._unit_voice(1, 1)
-        if not getattr(self, "_voice_bound", False):          # once: the pictures frame lives as long as the editor
-            self.pics.bind("<Configure>", lambda e: self._place_voice(), add="+")
-            self._voice_bound = True
-        self.after_idle(self._place_voice)
-
-    def _place_voice(self):
-        if not self.pics.winfo_exists():                      # the editor closed before the idle call came
-            return
-        voice = next((w for w in self.pics.grid_slaves() if isinstance(w, ttk.LabelFrame)
-                      and str(w.cget("text")).startswith("Voice")), None)
-        model = next((w for w in self.pics.grid_slaves() if isinstance(w, ttk.LabelFrame)
-                      and str(w.cget("text")).startswith("Battle model")), None)
-        if voice is None or model is None:
-            return
-        cols = [w for w in self.pics.grid_slaves(column=0)]
-        need = max([w.winfo_reqwidth() for w in cols] or [0]) + model.winfo_reqwidth() + voice.winfo_reqwidth() + 40
-        wide = self.pics.winfo_width() >= need
-        at = voice.grid_info()
-        if wide and int(at.get("column", 1)) != 2:
-            voice.grid(row=0, column=2, rowspan=2, sticky="nwe", pady=(4, 0), padx=(12, 0))
-            model.grid(rowspan=2)
-        elif not wide and int(at.get("column", 1)) != 1:
-            voice.grid(row=1, column=1, rowspan=1, sticky="nwe", pady=(4, 0), padx=(12, 0))
-            model.grid(rowspan=1)
+                    self, h, "the %s" % l.lower())).pack(side="left", padx=(theme.BUTTON_GAP, 0))
+            hint(box, (
+                "needs %d x %d, %d-bit TGA (as this mod's own)" % need if need else "size: as you like") +
+                "; PNG / JPG / TGA are converted; goes to %s for %s" % (
+                    "ui/unit_info/<faction>/%s_info.tga" % dic if info else "ui/units/<faction>/#%s.tga" % dic,
+                    ", ".join(facs[:4]) + (" and %d more" % (len(facs) - 4) if len(facs) > 4 else "") or "no faction"),
+                width=420).grid(row=2, column=1, sticky="w", pady=(4, 0))
+        self._unit_models(row)
+        self._unit_voice(row)
+        flow(row, top=True)
 
     # ---- battle models ----
     def _model_catalogue(self, mod=None):
@@ -889,11 +889,11 @@ class RecordEditor(ttk.Frame):
         f = self.mod.load(self.path())
         return [f.text(i) for i in range(a, b)]
 
-    def _unit_models(self, row, column=0):
+    def _unit_models(self, parent):
         """The unit's battle models: each soldier / officer line's model, how it sits, a texture, Replace model..."""
         from . import models as MO
-        box = ttk.LabelFrame(self.pics, text="Battle model", padding=6)
-        box.grid(row=row, column=column, sticky="nwe", pady=(4, 0), padx=(12 if column else 0, 0))
+        box = ttk.LabelFrame(parent, text="Battle model", padding=6)
+        box.pack(side="left", padx=(0, 12))
         try:
             cat = self._model_catalogue()
             lines = self._unit_lines()
@@ -901,10 +901,12 @@ class RecordEditor(ttk.Frame):
             ttk.Label(box, text="cannot read the battle models: %s" % e, foreground="#a33").grid(sticky="w")
             return
         if MO.is_ship(lines):
-            ttk.Label(box, foreground="#555", wraplength=380, justify="left", text=(
-                "A ship: the game fights sea battles by itself (auto-resolve), so a ship has no battle model. Its "
-                "soldier line (%s) is only there because the file's form asks for one." % (
-                    ", ".join(m for _, _, m in MO.unit_slots(lines)) or "none"))).grid(sticky="w")
+            head = ttk.Frame(box)
+            head.grid(sticky="w")
+            ttk.Label(head, text="A ship - no battle model").pack(side="left")
+            hint(head, "The game fights sea battles by itself (auto-resolve), so a ship has no battle model. Its "
+                       "soldier line (%s) is only there because the file's form asks for one." % (
+                           ", ".join(m for _, _, m in MO.unit_slots(lines)) or "none"), width=420).pack(side="left")
             # what the player sees of it: the faction's fleet on the campaign map (its admiral's figure) - in 3D
             # too (the user, 2026-10-10: 'ships - only the campaign map's can be seen in 3D, not the units')
             from . import stratmodels as SM
@@ -941,22 +943,26 @@ class RecordEditor(ttk.Frame):
                     next(iter(info.textures.values()), None)
             self._texture_thumb(box, self.mod, tex).grid(row=r, column=0, rowspan=1, sticky="nw", pady=2)
             txt = "%s: %s" % ("Soldiers" if key == "soldier" else "Officer %d" % (idx + 1), model)
+            about, problems = "", []
             if info is None:
-                detail, colour = "not in this mod's battle models - the game cannot show the unit", "#a33"
+                problems = [(True, "not in this mod's battle models - the game cannot show the unit")]
             else:
-                probs = MO.fit_problems(self.mod, info, seat)
+                problems = MO.fit_problems(self.mod, info, seat)
                 missing = [f for f in facs if f not in info.textures and "" not in info.textures]
-                detail = "the model is made %s; the unit is %s" % (info.seat_words(), MO.SEAT_WORDS.get(seat, seat))
-                detail += "\ntextures for %d faction(s)%s" % (
-                    len([f for f in info.textures if f]) or 1,
+                about = "The model is made %s; the unit is %s. Textures for %d faction(s)%s." % (
+                    info.seat_words(), MO.SEAT_WORDS.get(seat, seat), len([f for f in info.textures if f]) or 1,
                     ("; none for %s" % ", ".join(missing[:4]) + (" ..." if len(missing) > 4 else "")) if missing else "")
-                if probs:
-                    detail += "\n" + "\n".join(("WARNING: " if s else "") + m for s, m in probs)
-                colour = "#a33" if any(s for s, _ in probs) else ("#b60" if probs else "#555")
             cell = ttk.Frame(box)
             cell.grid(row=r, column=1, sticky="nw", padx=6)
-            ttk.Label(cell, text=txt, font=("", 9, "bold")).pack(anchor="w")
-            ttk.Label(cell, text=detail, foreground=colour, justify="left", wraplength=300).pack(anchor="w")
+            head = ttk.Frame(cell)
+            head.pack(anchor="w")
+            ttk.Label(head, text=txt, font=("", 9, "bold")).pack(side="left")
+            if about:
+                hint(head, about, width=420).pack(side="left")
+            if problems:                               # the problems stay in sight, red / orange
+                ttk.Label(cell, foreground="#a33" if any(s for s, _ in problems) else "#b60", justify="left",
+                          wraplength=300, text="\n".join(("WARNING: " if s else "") + m for s, m in problems)).pack(
+                    anchor="w")
             bar = ttk.Frame(cell)
             bar.pack(anchor="w", pady=(2, 0))
             ttk.Button(bar, text="Replace model...",
@@ -977,11 +983,15 @@ class RecordEditor(ttk.Frame):
             self._texture_thumb(box, self.mod, tex).grid(row=r, column=0, sticky="nw", pady=2)
             cell = ttk.Frame(box)
             cell.grid(row=r, column=1, sticky="nw", padx=6)
-            ttk.Label(cell, text="Mount: %s" % kind, font=("", 9, "bold")).pack(anchor="w")
-            ttk.Label(cell, foreground="#555" if info else "#a33", justify="left", wraplength=300, text=(
-                "its model %s (descr_mount.txt)" % mmodel if info else
-                "descr_mount.txt names the model %s - not in this mod's battle models" % mmodel if mmodel else
-                "no such mount in descr_mount.txt")).pack(anchor="w")
+            head = ttk.Frame(cell)
+            head.pack(anchor="w")
+            ttk.Label(head, text="Mount: %s" % kind, font=("", 9, "bold")).pack(side="left")
+            if info:
+                hint(head, "Its model %s (descr_mount.txt)." % mmodel, width=420).pack(side="left")
+            else:
+                ttk.Label(cell, foreground="#a33", justify="left", wraplength=300, text=(
+                    "descr_mount.txt names the model %s - not in this mod's battle models" % mmodel if mmodel else
+                    "no such mount in descr_mount.txt")).pack(anchor="w")
             if info is not None:
                 bar = ttk.Frame(cell)
                 bar.pack(anchor="w", pady=(2, 0))
@@ -993,9 +1003,11 @@ class RecordEditor(ttk.Frame):
             r = len(slots) + (1 if kind else 0)
             cell = ttk.Frame(box)
             cell.grid(row=r, column=1, sticky="nw", padx=6)
-            ttk.Label(cell, text="Siege engine: %s" % engine.name, font=("", 9, "bold")).pack(anchor="w")
-            ttk.Label(cell, foreground="#555", justify="left", wraplength=300, text="its models %s (descr_engines.txt)"
-                      % ", ".join(m.split("/")[-1] for m in engine.meshes[:2])).pack(anchor="w")
+            head = ttk.Frame(cell)
+            head.pack(anchor="w")
+            ttk.Label(head, text="Siege engine: %s" % engine.name, font=("", 9, "bold")).pack(side="left")
+            hint(head, "Its models %s (descr_engines.txt)." % ", ".join(m.split("/")[-1] for m in engine.meshes[:2]),
+                 width=420).pack(side="left")
             ttk.Button(cell, text="View in 3D...", command=lambda i=engine: self.view_model(i)).pack(
                 anchor="w", pady=(2, 0))
 
@@ -1064,12 +1076,12 @@ class RecordEditor(ttk.Frame):
             got = self._voice_cache = ((self.mod.data, stamp), SN.pack_index(self.mod), events)
         return got[1], got[2]
 
-    def _unit_voice(self, row, column=0):
+    def _unit_voice(self, parent):
         """What the unit says in battle, for each accent (Medieval II) / culture (Rome) of its owners: its voice class,
         its own name call (Play, Put in my own...), and its orders (Play)."""
         from . import sounds as SN
-        box = ttk.LabelFrame(self.pics, text="Voice in battle", padding=6)
-        box.grid(row=row, column=column, sticky="nwe", pady=(4, 0), padx=(12 if column else 0, 0))
+        box = ttk.LabelFrame(parent, text="Voice in battle", padding=6)
+        box.pack(side="left")
         unit = self.current[0]
         vt = self.value("voice_type").split(";")[0].strip()
         from . import models as MO
@@ -1078,9 +1090,12 @@ class RecordEditor(ttk.Frame):
         except Exception:
             ship = False
         if ship:
-            ttk.Label(box, foreground="#555", wraplength=320, justify="left", text=(
-                "A ship: it never stands on a battlefield, so it says nothing in battle. Its voice_type line (%s) "
-                "is only there because the file's form asks for one." % (vt or "none"))).grid(sticky="w")
+            head = ttk.Frame(box)
+            head.grid(sticky="w")
+            ttk.Label(head, text="A ship - no voice in battle").pack(side="left")
+            hint(head, "A ship never stands on a battlefield, so it says nothing in battle. Its voice_type line (%s) "
+                       "is only there because the file's form asks for one." % (vt or "none"), width=420).pack(
+                side="left")
             return
         if not SN.voice_file(self.mod):
             ttk.Label(box, text="this mod has no %s - no unit voices to show" % SN.VOICE_FILE).grid(sticky="w")
@@ -1106,8 +1121,11 @@ class RecordEditor(ttk.Frame):
                 r += 1
                 continue
             head = ("%s accent" if SN.accents(self.mod) else "culture %s") % (uv.label or uv.key)
-            ttk.Label(box, text="%s (%s), voice %s" % (head, who, vt), font=("", 9, "bold")).grid(
-                row=r, column=0, sticky="w", pady=(4 if r else 0, 0))
+            line = ttk.Frame(box)
+            line.grid(row=r, column=0, sticky="w", pady=(4 if r else 0, 0))
+            ttk.Label(line, text="%s (%s), voice %s" % (head, who, vt), font=("", 9, "bold")).pack(side="left")
+            hint(line, "The voice class is the voice_type line of the unit (%s). Classes this voice file has: %s." % (
+                vt, ", ".join(sorted({ev.cls for ev in events}, key=str.lower))), width=420).pack(side="left")
             r += 1
             if not uv.known_class:
                 ttk.Label(box, foreground="#a33", wraplength=320, justify="left", text=(
@@ -1140,9 +1158,6 @@ class RecordEditor(ttk.Frame):
                 ttk.Combobox(line, textvariable=v, values=names, state="readonly", width=30).pack(side="left", padx=4)
                 ttk.Button(line, text="Play", command=lambda v=v, o=orders: self.play_sound(
                     next(ev.files for ev in o if ev.vocal == v.get()))).pack(side="left")
-        ttk.Label(box, foreground="#555", wraplength=320, justify="left", text=(
-            "The voice class is the voice_type line above (%s)." % ", ".join(
-                sorted({ev.cls for ev in events}, key=str.lower)))).grid(row=r, column=0, sticky="w", pady=(4, 0))
 
     def play_sound(self, files):
         """Play the next of a set of sounds (each click the next one, as the game picks among them)."""
