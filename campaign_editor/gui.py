@@ -839,6 +839,8 @@ class App(tk.Tk):
         self.map_view.on_fort_double = self.fort_window   # ... a fort: the army in it
         self.map_view.on_wonder = lambda t: __import__("campaign_editor.gui_wonders", fromlist=["show"]).show(self, self.mod, t)
         self.map_view.on_pick_menu = self.pick_menu
+        self.map_view.on_special = lambda pid: __import__("campaign_editor.gui_places", fromlist=["open_place"]).open_place(
+            self, pid)                                    # a special place's diamond: its window
         # Bigger map (x3) on the map's own bar, left of its zoom (- 100% + Fit stay together), with its own '?'
         # saying what it does (once on the top row; a tester: 'not between the zoom's plus and minus')
         from .gui_util import hint as _hint, tip as _tip
@@ -3830,6 +3832,9 @@ class App(tk.Tk):
                            forts=[fo for fo in self.strat.forts if fo.line not in self.fort_removed] if self.strat
                            else [],
                            everyone=True, **region_kw)
+        from .gui_places import marks as _special_marks       # special places: engine-drawn models (gold diamonds)
+        self.map_view.special = _special_marks(self)
+        self.map_view.render()
 
     RELIGION_COLOURS = {"catholic": (214, 170, 60), "orthodox": (70, 110, 190), "islam": (60, 150, 70),
                         "pagan": (140, 95, 50), "heretic": (140, 40, 140)}
@@ -5229,6 +5234,15 @@ class App(tk.Tk):
             if items:
                 items.append((None, None))
             items.append(("Delete the port of %s" % port, delete_port))
+        sp = getattr(self.map_view, "menu_special", None)
+        if sp is not None:                               # a special place (engine-drawn model): its window
+            from .gui_places import delete as delete_place, open_place, places as special_places
+            p = next((q for q in special_places(self) if str(q.id) == sp), None)
+            if p is not None:
+                if items:
+                    items.append((None, None))
+                items.append(("Special place %s...  (double click)" % p.title, lambda: open_place(self, sp)))
+                items.append(("Delete the special place %s" % p.title, lambda: delete_place(self, sp)))
         rid = getattr(self.map_view, "menu_res", None)
         what = None
         if rid:                                        # a resource, fort, watchtower or wonder: gone with its line
@@ -5338,6 +5352,10 @@ class App(tk.Tk):
             for kind, label in kinds:
                 items.append(("%s  (%s)" % (label, whose) if whose else label,
                               lambda kind=kind: add_at(self, kind, tuple(xy))))
+            if not sea and sp is None:                   # a model of one's own with a window (specialplaces)
+                from .gui_places import open_place
+                items.append(("Special place here...  (a 3D model with its own window)",
+                              lambda: open_place(self, xy=tuple(xy))))
             from . import forts as FT
             wtypes = FT.landmark_types(self.mod) if not sea else []
             if wtypes:                                 # Rome: one of the game's wonders put here (written on Apply)

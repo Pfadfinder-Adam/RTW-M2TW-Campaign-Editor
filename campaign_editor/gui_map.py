@@ -328,6 +328,9 @@ class MapView(ttk.Frame):
         c.bind("<Motion>", self._hover)
         c.bind("<Double-Button-1>", self._double)          # a wonder opens its window, as in the game
         self.on_wonder = None                            # (type) -> the wonder's window
+        self.special = []                                # special places [{'id', 'xy', 'title', 'new'}] (specialplaces)
+        self.on_special = None                           # (id) -> the special place's window
+        self.menu_special = None
         self.on_town = None                              # (region) -> the town's own page (a double click)
         self.on_new_town = None                          # (new region) -> its names and data (a double click)
         self.menu_new = None                             # ('city' | 'port', new region) under the last right click
@@ -1405,6 +1408,8 @@ class MapView(ttk.Frame):
         if self._marks_on():
             self._resources(cw, ch)
         self._forts(cw, ch)
+        if signs:
+            self._special_marks(cw, ch)
         names = []                                       # (not mine, x, y, name) - written after every town
         for region, (x, y) in cm.cities.items():
             x, y = self.places.get(("city", region), (x, y))
@@ -1446,6 +1451,29 @@ class MapView(ttk.Frame):
         if self.v_chars.get() and signs and not self.region_mode:
             self._characters(cw, ch, size)
         self._size_badge()
+
+    def _special_marks(self, cw, ch):
+        """The special places (engine-drawn models, specialplaces.py): a gold diamond on the tile, its name beside
+        when near; one not written yet with a dashed edge."""
+        c = self.canvas
+        r = max(4.0, min(self.z * 0.45, 22))
+        for sp in self.special:
+            sx, sy = self.to_screen(*sp["xy"])
+            if not (-20 < sx < cw + 20 and -20 < sy < ch + 20):
+                continue
+            tags = ("special", "special:%s" % sp["id"])
+            c.create_polygon(sx, sy - r, sx + r, sy, sx, sy + r, sx - r, sy, fill="#e8b830", outline="#3a2400",
+                             width=2, dash=(3, 2) if sp.get("new") else None, tags=tags)
+            if self.z >= 6:
+                c.create_text(sx + r + 3, sy, text=sp["title"], anchor="w", fill="#ffe9a8", font=("", 8), tags=tags)
+
+    def _special_under(self, sx, sy):
+        """The id of the special place under the mouse, or None."""
+        for item in reversed(self.canvas.find_overlapping(sx - 3, sy - 3, sx + 3, sy + 3)):
+            for tag in self.canvas.gettags(item):
+                if tag.startswith("special:"):
+                    return tag.split(":", 1)[1]
+        return None
 
     def _size_badge(self):
         """The map's real size, under the map at its bottom left (never over the map, never moving): tiles
@@ -1896,6 +1924,10 @@ class MapView(ttk.Frame):
         self._doubled = True                             # its release must not pick the town back (on_city)
         if self.on_region_click:                         # a window's regions are being picked (mark_regions)
             return
+        sp = self._special_under(e.x, e.y)
+        if sp is not None and self.on_special and not self.v_pick.get():
+            self.on_special(sp)                          # a special place: its own window
+            return
         new = self._new_under(e.x, e.y)
         if new and self.on_new_town and not self.v_pick.get():
             self.on_new_town(new[1])                     # a new region's town: its names and data (before Apply)
@@ -2264,6 +2296,7 @@ class MapView(ttk.Frame):
             cid = self._char_under(e.x, e.y)
             self.menu_res = self._res_under(e.x, e.y)          # a resource / fort / tower under the mouse
             self.menu_fort = self._fort_line_under(e.x, e.y)        # a fort / tower / wonder sign (also when not editing)
+            self.menu_special = self._special_under(e.x, e.y)      # a special place
             under = self._place_under(e.x, e.y)
             self.menu_port = under[1] if under and under[0] == "port" and not self.menu_new else None
             items = self.on_menu(town[1] if town else xy, town[0] if town else None, cid) or []

@@ -8578,6 +8578,78 @@ building smith
         self.assertEqual([s[:2] for s in got.skin], [(2, 2), (1, 1)])
         self.assertEqual(got.parents, (-1, 0, 1))
 
+    def test_special_places_written_read_back_and_taken_out(self):
+        """Special places (specialplaces.py): a place written = its window's picture (the game's scroll, or a plain
+        parchment without interface sheets, the place's picture across the whole width), its model copied into the
+        mod at its own path, the engine script (every place, read back from its '// @places' line); the last one
+        taken out removes the script and the pictures. A name, a text and a model are a must."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import specialplaces as SP
+        data = os.path.join(self.root, "data")
+        os.makedirs(os.path.join(self.root, "script"), exist_ok=True)
+        write(os.path.join(self.root, "script", "main.nut"), 'scripting.listModules("modules")\n')
+        write(os.path.join(data, "models_strat", "residences", "tower.cas"), "a model\n")
+        pic = os.path.join(self.root, "pic.png")
+        Image.new("RGB", (200, 100), (200, 30, 30)).save(pic)
+        mod = ModData(self.root)
+        self.assertIn("data/models_strat/residences/tower.cas", SP.model_choices(mod))
+        bad = SP.Place(x=1, y=1)
+        self.assertEqual(SP.problems(bad), ["it needs a name", "it needs a text (what the place is)",
+                                            "pick a model for it"])
+        p = SP.Place(campaign="test", x=3, y=4, model="data/models_strat/residences/tower.cas", title='The "Old" Tower',
+                     bonus="+50 a turn", text="Line one\nLine two", money=50)
+        lay = SP.layout("medieval2", p, (200, 100))
+        self.assertEqual(lay["pic"], (42, 42, 356, 178))                # the whole inner width, not cut
+        self.assertLess(lay["title"], lay["bonus"])
+        self.assertLess(lay["bonus"], lay["text"])
+        self.assertLess(lay["text"], lay["held"])
+        self.assertLess(lay["held"], lay["h"])
+        plan = SP.plan(mod, [p], pictures={0: pic})
+        plan.apply()
+        self.assertEqual(p.id, 1)
+        script = SP.script_path(mod)
+        self.assertEqual(os.path.dirname(script), os.path.join(self.root, "script", "modules"))
+        with open(script, encoding="utf-8") as fh:
+            nut = fh.read()
+        self.assertIn('title = "The \\"Old\\" Tower"', nut)
+        self.assertIn('text = "Line one\\nLine two"', nut)
+        self.assertIn("models.drawAt(p.model, p.x, p.y, p.size)", nut)
+        self.assertIn('[%d] = "data/models_strat/residences/tower.cas"' % SP.FIRST_ID, nut)
+        got = SP.read(mod)
+        self.assertEqual([(q.id, q.title, q.x, q.y, q.money, q.picture) for q in got],
+                         [(1, 'The "Old" Tower', 3, 4, 50, "data/ui/ce_places/1_picture.tga")])
+        win = Image.open(os.path.join(data, "ui", "ce_places", "1.tga"))
+        self.assertEqual(win.size, (SP.WIDTH, SP.layout("rome", p, (200, 100))["h"]))     # the minimod is Rome's
+        self.assertEqual(win.convert("RGB").getpixel((60, 60)), (200, 30, 30))   # the picture in its place
+        self.assertTrue(os.path.isfile(os.path.join(data, "models_strat", "residences", "tower.cas")))
+        # taken out: the script and the windows' pictures go
+        SP.plan(mod, []).apply()
+        self.assertFalse(os.path.exists(script))
+        self.assertEqual(os.listdir(os.path.join(data, "ui", "ce_places")), [])
+
+    def test_special_place_scroll_from_nine_pieces(self):
+        """The game's scroll put together from its nine pieces: the corners as they are, the edges and the middle
+        repeated, the last copy cut at the edge (never past it)."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import specialplaces as SP
+        colours = {k: (i * 20, 0, 0, 255) for i, k in enumerate(SP.PIECES)}
+        parts = {k: Image.new("RGBA", (10, 10) if "MID" not in k or k == "MID" else (10, 7), colours[k])
+                 for k in SP.PIECES}
+        img = SP.scroll(parts, 45, 50)
+        self.assertEqual(img.size, (45, 50))
+        self.assertEqual(img.getpixel((0, 0)), colours["TOP_LEFT"])
+        self.assertEqual(img.getpixel((44, 49)), colours["BOTTOM_RIGHT"])
+        self.assertEqual(img.getpixel((22, 0)), colours["TOP_CENTER"])
+        self.assertEqual(img.getpixel((22, 25)), colours["MID"])
+        self.assertEqual(img.getpixel((0, 25)), colours["MID_LEFT"])
+        self.assertEqual(img.getpixel((44, 25)), colours["MID_RIGHT"])
+
     def test_read_and_draw_a_rome_cas(self):
         """A Rome .cas laid out as the vanilla ones (3.05): header with the bone count and parents, frame times, bone
         records, rest places, a shield hanging on a bone and a body whose points hang on a bone. Read back, put
