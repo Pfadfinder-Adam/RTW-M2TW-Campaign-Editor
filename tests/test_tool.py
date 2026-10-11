@@ -10640,6 +10640,30 @@ building smith
         self.assertNotEqual(aaron.xy, (3, 2))
         self.assertEqual(mod.region_map("test").get(*aaron.xy), (0, 0, 255))
 
+    def test_rivers_drawn_on_the_map_by_points(self):
+        """A tester: 'no rivers in Terrain' - the map drawn point by point (Heights, the coast's point brushes) left
+        map_features out. Now its rivers are drawn over it as over the ground: one tile's river = 4 x 4 pixels."""
+        try:
+            from PIL import ImageChops
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor.mapdata import CampaignMap
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        black, river = (0, 0, 0), (0, 0, 255)
+        feat = [[black] * 4 for _ in range(4)]
+        feat[2][3] = river
+        write_tga(os.path.join(camp, "map_features.tga"), 4, 4, feat)
+        write_tga(os.path.join(camp, "map_heights.tga"), 9, 9, [[(90, 90, 90)] * 9 for _ in range(9)])
+        cm = CampaignMap(ModData(self.root), "test")
+        for points in (False, True):
+            cm.show_heights = points
+            cm.__dict__.pop("_backgrounds", None)
+            with_r, without = cm.background(False, True), cm.background(False, False)
+            box = ImageChops.difference(with_r.convert("RGB"), without.convert("RGB")).getbbox()
+            self.assertIsNotNone(box, points)
+            side = 4 if points else 2
+            self.assertEqual((box[2] - box[0], box[3] - box[1]), (side, side))
+
     def test_bad_leader_name_is_refused(self):
         mod = ModData(self.root)
         with self.assertRaises(ValueError):

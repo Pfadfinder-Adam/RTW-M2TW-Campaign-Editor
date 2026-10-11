@@ -137,8 +137,9 @@ class CampaignMap:
         of the ground at its middle (what the tool checks and every brush paints);
         relief: shaded from map_heights.tga; rivers: map_features.tga's rivers,
         fords and cliffs."""
-        if getattr(self, "show_heights", False):
-            return self.heights_view()                  # the Terrain editor's Heights mode: map_heights itself
+        if getattr(self, "show_heights", False):        # the Terrain editor's Heights mode: map_heights itself,
+            im = self.heights_view()                    # the rivers over it too (a tester: 'no rivers in Terrain')
+            return self._rivers(im) if rivers else im
         climates = bool(getattr(self, "show_climates", False))
         key = (bool(relief), bool(rivers), climates)
         cache = self.__dict__.setdefault("_backgrounds", {})
@@ -305,13 +306,20 @@ class CampaignMap:
 
     def _rivers(self, im):
         """map_features.tga's non-black tiles drawn over the ground, each kind in its colour."""
-        f = self._pil("map_features.tga")
-        if f is None or f.size != (self.w, self.h):
+        cache = self.__dict__.setdefault("_backgrounds", {})      # (gone with the backgrounds when painted)
+        key = ("rivers", im.size)
+        if key not in cache:
+            f = self._pil("map_features.tga")
+            if f is None or f.size != (self.w, self.h):
+                cache[key] = None
+            else:
+                over = recolour(f, self.FEATURE_LOOK, (50, 105, 200))
+                mask = f.convert("L").point(lambda v: 255 if v else 0)
+                cache[key] = (over.resize(im.size, Image.NEAREST), mask.resize(im.size, Image.NEAREST))
+        if cache[key] is None:
             return im
-        over = recolour(f, self.FEATURE_LOOK, (50, 105, 200))
-        mask = f.convert("L").point(lambda v: 255 if v else 0)
-        over, mask = over.resize(im.size, Image.NEAREST), mask.resize(im.size, Image.NEAREST)
-        return Image.composite(over, im, mask)
+        over, mask = cache[key]
+        return Image.composite(over, im.convert(over.mode), mask)
 
     def _labels(self):
         """([(label image, [region per label])], border mask), made once: each

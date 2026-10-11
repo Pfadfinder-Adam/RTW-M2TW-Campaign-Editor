@@ -29,6 +29,9 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- **Terrain editor: Rivers** beside **Grid** - rivers, fords and cliffs drawn over the ground, now also on the map
+  drawn point by point (Heights, the coast's point brushes), where they were missing; the Map's Layers tick could
+  not be reached from here once it was off.
 - **View in 3D: one shield, not two** - a model that wears its shield two ways (on the back and in the hand:
   Polish shooters, a mod's pavise crossbowmen) shows it on the back while the man holds his first weapon and in his
   hand with his second, as the game does (both were drawn).

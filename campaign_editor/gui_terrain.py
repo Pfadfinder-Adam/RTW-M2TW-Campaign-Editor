@@ -68,6 +68,11 @@ class TerrainEditor(ttk.Frame):
         self.v_grid_here = tk.BooleanVar(value=True)
         ttk.Checkbutton(top, text="Grid", variable=self.v_grid_here, command=self._grid_toggled).pack(
             side="left", padx=(16, 0))
+        # the rivers, fords and cliffs (map_features) drawn over the ground: the map's Layers panel is hidden here,
+        # so its tick was out of reach once turned off on the Map (a tester: 'no rivers in Terrain')
+        self.v_rivers_here = tk.BooleanVar(value=True)
+        ttk.Checkbutton(top, text="Rivers", variable=self.v_rivers_here, command=self._rivers_toggled).pack(
+            side="left", padx=(8, 0))
         ttk.Button(top, text="Redo stroke", command=self.redo_stroke).pack(side="right", padx=(0, 4))
         self.v_shore = tk.BooleanVar(value=True)       # the shore as the game draws it (Land and sea's 2nd row)
         ttk.Button(top, text="Undo stroke", command=self.undo_stroke).pack(side="right", padx=4)
@@ -99,6 +104,7 @@ class TerrainEditor(ttk.Frame):
         self.view.lbar.pack_forget()
         self.view.legend.pack_forget()
         self.v_grid_here.set(self.view.v_grid.get())
+        self.v_rivers_here.set(self.view.v_rivers.get())
         self.fill_palette()
 
     GROUPS = {"terrain": ("ground", "features", "climate"), "heights": ("coast", "heights")}
@@ -128,6 +134,15 @@ class TerrainEditor(ttk.Frame):
         self.view.v_grid.set(self.v_grid_here.get())
         look = dict(settings.get("map_look") or {})
         look["grid"] = self.v_grid_here.get()
+        settings.put("map_look", look)
+        self.view.render()
+
+    def _rivers_toggled(self):
+        """The rivers, fords and cliffs over the ground, on or off (the same switch as Layers > Rivers, kept)."""
+        from . import settings
+        self.view.v_rivers.set(self.v_rivers_here.get())
+        look = dict(settings.get("map_look") or {})
+        look["rivers"] = self.v_rivers_here.get()
         settings.put("map_look", look)
         self.view.render()
 
