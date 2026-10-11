@@ -481,6 +481,8 @@ def own_logo(plan, faction, which, im=None):
     pic = im if im is not None else logo_image(plan, faction, which)
     if pic is None:
         return None
+    if not xml_path(mod, sheet, plan):
+        return None                                  # no .sd.xml sheet anywhere: nothing to put a sprite on
     page = own_page % faction
     target = os.path.join(mod.data, "ui", skins(mod)[0], "interface", page)
     name = got["name"]
@@ -525,6 +527,57 @@ def own_logo(plan, faction, which, im=None):
 ENGINE = {True: "REX", False: "M2EX"}
 
 
+CAPS = "descr_caps_ex.txt"
+XML_LINE = "sprite_format  xml"
+
+
+def can_use_xml(mod):
+    """Whether the mod's sheets could be switched to xml here: an engine runs it, it reads the binary sheets now and
+    a .sd.xml sheet of the logos is there (the mod's own or the game's)."""
+    from .limits import engine_of
+    return bool(engine_of(mod)) and sprite_mode(mod) != "xml" and \
+        any(xml_path(mod, sheets(mod)[w][0]) for w in (LOGO, SMALL))
+
+
+def use_xml(plan):
+    """'sprite_format xml' in the mod's own descr_caps_ex.txt: the engine reads the .sd.xml sheets then, and a faction
+    can have logos of its own (a tester: SSHIP's new factions kept other factions' shields - the mod had no
+    descr_caps_ex.txt, so M2EX read the binary sheets). A line of its own changed or switched on (a ';' taken off);
+    a mod without the file gets the game's copy with every other setting off (gamefix.settings_off - the engine's
+    defaults for mods stay), else a short file of that one line."""
+    from .gamefix import settings_off
+    from .limits import ex_file
+    from .newmod import game_of
+    from .moddata import _ci as ci
+    mod = plan.mod
+    have = ex_file(mod, CAPS)
+    path = have or os.path.join(mod.data, CAPS)
+    if have:
+        with open(have, "rb") as fh:
+            text = fh.read().decode("latin-1")
+    else:
+        game = game_of(mod.data)
+        gdata = ci(game, "data") if game else None
+        src = ci(gdata, CAPS) if gdata and os.path.normcase(os.path.abspath(gdata)) != \
+            os.path.normcase(os.path.abspath(mod.data)) else None
+        if src:
+            with open(src, "rb") as fh:
+                text = settings_off(fh.read()).decode("latin-1")
+        else:
+            text = "; %s - engine options (%s); the ones not named here keep their defaults for mods\r\n" % (
+                CAPS, ENGINE[rome(mod)])
+    nl = "\r\n" if "\r\n" in text else "\n"
+    new, n = re.subn(r"(?m)^([ \t]*sprite_format[ \t]+)\S+", lambda m: m.group(1) + "xml", text, count=1)
+    if not n:                                        # switched off with a ';' (the game's copy): on again
+        new, n = re.subn(r"(?m)^;[ \t]*(sprite_format[ \t]+)\S+", lambda m: m.group(1) + "xml", text, count=1)
+    if not n:
+        new = text + ("" if text.endswith(("\n", "\r")) or not text else nl) + XML_LINE + nl
+    plan.binary(path, new.encode("latin-1"))
+    plan.notes.append((mod.rel(path), "sprite_format xml: %s reads the .sd.xml sprite sheets - each faction can have "
+                                      "logos of its own (look the game's panels over once)" % ENGINE[rome(mod)]))
+    return path
+
+
 def give_own(plan, faction):
     """A new faction: its own flag slot (Rome) and (REX / M2EX xml sheets) its own logos, the template's pictures
     in them."""
@@ -554,20 +607,32 @@ def entries(mod, faction):
                         got["index"], got["rel"], (" - shared with %s: Replace gives it a slot of its own"
                                                    % ", ".join(got["shared"])) if got["shared"] else "")})
     xml = sprite_mode(mod) == "xml"
+    switch = can_use_xml(mod)
     for which in (LOGO, SMALL):
         lg = logo_of(mod, faction, which)
-        sp = lg and lg["sprite"]
-        if not sp or not sp["page_path"]:
-            continue
-        note = "sprite %s on %s" % (lg["name"], sp["page"])
+        if lg is None:
+            continue                                 # no logo line in descr_sm_factions: nothing the game reads
+        sp = lg["sprite"]
+        found = bool(sp and sp["page_path"])
+        sheet = sheets(mod)[which][0]
+        if found:
+            note = "sprite %s on %s" % (lg["name"], sp["page"])
+        else:
+            # a name the sheets lack: the game shows the sheet's first picture (M2EX: 'Unresolved sprite
+            # definition ... defaulting to index 0') - said here, never a card left out (a tester's SSHIP factions)
+            note = "sprite %s is on no sheet (%s) - the game shows another picture in its place" % (lg["name"], sheet)
         if not xml:
-            note += " - cannot be replaced: the game reads the binary sprite sheets (%s with 'sprite_format xml' " \
-                    "in the mod's own descr_caps_ex.txt needed)" % ENGINE[rome(mod)]
+            note += " - cannot be replaced while the game reads the binary sprite sheets" + (
+                ": 'Own logos for this mod...' lets it" if switch else
+                " (%s with 'sprite_format xml' in the mod's own descr_caps_ex.txt needed)" % ENGINE[rome(mod)])
+        elif not found:
+            note += " - Replace gives %s a picture of its own" % faction
         elif not lg["own"]:
             note += " - shared sheet: Replace gives %s a page of its own" % faction
-        out.append({"path": sp["page_path"], "rel": which, "label": LABELS[which][0], "where": LABELS[which][1],
-                    "size": (sp["box"][2], sp["box"][3], 32), "crop": sp["box"], "symbol": True, "note": note,
-                    "locked": not xml})
+        box = sp["box"] if found else (0, 0) + _box(sheets(mod)[which][4])
+        out.append({"path": sp["page_path"] if found else None, "rel": which, "label": LABELS[which][0],
+                    "where": LABELS[which][1], "size": (box[2], box[3], 32), "crop": sp["box"] if found else None,
+                    "symbol": True, "note": note, "locked": not xml, "switch": switch, "missing": not found})
     return out
 
 

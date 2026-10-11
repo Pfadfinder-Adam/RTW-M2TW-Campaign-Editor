@@ -29,6 +29,12 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- **Faction logos on the Art tab, always** (Medieval II with M2EX, Rome with REX): the faction logo and the small
+  logo (the shield in diplomacy, on the faction's scrolls and its button) have their cards also when the sprite is
+  on no sheet - the card says the game shows another picture there. A mod that reads the binary sprite sheets gets
+  **Own logos for this mod...**: after a yes it writes `sprite_format xml` into the mod's own `descr_caps_ex.txt`
+  (a backup first), and **Replace...** then gives the faction a logo of its own, also one no sheet had. New
+  factions in a big mod kept another faction's shield with no word why.
 - **Surnames only from the faction's own list** (New army / fleet / agent here on the Map, the leader and heir of
   New faction, the Family tree): picked, not typed, and a surname of the faction picked before goes when another is
   picked - an army was refused at Apply for a surname its faction has not. More surnames: Name list... in Edit faction.

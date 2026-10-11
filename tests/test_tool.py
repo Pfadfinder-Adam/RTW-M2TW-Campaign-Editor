@@ -5808,6 +5808,108 @@ building smith
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
         self.assertEqual(after, before)
 
+    def test_missing_logo_sprite_shown_and_made_after_the_xml_switch(self):
+        """Report R-20261011-477B62 (SSHIP, M2EX): a mod with no descr_caps_ex.txt reads the binary sheets, and a new
+        faction's logo_index named a sprite no sheet has - the Art tab left the card out and said nothing. Now the
+        card is there (no picture, the reason said, 'Own logos for this mod...' offered); the switch writes
+        'sprite_format xml' into the mod's own descr_caps_ex.txt (an old 'sd' line changed, the rest kept); then
+        Replace makes the faction a sprite and page of its own. Restore gives every file back."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from unittest import mock
+        from campaign_editor import limits, symbols as SY
+        from campaign_editor.factionart import image_tga
+        d = os.path.join(self.root, "data")
+        sm = SM.replace("culture\t\teastern\n", "culture\t\teastern\nlogo_index\t\tFACTION_LOGO_GAMMA\n", 1)
+        write(os.path.join(d, "descr_sm_factions.txt"), sm)
+        write(os.path.join(d, "ui", "strategy.sd.xml"), '<sprite_definitions version="7">\n'
+              '  <page file="stratpage_02.tga" w="128" h="128">\n'
+              '    <sprite name="OTHER" x="68" y="0" w="10" h="10" alpha="1"/>\n  </page>\n</sprite_definitions>\n')
+        os.makedirs(os.path.join(d, "ui", "southern_european", "interface"))
+        with open(os.path.join(d, "ui", "southern_european", "interface", "stratpage_02.tga"), "wb") as fh:
+            fh.write(image_tga(Image.new("RGBA", (128, 128), (0, 0, 200, 255))))
+        before = tree_hash(self.root)
+        with mock.patch.object(SY, "rome", lambda m: False), \
+                mock.patch.object(limits, "engine_of", lambda m: "M2EX.exe"):
+            mod = ModData(self.root)
+            self.assertEqual(SY.sprite_mode(mod), "sd")
+            card, = SY.entries(mod, "alpha")
+            self.assertEqual((card["rel"], card["path"], card["missing"], card["locked"], card["switch"]),
+                             (SY.LOGO, None, True, True, True))
+            self.assertIn("FACTION_LOGO_GAMMA is on no sheet", card["note"])
+            self.assertIn("Own logos for this mod", card["note"])
+            plan = Plan(mod, "sprites", "sprite_format", {})
+            SY.use_xml(plan)
+            plan.apply()
+            mod = ModData(self.root)
+            self.assertEqual(SY.sprite_mode(mod), "xml")
+            card, = SY.entries(mod, "alpha")
+            self.assertEqual((card["locked"], card["switch"], card["missing"]), (False, False, True))
+            self.assertIn("Replace gives alpha a picture of its own", card["note"])
+            plan = Plan(mod, "t", "t", {})
+            self.assertEqual(SY.own_logo(plan, "alpha", SY.LOGO, Image.new("RGBA", (40, 40), (220, 0, 0, 255))),
+                             "FACTION_LOGO_ALPHA")
+            plan.apply()
+            mod = ModData(self.root)
+            got = SY.logo_of(mod, "alpha", SY.LOGO)
+            self.assertTrue(got["own"])
+            self.assertEqual(SY.logo_image(mod, "alpha", SY.LOGO).size, (68, 76))
+            self.assertGreater(SY.logo_image(mod, "alpha", SY.LOGO).getpixel((30, 30))[0], 180)
+            for b in backups(mod):                    # newest first: both writes undone
+                restore(mod, b)
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
+        self.assertEqual(after, before)
+        # a mod's own descr_caps_ex.txt with 'sd': that line changed, the others and the line ends kept
+        with open(os.path.join(d, "descr_caps_ex.txt"), "wb") as fh:
+            fh.write(b"; caps\r\ntrade_fleet_source  capability\r\nsprite_format  sd\r\n")
+        with mock.patch.object(SY, "rome", lambda m: False):
+            plan = Plan(ModData(self.root), "sprites", "sprite_format", {})
+            SY.use_xml(plan)
+            plan.apply()
+        with open(os.path.join(d, "descr_caps_ex.txt"), "rb") as fh:
+            self.assertEqual(fh.read(), b"; caps\r\ntrade_fleet_source  capability\r\nsprite_format  xml\r\n")
+        # switched off with a ';' (Load's copy of the game's file, every setting off): switched on again
+        with open(os.path.join(d, "descr_caps_ex.txt"), "wb") as fh:
+            fh.write(b"; sd = legacy binary\n;trade_fleet_source  capability\n;sprite_format  xml\n")
+        with mock.patch.object(SY, "rome", lambda m: False):
+            plan = Plan(ModData(self.root), "sprites", "sprite_format", {})
+            SY.use_xml(plan)
+            plan.apply()
+        with open(os.path.join(d, "descr_caps_ex.txt"), "rb") as fh:
+            self.assertEqual(fh.read(), b"; sd = legacy binary\n;trade_fleet_source  capability\nsprite_format  xml\n")
+
+    def test_art_card_of_a_missing_logo(self):
+        """The Art tab's card of a logo no sheet has (no picture file): drawn with '(none)', its words, and the
+        'Own logos for this mod...' button when the switch is possible - no error for the missing file."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            from types import SimpleNamespace
+            from campaign_editor.gui_art import ArtEditor
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / display (CI's python3): not tested here
+            self.skipTest("no window: %s" % e)
+        try:
+            pressed = []
+            me = SimpleNamespace(app=SimpleNamespace(art_replace={}, mod=SimpleNamespace(find=lambda r: None)),
+                                 CELL=420, _photos=[], use_xml=lambda: pressed.append(1),
+                                 replace=lambda *a, **k: None, unreplace=lambda *a: None)
+            me._thumb = lambda *a, **k: ArtEditor._thumb(me, *a, **k)
+            me._need = ArtEditor._need
+            p = {"path": None, "rel": "symbol:logo", "label": "faction logo (faction button)", "where": "panels",
+                 "size": (68, 76, 32), "crop": None, "symbol": True, "note": "sprite X is on no sheet",
+                 "locked": True, "switch": True, "missing": True}
+            row = ArtEditor.card(me, root, p, "alpha", None)
+            buttons = [w for w in row.winfo_children() for w in ([w] + list(w.winfo_children()))
+                       if isinstance(w, ttk.Button)]
+            self.assertEqual([b["text"] for b in buttons], ["Own logos for this mod..."])
+            buttons[0].invoke()
+            self.assertEqual(pressed, [1])
+        finally:
+            root.destroy()
+
     def test_same_length_texture_name_for_a_cas_copy(self):
         """A texture name baked into a .cas model is rewritten in place: the copy's name keeps the length."""
         from campaign_editor.factionart import _same_length_name

@@ -123,8 +123,8 @@ class ArtEditor(ttk.Frame):
         return a.v["template"].get().strip(), (a.v["name"].get().strip().lower() or None)
 
     def _thumb(self, parent, path, box=(72, 72), crop=None):
-        from PIL import ImageTk
         try:
+            from PIL import ImageTk                  # (no Pillow, no picture: '(none)', the card still there)
             from .recolour import read_picture       # .tga, .dds, Medieval II's .texture
             im = read_picture(path).convert("RGBA")
             if crop:                                     # a symbol on a shared sheet
@@ -270,7 +270,10 @@ class ArtEditor(ttk.Frame):
                 ttk.Button(bar, text="Replace (its own copy)...", command=lambda t=target, s=p["size"],
                            l=p["label"], x=p["extra"]: self.replace(t, s, l, extra=[x["kind"], x["ref"]])).pack(
                     side="left")
-            if os.path.isfile(p["path"]):
+            if p.get("switch"):
+                # the mod reads the binary sheets (a tester's SSHIP): one press lets each faction have logos of its own
+                ttk.Button(bar, text="Own logos for this mod...", command=self.use_xml).pack(side="left", padx=(0, 4))
+            if p["path"] and os.path.isfile(p["path"]):
                 from .gui_util import save_copy
                 ttk.Button(bar, text="Save a copy...", command=lambda n=p["path"], l=p["label"]:
                            save_copy(self, n, l)).pack(side="left", padx=4)
@@ -295,6 +298,36 @@ class ArtEditor(ttk.Frame):
                 ttk.Button(bar, text="Back to the original", command=lambda t=target, o=orig, k=link:
                            self.revert(t, o, k)).pack(side="left", padx=4)
         return row
+
+    def use_xml(self):
+        """'sprite_format xml' written into the mod's own descr_caps_ex.txt after a yes (a backup first): the engine
+        reads the .sd.xml sheets then, and each faction's logos can be its own (symbols.use_xml)."""
+        from . import log, symbols as SY
+        from .plan import Plan
+        a = self.app
+        eng = SY.ENGINE[SY.rome(a.mod)]
+        if not ask("Own logos for this mod", (
+                "This mod has no 'sprite_format xml' line, so %s reads the old binary sprite sheets (ui/*.sd): a new "
+                "faction cannot have a logo of its own there and shows another faction's.\n\n"
+                "The editor writes 'sprite_format  xml' into the mod's own descr_caps_ex.txt now (a backup first; "
+                "Undo this write puts it back). %s then reads the .sd.xml sheets beside them, and Replace on the logo "
+                "cards gives each faction its own picture.\n\n"
+                "Look the game's panels over once afterwards: every sprite of the interface comes from the .sd.xml "
+                "sheets then - if the mod's .sd.xml are older than its .sd, a picture may be off; Undo this write "
+                "brings the old way back.") % (eng, eng),
+                yes="Switch it", no="Not now", parent=self):
+            return
+        plan = Plan(a.mod, "sprites", "sprite_format", {})
+        SY.use_xml(plan)
+        try:
+            bdir = plan.apply()
+        except Exception as e:
+            messagebox.showerror("Own logos for this mod", "Not written: %s" % e, parent=self)
+            return
+        log.write("sprite_format xml written (backup %s)\n%s" % (bdir, plan.report()))
+        a.status.set("The mod reads the .sd.xml sprite sheets now - Replace on the logo cards gives the faction its "
+                     "own; Undo this write puts it back.")
+        self.load()
 
     @staticmethod
     def _need(size, target):
