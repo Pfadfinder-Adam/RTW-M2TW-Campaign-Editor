@@ -330,6 +330,8 @@ class MapView(ttk.Frame):
         self.on_wonder = None                            # (type) -> the wonder's window
         self.special = []                                # special places [{'id', 'xy', 'title', 'new'}] (specialplaces)
         self.on_special = None                           # (id) -> the special place's window
+        self.on_special_move = None                      # (id, (x, y)) -> a special place dragged to a tile
+        self._sdrag = None                               # [id, x, y, moved] - a special place being dragged
         self.menu_special = None
         self.on_town = None                              # (region) -> the town's own page (a double click)
         self.on_new_town = None                          # (new region) -> its names and data (a double click)
@@ -2417,6 +2419,10 @@ class MapView(ttk.Frame):
             ch_ = next((c for c in self.chars if c["id"] == cid), None)
             if ch_:
                 self.readout.configure(text=self.locked(ch_))
+        sp = self._special_under(e.x, e.y) if self.cmap and self.on_special_move and not self.on_place else None
+        if sp is not None:
+            self._sdrag = [sp, e.x, e.y, False]           # a special place: dragged like a town (a click opens nothing)
+            return
         pl = self._place_under(e.x, e.y) if self.cmap and self.on_place_move and not self.on_place else None
         if pl:
             self._pdrag = [pl[0], pl[1], e.x, e.y, False]          # nothing happens unless the mouse moves
@@ -2500,6 +2506,21 @@ class MapView(ttk.Frame):
             self.canvas.create_rectangle(ax - r, ay - r, ax + r, ay + r, outline="#ff3030" if why else "#30ff60",
                                          width=2, tags=("target",))
             self.readout.configure(text="resource to tile %d, %d: %s" % (x, y, why or "fine - drop it here"))
+            return
+        if self._sdrag:
+            sp, lx, ly, started = self._sdrag
+            if not started and abs(e.x - lx) + abs(e.y - ly) <= 3:
+                return
+            self.canvas.move("special:" + sp, e.x - lx, e.y - ly)
+            self._sdrag = [sp, e.x, e.y, True]
+            x, y = self.to_tile(e.x, e.y)
+            why = self._outside((x, y))
+            self.canvas.delete("target")
+            ax, ay = self.to_screen(x, y)
+            r = max(self.z / 2, 4)
+            self.canvas.create_rectangle(ax - r, ay - r, ax + r, ay + r, outline="#ff3030" if why else "#30ff60",
+                                         width=2, tags=("target",))
+            self.readout.configure(text="special place to tile %d, %d: %s" % (x, y, why or "fine - drop it here"))
             return
         if getattr(self, "_pdrag", None):
             what, region, lx, ly, started = self._pdrag
@@ -2594,7 +2615,7 @@ class MapView(ttk.Frame):
             if mp and self.on_place and self.on_place_stop:            # a right click stops what hangs under the mouse
                 self.on_place_stop()
             elif mp and self.on_menu and self.cmap:
-                self._cdrag = self._rdrag = self._pdrag = None
+                self._cdrag = self._rdrag = self._pdrag = self._sdrag = None
                 self.canvas.delete("target")
                 self._show_menu(e)
             return
@@ -2626,6 +2647,18 @@ class MapView(ttk.Frame):
             return
         rpress, self._rpress = self._rpress, None
         doubled, self._doubled = getattr(self, "_doubled", False), False
+        if self._sdrag:
+            sp, _, _, started = self._sdrag
+            self._sdrag = None
+            if started:
+                xy = self.to_tile(e.x, e.y)
+                why = self._outside(xy)
+                if why:
+                    self.readout.configure(text="not moved - " + why)
+                    self.render()
+                else:
+                    self.on_special_move(sp, xy)
+            return
         if getattr(self, "_pdrag", None):
             what, region, _, _, started = self._pdrag
             self._pdrag = None

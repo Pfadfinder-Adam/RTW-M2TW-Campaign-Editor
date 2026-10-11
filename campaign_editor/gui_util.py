@@ -1507,13 +1507,14 @@ def keep_for_apply(win, key, label, make_plan, after=None, title=None):
         return False
     # the same change kept again is not added again (the user, 2026-10-10: five presses stood five times in the list)
     same = _plan_content(plan)
-    parts = win.app.session_parts() if hasattr(win.app, "session_parts") else {}
+    app = getattr(win, "app", win)                 # a window of the App, or the App itself (the map's right click)
+    parts = app.session_parts() if hasattr(app, "session_parts") else {}
     twin = next((k for k, p in parts.items() if p.get("plan") is not None and _plan_content(p["plan"]) == same),
                 None)
     if twin is not None:
-        win.app.status.set("%s - this very change is kept already; Apply changes (bottom left) writes it." % label)
+        app.status.set("%s - this very change is kept already; Apply changes (bottom left) writes it." % label)
         return True
-    win.app.session_add(key, label, plan, after)
+    app.session_add(key, label, plan, after)
     return True
 
 

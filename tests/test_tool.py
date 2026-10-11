@@ -8643,6 +8643,35 @@ building smith
         self.assertFalse(os.path.exists(script))
         self.assertEqual(os.listdir(os.path.join(data, "ui", "ce_places")), [])
 
+    def test_special_place_dragged_on_the_map(self):
+        """A special place's diamond dragged on the map to another tile: the place stands there (kept for Apply
+        at once, written with the rest); dropped on its own tile nothing is kept."""
+        try:
+            from PIL import Image  # noqa: F401
+            import tkinter  # noqa: F401
+            from types import SimpleNamespace
+            from campaign_editor import gui_places as GP
+        except Exception as e:                        # no Pillow / no tkinter: not tested here
+            self.skipTest("no window or Pillow: %s" % e)
+        from campaign_editor import specialplaces as SP
+        os.makedirs(os.path.join(self.root, "script"), exist_ok=True)
+        write(os.path.join(self.root, "script", "main.nut"), 'scripting.listModules("modules")\n')
+        write(os.path.join(self.root, "data", "models_strat", "residences", "tower.cas"), "a model\n")
+        mod = ModData(self.root)
+        SP.plan(mod, [SP.Place(campaign="test", x=3, y=4, model="data/models_strat/residences/tower.cas",
+                               title="Tower", text="A tower", money=5)]).apply()
+        parts, said, shown = {}, [], []
+        app = SimpleNamespace(mod=mod, v_campaign=SimpleNamespace(get=lambda: "test"), session_parts=lambda: parts,
+                              status=SimpleNamespace(set=said.append), show_map=lambda: shown.append(1),
+                              session_add=lambda k, label, plan, after=None: parts.__setitem__(k, {"plan": plan}))
+        GP.move(app, "1", (3, 4))                     # its own tile: nothing to keep
+        self.assertEqual(parts, {})
+        GP.move(app, "1", (7, 8))
+        self.assertIn("moved to 7, 8", said[-1])
+        parts["special_places"]["plan"].apply()
+        self.assertEqual([(q.title, q.x, q.y) for q in SP.read(mod)], [("Tower", 7, 8)])
+        self.assertEqual(len(shown), 2)
+
     def test_special_place_scroll_from_nine_pieces(self):
         """The game's scroll put together from its nine pieces: the corners as they are, the edges and the middle
         repeated, the last copy cut at the edge (never past it)."""
@@ -11366,6 +11395,42 @@ building smith
         self.assertEqual(app.place_moves, {})                 # not a move of a region of the map
         self.assertIn("new region New_Land", said[-1])
 
+    def test_special_place_diamond_dragged(self):
+        """A special place's gold diamond is taken by the left button and dropped on a tile (on_special_move); a
+        press without moving moves nothing (its double click opens its window), a drop outside the map neither."""
+        try:
+            import tkinter as tk
+            from types import SimpleNamespace
+            from campaign_editor.gui_map import MapView
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / display / Pillow (CI): not tested here
+            self.skipTest("no window: %s" % e)
+        try:
+            v = MapView(root)
+            v.pack()
+            root.update()
+            v.render = lambda: None
+            v.cmap = SimpleNamespace(w=50, h=50, cities={}, ports={})
+            v.z, v.ox, v.oy = 10, 0.0, 0.0
+            v.on_place = v.on_place_move = v.on_res_move = None    # (show() sets them)
+            moved = []
+            v.on_special_move = lambda pid, xy: moved.append((pid, xy))
+            v.canvas.create_polygon(20, 10, 30, 20, 20, 30, 10, 20, fill="gold", tags=("special", "special:1"))
+            ev = lambda x, y: SimpleNamespace(x=x, y=y, num=1, state=0)      # noqa: E731
+            v._press(ev(20, 20))
+            v._release(ev(20, 20))
+            self.assertEqual(moved, [])                       # a click: nothing moved
+            v._press(ev(20, 20))
+            v._move(ev(60, 90))
+            v._release(ev(65, 95))
+            self.assertEqual(moved, [("1", (6, 40))])         # tile 6, row 9 from the top of 50
+            v._press(ev(65, 95))
+            v._move(ev(-50, 20))
+            v._release(ev(-50, 20))
+            self.assertEqual(len(moved), 1)                   # outside the map: not moved
+        finally:
+            root.destroy()
+
     def test_map_drawn_again_after_it_is_dragged(self):
         """Signs, borders and names did not come back after the map was dragged until a zoom (the user, 2026-10-10,
         on every map): while dragging only the background is cut again and the signs shifted (_pan); the release
@@ -11531,6 +11596,9 @@ building smith
             keep_for_apply(win, "towns:%d" % k, "towns", make)
         self.assertEqual(len(parts), 1)
         self.assertIn("kept already", said[-1])
+        # the App itself (the map's right click > Delete the special place) has no .app: it is its own
+        keep_for_apply(app, "towns:9", "towns", make)
+        self.assertEqual(len(parts), 1)
 
     def test_closing_the_editor_when_a_command_is_already_gone(self):
         """Closing the editor once showed 'can't delete Tcl command' and then, while it reported that, a Windows box

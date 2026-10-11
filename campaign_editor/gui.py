@@ -841,6 +841,8 @@ class App(tk.Tk):
         self.map_view.on_pick_menu = self.pick_menu
         self.map_view.on_special = lambda pid: __import__("campaign_editor.gui_places", fromlist=["open_place"]).open_place(
             self, pid)                                    # a special place's diamond: its window
+        self.map_view.on_special_move = lambda pid, xy: __import__(
+            "campaign_editor.gui_places", fromlist=["move"]).move(self, pid, xy)    # ... dragged to another tile
         # Bigger map (x3) on the map's own bar, left of its zoom (- 100% + Fit stay together), with its own '?'
         # saying what it does (once on the top row; a tester: 'not between the zoom's plus and minus')
         from .gui_util import hint as _hint, tip as _tip

@@ -83,6 +83,25 @@ def open_place(app, place_id=None, xy=None):
     return w
 
 
+def move(app, place_id, xy):
+    """A place's diamond dragged on the map to tile xy: the place stands there from the next Apply (its open window
+    follows - it holds the same place)."""
+    p = next((q for q in places(app) if str(q.id or "new") == str(place_id)), None)
+    if p is None or (p.x, p.y) == tuple(xy):
+        app.show_map()
+        return
+    p.x, p.y = int(xy[0]), int(xy[1])
+    if getattr(p, "_new", False):                     # not kept yet: its window keeps it with the rest
+        app.status.set("Special place moved to %d, %d - Keep for Apply in its window." % (p.x, p.y))
+    elif keep(app):
+        app.status.set("Special place %s moved to %d, %d - written with the next Apply (Preview first)."
+                       % (p.title, p.x, p.y))
+    w = _OPEN.get(str(place_id))
+    if w is not None and w.winfo_exists():
+        w.title("%s - %s" % (TITLE, p.title or "new, at %d, %d" % (p.x, p.y)))
+    app.show_map()
+
+
 def delete(app, place_id):
     lst = places(app)
     p = next((q for q in lst if str(q.id) == str(place_id)), None)

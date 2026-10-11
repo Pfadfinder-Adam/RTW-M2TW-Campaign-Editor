@@ -10,8 +10,9 @@
   your own `.cas`) drawn on that tile by the engine, its name on a hover, and a double click opens its window at the
   screen's left like a wonder's: the game's own scroll (Medieval II's painted frame, Rome's rolled scroll), its
   picture across the whole width, its name, what it gives (two lines), its text and who holds it now. Money a turn
-  for its holder if you like. Its gold diamond on the map: a double click or a right click edits or deletes it. Kept
-  for Apply, one backup; the script runs only for its own mod.
+  for its holder if you like. Its gold diamond on the map: a double click or a right click edits or deletes it,
+  dragged with the left button it moves to another tile. Kept for Apply, one backup; the script runs only for its own
+  mod.
 - **Leader's and heir's titles** on the faction tab (New and Edit faction, both games): King, Duke, Emperor,
   Grand Prince... - Medieval II's 'King %S' / 'Prince %S' and the former leader's title get the new word, Rome's
   leader's and heir's labels the new text. A new faction takes the template's until others are written.
