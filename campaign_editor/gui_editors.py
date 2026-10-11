@@ -884,6 +884,28 @@ class RecordEditor(ttk.Frame):
         return zoomable(tk.Label(parent, image=ph, relief="sunken"), got[1] if got else os.path.join(mod.data, rel),
                         image=lambda: MO.texture_image(mod, rel), title=rel)
 
+    def _texture_card(self, box, r, info, tex, facs):
+        """A texture's picture with Recolour... under it: that one texture in the faction's colours (the faction
+        wearing it first - Show's, else the first owner)."""
+        cell = ttk.Frame(box)
+        cell.grid(row=r, column=0, sticky="nw", pady=2)
+        self._texture_thumb(cell, self.mod, tex).pack(anchor="w")
+        from .meshview import on_disk
+        got = on_disk(self.mod, tex) if tex else None
+        fac = next((f for f in facs if info is not None and f in info.textures), None) or (facs[0] if facs else None)
+        if got and fac:
+            ttk.Button(cell, text="Recolour...", command=lambda p=got[1], f=fac: self.recolour_texture(f, p)).pack(
+                anchor="w", pady=(2, 0))
+
+    def recolour_texture(self, faction, path):
+        """Recolour this one texture for the faction (gui_recolour.open_one: Keep for Apply, written with Apply)."""
+        from .gui_recolour import open_one
+        try:
+            return open_one(self.app, faction, path, parent=self)
+        except Exception as e:
+            messagebox.showerror("Recolour", "Could not read the pictures: %s" % e, parent=self)
+            return None
+
     def _unit_lines(self):
         name, a, b = self.current
         f = self.mod.load(self.path())
@@ -941,7 +963,7 @@ class RecordEditor(ttk.Frame):
             if info:
                 tex = next((info.textures[f] for f in facs if f in info.textures), None) or \
                     next(iter(info.textures.values()), None)
-            self._texture_thumb(box, self.mod, tex).grid(row=r, column=0, rowspan=1, sticky="nw", pady=2)
+            self._texture_card(box, r, info, tex, facs)
             txt = "%s: %s" % ("Soldiers" if key == "soldier" else "Officer %d" % (idx + 1), model)
             about, problems = "", []
             if info is None:
@@ -980,7 +1002,7 @@ class RecordEditor(ttk.Frame):
             info = minfo
             tex = (next((info.textures[f] for f in facs if f in info.textures), None) or
                    next(iter(info.textures.values()), None)) if info and info.textures else None
-            self._texture_thumb(box, self.mod, tex).grid(row=r, column=0, sticky="nw", pady=2)
+            self._texture_card(box, r, info, tex, facs)
             cell = ttk.Frame(box)
             cell.grid(row=r, column=1, sticky="nw", padx=6)
             head = ttk.Frame(cell)

@@ -4,6 +4,7 @@ cloned faction - guessed, can be changed) to the faction's own colours (descr_sm
 Before / after of the picked picture; Keep for Apply puts them in the session's list - the main window's Apply
 writes them with the rest (one backup; Undo this write puts them back)."""
 
+import os
 import tkinter as tk
 from tkinter import colorchooser, messagebox, ttk
 
@@ -20,10 +21,33 @@ def _hex(c):
     return "#%02x%02x%02x" % c if c else "#ffffff"
 
 
+_OPEN = {}                                     # (faction, picture) -> its one-picture window (one window a thing)
+
+
+def open_one(app, faction, path, parent=None):
+    """The window for ONE picture of the faction (a texture card's Recolour...): the same window, its list only
+    that picture. Said in words when the picture is none of the faction's coloured ones."""
+    key = (faction, os.path.normcase(os.path.abspath(path)))
+    w = _OPEN.get(key)
+    if w is not None and w.winfo_exists():
+        w.deiconify()
+        w.lift()
+        return w
+    if not R.targets_of(app.mod, app.v_campaign.get(), faction, path):
+        messagebox.showinfo(TITLE, "%s is not one of %s's pictures that carry the faction's colours (the faction "
+                                   "wears no texture line naming it, or it is no picture of the faction) - nothing "
+                                   "to recolour here for %s." % (os.path.basename(path), faction, faction),
+                            parent=parent or app)
+        return None
+    w = _OPEN[key] = RecolourWindow(app, faction, only=path)
+    return w
+
+
 class RecolourWindow(tk.Toplevel):
-    def __init__(self, app, faction):
+    def __init__(self, app, faction, only=None):
         super().__init__(app)
         self.app, self.mod, self.faction = app, app.mod, faction
+        self.only = only                       # one picture's path: the list holds only it (open_one)
         self.camp = app.v_campaign.get()
         self.title("%s - %s" % (TITLE, faction))
         self.transient(app)
@@ -41,14 +65,18 @@ class RecolourWindow(tk.Toplevel):
     def _take(self, faction):
         """Read the faction's pictures and guess the colours they carry now."""
         self.faction = faction
-        self.title("%s - %s" % (TITLE, faction))
-        self.items = R.targets(self.mod, self.camp, faction)
+        self.title("%s - %s" % (TITLE, faction) if not self.only else "Recolour %s - %s" % (
+            os.path.basename(self.only), faction))
+        self.items = self._targets()
         paths = [it for it in self.items if it["group"] != "symbols and banners" and not it["skip"]] or \
             [it for it in self.items if not it["skip"]]
         (self.source, self.source_of) = R.guess_source(self.mod, faction, paths, self.colours) if paths else \
             (self.colours.get(faction, ((200, 0, 0), None)), faction)
         self.target = list(self.colours.get(faction, ((200, 0, 0), None)))
         self.source = list(self.source)
+
+    def _targets(self):
+        return R.targets_of(self.mod, self.camp, self.faction, self.only)
 
     def _faction_picked(self):
         """Another faction picked in the window: its pictures and colours, the unwritten changes asked about first."""
@@ -89,7 +117,8 @@ class RecolourWindow(tk.Toplevel):
             self._faction_of["%s (%s)" % (shown[tag], tag) if shown.get(tag) and shown[tag] != tag else tag] = tag
         self._shown_of = lambda tag: next((k for k, v in self._faction_of.items() if v == tag), tag)
         self.v_faction = tk.StringVar(value=self._shown_of(self.faction))
-        fcb = ttk.Combobox(bar, textvariable=self.v_faction, values=list(self._faction_of), state="readonly",
+        fcb = ttk.Combobox(bar, textvariable=self.v_faction, values=list(self._faction_of),
+                           state="disabled" if self.only else "readonly",      # one picture: of this faction
                            width=min(26, max(12, max((len(k) for k in self._faction_of), default=12))))
         fcb.pack(side="left", padx=(4, 14))
         fcb.bind("<<ComboboxSelected>>", lambda e: self._faction_picked())
@@ -505,16 +534,17 @@ class RecolourWindow(tk.Toplevel):
             self.mod = self.app.mod
             self._cache, self.edits = {}, {}
             self.colours = R.faction_colours(self.mod)
-            self.items = R.targets(self.mod, self.camp, self.faction)
+            self.items = self._targets()
             self.source = list(target)
             self.v_from.set(self.faction if tuple(target) == tuple(self.colours.get(self.faction, ())) else CUSTOM)
             self.fill()
             self.status.configure(text="%d picture(s) written (backup %s)" % (n, bdir))
-        if keep_for_apply(self, "recolour:%s" % faction, "%s: %d picture(s) of %s" % (TITLE, n, faction),
+        key = "recolour:%s" % faction + (":%s" % os.path.normcase(self.only) if self.only else "")
+        if keep_for_apply(self, key, "%s: %d picture(s) of %s" % (TITLE, n, faction),
                           lambda: plan, after, TITLE):
             self.status.configure(text="%d picture(s) kept - Apply changes in the main window writes them" % n)
             return True
         return False
 
 
-__all__ = ["RecolourWindow"]
+__all__ = ["RecolourWindow", "open_one"]

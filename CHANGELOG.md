@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+- **Recolour... on a texture**: under each battle-model texture in the Unit editor (soldiers, officers, the mount)
+  and on each figure texture of the Models tab - the recolour window for that one texture, in the faction's colours
+  (the faction wearing it, the one picked in Show first). The original stays as it is: the faction gets a copy of
+  its own where others wear the same file. Keep for Apply, written with Apply (one backup).
+
 ### Changed
 - **Unit editor: the pictures in one row** - four alike frames side by side: the unit card, the picture in the
   description, the battle model (with its mount) and the voice in battle; on a narrow window they wrap to a second

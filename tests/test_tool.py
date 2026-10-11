@@ -6859,6 +6859,12 @@ building smith
         items = [t for t in RC.targets(mod, "test", "beta") if t["group"] == "unit textures"]
         self.assertEqual(len(items), 1)
         self.assertTrue(items[0]["own_tex"] and not items[0]["skip"])
+        # a texture card's Recolour... (Unit editor, Models): the path it shows finds that one picture
+        from campaign_editor.meshview import on_disk
+        shown = on_disk(mod, M.catalogue(mod)["spearman"].textures["beta"])[1]
+        self.assertEqual([t["path"] for t in RC.targets_of(mod, "test", "beta", shown.upper() if os.name == "nt"
+                                                            else shown)], [items[0]["path"]])
+        self.assertEqual(RC.targets_of(mod, "test", "beta", os.path.join(d, "descr_model_battle.txt")), [])
         with open(os.path.join(tex, "spearman_alpha.tga"), "rb") as fh:
             before = fh.read()
         plan = Plan(mod, "recolour", "beta", {})

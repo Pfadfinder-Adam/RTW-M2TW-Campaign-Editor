@@ -88,7 +88,9 @@ class ModelsEditor(ttk.Frame):
         for model, ps in pics.items():                  # a texture no type shows now (another was picked)
             if model not in shown:                      # - seen in 3D too (the user: 'a texture I cannot see in 3D')
                 cells += [a.art_editor.card(g.inner, p, src_faction, new, buttons=[
-                    ("3D", lambda m=model: self.view_figure(m, src_faction))]) for p in ps]
+                    ("3D", lambda m=model: self.view_figure(m, src_faction))] + (
+                    [("Recolour...", lambda q=p["path"]: self.recolour(src_faction, q))]
+                    if not new or new == src_faction else [])) for p in ps]
         g.fill(cells)
 
     def _type_card(self, parent, fg, lv, model, now, pics, faction, new):
@@ -102,8 +104,12 @@ class ModelsEditor(ttk.Frame):
         ttk.Button(top, text="3D", command=lambda: self.view_figure(model, faction)).pack(side="left")
         if model != now:
             ttk.Label(box, text="was %s (not written yet)" % now, foreground="#b05a00").pack(anchor="w")
+        # Recolour... for a faction that exists (a new one is made first - Create faction - then recoloured)
+        own = not new or new == faction
         for p in pics:
-            a.art_editor.card(box, p, faction, new, wrap=a.art_editor.CELL - 60).pack(fill="x", pady=(4, 0))
+            a.art_editor.card(box, p, faction, new, wrap=a.art_editor.CELL - 60, buttons=[
+                ("Recolour...", lambda q=p["path"]: self.recolour(faction, q))] if own else None).pack(
+                fill="x", pady=(4, 0))
         if not pics:
             src = (getattr(a, "figures_like", None) or {}).get(model)
             ttk.Label(box, foreground="#555", wraplength=a.art_editor.CELL, justify="left", text=(
@@ -151,6 +157,16 @@ class ModelsEditor(ttk.Frame):
         self.v_like.set("")
         a.status.set("The figures as they are in the files again.")
         self.load()
+
+    def recolour(self, faction, path):
+        """This one texture in the faction's colours (gui_recolour.open_one)."""
+        from .gui_recolour import open_one
+        try:
+            return open_one(self.app, faction, path, parent=self)
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showerror("Recolour", "Could not read the pictures: %s" % e, parent=self)
+            return None
 
     def view_figure(self, model, faction):
         from . import stratmodels as SM

@@ -2979,6 +2979,9 @@ COVERAGE = {
     "Banner...": ["s_banner"],
     "Recolour a faction's pictures": ["s_recolour"],
     "Recolour into black / white (the nearest faction's texture as the start)": ["s_recolour_plain"],
+    "Recolour... on one texture (Unit editor, Models tab)":
+        "s_recolour's work on a list of one (recolour.targets_of) - the unit test "
+        "test_recolour_gives_a_shared_battle_texture_a_copy_of_its_own finds the texture card's picture in it",
     "Make the campaign map 3 x bigger": RUN + " (the x3 copy, when asked)",
     "Check mod files": RUN + " (after every step)",
     "Restore a backup": RUN + " (check-scripts/testmod.py restores every step byte for byte)",

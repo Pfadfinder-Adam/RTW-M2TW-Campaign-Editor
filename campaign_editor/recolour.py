@@ -525,6 +525,17 @@ def _others_named(path, faction, factions, colours):
     return out
 
 
+def same_file(a, b):
+    """True when two paths name the same file (case and slashes aside, as Windows sees them)."""
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def targets_of(mod, campaign, faction, path=None):
+    """targets(), or only the one picture at path (a texture card's Recolour...) - [] when it is none of them."""
+    items = targets(mod, campaign, faction)
+    return [it for it in items if same_file(it["path"], path)] if path else items
+
+
 def targets(mod, campaign, faction):
     """[{'path', 'rel', 'group', 'label', 'others': [(path, colours)], 'crop': box or None, 'skip': why or None}]:
     every picture of the faction that carries its colours. Groups: 'unit cards', 'unit textures', 'symbols and
