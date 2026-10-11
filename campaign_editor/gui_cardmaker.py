@@ -28,10 +28,17 @@ class CardMaker(tk.Toplevel):
         self.area = None                # my own frame (x, y, w, h on the figure), dragged on the man; None: the preset
         self._fit, self._grab = None, None
         self._photos = []
-        self.v_part = tk.StringVar(value=CM.PICTURE_PART if info else CM.CARD_PART)
-        self.v_scale = tk.DoubleVar(value=100.0)
-        self.v_up = tk.DoubleVar(value=0.0)
-        self.v_side = tk.DoubleVar(value=0.0)
+        # how much of him and the sliders kept for the next unit (a modder: 'so I do not have to change it each
+        # time I switch to another unit') - for cards and pictures apart
+        self._key = "picture" if info else "card"
+        kept = settings.get("card_framing", {}) or {}
+        kept = kept.get(self._key, {}) if isinstance(kept, dict) else {}
+        part = kept.get("part")
+        self.v_part = tk.StringVar(value=part if part in [k for k, _, _ in CM.PARTS] else
+                                   (CM.PICTURE_PART if info else CM.CARD_PART))
+        self.v_scale = tk.DoubleVar(value=float(kept.get("scale", 100.0)))
+        self.v_up = tk.DoubleVar(value=float(kept.get("up", 0.0)))
+        self.v_side = tk.DoubleVar(value=float(kept.get("side", 0.0)))
         self.v_ground = tk.StringVar(value=settings.get("card_ground", "clear"))
         self.colour = tuple(settings.get("card_colour", [58, 64, 52]))[:3]
         self.ground_pic = None
@@ -67,6 +74,9 @@ class CardMaker(tk.Toplevel):
         ttk.Label(side, text="%s, %d x %d" % (what.capitalize(), self.size[0], self.size[1]),
                   font=("", 10, "bold")).pack(anchor="w")
         ttk.Button(side, text="Take the 3D view again", command=self.take).pack(anchor="w", pady=(6, 0))
+        # what was taken and when: a press always shows that it worked (a tester: 'I press it and see nothing change')
+        self.lbl_taken = ttk.Label(side, foreground="#555")
+        self.lbl_taken.pack(anchor="w")
         ttk.Label(side, text="How much of him").pack(anchor="w", pady=(8, 0))
         for key, words, _ in CM.PARTS + (("own", "my own (drag the man under the frame)", None),):
             ttk.Radiobutton(side, text=words, value=key, variable=self.v_part, command=self._part_picked).pack(
@@ -107,9 +117,40 @@ class CardMaker(tk.Toplevel):
         self.canvas.bind("<MouseWheel>", lambda e: self._wheel(1 if e.delta > 0 else -1))
         self.canvas.bind("<Button-4>", lambda e: self._wheel(1))
         self.canvas.bind("<Button-5>", lambda e: self._wheel(-1))
-        self.geometry("900x620")
+        self._place_beside(viewer)
         self._load_ground()
+        self._follow_id = None
+        viewer.__dict__.setdefault("_makers", []).append(self)   # the 3D view turned: this follows it (follow)
+        self.bind("<Destroy>", lambda e: self._gone() if e.widget is self else None, add="+")
         self.take()
+
+    def _place_beside(self, viewer):
+        """Beside the 3D window, not over it: the man is turned there while this stays open (a tester could not
+        reach the 3D view under it, so 'Take the 3D view again' took the same view)."""
+        try:
+            viewer.update_idletasks()
+            x = viewer.winfo_rootx() + viewer.winfo_width() + 8
+            y = max(0, viewer.winfo_rooty() - 30)
+            w = max(620, min(900, self.winfo_screenwidth() - x - 10))
+            if x + w > self.winfo_screenwidth():            # no room on its right: at the screen's right edge
+                x = max(0, self.winfo_screenwidth() - w)
+            self.geometry("%dx620+%d+%d" % (w, x, y))
+        except tk.TclError:
+            self.geometry("900x620")
+
+    def _gone(self):
+        lst = self.viewer.__dict__.get("_makers", [])
+        if self in lst:
+            lst.remove(self)
+
+    def follow(self):
+        """The 3D view drawn anew (turned, zoomed, another frame): taken again a moment later."""
+        if self._follow_id is not None:
+            try:
+                self.after_cancel(self._follow_id)
+            except tk.TclError:
+                pass
+        self._follow_id = self.after(350, self.take)
 
     # ---- the figure, the ground ----
     def take(self):
@@ -118,12 +159,28 @@ class CardMaker(tk.Toplevel):
             self.config(cursor="watch")
             self.update_idletasks()
             self.figure, self.box = self.viewer.snapshot()
+            import time
+            v = self.viewer
+            anim = getattr(v, "anim", None)
+            self.lbl_taken.configure(text="taken %s: turned %d\u00b0%s" % (
+                time.strftime("%H:%M:%S"), round(v.yaw) % 360, (", %s frame %d" % (
+                    v.anim_key or "", int(v.frame) + 1)) if anim is not None else ""))
         except Exception as e:
             messagebox.showerror("Make a %s" % self.what, "The 3D view could not be drawn: %s" % e, parent=self)
             self.figure, self.box = None, None
         finally:
             self.config(cursor="")
         self.show()
+
+    def _keep(self):
+        """How much of him and the sliders kept for the next unit."""
+        kept = settings.get("card_framing", {}) or {}
+        kept = dict(kept) if isinstance(kept, dict) else {}
+        part = self.v_part.get()
+        kept[self._key] = {"part": part if part != "own" else (kept.get(self._key) or {}).get("part"),
+                           "scale": round(self.v_scale.get(), 1), "up": round(self.v_up.get(), 1),
+                           "side": round(self.v_side.get(), 1)}
+        settings.put("card_framing", kept)
 
     def reset(self):
         self.v_scale.set(100.0)
@@ -132,6 +189,7 @@ class CardMaker(tk.Toplevel):
         self.area = None
         if self.v_part.get() == "own":
             self.v_part.set(CM.PICTURE_PART if self.info else CM.CARD_PART)
+        self._keep()
         self.show()
 
     # ---- the frame: a preset with its sliders, or my own dragged on the man ----
@@ -153,12 +211,14 @@ class CardMaker(tk.Toplevel):
                 self.v_part.set("own")
         else:
             self.area = None
+        self._keep()
         self.show()
 
     def _slid(self):
         if self.v_part.get() == "own":              # the sliders work on the presets: back to the last one
             self.v_part.set(CM.PICTURE_PART if self.info else CM.CARD_PART)
             self.area = None
+        self._keep()
         self.show()
 
     def _own(self, area, quick=False):

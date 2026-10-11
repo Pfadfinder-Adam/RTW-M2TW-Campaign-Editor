@@ -14,6 +14,11 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- **Make a card / Make a picture** stands beside the 3D view instead of over it and follows it: turn the man or
+  pick another frame and the card is taken again by itself; **Take the 3D view again** says what it took (the turn,
+  the frame, the time) - pressed with nothing changed it looked as if it did nothing. How much of him and the
+  Nearer / farther, Up / down, Right / left sliders are kept for the next unit. Pressed again, the open window comes
+  forward instead of a second one.
 - **Unit editor: the pictures in one row** - four alike frames side by side: the unit card, the picture in the
   description, the battle model (with its mount) and the voice in battle; on a narrow window they wrap to a second
   row. The explanations (the size a card needs, where it goes, the model's seat and textures, the voice class) sit on

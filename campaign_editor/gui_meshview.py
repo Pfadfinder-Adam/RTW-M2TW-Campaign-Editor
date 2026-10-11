@@ -650,6 +650,11 @@ class ModelViewer(tk.Toplevel):
             self.canvas.delete("all")
             self._shown = self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
         if not quick:
+            for m in list(self.__dict__.get("_makers", [])):     # an open Make a card... follows the view
+                try:
+                    m.follow()
+                except tk.TclError:
+                    pass
             n = sum(len(g.tris) // 3 for g in groups)
             if self.mount and self.v_mount.get() and self.mount_mesh is None:
                 self.info_lbl.configure(text="the mount's mesh file is not in this mod or the game")
@@ -668,6 +673,12 @@ class ModelViewer(tk.Toplevel):
         if self.mesh is None:
             return
         self._stop()
+        open_ = next((m for m in self.__dict__.get("_makers", []) if m.info == info and m.winfo_exists()), None)
+        if open_ is not None:                    # one window a thing: the open one comes forward, taken again
+            open_.deiconify()
+            open_.lift()
+            open_.take()
+            return
         from .gui_cardmaker import CardMaker
         CardMaker(self, info)
 
