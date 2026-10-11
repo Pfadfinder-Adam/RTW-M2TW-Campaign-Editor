@@ -44,6 +44,7 @@ class ModelInfo:
         self.weapons = {}               # Medieval II: {skeleton (lower): [its weapons' and shield's skeletons]}
         self.seats = set()
         self.exact = False
+        self.one_texture = False         # one texture over the whole model (a siege engine), not a man's two halves
 
     @property
     def factions(self):
@@ -315,6 +316,7 @@ def engine_of(mod, lines):
         elif t[0] in ("engine_model", "engine_mesh") and cur and cur.lower() == kind.lower() and \
                 group in (None, "normal") and len(t) > 1:
             info = info or ModelInfo(kind)              # Rome's engine_model .cas, Medieval II's engine_mesh .mesh
+            info.one_texture = True                     # one texture over the whole engine (no weapons half)
             info.meshes.append(t[1])
         elif t[0] == "engine_skeleton" and cur and cur.lower() == kind.lower() and group in (None, "normal") and \
                 len(t) > 1:

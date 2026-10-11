@@ -8557,6 +8557,11 @@ building smith
               "engine_model_group dying\nengine_skeleton catapult_dying\nengine_mesh siege_engines/dead.mesh, max\n"
               "crew_animations\n    crank   Crew_Right, crew_right_load_1, crew_right_load_2, crew_right\n"
               "    fire    Crew_Right, crew_right\nend\n")
+        from campaign_editor import models as MO
+        info = MO.engine_of(ModData(data), ["engine catapult"])
+        # one texture over the whole engine: read as a man's two halves, its wheels and frame were drawn grey
+        self.assertTrue(info.one_texture and info.meshes == ["siege_engines/catapult.mesh"])
+        self.assertFalse(MO.ModelInfo("x").one_texture)
         eng = EN.read_engine(ModData(data), "Catapult")
         self.assertEqual((eng.meshes, eng.skeleton), (["siege_engines/catapult.mesh"], "catapult"))
         self.assertEqual(eng.crew["crank"], [("Crew_Right", ["crew_right_load_1", "crew_right_load_2", "crew_right"])])

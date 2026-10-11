@@ -534,6 +534,10 @@ class ModelViewer(tk.Toplevel):
         else:
             try:
                 self.mesh = MV.read_file(path, self._pose())
+                if getattr(self.info, "one_texture", False):
+                    # a siege engine: its texture covers the whole model - read as a man's (the right half the
+                    # weapons'), its wheels and frame were drawn grey (the user)
+                    self.mesh.one_texture = True
                 msg = None
             except Exception as e:
                 msg = "cannot read %s: %s" % (rel, e)

@@ -11,6 +11,8 @@
   `data/animations/engine`), the crew men at the engine's places, each playing his moves for that state (the
   catapult's arm comes down while one man winds and the other loads; the gunners load, fire and cover). **Its crew**
   ticks them on or off.
+  A Medieval II siege engine's wheels and frame are drawn in its texture (they were grey: its one texture was
+  read as a man's, half of it taken for the weapons').
 - **Recolour... on a texture**: under each battle-model texture in the Unit editor (soldiers, officers, the mount)
   and on each figure texture of the Models tab - the recolour window for that one texture, in the faction's colours
   (the faction wearing it, the one picked in Show first). The original stays as it is: the faction gets a copy of
