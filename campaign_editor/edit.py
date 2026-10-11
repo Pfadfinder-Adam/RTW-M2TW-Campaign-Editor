@@ -4,6 +4,7 @@ Plan as a new faction, so preview, backup and restore work alike."""
 
 import re
 
+from . import titles
 from .build import template_display, validate
 from .clone import FE_NAMES, description_key, entry_end
 from .plan import Plan
@@ -40,10 +41,15 @@ def read_faction(mod, campaign, faction):
     keys = {m.group(2).upper() for p in mod.campaign_text_files(campaign) for l in mod.load(p).texts()
             for m in [RE_KEY.match(l)] if m}
     long_key = description_key(faction, campaign, keys) + "_DESCR"
+    emt = "EMT_" + F + "_"
+    title_strings = {}                              # the leader's / heir's strings (titles.py)
     for path in mod.campaign_text_files(campaign):
         texts = mod.load(path).texts()
         for i, line in enumerate(texts):
             m = RE_KEY.match(line)
+            if m and m.group(2).upper().startswith(emt) and m.group(2).upper()[len(emt) - 1:] in titles.SUFFIXES:
+                title_strings.setdefault(m.group(2).upper(), _unescape(_value(texts, i)))
+                continue
             if not m or not m.group(2).upper().endswith(("DESCR", "_STRENGTH", "_WEAKNESS", "_UNIT")):
                 continue
             key, val = m.group(2).upper(), _value(texts, i)
@@ -54,6 +60,8 @@ def read_faction(mod, campaign, faction):
                 out["description"] = _unescape(val)
             elif key == long_key and "long_description" not in out:
                 out["long_description"] = _unescape(val)
+    out["title_strings"] = title_strings
+    out.update(titles.read(title_strings, faction))
     cur = None
     for l in mod.load(mod.file("sm_factions")).texts():
         t = tokens(l)
@@ -191,6 +199,12 @@ def _texts(plan, now, campaign):
     for suffix, k in EXTRA_TEXTS.items():
         if k in now and o.get(k) is not None and o[k] != now[k]:
             set_to[F + suffix] = o[k]
+    set_to.update(titles.changes(now.get("title_strings") or {}, plan.new, o.get("leader_title"), o.get("heir_title")))
+    for k, words in (("leader_title", "leader's"), ("heir_title", "heir's")):
+        if o.get(k) and k not in now:
+            plan.warn(None, "the %s title '%s' is not written: this mod's text files hold no {EMT_%s_...} string for "
+                            "it (Medieval II: text/expanded.txt - a mod with only expanded.txt.strings.bin needs the "
+                            ".txt first)" % (words, o[k], plan.new.upper()))
     long_new = o.get("long_description")
     if long_new is not None and long_new != now.get("long_description"):
         keys = {m.group(2).upper() for p in plan.mod.campaign_text_files(campaign)

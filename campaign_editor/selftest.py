@@ -1211,6 +1211,18 @@ def s_recolour_plain(c, mod):
     return plan
 
 
+@step("Titles: {edited}'s leader called 'CE Duke' and its heir 'CE Prince'",
+      "a character's scroll / the family tree: {edited}'s leader 'CE Duke <his name>' (Rome: the leader's and "
+      "heir's label), its heir 'CE Prince <his name>'")
+def s_titles(c, mod):
+    from .edit import edit, read_faction
+    now = read_faction(mod, c.campaign, c.edited)
+    if "leader_title" not in now and "heir_title" not in now:
+        raise Skip("this mod's text files hold no leader / heir strings of %s (a .txt, not only a .strings.bin)"
+                   % c.edited)
+    return edit(mod, c.campaign, c.edited, {"leader_title": "CE Duke", "heir_title": "CE Prince"})
+
+
 @step("Diplomacy at the start: {edited} allied to {new} and at war with {foreign}",
       "the diplomacy screen: {new} an ally of {edited}, {foreign} at war with it from the first turn")
 def s_alliance(c, mod):
@@ -2977,6 +2989,7 @@ COVERAGE = {
     "Art: replace a picture": ["s_art", "s_art_all"],
     "Faction emblem": ["s_emblem"],
     "Banner...": ["s_banner"],
+    "Leader's and heir's titles (Faction tab)": ["s_titles"],
     "Recolour a faction's pictures": ["s_recolour"],
     "Recolour into black / white (the nearest faction's texture as the start)": ["s_recolour_plain"],
     "Recolour... on one texture (Unit editor, Models tab)":

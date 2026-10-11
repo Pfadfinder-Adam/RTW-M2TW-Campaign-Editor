@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **Leader's and heir's titles** on the faction tab (New and Edit faction, both games): King, Duke, Emperor,
+  Grand Prince... - Medieval II's 'King %S' / 'Prince %S' and the former leader's title get the new word, Rome's
+  leader's and heir's labels the new text. A new faction takes the template's until others are written.
 - **View in 3D: Medieval II's siege engines play their moves with their crew** - standing, moving (pushed),
   loading and shooting, as the game sets them: the engine on its own bones (the loose animations in
   `data/animations/engine`), the crew men at the engine's places, each playing his moves for that state (the

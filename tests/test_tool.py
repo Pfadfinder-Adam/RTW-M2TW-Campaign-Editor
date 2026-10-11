@@ -1628,6 +1628,46 @@ building smith
         cd = [p for p in mod.text_files() if p.endswith("campaign_descriptions.txt")][0]
         self.assertEqual(p2.files[cd].texts()[:2], ["{TEST_ALPHA_DESCR}\t\tFresh", "{TEST_ALPHA_TITLE}\t\tA"])
 
+    def test_leader_and_heir_titles(self):
+        """The faction's leader's and heir's titles (report #188, titles.py): Medieval II's 'King %S' / 'Prince %S'
+        and the former leader's title get only their word changed; Rome's whole _FACTION_LEADER / _FACTION_HEIR
+        text; a new faction takes the titles asked in its copied strings; a mod without the strings is warned."""
+        from campaign_editor import titles as T
+        from campaign_editor.edit import edit, read_faction
+        self.assertEqual(T.with_word("Crown Prince %S", "Atabeg"), "Atabeg %S")
+        self.assertEqual(T.with_word("%S the Great", "Duke"), "%S Duke")              # the word in its place
+        self.assertEqual(T.with_word("Sultan", "Emir"), "Emir %S")
+        eb = os.path.join(self.root, "data", "text", "expanded_bi.txt")
+        with open(eb, "rb") as fh:
+            text = fh.read().decode("utf-16").replace("\r\n", "\n")
+        write(eb, text + "{EMT_ALPHA_FACTION_LEADER_NAME}\t\tKing %S\n{EMT_ALPHA_FACTION_HEIR_NAME}\t\tPrince %S\n"
+                         "{EMT_ALPHA_FORMER_FACTION_LEADER_TITLE}\t\tKing\n"
+                         "{EMT_ALPHA_FACTION_LEADER}\t\tAlphan Faction Leader\n", utf16=True)
+        mod = ModData(self.root)
+        now = read_faction(mod, "test", "alpha")
+        self.assertEqual((now["leader_title"], now["heir_title"]), ("King", "Prince"))
+        p = edit(mod, "test", "alpha", {"leader_title": "Grand Duke", "heir_title": "Prince"})
+        got = [x for x in p.files[eb].texts() if "EMT_ALPHA_F" in x]
+        self.assertIn("{EMT_ALPHA_FACTION_LEADER_NAME}\t\tGrand Duke %S", got)
+        self.assertIn("{EMT_ALPHA_FACTION_HEIR_NAME}\t\tPrince %S", got)                 # unchanged
+        self.assertIn("{EMT_ALPHA_FORMER_FACTION_LEADER_TITLE}\t\tGrand Duke", got)
+        self.assertIn("{EMT_ALPHA_FACTION_LEADER}\t\tAlphan Faction Leader", got)        # a label: left alone
+        # a new faction (cloned from alpha): its copies carry the titles asked
+        plan = build(mod, "test", "alpha", "gamma", {"display_name": "Gammans", "leader_title": "Khan",
+                                                     "start": {"regions": ["B_R"], "leader": {"name": "Aaron"}}})
+        got = [x for x in plan.files[eb].texts() if "EMT_GAMMA_F" in x]
+        self.assertIn("{EMT_GAMMA_FACTION_LEADER_NAME}\t\tKhan %S", got)
+        self.assertIn("{EMT_GAMMA_FORMER_FACTION_LEADER_TITLE}\t\tKhan", got)
+        self.assertIn("{EMT_GAMMA_FACTION_HEIR_NAME}\t\tPrince %S", got)
+        # Rome's form: the whole text
+        write(eb, text + "{EMT_ALPHA_FACTION_LEADER}\t\tAlphan Faction Leader\n", utf16=True)
+        mod = ModData(self.root)
+        self.assertEqual(read_faction(mod, "test", "alpha")["leader_title"], "Alphan Faction Leader")
+        p = edit(mod, "test", "alpha", {"leader_title": "Basileus"})
+        self.assertIn("{EMT_ALPHA_FACTION_LEADER}\t\tBasileus", p.files[eb].texts())
+        p = edit(mod, "test", "alpha", {"heir_title": "Prince"})                         # no heir string: said
+        self.assertTrue(any("heir's title 'Prince' is not written" in w for _, w in p.warnings))
+
     def test_edit_moves_characters(self):
         from campaign_editor.edit import edit
         mod = ModData(self.root)

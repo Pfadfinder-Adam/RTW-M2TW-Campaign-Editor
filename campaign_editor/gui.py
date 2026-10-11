@@ -686,6 +686,18 @@ class App(tk.Tk):
             self.cb_names.append((a, b))
         ttk.Label(lf2, text="first name / surname / age - leave the heir empty for none").grid(
             row=2, column=0, columnspan=4, sticky="w", padx=4)
+        # their titles (a modder's wish, report #188): Duke, King, Emperor, Grand Prince ... (titles.py)
+        tl = ttk.Frame(lf2)
+        tl.grid(row=4, column=0, columnspan=4, sticky="w", padx=4, pady=(0, 4))
+        for key, label in (("leader_title", "Leader's title"), ("heir_title", "heir's")):
+            self.v[key] = tk.StringVar()
+            ttk.Label(tl, text=label).pack(side="left", padx=(0 if key == "leader_title" else 8, 2))
+            ttk.Entry(tl, textvariable=self.v[key], width=14).pack(side="left")
+        hint(tl, "What the game calls the faction's leader and heir. Medieval II: 'King %S' / 'Prince %S' in "
+                 "text/expanded.txt ({EMT_<FACTION>_FACTION_LEADER_NAME}, _FACTION_HEIR_NAME; %S is his name) and a "
+                 "former leader's title (_FORMER_FACTION_LEADER_TITLE) - only the word changes. Rome: the whole "
+                 "{EMT_<FACTION>_FACTION_LEADER} / _FACTION_HEIR text. A new faction takes the template's until you "
+                 "write others; Preview, then Apply writes them.", width=520).pack(side="left", padx=4)
         nl = ttk.Frame(lf2)
         nl.grid(row=3, column=0, columnspan=4, sticky="w", padx=4, pady=(2, 4))
         ttk.Button(nl, text="Name list...", command=self.name_list_dialog).pack(side="left")
@@ -1800,7 +1812,7 @@ class App(tk.Tk):
             return
         self.editing_now = now
         self.v["name"].set(faction)
-        for k in ("display_name", "short_name", "adjective", "ai", "religion"):
+        for k in ("display_name", "short_name", "adjective", "ai", "religion", "leader_title", "heir_title"):
             self.v[k].set(now.get(k) or "")
         for k, ws in self.extra_rows.items():
             self.v[k].set(now.get(k) or "")
@@ -4707,6 +4719,13 @@ class App(tk.Tk):
         if now.get("denari") is not None and (not d or d == getattr(self, "_auto_denari", None)):
             self._auto_denari = str(now["denari"])             # the last template's, replaced by the next
             self.v["denari"].set(self._auto_denari)
+        # the leader's / heir's titles start as the template's; one written by hand stays
+        auto = getattr(self, "_auto_titles", {})
+        for k in ("leader_title", "heir_title"):
+            cur = self.v[k].get()
+            if not cur or cur == auto.get(k):
+                self.v[k].set(now.get(k) or "")
+        self._auto_titles = {k: now.get(k) or "" for k in ("leader_title", "heir_title")}
         # the religion starts as the template's (Medieval II); one picked by hand for this faction stays
         r = self.v["religion"].get()
         if now.get("religion") and (not r or r == getattr(self, "_auto_religion", None)):
@@ -5610,6 +5629,7 @@ class App(tk.Tk):
             "description": self.t_descr.get("1.0", "end").strip(),
             "long_description": self.t_long.get("1.0", "end").strip(),
             "religion": (v.get("religion") or None) if self._m2() else None,
+            "leader_title": v["leader_title"] or None, "heir_title": v["heir_title"] or None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "copy_triggers": self.v_triggers.get(), "copy_art": self.v_art.get(),
             "start": {"regions": list(self.chosen) if way == "map" else [], "capital": v["capital"], "leader": leader,
@@ -5656,6 +5676,7 @@ class App(tk.Tk):
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "ai": v["ai"], "denari": int(v["denari"]) if v["denari"].isdigit() else None,
             "playable": self.v_playable.get(),
+            "leader_title": v["leader_title"] or None, "heir_title": v["heir_title"] or None,
             **{k: v[k] for k in self.extra_rows if k in (self.editing_now or {})},
             "take": [r for r in self.chosen if r not in had and not self._new_region(r)],
             "give": {r: self.v_give.get() or "slave" for r in had if r not in self.chosen},

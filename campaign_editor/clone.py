@@ -430,6 +430,9 @@ def text_strings(plan):
     tparts = t.split("_")
     repl = plan.display_replacements()
     long_keys = []
+    from . import titles
+    m2_titles = any(RE_KEY.match(line) and RE_KEY.match(line).group(2).upper() == "EMT_%s%s" % (t, titles.LEADER_NAME)
+                    for p in plan.mod.text_files() for line in plan.mod.load(p).texts())
     for path in plan.mod.text_files():
         if "regions_and_settlement_names" in os.path.basename(path).lower():
             continue        # region and town labels ({Baktria} the region), not the faction's strings
@@ -467,10 +470,14 @@ def text_strings(plan):
             value = m.group(3)[1:]
             gap = value[:len(value) - len(value.lstrip())]
             more = [f.text(k) for k in range(i + 1, end)]           # the rest of a long text
+            title = titles.copied(new_key, value, new, plan.opts.get("leader_title"), plan.opts.get("heir_title"),
+                                  m2_titles)
             if key.upper() == t and plan.opts.get("display_name"):
                 value, more = gap + plan.opts["display_name"], []
             elif key.upper() == t + "_DESCR" and plan.opts.get("description"):
                 value, more = gap + plan.opts["description"].replace("\n", "\\n"), []
+            elif title is not None:                 # the leader's / heir's title asked on the New faction tab
+                value, more = title, []
             elif key.upper().endswith("_" + t + "_DESCR") and plan.opts.get("long_description"):
                 # the campaign screen's long text, e.g. {IMPERIAL_CAMPAIGN_<FACTION>_DESCR}
                 value, more = gap + plan.opts["long_description"].replace("\n", "\\n"), []
