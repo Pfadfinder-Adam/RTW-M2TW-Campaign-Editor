@@ -200,6 +200,18 @@ def unit_slots(lines):
     return out
 
 
+def armour_models(lines):
+    """Medieval II: [(armour level, model)] of the unit's armour upgrades (armour_ug_levels / armour_ug_models, in
+    the same order - the first its own armour); [] when it has no more than one model (a modder: 'an option to see
+    the different armour upgrades, since they are different model entries in M2')."""
+    from .packs import _values
+    models = [m for m in (_values(lines, "armour_ug_models") or [[]])[0] if m]
+    levels = [x for x in (_values(lines, "armour_ug_levels") or [[]])[0] if x]
+    if len(models) < 2:
+        return []
+    return [(levels[i] if i < len(levels) else "", m) for i, m in enumerate(models)]
+
+
 def mount_classes(mod):
     """{mount type (lower): class} of descr_mount.txt."""
     from .packs import _block_lines, _values, type_blocks

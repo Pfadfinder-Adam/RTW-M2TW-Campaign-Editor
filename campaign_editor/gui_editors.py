@@ -979,6 +979,10 @@ class RecordEditor(ttk.Frame):
             head = ttk.Frame(cell)
             head.pack(anchor="w")
             ttk.Label(head, text=txt, font=("", 9, "bold")).pack(side="left")
+            ug = MO.armour_models(lines) if key == "soldier" else []
+            if ug:                                         # Medieval II: each armour level its own model
+                about += " Armour upgrades: %s - View in 3D shows each (Armour)." % ", ".join(
+                    "%s (level %s)" % (m, lv) if lv else m for lv, m in ug)
             if about:
                 hint(head, about, width=420).pack(side="left")
             if problems:                               # the problems stay in sight, red / orange
@@ -990,8 +994,12 @@ class RecordEditor(ttk.Frame):
             ttk.Button(bar, text="Replace model...",
                        command=lambda k=key, i=idx, m=model: self.replace_model(k, i, m)).pack(side="left")
             if info is not None:
-                ttk.Button(bar, text="View in 3D...", command=lambda i=info, k=key: self.view_model(
-                    i, mount=mount if k == "soldier" else None, unit=k == "soldier")).pack(side="left", padx=4)
+                # Medieval II: the armour upgrades (each level its own model) picked in the 3D window
+                ups = [("level %s - %s" % (lv, m) if lv else m, cat.get(m.lower()))
+                       for lv, m in MO.armour_models(lines)] if key == "soldier" else []
+                ttk.Button(bar, text="View in 3D...", command=lambda i=info, k=key, u=ups: self.view_model(
+                    i, mount=mount if k == "soldier" else None, unit=k == "soldier", upgrades=u)).pack(
+                    side="left", padx=4)
                 ttk.Button(bar, text="Save its files...", command=lambda i=info: self.save_model_files(i)).pack(
                     side="left")
                 ttk.Button(bar, text="Your own files...", command=lambda k=key, i=idx, m=model: self.own_files(
@@ -1248,12 +1256,12 @@ class RecordEditor(ttk.Frame):
             return
         ModelViewer(self, self.mod, info, (faction,), title="Campaign map figure in 3D")
 
-    def view_model(self, info, mod=None, mount=None, unit=False, engine=None):
+    def view_model(self, info, mod=None, mount=None, unit=False, engine=None, upgrades=None):
         """View in 3D...; unit: the unit's soldier model - Make a card... / Make a picture... there give the unit on
         show its card / description picture from the view."""
         from .gui_meshview import ModelViewer
         ModelViewer(self, mod or self.mod, info, self._factions_of(), mount=mount,
-                    make=self._picture_maker() if unit and mod is None else None, engine=engine)
+                    make=self._picture_maker() if unit and mod is None else None, engine=engine, upgrades=upgrades)
 
     def _picture_maker(self):
         """{'unit', 'need', 'write'} for View in 3D's Make a card... / Make a picture... - the unit on show now

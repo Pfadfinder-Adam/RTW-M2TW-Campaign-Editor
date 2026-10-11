@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **View in 3D: the armour upgrades** (Medieval II): a unit with more than one armour model (`armour_ug_models`)
+  gets **Armour** in its 3D window - each level's model in the same view (and for Make a card).
 - **Special places on the campaign map** (Rome with REX, Medieval II with M2EX): Map editor > a right click on the
   land > **Special place here...** - any model of the campaign map (a tower, a fort, a keep, a wonder, a mine... or
   your own `.cas`) drawn on that tile by the engine, its name on a hover, and a double click opens its window at the
@@ -26,6 +28,9 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- **View in 3D: one shield, not two** - a model that wears its shield two ways (on the back and in the hand:
+  Polish shooters, a mod's pavise crossbowmen) shows it on the back while the man holds his first weapon and in his
+  hand with his second, as the game does (both were drawn).
 - **Make a card / Make a picture** stands beside the 3D view instead of over it and follows it: turn the man or
   pick another frame and the card is taken again by itself; **Take the 3D view again** says what it took (the turn,
   the frame, the time) - pressed with nothing changed it looked as if it did nothing. How much of him and the

@@ -115,6 +115,12 @@ class Mesh:
         else:
             names = {n: n for n in parts}
         primary = any(n.lower().startswith("primary") for n in names.values())
+        # a shield worn two ways (shieldpassive: slung on the back, shieldactive: in the hand - vanilla Polish
+        # shooters, pavise crossbowmen): the game shows one - on the back while the man holds his first weapon (a
+        # crossbow), in the hand with his second (both were drawn: two pavises, a modder's report)
+        low_names = {n.lower() for n in names.values()}
+        both = any(n.startswith("shieldactive") for n in low_names) and \
+            any(n.startswith("shieldpassive") for n in low_names)
         out = []
         for key, gs in parts.items():
             name = names[key]
@@ -128,6 +134,8 @@ class Mesh:
                         any(n.lower().startswith("secondary") for n in names.values()):
                     continue
                 if not secondary and primary and low.startswith("secondary"):
+                    continue
+                if both and low.startswith("shieldactive" if not secondary else "shieldpassive"):
                     continue
             out.append(gs[look % len(gs)])
         return out

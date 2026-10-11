@@ -28,7 +28,8 @@ def _viewer_key(mod, info, mount=None, title="", make=None):
 class ModelViewer(tk.Toplevel):
     _open = {}                                # _viewer_key -> its open window
 
-    def __new__(cls, parent, mod, info, factions=(), mount=None, title="Battle model in 3D", make=None, engine=None):
+    def __new__(cls, parent, mod, info, factions=(), mount=None, title="Battle model in 3D", make=None, engine=None,
+                upgrades=None):
         w = cls._open.get(_viewer_key(mod, info, mount, title, make))
         try:
             if w is not None and w.winfo_exists():
@@ -38,12 +39,14 @@ class ModelViewer(tk.Toplevel):
             pass
         return tk.Toplevel.__new__(cls)
 
-    def __init__(self, parent, mod, info, factions=(), mount=None, title="Battle model in 3D", make=None, engine=None):
+    def __init__(self, parent, mod, info, factions=(), mount=None, title="Battle model in 3D", make=None, engine=None,
+                 upgrades=None):
         """mount: (its ModelInfo, mount type[, chariot]) - the unit's horse, camel ...: shown standing beside the
         rider; a Rome chariot (models.chariot_of, with 'horse_info'): the car, its horses and the crew put together
         as the game sets them. engine: (engines.Engine, the crew's ModelInfo or None) - a Medieval II siege engine
         playing its moves (standing, moving, loading, shooting) with its crew at their places, each man playing his
-        moves (engines.py). The same model's window open already: it comes forward (_viewer_key)."""
+        moves (engines.py). upgrades: [(words, ModelInfo)] - Medieval II's armour upgrades of the unit, picked in
+        the window (each its own model). The same model's window open already: it comes forward (_viewer_key)."""
         if self.__dict__.pop("_reused", False):
             try:
                 self.deiconify()
@@ -83,6 +86,16 @@ class ModelViewer(tk.Toplevel):
         cb = ttk.Combobox(side, textvariable=self.v_fac, values=facs, state="readonly", width=22)
         cb.pack(anchor="w")
         cb.bind("<<ComboboxSelected>>", lambda e: self.draw())
+        self.cb_fac = cb
+        # Medieval II: the armour upgrades - each level its own model (armour_ug_models)
+        self.upgrades = [(w, i) for w, i in (upgrades or []) if i is not None]
+        if len(self.upgrades) > 1:
+            ttk.Label(side, text="Armour").pack(anchor="w", pady=(8, 0))
+            self.v_armour = tk.StringVar(value=next((w for w, i in self.upgrades if i is info), self.upgrades[0][0]))
+            ca = ttk.Combobox(side, textvariable=self.v_armour, values=[w for w, _ in self.upgrades],
+                              state="readonly", width=22)
+            ca.pack(anchor="w")
+            ca.bind("<<ComboboxSelected>>", lambda e: self._armour_picked())
         ttk.Label(side, text="Detail (the game's distances)").pack(anchor="w", pady=(8, 0))
         self.lods = list(info.meshes)
         self.v_lod = tk.StringVar(value=self._lod_name(0))
@@ -514,6 +527,21 @@ class ModelViewer(tk.Toplevel):
                 self.engine["eng"], self.engine["points"], "Engine StationPoint")]
         mesh = EN.scene(self.mesh, groups, men) if men else self.mesh
         return MV.frame_of(mesh, mesh.groups if men else groups)
+
+    def _armour_picked(self):
+        """Another armour level: its model shown in the same view (turn, frame, faction kept where it has it)."""
+        info = next((i for w, i in self.upgrades if w == self.v_armour.get()), None)
+        if info is None or info is self.info:
+            return
+        self.info = info
+        self.title("%s - %s" % (self.title().split(" - ")[0], info.name))
+        self.lods = list(info.meshes)
+        facs = [f for f in info.textures if f] or [""]
+        self.cb_fac.configure(values=facs)
+        if self.v_fac.get() not in facs:
+            self.v_fac.set(facs[0])
+        self._tex = {}
+        self.load()
 
     def _lod_name(self, i):
         return "%d - %s" % (i, "closest" if i == 0 else "farther") if i < len(self.info.meshes) else "-"

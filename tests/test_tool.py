@@ -8159,6 +8159,19 @@ building smith
         self.assertEqual(m.positions[7], (1.0, 1.0, 1.0))
         self.assertAlmostEqual(m.uvs[2][0], 0.2, places=5)
         self.assertEqual([g.name for g in m.shown()], ["Head", "Attachments3"])
+        # a shield worn two ways (vanilla Polish shooters, a mod's pavise crossbowmen): on the back with the first
+        # weapon, in the hand with the second - one at a time, as the game shows it (two pavises were drawn)
+        two = MV.Mesh([MV.Group(n, n, (0, 1, 2), True) for n in ("Body", "primaryactive0", "secondaryactive0",
+                                                                    "shieldactive0", "shieldpassive0")],
+                      [(0, 0, 0)] * 3, None)
+        self.assertEqual([g.name for g in two.shown()], ["Body", "primaryactive0", "shieldpassive0"])
+        self.assertEqual([g.name for g in two.shown(secondary=True)], ["Body", "secondaryactive0", "shieldactive0"])
+        self.assertEqual([g.name for g in two.shown(weapons=False)], ["Body"])
+        # Medieval II's armour upgrades: each level its own model (armour_ug_levels / armour_ug_models)
+        from campaign_editor import models as MO
+        self.assertEqual(MO.armour_models(["armour_ug_levels 2, 3", "armour_ug_models Mailed_Knights, Mailed_Knights_ug1"]),
+                         [("2", "Mailed_Knights"), ("3", "Mailed_Knights_ug1")])
+        self.assertEqual(MO.armour_models(["armour_ug_levels 1", "armour_ug_models Peasants"]), [])
         with self.assertRaises(MV.MeshError):
             MV.read(b"\x16\x00\x00\x00not a mesh at all.........")
         # a battle banner (data/banners/*.mesh): one part 'GenMesh' with no material and 1 byte of class info
