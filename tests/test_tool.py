@@ -11419,6 +11419,46 @@ building smith
         self.assertEqual(app.place_moves, {})                 # not a move of a region of the map
         self.assertIn("new region New_Land", said[-1])
 
+    def test_new_army_surname_only_from_its_factions_list(self):
+        """A tester: an Egyptian army made on the Map was refused at Apply for a surname Egypt has not - the window's
+        surname was kept from the faction picked before (only the first name followed the switch) and could be
+        typed. Now it is picked from the faction's own list, goes with a faction switch, and Add checks it."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            from types import SimpleNamespace
+            from campaign_editor import gui_mapadd as MA
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / display (CI's python3): not tested here
+            self.skipTest("no window: %s" % e)
+        pools = {"romans": {"characters": ["Marcus"], "surnames": ["Julius"], "women": []},
+                 "egypt": {"characters": ["Ptolemaios"], "surnames": ["Soter"], "women": []}}
+        try:
+            root.AGENTS = ["spy"]
+            root.v_campaign = SimpleNamespace(get=lambda: "test")
+            root.mod = SimpleNamespace(is_sea=lambda camp, xy: False)
+            root.strat = SimpleNamespace(factions=[SimpleNamespace(name="romans"), SimpleNamespace(name="egypt")])
+            root._cmap = None
+            root.shown_names = lambda: {}
+            root.pool_for = lambda f: pools[f]
+            root.field_faction = lambda: None
+            root.map_only = lambda: True
+            MA.add_at(root, "army", (3, 3), faction="romans")
+            win = next(c for c in root.winfo_children() if isinstance(c, tk.Toplevel))
+            boxes = [c for c in win.winfo_children()[0].winfo_children() if isinstance(c, ttk.Combobox)]
+            last = next(b for b in boxes if "Soter" in b["values"] or "Julius" in b["values"])
+            self.assertEqual(str(last.cget("state")), "readonly")
+            last.set("Julius")
+            fac = next(b for b in win.winfo_children()[0].winfo_children() if isinstance(b, ttk.Combobox)
+                       and b is not last and "readonly" in str(b.cget("state")) and b not in boxes[1:])
+            var = fac.cget("textvariable")
+            root.setvar(str(var), "egypt")
+            root.update()
+            self.assertEqual(last.get(), "")                        # Julius is not Egypt's
+            self.assertIn("Soter", last["values"])
+        finally:
+            root.destroy()
+
     def test_special_place_diamond_dragged(self):
         """A special place's gold diamond is taken by the left button and dropped on a tile (on_special_move); a
         press without moving moves nothing (its double click opens its window), a drop outside the map neither."""

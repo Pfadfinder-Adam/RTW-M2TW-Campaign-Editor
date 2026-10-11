@@ -679,7 +679,7 @@ class App(tk.Tk):
         for r, who in enumerate(("leader", "heir")):
             ttk.Label(lf2, text=who.capitalize()).grid(row=r, column=0, sticky="w", padx=4, pady=2)
             a = ttk.Combobox(lf2, textvariable=self.v[who + "_first"], width=16)
-            b = ttk.Combobox(lf2, textvariable=self.v[who + "_last"], width=16)
+            b = ttk.Combobox(lf2, textvariable=self.v[who + "_last"], width=16, state="readonly")   # the list's own
             a.grid(row=r, column=1, padx=2)
             b.grid(row=r, column=2, padx=2)
             ttk.Entry(lf2, textvariable=self.v[who + "_age"], width=4).grid(row=r, column=3, padx=2)
@@ -4611,6 +4611,8 @@ class App(tk.Tk):
         for a, b in self.cb_names:
             a["values"] = first_names(pool, "general")
             b["values"] = [""] + pool.get("surnames", [])
+            if not self.editing() and b.get() and b.get() not in pool.get("surnames", []):
+                b.set("")                                # another template's surname goes (a faction's own stays)
         own = self.name_list.get(self.name_list_key())
         if hasattr(self, "l_name_list"):
             from .namelists import counts

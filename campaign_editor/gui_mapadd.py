@@ -84,7 +84,9 @@ def add_at(app, kind, xy, preset=None, faction=None):
     v_first, v_last, v_age = tk.StringVar(), tk.StringVar(), tk.StringVar(value="30")
     cb_first = ttk.Combobox(frm, textvariable=v_first, width=16)
     cb_first.grid(row=row, column=1)
-    cb_last = ttk.Combobox(frm, textvariable=v_last, width=16)
+    # only the faction's own surnames (a tester: an Egyptian army got a surname Egypt has not - kept from the faction
+    # picked before; the game has no string for it); more come from Name list... in Edit faction
+    cb_last = ttk.Combobox(frm, textvariable=v_last, width=16, state="readonly")
     cb_last.grid(row=row, column=2)
     row += 1
     ttk.Label(frm, text="Age").grid(row=row, column=0, sticky="w")
@@ -123,6 +125,8 @@ def add_at(app, kind, xy, preset=None, faction=None):
         cb_last["values"] = [""] + pool.get("surnames", [])
         if v_first.get() not in names:
             v_first.set(names[0] if names else "")
+        if v_last.get() not in pool.get("surnames", []):
+            v_last.set("")                       # another faction's surname goes with the faction switch
         mine = fac == app.field_faction() and not app.map_only()
         note.configure(text=(
             "Goes to %s's list on Units & armies (give it its units there)." % fac if mine else
@@ -145,7 +149,13 @@ def add_at(app, kind, xy, preset=None, faction=None):
                                       "no string for" % (first, "women's" if v_kind.get() in FEMALE_KINDS else "men's"),
                                  parent=w)
             return
-        full = (first + " " + v_last.get().strip()).strip()
+        last = v_last.get().strip()
+        if pool and last and last not in pool.get("surnames", []):
+            messagebox.showerror(APP, "'%s' is not among %s's surnames - the game crashes on a name it has no string "
+                                      "for. Pick one of the list (Name list... in Edit faction adds more)."
+                                 % (last, fac), parent=w)
+            return
+        full = (first + " " + last).strip()
         if full in taken_names(app, fac):
             messagebox.showerror(APP, "%s already has someone called %s - the game skips a second one with the same "
                                       "name. Pick another name (or add a surname)." % (fac, full), parent=w)

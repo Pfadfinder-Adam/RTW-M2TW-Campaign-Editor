@@ -113,7 +113,7 @@ class FamilyEditor(ttk.Frame):
         self.v_first, self.v_last, self.v_age, self.v_sex = tk.StringVar(), tk.StringVar(), tk.StringVar(), tk.StringVar()
         self.cb_first = ttk.Combobox(r, textvariable=self.v_first, width=16)
         self.cb_first.grid(row=0, column=1, padx=2)
-        self.cb_last = ttk.Combobox(r, textvariable=self.v_last, width=16)
+        self.cb_last = ttk.Combobox(r, textvariable=self.v_last, width=16, state="readonly")    # the list's own
         self.cb_last.grid(row=0, column=2, padx=2)
         ttk.Label(r, text="Age").grid(row=0, column=3, padx=(8, 2))
         ttk.Spinbox(r, from_=0, to=999, textvariable=self.v_age, width=5).grid(row=0, column=4)
@@ -1288,7 +1288,8 @@ class _PersonDialog(simpledialog.Dialog):
             tk.StringVar(value=str(self.age))
         c = ttk.Combobox(m, textvariable=self.v1, values=self.firsts, width=18)
         c.grid(row=1, column=0, padx=2)
-        ttk.Combobox(m, textvariable=self.v2, values=self.surnames, width=18).grid(row=1, column=1, padx=2)
+        ttk.Combobox(m, textvariable=self.v2, values=self.surnames, width=18, state="readonly").grid(row=1, column=1,
+                                                                                                padx=2)
         ttk.Label(m, text="Age").grid(row=2, column=0, sticky="w", pady=(6, 0))
         ttk.Spinbox(m, from_=0, to=999, textvariable=self.va, width=6).grid(row=2, column=1, sticky="w", pady=(6, 0))
         return c

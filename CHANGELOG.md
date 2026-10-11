@@ -29,6 +29,9 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- **Surnames only from the faction's own list** (New army / fleet / agent here on the Map, the leader and heir of
+  New faction, the Family tree): picked, not typed, and a surname of the faction picked before goes when another is
+  picked - an army was refused at Apply for a surname its faction has not. More surnames: Name list... in Edit faction.
 - **Terrain editor: Rivers** beside **Grid** - rivers, fords and cliffs drawn over the ground, now also on the map
   drawn point by point (Heights, the coast's point brushes), where they were missing; the Map's Layers tick could
   not be reached from here once it was off.
