@@ -2361,6 +2361,54 @@ building smith
         finally:
             root.destroy()
 
+    def test_bring_units_list_sorts(self):
+        """Report R-20261013-896978: the Bring units list had no sorting - as in the file, by name, by kind (infantry
+        before cavalry, then the class), by owner (the first of its ownership line) or by cost (cheapest first)."""
+        from campaign_editor import packs
+        p = os.path.join(self.root, "export_descr_unit.txt")
+        with open(p, "w") as fh:
+            fh.write("type zulu horse\ncategory cavalry\nclass light\nownership egypt\nstat_cost 1, 300, 80\n\n"
+                     "type alpha spears\ncategory infantry\nclass spearmen\nownership romans_julii, gauls\n"
+                     "stat_cost 1, 500, 100\n\n"
+                     "type mid archers\ncategory infantry\nclass missile\nownership carthage\nstat_cost 1, 200\n\n"
+                     "type no price\ncategory siege\nownership barbarian\n")
+        f = TextFile.load(p)
+        self.assertEqual(packs.sorted_units(f, "as in the file"),
+                         ["zulu horse", "alpha spears", "mid archers", "no price"])
+        self.assertEqual(packs.sorted_units(f, "by name"), ["alpha spears", "mid archers", "no price", "zulu horse"])
+        self.assertEqual(packs.sorted_units(f, "by kind"), ["mid archers", "alpha spears", "zulu horse", "no price"])
+        self.assertEqual(packs.sorted_units(f, "by owner"), ["no price", "mid archers", "zulu horse", "alpha spears"])
+        self.assertEqual(packs.sorted_units(f, "by cost"), ["mid archers", "zulu horse", "alpha spears", "no price"])
+
+    def test_step_window_fits_a_short_step(self):
+        """Report R-20261013-503D18: step 1 of Bring units (a short list of mods) stood in a big empty window. A step
+        of fit_steps gets a window as tall as it needs; the next step the full height again."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            from campaign_editor.gui_util import StepWindow
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        try:
+            root.withdraw()
+            w = StepWindow(root)
+            w.full_size = (800, 600, 400, 500)
+            w.fit_steps = (0,)
+            w.make_steps([("short", lambda: ttk.Label(w.body, text="one line").pack()),
+                          ("long", lambda: ttk.Label(w.body, text="more").pack())])
+            w.show()
+            w.update()
+            self.assertLess(w.winfo_height(), 300)
+            w.go(1)
+            w.update()
+            self.assertEqual(w.winfo_height(), 600)
+            w.go(-1)
+            w.update()
+            self.assertLess(w.winfo_height(), 300)
+        finally:
+            root.destroy()
+
     def test_text_is_readable_on_its_ground_in_either_look(self):
         """The dark look showed light text on the Module builder's light IF block, dark red / dark blue on its dark
         grey: theme.readable makes any text colour readable (4.5:1) on the ground it stands on, keeping its hue."""

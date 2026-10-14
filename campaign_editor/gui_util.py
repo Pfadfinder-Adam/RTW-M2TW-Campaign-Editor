@@ -1303,6 +1303,8 @@ class StepWindow(tk.Toplevel):
     make_steps; fn fills self.body; self._collect (set by a step) reads its widgets back before leaving it;
     leaving(step) runs after that; the last step's Next is finish_text and calls finish()."""
     finish_text = "Finish"
+    full_size = None          # (width, height, min width, min height): the window's size on a full step
+    fit_steps = ()            # steps that hold little: the window only as tall as they need (no empty space)
 
     def make_steps(self, steps):
         self.step, self.steps = 0, steps
@@ -1356,6 +1358,24 @@ class StepWindow(tk.Toplevel):
         self.b_next.configure(text=self.finish_text if self.step == len(self.steps) - 1 else "Next >")
         self.b_next.state(["!disabled"])
         fn()
+        self.size_to_step()
+
+    def size_to_step(self):
+        """A step of fit_steps gets a window as tall as what it holds; any other the full height again (a window
+        made bigger by hand stays so)."""
+        if not self.full_size:
+            return
+        W, H, mw, mh = self.full_size
+        self.update_idletasks()
+        w = self.winfo_width() if self.winfo_ismapped() and self.winfo_width() > 1 else W
+        if self.step in self.fit_steps:
+            h = min(H, self.winfo_reqheight())
+            self.minsize(mw, min(mh, h))
+            self.geometry("%dx%d" % (w, h))
+        else:
+            self.minsize(mw, mh)
+            if not self.winfo_ismapped() or self.winfo_height() < H:
+                self.geometry("%dx%d" % (w, H))
 
     def _note(self, text):
         ttk.Label(self.body, text=text, wraplength=780, justify="left", foreground="#555").pack(anchor="w",

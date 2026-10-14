@@ -29,8 +29,8 @@ class BringWindow(StepWindow):
         self.what = "units" if self.kind == "unit" else "buildings"
         self.title("Bring %s from another mod - step by step" % self.what)
         self.transient(editor)
-        self.geometry("1000x660")
-        self.minsize(720, 520)
+        self.full_size = (1000, 660, 720, 520)
+        self.fit_steps = (0,)                 # step 1 holds a short list: no big empty window (a tester)
         self.src = None                       # the other mod (ModData)
         self.picked = []                      # unit types / chain names of the other mod
         self.man = self.files = None          # what is brought (the same contents as a pack)
@@ -123,8 +123,8 @@ class BringWindow(StepWindow):
         return [b[0] for b in building_blocks(self.src.load(self.src.file("edb")))]
 
     def s_pick(self):
-        self._note("Tick the %s to bring (click; Ctrl / Shift for more) - the one clicked shows on the right as the "
-                   "game shows it; '(renamed here)' = this mod has one of that name, it gets a new one. %s" % (
+        self._note("Tick the %s to bring (click; Ctrl / Shift for more) - the one under the mouse (or clicked last) "
+                   "shows on the right as the game shows it; '(renamed here)' = this mod has one of that name, it gets a new one. %s" % (
             self.what, "Each comes with what it needs: its battle models, mount, textures, cards, name and "
                        "description." if self.kind == "unit" else
             "Each chain comes with all its levels, their names, descriptions and pictures."))
@@ -140,6 +140,10 @@ class BringWindow(StepWindow):
         ttk.Entry(bar, textvariable=v_find, width=24).pack(side="left", padx=4)
         v_new = tk.BooleanVar(value=False)
         ttk.Checkbutton(bar, text="only those this mod has not", variable=v_new).pack(side="left", padx=8)
+        orders = packs.UNIT_ORDERS if self.kind == "unit" else packs.UNIT_ORDERS[:2]
+        v_order = tk.StringVar(value=getattr(self, "_order", orders[0]))
+        ttk.Label(bar, text="Sort").pack(side="left", padx=(8, 0))
+        ttk.Combobox(bar, textvariable=v_order, values=orders, state="readonly", width=14).pack(side="left", padx=4)
         info = ttk.Label(bar, foreground="#555")
         info.pack(side="right")
         box = ttk.Frame(self.body)
@@ -165,6 +169,11 @@ class BringWindow(StepWindow):
 
         def fill(*a):
             remember()
+            self._order = v_order.get()
+            if self.kind == "unit":
+                names[:] = packs.sorted_units(self.src.load(self.src.file("edu")), self._order)
+            else:
+                names[:] = sorted(names, key=str.lower) if self._order == "by name" else self._source_names()
             lb.delete(0, "end")
             shown[:] = [n for n in names if (not v_find.get().strip() or v_find.get().strip().lower() in n.lower())
                         and (not v_new.get() or n.lower() not in here)]
@@ -173,17 +182,35 @@ class BringWindow(StepWindow):
                 if n in chosen:
                     lb.selection_set(i)
             info.configure(text="%d picked" % len(chosen))
+        on_show = [None, None]                         # [the one clicked, the one on show]
+
+        def put(n):
+            if n is not None and n != on_show[1]:
+                on_show[1] = n
+                look.show(n, self.src)
+
         def clicked(e=None):
             remember()
             info.configure(text="%d picked" % len(chosen))
             near = lb.nearest(e.y) if e is not None and hasattr(e, "y") else None
             i = near if near is not None and near >= 0 else (lb.curselection() or [None])[-1]
             if i is not None and i < len(shown):
-                look.show(shown[i], self.src)
+                on_show[0] = shown[i]
+                put(shown[i])
+
+        def hover(e):                                  # the one under the mouse shows without ticking it
+            i = lb.nearest(e.y)
+            if 0 <= i < len(shown):
+                bbox = lb.bbox(i)
+                if bbox and bbox[1] <= e.y < bbox[1] + bbox[3] + 2:
+                    put(shown[i])
         lb.bind("<<ListboxSelect>>", lambda e: clicked())
         lb.bind("<ButtonRelease-1>", clicked, add="+")
+        lb.bind("<Motion>", hover)
+        lb.bind("<Leave>", lambda e: put(on_show[0]))
         v_find.trace_add("write", fill)
         v_new.trace_add("write", fill)
+        v_order.trace_add("write", fill)
         shown[:] = []
         fill()
 

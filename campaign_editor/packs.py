@@ -70,6 +70,42 @@ def _values(lines, key):
     return out
 
 
+UNIT_ORDERS = ("as in the file", "by name", "by kind", "by owner", "by cost")
+CATEGORY_ORDER = ("infantry", "cavalry", "siege", "handler", "ship", "non_combatant")
+
+
+def sorted_units(f, how):
+    """The unit types of an EDU file in the order picked (UNIT_ORDERS): as the file has them, by name, by kind
+    (infantry, cavalry, siege... then light, heavy, missile...), by owner (the first faction / culture of its
+    ownership line) or by cost (the recruit price, cheapest first); each order then by name."""
+    spans = type_blocks(f)
+    names = list(spans)
+    if how not in UNIT_ORDERS[1:]:
+        return names
+
+    def first(lines, key):
+        got = _values(lines, key)
+        return got[0] if got else []
+
+    def key(n):
+        lines = _block_lines(f, spans[n])
+        if how == "by kind":
+            cat = (first(lines, "category") or [""])[0].lower()
+            rank = CATEGORY_ORDER.index(cat) if cat in CATEGORY_ORDER else len(CATEGORY_ORDER)
+            return (rank, cat, (first(lines, "class") or [""])[0].lower(), n.lower())
+        if how == "by owner":
+            return ((first(lines, "ownership") or ["~"])[0].lower() or "~", n.lower())
+        if how == "by cost":
+            cost = first(lines, "stat_cost")
+            try:
+                price = int(float(cost[1]))
+            except (IndexError, ValueError):
+                price = 10 ** 9                            # no price read: last
+            return (price, n.lower())
+        return (n.lower(),)
+    return sorted(names, key=key)
+
+
 def _file_refs(lines):
     """Every token of the lines that names a file (by its extension)."""
     refs = []

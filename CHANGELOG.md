@@ -6,6 +6,8 @@
 - **Campaign script...** (in the Events window): the campaign's own `campaign_script.txt` piece by piece - monitors,
   loops, counters, commands, each with its code - and any taken out: one, the picked ones, or all (the script frame
   stays). Preview and Keep for Apply as Events.
+- Bring units from another mod: the list sorts by name, kind, owner or cost; a unit shows on the right as soon as
+  the mouse is over it, without ticking it.
 - Events: pick many (Ctrl / Shift + click) and take them out with one right click, or **Remove all...**.
 - Scripts in the game: pick many and delete them at once, or **Delete them all...** (one backup).
 - Check mod files finds more of what the games themselves refuse, in the games' own words: a faction block missing
@@ -90,6 +92,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Bring units / buildings from another mod: the first step no longer stands in a big empty window.
 - New, copied and moved buildings show their own pictures in the construction window and the building chain window
   (they showed the game's generic one): pictures named through descr_ui_buildings.txt (Rome's temples) are found
   now, every culture gets them, and the construction queue's small picture is made in Rome too.
