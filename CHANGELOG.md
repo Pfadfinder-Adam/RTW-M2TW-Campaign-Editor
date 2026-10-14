@@ -3,8 +3,8 @@
 ## Unreleased
 
 ### Added
-- Scrollbars are back: every list, table and page shows one when there is more to see (the wheel and dragging
-  still work too).
+- Scrollbars are back: every list, table, page and text shows one when there is more to see (the wheel and
+  dragging still work too).
 - The region brush can paint sea on the region map ("(sea)" at the end of *Paint with*).
 - **View in 3D: the armour upgrades** (Medieval II): a unit with more than one armour model (`armour_ug_models`)
   gets **Armour** in its 3D window - each level's model in the same view (and for Make a card).

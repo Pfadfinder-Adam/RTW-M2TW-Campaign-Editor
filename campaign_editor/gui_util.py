@@ -376,6 +376,8 @@ def _first(root, cls, seq, fn):
 def scrolling_without_bars(root):
     """Besides their scrollbars (seen again since 2026-10-14 - 'not everyone is as intuitive'), the lists, tables,
     texts and pages scroll by the wheel, a left-button drag and the middle button."""
+    for cls in ("Listbox", "Treeview", "Text"):         # a list made without a scrollbar gets one on its edge
+        root.bind_class(cls, "<Map>", _auto_bar, add="+")
     if sys.platform != "darwin":                          # a Mac's Button-2 is the right button
         root.bind_all("<Button-2>", _auto_press, add="+")
         root.bind_all("<ButtonRelease-2>", _auto_release, add="+")
@@ -387,6 +389,33 @@ def scrolling_without_bars(root):
         _first(root, cls, "<Button-1>", _press1)
         _first(root, cls, "<B1-Motion>", _motion1)
         _first(root, cls, "<ButtonRelease-1>", _release1)
+
+
+def _auto_bar(e):
+    """A list, table or text shown with no scrollbar of its own (36 were made so while the editor had none): a
+    scrollbar placed over its right edge, seen only while there is more to see. One with its own bar is left alone."""
+    w = e.widget
+    try:
+        if hasattr(w, "_auto_bar") or str(w.cget("yscrollcommand")):
+            return
+        bar = ttk.Scrollbar(w.master, command=w.yview)
+    except (tk.TclError, AttributeError):
+        return
+    w._auto_bar = bar
+
+    def put(lo, hi):
+        try:
+            bar.set(lo, hi)
+            if float(hi) - float(lo) < 0.999:
+                if not bar.winfo_manager():
+                    bar.place(in_=w, relx=1.0, rely=0, relheight=1.0, anchor="ne")
+                    bar.lift(w)
+            elif bar.winfo_manager():
+                bar.place_forget()
+        except tk.TclError:
+            pass
+    w.configure(yscrollcommand=put)
+    w.after_idle(lambda: w.winfo_exists() and put(*w.yview()))
 
 
 class ScrollFrame(ttk.Frame):

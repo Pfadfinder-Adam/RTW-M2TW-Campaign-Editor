@@ -9394,6 +9394,7 @@ building smith
                 tv.column(c, width=300, stretch=False)
             rows = [tv.insert("", "end", text="row %d" % i, values=(i, i)) for i in range(200)]
             sb = ttk.Scrollbar(root, command=tv.yview)
+            tv.configure(yscrollcommand=sb.set)
             sb.pack(side="right", fill="y")
             tv.pack(fill="both", expand=True)
             text = tk.Text(root, height=3)
@@ -9430,6 +9431,20 @@ building smith
             for _ in range(3):
                 root.update()
             self.assertFalse(sf.bar.winfo_ismapped())        # all of it seen: no bar
+            # a list made without a scrollbar (36 of them): one of its own on its right edge while there is more
+            other = tk.Toplevel(root)
+            lb = tk.Listbox(other, height=4)
+            lb.pack()
+            for i in range(50):
+                lb.insert("end", "item %d" % i)
+            short = tk.Listbox(other, height=4)
+            short.pack()
+            short.insert("end", "one")
+            for _ in range(3):
+                root.update()
+            self.assertTrue(lb._auto_bar.winfo_ismapped())
+            self.assertFalse(getattr(short, "_auto_bar", None) and short._auto_bar.winfo_ismapped())
+            self.assertFalse(hasattr(tv, "_auto_bar"))          # a table with its own bar keeps only that one
         finally:
             root.destroy()
 
