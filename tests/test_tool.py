@@ -13226,5 +13226,30 @@ class ReaderChecksMoreTest(unittest.TestCase):
         self.assertIn("Invalid upgrade specified, must be above source level", got)
         self.assertNotIn("palisade -> wall", got)
 
+
+class ExeWallsTest(unittest.TestCase):
+    """Plan B: what the original exes refuse with a Script Error - character skills over 10, Rome's age over 120,
+    a trait with more than 10 levels (RomeTW.exe / medieval2.exe; with REX / M2EX no number is a limit)."""
+
+    def test_character_walls(self):
+        from campaign_editor.strat import character_walls
+        lines = ["faction\tromans_julii, balanced smith",
+                 "character\tFlavius, named character, leader, command 11, age 40, x 1, y 2",
+                 "character_record\tAulus, male, command 0, influence 12, management 0, subterfuge 0, age 130, "
+                 "dead 2, never_a_leader",
+                 "character\tGaius, general, age 30, x 2, y 2"]
+        got = "\n".join(character_walls(lines, "rome"))
+        self.assertIn("Flavius command attribute(11) is greater than the maximum permitted level(10)", got)
+        self.assertIn("Aulus influence attribute(12)", got)
+        self.assertIn("Aulus age(130) is greater than the maximum permitted age(120)", got)
+        self.assertNotIn("Gaius", got)
+        self.assertNotIn("age(130)", "\n".join(character_walls(lines, "medieval2")))   # its maximum is a setting
+
+    def test_trait_levels(self):
+        from campaign_editor.strat import trait_level_walls
+        text = ["Trait Many", "    Characters family"] + ["    Level L%d" % i for i in range(11)] + [
+                "Trait Few", "    Level A", "    Level B"]
+        self.assertEqual(trait_level_walls(text), [("Many", 11)])
+
 if __name__ == "__main__":
     unittest.main()

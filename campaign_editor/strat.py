@@ -317,6 +317,47 @@ def faction_option_words(lines, kind="rome"):
     return out
 
 
+# the original exes' walls for a character of descr_strat.txt (their Script Errors, read in RomeTW.exe / medieval2.exe):
+# command / influence / management / subterfuge at most 10; Rome's age at most 120 (Medieval II's is a setting)
+SKILL_MAX, ROME_AGE_MAX, TRAIT_LEVELS_MAX = 10, 120, 10
+
+
+def character_walls(lines, kind="rome"):
+    """The game's own error text for each character / character_record line over the original exes' walls."""
+    out = []
+    for l in lines:
+        t = tokens(l)
+        if t[:1] not in (["character"], ["character_record"]):
+            continue
+        parts = [p.strip() for p in strip_comment(l).split(None, 1)[-1].split(",")]
+        name = parts[0]
+        for p in parts[1:]:
+            w = p.split()
+            if len(w) != 2 or not w[1].isdigit():
+                continue
+            if w[0] in ("command", "influence", "management", "subterfuge") and int(w[1]) > SKILL_MAX:
+                out.append("%s %s attribute(%s) is greater than the maximum permitted level(%d)" % (
+                    name, w[0], w[1], SKILL_MAX))
+            elif w[0] == "age" and kind == "rome" and int(w[1]) > ROME_AGE_MAX:
+                out.append("%s age(%s) is greater than the maximum permitted age(%d)" % (name, w[1], ROME_AGE_MAX))
+    return out
+
+
+def trait_level_walls(lines):
+    """[(trait, levels)] of export_descr_character_traits.txt's traits with more levels than the original exes take
+    ('Too many levels for trait(%s). Max is %d.')."""
+    out, cur, n = [], None, 0
+    for l in list(lines) + ["Trait"]:
+        t = tokens(l)
+        if t[:1] == ["Trait"]:
+            if cur is not None and n > TRAIT_LEVELS_MAX:
+                out.append((cur, n))
+            cur, n = (t[1] if len(t) > 1 else None), 0
+        elif t[:1] == ["Level"]:
+            n += 1
+    return out
+
+
 def event_lines(lines):
     """Line numbers of `event` lines above the first faction block, where the games' readers meet them: 'Events
     are no longer supported in strat.txt, and must be added to events.txt' (RomeTW.exe, medieval2.exe, REX,

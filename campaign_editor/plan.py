@@ -274,6 +274,31 @@ class Plan:
                 out.append("%s: two armies on one tile (%d, %d) - the game stops reading the campaign there "
                            "('trying to attach ... to the army of' / 'Cannot attach 2 armies together'); move one of "
                            "them" % (" and ".join("%s (%s)" % n for n in names), xy[0], xy[1]))
+        out += self._wall_problems(changed)
+        return out
+
+    def _wall_problems(self, changed):
+        """The original exes' walls this write would cross (none with REX / M2EX): a character's skill over 10,
+        Rome's age over 120, a trait with more than 10 levels - each a Script Error, the game stops."""
+        from .limits import engine_of, game_kind
+        from .strat import character_walls, trait_level_walls
+        if engine_of(self.mod):
+            return []
+        out, kind = [], game_kind(self.mod)
+        for path, f in self.files.items():
+            if path not in changed:
+                continue
+            base = os.path.basename(path).lower()
+            old = TextFile.load(path).texts() if os.path.exists(path) else []
+            if base == "descr_strat.txt":
+                had = set(character_walls(old, kind))
+                for w in [w for w in character_walls(f.texts(), kind) if w not in had][:8]:
+                    out.append("descr_strat.txt: the game stops ('%s'); the original exe takes no more" % w)
+            elif base == "export_descr_character_traits.txt":
+                had = set(trait_level_walls(old))
+                for name, n in [w for w in trait_level_walls(f.texts()) if w not in had]:
+                    out.append("%s: the trait %s has %d levels - the game stops ('Too many levels for trait(%s). Max "
+                               "is 10.')" % (base, name, n, name))
         return out
 
     def _engine_takes(self, names):

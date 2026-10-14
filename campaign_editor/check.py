@@ -157,6 +157,14 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
             "('Events are no longer supported in strat.txt, and must be added to events.txt'); move them to "
             "descr_events.txt (Events)" % (len(ev), ", ".join(str(i + 1) for i in ev[:5])))
     from .limits import engine_of as _engine, game_kind as _kind
+    from .strat import character_walls, trait_level_walls
+    if not _engine(mod):                            # the original exes' walls (REX / M2EX: no number is a limit)
+        for w in character_walls(s.lines, _kind(mod))[:8]:
+            bad("descr_strat.txt: the game stops at the start ('%s'); lower it (Characters)" % w)
+        tf = mod.find("export_descr_character_traits.txt")
+        for name, n in trait_level_walls(mod.load(tf).texts()) if tf else []:
+            bad("export_descr_character_traits.txt: the trait %s has %d levels - the game stops at the start ('Too "
+                "many levels for trait(%s). Max is 10.')" % (name, n, name))
     if not _engine(mod):                            # REX / M2EX know more words there
         for fac, word, n in faction_option_words(s.lines, _kind(mod))[:8]:
             say("    note: descr_strat.txt line %d (%s): '%s' - the game does not know this word in a faction's head "

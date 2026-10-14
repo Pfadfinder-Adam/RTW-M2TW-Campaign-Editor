@@ -13,6 +13,8 @@
   map the game leaves out (a woman with no husband or father, a child with no father), a building factions list
   without its last comma, a building recruiting a unit the unit file lacks, a faction that may build a level but not
   the one below it (the last two not with REX, which dropped them).
+- Without REX / M2EX, Preview refuses and Check mod files names what the original games stop on: a character's
+  command, influence, management or subterfuge over 10, an age over 120 (Rome), a trait with more than 10 levels.
 - Check mod files learned more of the games' own checks: pikes without phalanx, a unit with none of square / horde /
   phalanx, a weapon firing a projectile that does not exist, a building upgrade pointing down, a wrong
   settlement_min, a town with a port building but no port on the map; and as notes: a misspelt word in a faction's
