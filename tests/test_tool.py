@@ -5986,6 +5986,33 @@ building smith
             self.assertEqual(sorted(packs.type_blocks(ModData(troot).load(fh.name))),
                              ["celtic_heavy", "celtic_heavy_2", "celtic_heavy_alt1"])
 
+    def test_unit_pack_brings_its_armour_upgrade_models(self):
+        # Medieval II: armour_ug_models names a body for each armour upgrade - they come along (a missing one stops
+        # the game), renamed in that list when this mod has another model of the name
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\tbody_a, 20, 0, 1\narmour_ug_models body_a, body_b ; upgrades\n"
+                                "ownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\tbody_a\nmodel_flexi\t\tdata/models_unit/a.cas, max\n\n"
+              "type\t\tbody_b\nmodel_flexi\t\tdata/models_unit/b.cas, max\n")
+        write(os.path.join(d, "models_unit", "a.cas"), "A")
+        write(os.path.join(d, "models_unit", "b.cas"), "B")
+        man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(sorted(man["blocks"]["model"]), ["body_a", "body_b"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        write(os.path.join(troot, "data", "descr_model_battle.txt"), "type\t\tbody_b\nmodel_flexi\t\tother.cas, max\n")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        plan.apply()
+        with open(os.path.join(troot, "data", "export_descr_unit.txt")) as fh:
+            self.assertIn("armour_ug_models body_a, body_b_2 ; upgrades", fh.read())
+
     def test_unit_pack_brings_its_projectile(self):
         # R-20261014-99712D / D5B6A6: crossbowmen brought from Barbarian Invasion into Rome - the game stopped:
         # "Stat_pri statistic refers to non-existant projectile type 'crossbow'". The projectile comes with the

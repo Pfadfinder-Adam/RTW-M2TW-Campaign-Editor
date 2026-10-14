@@ -360,6 +360,9 @@ def collect(mod, unit_types):
                 g.add_dep(kind, v[0])
         for p in _weapon_projectiles(lines):
             g.add_dep("projectile", p)
+        for v in _values(lines, "armour_ug_models"):    # Medieval II: the body of each armour upgrade (a model)
+            for name in v:
+                g.add_dep("model", name)
         for _, role, name in soldiers_block(lines):     # REX: the models in a soldiers { } block (HLR)
             if role == "model" or any(k.lower() == name.lower() for k in g.dep_blocks["model"]):
                 g.add_dep("model", name)
@@ -672,6 +675,19 @@ def _rename_projectile(lines, old, new):
     return _rename_ref(out, "projectile", old, new)
 
 
+def _rename_in_list(lines, key, old, new):
+    """Every name old on 'key a, b, c' lines (a list of names) renamed to new."""
+    out = []
+    for l in lines:
+        m = re.match(r"^(\s*%s\s+)([^;]*?)(\s*(;.*)?)$" % re.escape(key), l)
+        if not m:
+            out.append(l)
+            continue
+        parts = re.split(r"(\s*,\s*)", m.group(2))
+        out.append(m.group(1) + "".join(new if p.lower() == old.lower() else p for p in parts) + m.group(3))
+    return out
+
+
 def _rename_ref(lines, key, old, new):
     """'key old, ...' lines naming old renamed to new (the rest of the line kept)."""
     out = []
@@ -727,6 +743,7 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
                 lines = _rename_ref(lines, key, old, new)
                 if kind == "model" and key == "soldier":
                     lines = _rename_soldiers(lines, old, new)
+                    lines = _rename_in_list(lines, "armour_ug_models", old, new)
         for old, new in renamed.get("projectile", {}).items():
             lines = _rename_projectile(lines, old, new)
         lines = _set_line(lines, "ownership", ", ".join(owners))

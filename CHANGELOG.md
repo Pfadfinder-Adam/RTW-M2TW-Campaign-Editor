@@ -131,6 +131,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Bring units (Medieval II): the bodies of a unit's armour upgrades were left behind - they come along now.
 - Bigger map (x3): a river could be left 2 pixels wide in one place, and Rome stopped while loading the map -
   every river is one pixel wide now.
 - Bring units: the models a unit names in REX's `soldiers { }` block (HLR's units) were left behind - they come
