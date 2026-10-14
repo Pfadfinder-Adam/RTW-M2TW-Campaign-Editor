@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Tools > Sort the recruitment panel (strongest first)**: every building's recruit lines in one order - infantry,
+  then archers / slingers / skirmishers, animal handlers, cavalry, siege, ships, the dearest first in each - so the
+  panel's top left shows the strongest unit. Set once in the files; every town, new units and old saves follow it.
+- Answers to my reports: the states are asked afresh when the tab opens.
+- ROADMAP: the road so far as tables (no diagram to move with buttons).
 - Maps saved as colour-mapped TGAs (some map generators write them) open in the editor; written back as plain TGAs.
 - Map > Layers: **Towns and ports** (switch their signs off) and **Rebel land coloured** (the rebels' land as
   strongly coloured as a faction's).
