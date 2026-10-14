@@ -143,6 +143,10 @@ def edu_problems(lines, factions, kind="rome", engine=None, projectiles=None):
         words = set(re.findall(r"[a-z_]+", form))
         if "formation" in keys and not words & {"square", "horde", "phalanx"}:
             say(b, "A unit must always support either square, horde or phalanx formation, but '%s' does not." % name)
+        special = sorted(words - {"square", "column", "wedge", "mob"})
+        if len(special) > 1 and engine != "REX.exe":        # REX.exe has dropped this one
+            say(b, "More than one special formation (other than square,column,wedge,mob) found in unit type '%s'." %
+                name)
         pikes = set(re.findall(r"[a-z_]+", keys.get("stat_pri_attr", "") + " " + keys.get("stat_sec_attr", "")))
         if pikes & {"short_pike", "long_pike"} and not words & {"phalanx", "schiltrom"}:
             say(b, "Unit type '%s' must be able to do phalanx to use pikes." % name)

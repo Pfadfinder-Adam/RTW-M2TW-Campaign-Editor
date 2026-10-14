@@ -358,6 +358,27 @@ def trait_level_walls(lines):
     return out
 
 
+def settlement_order_problems(s):
+    """[(region, faction, word)]: a town's line after its first building that is no building / garrisoned_army - the
+    game stops ('Unexpected header %s, only buildings and garrisoned armies allowed after first building';
+    RomeTW.exe, medieval2.exe, M2EX - not REX)."""
+    out = []
+    for fb in s.factions:
+        for st in fb.settlements:
+            depth, seen = 0, False
+            for l in s.lines[st.start:st.end]:
+                code = strip_comment(l)
+                t = tokens(code)
+                if depth == 1 and t and t[0] not in ("{", "}"):
+                    if t[0] == "building":
+                        seen = True
+                    elif seen and t[0] != "garrisoned_army":
+                        out.append((st.region, fb.name, t[0]))
+                        break
+                depth += code.count("{") - code.count("}")
+    return out
+
+
 def event_lines(lines):
     """Line numbers of `event` lines above the first faction block, where the games' readers meet them: 'Events
     are no longer supported in strat.txt, and must be added to events.txt' (RomeTW.exe, medieval2.exe, REX,

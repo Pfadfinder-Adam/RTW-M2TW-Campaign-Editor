@@ -13200,7 +13200,7 @@ class ReaderChecksMoreTest(unittest.TestCase):
                 "stat_pri_attr\t%s\n" + stats)
         text = (unit % ("good", "square", "arrow", "no") + unit % ("pikes", "square", "no", "long_pike") +
                 unit % ("scots", "square, schiltrom", "no", "short_pike") + unit % ("loose", "wedge", "no", "no") +
-                unit % ("ghost", "square", "spirit_bolt", "no"))
+                unit % ("ghost", "square", "spirit_bolt", "no") + unit % ("twice", "phalanx, testudo", "no", "no"))
         got = "\n".join(edu_problems(text.split("\n"), [], "rome", None, projectiles={"arrow"}))
         self.assertNotIn("good", got)
         self.assertNotIn("scots", got)
@@ -13208,6 +13208,9 @@ class ReaderChecksMoreTest(unittest.TestCase):
         self.assertIn("A unit must always support either square, horde or phalanx formation, but 'loose' does not.",
                       got)
         self.assertIn("Stat_pri statistic refers to non-existant projectile type 'spirit_bolt'.", got)
+        self.assertIn("More than one special formation (other than square,column,wedge,mob) found in unit type "
+                      "'twice'.", got)
+        self.assertNotIn("found in unit type 'scots'", got)                      # square + one special: fine
         # no projectile file found: that check is left alone
         self.assertNotIn("spirit_bolt", "\n".join(edu_problems(text.split("\n"), [], "rome", None)))
 
@@ -13250,6 +13253,20 @@ class ExeWallsTest(unittest.TestCase):
         text = ["Trait Many", "    Characters family"] + ["    Level L%d" % i for i in range(11)] + [
                 "Trait Few", "    Level A", "    Level B"]
         self.assertEqual(trait_level_walls(text), [("Many", 11)])
+
+
+class SettlementOrderTest(unittest.TestCase):
+    def test_lines_after_the_first_building(self):
+        """'Unexpected header %s, only buildings and garrisoned armies allowed after first building'."""
+        from campaign_editor.strat import settlement_order_problems
+        text = ("campaign\timperial_campaign\r\nfaction\tengland, comfortable king\r\n"
+                "settlement\r\n{\r\n\tlevel town\r\n\tregion London\r\n\tbuilding\r\n\t{\r\n"
+                "\t\ttype core_building wooden_wall\r\n\t}\r\n\tpopulation 3800\r\n}\r\n"
+                "settlement\r\n{\r\n\tlevel town\r\n\tregion York\r\n\tpopulation 900\r\n\tbuilding\r\n\t{\r\n"
+                "\t\ttype core_building wooden_wall\r\n\t}\r\n}\r\n"
+                "\r\nfaction_standings\tengland, 0.0 slave\r\n")
+        s = Strat(TextFile.from_bytes("descr_strat.txt", text.encode("latin-1")))
+        self.assertEqual(settlement_order_problems(s), [("London", "england", "population")])
 
 if __name__ == "__main__":
     unittest.main()

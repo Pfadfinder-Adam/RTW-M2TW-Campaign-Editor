@@ -147,6 +147,13 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad("%s: its first lines in descr_strat.txt are out of the games' order (denari before superfaction / "
             "ai_label...) - the game starts it without its towns; Load offers to put them in order" % n)
     from .strat import event_lines, faction_option_words, unlisted_factions
+    from .strat import settlement_order_problems
+    from .limits import engine_of as _eng
+    if _eng(mod) != "REX.exe":
+        for region, fac, word in settlement_order_problems(s)[:8]:
+            bad("%s (%s): '%s' stands after the town's first building in descr_strat.txt - the game stops at the "
+                "start ('Unexpected header %s, only buildings and garrisoned armies allowed after first building'); "
+                "move it above the buildings" % (region, fac, word, word))
     for n in unlisted_factions(s):
         bad("%s: its block in descr_strat.txt is in none of the playable / unlockable / nonplayable lists at the "
             "file's top - the game stops at the start ('Faction %s not listed in playable/nonplayable header section.'); add it "
