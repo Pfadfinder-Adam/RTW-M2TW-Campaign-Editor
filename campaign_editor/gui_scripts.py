@@ -40,7 +40,7 @@ class ScriptsWindow(SettingsForm, tk.Toplevel):
         body.pack(fill="both", expand=True, padx=10, pady=8)
         left = ttk.Frame(body)
         body.add(left, weight=0)
-        self.tv = ttk.Treeview(left, columns=("what", "on"), show="tree headings", selectmode="browse", height=18)
+        self.tv = ttk.Treeview(left, columns=("what", "on"), show="tree headings", selectmode="extended", height=18)
         self.tv.heading("#0", text="Script")
         self.tv.heading("what", text="What it is")
         self.tv.heading("on", text="Runs")
@@ -49,6 +49,10 @@ class ScriptsWindow(SettingsForm, tk.Toplevel):
         self.tv.column("on", width=50, anchor="center")
         sb = ttk.Scrollbar(left, orient="vertical", command=self.tv.yview)
         self.tv.configure(yscrollcommand=sb.set)
+        lb = ttk.Frame(left)                      # under the list: every script out at once (Ctrl / Shift picks many)
+        lb.pack(side="bottom", fill="x", pady=(4, 0))
+        ttk.Button(lb, text="Delete them all...", command=self.delete_all).pack(side="left")
+        ttk.Label(lb, text="Ctrl / Shift + click picks many", foreground="#666").pack(side="left", padx=8)
         sb.pack(side="right", fill="y")
         self.tv.pack(side="left", fill="both", expand=True)
         self.tv.bind("<<TreeviewSelect>>", lambda e: self.show())
@@ -98,6 +102,10 @@ class ScriptsWindow(SettingsForm, tk.Toplevel):
             self.tv.see("s%d" % pick)
         else:
             self.show()
+
+    def picked_all(self):
+        """Every script picked in the list (folder rows left out)."""
+        return [self.items[int(i[1:])] for i in self.tv.selection() if i.startswith("s")]
 
     def picked(self):
         sel = self.tv.selection()
@@ -152,7 +160,9 @@ class ScriptsWindow(SettingsForm, tk.Toplevel):
             ttk.Button(bar, text="Write it in", command=self.write_settings).grid(row=0, column=0, sticky="we")
         ttk.Button(bar, text="Turn it on" if not s.on else "Turn it off", command=self.switch).grid(
             row=0, column=1, sticky="we", padx=(6, 0))
-        ttk.Button(bar, text="Delete it...", command=self.delete).grid(row=0, column=2, sticky="we", padx=(24, 0))
+        many = len(self.picked_all())
+        ttk.Button(bar, text="Delete the %d picked..." % many if many > 1 else "Delete it...",
+                   command=self.delete).grid(row=0, column=2, sticky="we", padx=(24, 0))
         ttk.Button(bar, text="Show the code", command=lambda: self.app.show_text(
             "%s - %s" % (s.file, s.title), s.text)).grid(row=1, column=0, sticky="we", pady=(6, 0))
         ttk.Button(bar, text="Open the folder", command=lambda: _open(s.folder)).grid(
@@ -204,10 +214,25 @@ class ScriptsWindow(SettingsForm, tk.Toplevel):
             self._write(items[0], lambda plan, items=items: SM.plan_take_out_test(plan, items),
                         "Take out the %d script(s) the test mod put in" % len(items), name="test_mod_scripts")
 
-    def delete(self):
-        s = self.picked()
-        if s:
+    def delete(self, items=None):
+        """The picked scripts (or items) deleted - one write (one backup) for each folder they are in."""
+        items = self.picked_all() if items is None else items
+        if len(items) == 1:
+            s = items[0]
             self._write(s, lambda plan: SM.plan_delete(plan, s), "Delete %s" % os.path.basename(s.path))
+            return
+        by = {}
+        for x in items:
+            by.setdefault(x.folder, []).append(x)
+        for these in by.values():
+            self._write(these[0], lambda plan, these=these: SM.plan_delete_many(plan, these),
+                        "Delete the %d script(s)" % len(these), name="scripts")
+
+    def delete_all(self):
+        """Every script of the list deleted (a mod made bare for the engine, or to start anew); Restore brings
+        them back."""
+        if self.items:
+            self.delete(list(self.items))
 
 
 def _open(folder):

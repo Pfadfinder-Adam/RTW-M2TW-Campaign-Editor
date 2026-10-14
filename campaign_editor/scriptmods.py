@@ -137,6 +137,13 @@ def plan_delete(plan, s):
     plan.delete(s.path, "the script %s deleted (Restore puts it back)" % s.title)
 
 
+def plan_delete_many(plan, items):
+    """Several scripts deleted in one write (Restore puts them back) - the picked ones, or every one listed."""
+    for s in items:
+        plan_delete(plan, s)
+    return len(items)
+
+
 def test_scripts(mod):
     """[Script] the test mod put in (its mark at the end, or a ce_test_ name), turned off ones too."""
     return [s for s in scripts(mod) if s.test]

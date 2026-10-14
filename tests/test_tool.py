@@ -7627,6 +7627,14 @@ building smith
         self.assertEqual(sorted(x.file for x in SCR.test_scripts(mod)), ["ce_test_engine_lines.nut",
                                                                           "growth_like.nut"])
         self.assertTrue(set(before) <= set(tree_hash(game)))
+        # Delete them all (the picked ones or every one): one write, one backup, Restore brings them back
+        every = SCR.scripts(mod)
+        plan = Plan(every[0].plan_mod(), "scripts", "scripts", {})
+        self.assertEqual(SCR.plan_delete_many(plan, every), len(every))
+        plan.apply()
+        self.assertEqual(SCR.scripts(mod), [])
+        restore_to(gm, backups(gm)[-1])
+        self.assertEqual(len(SCR.scripts(mod)), len(every))
 
     def test_medieval2_children_limit_raised_with_the_family(self):
         """Medieval II: descr_campaign_db.xml <max_number_of_children> (4 in vanilla) - a fifth child made the game
@@ -10395,6 +10403,12 @@ building smith
         self.assertEqual(sum(1 for l in t if l.startswith("event")), 3)              # one gone, one new
         self.assertIn("event\tvolcano\tboom", t)
         self.assertIn("{BOOM_TITLE}\tBoom!", plan.files[mod.text_file("historic_events.txt")].texts())
+        # Remove all (the Events window): every event out at once, the file's own comment kept
+        every = Plan(mod, "e", "e", {})
+        EV.apply(every, "test", {"remove": [e["id"] for e in evs]})
+        t = every.files[EV.path_of(mod, "test")].texts()
+        self.assertFalse([l for l in t if l.strip() and not l.startswith(";")], t)
+        self.assertEqual(EV.read(every.files[EV.path_of(mod, "test")]), [])
         # a storm strikes only at sea: on a land tile it is said (it never came in a tester's game), at sea not
         mod.is_sea = lambda campaign, xy: tuple(xy) == (3, 0)            # the tiny mod has no sea: one tile is
         wet = Plan(mod, "e", "e", {})
@@ -13092,6 +13106,41 @@ class EduReaderGapsTest(unittest.TestCase):
             self.assertNotIn("flying", got)
             self.assertIn("Invalid ownership type 'martians'", got)
             self.assertIn("Must declare a dictionary entry", got)
+
+
+class CampaignScriptTest(unittest.TestCase):
+    TEXT = ("; the mod's script\nscript\n\tdeclare_counter loaded\n\n\t; greet the player\n"
+            "\tmonitor_event FactionTurnStart FactionIsLocal\n\t\tif I_TurnNumber = 1\n\t\t\tset_counter loaded 1\n"
+            "\t\tend_if\n\t\tterminate_monitor\n\tend_monitor\n\n"
+            "\twhile I_TurnNumber < 2\n\tend_while\n\twait_monitors\nend_script\n")
+
+    def test_pieces_and_taking_them_out(self):
+        """campaign_script.txt in its top-level pieces (a comment right above goes with its piece); the picked ones
+        or all of them taken out, the script / end_script frame always kept."""
+        from campaign_editor import campaignscript as CS
+        f = TextFile.from_bytes("campaign_script.txt", self.TEXT.encode("latin-1"))
+        got = CS.read(f)
+        self.assertEqual([(p["kind"], p["lines"]) for p in got],
+                         [("declare_counter", 1), ("monitor_event", 7), ("while", 2), ("wait_monitors", 1)])
+        self.assertEqual(got[1]["id"], "monitor_event@6")
+        self.assertEqual(f.texts()[got[1]["span"][0]].strip(), "; greet the player")
+
+        class P:
+            def __init__(self, f):
+                self.f, self.notes = f, []
+
+            def edit(self, path):
+                return self.f
+
+            def note(self, f, text):
+                self.notes.append(text)
+        plan = P(TextFile.from_bytes("campaign_script.txt", self.TEXT.encode("latin-1")))
+        self.assertEqual(CS.plan_remove(plan, "x", ["monitor_event@6", "declare_counter@3"]), 2)
+        left = [l.strip() for l in plan.f.texts() if l.strip()]
+        self.assertEqual(left, ["; the mod's script", "script", "while I_TurnNumber < 2", "end_while",
+                                "wait_monitors", "end_script"])
+        CS.plan_remove(plan, "x", [p["id"] for p in CS.read(plan.f)])
+        self.assertEqual([l.strip() for l in plan.f.texts() if l.strip()], ["; the mod's script", "script", "end_script"])
 
 if __name__ == "__main__":
     unittest.main()

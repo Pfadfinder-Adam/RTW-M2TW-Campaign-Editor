@@ -6,6 +6,7 @@ Keep for Apply - the main window's Apply changes writes it with the rest of the 
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
+from . import theme
 from .gui_util import right_click
 from .gui_util import one_window, ShortHint
 from .gui_util import scroll_body
@@ -41,7 +42,7 @@ class EventsWindow(tk.Toplevel):
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
         self.tv = ttk.Treeview(left, columns=("name", "kind", "date", "title"), show="headings", height=18,
-                               selectmode="browse")
+                               selectmode="extended")
         for c, t, w in (("name", "event", 170), ("kind", "kind", 80), ("date", "date", 80), ("title", "title", 200)):
             self.tv.heading(c, text=t)
             self.tv.column(c, width=w, stretch=c == "title")
@@ -50,7 +51,9 @@ class EventsWindow(tk.Toplevel):
         bb = ttk.Frame(left)
         bb.pack(side="bottom", fill="x", pady=(4, 0))
         ttk.Button(bb, text="New event...", command=self.add).pack(side="left")
-        ttk.Label(bb, text="right click an event: remove it", foreground="#666").pack(side="left", padx=8)
+        ttk.Button(bb, text="Remove all...", command=self.remove_all).pack(side="left", padx=theme.BUTTON_GAP)
+        ttk.Label(bb, text="right click: remove (Ctrl / Shift + click picks many)", foreground="#666").pack(
+            side="left", padx=8)
         right_click(self.tv, self.remove)
         sb.pack(side="right", fill="y")
         self.tv.pack(side="left", fill="both", expand=True)
@@ -90,6 +93,9 @@ class EventsWindow(tk.Toplevel):
         ttk.Button(bar, text="Close", command=close).pack(side="right")
         ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=4)
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
+        from .gui_campaignscript import open_campaign_script        # the campaign's own script, piece by piece
+        ttk.Button(bar, text="Campaign script...", command=lambda: open_campaign_script(self.app, self)).pack(
+            side="right", padx=(0, 24))
         self.reload()
 
     # ---- factions that appear later ----
@@ -402,16 +408,26 @@ class EventsWindow(tk.Toplevel):
         show()
         return lbl
 
-    def remove(self):
-        name = (self.tv.selection() or [None])[0]
-        if not name:
+    def remove(self, names=None):
+        names = list(self.tv.selection()) if names is None else names
+        for name in names:
+            if any(x["name"] == name for x in self.new):
+                self.new = [x for x in self.new if x["name"] != name]
+            elif name not in self.removed:
+                self.removed.append(name)
+                self.edits.pop(name, None)
+        if names:
+            self.fill()
+
+    def remove_all(self):
+        """Every event of the list out at once (a mod made bare for an engine, or to start the events anew) - Keep
+        for Apply writes it; Close without keeping, or Undo this write after, brings them back."""
+        names = [e["id"] for e in self.rows()]
+        if not names:
             return
-        if any(x["name"] == name for x in self.new):
-            self.new = [x for x in self.new if x["name"] != name]
-        else:
-            self.removed.append(name)
-            self.edits.pop(name, None)
-        self.fill()
+        if messagebox.askyesno(TITLE, "Take out all %d event(s) of descr_events.txt? Nothing is written before Keep "
+                                      "for Apply and Apply changes." % len(names), parent=self):
+            self.remove(names)
 
     def _plan(self):
         plan = Plan(self.mod, "events", "events", {})

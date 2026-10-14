@@ -1133,14 +1133,16 @@ def keys(root):
 
 def right_click(widget, fn):
     """A right click on a row of a list / table picks that row and does fn() - the second mouse button in place of a
-    separate 'Remove' button beside the list (the user, 2026-10-07)."""
+    separate 'Remove' button beside the list (the user, 2026-10-07). On a row of several picked (Ctrl / Shift +
+    click) the pick stays: fn() acts on all of them."""
     def go(e):
         try:
             if isinstance(widget, ttk.Treeview):
                 row = widget.identify_row(e.y)
                 if not row:
                     return
-                widget.selection_set(row)
+                if row not in widget.selection():
+                    widget.selection_set(row)
                 widget.focus(row)
             else:
                 i = widget.nearest(e.y)

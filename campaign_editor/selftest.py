@@ -2617,6 +2617,12 @@ COVERAGE = {
     "Recolour... on one texture (Unit editor, Models tab)":
         "s_recolour's work on a list of one (recolour.targets_of) - the unit test "
         "test_recolour_gives_a_shared_battle_texture_a_copy_of_its_own finds the texture card's picture in it",
+    "Events: Remove all, many at once": "s_events_more takes one out the same way (events.apply's remove list) - "
+                                        "the unit test test_campaign_events takes them all out",
+    "Scripts in the game: delete the picked / all": "unit test test_scripts_the_test_mod_put_in_are_found_and_taken_out "
+                                                    "(every script out in one write, Restore brings them back)",
+    "Campaign script: pieces taken out (one, picked, all)": "unit test CampaignScriptTest - taking pieces of a mod's "
+                                                            "own script out is the modder's to try in the game",
     "Make the campaign map 3 x bigger": RUN + " (the x3 copy, when asked)",
     "Check mod files": RUN + " (after every step)",
     "Restore a backup": RUN + " (check-scripts/testmod.py restores every step byte for byte)",
@@ -2632,6 +2638,7 @@ COVERAGE = {
 
 # the window's work buttons, tabs and Tools entries (the start of their text) -> the feature above
 UI = {
+    "Campaign script": "Campaign script: pieces taken out (one, picked, all)",
     "New faction": "New faction", "Edit faction": "Edit faction (names, colours, money, towns, garrisons)",
     "Faction editor": "Edit faction (names, colours, money, towns, garrisons)",
     "Factions": "Edit faction (names, colours, money, towns, garrisons)",
