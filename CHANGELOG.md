@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- Check mod files finds more of what the games themselves refuse, in the games' own words: a faction block missing
+  from the playable / unlockable / nonplayable lists, `event` lines left in `descr_strat.txt`, family members off the
+  map the game leaves out (a woman with no husband or father, a child with no father), a building factions list
+  without its last comma, a building recruiting a unit the unit file lacks, a faction that may build a level but not
+  the one below it (the last two not with REX, which dropped them).
 - GitHub Sponsors beside Ko-fi: a "Sponsor" button in the editor, on the README and the wiki.
 - Scrollbars are back: every list, table, page and text shows one when there is more to see (the wheel and
   dragging still work too).
@@ -33,6 +38,8 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- Check mod files: a unit without an ownership line is a note now, not a problem - every game gives such a unit to
+  every faction.
 - **Faction logos on the Art tab, always** (Medieval II with M2EX, Rome with REX): the faction logo and the small
   logo (the shield in diplomacy, on the faction's scrolls and its button) have their cards also when the sprite is
   on no sheet - the card says the game shows another picture there. A mod that reads the binary sprite sheets gets

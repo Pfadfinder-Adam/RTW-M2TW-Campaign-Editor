@@ -280,6 +280,31 @@ def characters_after_tree(s):
     return bad
 
 
+def unlisted_factions(s):
+    """Factions with a block in descr_strat but in none of the playable / unlockable / nonplayable lists at its top:
+    every game stops there ('Faction %s not listed in playable/nonplayable header section.' - RomeTW.exe,
+    medieval2.exe, REX, M2EX). [] when the file has no lists at all (nothing to judge by)."""
+    lists = [x for x in (s.playable, s.unlockable, s.nonplayable) if x]
+    if not lists:
+        return []
+    listed = {name.rstrip(",") for x in lists for _, name in x["items"]}
+    return [fb.name for fb in s.factions if fb.name not in listed]
+
+
+def event_lines(lines):
+    """Line numbers of `event` lines above the first faction block, where the games' readers meet them: 'Events
+    are no longer supported in strat.txt, and must be added to events.txt' (RomeTW.exe, medieval2.exe, REX,
+    M2EX)."""
+    out = []
+    for i, l in enumerate(lines):
+        h = _head(l)
+        if h == "faction":
+            break
+        if h == "event":
+            out.append(i)
+    return out
+
+
 def empty_armies(s):
     """Armies with no unit under them, as 'name (faction)': a character's army line, or a town's own
     garrisoned_army. The game stops reading descr_strat there ('Must add at least one unit to an army') and every

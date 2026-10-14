@@ -51,6 +51,7 @@ FIXES = [
     (("copy them in to set this mod's own engine settings",), "Copy them in", "engine_files"),
     (("campaign rules", "max_number_of_children", "age of manhood"), "Open Campaign rules", "rules"),
     (("family tree", "children", "character_record"), "Open Characters (family tree)", "characters"),
+    (("nonplayable lists",), "Open Edit faction (tick Playable)", "edit"),
     (("settlements tab", "population", "governor's building", "core building", "temples"),
      "Open Edit faction (Settlements)", "edit"),
     (("win condition", "descr_win_conditions"), "Open Edit faction (victory)", "edit"),
@@ -145,6 +146,16 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     for n, _ in headers_out_of_order(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))):
         bad("%s: its first lines in descr_strat.txt are out of the games' order (denari before superfaction / "
             "ai_label...) - the game starts it without its towns; Load offers to put them in order" % n)
+    from .strat import event_lines, unlisted_factions
+    for n in unlisted_factions(s):
+        bad("%s: its block in descr_strat.txt is in none of the playable / unlockable / nonplayable lists at the "
+            "file's top - the game stops ('Faction %s not listed in playable/nonplayable header section.'); add it "
+            "to one of the lists (Edit faction: tick Playable)" % (n, n))
+    ev = event_lines(s.lines)
+    if ev:
+        bad("descr_strat.txt has %d event line(s) at its top (line %s) - the game does not read them there "
+            "('Events are no longer supported in strat.txt, and must be added to events.txt'); move them to "
+            "descr_events.txt (Events)" % (len(ev), ", ".join(str(i + 1) for i in ev[:5])))
     from .campaignrules import strat_order_problems
     for why in strat_order_problems(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))):
         bad(why)
@@ -178,6 +189,21 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         for father, younger, older in wrong[:3]:
             bad("%s: %s's children - %s is written before the older %s; the game wants them oldest first ('... is "
                 "supposed to be younger than ...')" % (fb.name, father, younger, older))
+    from .family import dropped_records
+    for fb in s.factions:                           # records the game leaves out of the family tree
+        try:
+            gone = dropped_records(read_family(strat_f, fb.name))
+        except Exception:
+            continue
+        for name, why in gone[:5]:
+            if why == "woman":
+                bad("%s: %s (off the map, character_record in descr_strat.txt) is a woman with no husband and no "
+                    "father on the family tree - the game leaves her out ('is neither married, nor has a father and "
+                    "will be ommited from the game'); put her on a relative line (Family tree)" % (fb.name, name))
+            else:
+                bad("%s: %s (off the map, character_record in descr_strat.txt) is a child with no father on the "
+                    "family tree - the game leaves the child out ('The child character record %s has no father and "
+                    "will be ommited'); give the child a father (Family tree)" % (fb.name, name, name))
     from .limits import manhood_age
     manhood = manhood_age(mod)
     for name, age in records_too_old(strat_f.texts(), manhood):     # a living man off the map must be a boy
@@ -222,11 +248,21 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         len(units), sum(u.mercenary for u in units), sum(u.category == "ship" for u in units)))
     no_owner = [u.type for u in units if not u.ownership]
     if no_owner:
-        bad("%d unit(s) without an ownership line, e.g. %s" % (len(no_owner), ", ".join(no_owner[:3])))
+        # not an error in any of the games: 'Ownership missing from unit type '%s'. using all.' (RomeTW.exe,
+        # medieval2.exe, REX, M2EX) - every faction may have it
+        say("    note: %d unit(s) without an ownership line (the game gives them to every faction: 'Ownership "
+            "missing ... using all'), e.g. %s" % (len(no_owner), ", ".join(no_owner[:3])))
     blds = read_buildings(mod.load(mod.file("edb")))
     chains = {b.name: b for b in blds}
     say("BUILDINGS: %d chains, %d levels in export_descr_buildings.txt" % (
         len(blds), sum(len(b.levels) for b in blds)))
+    from .buildings import reader_problems
+    from .limits import engine_of
+    edb_problems = reader_problems(blds, mod.load(mod.file("edb")).texts(), facs, types, engine_of(mod))
+    for m in edb_problems[:12]:
+        bad(m)
+    if len(edb_problems) > 12:
+        bad("... and %d more export_descr_buildings.txt problem(s) of the same kinds" % (len(edb_problems) - 12))
     if not any(b.lower().startswith("core") for b in chains):
         say("    (no core_building chain: settlements are not grown by the governor's building)")
     md = _modeldb_report(mod)
@@ -715,7 +751,7 @@ def rebel_problems(mod, units):
         for u in names:
             if u not in owners:
                 out.append("descr_rebel_factions.txt, %s: unit '%s' is not in export_descr_unit.txt" % (cur, u))
-            elif "slave" not in owners[u]:
+            elif owners[u] and "slave" not in owners[u]:      # no ownership line = every faction's
                 out.append("descr_rebel_factions.txt, %s: unit '%s' has no 'slave' in its ownership - the game "
                            "crashes when these rebels appear" % (cur, u))
     return out

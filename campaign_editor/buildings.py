@@ -112,6 +112,66 @@ def available(level, faction, culture, template=None):
     return any(x in fs for x in (faction, culture, template) if x)
 
 
+RE_LIST = re.compile(r"(?<![A-Za-z0-9_])factions\s*\{([^}]*)\}")
+
+
+def reader_problems(blds, lines, factions, unit_types, engine=None):
+    """What the games' own export_descr_buildings readers refuse, in their words (RomeTW.exe, medieval2.exe, M2EX,
+    read 2026-10-14): a factions list not ending with a comma (all games and engines); a recruit line for a unit
+    export_descr_unit.txt lacks ('Unknown unit type specified'); a faction that may build a level of a chain while
+    a lower one is closed to it ('Building DB error - faction %s has gap in building prior to %s') - REX.exe has
+    neither of the last two any more. factions: [(faction, culture)]; unit_types: the EDU's types."""
+    out = []
+    for n, l in enumerate(lines, 1):
+        for m in RE_LIST.finditer(strip_comment(l)):
+            body = m.group(1).strip()
+            if body and not body.endswith(","):
+                out.append("export_descr_buildings.txt line %d: the factions list '{ %s }' does not end with a comma "
+                           "- the game stops ('Expected faction or culture type, or 'all' - ... terminate list "
+                           "with comma; enclose list in {}'); write '{ %s, }'" % (n, body, body))
+    if engine == "REX.exe":
+        return out
+    known = {u.lower() for u in unit_types}
+    chain = level = None
+    depth, names = 0, []
+    for n, l in enumerate(lines, 1):
+        code = strip_comment(l)
+        t = tokens(code)
+        if t[:1] == ["building"] and depth == 0 and len(t) > 1:
+            chain, names = t[1], []
+        elif t[:1] == ["levels"] and depth == 1:
+            names = t[1:]
+        elif depth == 2 and t and t[0] in names:
+            level = t[0]
+        elif t[:1] in (["recruit"], ["recruit_pool"]) and code.count('"') >= 2:
+            unit = code.split('"')[1].strip()
+            if unit.lower() not in known:
+                out.append("export_descr_buildings.txt line %d (%s, %s): recruits '%s', which export_descr_unit.txt "
+                           "lacks - the game stops ('Unknown unit type specified: %s'); add the unit or take the line "
+                           "out" % (n, chain, level, unit, unit))
+        depth = max(depth + code.count("{") - code.count("}"), 0)
+    for b in blds:
+        for faction, culture in factions:
+            open_ = [bool(available(lv, faction, culture)) for lv in b.levels]
+            if True not in open_:
+                continue
+            first = open_.index(True)
+            if first > 0 and not (b.name == "temple_of_horse" and first > 2):
+                out.append("export_descr_buildings.txt, %s: %s may build %s but not the level below it (%s) - the "
+                           "game reports 'Building DB error - faction %s has gap in building prior to %s (unavailable "
+                           "at level zero)'; open the lower levels to it too (Buildings)" % (
+                               b.name, faction, b.levels[first].name, b.levels[first - 1].name, faction,
+                               b.levels[first].name))
+            elif False in open_[first:] and True in open_[open_.index(False, first):]:
+                gap = open_.index(False, first)
+                after = open_.index(True, gap)
+                out.append("export_descr_buildings.txt, %s: %s may build %s but not %s below it - the game reports "
+                           "'Building DB error - faction %s has gap in building prior to %s'; open %s to it too "
+                           "(Buildings)" % (b.name, faction, b.levels[after].name, b.levels[gap].name, faction,
+                                            b.levels[after].name, b.levels[gap].name))
+    return out
+
+
 def builder_cultures(mod, level):
     """The cultures that build a level (its factions lists: a faction's culture, a culture named, everyone for 'all'
     or no list), in descr_sm_factions.txt's order - the ones whose picture and texts the game shows for it. A

@@ -3161,6 +3161,20 @@ building smith
         self.assertIn("LIMITS (the original Rome exe: no REX", text)
         self.assertIn("building chains", text)
 
+    def test_check_mod_unit_without_ownership_is_a_note(self):
+        """'Ownership missing from unit type '%s'. using all.' - no error in any game (RomeTW.exe, medieval2.exe,
+        REX, M2EX): a note, every faction may have it, the rebels too."""
+        from campaign_editor.check import check_mod
+        edu = ModData(self.root).file("edu")
+        with open(edu) as fh:
+            text = fh.read()
+        with open(edu, "w") as fh:
+            fh.write(text.replace("ownership\talpha\n", "", 1))
+        found = []
+        text = check_mod(ModData(self.root), "test", found=found)
+        self.assertIn("without an ownership line (the game gives them to every faction", text)
+        self.assertFalse([p for p in found if "ownership" in p])
+
     def test_check_mod_crash_rules_from_modders(self):
         """Win conditions naming a missing region or faction, a region without the 'slaves' the mod's
         others have (Rome), Medieval II rebels with units slave may not own - all crash the game."""
@@ -12937,6 +12951,93 @@ class BIRegionsTest(unittest.TestCase):
         self.assertEqual((c["settlement"], c["creator"], c["rebels"]), ("Dal_Raida", "celts", "Pictii"))
         self.assertEqual((c["legion"], c["farming"], c["beliefs"]), ("legion: Caledonica", "5", "pagan 90 christianity 10"))
         self.assertEqual(e["Tribus_Saxones"]["resources"], "timber, slaves, amber")
+
+
+class ExeReaderGapsTest(unittest.TestCase):
+    """Three checks the games' own descr_strat readers make (RomeTW.exe, medieval2.exe, REX, M2EX - read in their
+    code 2026-10-13/14) that Check mod files did not make."""
+
+    TEXT = ("campaign\timperial_campaign\r\n"
+            "playable\r\n\tromans_julii\r\nend\r\n"
+            "unlockable\r\n\tgauls\r\nend\r\n"
+            "nonplayable\r\n\tslave\r\nend\r\n"
+            "start_date\t-270 summer\r\n"
+            "event\tearthquake\t-260 summer\r\n"
+            "faction\tromans_julii, balanced smith\r\n"
+            "character\tFlavius, named character, leader, age 40, x 1, y 2\r\n"
+            "character_record\tLivia, female, age 30, alive, never_a_leader\r\n"
+            "character_record\tJulia, female, age 25, alive, never_a_leader\r\n"
+            "character_record\tMarcus, male, age 10, alive, never_a_leader\r\n"
+            "character_record\tTitus, male, age 12, alive, never_a_leader\r\n"
+            "character_record\tGaia, female, age 8, alive, never_a_leader\r\n"
+            "character_record\tAulus, male, age 60, dead 2, never_a_leader\r\n"
+            "relative\tFlavius, Livia, Titus, end\r\n"
+            "relative\tAulus, Gaia, end\r\n"
+            "faction\tgauls, balanced smith\r\n"
+            "faction\tbritons, balanced smith\r\n"
+            "faction\tslave, balanced smith\r\n"
+            "\r\ncore_attitudes\tromans_julii, 0 slave\r\n")
+
+    def strat(self):
+        return TextFile.from_bytes("descr_strat.txt", self.TEXT.encode("latin-1"))
+
+    def test_faction_not_in_the_header_lists(self):
+        """'Faction %s not listed in playable/nonplayable header section.' - a Script Error, the game stops."""
+        from campaign_editor.strat import unlisted_factions
+        self.assertEqual(unlisted_factions(Strat(self.strat())), ["britons"])
+
+    def test_event_lines_in_descr_strat(self):
+        """'Events are no longer supported in strat.txt, and must be added to events.txt'."""
+        from campaign_editor.strat import event_lines
+        f = self.strat()
+        self.assertEqual([f.texts()[i].split()[0] for i in event_lines(f.texts())], ["event"])
+        self.assertEqual(event_lines(f.texts())[0], 11)
+
+    def test_records_the_game_leaves_out(self):
+        """A woman off the map with no husband and no father, a child (girl under 12, boy under 16) with no father:
+        'will be ommited from the game'. A wife (Livia) or a child with a father (Titus) stays, a grown man with no
+        father (Aulus) too; a girl wed with no father (Gaia) is still a child with no father - the game's own order."""
+        from campaign_editor.family import dropped_records, read
+        fam = read(self.strat(), "romans_julii")
+        self.assertEqual(dropped_records(fam), [("Julia", "woman"), ("Marcus", "child"), ("Gaia", "child")])
+
+
+class EdbReaderGapsTest(unittest.TestCase):
+    """export_descr_buildings checks of the games' own readers (RomeTW.exe, medieval2.exe, M2EX; REX dropped the
+    gap and unknown-unit ones - their texts are not in REX.exe)."""
+
+    EDB = ("building barracks\n{\n    levels muster_field militia_barracks city_barracks\n    {\n"
+           "        muster_field requires factions { roman, gauls, }\n        {\n"
+           "            recruit \"roman hastati\" 0\n            recruit \"ghost men\" 0\n        }\n"
+           "        militia_barracks requires factions { roman }\n        {\n        }\n"
+           "        city_barracks requires factions { roman, gauls, }\n        {\n        }\n    }\n}\n"
+           "building temple_of_horse\n{\n    levels shrine temple large_temple awesome_temple\n    {\n"
+           "        shrine requires factions { britons, }\n        {\n        }\n"
+           "        temple requires factions { britons, }\n        {\n        }\n"
+           "        large_temple requires factions { britons, }\n        {\n        }\n"
+           "        awesome_temple requires factions { roman, britons, }\n        {\n        }\n    }\n}\n")
+    FACTIONS = [("romans_julii", "roman"), ("gauls", "barbarian"), ("britons", "barbarian")]
+
+    def problems(self, engine=None):
+        from campaign_editor.buildings import read_buildings, reader_problems
+        f = TextFile.from_bytes("export_descr_buildings.txt", self.EDB.encode("latin-1"))
+        return reader_problems(read_buildings(f), f.texts(), self.FACTIONS, {"roman hastati"}, engine)
+
+    def test_the_three_checks(self):
+        got = self.problems()
+        self.assertEqual(len(got), 3, got)
+        self.assertIn("line 10", got[0])                  # factions { roman } - no comma
+        self.assertIn("terminate list with comma", got[0])
+        self.assertIn("'ghost men'", got[1])              # recruit of a unit EDU lacks
+        self.assertIn("gauls", got[2])                    # gauls: level 1 closed, level 2 open = a gap
+        self.assertIn("barracks", got[2])
+        # temple_of_horse closed to romans up to its 4th level: RomeTW.exe lets that one chain open late (its 4th
+        # level or later)
+
+    def test_rex_drops_gap_and_unknown_unit(self):
+        got = self.problems("REX.exe")
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("terminate list with comma", got[0])
 
 if __name__ == "__main__":
     unittest.main()
