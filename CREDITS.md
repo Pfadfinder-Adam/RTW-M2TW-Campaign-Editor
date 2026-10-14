@@ -18,7 +18,6 @@
 Thank you for keeping the work going (names only, never amounts):
 
 - **GKpretorian**
-- **NamiKawa**
 - **Ruthron**
 
 ## Thank you for the reports
