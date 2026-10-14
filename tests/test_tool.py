@@ -9374,9 +9374,11 @@ building smith
         places, _ = flow_places(boxes, 450, top=True)        # narrow: the third on a row of its own, at its top
         self.assertEqual(places[2], (0, 302))
 
-    def test_lists_scroll_by_dragging_with_no_scrollbar(self):
-        """No scrollbar anywhere (it only took room): a list, a table or a read-only text follows a left-button drag
-        both ways, the rows picked before stay picked; an editable text keeps the drag for selecting its words."""
+    def test_lists_scroll_by_dragging_and_show_their_scrollbar(self):
+        """Scrollbars are seen again (the user, 2026-10-14, after a modder asked for one: 'not everyone is as
+        intuitive'); a list, a table or a read-only text still follows a left-button drag both ways, the rows picked
+        before stay picked; an editable text keeps the drag for selecting its words. A page (ScrollFrame) shows its
+        bar only while its contents are taller than the window."""
         try:
             import tkinter as tk
             from tkinter import ttk
@@ -9405,7 +9407,7 @@ building smith
                     w.event_generate("<B1-Motion>", x=x + dx * k // 5, y=y + dy * k // 5, state=0x100)
                 w.event_generate("<ButtonRelease-1>", x=x + dx, y=y + dy)
                 root.update()
-            self.assertFalse(sb.winfo_ismapped())
+            self.assertTrue(sb.winfo_ismapped())
             tv.selection_set(rows[3])
             drag(tv, 200, 100, -120, -60)
             self.assertGreater(tv.yview()[0], 0)
@@ -9413,6 +9415,21 @@ building smith
             self.assertEqual(tv.selection(), (rows[3],))
             drag(text, 40, 20, 0, -30)
             self.assertEqual(text.yview()[0], 0)            # editable: the drag selected words
+            from campaign_editor.gui_util import ScrollFrame
+            top = tk.Toplevel(root)
+            top.geometry("300x200+0+0")
+            sf = ScrollFrame(top)
+            sf.pack(fill="both", expand=True)
+            labels = [ttk.Label(sf.inner, text="line %d" % i) for i in range(60)]
+            for lb in labels:
+                lb.pack(anchor="w")
+            root.update()
+            self.assertTrue(sf.bar.winfo_ismapped())         # taller than the window: its bar
+            for lb in labels[2:]:
+                lb.destroy()
+            for _ in range(3):
+                root.update()
+            self.assertFalse(sf.bar.winfo_ismapped())        # all of it seen: no bar
         finally:
             root.destroy()
 

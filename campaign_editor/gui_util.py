@@ -374,10 +374,8 @@ def _first(root, cls, seq, fn):
 
 
 def scrolling_without_bars(root):
-    """No scrollbar anywhere: every ttk.Scrollbar is made but never shown (pack / grid / place do nothing), the
-    lists, tables, texts and pages scroll by the wheel, a left-button drag and the middle button instead."""
-    for name in ("pack", "pack_configure", "grid", "grid_configure", "place", "place_configure"):
-        setattr(ttk.Scrollbar, name, lambda self, *a, **k: None)
+    """Besides their scrollbars (seen again since 2026-10-14 - 'not everyone is as intuitive'), the lists, tables,
+    texts and pages scroll by the wheel, a left-button drag and the middle button."""
     if sys.platform != "darwin":                          # a Mac's Button-2 is the right button
         root.bind_all("<Button-2>", _auto_press, add="+")
         root.bind_all("<ButtonRelease-2>", _auto_release, add="+")
@@ -399,6 +397,10 @@ class ScrollFrame(ttk.Frame):
     def __init__(self, parent, **kw):
         super().__init__(parent, **kw)
         self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0)
+        # its scrollbar only while the contents are taller than the window (a bar that appears narrows the page:
+        # wrapped texts grow taller, so it stays - showing and hiding cannot chase each other)
+        self.bar = ttk.Scrollbar(self, command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self._bar_set)
         self.canvas.pack(side="left", fill="both", expand=True)
         self.inner = ttk.Frame(self.canvas)
         self._win = self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
@@ -411,6 +413,14 @@ class ScrollFrame(ttk.Frame):
         cw = self.canvas.winfo_width()
         self.canvas.itemconfigure(self._win, width=cw)
         self.canvas.configure(scrollregion=(0, 0, cw, self.inner.winfo_reqheight()))
+
+    def _bar_set(self, lo, hi):
+        self.bar.set(lo, hi)
+        need = float(hi) - float(lo) < 0.999
+        if need and not self.bar.winfo_manager():
+            self.bar.pack(side="right", fill="y", before=self.canvas)
+        elif not need and self.bar.winfo_manager():
+            self.bar.pack_forget()
 
 
 
