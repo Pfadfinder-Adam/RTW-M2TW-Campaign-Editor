@@ -542,7 +542,7 @@ class NewRecordWizard(StepWindow):
         self._note("Every number starts at what is usual for such a unit in this mod (the middle of its %d units of "
                    "the kind); beside it the lowest and highest the mod has. Every other line (formation, ground, "
                    "heat, the weapons' kinds and sounds) is written as such units usually have it - change any of "
-                   "them later in Units (Every line of the block)." % typ["count"])
+                   "them later in Units (Stats)." % typ["count"])
         g = ttk.Frame(self.body)
         g.pack(fill="x")
         vs = {}

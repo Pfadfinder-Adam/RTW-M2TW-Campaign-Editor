@@ -119,7 +119,7 @@ class RecordEditor(ttk.Frame):
         self.lbl_links.pack(anchor="w")
         self._links_open = bool(settings.get("editor_links_open"))
         self._links_shown()
-        ShortHint(bar, text="Every line of the block: the key on the left, what follows it on the right. "
+        ShortHint(bar, text="Stats - every line of the block: the key on the left, what follows it on the right. "
                             "Changed fields turn yellow, lines to add green, lines to remove red (x on the left); "
                             "Preview, then Apply writes them (with a backup). A unit's line: the ? on its right says "
                             "what each value means, from the game's own notes.",
@@ -196,7 +196,7 @@ class RecordEditor(ttk.Frame):
 
     def _lines_label(self):
         n = len(getattr(self, "fields", None) or ()) if self.current else 0
-        self.b_lines.configure(text="Every line of the block%s%s" % (
+        self.b_lines.configure(text="Stats%s%s" % (
             " (%d)" % n if n else "", " - open" if self._lines_open else "..."))
         if self._lines_open and self._lines_win.winfo_exists():
             cur = self.current[0] if isinstance(self.current, tuple) else (self.current or "")
