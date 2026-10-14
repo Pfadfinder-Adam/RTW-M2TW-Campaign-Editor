@@ -382,9 +382,13 @@ def collect(mod, unit_types):
 ANIM_DIR = "__animations__/"            # the skeletons and animations a pack carries (animpacks) - never put as files
 
 
-def model_skeletons(blocks):
-    """The skeleton names the model blocks {name: lines} name (skeleton / skeleton_horse ... lines)."""
+def model_skeletons(blocks, modeldb=None):
+    """The skeleton names the model blocks {name: lines} name (skeleton / skeleton_horse ... lines) and Medieval II's
+    modeldb models {name: to_dict} (each mount entry's primary and secondary skeleton)."""
     out = []
+    for m in (modeldb or {}).values():
+        for mt in m.get("mounts") or []:
+            out += [s for s in (mt.get("primary"), mt.get("secondary")) if s and s not in out]
     for lines in blocks.values():
         for line in lines:
             code = strip_comment(line).strip().split(None, 1)
@@ -399,7 +403,7 @@ def _carry_skeletons(mod, manifest, files):
     file}, 'anims': {key: [[idx record (hex), file]]}}, the bytes in files under ANIM_DIR."""
     from . import animpacks
     try:
-        got = animpacks.collect(mod, model_skeletons(manifest["blocks"].get("model") or {}))
+        got = animpacks.collect(mod, model_skeletons(manifest["blocks"].get("model") or {}, manifest.get("modeldb")))
     except (OSError, ValueError):
         return
     if not got["skeletons"]:

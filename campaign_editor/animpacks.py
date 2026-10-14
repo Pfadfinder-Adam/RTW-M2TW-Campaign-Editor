@@ -1,4 +1,5 @@
-"""Skeletons and their animations carried from one mod into another (Bring units) - Rome, Barbarian Invasion and REX.
+"""Skeletons and their animations carried from one mod into another (Bring units) - Rome, Barbarian Invasion, REX,
+Medieval II and M2EX.
 
 The game loads ONE set of four files (exe study, open.md 'BRING EVERYTHING A UNIT NEEDS'): the mod's own
 data/animations/pack.idx + pack.dat + skeletons.idx + skeletons.dat when it has all four, else the game's own -
@@ -7,14 +8,16 @@ reaches another mod only inside that mod's set: the target's set (its own, or th
 its changes) written into the target mod's folder with the source's skeleton records and every animation they name
 appended.
 
-skeletons.idx / .dat: 'SKEL.PACK', 3 stamp bytes, a version (u32; Rome 3), the count (u32) at byte 16; idx records
+skeletons.idx / .dat: 'SKEL.PACK', 3 stamp bytes, a version (u32; Rome 3, Medieval II 0x18000e), the count (u32) at
+byte 16; idx records
 = u32 name length + 1, u32 offset, u32 size, the name + NUL; the dat holds the records one after another from byte
 20. A record names its animations by path ('data/animations/...cas') and holds no offsets of its own - the same
 bytes stand at other places in Rome's and Barbarian Invasion's files - so it is copied as it is.
 pack.idx / .dat: 'ANIM.PACK', the version and the count at 16 the same way; idx records = u32 (name length + 10), u32
 offset, u32 size, f32 scale, u16 frames, u16 bones, u8 kind, the name + NUL (animations.read_index); Rome keeps most
 animations twice (scale 1.0 and 1.1), each its own bytes in the dat.
-Medieval II's skeletons.idx has another head (not decoded) - its skeletons are not carried (the nearest is taken)."""
+Medieval II's are the same form (stamp 56 3c 7c; its 112 records hold no offsets either, a skeleton's parent baked in -
+no record names another)."""
 
 import os
 import re
@@ -57,10 +60,10 @@ class AnimSet:
 
     # ---- reading ----
     def skeletons(self):
-        """{name: (offset, size)} of skeletons.idx (ValueError when it is not a Rome one)."""
+        """{name: (offset, size)} of skeletons.idx (ValueError when it is not one)."""
         d = self.data["skeletons.idx"]
-        if not d.startswith(b"SKEL.PACK") or struct.unpack_from("<I", d, 12)[0] != 3:
-            raise ValueError("not a Rome skeleton pack")
+        if not d.startswith(b"SKEL.PACK"):
+            raise ValueError("not a skeleton pack")
         n = struct.unpack_from("<I", d, 16)[0]
         out, p = {}, 20
         for _ in range(n):

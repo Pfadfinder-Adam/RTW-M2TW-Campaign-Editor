@@ -5864,6 +5864,11 @@ building smith
         self.assertEqual(skeleton_problems(ModData(troot)), [])
         restore(ModData(troot), bdir)
         self.assertEqual({k: v for k, v in tree_hash(troot).items() if "_backups" not in k}, before)
+        # Medieval II (the user: 'не забывай'): the same set form; its models name skeletons in the modeldb
+        self.assertEqual(packs.model_skeletons({}, {"m": {"mounts": [{"primary": "MTW2_Spear", "secondary": ""},
+                                                                      {"primary": "MTW2_Spear",
+                                                                       "secondary": "MTW2_Sword"}]}}),
+                         ["MTW2_Spear", "MTW2_Sword"])
 
     def test_bring_all_units_to_one_building(self):
         # Bring > 'All the units here' (the user, 2026-10-14, for his tests): a unit the other mod trains nowhere gets
