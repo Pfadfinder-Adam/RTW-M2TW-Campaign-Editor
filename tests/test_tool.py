@@ -8137,6 +8137,37 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_region_brush_paints_sea(self):
+        """Discord (2026-10-13): region borders cut into a sailable river and there was no way to paint those tiles
+        back to sea on the region map. The region brush has '(sea)' - the map's own sea colour; on water (heights)
+        it just goes, on land it is said (that land would then belong to no region), a town or port tile refuses."""
+        from campaign_editor.regionedit import SEA, apply_regions, region_problems
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        red, blue, black, sea = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233)
+        write_tga(os.path.join(camp, "map_regions.tga"), 5, 4, [[red, red, blue, blue, sea],
+                                                                 [red, black, blue, blue, sea],
+                                                                 [red, red, blue, black, sea],
+                                                                 [red, red, blue, blue, sea]])
+        write_tga(os.path.join(camp, "map_heights.tga"), 11, 9,                  # tile (3, 0) is water
+                  [[(0, 0, 250) if x >= 9 or (x, y) == (7, 1) else (60, 60, 60) for x in range(11)]
+                   for y in range(9)])
+        mod = ModData(self.root)
+        errors, warns = region_problems(mod, "test", {(3, 0): SEA}, [])
+        self.assertEqual((errors, warns), ([], []))
+        errors, warns = region_problems(mod, "test", {(2, 3): SEA}, [])
+        self.assertEqual(errors, [])
+        self.assertTrue(any("land" in w for w in warns))
+        errors, _ = region_problems(mod, "test", {(1, 1): SEA}, [])
+        self.assertTrue(errors)                                       # a town's tile
+        before = tree_hash(self.root)
+        plan = Plan(mod, "map", "map", {})
+        apply_regions(plan, "test", {(3, 0): SEA}, [])
+        restore_dir = plan.apply()
+        self.assertTrue(ModData(self.root).is_sea("test", (3, 0)))
+        self.assertEqual(ModData(self.root).region_map("test").get(3, 0)[:3], sea)
+        restore(ModData(self.root), restore_dir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_a_brought_unit_takes_its_own_factions_look(self):
         """Reports R-20261013-018380 / 4547BC: Barbarian Invasion's saxon hunters brought into Rome came out in the
         rebels' blue - the model has 'texture slave' and 'texture saxons', no mercenaries' line, and the FIRST line

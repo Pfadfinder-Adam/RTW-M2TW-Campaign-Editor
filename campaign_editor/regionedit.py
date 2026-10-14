@@ -29,6 +29,20 @@ def _ok_name(n):
     return bool(n) and all(ch.isalnum() or ch == "_" for ch in n) and not n[0].isdigit()
 
 
+SEA = "(sea)"           # the region brush's sea: the map's own sea colour on the region map (Discord: borders cut
+                        # into sailable rivers could not be painted back)
+
+
+def sea_colour(mod, campaign):
+    """The sea colour this map_regions.tga uses most (vanilla 41 140 233), or that one."""
+    img = mod.region_map(campaign)
+    taken = set(mod.region_colours(campaign)) | {CITY, PORT}
+    seas = [c for c in img.colours() if tuple(c[:3]) not in taken]
+    if (41, 140, 233) in seas or not seas:
+        return (41, 140, 233)
+    return max(seas, key=lambda c: len(img.find(c)))
+
+
 def free_colour(mod, campaign, taken=()):
     """A colour no pixel of map_regions.tga has (nor black, white or near the seas'). The three channels step through
     199, 197 and 193 values (primes): 7.5 million different colours before the walk comes round again - it used to
@@ -66,6 +80,15 @@ def region_problems(mod, campaign, painted, new_regions):
         if r["name"] == r.get("settlement"):
             errors.append("%s: the region and its settlement need different names" % r["name"])
     for (x, y), r in painted.items():
+        if r == SEA:                                 # the region map's sea: refused on a town / port only; on land
+            if not (0 <= x < img.width and 0 <= y < img.height):          # by the heights it is said
+                errors.append("tile %d, %d is off the map" % (x, y))
+            elif img.get(x, y) in (CITY, PORT):
+                errors.append("tile %d, %d holds a town or port - it keeps its region" % (x, y))
+            elif mod.land_by_heights(campaign, (x, y)):
+                warns.append("tile %d, %d is land in map_heights.tga - painted sea on the region map it belongs to no "
+                             "region (make it water with the Terrain brush, or paint a region back)" % (x, y))
+            continue
         if r not in known:
             errors.append("tile %d, %d: no region '%s'" % (x, y, r))
             continue
@@ -97,7 +120,8 @@ def region_problems(mod, campaign, painted, new_regions):
             held[r] = cells | {tuple(t) for t, v in painted.items() if v == r}
         return held[r]
     tiles = mod.city_tiles(campaign)
-    for r in {v for v in painted.values()} | {by_colour.get(before(t)) for t in painted if before(t) in by_colour}:
+    for r in {v for v in painted.values() if v != SEA} | {by_colour.get(before(t)) for t in painted
+                                                          if before(t) in by_colour}:
         if r and r in regions and not cells_of(r):
             errors.append("%s would have no land left" % r)
     for r in new_regions:
@@ -229,6 +253,8 @@ def apply_regions(plan, campaign, painted, new_regions):
     colours = {k: v["colour"] for k, v in regions.items()}
     for r in new_regions:
         colours[r["name"]] = tuple(r.get("colour") or free_colour(mod, campaign, colours.values()))
+    if SEA in painted.values():
+        colours[SEA] = sea_colour(mod, campaign)
     path = mod.campaign_file(campaign, "map_regions.tga")
     changes = {xy: colours[r] for xy, r in painted.items()}
     for r in new_regions:
@@ -241,7 +267,7 @@ def apply_regions(plan, campaign, painted, new_regions):
         moved.setdefault(r, 0)
         moved[r] += 1
     for r, n in sorted(moved.items()):
-        plan.notes.append((mod.rel(path), "%d tile(s) to %s" % (n, r)))
+        plan.notes.append((mod.rel(path), "%d tile(s) to %s" % (n, "the sea" if r == SEA else r)))
     for folder in {os.path.dirname(path), os.path.join(mod.data, "world", "maps", "base")}:
         plan.delete(os.path.join(folder, "map.rwm"), "the game rebuilds it from the changed map on the next start")
     for w in warns:
@@ -655,3 +681,4 @@ def plan_land(plan, campaign):
             return painted.get(p, by_colour.get(img.get(*p))) == region
         return test
     return tiles, own
+

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- The region brush can paint sea on the region map ("(sea)" at the end of *Paint with*).
 - **View in 3D: the armour upgrades** (Medieval II): a unit with more than one armour model (`armour_ug_models`)
   gets **Armour** in its 3D window - each level's model in the same view (and for Make a card).
 - **Special places on the campaign map** (Rome with REX, Medieval II with M2EX): Map editor > a right click on the

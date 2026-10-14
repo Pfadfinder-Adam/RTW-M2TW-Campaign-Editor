@@ -2446,9 +2446,11 @@ class App(tk.Tk):
             land = {t: new[r] for t, r in self.region_paint.items() if r in new}
             return {"region_mode": False, "region_painted": self.region_paint, "region_points": points,
                     "new_land": land}
+        from .regionedit import SEA, sea_colour
         cols = self._region_colours()
         names = sorted(cols)
-        self.cb_paint["values"] = [r["name"] + "  (new)" for r in self.new_regions] + names
+        cols[SEA] = sea_colour(self.mod, self.v_campaign.get())     # the region map's sea (Discord: borders cut
+        self.cb_paint["values"] = [r["name"] + "  (new)" for r in self.new_regions] + names + [SEA]   # into rivers)
         cm = self._cmap
 
         def paint(tiles):
@@ -2463,13 +2465,13 @@ class App(tk.Tk):
                     continue
                 px = cm.regions_img.get(x, y)
                 was = cm.region_at(x, y)
-                if px in ((0, 0, 0), (255, 255, 255)) or was is None and not self.mod.unclaimed_land(
-                        self.v_campaign.get(), t):
+                if px in ((0, 0, 0), (255, 255, 255)) or was is None and target != SEA and \
+                        not self.mod.unclaimed_land(self.v_campaign.get(), t):
                     continue                              # sea, towns and ports keep their region; land no region
                                                           # holds takes one (Discord: 'unused land')
                 if any(tuple(r.get(k) or ()) == t for r in self.new_regions for k in ("city", "port")):
                     continue
-                if was == target:
+                if was == target or target == SEA and was is None:      # already so in the files
                     self.region_paint.pop(t, None)
                 elif self.region_paint.get(t) != target:
                     self.region_paint[t] = target

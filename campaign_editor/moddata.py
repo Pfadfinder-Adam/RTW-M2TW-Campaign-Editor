@@ -594,10 +594,16 @@ class ModData:
         px = img.get(x, y)
         if px in ((0, 0, 0), (255, 255, 255)) or px in self.region_colours(campaign):
             return False
+        return self.land_by_heights(campaign, xy)
+
+    def land_by_heights(self, campaign, xy):
+        """True when map_heights.tga makes tile xy land - its middle point not pure blue, the game's own rule
+        (RomeTW.exe FUN_004720ed); False for water, or no heights map of the right size."""
+        img = self.region_map(campaign)
         heights = self._optional_map(campaign, "map_heights.tga")
         if not heights or (heights.width, heights.height) != (2 * img.width + 1, 2 * img.height + 1):
             return False
-        r, g, b = heights.get(2 * x + 1, 2 * y + 1)[:3]
+        r, g, b = heights.get(2 * xy[0] + 1, 2 * xy[1] + 1)[:3]
         return not (r == 0 and g == 0 and b > 0)
 
     def is_sea(self, campaign, xy):
