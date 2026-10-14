@@ -18,6 +18,7 @@
 Thank you to everyone who helped with money and kept the work going - directly, on Ko-fi or on GitHub Sponsors
 (names only, never amounts):
 
+- **DEADHEART**
 - **NamiKawa**
 - **GKpretorian**
 - **Ruthron**
