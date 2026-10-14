@@ -194,7 +194,8 @@ def open_upscale(app):
         if st["done"] == len(STEPS):
             text += "\nALL DONE. Look the map over (the message that opened says what), then start the game: on the " \
                     "first start it builds map.rwm again, which takes a while."
-            messagebox.showinfo(APP, look_over(warn), parent=w)
+            from .limits import engine_of
+            messagebox.showinfo(APP, look_over(warn, engine_of(app.mod)), parent=w)
         v_state.set(text)
         show_marks()
 

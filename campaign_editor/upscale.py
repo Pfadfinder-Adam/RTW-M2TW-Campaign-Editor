@@ -2685,9 +2685,19 @@ def _dimensions(f, vertical=1.0):
     return n
 
 
-def look_over(warnings=()):
+# the original exes draw the sand / surf strip of the whole coast from ONE buffer (Rome 4000 / 9000, Medieval II
+# 5000 / 15000 vertices / indices); a coastline that no longer fits is SKIPPED. REX.exe / M2EX.exe grow the buffers
+# (FUN_1405f79c0) - nothing is lost there (exe study 2026-10-14, rules.md 'beach / surf STRIP')
+STRIP_WORDS = ("Without REX / M2EX: the original game draws sand and surf along a limited length of coast only "
+               "(about 2000 coast points in Rome, 2500 in Medieval II).\nA 3 x bigger map has about three times more "
+               "coast, so some coasts will show without sand or surf - a plain edge.\nNothing in the map files can "
+               "change that; with REX / M2EX every coast gets it.")
+
+
+def look_over(warnings=(), engine=None):
     """What the modder should look over by hand once the map is 3 x bigger (shown when it is written): the new
-    map is drawn by rules, and no rule draws every map 100 % right."""
+    map is drawn by rules, and no rule draws every map 100 % right. engine: limits.engine_of - without one, the
+    original exes' coast strip budget is said too."""
     text = ("The map is 3 x bigger now. Please look it over yourself before you play or share it: the new map is "
             "drawn from the old one by rules, and no rule gets every map 100 % right - here and there a coast, a "
             "river or a border can come out a pixel off.\n\n"
@@ -2700,6 +2710,8 @@ def look_over(warnings=()):
             "Small things are quick to fix by hand: the Map tab's 'Paint with' brush for borders, the Terrain "
             "tab's Land and sea, heights and ground brushes for the rest. Not happy with the whole map? 'Put the "
             "old map back' undoes it.")
+    if not engine:
+        text += "\n\n" + STRIP_WORDS
     warnings = list(warnings)
     if warnings:
         text += "\n\nAnd what the editor could not do itself:\n" + "\n".join(

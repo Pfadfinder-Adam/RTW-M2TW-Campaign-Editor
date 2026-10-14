@@ -4400,6 +4400,9 @@ building smith
         self.assertIn("could not do itself", text)
         self.assertIn("... and 2 more in the editor's log", text)
         self.assertTrue(all(len(line) <= 302 for line in text.splitlines()))
+        # the original exes skip coastlines past their strip buffer; REX / M2EX grow it
+        self.assertIn("without sand or surf", upscale.look_over())
+        self.assertNotIn("without sand or surf", upscale.look_over(engine="REX.exe"))
 
     def test_bigger_map_natural_heights(self):
         """x3 heights the natural way: the sea and land as the mask says, no slope (times the heights' growth)
