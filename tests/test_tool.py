@@ -2379,6 +2379,21 @@ building smith
         self.assertEqual(packs.sorted_units(f, "by kind"), ["mid archers", "alpha spears", "zulu horse", "no price"])
         self.assertEqual(packs.sorted_units(f, "by owner"), ["no price", "mid archers", "zulu horse", "alpha spears"])
         self.assertEqual(packs.sorted_units(f, "by cost"), ["mid archers", "zulu horse", "alpha spears", "no price"])
+        # R-20261014-97E905: 'by owner still mixed' - a faction picked shows only the units it may own
+        self.assertEqual(packs.unit_owners(f)["alpha spears"], ["romans_julii", "gauls"])
+        self.assertEqual(packs.owner_choices(f), ["barbarian", "carthage", "egypt", "gauls", "romans_julii"])
+
+    def test_one_line_text_cut_with_dots(self):
+        """R-20261014-AE0007 / 3E1F2A: a long text in a row of the interface stays on one line, cut with '...' (the
+        whole of it in the hover tip) - never a tall narrow column."""
+        try:
+            from campaign_editor.gui_util import cut_to
+        except ImportError:                        # no tkinter here (python3); CI's python3.12 has it
+            self.skipTest("no tkinter")
+        fits = lambda t: len(t) <= 12
+        self.assertEqual(cut_to("short", fits), "short")
+        self.assertEqual(cut_to("a very long line of words", fits), "a very lo...")
+        self.assertTrue(fits(cut_to("x" * 100, fits)))
 
     def test_step_window_fits_a_short_step(self):
         """Report R-20261013-503D18: step 1 of Bring units (a short list of mods) stood in a big empty window. A step
@@ -3702,11 +3717,33 @@ building smith
             fh.write(out)
         from campaign_editor.tga import read_tga
         g = read_tga(path)
-        self.assertEqual(g.get(10, 5), shallow)                       # no beach on the bigger map: shallow sea
-        self.assertEqual(g.get(11, 5), shallow)
-        self.assertEqual(g.get(11, 5), shallow)                       # the sea within a tile of the coast is shallow
+        self.assertEqual(g.get(10, 5), land_c)                        # no beach on the bigger map: the land round it
+        self.assertEqual(g.get(11, 5), land_c)                        # (it is land - never sea ground on the land)
+        self.assertEqual(g.get(12, 5), shallow)                       # the sea within a tile of the coast is shallow
+        self.assertEqual(g.get(13, 5), shallow)
         self.assertEqual(g.get(20, 15), shallow)                      # the speck of deep water joins the shallows
         self.assertEqual(g.get(28, 2), deep)                          # the open sea stays deep
+
+    def test_bigger_map_river_reaches_the_sea_by_one_pixel(self):
+        """R-20261014-5D5543 / C73129: after x3 a river ran 2-3 pixels along the shore past its mouth - the game drew
+        it lying on the beach with a hook. river_mouths takes the dead-end pixels on the shore out, one by one from
+        the end: one pixel by the water stays, as in the games' own maps; a fork inland is left alone."""
+        from campaign_editor import upscale
+        from campaign_editor.tga import read_tga_bytes
+        W, H = 6, 5
+        river, none = (0, 0, 255), (0, 0, 0)
+        f = [[none] * W for _ in range(H)]
+        for t in ((0, 1), (1, 1), (2, 1), (3, 1), (3, 2), (3, 3)):   # along y = 1, then down the shore at x = 3
+            f[t[1]][t[0]] = river
+        heights = [[(0, 0, 253) if X >= 9 else (40, 40, 40) for X in range(2 * W + 1)] for _ in range(2 * H + 1)]
+        fp, hp = os.path.join(self.root, "f.tga"), os.path.join(self.root, "h.tga")
+        write_tga(fp, W, H, f)
+        write_tga(hp, 2 * W + 1, 2 * H + 1, heights)
+        out, n = upscale.river_mouths(open(fp, "rb").read(), open(hp, "rb").read())
+        self.assertEqual(n, 2)
+        g = read_tga_bytes(out)
+        self.assertEqual([g.get(3, y) for y in (1, 2, 3)], [river, none, none])   # the mouth stays, the run goes
+        self.assertEqual(g.get(0, 1), river)
 
     def test_bigger_map_edges_three_ways(self):
         """x3 lines drawn three ways (the modder picks in the x3 window): smooth, light (1.5 x weaker) and winding.
@@ -5434,6 +5471,22 @@ building smith
         restore(ModData(troot), bdir)
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
+        # R-20261014-6CD955: brought chariots wore the Britons' chariots - the target has the same model lines but
+        # ANOTHER texture file at the same path: the brought one comes in under a name of its own, its model too,
+        # and the target's own texture stays as it was
+        write(os.path.join(troot, "data", "models_unit", "textures", "h.tga.dds"), "THE TARGET'S HORSE")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        manifest, files = packs.read_pack(pack)
+        packs.import_pack(plan, manifest, files, ["alpha"])
+        plan.apply()
+        tex = os.path.join(troot, "data", "models_unit", "textures")
+        self.assertEqual(open(os.path.join(tex, "h.tga.dds")).read(), "THE TARGET'S HORSE")
+        self.assertEqual(open(os.path.join(tex, "h_2.tga.dds")).read(), "H-texture")
+        dmb = open(os.path.join(troot, "data", "descr_model_battle.txt")).read()
+        self.assertIn("horse_model_2", dmb)
+        self.assertIn("data/models_unit/textures/h_2.tga", dmb)
+        mount = open(os.path.join(troot, "data", "descr_mount.txt")).read()
+        self.assertIn("horse_model_2", mount)                        # its mount follows its model
 
     def test_engine_found_in_the_game_folder_and_the_limit_raised_in_the_mod(self):
         # M2EX copied over the game's root (any case), the mod in mods/<mod>/data: the engine is seen, the

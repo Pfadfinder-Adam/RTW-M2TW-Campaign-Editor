@@ -1319,6 +1319,43 @@ def rivers_off_the_water(features, heights, ground, land=None):
     return _write(features, w, h, step, raw)
 
 
+def river_mouths(features, heights):
+    """map_features (bytes) with every river reaching the sea by ONE pixel: river pixels along the coast past the
+    mouth (each touching the sea, a dead end of the river) taken out, one by one from the end. The games' own maps
+    end a river with one pixel by the water (Rome: 40 such pixels, one pair); the x3 map left runs of 2-3 along the
+    shore, which the game drew as a river lying on the beach and a hook at the mouth (a tester, R-20261014-5D5543,
+    C73129). Fords and sources stay. heights: the new map_heights (bytes) - the sea is its blue."""
+    from .tga import patched, read_tga_bytes
+    f, h = read_tga_bytes(features), read_tga_bytes(heights)
+    river = (0, 0, 255)
+    rivery = {(0, 0, 255), (0, 255, 255), (255, 255, 255)}
+
+    def sea(x, y):
+        if not (0 <= x < f.width and 0 <= y < f.height and 0 <= 2 * x + 1 < h.width and 0 <= 2 * y + 1 < h.height):
+            return False
+        c = h.get(2 * x + 1, 2 * y + 1)
+        return c[0] == 0 and c[1] == 0 and c[2] > 0
+    n4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    riv = {(x, y) for y in range(f.height) for x in range(f.width) if f.get(x, y) in rivery}
+    shore = lambda p: not sea(*p) and any(sea(p[0] + a, p[1] + b) for a, b in n4)
+    gone = {}
+    todo = [p for p in riv if shore(p)]
+    while todo:
+        nxt = []
+        for p in todo:
+            if p not in riv or f.get(*p) != river:
+                continue
+            near = [(p[0] + a, p[1] + b) for a, b in n4 if (p[0] + a, p[1] + b) in riv]
+            if len(near) == 1 and shore(near[0]):          # a dead end on the shore, its neighbour on it too
+                riv.discard(p)
+                gone[p] = (0, 0, 0)
+                nxt.append(near[0])
+        todo = nxt
+    if not gone:
+        return features, 0
+    return patched(None, gone, data=features), len(gone)
+
+
 def coast_corners(heights, hgt, land):
     """map_heights (bytes) and map_heights.hgt (bytes or None) with the coast's corner points as both games' own maps
     have them (rules.md 'COAST POINTS, the games' own'): a tile corner touching 3 land tiles and 1 sea tile is land
@@ -1378,6 +1415,7 @@ def coast_corners(heights, hgt, land):
 
 SHALLOW = (196, 0, 0)
 DEEP_KINDS = ((128, 0, 0), (64, 0, 0))     # deep sea, ocean
+DEFAULT_LAND = (101, 124, 0)                 # low fertility: a beach with no land ground near it
 SPECK = 40                                 # ground pixels: deep water this small in the shallows is shallow too
 
 
@@ -1401,11 +1439,24 @@ def shallow_coast(data):
         raw[o], raw[o + 1], raw[o + 2] = c[2], c[1], c[0]
     sea_kinds = set(DEEP_KINDS) | {SHALLOW}
     kind = [get(x, y) for y in range(h) for x in range(w)]
-    for y in range(h):                              # no beach on the bigger map (the user: the game drew it as a
-        for x in range(w):                          # zigzag band over the land - the shore looks right without
-            if kind[y * w + x] == BEACH:            # it; the Terrain editor's beach brush puts it where wanted)
-                kind[y * w + x] = SHALLOW
-                put(x, y, SHALLOW)
+    # no beach on the bigger map (the user: the game drew it as a zigzag band over the land - the shore looks right
+    # without it; the Terrain editor's beach brush puts it where wanted). The beach is LAND (it lies on land heights):
+    # it takes the land ground round it - made shallow sea it left ~9450 points of sea ground on Rome's land, light
+    # blue teeth along the coast in the game (reports R-20261014-3E1F2A, 56DFFF, C73129)
+    for y in range(h):
+        for x in range(w):
+            if kind[y * w + x] != BEACH:
+                continue
+            got = DEFAULT_LAND
+            for r in (1, 2, 3, 4):
+                near = [kind[(y + b) * w + x + a] for a in range(-r, r + 1) for b in range(-r, r + 1)
+                        if 0 <= x + a < w and 0 <= y + b < h and kind[(y + b) * w + x + a] not in sea_kinds
+                        and kind[(y + b) * w + x + a] != BEACH]
+                if near:
+                    got = max(set(near), key=near.count)
+                    break
+            put(x, y, got)
+    kind = [get(x, y) for y in range(h) for x in range(w)]
     water = [k in sea_kinds for k in kind]
     coast = [False] * (w * h)                      # water within a tile (2 pixels: the picture is 2 x the map)
     for y in range(h):                             # of the land or the beach
@@ -3016,6 +3067,25 @@ def _upscale_all(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEFA
             plan.binary(hgt, new_hgt)
         plan.note(None, "map_heights: %d coast corner(s) set as the games' own maps have them (3 land tiles: land, "
                         "3 sea tiles: water)" % corners)
+    if hpath and plan.binaries.get(hpath) and plan.binaries.get(feats):
+        data, n = river_mouths(plan.binaries[feats], plan.binaries[hpath])
+        if n:
+            plan.binary(feats, data)
+            plan.note(None, "map_features: %d river pixel(s) along the shore past a river's mouth taken out - every "
+                            "river reaches the sea by one pixel, as in the games' own maps" % n)
+    if hpath and plan.binaries.get(hpath) and plan.binaries.get(ground_path):
+        # the last ground points on the other side of the heights' coast (Rome: 70 of 1.4 million) put right the way
+        # 'Find ground on the wrong side of the coast' does - the games' own maps have none (no texture on the water,
+        # no sea texture in the land)
+        from .tga import patched, read_tga_bytes
+        from .terrain import ground_off_heights, ground_under_heights
+        hi, gi = read_tga_bytes(plan.binaries[hpath]), read_tga_bytes(plan.binaries[ground_path])
+        wrong = ground_off_heights(hi, gi)
+        if wrong:
+            plan.binary(ground_path, patched(ground_path, ground_under_heights(hi, gi, wrong),
+                                             data=plan.binaries[ground_path]))
+            plan.note(None, "map_ground_types: %d point(s) on the other side of the coast put right under the "
+                            "heights" % len(wrong))
     for name, kind in CAMPAIGN_PICTURES.items():
         p = os.path.join(camp, name)
         if os.path.isfile(p):
