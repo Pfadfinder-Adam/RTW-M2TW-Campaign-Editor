@@ -633,9 +633,13 @@ def _army_edits(plan, f, faction=None, units=None, remove=None):
         units = [i for i, l in enumerate(chunk) if tokens(l)[:1] == ["unit"]]
         if not units:
             raise ValueError("%s has no army to change" % c.name)
-        if not m.get("units"):
-            raise ValueError("%s: an army or fleet needs at least one unit (remove it instead)" % c.name)
         keep = units[:1] if c.named else []
+        if not m.get("units") and not keep:
+            # the last unit taken: the army leaves the map with it, as in the game - never an empty army (the game
+            # stops reading the campaign at one: report R-20261013-C9ED42)
+            take_off_map(plan, f, faction, c)
+            plan.note(f, "%s (%s): no unit left - the army left the map with its last unit" % (c.name, c.kind))
+            continue
         room = MAX_UNITS - len(keep)
         lines = ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % t for t in m["units"]][:room]
         new = [l for i, l in enumerate(chunk) if i not in units or i in keep]

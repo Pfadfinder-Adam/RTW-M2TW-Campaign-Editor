@@ -677,8 +677,8 @@ def general_here(c, lines, owner):
 def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
     """Lines for descr_strat for start['characters'] / opts['characters']:
     [{'kind': army|spy|assassin|diplomat|fleet, 'name', 'age', 'units', 'xy'}].
-    Names must be in the name pool, tiles must pass tile_problem, an army or
-    fleet needs units. armies_at is updated."""
+    Names must be in the name pool, tiles must pass tile_problem; an army or fleet with no unit is
+    left out (said). armies_at is updated."""
     out = []
     owner = owner or plan.new
     for n, c in enumerate(chars, 1):
@@ -686,6 +686,11 @@ def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
         if kind not in KINDS:
             raise ValueError("character %d: unknown kind %r" % (n, kind))
         rtw_kind, army = KINDS[kind]
+        if army and not c.get("units"):
+            # an army is its units: with none it is no army (the game stops at an empty one) - left out, said
+            plan.note(f, "%s %s has no unit - not written (an army goes with its last unit)" % (
+                kind, (c.get("name") or "").strip()))
+            continue
         if kind == "army" and general_here(c, f, owner):
             rtw_kind = "named character"
         name = (c.get("name") or "").strip()
@@ -713,8 +718,6 @@ def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
         if why:
             raise ValueError("%s %s at %d, %d: %s" % (kind, name, xy[0], xy[1], why))
         units = list(c.get("units") or [])
-        if army and not units:
-            raise ValueError("%s %s has no units" % (kind, name))
         if army:
             armies_at.add(xy)
         out.append(";;\t%s placed with the Campaign Editor" % kind)

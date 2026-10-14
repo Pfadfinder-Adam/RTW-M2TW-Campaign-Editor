@@ -1735,6 +1735,12 @@ building smith
         self.assertIn(("Aaron", "general", (3, 1)), got)
         self.assertIn(("Boris Alphid", "spy", (2, 2)), got)
         self.assertIn(("Aaron Alphid", "admiral", (3, 0)), got)
+        # an army placed with no unit is no army - not written (said), never an empty army block
+        bare = build(ModData(self.root), "test", "alpha", "beta", {"start": {
+            "regions": ["B_R"], "leader": {"name": "Boris"}, "characters": [dict(chars[0], units=[])]}})
+        s2 = Strat(bare.files[mod.campaign_file("test", "descr_strat.txt")])
+        self.assertNotIn("Aaron", [c.name for c in s2.faction("beta").characters])
+        self.assertIn("has no unit - not written", bare.report())
         # a name the faction already gives someone: the game skips the second one ("duplicated character
         # name in this faction" - the user's nabataea army named like its leader)
         with self.assertRaises(ValueError) as e:
@@ -8434,9 +8440,17 @@ building smith
         aaron = next(c for c in s.faction("alpha").characters if c.name == "Aaron Alphid")
         units = [l for l in s.lines[aaron.start:aaron.end] if tokens(l)[:1] == ["unit"]]
         self.assertEqual(len(units), 2)                              # his bodyguard + the one given
-        with self.assertRaises(ValueError):                         # an army without units is refused
-            map_changes(Plan(mod, "map", "map", {}), "test",
-                        {"army_units": {"slave": [{"name": "Grog", "from": (2, 2), "units": []}]}})
+        # an army's last unit taken: the army goes with it, as in the game (never an empty army); a named general
+        # keeps his bodyguard - his army stays
+        bare = Plan(mod, "map", "map", {})
+        map_changes(bare, "test", {"army_units": {"slave": [{"name": "Grog", "from": (2, 2), "units": []}],
+                                                  "alpha": [{"name": "Aaron Alphid", "from": (1, 1), "units": []}]}})
+        s = Strat(bare.files[strat])
+        self.assertFalse([c for c in s.faction("slave").characters if c.name == "Grog"])
+        aaron = next(c for c in s.faction("alpha").characters if c.name == "Aaron Alphid")
+        self.assertEqual(len([l for l in s.lines[aaron.start:aaron.end] if tokens(l)[:1] == ["unit"]]), 1)
+        self.assertIn("left the map with its last unit", bare.report())
+        self.assertFalse(bare.crash_problems())
         from campaign_editor import textio
         two = Plan(mod, "map", "map", {})                           # two armies on one tile: said in Preview,
         map_changes(two, "test", {"moves": {"slave": [{"name": "Grog", "from": (2, 2), "to": (1, 1)}]}})

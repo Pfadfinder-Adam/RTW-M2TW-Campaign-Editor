@@ -5594,6 +5594,25 @@ class App(tk.Tk):
 
         def changed(types):
             self.remember()
+            if not types and not named:
+                # the last unit taken: the army goes with it, as in the game - never an empty army
+                if entry is not None:
+                    _, f_, k_ = str(cid).split(":")
+                    if int(k_) < len(self.map_chars.get(f_, [])):
+                        self.map_chars[f_].pop(int(k_))
+                elif ch.get("from"):
+                    self.map_moves.pop(cid, None)
+                    self.map_units.pop(cid, None)
+                    self.map_removed.setdefault(fac, []).append({"name": ch["name"], "from": list(ch["from"])})
+                self.status.set("%s %s of %s: its last unit is gone - the army leaves the map with the next Apply "
+                                "(Undo brings it back)." % (ch["kind"], ch["name"], fac))
+                self._mark_work()
+                self.show_map()
+                try:
+                    top.destroy()
+                except tk.TclError:
+                    pass
+                return
             if entry is not None:
                 entry["units"] = (entry["units"][:1] if named else []) + list(types)
             elif list(types) == list(start):
