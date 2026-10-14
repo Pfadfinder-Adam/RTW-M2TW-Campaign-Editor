@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- Bring units (Rome, Barbarian Invasion, REX): a unit's own skeletons and the animations they move by come along -
+  HLR's men move in your mod as they do in HLR.
 - Bring buildings from another mod (Rome, Barbarian Invasion, REX): the building now looks as it should in a town on
   the battle map - its places in the town plans, its battle building and models come with it (it stood as the
   game's stand-in model before).

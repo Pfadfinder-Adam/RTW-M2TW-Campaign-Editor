@@ -543,9 +543,10 @@ def skeleton_problems(mod):
     at the start: "Unable to find skeleton '...'" (a report: models brought from a mod with animations of its
     own). [] when no descr_skeleton.txt is read."""
     from .animations import skeletons
+    from .animpacks import skeleton_names
     from .models import TEXT_FILE
     from .packs import _block_lines, type_blocks
-    known = set(skeletons(mod))
+    known = set(skeletons(mod)) | skeleton_names(mod)       # descr_skeleton's and the animation set the game loads
     path = mod.find(TEXT_FILE)
     if not known or not path:
         return []

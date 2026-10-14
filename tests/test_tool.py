@@ -5792,6 +5792,79 @@ building smith
             fh.write("\ntype\t\tbroken\nskeleton\t\tfs_hc_spearman_classic, fs_swordsman ; old\n")
         self.assertEqual(skeleton_problems(ModData(troot)), [("broken", ["fs_hc_spearman_classic"])])
 
+    def test_unit_pack_carries_its_own_skeletons_and_animations(self):
+        # the user, 2026-10-14 (after #260): 'a skeleton the target lacks must come along, its animations too' - a mod
+        # (HLR) has skeletons of its own in its own animation set; the target's set (its own, or the game's) is
+        # written into the target mod with the source's skeleton records and every animation they name appended
+        # (each scale; one the target has stays its own), the counts raised - and the model keeps its skeleton
+        import struct as _st
+        from unittest import mock
+        from campaign_editor import animpacks as AP, packs
+        from campaign_editor.plan import Plan
+
+        def make_set(folder, skels, anims):
+            os.makedirs(folder, exist_ok=True)
+            head = lambda magic, stamp, ver, n: magic + stamp + _st.pack("<II", ver, n)  # noqa: E731
+            pidx, pdat = bytearray(head(b"ANIM.PACK", b"\0\0\0", 4, 0)), bytearray(head(b"ANIM.PACK", b"\0\0\0", 4, 0))
+            n = 0
+            for path, scales in anims.items():
+                for scale, body in scales:
+                    raw = path.encode()
+                    pidx += _st.pack("<IIIfHHB", len(raw) + 10, len(pdat), len(body), scale, 2, 3, 1) + raw + b"\0"
+                    pdat += body
+                    n += 1
+            for b in (pidx, pdat):
+                _st.pack_into("<I", b, 16, n)
+            sidx, sdat = bytearray(head(b"SKEL.PACK", b"\x80\x79\x08", 3, len(skels))), \
+                bytearray(head(b"SKEL.PACK", b"\x80\x79\x08", 3, len(skels)))
+            for name, paths in skels.items():
+                rec = b"\x01\x02" + b"".join(p.encode() + b"\0" * 9 for p in paths)
+                sidx += _st.pack("<III", len(name) + 1, len(sdat), len(rec)) + name.encode() + b"\0"
+                sdat += rec
+            for name, data in (("pack.idx", pidx), ("pack.dat", pdat), ("skeletons.idx", sidx),
+                               ("skeletons.dat", sdat)):
+                with open(os.path.join(folder, name), "wb") as fh:
+                    fh.write(bytes(data))
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1\nownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\talpha_model\nskeleton\t\tfs_own, fs_swordsman\nmodel_flexi\t\tdata/models_unit/a.cas, max\n")
+        write(os.path.join(d, "models_unit", "a.cas"), "A")
+        own_a, shared = "data/animations/Own_A.cas", "data/animations/shared.cas"
+        make_set(os.path.join(d, "animations"), {"fs_swordsman": [shared], "fs_own": [own_a, shared]},
+                 {shared: [(1.0, b"SHARED-SRC")], own_a: [(1.0, b"OWN-1.0"), (1.1, b"OWN-1.1")]})
+        with mock.patch.object(AP, "game_set", lambda mod: None):
+            man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(sorted(man["animations"]["skeletons"]), ["fs_own", "fs_swordsman"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        tan = os.path.join(troot, "data", "animations")
+        shutil.rmtree(tan)
+        make_set(tan, {"fs_swordsman": [shared]}, {shared: [(1.0, b"SHARED-TARGET")]})
+        write(os.path.join(tan, "aninterp.cache"), "REX CACHE")
+        write(os.path.join(troot, "data", "descr_model_battle.txt"), "type\t\tother\nskeleton\t\tfs_swordsman\n")
+        before = tree_hash(troot)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        self.assertIn("1 skeleton(s) of the brought units added", plan.report())
+        self.assertNotIn("fs_own ->", plan.report())
+        bdir = plan.apply()
+        got = AP.AnimSet.at(tan)
+        self.assertEqual(sorted(got.skeletons()), ["fs_own", "fs_swordsman"])
+        self.assertEqual(got.record("fs_own"), files[man["animations"]["skeletons"]["fs_own"]])
+        self.assertEqual([b for _, b in got.anim_bytes("data/animations/own_a.cas")], [b"OWN-1.0", b"OWN-1.1"])
+        self.assertEqual([b for _, b in got.anim_bytes(shared)], [b"SHARED-TARGET"])     # the target's own stays
+        self.assertFalse(os.path.exists(os.path.join(tan, "aninterp.cache")))
+        with open(os.path.join(troot, "data", "descr_model_battle.txt")) as fh:
+            self.assertIn("fs_own, fs_swordsman", fh.read())
+        from campaign_editor.check import skeleton_problems
+        self.assertEqual(skeleton_problems(ModData(troot)), [])
+        restore(ModData(troot), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(troot).items() if "_backups" not in k}, before)
+
     def test_unit_pack_brings_the_models_of_a_soldiers_block(self):
         # REX lets a unit name its men's models in a block under 'soldiers' (HLR: 37 units) - a skeleton model and
         # 'default { }' variants. They come along like the 'soldier' line's model; one the target has with other

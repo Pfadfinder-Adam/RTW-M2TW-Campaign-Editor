@@ -375,7 +375,58 @@ def collect(mod, unit_types):
                         with open(p, "rb") as fh:
                             files["ui/%s/%s/%s" % (sub, fac, os.path.basename(p))] = fh.read()
     manifest["recruit"] = _recruit_places(mod, unit_types)
+    _carry_skeletons(mod, manifest, files)
     return g.done()
+
+
+ANIM_DIR = "__animations__/"            # the skeletons and animations a pack carries (animpacks) - never put as files
+
+
+def model_skeletons(blocks):
+    """The skeleton names the model blocks {name: lines} name (skeleton / skeleton_horse ... lines)."""
+    out = []
+    for lines in blocks.values():
+        for line in lines:
+            code = strip_comment(line).strip().split(None, 1)
+            if len(code) == 2 and code[0].lower().startswith("skeleton") and "attachment" not in code[0].lower():
+                out += [x.strip() for x in code[1].split(",") if x.strip() and x.strip() not in out]
+    return out
+
+
+def _carry_skeletons(mod, manifest, files):
+    """The skeletons of the brought models the source has of its own (a big mod's own animations: HLR's
+    fs_hc_spearman_classic...) with their animations, into the pack: manifest['animations'] {'skeletons': {name:
+    file}, 'anims': {key: [[idx record (hex), file]]}}, the bytes in files under ANIM_DIR."""
+    from . import animpacks
+    try:
+        got = animpacks.collect(mod, model_skeletons(manifest["blocks"].get("model") or {}))
+    except (OSError, ValueError):
+        return
+    if not got["skeletons"]:
+        return
+    man = {"skeletons": {}, "anims": {}}
+    for i, (name, rec) in enumerate(sorted(got["skeletons"].items())):
+        rel = "%sskeleton_%d.rec" % (ANIM_DIR, i)
+        files[rel] = rec
+        man["skeletons"][name] = rel
+    n = 0
+    for key, items in got["anims"].items():
+        man["anims"][key] = []
+        for rec, body in items:
+            rel = "%sanim_%d.bin" % (ANIM_DIR, n)
+            n += 1
+            files[rel] = body
+            man["anims"][key].append([rec.hex(), rel])
+    manifest["animations"] = man
+
+
+def carried_skeletons(manifest, files):
+    """The pack's carried skeletons back as animpacks.merged takes them (None when it carries none)."""
+    man = manifest.get("animations") or {}
+    if not man.get("skeletons"):
+        return None
+    return {"skeletons": {n: files[r] for n, r in man["skeletons"].items() if r in files},
+            "anims": {k: [(bytes.fromhex(h), files[r]) for h, r in v if r in files] for k, v in man["anims"].items()}}
 
 
 def collect_models(mod, names):
@@ -540,6 +591,7 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
     files, moved = unclash_files(mod, manifest, files)
     for old, new in moved.items():
         plan.note(None, "%s: this mod has another file of that name - the brought one goes in as %s" % (old, new))
+    plan.carried_files = files
     renamed = _put_blocks(plan, manifest, owners)
     # the units
     edu = plan.edit(mod.file("edu"))
@@ -637,6 +689,8 @@ def unclash_files(mod, manifest, files):
     skin_files = _skin_files(manifest)
     for rel in sorted(files):
         parts = rel.split("/")
+        if rel.startswith(ANIM_DIR):
+            continue                                       # carried skeletons: animpacks puts them
         if len(parts) == 4 and parts[0].lower() == "ui" and parts[1].lower() in ("units", "unit_info"):
             continue                                       # cards: named after the (new) dictionary anyway
         if rel in skin_files:
@@ -691,7 +745,12 @@ def _put_blocks(plan, manifest, owners):
     owner_facs = [o for o in owners if o in set(facs)]
     game = game_kind(mod)
     from .animations import skeletons
-    known = set(skeletons(mod))                      # none read (no descr_skeleton): the lines go as they are
+    from . import animpacks
+    # the source's own skeletons this mod lacks come first, into this mod's animation set (the user, 2026-10-14:
+    # 'what the target lacks must come along'); what is still missing then takes the nearest one
+    added = animpacks.put(plan, carried_skeletons(manifest, plan.carried_files)) if getattr(
+        plan, "carried_files", None) is not None else []
+    known = set(skeletons(mod)) | animpacks.skeleton_names(mod) | {a.lower() for a in added}
     swapped, left = {}, set()
     for kind in ("model", "mount", "projectile", "engine", "animal"):      # projectiles before the engines firing them
         want = manifest["blocks"].get(kind) or {}
@@ -819,7 +878,7 @@ def _put_files(plan, files, manifest=None):
         parts = rel.split("/")
         if len(parts) == 4 and parts[0].lower() == "ui" and parts[1].lower() in ("units", "unit_info"):
             continue
-        if rel in skin_files:
+        if rel in skin_files or rel.startswith(ANIM_DIR):
             continue
         _put(plan, rel, data)
 
