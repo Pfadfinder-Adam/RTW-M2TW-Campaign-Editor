@@ -583,12 +583,15 @@ def building_typical(mod, kind, levels):
     'cost', 'construction', 'material'}], 'effects': {head: [number per level]} (the effects at least half the
     kind's chains have, each level their middle value there), 'count': the kind's chains, 'catalogue':
     effect_catalogue}. A level deeper than the mod's chains go grows from the one before (cost x 2, a turn more).
-    ValueError when the mod has no chain of the kind."""
+    A kind the mod has no chain of (report R-20261013-4761E2): the numbers of every chain of the mod, no effects
+    ('count' 0) - the modder adds his own."""
     f = mod.load(mod.file("edb"))
     chains = chains_of_kind(mod, kind, f)
+    count = len(chains)
     if not chains:
-        raise ValueError("this mod has no building of that kind (%s) to learn the usual numbers from" %
-                         BUILDING_KIND_WORDS.get(kind, kind))
+        chains = [(n, ls) for n, g, ls in chain_levels(mod, f) if not n.startswith(SPECIAL_CHAINS)]
+    if not chains:
+        raise ValueError("this mod has no building to learn the usual numbers from")
     cat = effect_catalogue(mod, f)
     out = []
     for i in range(levels):
@@ -623,7 +626,7 @@ def building_typical(mod, kind, levels):
             have[h] = have.get(h, 0) + 1
     effects = {}
     for h, n in sorted(have.items(), key=lambda kv: -kv[1]):
-        if n * 2 < len(chains):
+        if not count or n * 2 < len(chains):
             continue
         row = []
         for i in range(levels):
@@ -631,7 +634,7 @@ def building_typical(mod, kind, levels):
             nums = [x for x in nums if x is not None]
             row.append(nice(statistics.median_low(nums)) if nums else (row[-1] if row else nice(cat[h]["middle"])))
         effects[h] = row
-    return {"levels": out, "effects": effects, "count": len(chains), "catalogue": cat}
+    return {"levels": out, "effects": effects, "count": count, "catalogue": cat}
 
 
 def _ownership(mod, unit):

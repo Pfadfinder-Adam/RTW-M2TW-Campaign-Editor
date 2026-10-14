@@ -9961,8 +9961,12 @@ building smith
         self.assertEqual([lv["cost"] for lv in typ["levels"]], ["500", "800", "1600"])
         self.assertEqual([lv["settlement_min"] for lv in typ["levels"]], ["town", "large_town", "city"])
         self.assertEqual(typ["effects"], {"trade_base_income_bonus bonus": ["1", "2", "2"]})   # 2 of 3 have it
-        with self.assertRaises(ValueError):
-            FN.building_typical(mod, "temple", 2)                       # no temple here to learn from
+        # no temple here to learn from (report R-20261013-4761E2: 'Something else (0 in this mod)' was greyed out):
+        # the usual numbers of every building of the mod, no effect - the modder adds his own
+        bare = FN.building_typical(mod, "temple", 2)
+        self.assertEqual(bare["count"], 0)
+        self.assertEqual(bare["effects"], {})
+        self.assertEqual(len(bare["levels"]), 2)
         self.assertEqual(FN.trainable_units(mod, ["alpha"]), ["foot one"])
         one = [("a_1", "A", "", "")]
         self.assertTrue(FN.building_problems(mod, "economy", "new_market", [("trader", "X", "", "")], ["alpha"]))
@@ -10018,6 +10022,16 @@ building smith
         bdir = plan.apply()
         with open(ModData(self.root).text_file("export_buildings.txt"), "rb") as fh:
             self.assertRegex(fh.read().decode("utf-16"), r"\{market_two_name\}\s*Market")
+        restore(ModData(self.root), bdir)
+        # a chain whose source has no {chain}_name (report R-20261013-D70987: a church copied from a temple without
+        # one - 'localised string temple_church_christianity_name does not exist', the game showed 'Placeholder
+        # string'): the copy gets one all the same
+        plan = Plan(ModData(self.root), "copy", "copy", {})
+        E.copy_building(plan, "hinterland_farms", "farms_two", {"fields": "meadows"},
+                        texts={"meadows": {"name": "Meadows"}})
+        bdir = plan.apply()
+        with open(ModData(self.root).text_file("export_buildings.txt"), "rb") as fh:
+            self.assertRegex(fh.read().decode("utf-16"), r"\{farms_two_name\}\s*Meadows")
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
@@ -13284,6 +13298,20 @@ class SettlementOrderTest(unittest.TestCase):
                 "\r\nfaction_standings\tengland, 0.0 slave\r\n")
         s = Strat(TextFile.from_bytes("descr_strat.txt", text.encode("latin-1")))
         self.assertEqual(settlement_order_problems(s), [("London", "england", "population")])
+
+
+class SetBuildingsTest(unittest.TestCase):
+    def test_a_block_cut_before_its_brace(self):
+        """Report R-20261012-D24024 (HLR, the Town window): 'max() iterable argument is empty' - a settlement's lines
+        handed over without their closing brace; the buildings now go at the end of what is there."""
+        from campaign_editor.buildings import set_buildings
+        raw = ["settlement", "{", "\tlevel town", "\tregion A", "\tbuilding", "\t{", "\t\ttype old one", "\t}"]
+        got = set_buildings(raw, [("core_building", "wooden_wall")], lambda x: x)
+        self.assertEqual(got[:4], raw[:4])
+        self.assertIn("\t\ttype core_building wooden_wall", got)
+        self.assertNotIn("\t\ttype old one", got)
+        whole = set_buildings(raw + ["}"], [("a", "b")], lambda x: x)
+        self.assertEqual(whole[-1], "}")
 
 if __name__ == "__main__":
     unittest.main()

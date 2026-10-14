@@ -89,6 +89,10 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- A copied building chain whose original has no chain name now gets one (the game showed 'Placeholder string').
+- New building from nothing: a kind the mod has none of can be picked (it starts from the usual numbers of all
+  buildings, the effects are yours).
+- The Town window no longer fails with 'max() iterable argument is empty' on some towns.
 - A faction's adjective is kept after Apply in mods whose spy has another name (a Scout, a Guide); before, the field
   came back empty and the old adjective stayed in the game.
 - Picking another garrison no longer crashes the editor.

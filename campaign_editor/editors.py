@@ -576,6 +576,13 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
                 if k.lower() == src_chain.lower() + "_name":      # the chain's own name ({market_name}): the
                     keys[k] = new_chain + "_name"                    # game asks for it ('localised string ...')
         copy_text_entries(plan, path, keys)
+    if new_chain + "_name" not in keys.values():
+        # the source had none: the game still asks for it and shows 'Placeholder string' without (report
+        # R-20261013-D70987) - the first level's name, else the chain's own words
+        first = next(iter(level_names.values()), None)
+        shown = ((texts or {}).get(first) or {}).get("name") if first else None
+        from .strtables import write_texts
+        write_texts(plan, "export_buildings.txt", {new_chain + "_name": shown or new_chain.replace("_", " ").title()})
     # the pictures of every culture folder the mod or the game's data under it holds (a mod folder keeps only
     # what it changes); the copies go into the mod
     cultures = [c for c, _ in mod.listing("ui") if mod.dirs("ui/%s/buildings" % c)]

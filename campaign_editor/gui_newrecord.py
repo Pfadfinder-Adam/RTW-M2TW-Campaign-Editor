@@ -548,10 +548,9 @@ class NewRecordWizard(StepWindow):
         f = self.f
         for key, words in FN.BUILDING_KINDS:
             n = len(FN.chains_of_kind(self.mod, key, f))
-            rb = ttk.Radiobutton(box, variable=self.v["kind"], value=key, text="%s   (%d in this mod)" % (words, n))
+            rb = ttk.Radiobutton(box, variable=self.v["kind"], value=key, text="%s   (%s)" % (
+                words, "%d in this mod" % n if n else "none in this mod - usual numbers of all buildings, effects yours"))
             rb.pack(anchor="w", pady=2)
-            if not n:
-                rb.state(["disabled"])
         row = ttk.Frame(self.body)
         row.pack(fill="x", anchor="w", pady=(8, 0))
         ttk.Label(row, text="Levels").pack(side="left")
@@ -612,10 +611,11 @@ class NewRecordWizard(StepWindow):
         from . import fromnothing as FN
         st = self.state
         typ = st["typ"]
-        self._note("Every level side by side. The town it needs, its cost and turns start at what is usual for such "
-                   "buildings in this mod (the middle of its %d); each effect row is what the level gives. Add an "
-                   "effect from the list (everything this mod's buildings do); right click an effect's name to take "
-                   "it out." % typ["count"])
+        self._note("Every level side by side. The town it needs, its cost and turns start at what is usual for %s; "
+                   "each effect row is what the level gives. Add an effect from the list (everything this mod's "
+                   "buildings do); right click an effect's name to take it out." % (
+                       "such buildings in this mod (the middle of its %d)" % typ["count"] if typ["count"] else
+                       "the mod's buildings (it has none of this kind - add the effects yourself)"))
         cat = typ["catalogue"]
         game = FN._game(self.mod)
         grid = ttk.Frame(self.body)

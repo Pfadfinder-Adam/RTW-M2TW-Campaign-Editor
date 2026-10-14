@@ -622,7 +622,9 @@ def set_buildings(raw, buildings, make):
             continue
         out.append(raw[i])
         i += 1
-    close = max(j for j, l in enumerate(out) if "}" in strip_comment(l))
+    # before the block's closing brace; lines handed over without it (report R-20261012-D24024, HLR's Town window:
+    # 'max() iterable argument is empty'): at the end
+    close = max((j for j, l in enumerate(out) if "}" in strip_comment(l)), default=len(out))
     new = []
     for chain, level in buildings:
         new += [make("\tbuilding"), make("\t{"), make("\t\ttype %s %s" % (chain, level)), make("\t}")]
