@@ -41,6 +41,7 @@ class TerrainEditor(ttk.Frame):
         self._hvals = {}                # their running values with fractions (small puffs add up)
         self.base = {}                  # what the files have there: {('ground'|'features'|'climate', xy): colour}
         self.hbase = {}                 # map_heights pixels as the file has them: {(px, py): grey}
+        self._coast_why = None          # why the last land / sea tile could not turn
         self.coast = {}                 # tiles made land or sea: {(x, y): 'land' | 'sea'}
         self.cpx = {"regions": {}, "ground": {}, "heights": {}, "hgt": {}}   # the pixels those tiles change (hgt: the
         #                                                 shape brush's exact heights for map_heights.hgt)
@@ -62,8 +63,9 @@ class TerrainEditor(ttk.Frame):
         self._paint_end.pack(side="left")
         self.v_brush = tk.IntVar(value=1)
         self.v_brush.trace_add("write", lambda *_: self._brush_changed())     # typed too, not only the arrows
-        ttk.Spinbox(top, from_=1, to=24, width=3, textvariable=self.v_brush,
-                    command=lambda: setattr(self.view, "brush", self.v_brush.get())).pack(side="left", padx=2)
+        self._brush_box = ttk.Spinbox(top, from_=1, to=24, width=3, textvariable=self.v_brush,
+                                      command=lambda: setattr(self.view, "brush", self.v_brush.get()))
+        self._brush_box.pack(side="left", padx=2)
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
         self.v_grid_here = tk.BooleanVar(value=True)
         ttk.Checkbutton(top, text="Grid", variable=self.v_grid_here, command=self._grid_toggled).pack(
@@ -71,8 +73,9 @@ class TerrainEditor(ttk.Frame):
         # the rivers, fords and cliffs (map_features) drawn over the ground: the map's Layers panel is hidden here,
         # so its tick was out of reach once turned off on the Map (a tester: 'no rivers in Terrain')
         self.v_rivers_here = tk.BooleanVar(value=True)
-        ttk.Checkbutton(top, text="Rivers", variable=self.v_rivers_here, command=self._rivers_toggled).pack(
-            side="left", padx=(8, 0))
+        self._rivers_tick = ttk.Checkbutton(top, text="Rivers", variable=self.v_rivers_here,
+                                            command=self._rivers_toggled)
+        self._rivers_tick.pack(side="left", padx=(8, 0))
         ttk.Button(top, text="Redo stroke", command=self.redo_stroke).pack(side="right", padx=(0, 4))
         self.v_shore = tk.BooleanVar(value=True)       # the shore as the game draws it (Land and sea's 2nd row)
         ttk.Button(top, text="Undo stroke", command=self.undo_stroke).pack(side="right", padx=4)
@@ -136,6 +139,21 @@ class TerrainEditor(ttk.Frame):
         look["grid"] = self.v_grid_here.get()
         settings.put("map_look", look)
         self.view.render()
+
+    def _rivers_for_mode(self):
+        """Painting rivers, cliffs and volcanoes shows them always - no Rivers tick there (a tester: 'where are the
+        rivers in the rivers editor', 'the tick is not needed in this mode, on by default always'); the other brushes
+        keep the tick and its last value."""
+        painting = self.v_what.get() == "features"
+        if painting:
+            self._rivers_tick.pack_forget()
+        elif not self._rivers_tick.winfo_manager():
+            self._rivers_tick.pack(side="left", padx=(8, 0), after=self._brush_box)
+        want = True if painting else self.v_rivers_here.get()
+        if self.view.v_rivers.get() != want:
+            self.view.v_rivers.set(want)
+            if self.mod is not None:
+                self.view.render()
 
     def _rivers_toggled(self):
         """The rivers, fords and cliffs over the ground, on or off (the same switch as Layers > Rivers, kept)."""
@@ -387,6 +405,13 @@ class TerrainEditor(ttk.Frame):
         for t in tiles:
             if self._current(what, t) == colour:
                 continue
+            if what == "ground" and (colour in T.SEA) != self.cmap.is_sea(*t):
+                # a sea ground on land / a land ground on the sea turns the tile, as Land and sea's tile brush
+                # does (regions, heights, ground) - freedom: by cells here too (a tester, R-20261014-093582)
+                if not self.paint_coast([t], mode="sea" if colour in T.SEA else "land"):
+                    why = self._coast_why or "the tile cannot turn into %s here" % (
+                        "sea" if colour in T.SEA else "land")
+                    continue
             why = T.paint_problem(self.cmap, what, t, colour, self.standing) or None
             if why:
                 continue
@@ -518,6 +543,7 @@ class TerrainEditor(ttk.Frame):
         if took:
             self.cmap.__dict__.pop("_backgrounds", None)
             self.cmap._hpil = None
+        self._coast_why = why
         self.app.status.set(("Terrain: %d tile(s) of land / sea changed - Preview, then Apply changes."
                              % len(self.coast)) + ("   (not here: %s)" % why if why else ""))
         self.app._mark_work()
@@ -555,7 +581,7 @@ class TerrainEditor(ttk.Frame):
     def _say_off(self, text):
         self._off_said = text                       # kept when the palette is drawn again
         if getattr(self, "lbl_off", None) is not None and self.lbl_off.winfo_exists():
-            self.lbl_off.configure(text=text)
+            self.lbl_off.set_text(text)
         self.app.status.set("Terrain: " + text)
 
     def ground_check(self):
@@ -842,6 +868,7 @@ class TerrainEditor(ttk.Frame):
         for w in self.palette.winfo_children():
             w.destroy()
         what = self.v_what.get()
+        self._rivers_for_mode()
         if what == "ground":
             from .limits import engine_of, game_kind
             land, sea = T.ground_brushes(game_kind(self.mod) if self.mod else None,
@@ -849,8 +876,9 @@ class TerrainEditor(ttk.Frame):
             items = [("land", land, T.GROUND), ("sea", sea, T.GROUND)]
             self.hint.configure(text=(
                 "Left drag paints the picked ground, right click picks a tile's own, right drag moves the map. "
-                "A tile's ground decides movement, farming and what may stand there; land stays land and sea stays "
-                "sea here - to turn sea into land or land into sea, use 'Land and sea' above. On the coast a tile's "
+                "A tile's ground decides movement, farming and what may stand there. A sea ground painted on land "
+                "turns the tile into sea, a land ground on the sea turns it into land - tile by tile, the regions "
+                "and heights with it, as the Land / Sea brush of 'Land and sea' (Coast & heights) does. On the coast a tile's "
                 "ground stays on its own side of the waterline (map_heights: the coast runs between the tiles' "
                 "middles), so no land texture is laid on the water. The beach is land: both games lay it on the "
                 "land tiles along the coast. Mountains, high mountains, dense "
@@ -962,8 +990,9 @@ class TerrainEditor(ttk.Frame):
             "Close up, a light line shows the shore exactly as the game will draw it (in every mode of this tab): "
             "the game cuts every square of four heights points into two triangles and lays the water at height 0 - "
             "so the shore runs between the points, not along the tiles.").pack(side="left", padx=(12, 0))
-        from .gui_modbuilder import wrapping
-        self.lbl_off = wrapping(ttk.Label(more, text=getattr(self, "_off_said", "")), side="left", expand=True, padx=8)
+        from .gui_util import one_line
+        self.lbl_off = one_line(ttk.Label(more, width=1), getattr(self, "_off_said", ""), side="left", expand=True,
+                                padx=8)
         self.hint.configure(text=(
             "The SHAPE BRUSH draws the coast where the brush's edge goes, smooth like the games' own coasts: the "
             "game cuts every square of four heights points into two triangles and lays the water at height 0, so "

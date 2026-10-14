@@ -1233,6 +1233,52 @@ def tip(widget, text, **kw):
     return widget
 
 
+def cut_to(text, fits):
+    """text cut at the end with '...' so that fits(shorter text) is true (the whole text when it fits)."""
+    if fits(text):
+        return text
+    lo, hi = 0, len(text)
+    while lo < hi:                                  # the longest start that still fits with the dots
+        mid = (lo + hi + 1) // 2
+        if fits(text[:mid].rstrip() + "..."):
+            lo = mid
+        else:
+            hi = mid - 1
+    return text[:lo].rstrip() + "..."
+
+
+def one_line(label, text="", extra=0, **pack):
+    """A label on ONE line in a row of the interface: what does not fit its width is hidden behind '...' and the
+    whole text shows in the hover tip (a tester, R-20261014-AE0007: 'in the interface the text does not wrap - it
+    hides behind three dots and the hover tip shows it whole'; a wrapping label beside buttons became a tall narrow
+    column, R-20261014-3E1F2A). A Checkbutton too (extra = its box's pixels). label.set_text(text) changes it.
+    Packed with **pack (fill x)."""
+    import tkinter.font as tkfont
+    label._full = text
+
+    def fit(e=None):
+        try:
+            f = tkfont.Font(font=label.cget("font"))
+        except tk.TclError:
+            f = tkfont.nametofont("TkDefaultFont")
+        room = max(20, label.winfo_width() - 4 - extra)     # extra: a tick's box beside the words
+        label.configure(text=cut_to(label._full, lambda t: f.measure(t) <= room))
+
+    def set_text(t):
+        label._full = t or ""
+        label.configure(text=label._full)
+        if label.winfo_ismapped():
+            fit()
+    label.set_text = set_text
+    label.configure(text=text)
+    if "wraplength" in label.keys():
+        label.configure(wraplength=0)
+    Tip(label, lambda: label._full if label.cget("text") != label._full else "")
+    label.pack(fill="x", **pack)
+    label.bind("<Configure>", fit, add="+")
+    return label
+
+
 def hint(parent, text, **kw):
     """A small '?' that shows `text` when the mouse rests on it - in place of a long hint label."""
     lbl = ttk.Label(parent, text=" ? ", foreground="#2050c0", cursor="question_arrow", font=("", 9, "bold"))
@@ -1597,11 +1643,14 @@ class DropPanel:
         except tk.TclError:
             return False
 
+    _closed_at = 0.0
+
     def toggle(self):
+        import time
         if self.shown():
             self.hide()
-        else:
-            self.show()
+        elif time.monotonic() - self._closed_at > 0.3:   # closed by this very press (a tester on Windows: a second
+            self.show()                                  # press opened it again instead of closing, R-20261014-5B69BC)
 
     def show(self):
         if self.top is None:
@@ -1632,11 +1681,16 @@ class DropPanel:
         if isinstance(w, str):
             return
         try:
-            inside = str(w).startswith(str(self.top)) or w is self.button
+            b = self.button
+            on_button = w is b or (b.winfo_rootx() <= e.x_root < b.winfo_rootx() + b.winfo_width()
+                                   and b.winfo_rooty() <= e.y_root < b.winfo_rooty() + b.winfo_height())
+            inside = str(w).startswith(str(self.top)) or on_button
         except tk.TclError:
             inside = False
         if not inside:
+            import time
             self.hide()
+            self._closed_at = time.monotonic()
 
 
 def split_list(text):

@@ -201,7 +201,8 @@ class MapView(ttk.Frame):
                   self.v_regions, self.v_mode):
             v.trace_add("write", lambda *a: self._layers_label())
         self._layers_label()
-        ttk.Button(bar, text="Fit", command=self.fit).pack(side="right")
+        fit = ttk.Button(bar, text="Fit", command=self.fit)
+        fit.pack(side="right")
         ttk.Button(bar, text="+", command=lambda: self.zoom_by(1, by=50)).pack(side="right", padx=2)
         b = ttk.Button(bar, text="-", command=lambda: self.zoom_by(-1, by=50))
         b.pack(side="right")
@@ -215,7 +216,8 @@ class MapView(ttk.Frame):
         from .gui_util import hint
         hint(bar, "Wheel: zoom (100% = the whole map in the window, as Fit).   Right drag: move the map.   Left drag: "
                   "move markers (characters, towns, ports).   Click a town: take / give it.   Right click: what can "
-                  "be done there.").pack(side="right", padx=4)
+                  "be done there.").pack(side="right", padx=(4, 0), before=fit)   # the zoom's '?' right of Fit
+        # (a tester: it stood left of Bigger map, as if it were that button's)
         from . import settings
         self.v_legend = tk.BooleanVar(value=bool(settings.get("map_legend", True)))
         # 'Signs and tools' (once 'Legend' - a tester: 'is it a legend?'): what every sign means AND the palette its
