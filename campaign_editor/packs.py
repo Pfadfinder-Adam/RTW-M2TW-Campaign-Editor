@@ -412,8 +412,10 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
                    if rel.lower().startswith("ui/%s/" % sub) and rel.split("/")[-1].lower() == (pattern % old).lower()]
             if not src:
                 continue
+            by_fac = {rel.split("/")[2]: data for rel, data in reversed(src)}
+            look = by_fac.get(_first_of(look_order(manifest), by_fac, None), src[0][1])   # the unit's own faction's
             for fac in factions or [src[0][0].split("/")[2]]:
-                pick = next((data for rel, data in src if rel.split("/")[2] == fac), src[0][1])
+                pick = by_fac.get(fac, look)
                 _put(plan, "ui/%s/%s/%s" % (sub, fac, pattern % new), pick)
     # recruiting: the same chain and level as in the source mod, where the target has them
     if manifest.get("recruit") and mod.file("edb"):
@@ -449,7 +451,7 @@ def _put_blocks(plan, manifest, owners):
                         [strip_comment(x).split() for x in lines]:
                     if kind == "model":                        # the very same: shared, textured for the owners
                         a, b = have[same_name]
-                        got, added = _owner_textures(_block_lines(f, (a, b)), owner_facs)
+                        got, added = _owner_textures(_block_lines(f, (a, b)), owner_facs, look_order(manifest))
                         if added:
                             f.raw[a:a + len(_block_lines(f, (a, b)))] = [f.make(x) for x in got]
                             have = type_blocks(f)
@@ -460,7 +462,7 @@ def _put_blocks(plan, manifest, owners):
                 lines = _set_line(lines, "type", new)
                 plan.note(f, "%s %s exists with other lines: the pack's is added as %s" % (kind, name, new))
             if kind == "model":                                # every faction the units go to gets a texture
-                lines, added = _owner_textures(lines, owner_facs)
+                lines, added = _owner_textures(lines, owner_facs, look_order(manifest))
                 if added:
                     plan.note(f, "model %s: texture lines for %s" % (renamed[kind].get(name, name), ", ".join(added)))
             while f.raw and not f.text(len(f.raw) - 1).strip():
@@ -531,18 +533,38 @@ def _modeldb(plan, manifest, renamed, owners):
         if have is None:
             have = db.add_model(m, want)
             n += 1
-        added = MDB.give_owners(have, factions)
+        added = MDB.give_owners(have, factions, look_order(manifest))
         if added:
+            src_f = _first_of(look_order(manifest), {r[0] for r in m.textures}, None)
             plan.notes.append((mod.rel(dst), "battle model %s: texture entries for %s (copied from its %s)" % (
-                want, ", ".join(added), "mercenaries'" if "merc" in {r[0] for r in m.textures} else "first")))
+                want, ", ".join(added), "%s'" % src_f if src_f else "first")))
     plan.binary(dst, db.dump().encode("latin-1"))
     plan.notes.append((mod.rel(dst), "%d battle model(s) added%s" % (
         n, "" if src == dst else " (a copy of the game's modeldb, now the mod's own)")))
 
 
-def _owner_textures(lines, facs):
+def look_order(manifest):
+    """The factions whose look (texture, card) a brought unit copies for a new owner, best first: the modder's pick
+    (manifest['look']), then the units' own factions (their ownership), the mercenaries and the rebels last - a BI
+    unit owned by 'slave, saxons' took the rebels' blue (a report: its first texture line was copied)."""
+    out = [manifest["look"]] if manifest.get("look") else []
+    for u in manifest.get("units") or []:
+        for l in u.get("lines") or []:
+            if strip_comment(l).split(None, 1)[:1] == ["ownership"]:
+                for f in [x.strip() for x in strip_comment(l).split(None, 1)[1].split(",") if x.strip()]:
+                    if f not in ("slave", "merc") and f not in out:
+                        out.append(f)
+    return out + [f for f in ("merc", "slave") if f not in out]
+
+
+def _first_of(order, have, default):
+    """The first of order that have holds, else default."""
+    return next((f for f in order or () if f in have), default)
+
+
+def _owner_textures(lines, facs, order=None):
     """A model block's lines with a 'texture <faction>, ...' line for every faction that has none, copied from
-    the mercenaries' line (else the first faction's), and - Medieval II - a 'texture_attachments' line for every one
+    the first of order that has one (look_order), else the mercenaries' line (else the first faction's), and - Medieval II - a 'texture_attachments' line for every one
     of them that has a texture line but no such line (a faction given its texture by an older version, a hand edit
     or another tool: its men looked like bare skeletons in battle): (lines, [factions given a line]). A model with
     no per-faction texture lines is left as it is (one texture for everyone)."""
@@ -551,7 +573,9 @@ def _owner_textures(lines, facs):
     if not tex:
         return lines, []
     have = {_values([l], "texture")[0][0] for _, l in tex}
-    src = next((l for _, l in tex if _values([l], "texture")[0][0] == "merc"), tex[0][1])
+    by_f = {_values([l], "texture")[0][0]: l for _, l in reversed(tex)}
+    src = by_f[_first_of(order, by_f, None)] if _first_of(order, by_f, None) else \
+        next((l for _, l in tex if _values([l], "texture")[0][0] == "merc"), tex[0][1])
     src_f = _values([src], "texture")[0][0]
     add = [f for f in facs if f not in have]
     new = [re.sub(r"(texture\s+)%s(\s*,)" % re.escape(src_f), lambda m, f=f: m.group(1) + f + m.group(2), src,

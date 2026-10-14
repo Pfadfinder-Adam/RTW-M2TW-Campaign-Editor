@@ -299,16 +299,18 @@ def files_of(m):
     return [x for x in dict.fromkeys(out) if x and "/" in x]
 
 
-def give_owners(m, factions):
-    """Texture entries for factions the model has none for, copied from its mercenaries' (else its first) -
-    a unit given to a faction with no entry shows no texture. Returns the factions added."""
+def give_owners(m, factions, order=None):
+    """Texture entries for factions the model has none for, copied from the first of order that has one
+    (packs.look_order: the unit's own faction), else its mercenaries' (else its first) - a unit given to a faction
+    with no entry shows no texture. Returns the factions added."""
     added = []
     for key in ("textures", "attach"):
         rows = getattr(m, key)
         if not rows:
             continue
         have = {r[0] for r in rows}
-        src = next((r for r in rows if r[0] == "merc"), rows[0])
+        pick = next((f for f in order or () if f in have), None)
+        src = next(r for r in rows if r[0] == pick) if pick else next((r for r in rows if r[0] == "merc"), rows[0])
         for f in factions:
             if f not in have:
                 rows.append([f] + src[1:])

@@ -8137,6 +8137,27 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_a_brought_unit_takes_its_own_factions_look(self):
+        """Reports R-20261013-018380 / 4547BC: Barbarian Invasion's saxon hunters brought into Rome came out in the
+        rebels' blue - the model has 'texture slave' and 'texture saxons', no mercenaries' line, and the FIRST line
+        (slave) was copied. Now the unit's own faction's look is copied (its ownership, the rebels and mercenaries
+        last), or the one the modder picks."""
+        from campaign_editor import packs
+        from campaign_editor import modeldb as MDB
+        man = {"units": [{"type": "saxon hunters", "lines": ["type saxon hunters", "ownership slave, saxons, franks"]}]}
+        self.assertEqual(packs.look_order(man)[:2], ["saxons", "franks"])
+        man["look"] = "franks"
+        self.assertEqual(packs.look_order(man)[0], "franks")
+        lines = ["type saxon_hunters", "texture slave, hunters_slave.tga", "texture saxons, hunters_saxons.tga"]
+        got, added = packs._owner_textures(lines, ["romans_julii"], ["saxons", "franks"])
+        self.assertIn("texture romans_julii, hunters_saxons.tga", got)
+        got, _ = packs._owner_textures(lines, ["romans_julii"])               # no order: as before (first line)
+        self.assertIn("texture romans_julii, hunters_slave.tga", got)
+        m = MDB.Model()                                                    # Medieval II's modeldb the same
+        m.textures, m.attach = [["slave", "a"], ["saxons", "b"]], []
+        MDB.give_owners(m, ["romans_julii"], ["saxons"])
+        self.assertIn(["romans_julii", "b"], m.textures)
+
     def test_land_no_region_holds_can_be_painted(self):
         """Discord (two modders, 2026-10-13): an island of land whose map_regions colour is no region's could not be
         given to any region - 'tile is sea - only land changes region'. Land the game makes land (map_heights not pure
