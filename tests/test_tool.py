@@ -6969,7 +6969,8 @@ building smith
         self.assertTrue(a.fits("rome") and a.fits("medieval2"))
         text = a.template()
         for part in ("trueCost", "recruitCost", "::units.count()", '"FactionTurnStart"', '"FactionTurnEnd"',
-                     '"RecruitmentPanelOpen"', '"PreBattle"', '"unloadCampaign"', "isPlayerControlled",
+                     '"SettlementPanelOpen"', '"campaignMapLoaded"', '"PreBattle"', '"PostBattle"',
+                     '"unloadCampaign"', "isPlayerControlled",
                      "recruit_order_list", "recruit_order_off", "Recruitment Order module loaded"):
             self.assertIn(part, text)
         self.assertIn("local RO_KINDS = [%s]" % ", ".join('"%s"' % k for k in RO.KIND_ORDER), text)

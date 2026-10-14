@@ -22,10 +22,14 @@
 // animal handlers, cavalry, siege, ships, the rest - and inside each kind by
 // the campaign price (stat_cost's 2nd number): the dearest first (the top left
 // corner gets the strongest) or the cheapest first.
+// Medieval II keeps its own kind blocks in the panel (infantry, missile
+// infantry, cavalry, missile cavalry, handlers, siege, ships - unless
+// descr_campaign_db.xml says recruitment_sort_simple true); the order then
+// holds inside each block.
 //
 // Console helpers:
 //   sq ::recruit_order_list()   the order the panel follows now
-//   sq ::recruit_order_off()    the real numbers back (until the next turn)
+//   sq ::recruit_order_off()    the real numbers back (until the next turn or battle)
 // Log lines start with "[ORDER]".
 // ============================================================================
 
@@ -42,6 +46,7 @@ local RO_KINDS = ["infantry", "missiles", "handlers", "cavalry", "siege", "ships
 
 local ro_real = {}                   // type index -> its real trueCost (as the file has it)
 local ro_on = false                  // the ranks are in place now
+local ro_turn = false                // your turn now (the ranks belong in it)
 
 function ro_enum(table, name, fallback) {
     try {
@@ -205,18 +210,45 @@ function ro_listen(name, handler) {
     }
 }
 
+// The panel is sorted afresh at every fill, from the numbers as they are then (exe study): the ranks go in at the
+// start of your turn, after a loaded game and after a battle in your turn; the real numbers come back before every
+// battle, at the end of your turn and when the campaign closes.
 ro_listen("FactionTurnStart", function(e) {
     if (ro_is_player(e)) {
+        ro_turn = true
         ro_apply()
     } else {
+        ro_turn = false
         ro_restore()
     }
 })
-ro_listen("FactionTurnEnd", function(...) { ro_restore() })
-ro_listen("RecruitmentPanelOpen", function(...) { ro_apply() })   // also after a battle or a loaded save
+ro_listen("FactionTurnEnd", function(e) {
+    if (ro_is_player(e)) {
+        ro_turn = false
+    }
+    ro_restore()
+})
+ro_listen("campaignMapLoaded", function(...) {   // a game loaded (or begun) stands in your turn
+    ro_turn = true
+    ro_apply()
+})
+ro_listen("SettlementPanelOpen", function(...) {
+    if (ro_turn) {
+        ro_apply()
+    }
+})
 ro_listen("PreBattle", function(...) { ro_restore() })
+ro_listen("PostBattle", function(...) {
+    if (ro_turn) {
+        ro_apply()
+    }
+})
 ro_listen("unloadCampaign", function(...) {
     ro_restore()
+    ro_turn = false
     ro_real = {}
 })
 ro_log("Recruitment Order module loaded")
+// the engines load this file once the campaign map is up - in your turn
+ro_turn = true
+ro_apply()
