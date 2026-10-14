@@ -13,10 +13,12 @@
   *Divide and Conquer* (Medieval II with M2EX) and sent report after report; thanks to him many mistakes were found
   and many new ideas came in - natural rivers, coasts and borders among them.
 
-## Supporters on Ko-fi and GitHub Sponsors
+## Supporters
 
-Thank you for keeping the work going (names only, never amounts):
+Thank you to everyone who helped with money and kept the work going - directly, on Ko-fi or on GitHub Sponsors
+(names only, never amounts):
 
+- **NamiKawa**
 - **GKpretorian**
 - **Ruthron**
 
