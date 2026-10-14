@@ -5792,6 +5792,50 @@ building smith
             fh.write("\ntype\t\tbroken\nskeleton\t\tfs_hc_spearman_classic, fs_swordsman ; old\n")
         self.assertEqual(skeleton_problems(ModData(troot)), [("broken", ["fs_hc_spearman_classic"])])
 
+    def test_unit_pack_brings_the_models_of_a_soldiers_block(self):
+        # REX lets a unit name its men's models in a block under 'soldiers' (HLR: 37 units) - a skeleton model and
+        # 'default { }' variants. They come along like the 'soldier' line's model; one the target has with other
+        # lines comes in renamed and the block follows it
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldiers\t50, 0, 1.8, 0.4, 1.7\r\n{\n\tskeleton\tceltic_heavy\n\tdefault\n\t{\n"
+            "\t\tceltic_heavy\n\t\tceltic_heavy_alt1 ; a variant\n\t}\n}\nownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\tceltic_heavy\nmodel_flexi\t\tdata/models_unit/a.cas, max\n\n"
+              "type\t\tceltic_heavy_alt1\nmodel_flexi\t\tdata/models_unit/b.cas, max\n")
+        write(os.path.join(d, "models_unit", "a.cas"), "A")
+        write(os.path.join(d, "models_unit", "b.cas"), "B")
+        self.assertEqual([(r, n) for _, r, n in packs.soldiers_block(
+            packs._block_lines(ModData(self.root).load(os.path.join(d, "export_descr_unit.txt")),
+                               packs.type_blocks(ModData(self.root).load(os.path.join(d, "export_descr_unit.txt")))
+                               ["alpha general"]))],
+            [("skeleton", "celtic_heavy"), ("model", "celtic_heavy"), ("model", "celtic_heavy_alt1")])
+        pack = os.path.join(self.root, "alpha.zip")
+        man = packs.export_pack(ModData(self.root), ["alpha general"], pack)
+        self.assertEqual(sorted(man["blocks"]["model"]), ["celtic_heavy", "celtic_heavy_alt1"])
+        self.assertIn("models_unit/b.cas", man["files"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        write(os.path.join(troot, "data", "descr_model_battle.txt"),
+              "type\t\tceltic_heavy\nmodel_flexi\t\tdata/models_unit/other.cas, max\n")
+        manifest, files = packs.read_pack(pack)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, manifest, files, ["alpha"])
+        plan.apply()
+        with open(os.path.join(troot, "data", "export_descr_unit.txt")) as fh:
+            edu = fh.read()
+        unit = edu[edu.index("type\t\talpha general 2") if "type\t\talpha general 2" in edu else edu.rindex("alpha general 2"):]
+        self.assertIn("\tskeleton\tceltic_heavy_2", unit)
+        self.assertIn("\t\tceltic_heavy_2\n", unit)
+        self.assertIn("\t\tceltic_heavy_alt1 ; a variant", unit)
+        with open(os.path.join(troot, "data", "descr_model_battle.txt")) as fh:
+            self.assertEqual(sorted(packs.type_blocks(ModData(troot).load(fh.name))),
+                             ["celtic_heavy", "celtic_heavy_2", "celtic_heavy_alt1"])
+
     def test_unit_pack_brings_its_projectile(self):
         # R-20261014-99712D / D5B6A6: crossbowmen brought from Barbarian Invasion into Rome - the game stopped:
         # "Stat_pri statistic refers to non-existant projectile type 'crossbow'". The projectile comes with the

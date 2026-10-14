@@ -90,6 +90,49 @@ def _values(lines, key):
     return out
 
 
+def soldiers_block(lines):
+    """REX's 'soldiers ...' line followed by a { } block (HLR's units): [(i, role, name)] of its lines naming a
+    battle model - role 'skeleton' (the model whose skeleton the men take), 'model' (a 'default { }' or
+    'armour N { }' variant). Without such a block: []."""
+    out, depth, inside = [], 0, False
+    for i, line in enumerate(lines):
+        code = strip_comment(line).strip()
+        if not inside:
+            if code.split(None, 1)[:1] == ["soldiers"]:
+                inside, depth = True, 0
+            continue
+        if not code:
+            continue
+        if code.startswith("{"):
+            depth += 1
+            continue
+        if code.startswith("}"):
+            depth -= 1
+            if depth <= 0:
+                inside = False
+            continue
+        if depth == 0:                                 # a plain unit line: no block after 'soldiers'
+            inside = False
+            continue
+        words = code.split()
+        if words[0].lower() == "skeleton" and len(words) > 1:
+            out.append((i, "skeleton", words[1]))
+        elif words[0].lower() in ("default", "armour", "armor"):
+            continue
+        elif len(words) == 1:
+            out.append((i, "model", words[0]))
+    return out
+
+
+def _rename_soldiers(lines, old, new):
+    """The soldiers { } block's lines naming model old renamed to new (spacing kept)."""
+    out = list(lines)
+    for i, _, name in soldiers_block(lines):
+        if name.lower() == old.lower():
+            out[i] = re.sub(r"(?<![\w])%s(?![\w])" % re.escape(name), new, out[i], count=1)
+    return out
+
+
 UNIT_ORDERS = ("as in the file", "by name", "by kind", "by owner", "by cost")
 CATEGORY_ORDER = ("infantry", "cavalry", "siege", "handler", "ship", "non_combatant")
 
@@ -317,6 +360,9 @@ def collect(mod, unit_types):
                 g.add_dep(kind, v[0])
         for p in _weapon_projectiles(lines):
             g.add_dep("projectile", p)
+        for _, role, name in soldiers_block(lines):     # REX: the models in a soldiers { } block (HLR)
+            if role == "model" or any(k.lower() == name.lower() for k in g.dep_blocks["model"]):
+                g.add_dep("model", name)
         if d:
             for key in (d, d + "_descr", d + "_descr_short"):
                 val = _text_entry(mod, "export_units.txt", key)
@@ -509,6 +555,8 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
                           ("engine", "engine"), ("animal", "animal")):
             for old, new in renamed[kind].items():
                 lines = _rename_ref(lines, key, old, new)
+                if kind == "model" and key == "soldier":
+                    lines = _rename_soldiers(lines, old, new)
         for old, new in renamed.get("projectile", {}).items():
             lines = _rename_projectile(lines, old, new)
         lines = _set_line(lines, "ownership", ", ".join(owners))

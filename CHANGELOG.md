@@ -121,6 +121,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Bring units: the models a unit names in REX's `soldiers { }` block (HLR's units) were left behind - they come
+  along now.
 - Bring units: units brought from a mod with animations of its own (HLR's Gauls) stopped the game at start - their
   models now move with this mod's nearest skeleton; Check mod files names a model whose skeleton the mod lacks.
 - Bring units: chariots brought for another faction rode a chariot with a banner of another faction (Scotti
