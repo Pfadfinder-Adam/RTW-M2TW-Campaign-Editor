@@ -148,14 +148,14 @@ class GarrisonEditor(ttk.Frame):
         """unchanged: current is what stands in the town now, shown until the first click. auto(lo, hi, cap): the
         unit types Suggest draws (none: no Suggest); as_was: the As it was button (back to the town as it stands)."""
         self.unchanged = unchanged
-        if as_was:
-            self.b_auto.pack(side="right", padx=4, before=self.sugg)
-        else:
-            self.b_auto.pack_forget()
         if auto:
             self.sugg.pack(side="right", padx=4)
         else:
             self.sugg.pack_forget()
+        if as_was:                                # right of Suggest; packed 'before' only a packed one (TclError)
+            self.b_auto.pack(side="right", padx=4, **({"before": self.sugg} if auto else {}))
+        else:
+            self.b_auto.pack_forget()
         self.mod, self.faction, self.units = mod, faction, units
         self.by_type = {u.type: u for u in units}
         self.garrison = [t for t in current if t in self.by_type]

@@ -59,6 +59,13 @@
 - **Tied to it** (owners, recruit places, armies at the start) folds away behind a button of its own beside **Every
   line of the block** in both editors; the editor remembers whether it was open.
 
+### Fixed
+- **Picking another garrison no longer stops the editor** ("TclError ... isn't packed", four reports from Medieval II
+  (with M2EX) and Rome (with REX)): a town's garrison with *As it was* but no *Suggest* could not be shown.
+- **A click on Units & armies no longer stops the editor** ("FieldTable.bind() missing 1 required positional
+  argument"): the drag-to-scroll check asked the armies table a question it could not answer.
+- A tab opened before a mod was loaded no longer stops on the leader's name list (no mod: no names).
+
 ## 0.34.0 - 2026-10-10
 
 ### Added

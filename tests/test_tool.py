@@ -11465,6 +11465,67 @@ building smith
             settings._data, settings._path = saved
             root.destroy()
 
+    def test_garrison_as_it_was_without_suggest(self):
+        """Reports R-20261013-AC7F88 / EE93B5 / C9ED42, R-20261012-981F4B: picking another garrison stopped with
+        'TclError ... isn't packed' - As it was was packed before Suggest while Suggest was hidden (no draw)."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from campaign_editor.gui_garrison import GarrisonEditor
+        from campaign_editor.units import Unit
+        try:
+            ed = GarrisonEditor(root)
+            ed.pack()
+            u = Unit("spears")
+            u.cost = [1, 600, 300]
+            ed.load(None, "england", "town", [u], [], lambda t: None, auto=None, as_was=True)
+            root.update()
+            self.assertTrue(ed.b_auto.winfo_ismapped())
+            self.assertFalse(ed.sugg.winfo_ismapped())
+            ed.load(None, "england", "town", [u], [], lambda t: None, auto=lambda *a: [], as_was=True)
+            root.update()
+            self.assertTrue(ed.sugg.winfo_ismapped())
+            self.assertGreater(ed.b_auto.winfo_x(), ed.sugg.winfo_x())   # As it was still right of Suggest
+        finally:
+            root.destroy()
+
+    def test_field_table_answers_a_binding_question(self):
+        """Report R-20261012-981F4B (and three more): a click on Units & armies stopped with 'FieldTable.bind()
+        missing 1 required positional argument' - the drag-to-scroll check asks w.bind(seq) with no function."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        try:
+            from campaign_editor import gui, gui_util
+        except ImportError as e:                     # gui needs Pillow (CI's test job has none)
+            root.destroy()
+            self.skipTest("no Pillow: %s" % e)
+        try:
+            ft = gui.FieldTable(root)
+            ft.pack()
+            gui_util._own_mouse(ft)                      # no TypeError
+            gui_util.scroll_target(ft)
+            ft.bind("<<ListboxSelect>>", lambda e: None)
+            self.assertTrue(ft.tv.bind("<<TreeviewSelect>>"))
+        finally:
+            root.destroy()
+
+    def test_name_pool_with_no_mod_loaded(self):
+        """Report R-20261012-981F4B: 'NoneType' object has no attribute 'name_pool' when a tab opened before a mod
+        was loaded - no mod, no names (an empty pool), never an error."""
+        try:
+            from campaign_editor import gui
+        except Exception as e:
+            self.skipTest("no tkinter: %s" % e)
+        import types
+        fake = types.SimpleNamespace(mod=None, name_list={}, editing=lambda: True,
+                                     v={"template": types.SimpleNamespace(get=lambda: "romans_julii")})
+        self.assertEqual(gui.App.pool_for(fake, "romans_julii"), {})
+
     def test_art_pictures_sorted_into_tabs(self):
         """Art in sub-tabs (the user, 2026-10-09: 'everything sorted, nothing mixed'): icons and buttons, flags and
         banners, maps, other; the campaign-map figures' textures go to the Models tab with the figures."""

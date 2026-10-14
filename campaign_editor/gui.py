@@ -303,7 +303,9 @@ class FieldTable(ttk.Frame):
         if self.tv.selection():
             self.tv.selection_remove(*self.tv.selection())
 
-    def bind(self, seq, fn, add=None):
+    def bind(self, seq=None, fn=None, add=None):
+        if fn is None:                            # a question (the drag-to-scroll check): the frame's own answer
+            return super().bind(seq)
         self.tv.bind("<<TreeviewSelect>>" if seq == "<<ListboxSelect>>" else seq, fn, add)
 
 
@@ -4601,7 +4603,7 @@ class App(tk.Tk):
             pools = keep_used(self.mod, faction, pools)[0]
         if pools:
             return {p: [key_of(n) for n in v] for p, v in pools.items() if v}
-        return self.mod.name_pool(faction) or {}
+        return self.mod.name_pool(faction) or {} if self.mod else {}     # no mod loaded yet: no names
 
     def leader_pool(self):
         return self.pool_for(self.v["template"].get().strip())
