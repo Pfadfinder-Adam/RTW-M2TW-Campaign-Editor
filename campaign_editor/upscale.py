@@ -1317,7 +1317,37 @@ def rivers_off_the_water(features, heights, ground, land=None):
             else:
                 continue
             break
-    return _write(features, w, h, step, raw)
+    return one_pixel_rivers(_write(features, w, h, step, raw))[0]       # never 2 pixels wide (report #263)
+
+
+def one_pixel_rivers(features):
+    """(map_features bytes, n): every 2 x 2 block of river pixels (a river 2 pixels wide - the game crashes loading
+    the map: rules.md, report #263) broken by taking out one of its pixels - the plain river pixel with the fewest
+    river pixels beside it outside the block (none: a corner the line does without), never a source or a ford."""
+    w, h, step, top_down, _, raw = _decode(features, "map_features.tga")
+    raw = bytearray(raw)
+
+    def at(x, y):
+        o = (((h - 1 - y) if top_down else y) * w + x) * step
+        return (raw[o + 2], raw[o + 1], raw[o])
+    river = {(x, y) for y in range(h) for x in range(w) if at(x, y) in RIVERY}
+    n = 0
+    for y in range(h - 1):
+        for x in range(w - 1):
+            cell = [(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)]
+            if not all(p in river for p in cell):
+                continue
+            plain = [p for p in cell if at(*p) == (0, 0, 255)] or cell
+
+            def outside(p):
+                return sum((p[0] + dx, p[1] + dy) in river and (p[0] + dx, p[1] + dy) not in cell
+                           for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+            gone = min(plain, key=lambda p: (outside(p), p[1], p[0]))
+            o = (((h - 1 - gone[1]) if top_down else gone[1]) * w + gone[0]) * step
+            raw[o], raw[o + 1], raw[o + 2] = 0, 0, 0
+            river.discard(gone)
+            n += 1
+    return (_write(features, w, h, step, raw) if n else features), n
 
 
 def river_mouths(features, heights):

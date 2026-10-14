@@ -124,6 +124,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Bigger map (x3): a river could be left 2 pixels wide in one place, and Rome stopped while loading the map -
+  every river is one pixel wide now.
 - Bring units: the models a unit names in REX's `soldiers { }` block (HLR's units) were left behind - they come
   along now.
 - Bring units: units brought from a mod with animations of its own (HLR's Gauls) stopped the game at start - their

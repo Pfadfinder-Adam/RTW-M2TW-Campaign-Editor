@@ -7872,6 +7872,23 @@ building smith
         self.assertEqual(len(added), 1)
         a = added.pop()
         self.assertTrue(any((a[0] + dx, a[1] + dy) in sea_tiles for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))))
+        # report #263 (R-20261014-8B5F11): Rome with REX crashed loading the x3 map - a river left 2 pixels wide (a
+        # 2 x 2 block; the beach turned land kept a pixel the water used to take). No 2 x 2 block stays: the pixel
+        # the river does without goes (a source / ford kept), the river still one line
+        block = {(1, 0), (1, 1), (2, 0), (2, 1), (1, 2), (0, 0)}
+        W2 = H2 = 4
+        feats2 = tga_bytes(W2, H2, lambda x, y: (0, 0, 255) if (x, y) in block else (0, 0, 0))
+        fixed, n = U.one_pixel_rivers(feats2)
+        self.assertEqual(n, 1)
+        _, _, _, _, _, fr2 = U._decode(fixed, "map_features.tga")
+        left = {(x, y) for y in range(H2) for x in range(W2) if fr2[(y * W2 + x) * 3] == 255}
+        self.assertIn(block - left, ({(2, 0)}, {(2, 1)}))     # one with no river beside it outside the block
+        self.assertFalse(any({(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)} <= left for x, y in left))
+        self.assertEqual(U.one_pixel_rivers(fixed)[1], 0)
+        ground2 = tga_bytes(2 * W2 + 1, 2 * H2 + 1, lambda x, y: (96, 160, 64))
+        flat2 = tga_bytes(2 * W2 + 1, 2 * H2 + 1, lambda x, y: (40, 40, 40))
+        _, _, _, _, _, fr3 = U._decode(U.rivers_off_the_water(feats2, flat2, ground2), "map_features.tga")
+        self.assertEqual(sum(fr3[(y * W2 + x) * 3] == 255 for y in range(H2) for x in range(W2)), 5)
         # rivers onto the sea may be painted; cliffs not
         class Cm:
             w = h = 3
