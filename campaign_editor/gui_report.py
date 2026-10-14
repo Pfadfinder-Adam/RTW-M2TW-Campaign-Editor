@@ -8,7 +8,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from .gui_util import ask
+from .gui_util import ask, one_line
 from . import log, report, settings
 
 APP = "RTW & M2TW Campaign Editor"
@@ -100,14 +100,15 @@ def open_report(app, message="", kind="bug", tab=None):
         # the logs go along (an idea too) - untick to leave out; one already sent unchanged stays out (a tester's wish)
         v = tk.BooleanVar(value=not sent)
         ticks.append((v, (f, name, what)))
-        ttk.Checkbutton(box, variable=v, text="%s - %s (%s)%s" % (
+        # one line each - what does not fit hides behind '...', the whole line on hover (a tester, R-20261014-AE0007)
+        one_line(ttk.Checkbutton(box, variable=v, width=1), "%s - %s (%s)%s" % (
             name, what, report.size_words(os.path.getsize(f)), " - already sent with %s, not changed since" % sent
-            if sent else "")).pack(anchor="w")
+            if sent else ""), extra=28, anchor="w")
     # the mod's file list (names, sizes, dates - no contents): what the mod has and changes against the game
     v_files = tk.BooleanVar(value=app.mod is not None)
     if app.mod is not None:
-        ttk.Checkbutton(box, variable=v_files, text="%s - the list of the mod's files: name, size, date, new / "
-                        "other size than the game's (no contents)" % report.MOD_FILES).pack(anchor="w")
+        one_line(ttk.Checkbutton(box, variable=v_files, width=1), "%s - the list of the mod's files: name, size, "
+                 "date, new / other size than the game's (no contents)" % report.MOD_FILES, extra=28, anchor="w")
     if not any(n.endswith("system.log.txt") for _, n, _ in files):
         row = ttk.Frame(box)
         row.pack(anchor="w", fill="x")
@@ -191,17 +192,25 @@ def open_report(app, message="", kind="bug", tab=None):
     def words():
         return [x.strip() for x in v_hide.get().split(",") if x.strip()]
 
-    def gather():
-        picked = [f for v, f in ticks if v.get()]
-        hide = report.hidden_words(picked, words())
-        texts = report.contents(picked, hide)
-        listing = report.mod_files(app.mod, hide) if v_files.get() else None
+    def read_window():
+        """What the window holds (read on Tk's own thread)."""
+        return dict(picked=[f for v, f in ticks if v.get()], words=words(), files=v_files.get(), kind=v_kind.get(),
+                    msg=txt.get("1.0", "end").strip(), contact=v_contact.get())
+
+    def pack(ui):
+        """The logs cut, the mod's file list and the zip - the slow part (a big mod's 30 000 files: seconds), so Send
+        runs it beside the window (a tester: 'a pause like a hang after Send', R-20261014-C76F52)."""
+        hide = report.hidden_words(ui["picked"], ui["words"])
+        texts = report.contents(ui["picked"], hide)
+        listing = report.mod_files(app.mod, hide) if ui["files"] else None
         if listing:
             texts.append((report.MOD_FILES, listing))
-        info = dict(kind=v_kind.get(), **report.about(app.mod, _version()))
-        msg = txt.get("1.0", "end").strip()
-        data = report.build_zip(texts, msg, v_contact.get(), info, pictures, hide)
-        return texts, info, msg, hide, data
+        info = dict(kind=ui["kind"], **report.about(app.mod, _version()))
+        data = report.build_zip(texts, ui["msg"], ui["contact"], info, pictures, hide)
+        return texts, info, ui["msg"], hide, data
+
+    def gather():
+        return pack(read_window())
 
     def remember():
         settings.put("report_contact_keep", bool(v_keep.get()))
@@ -237,9 +246,10 @@ def open_report(app, message="", kind="bug", tab=None):
         messagebox.showinfo(APP, "Saved %s\n\nSend it on Discord or GitHub." % out, parent=w)
 
     def send():
-        texts, info, msg, hide, data = gather()
+        ui = read_window()
+        msg = ui["msg"]
         if not msg:
-            if v_kind.get() == "suggestion":
+            if ui["kind"] == "suggestion":
                 messagebox.showerror(APP, "Write your idea first - a few words are enough.", parent=w)
                 return
             if not ask(APP, "Nothing written under 'What happened?' - a report with a few words is "
@@ -247,14 +257,16 @@ def open_report(app, message="", kind="bug", tab=None):
                 return
         remember()
         b_send.configure(state="disabled")
-        lbl_state.configure(text="Sending...")
+        lbl_state.configure(text="Packing the logs...")
         result = {}
 
         def work():
             try:
+                result["packed"] = _, info, _, hide, data = pack(ui)
+                result["sending"] = True
                 result["id"], result["issue"] = report.send(
                     data, ("Idea: " if info["kind"] == "suggestion" else "Bug: ") + report.scrub(msg, hide),
-                    v_contact.get().strip(), info, full=True, timeout=SEND_LIMIT)
+                    ui["contact"].strip(), info, full=True, timeout=SEND_LIMIT)
             except Exception as e:           # RuntimeError in plain words; anything else still shown
                 result["error"] = str(e)
         th = threading.Thread(target=work, daemon=True)
@@ -266,10 +278,13 @@ def open_report(app, message="", kind="bug", tab=None):
             if th.is_alive():                # the seconds go on: it is working, not stuck (a report with pictures
                 n = int(time.monotonic() - started)     # takes up to a minute - the user thought it hung)
                 lbl_state.configure(text="Sending... %d s (up to a minute with pictures; it gives up after %d s)"
-                                    % (n, SEND_LIMIT))
+                                    % (n, SEND_LIMIT) if result.get("sending") else
+                                    "Packing the logs... %d s" % n)
                 w.after(500, wait)
                 return
             b_send.configure(state="normal")
+            if "packed" in result:
+                _, info, _, hide, data = result["packed"]
             if "id" in result:
                 log.write("Report sent: %s (%d KB)" % (result["id"], len(data) // 1024))
                 report.remember_sent(result["id"], result.get("issue"), info["kind"],
