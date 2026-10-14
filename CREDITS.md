@@ -16,8 +16,7 @@
 
 ## Supporters
 
-Thank you to everyone who helped with money and kept the work going - directly, on Ko-fi or on GitHub Sponsors
-(names only, never amounts; the most given first):
+Thank you to everyone who helped with money and kept the work going - directly, on Ko-fi or on GitHub Sponsors:
 
 - **NamiKawa**
 - **DEADHEART**
@@ -37,9 +36,9 @@ whose it is):
 - **Melchon** - 4 reports
 - **moderman1** - 4 reports
 - **bodkinarrow** - 3 reports
+- **John** - 3 reports
 - **doliwaq** - 2 reports
 - **HVS87** - 2 reports
-- **John** - 2 reports
 - **Tommy Speed** - 2 reports
 - **Yuri** - 2 reports
 - **Bartek K** - 1 report

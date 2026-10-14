@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- Terrain editor: a sea ground painted on land makes the tile sea, a land ground on the sea makes it land - tile by
+  tile, with its region and heights, as the Land / Sea brush does.
+- Bring units from another mod: pick a **Faction** to see only its units; *by owner* shows each unit's owners.
+  Sort and Faction stand first on the row.
 - **Campaign script...** (in the Events window): the campaign's own `campaign_script.txt` piece by piece - monitors,
   loops, counters, commands, each with its code - and any taken out: one, the picked ones, or all (the script frame
   stays). Preview and Keep for Apply as Events.
@@ -97,6 +101,21 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- 3 x bigger map: sand along the coast turned into shallow sea on the land - light blue teeth along the coasts in
+  the game and ports that looked as if they stood in the water; the ground now lies on its own side of the coast.
+- 3 x bigger map: a river no longer runs along the shore past its mouth (it lay on the beach in the game).
+- Brought units wore this mod's look when it had a texture or model of the same name (chariots looked like the
+  Britons'); the brought one now comes in under a name of its own.
+- Bring buildings: a level with no picture for the culture picked shows another culture's picture, named, instead
+  of '(no picture)'.
+- Terrain editor: painting rivers, cliffs and volcanoes always shows them (no Rivers tick needed there).
+- Terrain editor: the answer of *Find ground on the wrong side of the coast* no longer stretches the bar into a tall
+  narrow column.
+- Layers and *what...* on the map close on a second press.
+- The map's bar: *Bigger map (x3)* with its **?** before it, then the zoom, then the zoom's **?**.
+- Report a bug: Send no longer freezes the window while the logs are packed; long lines of *What goes with it* end
+  in '...' and show whole on hover.
+- Avoid Growth (Rome): the box one pixel narrower, as wide as Automanage's.
 - Bring units / buildings from another mod: the first step no longer stands in a big empty window.
 - New, copied and moved buildings show their own pictures in the construction window and the building chain window
   (they showed the game's generic one): pictures named through descr_ui_buildings.txt (Rome's temples) are found

@@ -56,9 +56,10 @@ local AG_M2_BOX = [24, 17]
 local AG_INK_M2 = [147, 131, 107, 255]
 // Rome's Automanage, measured on a tester's screenshot (report R-20261007-8A29B4): its words (128, 119, 97), its box
 // 24 x 18 units (wider than high) standing 99 units right of where its words start - ours stands in that column too
-// (a tester's photo, 2026-10-09: with 98 / 25 our box stood out 1 px on the left, its right edge even)
+// (a tester's photo, 2026-10-09: with 98 / 25 our box stood out 1 px on the left, its right edge even; 2026-10-14,
+// R-20261014-78BEE6 at 1600 x 900: the left edges even, ours 28 px wide against Automanage's 27 - so 23 units)
 local AG_INK_ROME = [128, 119, 97, 255]
-local AG_ROME_BOX = [99, 24]
+local AG_ROME_BOX = [99, 23]
 local AG_KEY = "avoid_growth"        // this add-on's place in the saved game (persistent.avoid_growth)
 // The game's own tick pieces, the first found: [box, tick, their size in 1024 x 768 units] - the pieces of the
 // scroll's own Auto-manage tick. Medieval II's are the small bevelled PLAIN_CHECKBOX ones too (a tester's screen,
