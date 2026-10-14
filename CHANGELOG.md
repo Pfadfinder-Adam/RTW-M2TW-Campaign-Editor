@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- Map > Layers: **Towns and ports** (switch their signs off) and **Rebel land coloured** (the rebels' land as
+  strongly coloured as a faction's).
 - Terrain editor: a sea ground painted on land makes the tile sea, a land ground on the sea makes it land - tile by
   tile, with its region and heights, as the Land / Sea brush does.
 - Bring units from another mod: pick a **Faction** to see only its units; *by owner* shows each unit's owners.

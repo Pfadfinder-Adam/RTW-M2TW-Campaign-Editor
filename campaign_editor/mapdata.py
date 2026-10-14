@@ -407,13 +407,15 @@ class CampaignMap:
         self._regions_layers = (key, im)
         return im
 
-    def political(self, owners, colours, highlight=None, alpha=205, borders=True, painted=None):
+    def political(self, owners, colours, highlight=None, alpha=205, borders=True, painted=None, rebels=False):
         """RGBA, 1 px per tile: each region in its owner's primary colour, see-through,
         borders darker (unless borders is False); the highlighted faction a little
         stronger. painted {(x, y): region}: tiles given to another region, in its
-        owner's colour (the map as it will be)."""
+        owner's colour (the map as it will be). rebels: the rebels' land as strong as a faction's (Layers > 'Rebel
+        land coloured'; a Discord question: 'how can I toggle the rebel overlay, not just ground types')."""
         key = (tuple(sorted(owners.items())), tuple(sorted(colours.items())), highlight, alpha, borders,
-               tuple(sorted((painted or {}).items())))
+               tuple(sorted((painted or {}).items())), rebels)
+        faint = alpha if rebels else alpha // 4
         if key in self._political:
             return self._political[key]
         layers, mask = self._labels()
@@ -429,7 +431,7 @@ class CampaignMap:
                 rgb = REBELS if owner == "slave" else colours.get(owner, REBELS)
                 a = min(255, alpha + 40) if owner == highlight else alpha
                 if owner == "slave":
-                    a = alpha // 4                   # rebel land barely tinted: the factions stand out
+                    a = faint                        # rebel land barely tinted: the factions stand out
                 flat += list(rgb) + [a]
                 shade += [rgb[0] // 3, rgb[1] // 3, rgb[2] // 3, 200]
             pad = [0, 0, 0, 0] * (256 - len(names) - 1)
@@ -451,7 +453,7 @@ class CampaignMap:
                         px[x, self.h - 1 - y] = (0, 0, 0, 0)
                         continue
                     rgb = REBELS if owner == "slave" else colours.get(owner, REBELS)
-                    a = min(255, alpha + 40) if owner == highlight else (alpha // 4 if owner == "slave" else alpha)
+                    a = min(255, alpha + 40) if owner == highlight else (faint if owner == "slave" else alpha)
                     px[x, self.h - 1 - y] = tuple(rgb) + (a,)
         self._political = {key: im}
         return im

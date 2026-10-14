@@ -100,6 +100,10 @@ class MapView(ttk.Frame):
         self.v_borders = tk.BooleanVar(value=True)
         self.v_names = tk.BooleanVar(value=True)
         self.v_ports = tk.BooleanVar(value=True)
+        # the town squares and port circles on or off (a Discord question, R-20261014-5D1BD4: 'how can I toggle
+        # those square settlements off' - the colours went with Colours > None, the towns had no switch)
+        self.v_towns = tk.BooleanVar(value=True)
+        self.v_rebels = tk.BooleanVar(value=False)     # the rebels' land coloured as strongly as a faction's
         self.v_chars = tk.BooleanVar(value=True)
         self.v_res = tk.BooleanVar(value=False)
         # forts, watchtowers and wonders: always picked, moved (right drag) and deleted (right click) on the Map; new
@@ -141,7 +145,9 @@ class MapView(ttk.Frame):
                 self._mode_radios[key] = r
             ttk.Separator(f).pack(fill="x", pady=4)
             ttk.Label(f, text="Shown", font=("", 9, "bold")).pack(anchor="w")
-            for label, var, cmd in (("Borders", self.v_borders, relayer), ("Town names", self.v_names, self.render),
+            for label, var, cmd in (("Borders", self.v_borders, relayer), ("Towns and ports", self.v_towns, self.render),
+                                    ("Town names", self.v_names, self.render),
+                                    ("Rebel land coloured", self.v_rebels, relayer),
                                     ("Characters", self.v_chars, self.render), ("Resources", self.v_res, relayer)):
                 ttk.Checkbutton(f, text=label, variable=var, command=cmd).pack(anchor="w")
             ttk.Separator(f).pack(fill="x", pady=4)
@@ -197,7 +203,7 @@ class MapView(ttk.Frame):
             "once with a backup (Undo this write / Tools > Restore).").pack(side="left", padx=(4, 4))
         self.lbl_layers = ttk.Label(lbar, text="", foreground="#666")
         self.lbl_layers.pack(side="left", padx=8)
-        for v in (self.v_pol, self.v_borders, self.v_names, self.v_ports, self.v_chars, self.v_res,
+        for v in (self.v_pol, self.v_borders, self.v_towns, self.v_rebels, self.v_names, self.v_ports, self.v_chars, self.v_res,
                   self.v_regions, self.v_mode):
             v.trace_add("write", lambda *a: self._layers_label())
         self._layers_label()
@@ -397,7 +403,8 @@ class MapView(ttk.Frame):
         mode = {"political": "political", "religion": "religion"}.get(
             self.v_mode.get()) if self.v_pol.get() else None
         on = ([mode] if mode else []) + [n for n, v in (
-            ("borders", self.v_borders), ("names", self.v_names),
+            ("borders", self.v_borders), ("towns", self.v_towns), ("rebel land", self.v_rebels),
+            ("names", self.v_names),
             ("characters", self.v_chars), ("resources", self.v_res)) if v.get()]
         self.lbl_layers.configure(text="shown: " + (", ".join(on) or "the ground only"))
 
@@ -1305,7 +1312,7 @@ class MapView(ttk.Frame):
                 pol = self.cmap.political({r: r for r in self.tint}, self.tint, None, borders=self.v_borders.get())
             elif self.v_pol.get():
                 pol = self.cmap.political(self.owners, self.colours, self.faction, borders=self.v_borders.get(),
-                                          painted=self.region_painted)
+                                          painted=self.region_painted, rebels=self.v_rebels.get())
             else:                                   # the borders alone
                 pol = self.cmap.political(self.owners, self.colours, None, alpha=0, borders=True,
                                           painted=self.region_painted)
@@ -1396,7 +1403,7 @@ class MapView(ttk.Frame):
         size = max(3, min(self.z * 0.9, 60))           # a town fills its tile
         font = ("", 8 if self.z < 10 else 9)
         signs = self.pct() >= zoom_setting("map_signs_from") - 1e-6   # far out: towns only (the settings' zoom)
-        if self.v_ports.get() and signs:              # far out: towns only - less to draw, less clutter
+        if self.v_ports.get() and self.v_towns.get() and signs:     # far out: towns only - less clutter
             new = {r: xy for (w, r), xy in self.places.items() if w == "port" and r not in cm.ports}
             for region, (x, y) in list(cm.ports.items()) + list(new.items()):     # a new port too (not written yet)
                 if region in getattr(self, "ports_gone", ()):
@@ -1415,7 +1422,7 @@ class MapView(ttk.Frame):
         if signs:
             self._special_marks(cw, ch)
         names = []                                       # (not mine, x, y, name) - written after every town
-        for region, (x, y) in cm.cities.items():
+        for region, (x, y) in (cm.cities.items() if self.v_towns.get() or self.v_pick.get() else ()):
             x, y = self.places.get(("city", region), (x, y))
             sx, sy = self.to_screen(x, y)
             if not (-40 < sx < cw + 40 and -20 < sy < ch + 20):

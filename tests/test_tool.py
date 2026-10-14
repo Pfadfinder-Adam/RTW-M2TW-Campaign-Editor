@@ -2383,6 +2383,22 @@ building smith
         self.assertEqual(packs.unit_owners(f)["alpha spears"], ["romans_julii", "gauls"])
         self.assertEqual(packs.owner_choices(f), ["barbarian", "carthage", "egypt", "gauls", "romans_julii"])
 
+    def test_rebel_land_coloured_on_a_tick(self):
+        """A Discord question (R-20261014-5D1BD4): 'how can I toggle the rebel overlay, not just ground types' - the
+        rebels' land is barely tinted (the factions stand out); Layers > 'Rebel land coloured' draws it as strongly
+        as a faction's."""
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor.mapdata import CampaignMap
+        cm = CampaignMap(ModData(self.root), "test")
+        owners = {r: "slave" for r in cm.info}
+        x, y = next(iter(cm.cities.values()))
+        faint = cm.political(owners, {}, borders=False).getpixel((x, cm.h - 1 - y))[3]
+        strong = cm.political(owners, {}, borders=False, rebels=True).getpixel((x, cm.h - 1 - y))[3]
+        self.assertEqual((faint, strong), (205 // 4, 205))
+
     def test_one_line_text_cut_with_dots(self):
         """R-20261014-AE0007 / 3E1F2A: a long text in a row of the interface stays on one line, cut with '...' (the
         whole of it in the hover tip) - never a tall narrow column."""
