@@ -8,6 +8,7 @@
 
 ## A special thank you
 
+- **DEADHEART** - who believed in it too and stood behind it, in word and deed.
 - **NamiKawa** - the one who believed in this before anyone else.
 - **Ruthron** - for the 3 x bigger map, and for so many reports. He made the map bigger again and again on
   *Divide and Conquer* (Medieval II with M2EX) and sent report after report; thanks to him many mistakes were found
@@ -16,32 +17,33 @@
 ## Supporters
 
 Thank you to everyone who helped with money and kept the work going - directly, on Ko-fi or on GitHub Sponsors
-(names only, never amounts):
+(names only, never amounts; the most given first):
 
-- **DEADHEART**
 - **NamiKawa**
-- **GKpretorian**
+- **DEADHEART**
 - **Ruthron**
+- **GKpretorian**
 
 ## Thank you for the reports
 
 Everyone who sent a report or an idea - from the editor or on Discord - each one made it better. By the names they
-signed with:
+signed with, the most reports and ideas first (the editor's and Discord's together; those sent without a name are
+not counted):
 
-- **Ruthron**
-- **wholesome_queen**
-- **doliwaq**
-- **Tommy Speed**
-- **Melchon**
-- **Espartan**
-- **moderman1**
-- **CrimsonScorpio**
-- **Mekkermann**
-- **HVS87**
-- **John**
-- **Bartek K**
-- **Yuri**
-- **bodkinarrow**
+- **Ruthron** - 12 reports
+- **wholesome_queen** - 6 reports
+- **Espartan** - 4 reports
+- **Mekkermann** - 4 reports
+- **Melchon** - 4 reports
+- **moderman1** - 4 reports
+- **doliwaq** - 2 reports
+- **HVS87** - 2 reports
+- **John** - 2 reports
+- **Tommy Speed** - 2 reports
+- **Bartek K** - 1 report
+- **bodkinarrow** - 1 report
+- **CrimsonScorpio** - 1 report
+- **Yuri** - 1 report
 
 ## How to get in
 
