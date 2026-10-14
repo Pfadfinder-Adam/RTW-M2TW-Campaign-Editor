@@ -12,10 +12,12 @@ bonuses, retrain lines, comments of their own) stays where it is, and each recru
 from .editors import building_blocks, chain_tree
 from .roster import RECRUITING, recruit_of
 
-# the kinds in the order the panel shows them (missile infantry is infantry of class missile or skirmish)
-KIND_ORDER = ("infantry", "missiles", "handlers", "cavalry", "siege", "ships", "non-combatants", "other")
+# the kinds in the order the panel shows them (the user, 2026-10-14: 'simpler - infantry, missiles, cavalry,
+# artillery, fleet, by price'): missile infantry is infantry of class missile or skirmish; animal handlers stand with
+# the infantry
+KIND_ORDER = ("infantry", "missiles", "cavalry", "siege", "ships", "non-combatants", "other")
 KIND_WORDS = {"infantry": "infantry", "missiles": "missiles (archers, slingers, skirmishers)",
-              "handlers": "animal handlers", "cavalry": "cavalry", "siege": "siege", "ships": "ships",
+              "cavalry": "cavalry", "siege": "siege", "ships": "ships",
               "non-combatants": "non-combatants", "other": "units the unit file lacks"}
 
 
@@ -34,7 +36,7 @@ def unit_facts(edu):
         if cat == "infantry":
             kind = "missiles" if cls in ("missile", "skirmish") else "infantry"
         elif cat == "handler":
-            kind = "handlers"
+            kind = "infantry"
         elif cat == "cavalry":
             kind = "cavalry"
         elif cat == "siege":

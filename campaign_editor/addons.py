@@ -172,8 +172,8 @@ ADDONS = [
           ".nut of the game's script/modules, whatever mod runs. The original exes run no scripts - the add-on then "
           "does nothing."),
     Addon("recruit_order", "Recruitment Order", "both", "recruit_order.nut",
-          "A town's recruitment panel in a fixed order: infantry, then archers / slingers / skirmishers, animal "
-          "handlers, cavalry, siege, ships - in each kind the dearest first (or the cheapest). The game sorts the "
+          "A town's recruitment panel in a fixed order: infantry, then archers / slingers / skirmishers, cavalry, "
+          "siege, ships - in each kind the dearest first (or the cheapest). The game sorts the "
           "panel itself by each unit's custom-battle price (stat_cost's 6th number); during your turn the add-on "
           "gives every unit that number in the order above and puts the real numbers back before every battle and "
           "at the end of your turn, so the computer's turns, battles and autoresolve keep the real values. Nothing "

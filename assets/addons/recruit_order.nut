@@ -18,8 +18,8 @@
 // Nothing is written into the mod's files or the saved game: take the file
 // out and everything is as before.
 //
-// The order: by kind - infantry, missiles (archers, slingers, skirmishers),
-// animal handlers, cavalry, siege, ships, the rest - and inside each kind by
+// The order: by kind - infantry (animal handlers with it), missiles (archers,
+// slingers, skirmishers), cavalry, siege, ships, the rest - and inside each kind by
 // the campaign price (stat_cost's 2nd number): the dearest first (the top left
 // corner gets the strongest) or the cheapest first.
 // Medieval II keeps its own kind blocks in the panel (infantry, missile
@@ -42,7 +42,7 @@ local RO_ENABLED = true
 local RO_ORDER = "dearest"           // "dearest" or "cheapest" first inside each kind
 
 // ---- the order ----
-local RO_KINDS = ["infantry", "missiles", "handlers", "cavalry", "siege", "ships", "non-combatants", "other"]
+local RO_KINDS = ["infantry", "missiles", "cavalry", "siege", "ships", "non-combatants", "other"]
 
 local ro_real = {}                   // type index -> its real trueCost (as the file has it)
 local ro_on = false                  // the ranks are in place now
@@ -72,7 +72,7 @@ function ro_kind(t) {
         return "infantry"
     }
     if (cat == ro_enum("UnitCategory", "handler", 5)) {
-        return "handlers"
+        return "infantry"                       // animal handlers stand with the infantry
     }
     if (cat == ro_enum("UnitCategory", "cavalry", 1)) {
         return "cavalry"

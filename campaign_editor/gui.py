@@ -6135,7 +6135,7 @@ class App(tk.Tk):
                                      "first in each.", parent=self)
             return
         if not ask(APP, "%d building level(s) get their recruit lines in export_descr_buildings.txt sorted:\n\n"
-                        "  infantry -> missiles (archers, slingers, skirmishers) -> animal handlers -> cavalry -> "
+                        "  infantry -> missiles (archers, slingers, skirmishers) -> cavalry -> "
                         "siege -> ships,\n  the dearest first in each kind.\n\nOnly the recruit lines change places. The game sorts the panel itself by each "
                         "unit's custom-battle price (stat_cost's 6th number) - with REX these lines only order "
                         "units of the same price. For the panel in this order in the game: the add-on Recruitment "
