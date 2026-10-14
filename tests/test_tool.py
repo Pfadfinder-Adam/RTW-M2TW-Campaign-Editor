@@ -3155,6 +3155,14 @@ building smith
 
     def test_check_mod_reads_the_mini_mod(self):
         from campaign_editor.check import check_mod
+        from campaign_editor.units import EDU_NEEDS
+        edu = ModData(self.root).file("edu")            # the mini mod's units, with every line a game's unit needs
+        with open(edu) as fh:
+            text = fh.read()
+        full = "".join("%s\t%s\n" % (k, "hardy" if k == "attributes" else "1") for k in EDU_NEEDS[1:])
+        with open(edu, "w") as fh:
+            fh.write(text.replace("ownership\talpha\n", "ownership\talpha\n" + full).replace(
+                "ownership\tslave\n", "ownership\tslave\n" + full))
         text = check_mod(ModData(self.root), "test")
         self.assertIn("FACTIONS: 2 in descr_sm_factions.txt, 2 blocks", text)
         self.assertIn("No problems found", text)
@@ -13038,6 +13046,52 @@ class EdbReaderGapsTest(unittest.TestCase):
         got = self.problems("REX.exe")
         self.assertEqual(len(got), 1, got)
         self.assertIn("terminate list with comma", got[0])
+
+
+class EduReaderGapsTest(unittest.TestCase):
+    """The games' own export_descr_unit checks, in their words (RomeTW.exe, medieval2.exe; REX / M2EX: numbers are
+    no limit)."""
+    STATS = "".join("%s\t1\n" % k for k in ("stat_health", "stat_pri", "stat_pri_attr", "stat_sec", "stat_sec_attr",
+                                             "stat_pri_armour", "stat_sec_armour", "stat_heat", "stat_ground",
+                                             "stat_mental", "stat_charge_dist", "stat_fire_delay", "stat_food",
+                                             "stat_cost"))
+
+    def edu(self):
+        good = ("dictionary\t%s\ncategory\tinfantry\nclass\tlight\nvoice_type\tLight\n"
+                "soldier\tmen, %d, %d, 1\nofficer\ta\nattributes\t%s\nformation\t1, 1, 2, 2, 4, square\n" + self.STATS +
+                "ownership\t%s\n\n")
+        return ("type\tgood men\n" + good % ("good_men", 40, 0, "sea_faring, hardy", "romans_julii, barbarian") +
+                "type\tbad men\n" + good % ("bad_men", 70, 400, "flying, hardy", "martians") +
+                "type\tno words\ncategory\tinfantry\nclass\tlight\nsoldier\tmen, 40, 0, 1\n"
+                "officer\ta\nofficer\tb\nofficer\tc\nofficer\td\n" + self.STATS)
+
+    def problems(self, kind="rome", engine=None):
+        from campaign_editor.units import edu_problems
+        return edu_problems(self.edu().split("\n"), [("romans_julii", "roman"), ("gauls", "barbarian")], kind, engine)
+
+    def test_rome(self):
+        got = self.problems()
+        words = "\n".join(got)
+        self.assertNotIn("good men", words)
+        for text in ("Invalid number of soldiers 70 for combatant unit type 'bad men'",
+                     "Invalid number of extras 400", "Unrecognised attribute 'flying'",
+                     "Invalid ownership type 'martians'",
+                     "Must declare a dictionary entry for the name of unit type 'no words'",
+                     "Too many officers added to unit type 'no words'", "attributes", "formation"):
+            self.assertIn(text, words)
+
+    def test_medieval2_and_engines(self):
+        got = "\n".join(self.problems("medieval2"))
+        self.assertIn("Invalid number of extras 400", got)
+        self.assertNotIn("for combatant unit type 'bad men'", got)       # 70 men: Medieval II takes 4-100
+        self.assertNotIn("flying", got)                                  # its own attribute list is not known
+        for engine in ("REX.exe", "M2EX.exe"):
+            got = "\n".join(self.problems("rome", engine))
+            self.assertNotIn("Invalid number", got)
+            self.assertNotIn("Too many officers", got)
+            self.assertNotIn("flying", got)
+            self.assertIn("Invalid ownership type 'martians'", got)
+            self.assertIn("Must declare a dictionary entry", got)
 
 if __name__ == "__main__":
     unittest.main()

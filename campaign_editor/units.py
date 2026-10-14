@@ -87,6 +87,79 @@ def _read_units(edu):
     return units
 
 
+# the lines every unit must have (RomeTW.exe / medieval2.exe: each missing one is a Script Error; every vanilla unit of
+# Rome, BI, Alexander and Medieval II has them all)
+EDU_NEEDS = ("dictionary", "category", "class", "soldier", "attributes", "formation", "stat_health", "stat_pri",
+             "stat_pri_attr", "stat_sec", "stat_sec_attr", "stat_pri_armour", "stat_sec_armour", "stat_heat",
+             "stat_ground", "stat_mental", "stat_charge_dist", "stat_fire_delay", "stat_food", "stat_cost")
+# Rome's own attribute words (RomeTW.exe; anything else: 'Unrecognised attribute')
+ROME_ATTRIBUTES = set("""can_sap can_withdraw can_formed_charge can_feign_rout can_run_amok can_swim can_horde hide_forest
+    hide_improved_forest hide_long_grass hide_anywhere sea_faring command heavy hardy very_hardy power_charge slave
+    frighten_foot frighten_mounted mercenary_unit no_custom is_peasant cantabrian_circle druid screeching_women warcry
+    general_unit general_unit_upgrade legionary_name""".split())
+# men a unit may have before the scale (the code's own numbers): combatant / non_combatant; extras at most 300
+SOLDIERS = {"rome": (6, 60), "medieval2": (4, 100)}
+
+
+def edu_problems(lines, factions, kind="rome", engine=None):
+    """What the games' own export_descr_unit readers refuse, per unit and in their words (each a Script Error - the
+    game stops): a missing line, an ownership naming no faction / culture / all. Without an engine also: soldiers
+    out of range (Rome 6-60, Medieval II 4-100, non-combatants 1-300), more than 300 extras, more than 3 officers,
+    and in Rome an attribute it does not know. With REX / M2EX numbers are no limit (limits.md THE RULE; REX's
+    `soldiers { }` block stands for the soldier line). factions: [(faction, culture)]."""
+    owners = {f for f, _ in factions} | {c for _, c in factions if c} | {"all"}
+    blocks, cur = [], None
+    for n, l in enumerate(lines, 1):
+        code = strip_comment(l)
+        t = tokens(code)
+        if not t:
+            continue
+        if t[0] == "type":
+            cur = {"type": " ".join(code.split()[1:]), "line": n, "keys": {}, "officers": 0}
+            blocks.append(cur)
+        elif cur is not None:
+            rest = code.split(None, 1)[1] if len(code.split(None, 1)) > 1 else ""
+            cur["keys"].setdefault(t[0], rest)
+            cur["officers"] += t[0] == "officer"
+    out = []
+
+    def say(b, what, quoted=True):
+        out.append("export_descr_unit.txt, %s (line %d): the game stops at the start - %s" % (
+            b["type"], b["line"], "'%s'" % what if quoted else what))
+
+    for b in blocks:
+        keys, name = b["keys"], b["type"]
+        if "soldiers" in keys:
+            keys.setdefault("soldier", "")
+        if "dictionary" not in keys:
+            say(b, "Must declare a dictionary entry for the name of unit type '%s'." % name)
+        lack = [k for k in EDU_NEEDS[1:] if k not in keys]
+        if lack:
+            say(b, "it has no %s line%s" % (", ".join(lack), "s" if len(lack) > 1 else ""), quoted=False)
+        for o in keys.get("ownership", "").replace(",", " ").split():
+            if o not in owners:
+                say(b, "Invalid ownership type '%s' found in unit '%s'." % (o, name))
+        if engine:
+            continue
+        nums = [x.strip() for x in keys.get("soldier", "").split(",")]
+        if len(nums) > 2 and nums[1].isdigit() and nums[2].isdigit():
+            men, extras = int(nums[1]), int(nums[2])
+            low, high = (1, 300) if keys.get("category") == "non_combatant" else SOLDIERS.get(kind, SOLDIERS["rome"])
+            if not low <= men <= high:
+                say(b, "Invalid number of soldiers %d for %s unit type '%s'." % (
+                    men, "non-combatant" if keys.get("category") == "non_combatant" else "combatant", name))
+            if extras > 300:
+                say(b, "Invalid number of extras %d for unit type '%s'." % (extras, name))
+        if b["officers"] > 3:
+            say(b, "Too many officers added to unit type '%s'." % name)
+        if kind == "rome":
+            for a in keys.get("attributes", "").split(","):
+                a = a.split()[0] if a.split() else ""
+                if a and a not in ROME_ATTRIBUTES:
+                    say(b, "Unrecognised attribute '%s' in unit type '%s'." % (a, name))
+    return out
+
+
 def owner_factions(mod, ownership):
     """The factions an ownership list names: factions by name, every faction of a culture it names, all of them
     for 'all' (in the order of descr_sm_factions.txt). A list naming nothing the mod knows is given back as it is."""

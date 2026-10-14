@@ -8,6 +8,8 @@
   map the game leaves out (a woman with no husband or father, a child with no father), a building factions list
   without its last comma, a building recruiting a unit the unit file lacks, a faction that may build a level but not
   the one below it (the last two not with REX, which dropped them).
+- Check mod files checks every unit the way the games do: missing lines, an owner that is no faction or culture,
+  and without REX / M2EX also the number of men, extras and officers and (Rome) unknown attributes.
 - GitHub Sponsors beside Ko-fi: a "Sponsor" button in the editor, on the README and the wiki.
 - Scrollbars are back: every list, table, page and text shows one when there is more to see (the wheel and
   dragging still work too).

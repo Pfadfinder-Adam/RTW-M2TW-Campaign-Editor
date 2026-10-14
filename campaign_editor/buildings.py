@@ -127,7 +127,7 @@ def reader_problems(blds, lines, factions, unit_types, engine=None):
             body = m.group(1).strip()
             if body and not body.endswith(","):
                 out.append("export_descr_buildings.txt line %d: the factions list '{ %s }' does not end with a comma "
-                           "- the game stops ('Expected faction or culture type, or 'all' - ... terminate list "
+                           "- the game stops at the start ('Expected faction or culture type, or 'all' - ... terminate list "
                            "with comma; enclose list in {}'); write '{ %s, }'" % (n, body, body))
     if engine == "REX.exe":
         return out
@@ -147,7 +147,7 @@ def reader_problems(blds, lines, factions, unit_types, engine=None):
             unit = code.split('"')[1].strip()
             if unit.lower() not in known:
                 out.append("export_descr_buildings.txt line %d (%s, %s): recruits '%s', which export_descr_unit.txt "
-                           "lacks - the game stops ('Unknown unit type specified: %s'); add the unit or take the line "
+                           "lacks - the game stops at the start ('Unknown unit type specified: %s'); add the unit or take the line "
                            "out" % (n, chain, level, unit, unit))
         depth = max(depth + code.count("{") - code.count("}"), 0)
     for b in blds:
@@ -158,15 +158,15 @@ def reader_problems(blds, lines, factions, unit_types, engine=None):
             first = open_.index(True)
             if first > 0 and not (b.name == "temple_of_horse" and first > 2):
                 out.append("export_descr_buildings.txt, %s: %s may build %s but not the level below it (%s) - the "
-                           "game reports 'Building DB error - faction %s has gap in building prior to %s (unavailable "
-                           "at level zero)'; open the lower levels to it too (Buildings)" % (
+                           "game reports at the start ('Building DB error - faction %s has gap in building prior to %s (unavailable "
+                           "at level zero)'); open the lower levels to it too (Buildings)" % (
                                b.name, faction, b.levels[first].name, b.levels[first - 1].name, faction,
                                b.levels[first].name))
             elif False in open_[first:] and True in open_[open_.index(False, first):]:
                 gap = open_.index(False, first)
                 after = open_.index(True, gap)
                 out.append("export_descr_buildings.txt, %s: %s may build %s but not %s below it - the game reports "
-                           "'Building DB error - faction %s has gap in building prior to %s'; open %s to it too "
+                           "at the start ('Building DB error - faction %s has gap in building prior to %s'); open %s to it too "
                            "(Buildings)" % (b.name, faction, b.levels[after].name, b.levels[gap].name, faction,
                                             b.levels[after].name, b.levels[gap].name))
     return out

@@ -20,7 +20,7 @@ from .units import read_units
 # problem there) - the first group whose words a problem holds takes it; the last takes the rest
 WHEN = [
     ("start", "the game would not start or the campaign would not load",
-     ("is missing", "does not know", "no culture line", "no name list", "the game crashes", "two settlement blocks",
+     ("is missing", "stops at the start", "reports at the start", "does not know", "no culture line", "no name list", "the game crashes", "two settlement blocks",
       "rehearsal for", "town pixel", "no such region", "wasteland region")),
     ("load", "the campaign loads, but something is lost or the game stops on it",
      ("descr_strat", "the game stops", "core building", "governor's building", "without its towns", "temples",
@@ -149,7 +149,7 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     from .strat import event_lines, unlisted_factions
     for n in unlisted_factions(s):
         bad("%s: its block in descr_strat.txt is in none of the playable / unlockable / nonplayable lists at the "
-            "file's top - the game stops ('Faction %s not listed in playable/nonplayable header section.'); add it "
+            "file's top - the game stops at the start ('Faction %s not listed in playable/nonplayable header section.'); add it "
             "to one of the lists (Edit faction: tick Playable)" % (n, n))
     ev = event_lines(s.lines)
     if ev:
@@ -252,17 +252,23 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         # medieval2.exe, REX, M2EX) - every faction may have it
         say("    note: %d unit(s) without an ownership line (the game gives them to every faction: 'Ownership "
             "missing ... using all'), e.g. %s" % (len(no_owner), ", ".join(no_owner[:3])))
+    from .units import edu_problems
+    from .limits import engine_of, game_kind
+    unit_problems = edu_problems(mod.load(mod.file("edu")).texts(), facs, game_kind(mod), engine_of(mod))
+    for m in unit_problems[:12]:
+        bad(m)
+    if len(unit_problems) > 12:
+        bad("... and %d more export_descr_unit.txt problem(s) of the same kinds (the game stops at the start on each)" % (len(unit_problems) - 12))
     blds = read_buildings(mod.load(mod.file("edb")))
     chains = {b.name: b for b in blds}
     say("BUILDINGS: %d chains, %d levels in export_descr_buildings.txt" % (
         len(blds), sum(len(b.levels) for b in blds)))
     from .buildings import reader_problems
-    from .limits import engine_of
     edb_problems = reader_problems(blds, mod.load(mod.file("edb")).texts(), facs, types, engine_of(mod))
     for m in edb_problems[:12]:
         bad(m)
     if len(edb_problems) > 12:
-        bad("... and %d more export_descr_buildings.txt problem(s) of the same kinds" % (len(edb_problems) - 12))
+        bad("... and %d more export_descr_buildings.txt problem(s) of the same kinds (the game stops at the start on each)" % (len(edb_problems) - 12))
     if not any(b.lower().startswith("core") for b in chains):
         say("    (no core_building chain: settlements are not grown by the governor's building)")
     md = _modeldb_report(mod)
