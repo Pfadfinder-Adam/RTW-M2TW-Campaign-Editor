@@ -5741,6 +5741,57 @@ building smith
         plan.apply()
         self.assertEqual(open(os.path.join(tex, "##chariot_alpha.tga.dds")).read(), "ALPHA'S OWN")
 
+    def test_unit_pack_model_skeletons_the_target_lacks(self):
+        # R-20261014-EFB5F2 (#260): every Gaul unit brought from HLR into Rome (with REX) - the game stopped at once:
+        # "Unable to find skeleton 'fs_hc_spearman_classic'" (descr_model_battle). HLR's skeletons live in its own
+        # animation packs; the target's descr_skeleton has none of them. Each brought model's skeleton the target
+        # lacks becomes the target's nearest one (fs_hc_spearman_classic -> fs_hc_spearman, fs_s1_gladius ->
+        # fs_swordsman, fs_m_bearer -> fs_standard_bearer), said in the preview; a skeleton the target has stays
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1\nownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\talpha_model\nskeleton\t\t\tfs_s1_gladius, fs_m_bearer\r\n"
+              "skeleton_horse\t\tfs_hc_spearman_classic, fs_hc_swordsman ; riders\n"
+              "texture\t\talpha, data/models_unit/textures/a.tga\nmodel_flexi\t\tdata/models_unit/a.cas, max\n")
+        write(os.path.join(d, "models_unit", "a.cas"), "A-model")
+        pack = os.path.join(self.root, "alpha.zip")
+        packs.export_pack(ModData(self.root), ["alpha general"], pack)
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        write(os.path.join(troot, "data", "descr_model_battle.txt"), "type\t\tother\nskeleton\t\tfs_swordsman\n")
+        write(os.path.join(troot, "data", "descr_skeleton.txt"),
+              "".join("type\t\t%s\nanim\t\tstand\tdata/animations/x.cas\n\n" % s for s in
+                      ("fs_swordsman", "fs_slow_swordsman", "fs_hc_spearman", "fs_hc_swordsman",
+                       "fs_standard_bearer")))
+        manifest, files = packs.read_pack(pack)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, manifest, files, ["alpha"])
+        said = " ".join(str(w) for w in plan.warnings)
+        self.assertIn("fs_hc_spearman_classic -> fs_hc_spearman", said)
+        plan.apply()
+        with open(os.path.join(troot, "data", "descr_model_battle.txt")) as fh:
+            dmb = fh.read()
+        self.assertIn("skeleton\t\t\tfs_swordsman, fs_standard_bearer", dmb)
+        self.assertIn("skeleton_horse\t\tfs_hc_spearman, fs_hc_swordsman ; riders", dmb)
+        self.assertNotIn("classic", dmb)
+        self.assertEqual(packs.near_skeleton("fs_s1_slow_barbswordsman", {"fs_slow_swordsman", "fs_swordsman"}),
+                         "fs_slow_swordsman")
+        self.assertEqual(packs.near_skeleton("fs_thp_m_spearman", {"fs_spearman"}), "fs_spearman")
+        self.assertEqual(packs.near_skeleton("fs_phalanx_pikeman", {"fs_semi_fast_spearman"}),
+                         "fs_semi_fast_spearman")
+        self.assertIsNone(packs.near_skeleton("fs_kraken", {"fs_spearman"}))
+        # Check mod files names a model whose skeleton the mod lacks (a mod brought into before this fix)
+        from campaign_editor.check import skeleton_problems
+        self.assertEqual(skeleton_problems(ModData(troot)), [])
+        with open(os.path.join(troot, "data", "descr_model_battle.txt"), "a") as fh:
+            fh.write("\ntype\t\tbroken\nskeleton\t\tfs_hc_spearman_classic, fs_swordsman ; old\n")
+        self.assertEqual(skeleton_problems(ModData(troot)), [("broken", ["fs_hc_spearman_classic"])])
+
     def test_unit_pack_brings_its_projectile(self):
         # R-20261014-99712D / D5B6A6: crossbowmen brought from Barbarian Invasion into Rome - the game stopped:
         # "Stat_pri statistic refers to non-existant projectile type 'crossbow'". The projectile comes with the

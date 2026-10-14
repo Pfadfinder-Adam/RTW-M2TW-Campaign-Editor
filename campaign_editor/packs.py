@@ -642,6 +642,9 @@ def _put_blocks(plan, manifest, owners):
     renamed = {k: {} for k in DEP_FILES}
     owner_facs = [o for o in owners if o in set(facs)]
     game = game_kind(mod)
+    from .animations import skeletons
+    known = set(skeletons(mod))                      # none read (no descr_skeleton): the lines go as they are
+    swapped, left = {}, set()
     for kind in ("model", "mount", "projectile", "engine", "animal"):      # projectiles before the engines firing them
         want = manifest["blocks"].get(kind) or {}
         if not want:
@@ -653,6 +656,10 @@ def _put_blocks(plan, manifest, owners):
         key = DEP_KEY.get(kind, "type")
         have = type_blocks(f, key)
         for name, lines in want.items():
+            if kind == "model" and known:
+                lines, got, unfit = _fit_skeletons(lines, known)
+                swapped.update(got)
+                left.update(unfit)
             if kind == "mount" or kind == "animal":
                 for old, new in renamed["model"].items():
                     lines = _rename_ref(lines, "model", old, new)
@@ -684,10 +691,76 @@ def _put_blocks(plan, manifest, owners):
             f.raw.extend(f.make(x) for x in [""] + lines + [""])
             have[renamed[kind].get(name, name)] = (0, 0)
             plan.note(f, "%s %s added" % (kind, renamed[kind].get(name, name)))
+    if swapped:
+        plan.warn(None, "%d skeleton(s) of the brought models are not in this mod (the source has its own "
+                        "animations) - its nearest ones move the men instead, so they may move a little "
+                        "differently: %s" % (len(swapped), ", ".join("%s -> %s" % kv for kv in sorted(swapped.items()))))
+    if left:
+        plan.warn(None, "skeleton(s) this mod lacks and has nothing near to: %s - the game stops on them "
+                        "(\"Unable to find skeleton\"); give the model a skeleton of this mod's descr_skeleton.txt "
+                        "in the Unit editor's model, or bring the source's animations" % ", ".join(sorted(left)))
     # Medieval II: the battle models in battle_models.modeldb, under the names descr_model_battle got
     if manifest.get("modeldb"):
         _modeldb(plan, manifest, renamed, owners)
     return renamed
+
+
+# A model's skeleton the target lacks stops the game at once ("Unable to find skeleton ..."): a mod like HLR has
+# skeletons of its own in its own animation packs. Rome's men share one bone tree, so the target's nearest skeleton
+# moves the brought men (with the target's animations) - the names the big mods give their own ones, read as the
+# target's kind of man.
+SKELETON_WORDS = (("thp_m_spearman", "spearman"), ("phalanx_pikeman", "spearman"), ("pikeman", "spearman"),
+                  ("hoplite", "spearman"), ("barbswordsman", "swordsman"), ("gladius", "swordsman"),
+                  ("m_bearer", "standard_bearer"))
+SKELETON_SPEEDS = ("semi_fast_", "slow_", "fast_")
+
+
+def near_skeleton(name, known):
+    """The skeleton of known (lower case names) nearest to name: itself, else the name without the big mods'
+    marks (_classic, s1_) and with their kinds read as the game's (gladius = swordsman...), else without its speed,
+    else without 'hc_', else any of the same kind (spearman, archer...). None when none is of its kind."""
+    n = (name or "").lower()
+    if n in known:
+        return n
+    s = n.replace("_classic", "").replace("fs_s1_", "fs_")
+    for old, new in SKELETON_WORDS:
+        s = s.replace(old, new)
+    speed = next((p for p in SKELETON_SPEEDS if s.startswith("fs_" + p) or s.startswith("fs_hc_" + p)), "")
+    plain = s.replace(speed, "", 1) if speed else s
+    for c in (s, plain, plain.replace("fs_hc_", "fs_", 1), s.replace("fs_hc_", "fs_", 1)):
+        if c in known:
+            return c
+    word = plain[3:] if plain.startswith("fs_") else plain
+    word = word[3:] if word.startswith("hc_") else word
+    same = [k for k in known if k == "fs_" + word or k.endswith("_" + word)]
+    if not same:
+        return None
+    return min(same, key=lambda k: (speed not in k, ("hc_" in s) != ("hc_" in k), len(k), k))
+
+
+def _fit_skeletons(lines, known):
+    """A model block's 'skeleton' / 'skeleton_horse' ... lines with every skeleton known lacks put to its nearest
+    (near_skeleton). -> (lines, [(old, new)], [names with no near one])."""
+    out, swapped, left = [], [], []
+    for l in lines:
+        m = re.match(r"^(\s*skeleton\w*\s+)([^;\r\n]*?)(\s*(;.*)?\r?)$", l, re.I)
+        if not m or "attachment" in m.group(1).lower():
+            out.append(l)
+            continue
+        names = [x.strip() for x in m.group(2).split(",")]
+        new = []
+        for x in names:
+            near = near_skeleton(x, known) if x else x
+            if near is None:
+                left.append(x)
+                near = x
+            elif near != x.lower():
+                swapped.append((x, near))
+            else:
+                near = x
+            new.append(near)
+        out.append(m.group(1) + ", ".join(new) + m.group(3))
+    return out, swapped, left
 
 
 def _put_files(plan, files, manifest=None):
