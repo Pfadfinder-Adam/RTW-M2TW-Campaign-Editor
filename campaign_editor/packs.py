@@ -414,6 +414,55 @@ def _carry_voices(mod, manifest, files):
                 out.setdefault(u["type"], []).append({"group": list(ev.group), "cls": ev.cls, "sounds": got})
     if out:
         manifest["voices"] = out
+    # the sound texts' 'type' lines naming the unit (a culture's war cry, a chariot's wheels, an elephant's trumpet):
+    # kept with the other units of each line, to find the same line in the target
+    lists = {}
+    try:
+        texts = S.sound_texts(mod)
+    except OSError:
+        texts = {}
+    want = {u["type"].lower(): u["type"] for u in manifest["units"]}
+    for name, p in texts.items():
+        try:
+            f = mod.load(p)
+        except (OSError, ValueError):
+            continue
+        for _, names in S.type_lines(f):
+            low = [n.lower() for n in names]
+            for t in [want[n] for n in low if n in want]:
+                lists.setdefault(t, []).append({"file": name, "with": [n for n in names if n.lower() != t.lower()]})
+    if lists:
+        manifest["sound_lists"] = lists
+
+
+def _put_sound_lists(plan, manifest, names):
+    """Each brought unit added to the target's sound text 'type' line that shares the most units with the line that
+    named it in the source (the same war cry, the same wheels); events.dat / .idx rebuilt."""
+    from . import sounds as S
+    lists = manifest.get("sound_lists") or {}
+    if not lists:
+        return
+    texts = S.sound_texts(plan.mod)
+    n = 0
+    for old, entries in lists.items():
+        new = names.get(old, (old,))[0]
+        for e in entries:
+            p = texts.get(e["file"])
+            if not p:
+                continue
+            f = plan.edit(p)
+            others = {x.lower() for x in e["with"]}
+            best = max(S.type_lines(f), key=lambda t: len(others & {x.lower() for x in t[1]}), default=None)
+            if best is None or not others & {x.lower() for x in best[1]} or new.lower() in (x.lower() for x in best[1]):
+                continue
+            line = f.text(best[0])
+            code, sep, comment = line.partition(";")
+            f.set(best[0], code.rstrip() + ", " + new + ((" " + sep + comment) if sep else ""))
+            n += 1
+    if n:
+        plan.note(None, "the brought units added to %d line(s) of the sound texts beside the units they sound with "
+                        "in their own mod (war cries, wheels, animals)" % n)
+        S.rebuild_events(plan)
 
 
 def _put_voices(plan, manifest, files, names):
@@ -720,6 +769,7 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
     if manifest.get("recruit") and mod.file("edb"):
         _recruit(plan, manifest, names, owners, recruit_map)
     _put_voices(plan, manifest, files, names)
+    _put_sound_lists(plan, manifest, names)
     _say_missing(plan, manifest)
     return plan
 

@@ -414,6 +414,30 @@ def name_call_from(plan, unit, key, cls, sounds, prefix=None):
     return [VOICE_FOLDER + "/" + n for n in names]
 
 
+def type_lines(f):
+    """[(line, [unit types])] of a sound text's 'type a, b, c' lines (the units a sound is for, by EDU name)."""
+    out = []
+    for i, line in enumerate(f.texts()):
+        code = line.split(";", 1)[0].strip()
+        word, _, rest = code.partition(" ")
+        if not code or word.lower() != "type":
+            continue
+        out.append((i, [x.strip() for x in rest.replace("\t", " ").split(",") if x.strip()]))
+    return out
+
+
+def sound_texts(mod):
+    """{file name: path} of the sound texts that list units by type (descr_sounds_units_*.txt, descr_sounds_weapons
+    .txt ...) - the mod's own, else the game's."""
+    out = {}
+    for data in [mod.data] + ([mod.under] if getattr(mod, "under", None) else []):
+        for n in sorted(os.listdir(data)) if os.path.isdir(data) else []:
+            low = n.lower()
+            if low.startswith("descr_sounds") and low.endswith(".txt") and low not in out:
+                out[low] = os.path.join(data, n)
+    return out
+
+
 def rebuild_events(plan):
     """Remove the mod's events.dat / events.idx (backed up) so the game builds them from the changed texts."""
     d = plan.mod.find("sounds")

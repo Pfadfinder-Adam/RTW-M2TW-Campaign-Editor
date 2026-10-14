@@ -5886,7 +5886,11 @@ building smith
               "BANK: unit_voice\n\tculture eastern,carthaginian\n\t\tclass Heavy_1\n"
               "\t\t\tvocal Unit_Select\n\t\t\t\tunit alpha general,other unit\n\t\t\t\tevent\n"
               "\t\t\t\t\tfolder %s\n\t\t\t\t\tEastern_Heavy_1_name_a_1.wav\n\t\t\t\t\tgroup\n\t\t\t\tend\n" % folder)
+        write(os.path.join(d, "descr_sounds_units_charge.txt"),
+              "BANK: charge\n\ttype alpha general,east peasant ; the war cry\n\tevent\n\t\tcry.wav\n\tend\n")
         man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(man["sound_lists"]["alpha general"], [{"file": "descr_sounds_units_charge.txt",
+                                                                "with": ["east peasant"]}])
         self.assertEqual([(e["group"], e["cls"]) for e in man["voices"]["alpha general"]],
                          [(["eastern", "carthaginian"], "Heavy_1")])
         target = tempfile.mkdtemp()
@@ -5894,6 +5898,9 @@ building smith
         troot = os.path.join(target, "mod")
         shutil.copytree(self.root, troot)
         write(os.path.join(troot, "data", "sounds", "events.dat"), "compiled")
+        write(os.path.join(troot, "data", "descr_sounds_units_charge.txt"),
+              "BANK: charge\n\ttype greek peasant\n\tevent\n\t\tg.wav\n\tend\n"
+              "\ttype east hillmen,east peasant ; the war cry\n\tevent\n\t\tcry.wav\n\tend\n")
         plan = Plan(ModData(troot), "pack", "pack", {})
         packs.import_pack(plan, man, files, ["alpha"])
         plan.apply()
@@ -5906,6 +5913,10 @@ building smith
         with open(got, "rb") as fh:
             self.assertEqual(fh.read(), wav)
         self.assertFalse(os.path.exists(os.path.join(troot, "data", "sounds", "events.dat")))
+        with open(os.path.join(troot, "data", "descr_sounds_units_charge.txt")) as fh:
+            charge = fh.read()
+        self.assertIn("\ttype east hillmen,east peasant, alpha general 2 ; the war cry", charge)
+        self.assertIn("\ttype greek peasant\n", charge)
 
     def test_bring_all_units_to_one_building(self):
         # Bring > 'All the units here' (the user, 2026-10-14, for his tests): a unit the other mod trains nowhere gets
