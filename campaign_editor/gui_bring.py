@@ -66,7 +66,7 @@ class BringWindow(StepWindow):
             lb = tk.Listbox(self.body, height=min(10, len(mods)), exportselection=False)
             for label, d in mods:
                 lb.insert("end", "%s    %s" % (label, d))
-            lb.pack(fill="x", pady=(2, 8))
+            lb.pack(fill="both", expand=True, pady=(2, 8))     # grows with the window (R-20261014-E0784E)
             lb.bind("<<ListboxSelect>>", lambda e: lb.curselection() and v.set(mods[lb.curselection()[0]][1]))
         row = ttk.Frame(self.body)
         row.pack(fill="x")
@@ -127,8 +127,8 @@ class BringWindow(StepWindow):
     def s_pick(self):
         self._note("Tick the %s to bring (click; Ctrl / Shift for more) - the one under the mouse (or clicked last) "
                    "shows on the right as the game shows it; '(renamed here)' = this mod has one of that name, it gets a new one. %s" % (
-            self.what, "Each comes with what it needs: its battle models, mount, textures, cards, name and "
-                       "description." if self.kind == "unit" else
+            self.what, "Each comes with what it needs: its battle models, mount, projectiles, textures, cards, "
+                       "name and description." if self.kind == "unit" else
             "Each chain comes with all its levels, their names, descriptions and pictures."))
         names = self._source_names()
         if self.kind == "unit":
@@ -192,6 +192,8 @@ class BringWindow(StepWindow):
             else:
                 names[:] = sorted(names, key=str.lower) if self._order == "by name" else self._source_names()
             self._owner = v_owner.get()
+            look.faction = None if self._owner == EVERY else self._owner       # its look in the picture
+            on_show[1] = None
             lb.delete(0, "end")
             shown[:] = [n for n in names if (not v_find.get().strip() or v_find.get().strip().lower() in n.lower())
                         and (not v_new.get() or n.lower() not in here)

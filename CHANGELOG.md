@@ -114,6 +114,12 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Bring units: a unit firing a projectile the mod has not (crossbowmen from Barbarian Invasion into Rome) stopped
+  the game at start - its projectile now comes along with it.
+- Bring units: with a Faction picked, the unit's picture shows that faction's card, not the first owner's.
+- Bring units: the list of mods grows with the window.
+- Report window: the ticks of what goes with a report showed one letter each - their words show again.
+- Report window: closing it while the answers were still being looked for gave an error.
 - 3 x bigger map: the minimap pictures keep their size (a 3 x bigger one can crash plain Rome; the game stretches
   it anyway).
 - 3 x bigger map: sand along the coast turned into shallow sea on the land - light blue teeth along the coasts in

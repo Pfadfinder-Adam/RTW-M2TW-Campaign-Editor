@@ -11,6 +11,8 @@ What a unit needs, found by following its lines (the same in Rome and Medieval I
                           animals' models), with every file those blocks name (.cas, .tga -
                           Rome keeps them as .tga.dds -, .spr, .mesh, .texture, ...)
   descr_mount.txt         its 'mount'; descr_engines.txt its 'engine'; descr_animals.txt its 'animal'
+  descr_projectile(_new)  the projectiles its stat_pri / stat_sec (and its engine) fire, with their model files
+                          (a missing one stops the game: "refers to non-existant projectile type")
   export_units.txt        {dict}, {dict}_descr, {dict}_descr_short
   ui/units, ui/unit_info  its card and info picture, per faction
   export_descr_buildings  where it is recruited (chain, level, the recruit line)
@@ -31,19 +33,37 @@ from .textio import strip_comment, tokens
 PACK_VERSION = 1
 FILE_EXT = (".cas", ".tga", ".dds", ".spr", ".mesh", ".texture", ".ms3d", ".png", ".bmp")
 DEP_FILES = {"model": "descr_model_battle.txt", "mount": "descr_mount.txt",
-             "engine": "descr_engines.txt", "animal": "descr_animals.txt"}
+             "engine": "descr_engines.txt", "animal": "descr_animals.txt", "projectile": "descr_projectile_new.txt"}
+DEP_KEY = {"projectile": "projectile"}               # the word a block starts with ('type' for the rest)
+
+
+def dep_file(game, kind):
+    """The file a dependency kind lives in: Rome reads descr_projectile_new.txt, Medieval II descr_projectile.txt
+    (units.projectile_names reads the same)."""
+    if kind == "projectile" and game == "medieval2":
+        return "descr_projectile.txt"
+    return DEP_FILES[kind]
+
+
+def _weapon_projectiles(lines):
+    """The projectiles a block's stat_pri / stat_sec lines fire (their third value; 'no' = none) and an engine's
+    'projectile' line names."""
+    out = [v[2] for key in ("stat_pri", "stat_sec") for v in _values(lines, key)
+           if len(v) > 2 and v[2] and v[2].lower() != "no"]
+    return out + [v[0].split()[0] for v in _values(lines, "projectile") if v[0]]
 
 
 # ---------------------------------------------------------------------------
 # Blocks: 'type <name>' up to the next 'type' line
 # ---------------------------------------------------------------------------
-def type_blocks(f):
+def type_blocks(f, key="type"):
     """{name: (start, end)} of a file made of 'type <name>' blocks (EDU, descr_model_battle,
-    descr_mount, descr_engines, descr_animals). Names may hold spaces (descr_mount)."""
+    descr_mount, descr_engines, descr_animals) - or of 'projectile <name>' blocks with key='projectile'.
+    Names may hold spaces (descr_mount)."""
     out, cur = {}, None
     for i in range(len(f.raw)):
         t = tokens(f.text(i))
-        if t[:1] == ["type"] and len(t) > 1:
+        if t[:1] == [key] and len(t) > 1:
             if cur:
                 out[cur[0]] = (cur[1], i)
             cur = (" ".join(strip_comment(f.text(i)).split()[1:]), i)
@@ -166,10 +186,11 @@ class _Gather:
 
     def __init__(self, mod):
         self.mod = mod
+        game = game_kind(mod)
         self.deps = {k: (mod.load(p) if p else None) for k, p in
-                     ((k, mod.find(v)) for k, v in DEP_FILES.items())}
-        self.dep_blocks = {k: type_blocks(f) if f else {} for k, f in self.deps.items()}
-        self.manifest = {"pack": PACK_VERSION, "game": game_kind(mod), "units": [],
+                     ((k, mod.find(dep_file(game, k))) for k in DEP_FILES)}
+        self.dep_blocks = {k: type_blocks(f, DEP_KEY.get(k, "type")) if f else {} for k, f in self.deps.items()}
+        self.manifest = {"pack": PACK_VERSION, "game": game, "units": [],
                          "blocks": {k: {} for k in DEP_FILES}, "texts": {}, "recruit": [], "files": [],
                          "missing": [], "modeldb": {}}
         self.files = {}
@@ -222,14 +243,17 @@ class _Gather:
         if span is None and in_db:
             return in_db
         if span is None:
-            man["missing"].append("%s %s" % (DEP_FILES[kind], name))
+            man["missing"].append("%s %s" % (dep_file(man["game"], kind), name))
             return None
         lines = _block_lines(self.deps[kind], span)
         man["blocks"][kind][name] = lines
         self.add_files(lines)
         for v in _values(lines, "model"):                  # a mount's / animal's model
-            if kind != "model":
+            if kind not in ("model", "projectile"):
                 self.add_dep("model", v[0])
+        if kind == "engine":                               # what the engine fires
+            for p in _weapon_projectiles(lines):
+                self.add_dep("projectile", p)
         return in_db or name
 
     def done(self):
@@ -254,6 +278,8 @@ def collect(mod, unit_types):
                           ("engine", "engine"), ("animal", "animal")):
             for v in _values(lines, key):
                 g.add_dep(kind, v[0])
+        for p in _weapon_projectiles(lines):
+            g.add_dep("projectile", p)
         if d:
             for key in (d, d + "_descr", d + "_descr_short"):
                 val = _text_entry(mod, "export_units.txt", key)
@@ -385,6 +411,15 @@ def _set_line(lines, key, value):
     return out
 
 
+def _rename_projectile(lines, old, new):
+    """stat_pri / stat_sec lines firing old (their third value) and an engine's 'projectile old' line renamed."""
+    out = []
+    for l in lines:
+        m = re.match(r"^(\s*stat_(?:pri|sec)\s+[^,;]*,[^,;]*,\s*)(%s)(\s*(,|;|$).*)$" % re.escape(old), l, re.I)
+        out.append(m.group(1) + new + m.group(3) if m else l)
+    return _rename_ref(out, "projectile", old, new)
+
+
 def _rename_ref(lines, key, old, new):
     """'key old, ...' lines naming old renamed to new (the rest of the line kept)."""
     out = []
@@ -437,6 +472,8 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
                           ("engine", "engine"), ("animal", "animal")):
             for old, new in renamed[kind].items():
                 lines = _rename_ref(lines, key, old, new)
+        for old, new in renamed.get("projectile", {}).items():
+            lines = _rename_projectile(lines, old, new)
         lines = _set_line(lines, "ownership", ", ".join(owners))
         edu.raw.extend(edu.make(x) for x in [""] + lines)
         plan.note(edu, "unit %s added (dictionary %s), owned by %s" % (t, d, ", ".join(owners)))
@@ -563,19 +600,24 @@ def _put_blocks(plan, manifest, owners):
     facs = [n for n, _ in mod.factions()]
     renamed = {k: {} for k in DEP_FILES}
     owner_facs = [o for o in owners if o in set(facs)]
-    for kind in ("model", "mount", "engine", "animal"):
+    game = game_kind(mod)
+    for kind in ("model", "mount", "projectile", "engine", "animal"):      # projectiles before the engines firing them
         want = manifest["blocks"].get(kind) or {}
         if not want:
             continue
-        path = mod.find(DEP_FILES[kind])
+        path = mod.find(dep_file(game, kind))
         if not path:
-            raise ValueError("%s is missing in this mod" % DEP_FILES[kind])
+            raise ValueError("%s is missing in this mod" % dep_file(game, kind))
         f = plan.edit(path)
-        have = type_blocks(f)
+        key = DEP_KEY.get(kind, "type")
+        have = type_blocks(f, key)
         for name, lines in want.items():
             if kind == "mount" or kind == "animal":
                 for old, new in renamed["model"].items():
                     lines = _rename_ref(lines, "model", old, new)
+            if kind == "engine":
+                for old, new in renamed["projectile"].items():
+                    lines = _rename_projectile(lines, old, new)
             same_name = next((k for k in have if k.lower() == name.lower()), None)
             if same_name is not None:
                 if [strip_comment(x).split() for x in _block_lines(f, have[same_name])] == \
@@ -585,12 +627,12 @@ def _put_blocks(plan, manifest, owners):
                         got, added = _owner_textures(_block_lines(f, (a, b)), owner_facs, look_order(manifest))
                         if added:
                             f.raw[a:a + len(_block_lines(f, (a, b)))] = [f.make(x) for x in got]
-                            have = type_blocks(f)
+                            have = type_blocks(f, key)
                             plan.note(f, "model %s: texture lines for %s" % (same_name, ", ".join(added)))
                     continue
-                new = free_name(have, name, sep="_" if kind == "model" else " ")
+                new = free_name(have, name, sep=" " if kind in ("mount", "engine", "animal") else "_")
                 renamed[kind][name] = new
-                lines = _set_line(lines, "type", new)
+                lines = _set_line(lines, key, new)
                 plan.note(f, "%s %s exists with other lines: the pack's is added as %s" % (kind, name, new))
             if kind == "model":                                # every faction the units go to gets a texture
                 lines, added = _owner_textures(lines, owner_facs, look_order(manifest))

@@ -220,6 +220,8 @@ def build_tab(app, nb, w):
         lbl_state.configure(text="Looking for answers...")
 
         def done(a, error):
+            if not b_check.winfo_exists():              # the window was closed while asking: nothing to show
+                return
             b_check.configure(state="normal")
             if error:
                 lbl_state.configure(text="Not checked: %s" % error)

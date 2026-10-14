@@ -1262,7 +1262,10 @@ def one_line(label, text="", extra=0, **pack):
         except tk.TclError:
             f = tkfont.nametofont("TkDefaultFont")
         room = max(20, label.winfo_width() - 4 - extra)     # extra: a tick's box beside the words
-        label.configure(text=cut_to(label._full, lambda t: f.measure(t) <= room))
+        # a Checkbutton made with width=1 (so its long text does not widen the window) draws only ONE letter in a
+        # ttk theme (R-20261014-E0784E: 'C', 'r', 'n' beside the report's ticks) - once cut to fit, its own width
+        label.configure(text=cut_to(label._full, lambda t: f.measure(t) <= room),
+                        **({"width": 0} if "width" in label.keys() and str(label.cget("width")) == "1" else {}))
 
     def set_text(t):
         label._full = t or ""

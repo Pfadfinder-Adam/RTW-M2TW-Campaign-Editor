@@ -2330,6 +2330,82 @@ building smith
             rgb = fill if isinstance(fill, tuple) else tuple(int(fill[i:i + 2], 16) for i in (1, 3, 5))
             self.assertGreaterEqual(theme.contrast(rgb, ink), 4.5)
 
+    def test_answers_come_after_the_report_window_closed(self):
+        """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
+        touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            from unittest import mock
+            from campaign_editor import gui_answers
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        try:
+            root.withdraw()
+            w = tk.Toplevel(root)
+            nb = ttk.Notebook(w)
+            later = []
+            with mock.patch.object(gui_answers, "_fetch", lambda app, done, timeout=30: later.append(done)):
+                frm, refresh = gui_answers.build_tab(root, nb, w)
+                nb.add(frm, text="Answers to my reports")
+                for c in frm.winfo_children()[1].winfo_children():
+                    if isinstance(c, ttk.Button):
+                        c.invoke()                                     # Check now
+            self.assertTrue(later)
+            w.destroy()
+            later[-1]({}, None)                                        # the answer comes late: no error
+            later[-1](None, "offline")
+        finally:
+            root.destroy()
+
+    def test_the_unit_preview_shows_the_picked_factions_card(self):
+        """R-20261014-D886D4: Bring's Faction set to the Berbers, camel raiders (owned by sassanids, berbers) showed
+        the Sassanids' card - the faction looked at shows its own."""
+        try:
+            import tkinter as tk
+            from unittest import mock
+            from campaign_editor.gui_preview import UnitPreview
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        try:
+            d = os.path.join(self.root, "data")
+            write(os.path.join(d, "export_descr_unit.txt"), EDU.replace("ownership\talpha", "ownership\tslave, alpha"))
+            for fac in ("slave", "alpha"):
+                write(os.path.join(d, "ui", "units", fac, "#alpha_general.tga"), fac)
+            look = UnitPreview(root, ModData(self.root))
+            seen = []
+            with mock.patch.object(UnitPreview, "_pic", lambda self, p, size, what: seen.append(p)):
+                look.show("alpha general")
+                look.faction = "slave"
+                look.show("alpha general")
+            self.assertIn(os.path.join("units", "alpha"), seen[0])                 # no faction: the first owner
+            self.assertIn(os.path.join("units", "slave"), seen[2])                 # the faction looked at
+        finally:
+            root.destroy()
+
+    def test_a_one_line_tick_shows_its_words(self):
+        """R-20261014-E0784E: the report's ticks showed one letter each ('C', 'r', 'n') - a Checkbutton made
+        width=1 keeps that width in ttk. Once fitted, the words show (cut with '...' only where they do not fit)."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            from campaign_editor.gui_util import one_line
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        try:
+            root.geometry("500x100")
+            cb = one_line(ttk.Checkbutton(root, width=1), "CampaignEditor.log - the editor's log " * 3, extra=28)
+            root.update()
+            cb.event_generate("<Configure>")
+            root.update()
+            self.assertEqual(str(cb.cget("width")), "0")
+            self.assertTrue(cb.cget("text").startswith("CampaignEditor.log - the"))
+        finally:
+            root.destroy()
+
     def test_the_wheel_turns_a_drop_down_where_nothing_scrolls(self):
         """The wheel over a closed drop-down turns it to the next / last choice (the user: 'it was very handy, bring
         it back') - a pick the window hears; at the ends and when disabled nothing changes."""
@@ -5614,6 +5690,52 @@ building smith
         self.assertIn("data/models_unit/textures/h_2.tga", dmb)
         mount = open(os.path.join(troot, "data", "descr_mount.txt")).read()
         self.assertIn("horse_model_2", mount)                        # its mount follows its model
+
+    def test_unit_pack_brings_its_projectile(self):
+        # R-20261014-99712D / D5B6A6: crossbowmen brought from Barbarian Invasion into Rome - the game stopped:
+        # "Stat_pri statistic refers to non-existant projectile type 'crossbow'". The projectile comes with the
+        # unit (its block and its model files); one the target has with the same lines is shared, one with other
+        # lines comes in under a free name and the unit's line follows it
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "stat_pri\t\t5, 2, crossbow, 120, 30, missile, simple, piercing, none, 25, 1\n"
+            "stat_sec\t\t3, 1, javelin, 35, 2, thrown, simple, piercing, none, 25, 1\nownership\talpha"))
+        bolt = ("projectile crossbow\n\ndamage\t\t0\nvelocity\t110\n"
+                "model\t\tdata/models_missile/Bolt_high.CAS,  40.0\n")
+        jav = "projectile javelin\n\ndamage\t\t0\nvelocity\t30\n"
+        write(os.path.join(d, "descr_projectile_new.txt"), "; the projectiles\n\n" + jav + "\n" + bolt)
+        write(os.path.join(d, "models_missile", "Bolt_high.CAS"), "BOLT")
+        pack = os.path.join(self.root, "x.zip")
+        man = packs.export_pack(ModData(self.root), ["alpha general"], pack)
+        self.assertEqual(sorted(man["blocks"]["projectile"]), ["crossbow", "javelin"])
+        self.assertIn("models_missile/Bolt_high.CAS", man["files"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        os.remove(os.path.join(troot, "data", "models_missile", "Bolt_high.CAS"))
+        write(os.path.join(troot, "data", "descr_projectile_new.txt"),
+              "projectile javelin\n\ndamage\t\t5\nvelocity\t30\n")      # its own javelin, other lines
+        before = tree_hash(troot)
+        manifest, files = packs.read_pack(pack)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, manifest, files, ["alpha"])
+        bdir = plan.apply()
+        m2 = ModData(troot)
+        proj = m2.load(os.path.join(troot, "data", "descr_projectile_new.txt"))
+        self.assertEqual(sorted(packs.type_blocks(proj, "projectile")), ["crossbow", "javelin", "javelin_2"])
+        self.assertEqual(open(os.path.join(troot, "data", "models_missile", "Bolt_high.CAS")).read(), "BOLT")
+        edu = m2.load(m2.file("edu"))
+        unit = "\n".join(edu.text(i) for i in range(*packs.type_blocks(edu)["alpha general 2"]))
+        self.assertIn("5, 2, crossbow, 120", unit)
+        self.assertIn("3, 1, javelin_2, 35", unit)
+        from campaign_editor.units import projectile_names
+        self.assertIn("crossbow", projectile_names(m2, "rome"))
+        restore(ModData(troot), bdir)
+        after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
+        self.assertEqual(after, before)
 
     def test_engine_found_in_the_game_folder_and_the_limit_raised_in_the_mod(self):
         # M2EX copied over the game's root (any case), the mod in mods/<mod>/data: the engine is seen, the
