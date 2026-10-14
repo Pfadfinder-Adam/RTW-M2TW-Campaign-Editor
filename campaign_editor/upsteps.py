@@ -121,7 +121,7 @@ def step_grid(plan, campaign, st):
         plan.note(None, "map_heights.hgt made 3 x bigger in blocks")
     for name, kind in U.CAMPAIGN_PICTURES.items():
         p = os.path.join(camp, name)
-        if os.path.isfile(p):
+        if os.path.isfile(p) and name not in U.MINIMAPS:       # the minimap keeps its size (U.MINIMAPS)
             plan.binary(p, U.scaled(p, kind)[0])
     t = os.path.join(base, "descr_terrain.txt")
     if os.path.isfile(t):

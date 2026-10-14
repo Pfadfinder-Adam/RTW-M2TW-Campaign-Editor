@@ -122,7 +122,8 @@ much faster on big mods; every picture opens big on a click; reports carry scree
   meanders on straight runs (never twice the same, the same map always alike), side by side pixels only; a river mouth runs on to the new coast and ends on the land touching the water - never a pixel on the water (no land is left under it). Medieval II's land bridges stay unbroken lines too. No cliffs and no beach are drawn (paint them where wanted). Small islands and lakes keep their size and come out round (no crosses or clovers), capes one tile wide stay whole strips; the sea along the coast is shallow, the line to the deep water smooth.
 - **Ground and climates by tile**: every new tile gets the ground type and climate of the old tile it lies in (a
   forest stays a forest), the edges where two kinds meet winding as the coast does - no 3 x 3 steps.
-- **Pictures**: `map_trade_routes`, fog, roughness, disasters and radar maps scaled with exact colours.
+- **Pictures**: `map_trade_routes`, fog, roughness and disasters scaled with exact colours. The minimap (radar maps)
+  is kept as it is: it shows the same land, and a 3 x bigger one can crash plain Rome.
 - `descr_terrain.txt` gets the new size; `map.rwm` is deleted so the game rebuilds it.
 - Preview of every file, one backup, Restore byte-exact.
 

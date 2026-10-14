@@ -2383,6 +2383,30 @@ building smith
         self.assertEqual(packs.unit_owners(f)["alpha spears"], ["romans_julii", "gauls"])
         self.assertEqual(packs.owner_choices(f), ["barbarian", "carthage", "egypt", "gauls", "romans_julii"])
 
+    def test_palette_tga_read_and_written_back_true_colour(self):
+        """A map made by a community map generator stores map_regions / features / ground as COLOUR-MAPPED TGAs
+        (type 1; 9 = run-length) - the editor could not open them. They read like true-colour ones, and a picture
+        written back (patched) is a plain type 2 TGA with the same pixels."""
+        import struct as st
+        from campaign_editor.tga import patched, read_tga, read_tga_bytes
+        pal = [(0, 0, 0), (41, 140, 233), (255, 255, 255)]           # r, g, b
+        idx = [1, 1, 0, 2, 1, 1]                                      # 3 x 2, bottom-up
+        cmap = b"".join(bytes((b, g, r)) for r, g, b in pal)
+        head = st.pack("<BBBHHBHHHHBB", 0, 1, 1, 0, 3, 24, 0, 0, 3, 2, 8, 0)
+        p = os.path.join(self.root, "pal.tga")
+        with open(p, "wb") as fh:
+            fh.write(head + cmap + bytes(idx))
+        img = read_tga(p)
+        self.assertEqual([img.get(x, y) for y in range(2) for x in range(3)], [pal[i] for i in idx])
+        rle = st.pack("<BBBHHBHHHHBB", 0, 1, 9, 0, 3, 24, 0, 0, 3, 2, 8, 0) + cmap + \
+            bytes((0x81, 1, 0x00, 0, 0x00, 2, 0x81, 1))               # 2 x 1, 0, 2, 2 x 1
+        self.assertEqual(read_tga_bytes(rle).get(0, 1), pal[2])
+        out = patched(p, {(0, 0): (9, 9, 9)})
+        self.assertEqual((out[1], out[2], out[16]), (0, 2, 24))        # true colour, no colour map
+        back = read_tga_bytes(out)
+        self.assertEqual(back.get(0, 0), (9, 9, 9))
+        self.assertEqual(back.get(2, 1), pal[1])
+
     def test_rebel_land_coloured_on_a_tick(self):
         """A Discord question (R-20261014-5D1BD4): 'how can I toggle the rebel overlay, not just ground types' - the
         rebels' land is barely tinted (the factions stand out); Layers > 'Rebel land coloured' draws it as strongly
@@ -4712,6 +4736,9 @@ building smith
             fh.write(struct.pack("<II", 9, 9) + struct.pack("<81f", *[(-24.5 if x < 3 else 1502.3)
                                                                      for y in range(9) for x in range(9)]))
         write(os.path.join(camp, "map.rwm"), "cache")
+        write_tga(os.path.join(camp, "radar_map1.tga"), 4, 4, [[(9, 90, 9)] * 4 for _ in range(4)])   # the minimap
+        with open(os.path.join(camp, "radar_map1.tga"), "rb") as fh:
+            radar = fh.read()
         # the campaign's script: campaign-map places move with the map (a tester's DaC: scripted armies stood in the
         # clouds at their old places), battle positions in the same script stay
         write(os.path.join(camp, "campaign_script.txt"),
@@ -4732,6 +4759,8 @@ building smith
         plan = Plan(mod, "map", "map_x3", {})
         warn = upscale.plan_upscale(plan, "test")
         bdir = plan.apply()
+        with open(os.path.join(camp, "radar_map1.tga"), "rb") as fh:     # the minimap kept (size not tied to the
+            self.assertEqual(fh.read(), radar)                            # map; a big one crashes plain Rome)
         script = open(os.path.join(camp, "campaign_script.txt")).read().splitlines()
         self.assertIn("x 4, y 7, family", script[3])                                    # spawned: (1, 2)
         self.assertEqual(script[6], "\tsnap_strat_camera 7, 4\t\t\t; the camera 2, 1")    # comment as it was

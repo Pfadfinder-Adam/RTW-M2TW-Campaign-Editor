@@ -24,7 +24,7 @@ What it writes (Preview lists it; one backup, Restore gives everything back):
                   map_ground_types and map_climates BY TILES (kinds_scaled: every new tile the kind of the old tile
                   it lies in, winding edges between kinds, the sea ground under the heights' sea), map_fog
     2W x 2H       map_roughness (smooth)
-  and the campaign's disasters.tga, radar_map1 / radar_map2 (when present);
+  and the campaign's disasters.tga (when present); the minimap (radar_map1 / radar_map2) is kept as it is;
 - descr_terrain.txt: the dimensions (width / height x 3) and - by default - the heights x 3 (max_land_height,
   min_sea_height): the land is 3 x wider, so its hills and mountains must be 3 x higher to keep their slopes;
 - descr_strat.txt: every character's x / y, every resource, fort, watchtower and wonder (Rome's landmarks);
@@ -53,6 +53,10 @@ BASE_PICTURES = {                       # name: how its size follows the map's W
     "map_heights.tga": "corners", "map_ground_types.tga": "corners", "map_climates.tga": "corners",
     "map_fog.tga": "corners", "map_roughness.tga": "double",
 }
+# the minimap pictures: NOT made bigger by x3 - their size is not tied to the map (M2TW 250 x 125 for 295 x 189, HLR
+# 1440 x 881 for 720 x 440; REX / M2EX scale radar_map2 to their box) and a too big radar_map1.tga crashes plain Rome;
+# the land they show is the same after x3 (wholesome_queen's files, studied 2026-10-14)
+MINIMAPS = ("radar_map1.tga", "radar_map2.tga", "map_radar2.tga")
 CAMPAIGN_PICTURES = {"disasters.tga": "tiles", "radar_map1.tga": "tiles", "radar_map2.tga": "double",
                      "map_radar2.tga": "double"}
 
@@ -144,11 +148,8 @@ def _read(path):
 
 
 def _write(data, w, h, step, raw):
-    id_len = data[0]
-    head = bytearray(data[:18 + id_len])
-    head[2] = 2                                 # uncompressed: the game reads it the same way
-    struct.pack_into("<HH", head, 12, w, h)
-    return bytes(head) + bytes(raw)
+    from .tga import true_colour_head         # uncompressed true colour: the game reads it the same way
+    return bytes(true_colour_head(data, step, w, h)) + bytes(raw)
 
 
 def scaled(path, kind):
@@ -3088,7 +3089,10 @@ def _upscale_all(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEFA
                             "heights" % len(wrong))
     for name, kind in CAMPAIGN_PICTURES.items():
         p = os.path.join(camp, name)
-        if os.path.isfile(p):
+        if os.path.isfile(p) and name in MINIMAPS:
+            plan.note(None, "%s (the minimap) kept as it is: the same land, its size not tied to the map's (a "
+                            "3 x bigger one can crash plain Rome)" % name)
+        elif os.path.isfile(p):
             data, _ = scaled(p, kind)
             plan.binary(p, data)
             plan.note(None, "%s made 3 x bigger" % name)

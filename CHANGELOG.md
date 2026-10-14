@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Maps saved as colour-mapped TGAs (some map generators write them) open in the editor; written back as plain TGAs.
 - Map > Layers: **Towns and ports** (switch their signs off) and **Rebel land coloured** (the rebels' land as
   strongly coloured as a faction's).
 - Terrain editor: a sea ground painted on land makes the tile sea, a land ground on the sea makes it land - tile by
@@ -103,6 +104,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- 3 x bigger map: the minimap pictures keep their size (a 3 x bigger one can crash plain Rome; the game stretches
+  it anyway).
 - 3 x bigger map: sand along the coast turned into shallow sea on the land - light blue teeth along the coasts in
   the game and ports that looked as if they stood in the water; the ground now lies on its own side of the coast.
 - 3 x bigger map: a river no longer runs along the shore past its mouth (it lay on the beach in the game).
