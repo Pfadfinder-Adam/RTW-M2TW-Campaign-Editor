@@ -5870,6 +5870,43 @@ building smith
                                                                        "secondary": "MTW2_Sword"}]}}),
                          ["MTW2_Spear", "MTW2_Sword"])
 
+    def test_unit_pack_brings_the_units_own_name_call(self):
+        # the user, 2026-10-14: 'sounds too - everything of the unit the target lacks': the unit's own name call
+        # (Unit_Select blocks naming it, with their wav files from the source's packs or loose files) comes along
+        # for its new name - new loose files, a block of its own in the target's layout, events.dat rebuilt
+        from campaign_editor import packs, sounds as SN
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        wav = b"RIFF" + struct.pack("<I", 36) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 22050, 44100, 2, 16) \
+            + b"data" + struct.pack("<I", 0)
+        folder = "data/sounds/Voice/Human/Localized/Battle_Map"
+        write(os.path.join(d, "sounds", "Voice", "Human", "Localized", "Battle_Map", "Eastern_Heavy_1_name_a_1.wav"),
+              wav.decode("latin-1"))
+        write(os.path.join(d, SN.VOICE_FILE),
+              "BANK: unit_voice\n\tculture eastern,carthaginian\n\t\tclass Heavy_1\n"
+              "\t\t\tvocal Unit_Select\n\t\t\t\tunit alpha general,other unit\n\t\t\t\tevent\n"
+              "\t\t\t\t\tfolder %s\n\t\t\t\t\tEastern_Heavy_1_name_a_1.wav\n\t\t\t\t\tgroup\n\t\t\t\tend\n" % folder)
+        man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual([(e["group"], e["cls"]) for e in man["voices"]["alpha general"]],
+                         [(["eastern", "carthaginian"], "Heavy_1")])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        write(os.path.join(troot, "data", "sounds", "events.dat"), "compiled")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        plan.apply()
+        with open(os.path.join(troot, "data", SN.VOICE_FILE)) as fh:
+            text = fh.read()
+        self.assertIn("unit alpha general 2", text)
+        self.assertIn("Eastern_Heavy_1_name_alpha_general_2_1.wav", text)
+        got = os.path.join(troot, "data", "sounds", "Voice", "Human", "Localized", "Battle_Map",
+                           "Eastern_Heavy_1_name_alpha_general_2_1.wav")
+        with open(got, "rb") as fh:
+            self.assertEqual(fh.read(), wav)
+        self.assertFalse(os.path.exists(os.path.join(troot, "data", "sounds", "events.dat")))
+
     def test_bring_all_units_to_one_building(self):
         # Bring > 'All the units here' (the user, 2026-10-14, for his tests): a unit the other mod trains nowhere gets
         # a recruit line of this mod's form in the level picked for all

@@ -376,7 +376,72 @@ def collect(mod, unit_types):
                             files["ui/%s/%s/%s" % (sub, fac, os.path.basename(p))] = fh.read()
     manifest["recruit"] = _recruit_places(mod, unit_types)
     _carry_skeletons(mod, manifest, files)
+    _carry_voices(mod, manifest, files)
     return g.done()
+
+
+SOUND_DIR = "__sounds__/"               # the units' own voice files a pack carries - put by sounds.name_call_from
+
+
+def _carry_voices(mod, manifest, files):
+    """Each unit's own name call (the voice file's Unit_Select blocks naming it, every class and culture / accent)
+    with its sound files' bytes (from the source's packs or loose files): manifest['voices'] {unit: [{'group',
+    'cls', 'sounds': [[label, file]]}]}, the bytes in files under SOUND_DIR."""
+    from . import sounds as S
+    try:
+        path = S.voice_file(mod)
+        if not path:
+            return
+        events = S.voice_events(mod.load(path))
+        index = S.pack_index(mod)
+    except (OSError, ValueError):
+        return
+    out, n = {}, 0
+    for u in manifest["units"]:
+        for ev in events:
+            if ev.vocal != S.NAME_CALL or not ev.says_for(u["type"]):
+                continue
+            got = []
+            for rel in ev.files:
+                data = S.sound_bytes(mod, rel, index)
+                if data is None:
+                    continue
+                stash = "%svoice_%d.wav" % (SOUND_DIR, n)
+                n += 1
+                files[stash] = data
+                got.append([rel.rsplit("/", 1)[-1], stash])
+            if got:
+                out.setdefault(u["type"], []).append({"group": list(ev.group), "cls": ev.cls, "sounds": got})
+    if out:
+        manifest["voices"] = out
+
+
+def _put_voices(plan, manifest, files, names):
+    """The brought units' own name calls written for their new names (sounds.name_call_from: new loose files, a
+    Unit_Select block each, events.dat / .idx rebuilt) where this mod's voice file has that culture / accent and
+    class; the rest said."""
+    from . import sounds as S
+    voices = manifest.get("voices") or {}
+    if not voices or not S.voice_file(plan.mod):
+        return
+    left = []
+    for old, entries in voices.items():
+        new = names.get(old, (old,))[0]
+        for e in entries:
+            sounds = [(label, files[r]) for label, r in e["sounds"] if r in files]
+            if not sounds:
+                continue
+            f = plan.edit(S.voice_file(plan.mod))
+            events = S.voice_events(f)
+            key = next((g for g in e["group"] if S._layout(f, events, g, e["cls"]) is not None), None)
+            if key is None:
+                left.append("%s (%s, %s)" % (new, ",".join(e["group"]), e["cls"]))
+                continue
+            S.name_call_from(plan, new, key, e["cls"], sounds,
+                             prefix="%s_%s_name_%s" % (S._slug(key).title(), e["cls"], S._slug(new)))
+    if left:
+        plan.warn(None, "name calls not brought - this mod's voice file has no such culture / accent and class: %s"
+                  % ", ".join(left[:4]) + (" ..." if len(left) > 4 else ""))
 
 
 ANIM_DIR = "__animations__/"            # the skeletons and animations a pack carries (animpacks) - never put as files
@@ -654,6 +719,7 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
     # recruiting: the same chain and level as in the source mod, where the target has them
     if manifest.get("recruit") and mod.file("edb"):
         _recruit(plan, manifest, names, owners, recruit_map)
+    _put_voices(plan, manifest, files, names)
     _say_missing(plan, manifest)
     return plan
 
@@ -693,8 +759,8 @@ def unclash_files(mod, manifest, files):
     skin_files = _skin_files(manifest)
     for rel in sorted(files):
         parts = rel.split("/")
-        if rel.startswith(ANIM_DIR):
-            continue                                       # carried skeletons: animpacks puts them
+        if rel.startswith((ANIM_DIR, SOUND_DIR)):
+            continue                                       # carried skeletons / voices: put by animpacks / sounds
         if len(parts) == 4 and parts[0].lower() == "ui" and parts[1].lower() in ("units", "unit_info"):
             continue                                       # cards: named after the (new) dictionary anyway
         if rel in skin_files:
@@ -882,7 +948,7 @@ def _put_files(plan, files, manifest=None):
         parts = rel.split("/")
         if len(parts) == 4 and parts[0].lower() == "ui" and parts[1].lower() in ("units", "unit_info"):
             continue
-        if rel in skin_files or rel.startswith(ANIM_DIR):
+        if rel in skin_files or rel.startswith((ANIM_DIR, SOUND_DIR)):
             continue
         _put(plan, rel, data)
 

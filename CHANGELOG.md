@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Bring units (both games): the unit's own name call in battle comes along with its sound files.
 - Bring units: **All the units here** - one building level for every brought unit at once (each row can still be
   changed).
 - Bring units (both games): a unit's own skeletons and the animations they move by come along - HLR's men move in

@@ -86,7 +86,10 @@ def pack_index(mod):
     """{lower 'data/sounds/...' name: Sound} of every pack the mod plays (its own first)."""
     out = {}
     for d in reversed(sound_dirs(mod)):
-        for p in PACKS:
+        # the games' own packs, then any other sound pack there (REX: a mod's own <mod>.idx), which wins
+        others = sorted(n for n in os.listdir(d) if n.lower().endswith(".idx") and n.lower() != "events.idx"
+                        and n[:-4].lower() not in {x.lower() for x in PACKS})
+        for p in list(PACKS) + [n[:-4] for n in others]:
             idx = _ci(d, p + ".idx")
             if idx:
                 try:
@@ -343,6 +346,19 @@ def set_name_call(plan, unit, key, cls, sounds):
         raise ValueError("this mod has no %s - the game has no unit voices to change here" % VOICE_FILE)
     if not sounds:
         raise ValueError("pick at least one .wav file")
+    loaded = []
+    for src in sounds:
+        with open(src, "rb") as fh:
+            loaded.append((os.path.basename(src), fh.read()))
+    return name_call_from(plan, unit, key, cls, loaded)
+
+
+def name_call_from(plan, unit, key, cls, sounds, prefix=None):
+    """set_name_call with the sounds as [(label, bytes)] (a brought unit's own name call: Bring units)."""
+    mod = plan.mod
+    path = voice_file(mod)
+    if not path:
+        raise ValueError("this mod has no %s - the game has no unit voices to change here" % VOICE_FILE)
     f = plan.edit(path)
     events = voice_events(f)
     lay = _layout(f, events, key, cls)
@@ -350,15 +366,12 @@ def set_name_call(plan, unit, key, cls, sounds):
         raise ValueError("the voice file has no '%s' names for %s class %s - pick another voice class "
                          "(the unit's voice_type line)" % (NAME_CALL, key, cls))
     index = pack_index(mod)
-    prefix = "%s_%s_name_%s_custom" % (_slug(key).title(), cls, _slug(unit))
+    prefix = prefix or "%s_%s_name_%s_custom" % (_slug(key).title(), cls, _slug(unit))
     names, taken = [], set()
-    for src in sounds:
-        with open(src, "rb") as fh:
-            data = fh.read()
+    for label, data in sounds:
         info = wav_info(data)
         if info is None:
-            raise ValueError("%s is not a .wav file - the game's voices are wav (save it as wav first)"
-                             % os.path.basename(src))
+            raise ValueError("%s is not a .wav file - the game's voices are wav (save it as wav first)" % label)
         name = new_sound_name(mod, prefix, index)
         while name.lower() in taken:
             index[(VOICE_FOLDER + "/" + name).lower()] = None
@@ -370,11 +383,11 @@ def set_name_call(plan, unit, key, cls, sounds):
         if folder and os.path.isdir(folder):
             dst = os.path.join(folder, name)
         plan.binary(dst, data)
-        plan.note(None, "new sound %s (from %s)" % (mod.rel(dst), os.path.basename(src)))
+        plan.note(None, "new sound %s (from %s)" % (mod.rel(dst), label))
         fmt, ch, rate, bits = info
         if (ch, rate, bits) != (1, 22050, 16) and fmt == 1:
             plan.warn(None, "%s is %d Hz, %d-bit, %s - the game's own voices are 22050 Hz, 16-bit, mono; it may "
-                            "sound off in the game" % (os.path.basename(src), rate, bits,
+                            "sound off in the game" % (label, rate, bits,
                                                        "mono" if ch == 1 else "%d channels" % ch))
         names.append(name)
     old = next((ev for ev in events if _in_group(ev, key) and ev.cls.lower() == cls.lower() and ev.says_for(unit)),
