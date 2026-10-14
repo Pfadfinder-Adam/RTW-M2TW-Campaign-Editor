@@ -178,11 +178,15 @@ ADDONS = [
           "gives every unit that number in the order above and puts the real numbers back before every battle and "
           "at the end of your turn, so the computer's turns, battles and autoresolve keep the real values. Nothing "
           "is written into the mod's files or the saved game. Ships always stand after the land units and agents "
-          "last - the game keeps them apart. Console: sq ::recruit_order_list(), sq ::recruit_order_off().",
+          "last - the game keeps them apart; in Medieval II the game's own kind blocks are switched off (a setting). "
+          "Console: sq ::recruit_order_list(), sq ::recruit_order_off().",
           [Setting("RO_ENABLED", "bool", "Recruitment Order on", "off keeps the file but does nothing"),
            Setting("RO_ORDER", "choice", "In each kind", "which units stand first among the same kind",
                    choices=[("dearest", "The dearest first (the strongest top left)"),
-                            ("cheapest", "The cheapest first")])],
+                            ("cheapest", "The cheapest first")]),
+           Setting("RO_ONE_PANEL", "bool", "Medieval II: one panel for every kind",
+                   "the game's own kind blocks off (recruitment_sort_simple), so the whole panel follows the order; "
+                   "Rome has no blocks")],
           "REX (Rome: Total War) or M2EX (Medieval II: Total War) - their own scripts (script/main.nut) load every "
           ".nut of the game's script/modules, whatever mod runs. The original exes run no scripts - the add-on then "
           "does nothing."),

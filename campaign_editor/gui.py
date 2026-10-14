@@ -969,8 +969,6 @@ class App(tk.Tk):
         menu.add_command(label="The game's log in plain words (what went wrong in the game)...",
                          command=self.once("game_log_window", self.game_log_window))
         menu.add_command(label=TEST_MOD_LABEL, command=self.once("test_mod", self.test_mod))
-        head("Tidy the mod")
-        menu.add_command(label="Sort the recruitment panel (strongest first)...", command=self.sort_recruitment)
         head("Files and backups")
         menu.add_command(label="Restore a backup...", command=self.restore)
         menu.add_command(label="Check and install a pack...", command=self.once("install_pack", self.install_pack))
@@ -6116,41 +6114,6 @@ class App(tk.Tk):
         t.bind("<<Paste>>", lambda e: "break")
         t.bind("<<Cut>>", lambda e: "break")
         t.focus_set()
-
-    def sort_recruitment(self):
-        """Tools > Sort the recruitment panel: every building level's recruit lines in the panel's order (infantry,
-        missiles, cavalry, siege, ships, the dearest first in each - recruitorder), kept for Apply."""
-        if not self.mod:
-            self.status.set("Load a mod first.")
-            return
-        from . import recruitorder as RO
-        from .gui_util import keep_for_apply
-        got = {}
-
-        def make():
-            plan = Plan(self.mod, "sort", "sort", {})
-            got["changed"] = RO.plan_sort(plan)
-            return plan
-        try:
-            make()
-        except Exception as e:
-            messagebox.showerror(APP, str(e), parent=self)
-            return
-        n = len(got["changed"])
-        if not n:
-            messagebox.showinfo(APP, "The recruit lines are in order already: every building level lists its "
-                                     "units infantry first, then missiles, cavalry, siege, ships - the dearest "
-                                     "first in each.", parent=self)
-            return
-        if not ask(APP, "%d building level(s) get their recruit lines in export_descr_buildings.txt sorted:\n\n"
-                        "  infantry -> missiles (archers, slingers, skirmishers) -> cavalry -> "
-                        "siege -> ships,\n  the dearest first in each kind.\n\nOnly the recruit lines change places. The game sorts the panel itself by each "
-                        "unit's custom-battle price (stat_cost's 6th number) - with REX these lines only order "
-                        "units of the same price. For the panel in this order in the game: the add-on Recruitment "
-                        "Order (Add-ons). Preview shows every level." % n, yes="Keep for Apply", no="Cancel", parent=self):
-            return
-        if keep_for_apply(self, "sort_recruitment", "Recruitment panel sorted (%d levels)" % n, make):
-            self.status.set("Recruitment panel sorted in %d building level(s) - Preview, then Apply changes." % n)
 
     def game_manifest(self):
         """Fingerprint every file of the game (not of its mods) into rtw_manifest.json.gz."""

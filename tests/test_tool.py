@@ -2500,47 +2500,6 @@ building smith
                                                                             img.height)))
         self.assertNotEqual(other, (200, 10, 10))                     # another faction's land: the map as it is
 
-    def test_recruitment_panel_sorted_strongest_first(self):
-        """The user, 2026-10-14: the panel lists units in the order of the buildings file's recruit lines - sort them:
-        infantry, missiles, cavalry, siege, ships, the dearest first in each; other lines and comments stay put."""
-        from campaign_editor import recruitorder as RO
-        d = os.path.join(self.root, "data")
-        write(os.path.join(d, "export_descr_unit.txt"),
-              "type boat\ncategory ship\nclass light\nstat_cost 1, 900, 10\n\n"
-              "type horse\ncategory cavalry\nclass light\nstat_cost 1, 300, 10\n\n"
-              "type archer\ncategory infantry\nclass missile\nstat_cost 1, 200, 10\n\n"
-              "type cheap spear\ncategory infantry\nclass spearmen\nstat_cost 1, 100, 10\n\n"
-              "type dear sword\ncategory infantry\nclass heavy\nstat_cost 1, 700, 10\n")
-        write(os.path.join(d, "export_descr_buildings.txt"),
-              "building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, }\n"
-              "        {\n            capability\n            {\n"
-              "                recruit \"boat\"  0  requires factions { alpha, }\n"
-              "                recruit \"horse\"  0  requires factions { alpha, } ; fast\n"
-              "                agent spy  0  requires factions { alpha, }\n"
-              "                recruit \"archer\"  0  requires factions { alpha, }\n"
-              "                recruit \"cheap spear\"  0  requires factions { alpha, }\n"
-              "                recruit \"dear sword\"  0  requires factions { alpha, }\n"
-              "            }\n        }\n    }\n}\n")
-        before = tree_hash(self.root)
-        mod = ModData(self.root)
-        plan = Plan(mod, "sort", "sort", {})
-        changed = RO.plan_sort(plan)
-        self.assertEqual(changed, [("barracks", "hall", ["dear sword", "cheap spear", "archer", "horse", "boat"])])
-        bdir = plan.apply()
-        lines = open(os.path.join(d, "export_descr_buildings.txt")).read().splitlines()
-        self.assertEqual([x.strip() for x in lines[8:13]], [
-            'recruit "dear sword"  0  requires factions { alpha, }',
-            'recruit "cheap spear"  0  requires factions { alpha, }',
-            'agent spy  0  requires factions { alpha, }',            # the agent line keeps its place
-            'recruit "archer"  0  requires factions { alpha, }',
-            'recruit "horse"  0  requires factions { alpha, } ; fast'])   # its comment goes with it
-        self.assertEqual(lines[13].strip(), 'recruit "boat"  0  requires factions { alpha, }')
-        plan2 = Plan(ModData(self.root), "sort", "sort", {})
-        self.assertEqual(RO.plan_sort(plan2), [])                     # sorted already: nothing to do
-        restore(ModData(self.root), bdir)
-        after = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
-        self.assertEqual(after, before)
-
     def test_palette_tga_read_and_written_back_true_colour(self):
         """A map made by a community map generator stores map_regions / features / ground as COLOUR-MAPPED TGAs
         (type 1; 9 = run-length) - the editor could not open them. They read like true-colour ones, and a picture
@@ -7183,21 +7142,23 @@ building smith
     def test_recruit_order_addon_for_both_games(self):
         """Recruitment Order: one script for REX and M2EX; the panel's sort number (trueCost = the 6th stat_cost)
         gets the rank only in the player's turn and the real one back before battles, at the turn's end and when the
-        campaign unloads; the kinds in recruitorder's order; its settings written and read back; put into the game's
+        campaign unloads; the kinds infantry, missiles, cavalry, siege, ships; its settings written and read back; put into the game's
         script/modules and taken out."""
-        from campaign_editor import addons as A, recruitorder as RO
+        from campaign_editor import addons as A
         a = A.by_key("recruit_order")
         self.assertTrue(a.fits("rome") and a.fits("medieval2"))
         text = a.template()
         for part in ("trueCost", "recruitCost", "::units.count()", '"FactionTurnStart"', '"FactionTurnEnd"',
                      '"SettlementPanelOpen"', '"campaignMapLoaded"', '"PreBattle"', '"PostBattle"',
                      '"unloadCampaign"', "isPlayerControlled",
-                     "recruit_order_list", "recruit_order_off", "Recruitment Order module loaded"):
+                     "recruit_order_list", "recruit_order_off", "Recruitment Order module loaded",
+                     "::campaignDb.extra.setRecruitmentSortSimple(true)"):
             self.assertIn(part, text)
-        self.assertIn("local RO_KINDS = [%s]" % ", ".join('"%s"' % k for k in RO.KIND_ORDER), text)
+        self.assertIn('local RO_KINDS = ["infantry", "missiles", "cavalry", "siege", "ships", "non-combatants", "other"]',
+                      text)
         self.assertNotIn("delete ", text)                                  # the engines forbid 'delete'
         got = A.read_settings(a, text)
-        self.assertEqual(got, {"RO_ENABLED": True, "RO_ORDER": "dearest"})
+        self.assertEqual(got, {"RO_ENABLED": True, "RO_ORDER": "dearest", "RO_ONE_PANEL": True})
         self.assertEqual(A.render(a, text, got), text)
         new = dict(got, RO_ORDER="cheapest")
         self.assertEqual(A.read_settings(a, A.render(a, text, new)), new)

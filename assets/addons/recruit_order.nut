@@ -22,10 +22,11 @@
 // slingers, skirmishers), cavalry, siege, ships, the rest - and inside each kind by
 // the campaign price (stat_cost's 2nd number): the dearest first (the top left
 // corner gets the strongest) or the cheapest first.
-// Medieval II keeps its own kind blocks in the panel (infantry, missile
-// infantry, cavalry, missile cavalry, handlers, siege, ships - unless
-// descr_campaign_db.xml says recruitment_sort_simple true); the order then
-// holds inside each block.
+// Medieval II splits the panel into its own kind blocks (infantry, missile
+// infantry, cavalry, missile cavalry, handlers, siege, ships) unless
+// recruitment_sort_simple is on: with RO_ONE_PANEL the add-on switches it on
+// (M2EX, while the game runs - descr_campaign_db.xml stays as it is), so the
+// whole panel follows the order. Rome has no such blocks.
 //
 // Console helpers:
 //   sq ::recruit_order_list()   the order the panel follows now
@@ -40,6 +41,7 @@ function ro_log(message) {
 
 local RO_ENABLED = true
 local RO_ORDER = "dearest"           // "dearest" or "cheapest" first inside each kind
+local RO_ONE_PANEL = true            // Medieval II: one panel for every kind (else the game's kind blocks)
 
 // ---- the order ----
 local RO_KINDS = ["infantry", "missiles", "cavalry", "siege", "ships", "non-combatants", "other"]
@@ -249,6 +251,23 @@ ro_listen("unloadCampaign", function(...) {
     ro_real = {}
 })
 ro_log("Recruitment Order module loaded")
+// Medieval II (M2EX): one panel for every kind - the game's recruitment_sort_simple switched on (REX has no
+// descr_campaign_db: the engine says so in its log and does nothing)
+function ro_one_panel() {
+    if (!RO_ENABLED || !RO_ONE_PANEL) {
+        return
+    }
+    try {
+        if (::campaignDb.extra.recruitmentSortSimple() != true) {
+            ::campaignDb.extra.setRecruitmentSortSimple(true)
+            ro_log("one panel for every kind (recruitment_sort_simple on)")
+        }
+    } catch (err) {
+    }
+}
+ro_listen("campaignMapLoaded", function(...) { ro_one_panel() })
+
 // the engines load this file once the campaign map is up - in your turn
+ro_one_panel()
 ro_turn = true
 ro_apply()
