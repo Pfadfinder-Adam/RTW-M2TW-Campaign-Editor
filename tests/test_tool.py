@@ -2383,6 +2383,24 @@ building smith
         self.assertEqual(packs.unit_owners(f)["alpha spears"], ["romans_julii", "gauls"])
         self.assertEqual(packs.owner_choices(f), ["barbarian", "carthage", "egypt", "gauls", "romans_julii"])
 
+    def test_leader_face_for_every_faction(self):
+        """The user, 2026-10-14: the faction-select screen shows the leader's face in all three games - a faction
+        without a leader_pic_<faction>.tga shows its faction leader's portrait (his own or one of his culture's pool
+        for his age)."""
+        from campaign_editor import factionart as FA
+        d = os.path.join(self.root, "data", "ui", "eastern", "portraits", "portraits")     # alpha is eastern
+        for age in ("young", "old"):
+            write(os.path.join(d, age, "generals", "001.tga"), "x")
+        mod = ModData(self.root)
+        from campaign_editor.family import read
+        fam = read(mod.load(mod.campaign_file("test", "descr_strat.txt")), "alpha")
+        lead = next((p for p in fam["people"] if p.role == "leader"), None)
+        got = FA.leader_portrait(mod, "test", "alpha")
+        if lead is None:
+            self.assertIsNone(got)
+        else:
+            self.assertTrue(got and got[0].endswith("001.tga") and lead.name in got[1])
+
     def test_select_map_drawn_from_the_campaign_map(self):
         """The user, 2026-10-14: the faction-select map made from the campaign map itself - relief and rivers, no
         signs - with the faction's land one SOLID patch in its colour (nothing see-through, no borders inside it);

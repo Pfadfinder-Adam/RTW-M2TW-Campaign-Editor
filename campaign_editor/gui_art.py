@@ -167,13 +167,38 @@ class ArtEditor(ttk.Frame):
                                         self.draw_start_map(t, s))]
             self.card(row, p, src_faction, new, box=(69, 96) if leader else (192, 120), wrap=150 if leader else 200,
                       short=True, buttons=own).pack(side="left", anchor="nw", padx=(0, 8))
-        from .packs import game_kind
         missing = []
         if FA.START_KINDS[0] not in kinds:
             missing.append("no campaign-select map of its own in this campaign (map_%s.tga)" % src_faction)
-        if FA.START_KINDS[1] not in kinds and game_kind(a.mod) == "rome":
-            missing.append("no leader's face: the campaign-select screen shows one only for a faction with a "
-                           "leader_pic_<faction>.tga (vanilla Rome has them for the three Roman families)")
+        if FA.START_KINDS[1] not in kinds:
+            # no leader_pic of its own: the screen shows its faction leader's portrait (all three games)
+            got = FA.leader_portrait(a.mod, a.v_campaign.get(), src_faction)
+            box = ttk.Frame(row)
+            box.pack(side="left", anchor="nw", padx=(0, 8))
+            ttk.Label(box, text="Leader's face", font=("", 9, "bold")).pack(anchor="w")
+            if got:
+                pic = ttk.Label(box)
+                pic.pack(anchor="w")
+                try:
+                    from PIL import Image, ImageTk
+                    with Image.open(got[0]) as im:
+                        im = im.convert("RGBA")
+                        im.thumbnail((69, 96))
+                        pic.image = ImageTk.PhotoImage(im)
+                    pic.configure(image=pic.image)
+                    from .gui_picview import zoomable
+                    zoomable(pic, got[0])
+                except Exception:
+                    pic.configure(text=os.path.basename(got[0]))
+                from .gui_util import hint as _hint
+                line = ttk.Frame(box)
+                line.pack(anchor="w")
+                ttk.Label(line, text="its leader's portrait", foreground="#666").pack(side="left")
+                _hint(line, got[1] + ". The faction-select screen shows it; change it in Characters (his "
+                             "portrait).", width=420).pack(side="left", padx=2)
+            else:
+                ttk.Label(box, text="no faction leader on the map", foreground="#666", wraplength=150).pack(
+                    anchor="w")
         for m in missing:
             ttk.Label(host, text=m, foreground="#666", wraplength=330, justify="left").pack(anchor="w")
         if FA.START_KINDS[0] not in kinds:

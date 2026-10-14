@@ -160,6 +160,30 @@ def start_pictures(mod, campaign, faction):
     return out
 
 
+def leader_portrait(mod, campaign, faction):
+    """(path, words) of the face the faction-select screen shows for a faction without a leader_pic_<faction>.tga
+    (the user, 2026-10-14: 'in all three games the screen shows the leader's portrait'): its faction leader's
+    portrait as the character editor finds it - his own (custom_portraits) or the one of his culture's pool for
+    his age (family.portraits). None when the faction has no leader on the map."""
+    from . import family as FM
+    try:
+        fam = FM.read(mod.load(mod.campaign_file(campaign, "descr_strat.txt")), faction)
+    except Exception:
+        return None
+    lead = next((p for p in fam["people"] if p.source == "map" and p.role == "leader"), None)
+    if lead is None:
+        return None
+    person = {"name": lead.name, "kind": lead.kind, "age": lead.age, "sex": lead.sex, "portrait": lead.portrait,
+              "source": "map"}
+    info = FM.portraits(mod, faction, person, fam["medieval"])
+    age = "old" if (lead.age or 0) >= 45 else "young"
+    path = info["files"].get(age) or info["files"].get("young") or (info.get("samples") or {}).get(age) or \
+        info["sample"]
+    if not path:
+        return None
+    return path, "%s, the faction leader (%s)" % (lead.name, info["how"])
+
+
 def faction_pictures(mod, campaign, faction):
     """[{'path', 'rel', 'label', 'size': (w, h, bpp) or None}] of every picture file
     named after the faction under data/ui, data/menu, data/loading_screen, the
