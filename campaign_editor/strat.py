@@ -291,6 +291,32 @@ def unlisted_factions(s):
     return [fb.name for fb in s.factions if fb.name not in listed]
 
 
+# the option lines the original exes read in a faction's head (before its towns and characters); any other line there
+# is skipped SILENTLY (RomeTW.exe FUN_00dae835; medieval2.exe's reader) - a misspelt word does nothing
+FACTION_OPTIONS = {"rome": {"superfaction", "re_emergent", "dead_until_resurrected", "denari"},
+                   "medieval2": {"ai_label", "undiscovered", "dead_until_resurrected", "re_emergent", "denari",
+                                 "denari_kings_purse"}}
+BLOCK_ENDS = {"settlement", "character", "character_record", "relative", "faction", "region"} | set(DIPLOMACY_HEADS)
+
+
+def faction_option_words(lines, kind="rome"):
+    """[(faction, word, line number)] of the lines in a faction's head the game does not know and skips without a
+    word (a misspelt dead_until_resurrected, a Medieval II word in Rome...). kind: 'rome' / 'medieval2'."""
+    known = FACTION_OPTIONS.get(kind, FACTION_OPTIONS["rome"])
+    out, fac = [], None
+    for n, l in enumerate(lines, 1):
+        t = tokens(l)
+        if not t:
+            continue
+        if t[0] == "faction" and len(t) > 1:
+            fac = t[1].rstrip(",")
+        elif t[0] in BLOCK_ENDS:
+            fac = None
+        elif fac is not None and t[0] not in known:
+            out.append((fac, t[0], n))
+    return out
+
+
 def event_lines(lines):
     """Line numbers of `event` lines above the first faction block, where the games' readers meet them: 'Events
     are no longer supported in strat.txt, and must be added to events.txt' (RomeTW.exe, medieval2.exe, REX,

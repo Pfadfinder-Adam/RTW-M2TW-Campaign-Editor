@@ -1,6 +1,7 @@
 """Units from export_descr_unit.txt, with the pictures the game shows for them."""
 
 import os
+import re
 
 from .moddata import _ci
 from .textio import strip_comment, tokens
@@ -101,12 +102,14 @@ ROME_ATTRIBUTES = set("""can_sap can_withdraw can_formed_charge can_feign_rout c
 SOLDIERS = {"rome": (6, 60), "medieval2": (4, 100)}
 
 
-def edu_problems(lines, factions, kind="rome", engine=None):
+def edu_problems(lines, factions, kind="rome", engine=None, projectiles=None):
     """What the games' own export_descr_unit readers refuse, per unit and in their words (each a Script Error - the
     game stops): a missing line, an ownership naming no faction / culture / all. Without an engine also: soldiers
     out of range (Rome 6-60, Medieval II 4-100, non-combatants 1-300), more than 300 extras, more than 3 officers,
     and in Rome an attribute it does not know. With REX / M2EX numbers are no limit (limits.md THE RULE; REX's
-    `soldiers { }` block stands for the soldier line). factions: [(faction, culture)]."""
+    `soldiers { }` block stands for the soldier line). factions: [(faction, culture)]. In every game also: pikes
+    without phalanx (or schiltrom), a unit with none of square / horde / phalanx, and - projectiles given (the names
+    of descr_projectile(_new).txt) - a weapon firing a projectile there is not."""
     owners = {f for f, _ in factions} | {c for _, c in factions if c} | {"all"}
     blocks, cur = [], None
     for n, l in enumerate(lines, 1):
@@ -136,6 +139,18 @@ def edu_problems(lines, factions, kind="rome", engine=None):
         lack = [k for k in EDU_NEEDS[1:] if k not in keys]
         if lack:
             say(b, "it has no %s line%s" % (", ".join(lack), "s" if len(lack) > 1 else ""), quoted=False)
+        form = keys.get("formation", "")
+        words = set(re.findall(r"[a-z_]+", form))
+        if "formation" in keys and not words & {"square", "horde", "phalanx"}:
+            say(b, "A unit must always support either square, horde or phalanx formation, but '%s' does not." % name)
+        pikes = set(re.findall(r"[a-z_]+", keys.get("stat_pri_attr", "") + " " + keys.get("stat_sec_attr", "")))
+        if pikes & {"short_pike", "long_pike"} and not words & {"phalanx", "schiltrom"}:
+            say(b, "Unit type '%s' must be able to do phalanx to use pikes." % name)
+        if projectiles:
+            for k in ("stat_pri", "stat_sec"):
+                f = [x.strip() for x in keys.get(k, "").split(",")]
+                if len(f) > 2 and f[2] and f[2] != "no" and f[2] not in projectiles:
+                    say(b, "Stat_pri statistic refers to non-existant projectile type '%s'." % f[2])
         for o in keys.get("ownership", "").replace(",", " ").split():
             if o not in owners:
                 say(b, "Invalid ownership type '%s' found in unit '%s'." % (o, name))
@@ -157,6 +172,20 @@ def edu_problems(lines, factions, kind="rome", engine=None):
                 a = a.split()[0] if a.split() else ""
                 if a and a not in ROME_ATTRIBUTES:
                     say(b, "Unrecognised attribute '%s' in unit type '%s'." % (a, name))
+    return out
+
+
+def projectile_names(mod, kind="rome"):
+    """The projectiles the game knows (descr_projectile_new.txt in Rome, descr_projectile.txt in Medieval II - the
+    files RomeTW.exe / medieval2.exe read), or None when the file is not found."""
+    p = mod.find("descr_projectile.txt" if kind == "medieval2" else "descr_projectile_new.txt")
+    if not p:
+        return None
+    out = set()
+    for line in mod.load(p).texts():
+        t = tokens(line)
+        if t[:1] == ["projectile"] and len(t) > 1:
+            out.add(t[1])
     return out
 
 

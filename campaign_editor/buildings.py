@@ -129,6 +129,31 @@ def reader_problems(blds, lines, factions, unit_types, engine=None):
                 out.append("export_descr_buildings.txt line %d: the factions list '{ %s }' does not end with a comma "
                            "- the game stops at the start ('Expected faction or culture type, or 'all' - ... terminate list "
                            "with comma; enclose list in {}'); write '{ %s, }'" % (n, body, body))
+    depth, names, chain, level, up = 0, [], None, None, False   # every game, REX too: settlement_min, upgrades
+    for n, l in enumerate(lines, 1):
+        code = strip_comment(l)
+        t = tokens(code)
+        if t[:1] == ["building"] and depth == 0 and len(t) > 1:
+            chain, names = t[1], []
+        elif t[:1] == ["levels"] and depth == 1:
+            names = t[1:]
+        elif depth == 2 and t and t[0] in names:
+            level = t[0]
+        elif depth == 3 and t[:1] == ["settlement_min"] and len(t) > 1 and t[1] not in SETTLEMENT_LEVELS:
+            out.append("export_descr_buildings.txt line %d (%s, %s): settlement_min '%s' is no settlement level (%s) "
+                       "- the game stops at the start ('Invalid settlement level found')" % (
+                           n, chain, level, t[1], ", ".join(SETTLEMENT_LEVELS)))
+        elif depth == 3 and t[:1] == ["upgrades"]:
+            up = True
+        elif up and depth == 4 and t and t[0] not in ("{", "}"):
+            if t[0] not in names or level not in names or names.index(t[0]) <= names.index(level):
+                out.append("export_descr_buildings.txt line %d (%s): the upgrade %s -> %s points %s - the game stops "
+                           "at the start ('Invalid upgrade specified, must be above source level')" % (
+                               n, chain, level, t[0], "to no level of this chain" if t[0] not in names
+                               else "down or to itself"))
+        depth = max(depth + code.count("{") - code.count("}"), 0)
+        if up and depth <= 3 and "}" in code:
+            up = False
     if engine == "REX.exe":
         return out
     known = {u.lower() for u in unit_types}

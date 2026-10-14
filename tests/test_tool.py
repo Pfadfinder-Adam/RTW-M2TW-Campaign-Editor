@@ -3189,7 +3189,8 @@ building smith
         edu = ModData(self.root).file("edu")            # the mini mod's units, with every line a game's unit needs
         with open(edu) as fh:
             text = fh.read()
-        full = "".join("%s\t%s\n" % (k, "hardy" if k == "attributes" else "1") for k in EDU_NEEDS[1:])
+        full = "".join("%s\t%s\n" % (k, {"attributes": "hardy", "formation": "1, 1, 2, 2, 4, square"}.get(k, "1"))
+                       for k in EDU_NEEDS[1:])
         with open(edu, "w") as fh:
             fh.write(text.replace("ownership\talpha\n", "ownership\talpha\n" + full).replace(
                 "ownership\tslave\n", "ownership\tslave\n" + full))
@@ -13171,6 +13172,59 @@ class CampaignScriptTest(unittest.TestCase):
                                 "wait_monitors", "end_script"])
         CS.plan_remove(plan, "x", [p["id"] for p in CS.read(plan.f)])
         self.assertEqual([l.strip() for l in plan.f.texts() if l.strip()], ["; the mod's script", "script", "end_script"])
+
+
+class ReaderChecksMoreTest(unittest.TestCase):
+    """More of the games' own reader checks (plan A, 2026-10-14)."""
+
+    def test_faction_option_words_the_game_skips(self):
+        """RomeTW.exe reads re_emergent / superfaction / dead_until_resurrected / denari and skips any other line
+        of a faction's head SILENTLY; Medieval II knows ai_label, undiscovered, denari_kings_purse too."""
+        from campaign_editor.strat import faction_option_words
+        lines = ["faction\tromans_julii, balanced smith", "dead_until_ressurected", "denari\t5000",
+                 "denari_kings_purse\t500", "settlement", "{", "\tlevel town", "}", "denari\t1",
+                 "faction\tslave, balanced smith", "ai_label\tdefault", "undiscovered", "character\tx, general"]
+        self.assertEqual(faction_option_words(lines, "rome"),
+                         [("romans_julii", "dead_until_ressurected", 2), ("romans_julii", "denari_kings_purse", 4),
+                          ("slave", "ai_label", 11), ("slave", "undiscovered", 12)])
+        self.assertEqual(faction_option_words(lines, "medieval2"), [("romans_julii", "dead_until_ressurected", 2)])
+
+    def test_edu_projectile_pikes_formation(self):
+        from campaign_editor.units import edu_problems
+        stats = "".join("%s\t1\n" % k for k in ("stat_health", "stat_pri_attr", "stat_sec", "stat_sec_attr",
+                                                 "stat_pri_armour", "stat_sec_armour", "stat_heat", "stat_ground",
+                                                 "stat_mental", "stat_charge_dist", "stat_fire_delay", "stat_food",
+                                                 "stat_cost"))
+        unit = ("type\t%s\ndictionary\td\ncategory\tinfantry\nclass\tlight\nsoldier\tm, 40, 0, 1\n"
+                "attributes\thardy\nformation\t1, 1, 2, 2, 4, %s\nstat_pri\t5, 2, %s, 80, 20, missile\n"
+                "stat_pri_attr\t%s\n" + stats)
+        text = (unit % ("good", "square", "arrow", "no") + unit % ("pikes", "square", "no", "long_pike") +
+                unit % ("scots", "square, schiltrom", "no", "short_pike") + unit % ("loose", "wedge", "no", "no") +
+                unit % ("ghost", "square", "spirit_bolt", "no"))
+        got = "\n".join(edu_problems(text.split("\n"), [], "rome", None, projectiles={"arrow"}))
+        self.assertNotIn("good", got)
+        self.assertNotIn("scots", got)
+        self.assertIn("Unit type 'pikes' must be able to do phalanx to use pikes.", got)
+        self.assertIn("A unit must always support either square, horde or phalanx formation, but 'loose' does not.",
+                      got)
+        self.assertIn("Stat_pri statistic refers to non-existant projectile type 'spirit_bolt'.", got)
+        # no projectile file found: that check is left alone
+        self.assertNotIn("spirit_bolt", "\n".join(edu_problems(text.split("\n"), [], "rome", None)))
+
+    def test_edb_upgrade_down_and_settlement_min(self):
+        from campaign_editor.buildings import read_buildings, reader_problems
+        edb = ("building walls\n{\n    levels palisade wall\n    {\n        palisade requires factions { all, }\n"
+               "        {\n            settlement_min hamlet\n            upgrades\n            {\n"
+               "                wall\n            }\n        }\n        wall requires factions { all, }\n        {\n"
+               "            settlement_min town\n            upgrades\n            {\n                palisade\n"
+               "            }\n        }\n    }\n}\n")
+        f = TextFile.from_bytes("export_descr_buildings.txt", edb.encode("latin-1"))
+        got = "\n".join(reader_problems(read_buildings(f), f.texts(), [], set(), None))
+        self.assertIn("'hamlet'", got)
+        self.assertIn("Invalid settlement level found", got)
+        self.assertIn("wall -> palisade", got)
+        self.assertIn("Invalid upgrade specified, must be above source level", got)
+        self.assertNotIn("palisade -> wall", got)
 
 if __name__ == "__main__":
     unittest.main()

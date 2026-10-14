@@ -146,7 +146,7 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     for n, _ in headers_out_of_order(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))):
         bad("%s: its first lines in descr_strat.txt are out of the games' order (denari before superfaction / "
             "ai_label...) - the game starts it without its towns; Load offers to put them in order" % n)
-    from .strat import event_lines, unlisted_factions
+    from .strat import event_lines, faction_option_words, unlisted_factions
     for n in unlisted_factions(s):
         bad("%s: its block in descr_strat.txt is in none of the playable / unlockable / nonplayable lists at the "
             "file's top - the game stops at the start ('Faction %s not listed in playable/nonplayable header section.'); add it "
@@ -156,6 +156,11 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad("descr_strat.txt has %d event line(s) at its top (line %s) - the game does not read them there "
             "('Events are no longer supported in strat.txt, and must be added to events.txt'); move them to "
             "descr_events.txt (Events)" % (len(ev), ", ".join(str(i + 1) for i in ev[:5])))
+    from .limits import engine_of as _engine, game_kind as _kind
+    if not _engine(mod):                            # REX / M2EX know more words there
+        for fac, word, n in faction_option_words(s.lines, _kind(mod))[:8]:
+            say("    note: descr_strat.txt line %d (%s): '%s' - the game does not know this word in a faction's head "
+                "and skips the line without a word (a misspelling does nothing)" % (n, fac, word))
     from .campaignrules import strat_order_problems
     for why in strat_order_problems(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))):
         bad(why)
@@ -254,11 +259,17 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
             "missing ... using all'), e.g. %s" % (len(no_owner), ", ".join(no_owner[:3])))
     from .units import edu_problems
     from .limits import engine_of, game_kind
-    unit_problems = edu_problems(mod.load(mod.file("edu")).texts(), facs, game_kind(mod), engine_of(mod))
+    from .units import projectile_names, unit_card
+    unit_problems = edu_problems(mod.load(mod.file("edu")).texts(), facs, game_kind(mod), engine_of(mod),
+                                 projectile_names(mod, game_kind(mod)))
     for m in unit_problems[:12]:
         bad(m)
     if len(unit_problems) > 12:
         bad("... and %d more export_descr_unit.txt problem(s) of the same kinds (the game stops at the start on each)" % (len(unit_problems) - 12))
+    no_card = [u.type for u in units if u.category != "non_combatant" and not unit_card(mod, u)]
+    if no_card:                                     # not a crash: logs/missing_images.txt + the generic card
+        say("    note: %d unit(s) without a card of their own - the game shows its generic card (and lists them in "
+            "logs/missing_images.txt), e.g. %s" % (len(no_card), ", ".join(no_card[:3])))
     blds = read_buildings(mod.load(mod.file("edb")))
     chains = {b.name: b for b in blds}
     say("BUILDINGS: %d chains, %d levels in export_descr_buildings.txt" % (
@@ -313,6 +324,21 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
             bad("%d resource(s) of descr_strat.txt lie on a wasteland's land (%s) - %s; take them out or move them "
                 "(Map: drag, right click)" % (len(on), ", ".join("%s at %d, %d in %s" % (r.kind, r.xy[0], r.xy[1], w)
                                                                  for r, w in on[:4]), RS.WASTE_WORDS))
+    from .buildings import settlement_info as _info
+    for fb in s.factions:                           # 'Settlement specifies port, but this region is not allowed a port'
+        for st in fb.settlements:
+            pb = [c for c, _ in _info(s.lines[st.start:st.end])[1] if c.lower().startswith(("port", "castle_port"))]
+            if pb and st.region in regions and st.region not in prt:
+                bad("%s (%s): its descr_strat.txt town has %s but the region has no port on the map - the game leaves "
+                    "the port building out ('this region is not allowed a port'); place a port (Map) or take it out"
+                    % (st.region, fb.name, ", ".join(pb)))
+    from . import resources as RS2
+    wet = [r for r in RS2.read(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
+           if RS2.problem(mod, campaign, r.xy)]
+    if wet:
+        say("    note: %d resource(s) of descr_strat.txt lie on sea or off the map - the game ignores them ('positioned "
+            "on an invalid tile'), e.g. %s" % (len(wet), ", ".join("%s at %d, %d" % (r.kind, r.xy[0], r.xy[1])
+                                                                   for r in wet[:3])))
     no_pixel = [r for r in regions if r not in tiles and not regions[r].get("wasteland")]
     if no_pixel:
         bad("%d region(s) without a town pixel: %s" % (len(no_pixel), ", ".join(no_pixel[:5])))
