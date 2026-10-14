@@ -5865,6 +5865,30 @@ building smith
         restore(ModData(troot), bdir)
         self.assertEqual({k: v for k, v in tree_hash(troot).items() if "_backups" not in k}, before)
 
+    def test_bring_all_units_to_one_building(self):
+        # Bring > 'All the units here' (the user, 2026-10-14, for his tests): a unit the other mod trains nowhere gets
+        # a recruit line of this mod's form in the level picked for all
+        from campaign_editor import packs
+        from campaign_editor.editors import recruit_text
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, }\n"
+              "        {\n            capability\n            {\n            }\n        }\n    }\n}\n")
+        man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(man["recruit"], [])
+        man["recruit"].append({"unit": "alpha general", "chain": "barracks", "level": "hall", "picked": True,
+                               "line": recruit_text("plain", "alpha general", "0", factions=["beta"])})
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        plan.apply()
+        with open(os.path.join(troot, "data", "export_descr_buildings.txt")) as fh:
+            self.assertIn('recruit "alpha general 2"  0  requires factions { alpha, }', fh.read())
+
     def test_unit_pack_brings_the_models_of_a_soldiers_block(self):
         # REX lets a unit name its men's models in a block under 'soldiers' (HLR: 37 units) - a skeleton model and
         # 'default { }' variants. They come along like the 'soldier' line's model; one the target has with other

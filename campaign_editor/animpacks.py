@@ -157,7 +157,9 @@ def collect(mod, names):
         out["skeletons"][real] = rec
         for key in anim_paths(rec):
             if key not in out["anims"]:
-                out["anims"][key] = src.anim_bytes(key)
+                # one the mod's set lacks taken from the game's own (BI's set names 32 it lacks, 29 of them in
+                # Rome's - BI seems to take them from the game under it)
+                out["anims"][key] = src.anim_bytes(key) or (base.anim_bytes(key) if base is not None else [])
     return out
 
 
