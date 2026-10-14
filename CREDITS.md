@@ -15,6 +15,7 @@ Thank you for keeping the work going (names only, never amounts):
 
 ## A special thank you
 
+- **NamiKawa** - the one who believed in this before anyone else.
 - **Ruthron** - for the 3 x bigger map, and for so many reports. He made the map bigger again and again on
   *Divide and Conquer* (Medieval II with M2EX) and sent report after report; thanks to him many mistakes were found
   and many new ideas came in - natural rivers, coasts and borders among them.
