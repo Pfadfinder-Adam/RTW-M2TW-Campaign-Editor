@@ -2514,6 +2514,18 @@ def s_building_nothing(c, mod):
     return plan
 
 
+@step("Recruitment panel sorted: every building level's recruit lines - infantry, missiles, cavalry, siege, ships, "
+      "the dearest first in each",
+      "a town's recruitment panel: the strongest infantry top left, then archers / skirmishers, cavalry, siege, "
+      "ships (a town with several barracks-like buildings: each building's units in that order)")
+def s_recruit_order(c, mod):
+    from . import recruitorder as RO
+    plan = Plan(mod, "sort", "recruit_order", {})
+    if not RO.plan_sort(plan):
+        raise Skip("the recruit lines are in that order already")
+    return plan
+
+
 @step("Map size: the map grown by 2 tiles of deep sea at the right and at the top (the last step - grown at the "
       "left or the bottom every place would move, and the test mod's engine scripts name tiles by number)",
       "the campaign map is 2 tiles wider and higher: open water at its right and top edges; every town, army and "
@@ -2532,6 +2544,7 @@ def s_map_size(c, mod):
 RUN = "tried by the run itself"
 LOOK = "only shows, writes nothing - tried in the window by check-scripts/smoke.py"
 COVERAGE = {
+    "Sort the recruitment panel": ["s_recruit_order"],
     "New faction": ["s_new_faction"],
     "New mod folder": RUN + " (CE_Test is made with it)",
     "Edit faction (names, colours, money, towns, garrisons)": ["s_edit"],
@@ -2638,6 +2651,7 @@ COVERAGE = {
 
 # the window's work buttons, tabs and Tools entries (the start of their text) -> the feature above
 UI = {
+    "Sort the recruitment panel (strongest first)...": "Sort the recruitment panel",
     "Campaign script": "Campaign script: pieces taken out (one, picked, all)",
     "New faction": "New faction", "Edit faction": "Edit faction (names, colours, money, towns, garrisons)",
     "Faction editor": "Edit faction (names, colours, money, towns, garrisons)",

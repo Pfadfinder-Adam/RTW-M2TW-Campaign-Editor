@@ -2383,6 +2383,47 @@ building smith
         self.assertEqual(packs.unit_owners(f)["alpha spears"], ["romans_julii", "gauls"])
         self.assertEqual(packs.owner_choices(f), ["barbarian", "carthage", "egypt", "gauls", "romans_julii"])
 
+    def test_recruitment_panel_sorted_strongest_first(self):
+        """The user, 2026-10-14: the panel lists units in the order of the buildings file's recruit lines - sort them:
+        infantry, missiles, cavalry, siege, ships, the dearest first in each; other lines and comments stay put."""
+        from campaign_editor import recruitorder as RO
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"),
+              "type boat\ncategory ship\nclass light\nstat_cost 1, 900, 10\n\n"
+              "type horse\ncategory cavalry\nclass light\nstat_cost 1, 300, 10\n\n"
+              "type archer\ncategory infantry\nclass missile\nstat_cost 1, 200, 10\n\n"
+              "type cheap spear\ncategory infantry\nclass spearmen\nstat_cost 1, 100, 10\n\n"
+              "type dear sword\ncategory infantry\nclass heavy\nstat_cost 1, 700, 10\n")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, }\n"
+              "        {\n            capability\n            {\n"
+              "                recruit \"boat\"  0  requires factions { alpha, }\n"
+              "                recruit \"horse\"  0  requires factions { alpha, } ; fast\n"
+              "                agent spy  0  requires factions { alpha, }\n"
+              "                recruit \"archer\"  0  requires factions { alpha, }\n"
+              "                recruit \"cheap spear\"  0  requires factions { alpha, }\n"
+              "                recruit \"dear sword\"  0  requires factions { alpha, }\n"
+              "            }\n        }\n    }\n}\n")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        plan = Plan(mod, "sort", "sort", {})
+        changed = RO.plan_sort(plan)
+        self.assertEqual(changed, [("barracks", "hall", ["dear sword", "cheap spear", "archer", "horse", "boat"])])
+        bdir = plan.apply()
+        lines = open(os.path.join(d, "export_descr_buildings.txt")).read().splitlines()
+        self.assertEqual([x.strip() for x in lines[8:13]], [
+            'recruit "dear sword"  0  requires factions { alpha, }',
+            'recruit "cheap spear"  0  requires factions { alpha, }',
+            'agent spy  0  requires factions { alpha, }',            # the agent line keeps its place
+            'recruit "archer"  0  requires factions { alpha, }',
+            'recruit "horse"  0  requires factions { alpha, } ; fast'])   # its comment goes with it
+        self.assertEqual(lines[13].strip(), 'recruit "boat"  0  requires factions { alpha, }')
+        plan2 = Plan(ModData(self.root), "sort", "sort", {})
+        self.assertEqual(RO.plan_sort(plan2), [])                     # sorted already: nothing to do
+        restore(ModData(self.root), bdir)
+        after = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
+        self.assertEqual(after, before)
+
     def test_palette_tga_read_and_written_back_true_colour(self):
         """A map made by a community map generator stores map_regions / features / ground as COLOUR-MAPPED TGAs
         (type 1; 9 = run-length) - the editor could not open them. They read like true-colour ones, and a picture
