@@ -1301,6 +1301,10 @@ class MapView(ttk.Frame):
             # Pick towns: the picked towns' regions see-through yellow (a tester: the towns alone were hard to see)
             pol = self.cmap.political({r: "picked" for r in self.picked}, {"picked": (255, 212, 0)}, None,
                                       alpha=110, borders=True)
+        elif self.on_city and self.chosen and not self.region_mode:
+            # a faction's towns picked on the map (New / Edit faction): their regions the same see-through yellow
+            pol = self.cmap.political({r: "picked" for r in self.chosen}, {"picked": (255, 212, 0)}, None,
+                                      alpha=110, borders=True)
         elif self.region_mode:
             pol = self.cmap.regions_layer(self.region_painted, self.region_colours, borders=self.v_borders.get())
         elif not self.v_pol.get() and not self.v_borders.get() and not land:
