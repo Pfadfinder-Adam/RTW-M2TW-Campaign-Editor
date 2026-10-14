@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- Bring units: a unit's ship type, Medieval II's mounted engine (an elephant's cannon) and an engine's own
+  skeleton with its animation files come along; a banner the mod's banner file lacks is said.
 - Bring units (both games): the unit's own name call in battle comes along with its sound files, and it joins the
   sound lines of the units it sounds with in its own mod (war cries, chariot wheels, animals).
 - Bring units: **All the units here** - one building level for every brought unit at once (each row can still be

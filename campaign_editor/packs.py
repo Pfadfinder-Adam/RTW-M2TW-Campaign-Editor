@@ -11,6 +11,8 @@ What a unit needs, found by following its lines (the same in Rome and Medieval I
                           animals' models), with every file those blocks name (.cas, .tga -
                           Rome keeps them as .tga.dds -, .spr, .mesh, .texture, ...)
   descr_mount.txt         its 'mount'; descr_engines.txt its 'engine'; descr_animals.txt its 'animal'
+  descr_ship.txt          its 'ship' (a fleet's ship type); descr_mounted_engines.txt (Medieval II) its
+                          'mounted_engine' (an elephant's cannon)
   descr_projectile(_new)  the projectiles its stat_pri / stat_sec (and its engine) fire, with their model files
                           (a missing one stops the game: "refers to non-existant projectile type")
   export_units.txt        {dict}, {dict}_descr, {dict}_descr_short
@@ -33,7 +35,8 @@ from .textio import strip_comment, tokens
 PACK_VERSION = 1
 FILE_EXT = (".cas", ".tga", ".dds", ".spr", ".mesh", ".texture", ".ms3d", ".png", ".bmp")
 DEP_FILES = {"model": "descr_model_battle.txt", "mount": "descr_mount.txt",
-             "engine": "descr_engines.txt", "animal": "descr_animals.txt", "projectile": "descr_projectile_new.txt"}
+             "engine": "descr_engines.txt", "animal": "descr_animals.txt", "projectile": "descr_projectile_new.txt",
+             "ship": "descr_ship.txt", "mounted_engine": "descr_mounted_engines.txt"}
 DEP_KEY = {"projectile": "projectile"}               # the word a block starts with ('type' for the rest)
 
 
@@ -294,14 +297,35 @@ class _Gather:
         for v in _values(lines, "model"):                  # a mount's / animal's model
             if kind not in ("model", "projectile"):
                 self.add_dep("model", v[0])
-        if kind == "engine":                               # what the engine fires
+        if kind == "engine":                               # what the engine fires, the skeletons it moves by
             for p in _weapon_projectiles(lines):
                 self.add_dep("projectile", p)
+            for v in _values(lines, "engine_skeleton"):
+                self.add_engine_skeleton(v[0])
         if kind == "mount":                                # a chariot's horses and its body's own textures
             for v in _values(lines, "horse_type"):
                 self.add_dep("mount", v[0])
             self.add_skins(lines)
         return in_db or name
+
+    def add_engine_skeleton(self, name):
+        """An engine's skeleton (descr_engine_skeleton.txt: plain text, its animations loose .cas / .evt files under
+        data/animations/engine) with every file it names: manifest['engine_skeletons'] {name: lines}."""
+        if not hasattr(self, "_eng_skel"):
+            p = self.mod.find("descr_engine_skeleton.txt")
+            f = self.mod.load(p) if p else None
+            self._eng_skel = (f, type_blocks(f) if f else {})
+        f, blocks = self._eng_skel
+        real = next((k for k in blocks if k.lower() == (name or "").lower()), None)
+        got = self.manifest.setdefault("engine_skeletons", {})
+        if real is None or real in got:
+            return
+        lines = _block_lines(f, blocks[real])
+        got[real] = lines
+        for line in lines:
+            for ref in re.findall(r"data/animations/[^\s,;]+?\.(?:cas|evt)", strip_comment(line).replace("\\", "/"),
+                                  re.I):
+                self.add_ref(ref)
 
     def add_skins(self, lines):
         """A chariot's body (descr_mount 'lod' .cas) names its texture itself ('textures\\##chariot_low_poly.tga')
@@ -355,7 +379,8 @@ def collect(mod, unit_types):
         d = next((v[0] for v in _values(lines, "dictionary")), None)
         manifest["units"].append({"type": t, "dictionary": d, "lines": lines})
         for key, kind in (("soldier", "model"), ("officer", "model"), ("mount", "mount"),
-                          ("engine", "engine"), ("animal", "animal")):
+                          ("engine", "engine"), ("animal", "animal"), ("ship", "ship"),
+                          ("mounted_engine", "mounted_engine")):
             for v in _values(lines, key):
                 g.add_dep(kind, v[0])
         for p in _weapon_projectiles(lines):
@@ -466,6 +491,26 @@ def _put_sound_lists(plan, manifest, names):
         plan.note(None, "the brought units added to %d line(s) of the sound texts beside the units they sound with "
                         "in their own mod (war cries, wheels, animals)" % n)
         S.rebuild_events(plan)
+
+
+def _say_banners(plan, manifest):
+    """Medieval II: a brought unit's 'banner faction / holy <name>' this mod's banner file does not name - said (the
+    banners are pictures of a mod's own; the unit then flies none of that kind)."""
+    mod = plan.mod
+    path = mod.find("descr_banners_new.xml") or mod.find("descr_banners.txt")
+    if not path:
+        return
+    try:
+        with open(path, "rb") as fh:
+            text = fh.read().decode("latin-1").lower()
+    except OSError:
+        return
+    gone = sorted({v[0].split()[-1] for u in manifest["units"] for v in _values(u["lines"], "banner")
+                   if v and v[0].split() and v[0].split()[-1].lower() not in text})
+    if gone:
+        plan.warn(None, "banner(s) this mod's %s does not name: %s - those units fly none of that kind (add the "
+                        "banner to the file, or pick one this mod has in the unit's banner line)"
+                  % (os.path.basename(path), ", ".join(gone)))
 
 
 def _put_voices(plan, manifest, files, names):
@@ -738,7 +783,8 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
         if d:
             lines = _set_line(lines, "dictionary", d)
         for key, kind in (("soldier", "model"), ("officer", "model"), ("mount", "mount"),
-                          ("engine", "engine"), ("animal", "animal")):
+                          ("engine", "engine"), ("animal", "animal"), ("ship", "ship"),
+                          ("mounted_engine", "mounted_engine")):
             for old, new in renamed[kind].items():
                 lines = _rename_ref(lines, key, old, new)
                 if kind == "model" and key == "soldier":
@@ -787,6 +833,7 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
         _recruit(plan, manifest, names, owners, recruit_map)
     _put_voices(plan, manifest, files, names)
     _put_sound_lists(plan, manifest, names)
+    _say_banners(plan, manifest)
     _say_missing(plan, manifest)
     return plan
 
@@ -889,7 +936,7 @@ def _put_blocks(plan, manifest, owners):
         plan, "carried_files", None) is not None else []
     known = set(skeletons(mod)) | animpacks.skeleton_names(mod) | {a.lower() for a in added}
     swapped, left = {}, set()
-    for kind in ("model", "mount", "projectile", "engine", "animal"):      # projectiles before the engines firing them
+    for kind in ("model", "mount", "projectile", "engine", "animal", "ship", "mounted_engine"):   # projectiles first
         want = manifest["blocks"].get(kind) or {}
         if not want:
             continue
@@ -922,7 +969,7 @@ def _put_blocks(plan, manifest, owners):
                             have = type_blocks(f, key)
                             plan.note(f, "model %s: texture lines for %s" % (same_name, ", ".join(added)))
                     continue
-                new = free_name(have, name, sep=" " if kind in ("mount", "engine", "animal") else "_")
+                new = free_name(have, name, sep=" " if kind in ("mount", "engine", "animal", "ship") else "_")
                 renamed[kind][name] = new
                 lines = _set_line(lines, key, new)
                 plan.note(f, "%s %s exists with other lines: the pack's is added as %s" % (kind, name, new))
@@ -935,6 +982,7 @@ def _put_blocks(plan, manifest, owners):
             f.raw.extend(f.make(x) for x in [""] + lines + [""])
             have[renamed[kind].get(name, name)] = (0, 0)
             plan.note(f, "%s %s added" % (kind, renamed[kind].get(name, name)))
+    _put_engine_skeletons(plan, manifest)
     if swapped:
         plan.warn(None, "%d skeleton(s) of the brought models are not in this mod (the source has its own "
                         "animations) - its nearest ones move the men instead, so they may move a little "
@@ -1005,6 +1053,30 @@ def _fit_skeletons(lines, known):
             new.append(near)
         out.append(m.group(1) + ", ".join(new) + m.group(3))
     return out, swapped, left
+
+
+def _put_engine_skeletons(plan, manifest):
+    """The brought engines' skeletons this mod's descr_engine_skeleton.txt lacks, appended (their animation files
+    come with the pack's files)."""
+    want = manifest.get("engine_skeletons") or {}
+    if not want:
+        return
+    path = plan.mod.find("descr_engine_skeleton.txt")
+    if not path:
+        plan.warn(None, "no descr_engine_skeleton.txt in this mod - the brought engines' skeletons (%s) were not "
+                        "written" % ", ".join(sorted(want)))
+        return
+    f = plan.edit(path)
+    have = {k.lower() for k in type_blocks(f)}
+    new = [(n, lines) for n, lines in want.items() if n.lower() not in have]
+    if not new:
+        return
+    while f.raw and not f.text(len(f.raw) - 1).strip():
+        del f.raw[-1]
+    for n, lines in new:
+        f.raw.extend(f.make(x) for x in [""] + lines)
+    f.raw.append(f.make(""))
+    plan.note(f, "engine skeleton(s) added: %s" % ", ".join(n for n, _ in new))
 
 
 def _put_files(plan, files, manifest=None):

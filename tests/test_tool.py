@@ -5972,6 +5972,68 @@ building smith
         with open(os.path.join(troot, "data", "export_descr_unit.txt")) as fh:
             self.assertIn("armour_ug_models body_a, body_b_2 ; upgrades", fh.read())
 
+    def test_unit_pack_brings_its_ship_and_mounted_engine(self):
+        # a unit's 'ship' (descr_ship.txt) and Medieval II's 'mounted_engine' (descr_mounted_engines.txt) come along
+        # like its mount; one the target has with other lines comes in renamed and the unit follows; a banner this
+        # mod's banner file does not name is said
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "ship\t\theavy warship\nmounted_engine\telephant_serpentine\n"
+                                "banner faction\tmy_flag\nownership\talpha"))
+        write(os.path.join(d, "descr_ship.txt"), "type\t\theavy warship\nspeed\t\t40\n")
+        write(os.path.join(d, "descr_mounted_engines.txt"), "type\t\telephant_serpentine\nclass\t\tserpentine\n")
+        man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(list(man["blocks"]["ship"]), ["heavy warship"])
+        self.assertEqual(list(man["blocks"]["mounted_engine"]), ["elephant_serpentine"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        write(os.path.join(troot, "data", "descr_ship.txt"), "type\t\theavy warship\nspeed\t\t7\n")
+        write(os.path.join(troot, "data", "descr_banners_new.xml"), "<banners><banner name=\"main_infantry\"/></banners>")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        self.assertIn("my_flag", " ".join(w[1] for w in plan.warnings))
+        plan.apply()
+        with open(os.path.join(troot, "data", "export_descr_unit.txt")) as fh:
+            edu = fh.read()
+        self.assertIn("ship\t\theavy warship 2", edu)
+        with open(os.path.join(troot, "data", "descr_ship.txt")) as fh:
+            self.assertIn("type\t\theavy warship 2\nspeed\t\t40", fh.read())
+
+    def test_unit_pack_brings_its_engine_skeleton(self):
+        # an engine's skeleton (descr_engine_skeleton.txt, its animations loose .cas / .evt files) comes along when
+        # this mod lacks it
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "engine\t\tmy onager\nownership\talpha"))
+        write(os.path.join(d, "descr_engines.txt"), "type\t\tmy onager\nengine_skeleton\t\tmy_onager\n")
+        write(os.path.join(d, "descr_engine_skeleton.txt"),
+              "type\t\tmy_onager\nanim\t\tidle\t\tdata/animations/engine/my/idle.CAS\t-evt:data/animations/engine/"
+              "my/idle.evt\n")
+        write(os.path.join(d, "animations", "engine", "my", "idle.CAS"), "CAS")
+        write(os.path.join(d, "animations", "engine", "my", "idle.evt"), "EVT")
+        man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(list(man["engine_skeletons"]), ["my_onager"])
+        self.assertIn("animations/engine/my/idle.evt", files)
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        write(os.path.join(troot, "data", "descr_engine_skeleton.txt"), "type\t\tballista\n")
+        shutil.rmtree(os.path.join(troot, "data", "animations"))
+        write(os.path.join(troot, "data", "descr_engines.txt"), "type\t\tother\n")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        plan.apply()
+        with open(os.path.join(troot, "data", "descr_engine_skeleton.txt")) as fh:
+            self.assertIn("type\t\tmy_onager", fh.read())
+        self.assertTrue(os.path.isfile(os.path.join(troot, "data", "animations", "engine", "my", "idle.evt")))
+
     def test_unit_pack_brings_its_projectile(self):
         # R-20261014-99712D / D5B6A6: crossbowmen brought from Barbarian Invasion into Rome - the game stopped:
         # "Stat_pri statistic refers to non-existant projectile type 'crossbow'". The projectile comes with the
