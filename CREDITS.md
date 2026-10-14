@@ -14,11 +14,22 @@
 
 ## Thank you for the reports
 
-Everyone who sent a report or an idea from the editor - each one made it better. By the names they signed with:
+Everyone who sent a report or an idea - from the editor or on Discord - each one made it better. By the names they
+signed with:
 
 - **Ruthron**
 - **wholesome_queen**
 - **doliwaq**
+- **Tommy Speed**
+- **Melchon**
+- **Espartan**
+- **moderman1**
+- **CrimsonScorpio**
+- **Mekkermann**
+- **HVS87**
+- **John**
+- **Bartek K**
+- **Yuri**
 
 ## Supporters on Ko-fi
 
@@ -29,8 +40,8 @@ Thank you for keeping the work going (names only, never amounts):
 
 ## How to get in
 
-Send a report or an idea from the editor (**Report a bug / Suggest**) and write your name in *Contact* - your name
-goes on the list above.
+Send a report or an idea from the editor (**Report a bug / Suggest**) and write your name in *Contact*, or tell us
+on Discord - your name goes on the list above.
 
 ## Made a mod with it?
 
