@@ -92,6 +92,8 @@ def _decode(data, path="(picture)"):
     id_len, cmap_type, img_type = data[0], data[1], data[2]
     width, height = struct.unpack_from("<HH", data, 12)
     bpp, desc = data[16], data[17]
+    if img_type in (1, 9) and cmap_type == 1 and bpp == 8:
+        return _decode_palette(data, path)
     if img_type not in (2, 10) or bpp not in (24, 32) or cmap_type != 0:
         raise ValueError("%s: unsupported TGA (type %d, %d bpp)" % (path, img_type, bpp))
     step = bpp // 8
@@ -118,6 +120,65 @@ def _decode(data, path="(picture)"):
     return width, height, step, bool(desc & 0x20), img_type, out
 
 
+def _decode_palette(data, path):
+    """A colour-mapped TGA (type 1, or 9 run-length; 8-bit indexes into a 15/16/24/32-bit colour map) as _decode gives
+    a true-colour one: B G R [A] per pixel (3 bytes, 4 when the colour map has alpha). Some mod tools write the map
+    pictures this way (a map generator's map_regions / map_features / map_ground_types - the editor could not open
+    them)."""
+    id_len, img_type = data[0], data[2]
+    first, length, entry = struct.unpack_from("<HHB", data, 3)
+    width, height = struct.unpack_from("<HH", data, 12)
+    desc = data[17]
+    pos = 18 + id_len
+    size = (entry + 7) // 8
+    table = []
+    for i in range(length):
+        e = data[pos + i * size:pos + (i + 1) * size]
+        if size == 2:                               # 15 / 16 bit: A RRRRR GGGGG BBBBB
+            v = e[0] | (e[1] << 8)
+            r, g, b = (v >> 10) & 31, (v >> 5) & 31, v & 31
+            table.append(bytes(((b << 3) | (b >> 2), (g << 3) | (g >> 2), (r << 3) | (r >> 2))))
+        else:
+            table.append(bytes(e[:4] if size == 4 else e[:3]))
+    step = 4 if size == 4 else 3
+    pos += length * size
+    count = width * height
+    if img_type == 1:
+        idx = data[pos:pos + count]
+    else:
+        idx = bytearray()
+        while len(idx) < count:
+            head = data[pos]
+            pos += 1
+            n = (head & 0x7F) + 1
+            if head & 0x80:
+                idx += bytes((data[pos],)) * n
+                pos += 1
+            else:
+                idx += data[pos:pos + n]
+                pos += n
+    blank = bytes(step)
+    out = bytearray(b"".join(table[i - first] if 0 <= i - first < length else blank for i in idx[:count]))
+    if len(out) != count * step:
+        raise ValueError("%s: a cut palette TGA" % path)
+    return width, height, step, bool(desc & 0x20), img_type, out
+
+
+def true_colour_head(data, step, width=None, height=None):
+    """The header (with its id field) for these pixels written as an uncompressed true-colour TGA (type 2): the
+    file's own id, size and row order kept; a colour-mapped file loses its map (the pixels carry the colours now)."""
+    id_len = data[0]
+    head = bytearray(data[:18 + id_len])
+    head[1] = 0                                     # no colour map
+    head[2] = 2
+    head[3:8] = bytes(5)
+    if width is not None:
+        struct.pack_into("<HH", head, 12, width, height)
+    head[16] = step * 8
+    head[17] = (head[17] & 0x30) | (8 if step == 4 else 0)
+    return head
+
+
 def read_tga_bytes(data, path="(picture)"):
     """read_tga from bytes already in memory (a picture a plan is about to write)."""
     width, height, step, top_down, _, out = _decode(data, path)
@@ -142,11 +203,8 @@ def patched(path, changes, data=None):
         with open(path, "rb") as f:
             data = f.read()
     width, height, step, top_down, _, raw = _decode(data, path)
-    id_len = data[0]
     for (x, y), (r, g, b) in changes.items():
         row = (height - 1 - y) if top_down else y          # storage row of tile row y
         o = (row * width + x) * step
         raw[o:o + 3] = bytes((b, g, r))
-    head = bytearray(data[:18 + id_len])
-    head[2] = 2
-    return bytes(head) + bytes(raw)
+    return bytes(true_colour_head(data, step)) + bytes(raw)
