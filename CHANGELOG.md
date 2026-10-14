@@ -6,7 +6,8 @@
 - The faction tab shows the leader's face the faction-select screen shows for EVERY faction, in all three games: a
   faction without a leader picture of its own shows its faction leader's portrait.
 - **Draw from the map**: the faction-select map made from the campaign map itself - relief and rivers, no signs,
-  the faction's land one solid patch in its colour, no borders inside (faction tab, under the map).
+  the faction's land one solid patch in its colour with a line round its outside (dark round a bright colour,
+  light round a dark one), no borders inside (faction tab, under the map).
 - **Tools > Sort the recruitment panel (strongest first)**: every building's recruit lines in one order - infantry,
   then archers / slingers / skirmishers, animal handlers, cavalry, siege, ships, the dearest first in each - so the
   panel's top left shows the strongest unit. Set once in the files; every town, new units and old saves follow it.

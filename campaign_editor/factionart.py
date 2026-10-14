@@ -837,12 +837,22 @@ def map_drawing(mod, campaign, regions, colour, size=None):
             if xy and 0 <= xy[0] < W and 0 <= xy[1] < H:
                 px[xy[0], H - 1 - xy[1]] = 255
     rgb = tuple(max(0, min(255, int(c))) for c in colour)
+    # the OUTER border in the colour that stands out on the fill - dark round a bright colour, light round a dark one
+    # (the user, 2026-10-14: 'as with the signs: a bright colour, a dark border'); none inside the land
+    try:
+        from .theme import on_colour
+        edge = (20, 20, 20) if on_colour(rgb) == "black" else (245, 245, 245)
+    except ImportError:                             # no tkinter: the same rule by the light of the colour
+        edge = (20, 20, 20) if 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] > 140 else (245, 245, 245)
 
     def drawn(size):                                # at its final size: the land's inside exactly the colour,
-        big = base.resize(size, Image.BILINEAR)     # only its outer edge softened - one patch, no borders inside
-        from PIL import ImageFilter
-        soft = mask.resize(size, Image.NEAREST).filter(ImageFilter.GaussianBlur(0.6))
-        return Image.composite(Image.new("RGB", size, rgb), big, soft)
+        from PIL import ImageChops, ImageFilter      # a solid line round its outside - one patch, no borders inside
+        big = base.resize(size, Image.BILINEAR)
+        land = mask.resize(size, Image.NEAREST)
+        width = max(1, round(min(size) / 160))      # 2 px on a 384 x 237 picture
+        ring = ImageChops.subtract(land.filter(ImageFilter.MaxFilter(2 * width + 1)), land)
+        out = Image.composite(Image.new("RGB", size, rgb), big, land.filter(ImageFilter.GaussianBlur(0.6)))
+        return Image.composite(Image.new("RGB", size, edge), out, ring.filter(ImageFilter.GaussianBlur(0.5)))
     got = select_background(mod, campaign)
     if got:
         bg, _ = got
