@@ -201,6 +201,13 @@ class NewRecordWizard(StepWindow):
         return True
 
     def leaving(self, step):
+        if self.steps[step][1] == self.s_bnames:          # the names checked here, not only at the last step
+            from tkinter import messagebox                # (a report: 'said too late')
+            from . import fromnothing as FN
+            bad = FN.building_name_problems(self.mod, self.state["chain"], self.state["levels"])
+            if bad:
+                messagebox.showinfo("New building", "Fix the names first:\n- " + "\n- ".join(bad), parent=self)
+                return False
         if step == 0:
             if self.nothing():
                 if not self.v["kind"].get():

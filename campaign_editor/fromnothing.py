@@ -679,11 +679,9 @@ def trainable_units(mod, builders):
     return out
 
 
-def building_problems(mod, kind, chain, levels, builders, numbers=None, units=()):
-    """Why the new chain cannot be written (plain sentences; empty = fine). levels: [(code name, ...)]; numbers:
-    [{'settlement_min', 'cost', 'construction', 'effects': {head: number}}] per level; units: [(type, from level
-    index)]."""
-    from . import limits
+def building_name_problems(mod, chain, levels):
+    """The chain's and its levels' names in the files: why they cannot be written (plain sentences; empty = fine) -
+    said on leaving the names step (a report: only at the last step), and again by building_problems."""
     out = []
     f = mod.load(mod.file("edb"))
     blocks = E.building_blocks(f)
@@ -708,6 +706,19 @@ def building_problems(mod, kind, chain, levels, builders, numbers=None, units=()
             out.append("level '%s' has the chain's own name - give it another" % n)
     if len({(n or "").lower() for n in names}) < len(names):
         out.append("two levels have the same name")
+    return out
+
+
+def building_problems(mod, kind, chain, levels, builders, numbers=None, units=()):
+    """Why the new chain cannot be written (plain sentences; empty = fine). levels: [(code name, ...)]; numbers:
+    [{'settlement_min', 'cost', 'construction', 'effects': {head: number}}] per level; units: [(type, from level
+    index)]."""
+    from . import limits
+    out = []
+    f = mod.load(mod.file("edb"))
+    blocks = E.building_blocks(f)
+    out += building_name_problems(mod, chain, levels)
+    names = [lv[0] for lv in levels]
     if not builders:
         out.append("pick who may build it (factions, cultures or all)")
     if kind not in BUILDING_KIND_WORDS:

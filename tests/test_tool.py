@@ -9857,6 +9857,15 @@ building smith
         one = [("a_1", "A", "", "")]
         self.assertTrue(FN.building_problems(mod, "economy", "new_market", [("trader", "X", "", "")], ["alpha"]))
         self.assertTrue(FN.building_problems(mod, "economy", "market", one, ["alpha"]))      # the chain is taken
+        # report R-20261013-9B1945: the names were only said at the last step - now on leaving the names step,
+        # by the same check (building_name_problems is part of building_problems)
+        same = [("uilding", "", "", ""), ("uilding", "", "", "")]
+        got = FN.building_name_problems(mod, "uilding", same)
+        self.assertIn("level 'uilding' has the chain's own name - give it another", got)
+        self.assertIn("two levels have the same name", got)
+        self.assertEqual(FN.building_name_problems(mod, "new_market", [("nm_1", "", "", ""), ("nm_2", "", "", "")]),
+                         [])
+        self.assertTrue(set(got) <= set(FN.building_problems(mod, "economy", "uilding", same, ["alpha"])))
         self.assertTrue(FN.building_problems(mod, "economy", "new_market", one, []))          # nobody builds it
         self.assertTrue(FN.building_problems(mod, "economy", "new_market", one, ["alpha"],
                                              units=[("beta guard", 0)]))                     # alpha may not own it

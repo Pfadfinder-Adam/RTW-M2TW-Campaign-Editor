@@ -78,6 +78,7 @@
 - The Town window remembers its kept changes when opened again.
 - Making land out of sea with the Terrain brush no longer fails with "that is sea".
 - The report window no longer gets wider with every screenshot added.
+- The new building wizard says a wrong level name on the names step, not only at the end.
 
 ## 0.34.0 - 2026-10-10
 
