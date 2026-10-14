@@ -60,44 +60,22 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
-- **Picking another garrison no longer stops the editor** ("TclError ... isn't packed", four reports from Medieval II
-  (with M2EX) and Rome (with REX)): a town's garrison with *As it was* but no *Suggest* could not be shown.
-- **A click on Units & armies no longer stops the editor** ("FieldTable.bind() missing 1 required positional
-  argument"): the drag-to-scroll check asked the armies table a question it could not answer.
-- A tab opened before a mod was loaded no longer stops on the leader's name list (no mod: no names).
-- **An army with no unit is never written** (a report: after garrisons were added in a Medieval II (with M2EX) mod
-  most factions vanished from the map). The game stops reading the campaign at such an army ("Must add at least
-  one unit to an army") and every faction after it is lost; Apply now refuses to make one, in plain words, before
-  anything is written. Check mod files names any the mod has already.
-- **A family member's army can be taken off the map** (a report: Units & armies sent him to the family tree, the
-  family tree sent him back to Units & armies). He leaves the map with his army and stays on the family tree as one
-  who died before the start, so his wife and children keep their place. Only the leader and the heir stay refused
-  (make another one first) - on the Map, in Units & armies and in the Map editor alike.
-
-- **The Town window shows the owner the Map gave** (it still said "slave - Rebels" for a town given on the Map):
-  the owner as the next Apply leaves the town - given on the Map, or taken into / let go from the edited
-  faction's towns.
-- **Many moves at once are judged where everything ends up** (an army refused "another army stands there" though
-  that army was moved away too; a town refused "another town or port stands there" though its port moved): an
-  army may take the tile another one leaves, a town the tile its port leaves - in any order, of any faction.
-  Two armies left on one tile are said in **Preview** already ("Apply will refuse this"), not only at Apply - and
-  only where the game would stop: with REX or M2EX another faction's army on a taken tile is placed beside it by
-  the engine (said, not refused); two of one faction, or any two on the original games, stay refused.
-- **A mod whose data folder holds only some files loads again** (after a Restore took the copied files away only
-  unit files were left and the mod stopped loading: "no descr_sm_factions.txt in ..."): a mod's data folder inside
-  the game folder is a mod whatever it holds - the rest is read from the game's data, as the game does.
-- **Land no region holds can be painted to a region** (an island whose colour in `map_regions.tga` is no region's
-  could not be filled: "tile is sea - only land changes region"): land the game makes land - `map_heights.tga` not
-  pure blue, the game's own rule - takes a region with the region brush; real sea still does not.
-- **A unit brought from another mod wears its own faction's look** (Barbarian Invasion's Saxon units came out in
-  the rebels' blue: their model has a rebels' and a Saxons' texture and the first one was copied): the new owners
-  get the texture and card of the unit's own faction (its ownership), the mercenaries' and the rebels' last.
-- **A building brought from another mod brings its build-queue icon too** (Rome / Barbarian Invasion keep it in
-  `ui/<culture>/buildings/construction/`; the game showed its placeholder): for the cultures it came with and the
-  cultures of every faction picked to build it.
-- **A town's changes kept for Apply come back when the Town window opens again** (it showed the old garrison).
-- **A wasteland on land the Terrain brush makes out of sea is written** (it stopped: "new slaves at ...: that is
-  sea" - its slaves resource was checked against the old map).
+- Picking another garrison no longer crashes the editor.
+- Clicking in Units & armies no longer crashes the editor.
+- Opening a tab before loading a mod no longer crashes the editor.
+- An army with no units is never written any more. Such an army made most factions vanish from the map.
+- A family member's army can now be removed. He stays in the family tree as someone who died before the start.
+- The Town window shows the new owner of a town given on the Map.
+- Many moves at once no longer fail with "another army stands there" when that army moves away too. The same goes
+  for a town moved onto its port's old tile.
+- Two armies on one tile are now shown in Preview, not only at Apply. With REX or M2EX, armies of two different
+  factions on one tile are allowed.
+- A mod whose data folder holds only a few files loads again.
+- Land that belongs to no region can now be painted to a region.
+- A unit brought from another mod keeps its own faction's colours, not the rebels'.
+- A building brought from another mod brings its build-queue icon too.
+- The Town window remembers its kept changes when opened again.
+- Making land out of sea with the Terrain brush no longer fails with "that is sea".
 
 ## 0.34.0 - 2026-10-10
 
