@@ -134,8 +134,9 @@ class BuildingPreview(_Base):
         cults = sorted({c for _, c in self.mod.factions() if c})
         if self.v_level.get() not in levels:
             self.v_level.set(levels[0] if levels else "")
-        if self.v_cult.get() not in cults:
-            # the first culture that has a picture of the first level
+        if self.v_cult.get() not in cults or not (levels and self._pics.find(self.v_cult.get(), levels[0])):
+            # the first culture that has a picture of the first level (a culture picked for another chain kept
+            # only when it has one here - a tester saw '(no picture)' beside a hover card with a picture)
             self.v_cult.set(next((c for c in cults if levels and self._pics.find(c, levels[0])),
                                  cults[0] if cults else ""))
         ttk.Label(self.bar, text="Level").pack(side="left")
@@ -154,8 +155,12 @@ class BuildingPreview(_Base):
         if lv is None:
             return
         name, cult = lv["name"], self.v_cult.get()
-        self._pic(self._pics.find(cult, name), (110, 90), "in the town")
-        self._pic(self._pics.find(cult, name, True), (200, 90), "when built")
+        others = [cult] + sorted({c for _, c in self.mod.factions() if c and c != cult})
+        for built, size, words in ((False, (110, 90), "in the town"), (True, (200, 90), "when built")):
+            # none of the culture picked: another culture's, named (R-20261014-AE0007)
+            whose = next((c for c in others if self._pics.find(c, name, built)), None)
+            self._pic(self._pics.find(whose, name, built) if whose else None, size,
+                      words if whose in (None, cult) else "%s (%s's)" % (words, whose))
         shown, desc = level_text(self.mod, name, cult)
         parts = [(shown or name.replace("_", " "), "h"), ("\n", None)]
         if desc:

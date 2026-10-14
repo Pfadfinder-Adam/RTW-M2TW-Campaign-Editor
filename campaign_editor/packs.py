@@ -106,6 +106,22 @@ def sorted_units(f, how):
     return sorted(names, key=key)
 
 
+def unit_owners(f):
+    """{unit type: [the factions / cultures of its ownership line]} of an EDU file - the Faction pick of Bring units
+    (a tester, R-20261014-97E905: 'by owner still mixed - let me pick the faction')."""
+    spans = type_blocks(f)
+    out = {}
+    for n, span in spans.items():
+        got = _values(_block_lines(f, span), "ownership")
+        out[n] = [x for x in (got[0] if got else []) if x]
+    return out
+
+
+def owner_choices(f):
+    """Every faction / culture any unit of the EDU file names in its ownership, sorted."""
+    return sorted({o for owners in unit_owners(f).values() for o in owners}, key=str.lower)
+
+
 def _file_refs(lines):
     """Every token of the lines that names a file (by its extension)."""
     refs = []
@@ -403,6 +419,9 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
     bad = [o for o in owners if known and o not in known]
     if bad:
         raise ValueError("no faction or culture %s in this mod" % ", ".join(bad))
+    files, moved = unclash_files(mod, manifest, files)
+    for old, new in moved.items():
+        plan.note(None, "%s: this mod has another file of that name - the brought one goes in as %s" % (old, new))
     renamed = _put_blocks(plan, manifest, owners)
     # the units
     edu = plan.edit(mod.file("edu"))
@@ -458,6 +477,82 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
         _recruit(plan, manifest, names, owners, recruit_map)
     _say_missing(plan, manifest)
     return plan
+
+
+def _target_bytes(mod, rel):
+    """The bytes of data path rel as the target mod reads it (its own folder, then the game's under it), or None."""
+    from .moddata import ci_path
+    for root in (mod.roots() if hasattr(mod, "roots") else [mod.data]):
+        p = ci_path(root, rel)
+        if p and os.path.isfile(p):
+            with open(p, "rb") as fh:
+                return fh.read()
+    return None
+
+
+def _clash_name(mod, rel, taken):
+    """rel with _2, _3... before its first dot of the file name: free in the mod, the game and taken."""
+    head, base = rel.rsplit("/", 1) if "/" in rel else ("", rel)
+    stem, dot, ext = base.partition(".")
+    n = 2
+    while True:
+        new = "%s%s_%d%s%s" % (head + "/" if head else "", stem, n, dot, ext)
+        if new.lower() not in taken and _target_bytes(mod, new) is None:
+            return new
+        n += 1
+
+
+def unclash_files(mod, manifest, files):
+    """The pack's files that the target mod (or the game under it) has at the same path with OTHER bytes get a
+    path of their own (name_2.tga...), and every block / modeldb model naming them follows - so the brought unit
+    wears the source mod's look, never the one already here (a tester, R-20261014-6CD955: brought chariots showed
+    the Britons' chariots - 'the mod's own is kept' left the old texture under the same name), and nothing the mod
+    has changes. The blocks whose lines change no longer match the mod's ones of the same name, so _put_blocks
+    adds them under a free name. -> (files, {old rel: new rel}); manifest changed in place."""
+    moved = {}
+    taken = {r.lower() for r in files}
+    for rel in sorted(files):
+        parts = rel.split("/")
+        if len(parts) == 4 and parts[0].lower() == "ui" and parts[1].lower() in ("units", "unit_info"):
+            continue                                       # cards: named after the (new) dictionary anyway
+        have = _target_bytes(mod, rel)
+        if have is not None and have != files[rel]:
+            new = _clash_name(mod, rel, taken)
+            taken.add(new.lower())
+            moved[rel] = new
+    if not moved:
+        return files, moved
+    files = {moved.get(r, r): d for r, d in files.items()}
+    low = {}
+    for old, new in moved.items():                         # a line names 'data/x.tga' for the file x.tga.dds
+        low[old.lower()] = new
+        if old.lower().endswith(".dds"):
+            low[old[:-4].lower()] = new[:-4]
+
+    def fix(ref):
+        pre = ref[:5] if ref.lower().startswith("data/") else ""
+        got = low.get(ref[len(pre):].replace("\\", "/").lower())
+        return pre + got if got else ref
+
+    def fix_line(line):
+        return re.sub(r"[^,\s;]+", lambda m: fix(m.group(0)) if "/" in m.group(0) else m.group(0), line)
+    for kind, blocks in manifest["blocks"].items():
+        for name in list(blocks):
+            blocks[name] = [fix_line(x) if ";" not in x else fix_line(x.split(";", 1)[0]) + ";" + x.split(";", 1)[1]
+                            for x in blocks[name]]
+
+    def walk(v):
+        if isinstance(v, str):
+            return fix(v) if "/" in v else v
+        if isinstance(v, list):
+            return [walk(x) for x in v]
+        if isinstance(v, dict):
+            return {k: walk(x) for k, x in v.items()}
+        return v
+    for name in list(manifest.get("modeldb") or {}):
+        manifest["modeldb"][name] = walk(manifest["modeldb"][name])
+    manifest["files"] = sorted(files)
+    return files, moved
 
 
 def _put_blocks(plan, manifest, owners):
@@ -535,6 +630,7 @@ def import_models(plan, manifest, files, owners):
     if manifest.get("game") and manifest["game"] != game_kind(plan.mod):
         raise ValueError("models go between mods of one game (this one is %s, the model's %s)" % (
             game_kind(plan.mod), manifest["game"]))
+    files, _ = unclash_files(plan.mod, manifest, files)
     renamed = _put_blocks(plan, manifest, owners)
     _put_files(plan, files)
     _say_missing(plan, manifest)

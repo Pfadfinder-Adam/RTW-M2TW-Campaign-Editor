@@ -137,15 +137,30 @@ class BringWindow(StepWindow):
             here = {b[0].lower() for b in building_blocks(self.mod.load(self.mod.file("edb")))}
         bar = ttk.Frame(self.body)
         bar.pack(fill="x")
-        ttk.Label(bar, text="Find").pack(side="left")
+        # Sort and Faction first, where the eye starts (a tester, R-20261014-97E905: 'the sorter stands where it is
+        # not seen at once; by owner still mixed - let me pick the faction')
+        orders = packs.UNIT_ORDERS if self.kind == "unit" else packs.UNIT_ORDERS[:2]
+        v_order = tk.StringVar(value=getattr(self, "_order", orders[0]))
+        ttk.Label(bar, text="Sort").pack(side="left")
+        ttk.Combobox(bar, textvariable=v_order, values=orders, state="readonly", width=14).pack(side="left", padx=4)
+        EVERY = "every faction"
+        v_owner = tk.StringVar(value=getattr(self, "_owner", EVERY))
+        owners = {}
+        if self.kind == "unit":
+            src_edu = self.src.load(self.src.file("edu"))
+            owners = packs.unit_owners(src_edu)
+            ttk.Label(bar, text="Faction").pack(side="left", padx=(12, 0))
+            from .gui_util import tip as _tip
+            _tip(ttk.Combobox(bar, textvariable=v_owner, values=[EVERY] + packs.owner_choices(src_edu),
+                              state="readonly", width=18),
+                 "Only the units this faction (or culture) may own - its name on their ownership line. In Rome a "
+                 "unit's look also follows the culture, so one unit can stand under several factions.").pack(
+                side="left", padx=4)
+        ttk.Label(bar, text="Find").pack(side="left", padx=(12, 0))
         v_find = tk.StringVar()
         ttk.Entry(bar, textvariable=v_find, width=24).pack(side="left", padx=4)
         v_new = tk.BooleanVar(value=False)
         ttk.Checkbutton(bar, text="only those this mod has not", variable=v_new).pack(side="left", padx=8)
-        orders = packs.UNIT_ORDERS if self.kind == "unit" else packs.UNIT_ORDERS[:2]
-        v_order = tk.StringVar(value=getattr(self, "_order", orders[0]))
-        ttk.Label(bar, text="Sort").pack(side="left", padx=(8, 0))
-        ttk.Combobox(bar, textvariable=v_order, values=orders, state="readonly", width=14).pack(side="left", padx=4)
         info = ttk.Label(bar, foreground="#555")
         info.pack(side="right")
         box = ttk.Frame(self.body)
@@ -176,11 +191,15 @@ class BringWindow(StepWindow):
                 names[:] = packs.sorted_units(self.src.load(self.src.file("edu")), self._order)
             else:
                 names[:] = sorted(names, key=str.lower) if self._order == "by name" else self._source_names()
+            self._owner = v_owner.get()
             lb.delete(0, "end")
             shown[:] = [n for n in names if (not v_find.get().strip() or v_find.get().strip().lower() in n.lower())
-                        and (not v_new.get() or n.lower() not in here)]
+                        and (not v_new.get() or n.lower() not in here)
+                        and (self._owner == EVERY or self._owner in owners.get(n, ()))]
             for i, n in enumerate(shown):
-                lb.insert("end", n + ("   (renamed here)" if n.lower() in here else ""))
+                lb.insert("end", n + ("   [%s]" % ", ".join(owners.get(n) or ["no owner"])
+                                      if self._order == "by owner" else "")
+                          + ("   (renamed here)" if n.lower() in here else ""))
                 if n in chosen:
                     lb.selection_set(i)
             info.configure(text="%d picked" % len(chosen))
@@ -213,6 +232,7 @@ class BringWindow(StepWindow):
         v_find.trace_add("write", fill)
         v_new.trace_add("write", fill)
         v_order.trace_add("write", fill)
+        v_owner.trace_add("write", fill)
         shown[:] = []
         fill()
 
