@@ -162,8 +162,11 @@ class ArtEditor(ttk.Frame):
             kind = FA.start_kind(p)
             kinds.add(kind)
             leader = kind == FA.START_KINDS[1]
+            own = None if leader else [("Draw from the map", lambda t=FA.picture_target(p, src_faction, new or
+                                                                                       src_faction), s=p["size"]:
+                                        self.draw_start_map(t, s))]
             self.card(row, p, src_faction, new, box=(69, 96) if leader else (192, 120), wrap=150 if leader else 200,
-                      short=True).pack(side="left", anchor="nw", padx=(0, 8))
+                      short=True, buttons=own).pack(side="left", anchor="nw", padx=(0, 8))
         from .packs import game_kind
         missing = []
         if FA.START_KINDS[0] not in kinds:
@@ -173,6 +176,41 @@ class ArtEditor(ttk.Frame):
                            "leader_pic_<faction>.tga (vanilla Rome has them for the three Roman families)")
         for m in missing:
             ttk.Label(host, text=m, foreground="#666", wraplength=330, justify="left").pack(anchor="w")
+        if FA.START_KINDS[0] not in kinds:
+            rel = os.path.relpath(FA.map_name(a.mod.campaign_dir(a.v_campaign.get()), new or src_faction),
+                                  a.mod.data).replace("\\", "/")
+            ttk.Button(host, text="Draw one from the map", command=lambda: self.draw_start_map(rel, None)).pack(
+                anchor="w", pady=(4, 0))
+
+    def draw_start_map(self, target, size):
+        """'Draw from the map' (the user, 2026-10-14): the faction-select map made from the campaign map itself -
+        relief and rivers, no signs - the faction's land one solid patch in its primary colour (factionart.
+        map_drawing); kept like a replaced picture (Preview, Apply)."""
+        a = self.app
+        src_faction, new = self._names()
+        camp = a.v_campaign.get()
+        regions = list(a.chosen) if getattr(a, "chosen", None) else []
+        if not regions and a.strat and a.strat.faction(src_faction):
+            regions = [st.region for st in a.strat.faction(src_faction).settlements]
+        colour = a.colours.get("primary") or self._template_primary() or (200, 200, 200)
+        try:
+            im = FA.map_drawing(a.mod, camp, regions, tuple(colour), tuple(size[:2]) if size else None)
+        except Exception as e:
+            messagebox.showerror("Draw from the map", "Could not draw it: %s" % e, parent=self)
+            return
+        if im is None:
+            messagebox.showerror("Draw from the map", "Drawing needs Pillow (the exe has it).", parent=self)
+            return
+        from . import log
+        folder = os.path.join(log.home(), "drawn")
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, "map_%s.png" % (new or src_faction))
+        im.save(path)
+        a.remember()
+        a.art_replace[target] = path
+        a.status.set("%s drawn from the map: %d region(s) in its colour - Preview, then Apply (Keep the current one "
+                     "takes it back)." % (os.path.basename(target), len(regions)))
+        self.load()
 
     def load(self):
         a = self.app

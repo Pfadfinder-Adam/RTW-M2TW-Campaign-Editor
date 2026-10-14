@@ -2383,6 +2383,29 @@ building smith
         self.assertEqual(packs.unit_owners(f)["alpha spears"], ["romans_julii", "gauls"])
         self.assertEqual(packs.owner_choices(f), ["barbarian", "carthage", "egypt", "gauls", "romans_julii"])
 
+    def test_select_map_drawn_from_the_campaign_map(self):
+        """The user, 2026-10-14: the faction-select map made from the campaign map itself - relief and rivers, no
+        signs - with the faction's land one SOLID patch in its colour (nothing see-through, no borders inside it);
+        a campaign without select pictures to learn from gets one too (384 wide, the map's shape)."""
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import factionart as FA
+        mod = ModData(self.root)
+        regions = list(mod.regions("test"))
+        im = FA.map_drawing(mod, "test", regions[:1], (200, 10, 10))
+        img = mod.region_map("test")
+        self.assertEqual(im.size, (384, round(384 * img.height / img.width)))
+        x, y = mod.city_tiles("test")[regions[0]]
+        px = im.getpixel((int((x + 0.5) * im.width / img.width), int((img.height - 1 - y + 0.5) * im.height /
+                                                                         img.height)))
+        self.assertEqual(px, (200, 10, 10))                           # solid: the colour itself, not a tint
+        x2, y2 = mod.city_tiles("test")[regions[1]]
+        other = im.getpixel((int((x2 + 0.5) * im.width / img.width), int((img.height - 1 - y2 + 0.5) * im.height /
+                                                                            img.height)))
+        self.assertNotEqual(other, (200, 10, 10))                     # another faction's land: the map as it is
+
     def test_recruitment_panel_sorted_strongest_first(self):
         """The user, 2026-10-14: the panel lists units in the order of the buildings file's recruit lines - sort them:
         infantry, missiles, cavalry, siege, ships, the dearest first in each; other lines and comments stay put."""

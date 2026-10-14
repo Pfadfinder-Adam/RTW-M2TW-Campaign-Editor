@@ -2526,6 +2526,22 @@ def s_recruit_order(c, mod):
     return plan
 
 
+@step("Faction-select map of {new} drawn from the campaign map: relief and rivers, its land one solid patch",
+      "the faction-select screen: {new}'s map shows the land with its relief and rivers and its towns' regions in "
+      "its colour, no borders inside")
+def s_select_map_drawn(c, mod):
+    from . import factionart as FA
+    from .strat import Strat
+    regions = [r for r, f in Strat(mod.load(mod.campaign_file(c.campaign, "descr_strat.txt"))).owners().items()
+               if f == c.new]
+    if not regions:
+        raise Skip("%s holds no town" % c.new)
+    plan = Plan(mod, "art", "select_map", {})
+    if not FA.write_select_map(plan, c.campaign, c.new, regions, tuple(c.colours[c.new][0]), from_map=True):
+        raise Skip("no Pillow")
+    return plan
+
+
 @step("Map size: the map grown by 2 tiles of deep sea at the right and at the top (the last step - grown at the "
       "left or the bottom every place would move, and the test mod's engine scripts name tiles by number)",
       "the campaign map is 2 tiles wider and higher: open water at its right and top edges; every town, army and "
@@ -2544,6 +2560,7 @@ def s_map_size(c, mod):
 RUN = "tried by the run itself"
 LOOK = "only shows, writes nothing - tried in the window by check-scripts/smoke.py"
 COVERAGE = {
+    "Draw from the map (faction-select map)": ["s_select_map_drawn"],
     "Sort the recruitment panel": ["s_recruit_order"],
     "New faction": ["s_new_faction"],
     "New mod folder": RUN + " (CE_Test is made with it)",

@@ -784,6 +784,52 @@ def draw_select_map(mod, campaign, regions, colour):
     return res
 
 
+SELECT_SIZE = 384                 # Rome's campaign-select pictures: 384 wide (384 x 237 for its 255 x 156 map)
+
+
+def map_drawing(mod, campaign, regions, colour, size=None):
+    """The faction-select map drawn from the campaign map itself (the user, 2026-10-14: 'a clean picture of the map -
+    its relief and rivers, no signs or names - with only this faction's land lit, filled with its colour, nothing
+    see-through and no borders inside its land'): the editor's own map picture (the ground with its relief and
+    rivers), the faction's regions one solid patch. Where the campaign's other select pictures have a frame round
+    the map (Medieval II), the drawing goes where the map lies in them; else the whole picture is the map, `size`
+    (the other pictures' size, else 384 wide in the map's shape). Pillow RGB image, or None without Pillow."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    from .mapdata import CampaignMap
+    from .mapedit import ports
+    cm = CampaignMap(mod, campaign)
+    W, H = cm.w, cm.h
+    base = cm.background(relief=True, rivers=True).convert("RGB")           # 2 px a tile, top row first
+    info = mod.regions(campaign)
+    cols = {info[r]["colour"] for r in regions if r in info}
+    mask = _map_mask(mod, campaign, lambda c: c in cols)
+    px = mask.load()
+    towns, harbours = mod.city_tiles(campaign), ports(mod, campaign)
+    for r in regions:                                   # a town / port pixel is its region's land too
+        for xy in (towns.get(r), harbours.get(r)):
+            if xy and 0 <= xy[0] < W and 0 <= xy[1] < H:
+                px[xy[0], H - 1 - xy[1]] = 255
+    rgb = tuple(max(0, min(255, int(c))) for c in colour)
+
+    def drawn(size):                                # at its final size: the land's inside exactly the colour,
+        big = base.resize(size, Image.BILINEAR)     # only its outer edge softened - one patch, no borders inside
+        from PIL import ImageFilter
+        soft = mask.resize(size, Image.NEAREST).filter(ImageFilter.GaussianBlur(0.6))
+        return Image.composite(Image.new("RGB", size, rgb), big, soft)
+    got = select_background(mod, campaign)
+    if got:
+        bg, _ = got
+        frame = select_frame(mod, campaign, bg.size) or (bg.size[0] / W, bg.size[1] / H, 0, 0)
+        sx, sy, dx, dy = frame if len(frame) == 4 else (frame[0], frame[0], frame[1], frame[2])
+        out = bg.copy()
+        out.paste(drawn((max(1, round(W * sx)), max(1, round(H * sy)))), (int(dx), int(dy)))
+        return out
+    return drawn(tuple(size or (SELECT_SIZE, max(1, round(SELECT_SIZE * H / W)))))
+
+
 def image_tga(im, like=None):
     """A Pillow image as TGA bytes in the depth of `like` (a TGA file: 24 or 32 bit),
     uncompressed, rows bottom-up as the game's own."""
@@ -814,18 +860,35 @@ def future(plan, campaign):
     return fut
 
 
-def write_select_map(plan, campaign, faction, regions, colour):
+def write_select_map(plan, campaign, faction, regions, colour, from_map=False):
     """map_<faction>.tga drawn from its regions (a note says so), on the map as the plan
-    leaves it; False when the campaign has no maps to learn the background from."""
+    leaves it: lit on the campaign's own select background, or with from_map (or when the campaign has no select
+    pictures to learn a background from) drawn from the campaign map itself (map_drawing). False without Pillow."""
     mod = plan.mod
-    im = draw_select_map(future(plan, campaign), campaign, regions, tuple(colour))
+    fut = future(plan, campaign)
+    got = select_background(mod, campaign)
+    im = None if from_map else draw_select_map(fut, campaign, regions, tuple(colour))
+    how = "lit on the select background"
     if im is None:
-        return False
+        size = None
+        old = mod.in_campaign(campaign, "map_%s.tga" % faction) or (
+            mod.in_campaign(campaign, "map_%s.tga" % plan.template) if getattr(plan, "template", None) else None)
+        if old and not got:
+            try:
+                from PIL import Image
+                with Image.open(old) as o:
+                    size = o.size
+            except Exception:
+                size = None
+        im = map_drawing(fut, campaign, regions, tuple(colour), size)
+        how = "drawn from the campaign map (relief, rivers, its land one solid patch)"
+        if im is None:
+            return False
     target = map_name(mod.campaign_dir(campaign), faction)
-    _, like = select_background(mod, campaign)
+    like = got[1] if got else (mod.in_campaign(campaign, "map_%s.tga" % faction) or None)
     plan.binary(target, image_tga(im, like))
-    plan.notes.append((mod.rel(target), "campaign-select map drawn: %d region(s) lit in %d %d %d" % (
-        (len(regions),) + tuple(colour))))
+    plan.notes.append((mod.rel(target), "campaign-select map %s: %d region(s) in %d %d %d" % (
+        (how, len(regions)) + tuple(colour))))
     return True
 
 
