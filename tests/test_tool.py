@@ -7925,6 +7925,8 @@ building smith
         write(os.path.join(d, "text", "export_buildings.txt"), "{shrine}Shrine\n{shrine_desc}Holy\n{big_shrine}Big\n",
               utf16=True)
         write(os.path.join(d, "ui", "greek", "buildings", "#greek_shrine.tga"), "PIC")
+        # the build-queue icon (Rome / BI: buildings/construction/ - report R-20261013-896D1E: never brought)
+        write(os.path.join(d, "ui", "greek", "buildings", "construction", "#greek_shrine.tga"), "QUEUE")
         target = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, target)
         shutil.copytree(self.root, os.path.join(target, "mod"))
@@ -7959,6 +7961,9 @@ building smith
         txt = open(m2.text_file("export_buildings.txt"), "rb").read().decode("utf-16")
         self.assertIn("{shrine_2_desc}Holy", txt)
         self.assertTrue(os.path.exists(os.path.join(troot, "data", "ui", "greek", "buildings", "#greek_shrine_2.tga")))
+        queue = os.path.join(troot, "data", "ui", "greek", "buildings", "construction", "#greek_shrine_2.tga")
+        self.assertTrue(os.path.exists(queue))
+        self.assertEqual(open(queue, "rb").read(), b"QUEUE")
         restore(ModData(troot), bdir)
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte

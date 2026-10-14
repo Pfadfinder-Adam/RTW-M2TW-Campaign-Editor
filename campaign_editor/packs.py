@@ -721,7 +721,7 @@ __all__ = ["recruit_levels", "default_recruit_map", "collect_buildings", "buildi
 def collect_buildings(mod, chains):
     """(manifest, files) for these building chains: each chain's block, every export_buildings.txt entry made of a
     level's name (<level>, <level>_desc, <level>_<culture>...), the level pictures
-    (ui/<culture>/buildings/#<culture>_<level>[_constructed].tga) and the units its recruit lines name."""
+    (ui/<culture>/buildings[/construction]/#<culture>_<level>[_constructed].tga) and the units its recruit lines name."""
     from .editors import building_blocks, chain_tree
     from .roster import recruit_of
     edb = mod.load(mod.file("edb"))
@@ -756,13 +756,14 @@ def collect_buildings(mod, chains):
                 if val is not None:
                     man["texts"][k] = val
         for cult in cultures:
-            pics = {n.lower(): (n, p) for n, p in mod.listing("ui/%s/buildings" % cult)}
-            for lv in levels:
-                for tail in (".tga", "_constructed.tga"):
-                    got = pics.get(("#%s_%s%s" % (cult, lv, tail)).lower())
-                    if got:
-                        with open(got[1], "rb") as fh:
-                            files["ui/%s/buildings/%s" % (cult, got[0])] = fh.read()
+            for sub in ("", "/construction"):          # Rome / BI: the build-queue icons in buildings/construction/
+                pics = {n.lower(): (n, p) for n, p in mod.listing("ui/%s/buildings%s" % (cult, sub))}
+                for lv in levels:
+                    for tail in (".tga", "_constructed.tga"):
+                        got = pics.get(("#%s_%s%s" % (cult, lv, tail)).lower())
+                        if got:
+                            with open(got[1], "rb") as fh:
+                                files["ui/%s/buildings%s/%s" % (cult, sub, got[0])] = fh.read()
     return man, files
 
 
@@ -936,19 +937,20 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
     by_level = {}
     for rel, data in files.items():
         parts = rel.split("/")
-        if len(parts) != 4 or parts[0].lower() != "ui" or parts[2].lower() != "buildings":
+        if parts[0].lower() != "ui" or len(parts) < 4 or parts[2].lower() != "buildings" or \
+                len(parts) not in (4, 5) or len(parts) == 5 and parts[3].lower() != "construction":
             continue
-        cult, name = parts[1], parts[3]
+        cult, name, sub = parts[1], parts[-1], "/construction" if len(parts) == 5 else ""
         for old, new in level_names.items():
             for tail in (".tga", "_constructed.tga"):
                 if name.lower() == ("#%s_%s%s" % (cult, old, tail)).lower():
-                    by_level.setdefault((new, tail), {})[cult] = data
-    for (new, tail), per in by_level.items():
+                    by_level.setdefault((new, tail, sub), {})[cult] = data
+    for (new, tail, sub), per in by_level.items():
         for cult in set(per) | owners_cults:
             if cult.lower() not in cults_here and cult not in per:
                 continue
             data = per.get(cult) or next(iter(per.values()))
-            rel = "ui/%s/buildings/#%s_%s%s" % (cults_here.get(cult.lower(), cult), cult, new, tail)
+            rel = "ui/%s/buildings%s/#%s_%s%s" % (cults_here.get(cult.lower(), cult), sub, cult, new, tail)
             if rel.lower() not in put:
                 put.add(rel.lower())
                 _put(plan, rel, data)

@@ -86,6 +86,9 @@
 - **A mod whose data folder holds only some files loads again** (after a Restore took the copied files away only
   unit files were left and the mod stopped loading: "no descr_sm_factions.txt in ..."): a mod's data folder inside
   the game folder is a mod whatever it holds - the rest is read from the game's data, as the game does.
+- **A building brought from another mod brings its build-queue icon too** (Rome / Barbarian Invasion keep it in
+  `ui/<culture>/buildings/construction/`; the game showed its placeholder): for the cultures it came with and the
+  cultures of every faction picked to build it.
 - **A town's changes kept for Apply come back when the Town window opens again** (it showed the old garrison).
 - **A wasteland on land the Terrain brush makes out of sea is written** (it stopped: "new slaves at ...: that is
   sea" - its slaves resource was checked against the old map).
