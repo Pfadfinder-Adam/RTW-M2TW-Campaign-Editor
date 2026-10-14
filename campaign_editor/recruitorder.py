@@ -2,13 +2,12 @@
 corner of the panel takes the strongest, or simply the dearest; by kind: infantry first, then missiles - skirmishers,
 archers -, then cavalry, then siege, and only then ships').
 
-The game lists a town's units in the order of the recruit lines of export_descr_buildings.txt (the Medieval 2 GUI
-Toolkit's notes: 'the order the game's recruitment panel lists units in'). So the lines are sorted once in the file
-and every town, every unit added later and old saves follow it - no script runs in the game. Inside each building
+The Medieval 2 GUI Toolkit's notes say the panel lists units in the order of the recruit lines of
+export_descr_buildings.txt - the exes say otherwise (rules.md 'Recruitment panel order (exe study)'): the game sorts
+the panel by each unit's 6th stat_cost value, the smallest first; with REX (a stable sort) the line order only orders
+units of the same value. The panel in this order in the game: the add-on recruit_order.nut. Inside each building
 level's capability block only the recruit lines change places, among the slots they held; every other line (agents,
-bonuses, retrain lines, comments of their own) stays where it is, and each recruit line moves with its own comment.
-How the game joins the lists of SEVERAL buildings of one town (barracks, stables, a range) is not known for sure -
-the order inside each building is what this sets."""
+bonuses, retrain lines, comments of their own) stays where it is, and each recruit line moves with its own comment."""
 
 from .editors import building_blocks, chain_tree
 from .roster import RECRUITING, recruit_of

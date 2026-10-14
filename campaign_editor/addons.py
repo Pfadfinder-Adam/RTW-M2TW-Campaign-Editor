@@ -171,6 +171,21 @@ ADDONS = [
           "REX (Rome: Total War) or M2EX (Medieval II: Total War) - their own scripts (script/main.nut) load every "
           ".nut of the game's script/modules, whatever mod runs. The original exes run no scripts - the add-on then "
           "does nothing."),
+    Addon("recruit_order", "Recruitment Order", "both", "recruit_order.nut",
+          "A town's recruitment panel in a fixed order: infantry, then archers / slingers / skirmishers, animal "
+          "handlers, cavalry, siege, ships - in each kind the dearest first (or the cheapest). The game sorts the "
+          "panel itself by each unit's custom-battle price (stat_cost's 6th number); during your turn the add-on "
+          "gives every unit that number in the order above and puts the real numbers back before every battle and "
+          "at the end of your turn, so the computer's turns, battles and autoresolve keep the real values. Nothing "
+          "is written into the mod's files or the saved game. Ships always stand after the land units and agents "
+          "last - the game keeps them apart. Console: sq ::recruit_order_list(), sq ::recruit_order_off().",
+          [Setting("RO_ENABLED", "bool", "Recruitment Order on", "off keeps the file but does nothing"),
+           Setting("RO_ORDER", "choice", "In each kind", "which units stand first among the same kind",
+                   choices=[("dearest", "The dearest first (the strongest top left)"),
+                            ("cheapest", "The cheapest first")])],
+          "REX (Rome: Total War) or M2EX (Medieval II: Total War) - their own scripts (script/main.nut) load every "
+          ".nut of the game's script/modules, whatever mod runs. The original exes run no scripts - the add-on then "
+          "does nothing."),
     Addon("player_diplomacy", "Player Diplomacy", "rome", "player_diplomacy.nut",
           "The computer's factions stop attacking you when it makes no sense: after a ceasefire they keep the peace "
           "for some turns (a war they declare in that time is undone), your client kingdoms never plan to invade "

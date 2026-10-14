@@ -6908,6 +6908,37 @@ building smith
         restore(mod, bdir)
         self.assertIsNone(A.installed(mod, a))
 
+    def test_recruit_order_addon_for_both_games(self):
+        """Recruitment Order: one script for REX and M2EX; the panel's sort number (trueCost = the 6th stat_cost)
+        gets the rank only in the player's turn and the real one back before battles, at the turn's end and when the
+        campaign unloads; the kinds in recruitorder's order; its settings written and read back; put into the game's
+        script/modules and taken out."""
+        from campaign_editor import addons as A, recruitorder as RO
+        a = A.by_key("recruit_order")
+        self.assertTrue(a.fits("rome") and a.fits("medieval2"))
+        text = a.template()
+        for part in ("trueCost", "recruitCost", "::units.count()", '"FactionTurnStart"', '"FactionTurnEnd"',
+                     '"RecruitmentPanelOpen"', '"PreBattle"', '"unloadCampaign"', "isPlayerControlled",
+                     "recruit_order_list", "recruit_order_off", "Recruitment Order module loaded"):
+            self.assertIn(part, text)
+        self.assertIn("local RO_KINDS = [%s]" % ", ".join('"%s"' % k for k in RO.KIND_ORDER), text)
+        self.assertNotIn("delete ", text)                                  # the engines forbid 'delete'
+        got = A.read_settings(a, text)
+        self.assertEqual(got, {"RO_ENABLED": True, "RO_ORDER": "dearest"})
+        self.assertEqual(A.render(a, text, got), text)
+        new = dict(got, RO_ORDER="cheapest")
+        self.assertEqual(A.read_settings(a, A.render(a, text, new)), new)
+        self.assertFalse(A.check(a, new))
+        self.assertTrue(A.check(a, dict(got, RO_ORDER="by name")))
+        mod = ModData(self.root)
+        plan = Plan(mod, "addon", "order", {})
+        dst = A.plan_install(plan, a, new, mod)
+        self.assertEqual(dst, os.path.join(self.root, "script", "modules", "recruit_order.nut"))
+        bdir = plan.apply()
+        self.assertEqual(A.installed(mod, a)["RO_ORDER"], "cheapest")
+        restore(mod, bdir)
+        self.assertIsNone(A.installed(mod, a))
+
     def test_module_builder_only_in_a_campaign_with_a_faction(self):
         """The test mod's modules lie in the GAME's script/modules: a module with only_with acts only where that
         faction is in the campaign, else one log line (a tester's plain campaign got the test's +100 people)."""

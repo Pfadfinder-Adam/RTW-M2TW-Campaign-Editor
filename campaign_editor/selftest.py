@@ -1625,6 +1625,20 @@ def s_addon_growth(c, mod):
     return plan
 
 
+@step("Add-on: Recruitment Order installed (REX / M2EX)",
+      "a town's recruitment panel (your turn) stands in order: infantry, then archers / slingers / skirmishers, "
+      "cavalry, siege, ships - the dearest first in each kind; the game's log has '[ORDER] the recruitment panel "
+      "follows the order'; in a battle's pre-battle panel and a custom battle the prices are the real ones")
+def s_addon_order(c, mod):
+    from . import addons as AD
+    a = next((x for x in AD.library() if x.key == "recruit_order"), None)
+    if a is None:
+        raise Skip("the add-on is not in the library")
+    plan = Plan(mod, "addon", "recruit_order", {})
+    AD.plan_install(plan, a, AD.read_settings(a, a.template()), mod, mark=SM.TEST_MARK)
+    return plan
+
+
 COND_SCRIPT = "ce_test_conditions.nut"
 # the forms of one game condition tried once (the engines' parser refused 'I_TurnNumber >= 1' thousands of times in
 # the tester's runs, also with a line end): the docs' own sample form first - the log shows which form it takes
@@ -2629,7 +2643,7 @@ COVERAGE = {
     "Campaign rules": ["s_rules", "s_rules_all"],
     "Campaign start (descr_strat.txt)": ["s_campaign_start"],
     "Engine settings (REX / M2EX)": ["s_engine_rules"],
-    "Add-ons": ["s_addon", "s_addon_diplomacy", "s_addon_growth", "s_addon_upkeep"],
+    "Add-ons": ["s_addon", "s_addon_diplomacy", "s_addon_growth", "s_addon_order", "s_addon_upkeep"],
     "Add-ons: an older version in the game put right on Load (its settings kept)":
         "offered on Load only when an older copy is in the game - the test mod puts this version in (the unit test "
         "test_older_addons_are_put_right_on_load writes an older one and takes the offer)",

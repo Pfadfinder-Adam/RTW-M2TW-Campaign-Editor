@@ -6130,18 +6130,16 @@ class App(tk.Tk):
             return
         n = len(got["changed"])
         if not n:
-            messagebox.showinfo(APP, "The recruitment panel is in order already: every building level recruits its "
+            messagebox.showinfo(APP, "The recruit lines are in order already: every building level lists its "
                                      "units infantry first, then missiles, cavalry, siege, ships - the dearest "
                                      "first in each.", parent=self)
             return
-        if not ask(APP, "The game lists a town's units in the order of the recruit lines in "
-                        "export_descr_buildings.txt. %d building level(s) get them sorted:\n\n"
+        if not ask(APP, "%d building level(s) get their recruit lines in export_descr_buildings.txt sorted:\n\n"
                         "  infantry -> missiles (archers, slingers, skirmishers) -> animal handlers -> cavalry -> "
-                        "siege -> ships,\n  the dearest first in each kind - the panel's top left takes the "
-                        "strongest.\n\nOnly the recruit lines change places; every town, every unit added later "
-                        "and old saves follow it. When a town recruits from several buildings, the order inside "
-                        "each building is set - how the game joins them, the game shows. Preview shows every "
-                        "level." % n, yes="Keep for Apply", no="Cancel", parent=self):
+                        "siege -> ships,\n  the dearest first in each kind.\n\nOnly the recruit lines change places. The game sorts the panel itself by each "
+                        "unit's custom-battle price (stat_cost's 6th number) - with REX these lines only order "
+                        "units of the same price. For the panel in this order in the game: the add-on Recruitment "
+                        "Order (Add-ons). Preview shows every level." % n, yes="Keep for Apply", no="Cancel", parent=self):
             return
         if keep_for_apply(self, "sort_recruitment", "Recruitment panel sorted (%d levels)" % n, make):
             self.status.set("Recruitment panel sorted in %d building level(s) - Preview, then Apply changes." % n)

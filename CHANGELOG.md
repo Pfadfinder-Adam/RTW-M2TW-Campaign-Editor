@@ -11,9 +11,11 @@
 - **Draw from the map**: the faction-select map made from the campaign map itself - relief and rivers, no signs,
   the faction's land one solid patch in its colour with a line round its outside (dark round a bright colour,
   light round a dark one), no borders inside (faction tab, under the map).
-- **Tools > Sort the recruitment panel (strongest first)**: every building's recruit lines in one order - infantry,
-  then archers / slingers / skirmishers, animal handlers, cavalry, siege, ships, the dearest first in each - so the
-  panel's top left shows the strongest unit. Set once in the files; every town, new units and old saves follow it.
+- Add-on **Recruitment Order** (Rome with REX, Medieval II with M2EX): a town's recruitment panel in order -
+  infantry, then archers / slingers / skirmishers, animal handlers, cavalry, siege, ships, the dearest (or the
+  cheapest) first in each; battles and the computer's turns keep the real prices.
+- **Tools > Sort the recruitment panel (strongest first)**: every building's recruit lines in that order in the
+  files (the game itself sorts the panel by price - with REX the lines only order units of the same price).
 - Answers to my reports: the states are asked afresh when the tab opens.
 - ROADMAP: the road so far as tables (no diagram to move with buttons).
 - Maps saved as colour-mapped TGAs (some map generators write them) open in the editor; written back as plain TGAs.
