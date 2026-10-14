@@ -294,4 +294,12 @@ def build_tab(app, nb, w):
         lbl_state.configure(text="The report service is not set up in this version.", foreground=theme.ink("#a60"))
         b_check.configure(state="disabled")
     fill()
+    try:
+        last = float(settings.get("reports_checked_at") or 0)
+    except (TypeError, ValueError):
+        last = 0
+    if report.url() and state["rows"] and time.time() - last > 60:
+        # asked afresh when the window opens (the user saw reports the author had closed still 'open' - the tab
+        # showed the last check, made only every few hours or on Check now)
+        frm.after(300, check)
     return frm, check
