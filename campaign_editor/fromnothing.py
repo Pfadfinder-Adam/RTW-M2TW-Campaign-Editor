@@ -836,6 +836,20 @@ def has_small(bp, culture):
                for p in list(bp.index.get(culture.lower(), {}).values())[:1])
 
 
+def _sample(bp, culture, which):
+    """A game picture of the same kind in this culture's folder (its colour depth is copied: Rome's built pictures
+    are 24 bit, the others 32), or None."""
+    for n, p in bp.index.get(culture.lower(), {}).items():
+        if not n.startswith("#") or not n.endswith(".tga") or (which == "constructed") != n.endswith("_constructed.tga"):
+            continue
+        if which == "small":
+            p = os.path.join(os.path.dirname(p), "construction", os.path.basename(p))
+            if not os.path.isfile(p):
+                continue
+        return p
+    return None
+
+
 def building_pictures(plan, chain, levels, builders, pictures=None):
     """Each level's pictures for every culture folder its builders read: in the town, when built and (Medieval II)
     the small one of the construction queue - the modder's (pictures {code name: {'pic', 'constructed'}}; the
@@ -844,12 +858,16 @@ def building_pictures(plan, chain, levels, builders, pictures=None):
     mod = plan.mod
     game = _game(mod)
     folders, bp = picture_folders(mod, builders)
+    # every culture's folder too: the game looks a level's pictures up for every culture (RomeTW.exe's building
+    # database, 2026-10-14) and shows its generic one where there is none - the construction and chain windows of a
+    # new building looked 'missing' to the user
+    folders += [c for c in sorted(bp.index) if c not in [x.lower() for x in folders]]
     drawn = 0
     for name, shown, *_ in levels:
         given = (pictures or {}).get(name) or {}
         for folder in folders:
             kinds = [("pic", "pic"), ("constructed", "constructed")]
-            if game == "medieval2" and has_small(bp, folder):
+            if has_small(bp, folder):                   # the construction queue's small one (Rome has them too)
                 kinds.append(("small", "pic"))
             for which, src_key in kinds:
                 size = picture_need(bp, folder, which, game)
@@ -862,7 +880,7 @@ def building_pictures(plan, chain, levels, builders, pictures=None):
                     continue
                 im = card_picture(size, shown or name)
                 if im is not None:
-                    plan.binary(path, image_tga(im))
+                    plan.binary(path, image_tga(im, like=_sample(bp, folder, which)))
                     drawn += 1
     return drawn
 

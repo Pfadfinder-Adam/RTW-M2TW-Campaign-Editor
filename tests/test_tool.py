@@ -13313,5 +13313,70 @@ class SetBuildingsTest(unittest.TestCase):
         whole = set_buildings(raw + ["}"], [("a", "b")], lambda x: x)
         self.assertEqual(whole[-1], "}")
 
+
+class CopiedBuildingPicturesTest(unittest.TestCase):
+    def test_pictures_named_through_descr_ui_buildings(self):
+        """Rome names a temple's level temple_of_battle_shrine and its pictures #roman_shrine... (descr_ui_buildings.txt
+        sends the one to the other): a copy found no picture under the long name and the game showed its generic one
+        in the construction window and the chain window (the user, 2026-10-14). The copy now takes them the game's
+        way - the town's, the built one and the construction queue's."""
+        from campaign_editor import editors as E
+        from campaign_editor.plan import Plan
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        d = os.path.join(root, "data")
+        write(os.path.join(d, "descr_sm_factions.txt"), SM)
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building temple_of_x\n{\n    levels temple_of_x_shrine\n    {\n"
+              "        temple_of_x_shrine requires factions { alpha, }\n        {\n        }\n    }\n}\n")
+        write(os.path.join(d, "descr_ui_buildings.txt"), "lookup_variants\n{\n\tgreek roman\n}\n"
+              "\ttemple_of_x_shrine\tshrine\n")
+        b = os.path.join(d, "ui", "roman", "buildings")
+        for rel in ("#roman_shrine.tga", "#roman_shrine_constructed.tga", "construction/#roman_shrine.tga"):
+            write(os.path.join(b, rel), rel)
+        mod = ModData(d)
+        plan = Plan(mod, "c", "c", {})
+        E.copy_building(plan, "temple_of_x", "temple_of_y", {"temple_of_x_shrine": "temple_of_y_shrine"})
+        plan.apply()
+        for rel in ("#roman_temple_of_y_shrine.tga", "#roman_temple_of_y_shrine_constructed.tga",
+                    "construction/#roman_temple_of_y_shrine.tga"):
+            self.assertTrue(os.path.isfile(os.path.join(b, rel)), rel)
+        with open(os.path.join(b, "#roman_temple_of_y_shrine_constructed.tga")) as fh:
+            self.assertEqual(fh.read(), "#roman_shrine_constructed.tga")
+        # a building moved to another mod packs them under the level's own name, and its chain's name text
+        from campaign_editor import packs as PK
+        write(os.path.join(d, "text", "export_buildings.txt"), "{temple_of_x_name}Temples of X\n", utf16=True)
+        man, files = PK.collect_buildings(ModData(d), ["temple_of_x"])
+        for rel in ("ui/roman/buildings/#roman_temple_of_x_shrine.tga",
+                    "ui/roman/buildings/#roman_temple_of_x_shrine_constructed.tga",
+                    "ui/roman/buildings/construction/#roman_temple_of_x_shrine.tga"):
+            self.assertIn(rel, files)
+        self.assertEqual(man["texts"].get("temple_of_x_name"), ["Temples of X"])
+
+    def test_a_new_building_draws_for_every_culture(self):
+        """A building from nothing gets its pictures in every culture's folder (the game shows its generic one where
+        there is none), the construction queue's small one too where the culture keeps them (Rome as well)."""
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("Pillow draws the plain pictures")
+        from campaign_editor import fromnothing as FN
+        from campaign_editor.plan import Plan
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        d = os.path.join(root, "data")
+        write(os.path.join(d, "descr_sm_factions.txt"), SM)
+        write(os.path.join(d, "export_descr_buildings.txt"), "")
+        for cult in ("roman", "barbarian"):
+            b = os.path.join(d, "ui", cult, "buildings")
+            for rel in ("#%s_hut.tga", "#%s_hut_constructed.tga", "construction/#%s_hut.tga"):
+                write(os.path.join(b, rel % cult), "x")
+        plan = Plan(ModData(d), "n", "n", {})
+        FN.building_pictures(plan, "camp", [("camp_tent", "Tent", "", "")], ["alpha"])
+        got = {os.path.relpath(p, d).replace(os.sep, "/") for p in plan.changed_files()}
+        for cult in ("roman", "barbarian"):
+            for rel in ("#%s_camp_tent.tga", "#%s_camp_tent_constructed.tga", "construction/#%s_camp_tent.tga"):
+                self.assertIn("ui/%s/buildings/%s" % (cult, rel % cult), got)
+
 if __name__ == "__main__":
     unittest.main()

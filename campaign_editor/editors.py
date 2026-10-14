@@ -588,17 +588,25 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
     cultures = [c for c, _ in mod.listing("ui") if mod.dirs("ui/%s/buildings" % c)]
     listing = {c: {n.lower(): p for n, p in mod.listing("ui/%s/buildings" % c)} for c in cultures}
     if cultures:
+        from .buildings import BuildingPictures
+        # the names the game looks the level's pictures up by: the level's own, then its descr_ui_buildings.txt
+        # name (Rome's temple_of_battle_shrine -> #roman_shrine.tga) - under the long name alone a copy found none and
+        # the game showed its generic picture in the construction and chain windows (the user, 2026-10-14)
+        bp_names = BuildingPictures(mod).names
+
         def card(old, tail, cult):
             """The level's picture for this culture: its own, else one of another culture's - in its folder first
             (Barbarian Invasion's nomad folder holds barbarian and hun pictures), then in the others' folders."""
-            own = listing[cult].get(("#%s_%s%s" % (cult, old, tail)).lower())
-            if own:
-                return own
-            for c2 in [cult] + [c for c in cultures if c != cult]:
-                for c3 in cultures:
-                    p = listing[c2].get(("#%s_%s%s" % (c3, old, tail)).lower())
-                    if p:
-                        return p
+            for name in bp_names(old):
+                own = listing[cult].get(("#%s_%s%s" % (cult, name, tail)).lower())
+                if own:
+                    return own
+            for name in bp_names(old):
+                for c2 in [cult] + [c for c in cultures if c != cult]:
+                    for c3 in cultures:
+                        p = listing[c2].get(("#%s_%s%s" % (c3, name, tail)).lower())
+                        if p:
+                            return p
             return None
         for cult in cultures:
             folder = os.path.join(mod.data, "ui", cult, "buildings")
@@ -608,8 +616,9 @@ def copy_building(plan, src_chain, new_chain, level_names, texts=None, factions=
                     src = card(old, tail, cult)
                     if src:
                         plan.copy(src, os.path.join(folder, "#%s_%s%s" % (cult, new, tail)))
-                got = smalls.get(("#%s_%s.tga" % (cult, old)).lower())
-                if got:                                     # Medieval II: the construction queue's small pictures
+                got = next((smalls[k] for k in (("#%s_%s.tga" % (cult, n)).lower() for n in bp_names(old))
+                            if k in smalls), None)
+                if got:                                     # the construction queue's small pictures (both games)
                     plan.copy(got, os.path.join(folder, os.path.basename(os.path.dirname(got)),
                                                 "#%s_%s.tga" % (cult, new)))
     if texts:

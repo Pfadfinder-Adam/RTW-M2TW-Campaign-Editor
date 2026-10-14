@@ -760,6 +760,8 @@ def collect_buildings(mod, chains):
             if s.startswith("{") and "}" in s:
                 keys.append(s[1:s.index("}")])
     cultures = [c for c, _ in mod.listing("ui") if mod.dirs("ui/%s/buildings" % c)]    # the mod's and the game's
+    from .buildings import BuildingPictures
+    names = BuildingPictures(mod).names
     for ch in chains:
         blk = blocks.get(ch)
         if blk is None:
@@ -775,7 +777,8 @@ def collect_buildings(mod, chains):
         man["buildings"].append({"chain": ch, "levels": levels, "lines": lines, "units": units})
         for k in keys:
             low = k.lower()
-            if any(low == lv.lower() or low.startswith(lv.lower() + "_") for lv in levels):
+            if low == ch.lower() + "_name" or any(low == lv.lower() or low.startswith(lv.lower() + "_")
+                                                  for lv in levels):
                 val = _text_entry(mod, "export_buildings.txt", k)
                 if val is not None:
                     man["texts"][k] = val
@@ -784,10 +787,14 @@ def collect_buildings(mod, chains):
                 pics = {n.lower(): (n, p) for n, p in mod.listing("ui/%s/buildings%s" % (cult, sub))}
                 for lv in levels:
                     for tail in (".tga", "_constructed.tga"):
-                        got = pics.get(("#%s_%s%s" % (cult, lv, tail)).lower())
+                        # the level's own picture, else the one descr_ui_buildings.txt names for it (Rome's
+                        # temple_of_battle_shrine -> #roman_shrine.tga) - packed under the level's own name, so the
+                        # mod it goes to needs no line of its own (the game showed its generic picture without)
+                        got = next((pics[k] for k in (("#%s_%s%s" % (cult, n, tail)).lower() for n in names(lv))
+                                    if k in pics), None)
                         if got:
                             with open(got[1], "rb") as fh:
-                                files["ui/%s/buildings%s/%s" % (cult, sub, got[0])] = fh.read()
+                                files["ui/%s/buildings%s/#%s_%s%s" % (cult, sub, cult, lv, tail)] = fh.read()
     return man, files
 
 
@@ -943,7 +950,10 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
         n = 0
         for key, value in manifest["texts"].items():
             new = key
-            for old, nl in sorted(level_names.items(), key=lambda kv: -len(kv[0])):
+            chain = next((c for c in chain_names if key.lower() == c.lower() + "_name"), None)
+            if chain is not None:                       # the chain's own name follows the chain's new name
+                new = chain_names[chain] + "_name"
+            for old, nl in sorted(level_names.items(), key=lambda kv: -len(kv[0])) if chain is None else ():
                 if key.lower() == old.lower() or key.lower().startswith(old.lower() + "_"):
                     new = nl + key[len(old):]
                     break

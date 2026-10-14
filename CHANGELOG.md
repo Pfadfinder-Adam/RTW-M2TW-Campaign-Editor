@@ -90,6 +90,9 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- New, copied and moved buildings show their own pictures in the construction window and the building chain window
+  (they showed the game's generic one): pictures named through descr_ui_buildings.txt (Rome's temples) are found
+  now, every culture gets them, and the construction queue's small picture is made in Rome too.
 - A copied building chain whose original has no chain name now gets one (the game showed 'Placeholder string').
 - New building from nothing: a kind the mod has none of can be picked (it starts from the usual numbers of all
   buildings, the effects are yours).
