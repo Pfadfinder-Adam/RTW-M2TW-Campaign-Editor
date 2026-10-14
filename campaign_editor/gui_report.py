@@ -119,7 +119,8 @@ def open_report(app, message="", kind="bug", tab=None):
                    command=lambda: messagebox.showinfo(APP, report.LOG_HOWTO, parent=w)).pack(side="left", padx=6)
     def kind_changed():
         lbl_prompt.configure(text=PROMPTS[v_kind.get()])
-    lbl_pics = ttk.Label(box, foreground="#666", text="No pictures.")
+    lbl_pics = ttk.Label(box, foreground="#666", text="No pictures.", wraplength=620,   # many names: more lines,
+                         justify="left")                                             # never a wider window
     lbl_pics.pack(anchor="w", pady=(4, 0))
 
     def add_pictures():

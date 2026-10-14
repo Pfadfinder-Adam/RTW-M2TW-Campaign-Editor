@@ -76,6 +76,7 @@
 - A building brought from another mod brings its build-queue icon too.
 - The Town window remembers its kept changes when opened again.
 - Making land out of sea with the Terrain brush no longer fails with "that is sea".
+- The report window no longer gets wider with every screenshot added.
 
 ## 0.34.0 - 2026-10-10
 
