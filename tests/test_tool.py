@@ -8434,6 +8434,65 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
 
+    def test_a_brought_building_keeps_its_look_on_the_battle_map(self):
+        # R-20261014-6E55CD: a church brought from Barbarian Invasion stood in town as the game's stand-in model -
+        # its town-plan place, battle building, items and models come along now: the plan's variant into the
+        # same-named slot (chain / level renamed with the building), the battle building and items into the
+        # editor's own include files, a taken item name with other lines renamed and followed, descr_items.db gone
+        from campaign_editor import packs, battlelook
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building temple\n{\n    levels shrine\n    {\n        shrine requires factions { alpha, }\n"
+              "        {\n        }\n    }\n}\n")
+        plan_head = "primary\n{\n\tother_hall\n%s}\n\nslots\n{\n\tslot slot_religious\n\t{\n%s\t}\n}\n"
+        variant = ("\t\tvariant\n\t\t{\n\t\t\tcultures any\n\t\t\tbuildings\n\t\t\t{\n"
+                   "\t\t\t\texact temple shrine\n\t\t\t}\n\t\t\tholy_hall,\t0,\t0,\t0,\t0\n\t\t}\n")
+        write(os.path.join(d, "descr_settlement_plan.txt"), plan_head % ("\tholy_hall\n", variant))
+        write(os.path.join(d, "descr_building_battle.txt"), "stat_cats\n{\n}\n\ninclude dbb_main.txt\n")
+        write(os.path.join(d, "descr_building_battle", "dbb_main.txt"),
+              "\tholy_hall\n\t{\n\t\tstat_cat medium_stone\n\t\tlevel\n\t\t{\n\t\t\tmin_health 1\n"
+              "\t\t\titem\t\tholy_item\n\t\t\tphysical_info\tnone\n\t\t}\n\t}\n")
+        write(os.path.join(d, "descr_items.txt"), "include di_main.txt\n")
+        write(os.path.join(d, "descr_items", "di_main.txt"),
+              "type\t\tholy_item\n\nlod\nmax_distance\t200\nmodel_rigid\tdata/models_building/holy.cas\n")
+        write(os.path.join(d, "models_building", "holy.cas"), "HOLY")
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        td = os.path.join(troot, "data")
+        write(os.path.join(td, "descr_settlement_plan.txt"), plan_head % ("", ""))
+        write(os.path.join(td, "descr_building_battle", "dbb_main.txt"), "\tother_hall\n\t{\n\t}\n")
+        write(os.path.join(td, "descr_items", "di_main.txt"),
+              "type\t\tholy_item\n\nlod\nmax_distance\t50\nmodel_rigid\tdata/models_building/theirs.cas\n")
+        write(os.path.join(td, "descr_items.db"), "CACHE")
+        os.remove(os.path.join(td, "models_building", "holy.cas"))
+        write(os.path.join(td, "export_descr_buildings.txt"), "")
+        before = tree_hash(troot)
+        man, files = packs.collect_buildings(ModData(self.root), ["temple"])
+        self.assertEqual(list(man["battle"]["buildings"]), ["holy_hall"])
+        self.assertIn("models_building/holy.cas", files)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_buildings(plan, man, files, ["alpha"], {"temple": "temple_2"}, {"shrine": "shrine_2"})
+        bdir = plan.apply()
+        sp = open(os.path.join(td, "descr_settlement_plan.txt")).read()
+        self.assertIn("exact temple_2 shrine_2", sp)
+        self.assertIn("holy_hall,", sp[sp.index("slot slot_religious"):])
+        self.assertIn("\tholy_hall\n", sp[:sp.index("slots")])                      # in primary too
+        dbb = open(os.path.join(td, "descr_building_battle", battlelook.OWN_DBB)).read()
+        self.assertIn("holy_item_2", dbb)                                           # follows the renamed item
+        self.assertIn("include %s" % battlelook.OWN_DBB, open(os.path.join(td, "descr_building_battle.txt")).read())
+        di = open(os.path.join(td, "descr_items", battlelook.OWN_DI)).read()
+        self.assertIn("holy_item_2", di)
+        self.assertIn("holy.cas", di)
+        self.assertIn("include %s" % battlelook.OWN_DI, open(os.path.join(td, "descr_items.txt")).read())
+        self.assertFalse(os.path.exists(os.path.join(td, "descr_items.db")))
+        self.assertEqual(open(os.path.join(td, "models_building", "holy.cas")).read(), "HOLY")
+        restore(ModData(troot), bdir)
+        after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
+        self.assertEqual(after, before)                              # Restore: byte for byte
+
     def test_bring_a_unit_with_the_building_this_mod_lacks(self):
         """Report R-20261013-C4DD62: 'what if the mod we bring the unit to has no such building?' - the chain that
         trains it comes along (levels, texts, pictures), its recruit line pointing at the unit brought now, no

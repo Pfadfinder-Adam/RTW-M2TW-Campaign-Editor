@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- Bring buildings from another mod (Rome, Barbarian Invasion, REX): the building now looks as it should in a town on
+  the battle map - its places in the town plans, its battle building and models come with it (it stood as the
+  game's stand-in model before).
 - The faction tab shows the leader's face the faction-select screen shows for EVERY faction, in all three games: a
   faction without a leader picture of its own shows its faction leader's portrait.
 - **Draw from the map**: the faction-select map made from the campaign map itself - relief and rivers, no signs,

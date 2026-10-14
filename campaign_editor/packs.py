@@ -1002,6 +1002,9 @@ def collect_buildings(mod, chains):
                         if got:
                             with open(got[1], "rb") as fh:
                                 files["ui/%s/buildings%s/#%s_%s%s" % (cult, sub, cult, lv, tail)] = fh.read()
+    if man["game"] == "rome":                          # its look on the battle map (town plan, battle building, items)
+        from . import battlelook
+        man["battle"] = battlelook.collect(mod, chains, files)
     return man, files
 
 
@@ -1195,5 +1198,10 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
             if rel.lower() not in put:
                 put.add(rel.lower())
                 _put(plan, rel, data)
+    # the look on the battle map: town-plan places, battle buildings, items and their models
+    if manifest.get("battle"):
+        from . import battlelook
+        battlelook.put(plan, manifest["battle"], chain_names, level_names)
+        _put_files(plan, {r: d for r, d in files.items() if not r.lower().startswith("ui/")})
     return plan
 

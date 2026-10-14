@@ -1485,7 +1485,9 @@ def s_features(c, mod):
 
 
 @step("Bring from another mod: a unit and a building chain brought from the game's own data (renamed, as both "
-      "are here already)", "the brought unit and building under their new names, owned by {new}")
+      "are here already; in Rome the building's town-plan places, battle building and items with it)",
+      "the brought unit and building under their new names, owned by {new}; in Rome: the building stands in its "
+      "own look in a town on the battle map, not the game's stand-in model")
 def s_bring(c, mod):
     from . import packs as P
     from . import editors as E
