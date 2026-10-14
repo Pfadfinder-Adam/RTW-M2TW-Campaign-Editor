@@ -27,23 +27,23 @@ Thank you to everyone who helped with money and kept the work going - directly, 
 ## Thank you for the reports
 
 Everyone who sent a report or an idea - from the editor or on Discord - each one made it better. By the names they
-signed with, the most reports and ideas first (the editor's and Discord's together; those sent without a name are
-not counted):
+signed with, the most reports and ideas first (the editor's and Discord's together; one sent without a name counts where its mod shows
+whose it is):
 
-- **Ruthron** - 12 reports
+- **Ruthron** - 18 reports
+- **Espartan** - 7 reports
 - **wholesome_queen** - 6 reports
-- **Espartan** - 4 reports
 - **Mekkermann** - 4 reports
 - **Melchon** - 4 reports
 - **moderman1** - 4 reports
+- **bodkinarrow** - 3 reports
 - **doliwaq** - 2 reports
 - **HVS87** - 2 reports
 - **John** - 2 reports
 - **Tommy Speed** - 2 reports
+- **Yuri** - 2 reports
 - **Bartek K** - 1 report
-- **bodkinarrow** - 1 report
 - **CrimsonScorpio** - 1 report
-- **Yuri** - 1 report
 
 ## How to get in
 
