@@ -1679,9 +1679,12 @@ building smith
         plan = edit(mod, "test", "alpha", {"moves": [{"name": "Aaron Alphid", "from": (1, 1), "to": (0, 0)}]})
         s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
         self.assertEqual(s.faction("alpha").characters[0].xy, (0, 0))
-        with self.assertRaises(ValueError):             # Grog's army holds Btown
-            edit(ModData(self.root), "test", "alpha",
-                 {"moves": [{"name": "Aaron Alphid", "from": (1, 1), "to": (2, 2)}]})
+        two = edit(ModData(self.root), "test", "alpha",      # Grog's army holds Btown: judged when every change
+                   {"moves": [{"name": "Aaron Alphid", "from": (1, 1), "to": (2, 2)}]})      # is in - Preview
+        self.assertTrue(any("two armies on one tile (2, 2)" in m for m in two.crash_problems()))  # says it, Apply
+        from campaign_editor.textio import WriteError                                             # refuses it
+        with self.assertRaises(WriteError):
+            two.apply()
 
     def test_armies_agents_fleets_placed_by_hand(self):
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
@@ -8012,6 +8015,33 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)
 
+    def test_town_onto_the_tile_its_port_leaves(self):
+        """Report R-20261012-79696C (HLR): 'town of Utica_R cannot go to 139, 190: another town or port stands there'
+        though that one was moved too - each place was checked only against the moves BEFORE it in the list. Now
+        against all of them: a town may take the tile its port leaves, whichever comes first."""
+        from campaign_editor import mapedit as ME
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        red, blue, black, white, sea = (255, 0, 0), (0, 0, 255), (0, 0, 0), (255, 255, 255), (41, 140, 233)
+        write_tga(os.path.join(camp, "map_regions.tga"), 5, 4, [[red, red, blue, blue, sea],
+                                                                 [red, black, black, blue, sea],
+                                                                 [red, red, blue, white, sea],
+                                                                 [red, red, blue, blue, sea]])
+        write_tga(os.path.join(camp, "map_heights.tga"), 11, 9,
+                  [[(0, 0, 250) if x >= 9 else (20, 20, 20) for x in range(11)] for y in range(9)])
+        mod = ModData(self.root)
+        region = next(r for r, v in mod.regions("test").items() if v["colour"] == blue)
+        self.assertEqual(tuple(ME.ports(mod, "test")[region]), (3, 2))
+        before = tree_hash(self.root)
+        plan = Plan(mod, "map", "map", {})                          # the town first, onto the port's old tile
+        ME.apply_places(plan, "test", [{"what": "city", "region": region, "to": (3, 2)},
+                                       {"what": "port", "region": region, "to": (3, 1)}])
+        restore(ModData(self.root), plan.apply())
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+        with self.assertRaises(ValueError):                         # both onto one tile: still refused
+            ME.apply_places(Plan(ModData(self.root), "map", "map", {}), "test",
+                            [{"what": "city", "region": region, "to": (3, 0)},
+                             {"what": "port", "region": region, "to": (3, 0)}])
+
     def test_a_region_without_a_port_gets_one(self):
         # a tester: the Map's legend offered towns but no port - a region by the sea without a port gets one
         from campaign_editor import mapedit as ME
@@ -8082,6 +8112,16 @@ building smith
         self.assertTrue(all(img.get(*t) == red for t in painted if t != spot))      # the painting is kept
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
+    def test_town_window_shows_the_owner_the_map_gave(self):
+        """Report R-20261012-05343F: Byzantium given on the Map, its Town window still said 'slave - Rebels' - the
+        window read the file; it shows the owner as the next Apply leaves the town."""
+        from campaign_editor.masstown import owner_now
+        self.assertEqual(owner_now("slave", "Propontis", {"Propontis": "greek_cities"}), "greek_cities")
+        self.assertEqual(owner_now("slave", "Propontis", {}), "slave")
+        self.assertEqual(owner_now("slave", "Propontis", {}, me="thrace", chosen=["Propontis"]), "thrace")
+        self.assertEqual(owner_now("thrace", "Propontis", {}, me="thrace", chosen=[]), "slave")   # given away
+        self.assertEqual(owner_now("thrace", "Propontis", {}, me="thrace", chosen=[], give="egypt"), "egypt")
 
     def test_map_deletes_a_character_of_any_faction(self):
         """The Map's right-click Delete: a character of any faction goes with his whole block (army too); the leader,
@@ -8174,11 +8214,35 @@ building smith
         with self.assertRaises(ValueError):                         # an army without units is refused
             map_changes(Plan(mod, "map", "map", {}), "test",
                         {"army_units": {"slave": [{"name": "Grog", "from": (2, 2), "units": []}]}})
-        with self.assertRaises(ValueError):                         # a tile he cannot stand on
-            map_changes(Plan(mod, "map", "map", {}), "test",
-                        {"moves": {"slave": [{"name": "Grog", "from": (2, 2), "to": (1, 1)}]}})
+        from campaign_editor import textio
+        two = Plan(mod, "map", "map", {})                           # two armies on one tile: said in Preview,
+        map_changes(two, "test", {"moves": {"slave": [{"name": "Grog", "from": (2, 2), "to": (1, 1)}]}})
+        self.assertIn("Grog", two.report().split("WARNINGS")[0])     # refused at Apply (judged on the end state)
+        self.assertIn("two armies on one tile", two.report())
+        with self.assertRaises(textio.WriteError):
+            two.apply()
+        self.assertEqual(tree_hash(self.root), before)
         restore(ModData(self.root), plan.apply())
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
+    def test_moves_judged_where_everyone_ends(self):
+        """Reports R-20261012-79696C / D50F20 (HLR): 'Antigonos cannot go to 251, 215: another army stands there'
+        though that army was moved away too - each move was checked against the others' OLD places, in the order
+        they came. Now only where everyone ends up counts: an army may take a tile another one leaves, of any
+        faction, in any order."""
+        from campaign_editor.edit import map_changes
+        mod = ModData(self.root)
+        strat = mod.campaign_file("test", "descr_strat.txt")
+        taken = set(mod.city_tiles("test").values()) | {(1, 1), (2, 2)}
+        to = mod.free_tile("test", "A_R", taken)
+        plan = Plan(mod, "map", "map", {})
+        map_changes(plan, "test", {"moves": {                       # the rebels first: Grog into Aaron's town,
+            "slave": [{"name": "Grog", "from": (2, 2), "to": (1, 1)}],          # Aaron out of it after
+            "alpha": [{"name": "Aaron Alphid", "from": (1, 1), "to": to}]}})
+        s = Strat(plan.files[strat])
+        self.assertEqual(next(c.xy for c in s.faction("slave").characters if c.name == "Grog"), (1, 1))
+        self.assertNotIn("two armies on one tile", plan.report())
+        self.assertEqual(plan.crash_problems(), [])
 
     def test_map_changes_for_any_faction(self):
         # a tester: what is put on the Map should not depend on the faction picked elsewhere - a town given to any

@@ -20,6 +20,19 @@ def known_buildings(mod):
     return {b.name: b for b in read_buildings(mod.load(edb))} if edb else {}
 
 
+def owner_now(owner, region, given, me=None, chosen=None, give=None):
+    """The town's owner as the next Apply leaves it: given = the Map's 'Give this town to' {region: faction}; me /
+    chosen / give = the faction being edited, its towns list and who gets the towns it lets go (else the rebels)."""
+    if region in (given or {}):
+        return given[region]
+    if me and chosen is not None:
+        if region in chosen:
+            return me
+        if owner == me:
+            return give or "slave"
+    return owner
+
+
 def towns(mod, campaign, only=None):
     """[{'region', 'name', 'owner', 'level', 'kind' ('city' | 'castle', None in a game without castles),
     'buildings' [(chain, level)], 'units' (in the army on the town), 'upkeep', 'port', 'unit_names', 'population',

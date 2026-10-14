@@ -74,6 +74,14 @@
   who died before the start, so his wife and children keep their place. Only the leader and the heir stay refused
   (make another one first) - on the Map, in Units & armies and in the Map editor alike.
 
+- **The Town window shows the owner the Map gave** (it still said "slave - Rebels" for a town given on the Map):
+  the owner as the next Apply leaves the town - given on the Map, or taken into / let go from the edited
+  faction's towns.
+- **Many moves at once are judged where everything ends up** (an army refused "another army stands there" though
+  that army was moved away too; a town refused "another town or port stands there" though its port moved): an
+  army may take the tile another one leaves, a town the tile its port leaves - in any order, of any faction.
+  Two armies left on one tile are said in **Preview** already ("Apply will refuse this"), not only at Apply.
+
 ## 0.34.0 - 2026-10-10
 
 ### Added

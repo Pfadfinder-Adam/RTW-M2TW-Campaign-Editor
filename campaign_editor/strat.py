@@ -297,6 +297,18 @@ def empty_armies(s):
     return out
 
 
+def shared_army_tiles(s):
+    """{(x, y): ['name (faction)', ...]} for tiles more than one army or fleet stands on - the game takes one army
+    a tile (a town holds one)."""
+    from .textio import tokens
+    at = {}
+    for fb in s.factions:
+        for c in fb.characters:
+            if c.xy and any(tokens(l)[:1] == ["army"] for l in s.lines[c.start:c.end]):
+                at.setdefault(tuple(c.xy), []).append("%s (%s)" % (c.name or "a character", fb.name))
+    return {xy: names for xy, names in at.items() if len(names) > 1}
+
+
 def faction_names(s, faction):
     """Every name a faction's block gives its characters and family records, as written
     (first name and surname) - the game wants each once per faction."""

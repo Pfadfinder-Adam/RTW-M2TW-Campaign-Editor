@@ -650,19 +650,17 @@ def _moves(plan, f, campaign, faction=None, moves=None):
     fb = s.faction(faction)
     if fb is None:
         raise ValueError("%s has no faction block in descr_strat.txt" % faction)
-    armies_at = {c.xy for x in s.factions for c in x.characters if c.xy and _has_army(s.lines[c.start:c.end])}
+    # two armies on one tile are judged when every change is in (Plan.crash_problems): an army may take a tile
+    # another one leaves later in the list, or of another faction (a report: 'another army stands there')
     for m in plan.opts["moves"] if moves is None else moves:
         src, dst = tuple(m["from"]), tuple(m["to"])
         c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
         if c is None:
             raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], faction))
         army = _has_army(s.lines[c.start:c.end])
-        why = plan.mod.tile_problem(campaign, dst, c.kind, army, armies_at - {src})
+        why = plan.mod.tile_problem(campaign, dst, c.kind, army)
         if why:
             raise ValueError("%s cannot go to %d, %d: %s" % (c.name, dst[0], dst[1], why))
-        if army:
-            armies_at.discard(src)
-            armies_at.add(dst)
         f.set(c.start, RE_XY.sub("x %d, y %d" % dst, f.text(c.start), 1))
         plan.note(f, "%s moved from %d, %d to %d, %d" % (c.name, src[0], src[1], dst[0], dst[1]))
 

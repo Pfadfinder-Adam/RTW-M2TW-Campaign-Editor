@@ -311,15 +311,17 @@ def apply_places(plan, campaign, places, painted=None):
     places = [p for p in places if p.get("to") is not None]
     if gone:
         _remove_ports(plan, campaign, gone)
+    # each one judged against ALL the others (the tiles they free and take), not only those before it in the list -
+    # a town onto the tile its port leaves came first and was refused (a report)
+    every = {(p["what"], p["region"]): tuple(p["to"]) for p in places}
     for p in places:
         key = (p["what"], p["region"])
-        why = place_problem(mod, campaign, p["what"], p["region"], tuple(p["to"]),
-                            {k: v for k, v in moved.items() if k != key}, painted)
+        others = {k: v for k, v in every.items() if k != key}
+        why = place_problem(mod, campaign, p["what"], p["region"], tuple(p["to"]), others, painted)
         if why:
             raise ValueError("%s of %s cannot go to %d, %d: %s" % (
                 "town" if p["what"] == "city" else "port", p["region"], p["to"][0], p["to"][1], why))
-        for serious, msg in _move_ring(mod, campaign, p["what"], p["region"], tuple(p["to"]),
-                                       {k: v for k, v in moved.items() if k != key}, painted):
+        for serious, msg in _move_ring(mod, campaign, p["what"], p["region"], tuple(p["to"]), others, painted):
             if not serious:
                 plan.warn(None, msg)
         moved[key] = tuple(p["to"])

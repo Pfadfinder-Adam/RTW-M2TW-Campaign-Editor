@@ -117,6 +117,13 @@ class TownWindow(tk.Toplevel):
         if town is None:
             self._no_town(region)
             return
+        app = self.app
+        me = app.field_faction() if getattr(app, "editing", lambda: False)() and not app.map_only() else None
+        now = MT.owner_now(town["owner"], region, getattr(app, "map_owners", {}), me,
+                           getattr(app, "chosen", None) if me else None,
+                           app.v_give.get() if me and hasattr(app, "v_give") else None)
+        if now != town["owner"] and now in dict(self.mod.factions()):     # given on the Map / the towns list: shown so
+            town = dict(town, owner=now)                                   # (a report: it still said slave)
         self.town = town
         if not town.get("army") and town.get("near"):        # said in the log too: a report shows it
             from . import log
@@ -321,7 +328,7 @@ class TownWindow(tk.Toplevel):
             opts["population"] = {r: int(pop)}
             opts["level_follows"] = bool(self.v_follow.get())
         if self.v_owner.get() and self.v_owner.get() != t["owner"]:
-            opts["owners"] = {r: self.v_owner.get()}
+            opts["owners"] = {r: self.v_owner.get()}      # (an owner the Map gave already is the Map's to write)
         return opts
 
     def building_changes(self):

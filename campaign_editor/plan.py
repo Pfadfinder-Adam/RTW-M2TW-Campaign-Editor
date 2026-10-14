@@ -218,6 +218,9 @@ class Plan:
     def report(self):
         self.stale_bins()
         lines = []
+        bad = self.crash_problems()
+        if bad:                                     # said in Preview, not only when Apply is pressed (a report)
+            lines += ["APPLY WILL REFUSE THIS - the game could not read it:"] + ["    " + m for m in bad] + [""]
         by = {}
         for rel, msg in self.notes:
             by.setdefault(rel, []).append(msg)
@@ -246,20 +249,36 @@ class Plan:
                 "%s" % (len(ro), ", ".join(ro[:8]) + (" ..." if len(ro) > 8 else "")))
 
     # ---- disk ----
-    def _no_empty_army(self):
-        """An army with no unit stops the game reading descr_strat - every faction after it is lost (a report). One
-        this write would make is refused before anything is written; one the mod has already stays (its own)."""
-        from .strat import Strat, empty_armies
+    def crash_problems(self):
+        """What this write would make that the game cannot read, judged on the files as they will be written (so the
+        order of the changes does not matter): an army with no unit (the game stops reading the campaign there - a
+        report: most factions vanished), two armies on one tile. One the mod has already is its own and stays."""
+        from .strat import Strat, empty_armies, shared_army_tiles
+        out = []
+        changed = self.changed_files()
         for path, f in self.files.items():
-            if os.path.basename(path).lower() != "descr_strat.txt" or path not in self.changed_files():
+            if os.path.basename(path).lower() != "descr_strat.txt" or path not in changed:
                 continue
-            had = set(empty_armies(Strat(TextFile.load(path)))) if os.path.exists(path) else set()
+            old = Strat(TextFile.load(path)) if os.path.exists(path) else None
+            had = set(empty_armies(old)) if old else set()
             new = [a for a in empty_armies(Strat(f)) if a not in had]
             if new:
-                names = ", ".join(new[:8]) + (" and %d more" % (len(new) - 8) if len(new) > 8 else "")
-                raise WriteError("%s\n\nAn army needs at least one unit: the game stops reading the campaign there "
-                                 "('Must add at least one unit to an army') and every faction after it is lost. "
-                                 "Give it a unit or take it off the map.\n\nNothing was changed." % names)
+                out.append("%s: an army needs at least one unit - the game stops reading the campaign there ('Must "
+                           "add at least one unit to an army') and every faction after it is lost; give it a unit or "
+                           "take it off the map" % (", ".join(new[:8]) + (" and %d more" % (len(new) - 8)
+                                                                            if len(new) > 8 else "")))
+            was = shared_army_tiles(old) if old else {}
+            for xy, names in sorted(shared_army_tiles(Strat(f)).items()):
+                if set(names) - set(was.get(xy, [])):
+                    out.append("%s: two armies on one tile (%d, %d) - the game takes one army a tile (a town holds "
+                               "one); move one of them" % (" and ".join(names), xy[0], xy[1]))
+        return out
+
+    def _no_empty_army(self):
+        """Refused before anything is written: what crash_problems names (Preview has said it already)."""
+        bad = self.crash_problems()
+        if bad:
+            raise WriteError("\n".join(bad) + "\n\nNothing was changed.")
 
     def apply(self):
         from .limits import keep_up
