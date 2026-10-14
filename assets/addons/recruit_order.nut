@@ -1,0 +1,222 @@
+// ============================================================================
+// Recruitment Order - the recruitment panel in the order you want. For any mod
+// on REX (Rome: Total War) or M2EX (Medieval II: Total War) - both engines run
+// this same script.
+//
+// Install: put this file in   <the game's folder>\script\modules\
+// The engine's own scripts (script\main.nut) require() every .nut in that
+// folder once the campaign map is up, whatever mod is running.
+//
+// Why a script: the game sorts the recruitment panel ITSELF, by the 6th number
+// of each unit's stat_cost line (the custom-battle price) - smaller first;
+// ships after the land units, agents last. The order of the recruit lines in
+// export_descr_buildings.txt does not count. The engines let a script change
+// that number while the game runs (UnitType.trueCost), so during YOUR turn
+// this script gives every unit type a small number in the order below, and
+// puts the real numbers back before every battle and at the end of your turn -
+// the computer's factions, battles and autoresolve keep the real values.
+// Nothing is written into the mod's files or the saved game: take the file
+// out and everything is as before.
+//
+// The order: by kind - infantry, missiles (archers, slingers, skirmishers),
+// animal handlers, cavalry, siege, ships, the rest - and inside each kind by
+// the campaign price (stat_cost's 2nd number): the dearest first (the top left
+// corner gets the strongest) or the cheapest first.
+//
+// Console helpers:
+//   sq ::recruit_order_list()   the order the panel follows now
+//   sq ::recruit_order_off()    the real numbers back (until the next turn)
+// Log lines start with "[ORDER]".
+// ============================================================================
+
+local PREFIX = "[ORDER] "
+function ro_log(message) {
+    println(PREFIX + message)
+}
+
+local RO_ENABLED = true
+local RO_ORDER = "dearest"           // "dearest" or "cheapest" first inside each kind
+
+// ---- the order ----
+local RO_KINDS = ["infantry", "missiles", "handlers", "cavalry", "siege", "ships", "non-combatants", "other"]
+
+local ro_real = {}                   // type index -> its real trueCost (as the file has it)
+local ro_on = false                  // the ranks are in place now
+
+function ro_enum(table, name, fallback) {
+    try {
+        return ::Enum[table][name]
+    } catch (err) {
+    }
+    return fallback
+}
+
+function ro_kind(t) {
+    local cat = -1
+    local cls = -1
+    try {
+        cat = t.category
+        cls = t.unitClass
+    } catch (err) {
+        return "other"
+    }
+    if (cat == ro_enum("UnitCategory", "infantry", 0)) {
+        if (cls == ro_enum("UnitClass", "missile", 4) || cls == ro_enum("UnitClass", "skirmish", 2)) {
+            return "missiles"
+        }
+        return "infantry"
+    }
+    if (cat == ro_enum("UnitCategory", "handler", 5)) {
+        return "handlers"
+    }
+    if (cat == ro_enum("UnitCategory", "cavalry", 1)) {
+        return "cavalry"
+    }
+    if (cat == ro_enum("UnitCategory", "siege", 2)) {
+        return "siege"
+    }
+    if (cat == ro_enum("UnitCategory", "ship", 4)) {
+        return "ships"
+    }
+    if (cat == ro_enum("UnitCategory", "nonCombatant", 3)) {
+        return "non-combatants"
+    }
+    return "other"
+}
+
+function ro_kind_index(kind) {
+    foreach (i, k in RO_KINDS) {
+        if (k == kind) {
+            return i
+        }
+    }
+    return RO_KINDS.len()
+}
+
+// [[kind index, price, name, type], ...] of every unit type, in the panel's order
+function ro_sorted() {
+    local all = []
+    local n = 0
+    try {
+        n = ::units.count()
+    } catch (err) {
+        ro_log("the unit types cannot be read: " + err)
+        return all
+    }
+    for (local i = 0; i < n; i++) {
+        local t = null
+        try {
+            t = ::units.at(i)
+        } catch (err) {
+        }
+        if (t == null) {
+            continue
+        }
+        local price = 0
+        local name = ""
+        try {
+            price = t.recruitCost
+            name = t.name
+        } catch (err) {
+        }
+        all.append([ro_kind_index(ro_kind(t)), price, name, t, i])
+    }
+    local dearest = RO_ORDER != "cheapest"
+    all.sort(function(a, b) {
+        if (a[0] != b[0]) {
+            return a[0] <=> b[0]
+        }
+        if (a[1] != b[1]) {
+            return dearest ? b[1] <=> a[1] : a[1] <=> b[1]
+        }
+        return a[2] <=> b[2]
+    })
+    return all
+}
+
+// every unit type gets its place (1, 2, 3...) as the number the panel sorts by
+function ro_apply() {
+    if (!RO_ENABLED || ro_on) {
+        return
+    }
+    local rank = 1
+    local done = 0
+    foreach (u in ro_sorted()) {
+        try {
+            if (!(u[4] in ro_real)) {
+                ro_real[u[4]] <- u[3].trueCost
+            }
+            u[3].trueCost = rank
+            done++
+        } catch (err) {
+            ro_log("unit " + u[2] + ": " + err)
+        }
+        rank++
+    }
+    ro_on = true
+    ro_log("the recruitment panel follows the order (" + done + " unit types, " + RO_ORDER + " first)")
+}
+
+// the real numbers back - battles, autoresolve and the computer's turns use them
+function ro_restore() {
+    if (!ro_on) {
+        return
+    }
+    foreach (i, v in ro_real) {
+        try {
+            local t = ::units.at(i)
+            if (t != null) {
+                t.trueCost = v
+            }
+        } catch (err) {
+        }
+    }
+    ro_on = false
+}
+
+function ro_is_player(e) {
+    try {
+        local v = e.faction.isPlayerControlled
+        return v == true || v == 1
+    } catch (err) {
+    }
+    return false
+}
+
+function ro_list() {
+    local out = []
+    foreach (u in ro_sorted()) {
+        out.append(RO_KINDS[u[0] < RO_KINDS.len() ? u[0] : RO_KINDS.len() - 1] + " " + u[2] + " (" + u[1] + ")")
+    }
+    foreach (line in out) {
+        ro_log(line)
+    }
+    return out.len()
+}
+getroottable().recruit_order_list <- ro_list
+getroottable().recruit_order_off <- ro_restore
+
+// ---- wiring ----
+function ro_listen(name, handler) {
+    try {
+        ::events.on(name, handler)
+    } catch (err) {
+        ro_log("events.on(" + name + ") failed: " + err)
+    }
+}
+
+ro_listen("FactionTurnStart", function(e) {
+    if (ro_is_player(e)) {
+        ro_apply()
+    } else {
+        ro_restore()
+    }
+})
+ro_listen("FactionTurnEnd", function(...) { ro_restore() })
+ro_listen("RecruitmentPanelOpen", function(...) { ro_apply() })   // also after a battle or a loaded save
+ro_listen("PreBattle", function(...) { ro_restore() })
+ro_listen("unloadCampaign", function(...) {
+    ro_restore()
+    ro_real = {}
+})
+ro_log("Recruitment Order module loaded")
