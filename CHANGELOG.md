@@ -83,6 +83,9 @@
   Two armies left on one tile are said in **Preview** already ("Apply will refuse this"), not only at Apply - and
   only where the game would stop: with REX or M2EX another faction's army on a taken tile is placed beside it by
   the engine (said, not refused); two of one faction, or any two on the original games, stay refused.
+- **A mod whose data folder holds only some files loads again** (after a Restore took the copied files away only
+  unit files were left and the mod stopped loading: "no descr_sm_factions.txt in ..."): a mod's data folder inside
+  the game folder is a mod whatever it holds - the rest is read from the game's data, as the game does.
 - **A town's changes kept for Apply come back when the Town window opens again** (it showed the old garrison).
 - **A wasteland on land the Terrain brush makes out of sea is written** (it stopped: "new slaves at ...: that is
   sea" - its slaves resource was checked against the old map).

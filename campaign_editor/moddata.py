@@ -183,6 +183,10 @@ def thin_mod(path):
     data = next((c for c in (os.path.join(path, "data"), os.path.join(path, "Data"), path)
                  if os.path.isfile(os.path.join(c, "descr_sm_factions.txt")) or os.path.isdir(os.path.join(c, "text"))
                  or os.path.isdir(os.path.join(c, "world"))), None)
+    if not data:                    # a mod's data folder holding none of those (only units, after a Restore - a
+        data = next((c for c in (os.path.join(path, "data"), os.path.join(path, "Data"))      # report) is a mod too
+                     if os.path.isdir(c)), path if os.path.basename(path).lower() == "data" and os.path.isdir(path)
+                    else None)
     if not data:
         return None
     from .newmod import game_of, is_game

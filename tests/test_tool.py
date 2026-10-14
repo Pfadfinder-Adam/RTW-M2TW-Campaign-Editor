@@ -3658,6 +3658,25 @@ building smith
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
         self.assertEqual(after, before)
 
+    def test_a_mod_left_with_only_units_still_loads(self):
+        """Report R-20261013-6CF161: after a Restore took the copied files away, RTW_New's data held only unit files
+        (no descr_sm_factions.txt, no text, no world) and the mod no longer loaded: 'no descr_sm_factions.txt in
+        ...'. A data folder of a mod inside a game folder is a mod whatever it holds - the game reads the rest from
+        its own data, and so does the editor."""
+        game = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, game)
+        write(os.path.join(game, "RomeTW.exe"), "exe")
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(game, "data"))
+        os.makedirs(os.path.join(game, "RTW_New", "data", "unit_models"))
+        for path in (os.path.join(game, "RTW_New"), os.path.join(game, "RTW_New", "data")):
+            mod = ModData(path)
+            self.assertEqual(mod.data, os.path.join(game, "RTW_New", "data"))
+            self.assertEqual(mod.under, os.path.join(game, "data"))
+            self.assertTrue(mod.factions())
+        os.makedirs(os.path.join(game, "Empty"))                    # a folder with no data folder: still no mod
+        with self.assertRaises(FileNotFoundError):
+            ModData(os.path.join(game, "Empty"))
+
     def test_a_mod_that_holds_only_its_changes(self):
         """A mod inside a game folder that holds only the files it changes (Medieval II mods/<x>, REX -mod:<x>) loads:
         every file it lacks is read from the game's data, as the game does; a write goes into the mod (a copy of the
