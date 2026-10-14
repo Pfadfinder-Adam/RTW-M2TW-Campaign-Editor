@@ -81,6 +81,7 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- Ko-fi and GitHub Sponsors are in one coloured drop-down at the bottom, **Support me on...**, like Tools.
 - A town given to a faction that stands empty (the rebels' garrison leaves with them) gets a garrison by itself:
   3 to 6 of its new owner's units, their upkeep together at most 750. Many towns at once draws 3 to 6, upkeep 750
   at first, too.

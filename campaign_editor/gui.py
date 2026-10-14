@@ -183,8 +183,8 @@ THE GAMES
 
 SUPPORT
   The tool is free. If it helps you, a coffee keeps new features coming:
-  https://ko-fi.com/pfadfinder  (the Support me on Ko-fi button)
-  https://github.com/sponsors/MasterOogwayHomebrew  (the Sponsor button)
+  https://ko-fi.com/pfadfinder  (Support me on... > Ko-fi)
+  https://github.com/sponsors/MasterOogwayHomebrew  (Support me on... > GitHub Sponsors)
 """
 
 _showerror = messagebox.showerror
@@ -929,13 +929,21 @@ class App(tk.Tk):
         self.b_create.pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Button(bar, text="Undo", command=self.undo).pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Button(bar, text="Redo", command=self.redo).pack(side="left", padx=(0, theme.BUTTON_GAP))
-        # the right side, packed from the right edge: Ko-fi last on the screen; each link in its own colour (Ko-fi's
-        # coral, Discord's blue, YouTube's red, GitHub's grey - white words in either look), a button like the others
-        links = []
+        # the right side, packed from the right edge: the money places in ONE drop-down like Tools (the user,
+        # 2026-10-14, report #262: 'Support me on...' over the places, each in its own colour), then each link in its
+        # own colour (Discord's blue, YouTube's red, GitHub's grey - white words in either look)
+        support = ttk.Menubutton(bar, text="\u2665 Support me on...", style="Support.TMenubutton", cursor="hand2")
+        smenu = tk.Menu(support, tearoff=False)
+        for label, (colour, deep), command in (
+                ("\u2615 Ko-fi", theme.COLOURED["Kofi.TButton"], self.support),
+                ("\u2665 GitHub Sponsors", theme.COLOURED["Sponsor.TButton"], lambda: self.open_link(SPONSORS))):
+            smenu.add_command(label=label, command=command, background=colour, foreground="#ffffff",
+                              activebackground=deep, activeforeground="#ffffff")
+        support["menu"] = smenu
+        support.pack(side="right", padx=(theme.BUTTON_GAP, 0))
+        links = [(support, "The places where you can support the work on the editor: Ko-fi (donations), GitHub "
+                           "Sponsors (monthly or one-time).")]
         for text, style, url, say in (
-                ("\u2615 Support me on Ko-fi", "Kofi.TButton", KOFI, "Donations keep the work on the editor going."),
-                ("\u2665 Sponsor", "Sponsor.TButton", SPONSORS, "GitHub Sponsors: a monthly or a one-time support on "
-                                                                "GitHub itself."),
                 ("YouTube", "YouTube.TButton", YOUTUBE, "The editor's videos: what it does and how."),
                 ("Discord", "Discord.TButton", DISCORD, "Our Discord server: questions, help, ideas and news."),
                 ("GitHub", "GitHub.TButton", None, "The editor's page: downloads, the changes of every version, "
