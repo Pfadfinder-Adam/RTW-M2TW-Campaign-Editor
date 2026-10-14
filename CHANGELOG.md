@@ -117,6 +117,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Bring units: chariots brought for another faction rode a chariot with a banner of another faction (Scotti
+  chariots for the Gauls showed the Britons' blue stag) - the chariot now wears the look it had in its own mod.
 - Bring units: a unit firing a projectile the mod has not (crossbowmen from Barbarian Invasion into Rome) stopped
   the game at start - its projectile now comes along with it.
 - Bring units: with a Faction picked, the unit's picture shows that faction's card, not the first owner's.

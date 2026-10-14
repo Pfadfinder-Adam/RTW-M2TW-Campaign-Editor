@@ -254,7 +254,44 @@ class _Gather:
         if kind == "engine":                               # what the engine fires
             for p in _weapon_projectiles(lines):
                 self.add_dep("projectile", p)
+        if kind == "mount":                                # a chariot's horses and its body's own textures
+            for v in _values(lines, "horse_type"):
+                self.add_dep("mount", v[0])
+            self.add_skins(lines)
         return in_db or name
+
+    def add_skins(self, lines):
+        """A chariot's body (descr_mount 'lod' .cas) names its texture itself ('textures\\##chariot_low_poly.tga')
+        and the game takes <name>_<faction> for a faction that has one (Rome's ##chariot_low_poly_slave), else the
+        plain file: every such file of the source comes along, manifest['skins'] {stem: {faction or '': rel}} -
+        put as <name>_<owner> (_put_skins), never over the target's own (a tester, R-20261014-6AD7ED: brought
+        Scotti chariots rode the Britons' blue stag chariot)."""
+        skins = self.manifest.setdefault("skins", {})
+        for v in _values(lines, "lod"):
+            got = _on_disk(self.mod, "models_unit/" + v[0].replace("\\", "/"))
+            if not got:
+                continue
+            with open(got[1], "rb") as fh:
+                data = fh.read()
+            folder = got[0].rsplit("/", 1)[0]
+            for ref in sorted(set(re.findall(rb"textures[\\/][^\x00\\/]+?\.tga", data, re.I))):
+                stem = folder + "/textures/" + ref.decode("latin-1")[9:-4]
+                if stem in skins:
+                    continue
+                skins[stem] = {}
+                head, base = stem.rsplit("/", 1)
+                pat = re.compile(r"^%s(?:_([a-z0-9_]+))?\.tga(?:\.dds)?$" % re.escape(base.lower()))
+                for root in (self.mod.roots() if hasattr(self.mod, "roots") else [self.mod.data]):
+                    from .moddata import ci_path
+                    folder_path = ci_path(root, head)
+                    if not folder_path or not os.path.isdir(folder_path):
+                        continue
+                    for fn in sorted(os.listdir(folder_path)):
+                        m = pat.match(fn.lower())
+                        if m and (m.group(1) or "") not in skins[stem]:
+                            rel = head + "/" + fn
+                            skins[stem][m.group(1) or ""] = rel
+                            self.add_ref(rel)
 
     def done(self):
         self.manifest["files"] = sorted(self.files)
@@ -497,7 +534,8 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
     # files: models, textures, sprites as they are; cards and info pictures for each owner faction
     factions = [o for o in owners if o in {n for n, _ in mod.factions()}]
     dict_of = {u["dictionary"]: names[u["type"]][1] for u in manifest["units"] if u.get("dictionary")}
-    _put_files(plan, files)
+    _put_files(plan, files, manifest)
+    _put_skins(plan, manifest, files, owners)
     for old, new in dict_of.items():
         for sub, pattern in (("units", "#%s.tga"), ("unit_info", "%s_info.tga")):
             src = [(rel, data) for rel, data in files.items()
@@ -548,10 +586,13 @@ def unclash_files(mod, manifest, files):
     adds them under a free name. -> (files, {old rel: new rel}); manifest changed in place."""
     moved = {}
     taken = {r.lower() for r in files}
+    skin_files = _skin_files(manifest)
     for rel in sorted(files):
         parts = rel.split("/")
         if len(parts) == 4 and parts[0].lower() == "ui" and parts[1].lower() in ("units", "unit_info"):
             continue                                       # cards: named after the (new) dictionary anyway
+        if rel in skin_files:
+            continue                                       # a .cas names it: it goes in as <name>_<owner>
         have = _target_bytes(mod, rel)
         if have is not None and have != files[rel]:
             new = _clash_name(mod, rel, taken)
@@ -649,13 +690,51 @@ def _put_blocks(plan, manifest, owners):
     return renamed
 
 
-def _put_files(plan, files):
-    """The pack's files at their paths (cards and info pictures are per owner - the unit import places them)."""
+def _put_files(plan, files, manifest=None):
+    """The pack's files at their paths (cards and info pictures are per owner - the unit import places them; a
+    chariot body's textures per owner too - _put_skins)."""
+    skin_files = _skin_files(manifest or {})
     for rel, data in sorted(files.items()):
         parts = rel.split("/")
         if len(parts) == 4 and parts[0].lower() == "ui" and parts[1].lower() in ("units", "unit_info"):
             continue
+        if rel in skin_files:
+            continue
         _put(plan, rel, data)
+
+
+def _skin_files(manifest):
+    return {rel for have in (manifest.get("skins") or {}).values() for rel in have.values()}
+
+
+def _put_skins(plan, manifest, files, owners):
+    """Every faction the units go to wears the source's chariot body (add_skins): <name>_<faction> written with
+    the look faction's file of the source (look_order, else its plain one) when the target would show another
+    one; the target's own <name>_<faction> is kept, its plain file never touched."""
+    mod = plan.mod
+    facs = [n for n, _ in mod.factions()]
+    want = [f for f in facs if f in owners or "all" in owners or (mod.culture(f) and mod.culture(f) in owners)]
+    for stem, have in sorted((manifest.get("skins") or {}).items()):
+        order = look_order(manifest)                      # the owners' own, else the plain one every faction wears
+        own = [f for f in order if f not in ("merc", "slave") or f == manifest.get("look")]
+        src_f = _first_of(own, have, "" if "" in have else _first_of(order, have, ""))
+        if src_f not in have or have[src_f] not in files:
+            continue
+        data = files[have[src_f]]
+        ext = have[src_f][len(stem) + (len(src_f) + 1 if src_f else 0):]
+        for f in want:
+            own = next((b for b in (_target_bytes(mod, "%s_%s%s" % (stem, f, e)) for e in (".tga", ".tga.dds"))
+                        if b is not None), None)
+            if own is not None:
+                if own != data:
+                    plan.note(None, "%s_%s: %s's own chariot look is kept" % (stem, f, f))
+                continue
+            plain = next((b for b in (_target_bytes(mod, stem + e) for e in (".tga", ".tga.dds")) if b is not None),
+                         None)
+            if plain == data:
+                continue
+            _put(plan, "%s_%s%s" % (stem, f, ext), data)
+            plan.note(None, "%s_%s%s: %s's chariots on this body now wear the brought look" % (stem, f, ext, f))
 
 
 def _say_missing(plan, manifest):

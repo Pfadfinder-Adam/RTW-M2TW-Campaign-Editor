@@ -5691,6 +5691,56 @@ building smith
         mount = open(os.path.join(troot, "data", "descr_mount.txt")).read()
         self.assertIn("horse_model_2", mount)                        # its mount follows its model
 
+    def test_unit_pack_chariot_wears_its_own_body(self):
+        # R-20261014-6AD7ED (#250): Scotti chariots brought from Barbarian Invasion into Rome for the Gauls rode a
+        # chariot with the Britons' blue stag banner. The chariot's body (descr_mount 'lod' .cas) names its texture
+        # itself ('textures\\##chariot_low_poly.tga') and the game takes <name>_<faction> when there is one (Rome's
+        # ##chariot_low_poly_slave), else the plain file - the target's plain one is another faction's look. The
+        # source's look comes in as <name>_<owner>; the target's own files stay as they are
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "mount\t\tbarbarian heavy chariot\nownership\talpha"))
+        write(os.path.join(d, "descr_mount.txt"),
+              "type\t\tlight horse\nclass\t\thorse\n\n"
+              "type\t\tbarbarian heavy chariot\nclass\t\tchariot\nhorse_type\t\tlight horse\nlods\t\t1\n"
+              "lod\t\tmount_chariot_high.cas,\t50\n")
+        mu = os.path.join(d, "models_unit")
+        os.makedirs(mu, exist_ok=True)
+        with open(os.path.join(mu, "mount_chariot_high.cas"), "wb") as fh:
+            fh.write(b"CAS\x00\x10textures\\##chariot.tga\x00more")
+        write(os.path.join(mu, "textures", "##chariot.tga.dds"), "GREEN TRISKEL")
+        write(os.path.join(mu, "textures", "##chariot_slave.tga.dds"), "GREY KNOT")
+        pack = os.path.join(self.root, "chariot.zip")
+        man = packs.export_pack(ModData(self.root), ["alpha general"], pack)
+        self.assertIn("light horse", man["blocks"]["mount"])             # the chariot's horses come along
+        self.assertEqual(man["skins"]["models_unit/textures/##chariot"],
+                         {"": "models_unit/textures/##chariot.tga.dds",
+                          "slave": "models_unit/textures/##chariot_slave.tga.dds"})
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        tex = os.path.join(troot, "data", "models_unit", "textures")
+        write(os.path.join(tex, "##chariot.tga.dds"), "BLUE STAG")            # the target's: another faction's look
+        before = tree_hash(troot)
+        manifest, files = packs.read_pack(pack)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, manifest, files, ["alpha"])
+        bdir = plan.apply()
+        self.assertEqual(open(os.path.join(tex, "##chariot_alpha.tga.dds")).read(), "GREEN TRISKEL")
+        self.assertEqual(open(os.path.join(tex, "##chariot.tga.dds")).read(), "BLUE STAG")     # untouched
+        self.assertFalse(os.path.exists(os.path.join(tex, "##chariot_2.tga.dds")))   # no renamed copy: the .cas
+        restore(ModData(troot), bdir)                                                 # names it itself
+        self.assertEqual({k: v for k, v in tree_hash(troot).items() if "_backups" not in k}, before)
+        # the target's own <name>_<faction> stays (that faction's chariots look so already)
+        write(os.path.join(tex, "##chariot_alpha.tga.dds"), "ALPHA'S OWN")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, manifest, files, ["alpha"])
+        plan.apply()
+        self.assertEqual(open(os.path.join(tex, "##chariot_alpha.tga.dds")).read(), "ALPHA'S OWN")
+
     def test_unit_pack_brings_its_projectile(self):
         # R-20261014-99712D / D5B6A6: crossbowmen brought from Barbarian Invasion into Rome - the game stopped:
         # "Stat_pri statistic refers to non-existant projectile type 'crossbow'". The projectile comes with the
