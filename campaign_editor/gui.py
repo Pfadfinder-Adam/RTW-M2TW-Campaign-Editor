@@ -1885,7 +1885,7 @@ class App(tk.Tk):
                 continue                               # a family member without an army
             out.append({"kind": kind, "name": c.name, "units": units[1:] if c.named and units else units,
                         "xy": c.xy, "from": c.xy, "existing": True, "cid": "%s:%d" % (faction, i),
-                        "named": c.named, "changed": False})
+                        "named": c.named, "role": c.role, "changed": False})
         return out
 
     # ------------------------------------------------------------------ undo / redo
@@ -5058,20 +5058,15 @@ class App(tk.Tk):
             if int(k) < len(self.map_chars.get(fac, [])):
                 self.map_chars[fac].pop(int(k))
                 gone += 1
-        needed = []                                  # a leader / heir, a man on the family tree: Apply refuses them
-
-        def on_tree(ch):
-            fb = self.strat.faction(ch["faction"]) if self.strat and ch.get("named") else None
-            return bool(fb) and any(tokens(t)[:1] == ["relative"] and ch["name"] in t
-                                    for t in self.strat.lines[fb.start:fb.end])
-        for cid in cids:
+        needed = []                                  # a leader / heir: Apply refuses them (a man on the family tree
+        for cid in cids:                             # stays on it as one who died before the start - take_off_map)
             if str(cid).startswith("map:"):
                 continue
             ch = chars.get(cid)
             if not ch:
                 continue
-            if ch.get("role") or on_tree(ch):
-                needed.append("%s (%s's %s)" % (ch["name"], ch["faction"], ch.get("role") or "family"))
+            if ch.get("role"):
+                needed.append("%s (%s's %s)" % (ch["name"], ch["faction"], ch["role"]))
                 continue
             self.map_moves.pop(cid, None)
             self.map_units.pop(cid, None)
@@ -5423,9 +5418,9 @@ class App(tk.Tk):
             return
         c = self.field[i]
         if c.get("existing"):
-            if c.get("named"):
-                messagebox.showerror(APP, "%s is a member of the family - the tool does not remove those "
-                                          "(the family tree names them)." % c["name"])
+            if c.get("role"):
+                messagebox.showerror(APP, "%s is the faction's %s - the faction needs him; make another the %s "
+                                          "first." % (c["name"], c["role"], c["role"]))
                 return
             self.removed_existing.append({"name": c["name"], "from": c["from"]})
             self.char_moves.pop(c["cid"], None)

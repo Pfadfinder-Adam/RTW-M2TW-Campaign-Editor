@@ -8104,6 +8104,48 @@ building smith
                 map_changes(Plan(mod, "map", "map", {}), "test",
                             {"remove": {lead.owner: [{"name": lead.name, "from": list(lead.xy)}]}})
 
+    def test_a_family_member_taken_off_the_map_stays_on_the_tree(self):
+        """Report R-20261012-EEEE61: Flavius Julius's army could not go - Units & armies said 'a member of the family,
+        remove him on the family tree', the family tree said 'he is on the map, remove him in Units & armies'. Now he
+        leaves the map and stays on the tree as a man who died before the start (character_record ..., dead), so
+        the relative lines still name someone; the leader and the heir stay refused (make another one first)."""
+        from campaign_editor.edit import map_changes, _army_edits
+        mod = ModData(self.root)
+        strat = mod.campaign_file("test", "descr_strat.txt")
+        f = mod.load(strat)
+        i = next(n for n, t in enumerate(f.texts()) if t.startswith(";#####<"))
+        f.raw[i:i] = [f.make(x) for x in (
+            "character\tAbel Alphid, named character, age 20, , x 2, y 1",
+            "army",
+            "unit\t\talpha general\t\texp 1 armour 0 weapon_lvl 0",
+            "unit\t\talpha general\t\texp 0 armour 0 weapon_lvl 0",
+            "character_record\t\tAda, \tfemale, command 0, influence 0, management 0, subterfuge 0, age 38, alive, "
+            "never_a_leader",
+            "relative \tAaron Alphid, \tAda,\t\tAbel Alphid,\tend")]
+        f.save()
+        for how in ("map", "units"):
+            mod = ModData(self.root)
+            plan = Plan(mod, "map", "map", {})
+            if how == "map":
+                map_changes(plan, "test", {"remove": {"alpha": [{"name": "Abel Alphid", "from": [2, 1]}]}})
+            else:
+                _army_edits(plan, plan.edit(strat), "alpha", units=[],
+                            remove=[{"name": "Abel Alphid", "from": [2, 1]}])
+            after = Strat(plan.files[strat])
+            fb = after.faction("alpha")
+            self.assertFalse(any(c.name == "Abel Alphid" for c in fb.characters))
+            texts = [t.strip() for t in after.lines[fb.start:fb.end] if t.strip()]
+            rec = [t for t in texts if t.startswith("character_record") and "Abel Alphid" in t]
+            self.assertEqual(len(rec), 1)
+            self.assertIn("age 20, dead", rec[0])
+            self.assertLess(texts.index(rec[0]), next(n for n, t in enumerate(texts) if t.startswith("relative")))
+            self.assertTrue(any(t.startswith("relative") and "Abel Alphid" in t for t in texts))
+            from campaign_editor.strat import characters_after_tree
+            self.assertEqual(characters_after_tree(after), [])
+        with self.assertRaises(ValueError):                         # the leader: make another the leader first
+            map_changes(Plan(ModData(self.root), "map", "map", {}), "test",
+                        {"remove": {"alpha": [{"name": "Aaron Alphid", "from": [1, 1]}]}})
+
     def test_map_editor_moves_and_arms_any_faction(self):
         """The Map editor (no faction picked): any faction's character dragged elsewhere and any army's units
         changed, written together - units found where the army stands, then the move; a named general keeps his

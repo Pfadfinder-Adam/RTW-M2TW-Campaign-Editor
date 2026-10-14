@@ -69,6 +69,10 @@
   most factions vanished from the map). The game stops reading the campaign at such an army ("Must add at least
   one unit to an army") and every faction after it is lost; Apply now refuses to make one, in plain words, before
   anything is written. Check mod files names any the mod has already.
+- **A family member's army can be taken off the map** (a report: Units & armies sent him to the family tree, the
+  family tree sent him back to Units & armies). He leaves the map with his army and stays on the family tree as one
+  who died before the start, so his wife and children keep their place. Only the leader and the heir stay refused
+  (make another one first) - on the Map, in Units & armies and in the Map editor alike.
 
 ## 0.34.0 - 2026-10-10
 

@@ -523,7 +523,7 @@ def map_changes(plan, campaign, changes):
     start.extra_characters takes them]}, 'remove': {faction: [{'name', 'from': (x, y)}]}, 'moves': {faction:
     [{'name', 'from', 'to'}]}, 'army_units': {faction: [{'name', 'from', 'units'}]}} - written into the plan's
     descr_strat.txt like the edited faction's own changes. A removed character goes with his whole block (his army
-    or fleet too); a member of the family tree is refused (the relative lines name him)."""
+    or fleet too); a man on the family tree stays on it as one who died before the start (take_off_map)."""
     if not changes or not any(changes.get(k) for k in ("owners", "characters", "remove", "moves", "army_units")):
         return
     from .start import extra_characters
@@ -541,15 +541,9 @@ def map_changes(plan, campaign, changes):
             if c.role:
                 raise ValueError("%s is %s's %s - the faction needs him; make another the %s first" % (
                     c.name, fac, c.role, c.role))
-            if c.named and any(t.split()[:1] == ["relative"] and c.name in t
-                               for t in f.texts()[fb.start:fb.end] if t.strip()):
-                raise ValueError("%s is on %s's family tree - take him off it in Characters first (the "
-                                 "relative lines name him)" % (c.name, fac))
-            gone.append((c.start, c.end, "%s %s (%s) at %d, %d removed with everything under him" % (
-                fac, c.name, c.kind, src[0], src[1])))
-    for start, end, note in sorted(gone, reverse=True):
-        del f.raw[start:end]
-        plan.note(f, note)
+            gone.append((c, fac))
+    for c, fac in sorted(gone, key=lambda x: -x[0].start):
+        take_off_map(plan, f, fac, c)
     # units first (found where they stand in the file), then the moves, before towns change hands (moving a town's
     # owner moves the characters standing in it)
     for fac, items in (changes.get("army_units") or {}).items():
@@ -576,11 +570,34 @@ def map_changes(plan, campaign, changes):
         f.raw[at:at] = lines
 
 
+def take_off_map(plan, f, faction, c):
+    """c leaves the map with his whole block (army or fleet too). A man the family tree names stays on it as one who
+    died before the start ('character_record ..., dead' - any age may be dead), so the relative lines still name
+    someone; written where the records stand, after every character (a report: removing him had no way at all)."""
+    fb = Strat(f).faction(faction)
+    texts = f.texts()
+    on_tree = c.named and any(tokens(t)[:1] == ["relative"] and c.name in t for t in texts[fb.start:fb.end])
+    where = "" if not c.xy else " at %d, %d" % c.xy
+    if on_tree:
+        from .family import record_line
+        from .strat import medieval
+        m = re.search(r"\bage\s+(\d+)", c.line)
+        at = next(i for i in range(fb.start, fb.end) if tokens(texts[i])[:1] in (["character_record"], ["relative"]))
+        f.raw[at:at] = [f.make(record_line(texts, c.name, "male", int(m.group(1)) if m else 40, medieval(texts),
+                                           dead=True))]
+        del f.raw[c.start:c.end]
+        plan.note(f, "%s %s (%s)%s leaves the map with everything under him; on the family tree he died before "
+                     "the start" % (faction, c.name, c.kind, where))
+        return
+    del f.raw[c.start:c.end]
+    plan.note(f, "%s %s (%s)%s removed with everything under him" % (faction, c.name, c.kind, where))
+
+
 def _army_edits(plan, f, faction=None, units=None, remove=None):
     """Characters already on the map: opts['army_units'] = [{'name', 'from', 'units'}]
     replaces an army's or fleet's units (a named character keeps his bodyguard);
-    opts['remove'] = [{'name', 'from'}] takes out agents, captains and admirals
-    (never a family member - the family tree names them). faction / units / remove: another faction's (the Map
+    opts['remove'] = [{'name', 'from'}] takes out anyone but the leader and the heir (take_off_map: a man on the
+    family tree stays on it as one who died before the start). faction / units / remove: another faction's (the Map
     editor), in place of the edited faction's opts."""
     faction = faction or plan.new
     if units is None and remove is None:
@@ -600,14 +617,14 @@ def _army_edits(plan, f, faction=None, units=None, remove=None):
         c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
         if c is None:
             raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], faction))
-        if what == "remove" and c.named:
-            raise ValueError("%s is a member of the family - the tool does not remove those" % c.name)
+        if what == "remove" and c.role:
+            raise ValueError("%s is %s's %s - the faction needs him; make another the %s first" % (
+                c.name, faction, c.role, c.role))
         found.append((c, what, m))
     for c, what, m in sorted(found, key=lambda x: -x[0].start):
         chunk = f.texts()[c.start:c.end]
         if what == "remove":
-            del f.raw[c.start:c.end]
-            plan.note(f, "%s (%s) at %d, %d removed" % (c.name, c.kind, c.xy[0], c.xy[1]))
+            take_off_map(plan, f, faction, c)
             continue
         units = [i for i, l in enumerate(chunk) if tokens(l)[:1] == ["unit"]]
         if not units:
