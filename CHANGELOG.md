@@ -59,6 +59,8 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- Bigger map (x3): the coast, borders and rivers bend by the old map's own hills and valleys (capes on ridges, bays
+  in valleys, a river on the lower side of its valley) instead of golden-ratio waves.
 - An army whose last unit is taken leaves the map when its units window is closed, as in the game (an empty army is
   never written; the window stays open and says so until then); a new army placed with no unit is not written. A
   general keeps his bodyguard.

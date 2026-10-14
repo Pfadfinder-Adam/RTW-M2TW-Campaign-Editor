@@ -6,7 +6,7 @@ Why 3: an odd factor keeps each town, port, army and resource in the MIDDLE of i
 What it writes (Preview lists it; one backup, Restore gives everything back):
 - world/maps/base pictures (colours stay exact - no new colours are made, except the heights' blended values):
     W x H         map_regions with a WINDING coast and winding region borders (a new point is land when most of
-                  the old land round a place bent by _warp - two golden-ratio waves - is: bays and capes, not 3 x 3
+                  the old land round a place bent by _warp - the old relief: capes on ridges, bays in valleys -: not 3 x 3
                   squares nor 45-degree cuts; a region keeps its pieces; every block's middle keeps its old value, so towns,
                   armies and resources stay on their kind of ground). The rules both games' own maps keep (measured
                   on vanilla Rome and Medieval II, 2026-10-02): a town pixel in its block's middle with its own
@@ -105,8 +105,8 @@ TUNES = {
                  "game, the default). 1: as high as before - a flatter world (tried). Others: not tried in the game."),
     "edges": ("Smoothing of the lines (coast, borders, ground, climates)", 1.0, 0.0, 3.0,
               "1: smooth - as water finds its level, no 3 x 3 steps, narrow rivers unbroken (the default). 0.67: "
-              "lighter, closer to the old shapes. 0: winding - every old tile's corner kept, bays and capes (the "
-              "older way, tried in the game). Above 1: rounder still - not tried. Towns, ports, armies and resources "
+              "lighter, closer to the old shapes. 0: winding - every old tile's corner kept, bays and capes where "
+              "the old map's ridges and valleys meet the sea. Above 1: rounder still - not tried. Towns, ports, armies and resources "
               "keep their tiles at any value."),
     "river": ("Narrow rivers kept open", 0.55, 0.2, 1.0,
               "How much of its own strongest water a narrow river needs to stay water: lower keeps one-tile rivers "
@@ -926,16 +926,156 @@ def hgt_from_picture(tga_bytes, top, low):
     return struct.pack("<II", w, h) + struct.pack("<%df" % (w * h), *out)
 
 
+RELIEF = []          # the old map's relief while an x3 runs (with relief(...)): what bends its lines and rivers
+BEND = 1.2           # the farthest a line is bent, in new tiles
+
+
+class _Relief:
+    """The old map's own relief, read from its map_heights (2W+1 x 2H+1 points, bottom-up like the tiles) - what
+    bends the bigger map's lines the way nature does (a tester's report: the golden-ratio waves before it
+    'do not fit this purpose'): a coast runs out as a cape where a ridge comes down to the sea and draws back into
+    a bay where a valley does (a drowned valley - a ria), a border between regions bends the same way, a river
+    lies on the lower side of its valley. Only the land's own shapes count (the sea is no height): ridge = land
+    standing above the land round it (the land's mean over ~3 old tiles), valley = below it; the bend runs along
+    the land's slope (down = toward the sea), as strong as the ridge or valley stands out, nothing where the land
+    is flat."""
+
+    def __init__(self, path):
+        _, w, h, _, _, at = _pixels(path)
+        self.w, self.h = w, h
+        sea = _heights_sea(at)
+        val = [0.0] * (w * h)
+        land = [0.0] * (w * h)
+        for y in range(h):
+            for x in range(w):
+                if not sea(x, y):
+                    val[y * w + x], land[y * w + x] = float(at(x, y)[0]), 1.0
+        self.height = [v if m else None for v, m in zip(val, land)]
+
+        def blur(a, r):                             # a box r points each way, rows then columns, twice
+            for _ in range(2):
+                out = [0.0] * (w * h)
+                for y in range(h):
+                    row, acc = a[y * w:(y + 1) * w], 0.0
+                    pre = [0.0]
+                    for v in row:
+                        acc += v
+                        pre.append(acc)
+                    for x in range(w):
+                        lo, hi = max(x - r, 0), min(x + r + 1, w)
+                        out[y * w + x] = (pre[hi] - pre[lo]) / (2 * r + 1)
+                a = out
+                out = [0.0] * (w * h)
+                for x in range(w):
+                    acc, pre = 0.0, [0.0]
+                    for y in range(h):
+                        acc += a[y * w + x]
+                        pre.append(acc)
+                    for y in range(h):
+                        lo, hi = max(y - r, 0), min(y + r + 1, h)
+                        out[y * w + x] = (pre[hi] - pre[lo]) / (2 * r + 1)
+                a = out
+            return a
+
+        def land_mean(r):                           # the land's mean round each point (the sea left out)
+            vs, ms = blur([v * m for v, m in zip(val, land)], r), blur(land, r)
+            return [v / m if m > 1e-6 else None for v, m in zip(vs, ms)]
+        near, wide = land_mean(1), land_mean(6)
+        rise = [n - f if n is not None and f is not None else 0.0 for n, f in zip(near, wide)]
+        big = sorted(abs(r) for r in rise if r)
+        scale = max(big[len(big) // 2], 1.0) if big else 1.0   # a ridge or valley as plain as most: full bend
+        slopes = []
+        grad = [(0.0, 0.0)] * (w * h)
+        for y in range(1, h - 1):
+            for x in range(1, w - 1):
+                a, b = wide[y * w + x + 1], wide[y * w + x - 1]
+                c, d = wide[(y + 1) * w + x], wide[(y - 1) * w + x]
+                if None in (a, b, c, d):
+                    continue
+                g = ((a - b) / 2, (c - d) / 2)
+                grad[y * w + x] = g
+                slopes.append(abs(g[0]) + abs(g[1]))
+        slopes.sort()
+        g0 = max(slopes[len(slopes) // 4], 1e-6) if slopes else 1.0   # only the flattest quarter bends less
+        self.shift = [(0.0, 0.0)] * (w * h)
+        # how rough the shore is below the old map's tiles: steep land a rocky, cut coast, low land a smooth one
+        self.rough = [0.0 if wide[i] is None else min(1.0, 0.5 + 0.5 * (abs(gx) + abs(gy)) / (2 * g0))
+                      for i, (gx, gy) in enumerate(grad)]
+        for i, (gx, gy) in enumerate(grad):
+            n = (gx * gx + gy * gy) ** 0.5
+            if n < 1e-9:
+                continue
+            s = max(-1.0, min(1.0, rise[i] / scale)) * min(1.0, n / g0) * BEND
+            self.shift[i] = (s * gx / n, s * gy / n)     # uphill on a ridge (land out to sea), downhill in a valley
+
+    def at(self, TX, TY):
+        """The bend (in new tiles) at the bigger map's tile TX, TY: the relief's (bilinear between the old points
+        round it) and, below the old tiles' size, a fractal coast's (_fractal) as rough as the land there is."""
+        px = min(max(2 * ((TX + 0.5) / FACTOR - 0.5) + 1, 0.0), self.w - 1.0)
+        py = min(max(2 * ((TY + 0.5) / FACTOR - 0.5) + 1, 0.0), self.h - 1.0)
+        xa, ya = int(px), int(py)
+        xb, yb = min(xa + 1, self.w - 1), min(ya + 1, self.h - 1)
+        fx, fy = px - xa, py - ya
+        sx = sy = rough = 0.0
+        for x, y, wt in ((xa, ya, (1 - fx) * (1 - fy)), (xb, ya, fx * (1 - fy)), (xa, yb, (1 - fx) * fy),
+                         (xb, yb, fx * fy)):
+            a, b = self.shift[y * self.w + x]
+            sx, sy, rough = sx + a * wt, sy + b * wt, rough + self.rough[y * self.w + x] * wt
+        sx += rough * _fractal(TX, TY, 1)
+        sy += rough * _fractal(TX, TY, 2)
+        return max(-BEND, min(BEND, sx)), max(-BEND, min(BEND, sy))
+
+    def point(self, X, Y):
+        """The old map's height at its point X, Y (None: sea or off the map)."""
+        if 0 <= X < self.w and 0 <= Y < self.h:
+            return self.height[Y * self.w + X]
+        return None
+
+
+def _lattice(i, j, seed):
+    """A number -1 .. 1 fixed for the lattice point i, j (an integer hash: the same map, the same value)."""
+    n = (i * 374761393 + j * 668265263 + seed * 1442695041) & 0xFFFFFFFF
+    n = ((n ^ (n >> 13)) * 1274126177) & 0xFFFFFFFF
+    return ((n ^ (n >> 16)) & 0xFFFF) / 32767.5 - 1.0
+
+
+def _fractal(TX, TY, seed):
+    """A coast's detail below the old map's tiles (new tiles, about -1.3 .. 1.3): real coasts are fractal - the
+    closer one looks, the more bays within bays (Richardson, Mandelbrot: 'How long is the coast of Britain?',
+    dimension ~1.25) - so three sizes of smooth wobble, 4, 2 and 1 new tiles across, each smaller one weaker by
+    2 ** -0.75. Not the old map's own shapes (it has none that small): only the size the old map leaves open."""
+    out, amp, size = 0.0, 0.7, 4.0
+    for _ in range(3):
+        x, y = TX / size, TY / size
+        i, j = int(x // 1), int(y // 1)
+        fx, fy = x - i, y - j
+        fx, fy = fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy)
+        a = _lattice(i, j, seed) + (_lattice(i + 1, j, seed) - _lattice(i, j, seed)) * fx
+        b = _lattice(i, j + 1, seed) + (_lattice(i + 1, j + 1, seed) - _lattice(i, j + 1, seed)) * fx
+        out += amp * (a + (b - a) * fy)
+        amp, size = amp * 2 ** -0.75, size / 2
+    return out
+
+
+class relief:
+    """with relief(old map_heights path): the x3 bends its lines by that map's relief (None / no file: no bend)."""
+
+    def __init__(self, path):
+        self.r = _Relief(path) if path and os.path.isfile(path) else None
+
+    def __enter__(self):
+        RELIEF.append(self.r)
+        return self.r
+
+    def __exit__(self, *a):
+        RELIEF.pop()
+
+
 def _warp(TX, TY):
-    """A smooth sideways shift (in new tiles, -1.2 .. 1.2) for the tile TX, TY: two waves whose sizes stand in the
-    golden ratio, so the field never repeats (quasi-periodic, as girih's patterns) and borders bend like a forest's
-    or a marsh's edge, not in 3 x 3 steps nor in random dots; the same map, the same shift."""
-    import math
-    k = 2 * math.pi / 13.0                          # a bend every ~13 new tiles (4 - 5 old ones)
-    p = 1 / GOLD                                    # 1.618...
-    wx = 0.65 * math.sin(k * (TX + p * TY)) + 0.55 * math.sin(k * p * (TY - 0.5 * TX) + 1.3)
-    wy = 0.65 * math.sin(k * (TY - p * TX) + 2.1) + 0.55 * math.sin(k * p * (TX + 0.5 * TY) + 0.4)
-    return wx, wy
+    """The sideways shift (in new tiles, -BEND .. BEND) a line of the bigger map takes at tile TX, TY: the old map's
+    own relief (_Relief - capes on ridges, bays in valleys); none outside an x3 or without heights."""
+    r = RELIEF[-1] if RELIEF else None
+    return r.at(TX, TY) if r else (0.0, 0.0)
 
 
 def kinds_scaled(path, mask=None, sea_colours=(), rounds=2, shore=(), natural=False, edges=EDGE_DEFAULT):
@@ -1594,9 +1734,7 @@ def _drops(out, old, grid, w, h):
             xs, ys = {i % W for i in take}, {i // W for i in take}
             if len(take) == len(xs) * len(ys):             # a plain rectangle (a one-tile islet: a 3 x 3 square) -
                 corners = [(min(xs), min(ys)), (max(xs), min(ys)), (max(xs), max(ys)), (min(xs), max(ys))]
-                turn = (ox0 * GOLD + oy0 * GOLD * GOLD) % 1.0  # one or two of its corners cut, by the golden ratio
-                for k in range(1 + int(turn * 2)):         # (never the same look twice, the same map always alike)
-                    cx, cy = corners[(int(turn * 4) + 2 * k) % 4]
+                for cx, cy in _cut_corners(corners, ox0, oy0):   # its corner(s) facing the lower ground
                     take.discard(cy * W + cx)
             land = 0 if kind else 1
             for i in cand:
@@ -2193,25 +2331,46 @@ def _no_pools(mask, W, H, fixed):
                 mask.b[i] = 0
 
 
-GOLD = (5 ** 0.5 - 1) / 2                                      # 0.618...: the golden ratio's part
-MEANDER = (0, 1, 0, -1)                                        # a bend each way, half a wave apart
+def _cut_corners(corners, ox, oy):
+    """Which corners of a square one-tile islet (or pool) are cut, so it is no 3 x 3 square: with the old relief,
+    the corner facing the lowest land round the old tile (water wears the low side; a pool spreads there), and the
+    opposite one too when it stands lower than the tile itself; without heights the corner by the tile's place."""
+    r = RELIEF[-1] if RELIEF else None
+    order = ((-1, -1), (1, -1), (1, 1), (-1, 1))             # the same order as corners: (min, min) round
+    if r is None:
+        return [corners[(ox + 2 * oy) % 4]]
+    mid = r.point(2 * ox + 1, 2 * oy + 1)
+    low = []
+    for k, (dx, dy) in enumerate(order):
+        v = r.point(2 * ox + 1 + 2 * dx, 2 * oy + 1 + 2 * dy)
+        low.append((v if v is not None else -1.0, k))         # the sea: lowest of all
+    low.sort()
+    out = [corners[low[0][1]]]
+    opp = (low[0][1] + 2) % 4
+    v = next(v for v, k in low if k == opp)
+    if mid is not None and v < mid:
+        out.append(corners[opp])
+    return out
 
 
-def _meander(t, row):
-    """A river's sideways offset (-1, 0, 1 pixels) at step t along a straight run, row = the run's other
-    coordinate: a meander (rivers swing every ~12 channel widths - Langbein & Leopold's sine-generated curve) whose
-    phase moves on by 1 or 2 by the Fibonacci word (the golden ratio's 1-D quasi-crystal, girih's cousin) - never the
-    same twice, the same map always the same."""
-    g = 1 - GOLD                                              # 0.382: the share of the longer steps
-    seed = (row * GOLD) % 1.0
-    phase = t + int(t * g + seed)
-    return MEANDER[phase % 4]
+def _meander(x, y, along_x):
+    """Where a river on a straight run lies across its old tile x, y (-1, 0, 1 pixels): on the lower side of its
+    valley - the old map's heights on either side of the tile's middle (a river runs in the lowest ground); in the
+    middle when both sides stand alike or without heights."""
+    r = RELIEF[-1] if RELIEF else None
+    if r is None:
+        return 0
+    X, Y = 2 * x + 1, 2 * y + 1
+    a, b = ((r.point(X, Y - 1), r.point(X, Y + 1)) if along_x else (r.point(X - 1, Y), r.point(X + 1, Y)))
+    if a is None or b is None or abs(a - b) < 1:
+        return 0
+    return -1 if a < b else 1
 
 
 def _river_offsets(lines, is_river, land, cx_of):
     """{old river tile: (ox, oy)} - where in its 3 x 3 block a river tile's point lies (0, 0 = the middle): at a bend
     the point moves one pixel into the bend (the corner cut, as a real river rounds it); on a straight run it swings
-    by _meander; a tile with a ford or a source, a river's end or a fork keeps the middle; never onto the new sea."""
+    to the lower side of its valley (_meander); a tile with a ford or a source, a river's end or a fork keeps the middle; never onto the new sea."""
     river = {p for p, c in lines.items() if is_river(c)}
 
     def links(p):
@@ -2234,9 +2393,9 @@ def _river_offsets(lines, is_river, land, cx_of):
             if (sx, sy) != (0, 0):                            # a bend: into it
                 o = (max(-1, min(1, sx)), max(-1, min(1, sy)))
             elif b == 0:                                      # a straight run along x: swing in y
-                o = (0, _meander(p[0], p[1]))
+                o = (0, _meander(p[0], p[1], True))
             elif a == 0:                                      # along y: swing in x
-                o = (_meander(p[1], p[0]), 0)
+                o = (_meander(p[0], p[1], False), 0)
         if o != (0, 0) and land is not None:
             cx, cy = cx_of(*p)
             if not land.get((cx + o[0], cy + o[1]), True):
@@ -2739,6 +2898,13 @@ def plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEFA
 
 
 def _plan_upscale(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEFAULT):
+    """_upscale_all with the lines bent by the old map's own relief (its map_heights)."""
+    hpath = os.path.join(os.path.dirname(plan.mod.campaign_file(campaign, "map_regions.tga")), "map_heights.tga")
+    with relief(hpath):
+        return _upscale_all(plan, campaign, vertical, progress, edges)
+
+
+def _upscale_all(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEFAULT):
     """Every file of the map made 3 x bigger, in the plan (nothing written until Apply). vertical: how much higher
     the hills, mountains and sea floor get (3 = in proportion with the wider land; 1 = as high as before). edges:
     how the coast, the borders and the edges of ground and climates are drawn (EDGES). Returns the warnings.

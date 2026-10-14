@@ -3502,7 +3502,7 @@ building smith
 
     def test_bigger_map_natural_rivers(self):
         """x3 rivers drawn the natural way: a bend's point moves into the bend, a straight run swings a pixel to
-        either side by the golden-ratio meander - and still one unbroken river (side by side only), as many ends as
+        its lower side (no relief here: the middle) - and still one unbroken river (side by side only), as many ends as
         before, every pixel inside its old tiles' 3 x 3 blocks (a corner link: the one beside), a ford on the river, never two pixels wide (no 2 x 2
         square anywhere); the same map, the same river."""
         from campaign_editor import upscale
@@ -3605,12 +3605,58 @@ building smith
             self.assertEqual(seen, px)                                  # one piece, as before
         border = {X for X in range(W) for Y in range(W) if g.get(X, Y) == A and X + 1 < W and g.get(X + 1, Y) == B}
         self.assertEqual(len(border), 1)                    # smooth: a straight border stays one straight line
-        with open(out, "wb") as fh:                         # winding (the modder's other pick): it bends
+        with open(out, "wb") as fh:                         # winding (the modder's other pick) and no relief: as is
             fh.write(upscale.regions_scaled(rpath, {A, B}, upscale.coast_mask(rpath, {A, B}, True, "winding"), (),
                                             {}, natural=True, edges="winding"))
         g = read_tga(out)
         border = {X for X in range(W) for Y in range(W) if g.get(X, Y) == A and X + 1 < W and g.get(X + 1, Y) == B}
+        self.assertEqual(len(border), 1)
+        # with the old map's relief - land rising to the east, ridges and valleys across it - the border bends by
+        # them (a tester's report #195: by the land's own shapes, not by golden-ratio waves)
+        hpath = os.path.join(self.root, "heights.tga")
+        write_tga(hpath, 2 * n + 1, 2 * n + 1, [[(min(255, 40 + 6 * x + (50 if (y // 4) % 2 else 0)),) * 3
+                                                 for x in range(2 * n + 1)] for y in range(2 * n + 1)])
+        with upscale.relief(hpath):
+            with open(out, "wb") as fh:
+                fh.write(upscale.regions_scaled(rpath, {A, B}, upscale.coast_mask(rpath, {A, B}, True, "winding"),
+                                                (), {}, natural=True, edges="winding"))
+        g = read_tga(out)
+        border = {X for X in range(W) for Y in range(W) if g.get(X, Y) == A and X + 1 < W and g.get(X + 1, Y) == B}
         self.assertGreater(len(border), 1)
+        self.assertEqual(upscale.RELIEF, [])                                   # only while the x3 runs
+
+    def test_bigger_map_bends_by_the_old_relief(self):
+        """Report #195: the x3 lines bent by the old map's own relief, not golden-ratio waves: where a ridge comes down
+        to the sea the coast runs out (the bend looks inland, uphill: land), where a valley does it draws back (it
+        looks seaward: a bay); flat land, no relief's bend; a river on a straight run lies on the lower side of its valley; a
+        one-tile islet loses the corner facing the lowest ground."""
+        from campaign_editor import upscale as U
+        n = 21                                                     # points: 10 x 10 old tiles; the sea to the west
+        def h(x, y):
+            v = 20 + 8 * x
+            if 10 <= y <= 12:
+                v += 60                                            # a ridge running out to the west at tile 5
+            if 4 <= y <= 6:
+                v -= 15                                            # a valley at tile 2
+            return (max(1, min(255, v)),) * 3
+        path = os.path.join(self.root, "heights.tga")
+        write_tga(path, n, n, [[h(x, y) for x in range(n)] for y in range(n)])
+        self.assertEqual(U._warp(10, 16), (0.0, 0.0))             # no x3 running: no bend
+        with U.relief(path):
+            ridge, valley = U._warp(3 * 3 + 1, 3 * 5 + 1), U._warp(3 * 3 + 1, 3 * 2 + 1)
+            self.assertGreater(ridge[0], 0.3)                      # inland (east, uphill): a cape
+            self.assertLess(valley[0], -0.3)                       # seaward: a bay
+            self.assertTrue(all(abs(v) <= U.BEND + 1e-9 for v in ridge + valley))
+            self.assertEqual(U._meander(3, 3, True), -1)           # tile 3: lower to the south (the valley side)
+            corners = [(0, 0), (2, 0), (2, 2), (0, 2)]
+            self.assertIn((0, 0), U._cut_corners(corners, 3, 3))   # toward the valley and the sea: south-west
+        self.assertEqual(U.RELIEF, [])
+        flat = os.path.join(self.root, "flat.tga")
+        write_tga(flat, n, n, [[(90, 90, 90)] * n for _ in range(n)])
+        with U.relief(flat) as r:                                  # flat land: no relief's bend, only a smooth
+            self.assertTrue(all(v == (0.0, 0.0) for v in r.shift))  # coast's small detail (half as rough)
+            self.assertTrue(all(abs(v) <= 0.7 for v in U._warp(16, 16)))
+            self.assertEqual(U._meander(3, 3, True), 0)
 
     def test_bigger_map_small_islands_and_coast_rules(self):
         """x3 rules from the user's look at the bigger map: a small islet or lake keeps its size and comes out whole and

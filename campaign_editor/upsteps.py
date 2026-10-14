@@ -450,7 +450,8 @@ def plan_step(mod, campaign, k, st, tune=None):
         st["vertical"] = U.TUNE["vertical"]
         st["edges"] = U.TUNE["edges"]
         plan = Plan(mod, "map", "%s_step%d" % (WORK, k + 1), {})
-        warn = RUN[STEPS[k][0]][0](plan, campaign, st)
+        with U.relief(old(mod, st, os.path.join(_base(mod, campaign), "map_heights.tga"))):   # the OLD map's relief
+            warn = RUN[STEPS[k][0]][0](plan, campaign, st)
         return plan, warn
     finally:
         U.TUNE.clear()

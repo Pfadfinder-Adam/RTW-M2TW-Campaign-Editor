@@ -102,8 +102,10 @@ much faster on big mods; every picture opens big on a click; reports carry scree
 - **Positions** (`descr_strat.txt`, `descr_events.txt`, ...): towns, characters, fleets, resources, forts,
   watchtowers, wonders and event places go to the middle of their new block.
 - **Coast and borders**: natural - the coastline winds with bays and capes and the borders between regions wind
-  too, instead of 3 x 3 squares and straight 45-degree cuts (two waves whose sizes stand in the golden ratio bend
-  them, so the pattern never repeats; the same map always comes out alike); every block's middle keeps its old
+  too, instead of 3 x 3 squares and straight 45-degree cuts (the old map's own relief bends
+  them - a cape where a ridge comes down to the sea, a bay where a valley does, a river on the lower side of its
+  valley - with a fractal coast's small detail, rougher where the land is steep; the same map always comes out
+  alike); every block's middle keeps its old
   value, so nothing changes under a town, army or resource, and every region stays in as many pieces as before. The rules the games' own maps keep are kept: every town has its own region (or sea) all round it,
   every port stands on a coastal land tile touching the sea and its region, and a region `descr_regions.txt` does
   not list still counts as land.
