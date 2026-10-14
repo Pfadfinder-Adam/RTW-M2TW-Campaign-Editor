@@ -1668,6 +1668,36 @@ building smith
         p = edit(mod, "test", "alpha", {"heir_title": "Prince"})                         # no heir string: said
         self.assertTrue(any("heir's title 'Prince' is not written" in w for _, w in p.warnings))
 
+    def test_adjective_without_spy_string(self):
+        """Report #192 (Medieval II, an Americas-based mod): {EMT_MAYANS_SPY} reads 'Mayan Scout', so the adjective was
+        never found - the field came back empty after Apply and nothing was written. The adjective is the word the
+        faction's own EMT_ labels share; a clone and an edit rewrite it; a mod with none of them is warned."""
+        from campaign_editor.build import template_display
+        from campaign_editor.edit import edit, read_faction
+        eb = os.path.join(self.root, "data", "text", "expanded_bi.txt")
+        with open(eb, "rb") as fh:
+            text = fh.read().decode("utf-16").replace("\r\n", "\n")
+        text = text.replace("{EMT_ALPHA_SPY}\t\tAlphan Spy\n", "{EMT_ALPHA_SPY}\t\tAlphan Scout\n")
+        write(eb, text + "{EMT_ALPHA_CITY}\t\tAlphan City\n{EMT_ALPHA_TOWN}\t\tAlphan Town\n"
+                         "{EMT_ALPHA_GENERAL}\t\tAlphan Army\n{EMT_ALPHA_FACTION_LEADER}\t\tAlphan Emperor\n"
+                         "{EMT_ALPHA_FACTION_HEIR_NAME}\t\tPrince %S\n", utf16=True)
+        mod = ModData(self.root)
+        self.assertEqual(template_display(mod, "alpha", "test")["adjective"], "Alphan")
+        self.assertEqual(read_faction(mod, "test", "alpha")["adjective"], "Alphan")
+        p = edit(mod, "test", "alpha", {"adjective": "Miskito"})
+        got = p.files[eb].texts()
+        self.assertIn("{EMT_ALPHA_CITY}\t\tMiskito City", got)
+        self.assertIn("{EMT_ALPHA_SPY}\t\tMiskito Scout", got)
+        plan = build(mod, "test", "alpha", "gamma", {"display_name": "Gammans", "adjective": "Gamman",
+                                                     "start": {"regions": ["B_R"], "leader": {"name": "Aaron"}}})
+        self.assertIn("{EMT_GAMMA_TOWN}\t\tGamman Town", plan.files[eb].texts())
+        # no label shares a word: no adjective read, and one asked is said to be unwritten (never lost silently)
+        write(eb, text.replace("{EMT_ALPHA_SPY}\t\tAlphan Scout\n", ""), utf16=True)
+        mod = ModData(self.root)
+        self.assertNotIn("adjective", read_faction(mod, "test", "alpha"))
+        p = edit(mod, "test", "alpha", {"adjective": "Miskito"})
+        self.assertTrue(any("adjective 'Miskito' is not written" in w for _, w in p.warnings), p.report())
+
     def test_edit_moves_characters(self):
         from campaign_editor.edit import edit
         mod = ModData(self.root)

@@ -28,7 +28,36 @@ def template_display(mod, template, campaign=None):
         val = keys.get("EMT_%s_SPY" % T)
         if val is not None and "adjective" not in found and val.endswith(" Spy"):
             found["adjective"] = val[:-4].strip()
+        if "adjective" not in found:
+            adj = _shared_adjective([keys.get("EMT_%s_%s" % (T, s)) for s in ADJECTIVE_LABELS])
+            if adj:
+                found["adjective"] = adj
     return found
+
+
+# the faction's own labels ({EMT_MAYANS_CITY} Mayan City): their first word(s) are the adjective - a mod may call the
+# spy a Scout ({EMT_MAYANS_SPY} Mayan Scout, Medieval II's Americas), so 'X Spy' alone is not enough (report #192)
+ADJECTIVE_LABELS = ("SPY", "ASSASSIN", "DIPLOMAT", "MERCHANT", "PRIEST", "PRINCESS", "ADMIRAL", "GENERAL",
+                    "NAMED_GENERAL", "NAMED_CHARACTER", "FACTION_LEADER", "FACTION_HEIR", "CAPITAL", "CITY", "TOWN",
+                    "VILLAGE", "LARGE_TOWN", "LARGE_CITY", "HUGE_CITY", "FISHING_VILLAGE", "PORT", "DOCK", "CASTLE",
+                    "FORT", "FORTRESS", "WATCHTOWER")
+
+
+def _shared_adjective(values):
+    """The longest run of first words most of the labels share ('Mayan' of 'Mayan City', 'Mayan Scout'...) - at
+    least 3 labels and more than half of them, and a word left after it in each; else None."""
+    words = [v.split() for v in values if v and len(v.split()) > 1]
+    best = None
+    for n in range(1, 4):
+        heads = {}
+        for w in words:
+            if len(w) > n:
+                heads[tuple(w[:n])] = heads.get(tuple(w[:n]), 0) + 1
+        top = max(heads.items(), key=lambda kv: kv[1], default=None)
+        if not top or top[1] < 3 or top[1] * 2 <= len(words):
+            break
+        best = " ".join(top[0])
+    return best
 
 
 def _text_keys(f):

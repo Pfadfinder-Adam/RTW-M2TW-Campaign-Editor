@@ -200,6 +200,10 @@ def _texts(plan, now, campaign):
         if k in now and o.get(k) is not None and o[k] != now[k]:
             set_to[F + suffix] = o[k]
     set_to.update(titles.changes(now.get("title_strings") or {}, plan.new, o.get("leader_title"), o.get("heir_title")))
+    if o.get("adjective") and not now.get("adjective"):
+        plan.warn(None, "the adjective '%s' is not written: no string of this faction in the mod's text files shows one "
+                        "to change ({EMT_%s_SPY} 'X Spy', or labels such as {EMT_%s_CITY} 'X City' sharing a first "
+                        "word)" % (o["adjective"], plan.new.upper(), plan.new.upper()))
     for k, words in (("leader_title", "leader's"), ("heir_title", "heir's")):
         if o.get(k) and k not in now:
             plan.warn(None, "the %s title '%s' is not written: this mod's text files hold no {EMT_%s_...} string for "

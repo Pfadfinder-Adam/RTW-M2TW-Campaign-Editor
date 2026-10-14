@@ -78,6 +78,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- A faction's adjective is kept after Apply in mods whose spy has another name (a Scout, a Guide); before, the field
+  came back empty and the old adjective stayed in the game.
 - Picking another garrison no longer crashes the editor.
 - Clicking in Units & armies no longer crashes the editor.
 - Opening a tab before loading a mod no longer crashes the editor.
