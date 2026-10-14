@@ -75,8 +75,8 @@ def region_problems(mod, campaign, painted, new_regions):
         px = img.get(x, y)
         if px in (CITY, PORT):
             errors.append("tile %d, %d holds a town or port - it keeps its region" % (x, y))
-        elif px not in by_colour:
-            errors.append("tile %d, %d is sea - only land changes region" % (x, y))
+        elif px not in by_colour and not mod.unclaimed_land(campaign, (x, y)):     # land no region holds: may
+            errors.append("tile %d, %d is sea - only land changes region" % (x, y))  # be given one (Discord)
     # what each region would hold - worked out only for the regions the painting touches (a map of millions
     # of tiles once made a dict of every tile here)
     def before(t):                                   # the tile's colour now (None off the map)

@@ -583,6 +583,23 @@ class ModData:
             self._cache[key] = {v["colour"]: k for k, v in self.regions(campaign).items()}
         return self._cache[key]
 
+    def unclaimed_land(self, campaign, xy):
+        """True when tile xy is land in the game but no region's: its map_regions colour is no region's (nor a town or
+        port) while map_heights makes it land - not pure blue, the game's own rule (RomeTW.exe FUN_004720ed). Such
+        land may be painted to a region (Discord: 'unused land' could not be filled). No heights map: False."""
+        img = self.region_map(campaign)
+        x, y = xy
+        if not (0 <= x < img.width and 0 <= y < img.height):
+            return False
+        px = img.get(x, y)
+        if px in ((0, 0, 0), (255, 255, 255)) or px in self.region_colours(campaign):
+            return False
+        heights = self._optional_map(campaign, "map_heights.tga")
+        if not heights or (heights.width, heights.height) != (2 * img.width + 1, 2 * img.height + 1):
+            return False
+        r, g, b = heights.get(2 * x + 1, 2 * y + 1)[:3]
+        return not (r == 0 and g == 0 and b > 0)
+
     def is_sea(self, campaign, xy):
         """Sea: a map_regions pixel that is no region, city or port."""
         img = self.region_map(campaign)

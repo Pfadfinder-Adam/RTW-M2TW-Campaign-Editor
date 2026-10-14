@@ -86,6 +86,9 @@
 - **A mod whose data folder holds only some files loads again** (after a Restore took the copied files away only
   unit files were left and the mod stopped loading: "no descr_sm_factions.txt in ..."): a mod's data folder inside
   the game folder is a mod whatever it holds - the rest is read from the game's data, as the game does.
+- **Land no region holds can be painted to a region** (an island whose colour in `map_regions.tga` is no region's
+  could not be filled: "tile is sea - only land changes region"): land the game makes land - `map_heights.tga` not
+  pure blue, the game's own rule - takes a region with the region brush; real sea still does not.
 - **A building brought from another mod brings its build-queue icon too** (Rome / Barbarian Invasion keep it in
   `ui/<culture>/buildings/construction/`; the game showed its placeholder): for the cultures it came with and the
   cultures of every faction picked to build it.

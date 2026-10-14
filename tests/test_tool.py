@@ -8137,6 +8137,29 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_land_no_region_holds_can_be_painted(self):
+        """Discord (two modders, 2026-10-13): an island of land whose map_regions colour is no region's could not be
+        given to any region - 'tile is sea - only land changes region'. Land the game makes land (map_heights not pure
+        blue - the game's own rule) may take a region whatever its colour; real sea still refuses."""
+        from campaign_editor.regionedit import region_problems
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        red, blue, black, sea, odd = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233), (120, 90, 40)
+        write_tga(os.path.join(camp, "map_regions.tga"), 5, 4, [[red, red, blue, blue, sea],
+                                                                 [red, black, blue, blue, sea],
+                                                                 [red, red, blue, black, odd],
+                                                                 [red, red, blue, blue, sea]])
+        write_tga(os.path.join(camp, "map_heights.tga"), 11, 9,                  # tile (4, 2) land, the rest sea
+                  [[(60, 60, 60) if x < 9 or (x, y) == (9, 5) else (0, 0, 250) for x in range(11)]
+                   for y in range(9)])
+        mod = ModData(self.root)
+        region = next(r for r, v in mod.regions("test").items() if v["colour"] == blue)
+        self.assertTrue(mod.unclaimed_land("test", (4, 2)))
+        self.assertFalse(mod.unclaimed_land("test", (4, 1)))
+        errors, _ = region_problems(mod, "test", {(4, 2): region}, [])
+        self.assertEqual(errors, [])
+        errors, _ = region_problems(mod, "test", {(4, 1): region}, [])
+        self.assertTrue(any("sea" in e for e in errors))
+
     def test_slaves_on_land_the_terrain_brush_makes(self):
         """Report R-20261012-C56BB7: the Terrain brush made land out of sea for a wasteland, its slaves resource went
         on that land and the write stopped: 'new slaves at 159, 217: that is sea' - checked against the old map.

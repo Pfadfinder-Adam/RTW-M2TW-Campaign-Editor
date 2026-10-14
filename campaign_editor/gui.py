@@ -2463,8 +2463,10 @@ class App(tk.Tk):
                     continue
                 px = cm.regions_img.get(x, y)
                 was = cm.region_at(x, y)
-                if was is None or px in ((0, 0, 0), (255, 255, 255)):
-                    continue                              # sea, towns and ports keep their region
+                if px in ((0, 0, 0), (255, 255, 255)) or was is None and not self.mod.unclaimed_land(
+                        self.v_campaign.get(), t):
+                    continue                              # sea, towns and ports keep their region; land no region
+                                                          # holds takes one (Discord: 'unused land')
                 if any(tuple(r.get(k) or ()) == t for r in self.new_regions for k in ("city", "port")):
                     continue
                 if was == target:
