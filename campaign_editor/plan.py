@@ -246,11 +246,27 @@ class Plan:
                 "%s" % (len(ro), ", ".join(ro[:8]) + (" ..." if len(ro) > 8 else "")))
 
     # ---- disk ----
+    def _no_empty_army(self):
+        """An army with no unit stops the game reading descr_strat - every faction after it is lost (a report). One
+        this write would make is refused before anything is written; one the mod has already stays (its own)."""
+        from .strat import Strat, empty_armies
+        for path, f in self.files.items():
+            if os.path.basename(path).lower() != "descr_strat.txt" or path not in self.changed_files():
+                continue
+            had = set(empty_armies(Strat(TextFile.load(path)))) if os.path.exists(path) else set()
+            new = [a for a in empty_armies(Strat(f)) if a not in had]
+            if new:
+                names = ", ".join(new[:8]) + (" and %d more" % (len(new) - 8) if len(new) > 8 else "")
+                raise WriteError("%s\n\nAn army needs at least one unit: the game stops reading the campaign there "
+                                 "('Must add at least one unit to an army') and every faction after it is lost. "
+                                 "Give it a unit or take it off the map.\n\nNothing was changed." % names)
+
     def apply(self):
         from .limits import keep_up
         for fn in list(BEFORE):              # may stop the write before anything is done (WriteError)
             fn(self)
         keep_up(self)                       # REX / M2EX: max_factions follows the factions, silently (limits.py)
+        self._no_empty_army()
         self.stale_bins()
         self._whole_map_folders()
         sm = self.mod.file("sm_factions")

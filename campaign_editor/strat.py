@@ -280,6 +280,23 @@ def characters_after_tree(s):
     return bad
 
 
+def empty_armies(s):
+    """Armies with no unit under them, as 'name (faction)': a character's army line, or a town's own
+    garrisoned_army. The game stops reading descr_strat there ('Must add at least one unit to an army') and every
+    faction after it is lost (report R-20261013-C9ED42)."""
+    from .textio import tokens
+    out = []
+    for fb in s.factions:
+        for c in fb.characters:
+            words = [tokens(l)[:1] for l in s.lines[c.start:c.end]]
+            if ["army"] in words and ["unit"] not in words:
+                out.append("%s (%s)" % (c.name or "a character", fb.name))
+        for st in fb.settlements:
+            if st.garrison_at is not None and not st.garrison:
+                out.append("the garrison of %s (%s)" % (st.region, fb.name))
+    return out
+
+
 def faction_names(s, faction):
     """Every name a faction's block gives its characters and family records, as written
     (first name and surname) - the game wants each once per faction."""

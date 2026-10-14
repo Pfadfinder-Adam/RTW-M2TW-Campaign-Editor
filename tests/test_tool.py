@@ -5425,6 +5425,39 @@ building smith
         self.assertEqual(symbols.sprite_mode(mod), "xml")
         self.assertFalse(modeldb.text_source(mod))                      # not in the mod's file: default modeldb
 
+    def test_an_army_with_no_unit_is_never_written(self):
+        """Report R-20261013-C9ED42 (Medieval II with M2EX): after garrisons were added most factions vanished - the
+        game stops reading descr_strat at an army with no unit ('Must add at least one unit to an army') and every
+        faction after it is lost. Such an army is refused before anything is written; one the mod had already is
+        its own and stays (freedom)."""
+        from campaign_editor import textio
+        from campaign_editor.strat import Strat, empty_armies
+        from campaign_editor.textio import tokens
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {
+            "display_name": "Betan League", "short_name": "Beta", "adjective": "Betan",
+            "start": {"regions": ["B_R"], "leader": {"name": "Boris Alphid", "age": 35}, "denari": 500}})
+        sp = mod.campaign_file("test", "descr_strat.txt")
+        f = plan.files[sp]
+        s = Strat(f)
+        c = next(c for fb in s.factions for c in fb.characters
+                 if any(tokens(l)[:1] == ["army"] for l in s.lines[c.start:c.end]))
+        units = [i for i in range(c.start, c.end) if tokens(s.lines[i])[:1] == ["unit"]]
+        self.assertTrue(units)
+        for i in reversed(units):
+            del f.raw[i]
+        self.assertIn(c.name, " ".join(empty_armies(Strat(f))))
+        with self.assertRaises(textio.WriteError) as got:
+            plan.apply()
+        self.assertIn("at least one unit", str(got.exception))
+        self.assertIn(c.name, str(got.exception))
+        self.assertEqual(tree_hash(self.root), before)
+        self.assertEqual(empty_armies(Strat(textio.TextFile.load(sp))), [])
+        f.save()                                                     # a mod that has one already: Check says it
+        from campaign_editor.check import check_mod
+        self.assertIn("%s (%s): an army with no unit" % (c.name, c.owner), check_mod(ModData(self.root), "test"))
+
     def test_a_refused_write_changes_nothing(self):
         """A file the system refuses half way through Apply (WinError 5: read-only, or held by another program - a
         report from a Medieval II mod): the files written before it go back, the copies go, no temp file and no

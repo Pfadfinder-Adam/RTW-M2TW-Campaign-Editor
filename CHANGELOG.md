@@ -65,6 +65,10 @@
 - **A click on Units & armies no longer stops the editor** ("FieldTable.bind() missing 1 required positional
   argument"): the drag-to-scroll check asked the armies table a question it could not answer.
 - A tab opened before a mod was loaded no longer stops on the leader's name list (no mod: no names).
+- **An army with no unit is never written** (a report: after garrisons were added in a Medieval II (with M2EX) mod
+  most factions vanished from the map). The game stops reading the campaign at such an army ("Must add at least
+  one unit to an army") and every faction after it is lost; Apply now refuses to make one, in plain words, before
+  anything is written. Check mod files names any the mod has already.
 
 ## 0.34.0 - 2026-10-10
 
