@@ -984,9 +984,9 @@ def s_units(c, mod):
     from . import editors as E
     src = unit_names(mod, c.edited, 1)[0]
     plan = Plan(mod, "u", "u", {})
-    E.copy_unit(plan, src, "ce test guard", "ce_test_guard", True,
-                texts={"name": "CE Test Guard", "descr": "Made by the test mod", "descr_short": "Test unit"},
-                owners=[c.edited, c.new])
+    E.write_new_record(plan, "unit", src, "ce test guard", {     # the window's own writer
+        "dict": "ce_test_guard", "recruit": True, "owners": [c.edited, c.new],
+        "texts": {"name": "CE Test Guard", "descr": "Made by the test mod", "descr_short": "Test unit"}})
     return plan
 
 

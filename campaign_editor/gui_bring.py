@@ -18,6 +18,7 @@ from .gui_util import one_window, ScrollFrame, StepWindow
 from .moddata import ModData
 
 NOWHERE = "(not recruited there)"
+BRING = "bring its building too (this mod has none)"
 LEAVE_OUT = "(leave the line out)"
 
 
@@ -39,6 +40,7 @@ class BringWindow(StepWindow):
         self.owners = []                      # factions / cultures of this mod
         self.recruit_map = {}                 # units: {(chain, level): (chain, level) or None}
         self.unit_map = {}                    # buildings: {unit: unit of this mod or None}
+        self.bring_chains = {}                # units: {unit: [chain of the other mod brought along with it]}
         facs = [n for n, _ in self.mod.factions()]
         self.factions = facs
         self.cultures = sorted({c for _, c in self.mod.factions() if c and c not in facs})
@@ -371,9 +373,11 @@ class BringWindow(StepWindow):
         """Units: one row each - which building of THIS mod trains it. Only the units come over, never a building;
         'as in the other mod' keeps the places this mod has under the same names."""
         AS_THERE = "the same buildings as in the other mod"
-        self._note("Only the units come over - no building. Pick the building level of THIS mod that trains each "
-                   "unit: '%s' uses the levels this mod has under the same names (shown beside it), '%s' = "
-                   "trained nowhere until you add a recruit line by hand." % (AS_THERE, NOWHERE))
+        self._note("Pick the building level of THIS mod that trains each unit: '%s' uses the levels this mod has "
+                   "under the same names (shown beside it), '%s' = trained nowhere until you add a recruit line by "
+                   "hand. A building this mod has not at all can come along: '%s' (all its levels, names and "
+                   "pictures; its recruit lines for units this mod lacks left out, said)." % (AS_THERE, NOWHERE, BRING))
+        lacking = packs.missing_chains(self.mod, self.man)
         levels = ["%s / %s" % x for x in packs.recruit_levels(self.mod)]
         have = set(packs.recruit_levels(self.mod))
         places = {}
@@ -393,7 +397,9 @@ class BringWindow(StepWindow):
             same = [p for p in mine if p in have]
             picked = {self.recruit_map.get((unit,) + p, self.recruit_map.get(p, p if p in have else None))
                       for p in mine}
-            if not mine:
+            if self.bring_chains.get(unit):
+                cur = BRING
+            elif not mine:
                 cur = NOWHERE
             elif picked == {p if p in have else None for p in mine}:
                 cur = AS_THERE if same else NOWHERE
@@ -402,20 +408,23 @@ class BringWindow(StepWindow):
                 cur = "%s / %s" % one if one else NOWHERE
             ttk.Label(frm, text=unit, font=("", 9, "bold")).grid(row=2 * i, column=0, sticky="w", pady=(6, 0))
             v = tk.StringVar(value=cur)
-            ttk.Combobox(frm, textvariable=v, values=([AS_THERE] if same else []) + [NOWHERE] + levels,
+            ttk.Combobox(frm, textvariable=v, values=([BRING] if lacking.get(unit) else []) +
+                         ([AS_THERE] if same else []) + [NOWHERE] + levels,
                          state="readonly", width=56).grid(row=2 * i, column=1, sticky="w", padx=8, pady=(6, 0))
             ttk.Label(frm, foreground="#666", wraplength=700, justify="left", text=(
-                "in the other mod: %s; here under the same names: %s" % (
+                "in the other mod: %s; here under the same names: %s%s" % (
                     ", ".join("%s / %s" % p for p in mine) or "nowhere",
-                    ", ".join("%s / %s" % p for p in same) or "none"))).grid(
+                    ", ".join("%s / %s" % p for p in same) or "none",
+                    "; this mod has no %s at all" % ", ".join(lacking[unit]) if lacking.get(unit) else ""))).grid(
                 row=2 * i + 1, column=0, columnspan=2, sticky="w")
             vs.append((unit, mine, v))
 
         def collect():
             for unit, mine, v in vs:
                 val = v.get()
+                self.bring_chains[unit] = list(lacking.get(unit, [])) if val == BRING else []
                 for p in mine:
-                    if val == AS_THERE:
+                    if val in (AS_THERE, BRING):
                         self.recruit_map[(unit,) + p] = p if p in have else None
                     elif val == NOWHERE:
                         self.recruit_map[(unit,) + p] = None
@@ -428,7 +437,9 @@ class BringWindow(StepWindow):
         from .plan import Plan
         plan = Plan(self.mod, "pack", "unit_pack" if self.kind == "unit" else "building_pack", {})
         if self.kind == "unit":
-            packs.import_pack(plan, self.man, self.files, self.owners, self.names, self.recruit_map)
+            chains = sorted({c for u in self.man["units"] for c in self.bring_chains.get(u["type"], [])})
+            packs.bring_with_buildings(plan, self.src, self.man, self.files, self.owners, self.names,
+                                       self.recruit_map, chains)
         else:
             packs.import_buildings(plan, self.man, self.files, self.owners, self.chain_names, self.level_names,
                                    self.unit_map)

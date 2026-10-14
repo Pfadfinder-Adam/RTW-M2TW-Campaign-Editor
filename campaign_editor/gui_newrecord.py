@@ -454,11 +454,84 @@ class NewRecordWizard(StepWindow):
             ttk.Label(g, text=what, foreground="#666", wraplength=260).grid(row=r, column=2, sticky="w")
             r += 1
         g.columnconfigure(1, weight=1)
+        look = ttk.LabelFrame(self.body, text="How it looks", padding=6)
+        look.pack(fill="x", pady=(8, 0))
+        self._own_files_box(look, 0)
 
         def collect():
             for k, v in vs.items():
                 st["values"][k] = v.get().strip()
         self._collect = collect
+
+    def _own_files_box(self, look, row):
+        """'Your own files' in the New unit window (a tester: 'we make a unit and cannot pick our own model'): a
+        texture for every faction, Medieval II's weapons and shields texture, the model file(s) - put on the new
+        unit's battle model when it is written (models.own_files: a model of its own, the old one untouched).
+        Right click a file: taken back. One texture per faction: the Units' Your own files... afterwards."""
+        from . import models as MO
+        own = self.state.setdefault("own", {"tex": {}, "attach": None, "meshes": []})
+        ext, word = MO.mesh_kind(self.mod)
+        pics = "*" + " *".join(MO.PICTURES)
+        box = ttk.Frame(look)
+        box.grid(row=row, column=0, columnspan=3, sticky="we", pady=(6, 0))
+        ttk.Label(box, text="Your own files", font=("", 9, "bold")).grid(row=0, column=0, sticky="w")
+
+        def shown(key):
+            v = own["tex"].get("*") if key == "tex" else own.get(key)
+            if key == "meshes":
+                return ", ".join(os.path.basename(p) for p in v) if v else "(the model's own)"
+            return os.path.basename(v) if v else "(the model's own)"
+        rows = [("tex", "Texture (every faction)", "Pick a picture...")]
+        if MO.game_kind(self.mod) == "medieval2":
+            rows.append(("attach", "Weapons and shields texture", "Pick a picture..."))
+        rows.append(("meshes", "The model itself (%s)" % word, "Pick the model file(s)..."))
+        for r, (key, text, button) in enumerate(rows, 1):
+            lbl = ttk.Label(box, text=shown(key), foreground="#555")
+
+            def pick(k=key, lb=lbl):
+                if k == "meshes":
+                    paths = filedialog.askopenfilenames(parent=self, title="Your %s file(s), the closest detail "
+                                                        "first" % word, filetypes=[(word, "*" + ext),
+                                                                                    ("Every file", "*.*")])
+                    if not paths:
+                        return
+                    try:
+                        for p in paths:
+                            MO.check_mesh(self.mod, p)
+                    except ValueError as e:
+                        from tkinter import messagebox
+                        messagebox.showerror("Your own files", str(e), parent=self)
+                        return
+                    own["meshes"] = list(paths)
+                else:
+                    path = filedialog.askopenfilename(parent=self, title="A picture for the texture", filetypes=[
+                        ("Pictures", pics), ("Every file", "*.*")])
+                    if not path:
+                        return
+                    if k == "tex":
+                        own["tex"]["*"] = path
+                    else:
+                        own["attach"] = path
+                lb.configure(text=shown(k))
+
+            def back(e, k=key, lb=lbl):
+                if k == "tex":
+                    own["tex"].clear()
+                else:
+                    own[k] = [] if k == "meshes" else None
+                lb.configure(text=shown(k))
+            ttk.Label(box, text=text).grid(row=r, column=0, sticky="w", pady=1)
+            b = ttk.Button(box, text=button, command=pick)
+            b.grid(row=r, column=1, sticky="w", padx=6, pady=1)
+            lbl.grid(row=r, column=2, sticky="w")
+            for wd in (b, lbl):
+                wd.bind("<Button-3>", back)
+        ttk.Label(box, foreground="#666", wraplength=700, justify="left", text=(
+            "Made in another program: the editor turns a picture into the game's texture, names and places every "
+            "file and gives the unit a model of its own (the old model and the units wearing it stay as they "
+            "are). A model file must be made for the model's skeleton; several = detail levels, the closest "
+            "first. Right click: the model's own again.")).grid(row=len(rows) + 1, column=0, columnspan=3,
+                                                                  sticky="w", pady=(2, 0))
 
     # ---- a unit made from nothing: its numbers, model and mount; where it is recruited ----
     def s_nothing_values(self):
@@ -495,14 +568,15 @@ class NewRecordWizard(StepWindow):
         v_model = tk.StringVar(value=st["model"])
         ttk.Combobox(look, textvariable=v_model, values=models, width=34).grid(row=0, column=1, sticky="w", padx=6)
         ttk.Label(look, foreground="#666", wraplength=420, justify="left", text=(
-            "a model of the mod made to sit %s; your own files (texture, .cas / .mesh) go in afterwards with the "
-            "Units' Your own files..." % MO.SEAT_WORDS.get(seat))).grid(row=0, column=2, sticky="w")
+            "a model of the mod made to sit %s; your own texture or model file below put on it" %
+            MO.SEAT_WORDS.get(seat))).grid(row=0, column=2, sticky="w")
         v_mount = tk.StringVar(value=st["mount"] or "")
         if st["kind"].startswith("horse"):
             mounts = sorted(m for m, c in MO.mount_classes(self.mod).items() if c in FN.RIDDEN)
             ttk.Label(look, text="It rides").grid(row=1, column=0, sticky="w", pady=(4, 0))
             ttk.Combobox(look, textvariable=v_mount, values=mounts, state="readonly", width=34).grid(
                 row=1, column=1, sticky="w", padx=6, pady=(4, 0))
+        self._own_files_box(look, 2)
 
         def collect():
             for k, v in vs.items():
@@ -927,13 +1001,13 @@ class NewRecordWizard(StepWindow):
                                     "model": st["model"], "mount": st["mount"], "values": dict(st["values"]),
                                     "texts": {k: st[k] for k in ("name", "descr", "descr_short")},
                                     "pictures": {k: v for k, v in st["pictures"].items() if v},
-                                    "recruit": list(st["levels"] or [])}
+                                    "recruit": list(st["levels"] or []), "own": self._own()}
         if self.kind == "unit":
             d = {"dict": st["dict"], "recruit": st["recruit"],
                  "texts": {k: (st[k] if st[k] != st["orig"][k] else None) for k in ("name", "descr", "descr_short")},
                  "owners": st["owners"] or None,
                  "values": {k: v for k, v in st["values"].items() if v != st["orig_values"].get(k)},
-                 "pictures": {k: v for k, v in st["pictures"].items() if v}}
+                 "pictures": {k: v for k, v in st["pictures"].items() if v}, "own": self._own()}
             return st["src"], st["type"], d
         levels = {old: new for old, new, _, _ in st["levels"]}
         d = {"levels": levels,
@@ -945,8 +1019,21 @@ class NewRecordWizard(StepWindow):
                           if k in levels and any((v or {}).values())}}
         return st["src"], st["chain"], d
 
+    def _own(self):
+        """The unit's own files picked in 'How it looks' (a copy of them), or None."""
+        own = self.state.get("own") or {}
+        if not (own.get("tex") or own.get("attach") or own.get("meshes")):
+            return None
+        return {"tex": dict(own.get("tex") or {}), "attach": own.get("attach"), "meshes": list(own.get("meshes") or [])}
+
     def problems(self):
         st = self.state
+        own = self._own() if self.kind == "unit" else None
+        if own:
+            files = list(own["tex"].values()) + [own["attach"]] + own["meshes"]
+            gone = ["your file not found: %s" % v for v in files if v and not os.path.isfile(v)]
+            if gone:
+                return gone
         out = []
         if self.nothing() and self.kind == "building":
             from . import fromnothing as FN
@@ -989,20 +1076,7 @@ class NewRecordWizard(StepWindow):
             from .plan import Plan
             try:
                 plan = Plan(ModData(self.mod.data), "new_" + self.kind, "new_" + self.kind, {})
-                if d.get("nothing") and self.kind == "building":
-                    from . import fromnothing as FN
-                    FN.new_building(plan, d["nothing"], new, d["levels"], d["factions"], d["numbers"], d["castle"],
-                                    d["units"], d["chain_name"], d["pictures"])
-                elif d.get("nothing"):
-                    from . import fromnothing as FN
-                    FN.new_unit(plan, d["nothing"], new, d["dict"], d["owners"], d["model"], d["mount"],
-                                d["values"], d["texts"], d["pictures"], d["recruit"])
-                elif self.kind == "unit":
-                    E.copy_unit(plan, src, new, d["dict"], d["recruit"], texts=d["texts"], owners=d["owners"],
-                                values=d["values"], pictures=d["pictures"])
-                else:
-                    E.copy_building(plan, src, new, d["levels"], texts=d["texts"], factions=d["factions"],
-                                    pictures=d["pictures"])
+                E.write_new_record(plan, self.kind, src, new, d)
             except Exception as e:
                 why = [str(e)]
         if why:

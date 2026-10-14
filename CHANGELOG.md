@@ -6,6 +6,9 @@
 - **Campaign script...** (in the Events window): the campaign's own `campaign_script.txt` piece by piece - monitors,
   loops, counters, commands, each with its code - and any taken out: one, the picked ones, or all (the script frame
   stays). Preview and Keep for Apply as Events.
+- Bring units from another mod: a unit whose building this mod has not at all can bring that building along (all
+  its levels, names and pictures), recruiting it there.
+- New unit step by step: your own texture or model file for the new unit right in the window (How it looks).
 - Bring units from another mod: the list sorts by name, kind, owner or cost; a unit shows on the right as soon as
   the mouse is over it, without ticking it.
 - Events: pick many (Ctrl / Shift + click) and take them out with one right click, or **Remove all...**.

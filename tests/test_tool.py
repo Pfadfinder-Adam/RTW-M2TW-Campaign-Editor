@@ -8086,6 +8086,46 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
 
+    def test_bring_a_unit_with_the_building_this_mod_lacks(self):
+        """Report R-20261013-C4DD62: 'what if the mod we bring the unit to has no such building?' - the chain that
+        trains it comes along (levels, texts, pictures), its recruit line pointing at the unit brought now, no
+        'not recruited at' warning for it; a chain this mod has stays as it is."""
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        hall = ("building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, }\n"
+                "        {\n            capability\n            {\n                recruit \"alpha general\"  0  "
+                "requires factions { alpha, }\n            }\n        }\n    }\n}\n")
+        write(os.path.join(d, "export_descr_buildings.txt"), hall + hall.replace("barracks", "temple").replace(
+            "hall", "shrine"))
+        write(os.path.join(d, "text", "export_buildings.txt"), "{shrine}Shrine\n{shrine_desc}Holy\n", utf16=True)
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        shutil.copytree(self.root, os.path.join(target, "mod"))
+        troot = os.path.join(target, "mod")
+        write(os.path.join(troot, "data", "export_descr_buildings.txt"), hall)          # no temple here
+        before = tree_hash(troot)
+        src, tmod = ModData(self.root), ModData(troot)
+        man, files = packs.collect(src, ["alpha general"])
+        self.assertEqual(packs.missing_chains(tmod, man), {"alpha general": ["temple"]})
+        names = packs.plan_names(tmod, man)
+        plan = Plan(tmod, "pack", "pack", {})
+        packs.bring_with_buildings(plan, src, man, files, ["alpha"], names, packs.default_recruit_map(tmod, man),
+                                   ["temple"])
+        self.assertNotIn("not recruited at temple", plan.report())
+        bdir = plan.apply()
+        with open(ModData(troot).file("edb")) as fh:
+            edb = fh.read()
+        temple = edb[edb.index("building temple"):]
+        self.assertIn("levels shrine", temple)
+        self.assertEqual(temple.count('recruit "alpha general 2"'), 1)      # once, with the building
+        barracks = edb[edb.index("building barracks"):edb.index("building temple")]
+        self.assertEqual(barracks.count('recruit "alpha general 2"'), 1)    # the place this mod has: as there
+        self.assertEqual(edb.count("building temple"), 1)
+        restore(ModData(troot), bdir)
+        after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
+        self.assertEqual(after, before)
+
     def test_brought_building_recruits_only_units_its_faction_may_own(self):
         """Bring from another mod: a brought barracks recruited the units of every culture, each line written for the
         new faction - the game warned 'unit(...) does not match up to the ownership for faction(...)' 159 times on
@@ -10154,6 +10194,41 @@ building smith
             MO.own_files(Plan(ModData(self.root), "own", "own", {}), "alpha general", "soldier", 0, attach=pic)
         with self.assertRaises(ValueError):
             MO.own_files(Plan(ModData(self.root), "own", "own", {}), "alpha general", "soldier", 0)
+
+    def test_new_unit_with_your_own_texture(self):
+        """Report R-20261013-814122: 'we make a unit and cannot pick our own model' - the New unit window's own files
+        go on the new unit's model when it is written (one writer for the window's check and the editor's Apply):
+        a model of its own, the template's unit keeps its look."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from campaign_editor import editors as E
+        from campaign_editor import models as MO
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1\nownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\talpha_model\nskeleton\t\tfs_swordsman\ntexture\t\talpha, data/models_unit/textures/a.tga\n"
+              "model_flexi\t\tdata/models_unit/a_low.cas, max\n")
+        tex = os.path.join(d, "models_unit", "textures")
+        os.makedirs(tex)
+        Image.new("RGBA", (64, 64), (200, 0, 0, 255)).save(os.path.join(tex, "a.tga"), format="TGA")
+        pic = os.path.join(self.root, "mine.png")
+        Image.new("RGB", (64, 64), (0, 255, 0)).save(pic)
+        before = tree_hash(self.root)
+        plan = Plan(ModData(self.root), "new_unit", "new_unit", {})
+        E.write_new_record(plan, "unit", "alpha general", "alpha elite", {
+            "dict": "alpha_elite", "recruit": False, "own": {"tex": {"*": pic}, "attach": None, "meshes": []}})
+        bdir = plan.apply()
+        m2 = ModData(self.root)
+        self.assertEqual(MO.unit_slots(MO.unit_lines(m2, "alpha elite")), [("soldier", 0, "alpha_elite")])
+        self.assertEqual(MO.unit_slots(MO.unit_lines(m2, "alpha general")), [("soldier", 0, "alpha_model")])
+        self.assertIn("alpha_elite", MO.catalogue(m2)["alpha_elite"].textures["alpha"])
+        restore(ModData(self.root), bdir)
+        after = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
+        self.assertEqual(after, before)
 
     def test_medieval_religions(self):
         # Medieval II: a ninth line per region, the religions

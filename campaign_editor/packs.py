@@ -667,6 +667,37 @@ def default_recruit_map(mod, manifest):
     return out
 
 
+def missing_chains(mod, manifest):
+    """{unit: [chain]}: the building chains of the other mod that train each unit and that this mod has not at all
+    (a tester: 'what if the mod we bring the unit to has no such building?')."""
+    from .editors import building_blocks
+    here = {b[0].lower() for b in building_blocks(mod.load(mod.file("edb")))} if mod.file("edb") else set()
+    out = {}
+    for r in manifest.get("recruit", []):
+        if r["chain"].lower() not in here and r["chain"] not in out.setdefault(r["unit"], []):
+            out[r["unit"]].append(r["chain"])
+    return {u: c for u, c in out.items() if c}
+
+
+def bring_with_buildings(plan, src, manifest, files, owners, names=None, recruit_map=None, chains=()):
+    """import_pack, then the other mod's building chains this mod lacks (chains) come along: every level, text and
+    picture (import_buildings), their recruit lines pointing at the units brought now (the others this mod has by
+    name kept, the rest left out - said), built by the same owners. The brought units' places in those chains are
+    not written twice: their lines come with the building."""
+    names = names or plan_names(plan.mod, manifest)
+    rmap = dict(recruit_map or default_recruit_map(plan.mod, manifest))
+    chains = [c for c in chains]
+    for r in manifest.get("recruit", []):
+        if r["chain"] in chains:
+            rmap[(r["unit"], r["chain"], r["level"])] = False
+    import_pack(plan, manifest, files, owners, names, rmap)
+    if chains:
+        bman, bfiles = collect_buildings(src, chains)
+        cn, ln = building_names(plan.mod, bman)
+        import_buildings(plan, bman, bfiles, owners, cn, ln, {old: new for old, (new, _) in names.items()})
+    return plan
+
+
 def known_conditions(mod):
     """What this mod knows of the names a requires line or a capability line may use: {'hidden_resource': set or
     None, 'resource': set or None, 'religion': set or None} (religion None = the game has no religions / beliefs at
@@ -742,6 +773,8 @@ def _recruit(plan, manifest, names, owners, recruit_map=None):
         if dst is None:
             missing.add("%s %s" % src)
             continue
+        if dst is False:                      # its building comes along with it (bring_with_buildings)
+            continue
         if (r["unit"], dst) in done:          # two source places sent to one level: one line is enough
             continue
         done.add((r["unit"], dst))
@@ -770,7 +803,7 @@ def _recruit(plan, manifest, names, owners, recruit_map=None):
                      "them (Buildings: Add line)" % m)
 
 
-__all__ = ["recruit_levels", "default_recruit_map", "collect_buildings", "building_names", "import_buildings",
+__all__ = ["recruit_levels", "default_recruit_map", "missing_chains", "bring_with_buildings", "collect_buildings", "building_names", "import_buildings",
            "type_blocks", "collect", "collect_models", "export_pack", "read_pack", "plan_names", "import_pack",
            "import_models", "game_kind"]
 

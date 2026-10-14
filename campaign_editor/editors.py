@@ -370,6 +370,31 @@ def set_text_values(plan, path, values):
     plan.note(f, "text of %s" % ", ".join(sorted(v[0] for v in low.values())))
 
 
+def write_new_record(plan, kind, src, new, d):
+    """One New unit / New building of the step-by-step window (gui_newrecord.op: source, new name, details) into
+    plan: made from nothing (fromnothing) or a copy; a unit's own files (d['own']: textures {'*' or faction:
+    picture}, attach, meshes, name) put on its model after it (models.own_files - the window's 'Your own files')."""
+    if d.get("nothing") and kind == "building":
+        from . import fromnothing as FN
+        FN.new_building(plan, d["nothing"], new, d["levels"], d["factions"], d["numbers"], d["castle"],
+                        d["units"], d["chain_name"], d["pictures"])
+    elif d.get("nothing"):
+        from . import fromnothing as FN
+        FN.new_unit(plan, d["nothing"], new, d["dict"], d["owners"], d["model"], d["mount"], d["values"],
+                    d["texts"], d["pictures"], d["recruit"])
+    elif kind == "unit":
+        copy_unit(plan, src, new, d["dict"], d["recruit"], texts=d.get("texts"), owners=d.get("owners"),
+                  values=d.get("values"), pictures=d.get("pictures"))
+    else:
+        copy_building(plan, src, new, d["levels"], texts=d.get("texts"), factions=d.get("factions"),
+                      pictures=d.get("pictures"))
+    own = d.get("own") or {}
+    if kind == "unit" and (own.get("tex") or own.get("attach") or own.get("meshes")):
+        from .models import own_files
+        own_files(plan, new, "soldier", 0, textures=own.get("tex"), attach=own.get("attach"),
+                  meshes=own.get("meshes"), name=own.get("name"))
+
+
 def copy_unit(plan, src_type, new_type, new_dict, recruit=True, texts=None, owners=None, values=None, pictures=None):
     """A new unit: the block of src_type copied after it under new_type and new_dict,
     its names and descriptions (export_units.txt) and cards copied to the new
