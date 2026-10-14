@@ -6,6 +6,13 @@
 
 **Pfadfinder ("Adam")** - the idea and the program.
 
+## Supporters on Ko-fi
+
+Thank you for keeping the work going (names only, never amounts):
+
+- **GKpretorian**
+- **Ruthron**
+
 ## A special thank you
 
 - **Ruthron** - for the 3 x bigger map, and for so many reports. He made the map bigger again and again on
@@ -30,13 +37,7 @@ signed with:
 - **John**
 - **Bartek K**
 - **Yuri**
-
-## Supporters on Ko-fi
-
-Thank you for keeping the work going (names only, never amounts):
-
-- **GKpretorian**
-- **Ruthron**
+- **bodkinarrow**
 
 ## How to get in
 
