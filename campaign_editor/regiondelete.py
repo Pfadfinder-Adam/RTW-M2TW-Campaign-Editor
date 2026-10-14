@@ -776,5 +776,5 @@ def make_wasteland(plan, campaign, name, colour, tiles=(), land=False):
         return
     cx, cy = sum(x for x, _ in cells) / len(cells), sum(y for _, y in cells) / len(cells)
     xy = min(cells, key=lambda p: ((p[0] - cx) ** 2 + (p[1] - cy) ** 2, p))
-    R.apply(plan, campaign, {"added": [{"type": "slaves", "xy": xy}]})
+    R.apply(plan, campaign, {"added": [{"type": "slaves", "xy": xy, "land": land}]})     # land: sea in the files still
     plan.note(sf, "%s: a slaves resource at %d, %d (Rome needs one in every region)" % (name, xy[0], xy[1]))

@@ -298,14 +298,15 @@ def empty_armies(s):
 
 
 def shared_army_tiles(s):
-    """{(x, y): ['name (faction)', ...]} for tiles more than one army or fleet stands on - the game takes one army
-    a tile (a town holds one)."""
+    """{(x, y): [(name, faction), ...]} for tiles more than one army or fleet stands on. The games' readers (exe study
+    2026-10-14): another faction's army there - the original exes stop ('trying to attach ... to the army of'), REX /
+    M2EX place the second one standalone; the same faction's - joined, or 'Cannot attach 2 armies together' (stop)."""
     from .textio import tokens
     at = {}
     for fb in s.factions:
         for c in fb.characters:
             if c.xy and any(tokens(l)[:1] == ["army"] for l in s.lines[c.start:c.end]):
-                at.setdefault(tuple(c.xy), []).append("%s (%s)" % (c.name or "a character", fb.name))
+                at.setdefault(tuple(c.xy), []).append((c.name or "a character", fb.name))
     return {xy: names for xy, names in at.items() if len(names) > 1}
 
 

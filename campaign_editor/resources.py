@@ -185,7 +185,8 @@ def _new_line(template, kind, xy, town=None):
 
 
 def apply(plan, campaign, changes):
-    """changes = {'moved': {index: (x, y)}, 'removed': [index], 'added': [{'type', 'xy'}],
+    """changes = {'moved': {index: (x, y)}, 'removed': [index], 'added': [{'type', 'xy'[, 'land': True - on land
+    this write makes out of sea]}],
     'region_tags': {region: 'tag, tag'}} - JSON keys may be strings. Writes descr_strat.txt
     (and descr_regions.txt for region tags)."""
     if not changes:
@@ -239,6 +240,8 @@ def apply(plan, campaign, changes):
             others = final[:]
             others.remove(xy)
             why = problem(mod, campaign, xy, others)
+            if why == "that is sea" and a.get("land"):     # land this same write makes out of sea (the Terrain brush)
+                why = None
             if why:
                 raise ValueError("new %s at %d, %d: %s" % (a["type"], xy[0], xy[1], why))
         # new lines after the last resource line, in its layout (one without a quantity if there is one)

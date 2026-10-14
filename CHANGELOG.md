@@ -80,7 +80,12 @@
 - **Many moves at once are judged where everything ends up** (an army refused "another army stands there" though
   that army was moved away too; a town refused "another town or port stands there" though its port moved): an
   army may take the tile another one leaves, a town the tile its port leaves - in any order, of any faction.
-  Two armies left on one tile are said in **Preview** already ("Apply will refuse this"), not only at Apply.
+  Two armies left on one tile are said in **Preview** already ("Apply will refuse this"), not only at Apply - and
+  only where the game would stop: with REX or M2EX another faction's army on a taken tile is placed beside it by
+  the engine (said, not refused); two of one faction, or any two on the original games, stay refused.
+- **A town's changes kept for Apply come back when the Town window opens again** (it showed the old garrison).
+- **A wasteland on land the Terrain brush makes out of sea is written** (it stopped: "new slaves at ...: that is
+  sea" - its slaves resource was checked against the old map).
 
 ## 0.34.0 - 2026-10-10
 

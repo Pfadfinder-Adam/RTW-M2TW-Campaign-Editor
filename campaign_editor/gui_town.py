@@ -201,6 +201,7 @@ class TownWindow(tk.Toplevel):
         self.views.bind("<<NotebookTabChanged>>", lambda e: self._tab_changed())
         self.picked = None                                  # the buildings as picked here, None = as the file has
         self.garrison = None                                # the garrison as picked here, None = as it stands
+        self._restore(region)
         self.load_buildings()
         self.ged_loaded = False                             # the garrison's cards are made when it is first shown:
         self.v_owner.trace_add("write", lambda *a: self._owner_changed())
@@ -214,6 +215,28 @@ class TownWindow(tk.Toplevel):
         ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=4)
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
         self.show_view()
+
+    def _restore(self, region):
+        """This town's changes kept for Apply, shown again when it is opened again (a report: a garrison kept here
+        showed the old one on the next opening - the town is read without its own kept part, which Keep replaces)."""
+        kept = getattr(self.app, "_town_kept", {})
+        st = kept.get(region)
+        if st is None:
+            return
+        if not (hasattr(self.app, "session_kept") and self.app.session_kept("town:%s" % region)):
+            kept.pop(region, None)                          # written or dropped since: the files say it now
+            return
+        for var, key in ((self.v_owner, "owner"), (self.v_kind, "kind"), (self.v_level, "level"),
+                         (self.v_pop, "population")):
+            if st.get(key) is not None:
+                var.set(st[key])
+        self.picked = st.get("picked")
+        self.garrison = st.get("garrison")
+
+    def _kept_state(self):
+        return {"owner": self.v_owner.get(), "kind": self.v_kind.get(), "level": self.v_level.get(),
+                "population": self.v_pop.get(), "picked": self.picked,
+                "garrison": None if self.garrison is None else list(self.garrison)}
 
     # ---- the two views ----
     def _tab_changed(self):
@@ -409,8 +432,14 @@ class TownWindow(tk.Toplevel):
             log.write("Town %s changed (backup %s)" % (region, bdir))
             if self.winfo_exists() and self.region == region:
                 self.load(region)
-        return keep_for_apply(self, "town:%s" % region, "Town %s: buildings / garrison / owner" % name, self._plan,
+        state = self._kept_state()
+        done = keep_for_apply(self, "town:%s" % region, "Town %s: buildings / garrison / owner" % name, self._plan,
                               after, TITLE)
+        if done:
+            if not hasattr(self.app, "_town_kept"):
+                self.app._town_kept = {}
+            self.app._town_kept[region] = state             # shown again when this town opens again
+        return done
 
     def _unwritten(self):
         """Words of what is neither written nor kept for the write, or '' (the close guard asks before throwing it

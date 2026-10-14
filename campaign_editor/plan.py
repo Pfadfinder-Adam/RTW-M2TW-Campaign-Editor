@@ -228,7 +228,7 @@ class Plan:
             lines.append(rel or "(files)")
             for msg in by[rel]:
                 lines.append("    " + msg)
-        warnings = list(self.warnings)
+        warnings = list(self.warnings) + [("", m) for m in self.tile_notes()]
         ro = self.readonly_note()
         if ro:
             warnings.append(("", ro))
@@ -269,9 +269,33 @@ class Plan:
                                                                             if len(new) > 8 else "")))
             was = shared_army_tiles(old) if old else {}
             for xy, names in sorted(shared_army_tiles(Strat(f)).items()):
-                if set(names) - set(was.get(xy, [])):
-                    out.append("%s: two armies on one tile (%d, %d) - the game takes one army a tile (a town holds "
-                               "one); move one of them" % (" and ".join(names), xy[0], xy[1]))
+                if not set(names) - set(was.get(xy, [])) or self._engine_takes(names):
+                    continue
+                out.append("%s: two armies on one tile (%d, %d) - the game stops reading the campaign there "
+                           "('trying to attach ... to the army of' / 'Cannot attach 2 armies together'); move one of "
+                           "them" % (" and ".join("%s (%s)" % n for n in names), xy[0], xy[1]))
+        return out
+
+    def _engine_takes(self, names):
+        """REX / M2EX place another faction's army standalone on a taken tile (their reader, exe study 2026-10-14);
+        two of ONE faction stay refused (not shown to be softened)."""
+        from .limits import engine_of
+        factions = [f for _, f in names]
+        return bool(engine_of(self.mod)) and len(set(factions)) == len(factions)
+
+    def tile_notes(self):
+        """Armies of different factions on one tile that REX / M2EX take (placed standalone): said, not refused."""
+        from .strat import Strat, shared_army_tiles
+        out = []
+        changed = self.changed_files()
+        for path, f in self.files.items():
+            if os.path.basename(path).lower() != "descr_strat.txt" or path not in changed:
+                continue
+            was = shared_army_tiles(Strat(TextFile.load(path))) if os.path.exists(path) else {}
+            for xy, names in sorted(shared_army_tiles(Strat(f)).items()):
+                if set(names) - set(was.get(xy, [])) and self._engine_takes(names):
+                    out.append("%s share tile %d, %d - the engine places one of them standalone there (the original "
+                               "game would stop)" % (" and ".join("%s (%s)" % n for n in names), xy[0], xy[1]))
         return out
 
     def _no_empty_army(self):

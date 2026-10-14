@@ -8113,6 +8113,66 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_slaves_on_land_the_terrain_brush_makes(self):
+        """Report R-20261012-C56BB7: the Terrain brush made land out of sea for a wasteland, its slaves resource went
+        on that land and the write stopped: 'new slaves at 159, 217: that is sea' - checked against the old map.
+        A resource put on land the same write makes is told so; any other still needs land."""
+        from campaign_editor import resources as R
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        red, blue, black, sea_c = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233)
+        write_tga(os.path.join(camp, "map_regions.tga"), 5, 4, [[red, red, blue, blue, sea_c],
+                                                                 [red, black, blue, blue, sea_c],
+                                                                 [red, red, blue, black, sea_c],
+                                                                 [red, red, blue, blue, sea_c]])
+        write_tga(os.path.join(camp, "map_heights.tga"), 11, 9,
+                  [[(0, 0, 250) if x >= 9 else (20, 20, 20) for x in range(11)] for y in range(9)])
+        mod = ModData(self.root)
+        sea = (4, 1)
+        self.assertTrue(mod.is_sea("test", sea))
+        with self.assertRaises(ValueError):
+            R.apply(Plan(mod, "map", "map", {}), "test", {"added": [{"type": "slaves", "xy": sea}]})
+        plan = Plan(mod, "map", "map", {})
+        R.apply(plan, "test", {"added": [{"type": "slaves", "xy": sea, "land": True}]})
+        self.assertTrue(any(r.kind == "slaves" and tuple(r.xy) == sea
+                            for r in R.read(plan.files[mod.campaign_file("test", "descr_strat.txt")])))
+
+    def test_town_window_shows_its_kept_garrison_again(self):
+        """Report R-20261012-C56BB7: a garrison kept for Apply in the Town window - opened again, the window showed
+        the old one (the town is read without its own kept part, which Keep replaces). The picks come back while
+        the part is kept, and are forgotten once it is written or dropped."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        try:
+            from campaign_editor import gui_town
+        except ImportError as e:                         # Pillow (CI's test job has none)
+            root.destroy()
+            self.skipTest("no Pillow: %s" % e)
+        from unittest import mock
+        mod = ModData(self.root)
+        kept = set()
+        root.mod, root.pictures, root.status = mod, None, tk.StringVar(root)
+        root.v_campaign = tk.StringVar(root, "test")
+        root.kept_view = lambda but=None: mod
+        root.session_kept = lambda key: key in kept
+        root.map_only = lambda: True
+        region = next(iter(mod.city_tiles("test")))
+        try:
+            with mock.patch("campaign_editor.gui_util.keep_for_apply", return_value=True):
+                w = gui_town.TownWindow(root, region)
+                w.garrison = ["alpha general"]
+                self.assertTrue(w.write())
+            kept.add("town:%s" % region)
+            w.load(region)
+            self.assertEqual(w.garrison, ["alpha general"])
+            kept.clear()                                 # written (or dropped): the files say it now
+            w.load(region)
+            self.assertIsNone(w.garrison)
+        finally:
+            root.destroy()
+
     def test_town_window_shows_the_owner_the_map_gave(self):
         """Report R-20261012-05343F: Byzantium given on the Map, its Town window still said 'slave - Rebels' - the
         window read the file; it shows the owner as the next Apply leaves the town."""
@@ -8243,6 +8303,15 @@ building smith
         self.assertEqual(next(c.xy for c in s.faction("slave").characters if c.name == "Grog"), (1, 1))
         self.assertNotIn("two armies on one tile", plan.report())
         self.assertEqual(plan.crash_problems(), [])
+        # REX / M2EX place another faction's army standalone on a taken tile (their reader): said, not refused
+        open(os.path.join(self.root, "REX.exe"), "wb").close()
+        from campaign_editor.limits import engine_of
+        rex = ModData(self.root)
+        self.assertTrue(engine_of(rex))
+        both = Plan(rex, "map", "map", {})
+        map_changes(both, "test", {"moves": {"slave": [{"name": "Grog", "from": (2, 2), "to": (1, 1)}]}})
+        self.assertEqual(both.crash_problems(), [])
+        self.assertIn("places one of them standalone", both.report())
 
     def test_map_changes_for_any_faction(self):
         # a tester: what is put on the Map should not depend on the faction picked elsewhere - a town given to any
