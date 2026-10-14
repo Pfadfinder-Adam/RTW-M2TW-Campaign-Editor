@@ -231,7 +231,7 @@ class MassTownWindow(tk.Toplevel):
 
     def _garrison_tab(self, nb):
         f = ttk.Frame(nb, padding=8)
-        self.v_lo, self.v_hi, self.v_cap = tk.StringVar(value="2"), tk.StringVar(value="6"), tk.StringVar(value="500")
+        self.v_lo, self.v_hi, self.v_cap = tk.StringVar(value="3"), tk.StringVar(value="6"), tk.StringVar(value="750")
         self.v_siege, self.v_gmode = tk.BooleanVar(value=False), tk.StringVar(value="add")
         self.v_here = tk.BooleanVar(value=True)            # only what the town's own buildings recruit
         self.v_gamesize = tk.BooleanVar(value=False)       # units per town as the game's own towns of that level

@@ -9183,8 +9183,19 @@ building smith
         alpha = st.faction("alpha")
         self.assertIn("B_R", [x.region for x in alpha.settlements])
         self.assertIn("Boris", [c.name for c in alpha.characters])
+        # report #201: the rebels' garrison left the town given - it gets 3-6 of its new owner's units drawn at
+        # random, their upkeep together at most 750, instead of standing empty
+        from campaign_editor.start import _units
+        tile = ModData(self.root).city_tiles("test")["B_R"]
+        holder = [c for c in alpha.characters if c.xy == tile]
+        self.assertEqual(len(holder), 1)
+        self.assertTrue(3 <= len(_units(st.lines[holder[0].start:holder[0].end])) <= 6)
+        self.assertIn("an empty town given to alpha - a garrison of", plan.report())
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+        off = Plan(ModData(self.root), "map", "map", {})              # switched off: the town stays empty
+        map_changes(off, "test", {"owners": {"B_R": "alpha"}, "auto_garrison": None})
+        self.assertNotIn("garrison of", off.report())
 
     def test_new_army_made_a_general(self):
         """Map > New army, 'Make him a general': his army starts with the faction's general's bodyguard (general_unit

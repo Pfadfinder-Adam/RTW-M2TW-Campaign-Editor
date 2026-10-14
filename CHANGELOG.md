@@ -81,6 +81,9 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- A town given to a faction that stands empty (the rebels' garrison leaves with them) gets a garrison by itself:
+  3 to 6 of its new owner's units, their upkeep together at most 750. Many towns at once draws 3 to 6, upkeep 750
+  at first, too.
 - New / Edit faction > Pick on the map: the regions of the towns picked for the faction show see-through yellow, as
   Select shows them.
 - Bigger map (x3): the coast, borders and rivers bend by the old map's own hills and valleys (capes on ridges, bays
