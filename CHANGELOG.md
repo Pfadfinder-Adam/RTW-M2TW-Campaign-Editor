@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- GitHub Sponsors beside Ko-fi: a "Sponsor" button in the editor, on the README and the wiki.
 - Scrollbars are back: every list, table, page and text shows one when there is more to see (the wheel and
   dragging still work too).
 - The region brush can paint sea on the region map ("(sea)" at the end of *Paint with*).

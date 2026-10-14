@@ -6,7 +6,7 @@
 
 **Pfadfinder ("Adam")** - the idea and the program.
 
-## Supporters on Ko-fi
+## Supporters on Ko-fi and GitHub Sponsors
 
 Thank you for keeping the work going (names only, never amounts):
 

@@ -37,6 +37,7 @@ from .units import faction_units, read_units
 
 VERSION = "0.34.0"
 KOFI = "https://ko-fi.com/pfadfinder"
+SPONSORS = "https://github.com/sponsors/MasterOogwayHomebrew"
 DISCORD = "https://discord.gg/uqA9MEn4Z"
 YOUTUBE = "https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ"
 APP = "RTW & M2TW Campaign Editor"
@@ -183,6 +184,7 @@ THE GAMES
 SUPPORT
   The tool is free. If it helps you, a coffee keeps new features coming:
   https://ko-fi.com/pfadfinder  (the Support me on Ko-fi button)
+  https://github.com/sponsors/MasterOogwayHomebrew  (the Sponsor button)
 """
 
 _showerror = messagebox.showerror
@@ -931,6 +933,8 @@ class App(tk.Tk):
         links = []
         for text, style, url, say in (
                 ("\u2615 Support me on Ko-fi", "Kofi.TButton", KOFI, "Donations keep the work on the editor going."),
+                ("\u2665 Sponsor", "Sponsor.TButton", SPONSORS, "GitHub Sponsors: a monthly or a one-time support on "
+                                                                "GitHub itself."),
                 ("YouTube", "YouTube.TButton", YOUTUBE, "The editor's videos: what it does and how."),
                 ("Discord", "Discord.TButton", DISCORD, "Our Discord server: questions, help, ideas and news."),
                 ("GitHub", "GitHub.TButton", None, "The editor's page: downloads, the changes of every version, "

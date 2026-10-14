@@ -24,11 +24,11 @@ BUTTON_PADX = 4     # px from a button's words to its edge, each side (no wider 
 BUTTON_PADY = 0     # px above and below the words: the button about 1.5 x lower than before (21 / 29 px)
 BUTTON_GAP = 4      # px between two buttons side by side
 # buttons with a colour of their own (the same size and frame): style name -> (background, when pressed / hovered);
-# white words in either look - the links (Ko-fi, Discord, YouTube, GitHub) in their own sites' colours
+# white words in either look - the links (Ko-fi, GitHub Sponsors, Discord, YouTube, GitHub) in their own sites' colours
 # (the bright ones muted 20 % - saturation and brightness x 0.8 - the author, 2026-10-09: they glowed too much)
 COLOURED = {"Play.TButton": ("#316434", "#28522a"), "PlayNoMod.TButton": ("#82571a", "#6b4715"), "Kofi.TButton": ("#cc6563", "#b45452"),
             "Discord.TButton": ("#5f67c2", "#4d549d"), "YouTube.TButton": ("#b32424", "#931d1d"),
-            "GitHub.TButton": ("#1b1f24", "#0d1117"),
+            "GitHub.TButton": ("#1b1f24", "#0d1117"), "Sponsor.TButton": ("#99306e", "#7d2759"),   # GitHub Sponsors pink
             "GitHubNew.TButton": ("#1f883d", "#1a7f37")}       # GitHub's own green: a newer release is out
 NAMED = {"#cfe3ff": "accent"}
 

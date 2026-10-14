@@ -7,6 +7,7 @@ preview of every change and a backup you can always go back to. Version **0.34.0
 [![Download](https://img.shields.io/github/v/release/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor?label=Download&style=for-the-badge)](../../releases)
 [![Wiki](https://img.shields.io/badge/Guide-Wiki-2b6cb0?style=for-the-badge)](../../wiki)
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/pfadfinder)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-bf3989?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/MasterOogwayHomebrew)
 [![YouTube - Pfadfinder](https://img.shields.io/badge/YouTube-Pfadfinder-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ)
 [![Discord](https://img.shields.io/badge/Discord-join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/uqA9MEn4Z)
 
@@ -27,7 +28,7 @@ preview of every change and a backup you can always go back to. Version **0.34.0
 I'm building a tool that finally lets us improve the games of our childhood ourselves - without digging through files
 every time, without the fear of breaking something, and without everything falling apart because we forgot one step.
 The editor is free and stays free. It is built with the help of AI, which costs money every month; if the tool saves
-you time, a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) keeps new features coming. I'm building this on my own on
+you time, a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) or [GitHub Sponsors](https://github.com/sponsors/MasterOogwayHomebrew) keeps new features coming. I'm building this on my own on
 an old laptop: a small contribution would also help me finally get a proper gaming PC, a childhood dream, and give the
 editor more time and faster testing (big mods and both games load slowly on the old machine). Thank you!
 
@@ -464,4 +465,4 @@ license.
 
 ## Support
 
-See [Why support it](#-why-support-it) - a coffee on [Ko-fi](https://ko-fi.com/pfadfinder). Thank you!
+See [Why support it](#-why-support-it) - a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) or [GitHub Sponsors](https://github.com/sponsors/MasterOogwayHomebrew). Thank you!
