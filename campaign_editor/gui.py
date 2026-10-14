@@ -5592,26 +5592,17 @@ class App(tk.Tk):
         if fleet:
             ed.v_whose.set("own + mercenaries")            # many mods mark every ship a mercenary
 
+        empty = [False]                                # no unit left: the army goes when the window is closed
+        note = ttk.Label(top, text="", foreground=theme.ink("#a33"))
+
         def changed(types):
             self.remember()
-            if not types and not named:
-                # the last unit taken: the army goes with it, as in the game - never an empty army
-                if entry is not None:
-                    _, f_, k_ = str(cid).split(":")
-                    if int(k_) < len(self.map_chars.get(f_, [])):
-                        self.map_chars[f_].pop(int(k_))
-                elif ch.get("from"):
-                    self.map_moves.pop(cid, None)
-                    self.map_units.pop(cid, None)
-                    self.map_removed.setdefault(fac, []).append({"name": ch["name"], "from": list(ch["from"])})
-                self.status.set("%s %s of %s: its last unit is gone - the army leaves the map with the next Apply "
-                                "(Undo brings it back)." % (ch["kind"], ch["name"], fac))
-                self._mark_work()
-                self.show_map()
-                try:
-                    top.destroy()
-                except tk.TclError:
-                    pass
+            empty[0] = not types and not named
+            note.configure(text="No unit left: when you close this window the army leaves the map (Undo brings it "
+                                "back). Give it a unit to keep it." if empty[0] else "")
+            if empty[0]:
+                self.status.set("%s %s of %s: no unit left - close this window and the army leaves the map (with the "
+                                "next Apply; Undo brings it back), or give it units." % (ch["kind"], ch["name"], fac))
                 return
             if entry is not None:
                 entry["units"] = (entry["units"][:1] if named else []) + list(types)
@@ -5634,7 +5625,28 @@ class App(tk.Tk):
         # no 'As it was' here: an army's units go back by Undo (Automatic emptied the army - a tester)
         ed.load(self.mod, fac, "%s %s of %s" % (ch["kind"], ch["name"], fac), units, current, changed,
                 held=named, unchanged=entry is None and cid not in self.map_units, auto=suggest)
-        ttk.Button(top, text="Close", command=top.destroy).pack(anchor="e", padx=6, pady=6)
+        def close():
+            # closed with no unit left: the army goes with its last unit, as in the game - never an empty army
+            if empty[0]:
+                self.remember()
+                if entry is not None:
+                    _, f_, k_ = str(cid).split(":")
+                    if int(k_) < len(self.map_chars.get(f_, [])):
+                        self.map_chars[f_].pop(int(k_))
+                elif ch.get("from"):
+                    self.map_moves.pop(cid, None)
+                    self.map_units.pop(cid, None)
+                    self.map_removed.setdefault(fac, []).append({"name": ch["name"], "from": list(ch["from"])})
+                self.status.set("%s %s of %s: closed with no unit - the army leaves the map with the next Apply "
+                                "(Undo brings it back)." % (ch["kind"], ch["name"], fac))
+                self._mark_work()
+                self.show_map()
+            top.destroy()
+        top.protocol("WM_DELETE_WINDOW", close)
+        bar = ttk.Frame(top)
+        bar.pack(fill="x", padx=6, pady=6)
+        ttk.Button(bar, text="Close", command=close).pack(side="right")
+        note.pack(in_=bar, side="left")
         return top
 
     def _with_types(self, units, types):

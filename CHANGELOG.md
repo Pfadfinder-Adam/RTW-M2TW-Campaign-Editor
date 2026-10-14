@@ -54,8 +54,9 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
-- An army whose last unit is taken leaves the map, as in the game (an empty army is never written); a new army placed
-  with no unit is simply not written. A general keeps his bodyguard.
+- An army whose last unit is taken leaves the map when its units window is closed, as in the game (an empty army is
+  never written; the window stays open and says so until then); a new army placed with no unit is not written. A
+  general keeps his bodyguard.
 - Check mod files: a unit without an ownership line is a note now, not a problem - every game gives such a unit to
   every faction.
 - **Faction logos on the Art tab, always** (Medieval II with M2EX, Rome with REX): the faction logo and the small
