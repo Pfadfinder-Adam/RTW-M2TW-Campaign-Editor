@@ -5,12 +5,14 @@
 ### In short
 - **Added**: a whole faction brought from another mod; the campaign map in 3D, with the minimap and the
   faction-select map drawn from it and the game's own map editor beside ours; one emblem for every flag, banner and
-  logo of a faction; locked factions opened to play; rebels, campaign script and special places on the map.
+  logo of a faction, right beside its colours; locked factions opened to play; rebels, campaign script and special places on the map.
 - **Fixed**: faction logos can be replaced without REX / M2EX too; many fixes from testers' reports (units and
   buildings brought from other mods, the recruitment order, Medieval II's add-on words, crashes).
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- **Emblem everywhere...** beside the faction's colours (New faction / Edit faction): one picture makes every
+  sign of the faction in its colours - logos, menu buttons, flags, banners, captains' cards.
 - The faction tab's **Leader's face** has **Replace...** in both games: any picture becomes the faction's own
   leader picture on the faction-select screen (`leader_pic_<faction>.tga` in the campaign folder).
 - On Load: a campaign whose factions are locked (Rome's Egypt, Gauls...; Barbarian Invasion's Celts...; Medieval

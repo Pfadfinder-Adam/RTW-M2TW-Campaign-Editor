@@ -621,6 +621,14 @@ class App(tk.Tk):
         self.b_primary.pack(side="left", padx=(0, theme.BUTTON_GAP))
         self.b_secondary = ttk.Button(cf, text="secondary", width=10, command=lambda: self.pick_colour("secondary"))
         self.b_secondary.pack(side="left", padx=(0, theme.BUTTON_GAP))
+        # the colours and the emblem in one place: the faction's whole look made here (the Art tab's own Faction
+        # emblem window - one place for the work, two ways in; the user, 2026-10-15: 'one button, every sign')
+        from .gui_util import tip
+        tip(ttk.Button(cf, text="Emblem everywhere...", command=lambda: self.art_editor.emblem_window()),
+            "Pick the faction's symbol once: with the colours beside it, every sign of the faction is made from it - "
+            "the menu buttons, loading screen, logos, the flag on the campaign map and its 3D symbol, the battle "
+            "banners, the flag on its towns, the captains' cards. Shown before and after; written on Apply with a "
+            "backup. The same as the Art tab's 'Faction emblem' button.").pack(side="left")
         field("Colours", cf)
         self.v_playable = tk.BooleanVar(value=True)
         self.v_triggers = tk.BooleanVar(value=True)
