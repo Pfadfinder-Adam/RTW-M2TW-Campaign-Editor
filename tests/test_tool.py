@@ -2629,6 +2629,16 @@ building smith
                                                                             img.height)))
         self.assertNotEqual(other, (200, 10, 10))                     # another faction's land: the map as it is
 
+    def test_emblem_says_which_flags_the_game_makes_itself(self):
+        """Rome's army and fleet flags on the campaign map are one white flag the game dyes in the faction's colours
+        with its symbol slot (descr_standards.txt), the generals' banners the battle banner: nothing to write, the
+        emblem window says so - for Rome only."""
+        from campaign_editor import emblem as E
+        said = E.game_made("rome")
+        self.assertIn("armies and fleets", said)
+        self.assertIn("generals'", said)
+        self.assertEqual(E.game_made("medieval2"), "")
+
     def test_emblem_reaches_town_flags_3d_symbol_and_captain_cards(self):
         """One symbol on every flag of the faction (Rome), each from a WHITE TEMPLATE (the user, 2026-10-15: 'do not
         repaint - white templates like the routing flags'): the town flag = the blank banner dyed, the 3D symbol =

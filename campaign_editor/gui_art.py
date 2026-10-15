@@ -480,6 +480,7 @@ class ArtEditor(ttk.Frame):
 
     def _emblem_made(self, master, pics, src, src_faction, new, symbol=None, banner=None):
         from . import emblem as E
+        from .limits import game_kind
         a = self.app
         blanks, first = self._banner_settings(pics, src_faction)
         banner = banner or first
@@ -493,7 +494,8 @@ class ArtEditor(ttk.Frame):
             "Every place the game shows the emblem, now and after - the flag on the campaign map and the battle "
             "banners carry the symbol alone - the banners made from the game's blank white banner dyed in the faction's colour. Each picture keeps "
             "its size and format; the button states are made like the mod's own. Nothing is written yet: 'Use it' puts them on the Art tab, "
-            "Preview and Apply write them with a backup (Restore gives them back).")).pack(anchor="w", padx=8, pady=6)
+            "Preview and Apply write them with a backup (Restore gives them back). " + E.game_made(game_kind(a.mod))
+        ).strip()).pack(anchor="w", padx=8, pady=6)
         grid = ttk.Frame(w, padding=8)
         grid.pack()
         photos = []

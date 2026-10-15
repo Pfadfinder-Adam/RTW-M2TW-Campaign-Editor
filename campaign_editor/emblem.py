@@ -20,6 +20,20 @@ VARIANTS = (("(mouse over)", "roll"), ("(selected)", "select"), ("(greyed out)",
 DEFAULT = {"roll": 1.4, "grey": 0.75}
 
 
+# what the game makes from the emblem by itself - no picture of the faction to write (Rome: descr_standards.txt names
+# ONE white flag for every army (banners/strat_flag) and fleet (banners/navy_banner -> navy_julii.tga); the game dyes
+# it in the faction's primary / secondary colours and lays the faction's slot of banners/symbolsN on it; descr_banners
+# gives the general's, the unit's and the mini banner the same standard_texture)
+GAME_MADE = {"rome": "The flags over its armies and fleets on the campaign map are made by the game itself: one white "
+                     "flag dyed in the faction's two colours with the flag symbol made here; its generals' and small "
+                     "banners in battle are the battle banner."}
+
+
+def game_made(game):
+    """The sentence saying which flags the game makes from the emblem by itself, for 'rome' / 'medieval2'; ''."""
+    return GAME_MADE.get(game, "")
+
+
 def variant_of(label):
     for word, v in VARIANTS:
         if word in label:
@@ -378,4 +392,4 @@ def save_all(made, folder):
     return paths
 
 
-__all__ = ["EMBLEM_KINDS", "SYMBOL_KINDS", "is_banner", "emblem_pictures", "build", "save_all", "variant_of", "measure", "fit"]
+__all__ = ["EMBLEM_KINDS", "SYMBOL_KINDS", "game_made", "is_banner", "emblem_pictures", "build", "save_all", "variant_of", "measure", "fit"]

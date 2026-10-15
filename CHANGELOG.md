@@ -5,7 +5,8 @@
 ### Added
 - Faction emblem (Rome): the symbol also reaches the flag on the faction's towns in battle, its 3D symbol on the
   campaign map and its captains' cards and portraits - each made from a clean white template in the faction's
-  colours; the routing and rebel flags are never changed.
+  colours; the routing and rebel flags are never changed. The emblem window also says which flags the game makes
+  by itself: the flags over armies and fleets on the campaign map, the generals' banners in battle.
 - **Maps > 3D > Make the minimap from it**: the campaign's minimap (the small map in the game's corner) drawn again
   from the map seen from above - the ground's textures, relief, rivers, a sea with deep water and turquoise
   shallows; each picture keeps its size and border.
