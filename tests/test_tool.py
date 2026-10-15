@@ -11239,6 +11239,10 @@ building smith
         self.assertNotEqual(list(body.getdata()), list(card.getdata()))
         self.assertEqual(CM.picture_size("medieval2", None, True), (256, 384))
         self.assertEqual(CM.picture_size("rome", (52, 70, 32), False), (52, 70))
+        # report #293's log: my own frame dragged / sized by the wheel wholly off the man - the cut stopped with an
+        # error; it is a see-through card now
+        off = CM.cut(fig, (fig.width + 50, -400, 30, 40), (48, 64))
+        self.assertEqual((off.size, off.getpixel((10, 10))[3]), ((48, 64), 0))
 
     def test_the_games_card_grounds_and_picture_frame(self):
         """The games' own interface pieces for Make a card / a picture (the user: 'take the frames and the card grounds
@@ -11354,6 +11358,9 @@ building smith
         many.bone_aliases = {20: ["bone_weapon01"], 22: ["bone_weapon03", "bone_shield01", "bone_shield"]}
         many.bone_names = {20: "bone_weapon01", 22: "bone_weapon03"}
         self.assertEqual(MV.weapon_bones(many), {"weapon": [20], "shield": [22]})
+        group = MV.Mesh([], [], None)                                   # report #293: the mod's only name
+        group.bone_names = {20: "bone_weapon_group01", 22: "bone_weapon_group03"}
+        self.assertEqual(MV.weapon_bones(group), {"weapon": [20], "shield": [22]})
         bent = list(rot)
         bent[16] = (0.0, 0.0, math.sqrt(0.5), math.sqrt(0.5))           # the left hand turned a quarter round
         for pure in (True, False):

@@ -83,8 +83,9 @@ def cut(figure, area, size):
     left, upper = int(round(rx)), int(round(ry))
     right, lower = int(round(rx + rw)), int(round(ry + rh))
     canvas = Image.new("RGBA", (max(1, right - left), max(1, lower - upper)), (0, 0, 0, 0))
-    canvas.paste(figure.crop((max(0, left), max(0, upper), min(figure.width, right), min(figure.height, lower))),
-                 (max(0, -left), max(0, -upper)))
+    box = (max(0, left), max(0, upper), min(figure.width, right), min(figure.height, lower))
+    if box[2] > box[0] and box[3] > box[1]:          # a frame wholly off the man (report #293): see-through
+        canvas.paste(figure.crop(box), (max(0, -left), max(0, -upper)))
     return canvas.resize(tuple(size), Image.LANCZOS)
 
 

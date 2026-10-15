@@ -482,7 +482,13 @@ def shield_slots(mesh):
     """The bone numbers any of whose names says shield (the game binds a weapon part by its name, never by a
     point's second bone - the engine source)."""
     names = getattr(mesh, "bone_aliases", None) or {k: [v] for k, v in (mesh.bone_names or {}).items()}
-    return {k for k, nms in names.items() if any("shield" in nm.lower() for nm in nms)}
+
+    def shield(nm):
+        flat = nm.lower().replace("_", "")
+        # the game's own meshes give the third weapon slot the shield's names too (bone_weapon03 = bone_shield);
+        # a mod naming it only bone_weapon_group03 (report #293) means the same slot
+        return "shield" in flat or flat.endswith(("weapon03", "weapongroup03"))
+    return {k for k, nms in names.items() if any(shield(nm) for nm in nms)}
 
 
 def _qmat(q):
