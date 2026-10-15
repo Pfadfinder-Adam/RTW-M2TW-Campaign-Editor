@@ -9,6 +9,7 @@ from tkinter import ttk
 from .gui_util import hint
 from .wincond import _empty, problems, same
 
+TAKE_CHOICES = ["", "15", "25", "50", "75", "100"]   # Take: the usual numbers of towns ("" = none)
 GOAL_WORDS = {"": "(none)", "imperator": "be emperor", "take_rome": "take Rome"}
 HELP = ("What the PLAYER must do to win (descr_win_conditions.txt; the AI does not read it). Long and short "
         "campaign each: Hold - regions to own at the end; Take - how many regions in all; Outlive - factions that "
@@ -152,15 +153,23 @@ class VictoryBox(ttk.LabelFrame):
             cb_goal = ttk.Combobox(self, textvariable=v_goal, state="readonly", width=12,
                                    values=list(GOAL_WORDS.values()))
             cb_goal.bind("<<ComboboxSelected>>", lambda ev, p=part: self._goal(p))
-            b_hold = ttk.Button(self, command=lambda p=part: self._pick(p, "hold"))
+            holdf = ttk.Frame(self)
+            b_hold = ttk.Button(holdf, command=lambda p=part: self._pick(p, "hold"))
+            b_hold.pack(side="left", fill="x", expand=True)
+            # the towns to hold clicked on the map straight away (report #267: the list's 'On the map...' was not
+            # found)
+            ttk.Button(holdf, text="On the map...", command=lambda p=part: self._pick_map(p)).pack(
+                side="left", padx=(2, 0))
             v_take = tk.StringVar()
-            sp = ttk.Spinbox(self, from_=0, to=999, width=4, textvariable=v_take,
-                             command=lambda p=part: self._take(p))
+            # a number of towns to take: the usual ones offered (report #267: 'a simple template 25, 50, 75, 100'),
+            # any other typed
+            sp = ttk.Combobox(self, width=5, textvariable=v_take, values=TAKE_CHOICES)
+            sp.bind("<<ComboboxSelected>>", lambda ev, p=part: self._take(p))
             sp.bind("<KeyRelease>", lambda ev, p=part: self._take(p))
             b_out = ttk.Button(self, command=lambda p=part: self._pick(p, "outlive"))
             a, b = r * 2 - 1, r * 2
             ttk.Label(self, text="Hold").grid(row=a, column=1, sticky="e", padx=(6, 2))
-            b_hold.grid(row=a, column=2, sticky="we", pady=1)
+            holdf.grid(row=a, column=2, sticky="we", pady=1)
             ttk.Label(self, text="Take").grid(row=a, column=3, sticky="e", padx=(6, 2))
             sp.grid(row=a, column=4, sticky="w")
             ttk.Label(self, text="Outlive").grid(row=b, column=1, sticky="e", padx=(6, 2))
@@ -248,6 +257,17 @@ class VictoryBox(ttk.LabelFrame):
         if got is not None and got != self.cond[part][what]:
             self._before()
             self.cond[part][what] = got
+            self._changed()
+
+    def _pick_map(self, part):
+        app = getattr(self, "app", None)
+        if self.cond is None or app is None:
+            return
+        from .gui_mappick import pick_regions
+        got = pick_regions(self, app, list(self.cond[part]["hold"]), "Hold these regions - click towns on the map")
+        if got is not None and got != self.cond[part]["hold"]:
+            self._before()
+            self.cond[part]["hold"] = got
             self._changed()
 
     def _take(self, part):

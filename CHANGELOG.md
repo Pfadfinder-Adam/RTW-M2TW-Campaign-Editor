@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- Victory: **Take** offers the usual numbers of towns (15, 25, 50, 75, 100 - any other typed) and each **Hold** has
+  its own **On the map...** to click the towns to hold.
 - Faction emblem (Rome): the symbol also reaches the flag on the faction's towns in battle, its 3D symbol on the
   campaign map and its captains' cards and portraits - each made from a clean white template in the faction's
   colours; the routing and rebel flags are never changed. The emblem window also says which flags the game makes
@@ -163,6 +165,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- New faction: the leader's and heir's title fields cut a long title -> wide enough for it; the Tooltip and Full
+  description boxes stand in the middle.
 - Report a bug: the mod's file list went with every report -> like the logs, it stays out when it went with an
   earlier report and the mod has not changed since.
 - Bring units: a unit sent to one building level (e.g. barracks / muster field) was gone from recruitment once

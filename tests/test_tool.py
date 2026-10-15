@@ -2509,6 +2509,36 @@ building smith
             rgb = fill if isinstance(fill, tuple) else tuple(int(fill[i:i + 2], 16) for i in (1, 3, 5))
             self.assertGreaterEqual(theme.contrast(rgb, ink), 4.5)
 
+    def test_victory_take_offers_the_usual_numbers_and_holds_by_map(self):
+        """Report #267: Victory wanted 'a simple template 25, 50, 75, 100 settlements' and the target towns picked
+        on the map: Take offers the usual numbers (any other still typed) and each Hold has its own On the map...
+        that sets the regions it returns."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            from unittest import mock
+            from campaign_editor import gui_wincond, gui_mappick
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        try:
+            root.withdraw()
+            box = gui_wincond.VictoryBox(root)
+            box.app = object()
+            box.load(None, [("A_R", "A"), ("B_R", "B")], [("alpha", "Alpha")], False, "alpha")
+            take = [w for w in box.grid_slaves() if isinstance(w, ttk.Combobox) and "50" in w.cget("values")]
+            self.assertEqual(len(take), 2)                              # long and short
+            self.assertEqual(list(take[0].cget("values"))[1:], ["15", "25", "50", "75", "100"])
+            box.rows["long"]["take"].set("50")
+            box._take("long")
+            self.assertEqual(box.cond["long"]["take"], 50)
+            with mock.patch.object(gui_mappick, "pick_regions", lambda *a, **k: ["B_R"]):
+                box._pick_map("short")
+            self.assertEqual(box.cond["short"]["hold"], ["B_R"])
+            self.assertTrue(box.changed())
+        finally:
+            root.destroy()
+
     def test_answers_come_after_the_report_window_closed(self):
         """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
         touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""
