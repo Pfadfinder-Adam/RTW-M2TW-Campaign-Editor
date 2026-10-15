@@ -14075,6 +14075,14 @@ building smith
             aside.event_generate("<ButtonPress-1>", x=5, y=5)       # a click aside closes it
             root.update()
             self.assertFalse(p.shown())
+            p._closed_at = 0.0                        # a while after the click aside
+            b.invoke()                                # a real second press: the press, then the button's command
+            root.update()
+            self.assertTrue(p.shown())
+            b.event_generate("<ButtonPress-1>", x=3, y=3)
+            b.invoke()
+            root.update()
+            self.assertFalse(p.shown())               # report #288: it opened again instead of closing
             self.assertEqual(len(got), 1)             # built once
         finally:
             root.destroy()

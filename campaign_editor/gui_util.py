@@ -1640,9 +1640,15 @@ class DropPanel:
         root.bind_all("<ButtonPress>", self._press_anywhere, add="+")
         root.bind("<Configure>", lambda e: self.hide() if e.widget is root else None, add="+")
 
+    _open = False
+
     def shown(self):
+        # our own flag, not winfo_ismapped: on Windows a borderless panel could read as not mapped while open, and
+        # the second press opened it again instead of closing it (reports R-20261014-5B69BC, #288)
+        if self.top is None or not self._open:
+            return False
         try:
-            return self.top is not None and bool(self.top.winfo_ismapped())
+            return bool(self.top.winfo_exists())
         except tk.TclError:
             return False
 
@@ -1669,8 +1675,10 @@ class DropPanel:
         self.top.deiconify()
         self.top.lift()
         self.top.focus_set()
+        self._open = True
 
     def hide(self):
+        self._open = False
         if self.top is not None:
             try:
                 self.top.withdraw()
@@ -1687,9 +1695,14 @@ class DropPanel:
             b = self.button
             on_button = w is b or (b.winfo_rootx() <= e.x_root < b.winfo_rootx() + b.winfo_width()
                                    and b.winfo_rooty() <= e.y_root < b.winfo_rooty() + b.winfo_height())
-            inside = str(w).startswith(str(self.top)) or on_button
+            inside = str(w).startswith(str(self.top))
         except tk.TclError:
-            inside = False
+            inside = on_button = False
+        if on_button:                                  # the press itself closes it; the button's command then sees
+            import time                                # it closed this very moment and leaves it closed
+            self.hide()
+            self._closed_at = time.monotonic()
+            return
         if not inside:
             import time
             self.hide()

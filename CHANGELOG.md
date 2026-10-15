@@ -185,6 +185,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- The map's Layers list opened again on a second press instead of closing (Windows) -> the press itself closes it.
 - Bring units: the card shown when resting the mouse on a unit was another faction's -> it is the picked faction's card from the other mod, as on the right.
 - The Coast & heights tab showed a Rivers tick it does not need -> the rivers are always drawn there.
 - Units brought from another mod that share one name there (several of HLR's barbarian cavalry) kept no name in the game -> they share one name here too.
