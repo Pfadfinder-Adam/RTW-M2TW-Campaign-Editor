@@ -6394,6 +6394,10 @@ building smith
         self.assertEqual(got["eastern"]["levels"], {"village": "models_strat/residences/e_village.CAS",
                                                     "town": "models_strat/residences/e_town.CAS"})
         self.assertEqual(got["eastern"]["fort"], "models_strat/residences/e_fort.CAS")
+        # a town's walls by the defences built there (the chain's 'levels' order); a port of its two models
+        self.assertEqual(O._wall_level(["\ttype defenses stone_wall"], ["wooden_pallisade", "wooden_wall",
+                                                                         "stone_wall"]), 3)
+        self.assertEqual(O._wall_level(["\ttype core_building x"], ["a"]), 0)
         self.assertEqual(got["eastern"]["port"], "models_strat/residences/e_port.CAS")
         camp = mod.campaign_file("test", "descr_strat.txt")
         with open(camp) as fh:

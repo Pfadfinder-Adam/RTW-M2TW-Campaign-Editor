@@ -4,7 +4,7 @@
 
 ### Added
 - **Maps > 3D**: the campaign map in 3D in the game's own ground textures (summer or winter), relief, water and
-  rivers, with the game's own models of towns, ports, forts, resources, armies and agents - what the brushes painted
+  rivers, with the game's own models of towns (with their walls), ports (quay and ships), forts, resources, armies and agents (standing, facing you) - what the brushes painted
   is seen before it is written; move with the right button, turn and tilt with the wheel held, zoom with the wheel.
 - Bring units (both games): the voices of the unit's class where your mod has none for its new owners, its fire
   arrows' projectile and effects (fire trails, explosions), its skeletons' lines in descr_skeleton.txt.

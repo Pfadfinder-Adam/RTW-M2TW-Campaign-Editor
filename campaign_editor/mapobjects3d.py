@@ -70,10 +70,14 @@ def culture_models(mod):
                 continue
             if word == "normal" and level:
                 c["levels"].setdefault(level, _rel(t[1]))
+            elif word == "wall" and level:                     # Rome: one per wall level (wall_1, wall_2 ...)
+                c.setdefault("walls", {}).setdefault(level, []).append(_rel(t[1]))
             elif word in ("fort", "watchtower", "fishing_village") and word not in c:
                 c[word] = _rel(t[1])
             elif word == "port_land" and "port" not in c:
                 c["port"] = _rel(t[1])
+            elif word == "port_sea" and "port_sea" not in c:       # a port is two models: the quay and its ships
+                c["port_sea"] = _rel(t[1])
     return {k: v for k, v in out.items() if k}
 
 
@@ -111,6 +115,35 @@ def _strat_scales(mod):
     return {k: tuple(v) for k, v in out.items()}
 
 
+def _defence_levels(mod):
+    """[level names] of the walls' building chain (export_descr_buildings.txt 'building defenses' - its 'levels'
+    line, in order: Rome wooden_pallisade wooden_wall stone_wall ...)."""
+    p = mod.file("edb") if hasattr(mod, "file") else None
+    try:
+        lines = mod.load(p).texts() if p else []
+    except (OSError, ValueError):
+        lines = []
+    inside = False
+    for line in lines:
+        t = strip_comment(line).split()
+        if t[:2] == ["building", "defenses"]:
+            inside = True
+        elif inside and t[:1] == ["levels"]:
+            return t[1:]
+        elif inside and t[:1] == ["building"]:
+            break
+    return []
+
+
+def _wall_level(block, levels):
+    """1-based level of the walls a settlement block has built (its 'type defenses <level>' line), else 0."""
+    for line in block:
+        t = strip_comment(line).split()
+        if t[:2] == ["type", "defenses"] and len(t) > 2:
+            return levels.index(t[2]) + 1 if t[2] in levels else 1
+    return 0
+
+
 CHAR_TYPES = {"named character": "named character", "general": "general", "admiral": "admiral", "spy": "spy",
               "assassin": "assassin", "diplomat": "diplomat", "merchant": "merchant", "priest": "priest",
               "princess": "princess", "heretic": "heretic", "witch": "witch", "inquisitor": "inquisitor"}
@@ -131,6 +164,7 @@ def objects(mod, campaign, strat):
         except Exception:
             return first
     towns, ports = set(), None
+    wall_levels = _defence_levels(mod)
     for fb in strat.factions:
         cm = culture_of(fb.name)
         for st in fb.settlements:
@@ -145,6 +179,11 @@ def objects(mod, campaign, strat):
                 out.append({"kind": "town", "model": model, "texture": None, "xy": tuple(xy), "scale": 1.0,
                             "faction": fb.name})
                 towns.add(tuple(xy))
+            walls = (cm.get("walls") or {}).get(level) or []
+            n = _wall_level(strat.lines[st.start:st.end], wall_levels)
+            if walls and n:                                    # its walls: the defences built there
+                out.append({"kind": "wall", "model": walls[min(n, len(walls)) - 1], "texture": None,
+                            "xy": tuple(xy), "scale": 1.0, "faction": fb.name})
         if ports is None:
             try:
                 from .mapedit import ports as _ports     # the one reader of port pixels
@@ -154,8 +193,10 @@ def objects(mod, campaign, strat):
         for st in fb.settlements:                         # its port, on the coast beside the town
             pxy = ports.get(st.region)
             if pxy and cm.get("port"):
-                out.append({"kind": "port", "model": cm["port"], "texture": None, "xy": tuple(pxy), "scale": 1.0,
-                            "faction": fb.name})
+                for part in ("port", "port_sea"):
+                    if cm.get(part):
+                        out.append({"kind": part, "model": cm[part], "texture": None, "xy": tuple(pxy),
+                                    "scale": 1.0, "faction": fb.name})
         for fo in [f for f in strat.forts if getattr(f, "owner", None) == fb.name]:
             kind = "watchtower" if fo.kind == "watchtower" else "fort"
             model = cm.get(kind)
@@ -190,7 +231,7 @@ def objects(mod, campaign, strat):
             tex = info.textures.get(fb.name) or info.textures.get("") or next(iter(info.textures.values()), None)
             sc, skel = scales.get(names[0], (1.0, None))
             out.append({"kind": "character", "model": info.meshes[0], "texture": tex, "xy": tuple(c.xy),
-                        "scale": sc, "skeleton": skel, "faction": fb.name})
+                        "scale": sc, "skeleton": skel, "faction": fb.name, "faces": True})
     return out
 
 
@@ -237,6 +278,31 @@ class Sprites:
                 self.textures[rel] = None
         return self.textures[rel]
 
+    def _own_textures(self, model, mesh):
+        """{group number: picture} - a model of several parts names a texture for each (Medieval II's towns: the
+        houses, the towers, the walls), in the order the parts stand."""
+        from . import meshview as MV
+        path = MV.mesh_path(self.mod, model)
+        names = []
+        try:
+            with open(path, "rb") as fh:
+                data = fh.read()
+            for m in re.finditer(rb"textures[\\/][^\x00\\/]{1,80}?\.tga", data, re.I):
+                n = m.group().decode("latin-1").replace("\\", "/")
+                names.append(n)
+        except (OSError, TypeError):
+            names = []
+        groups = list(getattr(mesh, "groups", []) or [])
+        folder = model.replace("\\", "/").rsplit("/", 1)[0] if "/" in model else ""
+        out = {}
+        if len(names) >= len(groups) > 1:
+            for i, g in enumerate(groups):
+                g.pic = 10 + i
+                got = self._texture(folder + "/" + names[i]) or self._texture(names[i])
+                if got is not None:
+                    out[10 + i] = got
+        return out
+
     def _own_texture(self, model, mesh):
         """The texture a .cas names itself: as written, else beside the model (its folder's textures/ - a
         residence names 'textures\\set_rome_village.tga' meaning models_strat/residences/textures)."""
@@ -270,9 +336,10 @@ class Sprites:
             P = np.asarray(mesh.positions, dtype=np.float64)
             radius = float(np.sqrt((P ** 2).sum(axis=1)).max()) or 1.0
             tex = self._texture(texture) or self._own_texture(model, mesh)
+            more = self._own_textures(model, mesh) if texture is None else {}
             try:
                 img = MV.render(mesh, size=(SPRITE, SPRITE), yaw=yb * 360.0 / YAWS, pitch=pb, texture=tex,
-                                quality=1, background=KEY, frame=((0.0, 0.0, 0.0), radius))
+                                quality=1, background=KEY, frame=((0.0, 0.0, 0.0), radius), more=more or None)
                 a = np.asarray(img.convert("RGB"), dtype=np.uint8)
                 alpha = np.where(np.all(a == np.array(KEY, np.uint8), axis=2), 0, 255).astype(np.uint8)
                 got = (np.dstack([a, alpha]), radius)
@@ -320,7 +387,8 @@ def draw_objects(img, depth, cmap, cam, objs, sprites, W, H, heights_rows=None, 
     drawn = 0
     yaw = (math.degrees(cam.yaw) + 180.0) % 360.0
     for d, sx, sy, o, pitch in sorted(todo, key=lambda t: -t[0]):
-        got = sprites.get(o["model"], o.get("texture"), yaw, pitch, o.get("skeleton"), cached_only=cached_only)
+        turn = (yaw + 180.0) % 360.0 if o.get("faces") else yaw     # a figure turned to face the camera
+        got = sprites.get(o["model"], o.get("texture"), turn, pitch, o.get("skeleton"), cached_only=cached_only)
         if got is None:
             continue
         pic, radius = got
