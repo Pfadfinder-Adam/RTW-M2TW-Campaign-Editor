@@ -2953,6 +2953,18 @@ building smith
             self.assertIn("PROVINCIAL CAMPAIGN EDITOR", line["how"])          # the game's own menu words
             self.assertIn("not the BATTLEFIELD EDITOR", line["how"])
             self.assertIn("-mod:HLR", line["args"])
+            # report #288: REX's menus list only the custom campaigns, no campaign editor - with the plain exe
+            # beside REX the editor starts it, without REX
+            write(os.path.join(rome, "RomeTW.exe"), "")
+            write(os.path.join(rome, "RomeTW-BI.exe"), "")
+            line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
+            self.assertTrue(line["exe"].endswith("RomeTW.exe"))
+            self.assertIn("without REX", line["how"])
+            self.assertIn("-mod:HLR", line["args"])
+            os.makedirs(os.path.join(rome, "bi", "data"))
+            line = GE.start_line(os.path.join(rome, "bi", "data"), "barbarian_invasion")
+            self.assertTrue(line["exe"].endswith("RomeTW-BI.exe"))
+            self.assertEqual(line["args"], ["-enable_editor"])
             os.remove(os.path.join(rome, "REX.exe"))
             write(os.path.join(rome, "RomeTW.exe"), "")
             line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")

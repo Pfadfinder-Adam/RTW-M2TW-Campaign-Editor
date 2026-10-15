@@ -186,6 +186,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Game's editor in Rome with REX led only to the list of custom campaigns -> Rome's own program is started for it, without REX.
 - The map's Layers list opened again on a second press instead of closing (Windows) -> the press itself closes it.
 - Bring units: the card shown when resting the mouse on a unit was another faction's -> it is the picked faction's card from the other mod, as on the right.
 - The Coast & heights tab showed a Rivers tick it does not need -> the rivers are always drawn there.

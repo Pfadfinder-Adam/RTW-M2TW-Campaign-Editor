@@ -9,7 +9,8 @@ pictures. So the work goes in three steps, the web's knots tied here in one plac
               them) copied into custom/<name>/ with a note of what each was (campaign_editor.json); the region names'
               text as text/<name>_regions_and_settlement_names.txt. Through a Plan: Restore takes it all out.
   start_line  the game started straight in its editor where it can be: Medieval II with M2EX
-              '--editor.campaign=custom/<name>'; Rome (with REX too - no such switch in its exe) and plain Medieval II
+              '--editor.campaign=custom/<name>'; Rome (its plain exe, also beside REX - REX's menus have no
+              campaign editor, #288) and plain Medieval II
               only show the editor in their menus ('-enable_editor' for Rome; Medieval II's cfg
               '[features] editor = true').
   take_back   every file the game's editor saved and changed goes back over the campaign's own (into the mod: the
@@ -130,10 +131,15 @@ def start_line(data, campaign):
     # Rome, with REX too: no switch opens the campaign editor straight away (REX.exe's command line knows strat,
     # battle, battle_ed and enable_editor - 'strat_ed' is only a keyboard-shortcut set), so -enable_editor shows it
     # in the menus and the words say where to click
-    rex = os.path.isfile(os.path.join(game, "REX.exe"))
-    exe = "REX.exe" if rex else EXPANSIONS[low][1] if low in EXPANSIONS else "RomeTW.exe"
+    # REX's menus list only the custom campaigns (its PROVINCIAL CAMPAIGN is no editor - report #288), so the plain
+    # exe beside it is started, without REX; REX only when no plain exe is there
+    plain = EXPANSIONS[low][1] if low in EXPANSIONS else "RomeTW.exe"
+    rex = not os.path.isfile(os.path.join(game, plain)) and os.path.isfile(os.path.join(game, "REX.exe"))
+    exe = "REX.exe" if rex else plain
     if not os.path.isfile(os.path.join(game, exe)):
         raise ValueError("no game exe (REX.exe, %s) in %s" % (exe, game))
+    if not rex and low in EXPANSIONS:
+        mod_args = []                                   # RomeTW-BI.exe / -ALX.exe are the expansion already
     args = mod_args + ["-enable_editor"]
     return {"exe": os.path.join(game, exe), "args": args, "cwd": game, "direct": False,
             "words": " ".join([exe] + args),
@@ -142,7 +148,9 @@ def start_line(data, campaign):
             "how": "Rome%s opens its editor only from its menus: in the game, OPTIONS > EDITORS > PROVINCIAL CAMPAIGN "
                    "EDITOR (not the BATTLEFIELD EDITOR), then load the custom campaign %s. The copy also shows in "
                    "the game's PROVINCIAL CAMPAIGN list until 'Remove the copy'." % (
-                       " with REX" if rex else " without REX", folder_name(campaign))}
+                       " with REX" if rex else " without REX", folder_name(campaign)) +
+                   ("" if rex else " A line of the mod only REX reads may stop the plain game - its log then says "
+                    "which.")}
 
 
 # ---- taking it back ----

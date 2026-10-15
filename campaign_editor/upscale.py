@@ -55,7 +55,7 @@ BASE_PICTURES = {                       # name: how its size follows the map's W
 }
 # the minimap pictures: NOT made bigger by x3 - their size is not tied to the map (M2TW 250 x 125 for 295 x 189, HLR
 # 1440 x 881 for 720 x 440; REX / M2EX scale radar_map2 to their box) and a too big radar_map1.tga crashes plain Rome;
-# the land they show is the same after x3 (wholesome_queen's files, studied 2026-10-14)
+# the land they show is the same after x3 (Wholesome Queen's files, studied 2026-10-14)
 MINIMAPS = ("radar_map1.tga", "radar_map2.tga", "map_radar2.tga")
 CAMPAIGN_PICTURES = {"disasters.tga": "tiles", "radar_map1.tga": "tiles", "radar_map2.tga": "double",
                      "map_radar2.tga": "double"}

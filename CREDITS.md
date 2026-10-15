@@ -10,7 +10,7 @@
 
 - **DEADHEART** - who believed in it too and stood behind it, in word and deed.
 - **NamiKawa** - the one who believed in this before anyone else.
-- **wholesome_queen** - for the scripts, tools and knowledge shared so freely.
+- **Wholesome Queen** - for the scripts, tools and knowledge shared so freely.
 - **Ruthron** - for the 3 x bigger map, and for so many reports. He made the map bigger again and again on
   *Divide and Conquer* (Medieval II with M2EX) and sent report after report; thanks to him many mistakes were found
   and many new ideas came in - natural rivers, coasts and borders among them.
@@ -32,7 +32,7 @@ whose it is):
 
 - **Ruthron** - 18 reports
 - **Espartan** - 7 reports
-- **wholesome_queen** - 6 reports
+- **Wholesome Queen** - 6 reports
 - **Mekkermann** - 4 reports
 - **Melchon** - 4 reports
 - **moderman1** - 4 reports
