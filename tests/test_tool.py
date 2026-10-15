@@ -7635,6 +7635,35 @@ building smith
         with open(os.path.join(d, "descr_caps_ex.txt"), "rb") as fh:
             self.assertEqual(fh.read(), b"; sd = legacy binary\n;trade_fleet_source  capability\nsprite_format  xml\n")
 
+    def test_release_page_text(self):
+        """The release page (release.yml): the download link first (GitHub always puts Assets at the bottom), then the
+        short '### In short' part of this version, then everything else of it in a closed fold - no scrolling to the
+        bottom to download. A version without 'In short' still gets the link and the fold; no part = no release."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "release_notes", os.path.join(os.path.dirname(__file__), "..", ".github", "release_notes.py"))
+        RN = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(RN)
+        log = ("# Changelog\n\n## Unreleased\n\n### Added\n- later\n\n## 1.2.0 - 2026-10-20\n\n### In short\n"
+               "- **Added**: own logos\n- **Fixed**: a crash\n\n### Added\n- Own logos without REX.\n\n### Fixed\n"
+               "- A crash on Load.\n\n## 1.1.0 - 2026-10-01\n\n### Added\n- Old.\n")
+        body = RN.notes(log, "v1.2.0", "owner/repo")
+        url = "https://github.com/owner/repo/releases/download/v1.2.0/RTW-M2TW-Campaign-Editor.exe"
+        self.assertTrue(body.startswith("### [⬇ Download RTW-M2TW-Campaign-Editor.exe](%s)" % url))
+        short, fold = body.index("- **Added**: own logos"), body.index("<details>")
+        self.assertLess(short, fold)
+        self.assertIn("<summary>", body)
+        self.assertNotIn("### In short", body[fold:])
+        self.assertLess(fold, body.index("- Own logos without REX."))
+        self.assertLess(body.index("- A crash on Load."), body.index("</details>"))
+        self.assertNotIn("later", body)
+        self.assertNotIn("Old.", body)
+        plain = RN.notes(log, "1.1.0", "owner/repo")
+        self.assertLess(plain.index("Download"), plain.index("<details>"))
+        self.assertIn("- Old.", plain)
+        with self.assertRaises(ValueError):
+            RN.notes(log, "9.9.9", "owner/repo")
+
     def test_sprite_sheet_binary_read_write_and_add(self):
         """The plain games' binary sprite sheets (Rome .rsd version 5, Medieval II .sd version 6): read and written
         back byte for byte; a page added (its click mask from the picture's alpha) and a sprite on it."""
