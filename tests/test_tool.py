@@ -2678,6 +2678,10 @@ building smith
             from PIL import Image
         except ImportError:
             self.skipTest("no Pillow")
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("no NumPy")
         import io
         from campaign_editor.minimap import radar_from
         old = Image.merge("RGB", [Image.effect_noise((60, 40), 60)] * 3)    # a map is a texture, never one colour
