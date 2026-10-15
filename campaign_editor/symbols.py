@@ -536,6 +536,43 @@ def _page_copies(mod, page):
     return list(out.values())
 
 
+def free_logos(plan_or_mod, which):
+    """The logo places of the sheet no faction of the mod uses (logos of factions the mod left out), whose page the
+    game has - the order of the sheet. On the binary sheets a faction that shares its logo takes one of these."""
+    mod = getattr(plan_or_mod, "mod", plan_or_mod)
+    plan = plan_or_mod if hasattr(plan_or_mod, "files") else None
+    sheet, key, sprite_name, _, _ = sheets(mod)[which]
+    xp = xml_path(mod, sheet, plan)
+    if not xp:
+        return []
+    prefix = sprite_name % ""
+    _, f = _sm(plan_or_mod)
+    used = {v.lower() for _, v in sm_values(f, key).values()}
+    out = []
+    for m in RE_PAGE.finditer(_xml_text(plan, xp)):
+        if not page_path(mod, m.group(1), plan) and not _page_copies(mod, m.group(1)):
+            continue
+        for sp in RE_SPRITE.finditer(m.group(2)):
+            name = sp.group(1)
+            if name.startswith(prefix) and name.lower() not in used and name not in out:
+                out.append(name)
+    return out
+
+
+def _free_for(plan_or_mod, faction, which):
+    """The free place a faction that shares its logo would take (the same size as its place now first), or None."""
+    got = logo_of(plan_or_mod, faction, which)
+    if not got or not got["shared"]:
+        return None
+    mod = getattr(plan_or_mod, "mod", plan_or_mod)
+    plan = plan_or_mod if hasattr(plan_or_mod, "files") else None
+    free = free_logos(plan_or_mod, which)
+    size = got["sprite"]["box"][2:] if got["sprite"] else None
+    same = [n for n in free if (find_sprite(mod, sheets(mod)[which][0], n, plan) or {}).get("box", (0,) * 4)[2:]
+            == size]
+    return (same or free or [None])[0]
+
+
 def paint_logo(plan, faction, which, im):
     """The binary sprite sheets (the plain games; an engine reading 'sd'): no sprite can be added, but the picture
     can go INTO the faction's place on its page - where the sheet says it is - so the game shows it. Painted on the
@@ -546,6 +583,17 @@ def paint_logo(plan, faction, which, im):
     from .factionart import image_tga
     mod = plan.mod
     got = logo_of(plan, faction, which)
+    free = _free_for(plan, faction, which)
+    if free:
+        # shared with another faction (the mod gave two factions one logo, or a new faction still on its
+        # template's): it takes a place no faction uses, so the other keeps its own
+        key = sheets(mod)[which][1]
+        path, _ = _sm(plan)
+        f = plan.edit(path)
+        _set_value(f, sm_values(f, key)[faction][0], free)
+        plan.note(f, "%s's %s now %s - a free place on the sheet (was %s, shared with %s)" % (
+            faction, key, free, got["name"], ", ".join(got["shared"])))
+        got = logo_of(plan, faction, which)
     sp = got and got["sprite"]
     if not sp or not sp["page_path"]:
         return None
@@ -629,11 +677,20 @@ def give_own(plan, faction):
     if rome(plan.mod):
         own_flag(plan, faction)
     if sprite_mode(plan.mod) != "xml":
-        if not logo_of(plan, faction, LOGO):
-            return                                   # no logo line at all: nothing shared to say
-        plan.warn(None, "%s: its faction logos stay %s's - the game reads the binary sprite sheets; with %s, "
-                        "'sprite_format xml' in the mod's own descr_caps_ex.txt lets a faction have logos of its own"
-                  % (faction, plan.template, ENGINE[rome(plan.mod)]))
+        # the binary sheets: a free place on the sheet (a logo no faction of the mod uses), the template's picture
+        # painted in; with none free its logo stays the template's - said
+        left = []
+        for which in (LOGO, SMALL):
+            if not logo_of(plan, faction, which):
+                continue                             # no logo line at all: nothing shared to say
+            pic = logo_image(plan, faction, which) if _free_for(plan, faction, which) else None
+            if pic is None or paint_logo(plan, faction, which, pic) is None:
+                left.append(LABELS[which][0])
+        if left:
+            plan.warn(None, "%s: its %s stay%s %s's - the game reads the binary sprite sheets and no free place is "
+                            "left on them; with %s, 'sprite_format xml' in the mod's own descr_caps_ex.txt lets a "
+                            "faction have logos of its own" % (faction, " and ".join(left), "" if len(left) > 1
+                                                               else "s", plan.template, ENGINE[rome(plan.mod)]))
         return
     for which in (LOGO, SMALL):
         own_logo(plan, faction, which)
@@ -669,8 +726,12 @@ def entries(mod, faction):
         if not xml and found:
             # the binary sheets: Replace paints into its place on the page (every culture's copy) - the plain game
             # shows it; 'Own logos for this mod...' (an engine) gives it a page of its own instead
-            note += " - Replace: painted into its place on that page" + (
-                " (shared with %s: theirs changes too)" % ", ".join(lg["shared"]) if lg["shared"] else "") + (
+            free = _free_for(mod, faction, which)
+            note += (" - shared with %s: Replace takes a free place on the sheet (%s, no faction uses it) and paints "
+                     "there" % (", ".join(lg["shared"]), free) if free else
+                     " - Replace: painted into its place on that page" + (
+                         " (shared with %s, no free place left: theirs changes too)" % ", ".join(lg["shared"])
+                         if lg["shared"] else "")) + (
                 "; 'Own logos for this mod...' gives it a page of its own" if switch else "")
         elif not xml:
             note += " - cannot be replaced: no place for it on the binary sprite sheets" + (

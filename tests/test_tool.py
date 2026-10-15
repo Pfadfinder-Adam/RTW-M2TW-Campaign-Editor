@@ -7688,6 +7688,61 @@ building smith
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
         self.assertEqual(after, before)
 
+    def test_shared_logo_moves_to_a_free_place_on_the_binary_sheets(self):
+        """A mod that gives two factions one logo, on the binary sheets (no sprite can be added): the faction takes a
+        logo place no faction of the mod uses (a faction the mod left out), its logo line points there and the new
+        picture is painted in - the other faction keeps its own. A new faction without REX gets its own the same way
+        (the template's picture copied in). Restore gives every file back."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from unittest import mock
+        from campaign_editor import limits, symbols as SY
+        from campaign_editor.factionart import image_tga
+        d = os.path.join(self.root, "data")
+        sm = SM.replace("culture\t\teastern\n", "culture\t\teastern\nlogo_index\t\tFACTION_LOGO_ALPHA\n", 1)
+        sm = sm.replace("culture\t\tbarbarian\n", "culture\t\tbarbarian\nlogo_index\t\tFACTION_LOGO_ALPHA\n", 1)
+        write(os.path.join(d, "descr_sm_factions.txt"), sm)
+        write(os.path.join(d, "ui", "strategy.sd.xml"), '<sprite_definitions version="7">\n'
+              '  <page file="stratpage_02.tga" w="64" h="64">\n'
+              '    <sprite name="FACTION_LOGO_ALPHA" x="10" y="12" w="20" h="22" alpha="1"/>\n'
+              '    <sprite name="SMALL_FACTION_LOGO_GHOST" x="0" y="40" w="8" h="8" alpha="1"/>\n'
+              '    <sprite name="FACTION_LOGO_GHOST" x="40" y="12" w="20" h="22" alpha="1"/>\n  </page>\n'
+              '</sprite_definitions>\n')
+        os.makedirs(os.path.join(d, "ui", "southern_european", "interface"))
+        page = os.path.join(d, "ui", "southern_european", "interface", "stratpage_02.tga")
+        with open(page, "wb") as fh:
+            fh.write(image_tga(Image.new("RGBA", (64, 64), (0, 0, 200, 255))))
+        before = tree_hash(self.root)
+        with mock.patch.object(SY, "rome", lambda m: False), mock.patch.object(limits, "engine_of", lambda m: None):
+            mod = ModData(self.root)
+            self.assertEqual(SY.free_logos(mod, SY.LOGO), ["FACTION_LOGO_GHOST"])
+            card, = SY.entries(mod, "alpha")
+            self.assertIn("a free place", card["note"])
+            plan = Plan(mod, "t", "t", {})
+            SY.paint_logo(plan, "alpha", SY.LOGO, Image.new("RGBA", (40, 40), (220, 0, 0, 255)))
+            self.assertEqual(plan.warnings, [])
+            plan.apply()
+            mod = ModData(self.root)
+            self.assertEqual(SY.logo_of(mod, "alpha", SY.LOGO)["name"], "FACTION_LOGO_GHOST")
+            self.assertEqual(SY.logo_of(mod, "slave", SY.LOGO)["name"], "FACTION_LOGO_ALPHA")
+            im = Image.open(page).convert("RGBA")
+            self.assertEqual(im.getpixel((50, 20)), (220, 0, 0, 255))       # alpha's new place
+            self.assertEqual(im.getpixel((20, 20)), (0, 0, 200, 255))       # slave's place as it was
+            self.assertEqual(SY.free_logos(mod, SY.LOGO), [])
+            for b in backups(mod):
+                restore(mod, b)
+            self.assertEqual({k: v for k, v in tree_hash(self.root).items()
+                              if not k.startswith("CampaignEditor_backups")}, before)
+            # a new faction (the template's logo line copied): its own free place, the template's picture in it
+            mod = ModData(self.root)
+            plan = Plan(mod, "t", "t", {})
+            plan.template = "slave"
+            SY.give_own(plan, "alpha")
+            self.assertEqual(SY.logo_of(plan, "alpha", SY.LOGO)["name"], "FACTION_LOGO_GHOST")
+            self.assertFalse(any("stay" in w for _, w in plan.warnings))
+
     def test_art_card_of_a_missing_logo(self):
         """The Art tab's card of a logo no sheet has (no picture file): drawn with '(none)', its words, and the
         'Own logos for this mod...' button when the switch is possible - no error for the missing file."""
