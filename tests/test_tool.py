@@ -2819,15 +2819,21 @@ building smith
         except ImportError:
             self.skipTest("no Pillow")
         from unittest import mock
-        from campaign_editor import factionart as FA, minimap
+        import contextlib
+        from campaign_editor import factionart as FA
         from campaign_editor.minimod import write_tga
+        try:                                       # without NumPy there is no picture from above at all
+            from campaign_editor import minimap
+            no_view = mock.patch.object(minimap, "top_view", side_effect=ValueError("no heights"))
+        except ImportError:
+            no_view = contextlib.nullcontext()
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         R, B, K = (255, 0, 0), (0, 0, 255), (0, 0, 0)
         px = [[R if x + y < 9 else B for x in range(12)] for y in range(8)]      # a slanting border
         px[1][1], px[5][9] = K, K
         write_tga(os.path.join(camp, "map_regions.tga"), 12, 8, px)
         mod = ModData(self.root)
-        with mock.patch.object(minimap, "top_view", side_effect=ValueError("no heights")):
+        with no_view:
             im = FA.map_drawing(mod, "test", ["A_R"], (200, 10, 10), size=(384, 384))
             bare = FA.map_drawing(mod, "test", [], (200, 10, 10), size=(384, 384))
         diff = ImageChops.difference(im, bare).convert("L").point(lambda v: 255 if v > 30 else 0)
