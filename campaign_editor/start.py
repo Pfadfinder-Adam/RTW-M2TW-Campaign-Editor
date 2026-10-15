@@ -191,6 +191,25 @@ def _family(plan, f, brought, capital, place, start):
     return out, tree
 
 
+def _own_name(plan, f, chunk, name, kind, pool, used):
+    """A character who joins a brought faction with a town, his first name not in its name list (a Gaul's captain
+    joining the Celts): he takes a free name of its own list - a character of a faction whose list lacks his name
+    may crash the game. -> (chunk, name)."""
+    names = first_names(pool, kind)
+    first = (name or "").split(" ")[0]
+    if not names or first in names:
+        return chunk, name
+    fresh = next((n for n in names if n not in used), None)
+    if fresh is None:
+        plan.warn(f, "%s keeps his name - %s's name list has no free one" % (name, plan.new))
+        return chunk, name
+    used.add(fresh)
+    head = chunk[0]
+    chunk = [head.replace(name, fresh, 1)] + list(chunk[1:])
+    plan.note(f, "%s takes the name %s from %s's own name list" % (name, fresh, plan.new))
+    return chunk, fresh
+
+
 def _has_army(lines):
     return any(tokens(l)[:1] == ["army"] for l in lines)
 
@@ -472,6 +491,11 @@ def build_start(plan, campaign, start):
     used |= {start[r]["name"].split()[0] for r in ("leader", "heir") if start.get(r) and start[r].get("name")}
     # and the armies / agents placed by hand (written later): a captain never takes one of their names
     used |= {c["name"].split()[0] for c in start.get("characters") or [] if (c.get("name") or "").strip()}
+    if brought:                                      # and the brought family's (on the map or in its records)
+        fam = brought.get("family") or {}
+        used |= {m["name"].split()[0] for m in fam.get("men", []) if m.get("name")}
+        used |= {strip_comment(x).split(None, 1)[1].split(",")[0].split()[0] for x in fam.get("records", [])
+                 if len(strip_comment(x).split(None, 1)) > 1}
     for r, lines in custom.items():
         agents = [j for j in joined.get(r, []) if not _has_army(j[2])]
         armies = [j for j in joined.get(r, []) if _has_army(j[2])]
@@ -592,6 +616,8 @@ def build_start(plan, campaign, start):
                 if len(extra) > room:
                     plan.warn(f, "%s: %d garrison unit(s) dropped - an army holds %d"
                               % (r, len(extra) - room, MAX_UNITS))
+            if brought:                                  # its own name list: a name of another list is renamed
+                chunk, name = _own_name(plan, f, chunk, name, kind, pool, used)
             block.extend(chunk)
             block.append(f.make(""))
             plan.note(f, "%s: %s (%s) joins %s with the town" % (r, name, kind, new))

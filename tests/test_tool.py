@@ -5727,6 +5727,15 @@ building smith
         self.assertFalse(any("Angus" in x for x in men))                    # the leader is the window's
         self.assertEqual(sum(1 for x in men if "celtic warlord" in x), 1)     # Brude with his bodyguard only
         self.assertEqual(len([x for x in tree if "Keyne" in str(x)]), 2)
+        # a captain of another faction joining with a town takes a free name of its own list
+        from campaign_editor.start import _own_name
+        chunk = ["character\tDumnorix of Bibrax, general, age 20, , x 94, y 90", "army", "unit gallowglass exp 0"]
+        used = {"Alpin"}
+        got, name = _own_name(plan, f, chunk, "Dumnorix of Bibrax", "general",
+                              {"characters": ["Alpin", "Brude"]}, used)
+        self.assertEqual((name, got[0].split(",")[0]), ("Brude", "character\tBrude"))
+        self.assertIn("Brude", used)
+        self.assertEqual(_own_name(plan, f, got, "Brude", "general", {"characters": ["Brude"]}, set())[1], "Brude")
 
     def test_brought_faction_pictures_and_figures(self):
         # its own pictures come even when the new faction keeps its name; a strat model this mod lacks comes with
