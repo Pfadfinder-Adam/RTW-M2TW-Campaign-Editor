@@ -1845,6 +1845,7 @@ class App(tk.Tk):
         else:
             for w in self.give_row:
                 w.grid_remove()
+        self._from_zero_look()
         self.update_actions()
         self.garrison_editor.auto_text = ("unchanged - the town keeps its garrison" if edit else None)
         self.chosen, self.garrisons, self.buildings_picked, self.sizes = [], {}, {}, {}
@@ -4923,6 +4924,26 @@ class App(tk.Tk):
         from .gui_factionbring import FactionBringWindow
         FactionBringWindow(self, self.set_bring)
 
+    def _from_zero_look(self):
+        """A faction brought from another mod is made from zero: nothing of the template is seen (the user,
+        2026-10-15, again: 'why does it still say Gauls - misleading'). The template row, 'Copy art named after the
+        template' and 'template's relations' are put away - the template only gives the lines in the game's lists,
+        inside; the relations are neutral, its own pictures come along. Everything back for a plain copy."""
+        brought = not self.editing() and bool(getattr(self, "bring", None))
+        for w in (self.lbl_template, self.cb_template):
+            w.grid_remove() if brought else w.grid()
+        if brought:
+            self.v_dip.set("neutral")
+            self.v_art.set(True)                       # its own pictures go where the frame's copies would
+            self.chk_art.grid_remove()
+            self.dip_buttons[1].pack_forget()
+            self.lf2.configure(text="Leader and heir (names from its own name list)")
+        elif not self.editing():
+            self.chk_art.grid()
+            if not self.dip_buttons[1].winfo_manager():
+                self.dip_buttons[1].pack(side="left")
+            self.lf2.configure(text="Leader and heir (names must come from the template's name list)")
+
     def set_bring(self, picked):
         """The faction brought from another mod (None: forget it - the New faction is a copy of the template again).
         Its names, colours and descriptions fill the window; the template becomes this mod's faction of its
@@ -4935,6 +4956,7 @@ class App(tk.Tk):
             self.b_unbring.pack_forget()
             self.lbl_template.configure(text="Template (copied)")
             self.cb_template.state(["!disabled"])
+            self._from_zero_look()
             self.status.set("New faction: a copy of the template again.")
             return
         fields = picked.get("fields") or {}
@@ -4972,13 +4994,15 @@ class App(tk.Tk):
         # faction its lines in the game's lists; the select map is drawn from this map
         self.lbl_template.configure(text="From zero (lists like)")
         self.cb_template.state(["disabled"])
+        self._from_zero_look()
         self.lbl_bring.configure(text="%s of %s - from zero: only its own things" % (
             fields.get("display_name") or picked["faction"], where))
         self.b_unbring.pack(side="left", padx=(6, 0))
         self.status.set("%s of %s, from zero: Apply brings its units, names, family, figures, flags and pictures - "
-                        "nothing of %s (it only gives the lines in the game's lists); its select map is drawn from "
+                        "nothing of the template (it only gives the lines in the game's lists, inside); its select map is "
+                        "drawn from "
                         "this map. Pick its towns on the map - its family stands by the capital, the garrisons are "
-                        "its own units." % (picked["faction"], where, frame))
+                        "its own units." % (picked["faction"], where))
 
     def rename_faction(self):
         """Edit faction > Rename...: the faction's code name changed in every file of the mod (factionrename) -
