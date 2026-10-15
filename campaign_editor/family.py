@@ -877,6 +877,38 @@ def portraits(mod, faction, person, m2):
     return out
 
 
+def general_card(mod, faction, line, m2):
+    """(path, words) of the small portrait card the game shows for a general's own unit (his bodyguard) beside his
+    army's unit cards - the face the character editor shows for him (portraits: one picture a name, the same number
+    young, old and dead), from the culture's portraits/cards/<age>/<pool> (Rome: 44 x 63; the big portrait when the
+    mod has no card of that number); his own picture when he has one (Medieval II ', portrait <folder>'). line: his
+    descr_strat character line. None when none is found."""
+    import os
+    import re as _re
+    from .moddata import _ci
+    from .strat import Character
+    try:
+        c = Character(0, 1, line, faction)
+    except Exception:
+        return None
+    m = _re.search(r"\bage\s+(\d+)", line)
+    p = _re.search(r",\s*portrait\s+([^,\s]+)", line)
+    age = int(m.group(1)) if m else 30
+    person = {"name": c.name, "kind": c.kind, "age": age, "portrait": p.group(1) if p else None, "source": "map"}
+    info = portraits(mod, faction, person, m2)
+    when = "old" if age >= 45 else "young"
+    if info["files"]:
+        path = info["files"].get(when) or info["files"].get("young")
+        return (path, "%s - his own portrait" % c.name) if path else None
+    face = (info.get("samples") or {}).get(when) or info.get("sample")
+    if not face:
+        return None
+    pool = POOL_OF.get(c.kind, "civilians")
+    cards = _find(mod, "ui", portrait_culture(mod, faction) or "", "portraits", "cards", when, pool)
+    card = _ci(cards, os.path.basename(face)) if cards else None
+    return (card or face), "%s - his portrait as the game shows it on his unit (%s)" % (c.name, info["how"])
+
+
 def portrait_size(mod, faction, m2):
     """(w, h) a portrait of this mod has: another custom portrait, else the culture's pool."""
     import os

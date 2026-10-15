@@ -5737,6 +5737,33 @@ building smith
         self.assertIn("Brude", used)
         self.assertEqual(_own_name(plan, f, got, "Brude", "general", {"characters": ["Brude"]}, set())[1], "Brude")
 
+    def test_general_card_is_his_portrait(self):
+        # a general's own unit shows his face beside his army's cards, as in the game: the portrait card of the
+        # number the character editor picks for his name (portraits/cards/<age>/generals)
+        import tempfile
+        from campaign_editor.family import general_card
+        from campaign_editor.moddata import ModData
+        with tempfile.TemporaryDirectory() as root:
+            data = os.path.join(root, "data")
+            os.makedirs(data)
+            with open(os.path.join(data, "descr_sm_factions.txt"), "w") as fh:
+                fh.write("faction gauls\nculture barbarian\n")
+            for sub in ("portraits/young/generals", "cards/young/generals", "portraits/old/generals",
+                        "cards/old/generals"):
+                d = os.path.join(data, "ui", "barbarian", "portraits", *sub.split("/"))
+                os.makedirs(d)
+                for n in ("000.tga", "001.tga"):
+                    open(os.path.join(d, n), "w").close()
+            mod = ModData(data)
+            mod.factions = lambda: [("gauls", "barbarian")]
+            got = general_card(mod, "gauls", "character\tBrennus, named character, leader, age 50, , x 1, y 2", False)
+            self.assertIsNotNone(got)
+            path, words = got
+            self.assertIn(os.path.join("cards", "old", "generals"), path)
+            self.assertIn("Brennus", words)
+            again = general_card(mod, "gauls", "character\tBrennus, named character, age 50, , x 9, y 9", False)
+            self.assertEqual(again[0], path)                              # one face a name, every time
+
     def test_brought_faction_pictures_and_figures(self):
         # its own pictures come even when the new faction keeps its name; a strat model this mod lacks comes with
         # only its own texture line (renamed), paths as this mod writes them, and its files

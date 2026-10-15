@@ -144,9 +144,12 @@ class GarrisonEditor(ttk.Frame):
         first(self.b_auto, self.sugg)             # As it was, Suggest before the total
 
     def load(self, mod, faction, region, units, current, on_change, auto=None, held=False, unchanged=False,
-             as_was=False):
+             as_was=False, general=None):
         """unchanged: current is what stands in the town now, shown until the first click. auto(lo, hi, cap): the
-        unit types Suggest draws (none: no Suggest); as_was: the As it was button (back to the town as it stands)."""
+        unit types Suggest draws (none: no Suggest); as_was: the As it was button (back to the town as it stands);
+        general: (picture, words) of the general's own unit - his portrait card, first, as the game shows it (it
+        stays: his bodyguard goes with him, not by a click)."""
+        self.general = general
         self.unchanged = unchanged
         if auto:
             self.sugg.pack(side="right", padx=4)
@@ -247,6 +250,14 @@ class GarrisonEditor(ttk.Frame):
     def fill_chosen(self):
         for w in self.chosen.winfo_children():
             w.destroy()
+        if getattr(self, "general", None) and self.held is True:
+            path, words = self.general
+            img = self.pics.get(path)
+            if img is not None:                             # his face, not a cavalry card - the game's way
+                g = tk.Label(self.chosen, image=img, text="general", compound="top", font=("", 8), pady=0)
+                g.image = img
+                g.bind("<Enter>", lambda e: self.info.configure(text=words))
+                g.bind("<Leave>", lambda e: self.info.configure(text=""))
         for i, t in enumerate(self.garrison):
             self._card(self.chosen, self.by_type[t], lambda i=i: self.take(i))
         self.chosen.cols = 0

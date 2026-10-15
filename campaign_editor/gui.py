@@ -1929,7 +1929,7 @@ class App(tk.Tk):
                 continue                               # a family member without an army
             out.append({"kind": kind, "name": c.name, "units": units[1:] if c.named and units else units,
                         "xy": c.xy, "from": c.xy, "existing": True, "cid": "%s:%d" % (faction, i),
-                        "named": c.named, "role": c.role, "changed": False})
+                        "named": c.named, "role": c.role, "changed": False, "line": c.line})
         return out
 
     # ------------------------------------------------------------------ undo / redo
@@ -3718,7 +3718,7 @@ class App(tk.Tk):
                 ulines = [l for l in lines if tokens(l)[:1] == ["unit"]]
                 chars.append({"id": cid, "faction": fb.name, "name": c.name, "kind": c.kind, "xy": xy,
                               "army": army, "units": len(ulines), "unit_names": [unit_name(l) for l in ulines],
-                              "from": c.xy, "named": bool(c.named), "role": c.role,
+                              "from": c.xy, "named": bool(c.named), "role": c.role, "line": c.line,
                               "family": c.name in family or bool(c.role)})
                 if army:
                     armies_at.add(xy)
@@ -5616,6 +5616,7 @@ class App(tk.Tk):
             self.refresh_field(keep=i)
         self.garrison_editor.load(self.mod, self.field_faction(), "%s %s" % (c["kind"], c["name"]), units,
                                   c["units"], changed, held=bool(c.get("named")),
+                                  general=self._general_card(self.field_faction(), c) if c.get("named") else None,
                                   unchanged=bool(c.get("existing")) and not c.get("changed"))
         if not c.get("xy"):
             self.status.set("Pick the units, then 'Place on map'.")
@@ -5765,6 +5766,15 @@ class App(tk.Tk):
             self.status.set("This %s at %d, %d is empty: drag an army onto it - its units are the garrison."
                             % (fo.kind, fo.xy[0], fo.xy[1]))
 
+    def _general_card(self, faction, ch):
+        """(picture, words) of a general's portrait card for his army's cards (family.general_card), or None."""
+        from .family import general_card
+        line = ch.get("line") or "character\t%s, %s, age 30, , x 0, y 0" % (ch.get("name", ""), ch.get("kind", ""))
+        try:
+            return general_card(self.mod, faction, line, self._m2())
+        except Exception:
+            return None
+
     def army_units_window(self, cid):
         """Any faction's army or fleet on the map (Maps, or another faction's from Edit faction): its units
         in the card picker, in a window of its own; written with the next Apply (a named general keeps his
@@ -5825,6 +5835,7 @@ class App(tk.Tk):
             return MT.random_garrison(pool, lo, hi, cap, random.Random())
         # no 'As it was' here: an army's units go back by Undo (Automatic emptied the army - a tester)
         ed.load(self.mod, fac, "%s %s of %s" % (ch["kind"], ch["name"], fac), units, current, changed,
+                general=self._general_card(fac, ch) if named else None,
                 held=named, unchanged=entry is None and cid not in self.map_units, auto=suggest)
         def close():
             # closed with no unit left: the army goes with its last unit, as in the game - never an empty army

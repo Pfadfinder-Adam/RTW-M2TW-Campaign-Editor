@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- An army's window shows its general first as his portrait card, as the game does, not as a cavalry card - the
+  same face the character editor shows for him.
 - **New faction > From another mod...**: a faction of another mod of the same game made a faction of yours - its
   names, colours, units, name lists, figures on the campaign map and in battle (generals, captains, admirals),
   battle flags, map flags, icons and pictures come with it; its family stands by the capital you pick, and its
