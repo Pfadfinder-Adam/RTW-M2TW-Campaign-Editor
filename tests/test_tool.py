@@ -5700,37 +5700,33 @@ building smith
         self.assertEqual(religions_for(regions, None, None), {"catholic": 90, "pagan": 10})         # most common
         self.assertEqual(religions_for(regions, {"pagan": 100}, "C"), {"pagan": 100})             # given, sums to 100
 
-    def test_brought_faction_armies_from_its_own_start(self):
-        # a faction brought from another mod: its armies and garrisons come from its own starting armies there,
-        # each unit under its name here, a unit this mod lacks left out; none left - the template's own
+    def test_brought_faction_garrisons_and_family(self):
+        # a faction brought from another mod: no armies of its start - a town's garrison is drawn from its own units
+        # the way an empty town given on the map gets one (3-6, upkeep capped); its family stands by the capital,
+        # its records and family tree after every character (the game crashes on a character after them)
         from types import SimpleNamespace
-        from campaign_editor.start import cheap_garrison, default_army, unit_name, unit_source
-        from campaign_editor.strat import Strat
+        from campaign_editor.start import _family, brought_garrison, unit_name
         from campaign_editor.textio import TextFile
-        src = ("campaign\timperial_campaign\nfaction\tceltae, balanced smith\ndenari\t1000\n"
-               "character\tAlpin, named character, leader, age 30, , x 1, y 2\n"
-               "army\nunit\t\tceltic warlord\t\texp 0 armour 0 weapon_lvl 0\n"
-               "unit\t\tgallowglass\t\texp 0 armour 0 weapon_lvl 0\n"
-               "unit\t\tbi only\t\texp 0 armour 0 weapon_lvl 0\n"
-               "unit\t\tceltic spearman\t\texp 0 armour 0 weapon_lvl 0\n"
-               "character\tDrest, general, age 20, , x 3, y 4\n"
-               "army\nunit\t\tceltic spearman\t\texp 0 armour 0 weapon_lvl 0\n"
-               "\nfaction\tslave, balanced smith\n")
-        warned = []
-        plan = SimpleNamespace(new="celts", warn=lambda *a: warned.append(a), unit_source=(
-            Strat(TextFile.from_bytes("s", src.encode())), "celtae",
-            {"celtic warlord": "celtic warlord", "gallowglass": "gallowglass 2", "celtic spearman": "celtic spearman"},
-            {"celtic warlord", "gallowglass 2", "celtic spearman"}))
-        s, f = unit_source(plan, None, "gauls")
-        self.assertEqual(f, "celtae")
-        self.assertEqual([unit_name(x) for x in default_army(s, f)],
-                         ["celtic warlord", "gallowglass 2", "celtic spearman"])
-        self.assertEqual([unit_name(x) for x in cheap_garrison(s, f, {}, 2)], ["celtic spearman", "gallowglass 2"])
-        self.assertEqual(unit_source(plan, None, "gauls"), (s, f))           # mapped once, kept
-        empty = SimpleNamespace(new="celts", warn=lambda *a: warned.append(a), unit_source=(
-            Strat(TextFile.from_bytes("s", src.encode())), "celtae", {}, set()))
-        self.assertEqual(unit_source(empty, "target strat", "gauls"), ("target strat", "gauls"))
-        self.assertTrue(warned)
+        self.assertIsNone(brought_garrison(SimpleNamespace()))
+        plan = SimpleNamespace(new="celts", notes=[], note=lambda f, m: plan.notes.append(m), bring_start={
+            "pool": [("celtic spearman", 100), ("gallowglass", 150)], "bodyguard": "unit celtic warlord exp 0",
+            "family": {"men": [{"name": "Angus", "line": "character\tAngus, named character, leader, age 65, , x 1, y 2",
+                                "rest": ["traits FactionLeader 1"], "bodyguard": "unit celtic warlord exp 0"},
+                               {"name": "Brude", "line": "character\tBrude, named character, age 40, , x 9, y 9",
+                                "rest": [], "bodyguard": "unit celtic warlord exp 0"}],
+                       "records": ["character_record\tKeyne, female, age 47, alive, never_a_leader"],
+                       "relatives": ["relative\tAngus, Keyne, end"]}})
+        for _ in range(20):
+            got = [unit_name(x) for x in brought_garrison(plan)]
+            self.assertTrue(3 <= len(got) <= 6 and set(got) <= {"celtic spearman", "gallowglass"}, got)
+        f = TextFile.from_bytes("s", b"")
+        men, tree = _family(plan, f, plan.bring_start, "Capital", lambda r, what: (5, 6),
+                            {"leader": {"name": "Angus"}})
+        men = [str(x) for x in men]
+        self.assertTrue(any("Brude" in x and "x 5, y 6" in x for x in men))
+        self.assertFalse(any("Angus" in x for x in men))                    # the leader is the window's
+        self.assertEqual(sum(1 for x in men if "celtic warlord" in x), 1)     # Brude with his bodyguard only
+        self.assertEqual(len([x for x in tree if "Keyne" in str(x)]), 2)
 
     def test_brought_faction_pictures_and_figures(self):
         # its own pictures come even when the new faction keeps its name; a strat model this mod lacks comes with

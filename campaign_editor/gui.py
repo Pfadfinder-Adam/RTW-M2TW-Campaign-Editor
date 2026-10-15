@@ -4928,6 +4928,13 @@ class App(tk.Tk):
             if fields.get(key):
                 t.delete("1.0", "end")
                 t.insert("1.0", fields[key])
+        for role in ("leader", "heir"):                 # its own leader and heir; the rest of its family on Apply
+            who = fields.get(role)
+            if who:
+                first, _, last = who["name"].partition(" ")
+                self.v[role + "_first"].set(first)
+                self.v[role + "_last"].set(last)
+                self.v[role + "_age"].set(str(who.get("age", 30)))
         for key, b in (("primary", self.b_primary), ("secondary", self.b_secondary)):
             rgb = fields.get(key + "_colour")
             if rgb:
@@ -4936,8 +4943,9 @@ class App(tk.Tk):
         where = os.path.basename(os.path.dirname(os.path.abspath(picked["src"]))) or picked["src"]
         self.lbl_bring.configure(text="%s of %s" % (fields.get("display_name") or picked["faction"], where))
         self.b_unbring.pack(side="left", padx=(6, 0))
-        self.status.set("%s of %s: Apply brings its units, names, figures, flags and pictures; made on %s. Its towns "
-                        "and armies are picked on this map." % (picked["faction"], where, frame))
+        self.status.set("%s of %s: Apply brings its units, names, family, figures, flags and pictures; made on %s. "
+                        "Pick its towns on the map - its family stands by the capital, the garrisons are its own "
+                        "units." % (picked["faction"], where, frame))
 
     def rename_faction(self):
         """Edit faction > Rename...: the faction's code name changed in every file of the mod (factionrename) -

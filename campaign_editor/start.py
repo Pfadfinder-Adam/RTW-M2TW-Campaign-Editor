@@ -83,14 +83,15 @@ def _own_garrison(plan, f, s, template, region, st, block_raw, start, own_held):
         return block_raw
     else:
         edu = plan.files.get(plan.mod.file("edu")) if plan.mod.file("edu") else None
-        lines = [u.strip() for u in cheap_garrison(*unit_source(plan, s, template),
-                                                   unit_upkeep(edu) if edu is not None else {},
-                                                   len(st.garrison))]
+        lines = brought_garrison(plan)
+        if lines is None:
+            lines = [u.strip() for u in cheap_garrison(s, template, unit_upkeep(edu) if edu is not None else {},
+                                                       len(st.garrison))]
         if not lines:
             own_held.add(region)
             return block_raw
         why = "%d unit(s) of %s's own instead of the old garrison (the town's own, no captain)" % (
-            len(lines), unit_source(plan, s, template)[1])
+            len(lines), plan.new if getattr(plan, "bring_start", None) else template)
     new = [old[0]] + [pad + u for u in lines] if lines else []
     plan.note(f, "%s: %s" % (region, why if lines else "its old garrison leaves - the town is empty"))
     if lines:
@@ -98,36 +99,18 @@ def _own_garrison(plan, f, s, template, region, st, block_raw, start, own_held):
     return block_raw[:a] + [f.make(x) for x in new] + block_raw[b:]
 
 
-def unit_source(plan, strat, template):
-    """(strat, faction) the new faction's armies and garrisons are picked from: the template's own, or - a faction
-    brought from another mod (factionbring sets plan.unit_source = (its descr_strat Strat, its name, {its unit:
-    this mod's name}, {this mod's unit types, lower case})) - that faction's own starting armies there, each unit
-    under the name it has in this mod and a unit this mod lacks left out."""
-    done = getattr(plan, "unit_pool_from", None)
-    if done:
-        return done
-    src = getattr(plan, "unit_source", None)
-    if not src:
-        return strat, template
-    ss, faction, names, have = src
-    for i, line in enumerate(ss.lines):
-        if tokens(line)[:1] != ["unit"]:
-            continue
-        u = unit_name(line)
-        got = names.get(u, u)
-        if got.lower() not in have:
-            ss.lines[i] = ";" + line                  # not in this mod: left out (the lines keep their places)
-        elif got != u:
-            ss.lines[i] = line.replace(u, got, 1)
-    plan.unit_source = None                           # mapped once
-    fb = ss.faction(faction)
-    if not fb or not any(tokens(x)[:1] == ["unit"] for x in ss.lines[fb.start:fb.end]):
-        plan.warn(None, "%s has no starting army of units this mod has - %s's armies and garrisons come from %s"
-                        % (faction, plan.new, template))
-        plan.unit_pool_from = (strat, template)
-    else:
-        plan.unit_pool_from = (ss, faction)
-    return plan.unit_pool_from
+def brought_garrison(plan):
+    """A faction brought from another mod (factionbring sets plan.bring_start = {'pool': [(its unit here, upkeep)],
+    'bodyguard': unit line, 'family': [...]}): a town's garrison is drawn from its own units the way an empty town
+    given on the map gets one (edit.AUTO_GARRISON: 3-6 units, their upkeep capped) - None when not brought."""
+    b = getattr(plan, "bring_start", None)
+    if not b:
+        return None
+    import random
+    from .edit import AUTO_GARRISON
+    from .masstown import random_garrison
+    return ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % u
+            for u in random_garrison(b["pool"], *AUTO_GARRISON, random.Random())]
 
 
 def cheap_garrison(strat, template, upkeep, n):
@@ -136,7 +119,7 @@ def cheap_garrison(strat, template, upkeep, n):
     return [order[i % len(order)] for i in range(n)] if order else []
 
 
-def balanced_army(strat, template, new_towns, upkeep, garrison, pool=None):
+def balanced_army(strat, template, new_towns, upkeep, garrison):
     """A leader's army sized like the other factions' start, not a copy of the
     template leader's (often among the strongest in the mod).
 
@@ -158,16 +141,16 @@ def balanced_army(strat, template, new_towns, upkeep, garrison, pool=None):
     leaders = [a for a in leaders if a] or [army(c) for fb in strat.factions for c in fb.characters
                                             if c.role == "leader" and army(c)]
     if not leaders:
-        return default_army(*(pool or (strat, template))), 0, 0
+        return default_army(strat, template), 0, 0
     sizes = sorted(len(a) for a in leaders)
     costs = sorted(cost(a) for a in leaders)
     size_t, cost_t = sizes[len(sizes) // 2], costs[len(costs) // 2]
 
-    lead = default_army(*(pool or (strat, template)))
+    lead = default_army(strat, template)
     out = lead[:1]                                    # the bodyguard
     have_n = len(out) + len(garrison)
     have_c = cost(out) + cost(garrison)
-    order = template_pool(*(pool or (strat, template)), upkeep)
+    order = template_pool(strat, template, upkeep)
     while have_n < size_t and any(e[1] for e in order):
         for e in order:
             if not e[1] or have_n >= size_t:
@@ -181,6 +164,31 @@ def balanced_army(strat, template, new_towns, upkeep, garrison, pool=None):
             have_n += 1
             have_c += c
     return out, size_t, cost_t
+
+
+def _family(plan, f, brought, capital, place, start):
+    """The brought faction's family members other than the leader and the heir (named characters with their
+    traits, each with his bodyguard), its records (wives, the dead) and the family tree's relative lines - the men
+    placed beside the capital. -> (the men's raw lines, the records' and relatives' raw lines - these go after every
+    character of the block: the game crashes on a character after the family tree)."""
+    out = []
+    taken = {(start.get(r) or {}).get("name", "").strip() for r in ("leader", "heir")}
+    men = [m for m in brought["family"]["men"] if m["name"] not in taken]
+    for m in men:
+        xy = place(capital, m["name"])
+        out.append(f.make(_set_xy(m["line"], xy)))
+        out.extend(f.make(x) for x in m["rest"])
+        out.append(f.make("army"))
+        out.append(f.make(m["bodyguard"]))
+        out.append(f.make(""))
+    tree = [f.make(x) for x in brought["family"]["records"] + brought["family"]["relatives"]]
+    if tree:
+        tree.append(f.make(""))
+    if men or tree:
+        plan.note(f, "%s's family from the other mod beside %s: %d man / men with their bodyguards, %d record(s), "
+                     "%d family-tree line(s)" % (plan.new, capital, len(men), len(brought["family"]["records"]),
+                                                 len(brought["family"]["relatives"])))
+    return out, tree
 
 
 def _has_army(lines):
@@ -381,8 +389,8 @@ def build_start(plan, campaign, start):
     if not cap_xy:
         raise ValueError("no city pixel for the capital %s in map_regions.tga" % capital)
     mode = start.get("army_mode") or "balanced"
-    pool_src = unit_source(plan, s, t)
-    template_army = default_army(*pool_src)
+    brought = getattr(plan, "bring_start", None)
+    template_army = [brought["bodyguard"]] if brought and brought.get("bodyguard") else default_army(s, t)
     if not template_army and not start.get("army"):
         plan.warn(f, "the template leader has no army to copy - the leader starts with no units")
     pool = plan.name_pool(new) or plan.name_pool(t)
@@ -424,14 +432,17 @@ def build_start(plan, campaign, start):
                     plan.note(f, "%s: %s (%s) and his %d unit(s) leave - the leader's army holds the town"
                               % (r, name, kind, len(units)))
                     continue
-                fresh = cheap_garrison(*pool_src, upkeep_all, len(units))
+                fresh = brought_garrison(plan)
+                if fresh is None:
+                    fresh = cheap_garrison(s, t, upkeep_all, len(units))
                 if not fresh:
                     kept.append((name, kind, chunk))
                     continue
-                it = iter(fresh)
-                chunk = [next(it) if tokens(l)[:1] == ["unit"] else l for l in chunk]
+                head = [l for l in chunk if tokens(l)[:1] != ["unit"]]
+                at = next(i for i, l in enumerate(head) if tokens(l)[:1] == ["army"]) + 1
+                chunk = head[:at] + fresh + head[at:]
                 plan.note(f, "%s: %s keeps the town with %d unit(s) of %s's own instead of the old garrison"
-                          % (r, name, len(fresh), pool_src[1]))
+                          % (r, name, len(fresh), new if brought else t))
                 kept.append((name, kind, chunk))
             joined[r] = kept
 
@@ -439,7 +450,7 @@ def build_start(plan, campaign, start):
     # chosen town, or a free tile by the capital when there is only one town
     spots = {"leader": (capital, cap_xy)}
     if start.get("heir"):
-        if len(regions) > 1 and tiles.get(regions[1]):
+        if len(regions) > 1 and tiles.get(regions[1]) and not brought:   # a brought family stands by the capital
             spots["heir"] = (regions[1], tiles[regions[1]])
         else:
             spots["heir"] = (None, place(capital, "the heir"))
@@ -513,11 +524,15 @@ def build_start(plan, campaign, start):
             units = list(template_army)
         elif mode == "bodyguard":
             units = template_army[:1]
+        elif brought:                                    # its bodyguard + the capital's garrison of its own units
+            units = template_army[:1] + (brought_garrison(plan) or [])
+            plan.note(f, "leader's army: bodyguard + %d unit(s) of %s's own (drawn as for an empty town)"
+                      % (len(units) - 1, new))
         else:
             garrison = [u for _, _, c in joined.get(capital, []) if _has_army(c) for u in _units(c)]
             edu = plan.files.get(mod.file("edu"))
             upkeep = unit_upkeep(edu) if edu is not None else {}
-            units, size_t, cost_t = balanced_army(s, t, len(regions), upkeep, garrison, pool_src)
+            units, size_t, cost_t = balanced_army(s, t, len(regions), upkeep, garrison)
             plan.note(f, "leader's army: bodyguard + %d unit(s) (target like similar factions: %d units, "
                          "upkeep %d%s)" % (len(units) - 1, size_t, cost_t,
                                            ", the town's garrison included" if garrison else ""))
@@ -525,6 +540,9 @@ def build_start(plan, campaign, start):
             units = merge(units, region, name)
         own.append(f.make(";;\t%s" % role))
         own.append(f.make(character_line(f, name, "named character", who.get("age", 30), xy, role=role)))
+        mine = next((m for m in (brought or {}).get("family", {}).get("men", []) if m["name"] == name), None)
+        if mine:                                         # a brought faction's leader / heir: his own traits
+            own.extend(f.make(x) for x in mine["rest"])
         if units:
             own.append(f.make("army"))
             own.extend(f.make(u.rstrip("\r")) for u in units)
@@ -556,6 +574,9 @@ def build_start(plan, campaign, start):
                       if c.xy and _has_army(s.lines[c.start:c.end]) and c.start not in removed}
         armies_now |= {spots[r][1] for r in spots}
         block.extend(extra_characters(plan, f, campaign, start["characters"], pool, armies_now))
+    if brought and brought.get("family"):           # the rest of its family, beside the capital
+        men, tree = _family(plan, f, brought, capital, place, start)
+        block.extend(men)
     for r in regions:
         # a town without one of our own characters keeps its first joined army
         # as the garrison; any further armies there fold into that one
@@ -574,6 +595,8 @@ def build_start(plan, campaign, start):
             block.extend(chunk)
             block.append(f.make(""))
             plan.note(f, "%s: %s (%s) joins %s with the town" % (r, name, kind, new))
+    if brought and brought.get("family"):           # its records and family tree after every character
+        block.extend(tree)
     block.append(f.make(";#######################################################################################<"))
     block.append(f.make(""))
 

@@ -58,6 +58,16 @@ def window_fields(src, campaign, faction):
         out["culture"] = src.culture(faction)
     except Exception:
         pass
+    try:                                                # its leader and heir (the rest of the family comes on Apply)
+        import re as _re
+        from .strat import Strat
+        ss = Strat(src.load(src.campaign_file(campaign, "descr_strat.txt")))
+        for c in ss.faction(faction).characters:
+            if c.role in ("leader", "heir") and c.named and c.role not in out:
+                m = _re.search(r"\bage\s+(\d+)", ss.lines[c.start])
+                out[c.role] = {"name": c.name, "age": int(m.group(1)) if m else 30}
+    except Exception:
+        pass
     return out
 
 
@@ -125,6 +135,83 @@ def bring_units(plan, src, faction, new):
         plan.note(None, "%d unit(s) of %s brought with their models, cards and recruit lines: %s" % (
             len(bring), faction, ", ".join(bring)))
     return shared, bring, names
+
+
+def unit_pool(plan, new):
+    """[(unit type, upkeep)] of the land units new owns in plan's export_descr_unit (the brought and the shared ones),
+    generals' bodyguards, siege engines, animal handlers and ships left out - what its garrisons are drawn from."""
+    from .packs import _block_lines, _values, type_blocks
+    edu = plan.edit(plan.mod.file("edu"))
+    out = []
+    for name, span in type_blocks(edu).items():
+        lines = _block_lines(edu, span)
+
+        def first(key):
+            got = _values(lines, key)
+            return [x.strip().lower() for x in got[0]] if got else []
+        owners = [o for part in first("ownership") for o in re.split(r"[\s,]+", part) if o]
+        attrs = [a for part in first("attributes") for a in re.split(r"[\s,]+", part) if a]
+        if new not in owners or "general_unit" in attrs or (first("category") or [""])[0] in (
+                "siege", "handler", "ship", "non_combatant"):
+            continue
+        cost = first("stat_cost")
+        try:
+            upkeep = int(float(cost[2]))
+        except (IndexError, ValueError):
+            upkeep = 0
+        out.append((name, upkeep))
+    return out
+
+
+def start_of(plan, src, campaign, faction, new, names):
+    """What the new faction's start takes from the brought one (start.py reads plan.bring_start): the pool its
+    garrisons are drawn from (its own units), its leader's bodyguard, and its family in the other mod's
+    descr_strat.txt - every named character with his traits and his bodyguard, the records (wives, the dead) and
+    the family tree's relative lines. Its armies and towns stay there: towns are picked on this map."""
+    from .packs import type_blocks
+    from .strat import Strat
+    pool = unit_pool(plan, new)
+    have = {t.lower(): t for t in type_blocks(plan.edit(plan.mod.file("edu")))}
+    out = {"pool": pool, "bodyguard": None, "family": {"men": [], "records": [], "relatives": []}}
+    sp = src.campaign_file(campaign, "descr_strat.txt") if campaign else None
+    if not sp or not os.path.isfile(sp):
+        return out
+    from .start import _strip_sub_faction, unit_name
+    ss = Strat(src.load(sp))
+    fb = ss.faction(faction)
+    if fb is None:
+        return out
+
+    def here(line):
+        """A unit line under the name its unit has in this mod, or None when this mod lacks it."""
+        u = unit_name(line)
+        got = names.get(u, u)
+        return line.replace(u, have[got.lower()], 1).strip() if got.lower() in have else None
+    for c in fb.characters:
+        if not c.named:
+            continue
+        body = ss.lines[c.start:c.end]
+        units = [x for x in body if tokens(x)[:1] == ["unit"]]
+        rest = [x for x in body[1:] if tokens(x)[:1] not in (["unit"], ["army"]) and x.strip()]
+        guard = here(units[0]) if units else None
+        if c.role == "leader" and guard:
+            out["bodyguard"] = guard
+        out["family"]["men"].append({"name": c.name, "line": _strip_sub_faction(body[0]), "rest": rest,
+                                     "bodyguard": guard, "role": c.role})
+    for x in ss.lines[fb.start:fb.end]:
+        t = tokens(x)[:1]
+        if t == ["character_record"]:
+            out["family"]["records"].append(x)
+        elif t == ["relative"]:
+            out["family"]["relatives"].append(x)
+    guard = out["bodyguard"] or next((m["bodyguard"] for m in out["family"]["men"] if m["bodyguard"]), None)
+    for m in out["family"]["men"]:
+        m["bodyguard"] = m["bodyguard"] or guard
+    if guard is None:
+        plan.warn(None, "%s's generals' bodyguard is not a unit of this mod - its family stays in the other mod "
+                        "(only the leader and heir picked in the window come)" % faction)
+        out["family"]["men"] = []
+    return out
 
 
 def bring_names(plan, src, faction, new):
@@ -404,12 +491,7 @@ def overlay(plan, campaign, bring):
     elif culture:
         plan.warn(sm, "%s's culture %s is not in this mod - %s keeps its frame's culture" % (faction, culture, new))
     shared, brought, names = bring_units(plan, src, faction, new)
-    sp = src.campaign_file(bring.get("campaign") or campaign, "descr_strat.txt")
-    if sp and os.path.isfile(sp):                       # its armies and garrisons from its own starting armies
-        from .packs import type_blocks
-        from .strat import Strat
-        have = {t.lower() for t in type_blocks(plan.edit(plan.mod.file("edu")))}
-        plan.unit_source = (Strat(src.load(sp)), faction, names, have)
+    plan.bring_start = start_of(plan, src, bring.get("campaign") or campaign, faction, new, names)
     if plan.opts.get("copy_art", True):                 # its pictures where the frame's copies went (yours win)
         from . import log
         folder = os.path.join(log.logs_dir() or os.path.expanduser("~"), "brought_pictures")

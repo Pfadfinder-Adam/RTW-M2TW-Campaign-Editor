@@ -1528,9 +1528,9 @@ def _other_mod(mod):
 @step("New faction > From another mod: a faction of another mod (Barbarian Invasion beside Rome, else the game's own "
       "data) made {brought} - its units, name lists, figures on the map and in battle, flags and pictures with it - "
       "in a rebel town",
-      "{brought} on the faction-select screen in its own flag and colours; its town's garrison and its leader's army "
-      "of its own units (their cards and models from the other mod); its general and admiral on the campaign map "
-      "in the other mod's figures; its banners in battle")
+      "{brought} on the faction-select screen in its own flag and colours; its leader, heir and family by its capital "
+      "(the family tree as in the other mod); its town's garrison of 3-6 of its own units (their cards and models "
+      "from the other mod); its generals on the campaign map in the other mod's figures; its banners in battle")
 def s_faction_bring(c, mod):
     from . import factionbring as FB
     from .build import build
@@ -1555,7 +1555,8 @@ def s_faction_bring(c, mod):
         "adjective": fields.get("adjective") or "",
         "primary_colour": c.colours[c.brought][0], "secondary_colour": c.colours[c.brought][1],
         "raise_faction_limit": True,
-        "start": {"regions": regions, "leader": {"name": pool["characters"][0], "age": 35}},
+        "start": {"regions": regions, "leader": fields.get("leader") or {"name": pool["characters"][0], "age": 35},
+                  "heir": fields.get("heir")},
         "bring": {"src": src.data, "faction": pick[0], "campaign": camp}})
 
 

@@ -5,7 +5,8 @@
 ### Added
 - **New faction > From another mod...**: a faction of another mod of the same game made a faction of yours - its
   names, colours, units, name lists, figures on the campaign map and in battle (generals, captains, admirals),
-  battle flags, map flags, icons and pictures come with it; its starting armies and garrisons are its own units.
+  battle flags, map flags, icons and pictures come with it; its family stands by the capital you pick, and its
+  towns' garrisons are 3-6 of its own units.
 - **Maps > 3D**: the campaign map in 3D in the game's own ground textures (summer or winter), relief, water and
   rivers, with the game's own models of towns (with their walls), ports (quay and ships), forts, resources, armies and agents (standing, facing you) - what the brushes painted
   is seen before it is written; move with the right button, turn and tilt with the wheel held, zoom with the wheel.
