@@ -1196,6 +1196,12 @@ def unclash_files(mod, manifest, files):
         return v
     for name in list(manifest.get("modeldb") or {}):
         manifest["modeldb"][name] = walk(manifest["modeldb"][name])
+    # an engine's skeleton names its animation files, an effect its textures / models: they follow too (a tester's
+    # question, 2026-10-15: a renamed animation not followed = the engine moving by the mod's own file of that name)
+    for name, lines in list((manifest.get("engine_skeletons") or {}).items()):
+        manifest["engine_skeletons"][name] = [fix_line(x) for x in lines]
+    for e in manifest.get("effects") or []:
+        e["lines"] = [fix_line(x) for x in e["lines"]]
     manifest["files"] = sorted(files)
     return files, moved
 
@@ -1218,6 +1224,7 @@ def _put_blocks(plan, manifest, owners):
     _put_skeleton_text(plan, manifest, added)
     known = set(skeletons(mod)) | animpacks.skeleton_names(mod) | {a.lower() for a in added}
     swapped, left = {}, set()
+    eng_skel = _engine_skeleton_names(plan, manifest)
     for kind in ("model", "mount", "projectile", "engine", "animal", "ship", "mounted_engine"):   # projectiles first
         want = manifest["blocks"].get(kind) or {}
         if not want:
@@ -1239,6 +1246,8 @@ def _put_blocks(plan, manifest, owners):
             if kind == "engine":
                 for old, new in renamed["projectile"].items():
                     lines = _rename_projectile(lines, old, new)
+                for old, new in eng_skel.items():
+                    lines = _rename_ref(lines, "engine_skeleton", old, new)
             same_name = next((k for k in have if k.lower() == name.lower()), None)
             if same_name is not None:
                 if [strip_comment(x).split() for x in _block_lines(f, have[same_name])] == \
@@ -1264,7 +1273,7 @@ def _put_blocks(plan, manifest, owners):
             f.raw.extend(f.make(x) for x in [""] + lines + [""])
             have[renamed[kind].get(name, name)] = (0, 0)
             plan.note(f, "%s %s added" % (kind, renamed[kind].get(name, name)))
-    _put_engine_skeletons(plan, manifest)
+    _put_engine_skeletons(plan, manifest, eng_skel)
     if swapped:
         plan.warn(None, "%d skeleton(s) of the brought models are not in this mod (the source has its own "
                         "animations) - its nearest ones move the men instead, so they may move a little "
@@ -1337,9 +1346,31 @@ def _fit_skeletons(lines, known):
     return out, swapped, left
 
 
-def _put_engine_skeletons(plan, manifest):
+def _engine_skeleton_names(plan, manifest):
+    """{brought engine skeleton: name it goes in under} for those this mod's descr_engine_skeleton.txt has with OTHER
+    lines (a free name: the brought engine moves by its own, the mod's engines keep theirs)."""
+    want = manifest.get("engine_skeletons") or {}
+    path = plan.mod.find("descr_engine_skeleton.txt") if want else None
+    if not path:
+        return {}
+    f = plan.mod.load(path)
+    have = type_blocks(f)
+    low = {k.lower(): k for k in have}
+    out = {}
+    for name, lines in want.items():
+        real = low.get(name.lower())
+        if real is None:
+            continue
+        if [strip_comment(x).split() for x in _block_lines(f, have[real])][1:] != \
+                [strip_comment(x).split() for x in lines][1:]:
+            out[name] = free_name(have, name, sep="_")
+    return out
+
+
+def _put_engine_skeletons(plan, manifest, renamed=None):
     """The brought engines' skeletons this mod's descr_engine_skeleton.txt lacks, appended (their animation files
-    come with the pack's files)."""
+    come with the pack's files); one it has with other lines under the name _engine_skeleton_names gave it."""
+    renamed = renamed or {}
     want = manifest.get("engine_skeletons") or {}
     if not want:
         return
@@ -1350,7 +1381,15 @@ def _put_engine_skeletons(plan, manifest):
         return
     f = plan.edit(path)
     have = {k.lower() for k in type_blocks(f)}
-    new = [(n, lines) for n, lines in want.items() if n.lower() not in have]
+    new = []
+    for n, lines in want.items():
+        if n in renamed:
+            lines = _set_line(lines, "type", renamed[n])
+            n = renamed[n]
+            plan.note(f, "engine skeleton %s exists here with other lines: the brought one is added as %s" % (
+                [k for k, v in renamed.items() if v == n][0], n))
+        if n.lower() not in have:
+            new.append((n, lines))
     if not new:
         return
     while f.raw and not f.text(len(f.raw) - 1).strip():

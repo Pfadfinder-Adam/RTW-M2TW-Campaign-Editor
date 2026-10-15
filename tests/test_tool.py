@@ -6159,6 +6159,46 @@ building smith
             self.assertIn("type\t\tmy_onager", fh.read())
         self.assertTrue(os.path.isfile(os.path.join(troot, "data", "animations", "engine", "my", "idle.evt")))
 
+    def test_brought_engine_keeps_its_own_skeleton_and_animation_on_a_name_clash(self):
+        # the user, 2026-10-15 ('then the unit breaks?'): the target has an engine skeleton of the same name with
+        # other lines, and an animation file of the same path with other bytes - the brought engine moves by its own
+        # (the file under a free name, the skeleton under a free name naming it, the engine pointing at that skeleton);
+        # the mod's own skeleton, file and engines are untouched
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "engine\t\tmy onager\nownership\talpha"))
+        write(os.path.join(d, "descr_engines.txt"), "type\t\tmy onager\nengine_skeleton\t\tonager\n")
+        write(os.path.join(d, "descr_engine_skeleton.txt"),
+              "type\t\tonager\nanim\t\tidle\t\tdata/animations/engine/idle.CAS\n")
+        write(os.path.join(d, "animations", "engine", "idle.CAS"), "THEIRS")
+        man, files = packs.collect(ModData(self.root), ["alpha general"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        td = os.path.join(troot, "data")
+        own_skel = "type\t\tonager\nanim\t\tidle\t\tdata/animations/engine/idle.CAS\nanim\t\tfire\t\tx.CAS\n"
+        write(os.path.join(td, "descr_engine_skeleton.txt"), own_skel)
+        write(os.path.join(td, "animations", "engine", "idle.CAS"), "MINE")
+        write(os.path.join(td, "descr_engines.txt"), "type\t\tother\nengine_skeleton\t\tonager\n")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        plan.apply()
+        with open(os.path.join(td, "descr_engine_skeleton.txt")) as fh:
+            skel = fh.read()
+        self.assertTrue(skel.startswith(own_skel))                       # the mod's own kept
+        self.assertIn("type\t\tonager_2\nanim\t\tidle\t\tdata/animations/engine/idle_2.CAS", skel)
+        with open(os.path.join(td, "animations", "engine", "idle.CAS")) as fh:
+            self.assertEqual(fh.read(), "MINE")
+        with open(os.path.join(td, "animations", "engine", "idle_2.CAS")) as fh:
+            self.assertEqual(fh.read(), "THEIRS")
+        with open(os.path.join(td, "descr_engines.txt")) as fh:
+            eng = fh.read()
+        self.assertIn("type\t\tother\nengine_skeleton\t\tonager\n", eng)
+        self.assertIn("engine_skeleton\t\tonager_2", eng)
+
     def test_unit_pack_brings_its_projectile(self):
         # R-20261014-99712D / D5B6A6: crossbowmen brought from Barbarian Invasion into Rome - the game stopped:
         # "Stat_pri statistic refers to non-existant projectile type 'crossbow'". The projectile comes with the

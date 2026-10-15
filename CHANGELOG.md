@@ -142,6 +142,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Bring units: a siege engine whose skeleton or animation file had the same name as one of your mod moved by your
+  mod's file -> it comes in under a name of its own and moves by its own animations.
 - A unit's card or description picture put in for one faction replaced every faction's -> it goes to the faction
   picked in **Pictures for** only; the others keep their own.
 - Bring units (Medieval II): the bodies of a unit's armour upgrades were left behind - they come along now.
