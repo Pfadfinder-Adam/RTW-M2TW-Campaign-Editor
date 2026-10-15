@@ -171,6 +171,9 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Factions: after loading another mod the form still showed the old mod's faction (Medieval II's France with
+  Barbarian Invasion loaded) -> it is read again from the new mod; a brought faction's 'From zero' lock never
+  stays on Edit faction.
 - Bring units: units brought from a REX mod such as HLR could stop the other game at start (a recruit condition
   on a resource it does not have, written with 'factionwide') -> such conditions are taken out.
 - New faction > From another mod: the brought faction kept its template's faction-select map -> it is made from

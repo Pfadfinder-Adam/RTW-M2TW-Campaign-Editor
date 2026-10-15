@@ -1806,6 +1806,10 @@ class App(tk.Tk):
         self._lock_frame(self.lf2, False)
         self.lf.configure(text="Edit faction" if edit else "New faction")
         self.lbl_template.configure(text="Faction (edited)" if edit else "Template (copied)")
+        brought = not edit and getattr(self, "bring", None)       # New with a brought faction: made from zero
+        self.cb_template.state(["disabled"] if brought else ["!disabled"])
+        if brought:
+            self.lbl_template.configure(text="From zero (lists like)")
         self.lf2.configure(text="Leader and heir (names from the faction's name list)" if edit else
                            "Leader and heir (names must come from the template's name list)")
         self.e_name.configure(state="readonly" if edit else "normal")
@@ -4251,6 +4255,15 @@ class App(tk.Tk):
             for ed in self.editors.values():
                 if ed.mod is not None:
                     ed.rebind(self.mod)
+            # the faction form still showed the old mod's faction (Medieval II's France with BI loaded - a tester's
+            # screen): it is read again from this mod's files - the same faction when this mod has it, else its
+            # first one
+            have = [n for n, _ in self.mod.factions()]
+            self.editing_now = None
+            if self.v["template"].get().strip() not in have:
+                self.v["template"].set(next((n for n in have if n != "slave"), ""))
+            if self.v["template"].get():
+                self.template_changed()
         ed = self.editor()
         if ed is not None:
             self._rebind(ed)
