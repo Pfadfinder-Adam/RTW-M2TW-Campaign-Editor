@@ -165,6 +165,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Bring buildings: a church brought from Barbarian Invasion into Rome stood in battle as a Roman temple -> its own
+  look comes first in the town plan, as in Barbarian Invasion.
 - New faction: the leader's and heir's title fields cut a long title -> wide enough for it; the Tooltip and Full
   description boxes stand in the middle.
 - Report a bug: the mod's file list went with every report -> like the logs, it stays out when it went with an

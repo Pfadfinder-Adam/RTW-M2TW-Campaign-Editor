@@ -251,7 +251,6 @@ class ToolTest(unittest.TestCase):
         # M2: a castle = `settlement castle` + castle levels; the game converts by each level's convert_to
         from campaign_editor.buildings import (read_buildings, convert, set_kind, settlement_kind, kind_problem,
                                             has_castles)
-        from campaign_editor.textio import TextFile
         path = os.path.join(self.root, "edb_m2.txt")
         write(path, """building core_building
 {
@@ -3581,7 +3580,6 @@ building smith
         """Both games: allied_to / at_war_with at the start (both ways), Medieval II's faction_standings floats,
         and a new faction neutral to all gets the rebels' lines the way the file's own factions have them."""
         from campaign_editor.diplomacy import kinds, read, rebels, set_relations
-        from campaign_editor.textio import TextFile
         from campaign_editor.diplomacy import parse
 
         class P:
@@ -5890,7 +5888,6 @@ building smith
         # its records and family tree after every character (the game crashes on a character after them)
         from types import SimpleNamespace
         from campaign_editor.start import _family, brought_garrison, unit_name
-        from campaign_editor.textio import TextFile
         self.assertIsNone(brought_garrison(SimpleNamespace()))
         plan = SimpleNamespace(new="celts", notes=[], note=lambda f, m: plan.notes.append(m), bring_start={
             "pool": [("celtic spearman", 100), ("gallowglass", 150)], "bodyguard": "unit celtic warlord exp 0",
@@ -9522,6 +9519,34 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte
 
+    def test_a_brought_buildings_plan_variant_goes_before_the_slots_temples(self):
+        """Report #275: a Christian chapel brought from Barbarian Invasion into Rome stood in battle as a Roman temple -
+        its variant went to the END of the plan's slot, and the game takes the first variant that fits: Rome's
+        'temple_of_battle temple_of_battle_temple' (no 'exact') fits any temple of that level. The brought variants
+        go before the slot's first building variant (after its construction site and empty plots), as BI's own plan
+        has them."""
+        from campaign_editor import battlelook
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        generic = ("\t\tvariant\n\t\t{\n\t\t\tcultures any\n\t\t\tbuildings\n\t\t\t{\n"
+                   "\t\t\t\ttemple_of_battle temple_of_battle_temple\n\t\t\t}\n\t\t\troman_temple,\t0,\t0,\t0,\t0\n\t\t}\n")
+        site = ("\t\tvariant\n\t\t{\n\t\t\tcultures any\n\t\t\tstatus construction\n\t\t\tbuildings\n\t\t\t{\n"
+                "\t\t\t\ttemple_of_battle temple_of_battle_shrine\n\t\t\t}\n\t\t\tsite,\t0,\t0,\t0,\t0\n\t\t}\n")
+        write(os.path.join(d, "descr_settlement_plan.txt"),
+              "slots\n{\n\tslot slot_religious\n\t{\n\t\tdefault\n\t\t{\n\t\t\tempty,\t0,\t0,\t0,\t0\n\t\t}\n"
+              + site + generic + "\t}\n}\n")
+        mod = ModData(self.root)
+        mine = ["\t\tvariant\n", "\t\t{\n", "\t\t\tcultures any\n", "\t\t\tbuildings\n", "\t\t\t{\n",
+                "\t\t\t\texact temple_church church_chapel\n", "\t\t\t}\n", "\t\t\tchapel,\t0,\t0,\t0,\t0\n",
+                "\t\t}\n"]
+        plan = Plan(mod, "pack", "pack", {})
+        battlelook.put(plan, {"variants": [{"slot": "slot_religious", "lines": mine}], "buildings": {},
+                              "items": {}, "primary": []}, {}, {})
+        sp = plan.edit(mod.find("descr_settlement_plan.txt")).texts()
+        text = "\n".join(sp)
+        self.assertLess(text.index("site,"), text.index("chapel,"))           # the construction site stays first
+        self.assertLess(text.index("chapel,"), text.index("roman_temple,"))   # before the slot's temples
+
     def test_a_brought_building_keeps_its_look_on_the_battle_map(self):
         # R-20261014-6E55CD: a church brought from Barbarian Invasion stood in town as the game's stand-in model -
         # its town-plan place, battle building, items and models come along now: the plan's variant into the
@@ -12229,7 +12254,6 @@ building smith
         rebels read from it; Check mod does not ask for its town pixel (a tester's Sahara_Province)."""
         from campaign_editor.check import check_mod
         from campaign_editor.moddata import region_entries
-        from campaign_editor.textio import TextFile
         f = TextFile.from_bytes("x", (REGIONS + "Sahara\n\twasteland\n\t9 9 9\nGobi\n\twasteland\n\tslave\n"
                                       "\tRebels\n\t8 8 8\n\tnone\n\t5\n\t1\n").encode())
         e = region_entries(f)
@@ -13874,7 +13898,6 @@ building smith
         as the kept parts will leave them are read in memory (plan.kept_texts - each part laid over the ones before
         it), and the same change kept again is not added again."""
         from campaign_editor.plan import Plan, kept_texts
-        from campaign_editor.textio import TextFile
         mod = ModData(self.root)
         path = mod.campaign_file("test", "descr_strat.txt")
         with open(path, "rb") as fh:
@@ -14639,7 +14662,6 @@ class M2DiplomacyEndTest(unittest.TestCase):
         """Medieval II's diplomacy starts with faction_standings (Rome's with core_attitudes): the slave block, the
         last one, must end before it - a rebel army written after it was never read (the user's M2TW, 2026-09-30)."""
         from campaign_editor.strat import Strat
-        from campaign_editor.textio import TextFile
         text = ("campaign\timperial_campaign\r\n"
                 "faction\tslave, comfortable caliph\r\n"
                 "denari\t5000\r\n"

@@ -257,6 +257,20 @@ def _own_file(plan, main, folder, own, blocks, note):
     plan.note(f, "include %s" % own)
 
 
+def _first_building_variant(texts, a, b):
+    """Where the brought variants go in a slot: before its first variant for a built building (after the default,
+    the construction sites and the empty-plot 'none' ones). The game takes the FIRST variant that fits, and a
+    variant naming a chain without 'exact' fits any building of its kind at that level - put last, the brought
+    church stood as the slot's Roman temple (report #275); Barbarian Invasion's own plan has its churches first."""
+    for h, x, y in children(texts, _body(texts, a), b):
+        if h != ["variant"]:
+            continue
+        status = any(_code(t).split()[:1] == ["status"] for t in texts[x:y])
+        if not status and any(c.lower() != "none" for _, c, _ in _named(texts, x, y)):
+            return x
+    return b
+
+
 def put(plan, look, chain_names, level_names):
     """The battle look of brought chains into plan.mod (see the module's text). Says what it could not place."""
     from .packs import free_name
@@ -323,7 +337,7 @@ def put(plan, look, chain_names, level_names):
         for v in variants:
             ins += v
             placed += 1
-        f.insert(b, ins)
+        f.insert(_first_building_variant(f.texts(), a, b), ins)
     if look.get("primary"):
         parts = _plan_parts(f.texts())
         if parts["primary"]:
