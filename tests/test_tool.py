@@ -1087,6 +1087,21 @@ building smith
         self.assertIn("alpha", cards[0]["of"])
         self.assertTrue(cards[0]["others"][cards[0]["of"].index("alpha")][0].startswith(os.path.join(game, "data")))
 
+    def test_recolour_kept_for_a_faction_not_created_yet_finds_its_copies(self):
+        """Report #224: Recolour while making a faction said 'create it first'. The window shows the template's
+        pictures; at the write (after the faction part) the ticked ones are found among the new faction's own copies
+        by their names (template -> new) - or the very file it shares with the template."""
+        from campaign_editor import recolour as R
+        game, _ = self._game()
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        before = [it for it in R.targets(ModData(data), "test", "alpha") if not isinstance(it, str)]
+        want = set().union(*(R.renamed_rels(it["rel"], "alpha", "beta") for it in before))
+        self.assertIn("data/ui/units/beta/#alpha_general.tga", want)         # the card keeps its name, own folder
+        build(ModData(data), "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}}).apply()
+        after = [it for it in R.targets(ModData(data), "test", "beta") if not isinstance(it, str)]
+        self.assertTrue(after)
+        self.assertEqual(len([it for it in after if R.plain_rel(it["rel"]) in want]), len(after))
+
     def test_thin_mod_gets_its_whole_map_folder_on_a_map_change(self):
         """A thin mod's first map change (a town deleted with its region) brings the game's whole map folder into the
         mod - but map.rwm, which the game builds again from the mod's map; the game's files are never written; Restore
@@ -2316,6 +2331,116 @@ building smith
                 self.assertIsNotNone(text, fd.key)
                 self.assertNotIn("do not name", text, (fd.key, fd.value))
 
+    def test_map_shows_the_faction_work_not_written_yet(self):
+        """Reports #223 / #219: the capital and towns picked for a new faction were not on the map until Apply. The
+        map lays New / Edit faction's kept work over the owners: its towns in its colour (said as waiting), the
+        capital starred; Edit's towns let go go to the faction they are given to."""
+        try:
+            from campaign_editor.gui import App
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        from types import SimpleNamespace
+        new = {"fields": {"name": "Saba", "template": "alpha", "capital": "B_R"}, "chosen": ["A_R", "B_R"],
+               "colours": {"primary": (0, 120, 0)}, "vars": {}}
+        edit = {"fields": {"template": "gamma", "capital": "D_R"}, "chosen": ["D_R", "E_R"], "vars": {"v_give": "slave"},
+                "editing_now": {"regions": ["C_R", "D_R"], "capital": "C_R"}}
+        fake = SimpleNamespace(_kept_sides={"new": new, "edit": edit}, v_mode=SimpleNamespace(get=lambda: "map"))
+        owners, colours = {"A_R": "slave", "B_R": "beta", "C_R": "gamma", "D_R": "gamma"}, {"alpha": (200, 0, 0)}
+        capitals = {"C_R": "gamma", "B_R": "beta"}
+        waiting = App.sides_on_map(fake, owners, colours, capitals)
+        self.assertEqual(owners, {"A_R": "saba", "B_R": "saba", "C_R": "slave", "D_R": "gamma", "E_R": "gamma"})
+        self.assertEqual(waiting, {"A_R", "B_R", "C_R", "E_R"})
+        self.assertEqual(capitals, {"B_R": "saba", "D_R": "gamma"})          # gamma's old capital loses its star
+        self.assertEqual(colours["saba"], (0, 120, 0))
+
+    def test_map_shows_changes_kept_for_apply(self):
+        """Report #219: what other windows keep for Apply (a town given, a garrison) is seen on the map before the
+        write - read from descr_strat as the kept plans will leave it."""
+        try:
+            from campaign_editor.gui import App
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        from types import SimpleNamespace
+        from campaign_editor.edit import map_changes
+        from campaign_editor.plan import kept_texts
+        from campaign_editor.strat import Strat
+        mod = ModData(os.path.join(self.root, "data"))
+        plan = Plan(mod, "map", "map", {})
+        map_changes(plan, "test", {"owners": {"B_R": "alpha"}})
+
+        def view():
+            v = ModData(mod.data)
+            for path, f in kept_texts([plan]).items():
+                v._cache[path] = f
+            return v
+        strat = Strat(mod.load(mod.campaign_file("test", "descr_strat.txt")))
+        fake = SimpleNamespace(session_parts=lambda: {"town": {}}, kept_view=view, strat=strat,
+                               v_campaign=SimpleNamespace(get=lambda: "test"),
+                               map_view=SimpleNamespace(own_garrison={}))
+        owners, waiting = strat.owners(), set()
+        App._kept_on_map(fake, owners, waiting)
+        self.assertEqual(owners["B_R"], "alpha")
+        self.assertIn("B_R", waiting)
+
+    def test_rebel_types_edited_and_their_regions_follow(self):
+        """Report #252 (a 'Rebels' window like Mercenaries): rebel types read from descr_rebel_factions.txt; a unit
+        added, a type renamed (its regions follow in descr_regions.txt), a new type (with the name players read), a
+        type given to a region; a type taken out while a region still names it is refused in words; a type not
+        changed keeps its bytes; Restore gives everything back."""
+        from campaign_editor import rebels as RB
+        data = os.path.join(self.root, "data")
+        text = ("; rebels\n\nrebel_type\t\t\tRebels\t\t// the usual\ncategory\t\t\tpeasant_revolt\nchance\t\t\t3\n"
+                "description\t\t\tRebels\nunit\t\t\trebel spear\n\n"
+                "rebel_type\t\t\tbrigands\ncategory\t\t\tbrigands\nchance\t\t\t50\ndescription\t\t\tbrigands\n"
+                "unit\t\t\trebel spear\n")
+        write(os.path.join(data, "descr_rebel_factions.txt"), text)
+        write(os.path.join(data, "text", "rebel_faction_descr.txt"), "{Rebels}\tRebels\n{brigands}\tBrigands\n",
+              utf16=True)
+        mod = ModData(data)
+        path, types = RB.read(mod)
+        self.assertEqual([t.name for t in types], ["Rebels", "brigands"])
+        self.assertEqual(types[0].units, ["rebel spear"])
+        self.assertEqual(types[0].words_now, "Rebels")
+        with open(path, "rb") as fh:
+            before = fh.read()
+        # rename + one more unit; a new type; B_R takes the new one
+        types[0].name = "Hill_Rebels"
+        types[0].units.append("alpha general")
+        new = RB.RebelType("Sea_Raiders", "pirates", 10, units=["rebel spear"])
+        new.words = "Sea Raiders"
+        plan = Plan(mod, "rebels", "rebels", {})
+        RB.plan_types(plan, "test", types + [new], given={"B_R": "Sea_Raiders"})
+        bdir = plan.apply()
+        after = ModData(data)
+        _, got = RB.read(after)
+        self.assertEqual([t.name for t in got], ["Hill_Rebels", "brigands", "Sea_Raiders"])
+        self.assertEqual(got[0].units, ["rebel spear", "alpha general"])
+        with open(path, encoding="utf-8") as fh:
+            now = fh.read()
+        self.assertIn("rebel_type\t\t\tHill_Rebels\t\t// the usual\n", now)      # its comment kept
+        self.assertIn("rebel_type\t\t\tbrigands\ncategory\t\t\tbrigands\n", now)   # untouched
+        self.assertEqual(RB.regions_of(after, "test"), {"A_R": "Hill_Rebels", "B_R": "Sea_Raiders"})
+        from campaign_editor.strtables import strings
+        self.assertEqual(strings(after, "rebel_faction_descr.txt").get("SEA_RAIDERS"), "Sea Raiders")
+        restore(ModData(self.root), bdir)
+        with open(path, "rb") as fh:
+            self.assertEqual(fh.read(), before)
+        # a type taken out while A_R still names it: refused, A_R named
+        mod = ModData(data)
+        _, types = RB.read(mod)
+        with self.assertRaisesRegex(ValueError, "A_R"):
+            RB.plan_types(Plan(mod, "rebels", "rebels", {}), "test", [t for t in types if t.name != "Rebels"])
+        plan = Plan(mod, "rebels", "rebels", {})
+        RB.plan_types(plan, "test", [t for t in types if t.name != "Rebels"],
+                      given={"A_R": "brigands", "B_R": "brigands"})
+        plan.apply()
+        self.assertEqual([t.name for t in RB.read(ModData(data))[1]], ["brigands"])
+        # a unit the mod lacks is said
+        _, types = RB.read(ModData(data))
+        types[0].units.append("no such unit")
+        with self.assertRaisesRegex(ValueError, "no such unit"):
+            RB.plan_types(Plan(ModData(data), "rebels", "rebels", {}), "test", types)
+
     def test_signs_letters_stand_out_on_any_colour(self):
         """A letter or picture on a coloured sign (a town's hall, an agent's sign, a resource's letters, a colour
         button): black on a bright colour, white on a dark one - Egypt's white disc hid its agents' white signs."""
@@ -2499,47 +2624,6 @@ building smith
         other = im.getpixel((int((x2 + 0.5) * im.width / img.width), int((img.height - 1 - y2 + 0.5) * im.height /
                                                                             img.height)))
         self.assertNotEqual(other, (200, 10, 10))                     # another faction's land: the map as it is
-
-    def test_recruitment_panel_sorted_strongest_first(self):
-        """The user, 2026-10-14: the panel lists units in the order of the buildings file's recruit lines - sort them:
-        infantry, missiles, cavalry, siege, ships, the dearest first in each; other lines and comments stay put."""
-        from campaign_editor import recruitorder as RO
-        d = os.path.join(self.root, "data")
-        write(os.path.join(d, "export_descr_unit.txt"),
-              "type boat\ncategory ship\nclass light\nstat_cost 1, 900, 10\n\n"
-              "type horse\ncategory cavalry\nclass light\nstat_cost 1, 300, 10\n\n"
-              "type archer\ncategory infantry\nclass missile\nstat_cost 1, 200, 10\n\n"
-              "type cheap spear\ncategory infantry\nclass spearmen\nstat_cost 1, 100, 10\n\n"
-              "type dear sword\ncategory infantry\nclass heavy\nstat_cost 1, 700, 10\n")
-        write(os.path.join(d, "export_descr_buildings.txt"),
-              "building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, }\n"
-              "        {\n            capability\n            {\n"
-              "                recruit \"boat\"  0  requires factions { alpha, }\n"
-              "                recruit \"horse\"  0  requires factions { alpha, } ; fast\n"
-              "                agent spy  0  requires factions { alpha, }\n"
-              "                recruit \"archer\"  0  requires factions { alpha, }\n"
-              "                recruit \"cheap spear\"  0  requires factions { alpha, }\n"
-              "                recruit \"dear sword\"  0  requires factions { alpha, }\n"
-              "            }\n        }\n    }\n}\n")
-        before = tree_hash(self.root)
-        mod = ModData(self.root)
-        plan = Plan(mod, "sort", "sort", {})
-        changed = RO.plan_sort(plan)
-        self.assertEqual(changed, [("barracks", "hall", ["dear sword", "cheap spear", "archer", "horse", "boat"])])
-        bdir = plan.apply()
-        lines = open(os.path.join(d, "export_descr_buildings.txt")).read().splitlines()
-        self.assertEqual([x.strip() for x in lines[8:13]], [
-            'recruit "dear sword"  0  requires factions { alpha, }',
-            'recruit "cheap spear"  0  requires factions { alpha, }',
-            'agent spy  0  requires factions { alpha, }',            # the agent line keeps its place
-            'recruit "archer"  0  requires factions { alpha, }',
-            'recruit "horse"  0  requires factions { alpha, } ; fast'])   # its comment goes with it
-        self.assertEqual(lines[13].strip(), 'recruit "boat"  0  requires factions { alpha, }')
-        plan2 = Plan(ModData(self.root), "sort", "sort", {})
-        self.assertEqual(RO.plan_sort(plan2), [])                     # sorted already: nothing to do
-        restore(ModData(self.root), bdir)
-        after = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
-        self.assertEqual(after, before)
 
     def test_palette_tga_read_and_written_back_true_colour(self):
         """A map made by a community map generator stores map_regions / features / ground as COLOUR-MAPPED TGAs
@@ -5741,6 +5825,380 @@ building smith
         plan.apply()
         self.assertEqual(open(os.path.join(tex, "##chariot_alpha.tga.dds")).read(), "ALPHA'S OWN")
 
+    def test_unit_pack_model_skeletons_the_target_lacks(self):
+        # R-20261014-EFB5F2 (#260): every Gaul unit brought from HLR into Rome (with REX) - the game stopped at once:
+        # "Unable to find skeleton 'fs_hc_spearman_classic'" (descr_model_battle). HLR's skeletons live in its own
+        # animation packs; the target's descr_skeleton has none of them. Each brought model's skeleton the target
+        # lacks becomes the target's nearest one (fs_hc_spearman_classic -> fs_hc_spearman, fs_s1_gladius ->
+        # fs_swordsman, fs_m_bearer -> fs_standard_bearer), said in the preview; a skeleton the target has stays
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1\nownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\talpha_model\nskeleton\t\t\tfs_s1_gladius, fs_m_bearer\r\n"
+              "skeleton_horse\t\tfs_hc_spearman_classic, fs_hc_swordsman ; riders\n"
+              "texture\t\talpha, data/models_unit/textures/a.tga\nmodel_flexi\t\tdata/models_unit/a.cas, max\n")
+        write(os.path.join(d, "models_unit", "a.cas"), "A-model")
+        pack = os.path.join(self.root, "alpha.zip")
+        packs.export_pack(ModData(self.root), ["alpha general"], pack)
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        write(os.path.join(troot, "data", "descr_model_battle.txt"), "type\t\tother\nskeleton\t\tfs_swordsman\n")
+        write(os.path.join(troot, "data", "descr_skeleton.txt"),
+              "".join("type\t\t%s\nanim\t\tstand\tdata/animations/x.cas\n\n" % s for s in
+                      ("fs_swordsman", "fs_slow_swordsman", "fs_hc_spearman", "fs_hc_swordsman",
+                       "fs_standard_bearer")))
+        manifest, files = packs.read_pack(pack)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, manifest, files, ["alpha"])
+        said = " ".join(str(w) for w in plan.warnings)
+        self.assertIn("fs_hc_spearman_classic -> fs_hc_spearman", said)
+        plan.apply()
+        with open(os.path.join(troot, "data", "descr_model_battle.txt")) as fh:
+            dmb = fh.read()
+        self.assertIn("skeleton\t\t\tfs_swordsman, fs_standard_bearer", dmb)
+        self.assertIn("skeleton_horse\t\tfs_hc_spearman, fs_hc_swordsman ; riders", dmb)
+        self.assertNotIn("classic", dmb)
+        self.assertEqual(packs.near_skeleton("fs_s1_slow_barbswordsman", {"fs_slow_swordsman", "fs_swordsman"}),
+                         "fs_slow_swordsman")
+        self.assertEqual(packs.near_skeleton("fs_thp_m_spearman", {"fs_spearman"}), "fs_spearman")
+        self.assertEqual(packs.near_skeleton("fs_phalanx_pikeman", {"fs_semi_fast_spearman"}),
+                         "fs_semi_fast_spearman")
+        self.assertIsNone(packs.near_skeleton("fs_kraken", {"fs_spearman"}))
+        # Check mod files names a model whose skeleton the mod lacks (a mod brought into before this fix)
+        from campaign_editor.check import skeleton_problems
+        self.assertEqual(skeleton_problems(ModData(troot)), [])
+        with open(os.path.join(troot, "data", "descr_model_battle.txt"), "a") as fh:
+            fh.write("\ntype\t\tbroken\nskeleton\t\tfs_hc_spearman_classic, fs_swordsman ; old\n")
+        self.assertEqual(skeleton_problems(ModData(troot)), [("broken", ["fs_hc_spearman_classic"])])
+
+    def test_unit_pack_carries_its_own_skeletons_and_animations(self):
+        # the user, 2026-10-14 (after #260): 'a skeleton the target lacks must come along, its animations too' - a mod
+        # (HLR) has skeletons of its own in its own animation set; the target's set (its own, or the game's) is
+        # written into the target mod with the source's skeleton records and every animation they name appended
+        # (each scale; one the target has stays its own), the counts raised - and the model keeps its skeleton
+        import struct as _st
+        from unittest import mock
+        from campaign_editor import animpacks as AP, packs
+        from campaign_editor.plan import Plan
+
+        def make_set(folder, skels, anims):
+            os.makedirs(folder, exist_ok=True)
+            head = lambda magic, stamp, ver, n: magic + stamp + _st.pack("<II", ver, n)  # noqa: E731
+            pidx, pdat = bytearray(head(b"ANIM.PACK", b"\0\0\0", 4, 0)), bytearray(head(b"ANIM.PACK", b"\0\0\0", 4, 0))
+            n = 0
+            for path, scales in anims.items():
+                for scale, body in scales:
+                    raw = path.encode()
+                    pidx += _st.pack("<IIIfHHB", len(raw) + 10, len(pdat), len(body), scale, 2, 3, 1) + raw + b"\0"
+                    pdat += body
+                    n += 1
+            for b in (pidx, pdat):
+                _st.pack_into("<I", b, 16, n)
+            sidx, sdat = bytearray(head(b"SKEL.PACK", b"\x80\x79\x08", 3, len(skels))), \
+                bytearray(head(b"SKEL.PACK", b"\x80\x79\x08", 3, len(skels)))
+            for name, paths in skels.items():
+                rec = b"\x01\x02" + b"".join(p.encode() + b"\0" * 9 for p in paths)
+                sidx += _st.pack("<III", len(name) + 1, len(sdat), len(rec)) + name.encode() + b"\0"
+                sdat += rec
+            for name, data in (("pack.idx", pidx), ("pack.dat", pdat), ("skeletons.idx", sidx),
+                               ("skeletons.dat", sdat)):
+                with open(os.path.join(folder, name), "wb") as fh:
+                    fh.write(bytes(data))
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1\nownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\talpha_model\nskeleton\t\tfs_own, fs_swordsman\nmodel_flexi\t\tdata/models_unit/a.cas, max\n")
+        write(os.path.join(d, "models_unit", "a.cas"), "A")
+        own_a, shared = "data/animations/Own_A.cas", "data/animations/shared.cas"
+        make_set(os.path.join(d, "animations"), {"fs_swordsman": [shared], "fs_own": [own_a, shared]},
+                 {shared: [(1.0, b"SHARED-SRC")], own_a: [(1.0, b"OWN-1.0"), (1.1, b"OWN-1.1")]})
+        with mock.patch.object(AP, "game_set", lambda mod: None):
+            man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(sorted(man["animations"]["skeletons"]), ["fs_own", "fs_swordsman"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        tan = os.path.join(troot, "data", "animations")
+        shutil.rmtree(tan)
+        make_set(tan, {"fs_swordsman": [shared]}, {shared: [(1.0, b"SHARED-TARGET")]})
+        write(os.path.join(tan, "aninterp.cache"), "REX CACHE")
+        write(os.path.join(troot, "data", "descr_model_battle.txt"), "type\t\tother\nskeleton\t\tfs_swordsman\n")
+        before = tree_hash(troot)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        self.assertIn("1 skeleton(s) of the brought units added", plan.report())
+        self.assertNotIn("fs_own ->", plan.report())
+        bdir = plan.apply()
+        got = AP.AnimSet.at(tan)
+        self.assertEqual(sorted(got.skeletons()), ["fs_own", "fs_swordsman"])
+        self.assertEqual(got.record("fs_own"), files[man["animations"]["skeletons"]["fs_own"]])
+        self.assertEqual([b for _, b in got.anim_bytes("data/animations/own_a.cas")], [b"OWN-1.0", b"OWN-1.1"])
+        self.assertEqual([b for _, b in got.anim_bytes(shared)], [b"SHARED-TARGET"])     # the target's own stays
+        self.assertFalse(os.path.exists(os.path.join(tan, "aninterp.cache")))
+        with open(os.path.join(troot, "data", "descr_model_battle.txt")) as fh:
+            self.assertIn("fs_own, fs_swordsman", fh.read())
+        from campaign_editor.check import skeleton_problems
+        self.assertEqual(skeleton_problems(ModData(troot)), [])
+        restore(ModData(troot), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(troot).items() if "_backups" not in k}, before)
+        # Medieval II (the user: 'не забывай'): the same set form; its models name skeletons in the modeldb
+        self.assertEqual(packs.model_skeletons({}, {"m": {"mounts": [{"primary": "MTW2_Spear", "secondary": ""},
+                                                                      {"primary": "MTW2_Spear",
+                                                                       "secondary": "MTW2_Sword"}]}}),
+                         ["MTW2_Spear", "MTW2_Sword"])
+
+    def test_unit_pack_brings_the_units_own_name_call(self):
+        # the user, 2026-10-14: 'sounds too - everything of the unit the target lacks': the unit's own name call
+        # (Unit_Select blocks naming it, with their wav files from the source's packs or loose files) comes along
+        # for its new name - new loose files, a block of its own in the target's layout, events.dat rebuilt
+        from campaign_editor import packs, sounds as SN
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        wav = b"RIFF" + struct.pack("<I", 36) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 22050, 44100, 2, 16) \
+            + b"data" + struct.pack("<I", 0)
+        folder = "data/sounds/Voice/Human/Localized/Battle_Map"
+        write(os.path.join(d, "sounds", "Voice", "Human", "Localized", "Battle_Map", "Eastern_Heavy_1_name_a_1.wav"),
+              wav.decode("latin-1"))
+        write(os.path.join(d, SN.VOICE_FILE),
+              "BANK: unit_voice\n\tculture eastern,carthaginian\n\t\tclass Heavy_1\n"
+              "\t\t\tvocal Unit_Select\n\t\t\t\tunit alpha general,other unit\n\t\t\t\tevent\n"
+              "\t\t\t\t\tfolder %s\n\t\t\t\t\tEastern_Heavy_1_name_a_1.wav\n\t\t\t\t\tgroup\n\t\t\t\tend\n" % folder)
+        write(os.path.join(d, "descr_sounds_units_charge.txt"),
+              "BANK: charge\n\ttype alpha general,east peasant ; the war cry\n\tevent\n\t\tcry.wav\n\tend\n")
+        man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(man["sound_lists"]["alpha general"], [{"file": "descr_sounds_units_charge.txt",
+                                                                "with": ["east peasant"]}])
+        self.assertEqual([(e["group"], e["cls"]) for e in man["voices"]["alpha general"]],
+                         [(["eastern", "carthaginian"], "Heavy_1")])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        write(os.path.join(troot, "data", "sounds", "events.dat"), "compiled")
+        write(os.path.join(troot, "data", "descr_sounds_units_charge.txt"),
+              "BANK: charge\n\ttype greek peasant\n\tevent\n\t\tg.wav\n\tend\n"
+              "\ttype east hillmen,east peasant ; the war cry\n\tevent\n\t\tcry.wav\n\tend\n")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        plan.apply()
+        with open(os.path.join(troot, "data", SN.VOICE_FILE)) as fh:
+            text = fh.read()
+        self.assertIn("unit alpha general 2", text)
+        self.assertIn("Eastern_Heavy_1_name_alpha_general_2_1.wav", text)
+        got = os.path.join(troot, "data", "sounds", "Voice", "Human", "Localized", "Battle_Map",
+                           "Eastern_Heavy_1_name_alpha_general_2_1.wav")
+        with open(got, "rb") as fh:
+            self.assertEqual(fh.read(), wav)
+        self.assertFalse(os.path.exists(os.path.join(troot, "data", "sounds", "events.dat")))
+        with open(os.path.join(troot, "data", "descr_sounds_units_charge.txt")) as fh:
+            charge = fh.read()
+        self.assertIn("\ttype east hillmen,east peasant, alpha general 2 ; the war cry", charge)
+        self.assertIn("\ttype greek peasant\n", charge)
+
+    def test_bring_all_units_to_one_building(self):
+        # Bring > 'All the units here' (the user, 2026-10-14, for his tests): a unit the other mod trains nowhere gets
+        # a recruit line of this mod's form in the level picked for all
+        from campaign_editor import packs
+        from campaign_editor.editors import recruit_text
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels hall\n    {\n        hall requires factions { alpha, }\n"
+              "        {\n            capability\n            {\n            }\n        }\n    }\n}\n")
+        man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(man["recruit"], [])
+        man["recruit"].append({"unit": "alpha general", "chain": "barracks", "level": "hall", "picked": True,
+                               "line": recruit_text("plain", "alpha general", "0", factions=["beta"])})
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        plan.apply()
+        with open(os.path.join(troot, "data", "export_descr_buildings.txt")) as fh:
+            self.assertIn('recruit "alpha general 2"  0  requires factions { alpha, }', fh.read())
+
+    def test_unit_pack_brings_the_models_of_a_soldiers_block(self):
+        # REX lets a unit name its men's models in a block under 'soldiers' (HLR: 37 units) - a skeleton model and
+        # 'default { }' variants. They come along like the 'soldier' line's model; one the target has with other
+        # lines comes in renamed and the block follows it
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldiers\t50, 0, 1.8, 0.4, 1.7\r\n{\n\tskeleton\tceltic_heavy\n\tdefault\n\t{\n"
+            "\t\tceltic_heavy\n\t\tceltic_heavy_alt1 ; a variant\n\t}\n}\nownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\tceltic_heavy\nmodel_flexi\t\tdata/models_unit/a.cas, max\n\n"
+              "type\t\tceltic_heavy_alt1\nmodel_flexi\t\tdata/models_unit/b.cas, max\n")
+        write(os.path.join(d, "models_unit", "a.cas"), "A")
+        write(os.path.join(d, "models_unit", "b.cas"), "B")
+        self.assertEqual([(r, n) for _, r, n in packs.soldiers_block(
+            packs._block_lines(ModData(self.root).load(os.path.join(d, "export_descr_unit.txt")),
+                               packs.type_blocks(ModData(self.root).load(os.path.join(d, "export_descr_unit.txt")))
+                               ["alpha general"]))],
+            [("skeleton", "celtic_heavy"), ("model", "celtic_heavy"), ("model", "celtic_heavy_alt1")])
+        pack = os.path.join(self.root, "alpha.zip")
+        man = packs.export_pack(ModData(self.root), ["alpha general"], pack)
+        self.assertEqual(sorted(man["blocks"]["model"]), ["celtic_heavy", "celtic_heavy_alt1"])
+        self.assertIn("models_unit/b.cas", man["files"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        write(os.path.join(troot, "data", "descr_model_battle.txt"),
+              "type\t\tceltic_heavy\nmodel_flexi\t\tdata/models_unit/other.cas, max\n")
+        manifest, files = packs.read_pack(pack)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, manifest, files, ["alpha"])
+        plan.apply()
+        with open(os.path.join(troot, "data", "export_descr_unit.txt")) as fh:
+            edu = fh.read()
+        unit = edu[edu.index("type\t\talpha general 2") if "type\t\talpha general 2" in edu else edu.rindex("alpha general 2"):]
+        self.assertIn("\tskeleton\tceltic_heavy_2", unit)
+        self.assertIn("\t\tceltic_heavy_2\n", unit)
+        self.assertIn("\t\tceltic_heavy_alt1 ; a variant", unit)
+        with open(os.path.join(troot, "data", "descr_model_battle.txt")) as fh:
+            self.assertEqual(sorted(packs.type_blocks(ModData(troot).load(fh.name))),
+                             ["celtic_heavy", "celtic_heavy_2", "celtic_heavy_alt1"])
+
+    def test_unit_pack_brings_its_armour_upgrade_models(self):
+        # Medieval II: armour_ug_models names a body for each armour upgrade - they come along (a missing one stops
+        # the game), renamed in that list when this mod has another model of the name
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\tbody_a, 20, 0, 1\narmour_ug_models body_a, body_b ; upgrades\n"
+                                "ownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\tbody_a\nmodel_flexi\t\tdata/models_unit/a.cas, max\n\n"
+              "type\t\tbody_b\nmodel_flexi\t\tdata/models_unit/b.cas, max\n")
+        write(os.path.join(d, "models_unit", "a.cas"), "A")
+        write(os.path.join(d, "models_unit", "b.cas"), "B")
+        man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(sorted(man["blocks"]["model"]), ["body_a", "body_b"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        write(os.path.join(troot, "data", "descr_model_battle.txt"), "type\t\tbody_b\nmodel_flexi\t\tother.cas, max\n")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        plan.apply()
+        with open(os.path.join(troot, "data", "export_descr_unit.txt")) as fh:
+            self.assertIn("armour_ug_models body_a, body_b_2 ; upgrades", fh.read())
+
+    def test_unit_pack_brings_its_ship_and_mounted_engine(self):
+        # a unit's 'ship' (descr_ship.txt) and Medieval II's 'mounted_engine' (descr_mounted_engines.txt) come along
+        # like its mount; one the target has with other lines comes in renamed and the unit follows; a banner this
+        # mod's banner file does not name is said
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "ship\t\theavy warship\nmounted_engine\telephant_serpentine\n"
+                                "banner faction\tmy_flag\nownership\talpha"))
+        write(os.path.join(d, "descr_ship.txt"), "type\t\theavy warship\nspeed\t\t40\n")
+        write(os.path.join(d, "descr_mounted_engines.txt"), "type\t\telephant_serpentine\nclass\t\tserpentine\n")
+        man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(list(man["blocks"]["ship"]), ["heavy warship"])
+        self.assertEqual(list(man["blocks"]["mounted_engine"]), ["elephant_serpentine"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        write(os.path.join(troot, "data", "descr_ship.txt"), "type\t\theavy warship\nspeed\t\t7\n")
+        write(os.path.join(troot, "data", "descr_banners_new.xml"), "<banners><banner name=\"main_infantry\"/></banners>")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        self.assertIn("my_flag", " ".join(w[1] for w in plan.warnings))
+        plan.apply()
+        with open(os.path.join(troot, "data", "export_descr_unit.txt")) as fh:
+            edu = fh.read()
+        self.assertIn("ship\t\theavy warship 2", edu)
+        with open(os.path.join(troot, "data", "descr_ship.txt")) as fh:
+            self.assertIn("type\t\theavy warship 2\nspeed\t\t40", fh.read())
+
+    def test_unit_pack_brings_its_engine_skeleton(self):
+        # an engine's skeleton (descr_engine_skeleton.txt, its animations loose .cas / .evt files) comes along when
+        # this mod lacks it
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "engine\t\tmy onager\nownership\talpha"))
+        write(os.path.join(d, "descr_engines.txt"), "type\t\tmy onager\nengine_skeleton\t\tmy_onager\n")
+        write(os.path.join(d, "descr_engine_skeleton.txt"),
+              "type\t\tmy_onager\nanim\t\tidle\t\tdata/animations/engine/my/idle.CAS\t-evt:data/animations/engine/"
+              "my/idle.evt\n")
+        write(os.path.join(d, "animations", "engine", "my", "idle.CAS"), "CAS")
+        write(os.path.join(d, "animations", "engine", "my", "idle.evt"), "EVT")
+        man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(list(man["engine_skeletons"]), ["my_onager"])
+        self.assertIn("animations/engine/my/idle.evt", files)
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        write(os.path.join(troot, "data", "descr_engine_skeleton.txt"), "type\t\tballista\n")
+        shutil.rmtree(os.path.join(troot, "data", "animations"))
+        write(os.path.join(troot, "data", "descr_engines.txt"), "type\t\tother\n")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        plan.apply()
+        with open(os.path.join(troot, "data", "descr_engine_skeleton.txt")) as fh:
+            self.assertIn("type\t\tmy_onager", fh.read())
+        self.assertTrue(os.path.isfile(os.path.join(troot, "data", "animations", "engine", "my", "idle.evt")))
+
+    def test_brought_engine_keeps_its_own_skeleton_and_animation_on_a_name_clash(self):
+        # the user, 2026-10-15 ('then the unit breaks?'): the target has an engine skeleton of the same name with
+        # other lines, and an animation file of the same path with other bytes - the brought engine moves by its own
+        # (the file under a free name, the skeleton under a free name naming it, the engine pointing at that skeleton);
+        # the mod's own skeleton, file and engines are untouched
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "engine\t\tmy onager\nownership\talpha"))
+        write(os.path.join(d, "descr_engines.txt"), "type\t\tmy onager\nengine_skeleton\t\tonager\n")
+        write(os.path.join(d, "descr_engine_skeleton.txt"),
+              "type\t\tonager\nanim\t\tidle\t\tdata/animations/engine/idle.CAS\n")
+        write(os.path.join(d, "animations", "engine", "idle.CAS"), "THEIRS")
+        man, files = packs.collect(ModData(self.root), ["alpha general"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        td = os.path.join(troot, "data")
+        own_skel = "type\t\tonager\nanim\t\tidle\t\tdata/animations/engine/idle.CAS\nanim\t\tfire\t\tx.CAS\n"
+        write(os.path.join(td, "descr_engine_skeleton.txt"), own_skel)
+        write(os.path.join(td, "animations", "engine", "idle.CAS"), "MINE")
+        write(os.path.join(td, "descr_engines.txt"), "type\t\tother\nengine_skeleton\t\tonager\n")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        plan.apply()
+        with open(os.path.join(td, "descr_engine_skeleton.txt")) as fh:
+            skel = fh.read()
+        self.assertTrue(skel.startswith(own_skel))                       # the mod's own kept
+        self.assertIn("type\t\tonager_2\nanim\t\tidle\t\tdata/animations/engine/idle_2.CAS", skel)
+        with open(os.path.join(td, "animations", "engine", "idle.CAS")) as fh:
+            self.assertEqual(fh.read(), "MINE")
+        with open(os.path.join(td, "animations", "engine", "idle_2.CAS")) as fh:
+            self.assertEqual(fh.read(), "THEIRS")
+        with open(os.path.join(td, "descr_engines.txt")) as fh:
+            eng = fh.read()
+        self.assertIn("type\t\tother\nengine_skeleton\t\tonager\n", eng)
+        self.assertIn("engine_skeleton\t\tonager_2", eng)
+
     def test_unit_pack_brings_its_projectile(self):
         # R-20261014-99712D / D5B6A6: crossbowmen brought from Barbarian Invasion into Rome - the game stopped:
         # "Stat_pri statistic refers to non-existant projectile type 'crossbow'". The projectile comes with the
@@ -5786,6 +6244,181 @@ building smith
         restore(ModData(troot), bdir)
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)
+
+    def test_bring_carries_projectile_effects_voices_and_skeleton_lines(self):
+        """The user, 2026-10-15 ('bring everything the target lacks'): a brought unit's fire arrows come with their
+        burning projectile, its effects (an effect set and the effects it is made of, with their texture) and the
+        voices of its voice_type where the target's voice file lacks that class for the new owners' culture (its
+        sound files too; other units' name calls in the class block are left out); the target's own effects and
+        classes are kept; Restore gives back every byte."""
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "stat_pri\t\t5, 2, arrow, 120, 30, missile, archery, piercing, none, 25, 1\n"
+            "voice_type\tLight_9\nownership\talpha"))
+        write(os.path.join(d, "descr_projectile_new.txt"),
+              "projectile arrow\n\ndamage\t\t0\n\nprojectile arrow_fiery\n\nflaming\t\tarrow\n"
+              "effect\t\tfire_set\nend_effect\tboom\n")
+        write(os.path.join(d, "descr_effects.txt"), "descr_effects_fx.txt\n")
+        fx = ("effect fire\n{\n\ttype ribbon\n\t{\n\t\ttexture\tdata/textures/fire_x.tga\n\t}\n}\n\n"
+              "effect_set < 0 1 > fire_set\n{\n\tlod 100\n\t{\n\t\tfire\n\t}\n}\n\n"
+              "effect boom\n{\n\ttype light\n}\n")
+        write(os.path.join(d, "descr_effects_fx.txt"), fx)
+        write(os.path.join(d, "textures", "fire_x.tga"), "FIRE")
+        voice = ("culture eastern\n\tclass Light_1\n\t\tvocal Group_Created\n\t\t\tevent\n\t\t\t\tfolder "
+                 "data/sounds/v\n\t\t\t\ta.wav\n\t\t\tend\n")
+        light9 = ("\tclass Light_9\n\t\tvocal Group_Created\n\t\t\tevent\n\t\t\t\tfolder data/sounds/v\n"
+                  "\t\t\t\tnine.wav\n\t\t\tend\n\t\tvocal Unit_Select\n\t\t\tunit alpha general, other guys\n"
+                  "\t\t\tevent\n\t\t\t\tfolder data/sounds/v\n\t\t\t\tname.wav\n\t\t\tend\n"
+                  "\t\t\tunit nobody here\n\t\t\tevent\n\t\t\t\tfolder data/sounds/v\n\t\t\t\tx.wav\n\t\t\tend\n")
+        write(os.path.join(d, "export_descr_sounds_units_voice.txt"), voice + light9)
+        wav = b"RIFF" + struct.pack("<I", 36) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 22050, 44100, 2, 16)
+        os.makedirs(os.path.join(d, "sounds", "v"))
+        for n in ("a.wav", "nine.wav", "name.wav", "x.wav"):
+            with open(os.path.join(d, "sounds", "v", n), "wb") as fh:
+                fh.write(wav + n.encode())
+        pack = os.path.join(self.root, "x.zip")
+        man = packs.export_pack(ModData(self.root), ["alpha general"], pack)
+        self.assertEqual(sorted(man["blocks"]["projectile"]), ["arrow", "arrow_fiery"])
+        self.assertEqual([e["name"] for e in man["effects"]], ["fire", "fire_set", "boom"])
+        self.assertIn("textures/fire_x.tga", man["files"])
+        self.assertEqual(sorted(man["voice_banks"]), ["Light_9"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        td = os.path.join(troot, "data")
+        shutil.rmtree(os.path.join(td, "sounds", "v"))
+        os.remove(os.path.join(td, "textures", "fire_x.tga"))
+        write(os.path.join(td, "descr_projectile_new.txt"), "projectile arrow\n\ndamage\t\t0\n")
+        write(os.path.join(td, "descr_effects_fx.txt"), "effect boom\n{\n\ttype light ; its own\n}\n")
+        write(os.path.join(td, "export_descr_sounds_units_voice.txt"), voice)
+        before = tree_hash(troot)
+        manifest, files = packs.read_pack(pack)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, manifest, files, ["alpha"])
+        bdir = plan.apply()
+        with open(os.path.join(td, "descr_effects_fx.txt")) as fh:
+            got = fh.read()
+        self.assertIn("type light ; its own", got)                      # the target's own kept
+        self.assertEqual(got.count("effect boom"), 1)
+        self.assertIn("effect_set < 0 1 > fire_set", got)
+        self.assertIn("effect fire\n", got)
+        with open(os.path.join(td, "textures", "fire_x.tga")) as fh:
+            self.assertEqual(fh.read(), "FIRE")
+        with open(os.path.join(td, "export_descr_sounds_units_voice.txt")) as fh:
+            vf = fh.read()
+        self.assertIn("class Light_9", vf)
+        self.assertIn("unit alpha general 2", vf)                       # the brought unit under its new name
+        self.assertNotIn("nobody here", vf)
+        self.assertNotIn("other guys", vf)
+        self.assertTrue(os.path.isfile(os.path.join(td, "sounds", "v", "nine.wav")))
+        restore(ModData(troot), bdir)
+        after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
+        self.assertEqual(after, before)
+
+    def test_bring_puts_the_skeletons_own_lines(self):
+        # a brought skeleton put into the target's animation set gets its descr_skeleton.txt block too (a rebuild of
+        # the packs keeps it); one the target names already is left as it is
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_skeleton.txt"), "; skeletons\n\ntype\tfs_old\nanim\tstand\tdata/a.cas\n")
+        manifest = {"animations": {"text": {"fs_new": ["type\tfs_new", "anim\tstand\tdata/b.cas"],
+                                            "fs_old": ["type\tfs_old", "anim\tstand\tdata/c.cas"]}}}
+        plan = Plan(ModData(self.root), "pack", "pack", {})
+        packs._put_skeleton_text(plan, manifest, ["fs_new", "FS_OLD"])
+        plan.apply()
+        with open(os.path.join(d, "descr_skeleton.txt")) as fh:
+            got = fh.read()
+        self.assertIn("type\tfs_new\nanim\tstand\tdata/b.cas\n", got)
+        self.assertNotIn("data/c.cas", got)
+
+    def test_map_in_3d_from_the_game_textures_and_the_brushes_pictures(self):
+        """Maps > 3D (the user, 2026-10-15): the map's colour picture takes each point's texture by its climate and
+        ground (descr_aerial_map_ground_types.txt), the water by its depth; the heights the brushes paint into
+        (ModData's cached pictures) count at once; the view is a picture of the asked size."""
+        try:
+            import numpy  # noqa: F401
+            from PIL import Image
+        except ImportError:
+            self.skipTest("NumPy / Pillow not installed")
+        from campaign_editor import terrain3d as T3
+        d = os.path.join(self.root, "data")
+        camp = os.path.join(d, "world", "maps", "campaign", "test")
+        W, H = 9, 9                                    # 2 x 4 + 1 heights points
+        grey = [[(200, 200, 200)] * W for _ in range(H)]
+        grey[0][0] = (0, 0, 120)                       # one water point (blue, bottom-left): its depth shows
+        write_tga(os.path.join(camp, "map_heights.tga"), W, H, grey)
+        write_tga(os.path.join(camp, "map_ground_types.tga"), W, H, [[(0, 128, 0)] * W for _ in range(H)])
+        write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
+              "climate default\n{\n\tfertility_high\tgreen.tga\tsnow.tga\n}\n")
+        tex = os.path.join(d, "terrain", "aerial_map", "ground_types")
+        os.makedirs(tex)
+        Image.new("RGB", (16, 16), (0, 200, 0)).save(os.path.join(tex, "green.tga"))
+        Image.new("RGB", (16, 16), (250, 250, 250)).save(os.path.join(tex, "snow.tga"))
+        mod = ModData(d)
+        sets, density = T3.aerial_sets(mod)
+        self.assertEqual(sets["default"]["fertility_high"], ("green.tga", "snow.tga"))
+        cm = T3.colour_map(mod, "test")
+        self.assertEqual(cm.notes, [])
+        mid = cm.rgb[cm.rgb.shape[0] // 2, cm.rgb.shape[1] // 2]
+        self.assertGreater(int(mid[1]), int(mid[0]) + 40)               # the green texture, lit
+        winter = T3.colour_map(mod, "test", winter=True)
+        self.assertGreater(int(winter.rgb[cm.rgb.shape[0] // 2, cm.rgb.shape[1] // 2][0]), 150)    # the snow
+        corner = cm.rgb[-1, 0]                                         # the water point (bottom-left, top-down)
+        self.assertGreater(int(corner[2]), int(corner[0]))
+        cam = T3.Camera(cm)
+        pic = T3.render(cm, cam, 64, 40)
+        self.assertEqual(pic.shape, (40, 64, 3))
+
+    def test_map_in_3d_finds_the_game_models_of_what_stands_on_the_map(self):
+        """Maps > 3D's models (the user, 2026-10-15: 'towns, resources, units...'): a town takes its level's model
+        of its owner's culture - Rome's descr_sm_settlements.txt ('roman { town { normal ... } }') and Medieval II's
+        descr_cultures.txt ('culture x' blocks, a model line with a second word) read alike; forts / watchtowers /
+        ports by culture; a resource its 'item' model at its descr_strat place."""
+        from campaign_editor import mapobjects3d as O
+        from campaign_editor.strat import Strat
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_sm_settlements.txt"),
+              "symbol\tdata/models_strat/residences/symbol.CAS\n\neastern\n{\n\tvillage\n\t{\n\t\tnormal\t"
+              "data/models_strat/residences/e_village.CAS\n\t}\n\ttown\n\t{\n\t\tnormal\t"
+              "data/models_strat/residences/e_town.CAS\n\t\tcard\tdata/ui/x.tga\n\t}\n}\n")
+        write(os.path.join(d, "descr_sm_forts_ports_watchtowers.txt"),
+              "culture\t\teastern\nfort\t\tdata/models_strat/residences/e_fort.CAS\n"
+              "port_land\tdata/models_strat/residences/e_port.CAS\n")
+        write(os.path.join(d, "descr_sm_resources.txt"), "type\t\tgold\nitem\t\tdata/models_strat/gold.CAS\n")
+        mod = ModData(d)
+        got = O.culture_models(mod)
+        self.assertEqual(got["eastern"]["levels"], {"village": "models_strat/residences/e_village.CAS",
+                                                    "town": "models_strat/residences/e_town.CAS"})
+        self.assertEqual(got["eastern"]["fort"], "models_strat/residences/e_fort.CAS")
+        # a town's walls by the defences built there (the chain's 'levels' order); a port of its two models
+        self.assertEqual(O._wall_level(["\ttype defenses stone_wall"], ["wooden_pallisade", "wooden_wall",
+                                                                         "stone_wall"]), 3)
+        self.assertEqual(O._wall_level(["\ttype core_building x"], ["a"]), 0)
+        self.assertEqual(got["eastern"]["port"], "models_strat/residences/e_port.CAS")
+        camp = mod.campaign_file("test", "descr_strat.txt")
+        with open(camp) as fh:
+            text = fh.read()
+        write(camp, text.replace("\n;#####>", "\nresource\tgold, 3, 2\n;#####>", 1))
+        mod = ModData(d)
+        strat = Strat(mod.load(mod.campaign_file("test", "descr_strat.txt")))
+        objs = O.objects(mod, "test", strat)
+        town = [o for o in objs if o["kind"] == "town" and o["faction"] == "alpha"]
+        self.assertEqual(town[0]["model"], "models_strat/residences/e_town.CAS")
+        self.assertEqual(town[0]["xy"], tuple(mod.city_tiles("test")["A_R"]))
+        self.assertIn({"kind": "resource", "model": "models_strat/gold.CAS", "texture": None, "xy": (3, 2),
+                       "scale": 1.0, "faction": None}, objs)
+        # Medieval II's form: everything in descr_cultures.txt, a second word after the model
+        write(os.path.join(d, "descr_cultures.txt"),
+              "symbol\tdata/models_strat/residences/symbol.CAS\n\nculture\t\tnorthern\nportrait_mapping\tx\n{\n"
+              "village\n{\n\tnormal\t\tdata/models_strat/residences/n_village.CAS,\t\tsettlement_level_1\n}\n"
+              "}\nfort\t\tdata/models_strat/residences/n_fort.CAS,\t\tfort_barbarian\n")
+        got = O.culture_models(ModData(d))
+        self.assertEqual(got["northern"]["levels"], {"village": "models_strat/residences/n_village.CAS"})
+        self.assertEqual(got["northern"]["fort"], "models_strat/residences/n_fort.CAS")
 
     def test_engine_found_in_the_game_folder_and_the_limit_raised_in_the_mod(self):
         # M2EX copied over the game's root (any case), the mod in mods/<mod>/data: the engine is seen, the
@@ -6908,6 +7541,40 @@ building smith
         restore(mod, bdir)
         self.assertIsNone(A.installed(mod, a))
 
+    def test_recruit_order_addon_for_both_games(self):
+        """Recruitment Order: one script for REX and M2EX; the panel's sort number (trueCost = the 6th stat_cost)
+        gets the rank only in the player's turn and the real one back before battles, at the turn's end and when the
+        campaign unloads; the kinds infantry, missiles, cavalry, siege, ships; its settings written and read back; put into the game's
+        script/modules and taken out."""
+        from campaign_editor import addons as A
+        a = A.by_key("recruit_order")
+        self.assertTrue(a.fits("rome") and a.fits("medieval2"))
+        text = a.template()
+        for part in ("trueCost", "recruitCost", "::units.count()", '"FactionTurnStart"', '"FactionTurnEnd"',
+                     '"SettlementPanelOpen"', '"campaignMapLoaded"', '"PreBattle"', '"PostBattle"',
+                     '"unloadCampaign"', "isPlayerControlled",
+                     "recruit_order_list", "recruit_order_off", "Recruitment Order module loaded",
+                     "::campaignDb.extra.setRecruitmentSortSimple(true)"):
+            self.assertIn(part, text)
+        self.assertIn('local RO_KINDS = ["infantry", "missiles", "cavalry", "siege", "ships", "non-combatants", "other"]',
+                      text)
+        self.assertNotIn("delete ", text)                                  # the engines forbid 'delete'
+        got = A.read_settings(a, text)
+        self.assertEqual(got, {"RO_ENABLED": True, "RO_ORDER": "dearest", "RO_ONE_PANEL": True})
+        self.assertEqual(A.render(a, text, got), text)
+        new = dict(got, RO_ORDER="cheapest")
+        self.assertEqual(A.read_settings(a, A.render(a, text, new)), new)
+        self.assertFalse(A.check(a, new))
+        self.assertTrue(A.check(a, dict(got, RO_ORDER="by name")))
+        mod = ModData(self.root)
+        plan = Plan(mod, "addon", "order", {})
+        dst = A.plan_install(plan, a, new, mod)
+        self.assertEqual(dst, os.path.join(self.root, "script", "modules", "recruit_order.nut"))
+        bdir = plan.apply()
+        self.assertEqual(A.installed(mod, a)["RO_ORDER"], "cheapest")
+        restore(mod, bdir)
+        self.assertIsNone(A.installed(mod, a))
+
     def test_module_builder_only_in_a_campaign_with_a_faction(self):
         """The test mod's modules lie in the GAME's script/modules: a module with only_with acts only where that
         faction is in the campaign, else one log line (a tester's plain campaign got the test's +100 people)."""
@@ -7745,6 +8412,23 @@ building smith
         self.assertEqual(len(added), 1)
         a = added.pop()
         self.assertTrue(any((a[0] + dx, a[1] + dy) in sea_tiles for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))))
+        # report #263 (R-20261014-8B5F11): Rome with REX crashed loading the x3 map - a river left 2 pixels wide (a
+        # 2 x 2 block; the beach turned land kept a pixel the water used to take). No 2 x 2 block stays: the pixel
+        # the river does without goes (a source / ford kept), the river still one line
+        block = {(1, 0), (1, 1), (2, 0), (2, 1), (1, 2), (0, 0)}
+        W2 = H2 = 4
+        feats2 = tga_bytes(W2, H2, lambda x, y: (0, 0, 255) if (x, y) in block else (0, 0, 0))
+        fixed, n = U.one_pixel_rivers(feats2)
+        self.assertEqual(n, 1)
+        _, _, _, _, _, fr2 = U._decode(fixed, "map_features.tga")
+        left = {(x, y) for y in range(H2) for x in range(W2) if fr2[(y * W2 + x) * 3] == 255}
+        self.assertIn(block - left, ({(2, 0)}, {(2, 1)}))     # one with no river beside it outside the block
+        self.assertFalse(any({(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)} <= left for x, y in left))
+        self.assertEqual(U.one_pixel_rivers(fixed)[1], 0)
+        ground2 = tga_bytes(2 * W2 + 1, 2 * H2 + 1, lambda x, y: (96, 160, 64))
+        flat2 = tga_bytes(2 * W2 + 1, 2 * H2 + 1, lambda x, y: (40, 40, 40))
+        _, _, _, _, _, fr3 = U._decode(U.rivers_off_the_water(feats2, flat2, ground2), "map_features.tga")
+        self.assertEqual(sum(fr3[(y * W2 + x) * 3] == 255 for y in range(H2) for x in range(W2)), 5)
         # rivers onto the sea may be painted; cliffs not
         class Cm:
             w = h = 3
@@ -9056,8 +9740,19 @@ building smith
         alpha = st.faction("alpha")
         self.assertIn("B_R", [x.region for x in alpha.settlements])
         self.assertIn("Boris", [c.name for c in alpha.characters])
+        # report #201: the rebels' garrison left the town given - it gets 3-6 of its new owner's units drawn at
+        # random, their upkeep together at most 750, instead of standing empty
+        from campaign_editor.start import _units
+        tile = ModData(self.root).city_tiles("test")["B_R"]
+        holder = [c for c in alpha.characters if c.xy == tile]
+        self.assertEqual(len(holder), 1)
+        self.assertTrue(3 <= len(_units(st.lines[holder[0].start:holder[0].end])) <= 6)
+        self.assertIn("an empty town given to alpha - a garrison of", plan.report())
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+        off = Plan(ModData(self.root), "map", "map", {})              # switched off: the town stays empty
+        map_changes(off, "test", {"owners": {"B_R": "alpha"}, "auto_garrison": None})
+        self.assertNotIn("garrison of", off.report())
 
     def test_new_army_made_a_general(self):
         """Map > New army, 'Make him a general': his army starts with the faction's general's bodyguard (general_unit
@@ -11856,6 +12551,17 @@ building smith
         self.assertFalse(os.path.exists(targets[0]))                     # Restore removes the new card
         with open(edu_path) as fh:
             self.assertIn("stat_cost\t1, 400, 170", fh.read())
+
+    def test_unit_picture_for_one_faction_keeps_the_others(self):
+        # Diocletian (Discord): an info picture for one faction replaced every faction's. 'Pictures for' gives one
+        # owner its own picture; an 'all owners' one waiting before keeps the other owners' places
+        from campaign_editor import editors as E
+        all_owners = [("a.png", ["u/romans/#x.tga", "u/greeks/#x.tga", "u/gauls/#x.tga"], None)]
+        got = E.queue_import(all_owners, "b.png", ["u/greeks/#x.tga"], (48, 64))
+        self.assertEqual(got, [("a.png", ["u/romans/#x.tga", "u/gauls/#x.tga"], None),
+                               ("b.png", ["u/greeks/#x.tga"], (48, 64))])
+        got = E.queue_import(got, "c.png", ["u/romans/#x.tga", "u/greeks/#x.tga", "u/gauls/#x.tga"], None)
+        self.assertEqual(got, [("c.png", ["u/romans/#x.tga", "u/greeks/#x.tga", "u/gauls/#x.tga"], None)])
 
     def test_picture_viewer_zoom(self):
         """A click on a picture opens it big (the user, 2026-10-09): a small one enlarged by whole steps (sharp), a big

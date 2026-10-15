@@ -167,7 +167,7 @@ ACTIONS = [
 ACTION = {a.key: a for a in ACTIONS}
 PLACEHOLDERS = ("town", "faction", "owner", "general", "turn", "people")
 
-BUILT_IN = ("sack_settlement", "raze_settlement", "avoid_growth", "player_diplomacy")
+BUILT_IN = ("sack_settlement", "raze_settlement", "avoid_growth", "recruit_order", "player_diplomacy")
 
 
 # ---------------------------------------------------------------------------

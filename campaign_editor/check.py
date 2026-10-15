@@ -300,6 +300,12 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     md = _modeldb_report(mod)
     if md:
         (bad if md[0] else say)(md[1])
+    lost = skeleton_problems(mod)
+    if lost:
+        bad("%d battle model(s) name a skeleton descr_skeleton.txt lacks, e.g. %s - the game stops at the start "
+            "(\"Unable to find skeleton\"); give them a skeleton this mod has (a model brought from a mod with "
+            "animations of its own: bring it again - the nearest skeleton is taken now)"
+            % (len(lost), ", ".join("%s (%s)" % (m, ", ".join(sk[:2])) for m, sk in lost[:3])))
     lacking = weapons_texture_problems(mod)
     if lacking:
         bad("%d battle model(s) give a faction its texture but no weapons texture (texture_attachments) line, e.g. %s "
@@ -529,6 +535,31 @@ def ai_label_problems(mod, strat_f):
                            "'Could not link faction ... to AI label %s'; pick one of those for it, or add that label "
                            "to the file" % (fb.name, t[1], where, ", ".join(sorted(set(names))) or "none", t[1]))
                 break
+    return out
+
+
+def skeleton_problems(mod):
+    """[(model, [skeletons])] of descr_model_battle.txt naming a skeleton descr_skeleton.txt lacks - the game stops
+    at the start: "Unable to find skeleton '...'" (a report: models brought from a mod with animations of its
+    own). [] when no descr_skeleton.txt is read."""
+    from .animations import skeletons
+    from .animpacks import skeleton_names
+    from .models import TEXT_FILE
+    from .packs import _block_lines, type_blocks
+    known = set(skeletons(mod)) | skeleton_names(mod)       # descr_skeleton's and the animation set the game loads
+    path = mod.find(TEXT_FILE)
+    if not known or not path:
+        return []
+    out = []
+    f = mod.load(path)
+    for name, span in type_blocks(f).items():
+        gone = []
+        for line in _block_lines(f, span):
+            code = strip_comment(line).strip().split(None, 1)
+            if len(code) == 2 and code[0].lower().startswith("skeleton") and "attachment" not in code[0].lower():
+                gone += [x.strip() for x in code[1].split(",") if x.strip() and x.strip().lower() not in known]
+        if gone:
+            out.append((name, sorted(set(gone))))
     return out
 
 

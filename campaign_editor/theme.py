@@ -29,6 +29,7 @@ BUTTON_GAP = 4      # px between two buttons side by side
 COLOURED = {"Play.TButton": ("#316434", "#28522a"), "PlayNoMod.TButton": ("#82571a", "#6b4715"), "Kofi.TButton": ("#cc6563", "#b45452"),
             "Discord.TButton": ("#5f67c2", "#4d549d"), "YouTube.TButton": ("#b32424", "#931d1d"),
             "GitHub.TButton": ("#1b1f24", "#0d1117"), "Sponsor.TButton": ("#99306e", "#7d2759"),   # GitHub Sponsors pink
+            "Support.TMenubutton": ("#ad2a5c", "#8e2249"),   # 'Support me on...': a raspberry heart (white words)
             "GitHubNew.TButton": ("#1f883d", "#1a7f37")}       # GitHub's own green: a newer release is out
 NAMED = {"#cfe3ff": "accent"}
 

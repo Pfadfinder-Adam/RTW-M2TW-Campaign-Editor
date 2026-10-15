@@ -18,14 +18,19 @@
 // Nothing is written into the mod's files or the saved game: take the file
 // out and everything is as before.
 //
-// The order: by kind - infantry, missiles (archers, slingers, skirmishers),
-// animal handlers, cavalry, siege, ships, the rest - and inside each kind by
+// The order: by kind - infantry (animal handlers with it), missiles (archers,
+// slingers, skirmishers), cavalry, siege, ships, the rest - and inside each kind by
 // the campaign price (stat_cost's 2nd number): the dearest first (the top left
 // corner gets the strongest) or the cheapest first.
+// Medieval II splits the panel into its own kind blocks (infantry, missile
+// infantry, cavalry, missile cavalry, handlers, siege, ships) unless
+// recruitment_sort_simple is on: with RO_ONE_PANEL the add-on switches it on
+// (M2EX, while the game runs - descr_campaign_db.xml stays as it is), so the
+// whole panel follows the order. Rome has no such blocks.
 //
 // Console helpers:
 //   sq ::recruit_order_list()   the order the panel follows now
-//   sq ::recruit_order_off()    the real numbers back (until the next turn)
+//   sq ::recruit_order_off()    the real numbers back (until the next turn or battle)
 // Log lines start with "[ORDER]".
 // ============================================================================
 
@@ -36,12 +41,14 @@ function ro_log(message) {
 
 local RO_ENABLED = true
 local RO_ORDER = "dearest"           // "dearest" or "cheapest" first inside each kind
+local RO_ONE_PANEL = true            // Medieval II: one panel for every kind (else the game's kind blocks)
 
 // ---- the order ----
-local RO_KINDS = ["infantry", "missiles", "handlers", "cavalry", "siege", "ships", "non-combatants", "other"]
+local RO_KINDS = ["infantry", "missiles", "cavalry", "siege", "ships", "non-combatants", "other"]
 
 local ro_real = {}                   // type index -> its real trueCost (as the file has it)
 local ro_on = false                  // the ranks are in place now
+local ro_turn = false                // your turn now (the ranks belong in it)
 
 function ro_enum(table, name, fallback) {
     try {
@@ -67,7 +74,7 @@ function ro_kind(t) {
         return "infantry"
     }
     if (cat == ro_enum("UnitCategory", "handler", 5)) {
-        return "handlers"
+        return "infantry"                       // animal handlers stand with the infantry
     }
     if (cat == ro_enum("UnitCategory", "cavalry", 1)) {
         return "cavalry"
@@ -205,18 +212,62 @@ function ro_listen(name, handler) {
     }
 }
 
+// The panel is sorted afresh at every fill, from the numbers as they are then (exe study): the ranks go in at the
+// start of your turn, after a loaded game and after a battle in your turn; the real numbers come back before every
+// battle, at the end of your turn and when the campaign closes.
 ro_listen("FactionTurnStart", function(e) {
     if (ro_is_player(e)) {
+        ro_turn = true
         ro_apply()
     } else {
+        ro_turn = false
         ro_restore()
     }
 })
-ro_listen("FactionTurnEnd", function(...) { ro_restore() })
-ro_listen("RecruitmentPanelOpen", function(...) { ro_apply() })   // also after a battle or a loaded save
+ro_listen("FactionTurnEnd", function(e) {
+    if (ro_is_player(e)) {
+        ro_turn = false
+    }
+    ro_restore()
+})
+ro_listen("campaignMapLoaded", function(...) {   // a game loaded (or begun) stands in your turn
+    ro_turn = true
+    ro_apply()
+})
+ro_listen("SettlementPanelOpen", function(...) {
+    if (ro_turn) {
+        ro_apply()
+    }
+})
 ro_listen("PreBattle", function(...) { ro_restore() })
+ro_listen("PostBattle", function(...) {
+    if (ro_turn) {
+        ro_apply()
+    }
+})
 ro_listen("unloadCampaign", function(...) {
     ro_restore()
+    ro_turn = false
     ro_real = {}
 })
 ro_log("Recruitment Order module loaded")
+// Medieval II (M2EX): one panel for every kind - the game's recruitment_sort_simple switched on (REX has no
+// descr_campaign_db: the engine says so in its log and does nothing)
+function ro_one_panel() {
+    if (!RO_ENABLED || !RO_ONE_PANEL) {
+        return
+    }
+    try {
+        if (::campaignDb.extra.recruitmentSortSimple() != true) {
+            ::campaignDb.extra.setRecruitmentSortSimple(true)
+            ro_log("one panel for every kind (recruitment_sort_simple on)")
+        }
+    } catch (err) {
+    }
+}
+ro_listen("campaignMapLoaded", function(...) { ro_one_panel() })
+
+// the engines load this file once the campaign map is up - in your turn
+ro_one_panel()
+ro_turn = true
+ro_apply()

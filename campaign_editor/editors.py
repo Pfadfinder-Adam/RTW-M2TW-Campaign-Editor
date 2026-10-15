@@ -262,6 +262,14 @@ def unit_picture_targets(mod, dictionary, factions, info=False):
     return [os.path.join(folder, f, name) for f in factions]
 
 
+def queue_import(imports, src, targets, size):
+    """imports [(src, targets, size)] with src waiting for targets: an older import keeps the places it still has
+    (a picture for one faction takes only that faction's place out of an 'all owners' one)."""
+    taken = set(targets)
+    kept = [(s, [t for t in ts if t not in taken], z) for s, ts, z in imports]
+    return [k for k in kept if k[1]] + [(src, list(targets), size)]
+
+
 def unit_picture_need(mod, info=False):
     """(w, h, bpp) of the mod's own unit cards / info pictures (vanilla: 48 x 64 cards)."""
     for folder in mod.dirs("ui/" + ("unit_info" if info else "units")):     # the mod's, else the game's

@@ -183,8 +183,8 @@ THE GAMES
 
 SUPPORT
   The tool is free. If it helps you, a coffee keeps new features coming:
-  https://ko-fi.com/pfadfinder  (the Support me on Ko-fi button)
-  https://github.com/sponsors/MasterOogwayHomebrew  (the Sponsor button)
+  https://ko-fi.com/pfadfinder  (Support me on... > Ko-fi)
+  https://github.com/sponsors/MasterOogwayHomebrew  (Support me on... > GitHub Sponsors)
 """
 
 _showerror = messagebox.showerror
@@ -873,6 +873,11 @@ class App(tk.Tk):
         self.heights_tab = ttk.Frame(self.nb, padding=0)
         self.nb.add(self.heights_tab, text="  %s  " % self.HEIGHTS_TAB)
         self.nb.hide(self.heights_tab)
+        # the map in 3D in the game's ground textures, the brushes' work seen at once (gui_map3d), made when opened
+        self.map3d_tab = ttk.Frame(self.nb, padding=0)
+        self.nb.add(self.map3d_tab, text="  %s  " % self.MAP3D_TAB)
+        self.nb.hide(self.map3d_tab)
+        self.map3d = None
         tab = ttk.Frame(self.nb, padding=4)
         self.nb.add(tab, text="  Diplomacy  ")
         self.dip_editor = DiplomacyEditor(tab)
@@ -929,13 +934,21 @@ class App(tk.Tk):
         self.b_create.pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Button(bar, text="Undo", command=self.undo).pack(side="left", padx=(0, theme.BUTTON_GAP))
         ttk.Button(bar, text="Redo", command=self.redo).pack(side="left", padx=(0, theme.BUTTON_GAP))
-        # the right side, packed from the right edge: Ko-fi last on the screen; each link in its own colour (Ko-fi's
-        # coral, Discord's blue, YouTube's red, GitHub's grey - white words in either look), a button like the others
-        links = []
+        # the right side, packed from the right edge: the money places in ONE drop-down like Tools (the user,
+        # 2026-10-14, report #262: 'Support me on...' over the places, each in its own colour), then each link in its
+        # own colour (Discord's blue, YouTube's red, GitHub's grey - white words in either look)
+        support = ttk.Menubutton(bar, text="\u2665 Support me on...", style="Support.TMenubutton", cursor="hand2")
+        smenu = tk.Menu(support, tearoff=False)
+        for label, (colour, deep), command in (
+                ("\u2615 Ko-fi", theme.COLOURED["Kofi.TButton"], self.support),
+                ("\u2665 GitHub Sponsors", theme.COLOURED["Sponsor.TButton"], lambda: self.open_link(SPONSORS))):
+            smenu.add_command(label=label, command=command, background=colour, foreground="#ffffff",
+                              activebackground=deep, activeforeground="#ffffff")
+        support["menu"] = smenu
+        support.pack(side="right", padx=(theme.BUTTON_GAP, 0))
+        links = [(support, "The places where you can support the work on the editor: Ko-fi (donations), GitHub "
+                           "Sponsors (monthly or one-time).")]
         for text, style, url, say in (
-                ("\u2615 Support me on Ko-fi", "Kofi.TButton", KOFI, "Donations keep the work on the editor going."),
-                ("\u2665 Sponsor", "Sponsor.TButton", SPONSORS, "GitHub Sponsors: a monthly or a one-time support on "
-                                                                "GitHub itself."),
                 ("YouTube", "YouTube.TButton", YOUTUBE, "The editor's videos: what it does and how."),
                 ("Discord", "Discord.TButton", DISCORD, "Our Discord server: questions, help, ideas and news."),
                 ("GitHub", "GitHub.TButton", None, "The editor's page: downloads, the changes of every version, "
@@ -961,8 +974,6 @@ class App(tk.Tk):
         menu.add_command(label="The game's log in plain words (what went wrong in the game)...",
                          command=self.once("game_log_window", self.game_log_window))
         menu.add_command(label=TEST_MOD_LABEL, command=self.once("test_mod", self.test_mod))
-        head("Tidy the mod")
-        menu.add_command(label="Sort the recruitment panel (strongest first)...", command=self.sort_recruitment)
         head("Files and backups")
         menu.add_command(label="Restore a backup...", command=self.restore)
         menu.add_command(label="Check and install a pack...", command=self.once("install_pack", self.install_pack))
@@ -1451,7 +1462,8 @@ class App(tk.Tk):
 
     HEIGHTS_TAB = "Coast & heights"
     TERRAIN_TABS = ("Terrain", HEIGHTS_TAB)         # both show the one Terrain editor, each its own brushes
-    MAP_TABS = ("Map",) + TERRAIN_TABS              # Maps' own tabs
+    MAP3D_TAB = "3D"
+    MAP_TABS = ("Map",) + TERRAIN_TABS + (MAP3D_TAB,)   # Maps' own tabs
 
     def _map_tab_only(self, on):
         """Maps shows its Map and Terrain tabs alone; New / Edit faction all the others (the map is the Map
@@ -1471,6 +1483,13 @@ class App(tk.Tk):
             return
         if tab in self.TERRAIN_TABS:
             self.open_terrain()
+            return
+        if tab == self.MAP3D_TAB:
+            if self.map3d is None:
+                from .gui_map3d import Map3DView
+                self.map3d = Map3DView(self.map3d_tab, self)
+                self.map3d.pack(fill="both", expand=True)
+            self.map3d.load()
             return
         if tab == "Diplomacy":
             self.load_diplomacy()
@@ -1514,12 +1533,14 @@ class App(tk.Tk):
                                                        "symbols"),
         ("mercs", "Mercenaries...", "mercenaries_window", "who is for hire in which regions: pools of regions and "
                                                           "their units"),
+        ("rebels", "Rebels...", "rebels_window", "who rises when a region revolts: rebel types, their units, which "
+                                                 "regions have which"),
     ]
     # the top row by topic (the author, 2026-10-09), each tool with a window of its own beside its work; the row
     # scrolls when the window is narrower - drag it with the left button
     # Bigger map (x3) is on the Maps bar beside the zoom, Many towns in the map's Select + right click (a tester,
     # 2026-10-09: 'not needed as buttons of their own up there')
-    WORK_ROW = (("map",), ("faction", "recolour"), ("settlements", "mercs"), ("units",),
+    WORK_ROW = (("map",), ("faction", "recolour"), ("settlements", "mercs", "rebels"), ("units",),
                 ("buildings",), ("characters", "traits"), ("religions",), ("addons", "builder", "rules", "events"))
     WORK_TITLES = {"map": "Maps", "faction": "Factions", "new": "New faction", "edit": "Edit faction",
                    "settlements": "Settlements", "units": "Units",
@@ -2305,6 +2326,11 @@ class App(tk.Tk):
     def mercenaries_window(self, region=None, new_from=None):
         from .gui_mercenaries import open_mercenaries
         return open_mercenaries(self, region=region, new_from=new_from)
+
+    def rebels_window(self, regions=None):
+        """Rebels... (work bar; the map's right click): rebel types and which regions have which (gui_rebels)."""
+        from .gui_rebels import open_rebels
+        return open_rebels(self, regions=regions)
 
     def merge_regions(self, keep, gone):
         """Merge regions (the map's switch): `gone` goes with its town from every file and all its land becomes
@@ -3635,6 +3661,13 @@ class App(tk.Tk):
         colours = dict(self._colours_all)
         me = ""                              # Maps: no faction of its own, every faction alike
         owners = self.owners_after(me, owners)
+        # New / Edit faction's work not written yet: its towns in its colour, its capital marked (#223 / #219: 'we
+        # picked the capital and do not see it on the map')
+        # every faction's capital (its first town in descr_strat), then the ones picked and not written yet
+        capitals = {fb.settlements[0].region: fb.name for fb in self.strat.factions
+                    if fb.name != "slave" and fb.settlements}
+        waiting = self.sides_on_map(owners, colours, capitals)
+        owners.update(getattr(self, "map_owners", {}))    # a town given on the Map since counts last
         chars, armies_at = [], set()
         tiles = self.mod.city_tiles(self.v_campaign.get())
         town_moves = {tiles[r]: xy for (w, r), xy in self.place_moves.items() if w == "city" and r in tiles}
@@ -3823,6 +3856,7 @@ class App(tk.Tk):
         self.map_view.allow_religion(self._m2())
         self.map_view.tools = self._map_tools()           # the legend's signs that are tools here
         self.map_view.ports_gone = set(self.ports_gone)
+        self.map_view.waiting_towns, self.map_view.capitals = waiting, capitals
         try:                                              # Find matches the names players read too
             from .regionedit import shown_labels
             keys = list(self.regions) + [i.get("settlement") for i in self.regions.values() if i.get("settlement")]
@@ -3837,6 +3871,12 @@ class App(tk.Tk):
         # the rebels' too: report #167) shows the same flag on the roof as an army in it
         self.map_view.own_garrison = {st.region: len(st.garrison) for fb in self.strat.factions for st in fb.settlements
                                 if st.garrison}
+        self._kept_on_map(owners, waiting)
+        for side in ("new", "edit"):                     # garrisons picked in New / Edit faction, not written yet
+            st = self._kept_sides.get(side)
+            for region, units in ((st or {}).get("garrisons") or {}).items():
+                if isinstance(units, (list, tuple)) and units:
+                    self.map_view.own_garrison[region] = len(units)
         picking = self._pick and self._kept_sides.get(self._pick["side"])
         self.map_view.load(self._cmap, owners, colours, me, picking["chosen"] if picking else (),
                            on_city=self._pick_town if picking else None, chars=chars,
@@ -4601,6 +4641,78 @@ class App(tk.Tk):
         owners.update(getattr(self, "map_owners", {}))   # towns given to any faction on the Map
         return owners
 
+    def _kept_on_map(self, owners, waiting):
+        """The other windows' changes kept for Apply (a town window's owner or garrison, Many towns...), read from
+        descr_strat as they will leave it (kept_view): owners and garrisons on the map before the write (#219)."""
+        if not self.session_parts():
+            return
+        try:
+            view = self.kept_view()
+            want = os.path.normcase(os.path.abspath(view.campaign_file(self.v_campaign.get(), "descr_strat.txt")))
+            path = next((p for p in view._cache if os.path.normcase(os.path.abspath(p)) == want), None)
+            if path is None:                             # nothing kept touches descr_strat
+                return
+            after = Strat(view._cache[path])
+        except Exception as e:
+            log.write("map: kept changes not shown: %s" % e)
+            return
+        before = self.strat.owners()
+        for region, owner in after.owners().items():
+            if before.get(region) != owner:
+                owners[region] = owner
+                waiting.add(region)
+        now = {st.region: len(st.garrison) for fb in self.strat.factions for st in fb.settlements}
+        for fb in after.factions:
+            for st in fb.settlements:
+                if len(st.garrison) != now.get(st.region, 0):
+                    self.map_view.own_garrison[st.region] = len(st.garrison)
+                    waiting.add(st.region)
+
+    def sides_on_map(self, owners, colours, capitals):
+        """New / Edit faction's work not written yet, laid on the map's owners / colours / capitals ({town: faction})
+        in place; returns the towns whose owner changes there. The work on show or kept while another work is on show
+        (_kept_sides) - what Apply will write, seen before it."""
+        waiting = set()
+        for side in ("new", "edit"):
+            st = self._kept_sides.get(side)
+            if st is None and self.v_mode.get() == side:
+                st = self._side_state()
+            if not st:
+                continue
+            f = st["fields"]
+            chosen = list(st.get("chosen") or [])
+            if side == "new":
+                tag = (f.get("name") or "").strip().lower()
+                if not tag or not (f.get("template") or "").strip():
+                    continue
+                prim = (st.get("colours") or {}).get("primary") or colours.get(f["template"].strip())
+                if prim:
+                    colours.setdefault(tag, tuple(prim))
+                gone = []
+                was_cap = None
+            else:
+                tag = (f.get("template") or "").strip()
+                now = st.get("editing_now") or {}
+                if not tag or not now:
+                    continue
+                had = list(now.get("regions") or [])
+                gone = [r for r in had if r not in chosen] if chosen else []
+                chosen = [r for r in chosen if r not in had]
+                was_cap = now.get("capital")
+            for r in chosen:
+                owners[r] = tag
+                waiting.add(r)
+            give = (st.get("vars") or {}).get("v_give") or "slave"
+            for r in gone:
+                owners[r] = give
+                waiting.add(r)
+            cap = (f.get("capital") or "").strip()
+            if cap and cap != was_cap and (cap in chosen or side == "edit"):
+                if was_cap and capitals.get(was_cap) == tag:
+                    capitals.pop(was_cap)
+                capitals[cap] = tag
+        return waiting
+
     def name_list_key(self):
         return self.v["template"].get().strip() if self.editing() else "(new)"
 
@@ -4987,10 +5099,18 @@ class App(tk.Tk):
             if not faction:
                 messagebox.showinfo(APP, "This mod has no faction to recolour.")
                 return
-        if self.editor() is None and self.undo_stack and self.v_mode.get() == "new":
-            messagebox.showinfo(APP, "Recolour works on the files as they are: create the new faction first "
-                                     "(Create faction), then recolour its pictures.")
         from .gui_recolour import RecolourWindow
+        new, template = self.v["name"].get().strip().lower(), self.v["template"].get().strip()
+        if self.editor() is None and self.v_mode.get() == "new" and new and new not in names and template in names:
+            # a faction not created yet (#224): its template's pictures shown, recoloured on its own copies when
+            # Apply creates it - no 'create it first'
+            try:
+                RecolourWindow(self, template, pending=new, to=(self.colours.get("primary"),
+                                                                 self.colours.get("secondary")))
+            except Exception as e:
+                log.error("Recolour: %s" % e)
+                messagebox.showerror(APP, "Could not read the pictures: %s" % e)
+            return
         try:
             RecolourWindow(self, faction)
         except Exception as e:
@@ -5038,6 +5158,8 @@ class App(tk.Tk):
                       (lambda: self.mass_towns(sorted(picked), "town")) if n else None))
         items.append(("New mercenary pool from the %d selected region(s)..." % n,
                       (lambda: self.mercenaries_window(new_from=sorted(picked))) if n else None))
+        items.append(("Rebel type for the %d selected region(s)..." % n,
+                      (lambda: self.rebels_window(regions=sorted(picked))) if n else None))
         if n > 1 and self._has_shares():
             items.append(("Religions of the %d selected regions..." % n,
                           lambda: self.religions_dialog(sorted(picked))))
@@ -5352,6 +5474,7 @@ class App(tk.Tk):
             if items:
                 items.append((None, None))
             items.append(("Mercenaries for hire in %s..." % land, lambda: self.mercenaries_window(region=land)))
+            items.append(("Rebels in %s..." % land, lambda: self.rebels_window(regions=[land])))
         if cid is None and self.strat:
             # for any faction: the land's owner by default, another picked in the window
             from .gui_mapadd import add_at, owner_at
@@ -6108,43 +6231,6 @@ class App(tk.Tk):
         t.bind("<<Paste>>", lambda e: "break")
         t.bind("<<Cut>>", lambda e: "break")
         t.focus_set()
-
-    def sort_recruitment(self):
-        """Tools > Sort the recruitment panel: every building level's recruit lines in the panel's order (infantry,
-        missiles, cavalry, siege, ships, the dearest first in each - recruitorder), kept for Apply."""
-        if not self.mod:
-            self.status.set("Load a mod first.")
-            return
-        from . import recruitorder as RO
-        from .gui_util import keep_for_apply
-        got = {}
-
-        def make():
-            plan = Plan(self.mod, "sort", "sort", {})
-            got["changed"] = RO.plan_sort(plan)
-            return plan
-        try:
-            make()
-        except Exception as e:
-            messagebox.showerror(APP, str(e), parent=self)
-            return
-        n = len(got["changed"])
-        if not n:
-            messagebox.showinfo(APP, "The recruitment panel is in order already: every building level recruits its "
-                                     "units infantry first, then missiles, cavalry, siege, ships - the dearest "
-                                     "first in each.", parent=self)
-            return
-        if not ask(APP, "The game lists a town's units in the order of the recruit lines in "
-                        "export_descr_buildings.txt. %d building level(s) get them sorted:\n\n"
-                        "  infantry -> missiles (archers, slingers, skirmishers) -> animal handlers -> cavalry -> "
-                        "siege -> ships,\n  the dearest first in each kind - the panel's top left takes the "
-                        "strongest.\n\nOnly the recruit lines change places; every town, every unit added later "
-                        "and old saves follow it. When a town recruits from several buildings, the order inside "
-                        "each building is set - how the game joins them, the game shows. Preview shows every "
-                        "level." % n, yes="Keep for Apply", no="Cancel", parent=self):
-            return
-        if keep_for_apply(self, "sort_recruitment", "Recruitment panel sorted (%d levels)" % n, make):
-            self.status.set("Recruitment panel sorted in %d building level(s) - Preview, then Apply changes." % n)
 
     def game_manifest(self):
         """Fingerprint every file of the game (not of its mods) into rtw_manifest.json.gz."""

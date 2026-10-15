@@ -3,6 +3,27 @@
 ## Unreleased
 
 ### Added
+- **Maps > 3D**: the campaign map in 3D in the game's own ground textures (summer or winter), relief, water and
+  rivers, with the game's own models of towns (with their walls), ports (quay and ships), forts, resources, armies and agents (standing, facing you) - what the brushes painted
+  is seen before it is written; move with the right button, turn and tilt with the wheel held, zoom with the wheel.
+- Bring units (both games): the voices of the unit's class where your mod has none for its new owners, its fire
+  arrows' projectile and effects (fire trails, explosions), its skeletons' lines in descr_skeleton.txt.
+- **Rebels...** (beside Mercenaries): rebel types - their units, kind, chance, the name players read - new, copied,
+  renamed, deleted; which regions have which type, many at once, with a faction filter (both games).
+- The map shows what Apply will write before it: a new faction's towns in its colour with their regions yellow as
+  a selection, garrisons and towns given in other windows; every faction's capital has a star inside its square.
+- Recolour while a new faction is being made: no more 'create it first' - its pictures are recoloured by the same
+  Apply that creates it.
+- New unit step by step, Pictures: the card and description picture shown as they will be, and **View in 3D...**
+  of the new unit's soldiers with **Make a card...** / **Make a picture...**.
+- Bring units: a unit's ship type, Medieval II's mounted engine (an elephant's cannon) and an engine's own
+  skeleton with its animation files come along; a banner the mod's banner file lacks is said.
+- Bring units (both games): the unit's own name call in battle comes along with its sound files, and it joins the
+  sound lines of the units it sounds with in its own mod (war cries, chariot wheels, animals).
+- Bring units: **All the units here** - one building level for every brought unit at once (each row can still be
+  changed).
+- Bring units (both games): a unit's own skeletons and the animations they move by come along - HLR's men move in
+  your mod as they do in HLR.
 - Bring buildings from another mod (Rome, Barbarian Invasion, REX): the building now looks as it should in a town on
   the battle map - its places in the town plans, its battle building and models come with it (it stood as the
   game's stand-in model before).
@@ -11,9 +32,9 @@
 - **Draw from the map**: the faction-select map made from the campaign map itself - relief and rivers, no signs,
   the faction's land one solid patch in its colour with a line round its outside (dark round a bright colour,
   light round a dark one), no borders inside (faction tab, under the map).
-- **Tools > Sort the recruitment panel (strongest first)**: every building's recruit lines in one order - infantry,
-  then archers / slingers / skirmishers, animal handlers, cavalry, siege, ships, the dearest first in each - so the
-  panel's top left shows the strongest unit. Set once in the files; every town, new units and old saves follow it.
+- Add-on **Recruitment Order** (Rome with REX, Medieval II with M2EX): a town's recruitment panel in order -
+  infantry, then archers / slingers / skirmishers, cavalry, siege, ships, the dearest (or the cheapest) first in
+  each (in Medieval II one panel for every kind, without the game's kind blocks); battles and the computer's turns keep the real prices.
 - Answers to my reports: the states are asked afresh when the tab opens.
 - ROADMAP: the road so far as tables (no diagram to move with buttons).
 - Maps saved as colour-mapped TGAs (some map generators write them) open in the editor; written back as plain TGAs.
@@ -79,6 +100,13 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- Unit and building editors: the button **Every line of the block** is called **Stats**.
+- Ko-fi and GitHub Sponsors are in one coloured drop-down at the bottom, **Support me on...**, like Tools.
+- A town given to a faction that stands empty (the rebels' garrison leaves with them) gets a garrison by itself:
+  3 to 6 of its new owner's units, their upkeep together at most 750. Many towns at once draws 3 to 6, upkeep 750
+  at first, too.
+- New / Edit faction > Pick on the map: the regions of the towns picked for the faction show see-through yellow, as
+  Select shows them.
 - Bigger map (x3): the coast, borders and rivers bend by the old map's own hills and valleys (capes on ridges, bays
   in valleys, a river on the lower side of its valley) instead of golden-ratio waves.
 - An army whose last unit is taken leaves the map when its units window is closed, as in the game (an empty army is
@@ -117,6 +145,17 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Bring units: a siege engine whose skeleton or animation file had the same name as one of your mod moved by your
+  mod's file -> it comes in under a name of its own and moves by its own animations.
+- A unit's card or description picture put in for one faction replaced every faction's -> it goes to the faction
+  picked in **Pictures for** only; the others keep their own.
+- Bring units (Medieval II): the bodies of a unit's armour upgrades were left behind - they come along now.
+- Bigger map (x3): a river could be left 2 pixels wide in one place, and Rome stopped while loading the map -
+  every river is one pixel wide now.
+- Bring units: the models a unit names in REX's `soldiers { }` block (HLR's units) were left behind - they come
+  along now.
+- Bring units: units brought from a mod with animations of its own (HLR's Gauls) stopped the game at start - their
+  models now move with this mod's nearest skeleton; Check mod files names a model whose skeleton the mod lacks.
 - Bring units: chariots brought for another faction rode a chariot with a banner of another faction (Scotti
   chariots for the Gauls showed the Britons' blue stag) - the chariot now wears the look it had in its own mod.
 - Bring units: a unit firing a projectile the mod has not (crossbowmen from Barbarian Invasion into Rome) stopped

@@ -410,6 +410,17 @@ class BringWindow(StepWindow):
             self._note("Nothing to set here.")
             self._collect = None
             return
+        # one building for every unit at once (the user, 2026-10-14: to try brought units in a mod quickly) - it
+        # sets each row below, which stays its own to change after
+        allrow = ttk.Frame(self.body)
+        allrow.pack(fill="x", pady=(0, 4))
+        ttk.Label(allrow, text="All the units here:", font=("", 9, "bold")).pack(side="left")
+        v_all = tk.StringVar(value="")
+        cb_all = ttk.Combobox(allrow, textvariable=v_all, values=[NOWHERE] + levels, state="readonly", width=56)
+        cb_all.pack(side="left", padx=8)
+        from .gui_util import tip as _tip
+        _tip(cb_all, "Every unit below is trained in this building level (also a unit the other mod trains nowhere); "
+                     "each row can still be changed after.")
         sf = ScrollFrame(self.body)                 # wheel and bar
         sf.pack(fill="both", expand=True)
         frm = sf.inner
@@ -441,10 +452,20 @@ class BringWindow(StepWindow):
                 row=2 * i + 1, column=0, columnspan=2, sticky="w")
             vs.append((unit, mine, v))
 
+        cb_all.bind("<<ComboboxSelected>>", lambda e: [v.set(v_all.get()) for _, _, v in vs])
+
         def collect():
+            from .editors import recruit_text
+            from .roster import recruit_dialect
+            dialect = recruit_dialect(self.mod.load(self.mod.file("edb"))) if self.mod.file("edb") else "plain"
+            self.man["recruit"] = [r for r in self.man.get("recruit", []) if not r.get("picked")]
             for unit, mine, v in vs:
                 val = v.get()
                 self.bring_chains[unit] = list(lacking.get(unit, [])) if val == BRING else []
+                if not mine and val not in (NOWHERE, BRING, AS_THERE, ""):
+                    chain, level = val.split(" / ", 1)       # trained nowhere in the other mod: a line of its own
+                    self.man["recruit"].append({"unit": unit, "chain": chain, "level": level, "picked": True,
+                                                "line": recruit_text(dialect, unit, "0", factions=self.owners)})
                 for p in mine:
                     if val in (AS_THERE, BRING):
                         self.recruit_map[(unit,) + p] = p if p in have else None

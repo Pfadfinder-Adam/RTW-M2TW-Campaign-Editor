@@ -16,7 +16,8 @@ from .plan import Plan
 # the line each built-in add-on writes into the game's log once it runs
 LOADED = {"sack_settlement": "'[SACK] Sack Settlement module loaded'.",
           "raze_settlement": "'[RAZE] Raze Settlement module loaded'.",
-          "avoid_growth": "'[GROWTH] Avoid Growth module loaded'."}
+          "avoid_growth": "'[GROWTH] Avoid Growth module loaded'.",
+          "recruit_order": "'[ORDER] Recruitment Order module loaded'."}
 
 
 class SettingsForm:

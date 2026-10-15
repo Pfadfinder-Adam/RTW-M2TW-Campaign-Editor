@@ -561,6 +561,7 @@ def map_changes(plan, campaign, changes):
         written = Strat(f).owners()             # a rebel village given to the rebels = its town written out
         moves = [(r, now.get(r), to) for r, to in changes["owners"].items() if now.get(r) != to or r not in written]
         move_towns(plan, f, campaign, moves)
+    given = [(r, to) for r, old, to in moves if old != to] if changes.get("owners") else []
     for fac, chars in (changes.get("characters") or {}).items():
         if not chars:
             continue
@@ -572,6 +573,43 @@ def map_changes(plan, campaign, changes):
         lines = extra_characters(plan, f, campaign, chars, plan.name_pool(fac) or {}, armies, owner=fac)
         at = _chars_at(f, fb)
         f.raw[at:at] = lines
+    if given and changes.get("auto_garrison", AUTO_GARRISON):
+        auto_garrisons(plan, f, campaign, given, *changes.get("auto_garrison", AUTO_GARRISON))
+
+
+# a town given on the Map that stands empty gets a garrison drawn at random (report #201): lo-hi units, their upkeep
+# together at most cap - from the units its new owner may field (masstown.garrison_pool)
+AUTO_GARRISON = (3, 6, 750)
+
+
+def auto_garrisons(plan, f, campaign, given, lo, hi, cap, rng=None):
+    """Each town of given [(region, new owner)] that no army holds after the change (no army on its tile, no
+    garrisoned_army of its own) gets random_garrison(lo, hi, cap) of its new owner's units."""
+    import random
+    from .masstown import garrison_pool, random_garrison
+    rng = rng or random.Random()
+    tiles = plan_tiles(plan, campaign)
+    by_owner = {}
+    for region, owner in given:
+        s = Strat(f)
+        fb = s.faction(owner)
+        st = next((x for x in fb.settlements if x.region == region), None) if fb else None
+        if st is None:
+            continue
+        xy = tiles.get(region)
+        held = st.garrison_at is not None or any(
+            c.xy == xy and _has_army(s.lines[c.start:c.end]) for x in s.factions for c in x.characters)
+        if held:
+            continue
+        if owner not in by_owner:
+            by_owner[owner] = garrison_pool(plan.mod, owner)
+        units = random_garrison(by_owner[owner], lo, hi, cap, rng)
+        if not units:
+            plan.warn(f, "%s: %s has no units to garrison it - the town starts empty" % (region, owner))
+            continue
+        _garrisons(plan, f, s, campaign, faction=owner, picked={region: units})
+        plan.note(f, "%s: an empty town given to %s - a garrison of %d unit(s) drawn (upkeep at most %d)"
+                  % (region, owner, len(units), cap))
 
 
 def take_off_map(plan, f, faction, c):
