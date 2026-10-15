@@ -9375,6 +9375,41 @@ building smith
             restore(ModData(self.root), b)
         self.assertEqual(open(strat, "rb").read(), before)
 
+    def test_bring_units_picked_level_and_every_level_above(self):
+        """Report #283: Gaul units brought into Barbarian Invasion with 'All the units here: barracks / muster_field'
+        were not in the recruitment panel - the town's barracks had grown past muster_field, and the game trains only
+        what the CURRENT level lists (its own files repeat a unit on every level). A level picked here takes the
+        unit at that level and at every level above it in the chain; the other mod's own places stay as they are."""
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        lvl = ("        %s requires factions { alpha, }\n        {\n            capability\n            {\n"
+               "                recruit \"alpha general\"  0  requires factions { alpha, }\n            }\n        }\n")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels muster hall fort\n    {\n" + lvl % "muster" + lvl % "hall" + lvl % "fort"
+              + "    }\n}\n")
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        shutil.copytree(self.root, os.path.join(target, "mod"))
+        troot = os.path.join(target, "mod")
+        write(os.path.join(troot, "data", "export_descr_buildings.txt"),
+              "building barracks\n{\n    levels camp muster hall fort\n    {\n" +
+              "".join((lvl % x).replace('                recruit \"alpha general\"  0  requires factions { alpha, }\n',
+                                         "") for x in ("camp", "muster", "hall", "fort")) + "    }\n}\n")
+        src, tmod = ModData(self.root), ModData(troot)
+        man, files = packs.collect(src, ["alpha general"])
+        names = packs.plan_names(tmod, man)
+        rmap = {("alpha general",) + p: ("barracks", "hall")                    # 'All the units here: hall'
+                for p in (("barracks", "muster"), ("barracks", "hall"), ("barracks", "fort"))}
+        plan = Plan(tmod, "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"], names, rmap)
+        plan.apply()
+        edb = open(ModData(troot).file("edb")).read()
+        unit = names["alpha general"][0]
+        got = {lv: edb.split("        %s requires" % lv, 1)[1].split("        }\n", 1)[0].count('"%s"' % unit)
+               for lv in ("camp", "muster", "hall", "fort")}
+        self.assertEqual(got, {"camp": 0, "muster": 0, "hall": 1, "fort": 1})
+
     def test_bring_units_and_buildings_from_another_mod(self):
         # straight from another mod's folder (no .zip): a unit whose recruit place is moved to a building the
         # user picks, and a building chain whose names are taken here - renamed with its levels, texts and

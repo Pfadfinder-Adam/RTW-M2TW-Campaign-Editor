@@ -394,7 +394,8 @@ class BringWindow(StepWindow):
         """Units: one row each - which building of THIS mod trains it. Only the units come over, never a building;
         'as in the other mod' keeps the places this mod has under the same names."""
         AS_THERE = "the same buildings as in the other mod"
-        self._note("Pick the building level of THIS mod that trains each unit: '%s' uses the levels this mod has "
+        self._note("Pick the building level of THIS mod that trains each unit - it trains there and on every level "
+                   "above it (the game trains only what a town's current level lists): '%s' uses the levels this mod has "
                    "under the same names (shown beside it), '%s' = trained nowhere until you add a recruit line by "
                    "hand. A building this mod has not at all can come along: '%s' (all its levels, names and "
                    "pictures; its recruit lines for units this mod lacks left out, said)." % (AS_THERE, NOWHERE, BRING))

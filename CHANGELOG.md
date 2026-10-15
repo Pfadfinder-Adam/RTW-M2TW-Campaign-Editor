@@ -162,6 +162,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Bring units: a unit sent to one building level (e.g. barracks / muster field) was gone from recruitment once
+  the town's building grew -> it is trained at that level and every level above it, as the game's own units.
 - Medieval II (with M2EX): the Avoid Growth tick's words and the Raze Settlement button's words were bigger and
   lighter than the game's own -> the same size and ink as the game's (Add-ons > Update it brings it in).
 - Bring units / buildings and New faction > From another mod listed the other game's mods too, and picking one

@@ -1757,24 +1757,32 @@ def _recruit(plan, manifest, names, owners, recruit_map=None):
             continue
         if dst is False:                      # its building comes along with it (bring_with_buildings)
             continue
-        if (r["unit"], dst) in done:          # two source places sent to one level: one line is enough
-            continue
-        done.add((r["unit"], dst))
         blocks = {b[0]: b for b in building_blocks(f)}
         blk = blocks.get(dst[0])
         tree = chain_tree(f, blk[1], blk[2]) if blk else None
-        if not tree or not any(lv["name"] == dst[1] for lv in tree["levels"]):
+        names_here = [lv["name"] for lv in tree["levels"]] if tree else []
+        if dst[1] not in names_here:
             missing.add("%s %s" % dst)
             continue
-        r = dict(r, chain=dst[0], level=dst[1])
+        # a level picked here (not the other mod's own places, which list every level themselves): that level and
+        # every one above it in its chain - the game trains only what the town's CURRENT level lists, so a unit
+        # put in muster_field alone was gone once the barracks grew (report #283)
+        levels = [dst[1]]
+        if r.get("picked") or dst != src:
+            levels = names_here[names_here.index(dst[1]):]
         line = r["line"].replace('"%s"' % r["unit"], '"%s"' % names[r["unit"]][0], 1)
         # every factions list (REX lines may carry several groups) names the pack's owners here
         line = re.sub(r"(?<![A-Za-z0-9_])factions\s*\{[^}]*\}", "factions { %s, }" % ", ".join(owners), line)
         line, out = fit_line(line, known)
         gone += [c for c in out if c not in gone]
-        at, make = line_place(f, "building", blk, "capability", r["level"], line.split()[0])
-        f.insert(at, make(line))
-        n += 1
+        for level in levels:
+            if (r["unit"], (dst[0], level)) in done:   # two source places sent to one level: one line is enough
+                continue
+            done.add((r["unit"], (dst[0], level)))
+            blk = {b[0]: b for b in building_blocks(f)}[dst[0]]
+            at, make = line_place(f, "building", blk, "capability", level, line.split()[0])
+            f.insert(at, make(line))
+            n += 1
     if n:
         plan.note(f, "%d recruit line(s) added" % n)
     if gone:
