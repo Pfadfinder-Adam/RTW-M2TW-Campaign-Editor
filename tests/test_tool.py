@@ -10182,6 +10182,46 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)
 
+    def test_brought_units_sharing_a_dictionary_keep_sharing_it(self):
+        """Report #291: HLR gives three units the one dictionary barb_light_cavalry (one name, one card); brought
+        into Barbarian Invasion each took a name of its own (barb_light_cavalry, _2, _3) while the one text went to
+        one of them - the game said 'Missing unit type string' for the others. Units sharing a dictionary there
+        share one here too."""
+        from campaign_editor import packs
+        man = {"units": [{"type": "cav a", "dictionary": "barb_light_cavalry"},
+                         {"type": "cav b", "dictionary": "barb_light_cavalry"},
+                         {"type": "cav c", "dictionary": "Barb_Light_Cavalry"},
+                         {"type": "other", "dictionary": "other_one"}]}
+        names = packs.plan_names(ModData(self.root), man)
+        self.assertEqual({names[t][1].lower() for t in ("cav a", "cav b", "cav c")}, {"barb_light_cavalry"})
+        self.assertEqual(len({names[t][0] for t in names}), 4)              # the types stay apart
+
+    def test_load_offers_to_take_out_conditions_this_mod_lacks(self):
+        """Report #291: an older bring had left 'hidden_resource alpine factionwide' in the mod's
+        export_descr_buildings.txt and the game stopped at start. Load offers to take such conditions out
+        (a yes), the rest of the line kept; a religious_belief of a religion the game lacks goes whole."""
+        from campaign_editor import gamefix
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"),
+              "hidden_resources rome\nbuilding barracks\n{\n    levels hall\n    {\n        hall requires factions "
+              "{ alpha, }\n        {\n            capability\n            {\n                recruit \"alpha general\"  0"
+              "  requires factions { alpha, } and hidden_resource alpine factionwide or hidden_resource gaul "
+              "factionwide\n                recruit \"alpha general\"  0  requires factions { alpha, } and "
+              "hidden_resource rome\n            }\n        }\n    }\n}\n")
+        mod = ModData(self.root)
+        found = [p for p in gamefix.problems(mod, on_load=True) if p["id"] == "building_conditions"]
+        self.assertEqual(len(found), 1)
+        self.assertIn("alpine", found[0]["why"])
+        bdir = gamefix.fix_plan(mod, found).apply()
+        text = open(ModData(self.root).file("edb")).read()
+        self.assertNotIn("alpine", text)
+        self.assertNotIn("gaul", text)
+        self.assertIn('recruit "alpha general"  0  requires factions { alpha, }\n', text)
+        self.assertIn("and hidden_resource rome", text)
+        self.assertEqual([p for p in gamefix.problems(ModData(self.root), on_load=True)
+                          if p["id"] == "building_conditions"], [])
+        self.assertTrue(bdir)
+
     def test_town_onto_the_tile_its_port_leaves(self):
         """Report R-20261012-79696C (HLR): 'town of Utica_R cannot go to 139, 190: another town or port stands there'
         though that one was moved too - each place was checked only against the moves BEFORE it in the list. Now

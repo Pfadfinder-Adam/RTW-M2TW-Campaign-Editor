@@ -185,6 +185,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Units brought from another mod that share one name there (several of HLR's barbarian cavalry) kept no name in the game -> they share one name here too.
+- A building condition left by an older bring stopped the game at start -> Load offers to take such conditions out (a backup first).
 - Game's editor in Rome: the window now names the game's menu path (Options > Editors > Provincial Campaign
   Editor) and says the copy shows in the Provincial Campaign list until it is removed.
 - A faction brought from another mod showed its frame's (Gaul's) faction button, loading logo and 3D symbol ->

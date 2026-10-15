@@ -102,6 +102,9 @@ def problems(mod, on_load=False):
                            "model_battle_source modeldb (M2EX's default for mods), nothing else changed.",
                     "file": caps, "line": i, "new": f.text(i).replace(m.group(0), m.group(1) + "modeldb", 1),
                     "note": "model_battle_source: text -> modeldb (the mod's own battle_models.modeldb is read)"})
+    edb = _building_conditions(mod)
+    if edb:
+        out.append(edb)
     missing = [] if on_load else missing_engine_files(mod)
     if missing:
         from .limits import engine_of
@@ -316,6 +319,38 @@ def missing_engine_files(mod):
     return [n for n in names if not _ci(mod.data, n)]   # the engines read these from the mod alone
 
 
+def _building_conditions(mod):
+    """The problem of export_descr_buildings.txt lines naming a hidden resource / resource / religion the mod does
+    not have (the game stops at start: 'unrecognised hidden resource'), or None - left by a bring of an older
+    version of this tool, or by hand (report #291: HLR's 'hidden_resource alpine factionwide' in Barbarian
+    Invasion). The fix takes those conditions out, the rest of each line kept (packs.fit_line, as a bring does)."""
+    from .packs import fit_line, known_conditions, cut_words
+    from .check import building_condition_problems
+    if not mod.file("edb") or not building_condition_problems(mod):
+        return None
+    known = known_conditions(mod)
+    f = mod.load(mod.file("edb"))
+    lines, gone = [], []
+    for i in range(len(f)):
+        text = f.text(i)
+        if strip_comment(text).split()[:1] == ["hidden_resources"]:
+            continue
+        new, out = fit_line(text, known)
+        if out:
+            lines.append((i, new))
+            gone += [c for c in out if c not in gone]
+    if not lines:
+        return None
+    return {"id": "building_conditions", "file": mod.file("edb"), "lines": lines, "line": 0,
+            "why": cut_words(gone, "buildings", "lines").replace(
+                "The other mod ties some of these buildings to",
+                "export_descr_buildings.txt (%d line(s)) names" % len(lines)).replace(
+                "So that they work here and the game does not stop at start, these conditions are taken out of "
+                "their lines - they work without them. Just so you know; nothing to do.",
+                "The game stops at start on them. The fix takes these conditions out of the lines; the rest of "
+                "each line stays.")}
+
+
 def fix_plan(mod, found):
     """A Plan that puts the problems found right."""
     plan = Plan(mod, "setup", "setup_fix")
@@ -365,6 +400,15 @@ def fix_plan(mod, found):
             for i, text in p["lines"]:
                 f.set(i, text)
             plan.note(f, "%d diplomacy line(s) written in this game's own form" % len(p["lines"]))
+            continue
+        if p["id"] == "building_conditions":
+            f = plan.edit(p["file"])
+            for i, text in reversed(p["lines"]):
+                if text is None:
+                    f.delete(i, i + 1)
+                else:
+                    f.set(i, text)
+            plan.note(f, "%d line(s): conditions this mod does not have taken out" % len(p["lines"]))
             continue
         if p["id"] == "weapons_texture":
             from .packs import _block_lines, _owner_textures, type_blocks

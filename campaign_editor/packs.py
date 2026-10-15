@@ -1003,13 +1003,17 @@ def plan_names(mod, manifest):
     dicts = set()
     for name, (a, b) in type_blocks(edu).items():
         dicts |= {v[0] for v in _values(_block_lines(edu, (a, b)), "dictionary")}
-    out = {}
+    out, shared = {}, {}
     for u in manifest["units"]:
         t = free_name(types, u["type"], sep=" ")
-        d = free_name(dicts, u["dictionary"]) if u.get("dictionary") else None
+        # units sharing one dictionary in their mod (HLR: three units named barb_light_cavalry) share one here
+        # too - one name each took the one text and the others had none (report #291)
+        src = (u.get("dictionary") or "").lower()
+        d = shared.get(src) or (free_name(dicts, u["dictionary"]) if src else None)
         types.add(t)
         if d:
             dicts.add(d)
+            shared[src] = d
         out[u["type"]] = (t, d)
     return out
 
@@ -1765,7 +1769,7 @@ def fit_line(text, known):
     out = ""
     for op, cond in keep:
         out += (" %s " % op if out and op else (" and " if out else "")) + cond
-    line = head.rstrip() + (" requires " + out if out else "")
+    line = head + "requires " + out if out else head.rstrip()          # the line's own spacing kept
     return line + (" " + tail.strip() if tail.strip() else ""), gone
 
 
