@@ -126,11 +126,10 @@ def read_xml(path, f):
     return rules
 
 
-# Rome with REX (a tester's test mod): the four multipliers changed to 0.475 / 0.95 / 1.9 / 3.8 and the game's
-# options showed no unit size choice any more
-UNIT_SIZE_NOTE = ("How many men a unit has at this choice of the game's options (1.0 = as in export_descr_unit). Change "
-                  "with care: with other numbers than the game's own (0.5, 1, 2, 4) a test in Rome with REX lost the "
-                  "unit size choice in the options.")
+# Rome with REX: the unit size choice stands on the options' Controls page, not Video as in the plain game (a tester
+# found it there, 2026-10-15 - an older test with changed numbers took it for gone, looking in Video)
+UNIT_SIZE_NOTE = ("How many men a unit has at this choice of the game's options (1.0 = as in export_descr_unit). With "
+                  "REX the Unit size choice is on the options' Controls page (the plain game has it under Video).")
 
 
 def read_unit_sizes(path, f):
@@ -483,7 +482,8 @@ SECTIONS = {
     "diplomacy_text_fields": "where the diplomacy screen switches words (how friendly, how rich...): each word up to "
                              "its threshold",
     "item_modifiers": "each offer a diplomat can make: its price and how it moves standing",
-    "unit sizes (battle options)": "the Unit size choices in the options: soldiers of a unit x this number",
+    "unit sizes (battle options)": "the Unit size choices in the options (with REX on the Controls page): soldiers "
+                                   "of a unit x this number",
 }
 
 KEYS = {
