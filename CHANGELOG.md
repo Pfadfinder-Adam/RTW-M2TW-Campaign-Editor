@@ -3,8 +3,6 @@
 ## Unreleased
 
 ### Added
-- Recruitment Order: the cavalry in two kinds like the foot - first the horse that fights hand to hand, then
-  horse archers, skirmisher horse and chariots with bows or javelins.
 - Faction emblem (Rome): the symbol also reaches the flag on the faction's towns in battle, its 3D symbol on the
   campaign map and its captains' cards and portraits - each made from a clean white template in the faction's
   colours; the routing and rebel flags are never changed. The emblem window also says which flags the game makes
