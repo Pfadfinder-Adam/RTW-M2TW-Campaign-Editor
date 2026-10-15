@@ -2629,6 +2629,38 @@ building smith
                                                                             img.height)))
         self.assertNotEqual(other, (200, 10, 10))                     # another faction's land: the map as it is
 
+    def test_emblem_reaches_town_flags_3d_symbol_and_captain_cards(self):
+        """One symbol on every flag of the faction (Rome), each from a WHITE TEMPLATE (the user, 2026-10-15: 'do not
+        repaint - white templates like the routing flags'): the town flag = the blank banner dyed, the 3D symbol =
+        its white square flag dyed, the captain's card = the old card with its cloth made the white cloth, then dyed
+        - the pole kept. The rebels' and the routing flags are never touched."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import emblem as E
+        blank = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        blank.paste(Image.new("RGBA", (12, 40), (235, 235, 235, 255)), (2, 2))    # the pennant
+        blank.paste(Image.new("RGBA", (30, 30), (235, 235, 235, 255)), (30, 2))   # the square flag
+        self.assertEqual(E.square_flag(blank), (30, 2, 60, 32))
+        old_std = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        old_std.paste(Image.new("RGBA", (30, 30), (180, 20, 20, 255)), (30, 2))
+        card = Image.new("RGBA", (20, 30), (90, 90, 90, 255))
+        card.paste(Image.new("RGBA", (12, 14), (175, 25, 22, 255)), (6, 3))       # the red cloth on a grey pole
+        tpl, mask, box = E.white_template(card, E.cloth_colour(old_std), E.white_square(blank))
+        self.assertEqual(tpl.getpixel((10, 8))[:3], (235, 235, 235))            # the template: white cloth
+        st = {"colours": [(20, 40, 200)], "pattern": "plain"}
+        for label, old, want in (("flag on its towns in battle", Image.new("RGBA", (32, 32)), (32, 32)),
+                                 ("faction symbol (3D) texture", Image.new("RGBA", (16, 16)), (16, 16)),
+                                 ("captain's card", card, (20, 30))):
+            got = E.flag_pictures({"label": label}, old, blank, st, None, old_std)
+            self.assertEqual(got.size, want)
+        got = E.flag_pictures({"label": "captain's card"}, card, blank, st, None, old_std)
+        self.assertEqual(got.getpixel((10, 8))[:3], (20, 40, 200))              # dyed from the white template
+        self.assertEqual(got.getpixel((1, 25))[:3], (90, 90, 90))               # the rest as it was
+        rebel = {"label": "flag on its towns in battle", "rel": "models_building/textures/##standard_slave.tga"}
+        self.assertTrue(E._rebels_flag(rebel))
+
     def test_minimap_drawn_again_keeps_size_depth_and_border(self):
         """The minimap (radar_map2) drawn again from the map seen from above: its own size and depth, Medieval II's
         blue border line (top and right) kept, the map inside it."""
