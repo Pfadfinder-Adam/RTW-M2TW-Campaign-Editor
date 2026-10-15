@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- Interface: more faction slots on a faction-select screen - right click a slot > Faction slots..., the new ones on the same grid; Check mod files says when a campaign has more playable factions than slots.
 - Check mod files looks at the menus too: a button leading to a page there is not, a menu piece with no picture, a menu picture file not found.
 - Add-ons: **One Recruitment Grid** (Medieval II) - the recruitment panel as one grid, row by row, as in Rome, instead of the blocks by kind; any Medieval II, no engine needed, taken out as it was.
 - Module builder: four more WHENs from the engines themselves - a new round begins, a character dies, a faction is wiped out, a new campaign begins.
