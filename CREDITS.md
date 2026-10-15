@@ -10,7 +10,8 @@
 
 - **DEADHEART** - who believed in it too and stood behind it, in word and deed.
 - **NamiKawa** - the one who believed in this before anyone else.
-- **Wholesome Queen** - for the scripts, tools and knowledge shared so freely.
+- **Wholesome Queen** - for the scripts, tools and knowledge shared so freely, and for the *RTW Sprite & HUD
+  Studio*, given to make this editor better for everyone - the idea and the start of its interface editor.
 - **Sin** (*Stainless Steel*) - for the questions that brought the 3D view and the game's own editor into the
   tool, for the hint on how he made his own 3D town models that showed us which way to go, and for the kind words
   of support.
