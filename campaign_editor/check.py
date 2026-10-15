@@ -482,6 +482,14 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         sum(1 for l in s.lines if tokens(l)[:1] == ["core_attitudes"]),
         sum(1 for l in s.lines if tokens(l)[:1] == ["faction_relationships"])))
 
+    # ---- the menus (the Interface work's file) ----
+    from . import lnt as LNT
+    menu = LNT.problems(mod)
+    for p in menu:
+        bad(p)
+    if LNT.find(mod):
+        say("MENUS: %s - %s" % (os.path.basename(LNT.find(mod)), "%d problem(s)" % len(menu) if menu else "fine"))
+
     # ---- deep: rehearse the tool's work for every faction ----
     if deep:
         say("")

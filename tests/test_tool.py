@@ -3220,6 +3220,29 @@ building smith
            "        </UI text>\r\n      </Parameters>\r\n      <object_id>empty_push_button</object_id>\r\n"
            "    </UI piece>\r\n  </lpage>\r\n  <lpage>new_game\r\n  </lpage>\r\n</layout>\r\n")
 
+    def test_menu_problems_in_check_mod(self):
+        """Check mod files looks at the menus too (the Interface work's file): a button leading to a page there is
+        not, a piece showing a picture no region has, Rome's picture file not found; the pages the games make in
+        their own code (CB_custom_army...) are no problem."""
+        from types import SimpleNamespace
+        from campaign_editor import lnt as L
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        good = self.LNT.replace("<menu_id>new_game</menu_id>", "<menu_id>CB_custom_army</menu_id>")
+        write(os.path.join(d, "menu", "Rome.lnt"), good)
+        write(os.path.join(d, "menu", "textures", "FE_texture1.tga"), "x")
+        mod = SimpleNamespace(roots=lambda: [d], data=d)
+        self.assertEqual(L.problems(mod), [])
+        broken = self.LNT.replace("<menu_id>new_game</menu_id>", "<menu_id>gone_page</menu_id>").replace(
+            "<object_id>logo_obj</object_id>", "<object_id>lost_logo</object_id>")
+        write(os.path.join(d, "menu", "Rome.lnt"), broken)
+        os.remove(os.path.join(d, "menu", "textures", "FE_texture1.tga"))
+        got = L.problems(mod)
+        self.assertEqual(len(got), 3, got)
+        self.assertIn("'lost_logo'", got[0])                       # in the page's order: the logo first
+        self.assertIn("leads to the page 'gone_page'", got[1])
+        self.assertIn("FE_texture1.tga is not found", got[2])
+
     def test_menu_layout_read_and_written_byte_exact(self):
         """The interface editor's ground (the user, 2026-10-15: 'a full interface editor', from Wholesome Queen's
         studio): a .lnt file read into pages, pieces, pictures; written back byte-exact; a move, a copy, a rename and

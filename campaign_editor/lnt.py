@@ -331,6 +331,75 @@ def find(mod):
     return None
 
 
+# pieces the game draws itself (no picture of their own) - never a problem
+SELF_DRAWN = ("empty_", "fmv_backdrop")
+# pages the games make in their code, not in the file (their own buttons lead there): Rome / BI / Alexander,
+# Medieval II
+ENGINE_PAGES = {"CB_custom_army", "Historical_battle_details", "PC_choose_faction"}
+
+
+def _loose(lnt):
+    """(menu_ids that name no page, objects with no picture) of a layout - what the game's own file already has
+    (Rome's CB_custom_army, Medieval II's PC_choose_faction...) is no problem in a mod's copy."""
+    pages = set(lnt.pages())
+    ids, objs = set(), set()
+    for page in lnt.pages():
+        for x in lnt.pieces(page):
+            if x["menu_id"] and x["menu_id"] not in pages:
+                ids.add(x["menu_id"])
+            if x["object"] and not x["object"].startswith(SELF_DRAWN) and lnt.art(x) is None:
+                objs.add(x["object"])
+    return ids, objs
+
+
+def problems(mod):
+    """[plain words] wrong in the mod's menu layout file (Check mod files): a button leading to a page the file does
+    not have, a piece whose picture names no region, (Rome) a picture file the game cannot find. What the game's own
+    file has the same way is left out."""
+    path = find(mod)
+    if not path:
+        return []
+    name = os.path.basename(path)
+    try:
+        lnt = Lnt.load(path)
+    except (OSError, LntError) as e:
+        return ["menu %s cannot be read: %s - the game's menus may not open" % (name, e)]
+    known_ids, known_objs = set(ENGINE_PAGES), set()
+    try:
+        from .campaignrules import game_data
+        gd = game_data(mod)
+        own = os.path.join(gd, "menu", name) if gd else None
+        if own and os.path.isfile(own) and os.path.normcase(os.path.abspath(own)) != \
+                os.path.normcase(os.path.abspath(path)):
+            ids, known_objs = _loose(Lnt.load(own))
+            known_ids |= ids
+    except (OSError, LntError, ValueError):
+        pass
+    out = []
+    pages = set(lnt.pages())
+    said = set()
+    for page in lnt.pages():
+        for x in lnt.pieces(page):
+            mid = x["menu_id"]
+            if mid and mid not in pages and mid not in known_ids and (page, mid) not in said:
+                said.add((page, mid))
+                out.append("menu %s, page %s: the button %s leads to the page '%s', which neither the file nor the "
+                           "game's own menus have - pressing it may go nowhere (try it in the game)"
+                           % (name, page, x["name"], mid))
+            obj = x["object"]
+            if obj and not obj.startswith(SELF_DRAWN) and obj not in known_objs and lnt.art(x) is None \
+                    and obj not in said:
+                said.add(obj)
+                out.append("menu %s, page %s: the piece %s shows '%s', a picture no texture region of the file "
+                           "has - it shows nothing" % (name, page, x["name"], obj))
+    if name.lower() == "rome.lnt":                 # Medieval II's menu pictures lie in its packs: not looked for
+        for page_name in lnt.textures():
+            if not texture_file(mod, path, page_name):
+                out.append("menu %s: its picture file %s is not found in the mod or the game - the menus that use "
+                           "it show nothing there" % (name, page_name))
+    return out
+
+
 def menu_texts(mod):
     """{KEY (upper): text} the pieces show - menu_english.txt as the game reads it (strtables.strings, the one
     reader of string tables; Medieval II's .strings.bin when its .txt holds no {KEY} lines)."""
