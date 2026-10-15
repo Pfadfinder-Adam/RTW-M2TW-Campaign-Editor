@@ -8,9 +8,10 @@ pictures. So the work goes in three steps, the web's knots tied here in one plac
   prepare     the campaign's text files and its map files (the campaign's own, else the base ones, as the game finds
               them) copied into custom/<name>/ with a note of what each was (campaign_editor.json); the region names'
               text as text/<name>_regions_and_settlement_names.txt. Through a Plan: Restore takes it all out.
-  start_line  the game started straight in its editor where it can be: Rome with REX '-strat_ed=custom/<name>',
-              Medieval II with M2EX '--editor.campaign=custom/<name>'; the plain games only show the editor in
-              their menus ('-enable_editor' for Rome; Medieval II's cfg '[features] editor = true').
+  start_line  the game started straight in its editor where it can be: Medieval II with M2EX
+              '--editor.campaign=custom/<name>'; Rome (with REX too - no such switch in its exe) and plain Medieval II
+              only show the editor in their menus ('-enable_editor' for Rome; Medieval II's cfg
+              '[features] editor = true').
   take_back   every file the game's editor saved and changed goes back over the campaign's own (into the mod: the
               campaign folder, or where the mod's own file lay), descr_strat.txt with its 'script' lines put back,
               map.rwm removed (the game builds it again) - and what the editor dropped is said: header keys,
@@ -126,18 +127,19 @@ def start_line(data, campaign):
     if base:
         rel = os.path.relpath(os.path.dirname(data), game).replace(os.sep, "/")
     mod_args = [EXPANSIONS[low][0]] if low in EXPANSIONS else (["-nm", "-show_err", "-mod:%s" % rel] if base else [])
-    if os.path.isfile(os.path.join(game, "REX.exe")):
-        args = mod_args + ["-strat_ed=%s" % where]
-        return {"exe": os.path.join(game, "REX.exe"), "args": args, "cwd": game, "direct": True,
-                "words": " ".join(["REX.exe"] + args), "how": ""}
-    exe = EXPANSIONS[low][1] if low in EXPANSIONS else "RomeTW.exe"
+    # Rome, with REX too: no switch opens the campaign editor straight away (REX.exe's command line knows strat,
+    # battle, battle_ed and enable_editor - 'strat_ed' is only a keyboard-shortcut set), so -enable_editor shows it
+    # in the menus and the words say where to click
+    rex = os.path.isfile(os.path.join(game, "REX.exe"))
+    exe = "REX.exe" if rex else EXPANSIONS[low][1] if low in EXPANSIONS else "RomeTW.exe"
     if not os.path.isfile(os.path.join(game, exe)):
         raise ValueError("no game exe (REX.exe, %s) in %s" % (exe, game))
     args = mod_args + ["-enable_editor"]
     return {"exe": os.path.join(game, exe), "args": args, "cwd": game, "direct": False,
             "words": " ".join([exe] + args),
-            "how": "Rome without REX opens its editor only from its menus: in the game, the editors' entry of the "
-                   "main menu > the campaign map editor > load custom campaign %s." % folder_name(campaign)}
+            "how": "Rome%s opens its editor only from its menus: in the game, the editors' entry of the main menu > "
+                   "the campaign map editor > load custom campaign %s." % (" with REX" if rex else " without REX",
+                                                                          folder_name(campaign))}
 
 
 # ---- taking it back ----

@@ -1924,7 +1924,6 @@ def s_engine_rules(c, mod):
 
 # every campaign rule changed (s_rules_all): what is left as it is, and why
 BYTE_TOPS = (127, 255, 32767, 65535)            # the most a byte / a short holds: a limit there is not raised
-UNIT_SIZES_LEFT = "the game's options keep their unit size choice only with these numbers as they are"
 RULES_LEFT = {
     "start_date": "the events and the campaign script count from it",
     # a tester in Medieval II: the years jumped +2 / +3 a turn (2.00 -> 1.90) and the turn counter showed the year
@@ -1946,10 +1945,6 @@ def rule_changed(rule, now=None):
     v, key = rule.value.strip(), rule.key
     if key in RULES_LEFT:
         return None, RULES_LEFT[key]
-    if os.path.basename(rule.path or "").lower() == "descr_unit_sizes.txt":
-        # the user's test mod in Rome with REX: with 0.475 / 0.95 / 1.9 / 3.8 the game's options lost the
-        # unit size choice
-        return None, UNIT_SIZES_LEFT
     if key.endswith("_source"):
         return None, "names the files the engine loads - another value needs other files"
     # a range only widens: a maximum or limit goes up, a minimum (and any other number) down - so the towns, families

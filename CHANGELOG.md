@@ -9,8 +9,8 @@
   II's Aztecs) offers to open them to play - with a backup; the Roman Senate, the Pope, the rebels and factions
   that start with no town stay locked.
 - **Maps > 3D > Game's editor...**: the campaign opened in the game's own campaign-map editor - copied to
-  campaign/custom/ and the game started in it (Rome with REX, Medieval II with M2EX; the plain games show where
-  to click) - and what it saved taken back, the script line it drops put back and anything it dropped listed.
+  campaign/custom/ and the game started in it (Medieval II with M2EX straight in the editor; Rome, with REX too,
+  and plain Medieval II show it in their menus and the window says where to click) - and what it saved taken back, the script line it drops put back and anything it dropped listed.
 - Victory: **Take** offers the usual numbers of towns (15, 25, 50, 75, 100 - any other typed) and each **Hold** has
   its own **On the map...** to click the towns to hold.
 - Faction emblem (Rome): the symbol also reaches the flag on the faction's towns in battle, its 3D symbol on the
@@ -173,6 +173,9 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Game's editor in Rome with REX: it was started with a switch REX does not have, so only the menu came up -> it
+  starts with the editor shown in the menus and the window says where to click.
+- Test mod: the unit sizes were left as they are -> they are changed too, like every other campaign rule.
 - Factions: after loading another mod the form still showed the old mod's faction (Medieval II's France with
   Barbarian Invasion loaded) -> it is read again from the new mod; a brought faction's 'From zero' lock never
   stays on Edit faction.

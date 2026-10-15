@@ -2855,7 +2855,13 @@ building smith
             self.assertTrue(line["direct"])
             self.assertEqual(line["args"], ["--features.mod=mods/a", "--editor.campaign=custom/ce_imperial_campaign"])
             line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
-            self.assertEqual(line["args"][-1], "-strat_ed=custom/ce_imperial_campaign")
+            # REX.exe has no switch that opens its campaign editor (read from its code): '-enable_editor' shows it
+            # in the menus, the words say where to click
+            self.assertFalse(line["direct"])
+            self.assertTrue(line["exe"].endswith("REX.exe"))
+            self.assertEqual(line["args"][-1], "-enable_editor")
+            self.assertFalse(any("strat_ed" in a for a in line["args"]))
+            self.assertIn("ce_imperial_campaign", line["how"])
             self.assertIn("-mod:HLR", line["args"])
             os.remove(os.path.join(rome, "REX.exe"))
             write(os.path.join(rome, "RomeTW.exe"), "")
@@ -11510,6 +11516,10 @@ building smith
         CR.apply(plan, "descr_campaign_db.xml", {rules[0]: "14", rules[1]: "true"},
                  os.path.join(d, "descr_campaign_db.xml"), None)
         sizes = CR.read(os.path.join(d, "descr_unit_sizes.txt"))
+        # the test mod changes the unit sizes too (REX keeps the Unit size choice on the options' Controls page -
+        # it never went missing, it was looked for in Video)
+        from campaign_editor.selftest import rule_changed
+        self.assertEqual(rule_changed(sizes[0]), ("0.475", None))
         CR.apply(plan, "descr_unit_sizes.txt", {sizes[0]: "3.0"}, os.path.join(d, "descr_unit_sizes.txt"), None)
         with self.assertRaises(ValueError):
             CR.apply(Plan(mod, "r", "r", {}), "descr_campaign_db.xml", {rules[0]: "x"},
