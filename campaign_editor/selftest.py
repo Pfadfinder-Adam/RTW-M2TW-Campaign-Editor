@@ -1527,6 +1527,18 @@ def s_minimap(c, mod):
     return plan
 
 
+@step("Maps > 3D > Game's editor...: the campaign copied to campaign/custom/ce_<campaign> for the game's own "
+      "campaign-map editor (Open in the game's editor without starting the game)",
+      "start the game in its campaign editor (Game's editor... > Open in the game's editor, or the start line it "
+      "shows): the map of ce_<campaign> loads with its towns and armies; Save there, close the game, Take the "
+      "changes back - the campaign keeps its script line")
+def s_game_editor(c, mod):
+    from . import gameeditor as GE
+    plan = Plan(mod, "game_editor", "game_editor", {})
+    GE.prepare(plan, c.campaign)
+    return plan
+
+
 def _other_mod(mod):
     """Another mod of the same game to bring a whole faction from: Barbarian Invasion beside a Rome mod (Rome Gold),
     else the game's own data under the mod; None when there is none."""
@@ -2712,6 +2724,7 @@ COVERAGE = {
     "Bring from another mod": ["s_bring"],
     "New faction > From another mod (a whole faction brought)": ["s_faction_bring"],
     "Maps > 3D > Make the minimap from it": ["s_minimap"],
+    "Maps > 3D > Game's editor (the game's own campaign-map editor)": ["s_game_editor"],
     "Unit packs export / import": ["s_unit_pack"],
     "Check and install a pack": ["s_modpack"],
     "Events": ["s_events", "s_events_more"],

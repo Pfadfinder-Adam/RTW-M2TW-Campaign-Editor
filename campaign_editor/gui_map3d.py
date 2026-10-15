@@ -50,6 +50,10 @@ class Map3DView(ttk.Frame):
         tip(b_mini, "The campaign's minimap (radar_map1 / radar_map2.tga - the small map in the game's bottom-left "
                     "corner) drawn again from this map seen from above: the ground's textures, relief, rivers, the "
                     "sea's depths; each picture keeps its size and border. Kept for Apply (Preview shows it).")
+        b_game = ttk.Button(bar, text="Game's editor...", command=self.game_editor)
+        b_game.pack(side="left", padx=(theme.BUTTON_GAP, 0))
+        tip(b_game, "The campaign opened in the game's own campaign-map editor (copied to campaign/custom/ first), "
+                    "and what it saved taken back - the 'script' line put back, what it dropped listed.")
         hint(bar, HINT, width=460).pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
         self.lbl = ttk.Label(bar, foreground=theme.palette()["muted"])
         self.lbl.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
@@ -82,6 +86,10 @@ class Map3DView(ttk.Frame):
                 os.path.normcase(os.path.abspath(mod.data)):
             return own
         return mod
+
+    def game_editor(self):
+        from .gui_gameeditor import open_window
+        open_window(self.app)
 
     def make_minimap(self):
         """'Make the minimap from it': the campaign's minimap pictures drawn again from the map as the brushes

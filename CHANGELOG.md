@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **Maps > 3D > Game's editor...**: the campaign opened in the game's own campaign-map editor - copied to
+  campaign/custom/ and the game started in it (Rome with REX, Medieval II with M2EX; the plain games show where
+  to click) - and what it saved taken back, the script line it drops put back and anything it dropped listed.
 - Victory: **Take** offers the usual numbers of towns (15, 25, 50, 75, 100 - any other typed) and each **Hold** has
   its own **On the map...** to click the towns to hold.
 - Faction emblem (Rome): the symbol also reaches the flag on the faction's towns in battle, its 3D symbol on the
