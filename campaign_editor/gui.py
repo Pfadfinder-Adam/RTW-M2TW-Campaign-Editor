@@ -685,6 +685,9 @@ class App(tk.Tk):
         self.t_long = tk.Text(texts, width=34, height=7, wrap="word")
         self.t_long.grid(row=1, column=1, sticky="we", padx=4, pady=2)
         texts.columnconfigure(1, weight=1)
+        # the boxes in the middle (report #267): as much room right of them as their labels take on the left
+        texts.bind("<Configure>", lambda e: texts.columnconfigure(
+            2, minsize=(texts.grid_bbox(0, 0, 0, 1) or (0, 0, 0, 0))[2]), add="+")
         # the campaign-select map and the leader's face (filled by ArtEditor.load_start - the Art tab's list leaves
         # them out): under Victory, in the room the short fields leave there (the user, 2026-10-10: 'an empty
         # rectangle - put the picture there'), packed below once Victory is
@@ -710,7 +713,7 @@ class App(tk.Tk):
         for key, label in (("leader_title", "Leader's title"), ("heir_title", "heir's")):
             self.v[key] = tk.StringVar()
             ttk.Label(tl, text=label).pack(side="left", padx=(0 if key == "leader_title" else 8, 2))
-            ttk.Entry(tl, textvariable=self.v[key], width=14).pack(side="left")
+            ttk.Entry(tl, textvariable=self.v[key], width=24).pack(side="left")    # 'Gallic Faction Leader' whole (#267)
         hint(tl, "What the game calls the faction's leader and heir. Medieval II: 'King %S' / 'Prince %S' in "
                  "text/expanded.txt ({EMT_<FACTION>_FACTION_LEADER_NAME}, _FACTION_HEIR_NAME; %S is his name) and a "
                  "former leader's title (_FORMER_FACTION_LEADER_TITLE) - only the word changes. Rome: the whole "
