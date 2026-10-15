@@ -9,10 +9,9 @@ pictures. So the work goes in three steps, the web's knots tied here in one plac
               them) copied into custom/<name>/ with a note of what each was (campaign_editor.json); the region names'
               text as text/<name>_regions_and_settlement_names.txt. Through a Plan: Restore takes it all out.
   start_line  the game started straight in its editor where it can be: Medieval II with M2EX
-              '--editor.campaign=custom/<name>'; Rome (its plain exe, also beside REX - REX's menus have no
-              campaign editor, #288) and plain Medieval II
-              only show the editor in their menus ('-enable_editor' for Rome; Medieval II's cfg
-              '[features] editor = true').
+              '--editor.campaign=custom/<name>', Rome with REX the same switch (a REX older than it opens the
+              main menu); plain Rome tries CA's '-strat_ed:<name>'; plain Medieval II only from its menus (cfg
+              '[features] editor = true'). The menus' own way is switched off in the game's code (#288).
   take_back   every file the game's editor saved and changed goes back over the campaign's own (into the mod: the
               campaign folder, or where the mod's own file lay), descr_strat.txt with its 'script' lines put back,
               map.rwm removed (the game builds it again) - and what the editor dropped is said: header keys,
@@ -119,38 +118,37 @@ def start_line(data, campaign):
             return {"exe": os.path.join(game, "M2EX.exe"), "args": args, "cwd": game, "direct": True,
                     "words": " ".join(["M2EX.exe"] + args), "how": ""}
         line = game_line(data)
-        line.update(direct=False, how="Medieval II without M2EX opens its editor only from its menus: add the lines "
-                    "'[features]' and 'editor = true' to the mod's .cfg (or the game's medieval2.preference.cfg), "
-                    "then in the game: the editors in the main menu > the campaign map editor > load %s." % where)
+        line.update(direct=False, how="Medieval II without M2EX has no way into its campaign editor: the menu page "
+                    "for it is switched off in the game's own code. Start it with M2EX instead (it opens %s "
+                    "straight in the editor)." % where)
         return line
     low = (base or "").lower()
     rel = None
     if base:
         rel = os.path.relpath(os.path.dirname(data), game).replace(os.sep, "/")
     mod_args = [EXPANSIONS[low][0]] if low in EXPANSIONS else (["-nm", "-show_err", "-mod:%s" % rel] if base else [])
-    # Rome, with REX too: no switch opens the campaign editor straight away (REX.exe's command line knows strat,
-    # battle, battle_ed and enable_editor - 'strat_ed' is only a keyboard-shortcut set), so -enable_editor shows it
-    # in the menus and the words say where to click
-    # REX's menus list only the custom campaigns (its PROVINCIAL CAMPAIGN is no editor - report #288), so the plain
-    # exe beside it is started, without REX; REX only when no plain exe is there
+    # The menus cannot open the campaign editor in either game: OPTIONS > EDITORS > PROVINCIAL CAMPAIGN EDITOR leads
+    # to a load page whose list and buttons are switched off in the game's own code, and New Game > PROVINCIAL
+    # CAMPAIGN only plays the custom campaigns (report #288; read in the engine source 2026-10-15). Only a switch
+    # opens it: REX's '--editor.campaign=<dir>' (the same as M2EX's, under the campaign folder), CA's own Rome builds
+    # '-strat_ed:<name>' (under campaign/custom/).
+    if os.path.isfile(os.path.join(game, "REX.exe")):
+        args = mod_args + ["--editor.campaign=%s" % where]
+        return {"exe": os.path.join(game, "REX.exe"), "args": args, "cwd": game, "direct": True,
+                "words": " ".join(["REX.exe"] + args),
+                "how": "If the game opens at its main menu instead, this REX is older than its campaign-editor switch "
+                       "(--editor.campaign): update REX - the game's menus cannot open the campaign editor."}
     plain = EXPANSIONS[low][1] if low in EXPANSIONS else "RomeTW.exe"
-    rex = not os.path.isfile(os.path.join(game, plain)) and os.path.isfile(os.path.join(game, "REX.exe"))
-    exe = "REX.exe" if rex else plain
-    if not os.path.isfile(os.path.join(game, exe)):
-        raise ValueError("no game exe (REX.exe, %s) in %s" % (exe, game))
-    if not rex and low in EXPANSIONS:
+    if not os.path.isfile(os.path.join(game, plain)):
+        raise ValueError("no game exe (REX.exe, %s) in %s" % (plain, game))
+    if low in EXPANSIONS:
         mod_args = []                                   # RomeTW-BI.exe / -ALX.exe are the expansion already
-    args = mod_args + ["-enable_editor"]
-    return {"exe": os.path.join(game, exe), "args": args, "cwd": game, "direct": False,
-            "words": " ".join([exe] + args),
-            # the menu words of data/text/menu_english.txt (UI_OPTIONS_EDITORS, UI_EDITORS_CAMPAIGN); a tester went
-            # into the BATTLEFIELD EDITOR next to it (and REX fell there, in its own battle code)
-            "how": "Rome%s opens its editor only from its menus: in the game, OPTIONS > EDITORS > PROVINCIAL CAMPAIGN "
-                   "EDITOR (not the BATTLEFIELD EDITOR), then load the custom campaign %s. The copy also shows in "
-                   "the game's PROVINCIAL CAMPAIGN list until 'Remove the copy'." % (
-                       " with REX" if rex else " without REX", folder_name(campaign)) +
-                   ("" if rex else " A line of the mod only REX reads may stop the plain game - its log then says "
-                    "which.")}
+    args = mod_args + ["-enable_editor", "-strat_ed:%s" % folder_name(campaign)]
+    return {"exe": os.path.join(game, plain), "args": args, "cwd": game, "direct": False,
+            "words": " ".join([plain] + args),
+            "how": "Rome without REX is started with the campaign-editor switch of CA's own builds (-strat_ed); the "
+                   "sold game may not know it. If it opens at its main menu, plain Rome has no way into the editor "
+                   "(its menu page is switched off) - use REX."}
 
 
 # ---- taking it back ----

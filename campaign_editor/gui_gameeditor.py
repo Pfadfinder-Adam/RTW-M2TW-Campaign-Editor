@@ -63,7 +63,7 @@ class GameEditorWindow(tk.Toplevel):
             return
         try:
             line = GE.start_line(mod.data, camp)
-            started = "It starts: %s%s" % (line["words"], "" if line["direct"] else "\n" + line["how"])
+            started = "It starts: %s%s" % (line["words"], "\n" + line["how"] if line["how"] else "")
         except ValueError as e:
             started = "The game cannot be started from here: %s" % e
         self.l_line.configure(text="Campaign %s -> %s\n%s" % (camp, mod.rel(GE.custom_dir(mod, camp)), started))
@@ -106,13 +106,13 @@ class GameEditorWindow(tk.Toplevel):
             self.show()
             return
         log.write("The game started %s: %s" % ("in its campaign editor" if line["direct"] else
-                                                "(its campaign editor in the menus)", line["words"]))
+                                                "(the switch may not be known - see the message)", line["words"]))
         if not line["direct"]:
             messagebox.showinfo(TITLE, line["how"], parent=self)
         self.app.status.set("The game is starting%s - Save there, close the game, then 'Take the changes back' "
                             "(Maps > 3D > Game's editor...)." % (
                                 " in its campaign editor" if line["direct"] else
-                                ": open its campaign editor from the menus as the window said"))
+                                " - if it opens at the main menu, see the message"))
         self.show()
 
     def take_back(self):

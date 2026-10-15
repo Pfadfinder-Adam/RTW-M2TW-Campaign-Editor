@@ -2995,34 +2995,29 @@ building smith
             self.assertTrue(line["direct"])
             self.assertEqual(line["args"], ["--features.mod=mods/a", "--editor.campaign=custom/ce_imperial_campaign"])
             line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
-            # REX.exe has no switch that opens its campaign editor (read from its code): '-enable_editor' shows it
-            # in the menus, the words say where to click
-            self.assertFalse(line["direct"])
-            self.assertTrue(line["exe"].endswith("REX.exe"))
-            self.assertEqual(line["args"][-1], "-enable_editor")
-            self.assertFalse(any("strat_ed" in a for a in line["args"]))
-            self.assertIn("ce_imperial_campaign", line["how"])
-            self.assertIn("PROVINCIAL CAMPAIGN EDITOR", line["how"])          # the game's own menu words
-            self.assertIn("not the BATTLEFIELD EDITOR", line["how"])
-            self.assertIn("-mod:HLR", line["args"])
-            # report #288: REX's menus list only the custom campaigns, no campaign editor - with the plain exe
-            # beside REX the editor starts it, without REX
+            # the menus cannot open the editor in either game (report #288, the engine source): REX gets the same
+            # switch as M2EX, beside a plain exe too
             write(os.path.join(rome, "RomeTW.exe"), "")
-            write(os.path.join(rome, "RomeTW-BI.exe"), "")
             line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
+            self.assertTrue(line["direct"])
+            self.assertTrue(line["exe"].endswith("REX.exe"))
+            self.assertEqual(line["args"], ["-nm", "-show_err", "-mod:HLR", "--editor.campaign=custom/ce_imperial_campaign"])
+            self.assertIn("update REX", line["how"])
+            # without REX: CA's own switch is tried, the words say what if the sold game does not know it
+            os.remove(os.path.join(rome, "REX.exe"))
+            line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
+            self.assertFalse(line["direct"])
             self.assertTrue(line["exe"].endswith("RomeTW.exe"))
-            self.assertIn("without REX", line["how"])
+            self.assertEqual(line["args"][-2:], ["-enable_editor", "-strat_ed:ce_imperial_campaign"])
             self.assertIn("-mod:HLR", line["args"])
+            write(os.path.join(rome, "RomeTW-BI.exe"), "")
             os.makedirs(os.path.join(rome, "bi", "data"))
             line = GE.start_line(os.path.join(rome, "bi", "data"), "barbarian_invasion")
             self.assertTrue(line["exe"].endswith("RomeTW-BI.exe"))
-            self.assertEqual(line["args"], ["-enable_editor"])
-            os.remove(os.path.join(rome, "REX.exe"))
-            write(os.path.join(rome, "RomeTW.exe"), "")
-            line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
-            self.assertFalse(line["direct"])
-            self.assertIn("-enable_editor", line["args"])
-            self.assertIn("ce_imperial_campaign", line["how"])
+            self.assertEqual(line["args"], ["-enable_editor", "-strat_ed:ce_barbarian_invasion"])
+            os.remove(os.path.join(rome, "RomeTW.exe"))
+            with self.assertRaises(ValueError):
+                GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
 
     def test_select_map_outline_smooth_without_a_picture_from_above(self):
         """Report #271 (Barbarian Invasion): with no picture from above the select map was drawn on the editor's own

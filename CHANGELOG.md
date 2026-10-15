@@ -190,14 +190,12 @@
 ### Fixed
 - A captain who went over to another faction with his town kept a name of his old faction's list, and that name could later vanish from every list - the game closed as the campaign loaded -> he takes a name of his new faction's own list, a changed list keeps every name any character wears, and Load offers to put a lost name back.
 - Avoid Growth and Raze Settlement in Medieval II were sized and coloured by eye -> they now take the game's own box, gap, letters and ink, read from the game itself, on any screen size; the Raze button has a tooltip like the game's own.
-- Game's editor in Rome with REX led only to the list of custom campaigns -> Rome's own program is started for it, without REX.
+- Game's editor in Rome led only to the game's menus, where the campaign editor cannot be opened -> Rome with REX is started straight in the editor, like Medieval II with M2EX (an older REX says to update it).
 - The map's Layers list opened again on a second press instead of closing (Windows) -> the press itself closes it.
 - Bring units: the card shown when resting the mouse on a unit was another faction's -> it is the picked faction's card from the other mod, as on the right.
 - The Coast & heights tab showed a Rivers tick it does not need -> the rivers are always drawn there.
 - Units brought from another mod that share one name there (several of HLR's barbarian cavalry) kept no name in the game -> they share one name here too.
 - A building condition left by an older bring stopped the game at start -> Load offers to take such conditions out (a backup first).
-- Game's editor in Rome: the window now names the game's menu path (Options > Editors > Provincial Campaign
-  Editor) and says the copy shows in the Provincial Campaign list until it is removed.
 - A faction brought from another mod showed its frame's (Gaul's) faction button, loading logo and 3D symbol ->
   it shows its own, its own movies come along too.
 - After Create faction the form stayed filled, so Start the game said changes were not written -> the form empties
@@ -207,8 +205,6 @@
 - Faction logos on games without REX / M2EX (and mods on the binary sprite sheets) could not be replaced -> the
   editor now reads and writes the game's own binary sprite lists, so Replace..., the Faction emblem and a new faction
   give the faction a logo of its own in both games; a faction that shared it keeps its old picture.
-- Game's editor in Rome with REX: it was started with a switch REX does not have, so only the menu came up -> it
-  starts with the editor shown in the menus and the window says where to click.
 - Test mod: the unit sizes were left as they are -> they are changed too, like every other campaign rule.
 - Factions: after loading another mod the form still showed the old mod's faction (Medieval II's France with
   Barbarian Invasion loaded) -> it is read again from the new mod; a brought faction's 'From zero' lock never
