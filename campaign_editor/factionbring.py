@@ -17,6 +17,7 @@ faction), scripts and events naming it, traits only it has, a culture this mod l
 import os
 import re
 
+from .packs import _data_rel
 from .textio import strip_comment, tokens
 
 
@@ -168,6 +169,8 @@ def bring_figures(plan, src, faction, new):
     if not p_src or not p_tgt:
         return 0
     theirs = _texture_lines(src.load(p_src).texts(), faction)
+    from .packs import game_kind
+    game = game_kind(plan.mod)
     f = plan.edit(p_tgt)
     n = 0
     cur = None
@@ -176,8 +179,8 @@ def bring_figures(plan, src, faction, new):
         if len(t) >= 2 and t[0] == "type":
             cur = t[1]
         elif len(t) >= 3 and t[0] == "texture" and t[1] == new and cur in theirs:
-            ref = theirs[cur]
-            rel = ref[5:] if ref.lower().startswith("data/") else ref
+            rel = _data_rel(theirs[cur])                  # 'bi/data/x' (from the game's root) -> under data
+            ref = ("data/" + rel) if game == "rome" else rel  # how this game writes its own lines
             if not plan.mod.find(rel):
                 got = src.find(rel) or src.find(rel + ".dds")
                 if not got:

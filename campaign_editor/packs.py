@@ -198,11 +198,37 @@ def _file_refs(lines):
     return refs
 
 
+_ROOTED = re.compile(r"^(?:[^/\s,]+/)+?data/", re.I)
+
+
+def _data_rel(ref):
+    """A file a line names, under data: 'data/x' -> 'x'; a path from the game's root through another data folder
+    ('bi/data/x' - Barbarian Invasion's own lines, 'mods/m/data/x') -> 'x' too."""
+    ref = ref.replace("\\", "/")
+    if ref.lower().startswith("data/"):
+        return ref[5:]
+    m = _ROOTED.match(ref)
+    return ref[m.end():] if m else ref
+
+
+def _rebase_line(line, game):
+    """A block line whose file paths go from the game's root through another data folder ('bi/data/...') written
+    the way the receiving mod reads its own: 'data/...' in Rome, under data in Medieval II."""
+    def fix(m):
+        part = m.group(0)
+        if not part.lower().endswith(FILE_EXT) or not _ROOTED.match(part.replace("\\", "/")) or \
+                part.lower().startswith("data/"):
+            return part
+        return ("data/" if game == "rome" else "") + _data_rel(part)
+    return re.sub(r"[^,\s]+", fix, line)
+
+
 def _on_disk(mod, ref):
     """(data-relative path, absolute path) of a file a model line names, or None. Rome
-    writes 'data/models_unit/x.tga' and keeps x.tga.dds; Medieval II 'unit_models/...'."""
+    writes 'data/models_unit/x.tga' and keeps x.tga.dds; Medieval II 'unit_models/...'; Barbarian Invasion
+    'bi/data/models_unit/...' (from the game's root)."""
     from .moddata import ci_path
-    rel = ref[5:] if ref.lower().startswith("data/") else ref
+    rel = _data_rel(ref)
     roots = mod.roots() if hasattr(mod, "roots") else [mod.data]       # the mod's own, then the game's under it
     for root in roots:
         for cand in (rel, rel + ".dds"):
@@ -291,7 +317,7 @@ class _Gather:
         if span is None:
             man["missing"].append("%s %s" % (dep_file(man["game"], kind), name))
             return None
-        lines = _block_lines(self.deps[kind], span)
+        lines = [_rebase_line(x, man["game"]) for x in _block_lines(self.deps[kind], span)]
         man["blocks"][kind][name] = lines
         self.add_files(lines)
         for v in _values(lines, "model"):                  # a mount's / animal's model

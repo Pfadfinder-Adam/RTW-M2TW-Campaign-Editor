@@ -5700,6 +5700,20 @@ building smith
         self.assertEqual(religions_for(regions, None, None), {"catholic": 90, "pagan": 10})         # most common
         self.assertEqual(religions_for(regions, {"pagan": 100}, "C"), {"pagan": 100})             # given, sums to 100
 
+    def test_unit_pack_paths_from_the_game_root(self):
+        # Barbarian Invasion's lines name files from the game's root ('bi/data/...'): found under data and written
+        # the way the receiving mod reads its own
+        from campaign_editor.packs import _data_rel, _rebase_line
+        self.assertEqual(_data_rel("bi/data/models_unit/a.tga"), "models_unit/a.tga")
+        self.assertEqual(_data_rel("data/models_unit/a.tga"), "models_unit/a.tga")
+        self.assertEqual(_data_rel("unit_models/a.mesh"), "unit_models/a.mesh")
+        self.assertEqual(_rebase_line("texture celts, bi/data/models_unit/textures/a.tga ; c", "rome"),
+                         "texture celts, data/models_unit/textures/a.tga ; c")
+        self.assertEqual(_rebase_line("model_flexi data/models_unit/a.cas, max", "rome"),
+                         "model_flexi data/models_unit/a.cas, max")
+        self.assertEqual(_rebase_line("texture x, mods/m/data/unit_models/a.texture", "medieval2"),
+                         "texture x, unit_models/a.texture")
+
     def test_unit_pack_round_trip(self):
         # a unit taken out with its model, mount, texture, card, texts and recruit place, put into
         # another mod where its names and its model's name are taken: all renamed, nothing overwritten
