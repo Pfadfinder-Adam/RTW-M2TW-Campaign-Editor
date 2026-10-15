@@ -132,6 +132,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- A unit's card or description picture put in for one faction replaced every faction's -> **Pictures for** picks
+  all owners or one faction; the others keep their own.
 - Bring units (Medieval II): the bodies of a unit's armour upgrades were left behind - they come along now.
 - Bigger map (x3): a river could be left 2 pixels wide in one place, and Rome stopped while loading the map -
   every river is one pixel wide now.

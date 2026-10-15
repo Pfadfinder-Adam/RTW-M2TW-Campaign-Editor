@@ -12212,6 +12212,17 @@ building smith
         with open(edu_path) as fh:
             self.assertIn("stat_cost\t1, 400, 170", fh.read())
 
+    def test_unit_picture_for_one_faction_keeps_the_others(self):
+        # Diocletian (Discord): an info picture for one faction replaced every faction's. 'Pictures for' gives one
+        # owner its own picture; an 'all owners' one waiting before keeps the other owners' places
+        from campaign_editor import editors as E
+        all_owners = [("a.png", ["u/romans/#x.tga", "u/greeks/#x.tga", "u/gauls/#x.tga"], None)]
+        got = E.queue_import(all_owners, "b.png", ["u/greeks/#x.tga"], (48, 64))
+        self.assertEqual(got, [("a.png", ["u/romans/#x.tga", "u/gauls/#x.tga"], None),
+                               ("b.png", ["u/greeks/#x.tga"], (48, 64))])
+        got = E.queue_import(got, "c.png", ["u/romans/#x.tga", "u/greeks/#x.tga", "u/gauls/#x.tga"], None)
+        self.assertEqual(got, [("c.png", ["u/romans/#x.tga", "u/greeks/#x.tga", "u/gauls/#x.tga"], None)])
+
     def test_picture_viewer_zoom(self):
         """A click on a picture opens it big (the user, 2026-10-09): a small one enlarged by whole steps (sharp), a big
         one made smaller to fit; the wheel walks the steps; the line under it names file, size and format."""

@@ -15,6 +15,8 @@ from .gui_util import save_copy
 from .moddata import ModData, _ci
 from .plan import Plan
 
+ALL_OWNERS = "All owners"                       # 'Pictures for': one card / description picture for every owner
+
 CHANGED = "#fff2b3"          # a field changed and not written yet
 REMOVED = "#f4c7c3"          # a line to be removed
 ADDED = "#d9f2d0"            # a line to be added
@@ -799,7 +801,18 @@ class RecordEditor(ttk.Frame):
             self._building_pictures()
 
     def _pending(self, targets):
-        return next((src for src, t, _ in self.imports if set(t) & set(targets)), None)
+        """The picture waiting for Apply at the first of targets (the place the thumb shows)."""
+        first = targets[:1]
+        return next((src for src, t, _ in reversed(self.imports) if set(t) & set(first)), None)
+
+    def _pictures_for(self, facs):
+        """The owners a unit's card / description picture is for: every owner ('All owners'), or the one picked in
+        'Pictures for' - the game reads each faction's own ui/units/<faction> (ui/unit_info/<faction>) folder."""
+        self.v_pfor = getattr(self, "v_pfor", tk.StringVar(value=ALL_OWNERS))
+        if self.v_pfor.get() not in facs:
+            self.v_pfor.set(ALL_OWNERS)
+        pick = self.v_pfor.get()
+        return list(facs) if pick == ALL_OWNERS else [pick]
 
     def _unit_pictures(self):
         from .gui_util import flow
@@ -812,20 +825,37 @@ class RecordEditor(ttk.Frame):
         # one row of four alike frames - card | description picture | battle model (+ mount) | voice - wrapping to a
         # second row when the window is narrow; the explanations sit on '?', the problems stay in sight (the user,
         # 2026-10-10)
+        pick = self._pictures_for(facs)
+        if len(facs) > 1:                                  # one card for every owner, or each its own (Diocletian)
+            top = ttk.Frame(self.pics)
+            top.pack(fill="x", pady=(0, 4))
+            ttk.Label(top, text="Pictures for").pack(side="left")
+            cb = ttk.Combobox(top, textvariable=self.v_pfor, values=[ALL_OWNERS] + list(facs), state="readonly",
+                              width=26)
+            cb.pack(side="left", padx=4)
+            cb.bind("<<ComboboxSelected>>", lambda ev: self.show_pictures())
+            hint(top, "The game shows each faction the card in its own folder (ui/units/<faction>, the description "
+                      "picture in ui/unit_info/<faction>). 'All owners': Import puts one picture in every owner's "
+                      "folder; pick a faction to give it a card of its own - the others keep theirs.").pack(
+                side="left", padx=4)
         row = ttk.Frame(self.pics)
         row.pack(fill="x")
+        merc = "mercenary_unit" in self.value("attributes").replace(",", " ").split()
         for info, label in ((False, "Unit card"), (True, "Picture in the description")):
             box = ttk.LabelFrame(row, text=label, padding=6)
             box.pack(side="left", padx=(0, 12))
-            targets = E.unit_picture_targets(self.mod, dic, facs, info)
+            targets = E.unit_picture_targets(self.mod, dic, pick, info)
             pending = self._pending(targets)
-            have = pending or card_path(self.mod, facs[0] if facs else "", dic, info, owners=facs,
-                                        mercenary="mercenary_unit" in self.value("attributes").replace(",", " ").split())
+            have = pending or card_path(self.mod, pick[0] if pick else "", dic, info, owners=facs, mercenary=merc)
             self._thumb(box, have).grid(row=0, column=0, columnspan=2, sticky="nw")
             need = E.unit_picture_need(self.mod, info)
             if pending:                                    # waits for Apply: said in sight
                 ttk.Label(box, foreground="#b60", wraplength=200, justify="left", text="new: %s (not written yet)"
                           % os.path.basename(pending)).grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 0))
+            elif have and len(pick) == 1 and os.path.basename(os.path.dirname(have)).lower() != pick[0].lower():
+                ttk.Label(box, wraplength=200, justify="left", text="%s has none of its own - this is %s's" % (
+                    pick[0], os.path.basename(os.path.dirname(have)))).grid(
+                    row=1, column=0, columnspan=2, sticky="w", pady=(2, 0))
             bb = ttk.Frame(box)
             bb.grid(row=2, column=0, sticky="w", pady=(4, 0))
             ttk.Button(bb, text="Import...", command=lambda t=targets, n=need, l=label: self.import_pic(t, n, l)).pack(
@@ -837,7 +867,7 @@ class RecordEditor(ttk.Frame):
                 "needs %d x %d, %d-bit TGA (as this mod's own)" % need if need else "size: as you like") +
                 "; PNG / JPG / TGA are converted; goes to %s for %s" % (
                     "ui/unit_info/<faction>/%s_info.tga" % dic if info else "ui/units/<faction>/#%s.tga" % dic,
-                    ", ".join(facs[:4]) + (" and %d more" % (len(facs) - 4) if len(facs) > 4 else "") or "no faction"),
+                    ", ".join(pick[:4]) + (" and %d more" % (len(pick) - 4) if len(pick) > 4 else "") or "no faction"),
                 width=420).grid(row=2, column=1, sticky="w", pady=(4, 0))
         self._unit_models(row)
         self._unit_voice(row)
@@ -1269,7 +1299,8 @@ class RecordEditor(ttk.Frame):
         the picture waits for Apply as an imported one."""
         if self.kind != "unit" or not self.current:
             return None
-        dic, facs, unit = self.value("dictionary"), self._factions_of(), self.current[0]
+        dic, unit = self.value("dictionary"), self.current[0]
+        facs = self._pictures_for(self._factions_of())         # 'Pictures for': every owner or the one picked
         if not dic:
             return None
         need = {False: E.unit_picture_need(self.mod), True: E.unit_picture_need(self.mod, True)}
@@ -1287,8 +1318,7 @@ class RecordEditor(ttk.Frame):
                                                          time.strftime("%Y%m%d_%H%M%S")))
             picture.save(src)
             label = "Picture in the description" if info else "Unit card"
-            self.imports = [(s, t, z) for s, t, z in self.imports if not set(t) & set(targets)]
-            self.imports.append((src, list(targets), picture.size))
+            self.imports = E.queue_import(self.imports, src, targets, picture.size)
             self.app.status.set("%s of %s made from its 3D model, for %d place(s) - Preview, then Apply." % (
                 label, unit, len(targets)))
             self.show_pictures()
@@ -1765,8 +1795,7 @@ class RecordEditor(ttk.Frame):
                                                  "Resize it to %d x %d?" % ((os.path.basename(src),) + tuple(got) +
                                                                             tuple(size) + tuple(size)), yes='Resize it', no='Keep its size'):
                 size = None
-        self.imports = [(s, t, z) for s, t, z in self.imports if not set(t) & set(targets)]
-        self.imports.append((src, list(targets), size))
+        self.imports = E.queue_import(self.imports, src, targets, size)
         self.app.status.set("%s: %s for %d place(s) - Preview, then Apply." % (label, os.path.basename(src), len(targets)))
         self.show_pictures()
 
