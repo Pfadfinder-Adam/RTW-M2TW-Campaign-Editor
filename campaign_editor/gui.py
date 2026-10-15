@@ -1561,8 +1561,6 @@ class App(tk.Tk):
                                                           "their units"),
         ("rebels", "Rebels...", "rebels_window", "who rises when a region revolts: rebel types, their units, which "
                                                  "regions have which"),
-        ("interface", "Interface...", "interface_window", "the game's menu screens: move, size, copy and remove "
-                                                          "their pieces"),
     ]
     # the top row by topic (the author, 2026-10-09), each tool with a window of its own beside its work; the row
     # scrolls when the window is narrower - drag it with the left button
@@ -1574,10 +1572,10 @@ class App(tk.Tk):
                    "settlements": "Settlements", "units": "Units",
                    "buildings": "Buildings", "characters": "Characters",
                    "terrain": "Terrain editor", "addons": "Add-ons", "religions": "Religions",
-                   "builder": "Module builder"}
+                   "builder": "Module builder", "interface": "Interface"}
     WORK_HINTS = {"map": "the campaign map alone, no faction to pick: drag any faction's towns, ports, armies, agents and "
                          "fleets, give towns to anyone, change any army's units, resources, forts, regions",
-                  "religions": "the game's religions and each region's shares (Medieval II)", "addons": "ready-made scripts that add something new to the game (Sack Settlement...)", "builder": "a new add-on made of blocks, no code (REX / M2EX) - here in the window, a module not saved yet stays while you look at other works","new": "make a new faction from a template", "edit": "change a faction that is in the game",
+                  "religions": "the game's religions and each region's shares (Medieval II)", "addons": "ready-made scripts that add something new to the game (Sack Settlement...)", "builder": "a new add-on made of blocks, no code (REX / M2EX) - here in the window, a module not saved yet stays while you look at other works", "interface": "the game's menu screens: move, size, copy and remove their pieces","new": "make a new faction from a template", "edit": "change a faction that is in the game",
                   "faction": "Edit faction: change a faction that is in the game; New faction: make a new one from a "
                              "template - the two tabs at the top of it",
                   "settlements": "every region and its town: the names in the files and the names players see, "
@@ -1711,7 +1709,7 @@ class App(tk.Tk):
         ed.pack(fill="both", expand=True, padx=6, pady=3, after=self.bottom_bar)
         if self.mod and ed.mod is not self.mod:
             self._rebind(ed)
-        elif w in ("religions", "settlements"):
+        elif w in ("religions", "settlements", "interface"):
             (ed.fill if w == "religions" else ed.load)()     # the map's work may have changed them since
         self.update_actions()
         self._mark_work()
@@ -1736,7 +1734,7 @@ class App(tk.Tk):
     def editor(self):
         """The unit, building or character editor on show, made the first time; None for the faction work."""
         w = self.v_work.get()
-        if w not in ("units", "buildings", "characters", "addons", "religions", "settlements", "builder"):
+        if w not in ("units", "buildings", "characters", "addons", "religions", "settlements", "builder", "interface"):
             return None                                 # (the Terrain editor is a tab of Maps now)
         if w not in self.editors:
             if w == "religions":
@@ -1751,6 +1749,9 @@ class App(tk.Tk):
             elif w == "builder":
                 from .gui_modbuilder import ModuleBuilder
                 self.editors[w] = ModuleBuilder(self, self)
+            elif w == "interface":
+                from .gui_interface import InterfacePanel
+                self.editors[w] = InterfacePanel(self, self)
             elif w == "characters":
                 from .gui_family import FamilyEditor
                 self.editors[w] = FamilyEditor(self, self, standalone=True)
@@ -2366,11 +2367,6 @@ class App(tk.Tk):
         """Rebels... (work bar; the map's right click): rebel types and which regions have which (gui_rebels)."""
         from .gui_rebels import open_rebels
         return open_rebels(self, regions=regions)
-
-    def interface_window(self):
-        """Interface... (work bar): the game's menu screens, their pieces moved, sized, copied (gui_interface)."""
-        from .gui_interface import open_interface
-        return open_interface(self)
 
     def merge_regions(self, keep, gone):
         """Merge regions (the map's switch): `gone` goes with its town from every file and all its land becomes
@@ -6939,6 +6935,11 @@ def main():
         if builder is not None and not builder.may_close():     # its module not saved yet: kept on a 'keep working'
             from .gui_modbuilder import open_builder
             open_builder(app)
+            return
+        face = app.editors.get("interface")
+        if face is not None and not face.may_close():           # menu changes not kept for Apply yet
+            from .gui_interface import open_interface
+            open_interface(app)
             return
         app._closing = True                       # from here a fault is only logged, no window opens
         app.save_session()

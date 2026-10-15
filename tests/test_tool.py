@@ -3394,8 +3394,9 @@ building smith
         try:
             root.mod = ModData(self.root)
             root.show_text = lambda *a: None
-            w = GI.open_interface(root)
-            self.assertIs(GI.open_interface(root), w)                  # one window
+            w = GI.InterfacePanel(root, root)                            # a work of the main window, no window
+            w.pack(fill="both", expand=True)
+            self.assertNotIsInstance(w, tk.Toplevel)
             root.update()
             self.assertEqual(w.page, "main_menu")
             w.picked = w.doc.piece("main_menu", "main_single")["index"]
@@ -3417,6 +3418,9 @@ building smith
             self.assertEqual(w.page, "new_game")
             self.assertTrue(w._unwritten())
             self.assertEqual(tree_hash(self.root), before)             # nothing written yet
+            w.load()                                                   # shown again on the same mod: work stays
+            self.assertIsNotNone(w.doc.piece("main_menu", "main_single_2"))
+            self.assertEqual(w.rebind(ModData(self.root)), 1)          # another mod: changes not kept are said
             w.destroy()
         finally:
             root.destroy()

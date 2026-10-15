@@ -1,4 +1,4 @@
-"""Interface... (the work bar, beside Module builder): the game's menu screens as the game lays them out - every page of
+"""Interface (a work of the main window, beside Module builder): the game's menu screens as the game lays them out - every page of
 the menu layout file (Rome / Barbarian Invasion / Alexander Rome.lnt, Medieval II mtw2.lnt; lnt.py) drawn on the
 1024 x 768 layout with its own pictures and words. A piece is picked with a click, moved by dragging, sized by its
 corner, nudged with the arrows (Shift: 10 pixels); its right click holds the rest - place and size, the page it opens,
@@ -23,31 +23,83 @@ KINDS = {"UIP_MENU_BUTTON": "a button that opens a page", "UIP_BACK_BUTTON": "th
          "UIP_STATIC_TEXT": "words", "UIP_EMPTY_ART": "a picture"}
 
 
-class InterfaceWindow(tk.Toplevel):
-    def __init__(self, app):
-        super().__init__(app)
-        self.app, self.mod = app, app.mod
-        self.title(TITLE)
-        self.transient(app)
-        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-        self.geometry("%dx%d" % (min(1500, sw - 40), min(900, sh - 80)))
-        self.minsize(min(900, sw - 40), min(560, sh - 100))
-        self.protocol("WM_DELETE_WINDOW", self.close)
-        self.path = L.find(self.mod)
-        self.doc = L.Lnt.load(self.path) if self.path else None
-        self.saved = self.doc.dump() if self.doc else b""
-        self.kept = self.saved
-        self.words = L.menu_texts(self.mod) if self.doc else {}
+class InterfacePanel(ttk.Frame):
+    """A work of the main window (the user, 2026-10-15: not a window of its own), like the Module builder."""
+
+    def __init__(self, master, app):
+        super().__init__(master)
+        self.app, self.mod = app, None
+        self.path, self.doc = None, None
+        self.saved = self.kept = b""
+        self.words = {}
         self.undo, self.redo = [], []
         self.page, self.picked = None, None
         self._pics, self._tex, self._fonts = {}, {}, {}
         self._drag = None
         self._build()
+        self.load()
+
+    def load(self):
+        """The mod loaded now read (again only when it is another mod - work not kept stays while you look at other
+        works)."""
+        mod = self.app.mod
+        if mod is self.mod and self.doc is not None:
+            return
+        self.mod = mod
+        self.path = L.find(mod) if mod else None
+        self.doc = L.Lnt.load(self.path) if self.path else None
+        self.saved = self.doc.dump() if self.doc else b""
+        self.kept = self.saved
+        self.words = L.menu_texts(mod) if self.doc else {}
+        self.undo, self.redo = [], []
+        self.page, self.picked = None, None
+        self._pics, self._tex, self._fonts = {}, {}, {}
+        self.lbl_title.configure(text="The game's menu screens" + (" - %s" % mod.rel(self.path) if self.path else ""))
+        self.lb_pages.delete(0, "end")
+        self.tv.delete(*self.tv.get_children())
         if self.doc:
+            self.lbl_status.configure(text="")
             self.fill_pages()
             first = self.doc.pages()[0] if self.doc.pages() else None
             if first:
                 self.show_page(first)
+        else:
+            self.lbl_status.configure(text="Load a mod first." if not mod else (
+                "This game / mod has no menu layout file (data/menu/Rome.lnt or mtw2.lnt) - nothing to show."))
+            self.draw()
+
+    # ---- a work of the main window (App.editor) ----
+    def rebind(self, mod):
+        """Another mod loaded: its menus are read; changes not kept for Apply are dropped (said)."""
+        lost = 1 if self.doc is not None and self._unwritten() else 0
+        self.load()
+        return lost
+
+    kind = "Interface"
+
+    def dirty(self):
+        return False                     # 'Keep for Apply' hands its changes to Apply, nothing waits here
+
+    def pending(self):
+        return 0
+
+    def make_plan(self):
+        raise ValueError("Interface: press 'Keep for Apply' under the screen first - then Apply changes writes it.")
+
+    def may_close(self):
+        """The editor is closing: changes not kept for Apply are never thrown away silently."""
+        from .gui_util import ask_choice
+        if not self.doc or not self._unwritten():
+            return True
+        k = ask_choice(self, TITLE, "The menu screens have changes not kept for Apply yet.\n\nKeep them for Apply, "
+                                    "keep working, or throw them away?",
+                       ["Keep for Apply", "Keep working", "Throw them away"], default=0, cancel=1, danger=2)
+        if k in (1, None):
+            return False
+        if k == 0:
+            self.write()
+            return not self._unwritten()
+        return True
 
     # ---- the window ----
     def _build(self):
@@ -55,13 +107,12 @@ class InterfaceWindow(tk.Toplevel):
         bar.pack(side="bottom", fill="x")
         self.lbl_status = ttk.Label(bar, foreground=theme.palette()["muted"])
         self.lbl_status.pack(side="left", fill="x", expand=True)
-        ttk.Button(bar, text="Close", command=self.close).pack(side="right")
         ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=(0, theme.BUTTON_GAP))
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="right", padx=(0, theme.BUTTON_GAP))
         top = ttk.Frame(self, padding=(10, 8, 10, 0))
         top.pack(fill="x")
-        ttk.Label(top, text="The game's menu screens" + (" - %s" % self.mod.rel(self.path) if self.path else ""),
-                  font=("", 12, "bold")).pack(anchor="w")
+        self.lbl_title = ttk.Label(top, font=("", 12, "bold"))
+        self.lbl_title.pack(anchor="w")
         ShortHint(top, text=(
             "Every screen of the game's menus as the game lays it out (1024 x 768). Click a piece to pick it, drag it "
             "to move it, drag its corner to size it, the arrows nudge it (Shift: 10 pixels). A double click on a "
@@ -131,9 +182,6 @@ class InterfaceWindow(tk.Toplevel):
         self.lbl_info.pack(fill="x", pady=(2, 0))
         c.bind("<Button-3>", self._menu)
         self.tv.bind("<Button-3>", self._tree_menu)
-        if not self.doc:
-            self.lbl_status.configure(text="This game / mod has no menu layout file (data/menu/Rome.lnt or "
-                                           "mtw2.lnt) - nothing to show.")
 
     # ---- pages and pieces ----
     def fill_pages(self):
@@ -261,7 +309,7 @@ class InterfaceWindow(tk.Toplevel):
             return
         d = tk.Toplevel(self)
         d.title("%s - place and size" % x["name"])
-        d.transient(self)
+        d.transient(self.winfo_toplevel())
         f = ttk.Frame(d, padding=10)
         f.pack(fill="both", expand=True)
         vs = {}
@@ -686,27 +734,13 @@ class InterfaceWindow(tk.Toplevel):
             self.draw()
         return got
 
-    def close(self):
-        from .gui_util import close_guard
-        close_guard(self, TITLE, self._unwritten, self.write, after=self._forget)()
-
-    def _forget(self):
-        if getattr(self.app, "_interface_window", None) is self:
-            self.app._interface_window = None
 
 
 def open_interface(app):
-    """One window: opened again it comes to the front."""
-    if not app.mod:
-        messagebox.showinfo(TITLE, "Load a mod first.")
-        return None
-    w = getattr(app, "_interface_window", None)
-    if w is None or not w.winfo_exists() or w.mod is not app.mod:
-        if w is not None and w.winfo_exists():
-            w.destroy()
-        w = app._interface_window = InterfaceWindow(app)
-    w.lift()
-    return w
+    """The Interface work shown in the main window (the work bar's 'Interface')."""
+    app.v_work.set("interface")
+    app.work_changed()
+    return app.editors["interface"]
 
 
-__all__ = ["InterfaceWindow", "open_interface"]
+__all__ = ["InterfacePanel", "open_interface"]

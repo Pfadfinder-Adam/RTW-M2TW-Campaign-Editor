@@ -1539,7 +1539,7 @@ def s_game_editor(c, mod):
     return plan
 
 
-@step("Interface...: the main menu's first picture (the game's logo) moved 10 pixels to the right in the menu "
+@step("Interface: the main menu's first picture (the game's logo) moved 10 pixels to the right in the menu "
       "layout file (Rome.lnt / mtw2.lnt)",
       "the main menu: the game's logo stands a little to the right of where it stood; every button still works")
 def s_interface(c, mod):
