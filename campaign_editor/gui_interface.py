@@ -284,6 +284,11 @@ class InterfacePanel(ttk.Frame):
                       command=lambda: self.ask_value("tooltip", "The text key of its tooltip:"))
         m.add_separator()
         m.add_command(label="Copy (the next number)", command=self.copy_piece)
+        slot = L.RE_SLOT.match(x["name"] or "")
+        if slot:
+            have = len(L.slot_rows(self.doc).get((self.page, slot.group(1)), []))
+            m.add_command(label="Faction slots on this page: %d - more..." % have,
+                          command=lambda: self.more_slots(slot.group(1)))
         m.add_command(label="Rename...", command=self.rename_piece)
         m.add_command(label="Remove", command=self.remove_piece)
         if x["menu_id"] in self.doc.pages():
@@ -665,6 +670,40 @@ class InterfacePanel(ttk.Frame):
         self.fill_form()
         self.fill_pages()
         self.draw()
+
+    def playable_count(self):
+        """The playable (and unlockable) factions of the campaign on show, or None."""
+        try:
+            from .strat import Strat
+            camp = self.app.v_campaign.get()
+            s = Strat(self.mod.load(self.mod.campaign_file(camp, "descr_strat.txt")))
+            return sum(len(lst["items"]) for lst in (s.playable, getattr(s, "unlockable", None)) if lst)
+        except Exception:
+            return None
+
+    def more_slots(self, stem):
+        """The faction slots of this page made up to a number: copies of the last one under the next numbers, on its
+        grid continued - the faction-select screen shows a faction only in a slot the file has."""
+        have = len(L.slot_rows(self.doc).get((self.page, stem), []))
+        want = self.playable_count()
+        total = simpledialog.askinteger(
+            TITLE, "%s slots on this page: %d.%s\n\nHow many should there be?" % (
+                stem + "N", have, (" The campaign has %d playable faction(s)." % want) if want else ""),
+            initialvalue=max(have, want or have), minvalue=have, maxvalue=200, parent=self)
+        if not total or total <= have:
+            return
+        self._remember()
+        try:
+            n = L.add_slots(self.doc, self.page, stem, total)
+        except L.LntError as err:
+            self.undo.pop()
+            messagebox.showerror(TITLE, "Not changed: %s" % err, parent=self)
+            return
+        self.fill_pieces()
+        self.fill_form()
+        self.draw()
+        self.lbl_status.configure(text="%d slot(s) added on %s - their grid continued; Keep for Apply writes them"
+                                       % (n, self.page))
 
     def rename_piece(self):
         x = self.current()

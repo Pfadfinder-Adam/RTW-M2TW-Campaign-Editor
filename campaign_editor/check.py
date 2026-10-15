@@ -489,6 +489,15 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad(p)
     if LNT.find(mod):
         say("MENUS: %s - %s" % (os.path.basename(LNT.find(mod)), "%d problem(s)" % len(menu) if menu else "fine"))
+        pickable = sum(len(lst["items"]) for lst in (s.playable, s.unlockable) if lst)
+        try:
+            short = LNT.slots_short(LNT.Lnt.load(LNT.find(mod)), pickable)
+        except (OSError, LNT.LntError):
+            short = []
+        for page, have in short:
+            bad("menu %s, page %s: %d faction slot(s) for %d playable faction(s) - the faction-select screen shows "
+                "only %d; Interface > right click on a slot > Faction slots... adds the rest"
+                % (os.path.basename(LNT.find(mod)), page, have, pickable, have))
 
     # ---- deep: rehearse the tool's work for every faction ----
     if deep:

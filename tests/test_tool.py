@@ -3220,6 +3220,26 @@ building smith
            "        </UI text>\r\n      </Parameters>\r\n      <object_id>empty_push_button</object_id>\r\n"
            "    </UI piece>\r\n  </lpage>\r\n  <lpage>new_game\r\n  </lpage>\r\n</layout>\r\n")
 
+    def test_faction_slots_added_on_their_grid(self):
+        """More factions to pick (open.md 'MENU SLOTS FOR MANY FACTIONS'): a faction-select page's CFP_symbol48_N slots
+        made up to a number - copies of the last under the next numbers, the grid continued (the same columns, rows
+        on from the last); Check mod files says when there are fewer slots than playable factions."""
+        from campaign_editor import lnt as L
+        page = ("    <UI piece>CFP_symbol48_%d\r\n      <identifier>UIP_MENU_BUTTON</identifier>\r\n"
+                "      <Parameters>\r\n        <x>%d</x>\r\n        <y>%d</y>\r\n        <width>48</width>\r\n"
+                "        <height>48</height>\r\n      </Parameters>\r\n    </UI piece>\r\n")
+        body = "".join(page % (i + 1, 780 + (i % 3) * 53, 158 + (i // 3) * 54) for i in range(4))
+        raw = ("<layout>\r\n  <layout_width>1024</layout_width>\r\n  <layout_height>768</layout_height>\r\n"
+               "  <lpage>ImpCam_choose_faction\r\n" + body + "  </lpage>\r\n</layout>\r\n")
+        lnt = L.Lnt(raw.encode("latin-1"))
+        self.assertEqual(L.slots_short(lnt, 6), [("ImpCam_choose_faction", 4)])
+        self.assertEqual(L.add_slots(lnt, "ImpCam_choose_faction", "CFP_symbol48_", 7), 3)
+        got = [(x["name"], x["x"], x["y"]) for x in L.slot_rows(lnt)[("ImpCam_choose_faction", "CFP_symbol48_")]]
+        self.assertEqual(got[3:], [("CFP_symbol48_4", 780, 212), ("CFP_symbol48_5", 833, 212),
+                                   ("CFP_symbol48_6", 886, 212), ("CFP_symbol48_7", 780, 266)])
+        self.assertEqual(L.slots_short(lnt, 6), [])
+        self.assertEqual(L.Lnt(lnt.dump()).dump(), lnt.dump())
+
     def test_menu_problems_in_check_mod(self):
         """Check mod files looks at the menus too (the Interface work's file): a button leading to a page there is
         not, a piece showing a picture no region has, Rome's picture file not found; the pages the games make in

@@ -487,6 +487,70 @@ def free_name(lnt, page, name):
     return "%s%d" % (stem, n)
 
 
+RE_SLOT = re.compile(r"^(.*symbol48_)(\d+)$", re.I)
+
+
+def slot_rows(lnt):
+    """{(page, stem): [piece, ...] in number order} - the numbered faction slots of each page (CFP_symbol48_N on the
+    campaign's faction select, symbol48_N on custom battle's, customize_symbol48_N...)."""
+    out = {}
+    for page in lnt.pages():
+        for x in lnt.pieces(page):
+            m = RE_SLOT.match(x["name"] or "")
+            if m:
+                out.setdefault((page, m.group(1)), []).append((int(m.group(2)), x))
+    return {k: [x for _, x in sorted(v, key=lambda t: t[0])] for k, v in out.items()}
+
+
+def _grid(slots):
+    """(x0, y0, dx, dy, per row) of a slot grid from the slots there are (rows by their y, a few pixels apart)."""
+    xs = [(x["x"] or 0, x["y"] or 0) for x in slots]
+    first_row = [p for p in xs if abs(p[1] - xs[0][1]) <= 8]
+    per = max(1, len(first_row))
+    steps = [b[0] - a[0] for a, b in zip(first_row, first_row[1:])]
+    dx = sorted(steps)[len(steps) // 2] if steps else (slots[0]["width"] or 53)
+    if len(xs) > per:
+        dy = xs[per][1] - xs[0][1]
+    else:
+        dy = (slots[0]["height"] or slots[0]["width"] or 53)
+    return xs[0][0], xs[0][1], dx, dy, per
+
+
+# the campaign's faction-select pages (Rome / BI / Alexander and Medieval II)
+CAMPAIGN_PICK = ("ImpCam_choose_faction", "PC_choose_faction", "PC_choose_faction_M2")
+
+
+def slots_short(lnt, pickable):
+    """[(page, slots)] of the campaign's faction-select pages with fewer CFP_symbol48_N slots than pickable factions."""
+    out = []
+    for (page, stem), rows in slot_rows(lnt).items():
+        if page in CAMPAIGN_PICK and stem.lower() == "cfp_symbol48_" and len(rows) < pickable:
+            out.append((page, len(rows)))
+    return out
+
+
+def add_slots(lnt, page, stem, total):
+    """The slots of stem on page made up to total, each a copy of the last one under the next number, placed on its
+    grid continued (the same step, as many a row) - more factions to pick on the faction-select screen (the game
+    asks for the piece by its name). The number of slots added."""
+    rows = slot_rows(lnt).get((page, stem))
+    if not rows:
+        raise LntError("page %s has no %sN pieces" % (page, stem))
+    x0, y0, dx, dy, per = _grid(rows)
+    have = len(rows)
+    cols = [x["x"] or 0 for x in rows[:per]]                 # the first row's own columns
+    last_row = (have - 1) // per
+    row_y = rows[last_row * per]["y"] or 0                    # rows go on from the last one there is
+    for k in range(have, total):
+        last = slot_rows(lnt)[(page, stem)][-1]
+        col = k % per
+        want_x = cols[col] if col < len(cols) else x0 + col * dx
+        want_y = row_y + (k // per - last_row) * dy
+        lnt.copy_piece(page, last["index"], "%s%d" % (stem, k + 1),
+                       dx=want_x - (last["x"] or 0), dy=want_y - (last["y"] or 0))
+    return max(0, total - have)
+
+
 def texture_file(mod, lnt_path, page, folder=""):
     """The picture file of a texture page under data/menu/ - Rome names it with its folder ('textures\\FE_texture1.tga'),
     Medieval II alone ('M2_Border.tga') with the folder in the texture's <path> - the mod's own first, then the game's;
