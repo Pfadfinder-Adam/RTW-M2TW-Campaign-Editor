@@ -598,6 +598,30 @@ def _place(mask, frame, size):
     return out
 
 
+def select_inner(bg):
+    """(left, top, right, bottom): the part of a faction-select picture inside its decorated frame - Medieval II's
+    rope frame (11 px on a 384 x 275 picture) ends on a dark even line on each side: the innermost such line within
+    the outer 8 % of the side (its middle 80 % even and dark). The whole picture where there is none (Rome)."""
+    from PIL import ImageStat
+    g = bg.convert("L")
+    w, h = g.size
+
+    def edge(n, line):
+        last = 0
+        for k in range(max(1, n * 8 // 100)):
+            st = ImageStat.Stat(line(k))
+            if st.mean[0] < 90 and st.stddev[0] < 8:
+                last = k + 1
+        return last
+    top = edge(h, lambda k: g.crop((w // 10, k, w - w // 10, k + 1)))
+    bottom = edge(h, lambda k: g.crop((w // 10, h - 1 - k, w - w // 10, h - k)))
+    left = edge(w, lambda k: g.crop((k, h // 10, k + 1, h - h // 10)))
+    right = edge(w, lambda k: g.crop((w - 1 - k, h // 10, w - k, h - h // 10)))
+    if right + left >= w or top + bottom >= h:
+        return 0, 0, w, h
+    return left, top, w - right, h - bottom
+
+
 def select_frame(mod, campaign, size=None):
     """(sx, sy, dx, dy): where the map lies in the campaign's select pictures - a map pixel
     x, y (top row first) is picture pixel x * sx + dx, y * sy + dy. Rome's pictures are the
@@ -867,8 +891,11 @@ def map_drawing(mod, campaign, regions, colour, size=None):
         bg, _ = got
         frame = select_frame(mod, campaign, bg.size) or (bg.size[0] / W, bg.size[1] / H, 0, 0)
         sx, sy, dx, dy = frame if len(frame) == 4 else (frame[0], frame[0], frame[1], frame[2])
+        whole = bg.copy()
+        whole.paste(drawn((max(1, round(W * sx)), max(1, round(H * sy)))), (int(dx), int(dy)))
+        inner = select_inner(bg)                       # the drawing replaces the map only; the frame stays the game's
         out = bg.copy()
-        out.paste(drawn((max(1, round(W * sx)), max(1, round(H * sy)))), (int(dx), int(dy)))
+        out.paste(whole.crop(inner), inner[:2])
         return out
     return drawn(tuple(size or (SELECT_SIZE, max(1, round(SELECT_SIZE * H / W)))))
 

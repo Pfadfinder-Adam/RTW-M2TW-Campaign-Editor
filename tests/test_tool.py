@@ -2642,6 +2642,33 @@ building smith
                                                                             img.height)))
         self.assertNotEqual(other, (200, 10, 10))                     # another faction's land: the map as it is
 
+    def test_select_map_drawn_inside_the_games_frame(self):
+        """The user, 2026-10-15: Medieval II's faction-select pictures have a rope frame round the map - the drawing
+        replaces the map only and fits inside the frame; the frame stays the game's own. A picture with no frame
+        (Rome) is the map from edge to edge."""
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            self.skipTest("no Pillow")
+        from unittest import mock
+        from campaign_editor import factionart as FA
+        bg = Image.new("RGB", (384, 275), (150, 140, 120))
+        d = ImageDraw.Draw(bg)
+        for k in range(11):                                  # rope: light and dark stripes, dark lines at 1-2 and 9-10
+            shade = (58, 58, 58) if k in (1, 2, 9, 10) else ((200, 190, 170) if k % 2 else (120, 110, 90))
+            d.rectangle((k, k, 383 - k, 274 - k), outline=shade)
+        self.assertEqual(FA.select_inner(bg), (11, 11, 373, 264))
+        self.assertEqual(FA.select_inner(Image.new("RGB", (384, 237), (90, 120, 160))), (0, 0, 384, 237))
+        mod = ModData(self.root)
+        img = mod.region_map("test")
+        with mock.patch.object(FA, "select_background", return_value=(bg, "map_x.tga")), \
+                mock.patch.object(FA, "select_frame", return_value=(500 / img.width, 400 / img.height, -60, -40)):
+            im = FA.map_drawing(mod, "test", list(mod.regions("test"))[:1], (200, 10, 10))
+        self.assertEqual(im.size, bg.size)
+        for xy in ((0, 0), (5, 137), (383, 274), (190, 270), (378, 100)):
+            self.assertEqual(im.getpixel(xy), bg.getpixel(xy), xy)          # the frame untouched
+        self.assertNotEqual(im.getpixel((190, 137)), bg.getpixel((190, 137)))   # the map inside drawn anew
+
     def test_emblem_says_which_flags_the_game_makes_itself(self):
         """Rome's army and fleet flags on the campaign map are one white flag the game dyes in the faction's colours
         with its symbol slot (descr_standards.txt), the generals' banners the battle banner: nothing to write, the

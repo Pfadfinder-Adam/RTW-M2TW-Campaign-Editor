@@ -162,6 +162,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- The faction-select map drawn from the campaign map covered Medieval II's rope frame -> it fills only the map
+  inside the frame; the frame stays the game's own.
 - Recolour: painting by hand on the 'after' picture could stop the editor with an error - fixed.
 - Bring units: a siege engine whose skeleton or animation file had the same name as one of your mod moved by your
   mod's file -> it comes in under a name of its own and moves by its own animations.
