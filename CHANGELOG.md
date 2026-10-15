@@ -183,6 +183,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- A faction brought from another mod showed its frame's (Gaul's) faction button, loading logo and 3D symbol ->
+  it shows its own, its own movies come along too.
 - After Create faction the form stayed filled, so Start the game said changes were not written -> the form empties
   and the new faction opens in Edit faction.
 - New faction > From another mod still showed the template (Gaul) and the template's options -> the faction made

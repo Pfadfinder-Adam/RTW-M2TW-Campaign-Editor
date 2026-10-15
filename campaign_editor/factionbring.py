@@ -258,6 +258,49 @@ def _kind(path):
     return name[name.find("."):] if "." in name else ""
 
 
+def _put_over(plan, src, dst):
+    """The brought faction's own picture at dst, in place of a copy queued there before (the frame's picture named
+    after the new faction): a copy onto a file already there is skipped at the write, so the first one queued would
+    win (the user's game test: the brought Celts showed Gaul's boar on the faction-select button)."""
+    own = plan.mod.own(dst) if hasattr(plan.mod, "own") else dst
+    plan.copies[:] = [(a, b) for a, b in plan.copies if os.path.normcase(b) != os.path.normcase(own)]
+    if os.path.exists(own):
+        # a file there already (an earlier try left the frame's picture under the new name): written over, with a
+        # backup - a copy never replaces a file
+        with open(src, "rb") as fh:
+            plan.binary(own, fh.read())
+    else:
+        plan.copy(src, dst)
+
+
+# the faction's lines in descr_sm_factions that name its own files: its 3D symbol on the campaign map and its movies
+SM_FILES = ("symbol", "intro_movie", "victory_movie", "defeat_movie", "death_movie")
+
+
+def bring_sm_files(plan, src, faction, new):
+    """The brought faction's own symbol and movies (descr_sm_factions lines naming files): its line values put on
+    new's lines, the files this mod lacks brought from the other mod (the user's game test: the Celts kept Gaul's
+    3D symbol). A file the other mod lacks too leaves the line as the frame had it."""
+    from .symbols import sm_values, _set_value
+    theirs = src.load(src.file("sm_factions"))
+    sm = plan.edit(plan.mod.file("sm_factions"))
+    for key in SM_FILES:
+        got = sm_values(theirs, key).get(faction)
+        mine = sm_values(sm, key).get(new)
+        if not got or not mine or got[1] == mine[1]:
+            continue
+        rel = got[1].replace("\\", "/")
+        if not plan.mod.find(rel):
+            path = src.find(rel)
+            if not path:
+                continue                                # neither mod has it: the frame's line stays
+            dst = os.path.join(plan.mod.data, *rel.split("/"))
+            if not _queued(plan, path, dst):
+                plan.copy(path, dst)
+        _set_value(sm, mine[0], got[1])
+        plan.note(sm, "%s's %s now %s (%s's own)" % (new, key, got[1], faction))
+
+
 def _queued(plan, src, dst):
     """The plan copies this very file there already."""
     own = plan.mod.own(dst) if hasattr(plan.mod, "own") else dst
@@ -529,10 +572,10 @@ def overlay(plan, campaign, bring):
                 continue
             if not rel.startswith("symbol:") and _kind(pic) == _kind(rel):
                 dst = os.path.join(plan.mod.data, *rel.split("/"))  # the same format: the file itself, byte for byte
-                if not _queued(plan, pic, dst):
-                    plan.copy(pic, dst)
+                _put_over(plan, pic, dst)                # over the frame's copy queued there
             else:
                 art[rel] = pic                          # a cut-out or another format: made to fit (Art's way)
+    bring_sm_files(plan, src, faction, new)
     own_select_map(plan, campaign, new)
     bring_names(plan, src, faction, new)
     bring_characters(plan, src, faction, new)

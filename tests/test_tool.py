@@ -2671,6 +2671,70 @@ building smith
         finally:
             root.destroy()
 
+    def test_brought_picture_wins_over_the_frames_copy(self):
+        """The user's game test (BI's Celts brought into Rome, from zero): the faction-select button and loading logo
+        showed GAUL's boar - the frame's copy (symbol48_gauls -> symbol48_celts) was queued first, and a copy onto a
+        file already there is skipped at the write, so the Celts' own picture never came. The brought picture takes
+        the place of the frame's copy in the queue."""
+        from campaign_editor import factionbring as FB
+        mod = ModData(self.root)
+        d = os.path.join(self.root, "data")
+        with tempfile.TemporaryDirectory() as t:
+            gaul, celt = os.path.join(t, "gaul.tga"), os.path.join(t, "celt.tga")
+            for path, body in ((gaul, b"GAUL"), (celt, b"CELT")):
+                with open(path, "wb") as fh:
+                    fh.write(body)
+            dst = os.path.join(d, "menu", "symbols", "FE_buttons_48", "symbol48_celts.tga")
+            plan = Plan(mod, "t", "t", {})
+            plan.copy(gaul, dst)                          # the frame's copy, named after the new faction
+            FB._put_over(plan, celt, dst)
+            FB._put_over(plan, celt, dst)                 # twice: queued once
+            self.assertEqual([a for a, b in plan.copies if b == dst], [celt])
+            bdir = plan.apply()
+            with open(dst, "rb") as fh:
+                self.assertEqual(fh.read(), b"CELT")
+            restore(mod, bdir)
+            self.assertFalse(os.path.exists(dst))
+            # the frame's picture already on the disk under the new name (an earlier try): written over, backed up
+            write(dst, "GAUL")
+            plan = Plan(mod, "t", "t", {})
+            FB._put_over(plan, celt, dst)
+            bdir = plan.apply()
+            with open(dst, "rb") as fh:
+                self.assertEqual(fh.read(), b"CELT")
+            restore(mod, bdir)
+            with open(dst, "rb") as fh:
+                self.assertEqual(fh.read(), b"GAUL")
+
+    def test_brought_faction_takes_its_symbol_and_movies(self):
+        """The user's game test: the brought Celts kept their frame's (Gaul's) 3D symbol on the campaign map. The
+        descr_sm_factions lines naming the faction's own files (symbol, movies) take the other mod's values, the
+        files this mod lacks come along; a file neither mod has leaves the frame's line."""
+        from campaign_editor import factionbring as FB
+        d = os.path.join(self.root, "data")
+        sm = SM.replace("culture\t\teastern\n", "culture\t\teastern\nsymbol\t\tmodels_strat/symbol_gaul.CAS\n"
+                        "defeat_movie\t\tfmv/lose/gauls_eliminated.wmv\nintro_movie\t\tfmv/a.wmv\n", 1)
+        write(os.path.join(d, "descr_sm_factions.txt"), sm)
+        with tempfile.TemporaryDirectory() as t:
+            shutil.copytree(self.root, os.path.join(t, "src"))
+            sd = os.path.join(t, "src", "data")
+            write(os.path.join(sd, "descr_sm_factions.txt"), SM.replace(
+                "faction\t\talpha\nculture\t\teastern\n", "faction\t\tceltsx\nculture\t\teastern\n"
+                "symbol\t\tmodels_strat/symbol_celts.CAS\ndefeat_movie\t\tfmv/lose/celts_eliminated.wmv\n"
+                "intro_movie\t\tfmv/missing.wmv\n", 1))
+            write(os.path.join(sd, "models_strat", "symbol_celts.CAS"), "cas")
+            write(os.path.join(sd, "fmv", "lose", "celts_eliminated.wmv"), "wmv")
+            mod, src = ModData(self.root), ModData(os.path.join(t, "src"))
+            plan = Plan(mod, "t", "t", {})
+            FB.bring_sm_files(plan, src, "celtsx", "alpha")
+            text = plan.files[mod.file("sm_factions")]
+            lines = [text.text(i) for i in range(len(text))]
+            self.assertIn("symbol\t\tmodels_strat/symbol_celts.CAS", lines)
+            self.assertIn("defeat_movie\t\tfmv/lose/celts_eliminated.wmv", lines)
+            self.assertIn("intro_movie\t\tfmv/a.wmv", lines)              # neither mod has its own: kept
+            self.assertEqual(sorted(os.path.relpath(b, d).replace("\\", "/") for _, b in plan.copies),
+                             ["fmv/lose/celts_eliminated.wmv", "models_strat/symbol_celts.CAS"])
+
     def test_bring_units_list_sorts(self):
         """Report R-20261013-896978: the Bring units list had no sorting - as in the file, by name, by kind (infantry
         before cavalry, then the class), by owner (the first of its ownership line) or by cost (cheapest first)."""
