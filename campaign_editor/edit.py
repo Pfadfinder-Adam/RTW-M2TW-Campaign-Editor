@@ -396,6 +396,7 @@ def move_towns(plan, f, campaign, moves, fac=None, taking=()):
                  if c.xy and _has_army(s.lines[c.start:c.end])}
     sets, cuts, to_add = {}, [], {}        # line -> text; (start, end); owner -> {"towns": [], "chars": []}
     built = None                            # descr_regions' creator of each region (read once, when needed)
+    used = None                             # first names already worn (read once, when a captain changes hands)
     for r, old, new in moves:
         st = s.settlement_of(r)
         if st is None:                          # the game's rebel village, written out
@@ -429,8 +430,13 @@ def move_towns(plan, f, campaign, moves, fac=None, taking=()):
                 else:
                     chunk = list(f.raw[c.start:c.end])
                     chunk[0] = re.sub(r"(character\s*,?\s*)sub_faction\s+\S+\s*,\s*", r"\1", chunk[0], count=1)
-                    to_add[new]["chars"].append(chunk)
                     plan.note(f, "%s: captain %s and his garrison go over to %s" % (r, c.name, new))
+                    # a name of the new owner's own list (report #292: a name its list lacks crashes the game)
+                    from .start import _own_name
+                    if used is None:
+                        used = {x.name.split()[0] for fb in s.factions for x in fb.characters if x.name}
+                    chunk, _ = _own_name(plan, f, chunk, c.name, c.kind, plan.name_pool(new) or {}, used, owner=new)
+                    to_add[new]["chars"].append(chunk)
                 continue
             keep = [x.region for x in ob.settlements if x.region not in moving and tiles.get(x.region)]
             if old == fac:                  # the towns this faction takes are its own too

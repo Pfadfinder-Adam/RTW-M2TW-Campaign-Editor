@@ -188,6 +188,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- A captain who went over to another faction with his town kept a name of his old faction's list, and that name could later vanish from every list - the game closed as the campaign loaded -> he takes a name of his new faction's own list, a changed list keeps every name any character wears, and Load offers to put a lost name back.
 - Avoid Growth and Raze Settlement in Medieval II were sized and coloured by eye -> they now take the game's own box, gap, letters and ink, read from the game itself, on any screen size; the Raze button has a tooltip like the game's own.
 - Game's editor in Rome with REX led only to the list of custom campaigns -> Rome's own program is started for it, without REX.
 - The map's Layers list opened again on a second press instead of closing (Windows) -> the press itself closes it.

@@ -163,6 +163,28 @@ def problems(mod, on_load=False):
                                "start (every faction neutral). Older versions of this tool wrote them so. The fix: "
                                "the same feelings written in this game's own form, nothing else changed."
                                % (camp, len(foreign), foreign[0][0] + 1)})
+    from .namelists import lost_names
+    lost = {}
+    for camp in mod.campaigns():
+        try:
+            got = lost_names(mod, camp)
+        except Exception:
+            got = {}
+        for fac, pools in got.items():
+            for pool, keys in pools.items():
+                have = lost.setdefault(fac, {}).setdefault(pool, [])
+                have += [k for k in keys if k not in have]
+    if lost:
+        every = [k for pools in lost.values() for keys in pools.values() for k in keys]
+        out.append({"id": "lost_names", "names": lost, "line": 0,
+                    "why": "%d name(s) the characters carry in descr_strat.txt are in no list of descr_names.txt "
+                           "(%s%s) - the game stops as the campaign loads, right after the faction is picked "
+                           "('Couldn't find name ... in the names database'). A name list changed while a "
+                           "character of another faction still wore one of its names (a captain who went over "
+                           "with his town) leaves it so. The fix: each name put back in the list of its "
+                           "character's faction (%s), with its text; nobody renamed, nothing else changed."
+                           % (len(every), ", ".join(every[:6]), "..." if len(every) > 6 else "",
+                              ", ".join(sorted(lost)))})
     from . import eventimages
     why = eventimages.problem(mod)
     if why:
@@ -434,6 +456,11 @@ def fix_plan(mod, found):
                 plan.binary(dst, db.dump().encode("latin-1"))
                 plan.notes.append((mod.rel(dst), "%d model(s): a weapons texture for the factions that had none"
                                    % len(p["db"])))
+            continue
+        if p["id"] == "lost_names":
+            from .namelists import add_names
+            for fac, adds in sorted(p["names"].items()):
+                add_names(plan, fac, adds)
             continue
         if p["id"] == "faction_defeated":
             from . import eventimages

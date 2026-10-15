@@ -85,15 +85,18 @@ def section(faction, pools, nl="\r\n"):
 
 
 def used_names(mod, faction, plan=None):
-    """{pool: [keys]} of the faction's current list that its characters and family records already carry
-    in any campaign's descr_strat (first names, surnames): a new list must keep them, or the game crashes."""
+    """{pool: [keys]} of the faction's current list that characters and family records already carry in any
+    campaign's descr_strat (first names, surnames): a new list must keep them, or the game crashes. Those of
+    EVERY faction count - the game looks a name up in all the lists (HLR's men carry names of other factions'
+    lists), so a captain who went over to another faction with his town still needs it (report #292: Acamus)."""
     from .strat import Strat, faction_names
     old = mod.name_pool(faction) or {}
     firsts, rests = set(), set()
     for c in mod.campaigns():
         p = mod.campaign_file(c, "descr_strat.txt")
         f = plan.files[p] if plan is not None and p in plan.files else mod.load(p)
-        for n in faction_names(Strat(f), faction):
+        s = Strat(f)
+        for n in (n for fb in s.factions for n in faction_names(s, fb.name)):
             parts = n.split(None, 1)             # the first name, then the surname (which may hold a space)
             firsts.add(parts[0])
             if len(parts) > 1:
@@ -127,9 +130,9 @@ def apply(plan, faction, pools):
     if mod.name_pool(faction):
         pools, kept = keep_used(mod, faction, pools, plan)
         if kept:
-            plan.warn(None, "%s's characters already carry %d name(s) of its old list (%s%s): kept in the new "
+            plan.warn(None, "characters already carry %d name(s) of %s's old list (%s%s): kept in the new "
                             "list, or the game would crash on them" % (
-                                faction, len(kept), ", ".join(kept[:8]), "..." if len(kept) > 8 else ""))
+                                len(kept), faction, ", ".join(kept[:8]), "..." if len(kept) > 8 else ""))
     f = plan.edit(mod.file("names"))
     heads = name_sections(f.texts())
     new = section(faction, pools)
@@ -154,7 +157,12 @@ def apply(plan, faction, pools):
     if shared:
         plan.note(f, "%s no longer shares the name list of %s" % (
             faction, ", ".join(o for k in shared for o in heads[k][1] if o != faction)))
-    keys = [(key_of(n), str(n).replace("_", " ")) for pool in POOLS for n in pools.get(pool) or []]
+    _strings(plan, [(key_of(n), str(n).replace("_", " ")) for pool in POOLS for n in pools.get(pool) or []])
+
+
+def _strings(plan, keys):
+    """The names.txt strings and descr_names_lookup.txt keys of keys [(key, text)] that are missing, appended."""
+    mod = plan.mod
     tp = mod.text_file("names.txt")
     if tp:
         t = plan.edit(tp)
@@ -173,6 +181,89 @@ def apply(plan, faction, pools):
         if add:
             lk.insert(_end(lk.texts()), add)
             plan.note(lk, "%d name key(s) added to the lookup" % len(add))
+
+
+def lost_names(mod, campaign, f=None):
+    """{faction: {pool: [keys]}} of the names descr_strat's characters and family records carry that no list of
+    descr_names.txt has - the game stops as the campaign loads ('Couldn't find name ... in the names database',
+    report #292). Each is put under the list it belongs to: the character's sub_faction's, else his faction's (a
+    faction with no list of its own is left to Check mod files' 'no name list')."""
+    from .moddata import name_sections, pool_in
+    from .strat import FEMALE_KINDS, Strat, strip_comment
+    path = mod.file("names")
+    if not path:
+        return {}
+    texts = mod.load(path).texts()
+    every = {p: set() for p in POOLS}
+    for _, owners in name_sections(texts):
+        for o in owners:
+            for p, keys in (pool_in(texts, o) or {}).items():
+                every.setdefault(p, set()).update(_same(k) for k in keys)
+    f = f if f is not None else mod.load(mod.campaign_file(campaign, "descr_strat.txt"))
+    s = Strat(f)
+    out = {}
+    for fb in s.factions:
+        for i in range(fb.start, fb.end):
+            body = strip_comment(s.lines[i]).strip()
+            m = re.match(r"(character_record|character)(?![\w])", body)     # also 'character,<tab>sub_faction ...'
+            if not m:
+                continue
+            head = [m.group(1)]
+            parts = [x.strip() for x in body[m.end():].strip().lstrip(",").split(",")]
+            sub = None
+            if parts and parts[0].startswith("sub_faction"):
+                sub = (parts[0].split() + [None])[1]
+                parts = parts[1:]
+            if not parts or not parts[0]:
+                continue
+            words = parts[0].split()                 # Medieval II's records: 'Anabella<tab>female, age 22'
+            if head == ["character_record"] and words[-1:] in (["female"], ["male"]):
+                parts[1:1] = [words.pop()]
+            woman = "female" in parts[1:3] or (head == ["character"] and parts[1:2] and parts[1] in FEMALE_KINDS)
+            first, rest = words[0], " ".join(words[1:])
+            owner = sub if sub and mod.name_pool(sub) else fb.name
+            if not mod.name_pool(owner):
+                continue
+            pool = "women" if woman else "characters"
+            for p, key in ((pool, first), ("surnames", rest)):
+                if key and _same(key) not in every[p]:
+                    got = out.setdefault(owner, {}).setdefault(p, [])
+                    if key not in got:
+                        got.append(key)
+    return out
+
+
+def _same(key):
+    """A key as the game matches it: '_' and spaces alike (vanilla Medieval II's 'Salih al_Alai' and its list's
+    'al Alai'), any case."""
+    return " ".join(key.replace("_", " ").split()).lower()
+
+
+def add_names(plan, faction, adds):
+    """Names put back into the faction's section of descr_names.txt, adds = {pool: [keys]}: each under its pool's
+    heading (the heading made when the section has none), every other line kept as it is; plus the names.txt
+    strings and lookup keys they lack."""
+    from .moddata import name_sections
+    f = plan.edit(plan.mod.file("names"))
+    heads = name_sections(f.texts())
+    k = next(k for k, (_, o) in enumerate(heads) if faction in o)
+    for pool in POOLS:
+        keys = adds.get(pool) or []
+        if not keys:
+            continue
+        texts = f.texts()
+        s = heads[k][0]
+        e = heads[k + 1][0] if k + 1 < len(heads) else len(f)
+        at = next((i for i in range(s + 1, e) if texts[i].strip() == pool), None)
+        if at is None:
+            end = _end(texts[:e]) if e > s + 1 else s + 1
+            f.insert(end, ["\t" + pool] + ["\t\t" + x for x in keys] + [""])
+        else:
+            f.insert(at + 1, ["\t\t" + x for x in keys])
+        heads = name_sections(f.texts())
+    plan.note(f, "%s: %d name(s) put back in its list (%s)" % (
+        faction, sum(len(v) for v in adds.values()), ", ".join(x for v in adds.values() for x in v)[:200]))
+    _strings(plan, [(x, x.replace("_", " ")) for v in adds.values() for x in v])
 
 
 def _end(texts):

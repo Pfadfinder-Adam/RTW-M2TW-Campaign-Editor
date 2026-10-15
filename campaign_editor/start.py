@@ -191,22 +191,24 @@ def _family(plan, f, brought, capital, place, start):
     return out, tree
 
 
-def _own_name(plan, f, chunk, name, kind, pool, used):
-    """A character who joins a brought faction with a town, his first name not in its name list (a Gaul's captain
-    joining the Celts): he takes a free name of its own list - a character of a faction whose list lacks his name
-    may crash the game. -> (chunk, name)."""
+def _own_name(plan, f, chunk, name, kind, pool, used, owner=None):
+    """A character who joins a new faction with a town (a clone or a brought one), his first name not in its name
+    list (a Gaul's captain joining the Celts): he takes a free name of its own list - a character of a faction whose
+    list lacks his name crashes the game as the campaign loads ('Couldn't find name ... in the names database').
+    owner: the faction he joins (the plan's new one when None). -> (chunk, name)."""
+    owner = owner or plan.new
     names = first_names(pool, kind)
     first = (name or "").split(" ")[0]
     if not names or first in names:
         return chunk, name
     fresh = next((n for n in names if n not in used), None)
     if fresh is None:
-        plan.warn(f, "%s keeps his name - %s's name list has no free one" % (name, plan.new))
+        plan.warn(f, "%s keeps his name - %s's name list has no free one" % (name, owner))
         return chunk, name
     used.add(fresh)
     head = chunk[0]
     chunk = [head.replace(name, fresh, 1)] + list(chunk[1:])
-    plan.note(f, "%s takes the name %s from %s's own name list" % (name, fresh, plan.new))
+    plan.note(f, "%s takes the name %s from %s's own name list" % (name, fresh, owner))
     return chunk, fresh
 
 
@@ -616,8 +618,9 @@ def build_start(plan, campaign, start):
                 if len(extra) > room:
                     plan.warn(f, "%s: %d garrison unit(s) dropped - an army holds %d"
                               % (r, len(extra) - room, MAX_UNITS))
-            if brought:                                  # its own name list: a name of another list is renamed
-                chunk, name = _own_name(plan, f, chunk, name, kind, pool, used)
+            # its own name list: a name of another list is renamed - a clone too (report #292: captain Acamus
+            # joined epiros with Bruttium, his name not in its list, and Rome crashed as the campaign loaded)
+            chunk, name = _own_name(plan, f, chunk, name, kind, pool, used)
             block.extend(chunk)
             block.append(f.make(""))
             plan.note(f, "%s: %s (%s) joins %s with the town" % (r, name, kind, new))

@@ -802,6 +802,58 @@ building smith
         armies = [c.xy for fb in s.factions for c in fb.characters if "army" in s.lines[c.start:c.end]]
         self.assertEqual(len(armies), len(set(armies)))
 
+    def test_captain_joining_a_clone_takes_a_name_of_its_list(self):
+        """Report #292 (Rome with REX): a captain written into Bruttium joined the new faction epiros with the town,
+        his name not in epiros's name list - the game crashed as the campaign loaded ('Couldn't find name Acamus in
+        the names database'). A character joining a clone takes a free name of its own list, as for a brought one."""
+        sp = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        write(sp, STRAT.replace("character\tAaron Alphid, named character, leader, age 40, , x 1, y 1",
+                                "character\tZed, general, age 30, , x 1, y 1"))
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R", "A_R"], "leader": {"name": "Boris"}}})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        self.assertEqual([c.name for c in s.faction("beta").characters], ["Boris", "Aaron"])
+        # the same when a town is given on the Map (or taken / given in Edit faction): the captain goes with it
+        from campaign_editor.edit import map_changes
+        from campaign_editor.plan import Plan
+        plan = Plan(mod, "map", "map", {})
+        map_changes(plan, "test", {"owners": {"A_R": "slave"}})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        self.assertIn("Rebel", [c.name for c in s.faction("slave").characters])
+        self.assertNotIn("Zed", [c.name for x in s.factions for c in x.characters])
+
+    def test_a_name_in_no_list_is_found_and_put_back(self):
+        """Report #292 (Rome with REX): Rome looks a character's name up in every list of descr_names.txt (HLR's
+        men carry other factions' names); a list changed while a man of another faction still wore one of its
+        names left that name in no list, and the game crashed as the campaign loaded. Changing a list keeps every
+        name any character wears; Load offers to put a lost name back in its character's faction's list."""
+        from campaign_editor import gamefix
+        from campaign_editor.edit import edit
+        from campaign_editor.namelists import lost_names
+        sp = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        mod = ModData(self.root)
+        self.assertEqual(lost_names(mod, "test"), {})
+        write(sp, STRAT.replace("Grog, general", "Zork, general"))
+        mod = ModData(self.root)
+        self.assertEqual(lost_names(mod, "test"), {"alpha": {"characters": ["Zork"]}})   # the rebel of sub_faction alpha
+        found = [p for p in gamefix.problems(mod, on_load=True) if p["id"] == "lost_names"]
+        self.assertEqual(len(found), 1)
+        names = mod.file("names")
+        with open(names, "rb") as fh:
+            before = fh.read()
+        plan = gamefix.fix_plan(mod, found)
+        texts = plan.files[names].texts()
+        self.assertEqual(texts[texts.index("\tcharacters") + 1], "\t\tZork")
+        self.assertEqual([t for t in texts if t != "\t\tZork"], TextFile.from_bytes(names, before).texts())
+        bdir = plan.apply()
+        self.assertEqual(lost_names(ModData(self.root), "test"), {})
+        restore(ModData(self.root), bdir)
+        # a list changed: a name another faction's man wears stays in it
+        write(sp, STRAT.replace("Aaron Alphid, named character", "Rebel Alphid, named character"))
+        mod = ModData(self.root)
+        p2 = edit(mod, "test", "slave", {"names": {"characters": ["Other"], "women": ["Una"]}})
+        self.assertIn("Rebel", p2.name_pool("slave")["characters"])
+
     def test_kept_garrison_folds_into_the_leader(self):
         mod = ModData(self.root)
         plan = build(mod, "test", "alpha", "beta", {

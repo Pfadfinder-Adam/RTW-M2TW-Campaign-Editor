@@ -38,6 +38,7 @@ NAMES = """faction: alpha
 faction: slave
 \tcharacters
 \t\tRebel
+\t\tGrog
 \tsurnames
 \t\tNobody
 """
