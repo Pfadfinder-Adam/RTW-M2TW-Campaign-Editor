@@ -35,7 +35,7 @@ whose it is):
 - **Mekkermann** - 4 reports
 - **Melchon** - 4 reports
 - **moderman1** - 4 reports
-- **bodkinarrow** - 3 reports
+- **bodkinarrow** - 4 reports
 - **John** - 3 reports
 - **doliwaq** - 2 reports
 - **HVS87** - 2 reports
