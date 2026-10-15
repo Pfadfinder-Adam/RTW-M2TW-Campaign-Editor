@@ -6205,6 +6205,96 @@ building smith
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)
 
+    def test_bring_carries_projectile_effects_voices_and_skeleton_lines(self):
+        """The user, 2026-10-15 ('bring everything the target lacks'): a brought unit's fire arrows come with their
+        burning projectile, its effects (an effect set and the effects it is made of, with their texture) and the
+        voices of its voice_type where the target's voice file lacks that class for the new owners' culture (its
+        sound files too; other units' name calls in the class block are left out); the target's own effects and
+        classes are kept; Restore gives back every byte."""
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "stat_pri\t\t5, 2, arrow, 120, 30, missile, archery, piercing, none, 25, 1\n"
+            "voice_type\tLight_9\nownership\talpha"))
+        write(os.path.join(d, "descr_projectile_new.txt"),
+              "projectile arrow\n\ndamage\t\t0\n\nprojectile arrow_fiery\n\nflaming\t\tarrow\n"
+              "effect\t\tfire_set\nend_effect\tboom\n")
+        write(os.path.join(d, "descr_effects.txt"), "descr_effects_fx.txt\n")
+        fx = ("effect fire\n{\n\ttype ribbon\n\t{\n\t\ttexture\tdata/textures/fire_x.tga\n\t}\n}\n\n"
+              "effect_set < 0 1 > fire_set\n{\n\tlod 100\n\t{\n\t\tfire\n\t}\n}\n\n"
+              "effect boom\n{\n\ttype light\n}\n")
+        write(os.path.join(d, "descr_effects_fx.txt"), fx)
+        write(os.path.join(d, "textures", "fire_x.tga"), "FIRE")
+        voice = ("culture eastern\n\tclass Light_1\n\t\tvocal Group_Created\n\t\t\tevent\n\t\t\t\tfolder "
+                 "data/sounds/v\n\t\t\t\ta.wav\n\t\t\tend\n")
+        light9 = ("\tclass Light_9\n\t\tvocal Group_Created\n\t\t\tevent\n\t\t\t\tfolder data/sounds/v\n"
+                  "\t\t\t\tnine.wav\n\t\t\tend\n\t\tvocal Unit_Select\n\t\t\tunit alpha general, other guys\n"
+                  "\t\t\tevent\n\t\t\t\tfolder data/sounds/v\n\t\t\t\tname.wav\n\t\t\tend\n"
+                  "\t\t\tunit nobody here\n\t\t\tevent\n\t\t\t\tfolder data/sounds/v\n\t\t\t\tx.wav\n\t\t\tend\n")
+        write(os.path.join(d, "export_descr_sounds_units_voice.txt"), voice + light9)
+        wav = b"RIFF" + struct.pack("<I", 36) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 22050, 44100, 2, 16)
+        os.makedirs(os.path.join(d, "sounds", "v"))
+        for n in ("a.wav", "nine.wav", "name.wav", "x.wav"):
+            with open(os.path.join(d, "sounds", "v", n), "wb") as fh:
+                fh.write(wav + n.encode())
+        pack = os.path.join(self.root, "x.zip")
+        man = packs.export_pack(ModData(self.root), ["alpha general"], pack)
+        self.assertEqual(sorted(man["blocks"]["projectile"]), ["arrow", "arrow_fiery"])
+        self.assertEqual([e["name"] for e in man["effects"]], ["fire", "fire_set", "boom"])
+        self.assertIn("textures/fire_x.tga", man["files"])
+        self.assertEqual(sorted(man["voice_banks"]), ["Light_9"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        td = os.path.join(troot, "data")
+        shutil.rmtree(os.path.join(td, "sounds", "v"))
+        os.remove(os.path.join(td, "textures", "fire_x.tga"))
+        write(os.path.join(td, "descr_projectile_new.txt"), "projectile arrow\n\ndamage\t\t0\n")
+        write(os.path.join(td, "descr_effects_fx.txt"), "effect boom\n{\n\ttype light ; its own\n}\n")
+        write(os.path.join(td, "export_descr_sounds_units_voice.txt"), voice)
+        before = tree_hash(troot)
+        manifest, files = packs.read_pack(pack)
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, manifest, files, ["alpha"])
+        bdir = plan.apply()
+        with open(os.path.join(td, "descr_effects_fx.txt")) as fh:
+            got = fh.read()
+        self.assertIn("type light ; its own", got)                      # the target's own kept
+        self.assertEqual(got.count("effect boom"), 1)
+        self.assertIn("effect_set < 0 1 > fire_set", got)
+        self.assertIn("effect fire\n", got)
+        with open(os.path.join(td, "textures", "fire_x.tga")) as fh:
+            self.assertEqual(fh.read(), "FIRE")
+        with open(os.path.join(td, "export_descr_sounds_units_voice.txt")) as fh:
+            vf = fh.read()
+        self.assertIn("class Light_9", vf)
+        self.assertIn("unit alpha general 2", vf)                       # the brought unit under its new name
+        self.assertNotIn("nobody here", vf)
+        self.assertNotIn("other guys", vf)
+        self.assertTrue(os.path.isfile(os.path.join(td, "sounds", "v", "nine.wav")))
+        restore(ModData(troot), bdir)
+        after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
+        self.assertEqual(after, before)
+
+    def test_bring_puts_the_skeletons_own_lines(self):
+        # a brought skeleton put into the target's animation set gets its descr_skeleton.txt block too (a rebuild of
+        # the packs keeps it); one the target names already is left as it is
+        from campaign_editor import packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_skeleton.txt"), "; skeletons\n\ntype\tfs_old\nanim\tstand\tdata/a.cas\n")
+        manifest = {"animations": {"text": {"fs_new": ["type\tfs_new", "anim\tstand\tdata/b.cas"],
+                                            "fs_old": ["type\tfs_old", "anim\tstand\tdata/c.cas"]}}}
+        plan = Plan(ModData(self.root), "pack", "pack", {})
+        packs._put_skeleton_text(plan, manifest, ["fs_new", "FS_OLD"])
+        plan.apply()
+        with open(os.path.join(d, "descr_skeleton.txt")) as fh:
+            got = fh.read()
+        self.assertIn("type\tfs_new\nanim\tstand\tdata/b.cas\n", got)
+        self.assertNotIn("data/c.cas", got)
+
     def test_engine_found_in_the_game_folder_and_the_limit_raised_in_the_mod(self):
         # M2EX copied over the game's root (any case), the mod in mods/<mod>/data: the engine is seen, the
         # game's descr_ex.txt is NOT read for the mod (engines read a mod's own _ex files only - "Mods that don't

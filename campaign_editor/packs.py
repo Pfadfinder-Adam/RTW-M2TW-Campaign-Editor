@@ -297,6 +297,12 @@ class _Gather:
         for v in _values(lines, "model"):                  # a mount's / animal's model
             if kind not in ("model", "projectile"):
                 self.add_dep("model", v[0])
+        if kind == "projectile":                           # its burning kind ('flaming <name>': fire arrows)
+            for other, sp in self.dep_blocks[kind].items():
+                if other not in man["blocks"][kind] and any(
+                        v and v[0].split()[0].lower() == name.lower()
+                        for v in _values(_block_lines(self.deps[kind], sp), "flaming")):
+                    self.add_dep("projectile", other)
         if kind == "engine":                               # what the engine fires, the skeletons it moves by
             for p in _weapon_projectiles(lines):
                 self.add_dep("projectile", p)
@@ -403,9 +409,124 @@ def collect(mod, unit_types):
                         with open(p, "rb") as fh:
                             files["ui/%s/%s/%s" % (sub, fac, os.path.basename(p))] = fh.read()
     manifest["recruit"] = _recruit_places(mod, unit_types)
+    _carry_effects(g)
     _carry_skeletons(mod, manifest, files)
     _carry_voices(mod, manifest, files)
+    _carry_voice_banks(mod, manifest, files)
     return g.done()
+
+
+def effect_files(mod):
+    """[path] of the effect texts the game reads: the files descr_effects.txt lists (the mod's, else the game's)."""
+    p = mod.find("descr_effects.txt")
+    out = []
+    for line in (mod.load(p).texts() if p else []):
+        name = strip_comment(line).strip()
+        if name.lower().endswith(".txt"):
+            q = mod.find(name)
+            if q and q not in out:
+                out.append(q)
+    return out
+
+
+def effect_blocks(f):
+    """[(name, start, end)] of an effect text's top-level 'effect <name> { }' and 'effect_set [< lods >] <name> { }'
+    blocks (an effect set may stand several times, one per detail level)."""
+    out, i, n = [], 0, len(f.raw)
+    while i < n:
+        t = tokens(f.text(i))
+        if t[:1] and t[0].lower() in ("effect", "effect_set") and len(t) > 1:
+            name, depth, j, opened = t[-1], 0, i, False
+            while j < n:
+                code = strip_comment(f.text(j))
+                depth += code.count("{") - code.count("}")
+                opened = opened or "{" in code
+                j += 1
+                if opened and depth <= 0:
+                    break
+            out.append((name, i, j))
+            i = j
+            continue
+        i += 1
+    return out
+
+
+def effect_index(mod):
+    """{effect name lower: [(file name, [lines])]} of every effect the mod's effect texts make."""
+    out = {}
+    for p in effect_files(mod):
+        try:
+            f = mod.load(p)
+        except (OSError, ValueError):
+            continue
+        for name, a, b in effect_blocks(f):
+            out.setdefault(name.lower(), []).append((os.path.basename(p), [f.text(k) for k in range(a, b)]))
+    return out
+
+
+def _projectile_effects(lines):
+    """The effect names a projectile block's '...effect <name>' lines name (effect, end_effect, end_man_effect...)."""
+    out = []
+    for line in lines:
+        t = strip_comment(line).split()
+        if len(t) > 1 and t[0].lower().endswith("effect"):
+            out.append(t[1])
+    return out
+
+
+def _carry_effects(g):
+    """The effects the brought projectiles show (fire trails, explosions) with the effects they are made of and every
+    texture / model they name: manifest['effects'] [{'name', 'file', 'lines'}], those first that others name."""
+    want = [n for lines in (g.manifest["blocks"].get("projectile") or {}).values() for n in _projectile_effects(lines)]
+    if not want:
+        return
+    index = effect_index(g.mod)
+    out, seen = [], set()
+
+    def add(name):
+        low = name.lower()
+        if low in seen or low not in index:
+            return
+        seen.add(low)
+        for fname, lines in index[low]:
+            for tok in {x for line in lines[1:] for x in re.split(r"[\s,{}<>]+", strip_comment(line)) if x}:
+                if tok.lower() != low and tok.lower() in index:
+                    add(tok)
+            g.add_files(lines)
+            out.append({"name": name, "file": fname, "lines": lines})
+    for name in want:
+        add(name)
+    if out:
+        g.manifest["effects"] = out
+
+
+def _put_effects(plan, manifest):
+    """The brought projectiles' effects this mod lacks, appended to its effect text of the same name (else the first
+    one its descr_effects.txt lists); one it has under that name is kept as it is."""
+    effects = manifest.get("effects") or []
+    if not effects:
+        return
+    mod = plan.mod
+    files = effect_files(mod)
+    if not files:
+        plan.warn(None, "this mod lists no effect files (descr_effects.txt) - the brought projectiles' effects (%s) "
+                        "are not put in" % ", ".join(sorted({e["name"] for e in effects})))
+        return
+    have = set(effect_index(mod))
+    by_name = {os.path.basename(p).lower(): p for p in files}
+    put = {}
+    for e in effects:                                  # an effect set's every detail level comes under one name
+        if e["name"].lower() in have:
+            continue
+        path = by_name.get(e["file"].lower(), files[0])
+        f = plan.edit(path)
+        while f.raw and not f.text(len(f.raw) - 1).strip():
+            del f.raw[-1]
+        f.raw.extend(f.make(x) for x in [""] + e["lines"])
+        f.raw.append(f.make(""))
+        put.setdefault(path, []).append(e["name"])
+    for path, names in put.items():
+        plan.note(plan.files[path], "the brought projectiles' effects added: %s" % ", ".join(sorted(set(names))))
 
 
 SOUND_DIR = "__sounds__/"               # the units' own voice files a pack carries - put by sounds.name_call_from
@@ -461,6 +582,129 @@ def _carry_voices(mod, manifest, files):
                 lists.setdefault(t, []).append({"file": name, "with": [n for n in names if n.lower() != t.lower()]})
     if lists:
         manifest["sound_lists"] = lists
+
+
+class _Lines:
+    def __init__(self, texts):
+        self._t = texts
+
+    def texts(self):
+        return self._t
+
+
+def _carry_voice_banks(mod, manifest, files):
+    """The voices a brought unit's class speaks with (its voice_type: 'Light_1', 'Heavy'...) in its owners' accent /
+    culture of the source: each class block of the voice file with its sound files' bytes - put where the target's
+    voice file has no such class for the new owners (else the unit says nothing there): manifest['voice_banks']
+    {class: {'group', 'lines', 'files': [[rel, stash]]}}."""
+    from . import sounds as S
+    from .units import owner_factions
+    try:
+        path = S.voice_file(mod)
+        if not path:
+            return
+        f = mod.load(path)
+        blocks = S.class_blocks(f)
+        index = S.pack_index(mod)
+    except (OSError, ValueError):
+        return
+    texts = f.texts()
+    banks, n = {}, 0
+    for u in manifest["units"]:
+        cls = next((v[0].split()[0] for v in _values(u["lines"], "voice_type") if v and v[0].split()), None)
+        if not cls or cls.lower() in (k.lower() for k in banks):
+            continue
+        owners = [x.strip() for v in _values(u["lines"], "ownership") for x in v]
+        keys = [k for k, _ in S.voice_groups(mod, owner_factions(mod, owners)) if k]
+        got = next((b for k in keys for b in blocks if b[1].lower() == cls.lower() and
+                    k.lower() in (g.lower() for g in b[0])), None)
+        got = got or next((b for b in blocks if b[1].lower() == cls.lower()), None)
+        if got is None:
+            continue
+        lines = texts[got[2]:got[3]]
+        stash = []
+        for rel in S.class_files(lines):
+            data = S.sound_bytes(mod, rel, index)
+            if data is None:
+                continue
+            name = "%sbank_%d.wav" % (SOUND_DIR, n)
+            n += 1
+            files[name] = data
+            stash.append([rel, name])
+        banks[cls] = {"group": got[0], "lines": lines, "files": stash}
+    if banks:
+        manifest["voice_banks"] = banks
+
+
+def _bank_lines(lines, names, engines):
+    """A class block as it goes into the target: name calls ('unit a, b' events) kept only for the brought units
+    (under their new names) and engines ('engine x') only for the brought ones - a name the target lacks is never
+    written into its voice file."""
+    from . import sounds as S
+    out = list(lines)
+    new_of = {o.lower(): n for o, (n, _) in names.items()}
+    keep_eng = {e.lower() for e in engines}
+    for ev in sorted(S.voice_events(_Lines(out)), key=lambda e: -e.head):
+        if ev.target is None:
+            continue
+        if ev.target == "unit":
+            kept = [new_of[x.lower()] for x in ev.names if x.lower() in new_of]
+        else:
+            kept = [x for x in ev.names if x.lower() in keep_eng]
+        if not kept:
+            del out[ev.head:ev.end + 1]
+            continue
+        head = out[ev.head]
+        lead = re.match(r"[ \t]*\w+", head).group(0)
+        out[ev.head] = lead + " " + ", ".join(kept)
+    return out
+
+
+def _put_voice_banks(plan, manifest, files, names, owners):
+    """Each brought class the target's voice file lacks for an accent / culture of the new owners: the source's class
+    block put in that group (after its last class), its sound files added where the target has none of that name;
+    events.dat / .idx rebuilt. The target's own classes are never touched."""
+    from . import sounds as S
+    from .units import owner_factions
+    banks = manifest.get("voice_banks") or {}
+    path = S.voice_file(plan.mod) if banks else None
+    if not path:
+        return
+    mod = plan.mod
+    want = {}
+    for u in manifest["units"]:
+        cls = next((v[0].split()[0] for v in _values(u["lines"], "voice_type") if v and v[0].split()), None)
+        if cls and cls in banks:
+            want.setdefault(cls, set())
+    keys = [k for k, _ in S.voice_groups(mod, owner_factions(mod, owners)) if k]
+    engines = list((manifest["blocks"].get("engine") or {}))
+    index = S.pack_index(mod)
+    put, sounds = [], 0
+    for cls in list(want):
+        if not banks[cls]["files"]:                    # the source's sound files were not readable: lines naming
+            del want[cls]                              # sounds the mod has not would only be noise in its log
+    for cls in want:
+        for key in keys:
+            f = plan.edit(path)
+            blocks = S.class_blocks(f)
+            mine = [b for b in blocks if key.lower() in (g.lower() for g in b[0])]
+            if not mine or any(b[1].lower() == cls.lower() for b in mine):
+                continue                               # a group the file lacks, or the class is there already
+            at = max(b[3] for b in mine)
+            f.insert(at, _bank_lines(banks[cls]["lines"], names, engines))
+            put.append("%s (%s)" % (cls, key))
+    if not put:
+        return
+    for cls in {p.split(" ")[0] for p in put}:
+        for rel, stash in banks[cls]["files"]:
+            if stash not in files or S.find(mod, rel, index):
+                continue
+            _put(plan, rel[5:] if rel.lower().startswith("data/") else rel, files[stash])
+            index[rel.lower()] = None
+            sounds += 1
+    plan.note(None, "voices the brought units speak with, which this mod lacked for their new owners: %s - "
+                    "%d sound file(s) with them" % (", ".join(put), sounds))
+    S.rebuild_events(plan)
 
 
 def _put_sound_lists(plan, manifest, names):
@@ -583,7 +827,42 @@ def _carry_skeletons(mod, manifest, files):
             n += 1
             files[rel] = body
             man["anims"][key].append([rec.hex(), rel])
+    # the skeletons' own blocks of descr_skeleton.txt (what a later rebuild of the packs reads: Rome's -util:animdb,
+    # Medieval II's first start without packs) - kept with them
+    try:
+        p = mod.find("descr_skeleton.txt")
+        f = mod.load(p) if p else None
+    except (OSError, ValueError):
+        f = None
+    if f is not None:
+        blocks = type_blocks(f)
+        low = {k.lower(): k for k in blocks}
+        man["text"] = {name: _block_lines(f, blocks[low[name.lower()]]) for name in man["skeletons"]
+                       if name.lower() in low}
     manifest["animations"] = man
+
+
+def _put_skeleton_text(plan, manifest, added):
+    """The blocks of descr_skeleton.txt of the skeletons put into the target's animation set (animpacks.put), where
+    its descr_skeleton.txt lacks them - so a rebuild of the packs keeps the brought men moving."""
+    text = (manifest.get("animations") or {}).get("text") or {}
+    if not added or not text:
+        return
+    path = plan.mod.find("descr_skeleton.txt")
+    if not path:
+        return
+    f = plan.edit(path)
+    have = {k.lower() for k in type_blocks(f)}
+    low = {k.lower(): v for k, v in text.items()}
+    put = [n for n in added if n.lower() in low and n.lower() not in have]
+    if not put:
+        return
+    while f.raw and not f.text(len(f.raw) - 1).strip():
+        del f.raw[-1]
+    for n in put:
+        f.raw.extend(f.make(x) for x in [""] + low[n.lower()])
+    f.raw.append(f.make(""))
+    plan.note(f, "the brought skeletons' own lines added: %s" % ", ".join(put))
 
 
 def carried_skeletons(manifest, files):
@@ -772,6 +1051,7 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
         plan.note(None, "%s: this mod has another file of that name - the brought one goes in as %s" % (old, new))
     plan.carried_files = files
     renamed = _put_blocks(plan, manifest, owners)
+    _put_effects(plan, manifest)
     # the units
     edu = plan.edit(mod.file("edu"))
     while edu.raw and not edu.text(len(edu.raw) - 1).strip():
@@ -831,6 +1111,7 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
     # recruiting: the same chain and level as in the source mod, where the target has them
     if manifest.get("recruit") and mod.file("edb"):
         _recruit(plan, manifest, names, owners, recruit_map)
+    _put_voice_banks(plan, manifest, files, names, owners)
     _put_voices(plan, manifest, files, names)
     _put_sound_lists(plan, manifest, names)
     _say_banners(plan, manifest)
@@ -934,6 +1215,7 @@ def _put_blocks(plan, manifest, owners):
     # 'what the target lacks must come along'); what is still missing then takes the nearest one
     added = animpacks.put(plan, carried_skeletons(manifest, plan.carried_files)) if getattr(
         plan, "carried_files", None) is not None else []
+    _put_skeleton_text(plan, manifest, added)
     known = set(skeletons(mod)) | animpacks.skeleton_names(mod) | {a.lower() for a in added}
     swapped, left = {}, set()
     for kind in ("model", "mount", "projectile", "engine", "animal", "ship", "mounted_engine"):   # projectiles first

@@ -121,13 +121,18 @@ def find(mod, rel, index=None):
 
 
 def sound_bytes(mod, rel, index=None):
+    """The bytes of a sound (a loose file, else its pack record), or None - also when the pack's .dat is not there
+    (a game copy with the .idx alone)."""
     got = find(mod, rel, index)
     if not got:
         return None
-    if got[0] == "file":
-        with open(got[1], "rb") as f:
-            return f.read()
-    return got[1].read()
+    try:
+        if got[0] == "file":
+            with open(got[1], "rb") as f:
+                return f.read()
+        return got[1].read()
+    except OSError:
+        return None
 
 
 def wav_info(data):
@@ -206,6 +211,51 @@ def voice_events(f):
                 cur = VoiceEvent(group, cls, vocal, None, [], i)
             cur.event = i
             folder = ""
+    return out
+
+
+def class_blocks(f):
+    """[(group [accents / cultures], class, start, end)] of a loaded voice file: each 'class <name>' block of an
+    accent (Medieval II) or culture (Rome) - its lines from the class line up to the next class / accent / culture
+    line (the blank lines before that one stay behind)."""
+    out, group, cur = [], [], None
+    texts = f.texts()
+
+    def close(i):
+        end = i
+        while end > cur[2] + 1 and not texts[end - 1].split(";", 1)[0].strip():
+            end -= 1
+        out.append((cur[0], cur[1], cur[2], end))
+    for i, line in enumerate(texts):
+        code = line.split(";", 1)[0].strip()
+        word, _, rest = code.partition(" ")
+        key = word.lower()
+        if key in ("accent", "culture", "class") and cur is not None:
+            close(i)
+            cur = None
+        if key in ("accent", "culture"):
+            group = [x.strip() for x in rest.split(",") if x.strip()]
+        elif key == "class":
+            cur = (list(group), rest.strip(), i)
+    if cur is not None:
+        close(len(texts))
+    return out
+
+
+def class_files(texts):
+    """The 'data/sounds/...' files a class block's lines name (each event's folder + file)."""
+    out, folder = [], ""
+    for line in texts:
+        code = line.split(";", 1)[0].strip()
+        word = code.split(" ", 1)[0].lower()
+        if word == "event":
+            folder = ""
+        elif word == "folder":
+            folder = code[6:].strip().rstrip("/\\")
+        elif code.lower().endswith((".wav", ".mp3")):
+            rel = (folder + "/" if folder else "") + code
+            if rel not in out:
+                out.append(rel)
     return out
 
 
