@@ -105,11 +105,14 @@ class GameEditorWindow(tk.Toplevel):
             messagebox.showinfo(TITLE, "Copied. %s" % e, parent=self)
             self.show()
             return
-        log.write("The game started in its campaign editor: %s" % line["words"])
+        log.write("The game started %s: %s" % ("in its campaign editor" if line["direct"] else
+                                                "(its campaign editor in the menus)", line["words"]))
         if not line["direct"]:
             messagebox.showinfo(TITLE, line["how"], parent=self)
-        self.app.status.set("The game is starting in its campaign editor - Save there, close the game, then 'Take "
-                            "the changes back' (Maps > 3D > Game's editor...).")
+        self.app.status.set("The game is starting%s - Save there, close the game, then 'Take the changes back' "
+                            "(Maps > 3D > Game's editor...)." % (
+                                " in its campaign editor" if line["direct"] else
+                                ": open its campaign editor from the menus as the window said"))
         self.show()
 
     def take_back(self):

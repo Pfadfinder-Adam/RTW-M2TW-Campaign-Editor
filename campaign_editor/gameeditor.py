@@ -137,9 +137,12 @@ def start_line(data, campaign):
     args = mod_args + ["-enable_editor"]
     return {"exe": os.path.join(game, exe), "args": args, "cwd": game, "direct": False,
             "words": " ".join([exe] + args),
-            "how": "Rome%s opens its editor only from its menus: in the game, the editors' entry of the main menu > "
-                   "the campaign map editor > load custom campaign %s." % (" with REX" if rex else " without REX",
-                                                                          folder_name(campaign))}
+            # the menu words of data/text/menu_english.txt (UI_OPTIONS_EDITORS, UI_EDITORS_CAMPAIGN); a tester went
+            # into the BATTLEFIELD EDITOR next to it (and REX fell there, in its own battle code)
+            "how": "Rome%s opens its editor only from its menus: in the game, OPTIONS > EDITORS > PROVINCIAL CAMPAIGN "
+                   "EDITOR (not the BATTLEFIELD EDITOR), then load the custom campaign %s. The copy also shows in "
+                   "the game's PROVINCIAL CAMPAIGN list until 'Remove the copy'." % (
+                       " with REX" if rex else " without REX", folder_name(campaign))}
 
 
 # ---- taking it back ----

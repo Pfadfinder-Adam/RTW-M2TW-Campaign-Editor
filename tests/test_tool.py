@@ -2927,6 +2927,8 @@ building smith
             self.assertEqual(line["args"][-1], "-enable_editor")
             self.assertFalse(any("strat_ed" in a for a in line["args"]))
             self.assertIn("ce_imperial_campaign", line["how"])
+            self.assertIn("PROVINCIAL CAMPAIGN EDITOR", line["how"])          # the game's own menu words
+            self.assertIn("not the BATTLEFIELD EDITOR", line["how"])
             self.assertIn("-mod:HLR", line["args"])
             os.remove(os.path.join(rome, "REX.exe"))
             write(os.path.join(rome, "RomeTW.exe"), "")

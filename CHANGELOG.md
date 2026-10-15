@@ -183,6 +183,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Game's editor in Rome: the window now names the game's menu path (Options > Editors > Provincial Campaign
+  Editor) and says the copy shows in the Provincial Campaign list until it is removed.
 - A faction brought from another mod showed its frame's (Gaul's) faction button, loading logo and 3D symbol ->
   it shows its own, its own movies come along too.
 - After Create faction the form stayed filled, so Start the game said changes were not written -> the form empties
