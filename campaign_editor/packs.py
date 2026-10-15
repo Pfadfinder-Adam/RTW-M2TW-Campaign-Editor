@@ -1701,7 +1701,10 @@ def known_conditions(mod):
     return {"hidden_resource": hidden, "resource": res, "religion": rel or None}
 
 
-_COND = re.compile(r"(?<![A-Za-z0-9_])(not\s+)?(hidden_resource|resource)\s+([A-Za-z0-9_]+)")
+# 'factionwide' after the name (REX mods such as HLR: the resource anywhere in the faction's lands) belongs to the
+# condition - without it here such a condition was never taken out and Barbarian Invasion stopped at start on
+# HLR's 'hidden_resource alpine factionwide' (report #285)
+_COND = re.compile(r"(?<![A-Za-z0-9_])(not\s+)?(hidden_resource|resource)\s+([A-Za-z0-9_]+)(\s+factionwide)?")
 
 
 def fit_line(text, known):
@@ -1721,7 +1724,7 @@ def fit_line(text, known):
     head, conds = text[:m.start()], body[m.end():]
     tail = text[len(body):]                     # the comment, if any
     parts = re.split(r"\s+(and|or)\s+", " " + conds.strip())
-    keep, gone = [], []
+    keep, gone, carried = [], [], None
     for i in range(0, len(parts), 2):
         cond = parts[i].strip()
         op = parts[i - 1] if i else None
@@ -1729,8 +1732,11 @@ def fit_line(text, known):
         have = known.get(c.group(2)) if c else None
         if c and have is not None and c.group(3).lower() not in have:
             gone.append(cond)
+            if carried is None:
+                carried = op                    # 'factions {..} and A or B', A gone: B joins with 'and', not 'or'
             continue
-        keep.append((op, cond))
+        keep.append((carried or op if keep else op, cond))
+        carried = None
     if not gone:
         return text, []
     out = ""

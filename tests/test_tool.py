@@ -1127,6 +1127,25 @@ building smith
         self.assertIsNone(report.files_sent(mod))
         self.assertIsNone(report.files_sent(None))
 
+    def test_brought_recruit_line_drops_unknown_factionwide_resources(self):
+        """Report #285: Gaul units brought from HLR into Barbarian Invasion stopped the game at start ('Script Error in
+        export_descr_buildings.txt, line 50, column 100'): HLR writes 'hidden_resource alpine factionwide' and the
+        word after the name hid the condition from the check - the resource BI does not have stayed in."""
+        from campaign_editor.packs import fit_line
+        known = {"hidden_resource": {"spain"}, "resource": None, "religion": None}
+        line = ('recruit "barb infantry slave"  0  requires factions { celts, } and hidden_resource alpine factionwide'
+                ' or hidden_resource briton factionwide')
+        got, gone = fit_line(line, known)
+        self.assertEqual(gone, ["hidden_resource alpine factionwide", "hidden_resource briton factionwide"])
+        self.assertNotIn("alpine", got)
+        self.assertIn("factions { celts, }", got)
+        got, _ = fit_line('recruit "x"  0  requires factions { celts, } and hidden_resource alpine factionwide or '
+                          'hidden_resource spain factionwide', known)
+        self.assertTrue(got.endswith("factions { celts, } and hidden_resource spain factionwide"), got)  # never 'or'
+        got, gone = fit_line('recruit "x"  0  requires factions { celts, }  and hidden_resource spain factionwide',
+                             known)
+        self.assertEqual(gone, [])                                      # a resource this mod has stays, whole
+
     def test_recolour_brush_dab_never_has_its_right_edge_before_its_left(self):
         """Report #281: painting by hand in Recolour stopped with 'x1 must be greater than or equal to x0' - the
         points are the shown picture's divided by its scale (fractions) and a size-1 dab's right edge came out a
