@@ -48,10 +48,11 @@ class Ctx:
         self.later = _free_name("ce_test_later", taken | {self.new})
         self.split = _free_name("ce_test_split", taken | {self.new, self.later})
         self.shadow = _free_name("ce_test_shadow", taken | {self.new, self.later, self.split})
+        self.brought = _free_name("ce_test_brought", taken | {self.new, self.later, self.split, self.shadow})
         # a faction of another culture than the template: its units and buildings are surely not the clone's
         cult = dict(mod.factions())
         self.foreign = next((n for n, cu in mod.factions() if n != "slave" and cu != cult.get(self.template) and
-                             n not in (self.new, self.later, self.split, self.shadow)), self.other)
+                             n not in (self.new, self.later, self.split, self.shadow, self.brought)), self.other)
         # the faction the split-off one leaves: on Barbarian Invasion the new faction itself, which has a shadow too -
         # the test of whether one faction may have both (BI's own never does; plain Rome takes neither); elsewhere
         # the template
@@ -60,7 +61,7 @@ class Ctx:
         self.both = game_kind(mod) == "rome" and EM.is_bi(mod)
         self.split_of = self.new if self.both else self.template
         self.logo = None
-        self.colours = test_colours(mod, [self.new, self.shadow, self.later, self.split])
+        self.colours = test_colours(mod, [self.new, self.shadow, self.later, self.split, self.brought])
         self.said = {}                       # what the steps picked, for the texts: {'near': town, 'far': town}
 
     def mod(self):
@@ -1510,6 +1511,54 @@ def s_bring(c, mod):
     return plan
 
 
+def _other_mod(mod):
+    """Another mod of the same game to bring a whole faction from: Barbarian Invasion beside a Rome mod (Rome Gold),
+    else the game's own data under the mod; None when there is none."""
+    from .packs import game_kind
+    from .moddata import ModData
+    game = _game_data(mod)
+    here = os.path.normcase(os.path.abspath(mod.data))
+    if game and game_kind(mod) == "rome":
+        bi = os.path.join(os.path.dirname(os.path.abspath(game)), "bi", "data")
+        if os.path.isfile(os.path.join(bi, "descr_sm_factions.txt")) and os.path.normcase(bi) != here:
+            return ModData(bi)
+    return ModData(game) if game and os.path.normcase(os.path.abspath(game)) != here else None
+
+
+@step("New faction > From another mod: a faction of another mod (Barbarian Invasion beside Rome, else the game's own "
+      "data) made {brought} - its units, name lists, figures on the map and in battle, flags and pictures with it - "
+      "in a rebel town",
+      "{brought} on the faction-select screen in its own flag and colours; its town's garrison and its leader's army "
+      "of its own units (their cards and models from the other mod); its general and admiral on the campaign map "
+      "in the other mod's figures; its banners in battle")
+def s_faction_bring(c, mod):
+    from . import factionbring as FB
+    from .build import build
+    src = _other_mod(mod)
+    if src is None:
+        raise Skip("no other mod of this game to bring a faction from")
+    here = {n for n, _ in mod.factions()}
+    facs = FB.factions(src)
+    pick = next((f for f in facs if f[0] not in here), None) or next((f for f in facs if f[0] == c.template),
+                                                                      facs[0] if facs else None)
+    if pick is None:
+        raise Skip("the other mod has no faction")
+    camps = src.campaigns()
+    camp = camps[0] if camps else None
+    regions = near_rebels(c, mod, c.other, 1)
+    pool = src.name_pool(pick[0])
+    if not regions or not pool.get("characters"):
+        raise Skip("no rebel town / no name list")
+    fields = FB.window_fields(src, camp, pick[0])
+    return build(mod, c.campaign, FB.frame_of(mod, pick[1], c.template), c.brought, {
+        "display_name": fields.get("display_name") or "Brought Test", "short_name": fields.get("short_name") or "",
+        "adjective": fields.get("adjective") or "",
+        "primary_colour": c.colours[c.brought][0], "secondary_colour": c.colours[c.brought][1],
+        "raise_faction_limit": True,
+        "start": {"regions": regions, "leader": {"name": pool["characters"][0], "age": 35}},
+        "bring": {"src": src.data, "faction": pick[0], "campaign": camp}})
+
+
 @step("Unit packs: a unit of {foreign} exported as a pack (.zip) and put back in as a copy for {new}",
       "the copied unit in {new}'s recruitment list")
 def s_unit_pack(c, mod):
@@ -2644,6 +2693,7 @@ COVERAGE = {
     "Building editor: lines": ["s_building_fields"],
     "Building editor: new building step by step": ["s_buildings"],
     "Bring from another mod": ["s_bring"],
+    "New faction > From another mod (a whole faction brought)": ["s_faction_bring"],
     "Unit packs export / import": ["s_unit_pack"],
     "Check and install a pack": ["s_modpack"],
     "Events": ["s_events", "s_events_more"],
@@ -2798,7 +2848,7 @@ def run(data, campaign, progress=None, make=True):
     os.makedirs(work, exist_ok=True)
     c = Ctx(data, campaign, work)
     names = {"template": c.template, "edited": c.edited, "other": c.other, "new": c.new, "later": c.later,
-             "split": c.split, "split_of": c.split_of, "shadow": c.shadow, "foreign": c.foreign,
+             "split": c.split, "split_of": c.split_of, "shadow": c.shadow, "foreign": c.foreign, "brought": c.brought,
              "addon": "Sack Settlement (Medieval II, M2EX)" if c.m2 else "Sack Settlement (Rome, REX)"}
     before = problems(ModData(data), campaign)
     results = []

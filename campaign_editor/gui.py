@@ -546,6 +546,20 @@ class App(tk.Tk):
         self.cb_template.bind("<<ComboboxSelected>>", lambda e: self.template_changed())
         field("Template (copied)", self.cb_template)
         self.lbl_template = lf.grid_slaves(row=row - 1, column=0)[0]
+        # New faction only: a faction of another mod brought whole (factionbring); the template is then its frame
+        self.bring = None
+        self.bring_row = ttk.Frame(lf)
+        self.bring_row.grid(row=row, column=1, sticky="w", padx=4, pady=(0, 2))
+        row += 1
+        b_from = ttk.Button(self.bring_row, text="From another mod...", command=self.bring_faction)
+        b_from.pack(side="left")
+        from .gui_util import tip as _tip_bring
+        _tip_bring(b_from, "Take a faction of another mod of the same game: its names, colours, units, name lists, figures "
+                    "on the map and in battle, flags and pictures come with it. The template above is the faction "
+                    "of this mod it is made on (picked by its culture - change it if you like).")
+        self.lbl_bring = ttk.Label(self.bring_row, text="")
+        self.lbl_bring.pack(side="left", padx=(6, 0))
+        self.b_unbring = ttk.Button(self.bring_row, text="Forget it", command=lambda: self.set_bring(None))
         self.e_name = ttk.Entry(lf, textvariable=self.v["name"])
         field("Internal name", self.e_name)
         # Rename... beside its label, not at the row's end (there it widened the whole box - the user, 2026-10-10)
@@ -1793,8 +1807,10 @@ class App(tk.Tk):
         self.e_name.configure(state="readonly" if edit else "normal")
         if edit:
             self.b_rename.pack(side="left", padx=(6, 0))
+            self.bring_row.grid_remove()
         else:
             self.b_rename.pack_forget()
+            self.bring_row.grid()
         for ws in self.extra_rows.values():             # shown again by load_existing when the faction has them
             for w in ws:
                 w.grid_remove()
@@ -4549,6 +4565,8 @@ class App(tk.Tk):
         self.sizes = {}
         self.kinds = {}
         self.field = []
+        if getattr(self, "bring", None) and self.bring.get("for") != self.mod.data:
+            self.set_bring(None)                         # another mod loaded: the faction picked for the old one goes
         self.editing_now, self.char_moves = None, {}
         self._kept_sides = {}                            # another campaign: New / Edit faction's kept work goes
         self.place_moves = {}
@@ -4871,6 +4889,55 @@ class App(tk.Tk):
                 theme.paint(b, rgb)
         self.status.set("Template %s: %s. Its units, buildings, names, traits and art are copied." %
                         (t, disp.get("display_name", t)))
+
+    def bring_faction(self):
+        """New faction > From another mod...: pick a mod and one of its factions; the window is filled from it."""
+        if not self.mod:
+            messagebox.showerror(APP, "load a mod first")
+            return
+        from .gui_factionbring import FactionBringWindow
+        FactionBringWindow(self, self.set_bring)
+
+    def set_bring(self, picked):
+        """The faction brought from another mod (None: forget it - the New faction is a copy of the template again).
+        Its names, colours and descriptions fill the window; the template becomes this mod's faction of its
+        culture; the internal name is its own unless this mod has one so called."""
+        from . import factionbring as FB
+        self.bring = dict({k: picked[k] for k in ("src", "faction", "campaign")}, **{"for": self.mod.data}) \
+            if picked else None
+        if not picked:
+            self.lbl_bring.configure(text="")
+            self.b_unbring.pack_forget()
+            self.status.set("New faction: a copy of the template again.")
+            return
+        fields = picked.get("fields") or {}
+        frame = FB.frame_of(self.mod, picked.get("culture"))
+        if frame:
+            self.v["template"].set(frame)
+            self.template_changed()
+        have = {n for n, _ in self.mod.factions()}
+        name = picked["faction"]
+        k = 2
+        while name in have:
+            name, k = "%s_%d" % (picked["faction"], k), k + 1
+        self.v["name"].set(name)
+        for key in ("display_name", "short_name", "adjective"):
+            if fields.get(key):
+                self.v[key].set(fields[key])
+        for t, key in ((self.t_descr, "description"), (self.t_long, "long_description")):
+            if fields.get(key):
+                t.delete("1.0", "end")
+                t.insert("1.0", fields[key])
+        for key, b in (("primary", self.b_primary), ("secondary", self.b_secondary)):
+            rgb = fields.get(key + "_colour")
+            if rgb:
+                self.colours[key] = tuple(rgb)
+                theme.paint(b, tuple(rgb))
+        where = os.path.basename(os.path.dirname(os.path.abspath(picked["src"]))) or picked["src"]
+        self.lbl_bring.configure(text="%s of %s" % (fields.get("display_name") or picked["faction"], where))
+        self.b_unbring.pack(side="left", padx=(6, 0))
+        self.status.set("%s of %s: Apply brings its units, names, figures, flags and pictures; made on %s. Its towns "
+                        "and armies are picked on this map." % (picked["faction"], where, frame))
 
     def rename_faction(self):
         """Edit faction > Rename...: the faction's code name changed in every file of the mod (factionrename) -
@@ -5838,6 +5905,8 @@ class App(tk.Tk):
             "kinds": {r: k for r, k in self.kinds.items() if r in self.chosen},
             "victory": self.victory.get(),
         }
+        if self.bring:                                  # a faction of another mod (factionbring.overlay)
+            opts["bring"] = {k: v for k, v in self.bring.items() if k != "for"}
         return v["template"], v["name"].lower(), opts
 
     def gather_edit(self):

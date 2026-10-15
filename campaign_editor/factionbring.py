@@ -165,6 +165,12 @@ def bring_names(plan, src, faction, new):
     plan.note(f, "%s's name lists: %s's own (%d name(s), %d new text(s))" % (new, faction, len(names), len(add)))
 
 
+def _kind(path):
+    """A picture's file kind by its whole ending: 'x.tga.dds' -> '.tga.dds', 'x.texture' -> '.texture'."""
+    name = os.path.basename(path).lower()
+    return name[name.find("."):] if "." in name else ""
+
+
 def _queued(plan, src, dst):
     """The plan copies this very file there already."""
     own = plan.mod.own(dst) if hasattr(plan.mod, "own") else dst
@@ -409,7 +415,14 @@ def overlay(plan, campaign, bring):
         folder = os.path.join(log.logs_dir() or os.path.expanduser("~"), "brought_pictures")
         art = plan.opts.setdefault("art", {})
         for rel, pic in art_picks(src, bring.get("campaign") or campaign, faction, new, folder).items():
-            art.setdefault(rel, pic)
+            if rel in art:
+                continue
+            if not rel.startswith("symbol:") and _kind(pic) == _kind(rel):
+                dst = os.path.join(plan.mod.data, *rel.split("/"))  # the same format: the file itself, byte for byte
+                if not _queued(plan, pic, dst):
+                    plan.copy(pic, dst)
+            else:
+                art[rel] = pic                          # a cut-out or another format: made to fit (Art's way)
     bring_names(plan, src, faction, new)
     bring_characters(plan, src, faction, new)
     bring_figures(plan, src, faction, new)
