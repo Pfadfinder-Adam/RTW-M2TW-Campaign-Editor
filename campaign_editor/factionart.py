@@ -160,6 +160,22 @@ def start_pictures(mod, campaign, faction):
     return out
 
 
+def leader_pic_size(mod, campaign):
+    """(w, h) of the campaign's leader pictures (leader_pic_<faction>.tga, the select screen's face) - the first there
+    is, else the size of a portrait card (69 x 96); a new one is made this size."""
+    folder = mod.campaign_dir(campaign)
+    try:
+        names = sorted(n for n in os.listdir(folder) if n.lower().startswith("leader_pic_") and n.lower() !=
+                       "leader_pic_fe.tga" and n.lower().endswith(".tga"))
+    except OSError:
+        names = []
+    for n in names:
+        got = tga_info(os.path.join(folder, n))
+        if got:
+            return got[0], got[1]
+    return 69, 96
+
+
 def leader_portrait(mod, campaign, faction):
     """(path, words) of the face the faction-select screen shows for a faction without a leader_pic_<faction>.tga
     (the user, 2026-10-14: 'in all three games the screen shows the leader's portrait'): its faction leader's

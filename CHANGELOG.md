@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- The faction tab's **Leader's face** has **Replace...** in both games: any picture becomes the faction's own
+  leader picture on the faction-select screen (`leader_pic_<faction>.tga` in the campaign folder).
 - On Load: a campaign whose factions are locked (Rome's Egypt, Gauls...; Barbarian Invasion's Celts...; Medieval
   II's Aztecs) offers to open them to play - with a backup; the Roman Senate, the Pope, the rebels and factions
   that start with no town stay locked.

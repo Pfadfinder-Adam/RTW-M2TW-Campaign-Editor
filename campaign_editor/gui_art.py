@@ -199,6 +199,17 @@ class ArtEditor(ttk.Frame):
             else:
                 ttk.Label(box, text="no faction leader on the map", foreground="#666", wraplength=150).pack(
                     anchor="w")
+            # a picture of its own for the screen (the user, 2026-10-15: 'Replace - any picture'; Medieval II had no
+            # button): leader_pic_<faction>.tga in the campaign folder, which every game's select screen reads first
+            target = os.path.relpath(os.path.join(a.mod.campaign_dir(a.v_campaign.get()), "leader_pic_%s.tga" % (
+                new or src_faction)), a.mod.data).replace("\\", "/")
+            waiting = a.art_replace.get(target)
+            if waiting:
+                ttk.Label(box, text="its own: %s (waits for Apply)" % os.path.basename(
+                    waiting if isinstance(waiting, str) else waiting.get("src", "")), foreground="#666",
+                    wraplength=150).pack(anchor="w")
+            ttk.Button(box, text="Replace...", command=lambda t=target: self.replace(
+                t, FA.leader_pic_size(a.mod, a.v_campaign.get()), "Leader's face")).pack(anchor="w", pady=(2, 0))
         for m in missing:
             ttk.Label(host, text=m, foreground="#666", wraplength=330, justify="left").pack(anchor="w")
         if FA.START_KINDS[0] not in kinds:

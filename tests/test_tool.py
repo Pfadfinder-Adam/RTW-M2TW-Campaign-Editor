@@ -6135,6 +6135,30 @@ building smith
             again = general_card(mod, "gauls", "character\tBrennus, named character, age 50, , x 9, y 9", False)
             self.assertEqual(again[0], path)                              # one face a name, every time
 
+    def test_leader_face_replace_writes_a_leader_pic_of_its_own(self):
+        """The user, 2026-10-15: the faction's leader's face (the select screen) gets Replace... in both games - a
+        faction with no leader_pic_<faction>.tga gets one in the campaign folder (every game reads it first), the size
+        of the campaign's other leader pictures, else of a portrait card."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import factionart as FA
+        from campaign_editor.plan import Plan
+        mod = ModData(self.root)
+        self.assertEqual(FA.leader_pic_size(mod, "test"), (69, 96))
+        folder = mod.campaign_dir("test")
+        Image.new("RGB", (80, 100), (1, 2, 3)).save(os.path.join(folder, "leader_pic_beta.tga"))
+        self.assertEqual(FA.leader_pic_size(mod, "test"), (80, 100))
+        src = os.path.join(self.root, "face.png")
+        Image.new("RGB", (160, 200), (200, 10, 10)).save(src)
+        rel = os.path.relpath(os.path.join(folder, "leader_pic_alpha.tga"), mod.data).replace(os.sep, "/")
+        plan = Plan(mod, "art", "art", {})
+        FA.write_art(plan, "alpha", rel, src)
+        plan.apply()
+        with Image.open(os.path.join(folder, "leader_pic_alpha.tga")) as im:
+            self.assertEqual(im.convert("RGB").getpixel((10, 10)), (200, 10, 10))
+
     def test_brought_faction_select_map_is_an_empty_stand_in(self):
         """Report #270 and the user, 2026-10-15: a brought faction keeps nothing of its frame (the template) - its
         faction-select map is not the frame's copy but a stand-in, this map with no land lit (Draw from the map lights
