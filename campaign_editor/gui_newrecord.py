@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 from . import editors as E
-from .gui_util import StepWindow
+from .gui_util import StepWindow, hint
 from .moddata import ModData
 
 UNIT_VALUES = [
@@ -901,11 +901,125 @@ class NewRecordWizard(StepWindow):
             if need:
                 ttk.Label(g, text="%d x %d" % need[:2], foreground="#666").grid(row=r, column=3, padx=6)
         g.columnconfigure(1, weight=1)
+        self._unit_picture_looks(vs, dict((k, n) for k, _, n in rows))
 
         def collect():
             for k, v in vs.items():
                 pics[k] = v.get().strip()
         self._collect = collect
+
+    def _source_card(self, info):
+        """The card (info: description picture) the new unit gets when no picture of its own is given: the copied
+        unit's (copy mode), None for a unit from nothing (the editor draws its initials)."""
+        from .units import card_path
+        st = self.state
+        if self.nothing() or not st.get("src"):
+            return None
+        lines = self._lines(st["src"])
+        dic = self._val(lines, "dictionary") or st["src"].replace(" ", "_")
+        owners = [x.strip() for x in (self._val(lines, "ownership") or "").split(",") if x.strip()]
+        from .units import owner_factions
+        facs = owner_factions(self.mod, owners)
+        return card_path(self.mod, facs[0] if facs else "", dic, info, owners=facs)
+
+    def _model_of_new(self):
+        """(ModelInfo, mount) of the new unit's soldiers: the copied unit's soldier model and mount, or the model
+        picked for a unit from nothing; (None, None) when the mod has no such model."""
+        from . import models as MO
+        st = self.state
+        cat = self.ed._model_catalogue()
+        if self.nothing():
+            return cat.get((st.get("model") or "").lower()), None
+        lines = self._lines(st["src"])
+        slots = [m for key, _, m in MO.unit_slots(lines) if key == "soldier"]
+        info = cat.get(slots[0].lower()) if slots else None
+        kind, mmodel = MO.unit_mount(self.mod, lines)
+        minfo = cat.get((mmodel or "").lower()) if kind else None
+        return info, ((minfo, kind) if minfo is not None else None)
+
+    def _unit_picture_looks(self, vs, needs):
+        """The pictures as they will be (yours, else the copied unit's) beside each other, and View in 3D... of the
+        new unit's soldier model with Make a card... / Make a picture... - the picture made there is put in the
+        field like a browsed one (#215: 'the same 3D view and own card as for the units there are')."""
+        look = ttk.Frame(self.body)
+        look.pack(fill="x", pady=(8, 0))
+        self._pic_photos = []
+        cells = {}
+        for k, label in (("card", "Unit card"), ("info", "Picture in the description")):
+            box = ttk.LabelFrame(look, text=label, padding=6)
+            box.pack(side="left", padx=(0, 12), anchor="n")
+            cells[k] = box
+
+        def show(*_):
+            if not look.winfo_exists():                   # the step was left; the field keeps the picture
+                return
+            self._pic_photos = []
+            for k, box in cells.items():
+                for w in box.winfo_children():
+                    w.destroy()
+                own = vs[k].get().strip()
+                path = own if own and os.path.isfile(own) else self._source_card(k == "info")
+                self._pic_thumb(box, path).pack(anchor="w")
+                ttk.Label(box, foreground="#666", wraplength=200, justify="left", text=(
+                    "yours: %s" % os.path.basename(own) if own and os.path.isfile(own) else
+                    "copied from %s" % self.state["src"] if path else "drawn by the editor (the unit's initials)")
+                          ).pack(anchor="w", pady=(2, 0))
+        for v in vs.values():
+            v.trace_add("write", show)
+        show()
+        bar = ttk.Frame(look)
+        bar.pack(side="left", anchor="n")
+        try:
+            info, mount = self._model_of_new()
+        except Exception as e:                            # a model file the mod cannot read: said, the step goes on
+            ttk.Label(bar, foreground="#a33", wraplength=260, text="cannot read the battle models: %s" % e).pack()
+            return
+        if info is None:
+            ttk.Label(bar, foreground="#666", wraplength=260, justify="left",
+                      text="no battle model of this mod to show in 3D").pack(anchor="w")
+            return
+        ttk.Label(bar, text="Its soldiers: %s" % info.name).pack(anchor="w")
+        ttk.Button(bar, text="View in 3D...", command=lambda: self._view_new(info, mount, vs, needs)).pack(
+            anchor="w", pady=(4, 0))
+        hint(bar, "The new unit's soldier model in 3D; Make a card... / Make a picture... there make its card or "
+                  "description picture from the view - put in here like a picture you browsed.", width=360).pack(
+            anchor="w", pady=(4, 0))
+
+    def _pic_thumb(self, parent, path, size=(80, 100)):
+        try:
+            from PIL import Image, ImageTk
+            im = Image.open(path).convert("RGBA")
+            im.thumbnail(size)
+            ph = ImageTk.PhotoImage(im)
+        except Exception:
+            return ttk.Label(parent, text="(none)", width=12, relief="sunken")
+        self._pic_photos.append(ph)
+        from .gui_picview import zoomable
+        return zoomable(tk.Label(parent, image=ph, relief="sunken"), path)
+
+    def _view_new(self, info, mount, vs, needs):
+        from .gui_meshview import ModelViewer
+        from .units import owner_factions
+        st = self.state
+        facs = owner_factions(self.mod, st.get("owners") or []) or [n for n, _ in self.mod.factions()][:1]
+        unit = st.get("type") or "the new unit"
+
+        def write(is_info, picture):
+            from . import log
+            import time
+            folder = os.path.join(log.logs_dir() or os.path.expanduser("~"), "made_pictures")
+            os.makedirs(folder, exist_ok=True)
+            k = "info" if is_info else "card"
+            src = os.path.join(folder, "%s_%s_%s.png" % ((st.get("dict") or "new_unit"), k,
+                                                         time.strftime("%Y%m%d_%H%M%S")))
+            picture.save(src)
+            st["pictures"][k] = src                         # kept even when another step is on show now
+            try:
+                vs[k].set(src)
+            except tk.TclError:
+                pass
+        ModelViewer(self, self.mod, info, facs, mount=mount,
+                    make={"unit": unit, "need": {False: needs.get("card"), True: needs.get("info")}, "write": write})
 
     def _building_pictures(self):
         """Each level has two pictures: in the town (the building panel) and when built (the wide one shown when

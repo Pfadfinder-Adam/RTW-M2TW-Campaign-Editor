@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- New unit step by step, Pictures: the card and description picture shown as they will be, and **View in 3D...**
+  of the new unit's soldiers with **Make a card...** / **Make a picture...**.
 - Bring units: a unit's ship type, Medieval II's mounted engine (an elephant's cannon) and an engine's own
   skeleton with its animation files come along; a banner the mod's banner file lacks is said.
 - Bring units (both games): the unit's own name call in battle comes along with its sound files, and it joins the
