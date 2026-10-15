@@ -6335,6 +6335,44 @@ building smith
         self.assertIn("type\tfs_new\nanim\tstand\tdata/b.cas\n", got)
         self.assertNotIn("data/c.cas", got)
 
+    def test_map_in_3d_from_the_game_textures_and_the_brushes_pictures(self):
+        """Maps > 3D (the user, 2026-10-15): the map's colour picture takes each point's texture by its climate and
+        ground (descr_aerial_map_ground_types.txt), the water by its depth; the heights the brushes paint into
+        (ModData's cached pictures) count at once; the view is a picture of the asked size."""
+        try:
+            import numpy  # noqa: F401
+            from PIL import Image
+        except ImportError:
+            self.skipTest("NumPy / Pillow not installed")
+        from campaign_editor import terrain3d as T3
+        d = os.path.join(self.root, "data")
+        camp = os.path.join(d, "world", "maps", "campaign", "test")
+        W, H = 9, 9                                    # 2 x 4 + 1 heights points
+        grey = [[(200, 200, 200)] * W for _ in range(H)]
+        grey[0][0] = (0, 0, 120)                       # one water point (blue, bottom-left): its depth shows
+        write_tga(os.path.join(camp, "map_heights.tga"), W, H, grey)
+        write_tga(os.path.join(camp, "map_ground_types.tga"), W, H, [[(0, 128, 0)] * W for _ in range(H)])
+        write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
+              "climate default\n{\n\tfertility_high\tgreen.tga\tsnow.tga\n}\n")
+        tex = os.path.join(d, "terrain", "aerial_map", "ground_types")
+        os.makedirs(tex)
+        Image.new("RGB", (16, 16), (0, 200, 0)).save(os.path.join(tex, "green.tga"))
+        Image.new("RGB", (16, 16), (250, 250, 250)).save(os.path.join(tex, "snow.tga"))
+        mod = ModData(d)
+        sets, density = T3.aerial_sets(mod)
+        self.assertEqual(sets["default"]["fertility_high"], ("green.tga", "snow.tga"))
+        cm = T3.colour_map(mod, "test")
+        self.assertEqual(cm.notes, [])
+        mid = cm.rgb[cm.rgb.shape[0] // 2, cm.rgb.shape[1] // 2]
+        self.assertGreater(int(mid[1]), int(mid[0]) + 40)               # the green texture, lit
+        winter = T3.colour_map(mod, "test", winter=True)
+        self.assertGreater(int(winter.rgb[cm.rgb.shape[0] // 2, cm.rgb.shape[1] // 2][0]), 150)    # the snow
+        corner = cm.rgb[-1, 0]                                         # the water point (bottom-left, top-down)
+        self.assertGreater(int(corner[2]), int(corner[0]))
+        cam = T3.Camera(cm)
+        pic = T3.render(cm, cam, 64, 40)
+        self.assertEqual(pic.shape, (40, 64, 3))
+
     def test_engine_found_in_the_game_folder_and_the_limit_raised_in_the_mod(self):
         # M2EX copied over the game's root (any case), the mod in mods/<mod>/data: the engine is seen, the
         # game's descr_ex.txt is NOT read for the mod (engines read a mod's own _ex files only - "Mods that don't

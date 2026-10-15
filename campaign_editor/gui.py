@@ -873,6 +873,11 @@ class App(tk.Tk):
         self.heights_tab = ttk.Frame(self.nb, padding=0)
         self.nb.add(self.heights_tab, text="  %s  " % self.HEIGHTS_TAB)
         self.nb.hide(self.heights_tab)
+        # the map in 3D in the game's ground textures, the brushes' work seen at once (gui_map3d), made when opened
+        self.map3d_tab = ttk.Frame(self.nb, padding=0)
+        self.nb.add(self.map3d_tab, text="  %s  " % self.MAP3D_TAB)
+        self.nb.hide(self.map3d_tab)
+        self.map3d = None
         tab = ttk.Frame(self.nb, padding=4)
         self.nb.add(tab, text="  Diplomacy  ")
         self.dip_editor = DiplomacyEditor(tab)
@@ -1457,7 +1462,8 @@ class App(tk.Tk):
 
     HEIGHTS_TAB = "Coast & heights"
     TERRAIN_TABS = ("Terrain", HEIGHTS_TAB)         # both show the one Terrain editor, each its own brushes
-    MAP_TABS = ("Map",) + TERRAIN_TABS              # Maps' own tabs
+    MAP3D_TAB = "3D"
+    MAP_TABS = ("Map",) + TERRAIN_TABS + (MAP3D_TAB,)   # Maps' own tabs
 
     def _map_tab_only(self, on):
         """Maps shows its Map and Terrain tabs alone; New / Edit faction all the others (the map is the Map
@@ -1477,6 +1483,13 @@ class App(tk.Tk):
             return
         if tab in self.TERRAIN_TABS:
             self.open_terrain()
+            return
+        if tab == self.MAP3D_TAB:
+            if self.map3d is None:
+                from .gui_map3d import Map3DView
+                self.map3d = Map3DView(self.map3d_tab, self)
+                self.map3d.pack(fill="both", expand=True)
+            self.map3d.load()
             return
         if tab == "Diplomacy":
             self.load_diplomacy()
