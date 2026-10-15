@@ -2639,7 +2639,7 @@ building smith
 
     def test_select_map_drawn_from_the_campaign_map(self):
         """The user, 2026-10-14: the faction-select map made from the campaign map itself - relief and rivers, no
-        signs - with the faction's land filled with its colour at 75 % (2026-10-15: a full fill 'looked ugly'), no
+        signs - with the faction's land filled with its colour at 50 % (2026-10-15: a full fill 'looked ugly', 75 % still a full fill), no
         borders inside it; a campaign without select pictures to learn from gets one too (384 wide, the map's
         shape)."""
         try:
@@ -2657,8 +2657,8 @@ building smith
                                                                          img.height)))
         bare = FA.map_drawing(mod, "test", [], (200, 10, 10)).getpixel(
             (int((x + 0.5) * im.width / img.width), int((img.height - 1 - y + 0.5) * im.height / img.height)))
-        want = tuple(round(0.25 * b + 0.75 * c) for b, c in zip(bare, (200, 10, 10)))
-        self.assertTrue(all(abs(a - b) <= 3 for a, b in zip(px, want)), (px, want))   # 75 %: the land shows through
+        want = tuple(round(0.5 * b + 0.5 * c) for b, c in zip(bare, (200, 10, 10)))
+        self.assertTrue(all(abs(a - b) <= 3 for a, b in zip(px, want)), (px, want))   # 50 %: the land shows through
         x2, y2 = mod.city_tiles("test")[regions[1]]
         other = im.getpixel((int((x2 + 0.5) * im.width / img.width), int((img.height - 1 - y2 + 0.5) * im.height /
                                                                             img.height)))

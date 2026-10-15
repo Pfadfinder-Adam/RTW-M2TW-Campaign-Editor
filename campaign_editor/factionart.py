@@ -835,10 +835,13 @@ def draw_select_map(mod, campaign, regions, colour):
 SELECT_SIZE = 384                 # Rome's campaign-select pictures: 384 wide (384 x 237 for its 255 x 156 map)
 
 
+FILL = 0.5           # the faction's colour over its land on the select map (75 % still looked a full fill)
+
+
 def map_drawing(mod, campaign, regions, colour, size=None):
     """The faction-select map drawn from the campaign map itself: the map seen from above in the game's own ground
     textures (minimap.top_view: relief, rivers, the sea's depths - the user, 2026-10-15: 'like our snapshot'), the
-    faction's regions filled with its colour at 75 % (the land shows through - a full fill 'looked ugly') inside a
+    faction's regions filled with its colour at FILL (the land shows through - a full fill 'looked ugly') inside a
     crisp outer line, the borders smoothed (no tile steps, no town / port pixels sticking out; along the sea the
     land's own coast). Without the heights picture: the editor's map picture (ground colours, relief, rivers).
     Where the campaign's other select pictures have a frame round the map (Medieval II), the drawing goes where the
@@ -882,7 +885,7 @@ def map_drawing(mod, campaign, regions, colour, size=None):
         area = smooth.resize(size, Image.LANCZOS).point(lambda v: 255 if v >= 128 else 0)
         width = max(1, round(min(size) / 160))      # 2 px on a 384 x 237 picture
         ring = ImageChops.subtract(area.filter(ImageFilter.MaxFilter(2 * width + 1)), area)
-        filled = Image.blend(big, Image.new("RGB", size, rgb), 0.75)
+        filled = Image.blend(big, Image.new("RGB", size, rgb), FILL)
         out = Image.composite(filled, big, area.filter(ImageFilter.GaussianBlur(0.6)))
         return Image.composite(Image.new("RGB", size, edge), out, ring.filter(ImageFilter.GaussianBlur(0.6)))
     got = select_background(mod, campaign)
