@@ -6110,6 +6110,21 @@ building smith
             again = general_card(mod, "gauls", "character\tBrennus, named character, age 50, , x 9, y 9", False)
             self.assertEqual(again[0], path)                              # one face a name, every time
 
+    def test_brought_faction_select_map_drawn_from_this_map(self):
+        """Report #270: a faction brought from another mod kept its frame's (the template's) faction-select map - the
+        frame's land lit. Brought, it is made from zero: its select map is drawn from this map in its own colour,
+        unless a picture of its own was given."""
+        from campaign_editor import factionbring as FB
+        from campaign_editor.plan import Plan
+        mod = ModData(self.root)
+        plan = Plan(mod, "alpha", "picts", {"primary_colour": (10, 200, 30)})
+        self.assertTrue(FB.own_select_map(plan, "test", "picts"))
+        self.assertEqual(plan.opts["select_map"], {"on": True, "colour": [10, 200, 30]})
+        mine = os.path.relpath(os.path.join(mod.campaign_dir("test"), "map_picts.tga"), mod.data).replace(os.sep, "/")
+        plan = Plan(mod, "alpha", "picts", {"art": {mine: "/x/own.png"}})
+        self.assertFalse(FB.own_select_map(plan, "test", "picts"))      # a picture of its own wins
+        self.assertNotIn("select_map", plan.opts)
+
     def test_brought_faction_pictures_and_figures(self):
         # its own pictures come even when the new faction keeps its name; a strat model this mod lacks comes with
         # only its own texture line (renamed), paths as this mod writes them, and its files

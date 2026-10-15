@@ -462,6 +462,23 @@ def art_picks(src, campaign, faction, new, folder):
     return out
 
 
+def own_select_map(plan, campaign, new):
+    """A brought faction is made from zero (report #270: 'not a clone - pictures of the clone stayed'): its
+    faction-select map is never its frame's copy (the frame's land lit) and the other mod's is of another map - it is
+    drawn from THIS map with its own towns in its colour, unless a picture of its own was given. True when asked."""
+    from .factionart import map_name
+    target = map_name(plan.mod.campaign_dir(campaign), new)
+    rel = os.path.relpath(target, plan.mod.data).replace("\\", "/")
+    if rel in (plan.opts.get("art") or {}):
+        return False
+    sel = dict(plan.opts.get("select_map") or {})
+    sel["on"] = True
+    if not sel.get("colour") and plan.opts.get("primary_colour"):
+        sel["colour"] = list(plan.opts["primary_colour"])
+    plan.opts["select_map"] = sel
+    return True
+
+
 def overlay(plan, campaign, bring):
     """Lay the brought faction (bring = {'src': its data folder, 'faction', 'campaign'}) over plan.new, made on its
     frame (build.build calls this before the start is written)."""
@@ -505,6 +522,7 @@ def overlay(plan, campaign, bring):
                     plan.copy(pic, dst)
             else:
                 art[rel] = pic                          # a cut-out or another format: made to fit (Art's way)
+    own_select_map(plan, campaign, new)
     bring_names(plan, src, faction, new)
     bring_characters(plan, src, faction, new)
     bring_figures(plan, src, faction, new)
@@ -514,4 +532,4 @@ def overlay(plan, campaign, bring):
                         new, plan.template, len(shared), len(brought)))
 
 
-__all__ = ["factions", "frame_of", "window_fields", "own_units", "overlay", "art_picks"]
+__all__ = ["factions", "frame_of", "window_fields", "own_units", "overlay", "art_picks", "own_select_map"]

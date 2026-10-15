@@ -171,6 +171,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- New faction > From another mod: the brought faction kept its template's faction-select map -> it is made from
+  zero: nothing of the template is seen, its select map is drawn from this map in its own colour.
 - Campaign rules: the unit sizes' note said changed numbers made the game's Unit size choice disappear -> it says
   where it is: with REX on the options' Controls page (not Video).
 - The faction-select map drawn without a picture from above (on the editor's own map picture) has the same smooth

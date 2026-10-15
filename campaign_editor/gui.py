@@ -554,9 +554,10 @@ class App(tk.Tk):
         b_from = ttk.Button(self.bring_row, text="From another mod...", command=self.bring_faction)
         b_from.pack(side="left")
         from .gui_util import tip as _tip_bring
-        _tip_bring(b_from, "Take a faction of another mod of the same game: its names, colours, units, name lists, figures "
-                    "on the map and in battle, flags and pictures come with it. The template above is the faction "
-                    "of this mod it is made on (picked by its culture - change it if you like).")
+        _tip_bring(b_from, "Take a faction of another mod of the same game, made from zero: its names, colours, units, "
+                    "name lists, figures on the map and in battle, flags and pictures come with it; nothing of a "
+                    "faction of this mod is seen (one of its culture only gives it its lines in the game's lists), "
+                    "its select map is drawn from this map.")
         self.lbl_bring = ttk.Label(self.bring_row, text="")
         self.lbl_bring.pack(side="left", padx=(6, 0))
         self.b_unbring = ttk.Button(self.bring_row, text="Forget it", command=lambda: self.set_bring(None))
@@ -4911,6 +4912,8 @@ class App(tk.Tk):
         if not picked:
             self.lbl_bring.configure(text="")
             self.b_unbring.pack_forget()
+            self.lbl_template.configure(text="Template (copied)")
+            self.cb_template.state(["!disabled"])
             self.status.set("New faction: a copy of the template again.")
             return
         fields = picked.get("fields") or {}
@@ -4944,11 +4947,17 @@ class App(tk.Tk):
                 self.colours[key] = tuple(rgb)
                 theme.paint(b, tuple(rgb))
         where = os.path.basename(os.path.dirname(os.path.abspath(picked["src"]))) or picked["src"]
-        self.lbl_bring.configure(text="%s of %s" % (fields.get("display_name") or picked["faction"], where))
+        # made from zero (report #270: 'not a clone'): nothing of the template is seen - it only gives the new
+        # faction its lines in the game's lists; the select map is drawn from this map
+        self.lbl_template.configure(text="From zero (lists like)")
+        self.cb_template.state(["disabled"])
+        self.lbl_bring.configure(text="%s of %s - from zero: only its own things" % (
+            fields.get("display_name") or picked["faction"], where))
         self.b_unbring.pack(side="left", padx=(6, 0))
-        self.status.set("%s of %s: Apply brings its units, names, family, figures, flags and pictures; made on %s. "
-                        "Pick its towns on the map - its family stands by the capital, the garrisons are its own "
-                        "units." % (picked["faction"], where, frame))
+        self.status.set("%s of %s, from zero: Apply brings its units, names, family, figures, flags and pictures - "
+                        "nothing of %s (it only gives the lines in the game's lists); its select map is drawn from "
+                        "this map. Pick its towns on the map - its family stands by the capital, the garrisons are "
+                        "its own units." % (picked["faction"], where, frame))
 
     def rename_faction(self):
         """Edit faction > Rename...: the faction's code name changed in every file of the mod (factionrename) -
