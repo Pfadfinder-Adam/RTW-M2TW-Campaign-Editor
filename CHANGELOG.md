@@ -162,6 +162,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Medieval II (with M2EX): the Avoid Growth tick's words and the Raze Settlement button's words were bigger and
+  lighter than the game's own -> the same size and ink as the game's (Add-ons > Update it brings it in).
 - Bring units / buildings and New faction > From another mod listed the other game's mods too, and picking one
   only gave an error -> they list only mods of the game loaded, and say which mod the things go into.
 - Maps > 3D: looking at the map from beyond its near edge drew that edge on down to the bottom as stretched

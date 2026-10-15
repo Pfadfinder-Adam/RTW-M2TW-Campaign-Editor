@@ -7788,8 +7788,9 @@ building smith
         self.assertLess(m2.index('"PLAIN_CHECKBOX_BG"'), m2.index('"CHECKBOX_BG"'))
         # measured on a tester's PrintScreen (1596 x 900): the game's words lighter, smaller, spaced wider; its box
         # 24 x 17 units, wider than high; the row 66 units under the population figures
-        for part in ("local AG_M2_TEXT = 12.5", "local AG_M2_TRACK = 1.3", "local AG_M2_BOX = [24, 17]",
-                     "local AG_INK_M2 = [147, 131, 107, 255]", "local AG_M2_ROW = [472, 66]"):
+        # report #277 (2026-10-15): measured again - the game's words smaller, closer and darker than ours
+        for part in ("local AG_M2_TEXT = 9.5", "local AG_M2_TRACK = 0.5", "local AG_M2_BOX = [24, 17]",
+                     "local AG_INK_M2 = [128, 119, 97, 255]", "local AG_M2_ROW = [472, 66]"):
             self.assertIn(part, text)
         self.assertNotIn("delete ", text.replace("rawdelete", ""))         # the engines forbid 'delete'
         got = A.read_settings(a, text)

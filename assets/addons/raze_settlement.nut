@@ -228,9 +228,9 @@ local RAZE_BUTTON = true
 // button's height; without it the first of these game fonts the game has
 // (sq ::raze_ui_fonts() lists them).
 local RAZE_BUTTON_LABEL = "Raze Settlement"
-local RAZE_BUTTON_TEXT = 0.4
+local RAZE_BUTTON_TEXT = 0.25        // report #279: at 0.4 ours stood 17 px high to the game's 10
 local RAZE_BUTTON_FACES = ["verdana_sml", "font_14", "tnr_med"]
-local RAZE_BUTTON_INK = [30, 26, 20, 255]
+local RAZE_BUTTON_INK = [0, 0, 0, 255]     // the game's three write in black
 // Words under the mouse: none, as on the game's own three buttons ("" = none).
 local RAZE_BUTTON_TIP = ""
 // The scroll is made for three buttons: the 4th would stand on its bottom frame

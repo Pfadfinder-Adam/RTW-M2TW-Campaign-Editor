@@ -48,12 +48,14 @@ local AG_INK = [96, 82, 62, 255]
 // Medieval II's own tick words and boxes, measured on a tester's PrintScreen (1596 x 900, 2026-10-09: ours stood 8 px
 // too high, its words darker, bigger and closer together, its box square): the words' em AG_M2_TEXT units in the
 // scroll's light ink, AG_M2_TRACK units between letters (the game's face is wider than Verdana), AG_M2_GAP from the
-// words to the box, the box AG_M2_BOX units wide x high (wider than high, the tick stretched over it)
-local AG_M2_TEXT = 12.5
-local AG_M2_TRACK = 1.3
+// words to the box, the box AG_M2_BOX units wide x high (wider than high, the tick stretched over it).
+// Measured again on report #277 (2026-10-15): the game's capitals 9 px high to ours 12, its small letters 7 to
+// 9, 2-3 px between letters to ours 4, its ink (128, 119, 97) - ours were too big, spaced and light
+local AG_M2_TEXT = 9.5
+local AG_M2_TRACK = 0.5
 local AG_M2_GAP_BOX = 10
 local AG_M2_BOX = [24, 17]
-local AG_INK_M2 = [147, 131, 107, 255]
+local AG_INK_M2 = [128, 119, 97, 255]
 // Rome's Automanage, measured on a tester's screenshot (report R-20261007-8A29B4): its words (128, 119, 97), its box
 // 24 x 18 units (wider than high) standing 99 units right of where its words start - ours stands in that column too
 // (a tester's photo, 2026-10-09: with 98 / 25 our box stood out 1 px on the left, its right edge even; 2026-10-14,
