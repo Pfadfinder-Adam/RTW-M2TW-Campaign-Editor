@@ -17,7 +17,7 @@ from . import theme
 from .gui_util import ShortHint
 
 TITLE = "Interface"
-WORDS, WORDS_RGB = "#e8dcb0", (232, 220, 176)        # the menus' light parchment words (a guess until read)
+WORDS = "#ffdd77"                                    # the menus' gold words (RomeTW.exe: RGB 255, 221, 119)
 HANDLE = 7                                   # the corner square that sizes a piece, in screen pixels
 KINDS = {"UIP_MENU_BUTTON": "a button that opens a page", "UIP_BACK_BUTTON": "the back button",
          "UIP_STATIC_TEXT": "words", "UIP_EMPTY_ART": "a picture"}
@@ -118,7 +118,7 @@ class InterfaceWindow(tk.Toplevel):
         mb = ttk.Frame(mid)
         mb.pack(fill="x", pady=(4, 0))
         ttk.Checkbutton(mb, text="Pictures", variable=self.v_back, command=self.draw).pack(side="left")
-        self.v_frames = tk.BooleanVar(value=True)
+        self.v_frames = tk.BooleanVar(value=False)       # the game's own look first; frames on a tick
         ttk.Checkbutton(mb, text="Frames of every piece", variable=self.v_frames, command=self.draw).pack(
             side="left", padx=(theme.BUTTON_GAP * 2, 0))
         ttk.Button(mb, text="Redo", command=self.do_redo).pack(side="right")
@@ -326,10 +326,40 @@ class InterfaceWindow(tk.Toplevel):
                 pass
         return self._fonts[font_id]
 
-    def _words_image(self, words, font_id, s, box_w):
-        """The words in the game's letters at the screen's scale (lines broken to the piece's width as the game
-        does), or None without Pillow / a font."""
-        key = (words, font_id, round(s, 3), int(box_w))
+    def _part(self, name):
+        """A part picture of data/menu (buttons_composite2.tga...) as RGBA, cached; None when not there."""
+        if name not in self._tex:
+            self._tex[name] = None
+            p = L.texture_file(self.mod, self.path, name)
+            if p:
+                try:
+                    from .recolour import read_picture
+                    self._tex[name] = read_picture(p)
+                except Exception:
+                    pass
+        return self._tex[name]
+
+    def _drawn(self, k, w, h, s):
+        """(PhotoImage, offset in layout pixels) of a piece the game draws itself, at the screen's scale."""
+        key = ("drawn", k, int(w), int(h))
+        if key not in self._pics:
+            self._pics[key] = None
+            try:
+                from PIL import Image, ImageTk
+                from . import menudraw as MD
+                img, off = MD.piece_image(self._part, k, w / s, h / s)
+                if img is not None:
+                    img = img.resize((max(1, int(img.width * s)), max(1, int(img.height * s))), Image.BILINEAR)
+                    self._pics[key] = (ImageTk.PhotoImage(img), off)
+            except Exception:
+                pass
+        return self._pics[key]
+
+    def _words_image(self, words, font_id, s, box_w, colour=(232, 220, 176), shadow=False):
+        """The words in the game's letters and colour at the screen's scale (lines broken to the piece's width as
+        the game does; static texts with the game's black shadow 1 px left and down), or None without Pillow /
+        a font."""
+        key = (words, font_id, round(s, 3), int(box_w), colour, shadow)
         if key in self._pics:
             return self._pics[key]
         self._pics[key] = None
@@ -364,8 +394,15 @@ class InterfaceWindow(tk.Toplevel):
             for i in imgs:
                 mask.paste(i, ((W - i.width) // 2, y))
                 y += i.height
-            col = Image.new("RGBA", mask.size, WORDS_RGB + (255,))
-            col.putalpha(mask)
+            col = Image.new("RGBA", (W + 1, H + 1), (0, 0, 0, 0))
+            if shadow:
+                black = Image.new("RGBA", mask.size, (0, 0, 0, 255))
+                black.putalpha(mask)
+                col.alpha_composite(black, (0, 1))
+            front = Image.new("RGBA", mask.size, tuple(colour) + (255,))
+            front.putalpha(mask)
+            col.alpha_composite(front, (1, 0))
+            W, H = col.size
             col = col.resize((max(1, int(W * s)), max(1, int(H * s))), Image.LANCZOS)
             self._pics[key] = ImageTk.PhotoImage(col)
         except Exception:
@@ -416,18 +453,25 @@ class InterfaceWindow(tk.Toplevel):
                 if pic is not None:
                     x0, y0, _, _ = self._rect(x)
                     c.create_image(x0, y0, image=pic, anchor="nw")
+        from . import menudraw as MD
         for x in self.doc.pieces(self.page):
             x0, y0, x1, y1 = self._rect(x)
             pic = self._picture(x, s) if self.v_back.get() else None
+            k = MD.kind(x["identifier"], x["object"], self.doc.art(x) is not None)
             if pic is not None:
                 c.create_image(x0, y0, image=pic, anchor="nw")
-            elif self.v_frames.get() or x["index"] == self.picked:
-                c.create_rectangle(x0, y0, x1, y1, outline="#5a7fa8")
+            else:
+                drawn = self._drawn(k, x1 - x0, y1 - y0, s) if self.v_back.get() else None
+                if drawn is not None:                       # what the game draws itself, from its own parts
+                    img, off = drawn
+                    c.create_image(x0 - off * s, y0 - off * s, image=img, anchor="nw")
+                if self.v_frames.get() or x["index"] == self.picked:
+                    c.create_rectangle(x0, y0, x1, y1, outline="#5a7fa8")
             words = self.words.get((x["text"] or "").upper())
             if words:
                 anchor = {"left": "w", "right": "e"}.get(x["align"] or "", "center")
                 tx = {"w": x0 + 3, "e": x1 - 3}.get(anchor, (x0 + x1) / 2)
-                img = self._words_image(words, x["font"], s, x1 - x0)
+                img = self._words_image(words, x["font"], s, x1 - x0, *MD.text_colour(k))
                 if img is not None:                         # in the game's own letters
                     c.create_image(tx, (y0 + y1) / 2, image=img, anchor=anchor)
                 else:

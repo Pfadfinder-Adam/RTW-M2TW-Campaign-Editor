@@ -3280,6 +3280,37 @@ building smith
         finally:
             LM.engine_of = real
 
+    def test_menu_pieces_drawn_the_games_way(self):
+        """Pieces with no picture of their own are drawn as RomeTW.exe draws them, from its parts in data/menu: the kind
+        from the identifier / object, a tick box = one cell of buttons_composite2 as a square of the piece's width,
+        frames a 9-slice from 8 px outside the piece, a slider arrows + track + knob."""
+        from campaign_editor import menudraw as MD
+        self.assertEqual(MD.kind("UIP_VIDEO_HDR", "empty_toggle_button", False), "tick")
+        self.assertEqual(MD.kind("UIP_VIDEO_RES_DROPDOWN", "empty_art", False), "dropdown")
+        self.assertEqual(MD.kind("UIP_AUDIO_MASTER_VOL_SLIDER", "empty_art", False), "slider")
+        self.assertEqual(MD.kind("UIP_STATIC_TEXT", "empty_art", False), "static")
+        self.assertEqual(MD.kind("UIP_MENU_BUTTON", "empty_push_button", False), "button")
+        self.assertEqual(MD.kind("UIP_MENU_BUTTON", "logo", True), "art")
+        self.assertEqual(MD.text_colour("static"), ((255, 223, 127), True))
+        self.assertEqual(MD.text_colour("button"), ((255, 221, 119), False))
+        try:
+            from PIL import Image
+        except ImportError:
+            return
+        grid = Image.new("RGBA", (128, 128))
+        for n in range(16):                                     # each cell its own colour
+            grid.paste((n * 10, 0, 0, 255), (32 * (n % 4), 32 * (n // 4), 32 * (n % 4 + 1), 32 * (n // 4 + 1)))
+        parts = lambda name: grid                               # noqa: E731
+        t = MD.tick(parts, 20)
+        self.assertEqual((t.size, t.getpixel((10, 10))[0]), ((20, 20), 0))
+        self.assertEqual(MD.tick(parts, 20, ticked=True).getpixel((10, 10))[0], 10)
+        f, off = MD.framed(parts, 100, 40)
+        self.assertEqual((f.size, off), ((116, 56), 8))
+        self.assertEqual([f.getpixel(p)[0] for p in ((2, 2), (50, 2), (50, 28), (113, 53))], [0, 10, 50, 150])
+        sl = MD.slider(parts, 120, 20, value=0)
+        self.assertEqual((sl.getpixel((5, 5))[0], sl.getpixel((115, 5))[0], sl.getpixel((25, 5))[0]), (120, 130, 70))
+        self.assertIsNone(MD.tick(lambda name: None, 20))
+
     def test_interface_window_moves_copies_and_undoes(self):
         """Interface... (the user, 2026-10-15: 'a full interface editor'): the mod's menu layout drawn page by page; a
         piece picked, nudged, copied under the next number, the change undone and redone; a double click on a button
