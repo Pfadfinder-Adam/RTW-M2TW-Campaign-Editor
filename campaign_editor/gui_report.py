@@ -105,10 +105,13 @@ def open_report(app, message="", kind="bug", tab=None):
             name, what, report.size_words(os.path.getsize(f)), " - already sent with %s, not changed since" % sent
             if sent else ""), extra=28, anchor="w")
     # the mod's file list (names, sizes, dates - no contents): what the mod has and changes against the game
-    v_files = tk.BooleanVar(value=app.mod is not None)
+    files_sent = report.files_sent(app.mod)        # sent already, the mod not written since: stays out (#269)
+    v_files = tk.BooleanVar(value=app.mod is not None and not files_sent)
     if app.mod is not None:
         one_line(ttk.Checkbutton(box, variable=v_files, width=1), "%s - the list of the mod's files: name, size, "
-                 "date, new / other size than the game's (no contents)" % report.MOD_FILES, extra=28, anchor="w")
+                 "date, new / other size than the game's (no contents)%s" % (
+                     report.MOD_FILES, " - already sent with %s, the mod not changed since" % files_sent
+                     if files_sent else ""), extra=28, anchor="w")
     if not any(n.endswith("system.log.txt") for _, n, _ in files):
         row = ttk.Frame(box)
         row.pack(anchor="w", fill="x")
@@ -290,6 +293,8 @@ def open_report(app, message="", kind="bug", tab=None):
                 report.remember_sent(result["id"], result.get("issue"), info["kind"],
                                      report.scrub(msg, hide).split("\n")[0])
                 report.remember_sent_logs([fl for v, fl in ticks if v.get()], result["id"])
+                if v_files.get() and app.mod is not None:
+                    report.remember_files_sent(app.mod, result["id"])
                 lbl_state.configure(text="Sent: %s" % result["id"])
                 messagebox.showinfo(APP, "Sent - thank you! Your report's number is %s.\n\nThe author's answer "
                                          "comes to this window, tab 'Answers to my reports' - the Report button "

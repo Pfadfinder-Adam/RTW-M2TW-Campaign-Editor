@@ -1109,6 +1109,25 @@ building smith
             here = SimpleNamespace(data=os.path.join(rome, "data"))
             self.assertEqual([lab for lab, _ in packs.same_game_mods(mods, here)], ["Rome: bi"])
 
+    def test_report_mod_file_list_not_sent_again_unchanged(self):
+        """Report #269: the mod's file list went with every report, like a log sent already - now it stays unticked
+        when it went with an earlier report and the editor has not written the mod since (a new backup = changed)."""
+        from campaign_editor import report, settings
+        from campaign_editor.plan import BACKUP_DIR
+        saved = dict(settings.get("reports_sent_files") or {})
+        self.addCleanup(settings.put, "reports_sent_files", saved)
+        mod = ModData(self.root)
+        settings.put("reports_sent_files", {})
+        self.assertIsNone(report.files_sent(mod))
+        report.remember_files_sent(mod, "R-20261015-AAAAAA")
+        self.assertEqual(report.files_sent(mod), "R-20261015-AAAAAA")
+        bdir = os.path.join(self.root, BACKUP_DIR, "20991231_000000_x")          # the editor wrote the mod
+        os.makedirs(bdir)
+        later = time.time() + 120
+        os.utime(bdir, (later, later))
+        self.assertIsNone(report.files_sent(mod))
+        self.assertIsNone(report.files_sent(None))
+
     def test_recolour_brush_dab_never_has_its_right_edge_before_its_left(self):
         """Report #281: painting by hand in Recolour stopped with 'x1 must be greater than or equal to x0' - the
         points are the shown picture's divided by its scale (fractions) and a size-1 dab's right edge came out a

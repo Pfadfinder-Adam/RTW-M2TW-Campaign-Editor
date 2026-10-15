@@ -256,6 +256,41 @@ def already_sent(f):
         return None
 
 
+def _files_mark(mod):
+    """What says the mod's file list changed, fast (no walk through its files): its data folder, the folder's own
+    time and the newest of the editor's backups (every write makes one) and of Restore."""
+    from .plan import BACKUP_DIRS
+    root = os.path.dirname(os.path.abspath(mod.data))
+    times = []
+    for p in [mod.data] + [os.path.join(root, b) for b in BACKUP_DIRS]:
+        try:
+            times.append(int(os.path.getmtime(p)))
+            if p != mod.data:
+                times += [int(os.path.getmtime(os.path.join(p, n))) for n in os.listdir(p)]
+        except OSError:
+            pass
+    return "%s|%d" % (os.path.normcase(os.path.abspath(mod.data)), max(times or [0]))
+
+
+def files_sent(mod):
+    """The report number the mod's file list went with, the mod unchanged by the editor since (report #269: send
+    it again only when something changed, like the logs), or None."""
+    from . import settings
+    if mod is None:
+        return None
+    try:
+        return (settings.get("reports_sent_files") or {}).get(_files_mark(mod))
+    except OSError:
+        return None
+
+
+def remember_files_sent(mod, rid):
+    from . import settings
+    marks = dict(settings.get("reports_sent_files") or {})
+    marks[_files_mark(mod)] = rid
+    settings.put("reports_sent_files", dict(list(marks.items())[-50:]))
+
+
 def remember_sent_logs(files, rid):
     """After a report went: its finished logs and how far the editor's log was sent."""
     from . import settings
