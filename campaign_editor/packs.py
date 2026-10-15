@@ -249,6 +249,17 @@ def game_kind(mod):
     return "medieval2" if os.path.isdir(os.path.join(mod.data, "unit_models")) else "rome"
 
 
+def same_game_mods(mods, mod):
+    """[(label, data folder)] of mods (the editor's list of mods in the game folders) of the same game as mod, mod
+    itself left out - what a 'from another mod' window offers (report #274: Rome's mods offered while a Medieval II
+    mod was loaded, and picking one only brought an error)."""
+    from types import SimpleNamespace
+    kind = game_kind(mod)
+    here = os.path.normcase(os.path.abspath(mod.data))
+    return [(label, d) for label, d in mods
+            if os.path.normcase(os.path.abspath(d)) != here and game_kind(SimpleNamespace(data=d)) == kind]
+
+
 # ---------------------------------------------------------------------------
 # Taking units out
 # ---------------------------------------------------------------------------

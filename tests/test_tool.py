@@ -1087,6 +1087,28 @@ building smith
         self.assertIn("alpha", cards[0]["of"])
         self.assertTrue(cards[0]["others"][cards[0]["of"].index("alpha")][0].startswith(os.path.join(game, "data")))
 
+    def test_from_another_mod_lists_only_mods_of_the_same_game(self):
+        """Report #274: with a Medieval II mod loaded, Bring buildings listed Rome's mods (bi among them) and picking
+        one only brought 'buildings go between mods of one game'. The 'from another mod' windows list only mods of
+        the loaded game, the loaded one left out."""
+        from types import SimpleNamespace
+        from campaign_editor import packs
+        with tempfile.TemporaryDirectory() as t:
+            rome, m2 = os.path.join(t, "Rome Total War Gold"), os.path.join(t, "Medieval II Total War")
+            for game, exe in ((rome, "REX.exe"), (m2, "M2EX.exe")):
+                os.makedirs(os.path.join(game, "data"))
+                write(os.path.join(game, exe), "")
+            for d in (os.path.join(rome, "bi", "data"), os.path.join(m2, "mods", "a", "data"),
+                      os.path.join(m2, "mods", "b", "data")):
+                os.makedirs(d)
+            mods = [("Rome: (the game)", os.path.join(rome, "data")), ("Rome: bi", os.path.join(rome, "bi", "data")),
+                    ("M2: (the game)", os.path.join(m2, "data")), ("M2: a", os.path.join(m2, "mods", "a", "data")),
+                    ("M2: b", os.path.join(m2, "mods", "b", "data"))]
+            here = SimpleNamespace(data=os.path.join(m2, "mods", "a", "data"))
+            self.assertEqual([lab for lab, _ in packs.same_game_mods(mods, here)], ["M2: (the game)", "M2: b"])
+            here = SimpleNamespace(data=os.path.join(rome, "data"))
+            self.assertEqual([lab for lab, _ in packs.same_game_mods(mods, here)], ["Rome: bi"])
+
     def test_recolour_brush_dab_never_has_its_right_edge_before_its_left(self):
         """Report #281: painting by hand in Recolour stopped with 'x1 must be greater than or equal to x0' - the
         points are the shown picture's divided by its scale (fractions) and a size-1 dab's right edge came out a

@@ -55,11 +55,10 @@ class BringWindow(StepWindow):
 
     # ---- step 1: the other mod ----
     def s_mod(self):
-        self._note("Pick the mod to bring %s from. It is only read - nothing in it changes. It must be a mod of the "
-                   "same game (Rome to Rome - with REX, HLR, BI... -, Medieval II to Medieval II)." % self.what)
-        here = os.path.normcase(os.path.abspath(self.mod.data))
-        mods = [(label, d) for label, d in getattr(self.app, "_mods", [])
-                if os.path.normcase(os.path.abspath(d)) != here]
+        self._note("Pick the mod to bring %s from - they go into the mod loaded now (%s). It is only read - nothing "
+                   "in it changes. It must be a mod of the same game (Rome to Rome - with REX, HLR, BI... -, "
+                   "Medieval II to Medieval II); the list shows only those." % (self.what, self.mod.data))
+        mods = packs.same_game_mods(getattr(self.app, "_mods", []), self.mod)
         v = tk.StringVar(value=self.src.data if self.src else "")
         if mods:
             ttk.Label(self.body, text="Mods in your game folder:").pack(anchor="w")

@@ -21,10 +21,9 @@ class FactionBringWindow(tk.Toplevel):
         self.title("A faction from another mod")
         frm, bar = window_body(self, 640, 560)
         ttk.Label(frm, text="Pick the mod, then its faction. The mod is only read - nothing in it changes. It must be "
-                            "a mod of the same game (Rome to Rome, Medieval II to Medieval II).").pack(anchor="w")
-        here = os.path.normcase(os.path.abspath(app.mod.data))
-        self.mods = [(label, d) for label, d in getattr(app, "_mods", [])
-                     if os.path.normcase(os.path.abspath(d)) != here]
+                            "a mod of the same game (Rome to Rome, Medieval II to Medieval II); the list shows only "
+                            "those.", wraplength=600, justify="left").pack(anchor="w")
+        self.mods = packs.same_game_mods(getattr(app, "_mods", []), app.mod)
         self.v_path = tk.StringVar()
         if self.mods:
             ttk.Label(frm, text="Mods in your game folder:").pack(anchor="w", pady=(8, 0))

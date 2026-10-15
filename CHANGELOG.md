@@ -162,6 +162,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Bring units / buildings and New faction > From another mod listed the other game's mods too, and picking one
+  only gave an error -> they list only mods of the game loaded, and say which mod the things go into.
 - Maps > 3D: looking at the map from beyond its near edge drew that edge on down to the bottom as stretched
   stripes -> the map ends there and the background shows, as at the sides.
 - The faction-select map drawn from the campaign map covered Medieval II's rope frame -> it fills only the map
