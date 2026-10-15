@@ -1721,6 +1721,19 @@ def s_addon_upkeep(c, mod):
     return plan
 
 
+@step("Add-on: One Recruitment Grid put in (Medieval II)",
+      "a town's Recruitment tab is one grid read row by row, as in Rome - no blocks of columns by kind (the game "
+      "itself puts agents and ships first)")
+def s_addon_grid(c, mod):
+    from . import addons as AD
+    if not c.m2:
+        raise Skip("Medieval II only (Rome's panel is one grid already)")
+    a = AD.by_key("one_recruit_grid")
+    plan = Plan(mod, "addon", a.key, {})
+    AD.plan_install(plan, a, {}, mod)
+    return plan
+
+
 @step("Add-on: Avoid Growth installed (REX / M2EX)",
       "the settlement scroll of your town has the game's own tick 'Avoid Growth': tick it, end a few turns - the town "
       "never grows past the people it had; recruit there - it shrinks, then grows back up to that ceiling")
@@ -2759,7 +2772,8 @@ COVERAGE = {
     "Campaign rules": ["s_rules", "s_rules_all"],
     "Campaign start (descr_strat.txt)": ["s_campaign_start"],
     "Engine settings (REX / M2EX)": ["s_engine_rules"],
-    "Add-ons": ["s_addon", "s_addon_diplomacy", "s_addon_growth", "s_addon_order", "s_addon_upkeep"],
+    "Add-ons": ["s_addon", "s_addon_diplomacy", "s_addon_growth", "s_addon_order", "s_addon_upkeep",
+                "s_addon_grid"],
     "Add-ons: an older version in the game put right on Load (its settings kept)":
         "offered on Load only when an older copy is in the game - the test mod puts this version in (the unit test "
         "test_older_addons_are_put_right_on_load writes an older one and takes the offer)",

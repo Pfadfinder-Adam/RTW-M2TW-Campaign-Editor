@@ -77,9 +77,10 @@ class FileAddon(Addon):
     the Add-ons page shows, previews and fills them as it does a script's."""
     files = True
 
-    def __init__(self, key, title, module, summary, settings, defaults):
-        super().__init__(key, title, "both", key + ".files", summary, settings,
-                         "nothing - no engine: it changes the mod's own files, on any mod of both games")
+    def __init__(self, key, title, module, summary, settings, defaults, game="both"):
+        super().__init__(key, title, game, key + ".files", summary, settings,
+                         "nothing - no engine: it changes the mod's own files, on any mod of %s" % (
+                             "both games" if game == "both" else "Medieval II" if game == "medieval2" else "Rome"))
         self.module, self.defaults = module, defaults
 
     def template(self):
@@ -87,7 +88,7 @@ class FileAddon(Addon):
 
     def code(self):
         from importlib import import_module
-        from . import upkeep  # noqa: F401 - named, so the exe surely carries it (a test-mod run lacked it)
+        from . import upkeep, onegrid  # noqa: F401 - named, so the exe surely carries them (a test-mod run lacked it)
         return import_module("campaign_editor." + self.module)
 
 
@@ -216,7 +217,14 @@ ADDONS = [
               "export_descr_unit.txt, so it shows the real, higher numbers everywhere. Take it out puts back exactly "
               "the old numbers (kept in CampaignEditor_upkeep.json beside that file).",
               [Setting("FACTOR", "float", "Upkeep x", "2 doubles it, 1.5 adds half, 3 triples it")],
-              {"FACTOR": "2.0"})
+              {"FACTOR": "2.0"}),
+    FileAddon("one_recruit_grid", "One Recruitment Grid (Medieval II)", "onegrid",
+              "A town's recruitment panel as one grid read row by row, as in Rome, instead of the game's blocks by "
+              "kind (infantry, missiles, cavalry ... each in its own columns). Any Medieval II, no engine needed: "
+              "it sets recruitment_sort_simple in descr_campaign_db.xml; Take it out puts the line back as it was. "
+              "In that grid the game itself shows the agents first, then the ships, then the land units - only an "
+              "engine change can move them.",
+              [], {}, game="medieval2"),
 ]
 
 

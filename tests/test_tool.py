@@ -6404,6 +6404,46 @@ building smith
         self.assertFalse(os.path.isfile(UK.mark_path(mod)))
         self.assertIsNone(AD.installed(ModData(self.root), a))
 
+    def test_one_recruitment_grid_addon(self):
+        """One Recruitment Grid (the user, 2026-10-15: on the Add-ons page): Medieval II's recruitment panel as one
+        grid, as in Rome - descr_campaign_db.xml's recruitment_sort_simple set to true, put back on Take it out, byte
+        for byte; a mod without the file gets the game's copy and loses it again."""
+        from campaign_editor import addons as AD, onegrid as OG
+        xml = ("<campaign_db>\n  <display>\n    <recruitment_sort_simple bool=\"false\"/>\n  </display>\n"
+               "</campaign_db>\n")
+        game = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, game)
+        write(os.path.join(game, "medieval2.exe"), "exe")
+        write(os.path.join(game, "data", "descr_campaign_db.xml"), xml)
+        shutil.copytree(self.root, os.path.join(game, "mods", "m"))
+        a = AD.by_key("one_recruit_grid")
+        self.assertTrue(a.fits("medieval2") and not a.fits("rome"))
+        mod = ModData(os.path.join(game, "mods", "m"))
+        data = mod.data
+        own = os.path.join(data, "descr_campaign_db.xml")
+        if os.path.isfile(own):
+            os.remove(own)
+        for has_own in (True, False):
+            if has_own:
+                write(own, xml)
+            self.assertIsNone(AD.installed(mod, a))
+            plan = Plan(mod, "addon", a.key, {})
+            AD.plan_install(plan, a, {}, mod)
+            plan.apply()
+            with open(own, encoding="utf-8") as fh:
+                self.assertIn('<recruitment_sort_simple bool="true"/>', fh.read())
+            self.assertEqual(AD.installed(ModData(data), a), {})
+            plan = Plan(ModData(data), "addon", a.key, {})
+            AD.plan_remove(plan, a, mod)
+            plan.apply()
+            if has_own:
+                with open(own, encoding="utf-8") as fh:
+                    self.assertEqual(fh.read(), xml)
+                os.remove(own)
+            else:
+                self.assertFalse(os.path.isfile(own))              # the copy it put in is gone again
+            self.assertFalse(os.path.isfile(OG.mark_path(mod)))
+
     def test_every_addon_says_what_it_needs_in_words(self):
         """Report R-20261009-30F6C9 (Rome with REX, BI): a click on Upkeep x 2 in Add-ons crashed - its 'needs' was
         an empty list and the page writes 'Needs: ' + needs (Share's README too). Every add-on says it in words."""
