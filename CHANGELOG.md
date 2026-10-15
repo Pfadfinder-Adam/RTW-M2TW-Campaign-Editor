@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- The map shows what Apply will write before it: a new faction's towns in its colour, its capital under a gold
+  star, garrisons and towns given in other windows (a dashed orange ring = not written yet).
 - Recolour while a new faction is being made: no more 'create it first' - its pictures are recoloured by the same
   Apply that creates it.
 - New unit step by step, Pictures: the card and description picture shown as they will be, and **View in 3D...**

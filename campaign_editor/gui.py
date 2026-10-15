@@ -3641,6 +3641,10 @@ class App(tk.Tk):
         colours = dict(self._colours_all)
         me = ""                              # Maps: no faction of its own, every faction alike
         owners = self.owners_after(me, owners)
+        # New / Edit faction's work not written yet: its towns in its colour, its capital marked (#223 / #219: 'we
+        # picked the capital and do not see it on the map')
+        waiting, capitals = self.sides_on_map(owners, colours)
+        owners.update(getattr(self, "map_owners", {}))    # a town given on the Map since counts last
         chars, armies_at = [], set()
         tiles = self.mod.city_tiles(self.v_campaign.get())
         town_moves = {tiles[r]: xy for (w, r), xy in self.place_moves.items() if w == "city" and r in tiles}
@@ -3829,6 +3833,7 @@ class App(tk.Tk):
         self.map_view.allow_religion(self._m2())
         self.map_view.tools = self._map_tools()           # the legend's signs that are tools here
         self.map_view.ports_gone = set(self.ports_gone)
+        self.map_view.waiting_towns, self.map_view.capitals = waiting, capitals
         try:                                              # Find matches the names players read too
             from .regionedit import shown_labels
             keys = list(self.regions) + [i.get("settlement") for i in self.regions.values() if i.get("settlement")]
@@ -3843,6 +3848,12 @@ class App(tk.Tk):
         # the rebels' too: report #167) shows the same flag on the roof as an army in it
         self.map_view.own_garrison = {st.region: len(st.garrison) for fb in self.strat.factions for st in fb.settlements
                                 if st.garrison}
+        self._kept_on_map(owners, waiting)
+        for side in ("new", "edit"):                     # garrisons picked in New / Edit faction, not written yet
+            st = self._kept_sides.get(side)
+            for region, units in ((st or {}).get("garrisons") or {}).items():
+                if isinstance(units, (list, tuple)) and units:
+                    self.map_view.own_garrison[region] = len(units)
         picking = self._pick and self._kept_sides.get(self._pick["side"])
         self.map_view.load(self._cmap, owners, colours, me, picking["chosen"] if picking else (),
                            on_city=self._pick_town if picking else None, chars=chars,
@@ -4606,6 +4617,76 @@ class App(tk.Tk):
                     owners[r] = self.v_give.get() or "slave"
         owners.update(getattr(self, "map_owners", {}))   # towns given to any faction on the Map
         return owners
+
+    def _kept_on_map(self, owners, waiting):
+        """The other windows' changes kept for Apply (a town window's owner or garrison, Many towns...), read from
+        descr_strat as they will leave it (kept_view): owners and garrisons on the map before the write (#219)."""
+        if not self.session_parts():
+            return
+        try:
+            view = self.kept_view()
+            want = os.path.normcase(os.path.abspath(view.campaign_file(self.v_campaign.get(), "descr_strat.txt")))
+            path = next((p for p in view._cache if os.path.normcase(os.path.abspath(p)) == want), None)
+            if path is None:                             # nothing kept touches descr_strat
+                return
+            after = Strat(view._cache[path])
+        except Exception as e:
+            log.write("map: kept changes not shown: %s" % e)
+            return
+        before = self.strat.owners()
+        for region, owner in after.owners().items():
+            if before.get(region) != owner:
+                owners[region] = owner
+                waiting.add(region)
+        now = {st.region: len(st.garrison) for fb in self.strat.factions for st in fb.settlements}
+        for fb in after.factions:
+            for st in fb.settlements:
+                if len(st.garrison) != now.get(st.region, 0):
+                    self.map_view.own_garrison[st.region] = len(st.garrison)
+                    waiting.add(st.region)
+
+    def sides_on_map(self, owners, colours):
+        """New / Edit faction's work not written yet, laid on the map's owners / colours in place: (the towns whose
+        owner changes there, {capital town: faction}). The work on show or kept while another work is on show
+        (_kept_sides) - what Apply will write, seen before it."""
+        waiting, capitals = set(), {}
+        for side in ("new", "edit"):
+            st = self._kept_sides.get(side)
+            if st is None and self.v_mode.get() == side:
+                st = self._side_state()
+            if not st:
+                continue
+            f = st["fields"]
+            chosen = list(st.get("chosen") or [])
+            if side == "new":
+                tag = (f.get("name") or "").strip().lower()
+                if not tag or not (f.get("template") or "").strip():
+                    continue
+                prim = (st.get("colours") or {}).get("primary") or colours.get(f["template"].strip())
+                if prim:
+                    colours.setdefault(tag, tuple(prim))
+                gone = []
+                was_cap = None
+            else:
+                tag = (f.get("template") or "").strip()
+                now = st.get("editing_now") or {}
+                if not tag or not now:
+                    continue
+                had = list(now.get("regions") or [])
+                gone = [r for r in had if r not in chosen] if chosen else []
+                chosen = [r for r in chosen if r not in had]
+                was_cap = now.get("capital")
+            for r in chosen:
+                owners[r] = tag
+                waiting.add(r)
+            give = (st.get("vars") or {}).get("v_give") or "slave"
+            for r in gone:
+                owners[r] = give
+                waiting.add(r)
+            cap = (f.get("capital") or "").strip()
+            if cap and cap != was_cap and (cap in chosen or side == "edit"):
+                capitals[cap] = tag
+        return waiting, capitals
 
     def name_list_key(self):
         return self.v["template"].get().strip() if self.editing() else "(new)"

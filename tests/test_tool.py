@@ -2331,6 +2331,56 @@ building smith
                 self.assertIsNotNone(text, fd.key)
                 self.assertNotIn("do not name", text, (fd.key, fd.value))
 
+    def test_map_shows_the_faction_work_not_written_yet(self):
+        """Reports #223 / #219: the capital and towns picked for a new faction were not on the map until Apply. The
+        map lays New / Edit faction's kept work over the owners: its towns in its colour (said as waiting), the
+        capital starred; Edit's towns let go go to the faction they are given to."""
+        try:
+            from campaign_editor.gui import App
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        from types import SimpleNamespace
+        new = {"fields": {"name": "Saba", "template": "alpha", "capital": "B_R"}, "chosen": ["A_R", "B_R"],
+               "colours": {"primary": (0, 120, 0)}, "vars": {}}
+        edit = {"fields": {"template": "gamma", "capital": "D_R"}, "chosen": ["D_R", "E_R"], "vars": {"v_give": "slave"},
+                "editing_now": {"regions": ["C_R", "D_R"], "capital": "C_R"}}
+        fake = SimpleNamespace(_kept_sides={"new": new, "edit": edit}, v_mode=SimpleNamespace(get=lambda: "map"))
+        owners, colours = {"A_R": "slave", "B_R": "beta", "C_R": "gamma", "D_R": "gamma"}, {"alpha": (200, 0, 0)}
+        waiting, capitals = App.sides_on_map(fake, owners, colours)
+        self.assertEqual(owners, {"A_R": "saba", "B_R": "saba", "C_R": "slave", "D_R": "gamma", "E_R": "gamma"})
+        self.assertEqual(waiting, {"A_R", "B_R", "C_R", "E_R"})
+        self.assertEqual(capitals, {"B_R": "saba", "D_R": "gamma"})
+        self.assertEqual(colours["saba"], (0, 120, 0))
+
+    def test_map_shows_changes_kept_for_apply(self):
+        """Report #219: what other windows keep for Apply (a town given, a garrison) is seen on the map before the
+        write - read from descr_strat as the kept plans will leave it."""
+        try:
+            from campaign_editor.gui import App
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        from types import SimpleNamespace
+        from campaign_editor.edit import map_changes
+        from campaign_editor.plan import kept_texts
+        from campaign_editor.strat import Strat
+        mod = ModData(os.path.join(self.root, "data"))
+        plan = Plan(mod, "map", "map", {})
+        map_changes(plan, "test", {"owners": {"B_R": "alpha"}})
+
+        def view():
+            v = ModData(mod.data)
+            for path, f in kept_texts([plan]).items():
+                v._cache[path] = f
+            return v
+        strat = Strat(mod.load(mod.campaign_file("test", "descr_strat.txt")))
+        fake = SimpleNamespace(session_parts=lambda: {"town": {}}, kept_view=view, strat=strat,
+                               v_campaign=SimpleNamespace(get=lambda: "test"),
+                               map_view=SimpleNamespace(own_garrison={}))
+        owners, waiting = strat.owners(), set()
+        App._kept_on_map(fake, owners, waiting)
+        self.assertEqual(owners["B_R"], "alpha")
+        self.assertIn("B_R", waiting)
+
     def test_signs_letters_stand_out_on_any_colour(self):
         """A letter or picture on a coloured sign (a town's hall, an agent's sign, a resource's letters, a colour
         button): black on a bright colour, white on a dark one - Egypt's white disc hid its agents' white signs."""

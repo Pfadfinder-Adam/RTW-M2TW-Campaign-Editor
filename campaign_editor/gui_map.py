@@ -86,6 +86,9 @@ class MapView(ttk.Frame):
         self.on_layers = on_layers                      # the window redraws when a layer that needs it changes
         self.cmap = None
         self.owners, self.colours, self.faction, self.chosen = {}, {}, None, set()
+        # New / Edit faction's work not written yet (App.sides_on_map): towns whose owner changes on Apply (a dashed
+        # orange ring) and {capital town: faction} (a gold star over it)
+        self.waiting_towns, self.capitals = set(), {}
         self.labels = {}
         self.on_city = None
         self.status = status
@@ -960,6 +963,11 @@ class MapView(ttk.Frame):
             if not getattr(self, "everyone", False):          # Maps: no faction is 'yours'
                 row("one of your towns", town(red, "#ffd400", 3))
             row("rebel village (no town yet)", town("", "black", 1, hollow=True))
+            if self.waiting_towns:
+                row("changes owner on Apply (not written yet)", lambda x, yy: (town(red, "black", 1)(x, yy), lc.create_rectangle(
+                    x - 11, yy - 11, x + 11, yy + 11, outline="#ff8c00", width=2, dash=(3, 2))))
+            if self.capitals:
+                row("capital picked, not written yet", lambda x, yy: self._star(x, yy, 7, (), lc))
             row("an army in it: a flag on its roof", lambda x, yy: self._roof_flag(x - 6, yy + 5, 13, "__legend__", ()))
             row("a port (click the coast)", port, "port")
             row("a fort (owner's colour)",
@@ -1446,6 +1454,12 @@ class MapView(ttk.Frame):
                                width=3 if mine else 1, tags=("city", "city:" + region))
             if r >= 6:
                 self._hall(sx, sy, size / 2, rgb, ("city", "city:" + region))
+            if region in self.waiting_towns and not picking:        # given on Apply: said by a dashed ring
+                c.create_rectangle(sx - r - 3, sy - r - 3, sx + r + 3, sy + r + 3, outline="#ff8c00", width=2,
+                                   dash=(3, 2), tags=("city", "city:" + region))
+            if region in self.capitals:                  # the capital picked, not written yet: a gold star over it
+                self._star(sx, sy - r - max(5, r), max(5, r * 0.9), ("city", "city:" + region))
+                mine = True                              # its name shown at any zoom
             if self.v_names.get() and (self.z >= 4 or mine):
                 name = self.labels.get(region) or cm.info.get(region, {}).get("settlement", region)
                 names.append((not mine, sx + r + 2, sy, name))
@@ -1466,6 +1480,16 @@ class MapView(ttk.Frame):
         if self.v_chars.get() and signs and not self.region_mode:
             self._characters(cw, ch, size)
         self._size_badge()
+
+    def _star(self, x, y, r, tags, canvas=None):
+        """A five-pointed gold star centred at x, y (a capital not written yet); canvas: the legend's."""
+        import math
+        pts = []
+        for i in range(10):
+            a = -math.pi / 2 + i * math.pi / 5
+            rr = r if i % 2 == 0 else r * 0.45
+            pts += [x + rr * math.cos(a), y + rr * math.sin(a)]
+        (canvas or self.canvas).create_polygon(*pts, fill="#ffd400", outline="black", width=1, tags=tags)
 
     def _special_marks(self, cw, ch):
         """The special places (engine-drawn models, specialplaces.py): a gold diamond on the tile, its name beside
