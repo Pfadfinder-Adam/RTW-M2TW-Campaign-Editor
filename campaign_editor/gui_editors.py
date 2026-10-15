@@ -15,8 +15,6 @@ from .gui_util import save_copy
 from .moddata import ModData, _ci
 from .plan import Plan
 
-ALL_OWNERS = "All owners"                       # 'Pictures for': one card / description picture for every owner
-
 CHANGED = "#fff2b3"          # a field changed and not written yet
 REMOVED = "#f4c7c3"          # a line to be removed
 ADDED = "#d9f2d0"            # a line to be added
@@ -806,13 +804,13 @@ class RecordEditor(ttk.Frame):
         return next((src for src, t, _ in reversed(self.imports) if set(t) & set(first)), None)
 
     def _pictures_for(self, facs):
-        """The owners a unit's card / description picture is for: every owner ('All owners'), or the one picked in
-        'Pictures for' - the game reads each faction's own ui/units/<faction> (ui/unit_info/<faction>) folder."""
-        self.v_pfor = getattr(self, "v_pfor", tk.StringVar(value=ALL_OWNERS))
+        """[the faction] a unit's card / description picture is for: the one picked in 'Pictures for' (the faction
+        shown first by default) - each faction has its own (ui/units/<faction>, ui/unit_info/<faction>); one picture
+        is never put in for every owner (the user, 2026-10-15: 'they are always different')."""
+        self.v_pfor = getattr(self, "v_pfor", tk.StringVar())
         if self.v_pfor.get() not in facs:
-            self.v_pfor.set(ALL_OWNERS)
-        pick = self.v_pfor.get()
-        return list(facs) if pick == ALL_OWNERS else [pick]
+            self.v_pfor.set(facs[0] if facs else "")
+        return [self.v_pfor.get()] if self.v_pfor.get() else []
 
     def _unit_pictures(self):
         from .gui_util import flow
@@ -826,17 +824,16 @@ class RecordEditor(ttk.Frame):
         # second row when the window is narrow; the explanations sit on '?', the problems stay in sight (the user,
         # 2026-10-10)
         pick = self._pictures_for(facs)
-        if len(facs) > 1:                                  # one card for every owner, or each its own (Diocletian)
+        if len(facs) > 1:                                  # each owner its own card (Diocletian)
             top = ttk.Frame(self.pics)
             top.pack(fill="x", pady=(0, 4))
             ttk.Label(top, text="Pictures for").pack(side="left")
-            cb = ttk.Combobox(top, textvariable=self.v_pfor, values=[ALL_OWNERS] + list(facs), state="readonly",
-                              width=26)
+            cb = ttk.Combobox(top, textvariable=self.v_pfor, values=list(facs), state="readonly", width=26)
             cb.pack(side="left", padx=4)
             cb.bind("<<ComboboxSelected>>", lambda ev: self.show_pictures())
             hint(top, "The game shows each faction the card in its own folder (ui/units/<faction>, the description "
-                      "picture in ui/unit_info/<faction>). 'All owners': Import puts one picture in every owner's "
-                      "folder; pick a faction to give it a card of its own - the others keep theirs.").pack(
+                      "picture in ui/unit_info/<faction>). Import and Make a card put the picture in for the faction "
+                      "picked here only - the other owners keep theirs.").pack(
                 side="left", padx=4)
         row = ttk.Frame(self.pics)
         row.pack(fill="x")
@@ -1300,7 +1297,7 @@ class RecordEditor(ttk.Frame):
         if self.kind != "unit" or not self.current:
             return None
         dic, unit = self.value("dictionary"), self.current[0]
-        facs = self._pictures_for(self._factions_of())         # 'Pictures for': every owner or the one picked
+        facs = self._pictures_for(self._factions_of())         # 'Pictures for': the faction picked
         if not dic:
             return None
         need = {False: E.unit_picture_need(self.mod), True: E.unit_picture_need(self.mod, True)}

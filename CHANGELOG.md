@@ -5,8 +5,8 @@
 ### Added
 - **Rebels...** (beside Mercenaries): rebel types - their units, kind, chance, the name players read - new, copied,
   renamed, deleted; which regions have which type, many at once, with a faction filter (both games).
-- The map shows what Apply will write before it: a new faction's towns in its colour, its capital under a gold
-  star, garrisons and towns given in other windows (a dashed orange ring = not written yet).
+- The map shows what Apply will write before it: a new faction's towns in its colour with their regions yellow as
+  a selection, garrisons and towns given in other windows; every faction's capital has a star inside its square.
 - Recolour while a new faction is being made: no more 'create it first' - its pictures are recoloured by the same
   Apply that creates it.
 - New unit step by step, Pictures: the card and description picture shown as they will be, and **View in 3D...**
@@ -140,8 +140,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
-- A unit's card or description picture put in for one faction replaced every faction's -> **Pictures for** picks
-  all owners or one faction; the others keep their own.
+- A unit's card or description picture put in for one faction replaced every faction's -> it goes to the faction
+  picked in **Pictures for** only; the others keep their own.
 - Bring units (Medieval II): the bodies of a unit's armour upgrades were left behind - they come along now.
 - Bigger map (x3): a river could be left 2 pixels wide in one place, and Rome stopped while loading the map -
   every river is one pixel wide now.

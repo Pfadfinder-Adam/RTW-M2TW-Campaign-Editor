@@ -2346,10 +2346,11 @@ building smith
                 "editing_now": {"regions": ["C_R", "D_R"], "capital": "C_R"}}
         fake = SimpleNamespace(_kept_sides={"new": new, "edit": edit}, v_mode=SimpleNamespace(get=lambda: "map"))
         owners, colours = {"A_R": "slave", "B_R": "beta", "C_R": "gamma", "D_R": "gamma"}, {"alpha": (200, 0, 0)}
-        waiting, capitals = App.sides_on_map(fake, owners, colours)
+        capitals = {"C_R": "gamma", "B_R": "beta"}
+        waiting = App.sides_on_map(fake, owners, colours, capitals)
         self.assertEqual(owners, {"A_R": "saba", "B_R": "saba", "C_R": "slave", "D_R": "gamma", "E_R": "gamma"})
         self.assertEqual(waiting, {"A_R", "B_R", "C_R", "E_R"})
-        self.assertEqual(capitals, {"B_R": "saba", "D_R": "gamma"})
+        self.assertEqual(capitals, {"B_R": "saba", "D_R": "gamma"})          # gamma's old capital loses its star
         self.assertEqual(colours["saba"], (0, 120, 0))
 
     def test_map_shows_changes_kept_for_apply(self):

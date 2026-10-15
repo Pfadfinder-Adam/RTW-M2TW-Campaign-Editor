@@ -3650,7 +3650,10 @@ class App(tk.Tk):
         owners = self.owners_after(me, owners)
         # New / Edit faction's work not written yet: its towns in its colour, its capital marked (#223 / #219: 'we
         # picked the capital and do not see it on the map')
-        waiting, capitals = self.sides_on_map(owners, colours)
+        # every faction's capital (its first town in descr_strat), then the ones picked and not written yet
+        capitals = {fb.settlements[0].region: fb.name for fb in self.strat.factions
+                    if fb.name != "slave" and fb.settlements}
+        waiting = self.sides_on_map(owners, colours, capitals)
         owners.update(getattr(self, "map_owners", {}))    # a town given on the Map since counts last
         chars, armies_at = [], set()
         tiles = self.mod.city_tiles(self.v_campaign.get())
@@ -4652,11 +4655,11 @@ class App(tk.Tk):
                     self.map_view.own_garrison[st.region] = len(st.garrison)
                     waiting.add(st.region)
 
-    def sides_on_map(self, owners, colours):
-        """New / Edit faction's work not written yet, laid on the map's owners / colours in place: (the towns whose
-        owner changes there, {capital town: faction}). The work on show or kept while another work is on show
+    def sides_on_map(self, owners, colours, capitals):
+        """New / Edit faction's work not written yet, laid on the map's owners / colours / capitals ({town: faction})
+        in place; returns the towns whose owner changes there. The work on show or kept while another work is on show
         (_kept_sides) - what Apply will write, seen before it."""
-        waiting, capitals = set(), {}
+        waiting = set()
         for side in ("new", "edit"):
             st = self._kept_sides.get(side)
             if st is None and self.v_mode.get() == side:
@@ -4692,8 +4695,10 @@ class App(tk.Tk):
                 waiting.add(r)
             cap = (f.get("capital") or "").strip()
             if cap and cap != was_cap and (cap in chosen or side == "edit"):
+                if was_cap and capitals.get(was_cap) == tag:
+                    capitals.pop(was_cap)
                 capitals[cap] = tag
-        return waiting, capitals
+        return waiting
 
     def name_list_key(self):
         return self.v["template"].get().strip() if self.editing() else "(new)"
