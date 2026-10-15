@@ -9914,7 +9914,7 @@ building smith
         packs.import_pack(plan, man, files, ["alpha"], names)
         cn, ln = packs.building_names(tmod, bman)
         packs.import_buildings(plan, bman, bfiles, ["alpha"], cn, ln, {"alpha general": names["alpha general"][0]})
-        self.assertIn("hidden_resource britain", plan.report())     # said in Preview
+        self.assertIn("hidden resources britain", plan.report())    # said in Preview, in plain words
         bdir = plan.apply()
         with open(ModData(troot).file("edb")) as fh:
             text = fh.read()
