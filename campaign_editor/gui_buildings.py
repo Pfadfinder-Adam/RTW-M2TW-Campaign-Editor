@@ -106,15 +106,23 @@ class BuildingsEditor(ttk.Frame):
 
     def chains(self):
         """(building, [levels this faction may build]) for every chain it may build,
-        plus chains the town already has."""
-        out = []
+        plus chains the town already has. A level its towns can never grow big enough for is left out (the user,
+        2026-10-15: 'if it can never reach them, why draw them') - one the town has stays; how many were left out
+        is said under the title."""
+        from .buildings import out_of_reach, top_settlement
+        top = top_settlement(self.buildings, self.faction, self.culture, self.template, castle=self.kind == "castle")
+        out, self.hidden = [], 0
         for b in self.buildings or ():
             # a level given or taken on the Roster tab counts as the faction's list will be
             lv = [l for l in b.levels if self.roster.get((b.name, l.name),
                                                          available(l, self.faction, self.culture, self.template))
                   and (self.kind is None or l.kind in (None, self.kind))]     # a castle offers castle levels
+            far = [l for l in lv if out_of_reach(l, top) and self.current.get(b.name) != l.name]
+            self.hidden += len(far)
+            lv = [l for l in lv if l not in far]
             if lv or b.name in self.current:
                 out.append((b, lv))
+        self.top = top
         return out
 
     def redraw(self):
@@ -130,6 +138,8 @@ class BuildingsEditor(ttk.Frame):
         for w in self.inner.winfo_children():
             w.destroy()
         rows = [self._row(b, levels) for b, levels in self.chains()]
+        if self.hidden_note():
+            self.info.configure(text=self.hidden_note())
         self.update_idletasks()
         self._cell = max((r.winfo_reqwidth() for r in rows), default=300) + 8
         self._rows, self._cols = rows, 0
@@ -193,10 +203,18 @@ class BuildingsEditor(ttk.Frame):
             w.bind("<Enter>", lambda e, t=tip: self.info.configure(text=t))
         return f
 
+    def hidden_note(self):
+        """The words for the levels left out (chains), or ''."""
+        if not getattr(self, "hidden", 0):
+            return ""
+        return "%d building level(s) not shown: %s's towns never grow past a %s, too small for them" % (
+            self.hidden, self.faction or self.culture, (getattr(self, "top", None) or "").replace("_", " "))
+
     def _summary(self):
         if not self.edited:
-            self.info.configure(text="the town keeps its own buildings (%d) - change any to set them by hand"
-                                % len(self.own))
+            note = self.hidden_note()
+            self.info.configure(text="the town keeps its own buildings (%d) - change any to set them by hand%s"
+                                % (len(self.own), ("; " + note) if note else ""))
 
     def fit_down(self, level):
         """Every picked building too big for a settlement of this level drops to the

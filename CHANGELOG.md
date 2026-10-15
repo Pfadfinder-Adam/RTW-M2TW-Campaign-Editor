@@ -11,6 +11,8 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- The Buildings tab and the town window leave out building levels the faction's towns can never grow big enough
+  for (vanilla Rome's large temples for barbarians) and say how many - the game's files stay as they are.
 - **Emblem everywhere...** beside the faction's colours (New faction / Edit faction): one picture makes every
   sign of the faction in its colours - logos, menu buttons, flags, banners, captains' cards.
 - The faction tab's **Leader's face** has **Replace...** in both games: any picture becomes the faction's own

@@ -375,6 +375,32 @@ def core_settlement(b, name):
     return SETTLEMENT_LEVELS[min(names.index(name) + core_offset(b), len(SETTLEMENT_LEVELS) - 1)]
 
 
+def top_settlement(blds, faction, culture, template=None, castle=False):
+    """The biggest settlement the faction's towns can ever grow to: the settlement level of the highest governor's
+    building (a level of a core chain - Medieval II's castle chain when castle) its factions lists let it build;
+    a town grows only by building the next one. None when the mod has no core chain for it."""
+    best = -1
+    for b in blds or ():
+        name = b.name.lower()
+        if not name.startswith("core") or ("castle" in name) != bool(castle):
+            continue
+        for lv in b.levels:
+            if available(lv, faction, culture, template):
+                s = core_settlement(b, lv.name)
+                if s in SETTLEMENT_LEVELS:
+                    best = max(best, SETTLEMENT_LEVELS.index(s))
+    return SETTLEMENT_LEVELS[best] if best >= 0 else None
+
+
+def out_of_reach(level, top):
+    """A level that needs a bigger settlement than top (top_settlement) - the faction may never build it (vanilla
+    Rome's temple levels 4-5 for barbarians: they need a large / huge city, barbarians stop at a city)."""
+    try:
+        return top is not None and SETTLEMENT_LEVELS.index(level.settlement_min) > SETTLEMENT_LEVELS.index(top)
+    except ValueError:
+        return False
+
+
 def core_problem(lines, known):
     """Why a settlement block's governor's building does not fit it, or None (report #181: two changes kept for one
     write made a castle of a town-sized settlement keep its village castle's motte_and_bailey - the game stopped:

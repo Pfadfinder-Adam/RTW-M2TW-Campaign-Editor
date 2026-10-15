@@ -3012,6 +3012,26 @@ building smith
         self.assertIn("generals'", said)
         self.assertEqual(E.game_made("medieval2"), "")
 
+    def test_levels_a_faction_never_reaches_are_found(self):
+        """A faction's towns grow only as far as the highest governor's building it may build (vanilla Rome's
+        barbarians: a city); a level needing a bigger settlement (the large temples, large / huge city) is out of
+        its reach - the Buildings tab leaves it out and says so."""
+        from campaign_editor.buildings import Building, Level, out_of_reach, top_settlement
+        core = Building("core_building")
+        for name, fs, smin in (("house", "roman, barbarian,", "village"), ("villa", "roman, barbarian,", "town"),
+                               ("palace", "roman, barbarian,", "large_town"), ("proconsul", "roman,", "city"),
+                               ("imperial", "roman,", "large_city")):
+            lv = Level(name, "factions { %s }" % fs)
+            lv.settlement_min = smin
+            core.levels.append(lv)
+        self.assertEqual(top_settlement([core], "gauls", "barbarian"), "city")
+        self.assertEqual(top_settlement([core], "julii", "roman"), "huge_city")
+        temple = Level("pantheon", "")
+        temple.settlement_min = "large_city"
+        self.assertTrue(out_of_reach(temple, "city"))
+        self.assertFalse(out_of_reach(temple, "huge_city"))
+        self.assertFalse(out_of_reach(temple, None))
+
     def test_emblem_reaches_town_flags_3d_symbol_and_captain_cards(self):
         """One symbol on every flag of the faction (Rome), each from a WHITE TEMPLATE (the user, 2026-10-15: 'do not
         repaint - white templates like the routing flags'): the town flag = the blank banner dyed, the 3D symbol =
