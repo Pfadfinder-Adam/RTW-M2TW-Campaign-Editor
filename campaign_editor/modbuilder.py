@@ -25,8 +25,12 @@ SUBJECT_WORDS = {F: "a faction", S: "a town", C: "a general", T: "a town's old o
 
 
 class Event:
-    def __init__(self, key, label, engine, subjects, help):
+    """hook: the engines' lifecycle hook's arguments made into the one payload the module reads (a Squirrel function
+    of them returning a table) - the hooks are no trigger events, they pass their own arguments (the engine source)."""
+
+    def __init__(self, key, label, engine, subjects, help, hook=None):
         self.key, self.label, self.engine, self.subjects, self.help = key, label, engine, subjects, help
+        self.hook = hook
 
 
 EVENTS = [
@@ -52,6 +56,19 @@ EVENTS = [
     Event("faction_destroyed", "a faction is destroyed", "FactionDestroyed", (F,), "the faction is the one gone"),
     Event("new_leader", "a faction gets a new leader", "BecomesFactionLeader", (F, C), "the general is the new leader"),
     Event("comes_of_age", "a son comes of age", "CharacterComesOfAge", (F, C), "the general is the young man"),
+    # the engines' lifecycle hooks (REX and M2EX alike; in no docudemon list)
+    Event("new_round", "a new round begins (the turn number goes up)", "turnChanged", (),
+          "once a round, before any faction moves - for every faction take 'each faction' below",
+          hook="function(turn) { mb_run({ turnNumber = turn }) }"),
+    Event("character_died", "a character dies (any reason)", "characterDied", (F, C),
+          "a general, family member or agent leaves the map for good - the faction is his own",
+          hook="function(ch) { mb_run({ character = ch, faction = mb_get(ch, \"faction\") }) }"),
+    Event("faction_died", "a faction is wiped out (before its lands are handed on)", "factionDied", (F,),
+          "the faction is the one gone; its towns and armies are still its own here",
+          hook="function(f) { mb_run({ faction = f }) }"),
+    Event("new_campaign", "a new campaign begins (not a loaded save)", "newGameLoaded", (),
+          "once, when a brand new campaign is built - a loaded save does not come here",
+          hook="function(...) { mb_run({}) }"),
 ]
 EVENT = {e.key: e for e in EVENTS}
 ENGINE_EVENT = "ev:"                 # a recipe's WHEN 'ev:<Name>': any event of the engines' own list
@@ -525,7 +542,7 @@ def event_subjects(ev, game="both", mod=None):
     such event (REX has no SettlementUpgraded). Without the editor's list: the event's own subjects."""
     from . import enginedocs as ED
     events = ED.catalogue(game, mod)["events"]
-    if not events:
+    if not events or ev.hook:                        # a lifecycle hook: both engines, its own subjects
         return ev.subjects
     e = events.get(ev.engine)
     if e is None:
@@ -714,7 +731,7 @@ def script(recipe):
     else:
         lines.append("    local acted = mb_body(c)")
     lines += ["    if (MB_ONCE && acted) {", "        mb_mark_done()", "    }", "}", ""]
-    lines += ['mb_listen("%s", mb_run)' % ev.engine,
+    lines += ['mb_listen("%s", %s)' % (ev.engine, ev.hook or "mb_run"),
               'mb_listen("GameReloaded", function(...) { mb_faction_cache = {} })',
               'mb_log("%s module loaded")' % title.replace('"', "'"), ""]
     return "\n".join(lines)

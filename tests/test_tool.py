@@ -8697,6 +8697,23 @@ building smith
         restore(mod, bdir)
         self.assertIsNone(A.installed(mod, a))
 
+    def test_module_builder_lifecycle_hooks(self):
+        """The engines' lifecycle hooks (both games, the engine source) as WHENs: a new round, a character dies, a
+        faction is wiped out, a new campaign - each passes its own arguments, made into the payload the module reads."""
+        from campaign_editor import modbuilder as MB
+        want = {"new_round": ("turnChanged", ()), "character_died": ("characterDied", ("faction", "character")),
+                "faction_died": ("factionDied", ("faction",)), "new_campaign": ("newGameLoaded", ())}
+        for key, (hook, subjects) in want.items():
+            ev = MB.EVENT[key]
+            self.assertEqual((ev.engine, MB.event_subjects(ev, "rome"), MB.event_subjects(ev, "medieval2")),
+                             (hook, subjects, subjects))
+            r = MB.new_recipe("Hook")
+            r.update(when=key, dos=[MB.item("do", "log", text="fired")])
+            self.assertIn('mb_listen("%s", %s)' % (hook, ev.hook), MB.script(r))
+        plain = MB.new_recipe("Plain")
+        plain.update(dos=[MB.item("do", "log", text="fired")])
+        self.assertIn('mb_listen("FactionTurnStart", mb_run)', MB.script(plain))
+
     def test_module_builder_only_in_a_campaign_with_a_faction(self):
         """The test mod's modules lie in the GAME's script/modules: a module with only_with acts only where that
         faction is in the campaign, else one log line (a tester's plain campaign got the test's +100 people)."""
