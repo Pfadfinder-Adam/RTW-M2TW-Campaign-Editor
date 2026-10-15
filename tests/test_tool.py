@@ -1,6 +1,7 @@
 """End-to-end test on a tiny synthetic mod (no game files needed)."""
 
 import hashlib
+import glob
 import os
 import shutil
 import struct
@@ -7634,114 +7635,110 @@ building smith
         with open(os.path.join(d, "descr_caps_ex.txt"), "rb") as fh:
             self.assertEqual(fh.read(), b"; sd = legacy binary\n;trade_fleet_source  capability\nsprite_format  xml\n")
 
-    def test_logo_painted_into_its_place_on_the_binary_sheets(self):
-        """A modder on Discord (Barbarian Invasion, no REX): the faction logos said 'cannot be replaced' - the game
-        reads the binary sprite sheets, so no sprite can be added. The picture is painted INTO the faction's own
-        place on the page instead (where the sheet says it is), on the mod's copy of the page for every culture that
-        has it: the plain game shows it. A place shared with another faction is said (both change), never refused.
-        The emblem takes the card (not locked). Restore gives every file back."""
+    def test_sprite_sheet_binary_read_write_and_add(self):
+        """The plain games' binary sprite sheets (Rome .rsd version 5, Medieval II .sd version 6): read and written
+        back byte for byte; a page added (its click mask from the picture's alpha) and a sprite on it."""
+        from campaign_editor import spritesheet as SS
+        sh = SS.Sheet(5, "CAMPAIGN_UI_SPRITES", [{"guide": "\\romans\\data\\ui\\roman\\interface\\guides\\p_guides.tga",
+                                                  "file": "p.tga", "flag": 0, "w": 3, "h": 3, "mask": b"\x0f\x01"}],
+                      [{"name": "A", "page": 0, "x0": 0, "x1": 1, "y0": 1, "y1": 2, "flag": 1, "tail": 0}])
+        data = SS.write(sh)
+        again = SS.read(data)
+        self.assertEqual(SS.write(again), data)
+        self.assertEqual(again.find("A"), {"page": "p.tga", "box": (0, 1, 2, 2)})
+        with self.assertRaises(ValueError):
+            SS.read(data + b"\0")
+        for f in glob.glob("/home/user/rtw-game-data/Rome Total War Gold/*/ui/*.rsd") + glob.glob(
+                "/home/user/rtw-game-data/Rome Total War Gold/*/data/ui/*.rsd") + glob.glob(
+                "/home/user/m2tw-game-data/Medieval II Total War/data/ui/*.sd"):
+            with open(f, "rb") as fh:                         # the games' own files, where this machine has them
+                b = fh.read()
+            self.assertEqual(SS.write(SS.read(b)), b, f)
+        try:
+            from PIL import Image
+        except ImportError:
+            return
+        im = Image.new("RGBA", (10, 3), (0, 0, 0, 0))
+        im.putpixel((0, 0), (1, 1, 1, 255))
+        im.putpixel((9, 0), (1, 1, 1, 128))
+        im.putpixel((1, 1), (1, 1, 1, 127))                      # 127: not over the line
+        i = SS.set_page(again, "faction_logo_x.tga", im)
+        SS.set_sprite(again, "FACTION_LOGO_X", i, 0, 0, 10, 3)
+        third = SS.read(SS.write(again))
+        page = third.pages[1]
+        self.assertEqual((page["file"], page["w"], page["h"], len(page["mask"])), ("faction_logo_x.tga", 10, 3, 4))
+        self.assertEqual(page["mask"], bytes([0b1, 0b10, 0, 0]))  # pixel 0 and pixel 9
+        self.assertTrue(page["guide"].endswith("\\faction_logo_x_guides.tga"))
+        self.assertEqual(third.find("FACTION_LOGO_X"), {"page": "faction_logo_x.tga", "box": (0, 0, 10, 3)})
+
+    def test_logo_of_its_own_on_the_binary_sheets(self):
+        """A modder on Discord (Barbarian Invasion, no REX): the faction logos said 'cannot be replaced' - the plain
+        game reads the binary sprite sheets. Now a page and a sprite are added to the mod's own copy of the binary
+        sheet: Replace gives the faction a logo of its own; a faction that shared the sprite first gets its own with
+        the old picture, so it keeps it. The page goes to every culture folder the old page was in. A new faction
+        gets its own the same way. Restore gives every file back."""
         try:
             from PIL import Image
         except ImportError:
             self.skipTest("Pillow is not installed")
         from unittest import mock
-        from campaign_editor import limits, symbols as SY
+        from campaign_editor import limits, spritesheet as SS, symbols as SY
         from campaign_editor.emblem import emblem_pictures
         from campaign_editor.factionart import image_tga
         d = os.path.join(self.root, "data")
         sm = SM.replace("culture\t\teastern\n", "culture\t\teastern\nlogo_index\t\tFACTION_LOGO_ALPHA\n", 1)
         sm = sm.replace("culture\t\tbarbarian\n", "culture\t\tbarbarian\nlogo_index\t\tFACTION_LOGO_ALPHA\n", 1)
         write(os.path.join(d, "descr_sm_factions.txt"), sm)
-        write(os.path.join(d, "ui", "strategy.sd.xml"), '<sprite_definitions version="7">\n'
-              '  <page file="stratpage_02.tga" w="64" h="64">\n'
-              '    <sprite name="FACTION_LOGO_ALPHA" x="10" y="12" w="20" h="22" alpha="1"/>\n  </page>\n'
-              '</sprite_definitions>\n')
+        big = Image.new("RGBA", (64, 64), (0, 0, 200, 255))
+        sheet = SS.Sheet(6, None, [{"guide": None, "file": "stratpage_02.tga", "flag": 0, "w": 64, "h": 64,
+                                    "mask": SS.mask(big)}],
+                         [{"name": "FACTION_LOGO_ALPHA", "page": 0, "x0": 10, "x1": 29, "y0": 12, "y1": 33, "flag": 1,
+                           "tail": 0}])
+        os.makedirs(os.path.join(d, "ui"), exist_ok=True)
+        with open(os.path.join(d, "ui", "strategy.sd"), "wb") as fh:
+            fh.write(SS.write(sheet))
         for culture in ("southern_european", "northern_european"):
             os.makedirs(os.path.join(d, "ui", culture, "interface"))
             with open(os.path.join(d, "ui", culture, "interface", "stratpage_02.tga"), "wb") as fh:
-                fh.write(image_tga(Image.new("RGBA", (64, 64), (0, 0, 200, 255))))
+                fh.write(image_tga(big))
         before = tree_hash(self.root)
         with mock.patch.object(SY, "rome", lambda m: False), mock.patch.object(limits, "engine_of", lambda m: None):
             mod = ModData(self.root)
             self.assertEqual(SY.sprite_mode(mod), "sd")
             card, = SY.entries(mod, "alpha")
-            self.assertFalse(card["locked"])
-            self.assertNotIn("cannot be replaced", card["note"])
-            self.assertIn("painted into its place", card["note"])
-            self.assertIn("shared with slave", card["note"])
+            self.assertEqual((card["locked"], card["switch"], card["missing"]), (False, False, False))
+            self.assertIn("shared with slave: Replace gives alpha a page of its own", card["note"])
             self.assertEqual(emblem_pictures([card]), [card])
             plan = Plan(mod, "t", "t", {})
             with tempfile.TemporaryDirectory() as t:
                 src = os.path.join(t, "new_logo.png")
                 Image.new("RGBA", (40, 40), (220, 0, 0, 255)).save(src)
                 SY.write(plan, "alpha", SY.LOGO, src)
-            self.assertTrue(any("slave" in w for _, w in plan.warnings))
             plan.apply()
+            mod = ModData(self.root)
+            with open(os.path.join(d, "ui", "strategy.sd"), "rb") as fh:
+                got = SS.read(fh.read())
+            self.assertEqual([p["file"] for p in got.pages],
+                             ["stratpage_02.tga", "faction_logo_slave.tga", "faction_logo_alpha.tga"])
+            self.assertEqual(got.find("FACTION_LOGO_ALPHA"), {"page": "faction_logo_alpha.tga", "box": (0, 0, 68, 76)})
+            self.assertEqual(got.find("FACTION_LOGO_SLAVE"), {"page": "faction_logo_slave.tga", "box": (0, 0, 68, 76)})
+            self.assertEqual(SY.logo_of(mod, "slave", SY.LOGO)["name"], "FACTION_LOGO_SLAVE")
+            self.assertEqual(SY.logo_image(mod, "slave", SY.LOGO).getpixel((5, 5)), (0, 0, 200, 255))  # kept its own
+            self.assertEqual(SY.logo_image(mod, "alpha", SY.LOGO).getpixel((30, 30)), (220, 0, 0, 255))
             for culture in ("southern_european", "northern_european"):
-                im = Image.open(os.path.join(d, "ui", culture, "interface", "stratpage_02.tga")).convert("RGBA")
-                self.assertEqual(im.size, (64, 64))
-                self.assertEqual(im.getpixel((20, 20)), (220, 0, 0, 255))      # inside its place: the new picture
-                self.assertEqual(im.getpixel((5, 5)), (0, 0, 200, 255))        # the rest of the page as it was
-                self.assertEqual(im.getpixel((31, 20)), (0, 0, 200, 255))
-            for b in backups(mod):
-                restore(mod, b)
-        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
-        self.assertEqual(after, before)
-
-    def test_shared_logo_moves_to_a_free_place_on_the_binary_sheets(self):
-        """A mod that gives two factions one logo, on the binary sheets (no sprite can be added): the faction takes a
-        logo place no faction of the mod uses (a faction the mod left out), its logo line points there and the new
-        picture is painted in - the other faction keeps its own. A new faction without REX gets its own the same way
-        (the template's picture copied in). Restore gives every file back."""
-        try:
-            from PIL import Image
-        except ImportError:
-            self.skipTest("Pillow is not installed")
-        from unittest import mock
-        from campaign_editor import limits, symbols as SY
-        from campaign_editor.factionart import image_tga
-        d = os.path.join(self.root, "data")
-        sm = SM.replace("culture\t\teastern\n", "culture\t\teastern\nlogo_index\t\tFACTION_LOGO_ALPHA\n", 1)
-        sm = sm.replace("culture\t\tbarbarian\n", "culture\t\tbarbarian\nlogo_index\t\tFACTION_LOGO_ALPHA\n", 1)
-        write(os.path.join(d, "descr_sm_factions.txt"), sm)
-        write(os.path.join(d, "ui", "strategy.sd.xml"), '<sprite_definitions version="7">\n'
-              '  <page file="stratpage_02.tga" w="64" h="64">\n'
-              '    <sprite name="FACTION_LOGO_ALPHA" x="10" y="12" w="20" h="22" alpha="1"/>\n'
-              '    <sprite name="SMALL_FACTION_LOGO_GHOST" x="0" y="40" w="8" h="8" alpha="1"/>\n'
-              '    <sprite name="FACTION_LOGO_GHOST" x="40" y="12" w="20" h="22" alpha="1"/>\n  </page>\n'
-              '</sprite_definitions>\n')
-        os.makedirs(os.path.join(d, "ui", "southern_european", "interface"))
-        page = os.path.join(d, "ui", "southern_european", "interface", "stratpage_02.tga")
-        with open(page, "wb") as fh:
-            fh.write(image_tga(Image.new("RGBA", (64, 64), (0, 0, 200, 255))))
-        before = tree_hash(self.root)
-        with mock.patch.object(SY, "rome", lambda m: False), mock.patch.object(limits, "engine_of", lambda m: None):
-            mod = ModData(self.root)
-            self.assertEqual(SY.free_logos(mod, SY.LOGO), ["FACTION_LOGO_GHOST"])
+                self.assertTrue(os.path.isfile(os.path.join(d, "ui", culture, "interface", "faction_logo_alpha.tga")))
             card, = SY.entries(mod, "alpha")
-            self.assertIn("a free place", card["note"])
-            plan = Plan(mod, "t", "t", {})
-            SY.paint_logo(plan, "alpha", SY.LOGO, Image.new("RGBA", (40, 40), (220, 0, 0, 255)))
-            self.assertEqual(plan.warnings, [])
-            plan.apply()
-            mod = ModData(self.root)
-            self.assertEqual(SY.logo_of(mod, "alpha", SY.LOGO)["name"], "FACTION_LOGO_GHOST")
-            self.assertEqual(SY.logo_of(mod, "slave", SY.LOGO)["name"], "FACTION_LOGO_ALPHA")
-            im = Image.open(page).convert("RGBA")
-            self.assertEqual(im.getpixel((50, 20)), (220, 0, 0, 255))       # alpha's new place
-            self.assertEqual(im.getpixel((20, 20)), (0, 0, 200, 255))       # slave's place as it was
-            self.assertEqual(SY.free_logos(mod, SY.LOGO), [])
+            self.assertNotIn("Replace gives", card["note"])     # its own now
             for b in backups(mod):
                 restore(mod, b)
             self.assertEqual({k: v for k, v in tree_hash(self.root).items()
                               if not k.startswith("CampaignEditor_backups")}, before)
-            # a new faction (the template's logo line copied): its own free place, the template's picture in it
-            mod = ModData(self.root)
-            plan = Plan(mod, "t", "t", {})
+            # a new faction (the template's logo line copied): its own page, the template's picture in it
+            plan = Plan(ModData(self.root), "t", "t", {})
             plan.template = "slave"
             SY.give_own(plan, "alpha")
-            self.assertEqual(SY.logo_of(plan, "alpha", SY.LOGO)["name"], "FACTION_LOGO_GHOST")
-            self.assertFalse(any("stay" in w for _, w in plan.warnings))
+            self.assertEqual(plan.warnings, [])
+            self.assertTrue(SY.logo_of(plan, "alpha", SY.LOGO)["own"])
 
     def test_art_card_of_a_missing_logo(self):
         """The Art tab's card of a logo no sheet has (no picture file): drawn with '(none)', its words, and the

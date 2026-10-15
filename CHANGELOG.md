@@ -173,10 +173,9 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
-- Faction logos on games without REX / M2EX (and mods on the binary sprite sheets) said they cannot be replaced ->
-  Replace... and the Faction emblem paint the new logo into its place on the game's page, for every culture; a
-  faction sharing its logo with another (a mod's choice, or a new faction on its template's) first takes a place no
-  faction of the mod uses, so the other keeps its own.
+- Faction logos on games without REX / M2EX (and mods on the binary sprite sheets) could not be replaced -> the
+  editor now reads and writes the game's own binary sprite lists, so Replace..., the Faction emblem and a new faction
+  give the faction a logo of its own in both games; a faction that shared it keeps its old picture.
 - Game's editor in Rome with REX: it was started with a switch REX does not have, so only the menu came up -> it
   starts with the editor shown in the menus and the window says where to click.
 - Test mod: the unit sizes were left as they are -> they are changed too, like every other campaign rule.
