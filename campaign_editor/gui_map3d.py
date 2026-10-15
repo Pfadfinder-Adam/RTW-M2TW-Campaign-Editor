@@ -44,6 +44,12 @@ class Map3DView(ttk.Frame):
             side="left", padx=(theme.BUTTON_GAP * 2, 0))
         ttk.Button(bar, text="Whole map", command=self.reset_view).pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
         ttk.Button(bar, text="Draw it again", command=self.rebuild).pack(side="left", padx=(theme.BUTTON_GAP, 0))
+        b_mini = ttk.Button(bar, text="Make the minimap from it", command=self.make_minimap)
+        b_mini.pack(side="left", padx=(theme.BUTTON_GAP, 0))
+        from .gui_util import tip
+        tip(b_mini, "The campaign's minimap (radar_map1 / radar_map2.tga - the small map in the game's bottom-left "
+                    "corner) drawn again from this map seen from above: the ground's textures, relief, rivers, the "
+                    "sea's depths; each picture keeps its size and border. Kept for Apply (Preview shows it).")
         hint(bar, HINT, width=460).pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
         self.lbl = ttk.Label(bar, foreground=theme.palette()["muted"])
         self.lbl.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
@@ -76,6 +82,31 @@ class Map3DView(ttk.Frame):
                 os.path.normcase(os.path.abspath(mod.data)):
             return own
         return mod
+
+    def make_minimap(self):
+        """'Make the minimap from it': the campaign's minimap pictures drawn again from the map as the brushes
+        leave it (minimap.redraw on the Terrain editor's copy), kept for Apply."""
+        from tkinter import messagebox
+        from . import minimap as MM
+        from .gui_util import keep_for_apply
+        from .plan import Plan
+        app, camp = self.app, self.app.v_campaign.get()
+        if app.mod is None or not camp:
+            self.lbl.configure(text="load a mod first")
+            return
+        self.lbl.configure(text="drawing the minimap...")
+        self.update_idletasks()
+
+        def make():
+            plan = Plan(app.mod, "minimap", "minimap", {})
+            MM.redraw(plan, camp, source=self._source())
+            return plan
+        try:
+            if keep_for_apply(app, "minimap:%s" % camp, "The minimap of %s drawn from the map" % camp, make,
+                              title="Minimap"):
+                self.lbl.configure(text="minimap kept - Preview, then Apply changes")
+        except ImportError:
+            messagebox.showerror("Minimap", "drawing pictures needs Pillow")
 
     def _stamp(self):
         """What the picture was made from: the mod, the campaign, the brushes' changes (their Undo list and the

@@ -155,6 +155,54 @@ class ColourMap:
         self.rgb, self.height, self.k, self.top, self.notes = rgb, height, k, top, notes
 
 
+def _box3(a):
+    """a (h, w) float averaged over each point's 3 x 3 neighbours (the edges repeated)."""
+    p = np.pad(a, 1, mode="edge")
+    h, w = a.shape
+    return sum(p[dy:dy + h, dx:dx + w] for dy in range(3) for dx in range(3)) / 9.0
+
+
+def _rounded(mask, k):
+    """(h, w) float 0-1 of a line mask drawn tile by tile: blurred and cut again, so its stair steps round off like
+    the game's rivers, then a soft edge (no hard pixels). The mask as it is without Pillow."""
+    try:
+        from PIL import Image, ImageFilter
+    except ImportError:
+        return mask.astype(np.float32)
+    im = Image.fromarray((mask * 255).astype(np.uint8))
+    im = im.filter(ImageFilter.GaussianBlur(max(1.0, k * 0.6))).point(lambda v: 255 if v >= 105 else 0)
+    return np.asarray(im.filter(ImageFilter.GaussianBlur(0.6)), np.float32) / 255
+
+
+def _blended(tex, gi, ci, k, period, bh, bw, rng):
+    """(bh, bw, 3) float: every pixel the grounds of the points round it mixed by how near they are - the game lays
+    its ground textures blended into each other, never in squares or speckles (the user, 2026-10-15: 'smooth the
+    textures and their edges as in the game, no pixels'). Each (climate, ground) on the map gets a weight: 1 at its
+    own points, smoothed over a tile (3 x 3 points), bilinear between the points, a little uneven (a soft noise), so
+    the borders wind; the textures are mixed by those weights. The sea (ground -1) weighs nothing - the water is
+    drawn over it later."""
+    H, W = gi.shape
+    yy = np.broadcast_to((np.arange(bh) % period)[:, None], (bh, bw))
+    xx = np.broadcast_to((np.arange(bw) % period)[None, :], (bh, bw))
+    pair = np.where(gi < 0, -1, ci * tex.shape[1] + gi)
+    wobble = 1.0 + 0.8 * _smooth_up(rng.uniform(-1, 1, (H, W)).astype(np.float32), k)[:bh, :bw]
+    out = np.zeros((bh, bw, 3), np.float32)
+    total = np.full((bh, bw), 1e-6, np.float32)
+    for p in np.unique(pair):
+        if p < 0:
+            continue
+        w = _smooth_up(_box3((pair == p).astype(np.float32)), k)[:bh, :bw]
+        w = np.clip(w * wobble, 0, None) ** 2                 # squared: each ground firm at home, mixed at its edge
+        if not w.any():
+            continue
+        c, g = divmod(int(p), tex.shape[1])
+        out += w[..., None] * tex[c, g][yy, xx]
+        total += w
+    # nowhere a land weight (the sea): the first texture, drawn over by the water later
+    out += (total <= 1e-6)[..., None] * tex[0, 0][yy, xx]
+    return out / total[..., None]
+
+
 def colour_map(mod, campaign, winter=False, limit=2048, rng=None):
     """ColourMap of the campaign as it stands in memory now (see the module's words). Raises ValueError without the
     heights picture."""
@@ -200,19 +248,7 @@ def colour_map(mod, campaign, winter=False, limit=2048, rng=None):
     big_h = _smooth_up(h, k)
     bh, bw = big_h.shape
     rng = rng or np.random.default_rng(7)
-    # where a pixel looks up its point is pushed by a smooth wave (random at each point, bilinear between): the
-    # borders between grounds wind softly as the game blends them, never in squares or speckles
-    wave = 1.1 * k
-    oy = _smooth_up(rng.uniform(-wave, wave, (H, W)).astype(np.float32), k)
-    ox = _smooth_up(rng.uniform(-wave, wave, (H, W)).astype(np.float32), k)
-    jy = np.clip(((np.arange(bh)[:, None] + oy) // k).astype(np.int32), 0, H - 1)
-    jx = np.clip(((np.arange(bw)[None, :] + ox) // k).astype(np.int32), 0, W - 1)
-    g = gi[jy, jx]
-    c = ci[jy, jx]
-    land_g = np.where(g < 0, 0, g)
-    yy = (np.arange(bh) % period)[:, None]
-    xx = (np.arange(bw) % period)[None, :]
-    rgb = tex[c, land_g, np.broadcast_to(yy, (bh, bw)), np.broadcast_to(xx, (bh, bw))]
+    rgb = _blended(tex, gi, ci, k, period, bh, bw, rng)
     # light: the slope's normal against a sun from the north-west, a little from above
     top = max(1.0, float(T.max_land_height(mod, campaign)))
     scale = top / (k * 6.0)                            # metres a pixel across, for the slopes' look
@@ -254,7 +290,8 @@ def colour_map(mod, campaign, winter=False, limit=2048, rng=None):
                 for dx in range(-r, r + 1):
                     if dy * dy + dx * dx <= half * half + 0.5:
                         mask[np.clip((ys + dy).astype(int), 0, bh - 1), np.clip((xs + dx).astype(int), 0, bw - 1)] = True
-        rgb = np.where(mask[..., None], rgb * 0.35 + RIVER * 0.65, rgb)
+        a = _rounded(mask, k)                          # the tiles' steps rounded off, the line's edge soft
+        rgb = rgb * (1 - 0.65 * a[..., None]) + RIVER * (0.65 * a[..., None])
     return ColourMap(np.clip(rgb, 0, 255).astype(np.uint8), np.maximum(big_h, 0).astype(np.float32), k, top, notes)
 
 

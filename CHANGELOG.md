@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **Maps > 3D > Make the minimap from it**: the campaign's minimap (the small map in the game's corner) drawn again
+  from the map seen from above - the ground's textures, relief, rivers, a sea with deep water and turquoise
+  shallows; each picture keeps its size and border.
+- The faction-select map (Art > Draw from the map) is drawn from the same picture: its land filled at 75 % with a
+  crisp, smooth outer line (no tile steps, no town dots).
+- Maps > 3D: the grounds' textures blend into each other and the rivers are rounded, as in the game - no squares
+  or pixel steps.
 - An army's window shows its general first as his portrait card, as the game does, not as a cavalry card - the
   same face the character editor shows for him.
 - **New faction > From another mod...**: a faction of another mod of the same game made a faction of yours - its

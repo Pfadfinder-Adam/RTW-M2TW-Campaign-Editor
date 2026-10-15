@@ -2604,8 +2604,9 @@ building smith
 
     def test_select_map_drawn_from_the_campaign_map(self):
         """The user, 2026-10-14: the faction-select map made from the campaign map itself - relief and rivers, no
-        signs - with the faction's land one SOLID patch in its colour (nothing see-through, no borders inside it);
-        a campaign without select pictures to learn from gets one too (384 wide, the map's shape)."""
+        signs - with the faction's land filled with its colour at 75 % (2026-10-15: a full fill 'looked ugly'), no
+        borders inside it; a campaign without select pictures to learn from gets one too (384 wide, the map's
+        shape)."""
         try:
             import PIL  # noqa: F401
         except ImportError:
@@ -2619,11 +2620,37 @@ building smith
         x, y = mod.city_tiles("test")[regions[0]]
         px = im.getpixel((int((x + 0.5) * im.width / img.width), int((img.height - 1 - y + 0.5) * im.height /
                                                                          img.height)))
-        self.assertEqual(px, (200, 10, 10))                           # solid: the colour itself, not a tint
+        bare = FA.map_drawing(mod, "test", [], (200, 10, 10)).getpixel(
+            (int((x + 0.5) * im.width / img.width), int((img.height - 1 - y + 0.5) * im.height / img.height)))
+        want = tuple(round(0.25 * b + 0.75 * c) for b, c in zip(bare, (200, 10, 10)))
+        self.assertTrue(all(abs(a - b) <= 3 for a, b in zip(px, want)), (px, want))   # 75 %: the land shows through
         x2, y2 = mod.city_tiles("test")[regions[1]]
         other = im.getpixel((int((x2 + 0.5) * im.width / img.width), int((img.height - 1 - y2 + 0.5) * im.height /
                                                                             img.height)))
         self.assertNotEqual(other, (200, 10, 10))                     # another faction's land: the map as it is
+
+    def test_minimap_drawn_again_keeps_size_depth_and_border(self):
+        """The minimap (radar_map2) drawn again from the map seen from above: its own size and depth, Medieval II's
+        blue border line (top and right) kept, the map inside it."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        import io
+        from campaign_editor.minimap import radar_from
+        old = Image.merge("RGB", [Image.effect_noise((60, 40), 60)] * 3)    # a map is a texture, never one colour
+        for x in range(60):
+            old.putpixel((x, 0), (0, 0, 255))
+        for y in range(40):
+            old.putpixel((59, y), (0, 0, 255))
+        buf = io.BytesIO()
+        old.save(buf, format="TGA")
+        view = Image.new("RGB", (300, 200), (200, 30, 30))
+        got = Image.open(io.BytesIO(radar_from(view, buf.getvalue())))
+        self.assertEqual((got.size, got.mode), ((60, 40), "RGB"))
+        self.assertEqual(got.getpixel((10, 0)), (0, 0, 255))          # the border line stays
+        self.assertEqual(got.getpixel((59, 20)), (0, 0, 255))
+        self.assertEqual(got.getpixel((20, 20)), (200, 30, 30))       # the map inside
 
     def test_palette_tga_read_and_written_back_true_colour(self):
         """A map made by a community map generator stores map_regions / features / ground as COLOUR-MAPPED TGAs

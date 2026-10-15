@@ -1511,6 +1511,22 @@ def s_bring(c, mod):
     return plan
 
 
+@step("Maps > 3D > Make the minimap from it: the campaign's minimap (radar_map1 / radar_map2) drawn again from the "
+      "map seen from above, each picture its own size",
+      "the minimap in the campaign's bottom-left corner: the ground's textures, mountains, rivers and the sea's "
+      "depths as on the campaign map (not the old painted picture); clicking it still moves the view to that place")
+def s_minimap(c, mod):
+    from . import minimap as MM
+    if not MM.radar_pictures(mod, c.campaign):
+        raise Skip("this campaign has no minimap picture")
+    plan = Plan(mod, "minimap", "minimap", {})
+    try:
+        MM.redraw(plan, c.campaign)
+    except ImportError:
+        raise Skip("drawing pictures needs Pillow")
+    return plan
+
+
 def _other_mod(mod):
     """Another mod of the same game to bring a whole faction from: Barbarian Invasion beside a Rome mod (Rome Gold),
     else the game's own data under the mod; None when there is none."""
@@ -2695,6 +2711,7 @@ COVERAGE = {
     "Building editor: new building step by step": ["s_buildings"],
     "Bring from another mod": ["s_bring"],
     "New faction > From another mod (a whole faction brought)": ["s_faction_bring"],
+    "Maps > 3D > Make the minimap from it": ["s_minimap"],
     "Unit packs export / import": ["s_unit_pack"],
     "Check and install a pack": ["s_modpack"],
     "Events": ["s_events", "s_events_more"],

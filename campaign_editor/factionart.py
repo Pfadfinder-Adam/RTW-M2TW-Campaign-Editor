@@ -812,48 +812,57 @@ SELECT_SIZE = 384                 # Rome's campaign-select pictures: 384 wide (3
 
 
 def map_drawing(mod, campaign, regions, colour, size=None):
-    """The faction-select map drawn from the campaign map itself (the user, 2026-10-14: 'a clean picture of the map -
-    its relief and rivers, no signs or names - with only this faction's land lit, filled with its colour, nothing
-    see-through and no borders inside its land'): the editor's own map picture (the ground with its relief and
-    rivers), the faction's regions one solid patch. Where the campaign's other select pictures have a frame round
-    the map (Medieval II), the drawing goes where the map lies in them; else the whole picture is the map, `size`
-    (the other pictures' size, else 384 wide in the map's shape). Pillow RGB image, or None without Pillow."""
+    """The faction-select map drawn from the campaign map itself: the map seen from above in the game's own ground
+    textures (minimap.top_view: relief, rivers, the sea's depths - the user, 2026-10-15: 'like our snapshot'), the
+    faction's regions filled with its colour at 75 % (the land shows through - a full fill 'looked ugly') inside a
+    crisp outer line, the borders smoothed (no tile steps, no town / port pixels sticking out; along the sea the
+    land's own coast). Without the heights picture: the editor's map picture (ground colours, relief, rivers).
+    Where the campaign's other select pictures have a frame round the map (Medieval II), the drawing goes where the
+    map lies in them; else the whole picture is the map, `size` (the other pictures' size, else 384 wide in the
+    map's shape). Pillow RGB image, or None without Pillow."""
     try:
-        from PIL import Image
+        from PIL import Image, ImageChops, ImageFilter
     except ImportError:
         return None
     from .mapdata import CampaignMap
-    from .mapedit import ports
-    cm = CampaignMap(mod, campaign)
-    W, H = cm.w, cm.h
-    base = cm.background(relief=True, rivers=True).convert("RGB")           # 2 px a tile, top row first
+    try:
+        from .minimap import top_view
+        base, land = top_view(mod, campaign)
+    except (ValueError, ImportError):
+        cm = CampaignMap(mod, campaign)
+        base = cm.background(relief=True, rivers=True).convert("RGB")
+        land = Image.new("L", base.size, 255)
     info = mod.regions(campaign)
     cols = {info[r]["colour"] for r in regions if r in info}
-    mask = _map_mask(mod, campaign, lambda c: c in cols)
-    px = mask.load()
-    towns, harbours = mod.city_tiles(campaign), ports(mod, campaign)
-    for r in regions:                                   # a town / port pixel is its region's land too
-        for xy in (towns.get(r), harbours.get(r)):
-            if xy and 0 <= xy[0] < W and 0 <= xy[1] < H:
-                px[xy[0], H - 1 - xy[1]] = 255
+    m = _map_mask(mod, campaign, lambda c: c in cols)
+    # town / port pixels are holes in the region's colour: closed from inside, never teeth into the sea
+    m = m.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
+    k = base.size[0] / float(m.size[0])                 # picture pixels a tile
+    smooth = m.resize(base.size, Image.BILINEAR).filter(ImageFilter.GaussianBlur(k * 0.9)).point(
+        lambda v: 255 if v >= 128 else 0)               # rounded, not stair steps
+    water = ImageChops.invert(land)
+    near_sea = water.filter(ImageFilter.MaxFilter(2 * max(1, round(k * 1.5)) + 1))
+    sharp = m.resize(base.size, Image.NEAREST)          # along the sea the land's own coast is the line
+    smooth = ImageChops.lighter(smooth, ImageChops.multiply(sharp, ImageChops.multiply(land, near_sea)))
+    smooth = ImageChops.multiply(smooth, land)          # never out into the water
     rgb = tuple(max(0, min(255, int(c))) for c in colour)
-    # the OUTER border in the colour that stands out on the fill - dark round a bright colour, light round a dark one
-    # (the user, 2026-10-14: 'as with the signs: a bright colour, a dark border'); none inside the land
+    # the OUTER line in the colour that stands out on the fill - dark round a bright colour, light round a dark one
     try:
         from .theme import on_colour
         edge = (20, 20, 20) if on_colour(rgb) == "black" else (245, 245, 245)
     except ImportError:                             # no tkinter: the same rule by the light of the colour
         edge = (20, 20, 20) if 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] > 140 else (245, 245, 245)
 
-    def drawn(size):                                # at its final size: the land's inside exactly the colour,
-        from PIL import ImageChops, ImageFilter      # a solid line round its outside - one patch, no borders inside
-        big = base.resize(size, Image.BILINEAR)
-        land = mask.resize(size, Image.NEAREST)
+    def drawn(size):                                # at its final size: shrunk from the big picture, line drawn there
+        big = base.resize(size, Image.LANCZOS)
+        area = smooth.resize(size, Image.LANCZOS).point(lambda v: 255 if v >= 128 else 0)
         width = max(1, round(min(size) / 160))      # 2 px on a 384 x 237 picture
-        ring = ImageChops.subtract(land.filter(ImageFilter.MaxFilter(2 * width + 1)), land)
-        out = Image.composite(Image.new("RGB", size, rgb), big, land.filter(ImageFilter.GaussianBlur(0.6)))
-        return Image.composite(Image.new("RGB", size, edge), out, ring.filter(ImageFilter.GaussianBlur(0.5)))
+        ring = ImageChops.subtract(area.filter(ImageFilter.MaxFilter(2 * width + 1)), area)
+        filled = Image.blend(big, Image.new("RGB", size, rgb), 0.75)
+        out = Image.composite(filled, big, area.filter(ImageFilter.GaussianBlur(0.6)))
+        return Image.composite(Image.new("RGB", size, edge), out, ring.filter(ImageFilter.GaussianBlur(0.6)))
     got = select_background(mod, campaign)
+    W, H = m.size
     if got:
         bg, _ = got
         frame = select_frame(mod, campaign, bg.size) or (bg.size[0] / W, bg.size[1] / H, 0, 0)
