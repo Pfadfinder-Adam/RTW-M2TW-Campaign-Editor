@@ -1142,6 +1142,12 @@ building smith
         got, _ = fit_line('recruit "x"  0  requires factions { celts, } and hidden_resource alpine factionwide or '
                           'hidden_resource spain factionwide', known)
         self.assertTrue(got.endswith("factions { celts, } and hidden_resource spain factionwide"), got)  # never 'or'
+        from campaign_editor.packs import cut_words
+        words = cut_words(["hidden_resource alpine factionwide", "hidden_resource briton factionwide",
+                           "not resource camels"], "units", "recruit lines")
+        self.assertIn("hidden resources alpine, briton (", words)
+        self.assertIn("resources camels (", words)
+        self.assertIn("the game does not stop at start", words)
         got, gone = fit_line('recruit "x"  0  requires factions { celts, }  and hidden_resource spain factionwide',
                              known)
         self.assertEqual(gone, [])                                      # a resource this mod has stays, whole
@@ -6129,20 +6135,29 @@ building smith
             again = general_card(mod, "gauls", "character\tBrennus, named character, age 50, , x 9, y 9", False)
             self.assertEqual(again[0], path)                              # one face a name, every time
 
-    def test_brought_faction_select_map_drawn_from_this_map(self):
-        """Report #270: a faction brought from another mod kept its frame's (the template's) faction-select map - the
-        frame's land lit. Brought, it is made from zero: its select map is drawn from this map in its own colour,
-        unless a picture of its own was given."""
+    def test_brought_faction_select_map_is_an_empty_stand_in(self):
+        """Report #270 and the user, 2026-10-15: a brought faction keeps nothing of its frame (the template) - its
+        faction-select map is not the frame's copy but a stand-in, this map with no land lit (Draw from the map lights
+        it once its towns are given); a picture of its own given wins."""
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import factionart as FA
         from campaign_editor import factionbring as FB
         from campaign_editor.plan import Plan
         mod = ModData(self.root)
-        plan = Plan(mod, "alpha", "picts", {"primary_colour": (10, 200, 30)})
-        self.assertTrue(FB.own_select_map(plan, "test", "picts"))
-        self.assertEqual(plan.opts["select_map"], {"on": True, "colour": [10, 200, 30]})
+        plan = Plan(mod, "alpha", "picts", {})
+        path = FB.own_select_map(plan, "test", "picts")
         mine = os.path.relpath(os.path.join(mod.campaign_dir("test"), "map_picts.tga"), mod.data).replace(os.sep, "/")
+        self.assertEqual(plan.opts["art"][mine], path)
+        self.assertNotIn("select_map", plan.opts)                      # nothing drawn in its colour
+        from PIL import Image, ImageChops
+        bare = FA.map_drawing(mod, "test", [], (128, 128, 128))
+        self.assertIsNone(ImageChops.difference(Image.open(path).convert("RGB"), bare).getbbox())
         plan = Plan(mod, "alpha", "picts", {"art": {mine: "/x/own.png"}})
-        self.assertFalse(FB.own_select_map(plan, "test", "picts"))      # a picture of its own wins
-        self.assertNotIn("select_map", plan.opts)
+        self.assertIsNone(FB.own_select_map(plan, "test", "picts"))   # a picture of its own wins
+        self.assertEqual(plan.opts["art"][mine], "/x/own.png")
 
     def test_brought_faction_pictures_and_figures(self):
         # its own pictures come even when the new faction keeps its name; a strat model this mod lacks comes with

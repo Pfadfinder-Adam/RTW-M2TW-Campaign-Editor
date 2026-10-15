@@ -1707,6 +1707,29 @@ def known_conditions(mod):
 _COND = re.compile(r"(?<![A-Za-z0-9_])(not\s+)?(hidden_resource|resource)\s+([A-Za-z0-9_]+)(\s+factionwide)?")
 
 
+CUT_KINDS = (("hidden_resource", "hidden resources", "marks its modder put on regions to say where something may be "
+                                                    "trained or built"),
+             ("resource", "resources", "goods of the map such as camels or elephants"),
+             ("religious_belief", "religions", "beliefs a building spreads"))
+
+
+def cut_words(gone, what, where):
+    """What fit_line took out, said plainly (the user, 2026-10-15: 'the other mod's modder made up things of his own;
+    your mod has none of them, so they are cut so the units work and the game does not crash - just letting you
+    know'): the names grouped by kind, each kind with what it is."""
+    names = {}
+    for cond in gone:
+        t = cond.replace("not ", "").split()
+        if len(t) >= 2:
+            names.setdefault(t[0], [])
+            if t[1] not in names[t[0]]:
+                names[t[0]].append(t[1])
+    parts = ["%s %s (%s)" % (label, ", ".join(names[key]), why) for key, label, why in CUT_KINDS if names.get(key)]
+    return ("The other mod ties some of these %s to things of its own that this mod does not have: %s. So that "
+            "they work here and the game does not stop at start, these conditions are taken out of their %s - "
+            "they work without them. Just so you know; nothing to do." % (what, "; ".join(parts), where))
+
+
 def fit_line(text, known):
     """(text, [what was taken out]) - a building line from another mod made fit for this one: conditions naming a
     hidden resource or a resource this mod does not have are taken out of its requires part (the game stops at
@@ -1792,8 +1815,7 @@ def _recruit(plan, manifest, names, owners, recruit_map=None):
     if n:
         plan.note(f, "%d recruit line(s) added" % n)
     if gone:
-        plan.warn(f, "taken out of the recruit lines, this mod does not have them (the game would stop at start): "
-                     "%s" % ", ".join(gone))
+        plan.warn(f, cut_words(gone, "units", "recruit lines"))
     for m in sorted(missing):
         plan.warn(f, "not recruited at %s (not in this mod or left out): recruit the units by hand where you want "
                      "them (Buildings: Add line)" % m)
@@ -1988,7 +2010,7 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
             ", ".join(factions)))
     f.insert(at, out)
     if gone:
-        plan.warn(f, "taken out, this mod does not have them (the game would stop at start): %s" % ", ".join(gone))
+        plan.warn(f, cut_words(gone, "buildings", "lines"))
     if unowned:
         plan.note(f, "recruit line(s) left out - %s may not own the unit (export_descr_unit.txt's ownership; give it "
                      "in Roster first): %s" % (", ".join(factions), ", ".join(unowned)))

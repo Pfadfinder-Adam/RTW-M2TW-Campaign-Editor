@@ -464,19 +464,30 @@ def art_picks(src, campaign, faction, new, folder):
 
 def own_select_map(plan, campaign, new):
     """A brought faction is made from zero (report #270: 'not a clone - pictures of the clone stayed'): its
-    faction-select map is never its frame's copy (the frame's land lit) and the other mod's is of another map - it is
-    drawn from THIS map with its own towns in its colour, unless a picture of its own was given. True when asked."""
-    from .factionart import map_name
+    faction-select map is never its frame's copy (the frame's land lit). It gets a stand-in, this map with no land
+    lit (the user, 2026-10-15: 'a stub in case you forget and start the game' - Art's Draw from the map lights its
+    land once its towns are given), unless a picture of its own was given. The picture's path, or None."""
+    from . import log
+    from .factionart import map_drawing, map_name
     target = map_name(plan.mod.campaign_dir(campaign), new)
     rel = os.path.relpath(target, plan.mod.data).replace("\\", "/")
-    if rel in (plan.opts.get("art") or {}):
-        return False
-    sel = dict(plan.opts.get("select_map") or {})
-    sel["on"] = True
-    if not sel.get("colour") and plan.opts.get("primary_colour"):
-        sel["colour"] = list(plan.opts["primary_colour"])
-    plan.opts["select_map"] = sel
-    return True
+    art = plan.opts.setdefault("art", {})
+    if rel in art:
+        return None
+    try:
+        im = map_drawing(plan.mod, campaign, [], (128, 128, 128))
+    except Exception:
+        im = None
+    if im is None:
+        return None
+    folder = os.path.join(log.logs_dir() or os.path.expanduser("~"), "brought_pictures")
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, "map_%s_empty.png" % new)
+    im.save(path)
+    art[rel] = path
+    plan.note(None, "%s's faction-select map: this map with no land lit yet - Art > Draw from the map lights its "
+                    "land once its towns are given" % new)
+    return path
 
 
 def overlay(plan, campaign, bring):
