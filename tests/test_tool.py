@@ -5700,6 +5700,38 @@ building smith
         self.assertEqual(religions_for(regions, None, None), {"catholic": 90, "pagan": 10})         # most common
         self.assertEqual(religions_for(regions, {"pagan": 100}, "C"), {"pagan": 100})             # given, sums to 100
 
+    def test_brought_faction_armies_from_its_own_start(self):
+        # a faction brought from another mod: its armies and garrisons come from its own starting armies there,
+        # each unit under its name here, a unit this mod lacks left out; none left - the template's own
+        from types import SimpleNamespace
+        from campaign_editor.start import cheap_garrison, default_army, unit_name, unit_source
+        from campaign_editor.strat import Strat
+        from campaign_editor.textio import TextFile
+        src = ("campaign\timperial_campaign\nfaction\tceltae, balanced smith\ndenari\t1000\n"
+               "character\tAlpin, named character, leader, age 30, , x 1, y 2\n"
+               "army\nunit\t\tceltic warlord\t\texp 0 armour 0 weapon_lvl 0\n"
+               "unit\t\tgallowglass\t\texp 0 armour 0 weapon_lvl 0\n"
+               "unit\t\tbi only\t\texp 0 armour 0 weapon_lvl 0\n"
+               "unit\t\tceltic spearman\t\texp 0 armour 0 weapon_lvl 0\n"
+               "character\tDrest, general, age 20, , x 3, y 4\n"
+               "army\nunit\t\tceltic spearman\t\texp 0 armour 0 weapon_lvl 0\n"
+               "\nfaction\tslave, balanced smith\n")
+        warned = []
+        plan = SimpleNamespace(new="celts", warn=lambda *a: warned.append(a), unit_source=(
+            Strat(TextFile.from_bytes("s", src.encode())), "celtae",
+            {"celtic warlord": "celtic warlord", "gallowglass": "gallowglass 2", "celtic spearman": "celtic spearman"},
+            {"celtic warlord", "gallowglass 2", "celtic spearman"}))
+        s, f = unit_source(plan, None, "gauls")
+        self.assertEqual(f, "celtae")
+        self.assertEqual([unit_name(x) for x in default_army(s, f)],
+                         ["celtic warlord", "gallowglass 2", "celtic spearman"])
+        self.assertEqual([unit_name(x) for x in cheap_garrison(s, f, {}, 2)], ["celtic spearman", "gallowglass 2"])
+        self.assertEqual(unit_source(plan, None, "gauls"), (s, f))           # mapped once, kept
+        empty = SimpleNamespace(new="celts", warn=lambda *a: warned.append(a), unit_source=(
+            Strat(TextFile.from_bytes("s", src.encode())), "celtae", {}, set()))
+        self.assertEqual(unit_source(empty, "target strat", "gauls"), ("target strat", "gauls"))
+        self.assertTrue(warned)
+
     def test_unit_pack_paths_from_the_game_root(self):
         # Barbarian Invasion's lines name files from the game's root ('bi/data/...'): found under data and written
         # the way the receiving mod reads its own

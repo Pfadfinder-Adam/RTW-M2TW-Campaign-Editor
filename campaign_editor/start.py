@@ -83,18 +83,51 @@ def _own_garrison(plan, f, s, template, region, st, block_raw, start, own_held):
         return block_raw
     else:
         edu = plan.files.get(plan.mod.file("edu")) if plan.mod.file("edu") else None
-        lines = [u.strip() for u in cheap_garrison(s, template, unit_upkeep(edu) if edu is not None else {},
+        lines = [u.strip() for u in cheap_garrison(*unit_source(plan, s, template),
+                                                   unit_upkeep(edu) if edu is not None else {},
                                                    len(st.garrison))]
         if not lines:
             own_held.add(region)
             return block_raw
-        why = "%d unit(s) of %s's own instead of the old garrison (the town's own, no captain)" % (len(lines),
-                                                                                                    template)
+        why = "%d unit(s) of %s's own instead of the old garrison (the town's own, no captain)" % (
+            len(lines), unit_source(plan, s, template)[1])
     new = [old[0]] + [pad + u for u in lines] if lines else []
     plan.note(f, "%s: %s" % (region, why if lines else "its old garrison leaves - the town is empty"))
     if lines:
         own_held.add(region)
     return block_raw[:a] + [f.make(x) for x in new] + block_raw[b:]
+
+
+def unit_source(plan, strat, template):
+    """(strat, faction) the new faction's armies and garrisons are picked from: the template's own, or - a faction
+    brought from another mod (factionbring sets plan.unit_source = (its descr_strat Strat, its name, {its unit:
+    this mod's name}, {this mod's unit types, lower case})) - that faction's own starting armies there, each unit
+    under the name it has in this mod and a unit this mod lacks left out."""
+    done = getattr(plan, "unit_pool_from", None)
+    if done:
+        return done
+    src = getattr(plan, "unit_source", None)
+    if not src:
+        return strat, template
+    ss, faction, names, have = src
+    for i, line in enumerate(ss.lines):
+        if tokens(line)[:1] != ["unit"]:
+            continue
+        u = unit_name(line)
+        got = names.get(u, u)
+        if got.lower() not in have:
+            ss.lines[i] = ";" + line                  # not in this mod: left out (the lines keep their places)
+        elif got != u:
+            ss.lines[i] = line.replace(u, got, 1)
+    plan.unit_source = None                           # mapped once
+    fb = ss.faction(faction)
+    if not fb or not any(tokens(x)[:1] == ["unit"] for x in ss.lines[fb.start:fb.end]):
+        plan.warn(None, "%s has no starting army of units this mod has - %s's armies and garrisons come from %s"
+                        % (faction, plan.new, template))
+        plan.unit_pool_from = (strat, template)
+    else:
+        plan.unit_pool_from = (ss, faction)
+    return plan.unit_pool_from
 
 
 def cheap_garrison(strat, template, upkeep, n):
@@ -103,7 +136,7 @@ def cheap_garrison(strat, template, upkeep, n):
     return [order[i % len(order)] for i in range(n)] if order else []
 
 
-def balanced_army(strat, template, new_towns, upkeep, garrison):
+def balanced_army(strat, template, new_towns, upkeep, garrison, pool=None):
     """A leader's army sized like the other factions' start, not a copy of the
     template leader's (often among the strongest in the mod).
 
@@ -125,16 +158,16 @@ def balanced_army(strat, template, new_towns, upkeep, garrison):
     leaders = [a for a in leaders if a] or [army(c) for fb in strat.factions for c in fb.characters
                                             if c.role == "leader" and army(c)]
     if not leaders:
-        return default_army(strat, template), 0, 0
+        return default_army(*(pool or (strat, template))), 0, 0
     sizes = sorted(len(a) for a in leaders)
     costs = sorted(cost(a) for a in leaders)
     size_t, cost_t = sizes[len(sizes) // 2], costs[len(costs) // 2]
 
-    lead = default_army(strat, template)
+    lead = default_army(*(pool or (strat, template)))
     out = lead[:1]                                    # the bodyguard
     have_n = len(out) + len(garrison)
     have_c = cost(out) + cost(garrison)
-    order = template_pool(strat, template, upkeep)
+    order = template_pool(*(pool or (strat, template)), upkeep)
     while have_n < size_t and any(e[1] for e in order):
         for e in order:
             if not e[1] or have_n >= size_t:
@@ -348,7 +381,8 @@ def build_start(plan, campaign, start):
     if not cap_xy:
         raise ValueError("no city pixel for the capital %s in map_regions.tga" % capital)
     mode = start.get("army_mode") or "balanced"
-    template_army = default_army(s, t)
+    pool_src = unit_source(plan, s, t)
+    template_army = default_army(*pool_src)
     if not template_army and not start.get("army"):
         plan.warn(f, "the template leader has no army to copy - the leader starts with no units")
     pool = plan.name_pool(new) or plan.name_pool(t)
@@ -390,14 +424,14 @@ def build_start(plan, campaign, start):
                     plan.note(f, "%s: %s (%s) and his %d unit(s) leave - the leader's army holds the town"
                               % (r, name, kind, len(units)))
                     continue
-                fresh = cheap_garrison(s, t, upkeep_all, len(units))
+                fresh = cheap_garrison(*pool_src, upkeep_all, len(units))
                 if not fresh:
                     kept.append((name, kind, chunk))
                     continue
                 it = iter(fresh)
                 chunk = [next(it) if tokens(l)[:1] == ["unit"] else l for l in chunk]
                 plan.note(f, "%s: %s keeps the town with %d unit(s) of %s's own instead of the old garrison"
-                          % (r, name, len(fresh), t))
+                          % (r, name, len(fresh), pool_src[1]))
                 kept.append((name, kind, chunk))
             joined[r] = kept
 
@@ -483,7 +517,7 @@ def build_start(plan, campaign, start):
             garrison = [u for _, _, c in joined.get(capital, []) if _has_army(c) for u in _units(c)]
             edu = plan.files.get(mod.file("edu"))
             upkeep = unit_upkeep(edu) if edu is not None else {}
-            units, size_t, cost_t = balanced_army(s, t, len(regions), upkeep, garrison)
+            units, size_t, cost_t = balanced_army(s, t, len(regions), upkeep, garrison, pool_src)
             plan.note(f, "leader's army: bodyguard + %d unit(s) (target like similar factions: %d units, "
                          "upkeep %d%s)" % (len(units) - 1, size_t, cost_t,
                                            ", the town's garrison included" if garrison else ""))

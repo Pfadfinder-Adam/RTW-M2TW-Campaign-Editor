@@ -88,13 +88,13 @@ def _same_unit(a, b):
 
 def bring_units(plan, src, faction, new):
     """The brought faction's own units into plan.mod for new: shared where this mod has the very same unit,
-    brought (with everything it needs) where not. -> (shared, brought) unit names."""
+    brought (with everything it needs) where not. -> (shared, brought, {its unit: the name it has here})."""
     from . import packs
     from .packs import type_blocks, _block_lines
     mod = plan.mod
     want = own_units(src, faction)
     if not want:
-        return [], []
+        return [], [], {}
     sf = src.load(src.file("edu"))
     sblocks = type_blocks(sf)
     edu = plan.edit(mod.file("edu"))
@@ -116,12 +116,15 @@ def bring_units(plan, src, faction, new):
     if shared:
         plan.note(edu, "%s owns %d unit(s) this mod has just as %s has them: %s" % (
             new, len(shared), faction, ", ".join(shared)))
+    names = {u: u for u in shared}
     if bring:
         manifest, files = packs.collect(src, bring)
-        packs.import_pack(plan, manifest, files, [new])
+        got = packs.plan_names(mod, manifest)          # a name this mod has already: a free one
+        packs.import_pack(plan, manifest, files, [new], names=got)
+        names.update({old: t for old, (t, _) in got.items()})
         plan.note(None, "%d unit(s) of %s brought with their models, cards and recruit lines: %s" % (
             len(bring), faction, ", ".join(bring)))
-    return shared, bring
+    return shared, bring, names
 
 
 def bring_names(plan, src, faction, new):
@@ -268,7 +271,13 @@ def overlay(plan, campaign, bring):
                 break
     elif culture:
         plan.warn(sm, "%s's culture %s is not in this mod - %s keeps its frame's culture" % (faction, culture, new))
-    shared, brought = bring_units(plan, src, faction, new)
+    shared, brought, names = bring_units(plan, src, faction, new)
+    sp = src.campaign_file(bring.get("campaign") or campaign, "descr_strat.txt")
+    if sp and os.path.isfile(sp):                       # its armies and garrisons from its own starting armies
+        from .packs import type_blocks
+        from .strat import Strat
+        have = {t.lower() for t in type_blocks(plan.edit(plan.mod.file("edu")))}
+        plan.unit_source = (Strat(src.load(sp)), faction, names, have)
     if plan.opts.get("copy_art", True):                 # its pictures where the frame's copies went (yours win)
         from . import log
         folder = os.path.join(log.logs_dir() or os.path.expanduser("~"), "brought_pictures")
