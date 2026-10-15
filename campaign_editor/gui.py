@@ -6518,6 +6518,8 @@ class App(tk.Tk):
         """Write [(key, label, plan or None)] in order; a plan left None is built just
         before it is written, on the files as the pieces before it left them."""
         done, failed, applied, bdirs = [], None, set(), []
+        # a New faction about to be written: once it is, its form is done (see _new_faction_made)
+        new_made = self.v["name"].get().strip() if self.mod and not self.editing() and not self.map_only() else None
         for key, label, plan in parts:
             try:
                 ed = self.editors.get(key)
@@ -6553,9 +6555,30 @@ class App(tk.Tk):
             text += "\n\nStart a NEW campaign to see the changes."
             self.show_text("Done" if not failed else "Written in part", text)
             self.load()
+            if new_made and applied & {"faction", "current"}:
+                self._new_faction_made(new_made)
         if len(bdirs) > 1:                              # Undo this write: the last part, or the whole write
             self.after_idle(lambda: self._written(bdirs[0][0], None, group=list(bdirs)))
         self._mark_work()
+
+    def _new_faction_made(self, name):
+        """The New faction just written: its form is done - left filled it still counted as a faction not written
+        yet (Start the game said 'changes not written', a second Create would make it again; the user, 2026-10-15).
+        The form is emptied and the work goes on in Edit faction on the faction made - create, then edit."""
+        self.bring = None
+        self.lbl_bring.configure(text="")
+        self.b_unbring.pack_forget()
+        self.v["name"].set("")
+        self._kept_sides.pop("new", None)
+        if not self.mod or name not in {n for n, _ in self.mod.factions()}:
+            self._from_zero_look()
+            return
+        self.v_work.set("edit")
+        self.work_changed()
+        self.v["template"].set(name)
+        self.template_changed()
+        self.status.set("%s is made - it opens here in Edit faction (start a NEW campaign to see it in the game)."
+                        % name)
 
     def _menu_hint(self, menu):
         try:

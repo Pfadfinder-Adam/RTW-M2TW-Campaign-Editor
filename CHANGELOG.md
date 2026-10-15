@@ -183,6 +183,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- After Create faction the form stayed filled, so Start the game said changes were not written -> the form empties
+  and the new faction opens in Edit faction.
 - New faction > From another mod still showed the template (Gaul) and the template's options -> the faction made
   from zero shows nothing of the template; its relations start neutral.
 - Faction logos on games without REX / M2EX (and mods on the binary sprite sheets) could not be replaced -> the
