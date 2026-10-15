@@ -1520,12 +1520,14 @@ class App(tk.Tk):
                                                        "symbols"),
         ("mercs", "Mercenaries...", "mercenaries_window", "who is for hire in which regions: pools of regions and "
                                                           "their units"),
+        ("rebels", "Rebels...", "rebels_window", "who rises when a region revolts: rebel types, their units, which "
+                                                 "regions have which"),
     ]
     # the top row by topic (the author, 2026-10-09), each tool with a window of its own beside its work; the row
     # scrolls when the window is narrower - drag it with the left button
     # Bigger map (x3) is on the Maps bar beside the zoom, Many towns in the map's Select + right click (a tester,
     # 2026-10-09: 'not needed as buttons of their own up there')
-    WORK_ROW = (("map",), ("faction", "recolour"), ("settlements", "mercs"), ("units",),
+    WORK_ROW = (("map",), ("faction", "recolour"), ("settlements", "mercs", "rebels"), ("units",),
                 ("buildings",), ("characters", "traits"), ("religions",), ("addons", "builder", "rules", "events"))
     WORK_TITLES = {"map": "Maps", "faction": "Factions", "new": "New faction", "edit": "Edit faction",
                    "settlements": "Settlements", "units": "Units",
@@ -2311,6 +2313,11 @@ class App(tk.Tk):
     def mercenaries_window(self, region=None, new_from=None):
         from .gui_mercenaries import open_mercenaries
         return open_mercenaries(self, region=region, new_from=new_from)
+
+    def rebels_window(self, regions=None):
+        """Rebels... (work bar; the map's right click): rebel types and which regions have which (gui_rebels)."""
+        from .gui_rebels import open_rebels
+        return open_rebels(self, regions=regions)
 
     def merge_regions(self, keep, gone):
         """Merge regions (the map's switch): `gone` goes with its town from every file and all its land becomes
@@ -5133,6 +5140,8 @@ class App(tk.Tk):
                       (lambda: self.mass_towns(sorted(picked), "town")) if n else None))
         items.append(("New mercenary pool from the %d selected region(s)..." % n,
                       (lambda: self.mercenaries_window(new_from=sorted(picked))) if n else None))
+        items.append(("Rebel type for the %d selected region(s)..." % n,
+                      (lambda: self.rebels_window(regions=sorted(picked))) if n else None))
         if n > 1 and self._has_shares():
             items.append(("Religions of the %d selected regions..." % n,
                           lambda: self.religions_dialog(sorted(picked))))
@@ -5447,6 +5456,7 @@ class App(tk.Tk):
             if items:
                 items.append((None, None))
             items.append(("Mercenaries for hire in %s..." % land, lambda: self.mercenaries_window(region=land)))
+            items.append(("Rebels in %s..." % land, lambda: self.rebels_window(regions=[land])))
         if cid is None and self.strat:
             # for any faction: the land's owner by default, another picked in the window
             from .gui_mapadd import add_at, owner_at

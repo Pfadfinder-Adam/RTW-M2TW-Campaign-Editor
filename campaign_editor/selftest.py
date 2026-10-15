@@ -2443,6 +2443,25 @@ def s_mercs(c, mod):
     return plan
 
 
+@step("Rebels: a new rebel type ce_test_rebels (the first type's units and one more) given to a rebel town",
+      "{rebels}")
+def s_rebels(c, mod):
+    from . import rebels as RB
+    path, types = RB.read(mod)
+    info = mod.regions(c.campaign)
+    slaves = [r for r in towns_of(c, mod, "slave") if r in info]
+    region = slaves[2] if len(slaves) > 2 else (slaves[-1] if slaves else None)   # s_region_props takes the 2nd
+    first = next((t for t in types if t.units), None)
+    if not path or first is None or region is None:
+        raise Skip("no descr_rebel_factions.txt with a type that has units, or no rebel town")
+    new = RB.RebelType("ce_test_rebels", "peasant_revolt", "3", units=list(first.units) + first.units[:1])
+    new.words = "CE Test Rebels"
+    plan = Plan(mod, "rebels", c.campaign, {})
+    RB.plan_types(plan, c.campaign, types + [new], given={region: new.name})
+    c.said["rebels"] = "%s revolts as 'CE Test Rebels' (%s)" % (region, ", ".join(new.units))
+    return plan
+
+
 @step("Rename a faction everywhere: a faction no other step uses gets the code name <name>_ce",
       "the renamed faction plays as before - its towns, units, pictures and names on screen")
 def s_rename_faction(c, mod):
@@ -2593,6 +2612,7 @@ COVERAGE = {
     "Map: a rebel village's town written (town window of a region with no town)": ["s_village_town"],
     "Map size: tiles added or cut at the edges": ["s_map_size"],
     "Mercenaries: pools of regions and their units": ["s_mercs"],
+    "Rebels: rebel types, their units, the regions that have them": ["s_rebels"],
     "New region": ["s_region", "s_region_garrison"],
     "Rename a region and its town everywhere": ["s_rename"],
     "Rename a faction everywhere (Edit faction > Rename...)": ["s_rename_faction"],
@@ -2700,6 +2720,7 @@ UI = {
     "Bigger map": "Make the campaign map 3 x bigger",
     "Change size": "Map size: tiles added or cut at the edges",
     "Mercenaries": "Mercenaries: pools of regions and their units",
+    "Rebels": "Rebels: rebel types, their units, the regions that have them",
     "New religion": "Religions (Medieval II, Barbarian Invasion)", "Religions of a region": "Religions (Medieval II, Barbarian Invasion)",
     "Restore a backup": "Restore a backup", "Game manifest": "Settings, Help, the log, Save logs, Game manifest",
     "Log": "Settings, Help, the log, Save logs, Game manifest",

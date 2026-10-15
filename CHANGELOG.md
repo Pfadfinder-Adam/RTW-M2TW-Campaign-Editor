@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **Rebels...** (beside Mercenaries): rebel types - their units, kind, chance, the name players read - new, copied,
+  renamed, deleted; which regions have which type, many at once, with a faction filter (both games).
 - The map shows what Apply will write before it: a new faction's towns in its colour, its capital under a gold
   star, garrisons and towns given in other windows (a dashed orange ring = not written yet).
 - Recolour while a new faction is being made: no more 'create it first' - its pictures are recoloured by the same

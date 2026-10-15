@@ -2381,6 +2381,65 @@ building smith
         self.assertEqual(owners["B_R"], "alpha")
         self.assertIn("B_R", waiting)
 
+    def test_rebel_types_edited_and_their_regions_follow(self):
+        """Report #252 (a 'Rebels' window like Mercenaries): rebel types read from descr_rebel_factions.txt; a unit
+        added, a type renamed (its regions follow in descr_regions.txt), a new type (with the name players read), a
+        type given to a region; a type taken out while a region still names it is refused in words; a type not
+        changed keeps its bytes; Restore gives everything back."""
+        from campaign_editor import rebels as RB
+        data = os.path.join(self.root, "data")
+        text = ("; rebels\n\nrebel_type\t\t\tRebels\t\t// the usual\ncategory\t\t\tpeasant_revolt\nchance\t\t\t3\n"
+                "description\t\t\tRebels\nunit\t\t\trebel spear\n\n"
+                "rebel_type\t\t\tbrigands\ncategory\t\t\tbrigands\nchance\t\t\t50\ndescription\t\t\tbrigands\n"
+                "unit\t\t\trebel spear\n")
+        write(os.path.join(data, "descr_rebel_factions.txt"), text)
+        write(os.path.join(data, "text", "rebel_faction_descr.txt"), "{Rebels}\tRebels\n{brigands}\tBrigands\n",
+              utf16=True)
+        mod = ModData(data)
+        path, types = RB.read(mod)
+        self.assertEqual([t.name for t in types], ["Rebels", "brigands"])
+        self.assertEqual(types[0].units, ["rebel spear"])
+        self.assertEqual(types[0].words_now, "Rebels")
+        with open(path, "rb") as fh:
+            before = fh.read()
+        # rename + one more unit; a new type; B_R takes the new one
+        types[0].name = "Hill_Rebels"
+        types[0].units.append("alpha general")
+        new = RB.RebelType("Sea_Raiders", "pirates", 10, units=["rebel spear"])
+        new.words = "Sea Raiders"
+        plan = Plan(mod, "rebels", "rebels", {})
+        RB.plan_types(plan, "test", types + [new], given={"B_R": "Sea_Raiders"})
+        bdir = plan.apply()
+        after = ModData(data)
+        _, got = RB.read(after)
+        self.assertEqual([t.name for t in got], ["Hill_Rebels", "brigands", "Sea_Raiders"])
+        self.assertEqual(got[0].units, ["rebel spear", "alpha general"])
+        with open(path, encoding="utf-8") as fh:
+            now = fh.read()
+        self.assertIn("rebel_type\t\t\tHill_Rebels\t\t// the usual\n", now)      # its comment kept
+        self.assertIn("rebel_type\t\t\tbrigands\ncategory\t\t\tbrigands\n", now)   # untouched
+        self.assertEqual(RB.regions_of(after, "test"), {"A_R": "Hill_Rebels", "B_R": "Sea_Raiders"})
+        from campaign_editor.strtables import strings
+        self.assertEqual(strings(after, "rebel_faction_descr.txt").get("SEA_RAIDERS"), "Sea Raiders")
+        restore(ModData(self.root), bdir)
+        with open(path, "rb") as fh:
+            self.assertEqual(fh.read(), before)
+        # a type taken out while A_R still names it: refused, A_R named
+        mod = ModData(data)
+        _, types = RB.read(mod)
+        with self.assertRaisesRegex(ValueError, "A_R"):
+            RB.plan_types(Plan(mod, "rebels", "rebels", {}), "test", [t for t in types if t.name != "Rebels"])
+        plan = Plan(mod, "rebels", "rebels", {})
+        RB.plan_types(plan, "test", [t for t in types if t.name != "Rebels"],
+                      given={"A_R": "brigands", "B_R": "brigands"})
+        plan.apply()
+        self.assertEqual([t.name for t in RB.read(ModData(data))[1]], ["brigands"])
+        # a unit the mod lacks is said
+        _, types = RB.read(ModData(data))
+        types[0].units.append("no such unit")
+        with self.assertRaisesRegex(ValueError, "no such unit"):
+            RB.plan_types(Plan(ModData(data), "rebels", "rebels", {}), "test", types)
+
     def test_signs_letters_stand_out_on_any_colour(self):
         """A letter or picture on a coloured sign (a town's hall, an agent's sign, a resource's letters, a colour
         button): black on a bright colour, white on a dark one - Egypt's white disc hid its agents' white signs."""
