@@ -5732,6 +5732,37 @@ building smith
         self.assertEqual(unit_source(empty, "target strat", "gauls"), ("target strat", "gauls"))
         self.assertTrue(warned)
 
+    def test_brought_faction_pictures_and_figures(self):
+        # its own pictures come even when the new faction keeps its name; a strat model this mod lacks comes with
+        # only its own texture line (renamed), paths as this mod writes them, and its files
+        import tempfile
+        from unittest import mock
+        from campaign_editor import factionart as FA
+        from campaign_editor import factionbring as FB
+        from campaign_editor.moddata import ModData
+        pics = [{"rel": "models/textures/standard_celts.tga.dds", "path": "/x/standard_celts.tga.dds"},
+                {"rel": "models/textures/standard_routing_barbarian.tga.dds", "path": "/x/r.tga.dds"}]
+        with mock.patch.object(FA, "faction_pictures", return_value=pics):
+            self.assertEqual(FB.art_picks(None, "c", "celts", "celts", "/tmp"),
+                             {"models/textures/standard_celts.tga.dds": "/x/standard_celts.tga.dds"})
+            self.assertEqual(list(FB.art_picks(None, "c", "celts", "picts", "/tmp")),
+                             ["models/textures/standard_picts.tga.dds"])
+        with tempfile.TemporaryDirectory() as root:
+            data = os.path.join(root, "bi", "data")
+            os.makedirs(os.path.join(data, "models_strat", "textures"))
+            with open(os.path.join(data, "descr_model_strat.txt"), "w") as fh:
+                fh.write("type\t\tcelts_admiral\nskeleton\tstrat_navy\n"
+                         "texture\tgoths,\tbi/data/models_strat/textures/navy_goths.tga\n"
+                         "texture\tcelts,\tbi/data/models_strat/textures/navy_celts.tga\n"
+                         "model_flexi\tbi/data/models_strat/navy_barb.cas, max\n\n")
+            for n in ("../descr_sm_factions.txt", "textures/navy_celts.tga.dds", "navy_barb.cas"):
+                open(os.path.join(data, "models_strat", n), "w").close()
+            lines, files = FB._strat_block(ModData(data), "celts_admiral", "celts", "picts", "rome")
+            self.assertEqual(lines, ["type\t\tcelts_admiral", "skeleton\tstrat_navy",
+                                     "texture\tpicts,\tdata/models_strat/textures/navy_celts.tga",
+                                     "model_flexi\tdata/models_strat/navy_barb.cas, max"])
+            self.assertEqual(sorted(files), ["models_strat/navy_barb.cas", "models_strat/textures/navy_celts.tga.dds"])
+
     def test_unit_pack_paths_from_the_game_root(self):
         # Barbarian Invasion's lines name files from the game's root ('bi/data/...'): found under data and written
         # the way the receiving mod reads its own

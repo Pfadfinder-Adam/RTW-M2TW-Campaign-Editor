@@ -165,6 +165,131 @@ def bring_names(plan, src, faction, new):
     plan.note(f, "%s's name lists: %s's own (%d name(s), %d new text(s))" % (new, faction, len(names), len(add)))
 
 
+def _queued(plan, src, dst):
+    """The plan copies this very file there already."""
+    own = plan.mod.own(dst) if hasattr(plan.mod, "own") else dst
+    return any(a == src and os.path.normcase(b) == os.path.normcase(own) for a, b in plan.copies)
+
+
+def _strat_block(src, model, faction, new, game):
+    """(lines, {data-relative path: file}) of the other mod's descr_model_strat block `model` made for this mod:
+    only the brought faction's texture line (named new) and the ones naming no faction, paths as this mod writes
+    them, with the files they name."""
+    from . import stratmodels as SM
+    from .packs import _on_disk, _rebase_line
+    f = src.load(src.file("model_strat"))
+    a, b = SM.model_types(src)[model]["span"]
+    lines, files = [], {}
+    for i in range(a, b):
+        t = tokens(f.text(i))
+        if t[:1] and t[0] in SM.LINK_KEYS and len(t) >= 3:
+            if t[1] != faction:
+                continue
+            line = re.sub(r"(%s\s+)%s(?![\w])" % (t[0], re.escape(faction)), lambda m: m.group(1) + new, f.text(i),
+                          count=1)
+        else:
+            line = f.text(i)
+        lines.append(_rebase_line(line, game))
+        for ref in re.findall(r"[^,\s]+", strip_comment(f.text(i))):
+            if "/" in ref:
+                got = _on_disk(src, ref)
+                if got:
+                    files[got[0]] = got[1]
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return lines, files
+
+
+def bring_characters(plan, src, faction, new):
+    """The brought faction's characters on the campaign map and in battle (descr_character.txt): each figure it has
+    and the new faction has a place for gets the brought one - a strat model this mod lacks comes with its block
+    (descr_model_strat.txt) and files, a battle model this mod lacks with its own (Bring units' way). -> how many
+    figures changed."""
+    from . import packs
+    from . import stratmodels as SM
+    mod = plan.mod
+    if not src.file("character") or not mod.file("character") or not mod.file("model_strat"):
+        return 0
+    game = packs.game_kind(mod)
+    theirs = {e["type"]: e for e in SM._entries(src.load(src.file("character"))) if faction in e["factions"]}
+    sk = SM.model_types(src)
+    ms = plan.edit(mod.file("model_strat"))
+    added = []
+    n = 0
+    for ctype, e in theirs.items():
+        models = [m for _, m in e["models"]]
+        if not models:
+            continue
+        here = SM.model_types(mod, plan.edit)
+        for m in models:
+            if m in here or m not in sk:
+                continue
+            lines, files = _strat_block(src, m, faction, new, game)
+            while ms.raw and not ms.text(len(ms.raw) - 1).strip():
+                del ms.raw[-1]
+            ms.raw.extend(ms.make(x) for x in [""] + lines + [""])
+            for rel, path in files.items():
+                dst = os.path.join(mod.data, *rel.split("/"))
+                if not mod.find(rel) and not _queued(plan, path, dst):
+                    plan.copy(path, dst)
+            added.append(m)
+        try:
+            if SM.set_figure(plan, new, ctype, models):
+                n += 1
+        except ValueError as err:
+            plan.warn(None, "%s's %s on the campaign map stays its frame's: %s" % (new, ctype, err))
+    if added:
+        plan.note(ms, "campaign-map figure(s) of %s brought: %s" % (faction, ", ".join(added)))
+    n += _bring_battle_models(plan, src, theirs, new)
+    return n
+
+
+def _bring_battle_models(plan, src, theirs, new):
+    """The battle_model lines of the new faction's characters: the brought faction's, the model brought when this
+    mod lacks it."""
+    from . import packs
+    from . import stratmodels as SM
+    from .packs import type_blocks
+    mod = plan.mod
+    sf = src.load(src.file("character"))
+    want = {}                                           # character type -> battle model
+    for ctype, e in theirs.items():
+        for i in range(e["head"], e["end"]):
+            t = tokens(sf.text(i))
+            if t[:1] == ["battle_model"] and len(t) > 1:
+                want[ctype] = t[1]
+    if not want:
+        return 0
+    mb = mod.file("model_battle")
+    have = {k.lower() for k in type_blocks(plan.edit(mb))} if mb else set()
+    lack = sorted({m for m in want.values() if m.lower() not in have})
+    renamed = {}
+    if lack:
+        try:
+            manifest, files = packs.collect_models(src, lack)
+            renamed = packs.import_models(plan, manifest, files, [new]) or {}
+        except ValueError as err:
+            plan.warn(None, "%s's battle figures stay its frame's: %s" % (new, err))
+            return 0
+    f = plan.edit(mod.file("character"))
+    n = 0
+    for e in SM._entries(f):
+        if e["type"] not in want or new not in e["factions"]:
+            continue
+        model = renamed.get(want[e["type"]], want[e["type"]])
+        for i in range(e["head"], e["end"]):
+            t = tokens(f.text(i))
+            if t[:1] == ["battle_model"] and len(t) > 1 and t[1] != model:
+                if len(e["factions"]) > 1:                  # shared with others: the frame's entry stays theirs
+                    break
+                f.set(i, re.sub(r"^(\s*battle_model\s+)\S+", lambda m: m.group(1) + model, f.text(i), count=1))
+                n += 1
+    if n:
+        plan.note(f, "%s's characters in battle wear the brought models: %s" % (
+            new, ", ".join(sorted({renamed.get(m, m) for m in want.values()}))))
+    return n
+
+
 def bring_figures(plan, src, faction, new):
     """descr_model_strat.txt: each campaign-map figure this mod has too gets new's texture line in the brought
     faction's texture (the picture copied in when this mod lacks it). -> how many."""
@@ -190,7 +315,8 @@ def bring_figures(plan, src, faction, new):
                     continue
                 dst = os.path.join(plan.mod.data, *rel.split("/")) + (".dds" if got.lower().endswith(".dds") and
                                                                       not rel.lower().endswith(".dds") else "")
-                plan.copy(got, dst)
+                if not _queued(plan, got, dst):
+                    plan.copy(got, dst)
             f.set(i, re.sub(r"(texture\s+%s\s*,\s*)(\S+)" % re.escape(new), lambda m: m.group(1) + ref, f.text(i),
                             count=1))
             n += 1
@@ -237,9 +363,9 @@ def art_picks(src, campaign, faction, new, folder):
             continue
         if rel.startswith("symbol:") or not e.get("path"):
             continue
-        new_rel = re.sub(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(faction), new, rel, flags=re.I)
-        if new_rel != rel:
-            out[new_rel] = e["path"]
+        own = re.compile(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(faction), re.I)
+        if own.search(rel):                             # its own picture (shared ones - routing, rebels - stay)
+            out[own.sub(new, rel)] = e["path"]
     return out
 
 
@@ -285,6 +411,7 @@ def overlay(plan, campaign, bring):
         for rel, pic in art_picks(src, bring.get("campaign") or campaign, faction, new, folder).items():
             art.setdefault(rel, pic)
     bring_names(plan, src, faction, new)
+    bring_characters(plan, src, faction, new)
     bring_figures(plan, src, faction, new)
     plan.note(None, "brought from %s: %s as %s (made on %s; %d unit(s) shared, %d brought). Not brought: its towns "
                     "and armies (placed on this map), scripts and events naming it" % (
