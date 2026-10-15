@@ -162,6 +162,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Recolour: painting by hand on the 'after' picture could stop the editor with an error - fixed.
 - Bring units: a siege engine whose skeleton or animation file had the same name as one of your mod moved by your
   mod's file -> it comes in under a name of its own and moves by its own animations.
 - A unit's card or description picture put in for one faction replaced every faction's -> it goes to the faction

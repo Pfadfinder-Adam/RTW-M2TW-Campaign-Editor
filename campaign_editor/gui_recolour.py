@@ -453,12 +453,13 @@ class RecolourWindow(tk.Toplevel):
             return
         ed = self.edits.setdefault(key, {})
         which = self.v_brush.get()
-        r = max(1, self.v_size.get()) / 2.0
+        from .recolour import dab
+        size = self.v_size.get()
         for name in ("p", "s", "keep"):
             m = ed.get(name) or Image.new("L", im.size, 0)
             d = ImageDraw.Draw(m)
             for x, y in pts:
-                d.ellipse((x - r, y - r, x + r - 1, y + r - 1), fill=255 if name == which else 0)
+                d.ellipse(dab(x, y, size), fill=255 if name == which else 0)
             ed[name] = m
         it["edits"] = ed
         iid = "i%d" % self.items.index(it)

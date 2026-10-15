@@ -1087,6 +1087,19 @@ building smith
         self.assertIn("alpha", cards[0]["of"])
         self.assertTrue(cards[0]["others"][cards[0]["of"].index("alpha")][0].startswith(os.path.join(game, "data")))
 
+    def test_recolour_brush_dab_never_has_its_right_edge_before_its_left(self):
+        """Report #281: painting by hand in Recolour stopped with 'x1 must be greater than or equal to x0' - the
+        points are the shown picture's divided by its scale (fractions) and a size-1 dab's right edge came out a
+        hair left of its left edge."""
+        from campaign_editor import recolour as R
+        for k in (7, 3, 2.5, 1.3):
+            for i in range(400):
+                for size in (0, 1, 2, 5):
+                    x0, y0, x1, y1 = R.dab(i / k, (i * 3) / k, size)
+                    self.assertGreaterEqual(x1, x0)
+                    self.assertGreaterEqual(y1, y0)
+        self.assertEqual(R.dab(10, 10, 4), (8.0, 8.0, 11.0, 11.0))
+
     def test_recolour_kept_for_a_faction_not_created_yet_finds_its_copies(self):
         """Report #224: Recolour while making a faction said 'create it first'. The window shows the template's
         pictures; at the write (after the faction part) the ticked ones are found among the new faction's own copies

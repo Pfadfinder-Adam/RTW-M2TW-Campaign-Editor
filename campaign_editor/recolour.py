@@ -67,6 +67,15 @@ def _near(a, b):
     return min(d, 1 - d) <= HUE_GAP * 1.5
 
 
+def dab(x, y, size):
+    """The box of one round dab of a brush of size pixels at (x, y) for Pillow's ellipse. The points come from the
+    shown picture divided by its scale, so they are fractions: x + r - 1 could fall a hair below x - r and Pillow
+    refused it (report #281); the right / bottom edge never comes before the left / top one."""
+    r = max(1, size) / 2.0
+    x0, y0 = x - r, y - r
+    return x0, y0, max(x0, x + r - 1), max(y0, y + r - 1)
+
+
 def _plain(rgb):
     """A colour with no hue to look for: 'dark' (black, near black), 'light' (white, near white), 'grey', or None."""
     if not rgb or coloured(rgb):
