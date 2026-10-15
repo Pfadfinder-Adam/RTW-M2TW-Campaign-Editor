@@ -184,21 +184,22 @@ class InterfaceWindow(tk.Toplevel):
     def fill_pieces(self):
         self.tv.delete(*self.tv.get_children())
         for x in self.doc.pieces(self.page):
-            self.tv.insert("", "end", iid=x["name"], text=x["name"],
+            self.tv.insert("", "end", iid=str(x["index"]), text=x["name"],
                            values=tuple("" if x[k] is None else x[k] for k in L.PARAMS))
-        if self.picked and self.tv.exists(self.picked):
-            self.tv.selection_set(self.picked)
-            self.tv.see(self.picked)
+        if self.picked is not None and self.tv.exists(str(self.picked)):
+            self.tv.selection_set(str(self.picked))
+            self.tv.see(str(self.picked))
 
     def _tree_picked(self):
         sel = self.tv.selection()
-        if sel and sel[0] != self.picked:
-            self.picked = sel[0]
+        if sel and int(sel[0]) != self.picked:
+            self.picked = int(sel[0])
             self.fill_form()
             self.draw()
 
     def current(self):
-        return self.doc.piece(self.page, self.picked) if self.doc and self.page and self.picked else None
+        # pieces are picked by their place on the page: a page may hold two of one name (Medieval II's main menu)
+        return self.doc.piece(self.page, self.picked) if self.doc and self.page and self.picked is not None else None
 
     def fill_form(self):
         x = self.current()
@@ -225,10 +226,10 @@ class InterfaceWindow(tk.Toplevel):
         s = min(cw / w, ch / h)
         return s, (cw - w * s) / 2, (ch - h * s) / 2
 
-    def _texture(self, page):
+    def _texture(self, page, folder=""):
         if page not in self._tex:
             self._tex[page] = None
-            p = L.texture_file(self.mod, self.path, page)
+            p = L.texture_file(self.mod, self.path, page, folder)
             if p:
                 try:
                     from .recolour import read_picture
@@ -241,13 +242,13 @@ class InterfaceWindow(tk.Toplevel):
         art = self.doc.art(x)
         if not art:
             return None
-        page, box, _ = art
+        page, box, folder = art
         w = int(round((x["width"] or box[2] - box[0]) * s))
         h = int(round((x["height"] or box[3] - box[1]) * s))
         key = (page, box, w, h)
         if key not in self._pics:
             self._pics[key] = None
-            tex = self._texture(page)
+            tex = self._texture(page, folder)
             if tex is not None and w > 0 and h > 0:
                 try:
                     from PIL import Image, ImageTk
@@ -286,7 +287,7 @@ class InterfaceWindow(tk.Toplevel):
             pic = self._picture(x, s) if self.v_back.get() else None
             if pic is not None:
                 c.create_image(x0, y0, image=pic, anchor="nw")
-            elif self.v_frames.get() or x["name"] == self.picked:
+            elif self.v_frames.get() or x["index"] == self.picked:
                 c.create_rectangle(x0, y0, x1, y1, outline="#5a7fa8")
             words = self.words.get((x["text"] or "").upper())
             if words:
@@ -294,25 +295,28 @@ class InterfaceWindow(tk.Toplevel):
                 tx = {"w": x0 + 3, "e": x1 - 3}.get(anchor, (x0 + x1) / 2)
                 c.create_text(tx, (y0 + y1) / 2, text=words, fill="#e8dcb0", anchor=anchor,
                               width=max(10, x1 - x0 - 4), font=("", max(7, int(10 * s))))
-            if x["name"] == self.picked:
+            if x["index"] == self.picked:
                 c.create_rectangle(x0, y0, x1, y1, outline=pal_sel, width=2)
                 c.create_rectangle(x1 - HANDLE, y1 - HANDLE, x1, y1, fill=pal_sel, outline="")
-        self.lbl_status.configure(text="page %s - %d pieces%s" % (
+        arts = [self.doc.art(x) for x in self.doc.pieces(self.page)]
+        unseen = [a for a in arts if a and self._texture(a[0], a[2]) is None]
+        self.lbl_status.configure(text="page %s - %d pieces%s%s" % (
             self.page, len(self.doc.pieces(self.page)), "  (changes not kept for Apply yet)" if self._unwritten()
-            else ""))
+            else "", ("  - %d picture(s) not found as files (Medieval II keeps them in its .pack files until the game "
+                      "is unpacked): shown as frames" % len(unseen)) if unseen else ""))
 
     # ---- the mouse and the keys ----
     def _hit(self, e):
-        """(piece name, 'size' on its corner / 'move') under the mouse - the smallest piece there first."""
+        """(piece's place on the page, 'size' on its corner / 'move') under the mouse - the smallest piece first."""
         best = None
         for x in self.doc.pieces(self.page):
             x0, y0, x1, y1 = self._rect(x)
             if x0 <= e.x <= x1 and y0 <= e.y <= y1:
                 area = (x1 - x0) * (y1 - y0)
-                if x["name"] == self.picked and e.x >= x1 - HANDLE and e.y >= y1 - HANDLE:
-                    return x["name"], "size"
+                if x["index"] == self.picked and e.x >= x1 - HANDLE and e.y >= y1 - HANDLE:
+                    return x["index"], "size"
                 if best is None or area < best[0]:
-                    best = (area, x["name"])
+                    best = (area, x["index"])
         return (best[1], "move") if best else (None, None)
 
     def _press(self, e):
@@ -338,11 +342,11 @@ class InterfaceWindow(tk.Toplevel):
             self._remember()
             self._drag = (how, sx, sy, start, True)
         if how == "move":
-            self.doc.move(self.page, start["name"], x=(start["x"] or 0) + dx, y=(start["y"] or 0) + dy)
+            self.doc.move(self.page, start["index"], x=(start["x"] or 0) + dx, y=(start["y"] or 0) + dy)
         else:
             r = self._rect(start)
             w0, h0 = (r[2] - r[0]) / s, (r[3] - r[1]) / s
-            self.doc.move(self.page, start["name"], width=max(1, w0 + dx), height=max(1, h0 + dy))
+            self.doc.move(self.page, start["index"], width=max(1, w0 + dx), height=max(1, h0 + dy))
         self.fill_form()
         self.draw()
 
@@ -353,7 +357,7 @@ class InterfaceWindow(tk.Toplevel):
 
     def _double(self, e):
         name, _ = self._hit(e)
-        x = self.doc.piece(self.page, name) if name else None
+        x = self.doc.piece(self.page, name) if name is not None else None
         if x and x["menu_id"] and x["menu_id"] in self.doc.pages():
             self.show_page(x["menu_id"])
             self.fill_pages()
@@ -364,7 +368,7 @@ class InterfaceWindow(tk.Toplevel):
             return "break"
         step = 10 if e is not None and (e.state & 0x1) else 1
         self._remember()
-        self.doc.move(self.page, x["name"], x=(x["x"] or 0) + dx * step, y=(x["y"] or 0) + dy * step)
+        self.doc.move(self.page, x["index"], x=(x["x"] or 0) + dx * step, y=(x["y"] or 0) + dy * step)
         self.fill_pieces()
         self.fill_form()
         self.draw()
@@ -405,11 +409,11 @@ class InterfaceWindow(tk.Toplevel):
                 value = int(value)
             self._remember()
             if key == "text":
-                self.doc.set_text(self.page, x["name"], value)
+                self.doc.set_text(self.page, x["index"], value)
             elif key == "tooltip":
-                self.doc.set_param(self.page, x["name"], "tool_tip_id", value)
+                self.doc.set_param(self.page, x["index"], "tool_tip_id", value)
             else:
-                self.doc.set_param(self.page, x["name"], key, value)
+                self.doc.set_param(self.page, x["index"], key, value)
         except (ValueError, L.LntError) as err:
             if self.undo:
                 self.undo.pop()
@@ -426,8 +430,7 @@ class InterfaceWindow(tk.Toplevel):
             return
         new = L.free_name(self.doc, self.page, x["name"])
         self._remember()
-        self.doc.copy_piece(self.page, x["name"], new, dx=10, dy=10)
-        self.picked = new
+        self.picked = self.doc.copy_piece(self.page, x["index"], new, dx=10, dy=10)
         self.fill_pieces()
         self.fill_form()
         self.fill_pages()
@@ -445,11 +448,10 @@ class InterfaceWindow(tk.Toplevel):
             if self.doc.piece(self.page, new.strip()):
                 raise L.LntError("this page has a piece %s already" % new.strip())
             self._remember()
-            self.doc.rename_piece(self.page, x["name"], new.strip())
+            self.doc.rename_piece(self.page, x["index"], new.strip())
         except L.LntError as err:
             messagebox.showerror(TITLE, str(err), parent=self)
             return
-        self.picked = new.strip()
         self.fill_pieces()
         self.fill_form()
         self.draw()
@@ -459,7 +461,7 @@ class InterfaceWindow(tk.Toplevel):
         if not x:
             return
         self._remember()
-        self.doc.remove_piece(self.page, x["name"])
+        self.doc.remove_piece(self.page, x["index"])
         self.picked = None
         self.fill_pieces()
         self.fill_form()

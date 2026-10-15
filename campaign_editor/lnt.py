@@ -148,10 +148,20 @@ class Lnt:
         """[piece dict] of a page: name, identifier, x, y, width, height (int or None), menu_id, text, font,
         align, tooltip, object, node."""
         p = self.page_node(page)
-        return [piece_info(n) for n in p.all("UI piece")] if p is not None else []
+        if p is None:
+            return []
+        out = [piece_info(n) for n in p.all("UI piece")]
+        for i, x in enumerate(out):
+            x["index"] = i
+        return out
 
-    def piece(self, page, name):
-        return next((x for x in self.pieces(page) if x["name"] == name), None)
+    def piece(self, page, key):
+        """A piece by its place on the page (int - the sure way: a page may hold two pieces of one name, Medieval
+        II's main menu does) or by its name (the first of that name)."""
+        got = self.pieces(page)
+        if isinstance(key, int):
+            return got[key] if 0 <= key < len(got) else None
+        return next((x for x in got if x["name"] == key), None)
 
     def opened_by(self):
         """{page: [(page, piece)]}: which buttons open each page (their menu_id) - the way to a page."""
@@ -232,8 +242,9 @@ class Lnt:
                 self.set_param(page, name, key, int(round(v)))
 
     def copy_piece(self, page, name, new_name, dx=0, dy=0, to_page=None):
-        """A copy of a piece under a new name, right after it (or at the end of to_page), moved by dx, dy -> its
-        name. The game finds many pieces by their name (CFP_symbol48_N...), so a slot = the next number."""
+        """A copy of a piece (name or place) under a new name, right after it (or at the end of to_page), moved by
+        dx, dy -> its place on its page. The game finds many pieces by their name (CFP_symbol48_N...), so a slot = the
+        next number."""
         x = self.piece(page, name)
         if x is None:
             raise LntError("no piece %s on page %s" % (name, page))
@@ -242,21 +253,22 @@ class Lnt:
         n = x["node"]
         block = self.lines[n.start:n.end + 1]
         head = block[0]
-        block[0] = re.sub(r"(<UI piece>)\s*%s" % re.escape(name), lambda m: m.group(1) + new_name, head, count=1)
+        block[0] = re.sub(r"(<UI piece>)\s*%s" % re.escape(x["name"]), lambda m: m.group(1) + new_name, head,
+                          count=1)
         if to_page and to_page != page:
             tp = self.page_node(to_page)
             if tp is None:
                 raise LntError("no page %s" % to_page)
-            at = tp.end
+            at, where = tp.end, len(self.pieces(to_page))
         else:
-            at = n.end + 1
+            at, where = n.end + 1, x["index"] + 1
         self.lines[at:at] = block
         self.parse()
-        new = self.piece(to_page or page, new_name)
+        new = self.piece(to_page or page, where)
         if dx or dy:
-            self.move(to_page or page, new_name,
+            self.move(to_page or page, where,
                       x=(new["x"] or 0) + dx if dx else None, y=(new["y"] or 0) + dy if dy else None)
-        return new_name
+        return where
 
     def remove_piece(self, page, name):
         x = self.piece(page, name)
@@ -271,7 +283,7 @@ class Lnt:
         if x is None:
             raise LntError("no piece %s on page %s" % (name, page))
         i = x["node"].start
-        self.lines[i] = re.sub(r"(<UI piece>)\s*%s" % re.escape(name), lambda m: m.group(1) + new_name,
+        self.lines[i] = re.sub(r"(<UI piece>)\s*%s" % re.escape(x["name"]), lambda m: m.group(1) + new_name,
                                self.lines[i], count=1)
         self.parse()
 
@@ -346,18 +358,21 @@ def free_name(lnt, page, name):
     return "%s%d" % (stem, n)
 
 
-def texture_file(mod, lnt_path, page):
-    """The picture file of a texture page ('textures\\FE_texture1.tga' under data/menu/), the mod's own first, then
-    the game's; a .dds beside a missing .tga too. None when not there (Medieval II keeps them in its packs)."""
+def texture_file(mod, lnt_path, page, folder=""):
+    """The picture file of a texture page under data/menu/ - Rome names it with its folder ('textures\\FE_texture1.tga'),
+    Medieval II alone ('M2_Border.tga') with the folder in the texture's <path> - the mod's own first, then the game's;
+    a .dds / .tga.dds beside a missing .tga too. None when not there (Medieval II keeps them in its packs until
+    unpacked)."""
     from .moddata import ci_path
-    rel = "menu/" + page.replace("\\", "/")
+    page = page.replace("\\", "/")
+    rel = "menu/" + (page if "/" in page or not folder else folder.replace("\\", "/").strip("/") + "/" + page)
     roots = list(mod.roots()) if hasattr(mod, "roots") else [mod.data]
     if lnt_path:
         here = os.path.dirname(os.path.dirname(os.path.abspath(lnt_path)))      # the data folder of the .lnt
         if here not in roots:
             roots.insert(0, here)
     for root in roots:
-        for cand in (rel, rel + ".dds", os.path.splitext(rel)[0] + ".dds"):
+        for cand in (rel, rel + ".dds", os.path.splitext(rel)[0] + ".dds", "menu/" + page.split("/")[-1]):
             p = ci_path(root, cand)
             if p and os.path.isfile(p):
                 return p

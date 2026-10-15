@@ -3191,6 +3191,17 @@ building smith
         self.assertEqual(lnt.art(lnt.piece("main_menu", "main_logo")),
                          ("textures\\FE_texture1.tga", (0, 36, 489, 204), "textures"))
         self.assertIsNone(lnt.art(single))                           # empty_push_button: the engine draws it
+        from types import SimpleNamespace
+        from campaign_editor.lnt import texture_file
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        for rel in ("menu/textures/FE_texture1.tga", "menu/textures/M2_Border.tga.dds"):
+            write(os.path.join(d, *rel.split("/")), "x")
+        mod = SimpleNamespace(roots=lambda: [d], data=d)
+        self.assertTrue(texture_file(mod, None, "textures\\FE_texture1.tga").endswith("FE_texture1.tga"))
+        # Medieval II names the picture alone, its folder in the texture's <path>; unpacked as .tga.dds
+        self.assertTrue(texture_file(mod, None, "M2_Border.tga", "textures").endswith("M2_Border.tga.dds"))
+        self.assertIsNone(texture_file(mod, None, "none.tga", "textures"))
         lnt.move("main_menu", "main_single", x=300, y=200)
         lnt.move("main_menu", "main_logo", height=168)                # a missing height goes after width
         out = lnt.dump().decode("latin-1")
@@ -3214,6 +3225,13 @@ building smith
         self.assertEqual(lnt.dump().decode("latin-1").replace("        <height>168</height>\r\n", "", 1), self.LNT)
         with self.assertRaises(LntError):
             Lnt("<layout>\r\n  <lpage>a\r\n</layout>\r\n")
+        # two pieces of one name on a page (Medieval II's main menu): each reached by its place, the right one moves
+        twin = Lnt(raw)
+        at = twin.copy_piece("main_menu", 0, "main_logo_2")
+        twin.rename_piece("main_menu", at, "main_logo")
+        self.assertEqual([x["name"] for x in twin.pieces("main_menu")], ["main_logo", "main_logo", "main_single"])
+        twin.move("main_menu", at, x=5)
+        self.assertEqual([x["x"] for x in twin.pieces("main_menu")], [266, 5, 255])
         for game, rel in (("Rome Total War Gold", "data/menu/Rome.lnt"), ("Medieval II Total War", "data/menu/mtw2.lnt")):
             for top in ("/home/user/rtw-game-data", "/home/user/m2tw-game-data"):    # the games' own, when here
                 p = os.path.join(top, game, rel)
@@ -3245,11 +3263,11 @@ building smith
             self.assertIs(GI.open_interface(root), w)                  # one window
             root.update()
             self.assertEqual(w.page, "main_menu")
-            w.picked = "main_single"
+            w.picked = w.doc.piece("main_menu", "main_single")["index"]
             w.nudge(1, 0, SimpleNamespace(state=0x1))                   # Shift: 10 pixels
             self.assertEqual(w.current()["x"], 265)
             w.copy_piece()
-            self.assertEqual(w.picked, "main_single_2")
+            self.assertEqual(w.current()["name"], "main_single_2")
             self.assertEqual(w.current()["y"], 266)
             w.do_undo()
             self.assertIsNone(w.doc.piece("main_menu", "main_single_2"))
@@ -3258,7 +3276,7 @@ building smith
             w.vars["text"].set("UI_OTHER")
             w.set_field("text")
             self.assertEqual(w.current()["text"], "UI_OTHER")
-            w.picked = "main_single"
+            w.picked = w.doc.piece("main_menu", "main_single")["index"]
             w.open_target()
             self.assertEqual(w.page, "new_game")
             self.assertTrue(w._unwritten())
