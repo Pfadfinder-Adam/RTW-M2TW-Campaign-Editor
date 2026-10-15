@@ -12,7 +12,8 @@
 - **NamiKawa** - the one who believed in this before anyone else.
 - **Wholesome Queen** - for the scripts, tools and knowledge shared so freely.
 - **Sin** (*Stainless Steel*) - for the questions that brought the 3D view and the game's own editor into the
-  tool, and for the kind words of support.
+  tool, for the hint on how he made his own 3D town models that showed us which way to go, and for the kind words
+  of support.
 - **Klerski** - for the questions and ideas that pushed the editor forward.
 - **Ruthron** - for the 3 x bigger map, and for so many reports. He made the map bigger again and again on
   *Divide and Conquer* (Medieval II with M2EX) and sent report after report; thanks to him many mistakes were found
