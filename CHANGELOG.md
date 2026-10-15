@@ -185,6 +185,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- The Coast & heights tab showed a Rivers tick it does not need -> the rivers are always drawn there.
 - Units brought from another mod that share one name there (several of HLR's barbarian cavalry) kept no name in the game -> they share one name here too.
 - A building condition left by an older bring stopped the game at start -> Load offers to take such conditions out (a backup first).
 - Game's editor in Rome: the window now names the game's menu path (Options > Editors > Provincial Campaign

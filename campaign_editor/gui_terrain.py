@@ -128,6 +128,7 @@ class TerrainEditor(ttk.Frame):
         if self.v_what.get() not in mine:
             self.v_what.set(self._last_of.get(group) or mine[0])
             self.fill_palette()
+        self._rivers_for_mode()
         if (self.view.shore is not None) != self._shore_wanted() and self.mod is not None:
             self._shore_toggled()                         # the shore line on in Coast & heights, off in Terrain
 
@@ -143,8 +144,9 @@ class TerrainEditor(ttk.Frame):
     def _rivers_for_mode(self):
         """Painting rivers, cliffs and volcanoes shows them always - no Rivers tick there (a tester: 'where are the
         rivers in the rivers editor', 'the tick is not needed in this mode, on by default always'); the other brushes
-        keep the tick and its last value."""
-        painting = self.v_what.get() == "features"
+        keep the tick and its last value. The Coast & heights tab shows them always too, with no tick (report #289:
+        'on the heights maps this tick is not needed - again')."""
+        painting = self.v_what.get() == "features" or self.group == "heights"
         if painting:
             self._rivers_tick.pack_forget()
         elif not self._rivers_tick.winfo_manager():

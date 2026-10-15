@@ -11664,6 +11664,31 @@ building smith
         self.assertFalse(TerrainEditor._shore_wanted(SimpleNamespace(group="heights",
                                                                      v_shore=SimpleNamespace(get=lambda: False))))
 
+    def test_no_rivers_tick_on_coast_and_heights(self):
+        """Report #289: the Rivers tick on the Coast & heights tab is not needed - the rivers are drawn there always
+        (as in the rivers brush); the Terrain tab's ground brushes keep the tick."""
+        try:
+            from campaign_editor.gui_terrain import TerrainEditor
+        except ImportError:                                # no tkinter here (the CI test job has it)
+            return
+        from types import SimpleNamespace
+
+        def ed(group, what):
+            got = {"shown": True}
+            tick = SimpleNamespace(pack_forget=lambda: got.update(shown=False), winfo_manager=lambda: "pack",
+                                   pack=lambda **k: got.update(shown=True))
+            val = {"v": False}
+            view = SimpleNamespace(v_rivers=SimpleNamespace(get=lambda: val["v"], set=lambda v: val.update(v=v)),
+                                   render=lambda: None)
+            e = SimpleNamespace(group=group, v_what=SimpleNamespace(get=lambda: what), _rivers_tick=tick, view=view,
+                                v_rivers_here=SimpleNamespace(get=lambda: False), mod=None, _brush_box=None)
+            TerrainEditor._rivers_for_mode(e)
+            return got["shown"], val["v"]
+        self.assertEqual(ed("heights", "coast"), (False, True))
+        self.assertEqual(ed("heights", "heights"), (False, True))
+        self.assertEqual(ed("terrain", "features"), (False, True))
+        self.assertEqual(ed("terrain", "ground"), (True, False))
+
     def test_middle_button_autoscroll_speed(self):
         """The middle button's autoscroll: still round the press point, faster the further the mouse goes, down
         for below and up for above."""
