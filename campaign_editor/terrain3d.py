@@ -258,16 +258,33 @@ def colour_map(mod, campaign, winter=False, limit=2048, rng=None):
     return ColourMap(np.clip(rgb, 0, 255).astype(np.uint8), np.maximum(big_h, 0).astype(np.float32), k, top, notes)
 
 
+FOV = 0.9                   # half the view's width at depth 1
+
+
+def focal(W):
+    return W / (2.0 * FOV)
+
+
+def project(f, dv, cam, W, H):
+    """(depth, screen y) of a point f ahead of the camera along the ground and dv above its eye (negative: below),
+    for a camera tilted down by cam.pitch - a real tilt, so the ground and the models on it keep their shapes from
+    any height."""
+    sp, cp = math.sin(cam.pitch), math.cos(cam.pitch)
+    depth = f * cp - dv * sp
+    up = f * sp + dv * cp
+    return depth, H / 2.0 - up / np.maximum(depth, 1e-3) * focal(W)
+
+
 class Camera:
     """Where the view stands: over map pixel (x, y) (colour-map pixels, x right, y down), looking towards yaw
-    (radians, 0 = north / up the map), at a height above the ground there, pitched down by the horizon line."""
+    (radians, 0 = north / up the map), at a height above the ground there, tilted down by pitch (radians)."""
 
     def __init__(self, cmap):
         bh, bw = cmap.height.shape
         self.x, self.y = bw / 2.0, bh * 0.85
         self.yaw = 0.0
         self.alt = max(bh, bw) * 0.12
-        self.horizon = 0.25                 # where the horizon stands on the screen (0 = top)
+        self.pitch = 0.62                   # looking down about 35 degrees, as the game's camera
         self.far = max(bh, bw) * 0.9
         self.exaggerate = 1.0
 
@@ -277,40 +294,50 @@ class Camera:
         self.y += right * s - forward * c
 
 
-def render(cmap, cam, W, H, steps=None, sky=(170, 196, 220)):
-    """(H, W, 3) uint8 picture of the map from cam (see the module's words)."""
+def render(cmap, cam, W, H, steps=None, sky=(170, 196, 220), with_depth=False):
+    """(H, W, 3) uint8 picture of the map from cam (see the module's words); with_depth: (picture, (H, W) distance
+    of the ground each pixel shows - infinite for the sky), what the models on the map are hidden behind."""
     bh, bw = cmap.height.shape
     steps = steps or max(200, min(900, int(cam.far)))
     # the distances walked: closer steps near the camera, wider further away
     z = np.linspace(0, 1, steps, dtype=np.float32) ** 1.6 * cam.far + 1.0
     s, c = math.sin(cam.yaw), math.cos(cam.yaw)
-    fov = 0.9                                          # half the view's width at distance 1
-    u = np.linspace(-fov, fov, W, dtype=np.float32)
-    # the map point every (step, column) looks at
-    px = cam.x + z[:, None] * (s + u[None, :] * c)
-    py = cam.y + z[:, None] * (-c + u[None, :] * s)
-    inside = (px >= 0) & (px < bw) & (py >= 0) & (py < bh)
-    ix = np.clip(px.astype(np.int32), 0, bw - 1)
-    iy = np.clip(py.astype(np.int32), 0, bh - 1)
+    a = (np.arange(W, dtype=np.float32) - W / 2.0) / focal(W)        # each column's side / depth
     k = cmap.k
     hscale = (k * 6.0) / max(1.0, cmap.top) * cam.exaggerate      # a mountain's top ~ 3 tiles high at x1
-    ground_h = cmap.height[iy, ix] * hscale
     here = cmap.height[int(np.clip(cam.y, 0, bh - 1)), int(np.clip(cam.x, 0, bw - 1))] * hscale
     eye = here + cam.alt
-    focal = H * 0.9
-    y = (eye - ground_h) / z[:, None] * focal + cam.horizon * H
-    y = np.where(inside, y, H + 1.0)                   # off the map: nothing drawn
+    # the map point every (step, column) looks at: ahead z, to the side as the column's ray reaches the ground there
+    side = a[None, :] * (z[:, None] * math.cos(cam.pitch) + eye * math.sin(cam.pitch))
+    px = cam.x + z[:, None] * s + side * c
+    py = cam.y - z[:, None] * c + side * s
+    inside = (px >= 0) & (px < bw) & (py >= 0) & (py < bh)
+    # between the pixels: the four around each point blended (bilinear) - smooth slopes and no squares up close
+    fx0 = np.clip(px - 0.5, 0, bw - 1.001)
+    fy0 = np.clip(py - 0.5, 0, bh - 1.001)
+    ix, iy = fx0.astype(np.int32), fy0.astype(np.int32)
+    tx, ty = (fx0 - ix)[..., None], (fy0 - iy)[..., None]
+    ix1, iy1 = np.minimum(ix + 1, bw - 1), np.minimum(iy + 1, bh - 1)
+    hm = cmap.height
+    ground_h = ((hm[iy, ix] * (1 - tx[..., 0]) + hm[iy, ix1] * tx[..., 0]) * (1 - ty[..., 0]) +
+                (hm[iy1, ix] * (1 - tx[..., 0]) + hm[iy1, ix1] * tx[..., 0]) * ty[..., 0]) * hscale
+    dist, y = project(z[:, None], ground_h - eye, cam, W, H)
+    y = np.where(inside & (dist > 0.5), y, H + 1.0)    # off the map: nothing drawn
     # front to back: a step is seen where it rises above every nearer step
     cover = np.minimum.accumulate(y, axis=0)
     rows = np.arange(H, dtype=np.float32)
     out = np.empty((H, W, 3), np.uint8)
     # the sky: lighter towards the horizon
-    t = np.clip(rows / max(1.0, cam.horizon * H), 0, 1)[:, None]
+    horizon = H / 2.0 - math.tan(cam.pitch) * focal(W)
+    t = np.clip(rows / max(1.0, horizon), 0, 1)[:, None]
     skyc = (np.array(sky, np.float32)[None, :] * (0.75 + 0.25 * t)).astype(np.uint8)
     out[:] = skyc[:, None, :]
-    colours = cmap.rgb[iy, ix]                        # (steps, W, 3)
+    rgb = cmap.rgb
+    colours = ((rgb[iy, ix] * (1 - tx) + rgb[iy, ix1] * tx) * (1 - ty) +
+               (rgb[iy1, ix] * (1 - tx) + rgb[iy1, ix1] * tx) * ty)     # (steps, W, 3)
     fog = np.clip((z - cam.far * 0.55) / (cam.far * 0.45), 0, 1)[:, None, None]
     colours = (colours * (1 - fog) + np.array(sky, np.float32) * fog).astype(np.uint8)
+    depth = np.full((H, W), np.inf, np.float32) if with_depth else None
     for col in range(W):
         cv = -cover[:, col]                            # rising: searchsorted wants it sorted
         s_idx = np.searchsorted(cv, -rows, side="left")
@@ -318,7 +345,9 @@ def render(cmap, cam, W, H, steps=None, sky=(170, 196, 220)):
         r = np.nonzero(seen)[0]
         if r.size:
             out[r, col] = colours[s_idx[r], col]
-    return out
+            if depth is not None:
+                depth[r, col] = dist[s_idx[r], col]
+    return (out, depth) if with_depth else out
 
 
 __all__ = ["colour_map", "render", "Camera", "ColourMap", "aerial_sets", "heights_metres"]

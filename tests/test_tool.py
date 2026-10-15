@@ -6373,6 +6373,49 @@ building smith
         pic = T3.render(cm, cam, 64, 40)
         self.assertEqual(pic.shape, (40, 64, 3))
 
+    def test_map_in_3d_finds_the_game_models_of_what_stands_on_the_map(self):
+        """Maps > 3D's models (the user, 2026-10-15: 'towns, resources, units...'): a town takes its level's model
+        of its owner's culture - Rome's descr_sm_settlements.txt ('roman { town { normal ... } }') and Medieval II's
+        descr_cultures.txt ('culture x' blocks, a model line with a second word) read alike; forts / watchtowers /
+        ports by culture; a resource its 'item' model at its descr_strat place."""
+        from campaign_editor import mapobjects3d as O
+        from campaign_editor.strat import Strat
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_sm_settlements.txt"),
+              "symbol\tdata/models_strat/residences/symbol.CAS\n\neastern\n{\n\tvillage\n\t{\n\t\tnormal\t"
+              "data/models_strat/residences/e_village.CAS\n\t}\n\ttown\n\t{\n\t\tnormal\t"
+              "data/models_strat/residences/e_town.CAS\n\t\tcard\tdata/ui/x.tga\n\t}\n}\n")
+        write(os.path.join(d, "descr_sm_forts_ports_watchtowers.txt"),
+              "culture\t\teastern\nfort\t\tdata/models_strat/residences/e_fort.CAS\n"
+              "port_land\tdata/models_strat/residences/e_port.CAS\n")
+        write(os.path.join(d, "descr_sm_resources.txt"), "type\t\tgold\nitem\t\tdata/models_strat/gold.CAS\n")
+        mod = ModData(d)
+        got = O.culture_models(mod)
+        self.assertEqual(got["eastern"]["levels"], {"village": "models_strat/residences/e_village.CAS",
+                                                    "town": "models_strat/residences/e_town.CAS"})
+        self.assertEqual(got["eastern"]["fort"], "models_strat/residences/e_fort.CAS")
+        self.assertEqual(got["eastern"]["port"], "models_strat/residences/e_port.CAS")
+        camp = mod.campaign_file("test", "descr_strat.txt")
+        with open(camp) as fh:
+            text = fh.read()
+        write(camp, text.replace("\n;#####>", "\nresource\tgold, 3, 2\n;#####>", 1))
+        mod = ModData(d)
+        strat = Strat(mod.load(mod.campaign_file("test", "descr_strat.txt")))
+        objs = O.objects(mod, "test", strat)
+        town = [o for o in objs if o["kind"] == "town" and o["faction"] == "alpha"]
+        self.assertEqual(town[0]["model"], "models_strat/residences/e_town.CAS")
+        self.assertEqual(town[0]["xy"], tuple(mod.city_tiles("test")["A_R"]))
+        self.assertIn({"kind": "resource", "model": "models_strat/gold.CAS", "texture": None, "xy": (3, 2),
+                       "scale": 1.0, "faction": None}, objs)
+        # Medieval II's form: everything in descr_cultures.txt, a second word after the model
+        write(os.path.join(d, "descr_cultures.txt"),
+              "symbol\tdata/models_strat/residences/symbol.CAS\n\nculture\t\tnorthern\nportrait_mapping\tx\n{\n"
+              "village\n{\n\tnormal\t\tdata/models_strat/residences/n_village.CAS,\t\tsettlement_level_1\n}\n"
+              "}\nfort\t\tdata/models_strat/residences/n_fort.CAS,\t\tfort_barbarian\n")
+        got = O.culture_models(ModData(d))
+        self.assertEqual(got["northern"]["levels"], {"village": "models_strat/residences/n_village.CAS"})
+        self.assertEqual(got["northern"]["fort"], "models_strat/residences/n_fort.CAS")
+
     def test_engine_found_in_the_game_folder_and_the_limit_raised_in_the_mod(self):
         # M2EX copied over the game's root (any case), the mod in mods/<mod>/data: the engine is seen, the
         # game's descr_ex.txt is NOT read for the mod (engines read a mod's own _ex files only - "Mods that don't
