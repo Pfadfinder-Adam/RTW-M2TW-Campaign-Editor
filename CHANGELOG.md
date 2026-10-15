@@ -163,6 +163,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Report a bug: the mod's file list went with every report -> like the logs, it stays out when it went with an
+  earlier report and the mod has not changed since.
 - Bring units: a unit sent to one building level (e.g. barracks / muster field) was gone from recruitment once
   the town's building grew -> it is trained at that level and every level above it, as the game's own units.
 - Medieval II (with M2EX): the Avoid Growth tick's words and the Raze Settlement button's words were bigger and
