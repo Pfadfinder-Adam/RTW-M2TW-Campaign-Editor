@@ -3240,6 +3240,23 @@ building smith
                         data = fh.read()
                     self.assertEqual(Lnt(data).dump(), data)
 
+    def test_raze_tooltip_says_what_it_brings(self):
+        """The game's own three capture buttons say their gold at once; Sack Settlement (Rome) and Raze Settlement
+        (Medieval II) say theirs too: the tooltip holds {gold} / {buildings} / {people}, filled for the town just
+        taken by the same rule the raze pays by (raze_estimate)."""
+        from campaign_editor import addons as A
+        for key in ("sack_settlement", "raze_settlement"):
+            text = A.by_key(key).template()
+            got = A.read_settings(A.by_key(key), text)
+            self.assertIn("{gold}", got["RAZE_BUTTON_TIP"])
+            self.assertIn("ui.tooltip(0, raze_tip_text())", text)
+            est = text[text.index("function raze_estimate"):text.index("function raze_tip_text")]
+            self.assertIn("RAZE_GOLD_PER_BUILDING", est)
+            self.assertIn("RAZE_KEEP_CHAINS", est)
+            import re
+            code = re.sub(r'"(?:[^"\\\n]|\\.)*"', '""', re.sub(r"//[^\n]*", "", text))     # strings and comments out
+            self.assertEqual(code.count("{"), code.count("}"))
+
     def test_game_fonts_read_and_picked_for_the_menus(self):
         """The Interface window writes the menus' words in the game's own letters: a .cuf font (CUF0: header, a char
         table, 4-byte glyph records, offsets, 8-bit alpha) read and drawn; the font a piece names found as the game

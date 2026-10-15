@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- Sack Settlement (Rome) and Raze Settlement (Medieval II): the button's tooltip says what the sack brings - about how much gold, how many buildings come down, how many people are driven out - as the game's own three buttons say their gold.
 - **Interface...**: the game's menu screens page by page with their pictures, their words in the game's own letters and colours, and the buttons, tick boxes, drop-downs, sliders and lists the game draws itself made from its own parts - pieces moved, sized, copied, renamed and removed, their words and the page they open set; Undo / Redo (both games).
 - Maps > 3D > **Own minimap...**: any picture of your own becomes the campaign's minimap, fitted into its size and border.
 - The Buildings tab and the town window leave out building levels the faction's towns can never grow big enough

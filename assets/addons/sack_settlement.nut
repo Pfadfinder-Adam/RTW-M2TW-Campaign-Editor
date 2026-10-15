@@ -226,7 +226,8 @@ local RAZE_BUTTON = true
 local RAZE_BUTTON_LABEL = "Sack Settlement"
 local RAZE_BUTTON_FONT = 5
 local RAZE_BUTTON_INK = [0, 0, 0, 255]
-local RAZE_BUTTON_TIP = "Tear the town down to its walls and roads, plunder it and leave the ruins to the rebels"
+// {gold} {buildings} {people} = what this raze brings, filled for the town just taken
+local RAZE_BUTTON_TIP = "Sack: about {gold} denarii - {buildings} buildings pulled down, up to {people} people driven out"
 local raze_force_region = null       // region the Raze button asked for
 local raze_button_canvas = null
 local raze_button_art = null          // { l, m, r, dl, dm, dr } text-button sprites
@@ -1231,6 +1232,59 @@ function raze_button_pressed() {
     }
 }
 
+// What the raze would bring, before the button is pressed (the game's own three buttons say their gold at once):
+// { gold, buildings, people } - buildings that would come down (not the kept chains, never core) and the people
+// above the floor. The people part is the most it can be: Exterminate runs first and takes its own share.
+function raze_estimate(region_id) {
+    local out = { gold = 0, buildings = 0, people = 0 }
+    local settlement = null
+    try {
+        settlement = ::stratMap.region(region_id).settlementAt(0)
+    } catch (err) {
+    }
+    if (settlement == null) {
+        return out
+    }
+    try {
+        local n = settlement.buildingCount
+        for (local i = 0; n != null && i < n; i++) {
+            local building = settlement.building(i)
+            local chain = building == null ? null : building.chainName
+            if (chain != null && !(chain in RAZE_KEEP_CHAINS) && chain.indexof("core") != 0) {
+                out.buildings++
+            }
+        }
+    } catch (err) {
+    }
+    local keep = RAZE_PEOPLE_LEFT > RAZE_MIN_PEOPLE ? RAZE_PEOPLE_LEFT : RAZE_MIN_PEOPLE
+    try {
+        local p = settlement.population
+        out.people = p != null && p > keep ? p - keep : 0
+    } catch (err) {
+    }
+    out.gold = out.buildings * RAZE_GOLD_PER_BUILDING + out.people * RAZE_GOLD_PER_CITIZEN
+    return out
+}
+
+// RAZE_BUTTON_TIP with {gold}, {buildings} and {people} filled for the town just taken.
+function raze_tip_text() {
+    local text = RAZE_BUTTON_TIP
+    if (raze_last_capture == null || text.find("{") == null) {
+        return text
+    }
+    local e = raze_estimate(raze_last_capture.region)
+    foreach (key, value in { gold = e.gold, buildings = e.buildings, people = e.people }) {
+        local mark = "{" + key + "}"
+        local at = text.find(mark)
+        while (at != null) {
+            text = text.slice(0, at) + value + text.slice(at + mark.len())
+            at = text.find(mark)
+        }
+    }
+    return text
+}
+
+
 // Every frame: while the capture scroll is up, draw the Raze button beside
 // Exterminate, sized and spaced like the engine's own buttons.
 function raze_button_draw() {
@@ -1338,7 +1392,7 @@ function raze_button_draw() {
     if (hit != null) {
         try {
             ui.tooltipAt(x, y, w, h)
-            ui.tooltip(0, RAZE_BUTTON_TIP)
+            ui.tooltip(0, raze_tip_text())
         } catch (err) {
         }
         if (hit.clicked && raze_ui_click == null) {
