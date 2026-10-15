@@ -3222,6 +3222,51 @@ building smith
                         data = fh.read()
                     self.assertEqual(Lnt(data).dump(), data)
 
+    def test_interface_window_moves_copies_and_undoes(self):
+        """Interface... (the user, 2026-10-15: 'a full interface editor'): the mod's menu layout drawn page by page; a
+        piece picked, nudged, copied under the next number, the change undone and redone; a double click on a button
+        opens its page; nothing written before Keep for Apply."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display (CI without one)
+            self.skipTest("no window: %s" % e)
+        from types import SimpleNamespace
+        from campaign_editor import gui_interface as GI
+        menu = os.path.join(self.root, "data", "menu")
+        os.makedirs(menu, exist_ok=True)
+        with open(os.path.join(menu, "Rome.lnt"), "wb") as fh:
+            fh.write(self.LNT.encode("latin-1"))
+        before = tree_hash(self.root)
+        try:
+            root.mod = ModData(self.root)
+            root.show_text = lambda *a: None
+            w = GI.open_interface(root)
+            self.assertIs(GI.open_interface(root), w)                  # one window
+            root.update()
+            self.assertEqual(w.page, "main_menu")
+            w.picked = "main_single"
+            w.nudge(1, 0, SimpleNamespace(state=0x1))                   # Shift: 10 pixels
+            self.assertEqual(w.current()["x"], 265)
+            w.copy_piece()
+            self.assertEqual(w.picked, "main_single_2")
+            self.assertEqual(w.current()["y"], 266)
+            w.do_undo()
+            self.assertIsNone(w.doc.piece("main_menu", "main_single_2"))
+            w.do_redo()
+            self.assertIsNotNone(w.doc.piece("main_menu", "main_single_2"))
+            w.vars["text"].set("UI_OTHER")
+            w.set_field("text")
+            self.assertEqual(w.current()["text"], "UI_OTHER")
+            w.picked = "main_single"
+            w.open_target()
+            self.assertEqual(w.page, "new_game")
+            self.assertTrue(w._unwritten())
+            self.assertEqual(tree_hash(self.root), before)             # nothing written yet
+            w.destroy()
+        finally:
+            root.destroy()
+
     def test_palette_tga_read_and_written_back_true_colour(self):
         """A map made by a community map generator stores map_regions / features / ground as COLOUR-MAPPED TGAs
         (type 1; 9 = run-length) - the editor could not open them. They read like true-colour ones, and a picture

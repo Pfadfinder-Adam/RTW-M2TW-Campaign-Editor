@@ -1561,13 +1561,15 @@ class App(tk.Tk):
                                                           "their units"),
         ("rebels", "Rebels...", "rebels_window", "who rises when a region revolts: rebel types, their units, which "
                                                  "regions have which"),
+        ("interface", "Interface...", "interface_window", "the game's menu screens: move, size, copy and remove "
+                                                          "their pieces"),
     ]
     # the top row by topic (the author, 2026-10-09), each tool with a window of its own beside its work; the row
     # scrolls when the window is narrower - drag it with the left button
     # Bigger map (x3) is on the Maps bar beside the zoom, Many towns in the map's Select + right click (a tester,
     # 2026-10-09: 'not needed as buttons of their own up there')
     WORK_ROW = (("map",), ("faction", "recolour"), ("settlements", "mercs", "rebels"), ("units",),
-                ("buildings",), ("characters", "traits"), ("religions",), ("addons", "builder", "rules", "events"))
+                ("buildings",), ("characters", "traits"), ("religions",), ("addons", "builder", "rules", "events", "interface"))
     WORK_TITLES = {"map": "Maps", "faction": "Factions", "new": "New faction", "edit": "Edit faction",
                    "settlements": "Settlements", "units": "Units",
                    "buildings": "Buildings", "characters": "Characters",
@@ -2364,6 +2366,11 @@ class App(tk.Tk):
         """Rebels... (work bar; the map's right click): rebel types and which regions have which (gui_rebels)."""
         from .gui_rebels import open_rebels
         return open_rebels(self, regions=regions)
+
+    def interface_window(self):
+        """Interface... (work bar): the game's menu screens, their pieces moved, sized, copied (gui_interface)."""
+        from .gui_interface import open_interface
+        return open_interface(self)
 
     def merge_regions(self, keep, gone):
         """Merge regions (the map's switch): `gone` goes with its town from every file and all its land becomes

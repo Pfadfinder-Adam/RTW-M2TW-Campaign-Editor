@@ -320,24 +320,66 @@ def find(mod):
 
 
 def menu_texts(mod):
-    """{KEY: text} of data/text/menu_english.txt (the words the pieces show)."""
-    path = mod.text_file("menu_english.txt") if hasattr(mod, "text_file") else None
-    if not path or not os.path.isfile(path):
-        return {}
+    """{KEY (upper): text} the pieces show - menu_english.txt as the game reads it (strtables.strings, the one
+    reader of string tables; Medieval II's .strings.bin when its .txt holds no {KEY} lines)."""
+    from .strtables import read_strings_bin, strings
+    out = strings(mod, "menu_english.txt")
+    if out or not hasattr(mod, "text_dirs"):
+        return out
+    from .moddata import _ci
+    for folder in mod.text_dirs():
+        p = _ci(folder, "menu_english.txt.strings.bin")
+        if p:
+            with open(p, "rb") as fh:
+                return {k.upper(): v for k, v in read_strings_bin(fh.read()).items()}
+    return {}
+
+
+def free_name(lnt, page, name):
+    """name with its number one up (CFP_symbol48_7 -> CFP_symbol48_8, a name without one -> name_2), free on the
+    page - the game finds numbered pieces by their names, so a copy takes the next number."""
+    taken = {x["name"] for x in lnt.pieces(page)}
+    m = re.match(r"^(.*?)(\d+)$", name)
+    stem, n = (m.group(1), int(m.group(2)) + 1) if m else (name + "_", 2)
+    while "%s%d" % (stem, n) in taken:
+        n += 1
+    return "%s%d" % (stem, n)
+
+
+def texture_file(mod, lnt_path, page):
+    """The picture file of a texture page ('textures\\FE_texture1.tga' under data/menu/), the mod's own first, then
+    the game's; a .dds beside a missing .tga too. None when not there (Medieval II keeps them in its packs)."""
+    from .moddata import ci_path
+    rel = "menu/" + page.replace("\\", "/")
+    roots = list(mod.roots()) if hasattr(mod, "roots") else [mod.data]
+    if lnt_path:
+        here = os.path.dirname(os.path.dirname(os.path.abspath(lnt_path)))      # the data folder of the .lnt
+        if here not in roots:
+            roots.insert(0, here)
+    for root in roots:
+        for cand in (rel, rel + ".dds", os.path.splitext(rel)[0] + ".dds"):
+            p = ci_path(root, cand)
+            if p and os.path.isfile(p):
+                return p
+    return None
+
+
+def plan_write(plan, path, lnt):
+    """The changed layout into a Plan (the mod's own copy of a game file), with a note of what changed."""
     with open(path, "rb") as fh:
-        data = fh.read()
-    for enc in ("utf-16", "utf-8-sig", "latin-1"):
-        try:
-            text = data.decode(enc)
-            break
-        except UnicodeDecodeError:
-            continue
-    out = {}
-    for line in text.splitlines():
-        m = re.match(r"^\s*\{([^}]+)\}\s*(.*)$", line)
-        if m:
-            out[m.group(1)] = m.group(2)
-    return out
+        old = fh.read()
+    new = lnt.dump()
+    if new == old:
+        return False
+    plan.binary(path, new)
+    plan.note(None, "%s: the menus' layout changed (%d line(s) differ)" % (
+        os.path.basename(path), _diff_count(old.decode("latin-1"), new.decode("latin-1"))))
+    return True
 
 
-__all__ = ["Lnt", "LntError", "Node", "find", "menu_texts", "piece_info", "FILES", "PARAMS"]
+def _diff_count(a, b):
+    import difflib
+    return sum(1 for op in difflib.ndiff(a.splitlines(), b.splitlines()) if op[:1] in "+-")
+
+
+__all__ = ["Lnt", "LntError", "Node", "find", "menu_texts", "piece_info", "free_name", "texture_file", "plan_write", "FILES", "PARAMS"]

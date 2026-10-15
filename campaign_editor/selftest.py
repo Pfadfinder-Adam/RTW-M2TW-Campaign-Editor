@@ -1539,6 +1539,25 @@ def s_game_editor(c, mod):
     return plan
 
 
+@step("Interface...: the main menu's first picture (the game's logo) moved 10 pixels to the right in the menu "
+      "layout file (Rome.lnt / mtw2.lnt)",
+      "the main menu: the game's logo stands a little to the right of where it stood; every button still works")
+def s_interface(c, mod):
+    from . import lnt as L
+    path = L.find(mod)
+    if not path:
+        raise Skip("no menu layout file (data/menu/Rome.lnt or mtw2.lnt)")
+    doc = L.Lnt.load(path)
+    page = "main_menu" if "main_menu" in doc.pages() else (doc.pages() or [None])[0]
+    piece = next((x for x in doc.pieces(page) if doc.art(x) and x["x"] is not None), None) if page else None
+    if piece is None:
+        raise Skip("the main menu has no picture to move")
+    doc.move(page, piece["name"], x=piece["x"] + 10)
+    plan = Plan(mod, "interface", "interface", {})
+    L.plan_write(plan, path, doc)
+    return plan
+
+
 @step("Load: the campaign's locked factions (unlockable / nonplayable, each with a town at the start) opened to play - "
       "the Senate, the Pope and the rebels stay locked",
       "the faction-select screen offers the opened factions (Egypt, the Gauls... in Rome; the Aztecs in Medieval II) "
@@ -2732,6 +2751,7 @@ COVERAGE = {
     "New faction > From another mod (a whole faction brought)": ["s_faction_bring"],
     "Maps > 3D > Make the minimap from it": ["s_minimap"],
     "Maps > 3D > Game's editor (the game's own campaign-map editor)": ["s_game_editor"],
+    "Interface: the game's menu screens, their pieces moved, sized, copied": ["s_interface"],
     "Load: locked factions opened to play": ["s_open_factions"],
     "Unit packs export / import": ["s_unit_pack"],
     "Check and install a pack": ["s_modpack"],
@@ -2811,6 +2831,7 @@ UI = {
     "Change size": "Map size: tiles added or cut at the edges",
     "Mercenaries": "Mercenaries: pools of regions and their units",
     "Rebels": "Rebels: rebel types, their units, the regions that have them",
+    "Interface": "Interface: the game's menu screens, their pieces moved, sized, copied",
     "New religion": "Religions (Medieval II, Barbarian Invasion)", "Religions of a region": "Religions (Medieval II, Barbarian Invasion)",
     "Restore a backup": "Restore a backup", "Game manifest": "Settings, Help, the log, Save logs, Game manifest",
     "Log": "Settings, Help, the log, Save logs, Game manifest",
