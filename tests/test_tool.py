@@ -3240,6 +3240,46 @@ building smith
                         data = fh.read()
                     self.assertEqual(Lnt(data).dump(), data)
 
+    def test_game_fonts_read_and_picked_for_the_menus(self):
+        """The Interface window writes the menus' words in the game's own letters: a .cuf font (CUF0: header, a char
+        table, 4-byte glyph records, offsets, 8-bit alpha) read and drawn; the font a piece names found as the game
+        does - descr_font_db.txt's TrueType under an engine, else the layout's own .cuf, else the nearest size."""
+        import struct as st
+        from types import SimpleNamespace
+        from campaign_editor import cuf, lnt as L
+        table = [0xFFFF] * 65536
+        table[ord("A")], table[ord(" ")] = 0, 1
+        recs = st.pack("<bBBB", 2, 3, 2, 2) + st.pack("<bBBB", 0, 2, 0, 0)
+        bitmap = bytes((255, 0, 0, 255))
+        data = (b"CUF0" + st.pack("<11h", 2, 10, 0, 0, 0, 0, 0, 0, 0, 2, 2) + st.pack("<HI", 2, len(bitmap)) +
+                st.pack("<65536H", *table) + recs + st.pack("<2I", 0, 0x7FFFFFFF) + bitmap)
+        font = cuf.read(data)
+        self.assertEqual(font.glyph("A").rows, [bytes((255, 0)), bytes((0, 255))])
+        w, h, alpha = cuf.render(font, "A A")
+        self.assertEqual((w, h), (8, 2))                          # 3 + 2 + 3 advance
+        self.assertEqual(alpha[:2], bytes((255, 0)))
+        with self.assertRaises(ValueError):
+            cuf.read(b"NOPE" + data[4:])
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        for n in ("fonts/font_10.cuf", "fonts/font_18.cuf", "fonts/times.ttf"):
+            write(os.path.join(d, *n.split("/")), "x")
+        write(os.path.join(d, "descr_font_db.txt"), "font\ttnr_sml\ttimes.ttf\t14\tkerned\n")
+        mod = SimpleNamespace(roots=lambda: [d], data=d)
+        doc = SimpleNamespace(fonts=lambda: {"tnr": {"file": "fonts\\font_18.cuf", "height": "18"},
+                                             "arial_split_CAF": {"file": "Fonts\\arial.CAF", "height": "10"}})
+        import campaign_editor.limits as LM
+        real = LM.engine_of
+        try:
+            LM.engine_of = lambda m: "REX.exe"
+            self.assertEqual(L.font_source(mod, doc, "tnr_sml"), ("ttf", os.path.join(d, "fonts", "times.ttf"), 14))
+            LM.engine_of = lambda m: None                          # the original exe: its .cuf fonts
+            self.assertEqual(L.font_source(mod, doc, "tnr_sml")[0], "cuf")
+            self.assertTrue(L.font_source(mod, doc, "tnr")[1].endswith("font_18.cuf"))
+            self.assertTrue(L.font_source(mod, doc, "arial_split_CAF")[1].endswith("font_10.cuf"))
+        finally:
+            LM.engine_of = real
+
     def test_interface_window_moves_copies_and_undoes(self):
         """Interface... (the user, 2026-10-15: 'a full interface editor'): the mod's menu layout drawn page by page; a
         piece picked, nudged, copied under the next number, the change undone and redone; a double click on a button
@@ -3273,8 +3313,9 @@ building smith
             self.assertIsNone(w.doc.piece("main_menu", "main_single_2"))
             w.do_redo()
             self.assertIsNotNone(w.doc.piece("main_menu", "main_single_2"))
-            w.vars["text"].set("UI_OTHER")
-            w.set_field("text")
+            w.set_value("text", "UI_OTHER")
+            d = w.ask_place()                                         # the right click's Place and size...
+            d.destroy()
             self.assertEqual(w.current()["text"], "UI_OTHER")
             w.picked = w.doc.piece("main_menu", "main_single")["index"]
             w.open_target()

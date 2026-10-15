@@ -347,6 +347,66 @@ def menu_texts(mod):
     return {}
 
 
+def _data_file(mod, rel):
+    from .moddata import ci_path
+    for root in (mod.roots() if hasattr(mod, "roots") else [mod.data]):
+        p = ci_path(root, rel.replace("\\", "/"))
+        if p and os.path.isfile(p):
+            return p
+    return None
+
+
+def font_db(mod):
+    """{name: (font file, size)} of data/descr_font_db.txt - the engines' (REX / M2EX) TrueType fonts for the menus'
+    font names (tnr, verdana_sml...): 'font <name> <file> <size> [kerned]'."""
+    p = _data_file(mod, "descr_font_db.txt")
+    out = {}
+    if not p:
+        return out
+    with open(p, "rb") as fh:
+        for line in fh.read().decode("latin-1").splitlines():
+            t = line.split(";")[0].split()
+            if len(t) >= 4 and t[0] == "font":
+                try:
+                    out[t[1]] = (t[2], int(float(t[3])))
+                except ValueError:
+                    continue
+    return out
+
+
+def font_source(mod, lnt, font_id):
+    """Where the letters of a font name come from, as the game takes them: ('ttf', path, size) from
+    descr_font_db.txt (the engines draw the menus with TrueType), else ('cuf', path) - the layout file's own <font>
+    (Medieval II: fonts\\font_18.cuf...), else the .cuf of the nearest size (Rome's layout names a fonts\\arial.CAF
+    that is not there). None without any font file."""
+    try:
+        from .limits import engine_of
+        engine = engine_of(mod)
+    except Exception:
+        engine = None
+    db = font_db(mod) if engine else {}              # the original exes draw the menus from the .cuf fonts
+    if font_id in db:
+        p = _data_file(mod, "fonts/" + db[font_id][0])
+        if p:
+            return "ttf", p, db[font_id][1]
+    fonts = lnt.fonts() if lnt is not None else {}
+    f = fonts.get(font_id) or {}
+    if f.get("file", "").lower().endswith(".cuf"):
+        p = _data_file(mod, f["file"])
+        if p:
+            return "cuf", p
+    try:
+        want = int(f.get("height") or 14)
+    except ValueError:
+        want = 14
+    best = None
+    for n in (10, 14, 18):
+        p = _data_file(mod, "fonts/font_%d.cuf" % n)
+        if p and (best is None or abs(n - want) < abs(best[0] - want)):
+            best = (n, p)
+    return ("cuf", best[1]) if best else None
+
+
 def free_name(lnt, page, name):
     """name with its number one up (CFP_symbol48_7 -> CFP_symbol48_8, a name without one -> name_2), free on the
     page - the game finds numbered pieces by their names, so a copy takes the next number."""
@@ -397,4 +457,4 @@ def _diff_count(a, b):
     return sum(1 for op in difflib.ndiff(a.splitlines(), b.splitlines()) if op[:1] in "+-")
 
 
-__all__ = ["Lnt", "LntError", "Node", "find", "menu_texts", "piece_info", "free_name", "texture_file", "plan_write", "FILES", "PARAMS"]
+__all__ = ["Lnt", "LntError", "Node", "find", "menu_texts", "piece_info", "font_db", "font_source", "free_name", "texture_file", "plan_write", "FILES", "PARAMS"]
