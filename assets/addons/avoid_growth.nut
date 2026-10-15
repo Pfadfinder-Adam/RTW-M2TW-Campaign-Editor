@@ -41,7 +41,7 @@ local AG_OFFSET_Y = 0                // move the tick down (+) or up (-)
 // The words in the first of these game fonts the game has (both games name them alike) - the small one the
 // scroll's own tick labels use, in their grey-brown ink.
 local AG_FACES = ["verdana_sml", "tnr_sml", "verdana"]
-local AG_INK = [96, 82, 62, 255]
+local AG_INK = [128, 119, 97, 255]      // both games' tick words (read in their exes, rules.md 'THE SETTLEMENT SCROLL')
 // Medieval II writes its ticks' words (Auto-manage, Construction, Recruitment) in a plain Verdana-like face as big as
 // about half their box - M2EX's game faces draw at a fixed small size (a tester's screen: ours stood out), so the words
 // take M2EX's own Verdana (script/core/fonts.nut, ::EX.fonts.body) AG_M2_TEXT units high
@@ -51,10 +51,14 @@ local AG_INK = [96, 82, 62, 255]
 // words to the box, the box AG_M2_BOX units wide x high (wider than high, the tick stretched over it).
 // Measured again on report #277 (2026-10-15): the game's capitals 9 px high to ours 12, its small letters 7 to
 // 9, 2-3 px between letters to ours 4, its ink (128, 119, 97) - ours were too big, spaced and light
-local AG_M2_TEXT = 9.5
+// Read in medieval2.exe / M2EX.exe (2026-10-15, rules.md 'THE SETTLEMENT SCROLL AS THE GAMES DRAW IT'): the box is
+// 18 x 18 layout units stretched on each axis alone (W / 1024 wide, H / 768 high - so on a wide screen it is wider
+// than high, as the testers measured), 8 units right of the words; the words verdana_sml (Verdana 10), stretched the
+// same way - the letter spacing below stands in for the wider letters
+local AG_M2_TEXT = 10
 local AG_M2_TRACK = 0.5
-local AG_M2_GAP_BOX = 10
-local AG_M2_BOX = [24, 17]
+local AG_M2_GAP_BOX = 8
+local AG_M2_BOX = [18, 18]
 local AG_INK_M2 = [128, 119, 97, 255]
 // Rome's Automanage, measured on a tester's screenshot (report R-20261007-8A29B4): its words (128, 119, 97), its box
 // 24 x 18 units (wider than high) standing 99 units right of where its words start - ours stands in that column too
@@ -426,6 +430,23 @@ function ag_rome_scale(k) {
     return kp > k * 0.5 && kp < k * 2.0 ? kp : k                   // a panel of another size: the screen's
 }
 
+// Screen px per layout unit across (W / 1024): the games stretch their scroll on each axis alone; k (down) when the
+// width is not known.
+function ag_scale_x(ui, k) {
+    try {
+        local v = ui.virtualScale()
+        if (v != null && v[0] > 0) {
+            return v[0]
+        }
+    } catch (err) {
+    }
+    try {
+        return ui.screenSize()[0] / 1024.0
+    } catch (err) {
+    }
+    return k
+}
+
 function ag_scale(ui) {
     try {
         local v = ui.virtualScale()
@@ -598,7 +619,8 @@ function ag_draw() {
         k = ag_rome_scale(k)
     }
     local box = (art.size * k + 0.5).tointeger()
-    if (art.m2 && art.size == 18) {             // Medieval II: the scroll's own box, wider than high
+    local kx = art.m2 ? ag_scale_x(ui, k) : k
+    if (art.m2 && art.size == 18) {             // Medieval II: the scroll's own box, each axis stretched alone
         box = ag_round(AG_M2_BOX[1] * k)
     }
     local tick = box
@@ -663,8 +685,8 @@ function ag_draw() {
             cx += lw + track
         }
     })
-    local bx = x + tw[0] + ((art.m2 ? AG_M2_GAP_BOX : AG_GAP) * k).tointeger()
-    local bw = art.m2 && art.size == 18 ? ag_round(AG_M2_BOX[0] * k) : box
+    local bx = x + tw[0] + (art.m2 ? ag_round(AG_M2_GAP_BOX * kx) : (AG_GAP * k).tointeger())
+    local bw = art.m2 && art.size == 18 ? ag_round(AG_M2_BOX[0] * kx) : box
     if (!art.m2) {                  // in Automanage's column, as wide as its box (one rounding: no pixel off)
         bw = ag_round(AG_ROME_BOX[1] * k)
         local col = at.len() > 3 ? at[3] + ag_round((AG_ROME_X + AG_ROME_BOX[0]) * k) + ag_round(AG_OFFSET_X * k)

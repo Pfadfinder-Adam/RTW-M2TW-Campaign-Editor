@@ -228,11 +228,12 @@ local RAZE_BUTTON = true
 // button's height; without it the first of these game fonts the game has
 // (sq ::raze_ui_fonts() lists them).
 local RAZE_BUTTON_LABEL = "Raze Settlement"
-local RAZE_BUTTON_TEXT = 0.25        // report #279: at 0.4 ours stood 17 px high to the game's 10
+local RAZE_BUTTON_TEXT = 0.22        // the game's: Verdana 10 on a 45-unit button (medieval2.exe; report #279)
 local RAZE_BUTTON_FACES = ["verdana_sml", "font_14", "tnr_med"]
 local RAZE_BUTTON_INK = [0, 0, 0, 255]     // the game's three write in black
-// Words under the mouse: none, as on the game's own three buttons ("" = none).
-local RAZE_BUTTON_TIP = ""
+// Words under the mouse, as the game's own three buttons have (theirs say the gold and the people; read in
+// medieval2.exe / RomeTW.exe, 2026-10-15) - "" = none.
+local RAZE_BUTTON_TIP = "Pull down its buildings for gold and leave ruins"
 // The scroll is made for three buttons: the 4th would stand on its bottom frame
 // (a tester's screen). It is made one button-step taller (its height written once
 // each time it opens); if the game keeps its size, the button stays under
