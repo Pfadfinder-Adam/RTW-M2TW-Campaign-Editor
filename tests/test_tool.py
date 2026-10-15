@@ -7825,7 +7825,8 @@ building smith
                      "recruit_order_list", "recruit_order_off", "Recruitment Order module loaded",
                      "::campaignDb.extra.setRecruitmentSortSimple(true)"):
             self.assertIn(part, text)
-        self.assertIn('local RO_KINDS = ["infantry", "missiles", "cavalry", "siege", "ships", "non-combatants", "other"]',
+        self.assertIn('local RO_KINDS = ["infantry", "missiles", "cavalry", "missile cavalry", "siege", "ships", '
+                      '"non-combatants", "other"]',
                       text)
         self.assertNotIn("delete ", text)                                  # the engines forbid 'delete'
         got = A.read_settings(a, text)

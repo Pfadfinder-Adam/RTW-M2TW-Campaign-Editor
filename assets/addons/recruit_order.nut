@@ -19,7 +19,8 @@
 // out and everything is as before.
 //
 // The order: by kind - infantry (animal handlers with it), missiles (archers,
-// slingers, skirmishers), cavalry, siege, ships, the rest - and inside each kind by
+// slingers, skirmishers), cavalry, missile cavalry (horse archers, skirmisher horse,
+// chariots with bows or javelins), siege, ships, the rest - and inside each kind by
 // the campaign price (stat_cost's 2nd number): the dearest first (the top left
 // corner gets the strongest) or the cheapest first.
 // Medieval II splits the panel into its own kind blocks (infantry, missile
@@ -44,7 +45,7 @@ local RO_ORDER = "dearest"           // "dearest" or "cheapest" first inside eac
 local RO_ONE_PANEL = true            // Medieval II: one panel for every kind (else the game's kind blocks)
 
 // ---- the order ----
-local RO_KINDS = ["infantry", "missiles", "cavalry", "siege", "ships", "non-combatants", "other"]
+local RO_KINDS = ["infantry", "missiles", "cavalry", "missile cavalry", "siege", "ships", "non-combatants", "other"]
 
 local ro_real = {}                   // type index -> its real trueCost (as the file has it)
 local ro_on = false                  // the ranks are in place now
@@ -77,6 +78,11 @@ function ro_kind(t) {
         return "infantry"                       // animal handlers stand with the infantry
     }
     if (cat == ro_enum("UnitCategory", "cavalry", 1)) {
+        // horse archers, skirmisher horse and the light chariots with javelins or bows after the cavalry that
+        // fights hand to hand, as the infantry's shooters stand after its foot (a tester, 2026-10-15)
+        if (cls == ro_enum("UnitClass", "missile", 4) || cls == ro_enum("UnitClass", "skirmish", 2)) {
+            return "missile cavalry"
+        }
         return "cavalry"
     }
     if (cat == ro_enum("UnitCategory", "siege", 2)) {
