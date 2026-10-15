@@ -747,6 +747,29 @@ building smith
         self.assertEqual(builder_cultures(mod, lv), [cults["alpha"]])
         self.assertEqual(set(builder_cultures(mod, Level("x", ""))), {c for c in cults.values() if c})
 
+    def test_hover_card_in_the_faction_the_window_looks_at(self):
+        """Report #290: Bring units' list showed, on hover, the card of another faction (and of the loaded mod's unit
+        of that name) while the picture on the right was the picked faction's: the hover card takes the list's own
+        mod and the faction it looks at."""
+        try:
+            from campaign_editor.gui_hovercard import Cards
+        except ImportError:                                # no tkinter here (the CI test job has it)
+            return
+        d = os.path.join(self.root, "data")
+        mod = ModData(self.root)
+        edu = mod.file("edu")
+        with open(edu) as fh:
+            text = fh.read()
+        first = text.split("type", 2)[1].split("\n", 1)[0].strip()
+        c = Cards(mod)
+        u = c.units[first]
+        u.dictionary, u.ownership, u.attributes = "alpha_spear", ["alpha", "slave"], []
+        for fac in ("alpha", "slave"):
+            write(os.path.join(d, "ui", "units", fac, "#alpha_spear.tga"), "x")
+        self.assertTrue(c.unit_card(first, "slave")[0].endswith(os.path.join("slave", "#alpha_spear.tga")))
+        self.assertTrue(c.unit_card(first, "alpha")[0].endswith(os.path.join("alpha", "#alpha_spear.tga")))
+        self.assertTrue(c.unit_card(first, "nobody")[0])                 # a faction not owning it: an owner's card
+
     def test_unit_cards_fill_a_folder_left_from_an_earlier_attempt(self):
         # ui/units/beta exists already (an old manual attempt) but lacks alpha's cards
         write(os.path.join(self.root, "data", "ui", "units", "beta", "#old_unit.tga"), "old")

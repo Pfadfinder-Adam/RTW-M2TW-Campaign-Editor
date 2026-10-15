@@ -59,10 +59,15 @@ class Cards:
                     return "chain", w
         return None
 
-    def unit_card(self, name):
-        from .units import unit_card
+    def unit_card(self, name, faction=None):
+        """(card path, words); faction (a faction or a culture the window looks at) picks its own owner's card."""
+        from .units import owner_factions, unit_card, unit_owners
         u = self.units[name]
-        path = unit_card(self.mod, u)                    # the card of an owner (never another picture)
+        fac = None
+        if faction:
+            owners = unit_owners(self.mod, u)
+            fac = next((f for f in owner_factions(self.mod, [faction]) if f in owners), None)
+        path = unit_card(self.mod, u, fac)               # the card of an owner (never another picture)
         return path, u.summary()
 
     def building_card(self, kind, name):
@@ -109,9 +114,16 @@ class Cards:
 def install(root, mod_of, pictures, culture=None):
     """Every Treeview and Listbox shows the card of the unit / building its hovered row names. mod_of() -> the
     loaded ModData (or None); pictures = the app's card cache (gui_garrison.Pictures)."""
-    state = {"job": None, "win": None, "row": None, "cards": None, "for": None}
+    state = {"job": None, "win": None, "row": None, "cards": None, "for": None, "own": {}}
 
-    def cards():
+    def cards(w=None):
+        # a list of another mod's units (Bring units) names that mod: its cards, never the loaded mod's ones of the
+        # same name (report #290: the hover showed another faction's card) - widget._cards_mod
+        own = getattr(w, "_cards_mod", None)
+        if own is not None:
+            if id(own) not in state["own"]:
+                state["own"] = {id(own): Cards(own)}
+            return state["own"][id(own)]
         mod = mod_of()
         if mod is None:
             return None
@@ -153,12 +165,14 @@ def install(root, mod_of, pictures, culture=None):
 
     def show(w, x, y, hit):
         state["job"] = None
-        c = cards()
+        c = cards(w)
         if c is None:
             return
         try:
             kind, name = hit
-            path, words = c.unit_card(name) if kind == "unit" else c.building_card(kind, name)
+            fac = getattr(w, "_cards_faction", None)
+            path, words = (c.unit_card(name, fac() if fac else None) if kind == "unit"
+                           else c.building_card(kind, name))
         except Exception:
             return
         from . import theme
@@ -195,7 +209,7 @@ def install(root, mod_of, pictures, culture=None):
         hide()
         if row is None:
             return
-        c = cards()
+        c = cards(w)
         hit = c.find(texts) if c is not None else None
         if hit is None:
             return

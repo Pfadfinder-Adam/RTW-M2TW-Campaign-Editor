@@ -165,6 +165,7 @@ class BringWindow(StepWindow):
         box = ttk.Frame(self.body)
         box.pack(fill="both", expand=True, pady=4)
         lb = tk.Listbox(box, selectmode="extended", exportselection=False, width=40)
+        lb._cards_mod = self.src                       # the hover card: the other mod's unit, as on the right
         sb = ttk.Scrollbar(box, command=lb.yview)
         lb.configure(yscrollcommand=sb.set)
         lb.pack(side="left", fill="y")
@@ -173,6 +174,7 @@ class BringWindow(StepWindow):
         from .gui_preview import BuildingPreview, UnitPreview
         look = (UnitPreview if self.kind == "unit" else BuildingPreview)(box, self.src)
         look.pack(side="left", fill="both", expand=True)
+        lb._cards_faction = lambda: look.faction       # ...in the picked faction's look (report #290)
         chosen = set(self.picked)
         shown = []
 
