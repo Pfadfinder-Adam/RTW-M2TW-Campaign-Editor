@@ -162,6 +162,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Maps > 3D: looking at the map from beyond its near edge drew that edge on down to the bottom as stretched
+  stripes -> the map ends there and the background shows, as at the sides.
 - The faction-select map drawn from the campaign map covered Medieval II's rope frame -> it fills only the map
   inside the frame; the frame stays the game's own.
 - Recolour: painting by hand on the 'after' picture could stop the editor with an error - fixed.

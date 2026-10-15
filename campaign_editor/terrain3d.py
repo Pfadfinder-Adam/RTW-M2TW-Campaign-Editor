@@ -358,10 +358,16 @@ def render(cmap, cam, W, H, steps=None, sky=(170, 196, 220), with_depth=False):
     hm = cmap.height
     ground_h = ((hm[iy, ix] * (1 - tx[..., 0]) + hm[iy, ix1] * tx[..., 0]) * (1 - ty[..., 0]) +
                 (hm[iy1, ix] * (1 - tx[..., 0]) + hm[iy1, ix1] * tx[..., 0]) * ty[..., 0]) * hscale
-    dist, y = project(z[:, None], ground_h - eye, cam, W, H)
-    y = np.where(inside & (dist > 0.5), y, H + 1.0)    # off the map: nothing drawn
+    dist, y_raw = project(z[:, None], ground_h - eye, cam, W, H)
+    y = np.where(inside & (dist > 0.5), y_raw, H + 1.0)    # off the map: nothing drawn
     # front to back: a step is seen where it rises above every nearer step
     cover = np.minimum.accumulate(y, axis=0)
+    # how low each step may reach: down to the nearer step's row - where that one is off the map (the camera
+    # outside it, looking in), down to where its ground would be, so under the map's near edge the background
+    # shows, as at the sides (report #265: the edge's first row went on down to the picture's bottom)
+    reach = np.empty_like(cover)
+    reach[0] = H + 1.0
+    reach[1:] = np.minimum(cover[:-1], np.where(dist[:-1] > 0.5, y_raw[:-1], H + 1.0))
     rows = np.arange(H, dtype=np.float32)
     out = np.empty((H, W, 3), np.uint8)
     # the sky: lighter towards the horizon
@@ -379,6 +385,7 @@ def render(cmap, cam, W, H, steps=None, sky=(170, 196, 220), with_depth=False):
         cv = -cover[:, col]                            # rising: searchsorted wants it sorted
         s_idx = np.searchsorted(cv, -rows, side="left")
         seen = s_idx < steps
+        seen[seen] &= rows[seen] < reach[s_idx[seen], col]
         r = np.nonzero(seen)[0]
         if r.size:
             out[r, col] = colours[s_idx[r], col]
