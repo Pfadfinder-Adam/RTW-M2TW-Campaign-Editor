@@ -1539,6 +1539,18 @@ def s_game_editor(c, mod):
     return plan
 
 
+@step("Load: the campaign's locked factions (unlockable / nonplayable, each with a town at the start) opened to play - "
+      "the Senate, the Pope and the rebels stay locked",
+      "the faction-select screen offers the opened factions (Egypt, the Gauls... in Rome; the Aztecs in Medieval II) "
+      "and not the Senate or the Pope")
+def s_open_factions(c, mod):
+    from . import gamefix
+    found = [p for p in gamefix.problems(mod, on_load=True) if p["id"] == "locked_factions:%s" % c.campaign]
+    if not found:
+        raise Skip("no locked faction with a town in this campaign")
+    return gamefix.fix_plan(mod, found)
+
+
 def _other_mod(mod):
     """Another mod of the same game to bring a whole faction from: Barbarian Invasion beside a Rome mod (Rome Gold),
     else the game's own data under the mod; None when there is none."""
@@ -2725,6 +2737,7 @@ COVERAGE = {
     "New faction > From another mod (a whole faction brought)": ["s_faction_bring"],
     "Maps > 3D > Make the minimap from it": ["s_minimap"],
     "Maps > 3D > Game's editor (the game's own campaign-map editor)": ["s_game_editor"],
+    "Load: locked factions opened to play": ["s_open_factions"],
     "Unit packs export / import": ["s_unit_pack"],
     "Check and install a pack": ["s_modpack"],
     "Events": ["s_events", "s_events_more"],

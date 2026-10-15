@@ -2712,6 +2712,35 @@ building smith
                                                                             img.height)))
         self.assertNotEqual(other, (200, 10, 10))                     # another faction's land: the map as it is
 
+    def test_locked_factions_opened_on_load(self):
+        """The user, 2026-10-15: on loading a game whose campaign keeps factions locked (unlockable / nonplayable),
+        offer to open them - into the playable list, with a backup; the Senate, the Pope, the rebels and factions
+        with no town at the start (dead on turn one) stay as they are."""
+        from campaign_editor import gamefix
+        from campaign_editor.strat import Strat
+        from campaign_editor.textio import TextFile
+        strat = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        text = open(strat).read()
+        text = text.replace("playable\n\talpha\nend\nunlockable\nend\nnonplayable\n\tslave\nend",
+                            "playable\n\tbeta\nend\nunlockable\n\talpha\nend\nnonplayable\n\tgamma\n\tslave\n"
+                            "\tromans_senate\nend", 1)
+        write(strat, text)
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertEqual(gamefix.locked_factions(mod, "test"), ["alpha"])      # gamma has no town, slave stays
+        found = [p for p in gamefix.problems(mod, on_load=True) if p["id"].startswith("locked_factions")]
+        self.assertEqual(len(found), 1)
+        self.assertIn("alpha", found[0]["why"])
+        bdir = gamefix.fix_plan(mod, found).apply()
+        s = Strat(TextFile.load(strat))
+        self.assertEqual([n for _, n in s.playable["items"]], ["beta", "alpha"])
+        self.assertEqual([n for _, n in s.unlockable["items"]], [])
+        self.assertEqual([n for _, n in s.nonplayable["items"]], ["gamma", "slave", "romans_senate"])
+        self.assertEqual(gamefix.locked_factions(ModData(self.root), "test"), [])    # not asked again
+        restore(ModData(self.root), bdir)
+        after = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
+        self.assertEqual(after, before)
+
     def test_open_in_the_games_campaign_editor_and_take_it_back(self):
         """The user, 2026-10-15: the game's own campaign-map editor beside ours. It opens only campaign/custom/<name>/
         and on Save writes descr_strat.txt again without the 'script' line and without what it could not read: the

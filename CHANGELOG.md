@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- On Load: a campaign whose factions are locked (Rome's Egypt, Gauls...; Barbarian Invasion's Celts...; Medieval
+  II's Aztecs) offers to open them to play - with a backup; the Roman Senate, the Pope, the rebels and factions
+  that start with no town stay locked.
 - **Maps > 3D > Game's editor...**: the campaign opened in the game's own campaign-map editor - copied to
   campaign/custom/ and the game started in it (Rome with REX, Medieval II with M2EX; the plain games show where
   to click) - and what it saved taken back, the script line it drops put back and anything it dropped listed.

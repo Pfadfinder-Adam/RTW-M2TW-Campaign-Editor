@@ -19,6 +19,57 @@ def _vegetation_maps(mod):
     return False
 
 
+# factions a locked faction stays for when the others are opened (the user, 2026-10-15): the Roman Senate, the Pope,
+# the rebels - and any that starts with no town (the Mongols, the Timurids, BI's hordes and rebel empires): picked,
+# it would be dead on the first turn
+KEEP_LOCKED = {"romans_senate", "papal_states", "slave"}
+
+
+def locked_factions(mod, campaign):
+    """The factions of a campaign the player cannot pick (unlockable / nonplayable) that could be opened - each with
+    a town at the start and none of KEEP_LOCKED."""
+    from .strat import Strat
+    sp = mod.campaign_file(campaign, "descr_strat.txt")
+    if not sp:
+        return []
+    s = Strat(mod.load(sp))
+    towns = {fb.name: len(fb.settlements) for fb in s.factions}
+    shut = [n for lst in (s.unlockable, s.nonplayable) for _, n in (lst or {}).get("items", [])]
+    return [n for n in shut if n not in KEEP_LOCKED and towns.get(n, 0) > 0]
+
+
+def open_factions(f, names):
+    """The names taken out of descr_strat's unlockable / nonplayable lists and written into its playable list (a
+    TextFile, in place)."""
+    want = set(names)
+    where, cur, drop = None, None, []
+    for i in range(len(f)):
+        t = tokens(strip_comment(f.text(i)))
+        if not t:
+            continue
+        if t[0] in ("playable", "unlockable", "nonplayable"):
+            cur = t[0]
+            continue
+        if cur and t[0] == "end":
+            if cur == "playable":
+                where = i
+            cur = None
+            continue
+        if cur in ("unlockable", "nonplayable") and t[0] in want:
+            drop.append(i)
+        if cur is None and t[0] == "faction":
+            break
+    if where is None:
+        raise ValueError("descr_strat.txt has no playable list to open the factions into")
+    indent = next((re.match(r"^(\s*)", f.text(i)).group(1) for i in range(where - 1, -1, -1)
+                   if tokens(strip_comment(f.text(i)))[:1] not in ([], ["playable"])), "\t") or "\t"
+    got = [tokens(strip_comment(f.text(i)))[0] for i in drop]
+    f.insert(where, [indent + n for n in got])
+    for i in sorted(drop, reverse=True):
+        f.delete(i if i < where else i + len(got), (i if i < where else i + len(got)) + 1)
+    return got
+
+
 def problems(mod, on_load=False):
     """[{'id', 'why', 'file', 'line', 'new'}] - what would stop the game and can be put right. on_load: what Load
     asks about - not the engine's settings files a mod lacks (the game runs either way; the user, 2026-10-10:
@@ -67,6 +118,17 @@ def problems(mod, on_load=False):
                            % (", ".join(missing), "it lies" if len(missing) == 1 else "they lie", name, name)})
     from .strat import headers_out_of_order
     for camp in mod.campaigns():
+        try:
+            shut = locked_factions(mod, camp)
+        except Exception:
+            shut = []
+        if shut:
+            out.append({"id": "locked_factions:%s" % camp, "file": mod.campaign_file(camp, "descr_strat.txt"),
+                        "names": shut, "line": 0,
+                        "why": "%s: %d faction(s) cannot be picked to play (%s). The fix: they go into the playable "
+                               "list (the Roman Senate, the Pope, the rebels and factions that start with no town "
+                               "stay as they are); Edit faction's Playable tick changes one at a time."
+                               % (camp, len(shut), ", ".join(shut))})
         sp = mod.campaign_file(camp, "descr_strat.txt")
         bad = headers_out_of_order(mod.load(sp)) if sp else []
         if bad:
@@ -285,6 +347,11 @@ def fix_plan(mod, found):
                 for i, t in zip(idx, texts):
                     f.set(i, t)
             plan.note(f, "faction header lines put in the games' order: %s" % ", ".join(n for n, _ in p["blocks"]))
+            continue
+        if p["id"].startswith("locked_factions:"):
+            f = plan.edit(p["file"])
+            got = open_factions(f, p["names"])
+            plan.note(f, "%d faction(s) opened to play: %s" % (len(got), ", ".join(got)))
             continue
         if p["id"] == "rome_dead":
             f = plan.edit(p["file"])
