@@ -45,6 +45,10 @@ def pose(mesh, n, mats, held_mats):
     T = np.asarray(table, dtype=np.float64)
     M, t = T[:, :9].reshape(-1, 3, 3), T[:, 9:]
     hand = np.where((b1 > 0) & (b1 < n), b1, 12 if n == 20 else 0)    # meshview.hand_of
+    from .meshview import shield_slots, LEFT_HAND
+    sh = sorted(shield_slots(mesh))
+    if sh and n == 20:                                                  # meshview.holder: a shield the left hand
+        hand = np.where(np.isin(b0, sh), LEFT_HAND, hand)
     i0 = np.where(b0 >= n, hand, b0)
     i1 = np.where(b1 >= n, i0, b1)
     if held_idx:

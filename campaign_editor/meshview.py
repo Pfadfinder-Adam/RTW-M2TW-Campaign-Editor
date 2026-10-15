@@ -70,7 +70,8 @@ class Mesh:
         self.parents = None             # Medieval II: its skeleton's bone tree (None: a man's, M2_PARENTS)
         self.joints = None              # posed: every bone's place in the model (pose_mesh)
         self.turns = None               # posed: every bone's turn in the model
-        self.bone_names = {}            # Medieval II: {bone number: name} as the file lists them
+        self.bone_names = {}            # Medieval II: {bone number: name} as the file lists them (its first one)
+        self.bone_aliases = {}          # Medieval II: {bone number: [every name]} - a slot may carry several
 
     @property
     def positions(self):
@@ -289,7 +290,8 @@ def read(data):
         b = data[st[BONES]:st[BONES] + 4 * count]
         w = list(struct.iter_unpack("<2f", data[st[WEIGHTS]:st[WEIGHTS] + 8 * count]))
         m.skin = [(b[4 * i + 2], b[4 * i + 1], w[i][0], w[i][1]) for i in range(count)]
-        m.bone_names = _bone_names(data)
+        m.bone_aliases = _bone_names(data, every=True)
+        m.bone_names = {k: v[0] for k, v in m.bone_aliases.items()}
         _animal_tree(m, m.bone_names)
     # the texture the file itself names (a siege engine's: siege_engines/textures/siege_catapult.texture - its
     # descr_engines block has no texture line); bump maps and overlays left out
@@ -301,9 +303,10 @@ def read(data):
     return m
 
 
-def _bone_names(data):
+def _bone_names(data, every=False):
     """{bone number: name} from the mesh's list of its skeleton's bones near its end (each a 4-byte length, the name,
-    its 4-byte number)."""
+    its 4-byte number); every: {bone number: [every name]} - the game's own meshes give slot 22 three
+    (bone_weapon03, bone_shield01, bone_shield), the first one alone hid the shield."""
     out = {}
     for hit in re.finditer(rb"bone_[A-Za-z0-9_]+", data[-6000:]):
         s, e = hit.start() + len(data) - min(len(data), 6000), hit.end() + len(data) - min(len(data), 6000)
@@ -311,7 +314,12 @@ def _bone_names(data):
             continue
         k = struct.unpack_from("<I", data, e)[0]
         if k < 256:
-            out.setdefault(k, data[s:e].decode("latin-1"))
+            name = data[s:e].decode("latin-1")
+            if every:
+                if name not in out.setdefault(k, []):
+                    out[k].append(name)
+            else:
+                out.setdefault(k, name)
     return out
 
 
@@ -460,7 +468,7 @@ def weapon_bones(mesh):
     """{'weapon': [bone numbers], 'shield': [...]} of a man's mesh from its bone names (bone_weapon01 / 02 / 03,
     bone_shield...; the numbers a file gives two names keep the shield's)."""
     out = {"weapon": [], "shield": []}
-    shields = {k for k, nm in mesh.bone_names.items() if "shield" in nm.lower()}
+    shields = shield_slots(mesh)
     for k, nm in sorted(mesh.bone_names.items()):
         if k < len(M2_PARENTS):
             continue
@@ -468,6 +476,13 @@ def weapon_bones(mesh):
         if k not in out[part]:
             out[part].append(k)
     return out
+
+
+def shield_slots(mesh):
+    """The bone numbers any of whose names says shield (the game binds a weapon part by its name, never by a
+    point's second bone - the engine source)."""
+    names = getattr(mesh, "bone_aliases", None) or {k: [v] for k, v in (mesh.bone_names or {}).items()}
+    return {k for k, nms in names.items() if any("shield" in nm.lower() for nm in nms)}
 
 
 def _qmat(q):
@@ -714,12 +729,13 @@ def pose_mesh(mesh, pose, base, held=None):
         out = _pose_points(mesh, n, mats, held, rot, brot, where, bwhere)
     m = Mesh(mesh.groups, out, mesh.uvs)
     m.one_texture, m.texture_ref, m.skin, m.parents = mesh.one_texture, mesh.texture_ref, mesh.skin, mesh.parents
-    m.bone_names = mesh.bone_names
+    m.bone_names, m.bone_aliases = mesh.bone_names, getattr(mesh, "bone_aliases", {})
     m.joints, m.turns = where, rot
     return m
 
 
 RIGHT_HAND = 12                         # bone_rhand of a man's 20
+LEFT_HAND = 16                          # bone_lhand: the game's shield skeleton holds the shield there
 
 
 def hand_of(second, n):
@@ -730,20 +746,30 @@ def hand_of(second, n):
     return RIGHT_HAND if n == len(M2_PARENTS) else 0
 
 
+def holder(b0, b1, n, shields):
+    """The bone holding a weapon / shield point: a shield the left hand (a Discord modder's shield floated beside
+    the head - its points' second bone, weightless, named the belly), anything else hand_of."""
+    if b0 in shields and n == len(M2_PARENTS):
+        return LEFT_HAND
+    return hand_of(b1, n)
+
+
 def _weapon_pairs(mesh, n):
     """The (weapon bone, the hand holding it) pairs of a mesh's points, found once."""
     got = getattr(mesh, "_pairs", None)
     if got is None or got[0] != n:
-        got = mesh._pairs = (n, sorted({(b0, hand_of(b1, n)) for b0, b1, _, _ in mesh.skin if b0 >= n}))
+        sh = shield_slots(mesh)
+        got = mesh._pairs = (n, sorted({(b0, holder(b0, b1, n, sh)) for b0, b1, _, _ in mesh.skin if b0 >= n}))
     return got[1]
 
 
 def _pose_points(mesh, n, mats, held, rot, brot, where, bwhere):
     """pose_mesh's points one by one (no NumPy)."""
     out = []
+    sh = shield_slots(mesh)
     for v, (b0, b1, w0, w1) in zip(mesh.positions, mesh.skin):
         if b0 >= n and held and b0 in held:          # a weapon with a move of its own in the hand holding it
-            h = hand_of(b1, n)
+            h = holder(b0, b1, n, sh)
             a = mats.get((b0, h))
             if a is None:
                 q = _qmul(_qmul(rot[h], (-brot[h][0], -brot[h][1], -brot[h][2], brot[h][3])), held[b0])
@@ -755,7 +781,7 @@ def _pose_points(mesh, n, mats, held, rot, brot, where, bwhere):
                         a[6] * x + a[7] * y + a[8] * z + a[11]))
             continue
         if b0 >= n:                                  # a weapon's or the shield's point: the hand holding it
-            b0 = hand_of(b1, n)
+            b0 = holder(b0, b1, n, sh)
         if b1 >= n:
             b1 = b0
         if w0 <= 0 and w1 <= 0:                      # no weights (a shield, a quiver): all on its bone

@@ -11346,6 +11346,27 @@ building smith
         named = MV.Mesh([], [], None)
         named.bone_names = {0: "bone_pelvis", 20: "bone_weapon01", 21: "bone_weapon02", 22: "bone_shield"}
         self.assertEqual(MV.weapon_bones(named), {"weapon": [20, 21], "shield": [22]})
+        # a Discord modder's shield (a Morrowind mod) floated beside the head as an animation played: the game's
+        # meshes give slot 22 several names (bone_weapon03, bone_shield01, bone_shield) - only the first was kept, so
+        # no shield was found, and its points' weightless second bone (the belly) held it. The game binds a shield to
+        # the left hand by name (the engine source).
+        many = MV.Mesh([], [], None)
+        many.bone_aliases = {20: ["bone_weapon01"], 22: ["bone_weapon03", "bone_shield01", "bone_shield"]}
+        many.bone_names = {20: "bone_weapon01", 22: "bone_weapon03"}
+        self.assertEqual(MV.weapon_bones(many), {"weapon": [20], "shield": [22]})
+        bent = list(rot)
+        bent[16] = (0.0, 0.0, math.sqrt(0.5), math.sqrt(0.5))           # the left hand turned a quarter round
+        for pure in (True, False):
+            shield = MV.Mesh(mesh.groups, mesh.positions, None)
+            shield.skin = [(0, 4, 1.0, 0.0), (22, 4, 1.0, 0.0), (0, 0, 0.0, 0.0)]
+            shield.bone_aliases, shield.bone_names = {22: ["bone_shield"]}, {22: "bone_shield"}
+            on_hand = MV.Mesh(mesh.groups, mesh.positions, None)
+            on_hand.skin = [(0, 4, 1.0, 0.0), (16, 0, 1.0, 0.0), (0, 0, 0.0, 0.0)]
+            shield.pure = on_hand.pure = pure
+            got = MV.pose_mesh(shield, MV.Pose(bent, off), (rot, off)).positions[1]
+            want = MV.pose_mesh(on_hand, MV.Pose(bent, off), (rot, off)).positions[1]
+            for g, w in zip(got, want):
+                self.assertAlmostEqual(g, w, places=5)
         # a moment between two frames is drawn between them (the play looked hurried and jerky drawing whole
         # frames only): half way from unturned to half round the up axis = a quarter round; past the last frame
         # it blends into the first
