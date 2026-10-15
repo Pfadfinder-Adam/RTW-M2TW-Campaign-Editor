@@ -50,6 +50,10 @@ class Map3DView(ttk.Frame):
         tip(b_mini, "The campaign's minimap (radar_map1 / radar_map2.tga - the small map in the game's bottom-left "
                     "corner) drawn again from this map seen from above: the ground's textures, relief, rivers, the "
                     "sea's depths; each picture keeps its size and border. Kept for Apply (Preview shows it).")
+        b_own = ttk.Button(bar, text="Own minimap...", command=self.own_minimap)
+        b_own.pack(side="left", padx=(theme.BUTTON_GAP, 0))
+        tip(b_own, "A picture of your own (any size, .tga / .png / .jpg...) as the campaign's minimap: fitted into "
+                   "each minimap picture, its size and border kept. Kept for Apply; Restore takes it back.")
         b_game = ttk.Button(bar, text="Game's editor...", command=self.game_editor)
         b_game.pack(side="left", padx=(theme.BUTTON_GAP, 0))
         tip(b_game, "The campaign opened in the game's own campaign-map editor (copied to campaign/custom/ first), "
@@ -91,7 +95,15 @@ class Map3DView(ttk.Frame):
         from .gui_gameeditor import open_window
         open_window(self.app)
 
-    def make_minimap(self):
+    def own_minimap(self):
+        """'Own minimap...': a picture of the modder's own as the campaign's minimap (minimap.redraw picture=)."""
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(parent=self, title="Own minimap picture", filetypes=[
+            ("Pictures", "*.tga *.png *.jpg *.jpeg *.bmp *.dds"), ("All files", "*.*")])
+        if path:
+            self.make_minimap(picture=path)
+
+    def make_minimap(self, picture=None):
         """'Make the minimap from it': the campaign's minimap pictures drawn again from the map as the brushes
         leave it (minimap.redraw on the Terrain editor's copy), kept for Apply."""
         from tkinter import messagebox
@@ -107,14 +119,19 @@ class Map3DView(ttk.Frame):
 
         def make():
             plan = Plan(app.mod, "minimap", "minimap", {})
-            MM.redraw(plan, camp, source=self._source())
+            MM.redraw(plan, camp, source=self._source(), picture=picture)
             return plan
+        what = ("The minimap of %s from %s" % (camp, os.path.basename(picture)) if picture else
+                "The minimap of %s drawn from the map" % camp)
         try:
-            if keep_for_apply(app, "minimap:%s" % camp, "The minimap of %s drawn from the map" % camp, make,
+            if keep_for_apply(app, "minimap:%s" % camp, what, make,
                               title="Minimap"):
                 self.lbl.configure(text="minimap kept - Preview, then Apply changes")
         except ImportError:
             messagebox.showerror("Minimap", "drawing pictures needs Pillow")
+        except (OSError, ValueError) as e:
+            messagebox.showerror("Minimap", "That picture cannot be used: %s" % e, parent=self)
+            self.lbl.configure(text="")
 
     def _stamp(self):
         """What the picture was made from: the mod, the campaign, the brushes' changes (their Undo list and the

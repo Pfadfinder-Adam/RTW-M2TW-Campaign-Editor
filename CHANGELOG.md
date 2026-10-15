@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- Maps > 3D > **Own minimap...**: any picture of your own becomes the campaign's minimap, fitted into its size and border.
 - The Buildings tab and the town window leave out building levels the faction's towns can never grow big enough
   for (vanilla Rome's large temples for barbarians) and say how many - the game's files stay as they are.
 - **Emblem everywhere...** beside the faction's colours (New faction / Edit faction): one picture makes every

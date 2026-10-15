@@ -3114,6 +3114,37 @@ building smith
         self.assertEqual(got.getpixel((59, 20)), (0, 0, 255))
         self.assertEqual(got.getpixel((20, 20)), (200, 30, 30))       # the map inside
 
+    def test_own_picture_as_the_minimap(self):
+        """Report #288: the minimap drawn from the map is good - and a picture of the modder's own may be put in too:
+        fitted into each minimap picture, its size kept; Restore takes it back."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("no NumPy")
+        from campaign_editor import minimap as MM
+        from campaign_editor.plan import Plan
+        mod = ModData(self.root)
+        camp = mod.campaigns()[0]
+        radar = os.path.join(os.path.dirname(mod.campaign_file(camp, "descr_strat.txt")), "radar_map1.tga")
+        Image.new("RGB", (40, 20), (0, 0, 200)).save(radar)
+        before = tree_hash(self.root)
+        own = os.path.join(tempfile.mkdtemp(), "mine.png")
+        self.addCleanup(shutil.rmtree, os.path.dirname(own))
+        Image.new("RGB", (400, 300), (10, 200, 10)).save(own)
+        plan = Plan(mod, "minimap", "minimap", {})
+        self.assertEqual(MM.redraw(plan, camp, picture=own), 1)
+        self.assertIn("mine.png", plan.report())
+        bdir = plan.apply()
+        got = Image.open(radar)
+        self.assertEqual(got.size, (40, 20))
+        self.assertEqual(got.convert("RGB").getpixel((20, 10)), (10, 200, 10))
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_palette_tga_read_and_written_back_true_colour(self):
         """A map made by a community map generator stores map_regions / features / ground as COLOUR-MAPPED TGAs
         (type 1; 9 = run-length) - the editor could not open them. They read like true-colour ones, and a picture

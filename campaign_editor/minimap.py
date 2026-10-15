@@ -8,7 +8,7 @@ same picture as the faction's map with its land filled 75 %, crisp smooth border
 - radar_pictures() / redraw(): the campaign's minimap pictures (radar_map1 / radar_map2 / map_radar2.tga - the map in
   the campaign's bottom-left corner) drawn again from it, each at its own size, its border lines kept (Medieval II's
   radar_map2: a blue line along the top and the right) - never bigger than it was, so the original Rome exe that
-  crashes on a too big radar_map1 is safe.
+  crashes on a too big radar_map1 is safe. redraw(picture=) puts a picture of the modder's own in the same way.
 """
 
 import io
@@ -77,19 +77,28 @@ def radar_from(view, data):
     return buf.getvalue()
 
 
-def redraw(plan, campaign, source=None):
+def redraw(plan, campaign, source=None, picture=None):
     """The campaign's minimap pictures drawn again from the map (source: the mod to read the map from - the Terrain
-    editor's copy with its unwritten brush work; plan.mod by default), into plan as binaries. -> how many."""
+    editor's copy with its unwritten brush work; plan.mod by default), into plan as binaries. -> how many.
+    picture: a picture file of the modder's own (report #288: 'give a button so they can put their own') put in
+    instead, fitted to each minimap's size inside its border."""
     mod = plan.mod
-    view, _ = top_view(source or mod, campaign)
+    if picture:
+        from PIL import Image
+        with Image.open(picture) as im:
+            view = im.convert("RGB")
+    else:
+        view, _ = top_view(source or mod, campaign)
     n = 0
     for p in radar_pictures(mod, campaign):
         with open(p, "rb") as fh:
             data = fh.read()
         dst = mod.own(p) if hasattr(mod, "own") else p
         plan.binary(dst, radar_from(view, data))
-        plan.note(None, "%s drawn again from the map (its size %s kept; the ground's textures, relief, rivers, "
-                        "the sea's depths)" % (mod.rel(dst), "x".join(str(x) for x in _size(data))))
+        plan.note(None, ("%s: your picture %s put in (its size %s kept)" % (
+            mod.rel(dst), os.path.basename(picture), "x".join(str(x) for x in _size(data)))) if picture else
+            "%s drawn again from the map (its size %s kept; the ground's textures, relief, rivers, the sea's depths)"
+            % (mod.rel(dst), "x".join(str(x) for x in _size(data))))
         n += 1
     if not n:
         raise ValueError("this campaign has no minimap picture (radar_map1 / radar_map2.tga) to draw again")
