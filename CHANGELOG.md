@@ -188,6 +188,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Avoid Growth in Rome stood a little off Automanage on 4:3 and 16:10 screens -> it keeps its place on any screen shape.
 - Make a card: an own frame moved or sized wholly off the man stopped with an error -> the card is simply empty there.
 - View in 3D (Medieval II): a shield could float beside the man's head once an animation played -> the shield is held by the left hand, as in the game.
 - Interface opened in a window of its own -> it is a work of the main window now, like the Module builder.

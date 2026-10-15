@@ -8627,6 +8627,10 @@ building smith
                      '"verdana_sml"', '"BEVEL_TL"', "AG_M2_ROW", "root.persistent", '"SettlementTurnStart"',
                      "settlementScroll", "rawdelete"):
             self.assertIn(part, text)
+        # Rome's tick: across by its governor panel, down by the screen's height - one scale for both put it 10-25 %
+        # short off 16:9 screens (the engine source: the scrolls stretch each axis alone)
+        self.assertIn("local kx = art.m2 ? ag_scale_x(ui, k) : ag_rome_scale(k)", text)
+        self.assertIn("ag_round(AG_ROME_X * kx), gov[1] + gov[3] + ag_round(AG_ROME_BELOW * k)", text)
         # the scroll's own ticks are the small bevelled PLAIN_CHECKBOX pieces in BOTH games (a tester's Medieval II
         # screen, 2026-10-09: CHECKBOX_BG drew a flat pink square beside them); the words as high as the game's
         m2 = text[text.index("local AG_SPRITES_M2"):text.index("local AG_SPRITES_ROME")]

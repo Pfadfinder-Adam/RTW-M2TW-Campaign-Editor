@@ -547,7 +547,8 @@ function ag_place_m2(box, k) {
 
 // [x, y] of the tick box (physical px), from the first open anchor, or null. m2: Medieval II's scroll (its tick
 // row is known: the box goes right of Recruitment); k: screen px per 1024 x 768 unit.
-function ag_place(box, m2, k) {
+function ag_place(box, m2, k, kx = null) {
+    kx = kx == null ? k : kx
     if (m2 && ag_rect(ag_game_element("settlement_details_population_stats")) == null) {
         local at = ag_place_m2(box, k)
         if (at != null) {
@@ -559,7 +560,7 @@ function ag_place(box, m2, k) {
         // figures are on screen too, and the tick belongs under Automanage, not there
         local gov = ag_rect(ag_game_element("own_settlement_governor_info_panel"))
         if (gov != null) {
-            return [gov[0] + ag_round(AG_ROME_X * k), gov[1] + gov[3] + ag_round(AG_ROME_BELOW * k),
+            return [gov[0] + ag_round(AG_ROME_X * kx), gov[1] + gov[3] + ag_round(AG_ROME_BELOW * k),
                     "own_settlement_governor_info_panel (Rome: under Automanage)", gov[0]]
         }
     }
@@ -573,7 +574,7 @@ function ag_place(box, m2, k) {
                     a[0] + " (Medieval II tick row)"]
         }
         if (!m2 && a[0] == "own_settlement_governor_info_panel") {
-            return [r[0] + ag_round(AG_ROME_X * k), r[1] + r[3] + ag_round(AG_ROME_BELOW * k),
+            return [r[0] + ag_round(AG_ROME_X * kx), r[1] + r[3] + ag_round(AG_ROME_BELOW * k),
                     a[0] + " (Rome: under Automanage)", r[0]]
         }
         if (a[1] == "below") {
@@ -613,18 +614,18 @@ function ag_draw() {
     if (s == null || !ag_tab_open()) {
         return
     }
-    local k = ag_scale(ui)
+    local k = ag_scale(ui)                      // down: H / 768, as the games stretch their scrolls
     local art = ag_load_art(ui)
-    if (!art.m2) {
-        k = ag_rome_scale(k)
-    }
     local box = (art.size * k + 0.5).tointeger()
-    local kx = art.m2 ? ag_scale_x(ui, k) : k
+    // across: Medieval II W / 1024; Rome from its governor panel as drawn (its numbers here were measured in those
+    // units) - one scale for both axes put the tick 10-25 % short off 16:9 screens (the engine source: each axis
+    // is stretched alone)
+    local kx = art.m2 ? ag_scale_x(ui, k) : ag_rome_scale(k)
     if (art.m2 && art.size == 18) {             // Medieval II: the scroll's own box, each axis stretched alone
         box = ag_round(AG_M2_BOX[1] * k)
     }
     local tick = box
-    local at = ag_place(box, art.m2, k)
+    local at = ag_place(box, art.m2, k, kx)
     if (at == null) {
         return
     }
@@ -638,7 +639,7 @@ function ag_draw() {
         ag_log(line + "; the tick at " + at[0] + "," + at[1] + " beside " + at[2] + ", " + k + " px a unit, font "
             + (art.m2 && ag_ex_font() != null ? "M2EX's Verdana" : ag_face(ui)))
     }
-    local x = at[0] + (AG_OFFSET_X * k).tointeger()
+    local x = at[0] + (AG_OFFSET_X * kx).tointeger()
     local y = at[1] + (AG_OFFSET_Y * k).tointeger()
     local name = ag_name(s)
     local store = ag_store()
@@ -685,12 +686,12 @@ function ag_draw() {
             cx += lw + track
         }
     })
-    local bx = x + tw[0] + (art.m2 ? ag_round(AG_M2_GAP_BOX * kx) : (AG_GAP * k).tointeger())
+    local bx = x + tw[0] + (art.m2 ? ag_round(AG_M2_GAP_BOX * kx) : (AG_GAP * kx).tointeger())
     local bw = art.m2 && art.size == 18 ? ag_round(AG_M2_BOX[0] * kx) : box
     if (!art.m2) {                  // in Automanage's column, as wide as its box (one rounding: no pixel off)
-        bw = ag_round(AG_ROME_BOX[1] * k)
-        local col = at.len() > 3 ? at[3] + ag_round((AG_ROME_X + AG_ROME_BOX[0]) * k) + ag_round(AG_OFFSET_X * k)
-                                 : x + ag_round(AG_ROME_BOX[0] * k)
+        bw = ag_round(AG_ROME_BOX[1] * kx)
+        local col = at.len() > 3 ? at[3] + ag_round((AG_ROME_X + AG_ROME_BOX[0]) * kx) + ag_round(AG_OFFSET_X * kx)
+                                 : x + ag_round(AG_ROME_BOX[0] * kx)
         bx = bx > col ? bx : col
     }
     if (art.box != null) {
