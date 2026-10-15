@@ -2752,6 +2752,7 @@ COVERAGE = {
     "Art: replace a picture": ["s_art", "s_art_all"],
     "Faction emblem": ["s_emblem"],
     "Own logos for this mod (sprite_format xml)": "unit tests - CE_Test reads the .sd.xml sheets already (the switch shows only on a mod without it); its logos are replaced by s_emblem",
+    "Logos painted into their place on the binary sprite sheets (the plain games)": ["s_emblem"],
     "Banner...": ["s_banner"],
     "Leader's and heir's titles (Faction tab)": ["s_titles"],
     "Recolour a faction's pictures": ["s_recolour"],

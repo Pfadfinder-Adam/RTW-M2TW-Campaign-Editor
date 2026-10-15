@@ -7634,6 +7634,60 @@ building smith
         with open(os.path.join(d, "descr_caps_ex.txt"), "rb") as fh:
             self.assertEqual(fh.read(), b"; sd = legacy binary\n;trade_fleet_source  capability\nsprite_format  xml\n")
 
+    def test_logo_painted_into_its_place_on_the_binary_sheets(self):
+        """A modder on Discord (Barbarian Invasion, no REX): the faction logos said 'cannot be replaced' - the game
+        reads the binary sprite sheets, so no sprite can be added. The picture is painted INTO the faction's own
+        place on the page instead (where the sheet says it is), on the mod's copy of the page for every culture that
+        has it: the plain game shows it. A place shared with another faction is said (both change), never refused.
+        The emblem takes the card (not locked). Restore gives every file back."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from unittest import mock
+        from campaign_editor import limits, symbols as SY
+        from campaign_editor.emblem import emblem_pictures
+        from campaign_editor.factionart import image_tga
+        d = os.path.join(self.root, "data")
+        sm = SM.replace("culture\t\teastern\n", "culture\t\teastern\nlogo_index\t\tFACTION_LOGO_ALPHA\n", 1)
+        sm = sm.replace("culture\t\tbarbarian\n", "culture\t\tbarbarian\nlogo_index\t\tFACTION_LOGO_ALPHA\n", 1)
+        write(os.path.join(d, "descr_sm_factions.txt"), sm)
+        write(os.path.join(d, "ui", "strategy.sd.xml"), '<sprite_definitions version="7">\n'
+              '  <page file="stratpage_02.tga" w="64" h="64">\n'
+              '    <sprite name="FACTION_LOGO_ALPHA" x="10" y="12" w="20" h="22" alpha="1"/>\n  </page>\n'
+              '</sprite_definitions>\n')
+        for culture in ("southern_european", "northern_european"):
+            os.makedirs(os.path.join(d, "ui", culture, "interface"))
+            with open(os.path.join(d, "ui", culture, "interface", "stratpage_02.tga"), "wb") as fh:
+                fh.write(image_tga(Image.new("RGBA", (64, 64), (0, 0, 200, 255))))
+        before = tree_hash(self.root)
+        with mock.patch.object(SY, "rome", lambda m: False), mock.patch.object(limits, "engine_of", lambda m: None):
+            mod = ModData(self.root)
+            self.assertEqual(SY.sprite_mode(mod), "sd")
+            card, = SY.entries(mod, "alpha")
+            self.assertFalse(card["locked"])
+            self.assertNotIn("cannot be replaced", card["note"])
+            self.assertIn("painted into its place", card["note"])
+            self.assertIn("shared with slave", card["note"])
+            self.assertEqual(emblem_pictures([card]), [card])
+            plan = Plan(mod, "t", "t", {})
+            with tempfile.TemporaryDirectory() as t:
+                src = os.path.join(t, "new_logo.png")
+                Image.new("RGBA", (40, 40), (220, 0, 0, 255)).save(src)
+                SY.write(plan, "alpha", SY.LOGO, src)
+            self.assertTrue(any("slave" in w for _, w in plan.warnings))
+            plan.apply()
+            for culture in ("southern_european", "northern_european"):
+                im = Image.open(os.path.join(d, "ui", culture, "interface", "stratpage_02.tga")).convert("RGBA")
+                self.assertEqual(im.size, (64, 64))
+                self.assertEqual(im.getpixel((20, 20)), (220, 0, 0, 255))      # inside its place: the new picture
+                self.assertEqual(im.getpixel((5, 5)), (0, 0, 200, 255))        # the rest of the page as it was
+                self.assertEqual(im.getpixel((31, 20)), (0, 0, 200, 255))
+            for b in backups(mod):
+                restore(mod, b)
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
+        self.assertEqual(after, before)
+
     def test_art_card_of_a_missing_logo(self):
         """The Art tab's card of a logo no sheet has (no picture file): drawn with '(none)', its words, and the
         'Own logos for this mod...' button when the switch is possible - no error for the missing file."""

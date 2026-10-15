@@ -521,6 +521,51 @@ def own_logo(plan, faction, which, im=None):
     return name
 
 
+def _page_copies(mod, page):
+    """[(culture, path to read)] of every ui/<culture>/interface/<page> the mod or the game has (the mod's first)."""
+    out = {}
+    for base in [mod.data] + ([_game_data(mod)] if _game_data(mod) else []):
+        ui = _ci(base, "ui")
+        if not ui or not os.path.isdir(ui):
+            continue
+        for c in sorted(os.listdir(ui)):
+            d = _ci(os.path.join(ui, c), "interface")
+            got = _ci(d, page) if d and os.path.isdir(d) else None
+            if got and c.lower() not in out:
+                out[c.lower()] = (c, got)
+    return list(out.values())
+
+
+def paint_logo(plan, faction, which, im):
+    """The binary sprite sheets (the plain games; an engine reading 'sd'): no sprite can be added, but the picture
+    can go INTO the faction's place on its page - where the sheet says it is - so the game shows it. Painted on the
+    mod's copy of that page in every culture folder that has it (each culture's interface has its own copy; the
+    places are the same). A place shared with other factions changes for them too - said, not refused (a modder on
+    Discord: 'cannot be replaced' for Barbarian Invasion's Huns). Returns the page, or None when the place is unknown."""
+    from PIL import Image
+    from .factionart import image_tga
+    mod = plan.mod
+    got = logo_of(plan, faction, which)
+    sp = got and got["sprite"]
+    if not sp or not sp["page_path"]:
+        return None
+    x, y, w, h = sp["box"]
+    pic = im.convert("RGBA").resize((w, h), Image.LANCZOS)
+    for culture, path in _page_copies(mod, sp["page"]):
+        mine = os.path.join(mod.data, "ui", culture, "interface", os.path.basename(path))
+        page = _read_image(plan, mine if mine in plan.binaries else path)
+        page.paste(pic, (x, y))                    # the place's pixels replaced, alpha too; the rest of the page kept
+        plan.binary(mine, image_tga(page))
+        plan.notes.append((mod.rel(mine), "%s of %s painted into its place (%d, %d, %d x %d)"
+                           % (LABELS[which][0], faction, x, y, w, h)))
+    if got["shared"]:
+        plan.warn(None, "%s: its %s shares its place on %s with %s - their logo changes too (the game's binary sprite "
+                        "sheets give no place of its own%s)" % (
+                            faction, LABELS[which][0], sp["page"], ", ".join(got["shared"]),
+                            "; 'Own logos for this mod...' would" if can_use_xml(mod) else ""))
+    return sp["page"]
+
+
 # ---------------------------------------------------------------------------
 # For the clone, the Art tab and its writes
 # ---------------------------------------------------------------------------
@@ -621,8 +666,14 @@ def entries(mod, faction):
             # a name the sheets lack: the game shows the sheet's first picture (M2EX: 'Unresolved sprite
             # definition ... defaulting to index 0') - said here, never a card left out (a tester's SSHIP factions)
             note = "sprite %s is on no sheet (%s) - the game shows another picture in its place" % (lg["name"], sheet)
-        if not xml:
-            note += " - cannot be replaced while the game reads the binary sprite sheets" + (
+        if not xml and found:
+            # the binary sheets: Replace paints into its place on the page (every culture's copy) - the plain game
+            # shows it; 'Own logos for this mod...' (an engine) gives it a page of its own instead
+            note += " - Replace: painted into its place on that page" + (
+                " (shared with %s: theirs changes too)" % ", ".join(lg["shared"]) if lg["shared"] else "") + (
+                "; 'Own logos for this mod...' gives it a page of its own" if switch else "")
+        elif not xml:
+            note += " - cannot be replaced: no place for it on the binary sprite sheets" + (
                 ": 'Own logos for this mod...' lets it" if switch else
                 " (%s with 'sprite_format xml' in the mod's own descr_caps_ex.txt needed)" % ENGINE[rome(mod)])
         elif not found:
@@ -632,7 +683,8 @@ def entries(mod, faction):
         box = sp["box"] if found else (0, 0) + _box(sheets(mod)[which][4])
         out.append({"path": sp["page_path"] if found else None, "rel": which, "label": LABELS[which][0],
                     "where": LABELS[which][1], "size": (box[2], box[3], 32), "crop": sp["box"] if found else None,
-                    "symbol": True, "note": note, "locked": not xml, "switch": switch, "missing": not found})
+                    "symbol": True, "note": note, "locked": not xml and not found, "switch": switch,
+                    "missing": not found})
     return out
 
 
@@ -642,7 +694,8 @@ def write(plan, faction, which, src):
     im = Image.open(src).convert("RGBA")
     if which == FLAG:
         own_flag(plan, faction, im)
-    elif own_logo(plan, faction, which, im) is None:
+    elif own_logo(plan, faction, which, im) is None and (
+            sprite_mode(plan.mod) == "xml" or paint_logo(plan, faction, which, im) is None):
         raise ValueError("%s: the %s cannot be replaced here - the game reads the binary sprite sheets; "
                          "%s with 'sprite_format xml' in the mod's own descr_caps_ex.txt can take it"
                          % (faction, LABELS[which][0], ENGINE[rome(plan.mod)]))
