@@ -530,6 +530,24 @@ def same_file(a, b):
     return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
 
 
+def plain_rel(rel):
+    """A picture's path without ModData.rel's '(the game's) ' mark - the same file name in the mod or the game."""
+    return rel.split(") ", 1)[1] if rel.startswith("(") and ") " in rel else rel
+
+
+def renamed_rels(rel, template, new):
+    """The names a template picture's copy for a new faction may have: in the new faction's folder (ui/units/<new>/
+    keeps the card's own name), named after it ('<template>' -> '<new>' anywhere), or the very file (a picture the
+    new faction wears as the template does) - each without the '(the game's) ' mark."""
+    import re
+    rel = plain_rel(rel).replace("\\", "/")
+    out = {rel}
+    if template:
+        out.add("/".join(new if p.lower() == template.lower() else p for p in rel.split("/")))
+        out.add(re.sub(re.escape(template), new, rel, flags=re.IGNORECASE))
+    return out
+
+
 def targets_of(mod, campaign, faction, path=None):
     """targets(), or only the one picture at path (a texture card's Recolour...) - [] when it is none of them."""
     items = targets(mod, campaign, faction)

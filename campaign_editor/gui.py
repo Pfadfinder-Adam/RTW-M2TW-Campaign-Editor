@@ -4993,10 +4993,18 @@ class App(tk.Tk):
             if not faction:
                 messagebox.showinfo(APP, "This mod has no faction to recolour.")
                 return
-        if self.editor() is None and self.undo_stack and self.v_mode.get() == "new":
-            messagebox.showinfo(APP, "Recolour works on the files as they are: create the new faction first "
-                                     "(Create faction), then recolour its pictures.")
         from .gui_recolour import RecolourWindow
+        new, template = self.v["name"].get().strip().lower(), self.v["template"].get().strip()
+        if self.editor() is None and self.v_mode.get() == "new" and new and new not in names and template in names:
+            # a faction not created yet (#224): its template's pictures shown, recoloured on its own copies when
+            # Apply creates it - no 'create it first'
+            try:
+                RecolourWindow(self, template, pending=new, to=(self.colours.get("primary"),
+                                                                 self.colours.get("secondary")))
+            except Exception as e:
+                log.error("Recolour: %s" % e)
+                messagebox.showerror(APP, "Could not read the pictures: %s" % e)
+            return
         try:
             RecolourWindow(self, faction)
         except Exception as e:

@@ -44,10 +44,13 @@ def open_one(app, faction, path, parent=None):
 
 
 class RecolourWindow(tk.Toplevel):
-    def __init__(self, app, faction, only=None):
+    def __init__(self, app, faction, only=None, pending=None, to=None):
         super().__init__(app)
         self.app, self.mod, self.faction = app, app.mod, faction
         self.only = only                       # one picture's path: the list holds only it (open_one)
+        # a new faction not created yet (#224): faction = its template, whose pictures it gets as copies; the
+        # recolour is made on its own copies at the write, after the faction is created (one Apply)
+        self.pending, self.pending_to = pending, to
         self.camp = app.v_campaign.get()
         self.title("%s - %s" % (TITLE, faction))
         self.transient(app)
@@ -73,6 +76,11 @@ class RecolourWindow(tk.Toplevel):
         (self.source, self.source_of) = R.guess_source(self.mod, faction, paths, self.colours) if paths else \
             (self.colours.get(faction, ((200, 0, 0), None)), faction)
         self.target = list(self.colours.get(faction, ((200, 0, 0), None)))
+        if self.pending:
+            self.title("%s - %s (made from %s's pictures, written when it is created)" % (
+                TITLE, self.pending, faction))
+            if self.pending_to and self.pending_to[0]:
+                self.target = [tuple(self.pending_to[0]), tuple(self.pending_to[1]) if self.pending_to[1] else None]
         self.source = list(self.source)
 
     def _targets(self):
@@ -118,7 +126,7 @@ class RecolourWindow(tk.Toplevel):
         self._shown_of = lambda tag: next((k for k, v in self._faction_of.items() if v == tag), tag)
         self.v_faction = tk.StringVar(value=self._shown_of(self.faction))
         fcb = ttk.Combobox(bar, textvariable=self.v_faction, values=list(self._faction_of),
-                           state="disabled" if self.only else "readonly",      # one picture: of this faction
+                           state="disabled" if self.only or self.pending else "readonly",   # one picture / new
                            width=min(26, max(12, max((len(k) for k in self._faction_of), default=12))))
         fcb.pack(side="left", padx=(4, 14))
         fcb.bind("<<ComboboxSelected>>", lambda e: self._faction_picked())
@@ -493,7 +501,7 @@ class RecolourWindow(tk.Toplevel):
         self.update_idletasks()
         done = R.plan_recolour(plan, items, self.source, self.target, self._from_of())
         now = tuple(tuple(c) if c else None for c in self.colours.get(self.faction, (None, None)))
-        if self.v_set.get() and tuple(tuple(c) for c in self.target) != now:
+        if self.v_set.get() and not self.pending and tuple(tuple(c) for c in self.target) != now:
             # the pictures and the faction's own colour lines move together (our rule: a change pulls along
             # what is tied to it - a tester found the colours unchanged after a recolour)
             from .edit import set_faction_colours
@@ -519,6 +527,8 @@ class RecolourWindow(tk.Toplevel):
         """Keep for Apply: the recoloured pictures go into the session's list, written by the main window's Apply
         changes with everything else (one write, one Undo)."""
         from .gui_util import keep_for_apply
+        if self.pending:
+            return self._keep_pending()
         try:
             plan = self._plan()
         except ValueError as e:
@@ -545,6 +555,46 @@ class RecolourWindow(tk.Toplevel):
             self.status.configure(text="%d picture(s) kept - Apply changes in the main window writes them" % n)
             return True
         return False
+
+
+    def _keep_pending(self):
+        """A new faction not created yet: what is ticked here (the template's pictures) is recoloured on the new
+        faction's own copies at the write - built after the faction part has written them (App.session_add
+        build=), so one Apply creates the faction and recolours it."""
+        items = self.picked()
+        if not items:
+            messagebox.showinfo(TITLE, "Tick at least one picture.", parent=self)
+            return False
+        new, template, camp = self.pending, self.faction, self.camp
+        # its copy (named after it) - or the same file, where the new faction wears the template's own picture (a
+        # battle texture: the recolour makes it a copy of its own then)
+        want = set().union(*(R.renamed_rels(it["rel"], template, new) for it in items))
+        n = len(items)
+        source, target, frm = list(self.source), list(self.target), self._from_of()
+        if any(self.edits.values()):
+            messagebox.showinfo(TITLE, "The brush touch-ups are not carried over: they are made on the pictures "
+                                       "themselves - recolour again after %s is created to touch them up." % new,
+                                parent=self)
+        app = self.app
+
+        def build():
+            from .moddata import ModData
+            from .plan import Plan
+            mod = ModData(app.mod.data)                 # the files as the faction part left them
+            plan = Plan(mod, "recolour", "recolour_%s" % new, {})
+            if new not in [n for n, _ in mod.factions()]:
+                plan.note(None, "%d picture(s) of %s recoloured once it is created (it is written first)" % (n, new))
+                return plan
+            got = [it for it in R.targets(mod, camp, new) if R.plain_rel(it["rel"]).replace("\\", "/") in want]
+            done = R.plan_recolour(plan, got, source, target, frm)
+            for it, how in done:
+                if not isinstance(how, float):
+                    plan.warn(None, "%s: %s" % (it["rel"], how))
+            return plan
+        app.session_add("recolour:%s" % new, "%s: %d picture(s) of the new faction %s" % (TITLE, n, new),
+                        None, build=build)
+        self.status.configure(text="%d picture(s) kept - Apply changes creates %s and recolours them" % (n, new))
+        return True
 
 
 __all__ = ["RecolourWindow", "open_one"]

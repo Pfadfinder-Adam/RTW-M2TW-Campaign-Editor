@@ -1087,6 +1087,21 @@ building smith
         self.assertIn("alpha", cards[0]["of"])
         self.assertTrue(cards[0]["others"][cards[0]["of"].index("alpha")][0].startswith(os.path.join(game, "data")))
 
+    def test_recolour_kept_for_a_faction_not_created_yet_finds_its_copies(self):
+        """Report #224: Recolour while making a faction said 'create it first'. The window shows the template's
+        pictures; at the write (after the faction part) the ticked ones are found among the new faction's own copies
+        by their names (template -> new) - or the very file it shares with the template."""
+        from campaign_editor import recolour as R
+        game, _ = self._game()
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        before = [it for it in R.targets(ModData(data), "test", "alpha") if not isinstance(it, str)]
+        want = set().union(*(R.renamed_rels(it["rel"], "alpha", "beta") for it in before))
+        self.assertIn("data/ui/units/beta/#alpha_general.tga", want)         # the card keeps its name, own folder
+        build(ModData(data), "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}}).apply()
+        after = [it for it in R.targets(ModData(data), "test", "beta") if not isinstance(it, str)]
+        self.assertTrue(after)
+        self.assertEqual(len([it for it in after if R.plain_rel(it["rel"]) in want]), len(after))
+
     def test_thin_mod_gets_its_whole_map_folder_on_a_map_change(self):
         """A thin mod's first map change (a town deleted with its region) brings the game's whole map folder into the
         mod - but map.rwm, which the game builds again from the mod's map; the game's files are never written; Restore

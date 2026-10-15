@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- Recolour while a new faction is being made: no more 'create it first' - its pictures are recoloured by the same
+  Apply that creates it.
 - New unit step by step, Pictures: the card and description picture shown as they will be, and **View in 3D...**
   of the new unit's soldiers with **Make a card...** / **Make a picture...**.
 - Bring units: a unit's ship type, Medieval II's mounted engine (an elephant's cannon) and an engine's own
