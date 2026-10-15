@@ -3157,6 +3157,71 @@ building smith
         restore(ModData(self.root), bdir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    LNT = ("<version>1.01</version>\r\n<texture>textures\\FE_texture1.tga\r\n  <path>textures</path>\r\n"
+           "  <region>logo\r\n    <left>0</left>\r\n    <top>36</top>\r\n    <right>489</right>\r\n"
+           "    <bottom>204</bottom>\r\n  </region>\r\n</texture>\r\n<UI object>logo_obj\r\n  <type>art</type>\r\n"
+           "  <UI region>art\r\n    <page>textures\\FE_texture1.tga</page>\r\n    <region>logo</region>\r\n"
+           "  </UI region>\r\n</UI object>\r\n<layout>\r\n  <layout_width>1024</layout_width>\r\n"
+           "  <layout_height>768</layout_height>\r\n  <lpage>main_menu\r\n    <UI piece>main_logo\r\n"
+           "      <identifier>UIP_EMPTY_ART</identifier>\r\n      <Parameters>\r\n        <x>266</x>\r\n"
+           "        <y>30</y>\r\n        <width>489</width>\r\n      </Parameters>\r\n"
+           "      <object_id>logo_obj</object_id>\r\n    </UI piece>\r\n    <UI piece>main_single\r\n"
+           "      <identifier>UIP_MENU_BUTTON</identifier>\r\n      <Parameters>\r\n        <x>255</x>\r\n"
+           "        <y>256</y>\r\n        <width>513</width>\r\n        <height>38</height>\r\n"
+           "        <menu_id>new_game</menu_id>\r\n        <UI text>UI_SINGLE\r\n"
+           "          <font_id>arial_split_CAF</font_id>\r\n          <align>centre</align>\r\n"
+           "        </UI text>\r\n      </Parameters>\r\n      <object_id>empty_push_button</object_id>\r\n"
+           "    </UI piece>\r\n  </lpage>\r\n  <lpage>new_game\r\n  </lpage>\r\n</layout>\r\n")
+
+    def test_menu_layout_read_and_written_byte_exact(self):
+        """The interface editor's ground (the user, 2026-10-15: 'a full interface editor', from Wholesome Queen's
+        studio): a .lnt file read into pages, pieces, pictures; written back byte-exact; a move, a copy, a rename and
+        a removal change only their own lines."""
+        from campaign_editor.lnt import Lnt, LntError
+        raw = self.LNT.encode("latin-1")
+        lnt = Lnt(raw)
+        self.assertEqual(lnt.dump(), raw)
+        self.assertEqual(lnt.pages(), ["main_menu", "new_game"])
+        self.assertEqual(lnt.size(), (1024, 768))
+        single = lnt.piece("main_menu", "main_single")
+        self.assertEqual((single["x"], single["y"], single["width"], single["height"]), (255, 256, 513, 38))
+        self.assertEqual((single["menu_id"], single["text"], single["font"], single["align"]),
+                         ("new_game", "UI_SINGLE", "arial_split_CAF", "centre"))
+        self.assertEqual(lnt.opened_by(), {"new_game": [("main_menu", "main_single")]})
+        self.assertEqual(lnt.art(lnt.piece("main_menu", "main_logo")),
+                         ("textures\\FE_texture1.tga", (0, 36, 489, 204), "textures"))
+        self.assertIsNone(lnt.art(single))                           # empty_push_button: the engine draws it
+        lnt.move("main_menu", "main_single", x=300, y=200)
+        lnt.move("main_menu", "main_logo", height=168)                # a missing height goes after width
+        out = lnt.dump().decode("latin-1")
+        self.assertIn("        <x>300</x>\r\n        <y>200</y>\r\n", out)
+        self.assertIn("        <width>489</width>\r\n        <height>168</height>\r\n      </Parameters>", out)
+        self.assertEqual(len(out.splitlines()), len(self.LNT.splitlines()) + 1)
+        lnt.copy_piece("main_menu", "main_single", "main_single_2", dy=64)
+        two = lnt.piece("main_menu", "main_single_2")
+        self.assertEqual((two["x"], two["y"], two["text"]), (300, 264, "UI_SINGLE"))
+        self.assertEqual(lnt.piece("main_menu", "main_single")["y"], 200)
+        lnt.copy_piece("main_menu", "main_logo", "logo_there", to_page="new_game")
+        self.assertEqual([x["name"] for x in lnt.pieces("new_game")], ["logo_there"])
+        lnt.rename_piece("new_game", "logo_there", "logo_here")
+        lnt.set_text("main_menu", "main_single_2", "UI_OTHER")
+        self.assertEqual(lnt.piece("main_menu", "main_single_2")["text"], "UI_OTHER")
+        with self.assertRaises(LntError):
+            lnt.copy_piece("main_menu", "main_single", "main_single_2")      # the name is taken
+        for page, name in (("new_game", "logo_here"), ("main_menu", "main_single_2")):
+            lnt.remove_piece(page, name)
+        lnt.move("main_menu", "main_single", x=255, y=256)
+        self.assertEqual(lnt.dump().decode("latin-1").replace("        <height>168</height>\r\n", "", 1), self.LNT)
+        with self.assertRaises(LntError):
+            Lnt("<layout>\r\n  <lpage>a\r\n</layout>\r\n")
+        for game, rel in (("Rome Total War Gold", "data/menu/Rome.lnt"), ("Medieval II Total War", "data/menu/mtw2.lnt")):
+            for top in ("/home/user/rtw-game-data", "/home/user/m2tw-game-data"):    # the games' own, when here
+                p = os.path.join(top, game, rel)
+                if os.path.isfile(p):
+                    with open(p, "rb") as fh:
+                        data = fh.read()
+                    self.assertEqual(Lnt(data).dump(), data)
+
     def test_palette_tga_read_and_written_back_true_colour(self):
         """A map made by a community map generator stores map_regions / features / ground as COLOUR-MAPPED TGAs
         (type 1; 9 = run-length) - the editor could not open them. They read like true-colour ones, and a picture
