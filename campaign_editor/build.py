@@ -113,7 +113,8 @@ def build(mod, campaign, template, new, opts):
     clone.sm_factions_json(plan)
     clone.faction_blocks(plan, "character", heads=("faction", "type"))
     clone.names(plan)
-    clone.edu_ownership(plan)
+    if not opts.get("bring"):                    # brought from another mod: it owns its own units (factionbring)
+        clone.edu_ownership(plan)
     clone.edb_factions(plan)
     clone.texture_lines(plan, "model_battle")
     clone.texture_lines(plan, "model_strat")
@@ -136,6 +137,9 @@ def build(mod, campaign, template, new, opts):
         clone.own_pictures(plan)
         from .symbols import give_own
         give_own(plan, new)              # its own flag symbol and faction logos (Rome)
+    if opts.get("bring"):                        # a faction of another mod: its own units, names, figures, pictures
+        from . import factionbring
+        factionbring.overlay(plan, campaign, opts["bring"])
     clone.unit_cards(plan)
     # new regions first: a new region picked as a start town is then a region of the map
     # (a rebel village the new faction takes) - one Apply writes the map and the faction

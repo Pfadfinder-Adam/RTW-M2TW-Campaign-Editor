@@ -1021,6 +1021,23 @@ def _rename_ref(lines, key, old, new):
     return out
 
 
+def _factions_here(plan):
+    """[faction] of plan.mod - and the faction this same write makes (a faction brought from another mod: its
+    units come in the plan that creates it)."""
+    names = [n for n, _ in plan.mod.factions()]
+    new = getattr(plan, "new", None)
+    if isinstance(new, str) and new and new not in names and getattr(plan, "template", None) in names:
+        names.append(new)
+    return names
+
+
+def _culture_here(plan, faction):
+    try:
+        return plan.mod.culture(faction)
+    except Exception:
+        return plan.mod.culture(plan.template) if faction == getattr(plan, "new", None) else None
+
+
 def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
     """Put the pack into plan.mod: units given to owners (factions or cultures), under names
     {old type: (type, dictionary)} (plan_names by default). recruit_map {(chain, level): (chain, level) or None}:
@@ -1041,8 +1058,8 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
             raise ValueError("a unit '%s' exists in this mod already - give the pack's %s another name" % (t, old))
         if d and (" " in d or not d.strip()):
             raise ValueError("%s: the dictionary name needs letters, digits and _ only" % t)
-    facs = [n for n, _ in mod.factions()]
-    known = set(facs) | {mod.culture(n) for n in facs if mod.culture(n)} | {"all"}
+    facs = _factions_here(plan)
+    known = set(facs) | {_culture_here(plan, n) for n in facs if _culture_here(plan, n)} | {"all"}
     bad = [o for o in owners if known and o not in known]
     if bad:
         raise ValueError("no faction or culture %s in this mod" % ", ".join(bad))
@@ -1093,7 +1110,7 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
         tf.raw.append(tf.make(""))
         plan.note(tf, "%d name(s) and description(s) added" % n)
     # files: models, textures, sprites as they are; cards and info pictures for each owner faction
-    factions = [o for o in owners if o in {n for n, _ in mod.factions()}]
+    factions = [o for o in owners if o in set(_factions_here(plan))]
     dict_of = {u["dictionary"]: names[u["type"]][1] for u in manifest["units"] if u.get("dictionary")}
     _put_files(plan, files, manifest)
     _put_skins(plan, manifest, files, owners)
@@ -1211,7 +1228,7 @@ def _put_blocks(plan, manifest, owners):
     the same content is shared, another content under a taken name is added under a free one. Every faction of
     owners gets texture entries on the models. Returns {kind: {old name: new name}}."""
     mod = plan.mod
-    facs = [n for n, _ in mod.factions()]
+    facs = _factions_here(plan)
     renamed = {k: {} for k in DEP_FILES}
     owner_facs = [o for o in owners if o in set(facs)]
     game = game_kind(mod)
@@ -1422,8 +1439,9 @@ def _put_skins(plan, manifest, files, owners):
     the look faction's file of the source (look_order, else its plain one) when the target would show another
     one; the target's own <name>_<faction> is kept, its plain file never touched."""
     mod = plan.mod
-    facs = [n for n, _ in mod.factions()]
-    want = [f for f in facs if f in owners or "all" in owners or (mod.culture(f) and mod.culture(f) in owners)]
+    facs = _factions_here(plan)
+    want = [f for f in facs if f in owners or "all" in owners or (_culture_here(plan, f) and
+                                                                  _culture_here(plan, f) in owners)]
     for stem, have in sorted((manifest.get("skins") or {}).items()):
         order = look_order(manifest)                      # the owners' own, else the plain one every faction wears
         own = [f for f in order if f not in ("merc", "slave") or f == manifest.get("look")]
@@ -1480,7 +1498,7 @@ def _modeldb(plan, manifest, renamed, owners):
         plan.warn(None, "no battle_models.modeldb found: the units' models are only in descr_model_battle.txt")
         return
     db = MDB._db_in_plan(plan, src, dst)
-    factions = [o for o in owners if o in {n for n, _ in mod.factions()}]
+    factions = [o for o in owners if o in set(_factions_here(plan))]
     n = 0
     for name, d in manifest["modeldb"].items():
         m = MDB.from_dict(d)
