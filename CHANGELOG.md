@@ -165,6 +165,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- The faction-select map drawn without a picture from above (on the editor's own map picture) has the same smooth
+  outline as with it.
 - Bring buildings: a church brought from Barbarian Invasion into Rome stood in battle as a Roman temple -> its own
   look comes first in the town plan, as in Barbarian Invasion.
 - New faction: the leader's and heir's title fields cut a long title -> wide enough for it; the Tooltip and Full

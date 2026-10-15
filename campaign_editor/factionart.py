@@ -855,13 +855,20 @@ def map_drawing(mod, campaign, regions, colour, size=None):
     try:
         from .minimap import top_view
         base, land = top_view(mod, campaign)
-    except (ValueError, ImportError):
+    except (ValueError, ImportError) as e:
+        from . import log
+        log.write("The faction-select map: no picture from above (%s) - drawn on the editor's map picture" % e)
         cm = CampaignMap(mod, campaign)
         base = cm.background(relief=True, rivers=True).convert("RGB")
         land = Image.new("L", base.size, 255)
     info = mod.regions(campaign)
     cols = {info[r]["colour"] for r in regions if r in info}
     m = _map_mask(mod, campaign, lambda c: c in cols)
+    if base.size[0] < m.size[0] * 4:
+        # a picture of a pixel or two a tile (the editor's own, Barbarian Invasion in report #271): the outline is
+        # rounded on one 6 pixels a tile, as on the picture from above - else it stays in tile steps
+        big = (m.size[0] * 6, m.size[1] * 6)
+        base, land = base.resize(big, Image.BICUBIC), land.resize(big, Image.NEAREST)
     # town / port pixels are holes in the region's colour: closed from inside, never teeth into the sea
     m = m.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
     k = base.size[0] / float(m.size[0])                 # picture pixels a tile
