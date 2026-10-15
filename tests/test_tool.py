@@ -8664,7 +8664,10 @@ building smith
                      '"SettlementPanelOpen"', '"campaignMapLoaded"', '"PreBattle"', '"PostBattle"',
                      '"unloadCampaign"', "isPlayerControlled",
                      "recruit_order_list", "recruit_order_off", "Recruitment Order module loaded",
-                     "::campaignDb.extra.setRecruitmentSortSimple(true)"):
+                     "::campaignDb.extra.setRecruitmentSortSimple(true)",
+                     # Medieval II lays its cards from the end of its list (the engine source): the ranks reversed
+                     '"campaignVoice" in getroottable()', "local rank = m2 ? order.len() : 1",
+                     "rank += m2 ? -1 : 1"):
             self.assertIn(part, text)
         self.assertIn('local RO_KINDS = ["infantry", "missiles", "cavalry", "missile cavalry", "siege", "ships", '
                       '"non-combatants", "other"]',

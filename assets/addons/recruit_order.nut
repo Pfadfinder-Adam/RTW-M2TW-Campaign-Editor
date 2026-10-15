@@ -8,8 +8,9 @@
 // folder once the campaign map is up, whatever mod is running.
 //
 // Why a script: the game sorts the recruitment panel ITSELF, by the 6th number
-// of each unit's stat_cost line (the custom-battle price) - smaller first;
-// ships after the land units, agents last. The order of the recruit lines in
+// of each unit's stat_cost line (the custom-battle price) - Rome smaller first,
+// ships after the land units, agents last; Medieval II the other way round
+// (it lays the cards from the end of its list: the larger number first). The order of the recruit lines in
 // export_descr_buildings.txt does not count. The engines let a script change
 // that number while the game runs (UnitType.trueCost), so during YOUR turn
 // this script gives every unit type a small number in the order below, and
@@ -27,7 +28,10 @@
 // infantry, cavalry, missile cavalry, handlers, siege, ships) unless
 // recruitment_sort_simple is on: with RO_ONE_PANEL the add-on switches it on
 // (M2EX, while the game runs - descr_campaign_db.xml stays as it is), so the
-// whole panel follows the order. Rome has no such blocks.
+// whole panel follows the order. Rome has no such blocks. In that one panel
+// Medieval II puts the agents first and then the ships, before every land unit
+// - the game itself does that, no number changes it; with RO_ONE_PANEL false
+// the agents stay in their own block at the end.
 //
 // Console helpers:
 //   sq ::recruit_order_list()   the order the panel follows now
@@ -147,14 +151,22 @@ function ro_sorted() {
     return all
 }
 
-// every unit type gets its place (1, 2, 3...) as the number the panel sorts by
+// Medieval II: the engine has campaignVoice, Rome's does not
+function ro_medieval2() {
+    return "campaignVoice" in getroottable()
+}
+
+// every unit type gets its place as the number the panel sorts by: 1, 2, 3... in Rome (smaller first), the
+// other way round in Medieval II (its panel shows the larger number first)
 function ro_apply() {
     if (!RO_ENABLED || ro_on) {
         return
     }
-    local rank = 1
+    local order = ro_sorted()
+    local m2 = ro_medieval2()
+    local rank = m2 ? order.len() : 1
     local done = 0
-    foreach (u in ro_sorted()) {
+    foreach (u in order) {
         try {
             if (!(u[4] in ro_real)) {
                 ro_real[u[4]] <- u[3].trueCost
@@ -164,7 +176,7 @@ function ro_apply() {
         } catch (err) {
             ro_log("unit " + u[2] + ": " + err)
         }
-        rank++
+        rank += m2 ? -1 : 1
     }
     ro_on = true
     ro_log("the recruitment panel follows the order (" + done + " unit types, " + RO_ORDER + " first)")
