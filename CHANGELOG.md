@@ -208,6 +208,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Game's editor (Rome with REX): the game opened its main menu - the switch used was one REX does not know -> REX gets the engine's own campaign-editor switch, and after a try the window reads the game's log and says plainly whether the editor opened (REX of 2026-10-05 has no way into it yet).
 - Words in a window narrower than its contents ran down to a bare '...' (form names, hints) until the window was made full screen -> only the end that does not fit is cut, the rest stays readable.
 - Interface stopped with an error on a menu file holding a modder's notes (<!-- ... -->) -> the notes are read past.
 - A changed garrison or army had every unit's experience, armour and weapon put back to 0 -> each unit keeps its own.
