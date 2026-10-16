@@ -134,15 +134,15 @@ class _Recolour(AutoKeep):
                            width=min(26, max(12, max((len(k) for k in self._faction_of), default=12))))
         fcb.pack(side="left", padx=(4, 14))
         fcb.bind("<<ComboboxSelected>>", lambda e: self._faction_picked())
-        ttk.Label(bar, text="from the colours of").pack(side="left")
-        names = sorted(self.colours) + [CUSTOM]
-        self.v_from = tk.StringVar(value=self.source_of)
-        cb = ttk.Combobox(bar, textvariable=self.v_from, values=names, state="readonly", width=18)
-        cb.pack(side="left", padx=4)
-        cb.bind("<<ComboboxSelected>>", lambda e: self._from_picked())
+        # no 'from the colours of' list (the user, 2026-10-16: 'why - in the end it is the faction's colours'): the
+        # colours each picture carries now are found by themselves - its own (a template's copy, a brought unit),
+        # else the colours most of the faction's pictures show (guess_source); the swatches only to correct them
+        ttk.Label(bar, text="now").pack(side="left")
+        self.v_from = tk.StringVar(value=self.source_of)        # the faction the 'now' colours are (no list)
         self.sw_from = [self._swatch(bar, "from", 0), self._swatch(bar, "from", 1)]
-        hint(bar, "Guessed from the pictures: the faction whose colours they show most (for a faction cloned from "
-                  "a template: the template's). Click a colour to pick another.").pack(side="left")
+        hint(bar, "The colours the pictures carry now - found by themselves for each picture (a copy of a "
+                  "template's picture or a unit brought from another mod keeps its own). Click one only if it "
+                  "is wrong.").pack(side="left")
         ttk.Label(bar, text="    to").pack(side="left")
         self.sw_to = [self._swatch(bar, "to", 0), self._swatch(bar, "to", 1)]
         hint(bar, "The faction's own primary and secondary colour (descr_sm_factions.txt). Click to pick others; "
@@ -260,12 +260,6 @@ class _Recolour(AutoKeep):
         """The faction the 'from' colours are ('*' when picked by hand: they count for every picture)."""
         f = self.v_from.get()
         return "*" if f == CUSTOM else f
-
-    def _from_picked(self):
-        f = self.v_from.get()
-        if f in self.colours:
-            self.source = list(self.colours[f])
-            self._changed()
 
     def _changed(self):
         self._cache = {}

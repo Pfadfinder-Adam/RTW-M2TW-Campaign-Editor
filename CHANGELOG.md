@@ -157,6 +157,7 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- Recolour: no 'from the colours of' list - the colours each picture carries now are found by themselves; the 'now' swatches stay to correct them.
 - Recolour, Campaign rules, Events, Traits and retinue, Mercenaries and Rebels are works of the main window on the top row, not windows of their own; their changes are kept by themselves and written with Apply changes.
 - Add-ons: Sack Settlement and Recruitment Order are one row each - the row puts in the part for the loaded game (Rome's or Medieval II's); on Medieval II, Recruitment Order offers its two parts (the order of the cards, or one grid as in Rome with no engine).
 - Models tab: a figure's 3D button stands with its picture's other buttons (Recolour, Replace, Save a copy), not beside its name.
