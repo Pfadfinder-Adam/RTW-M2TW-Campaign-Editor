@@ -8012,6 +8012,12 @@ building smith
         cam.moved(1.0, 0.0)                            # forward = north = up the map
         self.assertAlmostEqual(cam.z, 1.0)
         self.assertGreater(glmap.lighting(mod)["diffuse"][0], 0)
+        self.assertFalse(glmap.lighting(mod)["linear"])                                 # the old games' light
+        write(os.path.join(d, "descr_strategy_lighting_ex.txt"), "ambient_colour 0.2 0.2 0.25\nexposure 1.5\n")
+        lit = glmap.lighting(mod)                       # REX / M2EX: its own file, linear light
+        self.assertTrue(lit["linear"])
+        self.assertEqual((lit["ambient"], lit["exposure"]), ((0.2, 0.2, 0.25), 1.5))
+        os.remove(os.path.join(d, "descr_strategy_lighting_ex.txt"))
         if not glmap.available()[0]:
             self.skipTest("no OpenGL 3.3 here: %s" % glmap.available()[1])
         gl = glmap.GLMap(data)

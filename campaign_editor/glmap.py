@@ -9,7 +9,8 @@ games. What the games do (read in the engine's source, facts only - editor-notes
   painted masks (terrain/aerial_map/template_weights/weights*.tga - each corner one of them at random, mirrored to
   its corner), so the borders between grounds are soft and ragged, never a straight cross-fade;
 - the pictures lie fixed on the world: a picture N pixels wide repeats every N / (64 x texture_density) tiles;
-- the light (descr_strategy_lighting.txt): colour = picture x min(ambient + diffuse x (normal . sun), 1), per point;
+- the light (descr_strategy_lighting.txt): colour = picture x min(ambient + diffuse x (normal . sun), 1); with REX /
+  M2EX (descr_strategy_lighting_ex.txt) the same sum in linear light, made sRGB at the end (lighting());
 - the sea is a flat sheet at height 0 under everything - land below 0 hides under it, so the coast is where the
   ground crosses 0: water_surface.tga stretched over the whole map, with the waves and the sky's reflection;
 - along that line lie see-through strips: the beach (sea/beach_strip.tga) and the wet sand and surf (sea/surf2b.tga)
@@ -69,24 +70,33 @@ def available():
 
 
 def lighting(mod):
-    """{ambient, diffuse, direction} of descr_strategy_lighting.txt (the mod's, else the game's), the games' own
-    values where a line is missing."""
+    """{ambient, diffuse, direction, linear, exposure} of the campaign map's light. REX / M2EX read
+    descr_strategy_lighting_ex.txt when there is one (its colours are linear: the light is added up in linear
+    light and the picture made sRGB at the end, a soft shoulder above 0.9 - the engine's own look); else
+    descr_strategy_lighting.txt in the old games' way (picture x min(light, 1), all in sRGB). The mod's file, else
+    the game's; the games' own values where a line is missing."""
     from .textio import strip_comment
     m2 = _kind(mod) == "medieval2"
     out = {"ambient": (0.5, 0.5, 0.52) if m2 else (0.3, 0.3, 0.5),
            "diffuse": (0.7, 0.7, 0.72) if m2 else (1.1, 1.1, 0.85),
-           "direction": (-1.0, -1.0, 1.0)}
-    p = mod.find("descr_strategy_lighting.txt")
+           "direction": (-1.0, -1.0, 1.0), "linear": False, "exposure": 1.0}
+    p = mod.find("descr_strategy_lighting_ex.txt")
+    if p:
+        out["linear"] = True
+    else:
+        p = mod.find("descr_strategy_lighting.txt")
     if p:
         for line in mod.load(p).texts():
             t = strip_comment(line).split()
             key = {"ambient_colour": "ambient", "diffuse_colour": "diffuse", "diffuse_direction": "direction"}.get(
                 t[0] if t else "")
-            if key and len(t) >= 4:
-                try:
+            try:
+                if key and len(t) >= 4:
                     out[key] = tuple(float(v) for v in t[1:4])
-                except ValueError:
-                    pass
+                elif t and t[0] == "exposure" and len(t) >= 2:
+                    out["exposure"] = float(t[1])
+            except ValueError:
+                pass
     return out
 
 
@@ -238,7 +248,7 @@ class MapData:
 
 COAST_TIGHT = 0.5                               # the slope the strips lean to: half a step along a cell side,
 COAST_CORNER = 0.707                            # 0.707 across a corner (the engine's 'opposite' / 'adjacent')
-WET_SAND = 0.2176 ** (1 / 2.2)                  # the wet sand's dimming (the engine's linear 0.2176, as a gamma shade)
+WET_SAND = 0.2176                               # the wet sand's dimming (the engine's, in linear light)
 
 
 def coast_line(heights, yscale, hidden=None):
@@ -385,25 +395,33 @@ def coast_strips(t):
     return out
 
 
+COLOUR_GLSL = """
+uniform int linear;
+uniform float exposure;
+vec3 dec(vec3 c) { return linear == 1 ? pow(c, vec3(2.2)) : c; }
+vec3 enc(vec3 c) {
+    if (linear == 0) return c;
+    c = max(c * exposure, vec3(0.0));
+    c = mix(c, 0.9 + 0.1 * (1.0 - exp(-(c - 0.9) / 0.1)), step(vec3(0.9), c));
+    return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+"""
+
 TERRAIN_VS = """
 #version 330
 uniform sampler2D heights;
 uniform mat4 mvp;
 uniform float yscale;
 uniform ivec2 size;
-uniform vec3 to_light;
-uniform vec3 ambient;
-uniform vec3 diffuse;
 in vec2 grid;
 out vec2 g;
-out vec3 light;
+out vec3 n;
 float h(ivec2 p) { return texelFetch(heights, clamp(p, ivec2(0), size - 1), 0).r * yscale; }
 void main() {
     ivec2 p = ivec2(grid);
     float y = h(p);
-    vec3 n = normalize(vec3(-(h(p + ivec2(1, 0)) - h(p - ivec2(1, 0))) * 0.5, 0.5,
-                            -(h(p + ivec2(0, 1)) - h(p - ivec2(0, 1))) * 0.5));
-    light = min(ambient + diffuse * max(dot(n, to_light), 0.0), vec3(1.0));
+    n = normalize(vec3(-(h(p + ivec2(1, 0)) - h(p - ivec2(1, 0))) * 0.5, 0.5,
+                       -(h(p + ivec2(0, 1)) - h(p - ivec2(0, 1))) * 0.5));
     g = grid;
     gl_Position = mvp * vec4(grid.x * 0.5, y, grid.y * 0.5, 1.0);
 }
@@ -411,6 +429,10 @@ void main() {
 
 TERRAIN_FS = """
 #version 330
+""" + COLOUR_GLSL + """
+uniform vec3 to_light;
+uniform vec3 ambient;
+uniform vec3 diffuse;
 uniform usampler2D layers;
 uniform sampler2DArray ground;
 uniform sampler2DArray masks;
@@ -418,14 +440,14 @@ uniform int nmasks;
 uniform ivec2 size;
 uniform float rep[64];
 in vec2 g;
-in vec3 light;
+in vec3 n;
 out vec4 colour;
 uint mix3(uint a, uint b, uint c) {
     uint x = a * 73856093u ^ b * 19349663u ^ c * 83492791u;
     x ^= x >> 13; x *= 0x5bd1e995u; x ^= x >> 15;
     return x;
 }
-vec3 pic(uint l, vec2 t) { return texture(ground, vec3(t * rep[l], float(l))).rgb; }
+vec3 pic(uint l, vec2 t) { return dec(texture(ground, vec3(t * rep[l], float(l))).rgb); }
 void main() {
     ivec2 c = clamp(ivec2(floor(g)), ivec2(0), size - 2);
     vec2 f = clamp(g - vec2(c), 0.0, 1.0);
@@ -450,7 +472,8 @@ void main() {
         float sum = max(w0 + w1 + w2 + w3, 1e-4);
         col = (pic(l0, t) * w0 + pic(l1, t) * w1 + pic(l2, t) * w2 + pic(l3, t) * w3) / sum;
     }
-    colour = vec4(col * light, 1.0);
+    vec3 light = ambient + diffuse * max(dot(normalize(n), to_light), 0.0);
+    colour = vec4(enc(col * (linear == 1 ? light : min(light, vec3(1.0)))), 1.0);
 }
 """
 
@@ -464,6 +487,7 @@ void main() { w = pos; gl_Position = mvp * vec4(pos.x, 0.0, pos.y, 1.0); }
 
 SEA_FS = """
 #version 330
+""" + COLOUR_GLSL + """
 uniform sampler2D water;
 uniform sampler2D waves;
 uniform sampler2D sky;
@@ -475,11 +499,12 @@ out vec4 colour;
 in vec2 w;
 void main() {
     vec2 uv = w / tiles;
-    vec3 c = texture(water, uv).rgb * sea_light;
-    c *= texture(waves, w * 0.25).r / max(waves_mean, 0.05);      // the waves around their own mean
+    vec3 c = dec(texture(water, uv).rgb) * sea_light;
+    float wave = dec(texture(waves, w * 0.25).rgb).r;
+    c *= linear == 1 ? wave : wave / max(waves_mean, 0.05);    // the old games: the waves around their own mean
     vec2 r = (w + (eye.xz - w) * 0.15) / 32.0;
-    c = mix(c, texture(sky, r).rgb, 0.5);
-    colour = vec4(c, 1.0);
+    c = mix(c, dec(texture(sky, r).rgb), 0.5);
+    colour = vec4(enc(c), 1.0);
 }
 """
 
@@ -503,6 +528,7 @@ void main() {
 
 COAST_FS = """
 #version 330
+""" + COLOUR_GLSL + """
 uniform sampler2D strip;
 uniform vec4 tint;
 in vec2 t;
@@ -510,7 +536,7 @@ in float a;
 out vec4 colour;
 void main() {
     vec4 c = texture(strip, t);
-    colour = vec4(c.rgb * tint.rgb, c.a * tint.a * a);
+    colour = vec4(enc(dec(c.rgb) * tint.rgb), c.a * tint.a * a);
 }
 """
 
@@ -629,7 +655,13 @@ class GLMap:
         to_light = -d / max(np.linalg.norm(d), 1e-9)
         s = np.asarray(SEA_LIGHT, np.float64)
         s /= np.linalg.norm(s)
-        sea_l = np.minimum(np.asarray(L["ambient"]) + np.asarray(L["diffuse"]) * max(float(s[1]), 0.0), 1.0)
+        lin = bool(L.get("linear"))
+        top = np.inf if lin else 1.0                # linear light is not cut at 1 (the shoulder bends it at the end)
+        sea_l = np.minimum(np.asarray(L["ambient"]) + np.asarray(L["diffuse"]) * max(float(s[1]), 0.0), top)
+        self.linear = lin
+        for prog in (self.terrain, self.sea, self.coast):
+            prog["linear"].value = int(lin)
+            prog["exposure"].value = float(L.get("exposure", 1.0))
         for name, value in (("to_light", tuple(to_light)), ("ambient", L["ambient"]), ("diffuse", L["diffuse"]),
                             ("size", (cols, rows))):
             self.terrain[name].value = value
@@ -645,7 +677,7 @@ class GLMap:
             self.sea[name].value = unit
         # the strips are lit as flat ground facing up (the engine's coastline shader)
         self.strip_light = np.minimum(np.asarray(L["ambient"]) + np.asarray(L["diffuse"]) * max(float(to_light[1]), 0.0),
-                                      1.0)
+                                      top)
 
     def _keep(self, obj):
         self._gone.append(obj)
@@ -736,6 +768,7 @@ class GLMap:
                     continue
                 self.strips[key].use(7)
                 self.coast["edges"].value = (inland, sea)
+                bright = bright if self.linear else bright ** (1 / 2.2)     # the old games' light is sRGB
                 self.coast["tint"].value = tuple(float(v) * bright for v in self.strip_light) + (alpha,)
                 self.coast_vao.render()
             ctx.polygon_offset = (0.0, 0.0)
