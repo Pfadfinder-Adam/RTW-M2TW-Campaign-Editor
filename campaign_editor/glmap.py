@@ -28,6 +28,7 @@ import numpy as np
 from . import terrain3d as T3
 
 SCALE = {"medieval2": 1.2, "rome": 0.6}         # the games' height scale (aerial_map.h)
+LAYERS = (("sea", "Sea"), ("coast", "Beach and surf"))     # what render(show=...) can leave out, as the window names it
 SEGMENT_TEXELS = 64                             # a picture's pixels a tile covers at texture_density 1
 LAYER = 512                                     # every ground picture is made this size on the card
 SEA_LIGHT = (0.5, 1.0, 1.0)                     # the way to the sea's own light (the engine's (-0.5, -1, -1) reversed)
@@ -150,6 +151,12 @@ class MapData:
         self.beach = _image(mod, ["terrain/aerial_map/sea/beach_strip.tga"], mode="RGBA")
         self.surf = _image(mod, ["terrain/aerial_map/sea/surf2b.tga"], mode="RGBA")
         self.light = lighting(mod)
+        feats = T3._picture(mod, campaign, "map_features.tga")
+        self.coast_hidden = None                    # rivers (sources, fords) and cliffs: the game draws no strip there
+        if feats is not None:
+            from .terrain import RIVERY
+            code = (feats[..., 0].astype(np.int32) << 16) | (feats[..., 1].astype(np.int32) << 8) | feats[..., 2]
+            self.coast_hidden = np.isin(code, [(r << 16) | (g << 8) | b for r, g, b in RIVERY | {(255, 255, 0)}])
 
     def _ground(self, mod, campaign, winter):
         """(layer of each point (rows, cols) uint16, [pictures (LAYER, LAYER, 3)], [repeats a tile per layer])."""
@@ -234,18 +241,19 @@ COAST_CORNER = 0.707                            # 0.707 across a corner (the eng
 WET_SAND = 0.2176 ** (1 / 2.2)                  # the wet sand's dimming (the engine's linear 0.2176, as a gamma shade)
 
 
-def coast_line(heights, yscale):
+def coast_line(heights, yscale, hidden=None):
     """The coast as the games trace it (aerial_map_coastline): where the ground crosses height 0 on every half-tile
     square of the points' grid - a square with two sides crossing gets one piece between them; one with all four (two
     land corners facing each other) gets two, cutting off its top-left and bottom-right corners, as the ground's own
     SW -> NE diagonal joins the other two. Pieces join into lines; each point of a line has a direction across the
     shore, pointing inland and up the slope, and its length along the line (the strips' pictures run along it, one
-    repeat a tile). heights: metres (rows, cols), top row first; yscale: metres -> world units.
-    Returns (vertices (n, 8) float32: x, y, z, direction x, y, z, length, side - two a point, side 0 the strip's
-    inland edge, 1 its sea edge; triangles (m,) uint32)."""
+    repeat a tile). heights: metres (rows, cols), top row first; yscale: metres -> world units; hidden: tiles
+    (rows // 2, cols // 2) where the game draws no strip (a river or a cliff there) - a point beside one is clear.
+    Returns (vertices (n, 9) float32: x, y, z, direction x, y, z, length, side - two a point, side 0 the strip's
+    inland edge, 1 its sea edge -, how much it shows (0 or 1); triangles (m,) uint32)."""
     h = np.asarray(heights, np.float64)
     rows, cols = h.shape
-    empty = (np.zeros((0, 8), np.float32), np.zeros(0, np.uint32))
+    empty = (np.zeros((0, 9), np.float32), np.zeros(0, np.uint32))
     if rows < 2 or cols < 2:
         return empty
     land = h > 0
@@ -288,6 +296,12 @@ def coast_line(heights, yscale):
     k = np.concatenate([k2, np.full(len(s4) * 2, COAST_CORNER)])
     if not len(a):
         return empty
+    r2, c2 = np.nonzero(two)
+    r4, c4 = np.nonzero(four)
+    shown = np.ones(len(a))
+    if hidden is not None and hidden.shape == ((rows - 1) // 2, (cols - 1) // 2):
+        pr, pc = np.concatenate([r2, r4, r4]) // 2, np.concatenate([c2, c4, c4]) // 2
+        shown = np.where(hidden[np.minimum(pr, hidden.shape[0] - 1), np.minimum(pc, hidden.shape[1] - 1)], 0.0, 1.0)
     dx, dz = px[b] - px[a], pz[b] - pz[a]
     flip = -dz * vx + dx * vz < 0                  # walk with the land on the same hand everywhere
     a, b = np.where(flip, b, a), np.where(flip, a, b)
@@ -338,9 +352,10 @@ def coast_line(heights, yscale):
     for s, e in lines:
         first[s] = True
     u -= np.maximum.accumulate(np.where(first, u, 0.0))      # each line's length from its own start
+    alpha = np.minimum(shown[j[:, 0]], shown[j[:, 1]])     # a joint shows only when both its pieces do
     one = np.stack([px[p], np.zeros(len(p)), pz[p], pd[:, 0], pd[:, 1], pd[:, 2], u], 1)
     verts = np.repeat(one, 2, 0)
-    verts = np.concatenate([verts, np.tile([[0.0], [1.0]], (len(p), 1))], 1)
+    verts = np.concatenate([verts, np.tile([[0.0], [1.0]], (len(p), 1)), np.repeat(alpha, 2)[:, None]], 1)
     q = np.concatenate([np.arange(s, e - 1) for s, e in lines]) * 2
     tris = np.stack([q, q + 1, q + 2, q + 2, q + 1, q + 3], 1).ravel()
     return verts.astype(np.float32), tris.astype(np.uint32)
@@ -476,9 +491,12 @@ uniform vec2 edges;
 in vec3 pos;
 in vec3 dir;
 in vec2 uv;
+in float shown;
 out vec2 t;
+out float a;
 void main() {
     t = vec2(uv.x, uv.y * 0.95);
+    a = shown;
     gl_Position = mvp * vec4(pos + dir * (uv.y < 0.5 ? edges.x : edges.y), 1.0);
 }
 """
@@ -488,10 +506,11 @@ COAST_FS = """
 uniform sampler2D strip;
 uniform vec4 tint;
 in vec2 t;
+in float a;
 out vec4 colour;
 void main() {
     vec4 c = texture(strip, t);
-    colour = vec4(c.rgb * tint.rgb, c.a * tint.a);
+    colour = vec4(c.rgb * tint.rgb, c.a * tint.a * a);
 }
 """
 
@@ -662,17 +681,18 @@ class GLMap:
         for obj in self._coast_buffers:
             obj.release()
         self._coast_buffers, self.coast_vao, self.coast_dirty = [], None, False
-        verts, tris = coast_line(self.data.heights, 0.0005 * self.data.scale)
+        verts, tris = coast_line(self.data.heights, 0.0005 * self.data.scale, self.data.coast_hidden)
         if not len(tris):
             return
         vbo, ibo = self.ctx.buffer(verts.tobytes()), self.ctx.buffer(tris.tobytes())
-        self.coast_vao = self.ctx.vertex_array(self.coast, [(vbo, "3f 3f 2f", "pos", "dir", "uv")], ibo,
+        self.coast_vao = self.ctx.vertex_array(self.coast, [(vbo, "3f 3f 2f 1f", "pos", "dir", "uv", "shown")], ibo,
                                                index_element_size=4)
         self._coast_buffers = [self.coast_vao, vbo, ibo]
 
-    def render(self, cam, w, h, t=0.3):
+    def render(self, cam, w, h, t=0.3, show=None):
         """The map seen from cam as a (h, w, 3) uint8 picture, top row first; t: the moment of the surf's wave
-        (0..1)."""
+        (0..1); show: {layer: False} leaves a layer out (LAYERS - the sea off shows the sea floor)."""
+        show = show or {}
         ctx = self.ctx
         w, h = max(16, int(w)), max(16, int(h))
         if self.fbo_size != (w, h):
@@ -690,10 +710,11 @@ class GLMap:
         self.water.use(4)
         self.waves.use(5)
         self.sky.use(6)
-        self.sea["mvp"].write(mvp_bytes)
-        if "eye" in self.sea:
-            self.sea["eye"].value = tuple(float(v) for v in eye)
-        self.sea_vao.render(ctx.TRIANGLE_STRIP)
+        if show.get("sea", True):
+            self.sea["mvp"].write(mvp_bytes)
+            if "eye" in self.sea:
+                self.sea["eye"].value = tuple(float(v) for v in eye)
+            self.sea_vao.render(ctx.TRIANGLE_STRIP)
         self.heights.use(0)
         self.layers.use(1)
         self.ground.use(2)
@@ -703,7 +724,7 @@ class GLMap:
         self.vao.render()
         if self.coast_dirty:
             self._coast()
-        if self.coast_vao is not None:                           # see-through strips over the ground, as the game
+        if self.coast_vao is not None and show.get("coast", True):   # see-through strips over the ground, as the game
             self.coast["mvp"].write(mvp_bytes)
             self.fbo.depth_mask = False
             ctx.enable(ctx.BLEND)
@@ -733,4 +754,4 @@ class GLMap:
         self._gone, self._coast_buffers, self.fbo = [], [], None
 
 
-__all__ = ["available", "context", "MapData", "GLMap", "Camera", "lighting"]
+__all__ = ["available", "context", "MapData", "GLMap", "Camera", "lighting", "LAYERS", "coast_line", "coast_strips"]

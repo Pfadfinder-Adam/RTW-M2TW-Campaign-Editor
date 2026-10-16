@@ -8051,10 +8051,15 @@ building smith
             self.assertGreater(float(np.dot(v[[3, 5]], to_mid)), 0)    # every point looks inland
             self.assertGreater(float(v[4]), 0)                           # and up the slope
         self.assertAlmostEqual(float(verts[-1, 6]), 4 * 1.0 + 4 * 0.375 * 2 ** 0.5, places=4)    # its length
+        self.assertTrue((verts[:, 8] == 1).all())                       # every strip shows
+        hidden = np.zeros((3, 3), bool)
+        hidden[0, 0] = True                            # a river (or a cliff) on the top-left tile: no strip there
+        shown = glmap.coast_line(h, 0.0006, hidden)[0][:, 8]
+        self.assertTrue((shown == 0).any() and (shown == 1).any())
         saddle = np.array([[100.0, -100.0], [-100.0, 100.0]], np.float32)
         verts, tris = glmap.coast_line(saddle, 0.0006)
         self.assertEqual(len(tris) // 6, 2)                              # two pieces: top-left and bottom-right
-        self.assertEqual(glmap.coast_line(np.full((3, 3), 50.0), 0.0006)[0].shape, (0, 8))   # no sea: no coast
+        self.assertEqual(glmap.coast_line(np.full((3, 3), 50.0), 0.0006)[0].shape, (0, 9))   # no sea: no coast
         strips = glmap.coast_strips(0.3)
         self.assertEqual([s[0] for s in strips], ["beach", "surf", "surf", "surf", "surf"])
         self.assertEqual(strips[0][1:3], (0.15, -0.15))
@@ -14318,7 +14323,10 @@ building smith
             self.assertEqual(G.zstd_decompress(frame, len(text)), text)
         except ValueError:
             pass                                       # no zstd on this system: the pack is said to be unread
-        from campaign_editor.terrain3d import ground_file
+        try:
+            from campaign_editor.terrain3d import ground_file
+        except ImportError:
+            return                                     # the 3D readers need NumPy
         self.assertEqual(ground_file("../../../../data/terrain/aerial_map/ground_types/RS.tga"),
                          "terrain/aerial_map/ground_types/RS.tga")                    # HLR's way of naming
         self.assertEqual(ground_file("grass.tga"), "terrain/aerial_map/ground_types/grass.tga")

@@ -22,7 +22,8 @@ from .gui_util import hint
 
 HINT = ("The campaign map in 3D, drawn by the graphics card the way the games draw it: the game's own ground textures "
         "for each climate (descr_aerial_map_ground_types.txt) blended with the game's own masks, the relief of "
-        "map_heights, the game's light and sea. What the brushes of Terrain and Coast & "
+        "map_heights, the game's light and sea, the beach and the surf rolling in along the coast. Layers shows or "
+        "leaves out each of them (the sea left out shows the sea floor; the surf can stand still). What the brushes of Terrain and Coast & "
         "heights painted shows here before it is written. Right drag: move over the map; the wheel held down and "
         "dragged: turn and look up or down; the wheel turned: nearer / farther; the arrow keys or W A S D move too. The relief stands as "
         "high as in the game. The game's mountains, rivers, trees, towns and "
@@ -39,7 +40,21 @@ class Map3DView(ttk.Frame):
         bar.pack(fill="x")
         self.v_winter = tk.BooleanVar(value=False)
         ttk.Checkbutton(bar, text="Winter", variable=self.v_winter, command=self.rebuild).pack(side="left")
-        self.gl, self.gcam = None, None
+        self.gl, self.gcam, self._anim_job = None, None, None
+        # Layers: each thing on the map shown or left out (the sea off shows the sea floor); the surf moving or still
+        from .glmap import LAYERS
+        from .gui_util import DropPanel
+        self.v_show = {key: tk.BooleanVar(value=True) for key, _ in LAYERS}
+        self.v_moving = tk.BooleanVar(value=True)
+
+        def build_layers(f):
+            for key, label in LAYERS:
+                ttk.Checkbutton(f, text=label, variable=self.v_show[key], command=self._layers_changed).pack(anchor="w")
+            ttk.Checkbutton(f, text="The surf moves", variable=self.v_moving,
+                            command=self._layers_changed).pack(anchor="w")
+        lb = ttk.Button(bar, text="Layers \u25be")
+        lb.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
+        self._layers_panel = DropPanel(lb, build_layers)
         from .gui_util import tip
         ttk.Button(bar, text="Whole map", command=self.reset_view).pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
         ttk.Button(bar, text="Draw it again", command=self.rebuild).pack(side="left", padx=(theme.BUTTON_GAP, 0))
@@ -205,6 +220,7 @@ class Map3DView(ttk.Frame):
         notes = "; ".join(data.notes)
         self.lbl.configure(text="made in %.1f s%s" % (took, (" - " + notes) if notes else ""))
         self.draw()
+        self._animate()
         return True
 
     def reset_view(self, draw=True):
@@ -225,8 +241,9 @@ class Map3DView(ttk.Frame):
         from PIL import Image, ImageTk
         W, H = max(50, self.canvas.winfo_width()), max(50, self.canvas.winfo_height())
         f = 2 if half else 1
+        t = (time.monotonic() * 0.2) % 1.0 if self.v_moving.get() else 0.3    # a wave every 5 s, as the game
         try:
-            arr = self.gl.render(self.gcam, W // f, H // f)
+            arr = self.gl.render(self.gcam, W // f, H // f, t, {k: v.get() for k, v in self.v_show.items()})
         except Exception as e:                           # the card failed now: said in the bar, never a crash
             self.lbl.configure(text="the graphics card stopped drawing: %s" % e)
             self.gl.release()
@@ -238,6 +255,26 @@ class Map3DView(ttk.Frame):
         self._photo = ImageTk.PhotoImage(im)
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
+
+    def _layers_changed(self):
+        self.draw()
+        self._animate()
+
+    def _animate(self):
+        """The surf rolls in (a frame every 0.1 s) while the tab is seen, the coast shown and the surf ticked to
+        move - nothing runs otherwise."""
+        if self._anim_job is not None:
+            self.after_cancel(self._anim_job)
+            self._anim_job = None
+        if not (self._on() and self.v_moving.get() and self.v_show["coast"].get()):
+            return
+        try:
+            seen = self.winfo_viewable()
+        except tk.TclError:
+            return
+        if seen and self._drag is None and self._sharp_job is None:
+            self.draw()
+        self._anim_job = self.after(100 if seen else 600, self._animate)
 
     def _changed_view(self):
         self.draw(half=True)
