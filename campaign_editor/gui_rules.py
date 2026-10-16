@@ -1,10 +1,11 @@
 """Campaign rules... (top row): the campaign's settings files as plain values with an explanation, the game's own value
-beside a changed one, Preview, Keep for Apply (the main window's Apply writes it with the rest, a backup first)."""
+beside a changed one; a change waits for Apply changes by itself (gui_util.AutoKeep - the main window's Preview
+changes / Apply changes / Undo / Redo; a backup first)."""
 
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from .gui_util import one_window, ShortHint, tip
+from .gui_util import AutoKeep, one_window, ShortHint, tip
 from . import campaignrules as CR
 from .gui_util import ScrollFrame
 from .plan import Plan
@@ -14,7 +15,7 @@ BAD = "#f4b6b6"
 
 
 @one_window
-class RulesWindow(tk.Toplevel):
+class RulesWindow(AutoKeep, tk.Toplevel):
     def __init__(self, app):
         super().__init__(app)
         self.app, self.mod = app, app.mod
@@ -32,7 +33,7 @@ class RulesWindow(tk.Toplevel):
         ShortHint(frm, wraplength=1060, justify="left", text=(
             "The rules of the whole campaign, from this mod's settings files and the top of the campaign's "
             "descr_strat.txt (start and end date, years a turn, switches). Pick a group on the left (or Find), "
-            "change a value, then Preview and Keep for Apply - Apply changes in the main window writes it (a backup first). A value "
+            "change a value - it waits for Apply changes in the main window (a backup first). A value "
             "that differs from the game's own shows the game's beside it, with Reset.")).pack(anchor="w")
         if any(CR.blocked(r) for g in self.groups for r in g[3]):
             ttk.Label(frm, foreground="#777", wraplength=1060, justify="left", text=(
@@ -62,15 +63,13 @@ class RulesWindow(tk.Toplevel):
         foot.pack(fill="x", pady=(6, 0))
         self.lbl = ttk.Label(foot, foreground="#555")
         self.lbl.pack(side="left")
-        from .gui_util import close_guard               # never closes over unwritten changes silently
-        close = close_guard(self, "Campaign rules", lambda: ("%d value(s)" % len(self.changes)) if self.changes
-                            else "", self.write)
-        ttk.Button(foot, text="Close", command=close).pack(side="right")
-        ttk.Button(foot, text="Keep for Apply", command=self.write).pack(side="right", padx=6)
-        ttk.Button(foot, text="Preview", command=self.preview).pack(side="right")
+        ttk.Button(foot, text="Close", command=self.close).pack(side="right")
+        self.protocol("WM_DELETE_WINDOW", self.close)
+        self._ak_busy = True                            # the rows' first paint is no change
         if self.groups:
             self.lb.selection_set(0)
         self.show()
+        self.ak_start()
 
     def _read(self):
         from .limits import game_kind
@@ -169,6 +168,7 @@ class RulesWindow(tk.Toplevel):
                 self.changes.pop(rule, None)
             else:
                 self.changes[rule] = now
+            self.ak_changed()
             colour = BAD if why else CHANGED if now != rule.value else "white"
             e.configure(**({"readonlybackground": colour} if rule.kind == "flag" else {"background": colour}))
             self._status(why and "%s: %s must be %s" % (rule.key, now or "(empty)", why))
@@ -180,8 +180,8 @@ class RulesWindow(tk.Toplevel):
 
     def _status(self, problem=None):
         n = len(self.changes)
-        self.lbl.configure(text=problem or ("%d value(s) changed - Preview, then Keep for Apply." % n if n else
-                                            "Nothing changed yet - change a value, then Preview and Keep for Apply."),
+        self.lbl.configure(text=problem or ("%d value(s) changed - waiting for Apply changes." % n if n else
+                                            "Nothing changed yet."),
                            foreground="#a33" if problem else "#555")
 
     def _plan(self):
@@ -196,33 +196,38 @@ class RulesWindow(tk.Toplevel):
                 CR.apply(plan, name, mine, own, base)
         return plan
 
-    def preview(self):
-        if not self.changes:
-            messagebox.showinfo("Campaign rules", "Nothing changed yet - change a value first.", parent=self)
-            return
-        try:
-            plan = self._plan()
-        except Exception as e:
-            messagebox.showerror("Campaign rules", str(e), parent=self)
-            return
-        self.app.show_text("Campaign rules - preview (nothing written)", plan.report())
+    # ---- kept by itself (gui_util.AutoKeep) ----
+    def _rules(self):
+        return [r for g in self.groups for r in g[3]]
 
-    def write(self):
-        """Keep for Apply: the changed values go into the session's list (the window closes), written by the main
-        window's Apply changes with everything else."""
-        if not self.changes:
-            messagebox.showinfo("Campaign rules", "Nothing changed yet - change a value first.", parent=self)
-            return False
-        from .gui_util import keep_for_apply
-        n = len(self.changes)
+    def _ak_key(self):
+        return "rules"
 
+    def _ak_label(self):
+        return "Campaign rules: %d value(s)" % len(self.changes)
+
+    def _ak_plan(self):
+        return self._plan()
+
+    def _ak_state(self):
+        at = {id(r): i for i, r in enumerate(self._rules())}
+        return tuple(sorted((at[id(r)], t) for r, t in self.changes.items() if id(r) in at))
+
+    def _ak_set(self, st):
+        rules = self._rules()
+        self.changes = {rules[i]: t for i, t in st if i < len(rules)}
+        self.show()
+
+    @property
+    def _ak_after(self):
         def after(bdir):
             from . import log
             log.write("Campaign rules changed (backup %s)" % bdir)
-        if keep_for_apply(self, "rules", "Campaign rules: %d value(s)" % n, self._plan, after, "Campaign rules"):
-            self.destroy()
-            return True
-        return False
+        return after
+
+    def close(self):
+        self.ak_close()
+        self.destroy()
 
 
 def open_rules(app):

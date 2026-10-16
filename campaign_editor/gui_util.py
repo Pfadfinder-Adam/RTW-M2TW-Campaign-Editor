@@ -1708,10 +1708,48 @@ class AutoKeep:
     problems). It calls ak_start() once its picks are shown and ak_changed() after every change."""
 
     AK_WAIT = 400                                   # ms after the last change (typing a number keeps once)
+    _ak_fields = ()                                 # the attributes that hold its picks (the default state below)
+
+    def _ak_state(self):
+        """Its picks as bytes (equal picks, equal bytes - objects without == of their own compare too)."""
+        import pickle
+        return pickle.dumps(tuple(getattr(self, a) for a in self._ak_fields), protocol=4)
+
+    def _ak_set(self, st):
+        import pickle
+        for a, v in zip(self._ak_fields, pickle.loads(st)):
+            setattr(self, a, v)
+        self.ak_refresh()
+
+    def ak_refresh(self):
+        """Shows the picks again after Undo / Redo (the window's own fill)."""
 
     def ak_start(self):
+        """Its picks are shown: steps start from here; the picks it kept before (closed, opened again) come back
+        while they still wait for Apply."""
         self._ak_hist, self._ak_redo, self._ak_job, self._ak_busy = [], [], None, False
+        app, key = getattr(self, "app", None), self._ak_key()
+        saved = (getattr(app, "_ak_saved", None) or {}).get(key) if key else None
+        if saved is not None and hasattr(app, "session_kept") and app.session_kept(key):
+            self._ak_busy = True
+            try:
+                self._ak_set(saved)
+            finally:
+                self._ak_busy = False
+        elif saved is not None:
+            app._ak_saved.pop(key, None)              # written or thrown away since: the files say it now
         self._ak_last = self._ak_state()
+
+    def _ak_saw(self, st):
+        """Remember the picks for the next opening (None: nothing waits)."""
+        app, key = getattr(self, "app", None), self._ak_key()
+        if app is None or key is None:
+            return
+        saved = app.__dict__.setdefault("_ak_saved", {})
+        if st is None:
+            saved.pop(key, None)
+        else:
+            saved[key] = st
 
     def ak_changed(self, *_):
         if getattr(self, "_ak_busy", True) or not hasattr(self, "_ak_last"):
@@ -1758,9 +1796,7 @@ class AutoKeep:
             app.session_add(key, self._ak_label(), plan, getattr(self, "_ak_after", None), quiet=True,
                             problem=problem)
             app.__dict__.setdefault("_ak_windows", {})[key] = self
-        saw = getattr(self, "_ak_saw", None)
-        if saw is not None:
-            saw(None if empty else self._ak_last)
+        self._ak_saw(None if empty else self._ak_last)
 
     def _ak_step(self, src, dst, words):
         if getattr(self, "_ak_busy", True) or not src:
@@ -1786,9 +1822,7 @@ class AutoKeep:
     def ak_dropped(self):
         """Its changes thrown away in Apply changes' list: the window shows the files again (ak_reload), its steps
         start anew."""
-        saw = getattr(self, "_ak_saw", None)
-        if saw is not None:
-            saw(None)
+        self._ak_saw(None)
         reload = getattr(self, "ak_reload", None)
         if reload is not None:
             reload()

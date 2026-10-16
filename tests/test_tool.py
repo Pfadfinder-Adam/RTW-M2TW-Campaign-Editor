@@ -11291,6 +11291,58 @@ building smith
         finally:
             root.destroy()
 
+    def test_script_rules_and_traits_windows_keep_by_themselves(self):
+        """The user, 2026-10-16: no Keep for Apply anywhere - the Campaign script, Campaign rules and Traits windows
+        keep a change by themselves, step it back with Undo, keep what waits on closing, and show it again when
+        opened again while it still waits."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from campaign_editor import gui_campaignscript as GS, gui_rules as GR, gui_traits as GT
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "campaign_script.txt"), "script\n\tif I_LocalFaction alpha\n\t\tset_counter a 1\n"
+              "\tend_if\n\tset_counter b 2\nend_script\n")
+        parts = {}
+        root.mod = ModData(self.root)
+        root.v_campaign = tk.StringVar(root, "test")
+        root.status = tk.StringVar(root)
+        root.session_add = lambda key, label, plan, after=None, **kw: parts.__setitem__(key, (plan, kw))
+        root.session_drop = lambda key: parts.pop(key, None)
+        root.session_kept = lambda key: key in parts
+        root.show_text = lambda *a: None
+        try:
+            for cls in (GS.CampaignScriptWindow, GR.RulesWindow, GT.TraitsWindow):
+                buttons, todo = [], []
+                w = cls(root, "test") if cls is GS.CampaignScriptWindow else cls(root)
+                todo = [w]
+                while todo:
+                    c = todo.pop(0)
+                    buttons += [c.cget("text")] if c.winfo_class() == "TButton" else []
+                    todo += c.winfo_children()
+                self.assertNotIn("Keep for Apply", buttons, cls.__name__)
+                w.close()
+            w = GS.CampaignScriptWindow(root, "test")
+            first = w.pieces[0]["id"]
+            w.remove([first])
+            w.ak_keep()
+            key = "campaign_script:test"
+            self.assertIn(key, parts)
+            self.assertEqual(len(parts[key][0].changed_files()), 1)
+            w._undo()
+            self.assertEqual(w.removed, [])
+            w.ak_keep()
+            self.assertNotIn(key, parts)
+            w._redo()
+            w.close()                                                  # closing keeps it
+            self.assertIn(key, parts)
+            w = GS.CampaignScriptWindow(root, "test")                  # opened again: shown as kept
+            self.assertEqual(w.removed, [first])
+            w.close()
+        finally:
+            root.destroy()
+
     def test_town_window_shows_its_kept_garrison_again(self):
         """Report R-20261012-C56BB7: a garrison kept for Apply in the Town window - opened again, the window showed
         the old one. Since 2026-10-16 the window keeps every change by itself (no Keep button), its Undo / Redo step

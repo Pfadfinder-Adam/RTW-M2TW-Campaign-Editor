@@ -1,13 +1,14 @@
 """Traits and retinue: the traits and ancillaries themselves (traitsedit), both games - a list to pick from, each
 level's name and description as players see them, its threshold and effects; an ancillary's name, text,
 picture, the cultures it is barred from and its effects. A new one is made as a copy of the picked one (written
-at once, then edited like the others). Changes wait for Preview / Keep for Apply; the main window's Apply writes them with the rest of the session."""
+at once, then edited like the others). A change waits for Apply changes by itself (gui_util.AutoKeep - the main
+window's Preview changes / Apply changes / Undo / Redo write and step it with the rest of the session)."""
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from .gui_util import ask
-from .gui_util import one_window, ShortHint
+from .gui_util import AutoKeep, one_window, ShortHint
 from . import traitsedit as TE
 from .plan import Plan
 
@@ -15,7 +16,9 @@ TITLE = "Traits and retinue"
 
 
 @one_window
-class TraitsWindow(tk.Toplevel):
+class TraitsWindow(AutoKeep, tk.Toplevel):
+    _ak_fields = ("pending", "texts", "pictures")
+
     def __init__(self, app, pick=None):
         super().__init__(app)
         self.app, self.mod = app, app.mod
@@ -32,8 +35,8 @@ class TraitsWindow(tk.Toplevel):
             "The traits and the retinue themselves (export_descr_character_traits.txt, export_descr_ancillaries.txt). "
             "Pick one on the left: each level's name and description as players see them, the points it needs "
             "(Threshold) and what it gives (Effects, like 'Command 1, Loyalty -2'). New... makes a copy of the "
-            "picked one under a new name - then give it to characters in Characters. Preview, then "
-            "Keep for Apply - Apply changes in the main window writes it (a backup first; Undo this write puts it back).")).pack(fill="x")
+            "picked one under a new name - then give it to characters in Characters. A change waits for Apply "
+            "changes in the main window (a backup first; Undo this write puts it back).")).pack(fill="x")
         self.nb = ttk.Notebook(top)
         self.nb.pack(fill="both", expand=True, pady=6)
         self.tabs = {}
@@ -43,12 +46,11 @@ class TraitsWindow(tk.Toplevel):
         bar.pack(fill="x")
         self.lbl = ttk.Label(bar, text="", foreground="#555")
         self.lbl.pack(side="left")
-        from .gui_util import close_guard               # never closes over unwritten changes silently
-        close = close_guard(self, "Traits and retinue", self._dirty, self.write)
-        ttk.Button(bar, text="Close", command=close).pack(side="right")
-        ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=4)
-        ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
+        ttk.Button(bar, text="Close", command=self.close).pack(side="right")
+        self.protocol("WM_DELETE_WINDOW", self.close)
+        self._ak_busy = True
         self.reload(pick)
+        self.ak_start()
 
     # ---- reading ----
     def reload(self, pick=None):
@@ -310,8 +312,8 @@ class TraitsWindow(tk.Toplevel):
 
     def _status(self):
         n = self._count()
-        self.lbl.configure(text="%d change(s) - Preview, then Keep for Apply." % n if n else
-                           "Nothing changed yet.")
+        self.lbl.configure(text="%d change(s) - waiting for Apply changes." % n if n else "Nothing changed yet.")
+        self.ak_changed()
 
     def replace_picture(self, name, image):
         src = filedialog.askopenfilename(parent=self, title="Picture for %s" % name, filetypes=[
@@ -364,42 +366,43 @@ class TraitsWindow(tk.Toplevel):
                             "may refuse a name it does not know)" % ", ".join(unknown))
         return plan
 
-    def preview(self):
-        if not self._count():
-            messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
-            return
-        try:
-            plan = self._plan()
-        except Exception as e:
-            messagebox.showerror(TITLE, str(e), parent=self)
-            return
-        self.app.show_text("Traits and retinue - preview (nothing written)", plan.report())
+    # ---- kept by itself (gui_util.AutoKeep) ----
+    def _ak_key(self):
+        return "traits"
 
-    def write(self):
-        """Keep for Apply: the changes go into the session's list, written by the main window's Apply changes with
-        everything else. (New... still writes at once: a new trait must exist before it is edited.)"""
-        if not self._count():
-            messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
-            return False
-        from .gui_util import keep_for_apply
+    def _ak_label(self):
+        return "Traits and retinue: %d change(s)" % self._count()
 
+    def _ak_plan(self):
+        return self._plan()
+
+    def ak_refresh(self):
+        for kind in ("trait", "ancillary"):
+            self.show(kind)
+        self._status()
+
+    @property
+    def _ak_after(self):
         def after(bdir):
             from . import log
             log.write("Traits and retinue changed (backup %s)" % bdir)
             if self.winfo_exists():
-                self.mod = self.app.mod
-                self.pending = {"trait": {}, "ancillary": {}}
-                self.texts = {"trait": {}, "ancillary": {}}
-                self.pictures = {}
-                self.reload()
-        return keep_for_apply(self, "traits", "Traits and retinue: %d change(s)" % self._count(), self._plan, after,
-                              TITLE)
+                self.ak_reload()
+        return after
 
-    def _dirty(self):
-        if not self._count():
-            return ""
-        from .gui_util import kept_or_not
-        return kept_or_not(self.app, "traits", self._plan)
+    def ak_reload(self):
+        self.mod = self.app.mod
+        self.pending = {"trait": {}, "ancillary": {}}
+        self.texts = {"trait": {}, "ancillary": {}}
+        self.pictures = {}
+        self._ak_busy = True
+        self.reload()
+        self.ak_refresh()
+        self.ak_start()
+
+    def close(self):
+        self.ak_close()
+        self.destroy()
 
     def _apply(self, plan, question):
         if self.app.pending_parts():
@@ -423,8 +426,8 @@ class TraitsWindow(tk.Toplevel):
             messagebox.showinfo(TITLE, "Pick the %s to copy first (on the left)." % kind, parent=self)
             return
         if self._count():
-            messagebox.showinfo(TITLE, "Keep (or throw away) the changes waiting first - a new one is "
-                                       "written at once.", parent=self)
+            messagebox.showinfo(TITLE, "Apply changes (or throw away in its list) the changes waiting first - a new "
+                                       "one is written at once.", parent=self)
             return
         new = simpledialog.askstring(TITLE, "Name of the new %s (letters, digits and _), a copy of %s:" % (kind, src),
                                      parent=self)

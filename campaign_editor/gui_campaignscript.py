@@ -1,21 +1,22 @@
 """Campaign script... (the Events window's bottom bar): campaign_script.txt in its top-level pieces - monitors,
 while / if blocks, counters, commands - each with its code; any taken out (one, the picked ones, or all - a mod
-made bare for an engine, or its scripts started anew). Preview / Keep for Apply like Events; the script /
-end_script frame always stays."""
+made bare for an engine, or its scripts started anew). Kept for Apply by itself (gui_util.AutoKeep) - the main
+window's Preview changes / Apply changes / Undo / Redo; the script / end_script frame always stays."""
 
 import tkinter as tk
 from tkinter import messagebox, ttk
 
 from . import campaignscript as CS
-from . import theme
-from .gui_util import ShortHint, close_guard, keep_for_apply, kept_or_not, one_window, right_click
+from .gui_util import AutoKeep, ShortHint, one_window, right_click
 from .plan import Plan
 
 TITLE = "Campaign script"
 
 
 @one_window
-class CampaignScriptWindow(tk.Toplevel):
+class CampaignScriptWindow(AutoKeep, tk.Toplevel):
+    _ak_fields = ("removed",)
+
     def __init__(self, app, campaign):
         super().__init__(app)
         self.app, self.mod, self.campaign = app, app.mod, campaign
@@ -61,11 +62,10 @@ class CampaignScriptWindow(tk.Toplevel):
         bar.pack(fill="x", pady=(6, 0))
         self.lbl = ttk.Label(bar, text="", foreground="#555")
         self.lbl.pack(side="left")
-        close = close_guard(self, TITLE, self._dirty, self.write)
-        ttk.Button(bar, text="Close", command=close).pack(side="right")
-        ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=theme.BUTTON_GAP)
-        ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
+        ttk.Button(bar, text="Close", command=self.close).pack(side="right")
+        self.protocol("WM_DELETE_WINDOW", self.close)
         self.reload()
+        self.ak_start()
 
     def reload(self):
         self.f = self.mod.load(self.path)
@@ -82,7 +82,7 @@ class CampaignScriptWindow(tk.Toplevel):
             self.tv.selection_set(kids[0])
         self.show()
         n = len(self.removed)
-        self.lbl.configure(text="%d of %d piece(s) taken out - Preview, then Keep for Apply." % (n, len(self.pieces))
+        self.lbl.configure(text="%d of %d piece(s) taken out - waiting for Apply changes." % (n, len(self.pieces))
                            if n else "%d piece(s). Nothing changed yet." % len(self.pieces))
 
     def show(self):
@@ -100,11 +100,12 @@ class CampaignScriptWindow(tk.Toplevel):
         self.removed += [i for i in ids if i not in self.removed]
         if ids:
             self.fill()
+            self.ak_changed()
 
     def remove_all(self):
         ids = [p["id"] for p in self.pieces if p["id"] not in self.removed]
         if ids and messagebox.askyesno(TITLE, "Take out all %d piece(s) of the campaign script? Nothing is written "
-                                              "before Keep for Apply and Apply changes." % len(ids), parent=self):
+                                              "before Apply changes." % len(ids), parent=self):
             self.remove(ids)
 
     def _plan(self):
@@ -115,24 +116,36 @@ class CampaignScriptWindow(tk.Toplevel):
     def _key(self):
         return "campaign_script:%s" % self.campaign
 
-    def preview(self):
-        plan = self._plan()
-        if not plan.changed_files():
-            messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
-            return
-        self.app.show_text("Campaign script - preview (nothing written)", plan.report())
+    # ---- kept by itself (gui_util.AutoKeep) ----
+    def _ak_key(self):
+        return self._key()
 
-    def write(self):
+    def _ak_label(self):
+        return "Campaign script (%s)" % self.campaign
+
+    def _ak_plan(self):
+        return self._plan()
+
+    def ak_refresh(self):
+        self.fill()
+
+    @property
+    def _ak_after(self):
         def after(bdir):
             from . import log
             log.write("Campaign script changed (backup %s)" % bdir)
             if self.winfo_exists():
-                self.mod, self.removed = self.app.mod, []
-                self.reload()
-        return keep_for_apply(self, self._key(), "Campaign script (%s)" % self.campaign, self._plan, after, TITLE)
+                self.ak_reload()
+        return after
 
-    def _dirty(self):
-        return kept_or_not(self.app, self._key(), self._plan) if self.removed else ""
+    def ak_reload(self):
+        self.mod, self.removed = self.app.mod, []
+        self.reload()
+        self.ak_start()
+
+    def close(self):
+        self.ak_close()
+        self.destroy()
 
 
 def open_campaign_script(app, parent=None):
