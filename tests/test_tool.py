@@ -771,6 +771,21 @@ building smith
         u.ownership, u.attributes = ["slave"], ["mercenary_unit"]
         write(os.path.join(d, "ui", "units", "mercs", "#alpha_spear.tga"), "x")
         self.assertTrue(unit_card(mod, u).endswith(os.path.join("mercs", "#alpha_spear.tga")))
+        # Medieval II card_pic_dir / info_pic_dir: that folder FIRST, then the faction's (medieval2.exe FUN_008ebfd0);
+        # a mercenary only the mercenaries' folder; the read line reaches the Unit
+        u.ownership, u.attributes = ["alpha"], []
+        u.card_dir, u.info_dir = "shared_cards", "shared_info"
+        write(os.path.join(d, "ui", "units", "shared_cards", "#alpha_spear.tga"), "x")
+        self.assertTrue(unit_card(mod, u).endswith(os.path.join("shared_cards", "#alpha_spear.tga")))
+        self.assertIsNone(unit_card(mod, u, info=True))
+        write(os.path.join(d, "ui", "unit_info", "shared_info", "alpha_spear_info.tga"), "x")
+        self.assertTrue(unit_card(mod, u, info=True).endswith(os.path.join("shared_info", "alpha_spear_info.tga")))
+        u.attributes = ["mercenary_unit"]
+        self.assertNotIn("shared_cards", unit_card(mod, u))           # a mercenary: never its card_pic_dir
+        from campaign_editor.textio import TextFile
+        edu = TextFile.from_bytes("x.txt", b"type a\ndictionary a\ncard_pic_dir mercs\ninfo_pic_dir merc\n")
+        got = read_units(edu)[0]
+        self.assertEqual((got.card_dir, got.info_dir), ("mercs", "merc"))
         cults = {n: c for n, c in mod.factions()}
         lv = Level("execution_square", "factions { %s, }" % cults["alpha"])
         self.assertEqual(builder_cultures(mod, lv), [cults["alpha"]])

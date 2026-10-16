@@ -224,8 +224,10 @@ class UnitPreview(_Base):
         # (R-20261014-D886D4: camel raiders under the Berbers showed the Sassanids' card)
         want = owner_factions(self.mod, [self.faction]) if getattr(self, "faction", None) else []
         fac = next((x for x in want if x in facs), facs[0] if facs else first)
-        self._pic(card_path(self.mod, fac, dic, owners=facs, mercenary=merc), (60, 80), "card")
-        self._pic(card_path(self.mod, fac, dic, True, owners=facs, mercenary=merc), (120, 160), "description")
+        self._pic(card_path(self.mod, fac, dic, owners=facs, mercenary=merc, pic_dir=val("card_pic_dir")), (60, 80),
+                  "card")
+        self._pic(card_path(self.mod, fac, dic, True, owners=facs, mercenary=merc, pic_dir=val("info_pic_dir")),
+                  (120, 160), "description")
         name = text_value(self.mod, "export_units.txt", dic) or unit
         short = text_value(self.mod, "export_units.txt", dic + "_descr_short")
         parts = [(name + "\n", "h")]

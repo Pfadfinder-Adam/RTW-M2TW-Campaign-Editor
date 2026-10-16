@@ -199,6 +199,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Medieval II: a unit with card_pic_dir / info_pic_dir showed as having no card in the editor (and was named in Check mod files) - its card is looked for in that folder first, as the game does.
 - Medieval II: two or more factions recoloured and kept for one Apply - only the first was written, the others stopped with "battle_models.modeldb was changed by another part of this write" -> each is laid over the file as the one before left it, all are written.
 - Avoid Growth in Rome stood a little off Automanage on 4:3 and 16:10 screens -> it keeps its place on any screen shape.
 - Make a card: an own frame moved or sized wholly off the man stopped with an error -> the card is simply empty there.

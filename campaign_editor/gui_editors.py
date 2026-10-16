@@ -843,7 +843,8 @@ class RecordEditor(ttk.Frame):
             box.pack(side="left", padx=(0, 12))
             targets = E.unit_picture_targets(self.mod, dic, pick, info)
             pending = self._pending(targets)
-            have = pending or card_path(self.mod, pick[0] if pick else "", dic, info, owners=facs, mercenary=merc)
+            have = pending or card_path(self.mod, pick[0] if pick else "", dic, info, owners=facs, mercenary=merc,
+                                        pic_dir=(self.value("info_pic_dir" if info else "card_pic_dir") or "").strip())
             self._thumb(box, have).grid(row=0, column=0, columnspan=2, sticky="nw")
             need = E.unit_picture_need(self.mod, info)
             if pending:                                    # waits for Apply: said in sight

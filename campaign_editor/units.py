@@ -17,6 +17,8 @@ class Unit:
         self.attributes = []
         self.cost = []              # turns, cost, upkeep, weapon up, armour up, custom battle cost
         self.ownership = []
+        self.card_dir = ""          # Medieval II: card_pic_dir / info_pic_dir - the folder looked in first
+        self.info_dir = ""
 
     @property
     def price(self):
@@ -85,6 +87,10 @@ def _read_units(edu):
             cur.cost = _ints(rest)
         elif key == "ownership":
             cur.ownership = [a.strip() for a in rest.replace(",", " ").split() if a.strip()]
+        elif key == "card_pic_dir" and len(t) > 1:
+            cur.card_dir = t[1]
+        elif key == "info_pic_dir" and len(t) > 1:
+            cur.info_dir = t[1]
     return units
 
 
@@ -227,18 +233,21 @@ NOT_FACTIONS = ("construction",)
 MERC_FOLDERS = ("mercs", "merc", "mercenaries")        # the games' own: Rome ui/units/mercs + ui/unit_info/merc
 
 
-def card_path(mod, faction, dictionary, info=False, owners=None, mercenary=False):
+def card_path(mod, faction, dictionary, info=False, owners=None, mercenary=False, pic_dir=""):
     """The card the game shows for a unit (ui/units/<faction>/#<dict>.tga; info: the picture of its description,
     ui/unit_info/<faction>/<dict>_info.tga) - the one resolver every window uses. Looked up the game's way: the
     faction's own folder, then each owner's (owners: the factions the unit's ownership gives it - unit_owners), then
     the mercenaries' folder for a mercenary; never a folder that is no faction's (construction). owners None (a
     caller that does not know the unit): any faction's folder. None when there is no such card - a window says so,
-    never another picture in its place. The mod's own data first, then the game's (as the game reads them)."""
+    never another picture in its place. The mod's own data first, then the game's (as the game reads them).
+    pic_dir: a Medieval II unit's card_pic_dir / info_pic_dir - looked in FIRST, then the faction's (medieval2.exe
+    FUN_008ebfd0 / the info one beside it: card_pic_dir, else the faction's folder; a mercenary only ui/units/mercs;
+    no other fallback - a missing card logs 'Missing unit card' and shows the generic one)."""
     from .clone import data_roots
     name = ("%s_info.tga" if info else "#%s.tga") % dictionary
     folders = [os.path.join(d, "ui", "unit_info" if info else "units") for d in data_roots(mod)]
     folders = [f for f in folders if os.path.isdir(f)]
-    order = [faction] if faction else []
+    order = ([pic_dir] if pic_dir and not mercenary else []) + ([faction] if faction and faction != pic_dir else [])
     if owners is not None:
         order += [o for o in owners if o and o not in order]
         if mercenary:
@@ -272,4 +281,5 @@ def unit_card(mod, unit, faction=None, info=False):
     if not getattr(unit, "dictionary", ""):
         return None
     return card_path(mod, faction, unit.dictionary, info, owners=unit_owners(mod, unit),
-                     mercenary=bool(getattr(unit, "mercenary", False)))
+                     mercenary=bool(getattr(unit, "mercenary", False)),
+                     pic_dir=getattr(unit, "info_dir" if info else "card_dir", ""))
