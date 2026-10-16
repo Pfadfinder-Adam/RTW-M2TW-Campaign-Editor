@@ -353,8 +353,32 @@ class GarrisonEditor(ttk.Frame):
         m.add_command(label="Take out every %s" % t, command=lambda: self.take_all(t))
         m.add_command(label="Replace with... (then click a card on the left)", command=lambda: self.replace(i))
         m.add_separator()
+        self._unit_items(m, t)
+        m.add_separator()
         m.add_command(label="Take it out", command=lambda: self.take(i))
         self._popup(e, m)
+
+    def _unit_items(self, m, unit):
+        """The unit itself: in the Unit editor, in 3D, where it is recruited (BACKLOG A1)."""
+        app = self._app_of()
+        if app is None:
+            return
+        m.add_command(label="Open in the Unit editor", command=lambda: app.open_unit(unit))
+        m.add_command(label="View in 3D...", command=lambda: app.open_unit(unit, view3d=True))
+        m.add_command(label="Where it is recruited...", command=lambda: self._where(app, unit))
+
+    def _app_of(self):
+        w = self
+        while w is not None:
+            if hasattr(w, "open_unit"):
+                return w
+            w = getattr(w, "master", None)
+        return None
+
+    def _where(self, app, unit):
+        from types import SimpleNamespace
+        from .buildwhere import open_where
+        return open_where(SimpleNamespace(app=app, mod=app.mod, kind="unit"), unit, parent=self.winfo_toplevel())
 
     def roster_menu(self, e, unit):
         """A roster card: add several, add with experience."""
@@ -368,6 +392,8 @@ class GarrisonEditor(ttk.Frame):
         for v in range(1, 10):
             sub.add_command(label="Experience %d" % v, command=lambda v=v: self.add(unit, 1, v))
         m.add_cascade(label="Add with experience", menu=sub)
+        m.add_separator()
+        self._unit_items(m, unit.type)
         self._popup(e, m)
 
     def set_stats(self, i, every=False, **values):

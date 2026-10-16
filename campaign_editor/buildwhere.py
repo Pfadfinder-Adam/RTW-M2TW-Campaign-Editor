@@ -118,13 +118,14 @@ def recruit_lines(mod):
     return out
 
 
-def open_where(editor, name):
-    """The building editor's 'Where it can be built...' / the unit editor's 'Where it is recruited...' window."""
+def open_where(editor, name, parent=None):
+    """The building editor's 'Where it can be built...' / the unit editor's 'Where it is recruited...' window (editor:
+    anything with app, mod and kind; parent: the window it opens over, the editor by default)."""
     import tkinter as tk
     from tkinter import ttk
     app, mod = editor.app, editor.mod
     camp = app.v_campaign.get()
-    w = tk.Toplevel(editor)
+    w = tk.Toplevel(parent or editor)
     w.transient(app)
     w.geometry("860x560")
     from . import theme

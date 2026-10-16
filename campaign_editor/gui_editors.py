@@ -934,6 +934,40 @@ class RecordEditor(ttk.Frame):
             messagebox.showerror("Recolour", "Could not read the pictures: %s" % e, parent=self)
             return None
 
+    def pick(self, name):
+        """The record of this name shown (the find box cleared when it hides it); True when found."""
+        if not any(r[0] == name for r in self.shown) and self.v_find.get():
+            self.v_find.set("")
+            self.fill_list()
+        at = next((i for i, r in enumerate(self.shown) if r[0] == name), None)
+        if at is None:
+            return False
+        self.lb.selection_clear(0, "end")
+        self.lb.selection_set(at)
+        self.lb.see(at)
+        self.show()
+        return True
+
+    def view_unit_3d(self):
+        """The unit on show in 3D, its soldier model with its mount (as its Battle model's View in 3D...)."""
+        from . import models as MO
+        if self.kind != "unit" or not self.current:
+            return None
+        cat, lines = self._model_catalogue(), self._unit_lines()
+        slots = MO.unit_slots(lines)
+        info = cat.get(slots[0][2].lower()) if slots else None
+        if info is None:
+            messagebox.showinfo("3D", "%s has no battle model this mod knows - nothing to show." % self.current[0])
+            return None
+        kind, mmodel = MO.unit_mount(self.mod, lines)
+        minfo = cat.get((mmodel or "").lower()) if kind else None
+        mount = (minfo, kind) if minfo is not None else None
+        chariot = MO.chariot_of(self.mod, lines)
+        if chariot:
+            chariot["horse_info"] = cat.get((chariot["horse"] or "").lower())
+            mount = (chariot["info"], kind, chariot)
+        return self.view_model(info, mount=mount, unit=True)
+
     def _unit_lines(self):
         name, a, b = self.current
         f = self.mod.load(self.path())

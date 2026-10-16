@@ -1809,6 +1809,18 @@ class App(tk.Tk):
             self.work_changed()
         return self._page(w)
 
+    def open_unit(self, unit, view3d=False):
+        """The unit shown in the Unit editor (a garrison card's right click), its 3D view too when asked."""
+        if not self.mod:
+            return None
+        self.v_bar.set("units")
+        self._bar_pressed()
+        ed = self.editors.get("units")
+        if ed is None or not ed.pick(unit):
+            messagebox.showinfo(APP, "No unit '%s' in this mod's export_descr_unit.txt." % unit)
+            return None
+        return ed.view_unit_3d() if view3d else ed
+
     def page_closed(self, page):
         """A work's Close: it goes, the map shows."""
         for k, ed in list(self.editors.items()):

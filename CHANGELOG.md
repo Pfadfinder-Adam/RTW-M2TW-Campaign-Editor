@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- Garrisons and armies: a unit's right click (and a roster card's) opens it in the Unit editor, shows it in 3D or tells where it is recruited.
 - Apply changes' list: a right click on Units, Buildings, Characters or Terrain throws their changes away too, as for the windows' kept changes.
 - Units: Import... of a card or description picture offers its size - the mod's own, two to four times bigger, or the file's own; the pick is kept for the next one, as in Make a card.
 - Garrisons and armies: a right click on a unit opens a menu - its experience, armour and weapon, one or five more like it, every one like it out, replace it with another (its numbers kept); on the roster add several, fill the army or add with experience. The numbers show under the card.
