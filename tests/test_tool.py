@@ -3558,6 +3558,11 @@ building smith
         self.assertEqual(lnt.dump().decode("latin-1").replace("        <height>168</height>\r\n", "", 1), self.LNT)
         with self.assertRaises(LntError):
             Lnt("<layout>\r\n  <lpage>a\r\n</layout>\r\n")
+        # a modder's comments, one line and several (#305: '</lpage> closes nothing open (open: <!-- HEADING ...')
+        noted = ("<layout>\r\n  <!-- HEADING WITH TITLE \"FACTIONS\" I THINK -->\r\n  <lpage>a\r\n  <!-- two\r\n"
+                 "  <lpage>b -->\r\n  </lpage>\r\n</layout>\r\n")
+        self.assertEqual([p.value for p in Lnt(noted).layout().all("lpage")], ["a"])
+        self.assertEqual(Lnt(noted).dump().decode("latin-1"), noted)
         # two pieces of one name on a page (Medieval II's main menu): each reached by its place, the right one moves
         twin = Lnt(raw)
         at = twin.copy_piece("main_menu", 0, "main_logo_2")

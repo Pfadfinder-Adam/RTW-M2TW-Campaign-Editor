@@ -76,9 +76,17 @@ class Lnt:
     def parse(self):
         self.root = Node("", "", -1)
         stack = [self.root]
+        comment = False
         for i, raw in enumerate(self.lines):
             s = raw.strip()
-            if not s:
+            # a modder's <!-- comment --> (one line or several) and <?...?> / <!...> lines are no pieces
+            if comment:
+                comment = "-->" not in s
+                continue
+            if s.startswith("<!--"):
+                comment = "-->" not in s[4:]
+                continue
+            if not s or s.startswith(("<?", "<!")):
                 continue
             m = _LEAF.match(s)
             if m:
