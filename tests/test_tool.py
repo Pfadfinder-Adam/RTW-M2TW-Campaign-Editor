@@ -7135,6 +7135,13 @@ building smith
         txt = open(m2.text_file("export_units.txt"), "rb").read().decode("utf-16")
         self.assertIn("{alpha_general_2_descr}Good", txt)
         self.assertIn('recruit "alpha general 2"', open(m2.file("edb")).read())
+        # brought again later: the one brought before is known as the same unit under its new names (#298: the
+        # same 67 units brought twice - every card twice in the recruitment panel)
+        src_edu = ModData(self.root).load(ModData(self.root).file("edu"))
+        self.assertEqual(packs._unit_print(packs._block_lines(edu, blocks["alpha general 2"])),
+                         packs._unit_print(packs._block_lines(src_edu, packs.type_blocks(src_edu)["alpha general"])))
+        self.assertIn(packs.brought_before(m2, ModData(self.root)).get("alpha general"),
+                      ("alpha general", "alpha general 2"))
         restore(ModData(troot), bdir)
         after = {k: v for k, v in tree_hash(troot).items() if "_backups" not in k}
         self.assertEqual(after, before)                              # Restore: byte for byte

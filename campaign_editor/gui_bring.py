@@ -130,8 +130,10 @@ class BringWindow(StepWindow):
                        "name and description." if self.kind == "unit" else
             "Each chain comes with all its levels, their names, descriptions and pictures."))
         names = self._source_names()
+        twins = {}
         if self.kind == "unit":
             here = {n.lower() for n in packs.type_blocks(self.mod.load(self.mod.file("edu")))}
+            twins = self._twins()
         else:
             here = {b[0].lower() for b in building_blocks(self.mod.load(self.mod.file("edb")))}
         bar = ttk.Frame(self.body)
@@ -197,12 +199,13 @@ class BringWindow(StepWindow):
             on_show[1] = None
             lb.delete(0, "end")
             shown[:] = [n for n in names if (not v_find.get().strip() or v_find.get().strip().lower() in n.lower())
-                        and (not v_new.get() or n.lower() not in here)
+                        and (not v_new.get() or (n.lower() not in here and n not in twins))
                         and (self._owner == EVERY or self._owner in owners.get(n, ()))]
             for i, n in enumerate(shown):
                 lb.insert("end", n + ("   [%s]" % ", ".join(owners.get(n) or ["no owner"])
                                       if self._order == "by owner" else "")
-                          + ("   (renamed here)" if n.lower() in here else ""))
+                          + ("   (here already as %s - brought before)" % twins[n] if n in twins else
+                             "   (renamed here)" if n.lower() in here else ""))
                 if n in chosen:
                     lb.selection_set(i)
             info.configure(text="%d picked" % len(chosen))
@@ -244,10 +247,34 @@ class BringWindow(StepWindow):
             self.picked = [n for n in names if n in chosen]
         self._collect = collect
 
+    def _twins(self):
+        """{unit of the other mod: the same unit here} - an earlier bring still in this mod (packs.brought_before)."""
+        key = (self.src.data, self.mod.data)
+        if getattr(self, "_twins_of", (None,))[0] != key:
+            try:
+                self._twins_of = (key, packs.brought_before(self.mod, self.src))
+            except Exception:
+                self._twins_of = (key, {})
+        return self._twins_of[1]
+
     def _gather(self):
         if not self.picked:
             messagebox.showerror(self.title(), "tick at least one", parent=self)
             return False
+        twins = {n: t for n, t in self._twins().items() if n in self.picked} if self.kind == "unit" else {}
+        if twins and getattr(self, "_twins_said", None) != tuple(sorted(twins)):
+            self._twins_said = tuple(sorted(twins))
+            if ask(self.title(), "%d of the picked units are in this mod already - an earlier bring is still in "
+                   "(%s%s). Bringing them again makes a second copy of each: every card twice in the "
+                   "recruitment panel.\n\nLeave them out?" % (
+                       len(twins), ", ".join("%s = %s" % kv for kv in sorted(twins.items())[:6]),
+                       ", ..." if len(twins) > 6 else ""),
+                   parent=self, yes="Leave them out", no="Bring a second copy"):
+                self.picked = [n for n in self.picked if n not in twins]
+                if not self.picked:
+                    messagebox.showinfo(self.title(), "Every picked unit is here already - nothing left to bring.",
+                                        parent=self)
+                    return False
         key = tuple(self.picked)
         if getattr(self, "_gathered", None) == (self.src.data, key):
             return None
@@ -527,6 +554,19 @@ class BringWindow(StepWindow):
         self.app.status.set("%d %s brought from %s (backup %s) - Restore undoes it." % (
             n, self.what if n != 1 else self.what[:-1], os.path.basename(os.path.dirname(self.src.data))
             or self.src.data, bdir))
+        # Rome's and Medieval II's unit textures carry their faction's colours painted in: a brought unit wears the
+        # other mod's faction colours (#298: 'in battle they are all the same blue') until recoloured
+        facs = [o for o in self.owners if o in self.factions] if self.kind == "unit" else []
+        if facs and ask(self.app.title(), "The brought units wear the colours of their faction in the other mod "
+                        "(their textures and cards are copies of its pictures). Recolour them into %s's colours "
+                        "now?%s" % (facs[0], "\n\n(%s: Recolour... on its own Faction tab later.)" % ", ".join(
+                            facs[1:]) if len(facs) > 1 else ""), yes="Recolour...", no="Not now"):
+            try:
+                from .gui_recolour import RecolourWindow
+                RecolourWindow(self.app, facs[0])
+            except Exception as e:
+                log.error("Recolour: %s" % e)
+                messagebox.showerror(self.app.title(), "Could not read the pictures: %s" % e)
 
 
 def _game(mod):

@@ -208,6 +208,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Bring units: the same units brought a second time (an earlier bring still in) came in again as copies - every card twice in the recruitment panel -> the list marks them 'here already', 'only those this mod has not' hides them, and picking them asks first; after the write the editor offers to recolour the brought units into their new faction's colours (they wore the other mod's colours in battle).
 - Game's editor (Rome with REX): the game opened its main menu - the switch used was one REX does not know -> REX gets the engine's own campaign-editor switch, and after a try the window reads the game's log and says plainly whether the editor opened (REX of 2026-10-05 has no way into it yet).
 - Words in a window narrower than its contents ran down to a bare '...' (form names, hints) until the window was made full screen -> only the end that does not fit is cut, the rest stays readable.
 - Interface stopped with an error on a menu file holding a modder's notes (<!-- ... -->) -> the notes are read past.

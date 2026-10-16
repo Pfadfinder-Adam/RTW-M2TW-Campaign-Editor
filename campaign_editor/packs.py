@@ -995,6 +995,44 @@ def free_name(taken, name, sep="_"):
     return "%s%s%d" % (name, sep, n)
 
 
+# the lines a bring changes in a unit (its names here, its owners): left out when telling whether two are one
+_BRING_SET = ("type", "dictionary", "ownership")
+
+
+def _unit_print(lines):
+    """A unit's lines as a bring leaves them alike: no names / owners, the models' and mounts' free-name endings
+    (barb_peasant_3, 'horse 2') taken off - what tells a unit brought before from another one."""
+    out = []
+    for l in lines:
+        t = strip_comment(l).split(None, 1)
+        if not t or t[0] in _BRING_SET:
+            continue
+        words = [re.sub(r"_\d+$", "", w) for w in re.split(r"\s*,\s*", t[1].strip())] if len(t) > 1 else []
+        if t[0] in ("mount", "engine", "animal", "ship", "mounted_engine") and words:
+            words[0] = re.sub(r"\s+\d+$", "", words[0])
+        out.append((t[0], tuple(words)))
+    return out
+
+
+def brought_before(mod, src, types=None):
+    """{type of the other mod: its twin here}: units of src (or of `types` of it) this mod holds already under
+    any name - an earlier bring still in (a tester brought the same 67 units twice: every card stood twice in the
+    recruitment panel, report #298)."""
+    here_f = mod.load(mod.file("edu"))
+    prints = {}
+    for name, span in type_blocks(here_f).items():
+        prints.setdefault(tuple(_unit_print(_block_lines(here_f, span))), name)
+    src_f = src.load(src.file("edu"))
+    out = {}
+    for name, span in type_blocks(src_f).items():
+        if types is not None and name not in types:
+            continue
+        twin = prints.get(tuple(_unit_print(_block_lines(src_f, span))))
+        if twin is not None:
+            out[name] = twin
+    return out
+
+
 def plan_names(mod, manifest):
     """{old type: (new type, new dictionary)}: the pack's names, or free ones where the target
     mod has them already."""
