@@ -16917,6 +16917,50 @@ class ReaderChecksMoreTest(unittest.TestCase):
         # no projectile file found: that check is left alone
         self.assertNotIn("spirit_bolt", "\n".join(edu_problems(text.split("\n"), [], "rome", None)))
 
+    def test_edu_type_lines_mounts_ammo_range(self):
+        """RomeTW.exe / medieval2.exe stop on a ride / engine / ship / animal line the category does not take, a
+        handler without its animal, an unknown mount, ammo below 2 and (Rome only) a range below 20 m - not with
+        'prec'; REX only on 0."""
+        from campaign_editor.units import edu_problems
+        stats = "".join("%s\t1\n" % k for k in ("stat_health", "stat_sec", "stat_sec_attr", "stat_pri_armour",
+                                                 "stat_sec_armour", "stat_heat", "stat_ground", "stat_mental",
+                                                 "stat_charge_dist", "stat_fire_delay", "stat_food", "stat_cost"))
+        unit = ("type\t%s\ndictionary\td\ncategory\t%s\nclass\tlight\nsoldier\tm, 40, 0, 1\n%s"
+                "attributes\thardy\nformation\t1, 1, 2, 2, 4, square\nstat_pri\t5, 2, %s, %d, %d, missile\n"
+                "stat_pri_attr\t%s\n" + stats)
+        text = (unit % ("rider", "cavalry", "mount\theavy horse\n", "no", 0, 0, "no") +
+                unit % ("on foot", "cavalry", "", "no", 0, 0, "no") +
+                unit % ("pony", "cavalry", "mount\tpony\n", "no", 0, 0, "no") +
+                unit % ("two", "siege", "engine\tonager\nanimal\twardogs\n", "no", 0, 0, "no") +
+                unit % ("walker", "infantry", "mount\theavy horse\n", "no", 0, 0, "no") +
+                unit % ("dogs", "handler", "", "no", 0, 0, "no") +
+                unit % ("archer", "infantry", "", "arrow", 120, 30, "no") +
+                unit % ("empty", "infantry", "", "arrow", 120, 1, "no") +
+                unit % ("short", "infantry", "", "arrow", 15, 30, "no") +
+                unit % ("aimed", "infantry", "", "arrow", 15, 1, "prec") +
+                unit % ("puller", "cavalry", "mounted_engine\telephant cannon\nmount\telephant\n", "no", 0, 0,
+                        "no"))
+        mounts = {"heavy horse", "elephant"}
+        got = "\n".join(edu_problems(text.split("\n"), [], "rome", None, mounts=mounts))
+        for ok in ("'rider'", "'on foot'", "'archer'", "'aimed'"):
+            self.assertNotIn(ok, got)
+        self.assertIn("Unrecognised mount type 'pony'.", got)
+        self.assertIn("Missing attributes field for unit type 'two'.", got)
+        self.assertIn("Missing attributes field for unit type 'walker'.", got)
+        self.assertIn("Expected animal type for handler unit type 'dogs'.", got)
+        self.assertIn("absolute minimum of 2 on unit type 'empty'.", got)
+        self.assertIn("absolute minimum of 20m on unit type 'short'.", got)
+        self.assertIn("Missing attributes field for unit type 'puller'.", got)      # Rome has no mounted_engine
+        m2 = "\n".join(edu_problems(text.split("\n"), [], "medieval2", None, mounts=mounts))
+        self.assertNotIn("'puller'", m2)
+        self.assertNotIn("20m", m2)                                    # Medieval II's unit reader has no 20 m
+        self.assertIn("absolute minimum of 2 on unit type 'empty'.", m2)
+        rex = "\n".join(edu_problems(text.split("\n"), [], "rome", "REX.exe", mounts=mounts))
+        self.assertNotIn("'empty'", rex)                               # REX: only 0 ammo / 0 m
+        self.assertNotIn("'short'", rex)
+        self.assertIn("Missing attributes field for unit type 'two'.", rex)
+        self.assertNotIn("pony", "\n".join(edu_problems(text.split("\n"), [], "rome", None)))   # no descr_mount
+
     def test_edb_upgrade_down_and_settlement_min(self):
         from campaign_editor.buildings import read_buildings, reader_problems
         edb = ("building walls\n{\n    levels palisade wall\n    {\n        palisade requires factions { all, }\n"

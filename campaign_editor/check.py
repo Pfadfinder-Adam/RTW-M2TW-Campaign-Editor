@@ -275,8 +275,9 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     from .units import edu_problems
     from .limits import engine_of, game_kind
     from .units import projectile_names, unit_card
+    from .models import mount_classes
     unit_problems = edu_problems(mod.load(mod.file("edu")).texts(), facs, game_kind(mod), engine_of(mod),
-                                 projectile_names(mod, game_kind(mod)))
+                                 projectile_names(mod, game_kind(mod)), set(mount_classes(mod)) or None)
     for m in unit_problems[:12]:
         bad(m)
     if len(unit_problems) > 12:

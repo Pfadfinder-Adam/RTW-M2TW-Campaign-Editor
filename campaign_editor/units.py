@@ -108,14 +108,25 @@ ROME_ATTRIBUTES = set("""can_sap can_withdraw can_formed_charge can_feign_rout c
 SOLDIERS = {"rome": (6, 60), "medieval2": (4, 100)}
 
 
-def edu_problems(lines, factions, kind="rome", engine=None, projectiles=None):
+# the one line saying what a unit rides / pulls / sails, by its category (RomeTW.exe FUN_009124d6, medieval2.exe
+# FUN_008efd50 take one branch per category; any other such line stops the reader at 'attributes'). Cavalry may also
+# go without (on foot in its stats); Medieval II's cavalry may pull a mounted_engine before its mount.
+TYPE_LINES = ("mount", "engine", "ship", "animal", "mounted_engine")
+TYPE_LINES_OF = {"cavalry": [(), ("mount",), ("mounted_engine", "mount")], "siege": [("engine",)], "ship": [("ship",)],
+                 "handler": [("animal",)]}
+
+
+def edu_problems(lines, factions, kind="rome", engine=None, projectiles=None, mounts=None):
     """What the games' own export_descr_unit readers refuse, per unit and in their words (each a Script Error - the
     game stops): a missing line, an ownership naming no faction / culture / all. Without an engine also: soldiers
     out of range (Rome 6-60, Medieval II 4-100, non-combatants 1-300), more than 300 extras, more than 3 officers,
     and in Rome an attribute it does not know. With REX / M2EX numbers are no limit (limits.md THE RULE; REX's
     `soldiers { }` block stands for the soldier line). factions: [(faction, culture)]. In every game also: pikes
     without phalanx (or schiltrom), a unit with none of square / horde / phalanx, and - projectiles given (the names
-    of descr_projectile(_new).txt) - a weapon firing a projectile there is not."""
+    of descr_projectile(_new).txt) - a weapon firing a projectile there is not. Also (every game and engine): a
+    mount / engine / ship / animal line the unit's category does not take, or two of them ('Missing attributes
+    field'), a handler without its animal line, and - mounts given (descr_mount.txt's types) - a mount there is not;
+    a missile weapon (not 'prec') with ammo below 2 (REX: 0) and, in Rome without REX, a range below 20 m (REX: 0)."""
     owners = {f for f, _ in factions} | {c for _, c in factions if c} | {"all"}
     blocks, cur = [], None
     for n, l in enumerate(lines, 1):
@@ -124,12 +135,14 @@ def edu_problems(lines, factions, kind="rome", engine=None, projectiles=None):
         if not t:
             continue
         if t[0] == "type":
-            cur = {"type": " ".join(code.split()[1:]), "line": n, "keys": {}, "officers": 0}
+            cur = {"type": " ".join(code.split()[1:]), "line": n, "keys": {}, "officers": 0, "kinds": []}
             blocks.append(cur)
         elif cur is not None:
             rest = code.split(None, 1)[1] if len(code.split(None, 1)) > 1 else ""
             cur["keys"].setdefault(t[0], rest)
             cur["officers"] += t[0] == "officer"
+            if t[0] in TYPE_LINES:
+                cur["kinds"].append(t[0])
     out = []
 
     def say(b, what, quoted=True):
@@ -161,6 +174,34 @@ def edu_problems(lines, factions, kind="rome", engine=None, projectiles=None):
                 f = [x.strip() for x in keys.get(k, "").split(",")]
                 if len(f) > 2 and f[2] and f[2] != "no" and f[2] not in projectiles:
                     say(b, "Stat_pri statistic refers to non-existant projectile type '%s'." % f[2])
+        cat, kinds = keys.get("category", "").strip(), tuple(b["kinds"])
+        if cat == "handler" and "animal" not in kinds:
+            say(b, "Expected animal type for handler unit type '%s'." % name)
+        elif "category" in keys and kinds not in [k for k in TYPE_LINES_OF.get(cat, [()])
+                                                  if kind == "medieval2" or "mounted_engine" not in k]:
+            say(b, "Missing attributes field for unit type '%s'." % name)
+            out[-1] += " (the %s line%s: %s unit takes %s)" % (
+                " / ".join(kinds), "s" if len(kinds) > 1 else "", "an %s" % cat if cat[:1] in "aeiou" else "a %s" % cat,
+                "one %s line" % TYPE_LINES_OF[cat][-1][-1] if cat in TYPE_LINES_OF else "none of them")
+        mount = keys.get("mount", "").strip()
+        if mounts is not None and mount and mount.lower() not in mounts:
+            say(b, "Unrecognised mount type '%s'." % mount)
+        for k in ("stat_pri", "stat_sec"):
+            f = [x.strip() for x in keys.get(k, "").split(",")]
+            attr = set(re.findall(r"[a-z_]+", keys.get(k + "_attr", "")))
+            if len(f) < 5 or not f[2] or f[2] == "no" or "prec" in attr or not (f[3].isdigit() and f[4].isdigit()):
+                continue
+            rng, ammo = int(f[3]), int(f[4])
+            if engine == "REX.exe":
+                if ammo == 0:
+                    say(b, "Missile ammo amount is less than the absolute minimum of 1 on unit type '%s'." % name)
+                if rng == 0:
+                    say(b, "Missile range is less than the absolute minimum of 1m on unit type '%s'." % name)
+                continue
+            if min(max(ammo, 1), 127) < 2:
+                say(b, "Missile ammo amount is less than the absolute minimum of 2 on unit type '%s'." % name)
+            if kind == "rome" and min(max(rng, 1), 511) < 20:
+                say(b, "Missile range is less than the absolute minimum of 20m on unit type '%s'." % name)
         for o in keys.get("ownership", "").replace(",", " ").split():
             if o not in owners:
                 say(b, "Invalid ownership type '%s' found in unit '%s'." % (o, name))
