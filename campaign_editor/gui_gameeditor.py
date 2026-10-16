@@ -43,6 +43,7 @@ class GameEditorWindow(tk.Toplevel):
         sb.pack(side="right", fill="y")
         self.txt.pack(side="left", fill="both", expand=True)
         ttk.Button(bar, text="Close", command=self.destroy).pack(side="right")
+        self.bind("<FocusIn>", lambda e: self.show() if e.widget is self else None, add="+")   # back from the game
         self.show()
 
     def _camp(self):
@@ -75,9 +76,27 @@ class GameEditorWindow(tk.Toplevel):
             self._say("Not opened in the game's editor yet.")
             return
         got = GE.changed(mod, camp)
+        tried = self._last_try(mod)
+        if not got and tried is False:
+            self._say("The copy is in place, but the game's last start did not open its campaign editor (its log "
+                      "shows no editor).\n\n" + (GE.NO_WAY_REX if "REX.exe" in self.l_line.cget("text") else
+                                                 "See the line above for this game's way in."))
+            return
         self._say("The copy is in place.\n" + (
             "Saved and changed by the game's editor:\n  " + "\n  ".join(n for n, _, _ in got) if got else
             "Nothing saved by the game's editor yet (Save there, close the game, then look here again)."))
+
+    def _last_try(self, mod):
+        """Did the game started from here open its editor (its newest log since)? None before a try."""
+        import os
+        from .newmod import game_of
+        since = getattr(self.app, "_game_editor_started", None)
+        if since is None:
+            return None
+        try:
+            return GE.last_try(game_of(mod.data), os.path.dirname(os.path.abspath(mod.data)), since)
+        except (OSError, ValueError):
+            return None
 
     def open_it(self):
         from . import log
@@ -101,6 +120,8 @@ class GameEditorWindow(tk.Toplevel):
         try:
             line = GE.start_line(mod.data, camp)
             start(line)
+            import time
+            self.app._game_editor_started = time.time()
         except (ValueError, OSError) as e:
             messagebox.showinfo(TITLE, "Copied. %s" % e, parent=self)
             self.show()

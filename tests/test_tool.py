@@ -3041,14 +3041,24 @@ building smith
             self.assertTrue(line["direct"])
             self.assertEqual(line["args"], ["--features.mod=mods/a", "--editor.campaign=custom/ce_imperial_campaign"])
             line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
-            # the menus cannot open the editor in either game (report #288, the engine source): REX gets the same
-            # switch as M2EX, beside a plain exe too
+            # the menus cannot open the editor in either game (report #288, the engine source): REX gets the
+            # source's -strat_ed:<dir> - REX of 2026-10-05 said 'unknown option: --editor.campaign' (#299, #301)
             write(os.path.join(rome, "RomeTW.exe"), "")
             line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
             self.assertTrue(line["direct"])
             self.assertTrue(line["exe"].endswith("REX.exe"))
-            self.assertEqual(line["args"], ["-nm", "-show_err", "-mod:HLR", "--editor.campaign=custom/ce_imperial_campaign"])
-            self.assertIn("update REX", line["how"])
+            self.assertEqual(line["args"], ["-nm", "-show_err", "-mod:HLR", "-enable_editor",
+                                            "-strat_ed:custom/ce_imperial_campaign"])
+            self.assertIn("main menu", line["how"])
+            # after a try the game's log says whether the editor opened
+            self.assertIs(GE.opened("11:31:40 [core.options] [warning] unknown option: --editor.campaign\n"), False)
+            self.assertIs(GE.opened("Loading string table: data/text/english/shared.txt\n"
+                                    "************** STARTING CAMPAIGN EDITOR\n"), True)
+            self.assertIsNone(GE.opened(""))
+            log_dir = os.path.join(rome, "HLR")
+            write(os.path.join(log_dir, "system.log.txt"), "Loading string table: x\n")
+            self.assertIs(GE.last_try(rome, log_dir, 0), False)
+            self.assertIsNone(GE.last_try(rome, log_dir, time.time() + 60))     # an older log says nothing
             # without REX: CA's own switch is tried, the words say what if the sold game does not know it
             os.remove(os.path.join(rome, "REX.exe"))
             line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")

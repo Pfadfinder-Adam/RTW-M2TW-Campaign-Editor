@@ -9,9 +9,11 @@ pictures. So the work goes in three steps, the web's knots tied here in one plac
               them) copied into custom/<name>/ with a note of what each was (campaign_editor.json); the region names'
               text as text/<name>_regions_and_settlement_names.txt. Through a Plan: Restore takes it all out.
   start_line  the game started straight in its editor where it can be: Medieval II with M2EX
-              '--editor.campaign=custom/<name>', Rome with REX the same switch (a REX older than it opens the
-              main menu); plain Rome tries CA's '-strat_ed:<name>'; plain Medieval II only from its menus (cfg
-              '[features] editor = true'). The menus' own way is switched off in the game's code (#288).
+              '--editor.campaign=custom/<name>'; Rome with REX '-enable_editor -strat_ed:custom/<name>' (the engine
+              source's switch; REX of 2026-10-05 knows neither it nor '--editor.campaign' - its log says 'unknown
+              option', #299 #301 - and opens the main menu); plain Rome tries CA's '-strat_ed:<name>'; plain
+              Medieval II only from its menus (cfg '[features] editor = true'). The menus' own way is switched off
+              in the game's code (#288). opened() reads the game's log after a try: did the editor start?
   take_back   every file the game's editor saved and changed goes back over the campaign's own (into the mod: the
               campaign folder, or where the mod's own file lay), descr_strat.txt with its 'script' lines put back,
               map.rwm removed (the game builds it again) - and what the editor dropped is said: header keys,
@@ -130,14 +132,13 @@ def start_line(data, campaign):
     # The menus cannot open the campaign editor in either game: OPTIONS > EDITORS > PROVINCIAL CAMPAIGN EDITOR leads
     # to a load page whose list and buttons are switched off in the game's own code, and New Game > PROVINCIAL
     # CAMPAIGN only plays the custom campaigns (report #288; read in the engine source 2026-10-15). Only a switch
-    # opens it: REX's '--editor.campaign=<dir>' (the same as M2EX's, under the campaign folder), CA's own Rome builds
-    # '-strat_ed:<name>' (under campaign/custom/).
+    # opens it: the engine source's Rome side reads '-strat_ed:<dir>' (under the campaign folder), CA's own Rome
+    # builds '-strat_ed:<name>' (under campaign/custom/). REX of 2026-10-05 (078b01a2c) knows no such switch: its
+    # log says 'unknown option: --editor.campaign' and the game opens its main menu (#299, #301).
     if os.path.isfile(os.path.join(game, "REX.exe")):
-        args = mod_args + ["--editor.campaign=%s" % where]
+        args = mod_args + ["-enable_editor", "-strat_ed:%s" % where]
         return {"exe": os.path.join(game, "REX.exe"), "args": args, "cwd": game, "direct": True,
-                "words": " ".join(["REX.exe"] + args),
-                "how": "If the game opens at its main menu instead, this REX is older than its campaign-editor switch "
-                       "(--editor.campaign): update REX - the game's menus cannot open the campaign editor."}
+                "words": " ".join(["REX.exe"] + args), "how": NO_WAY_REX}
     plain = EXPANSIONS[low][1] if low in EXPANSIONS else "RomeTW.exe"
     if not os.path.isfile(os.path.join(game, plain)):
         raise ValueError("no game exe (REX.exe, %s) in %s" % (plain, game))
@@ -149,6 +150,37 @@ def start_line(data, campaign):
             "how": "Rome without REX is started with the campaign-editor switch of CA's own builds (-strat_ed); the "
                    "sold game may not know it. If it opens at its main menu, plain Rome has no way into the editor "
                    "(its menu page is switched off) - use REX."}
+
+
+NO_WAY_REX = ("If the game opens at its main menu, this REX has no way into its campaign editor yet: the editor "
+              "is in REX.exe, but REX of 2026-10-05 has no start switch for it and the game's menu page for it is "
+              "switched off in the game's own code. A newer REX may have it - the editor tries it at every start.")
+
+
+def opened(text):
+    """Did the game's start open its campaign editor? From its log (system.log.txt): True when the log says
+    'STARTING CAMPAIGN EDITOR', False when the game ran without it, None when the log says nothing either way."""
+    if not text:
+        return None
+    if "STARTING CAMPAIGN EDITOR" in text:
+        return True
+    if re.search(r"unknown option: --?(editor\.campaign|strat_ed)", text) or "Loading string table" in text:
+        return False
+    return None
+
+
+def last_try(game, mod_dir, since):
+    """opened() of the newest game log written after `since` (a time.time()), None without one."""
+    from .report import game_logs
+    for p in game_logs(game, mod_dir) if game else []:
+        try:
+            if os.path.getmtime(p) < since:
+                continue
+            with open(p, "rb") as fh:
+                return opened(fh.read().decode("latin-1", errors="replace"))
+        except OSError:
+            continue
+    return None
 
 
 # ---- taking it back ----
