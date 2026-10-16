@@ -3103,16 +3103,22 @@ building smith
             line = GE.start_line(os.path.join(m2, "mods", "a", "data"), "imperial_campaign")
             self.assertTrue(line["direct"])
             self.assertEqual(line["args"], ["--features.mod=mods/a", "--editor.campaign=custom/ce_imperial_campaign"])
-            line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
-            # the menus cannot open the editor in either game (report #288, the engine source): REX gets the
-            # source's -strat_ed:<dir> - REX of 2026-10-05 said 'unknown option: --editor.campaign' (#299, #301)
+            with self.assertRaises(ValueError):                  # REX alone: the game's own exe is needed
+                GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
+            # the menus cannot open the editor in either game (report #288): Rome is started with its own exe,
+            # never REX - REX of 2026-10-05 said 'unknown option: --editor.campaign' (#299, #301)
             write(os.path.join(rome, "RomeTW.exe"), "")
             line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
             self.assertTrue(line["direct"])
-            self.assertTrue(line["exe"].endswith("REX.exe"))
-            self.assertEqual(line["args"], ["-nm", "-show_err", "-mod:HLR", "-enable_editor",
-                                            "-strat_ed:custom/ce_imperial_campaign"])
-            self.assertIn("main menu", line["how"])
+            self.assertTrue(line["exe"].endswith("RomeTW.exe"))
+            self.assertEqual(line["args"], ["-show_err", "-mod:HLR", "-enable_editor", "-strat_ed:ce_imperial_campaign"])
+            self.assertIn("without REX", line["how"])
+            # a Barbarian Invasion mod in a folder of its own: RomeTW-BI.exe
+            os.makedirs(os.path.join(rome, "bi_New", "data"))
+            write(os.path.join(rome, "RomeTW-BI.exe"), "")
+            line = GE.start_line(os.path.join(rome, "bi_New", "data"), "barbarian_invasion")
+            self.assertTrue(line["exe"].endswith("RomeTW-BI.exe"))
+            self.assertIn("-mod:bi_New", line["args"])
             # after a try the game's log says whether the editor opened
             self.assertIs(GE.opened("11:31:40 [core.options] [warning] unknown option: --editor.campaign\n"), False)
             self.assertIs(GE.opened("Loading string table: data/text/english/shared.txt\n"
@@ -3122,14 +3128,6 @@ building smith
             write(os.path.join(log_dir, "system.log.txt"), "Loading string table: x\n")
             self.assertIs(GE.last_try(rome, log_dir, 0), False)
             self.assertIsNone(GE.last_try(rome, log_dir, time.time() + 60))     # an older log says nothing
-            # without REX: CA's own switch is tried, the words say what if the sold game does not know it
-            os.remove(os.path.join(rome, "REX.exe"))
-            line = GE.start_line(os.path.join(rome, "HLR", "data"), "imperial_campaign")
-            self.assertFalse(line["direct"])
-            self.assertTrue(line["exe"].endswith("RomeTW.exe"))
-            self.assertEqual(line["args"][-2:], ["-enable_editor", "-strat_ed:ce_imperial_campaign"])
-            self.assertIn("-mod:HLR", line["args"])
-            write(os.path.join(rome, "RomeTW-BI.exe"), "")
             os.makedirs(os.path.join(rome, "bi", "data"))
             line = GE.start_line(os.path.join(rome, "bi", "data"), "barbarian_invasion")
             self.assertTrue(line["exe"].endswith("RomeTW-BI.exe"))

@@ -217,7 +217,7 @@
 - The bottom bar said 'Create faction' in Religions, Add-ons and other works -> only on the New faction tab; elsewhere 'Apply changes'.
 - Giving away a faction's last town with its general inside was refused until it had another town -> the general steps out onto a free tile beside the town, and a warning says so.
 - Bring units: the same units brought a second time (an earlier bring still in) came in again as copies - every card twice in the recruitment panel -> the list marks them 'here already', 'only those this mod has not' hides them, and picking them asks first; after the write the editor offers to recolour the brought units into their new faction's colours (they wore the other mod's colours in battle).
-- Game's editor (Rome with REX): the game opened its main menu - the switch used was one REX does not know -> REX gets the engine's own campaign-editor switch, and after a try the window reads the game's log and says plainly whether the editor opened (REX of 2026-10-05 has no way into it yet).
+- Game's editor (Rome): REX opened its main menu - it knows no switch into the campaign editor -> Rome's own exe (RomeTW.exe, RomeTW-BI.exe for Barbarian Invasion) starts it with the editor's switch, and after a try the window reads the game's log and says plainly whether the editor opened.
 - Words in a window narrower than its contents ran down to a bare '...' (form names, hints) until the window was made full screen -> only the end that does not fit is cut, the rest stays readable.
 - Interface stopped with an error on a menu file holding a modder's notes (<!-- ... -->) -> the notes are read past.
 - A changed garrison or army had every unit's experience, armour and weapon put back to 0 -> each unit keeps its own.

@@ -9,9 +9,9 @@ pictures. So the work goes in three steps, the web's knots tied here in one plac
               them) copied into custom/<name>/ with a note of what each was (campaign_editor.json); the region names'
               text as text/<name>_regions_and_settlement_names.txt. Through a Plan: Restore takes it all out.
   start_line  the game started straight in its editor where it can be: Medieval II with M2EX
-              '--editor.campaign=custom/<name>'; Rome with REX '-enable_editor -strat_ed:custom/<name>' (the engine
-              source's switch; REX of 2026-10-05 knows neither it nor '--editor.campaign' - its log says 'unknown
-              option', #299 #301 - and opens the main menu); plain Rome tries CA's '-strat_ed:<name>'; plain
+              '--editor.campaign=custom/<name>'; Rome always with its own exe (RomeTW.exe / RomeTW-BI.exe
+              -enable_editor -strat_ed:<name>), never REX: REX of 2026-10-05 knows neither switch - its log says
+              'unknown option', #299 #301 - and opens the main menu; plain
               Medieval II only from its menus (cfg '[features] editor = true'). The menus' own way is switched off
               in the game's code (#288). opened() reads the game's log after a try: did the editor start?
   take_back   every file the game's editor saved and changed goes back over the campaign's own (into the mod: the
@@ -128,34 +128,34 @@ def start_line(data, campaign):
     rel = None
     if base:
         rel = os.path.relpath(os.path.dirname(data), game).replace(os.sep, "/")
-    mod_args = [EXPANSIONS[low][0]] if low in EXPANSIONS else (["-nm", "-show_err", "-mod:%s" % rel] if base else [])
     # The menus cannot open the campaign editor in either game: OPTIONS > EDITORS > PROVINCIAL CAMPAIGN EDITOR leads
     # to a load page whose list and buttons are switched off in the game's own code, and New Game > PROVINCIAL
     # CAMPAIGN only plays the custom campaigns (report #288; read in the engine source 2026-10-15). Only a switch
-    # opens it: the engine source's Rome side reads '-strat_ed:<dir>' (under the campaign folder), CA's own Rome
-    # builds '-strat_ed:<name>' (under campaign/custom/). REX of 2026-10-05 (078b01a2c) knows no such switch: its
-    # log says 'unknown option: --editor.campaign' and the game opens its main menu (#299, #301).
-    if os.path.isfile(os.path.join(game, "REX.exe")):
-        args = mod_args + ["-enable_editor", "-strat_ed:%s" % where]
-        return {"exe": os.path.join(game, "REX.exe"), "args": args, "cwd": game, "direct": True,
-                "words": " ".join(["REX.exe"] + args), "how": NO_WAY_REX}
-    plain = EXPANSIONS[low][1] if low in EXPANSIONS else "RomeTW.exe"
+    # opens it: CA's Rome builds '-strat_ed:<name>' (under campaign/custom/).
+    # Rome: the game's own exe, never REX (the user, 2026-10-16: 'stop trying with REX, make sure the vanilla starts
+    # it'): RomeTW.exe / RomeTW-BI.exe hold 'strat_ed' among their switches beside enable_editor; REX of 2026-10-05
+    # knows neither it nor --editor.campaign (#299, #301). A Barbarian Invasion mod goes to RomeTW-BI.exe.
+    bi = low == "bi" or _bi_data(data, campaign)
+    alx = low == "alexander"
+    plain = "RomeTW-ALX.exe" if alx else "RomeTW-BI.exe" if bi else "RomeTW.exe"
     if not os.path.isfile(os.path.join(game, plain)):
-        raise ValueError("no game exe (REX.exe, %s) in %s" % (plain, game))
-    if low in EXPANSIONS:
-        mod_args = []                                   # RomeTW-BI.exe / -ALX.exe are the expansion already
-    args = mod_args + ["-enable_editor", "-strat_ed:%s" % folder_name(campaign)]
-    return {"exe": os.path.join(game, plain), "args": args, "cwd": game, "direct": False,
-            "words": " ".join([plain] + args),
-            "how": "Rome without REX is started with the campaign-editor switch of CA's own builds (-strat_ed); the "
-                   "sold game may not know it. If it opens at its main menu, plain Rome has no way into the editor "
-                   "(its menu page is switched off) - use REX."}
+        raise ValueError("no %s in %s - the game's campaign editor is started with the game's own exe (REX has no "
+                         "way into it)" % (plain, game))
+    args = ([] if low in EXPANSIONS or not base else ["-show_err", "-mod:%s" % rel]) + \
+        ["-enable_editor", "-strat_ed:%s" % folder_name(campaign)]
+    return {"exe": os.path.join(game, plain), "args": args, "cwd": game, "direct": True,
+            "words": " ".join([plain] + args), "how": PLAIN_HOW}
 
 
-NO_WAY_REX = ("If the game opens at its main menu, this REX has no way into its campaign editor yet: the editor "
-              "is in REX.exe, but REX of 2026-10-05 has no start switch for it and the game's menu page for it is "
-              "switched off in the game's own code. A newer REX may have it - the editor tries it at every start.")
+def _bi_data(data, campaign):
+    """A Rome mod of Barbarian Invasion: its campaign barbarian_invasion or BI's own descr_beliefs.txt."""
+    return campaign.lower() == "barbarian_invasion" or any(
+        n.lower() == "descr_beliefs.txt" for n in (os.listdir(data) if os.path.isdir(data) else []))
 
+
+PLAIN_HOW = ("Started with the game's own exe, without REX (REX has no way into the campaign editor). A mod made "
+             "for REX only may not start on the plain game - try the game's own campaign first (load its data "
+             "folder: data, or bi/data for Barbarian Invasion).")
 
 def opened(text):
     """Did the game's start open its campaign editor? From its log (system.log.txt): True when the log says

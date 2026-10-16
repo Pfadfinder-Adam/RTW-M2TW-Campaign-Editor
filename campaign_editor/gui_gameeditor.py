@@ -79,8 +79,7 @@ class GameEditorWindow(tk.Toplevel):
         tried = self._last_try(mod)
         if not got and tried is False:
             self._say("The copy is in place, but the game's last start did not open its campaign editor (its log "
-                      "shows no editor).\n\n" + (GE.NO_WAY_REX if "REX.exe" in self.l_line.cget("text") else
-                                                 "See the line above for this game's way in."))
+                      "shows no editor).\n\n" + GE.PLAIN_HOW)
             return
         self._say("The copy is in place.\n" + (
             "Saved and changed by the game's editor:\n  " + "\n  ".join(n for n, _, _ in got) if got else
