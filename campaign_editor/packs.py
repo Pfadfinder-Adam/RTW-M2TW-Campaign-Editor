@@ -1172,8 +1172,10 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
         edu.raw.extend(edu.make(x) for x in [""] + lines)
         plan.note(edu, "unit %s added (dictionary %s), owned by %s" % (t, d, ", ".join(owners)))
         if d and u.get("dictionary"):
-            for suffix in ("", "_descr", "_descr_short"):
-                text_renames[u["dictionary"] + suffix] = d + suffix
+            for suffix in ("", "_descr", "_descr_short"):       # units sharing one text may get names apart here:
+                text_renames.setdefault(u["dictionary"] + suffix, [])    # each of them gets the text (#298's
+                if d + suffix not in text_renames[u["dictionary"] + suffix]:  # follow-up: one went without)
+                    text_renames[u["dictionary"] + suffix].append(d + suffix)
     edu.raw.append(edu.make(""))
     # texts
     table = mod.text_file("export_units.txt")
@@ -1183,17 +1185,18 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
             del tf.raw[-1]
         n = 0
         for key, value in manifest["texts"].items():
-            new = text_renames.get(key, key)
-            tf.raw.extend(tf.make(x) for x in ["{%s}%s" % (new, value[0])] + value[1:])
-            n += 1
+            for new in text_renames.get(key) or [key]:
+                tf.raw.extend(tf.make(x) for x in ["{%s}%s" % (new, value[0])] + value[1:])
+                n += 1
         tf.raw.append(tf.make(""))
         plan.note(tf, "%d name(s) and description(s) added" % n)
     # files: models, textures, sprites as they are; cards and info pictures for each owner faction
     factions = [o for o in owners if o in set(_factions_here(plan))]
-    dict_of = {u["dictionary"]: names[u["type"]][1] for u in manifest["units"] if u.get("dictionary")}
+    dict_of = sorted({(u["dictionary"], names[u["type"]][1]) for u in manifest["units"]
+                      if u.get("dictionary") and names[u["type"]][1]})
     _put_files(plan, files, manifest)
     _put_skins(plan, manifest, files, owners)
-    for old, new in dict_of.items():
+    for old, new in dict_of:
         for sub, pattern in (("units", "#%s.tga"), ("unit_info", "%s_info.tga")):
             src = [(rel, data) for rel, data in files.items()
                    if rel.lower().startswith("ui/%s/" % sub) and rel.split("/")[-1].lower() == (pattern % old).lower()]

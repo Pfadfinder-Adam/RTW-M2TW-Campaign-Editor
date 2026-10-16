@@ -11131,6 +11131,34 @@ building smith
         self.assertEqual({names[t][1].lower() for t in ("cav a", "cav b", "cav c")}, {"barb_light_cavalry"})
         self.assertEqual(len({names[t][0] for t in names}), 4)              # the types stay apart
 
+    def test_units_sharing_a_dictionary_named_apart_each_get_card_and_text(self):
+        """A tester's bring from HLR (R-20261016-8462A9): 'barb wardogs briton' and 'barb wardogs gaul' share
+        barb_wardogs_briton there; given names apart here (_2), the card, picture and text went to the last one only
+        - the other stood with the game's stand-in card and 'Unlocalised placement text'. Each gets them."""
+        from campaign_editor import packs
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU + "\ntype\t\talpha guard\ndictionary\talpha_general\n"
+              "ownership\talpha\n")
+        write(os.path.join(d, "ui", "units", "alpha", "#alpha_general.tga"), "CARD")
+        write(os.path.join(d, "ui", "unit_info", "alpha", "alpha_general_info.tga"), "INFO")
+        write(os.path.join(d, "text", "export_units.txt"),
+              "{alpha_general}Alpha Guard\n{alpha_general_descr}Good\n{alpha_general_descr_short}Good\n", utf16=True)
+        man, files = packs.collect(ModData(self.root), ["alpha general", "alpha guard"])
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        shutil.copytree(self.root, os.path.join(target, "mod"))
+        tmod = ModData(os.path.join(target, "mod"))
+        plan = Plan(tmod, "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"], {"alpha general": ("alpha general 2", "ag_one"),
+                                                         "alpha guard": ("alpha guard 2", "ag_two")})
+        plan.apply()
+        tdata = os.path.join(target, "mod", "data")
+        txt = open(os.path.join(tdata, "text", "export_units.txt"), "rb").read().decode("utf-16")
+        for dd in ("ag_one", "ag_two"):
+            self.assertTrue(os.path.exists(os.path.join(tdata, "ui", "units", "alpha", "#%s.tga" % dd)), dd)
+            self.assertTrue(os.path.exists(os.path.join(tdata, "ui", "unit_info", "alpha", "%s_info.tga" % dd)))
+            self.assertIn("{%s}Alpha Guard" % dd, txt)
+
     def test_load_offers_to_take_out_conditions_this_mod_lacks(self):
         """Report #291: an older bring had left 'hidden_resource alpine factionwide' in the mod's
         export_descr_buildings.txt and the game stopped at start. Load offers to take such conditions out
