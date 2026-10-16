@@ -208,6 +208,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Words in a window narrower than its contents ran down to a bare '...' (form names, hints) until the window was made full screen -> only the end that does not fit is cut, the rest stays readable.
 - Interface stopped with an error on a menu file holding a modder's notes (<!-- ... -->) -> the notes are read past.
 - A changed garrison or army had every unit's experience, armour and weapon put back to 0 -> each unit keeps its own.
 - Make a picture: the game's ground showed nothing when a card's ground had been picked before -> cards and pictures keep their own ground, and a picture gets the game's scroll paper it is shown on in the unit's details; the picture is also shown bigger as the window grows.
