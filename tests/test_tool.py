@@ -12178,6 +12178,14 @@ building smith
         posed = MV.read_cas(data, MV.Pose([(0, 1, 0, 0)], [(0, 2, 0)]))
         for got, want in zip(posed.positions[15], (-0.1, 2.1, -0.1)):
             self.assertAlmostEqual(got, want, places=5)
+        # a track of zeros (Barbarian Invasion's 3.2 strat men keep one for every bone): the bone stays at rest, the
+        # parts never fall onto one point
+        flat = data.replace(bones, bones.replace(struct.pack("<5I", 1, 0, 0, 16, 0), struct.pack("<5I", 1, 1, 0, 16, 0)))
+        flat = flat.replace(anim, struct.pack("<4f", 0, 0, 0, 1) + struct.pack("<3f", 0, 0, 0) * 2 + struct.pack(
+            "<3f", 0, 1, 0))                                               # the pelvis: a key of zeros, at rest 1 up
+        self.assertEqual(MV.cas_skeleton(flat)[2][1][:2], (1, 1))
+        for got, want in zip(MV.read_cas(flat).positions[15], (0.1, 1.1, 0.1)):
+            self.assertAlmostEqual(got, want, places=5)
         with self.assertRaises(MV.MeshError):
             MV.read_cas(b"\x00" * 80)
         try:

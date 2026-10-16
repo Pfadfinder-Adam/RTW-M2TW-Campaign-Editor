@@ -550,6 +550,8 @@ def read_cas(data, pose="t"):
     for i, (nq, npos, qo, po) in enumerate(bones):
         q = struct.unpack_from("<4f", data, base + qo) if nq and pose == "frame" else (0.0, 0.0, 0.0, 1.0)
         t = struct.unpack_from("<3f", data, base + po) if npos else rest[i]
+        if not any(t):          # Barbarian Invasion's 3.2 strat men keep a track of zeros for every bone: no place
+            t = rest[i]         # of its own - read as one, all the parts fell onto one point (a tester's picture)
         if isinstance(pose, Pose) and 1 <= i <= len(pose.rotations):   # an animation's frame: bone 0 = Scene Root
             q = pose.rotations[i - 1]
             if i - 1 < len(pose.offsets):

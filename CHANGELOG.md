@@ -203,6 +203,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- 3D view of a Barbarian Invasion campaign-map figure (a special place's model): its parts fell together into one heap -> the figure stands whole.
 - Interface: Quit, Continue and the other buttons without 'BUTTON' in their kind did not light up under the mouse; dragging or sizing a piece lagged (the screen was drawn again for every mouse move - now once the mouse is quiet).
 - Medieval II: a unit with card_pic_dir / info_pic_dir showed as having no card in the editor (and was named in Check mod files) - its card is looked for in that folder first, as the game does.
 - Medieval II: two or more factions recoloured and kept for one Apply - only the first was written, the others stopped with "battle_models.modeldb was changed by another part of this write" -> each is laid over the file as the one before left it, all are written.
