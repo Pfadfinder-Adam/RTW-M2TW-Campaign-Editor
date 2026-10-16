@@ -6633,13 +6633,20 @@ class App(tk.Tk):
             lab = ttk.Label(frm, text=note, foreground="#666", wraplength=540, justify="left")
             lab.pack(anchor="w", padx=(24, 0))
             picks.append((key, label, v))
-            if key in self.session_parts():          # a window's kept changes: the right click throws them away
+            # a window's kept changes or an editor's (Units, Buildings, Characters, Terrain): the right click throws
+            # them away (BACKLOG A10, his 'да')
+            ed = self.editors.get(key)
+            if key in self.session_parts() or (ed is not None and hasattr(ed, "reset")):
 
                 def menu(e, key=key, row=(tick, lab), item=picks[-1]):
                     m = tk.Menu(w, tearoff=0)
 
                     def throw():
-                        self.session_throw(key)
+                        if key in self.session_parts():
+                            self.session_throw(key)
+                        else:
+                            self.editors[key].reset()
+                            self.update_actions()
                         for x in row:
                             x.destroy()
                         picks.remove(item)
