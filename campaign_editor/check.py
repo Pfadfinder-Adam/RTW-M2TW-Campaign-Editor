@@ -507,6 +507,29 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
                 "only %d; Interface > right click on a slot > Faction slots... adds the rest"
                 % (os.path.basename(LNT.find(mod)), page, have, pickable, have))
 
+    # ---- the rivers of the campaign map (map_features.tga) ----
+    try:
+        rivers = river_problems(mod, campaign)
+    except (OSError, ValueError):
+        rivers = None
+    if rivers is not None:
+        broken, shapes = rivers
+        for x, y, n in broken[:8]:
+            bad("map_features.tga: a river piece of %d tile(s) at %d, %d joins no sea, map edge, river source or "
+                "other river by a side (touching by a corner does not count) - the game leaves it out of the map; "
+                "join it in the Terrain editor (Rivers)" % (n, x, y))
+        if len(broken) > 8:
+            bad("map_features.tga: %d more river piece(s) like that" % (len(broken) - 8))
+        squares = [s for s in shapes if s[0] == "square"]
+        loops = [s for s in shapes if s[0] == "loop"]
+        if squares:
+            say("    note: map_features.tga: %d block(s) of 2 x 2 river tiles (first at %d, %d) - modders' guides say "
+                "the game cannot take them; vanilla has none" % (len(squares), squares[0][1], squares[0][2]))
+        if loops:
+            say("    note: map_features.tga: %d river(s) rejoining themselves round land (first at %d, %d) - the "
+                "guides warn of it, yet HLR runs with 6" % (len(loops), loops[0][1], loops[0][2]))
+        say("RIVERS: %s" % ("%d piece(s) the game leaves out" % len(broken) if broken else "every river joined"))
+
     # ---- the textures named inside the campaign-map models (a missing one stops the game) ----
     from . import castex
     try:
@@ -1050,3 +1073,18 @@ def mod_summary(mod, campaign=None):
         return "%d: %s" % (sum(tops.values()), ", ".join("%s %d" % kv for kv in tops.most_common(12)))
     part("own files", own_files)
     return "\n".join(out)
+
+
+def river_problems(mod, campaign):
+    """(broken pieces [(x, y, n)], shapes [('square' | 'loop', x, y...)]) of the campaign's map_features.tga
+    (terrain.river_warnings / river_shapes, the Terrain editor's own), or None without the picture. Vanilla Rome,
+    BI and Medieval II: none of either; HLR: 6 loops and it runs."""
+    from .tga import read_tga
+    from . import terrain as T
+    p = mod.campaign_file(campaign, "map_features.tga")
+    if not p or not os.path.exists(p):
+        return None
+    f = read_tga(p)
+    feats = {(x, y): f.get(x, y) for y in range(f.height) for x in range(f.width) if f.get(x, y) != (0, 0, 0)}
+    return (T.river_warnings(feats, f.width, f.height, lambda x, y: mod.is_sea(campaign, (x, y))),
+            T.river_shapes(feats))

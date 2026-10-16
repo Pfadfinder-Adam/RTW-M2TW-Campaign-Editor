@@ -3414,6 +3414,25 @@ building smith
         self.assertIn("descr_standards.txt line 2: 'data/banners/navy_banner.cas' is not there", got[0])
         self.assertIn("line 3: 'C:\\Users\\me\\mod\\data\\banners\\julii.tga' is a whole path on one PC", got[1])
 
+    def test_rivers_in_check_mod(self):
+        """Check mod files: a river piece joined to no sea, map edge, source or other river by a side - the game leaves
+        it out (the Terrain editor's own river_warnings) - is a fault; 2 x 2 river blocks and loops are notes (HLR
+        runs with 6 loops). Vanilla Rome, BI and Medieval II have none of these."""
+        from campaign_editor.check import check_mod, river_problems
+        mod = ModData(self.root)
+        camp = os.path.dirname(mod.in_campaign("test", "descr_strat.txt"))
+        k, river = (0, 0, 0), (0, 0, 255)
+        write_tga(os.path.join(camp, "map_features.tga"), 4, 4, [[k, k, k, k], [k, river, k, k], [k, k, k, k],
+                                                                  [k, k, k, k]])
+        broken, shapes = river_problems(mod, "test")
+        self.assertEqual((broken, shapes), ([(1, 1, 1)], []))
+        report = check_mod(mod, "test")
+        self.assertIn("a river piece of 1 tile(s) at 1, 1 joins no sea", report)
+        self.assertIn("RIVERS: 1 piece(s) the game leaves out", report)
+        write_tga(os.path.join(camp, "map_features.tga"), 4, 4, [[k, k, k, k], [river, river, k, k], [k, k, k, k],
+                                                                  [k, k, k, k]])               # runs to the map's edge
+        self.assertEqual(river_problems(mod, "test")[0], [])
+
     def test_menu_problems_in_check_mod(self):
         """Check mod files looks at the menus too (the Interface work's file): a button leading to a page there is
         not, a piece showing a picture no region has, Rome's picture file not found; the pages the games make in
