@@ -14903,6 +14903,57 @@ building smith
         finally:
             root.destroy()
 
+    def test_two_kept_recolours_both_written_into_one_modeldb(self):
+        """Report #294: milan, spain and the moors recoloured and kept for one Apply - milan was written, then
+        spain and the moors failed: 'battle_models.modeldb was changed by another part of this write'. Each kept
+        part changes the modeldb for its own faction; the later ones are now laid over the file as the earlier
+        ones left it (modeldb.merged), and two different changes of one row are still refused in plain words."""
+        from campaign_editor import modeldb as MDB
+        from campaign_editor.plan import Plan, keep, rebased
+        def model(name, facs, first=False):
+            m = MDB.from_dict({"name": name, "scale": "1", "lods": [["unit_models/x/%s.mesh" % name, "121"]],
+                               "textures": [[f, "unit_models/x/%s.texture" % f, "unit_models/x/n.texture", ""]
+                                            for f in facs],
+                               "attach": [], "mounts": [], "torch": ["-1", "0", "0", "0", "0", "0", "0"]})
+            if first:
+                m.ci = {k: ["0", "0"] for k in ("lodvec", "lod", "texvec", "tex", "mountvec", "mount", "weapons",
+                                                 "torch")}
+            return m
+        text = "22 serialization::archive 3 0 0 0 0 2 0 0 " + " ".join(MDB.ModelDB.dump_models(
+            [model("knights", ["milan", "spain", "moors"], True), model("spears", ["milan", "spain"])]))
+        mod = ModData(self.root)
+        path = os.path.join(self.root, "unit_models", "battle_models.modeldb")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as fh:
+            fh.write(text.encode("latin-1"))
+
+        def recolour(fac, tex):
+            plan = Plan(mod, "recolour", "recolour %s" % fac)
+            db = MDB.ModelDB(text)
+            for m in db.models:
+                for r in m.textures:
+                    if r[0] == fac:
+                        r[1] = tex
+            plan.binary(path, db.dump().encode("latin-1"))
+            return keep(plan)
+        parts = [recolour("milan", "unit_models/x/milan_own.texture"),
+                 recolour("spain", "unit_models/x/spain_own.texture"),
+                 recolour("moors", "unit_models/x/moors_own.texture")]
+        clash = recolour("milan", "unit_models/x/milan_other.texture")   # kept too: milan a second way
+        for plan in parts:
+            rebased(plan).apply()
+        db = MDB.load(path)
+        got = {(m.name, r[0]): r[1] for m in db.models for r in m.textures}
+        self.assertEqual(got[("knights", "milan")], "unit_models/x/milan_own.texture")
+        self.assertEqual(got[("knights", "spain")], "unit_models/x/spain_own.texture")
+        self.assertEqual(got[("knights", "moors")], "unit_models/x/moors_own.texture")
+        self.assertEqual(got[("spears", "spain")], "unit_models/x/spain_own.texture")
+        self.assertEqual(db.model("knights").factions(), ["milan", "spain", "moors"])     # the file's order kept
+        self.assertEqual(MDB.ModelDB(db.dump()).dump(), db.dump())
+        with self.assertRaises(ValueError) as e:
+            rebased(clash)
+        self.assertIn("knights's textures rows of milan", str(e.exception))
+
     def test_kept_changes_seen_before_the_write_and_never_kept_twice(self):
         """Keep for Apply (the user, 2026-10-10): pressed five times, the same change stood five times in the list;
         and the window did not show what it had kept (a Market added to many towns was not seen in them). The files

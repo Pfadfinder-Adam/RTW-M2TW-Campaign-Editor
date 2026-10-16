@@ -272,6 +272,65 @@ class ModelDB:
         return n
 
 
+def merged(base, ours, theirs):
+    """The text of a modeldb as theirs (the file now) with ours' changes laid over it - ours and theirs both grew
+    from base (three texts). Two writes of one session meet here (#294: spain and the moors recoloured after
+    milan, each made on the file as it was). Matched by model name; inside a model the texture / attachment rows
+    by faction, the rest field by field: a change on one side only is taken, the same change on both sides once,
+    two different changes of one thing -> ValueError naming it."""
+    b, o, t = ModelDB(base), ModelDB(ours), ModelDB(theirs)
+    bm = {m.name.lower(): m for m in b.models}
+    om = {m.name.lower(): m for m in o.models}
+    tm = {m.name.lower(): m for m in t.models}
+
+    def pick(what, bv, ov, tv):
+        if ov == bv or ov == tv:
+            return tv
+        if tv == bv:
+            return ov
+        raise ValueError("%s was changed twice in this session, two different ways" % what)
+
+    def rows(name, key, bm_, om_, tm_):
+        def by(m):
+            out = {}
+            for r in getattr(m, key) if m else []:
+                out.setdefault(r[0], []).append(list(r))
+            return out
+        bb, oo, tt = by(bm_), by(om_), by(tm_)
+        out = []
+        for f in list(tt) + [f for f in oo if f not in tt]:
+            out += pick("%s's %s rows of %s" % (name, key, f), bb.get(f, []), oo.get(f, []), tt.get(f, []))
+        return out
+
+    for key, mo in om.items():
+        mb, mt = bm.get(key), tm.get(key)
+        if mb is not None and to_dict(mo) == to_dict(mb):
+            continue                                       # ours left it as it was
+        if mt is None:
+            if mb is not None:
+                raise ValueError("model %s was changed here and taken out by another part" % mo.name)
+            c = copy.deepcopy(mo)                          # a model new in ours
+            c.ci = {}
+            t.models.append(c)
+            tm[key] = c
+            continue
+        if mb is None:
+            if to_dict(mt) != to_dict(mo):
+                raise ValueError("model %s was added twice in this session, two different ways" % mo.name)
+            continue
+        for f in ("scale", "lods", "mounts", "torch"):
+            setattr(mt, f, pick("%s's %s" % (mo.name, f), getattr(mb, f), getattr(mo, f), getattr(mt, f)))
+        for f in ("textures", "attach"):
+            setattr(mt, f, rows(mo.name, f, mb, mo, mt))
+    gone = [k for k in bm if k not in om]                  # models ours took out
+    for k in gone:
+        if k in tm and to_dict(tm[k]) != to_dict(bm[k]):
+            raise ValueError("model %s was taken out here and changed by another part" % bm[k].name)
+    if gone:
+        t.models = [m for m in t.models if m.name.lower() not in gone]
+    return t.dump()
+
+
 def to_dict(m):
     return {"name": m.name, "scale": m.scale, "lods": m.lods, "textures": m.textures, "attach": m.attach,
             "mounts": m.mounts, "torch": m.torch}

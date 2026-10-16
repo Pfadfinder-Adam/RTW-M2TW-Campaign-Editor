@@ -707,7 +707,19 @@ def rebased(plan):
         plan.originals[path] = now
     for path in plan.binaries:
         was = getattr(plan, "disk_before", {}).get(path, "?")
-        if was != "?" and (_read(path) if os.path.exists(path) else None) != was:
+        now = _read(path) if os.path.exists(path) else None
+        if was != "?" and now != was and was is not None and now is not None and \
+                path.lower().endswith(".modeldb"):         # a modeldb is text: laid over model by model (#294)
+            from .modeldb import ModelDBError, merged
+            try:
+                plan.binaries[path] = merged(was.decode("latin-1"), plan.binaries[path].decode("latin-1"),
+                                             now.decode("latin-1")).encode("latin-1")
+            except (ValueError, ModelDBError) as e:
+                raise ValueError("%s: %s - keep this window's changes again (it reads the file as it is now)"
+                                 % (plan.mod.rel(path), e))
+            plan.disk_before[path] = now
+            continue
+        if was != "?" and now != was:
             raise ValueError("%s was changed by another part of this write - keep this window's changes again"
                              % plan.mod.rel(path))
     return plan
