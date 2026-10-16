@@ -169,6 +169,35 @@ class ToolTest(unittest.TestCase):
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")},
                          {k: v for k, v in now.items() if not k.startswith("CampaignEditor_backups")})
 
+    def test_modeldb_miscounted_name_and_two_models_of_one_name(self):
+        """Check mod files on battle_models.modeldb: the game reads it as a Boost text archive - a string is its length,
+        ONE space, then that many letters - so a space too many by hand (the modders' '3 spaces crash') makes a name
+        start with a space: said as a fault, with its line. Two models of one name: a note (a unit names its model by
+        the name). The vanilla file has neither."""
+        from campaign_editor import modeldb as MDB
+        def model(name, first=False):
+            m = MDB.from_dict({"name": name, "scale": "1", "lods": [["unit_models/x/%s.mesh" % name, "121"]],
+                               "textures": [["slave", "unit_models/x/t.texture", "unit_models/x/n.texture", ""]],
+                               "attach": [], "mounts": [], "torch": ["-1", "0", "0", "0", "0", "0", "0"]})
+            if first:
+                m.ci = {k: ["0", "0"] for k in ("lodvec", "lod", "texvec", "tex", "mountvec", "mount", "weapons",
+                                                 "torch")}
+            return m
+        text = "22 serialization::archive 3 0 0 0 0 3 0 0 " + " ".join(MDB.ModelDB.dump_models(
+            [model("knights", True), model("spears"), model("Spears")]))
+        db = MDB.ModelDB(text)
+        got = db.problems()
+        self.assertEqual([f for f, _ in got], [False])
+        self.assertIn("1 model name(s) stand twice (spears)", got[0][1])
+        bad = MDB.ModelDB(text.replace("7 knights", "8  knights", 1))     # one space too many by hand
+        self.assertEqual(bad.models[0].name, " knights")                  # read as the game reads it
+        faults = [w for f, w in bad.problems() if f]
+        self.assertEqual(len(faults), 1)
+        self.assertIn("line 1: the name ' knights' starts or ends with a space", faults[0])
+        vanilla = "/home/user/m2tw-game-data/Medieval II Total War/data/unit_models/battle_models.modeldb"
+        if os.path.exists(vanilla):
+            self.assertEqual(MDB.load(vanilla).problems(), [])
+
     def test_modeldb_round_trip_and_clone(self):
         # Medieval II battle_models.modeldb: read back byte for byte, the clone copies the template's texture
         # entries (and attachment sets) for the new faction, Restore undoes it

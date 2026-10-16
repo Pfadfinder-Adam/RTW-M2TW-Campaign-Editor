@@ -300,6 +300,8 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     md = _modeldb_report(mod)
     if md:
         (bad if md[0] else say)(md[1])
+        for fault, words in (md[2] if len(md) > 2 else []):
+            (bad if fault else say)(words if fault else "    note: " + words)
     lost = skeleton_problems(mod)
     if lost:
         bad("%d battle model(s) name a skeleton descr_skeleton.txt lacks, e.g. %s - the game stops at the start "
@@ -643,8 +645,8 @@ def _modeldb_report(mod):
                      "models' textures until it is put right" % e
     note = db.uncounted_note()
     if note:
-        return False, "    note: " + note
-    return False, "    battle_models.modeldb: %d models (%s)" % (len(db.models), mod.rel(src))
+        return False, "    note: " + note, db.problems()
+    return False, "    battle_models.modeldb: %d models (%s)" % (len(db.models), mod.rel(src)), db.problems()
 
 
 def building_condition_problems(mod):

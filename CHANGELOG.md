@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- Check mod files (Medieval II): a name in battle_models.modeldb whose number before it is not its length (a space too many by hand) - the game reads everything after it wrong; two models of one name as a note.
 - Check mod files: a texture named inside a campaign-map model (resources, settlements, faction symbols, campaign-map figures without a texture line) that is not there - both games stop as the campaign loads with "Failed to find texture".
 - Faction emblem on Medieval II: the battle banner sheet comes along - a white template of the mod's own banner sheets dyed in the faction's colours, the symbol on every banner shape of its units; Banner... under it to change them.
 - Interface: buttons show their states - the mouse-over picture under the mouse, every button pressed or ticked on **Buttons shown**; **Pictures of its states...** (right click) sets, adds or takes out each state's picture.

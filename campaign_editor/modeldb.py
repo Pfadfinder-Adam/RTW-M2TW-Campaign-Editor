@@ -34,6 +34,7 @@ class ModelDBError(ValueError):
 class _Reader:
     def __init__(self, text):
         self.t, self.p = text, 0
+        self.odd = []                # (where, string) of strings that start or end with a space: the count is wrong
 
     WS = " \t\r\n"
 
@@ -76,6 +77,8 @@ class _Reader:
         s = t[p:p + n]
         if len(s) != n:
             raise ModelDBError("modeldb: a string runs past the end of the file")
+        if s and (s[0] in self.WS or s[-1] in self.WS):
+            self.odd.append((p, s))  # the game (Boost) reads it as wrongly: its count is not its length
         self.p = p + n
         return s
 
@@ -107,6 +110,7 @@ class ModelDB:
         self.models = []
         for _ in range(count):
             self.models.append(self._model(r, seen))
+        self.odd = list(r.odd)
         # what follows the counted models: nothing in a file the game wrote. A modder who added models and left the
         # count at the top as it was has them here - the game reads only the counted ones (Boost stops at the
         # count). Kept exactly as it is; the models found there are told (uncounted_note), never changed.
@@ -120,6 +124,29 @@ class ModelDB:
                     self.extra.append(self._model(r2, seen2))
             except ModelDBError:
                 self.extra_whole = False
+
+    def problems(self):
+        """[(fault?, words)]: strings whose count is not their length (the game reads them as wrongly - a name then
+        starts with a space or loses its last letter, the model or texture it names is not found), and two models of
+        one name (the units name a model by its name - only one of them can be meant)."""
+        out = []
+        for where, s in self.odd[:5]:
+            line = self.text.count("\n", 0, where) + 1
+            out.append((True, "battle_models.modeldb line %d: the name '%s' starts or ends with a space - the number "
+                              "before it is not its length (a space too many or too few by hand); the game reads "
+                              "the file by those numbers, so this name and everything after it are read wrong. Make "
+                              "the number the name's length (no space counted)" % (line, s)))
+        if len(self.odd) > 5:
+            out.append((True, "battle_models.modeldb: %d more name(s) like that" % (len(self.odd) - 5)))
+        names = {}
+        for m in self.models:
+            names.setdefault(m.name.lower(), []).append(m.name)
+        twice = [v[0] for v in names.values() if len(v) > 1]
+        if twice:
+            out.append((False, "battle_models.modeldb: %d model name(s) stand twice (%s) - a unit names its model by "
+                               "the name, so only one of the two can be meant; rename or remove the other"
+                               % (len(twice), ", ".join(twice[:5]) + (" ..." if len(twice) > 5 else ""))))
+        return out
 
     def uncounted_note(self):
         """Plain words for what follows the counted models, or ''."""
