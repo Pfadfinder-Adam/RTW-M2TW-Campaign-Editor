@@ -45,11 +45,20 @@ def is_banner(p):
     return bool(p.get("link")) and p["link"][0] == "banners" and p["link"][1] in BANNER_FIELDS
 
 
+def is_m2_banner(p):
+    """Medieval II's battle banner sheet of the faction (banners/textures/faction_banner_<f>, banners_m2): every
+    banner shape of its units on one picture."""
+    from .banners_m2 import faction_sheet
+    return (p.get("extra") or {}).get("kind") == "banner" and bool(p.get("path")) and faction_sheet(p["path"])
+
+
 def emblem_pictures(pics):
     """The Art tab's pictures (factionart.faction_pictures) that show the emblem, not locked: the emblem itself,
-    the flag symbol on the campaign map and the battle banners that carry the symbol."""
-    return [p for p in pics if not p.get("locked") and (
-        any(p["label"].startswith(k) for k in EMBLEM_KINDS + SYMBOL_KINDS + FLAG_KINDS) or is_banner(p))
+    the flag symbol on the campaign map and the battle banners that carry the symbol (Medieval II's banner sheet
+    also when other factions share it - it becomes the faction's own copy)."""
+    return [p for p in pics if (not p.get("locked") or is_m2_banner(p)) and (
+        any(p["label"].startswith(k) for k in EMBLEM_KINDS + SYMBOL_KINDS + FLAG_KINDS) or is_banner(p) or
+        is_m2_banner(p))
             and "(rebel)" not in p["label"] and ("(dead)" not in p["label"] or p["label"].startswith("captain's"))
             and not (_rebels_flag(p))]
 
@@ -58,7 +67,7 @@ def _rebels_flag(p):
     """A flag or banner of the rebels (the slave faction): the rebel flag every faction's rebels carry - never
     touched (the user, 2026-10-15: the routing and the rebel flags stay as they are)."""
     name = os.path.basename(p.get("rel") or "").lower()
-    flaggy = is_banner(p) or any(p["label"].startswith(k) for k in FLAG_KINDS + SYMBOL_KINDS)
+    flaggy = is_banner(p) or is_m2_banner(p) or any(p["label"].startswith(k) for k in FLAG_KINDS + SYMBOL_KINDS)
     return flaggy and any(w in name for w in ("slave", "rebel"))
 
 
@@ -310,8 +319,9 @@ def build(src, pics, symbol=None, banner=None):
     """{rel of the Art picture: new picture (RGBA, its size)} for every emblem picture, from one source picture
     (a Pillow image). pics: emblem_pictures(...). symbol: the bare symbol (no disc, no ground) for the flag symbol
     and the banners - src when not given. banner: {'blank': the blank white banner (banners.templates), 'colour':
-    the cloth's colour, 'boxes': where the symbol goes or None} - the battle banners are made from it; without it
-    they are left as they are."""
+    the cloth's colour, 'boxes': where the symbol goes or None} - the battle banners are made from it; Medieval II:
+    {'kit': banners_m2.Kit (the white template of the mod's sheets), 'colours', 'pattern'...} - the symbol on every
+    banner shape of the sheet; without it they are left as they are."""
     from PIL import Image
     from . import banners as B
     symbol = symbol or src
@@ -333,6 +343,11 @@ def build(src, pics, symbol=None, banner=None):
                                 banner.get("symbol") or symbol if banner else symbol, old_standard)
             if got is not None:
                 out[p["rel"]] = got
+            continue
+        if is_m2_banner(p):
+            if banner and banner.get("kit") is not None:
+                s2 = {k: v for k, v in banner.items() if k not in ("kit", "symbol", "no_symbol")}
+                out[p["rel"]] = banner["kit"].make(s2, banner.get("symbol") or symbol)
             continue
         if is_banner(p):
             if banner and banner.get("blank") is not None and (banner.get("colours") or banner.get("colour") or

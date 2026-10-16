@@ -3114,6 +3114,38 @@ building smith
         self.assertFalse(out_of_reach(temple, "huge_city"))
         self.assertFalse(out_of_reach(temple, None))
 
+    def test_emblem_makes_medieval_banner_sheet_from_the_white_template(self):
+        """Emblem everywhere, Medieval II (the plan's step 3, his 'да'): the faction's battle banner sheet (every banner
+        shape of its units, banners/textures/faction_banner_<f>) is made with the emblem - the white template of the
+        mod's sheets dyed in the colours with the symbol on each shape (banners_m2.Kit); a sheet other factions share
+        is offered too (it becomes the faction's own copy); the rebels' sheet never."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from campaign_editor import emblem as E
+        path = os.path.join(self.root, "faction_banner_milan.tga")
+        Image.new("RGBA", (8, 4), (9, 9, 9, 255)).save(path)
+        sheet = {"label": "battle banner faction_banner_milan.texture", "rel": "banners/textures/faction_banner_milan"
+                 ".texture", "path": path, "locked": True, "size": (8, 4),
+                 "extra": {"kind": "banner", "ref": "banners/textures/faction_banner_milan.texture"}}
+        rebels = dict(sheet, label="battle banner faction_banner_rebels.texture", rel="banners/textures/"
+                      "faction_banner_rebels.texture", path=path.replace("milan", "rebels"))
+        Image.new("RGBA", (8, 4)).save(rebels["path"])
+        self.assertEqual([p["rel"] for p in E.emblem_pictures([sheet, rebels])], [sheet["rel"]])
+        asked = []
+
+        class Kit:
+            def make(self, s, symbol):
+                asked.append((s, symbol))
+                return Image.new("RGBA", (8, 4), tuple(s["colours"][0]) + (255,))
+        sym = Image.new("RGBA", (4, 4), (255, 255, 255, 255))
+        got = E.build(sym, [sheet], sym, {"kit": Kit(), "colours": [(10, 20, 30), (1, 1, 1)], "pattern": "plain"})
+        self.assertEqual(got[sheet["rel"]].getpixel((0, 0)), (10, 20, 30, 255))
+        self.assertEqual(asked[0][0], {"colours": [(10, 20, 30), (1, 1, 1)], "pattern": "plain"})
+        self.assertIs(asked[0][1], sym)                                # the symbol on every shape
+        self.assertEqual(E.build(sym, [sheet], sym, None), {})           # no white template: left as it is
+
     def test_emblem_reaches_town_flags_3d_symbol_and_captain_cards(self):
         """One symbol on every flag of the faction (Rome), each from a WHITE TEMPLATE (the user, 2026-10-15: 'do not
         repaint - white templates like the routing flags'): the town flag = the blank banner dyed, the 3D symbol =

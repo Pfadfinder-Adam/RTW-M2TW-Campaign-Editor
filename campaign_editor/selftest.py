@@ -1123,7 +1123,8 @@ def s_art(c, mod):
     return edit(mod, c.campaign, c.new, {"art": {FA.picture_target(p, c.new, c.new): logo(c)}})
 
 
-@step("Faction emblem - one picture everywhere for {new}", "the emblem on the menu buttons, the loading screen, logos")
+@step("Faction emblem - one picture everywhere for {new}", "the emblem on the menu buttons, the loading screen, logos; "
+      "in Medieval II also on every banner over {new}'s units in battle, in its colours")
 def s_emblem(c, mod):
     import tempfile
     from PIL import Image
@@ -1133,10 +1134,23 @@ def s_emblem(c, mod):
     pics = E.emblem_pictures(FA.faction_pictures(mod, c.campaign, c.new))
     if not pics:
         raise Skip("no emblem pictures")
-    made = E.build(Image.open(logo(c)).convert("RGBA"), pics)
+    banner = None
+    if c.m2:                                     # Medieval II: the banner sheet from the white template, the symbol on
+        from . import banners_m2 as BM           # every banner shape
+        sheet = BM.sheet_blank(mod)
+        if sheet is not None:
+            banner = {"kit": BM.Kit(sheet, BM.meshes(mod)), "pattern": "plain",
+                      "colours": [c.colours[c.new][0], c.colours[c.new][1], (240, 240, 240)]}
+    made = E.build(Image.open(logo(c)).convert("RGBA"), pics, None, banner)
     paths = E.save_all(made, tempfile.mkdtemp(prefix="ce_emblem_"))
-    return edit(mod, c.campaign, c.new, {"art": {FA.picture_target(p, c.new, c.new): paths[p["rel"]]
-                                                 for p in pics if p["rel"] in paths}})
+    art = {}
+    for p in pics:
+        if p["rel"] not in paths:
+            continue
+        x = p.get("extra")
+        art[FA.picture_target(p, c.new, c.new)] = {"src": paths[p["rel"]], "extra": [x["kind"], x["ref"]]} \
+            if E.is_m2_banner(p) and p.get("locked") and x else paths[p["rel"]]
+    return edit(mod, c.campaign, c.new, {"art": art})
 
 
 @step("Banner...: {new}'s battle banners from the white banner, a tricolour and the symbol",

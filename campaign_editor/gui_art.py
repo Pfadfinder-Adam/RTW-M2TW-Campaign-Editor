@@ -497,9 +497,20 @@ class ArtEditor(ttk.Frame):
         from . import emblem as E
         from .limits import game_kind
         a = self.app
-        blanks, first = self._banner_settings(pics, src_faction)
-        banner = banner or first
-        made = E.build(master, pics, symbol, dict(banner, blank=blanks[banner["kind"]]) if banner else None)
+        # Medieval II: the banner sheet (every banner shape of its units) from the white template of the mod's sheets;
+        # shared with other factions while the new faction is not written yet: left as it is (said in its cell)
+        m2 = [p for p in pics if E.is_m2_banner(p)]
+        waiting = bool(new and new != src_faction)
+        kit = self._m2_kit() if m2 and not all(p.get("locked") and waiting for p in m2) else None
+        if kit is not None:
+            blanks = None
+            banner = banner or self._m2_first(src_faction)
+            use_pics = [p for p in pics if not (E.is_m2_banner(p) and p.get("locked") and waiting)]
+            made = E.build(master, use_pics, symbol, dict(banner, kit=kit))
+        else:
+            blanks, first = self._banner_settings(pics, src_faction)
+            banner = banner or first
+            made = E.build(master, pics, symbol, dict(banner, blank=blanks[banner["kind"]]) if banner else None)
         import tempfile
         paths = E.save_all(made, tempfile.mkdtemp(prefix="emblem_"))
         w = tk.Toplevel(self)
@@ -507,7 +518,9 @@ class ArtEditor(ttk.Frame):
         w.transient(self.winfo_toplevel())
         ShortHint(w, text=(
             "Every place the game shows the emblem, now and after - the flag on the campaign map and the battle "
-            "banners carry the symbol alone - the banners made from the game's blank white banner dyed in the faction's colour. Each picture keeps "
+            "banners carry the symbol alone - the banners made from a white banner dyed in the faction's colours (Rome: the "
+            "game's blank routing banner; Medieval II: a white template of the mod's banner sheets, the symbol on "
+            "every banner shape). Each picture keeps "
             "its size and format; the button states are made like the mod's own. Nothing is written yet: 'Use it' puts them on the Art tab, "
             "Preview and Apply write them with a backup (Restore gives them back). " + E.game_made(game_kind(a.mod))
         ).strip()).pack(anchor="w", padx=8, pady=6)
@@ -532,9 +545,13 @@ class ArtEditor(ttk.Frame):
                 tk.Label(cell, image=ph).grid(row=0, column=j, padx=1)
             ttk.Label(cell, text="%s\n%d x %d" % (p["label"], p["size"][0], p["size"][1]), wraplength=200,
                       justify="center", foreground="#444").grid(row=1, column=0, columnspan=2)
-            if E.is_banner(p):
+            if E.is_banner(p) or E.is_m2_banner(p):
                 if p["rel"] not in made:
-                    ttk.Label(cell, text="no blank banner (standard_routing) in the mod - left as it is",
+                    why = ("shared with other factions - Apply the new faction first, then Emblem everywhere "
+                           "gives it a banner of its own" if E.is_m2_banner(p) and kit is None and m2 and waiting
+                           else "no faction banner pictures to make the white banner from" if E.is_m2_banner(p)
+                           else "no blank banner (standard_routing) in the mod")
+                    ttk.Label(cell, text=why + " - left as it is",
                               foreground="#a60", wraplength=200).grid(row=2, column=0, columnspan=2)
                 else:
                     ttk.Button(cell, text="Banner...", command=lambda: fix()).grid(row=3, column=0, columnspan=2)
@@ -546,12 +563,18 @@ class ArtEditor(ttk.Frame):
             def done(got):
                 w.destroy()
                 self._emblem_made(master, pics, src, src_faction, new, symbol, got)
-            BannerWindow(w, blanks, symbol or master, banner, done)
+            BannerWindow(w, kit if kit is not None else blanks, symbol or master, banner, done)
 
         def use():
             a.remember()
             for p in pics:
-                if p["rel"] in paths:
+                if p["rel"] not in paths:
+                    continue
+                x = p.get("extra")
+                if E.is_m2_banner(p) and p.get("locked") and x:      # a shared sheet: the faction's own copy
+                    a.art_replace[FA.picture_target(p, src_faction, src_faction)] = {
+                        "src": paths[p["rel"]], "extra": [x["kind"], x["ref"]]}
+                else:
                     a.art_replace[FA.picture_target(p, src_faction, new or src_faction)] = paths[p["rel"]]
             w.destroy()
             a.status.set("Faction emblem: %d pictures made from %s - Preview, then Apply." % (
@@ -597,15 +620,31 @@ class ArtEditor(ttk.Frame):
             self._banners_made(rome, out, src_faction, new)
         BannerWindow(self, blanks, None, first, done, title="Battle banners - %s" % (new or src_faction))
 
-    def _banner_m2(self, pics, src_faction, new):
-        a = self.app
+    def _m2_kit(self):
+        """Medieval II's white banner template of the mod's sheets (banners_m2.Kit), or None without sheets."""
         from . import banners_m2 as M
-        from .recolour import faction_colours
+        a = self.app
         a.status.set("Making the white banner from the mod's banner pictures...")
         self.update_idletasks()
         sheet = M.sheet_blank(a.mod)
         a.status.set("")
-        if sheet is None:
+        return M.Kit(sheet, M.meshes(a.mod)) if sheet is not None else None
+
+    def _m2_first(self, src_faction, no_symbol=False):
+        """Medieval II's banner settings to start from: the faction's colours, plain."""
+        from .recolour import faction_colours
+        a = self.app
+        fc = faction_colours(a.mod).get(src_faction, (None, None))
+        first = a.colours.get("primary") or fc[0] or (200, 200, 200)
+        second = a.colours.get("secondary") or fc[1] or (240, 240, 240)
+        out = {"colours": [tuple(first[:3]), tuple(second[:3]), (240, 240, 240)], "pattern": "plain"}
+        if no_symbol:
+            out["no_symbol"] = True
+        return out
+
+    def _banner_m2(self, pics, src_faction, new):
+        kit = self._m2_kit()
+        if kit is None:
             messagebox.showinfo("Banner", "No faction banner pictures (banners/textures/faction_banner_*) were "
                                           "found to make the white banner from.")
             return
@@ -614,17 +653,12 @@ class ArtEditor(ttk.Frame):
                                           "faction first, then Edit faction > Art > Banner... gives it a banner "
                                           "of its own." % src_faction)
             return
-        fc = faction_colours(a.mod).get(src_faction, (None, None))
-        first = a.colours.get("primary") or fc[0] or (200, 200, 200)
-        second = a.colours.get("secondary") or fc[1] or (240, 240, 240)
-        kit = M.Kit(sheet, M.meshes(a.mod))
         from .gui_banners import BannerWindow
 
         def done(got):
             im = kit.make(got, got.get("symbol"))
             self._banners_made(pics, {p["rel"]: im for p in pics}, src_faction, new)
-        BannerWindow(self, kit, None, {"colours": [tuple(first[:3]), tuple(second[:3]), (240, 240, 240)],
-                                       "pattern": "plain", "no_symbol": True},
+        BannerWindow(self, kit, None, self._m2_first(src_faction, no_symbol=True),
                      done, title="Battle banners - %s" % (new or src_faction))
 
     def _banners_made(self, pics, made, src_faction, new):

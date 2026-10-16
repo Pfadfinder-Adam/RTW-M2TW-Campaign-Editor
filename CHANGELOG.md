@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- Faction emblem on Medieval II: the battle banner sheet comes along - a white template of the mod's own banner sheets dyed in the faction's colours, the symbol on every banner shape of its units; Banner... under it to change them.
 - Interface: buttons show their states - the mouse-over picture under the mouse, every button pressed or ticked on **Buttons shown**; **Pictures of its states...** (right click) sets, adds or takes out each state's picture.
 - Interface: a **Sprite sheets** tab - every interface picture of the sheets the game reads, page by page and culture by culture, each with its box and name; Find looks through every sheet; open big or save as PNG.
 - Interface: more faction slots on a faction-select screen - right click a slot > Faction slots..., the new ones on the same grid; Check mod files says when a campaign has more playable factions than slots.
