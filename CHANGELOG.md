@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- Make a card / Make a picture: a **Size** choice - the mod's own size, or two, three or four times bigger for sharper cards and pictures.
 - Interface: the wheel zooms the screen round the mouse, the held wheel moves it, **Fit** shows it whole - as on the map.
 - Check mod files (both games): the campaign map's rivers - a piece joined to nothing by a side, which the game leaves out; 2 x 2 river blocks and rivers rejoining themselves as notes.
 - Check mod files (both games): a file the banners, standards or projectile files name that is not there, or a whole path on one PC (C:\...); an event without its words in historic_events.txt as a note (its scroll shows empty).

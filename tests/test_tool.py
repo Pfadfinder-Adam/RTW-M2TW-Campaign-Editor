@@ -12134,6 +12134,48 @@ building smith
         self.assertEqual(img.getpixel((0, 25)), colours["MID_LEFT"])
         self.assertEqual(img.getpixel((44, 25)), colours["MID_RIGHT"])
 
+    def test_make_a_card_bigger_and_a_picture_on_its_own_ground(self):
+        """Make a card / a picture: a size picked (x1 = the mod's own, up to x4 - a modder's wish for sharper cards)
+        makes the picture in it and is kept for the next unit; a card's ground and a picture's are kept apart (a
+        card's 'battle card ground' picked before drew no ground at all in Make a picture)."""
+        try:
+            import tkinter as tk
+            from PIL import Image
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from types import SimpleNamespace
+        from campaign_editor import gui_cardmaker as GC, settings
+        for key in ("card_ground", "card_scale", "picture_ground", "picture_scale"):
+            self.addCleanup(settings.put, key, settings.get(key))
+        given = []
+        man = Image.new("RGBA", (200, 400), (0, 0, 0, 0))
+        man.paste((200, 30, 30, 255), (60, 20, 140, 380))
+        viewer = tk.Toplevel(root)
+        viewer.mod = ModData(self.root)
+        viewer.info = SimpleNamespace(name="x")
+        viewer.make = {"unit": "levy", "need": {False: None, True: None}, "write": lambda i, p: given.append((i, p))}
+        viewer.snapshot = lambda: (man, (60, 20, 140, 380))
+        viewer.yaw, viewer.anim = 0, None
+        try:
+            settings.put("card_ground", "game:BATTLE_CARD_BACKGROUND")
+            settings.put("card_scale", 1)
+            card = GC.CardMaker(viewer, False)
+            root.update()
+            self.assertEqual(card.size, (48, 64))
+            card.v_size.set(card._sizes[2])                             # x3
+            card._resized()
+            card.use()
+            self.assertEqual(given[-1][1].size, (144, 192))
+            card.destroy()
+            pic = GC.CardMaker(viewer, True)                           # a picture: its own ground, never the card's
+            root.update()
+            self.assertFalse(pic.v_ground.get().startswith("game:BATTLE"))
+            self.assertEqual(settings.get("card_scale"), 3)
+            pic.destroy()
+        finally:
+            root.destroy()
+
     def test_words_cut_with_dots_when_the_window_is_too_narrow(self):
         """The user, 2026-10-16 (again, 'everywhere'): a label / tick / button whose words do not fit the window ends
         in '...' and shows them whole on hover; the window made wider gives them back whole; a window of its own size

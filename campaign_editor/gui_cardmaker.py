@@ -23,7 +23,14 @@ class CardMaker(tk.Toplevel):
         self.title("Make a %s - %s" % (what, make.get("unit", viewer.info.name)))
         self.transient(viewer)
         from .models import game_kind
-        self.size = CM.picture_size(game_kind(viewer.mod), (make.get("need") or {}).get(info), info)
+        self.base_size = CM.picture_size(game_kind(viewer.mod), (make.get("need") or {}).get(info), info)
+        # bigger cards / pictures for mods with sharper ones (a Stainless Steel modder's wish): x1 = the mod's own size
+        self._scale_key = "picture_scale" if info else "card_scale"
+        try:
+            self.v_times = tk.IntVar(value=max(1, min(4, int(settings.get(self._scale_key, 1) or 1))))
+        except (TypeError, ValueError):
+            self.v_times = tk.IntVar(value=1)
+        self.size = tuple(d * self.v_times.get() for d in self.base_size)
         self.figure, self.box = None, None
         self.area = None                # my own frame (x, y, w, h on the figure), dragged on the man; None: the preset
         self._fit, self._grab = None, None
@@ -77,8 +84,19 @@ class CardMaker(tk.Toplevel):
         self.canvas.pack(side="left", fill="both", expand=True)
         side = ttk.Frame(body, padding=(10, 0))
         side.pack(side="left", fill="y")
-        ttk.Label(side, text="%s, %d x %d" % (what.capitalize(), self.size[0], self.size[1]),
-                  font=("", 10, "bold")).pack(anchor="w")
+        size_row = ttk.Frame(side)
+        size_row.pack(anchor="w", fill="x")
+        ttk.Label(size_row, text=what.capitalize(), font=("", 10, "bold")).pack(side="left")
+        self._sizes = ["%d x %d%s" % (self.base_size[0] * k, self.base_size[1] * k,
+                                      "  (as the mod's)" if k == 1 else "  (x%d)" % k) for k in (1, 2, 3, 4)]
+        self.v_size = tk.StringVar(value=self._sizes[self.v_times.get() - 1])
+        box = ttk.Combobox(size_row, textvariable=self.v_size, values=self._sizes, state="readonly", width=20)
+        box.pack(side="left", padx=(6, 0))
+        box.bind("<<ComboboxSelected>>", lambda e: self._resized())
+        from .gui_util import hint
+        hint(size_row, "The size the %s is made in. 'As the mod's' is the size of the mod's own %ss (the game's when "
+                       "it has none). A bigger one is sharper where the game or the engine draws it big - the game "
+                       "fits it into its slot; look at it in the game." % (what, what)).pack(side="left")
         ttk.Button(side, text="Take the 3D view again", command=self.take).pack(anchor="w", pady=(6, 0))
         # what was taken and when: a press always shows that it worked (a tester: 'I press it and see nothing change')
         self.lbl_taken = ttk.Label(side, foreground="#555")
@@ -286,6 +304,16 @@ class CardMaker(tk.Toplevel):
             messagebox.showerror("Make a %s" % self.what, "Cannot read %s as a picture." % path, parent=self)
             return
         self.v_ground.set("picture")
+        self.show()
+
+    def _resized(self):
+        """Another size picked: the picture made in it from now on (kept for the next unit)."""
+        k = self._sizes.index(self.v_size.get()) + 1 if self.v_size.get() in self._sizes else 1
+        self.v_times.set(k)
+        settings.put(self._scale_key, k)
+        self.size = tuple(d * k for d in self.base_size)
+        if self.info and "SCROLL_MID" in self.game_grounds:
+            self.game_grounds["SCROLL_MID"] = CM.paper(self.viewer.mod, self.size, self.culture)
         self.show()
 
     def picture(self):
