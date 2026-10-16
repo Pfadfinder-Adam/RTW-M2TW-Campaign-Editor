@@ -210,6 +210,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Barbarian Invasion: the buttons of the cut White Huns were shown (and dyed by Emblem everywhere) as the Huns' own -> a faction named only in the texts keeps its files apart.
 - On the map only towns, ports and characters grew under the mouse -> resources, wonders, forts, watchtowers and special places grow too.
 - The 3D view stayed the same size when its window was made bigger -> the view grows with the window. The Add-ons list cut a long name at its edge -> it is as wide as its longest name.
 - The bottom bar said 'Create faction' in Religions, Add-ons and other works -> only on the New faction tab; elsewhere 'Apply changes'.

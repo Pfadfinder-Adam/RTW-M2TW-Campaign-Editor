@@ -520,6 +520,34 @@ def longer_names(names, t):
     return [n.lower() for n in names if n.lower() != t and _token_hit(n, t)]
 
 
+def faction_words(mod):
+    """The factions of the mod and the faction names its texts still hold for factions it does not have - BI's cut
+    White Huns ({WHITE_HUNS} in expanded_bi.txt, menu/symbols/FE_buttons_48/symbol48_white_huns*.tga): their files
+    are not the Huns' (#307: they were shown and dyed as the Huns' own)."""
+    names = [n for n, _ in mod.factions()]
+    have = {n.lower() for n in names}
+    for t in ("expanded_bi.txt", "expanded.txt"):
+        p = mod.text_file(t)
+        if not p:
+            continue
+        try:
+            with open(p, "rb") as fh:
+                data = fh.read()
+        except OSError:
+            continue
+        text = data.decode("utf-16", errors="ignore") if data[:2] in (b"\xff\xfe", b"\xfe\xff") else \
+            data.decode("latin-1")
+        for key in re.findall(r"\{([A-Za-z0-9_]+)\}", text):
+            k = key.lower()
+            if k in have or "_" not in k:
+                continue
+            word, _, rest = k.partition("_")
+            if word != "emt" and rest in have:              # <one word>_<faction>: a faction name of its own
+                have.add(k)
+                names.append(k)
+    return names
+
+
 def renamed(name, t, new):
     """A file name with the faction t in it as a whole word swapped for new: symbol48_greek_cities_grey.tga ->
     symbol48_athens_grey.tga (a name with _ inside counts as one word - split into words, greek_cities matched no
@@ -546,7 +574,7 @@ def _in_mod(mod, data, path):
 def art_files(plan, campaign):
     t, new = plan.template, plan.new
     mod = plan.mod
-    longer = longer_names([n for n, _ in mod.factions()] + [new], t)
+    longer = longer_names(faction_words(mod) + [new], t)
     found, taken = [], set()                   # taken: data-relative places a copy goes to (the mod's copy wins)
 
     def add(src, dst):

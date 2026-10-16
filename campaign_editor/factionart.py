@@ -14,7 +14,7 @@ import colorsys
 import os
 import re
 
-from .clone import longer_names
+from .clone import faction_words, longer_names
 from .clone import (ART_ROOTS, _token_hit, disk_tail, link_users, own_picture_ref, picture_file, picture_links,
                     set_picture_ref)
 from .editors import tga_info
@@ -142,7 +142,7 @@ def start_pictures(mod, campaign, faction):
     the same entries faction_pictures gives, read from the campaign folder and data/menu only (quick: no walk
     through data/ui)."""
     out = []
-    longer = longer_names([n for n, _ in mod.factions()], faction)
+    longer = longer_names(faction_words(mod), faction)
     seen = set()
     for root in mod.dirs("world/maps/campaign/" + campaign) + mod.dirs("menu"):      # the mod's, then the game's
         for n in sorted(os.listdir(root)):
@@ -216,7 +216,7 @@ def faction_pictures(mod, campaign, faction):
         seen[n] = e
         out.append(e)
         return e
-    longer = longer_names([n for n, _ in mod.factions()], faction)     # their files are not this faction's
+    longer = longer_names(faction_words(mod), faction)     # their files are not this faction's
     # the mod's folders first, then the game's data under a mod folder that keeps only what it changes
     roots = [d for r in ART_ROOTS for d in mod.dirs(r)] + mod.dirs("world/maps/campaign/" + campaign)
     for root in roots:

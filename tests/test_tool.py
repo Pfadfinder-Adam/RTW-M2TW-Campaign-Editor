@@ -903,6 +903,18 @@ building smith
         finally:
             root.destroy()
 
+    def test_a_cut_faction_s_pictures_are_not_its_namesake_s(self):
+        """Report #307: Barbarian Invasion keeps the cut White Huns' buttons (symbol48_white_huns*.tga, {WHITE_HUNS}
+        in expanded_bi.txt) - they were shown, and dyed by Emblem everywhere, as the Huns' own."""
+        from campaign_editor.clone import faction_words, longer_names, _token_hit
+        write(os.path.join(self.root, "data", "text", "expanded_bi.txt"),
+              "{WHITE_ALPHA}White Alpha\n{EMT_VICTORY_ALPHA}won\n", utf16=True)
+        mod = ModData(self.root)
+        longer = longer_names(faction_words(mod), "alpha")
+        self.assertEqual(longer, ["white_alpha"])
+        self.assertFalse(_token_hit("symbol48_white_alpha_grey.tga", "alpha", longer))
+        self.assertTrue(_token_hit("symbol48_alpha_grey.tga", "alpha", longer))
+
     def test_last_town_given_away_its_general_steps_out(self):
         """Report #306: giving a faction's last town away with its general inside was refused ('has no other town to
         go to' - give it another town first, Apply, then again). He steps out onto a free tile beside the town, as
