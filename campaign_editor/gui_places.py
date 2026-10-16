@@ -9,10 +9,10 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 from . import specialplaces as SP
+from . import theme
 from .gui_util import AutoKeep
 
 TITLE = "Special place"
-OWN = "(my own .cas file...)"
 _OPEN = {}                                         # place id (or the tile of a new one) -> its window
 
 
@@ -175,15 +175,17 @@ class PlaceWindow(AutoKeep, tk.Toplevel):
         row("Text", self.t_text, "What the place is - the window's main text (a must).")
         self.v_model = tk.StringVar(value=place.model)
         self.models = SP.model_choices(self.mod)
-        cb = ttk.Combobox(form, textvariable=self.v_model, values=self.models + [OWN], width=40, height=24)
-        cb.bind("<<ComboboxSelected>>", lambda e: self._model_picked())
+        cb = ttk.Combobox(form, textvariable=self.v_model, values=self.models, width=40, height=24)
         cb.bind("<KeyRelease>", lambda e: cb.configure(values=[m for m in self.models if self.v_model.get().lower()
-                                                               in m.lower()] + [OWN]))
+                                                               in m.lower()]))
         row("Model", cb, "Any model of the campaign map (models_strat: towers, forts, wonders, mines, resources...) "
                          "- type to find one - or your own .cas (copied into the mod's models_strat; its textures "
                          "go beside it in models_strat/textures, as the game's own).")
         bar = ttk.Frame(form)
         ttk.Button(bar, text="View in 3D...", command=self.view_model).pack(side="left")
+        # a button beside View in 3D, not a line at the list's end (#303)
+        ttk.Button(bar, text="My own .cas file...", command=self.own_model).pack(side="left",
+                                                                                  padx=(theme.BUTTON_GAP, 0))
         row("", bar)
         row("Size", ttk.Spinbox(form, from_=0.2, to=5.0, increment=0.1, textvariable=self.v_size, width=6),
             "1.0 = the model's own size on the map.")
@@ -222,13 +224,10 @@ class PlaceWindow(AutoKeep, tk.Toplevel):
         self.preview()
 
     # ---- the fields ----
-    def _model_picked(self):
-        if self.v_model.get() != OWN:
-            return
+    def own_model(self):
         path = filedialog.askopenfilename(parent=self, title="A model for %s (.cas)" % (self.v_title.get() or "it"),
                                           filetypes=[("Campaign map models", "*.cas"), ("All files", "*.*")])
         if not path:
-            self.v_model.set(self.place.model)
             return
         rel = "data/models_strat/%s" % os.path.basename(path).replace(" ", "_")
         _extra(self.app)[1][rel] = path
@@ -238,7 +237,7 @@ class PlaceWindow(AutoKeep, tk.Toplevel):
         from . import models as MO
         from .gui_meshview import ModelViewer
         rel = self.v_model.get()
-        if not rel or rel == OWN:
+        if not rel:
             return
         info = MO.ModelInfo(os.path.basename(rel))
         info.meshes = [rel[5:] if rel.lower().startswith("data/") else rel]
@@ -290,7 +289,7 @@ class PlaceWindow(AutoKeep, tk.Toplevel):
         except (ValueError, tk.TclError):
             size = 1.0
         return SP.Place(id=self.place.id, campaign=self.place.campaign, x=self.place.x, y=self.place.y,
-                        model=self.v_model.get() if self.v_model.get() != OWN else "", size=size,
+                        model=self.v_model.get(), size=size,
                         title=self.v_title.get().strip(), bonus=self.t_bonus.get("1.0", "end").strip(),
                         text=self.t_text.get("1.0", "end").strip(), money=money,
                         picture="" if self.picture == "" else self.place.picture)

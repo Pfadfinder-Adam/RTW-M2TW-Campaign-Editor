@@ -157,6 +157,7 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- Special place: 'My own .cas file...' is a button beside View in 3D, no longer a line at the end of the models list.
 - No Keep for Apply anywhere: Campaign script, Campaign rules, Traits and retinue, Events, Mercenaries, Rebels, a character's window, Special places and Recolour wait for Apply changes by themselves; Many towns at once does its change with 'Do it for the chosen towns' (Undo takes it back); Map size with 'Set this size'. The banner, emblem and Terrain windows lost their own Undo buttons - the bottom Undo / Redo and Ctrl+Z / Ctrl+Y act on them.
 - Town window: no Keep for Apply any more - every change waits for Apply changes by itself, closing the window keeps it; the bottom Undo / Redo and Ctrl+Z / Ctrl+Y step the window worked in last; Apply changes' list throws one window's changes away on a right click; closing the editor with changes not written asks once: write, keep working or throw away.
 - Every window: words on labels, ticks and buttons that do not fit a narrowed window end in '...' and show whole when the mouse rests on them; widened, the window gives them back whole.
