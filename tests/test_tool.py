@@ -866,6 +866,20 @@ building smith
         self.assertIn("Rebel", [c.name for c in s.faction("slave").characters])
         self.assertNotIn("Zed", [c.name for x in s.factions for c in x.characters])
 
+    def test_last_town_given_away_its_general_steps_out(self):
+        """Report #306: giving a faction's last town away with its general inside was refused ('has no other town to
+        go to' - give it another town first, Apply, then again). He steps out onto a free tile beside the town, as
+        the game leaves a faction with no town: its army in the field, said in a warning."""
+        from campaign_editor.edit import map_changes
+        mod = ModData(self.root)
+        plan = Plan(mod, "map", "map", {})
+        map_changes(plan, "test", {"owners": {"A_R": "slave"}})
+        s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+        aaron = next(c for c in s.faction("alpha").characters if c.name.startswith("Aaron"))
+        self.assertNotEqual(aaron.xy, (1, 1))
+        self.assertEqual(s.owners()["A_R"], "slave")
+        self.assertTrue(any("steps out of the town" in w for _, w in plan.warnings), plan.warnings)
+
     def test_a_name_in_no_list_is_found_and_put_back(self):
         """Report #292 (Rome with REX): Rome looks a character's name up in every list of descr_names.txt (HLR's
         men carry other factions' names); a list changed while a man of another faction still wore one of its

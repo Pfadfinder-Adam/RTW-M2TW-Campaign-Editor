@@ -442,8 +442,23 @@ def move_towns(plan, f, campaign, moves, fac=None, taking=()):
             if old == fac:                  # the towns this faction takes are its own too
                 keep += [t for t in taking if tiles.get(t)]
             if not keep:
-                raise ValueError("%s: %s of %s stands in the town and %s has no other town to go to"
-                                 % (r, c.name, old, old))
+                # its last town given away (#306: 'give them another town first, Apply, then do it - absurd'): he
+                # steps out of the gate onto a free tile beside it, as the game itself leaves a faction with no
+                # town - its armies in the field
+                from .regionedit import plan_land
+                ptiles, own = plan_land(plan, campaign)
+                dest = mod.free_tile(campaign, r, taken | armies_at, start=ptiles.get(r) or xy, own=own(r))
+                if not dest:
+                    raise ValueError("%s: %s of %s stands in the town, %s has no other town and there is no free "
+                                     "tile beside it - move him out first" % (r, c.name, old, old))
+                taken.add(dest)
+                if army:
+                    armies_at.add(dest)
+                sets[c.start] = RE_XY.sub("x %d, y %d" % dest, f.text(c.start), 1)
+                plan.warn(f, "%s: %s of %s steps out of the town onto tile %d, %d - %s has no town left now (its "
+                             "men stay in the field; a faction that cannot roam as a horde may be counted out on its "
+                             "first turn)" % (r, c.name, old, dest[0], dest[1], old))
+                continue
             dest = tiles[keep[0]]
             if army and dest in armies_at:
                 from .regionedit import plan_land
