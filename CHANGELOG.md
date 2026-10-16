@@ -150,6 +150,7 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- Recruitment Order: chariots, then elephants (each: those that charge first, then those that shoot), then war dogs and pigs stand after all the cavalry - before, handlers stood with the infantry and shooting chariots with the horse archers.
 - Unit and building editors: the button **Every line of the block** is called **Stats**.
 - Ko-fi and GitHub Sponsors are in one coloured drop-down at the bottom, **Support me on...**, like Tools.
 - A town given to a faction that stands empty (the rebels' garrison leaves with them) gets a garrison by itself:

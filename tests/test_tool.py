@@ -8922,9 +8922,11 @@ building smith
                      '"campaignVoice" in getroottable()', "local rank = m2 ? order.len() : 1",
                      "rank += m2 ? -1 : 1"):
             self.assertIn(part, text)
-        self.assertIn('local RO_KINDS = ["infantry", "missiles", "cavalry", "missile cavalry", "siege", "ships", '
-                      '"non-combatants", "other"]',
-                      text)
+        self.assertIn('local RO_KINDS = ["infantry", "missiles", "cavalry", "missile cavalry", "chariots", '
+                      '"missile chariots", "elephants",\n                  "missile elephants", "animals", "siege", '
+                      '"ships", "non-combatants", "other"]', text)
+        self.assertIn("if (mount == 3) {\n            return shoots ? \"missile chariots\" : \"chariots\"", text)
+        self.assertIn('return "animals"', text)
         self.assertNotIn("delete ", text)                                  # the engines forbid 'delete'
         got = A.read_settings(a, text)
         self.assertEqual(got, {"RO_ENABLED": True, "RO_ORDER": "dearest", "RO_ONE_PANEL": True})

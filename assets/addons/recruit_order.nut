@@ -19,9 +19,10 @@
 // Nothing is written into the mod's files or the saved game: take the file
 // out and everything is as before.
 //
-// The order: by kind - infantry (animal handlers with it), missiles (archers,
-// slingers, skirmishers), cavalry, missile cavalry (horse archers, skirmisher horse,
-// chariots with bows or javelins), siege, ships, the rest - and inside each kind by
+// The order: by kind - infantry, missiles (archers, slingers, skirmishers),
+// cavalry, missile cavalry (horse archers, skirmisher horse), chariots (those that
+// charge, then those with bows or javelins), elephants (the same way), animals
+// (war dogs, pigs and their handlers), siege, ships, the rest - and inside each kind by
 // the campaign price (stat_cost's 2nd number): the dearest first (the top left
 // corner gets the strongest) or the cheapest first.
 // Medieval II splits the panel into its own kind blocks (infantry, missile
@@ -49,7 +50,8 @@ local RO_ORDER = "dearest"           // "dearest" or "cheapest" first inside eac
 local RO_ONE_PANEL = true            // Medieval II: one panel for every kind (else the game's kind blocks)
 
 // ---- the order ----
-local RO_KINDS = ["infantry", "missiles", "cavalry", "missile cavalry", "siege", "ships", "non-combatants", "other"]
+local RO_KINDS = ["infantry", "missiles", "cavalry", "missile cavalry", "chariots", "missile chariots", "elephants",
+                  "missile elephants", "animals", "siege", "ships", "non-combatants", "other"]
 
 local ro_real = {}                   // type index -> its real trueCost (as the file has it)
 local ro_on = false                  // the ranks are in place now
@@ -61,6 +63,18 @@ function ro_enum(table, name, fallback) {
     } catch (err) {
     }
     return fallback
+}
+
+// the class of the unit's mount: 0 horse, 1 camel, 2 elephant, 3 chariot, 4 scorpion cart (descr_mount); -1 none
+function ro_mount_class(t) {
+    try {
+        local m = t.mount
+        if (m != null) {
+            return m.mountClass
+        }
+    } catch (err) {
+    }
+    return -1
 }
 
 function ro_kind(t) {
@@ -79,15 +93,20 @@ function ro_kind(t) {
         return "infantry"
     }
     if (cat == ro_enum("UnitCategory", "handler", 5)) {
-        return "infantry"                       // animal handlers stand with the infantry
+        return "animals"                        // war dogs, pigs: after the elephants (the user, 2026-10-16)
     }
     if (cat == ro_enum("UnitCategory", "cavalry", 1)) {
-        // horse archers, skirmisher horse and the light chariots with javelins or bows after the cavalry that
-        // fights hand to hand, as the infantry's shooters stand after its foot (a tester, 2026-10-15)
-        if (cls == ro_enum("UnitClass", "missile", 4) || cls == ro_enum("UnitClass", "skirmish", 2)) {
-            return "missile cavalry"
+        // the shooters after those that fight hand to hand, as the infantry's after its foot; chariots and then
+        // elephants after all the horse (the user, 2026-10-16) - told by the mount's class (descr_mount)
+        local shoots = cls == ro_enum("UnitClass", "missile", 4) || cls == ro_enum("UnitClass", "skirmish", 2)
+        local mount = ro_mount_class(t)
+        if (mount == 3) {
+            return shoots ? "missile chariots" : "chariots"
         }
-        return "cavalry"
+        if (mount == 2) {
+            return shoots ? "missile elephants" : "elephants"
+        }
+        return shoots ? "missile cavalry" : "cavalry"
     }
     if (cat == ro_enum("UnitCategory", "siege", 2)) {
         return "siege"
