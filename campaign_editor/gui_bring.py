@@ -561,12 +561,7 @@ class BringWindow(StepWindow):
                         "(their textures and cards are copies of its pictures). Recolour them into %s's colours "
                         "now?%s" % (facs[0], "\n\n(%s: Recolour... on its own Faction tab later.)" % ", ".join(
                             facs[1:]) if len(facs) > 1 else ""), yes="Recolour...", no="Not now"):
-            try:
-                from .gui_recolour import RecolourWindow
-                RecolourWindow(self.app, facs[0])
-            except Exception as e:
-                log.error("Recolour: %s" % e)
-                messagebox.showerror(self.app.title(), "Could not read the pictures: %s" % e)
+            self.app.recolour_window(facs[0])
 
 
 def _game(mod):

@@ -11,7 +11,7 @@ from tkinter import colorchooser, messagebox, ttk
 
 from . import recolour as R
 from . import theme
-from .gui_util import AutoKeep, ShortHint, hint
+from .gui_util import Page, AutoKeep, ShortHint, hint
 
 TITLE = "Recolour the faction's pictures"
 SIDE = 360
@@ -44,7 +44,9 @@ def open_one(app, faction, path, parent=None):
     return w
 
 
-class RecolourWindow(AutoKeep, tk.Toplevel):
+class _Recolour(AutoKeep):
+    """The recolour tool itself: a window for one picture (open_one: RecolourWindow), the top row's work for a
+    faction's pictures (RecolourPage, a work of the main window - the user, 2026-10-16)."""
     _ak_fields = ("ticked", "source", "target", "edits")
 
     def __init__(self, app, faction, only=None, pending=None, to=None):
@@ -658,3 +660,23 @@ class RecolourWindow(AutoKeep, tk.Toplevel):
 
 
 __all__ = ["RecolourWindow", "open_one"]
+
+
+class RecolourWindow(_Recolour, tk.Toplevel):
+    """One picture's recolour (a texture card's Recolour...) in a window of its own."""
+
+
+class RecolourPage(_Recolour, Page):
+    """The faction's pictures recoloured: the top row's Recolour work."""
+    page_heading = True
+
+
+def make_page(app, want=None):
+    """The Recolour work for want = (faction, pending new faction or None, its colours) (App.recolour_wish)."""
+    if not app.mod:
+        return None
+    want = want or app.recolour_wish()
+    if isinstance(want, str):
+        return want
+    faction, pending, to = want
+    return RecolourPage(app, faction, pending=pending, to=to)

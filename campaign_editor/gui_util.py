@@ -1683,8 +1683,16 @@ class Page(ttk.Frame):
     def __init__(self, master=None, **kw):
         super().__init__(master, **kw)
 
+    page_heading = False                 # True: what the window's title said shows as a heading on top
+
     # the window manager's calls of a window: nothing to do in the main window
     def title(self, *a):
+        if a and a[0] and self.page_heading:
+            head = getattr(self, "_page_head", None)
+            if head is None:
+                head = self._page_head = ttk.Label(self, font=("", 12, "bold"))
+                head.pack(side="top", anchor="w", padx=8, pady=(6, 2))
+            head.configure(text=a[0])
         return ""
 
     def transient(self, *a):

@@ -1552,13 +1552,10 @@ class App(tk.Tk):
             self.load_buildings()
 
     # the tools that open a window of their own, on the work bar after the works: (key, button, App method, hover)
-    WINDOW_BUTTONS = [
-        ("recolour", "Recolour...", "recolour_window", "a faction's pictures in its colours: cards, textures, "
-                                                       "symbols"),
-    ]
+    WINDOW_BUTTONS = []
     # tools that were windows of their own, now works of the main window (the user, 2026-10-16: 'Events, Mercenaries,
     # Rebels, Traits ... windows of the main window instead of separate ones'): key -> module with make_page(app)
-    PAGE_WORKS = {"rules": "gui_rules", "events": "gui_events", "traits": "gui_traits", "mercs": "gui_mercenaries",
+    PAGE_WORKS = {"recolour": "gui_recolour", "rules": "gui_rules", "events": "gui_events", "traits": "gui_traits", "mercs": "gui_mercenaries",
                   "rebels": "gui_rebels"}
     # the top row by topic (the author, 2026-10-09), each tool with a window of its own beside its work; the row
     # scrolls when the window is narrower - drag it with the left button
@@ -1571,7 +1568,7 @@ class App(tk.Tk):
                    "buildings": "Buildings", "characters": "Characters",
                    "terrain": "Terrain editor", "addons": "Add-ons", "religions": "Religions",
                    "builder": "Module builder", "interface": "Interface", "rules": "Campaign rules",
-                   "events": "Events", "traits": "Traits and retinue", "mercs": "Mercenaries", "rebels": "Rebels"}
+                   "recolour": "Recolour", "events": "Events", "traits": "Traits and retinue", "mercs": "Mercenaries", "rebels": "Rebels"}
     WORK_HINTS = {"map": "the campaign map alone, no faction to pick: drag any faction's towns, ports, armies, agents and "
                          "fleets, give towns to anyone, change any army's units, resources, forts, regions",
                   "religions": "the game's religions and each region's shares (Medieval II)", "addons": "ready-made scripts that add something new to the game (Sack Settlement...)", "builder": "a new add-on made of blocks, no code (REX / M2EX) - here in the window, a module not saved yet stays while you look at other works", "interface": "the game's menu screens: move, size, copy and remove their pieces","new": "make a new faction from a template", "edit": "change a faction that is in the game",
@@ -1583,6 +1580,7 @@ class App(tk.Tk):
                   "buildings": "every line of a building chain in export_descr_buildings.txt, its pictures",
                   "characters": "any faction's characters: names, ages, traits, ancillaries, portraits, family tree",
                   "rules": "ages, agents, towns, diplomacy, unit sizes - every rule of the campaign",
+                  "recolour": "a faction's pictures in its colours: cards, textures, symbols",
                   "events": "events and later factions: plagues, volcanoes, historic messages",
                   "traits": "what they give, their names, new ones",
                   "mercs": "who is for hire in which regions: pools of regions and their units",
@@ -1592,6 +1590,9 @@ class App(tk.Tk):
     def _bar_pressed(self):
         """A work button: Factions opens on the tab it was on (Edit faction the first time)."""
         b = self.v_bar.get()
+        if b == "recolour" and self.mod:              # the faction picked in the form now
+            self.recolour_window()
+            return
         self.v_work.set(self._faction_side if b == "faction" else b)
         self.work_changed()
 
@@ -1776,7 +1777,8 @@ class App(tk.Tk):
             alive = page is not None and page.winfo_exists()
         except tk.TclError:
             alive = False
-        if alive and page.mod is self.mod and self.mod is not None and getattr(page, "campaign", camp) == camp:
+        if alive and page.mod is self.mod and self.mod is not None and \
+                getattr(page, "campaign", getattr(page, "camp", camp)) == camp:
             return page
         if alive:
             page._page_gone = True               # made again: not a Close (the map stays where it is)
@@ -5303,44 +5305,47 @@ class App(tk.Tk):
             log.write("Many towns: %s" % e)
             messagebox.showerror(APP, "Could not read the towns: %s" % e)
 
-    def recolour_window(self, faction=None):
-        """Recolour the faction's pictures (the faction picked in the window, else the first; the window's list changes it)."""
-        if not self.mod:
-            messagebox.showinfo(APP, "Load a mod first.")
-            return
+    def recolour_wish(self, faction=None):
+        """(faction, pending new faction or None, its colours) the Recolour work shows: the faction picked in the
+        form, else the first; a New faction not created yet (#224) shows its template's pictures, recoloured on its
+        own copies when Apply creates it. Words when there is nothing to show."""
         names = [n for n, _ in self.mod.factions()]
         faction = faction or self.field_faction()
-        if faction not in names:                    # no faction picked yet: the window opens on the first, a list
-            faction = next(iter(sorted(names)), None)   # at its top changes it
+        if faction not in names:                    # no faction picked yet: the first, a list at its top changes it
+            faction = next(iter(sorted(names)), None)
             if not faction:
-                messagebox.showinfo(APP, "This mod has no faction to recolour.")
-                return
-        from .gui_recolour import RecolourWindow
+                return "This mod has no faction to recolour."
         new, template = self.v["name"].get().strip().lower(), self.v["template"].get().strip()
-        pending = self.editor() is None and self.v_mode.get() == "new" and new and new not in names and template in names
-        held = (getattr(self, "_ak_windows", None) or {}).get("recolour:%s" % (new if pending else faction))
+        if self.v_mode.get() == "new" and new and new not in names and template in names:
+            return (template, new, (self.colours.get("primary"), self.colours.get("secondary")))
+        return (faction, None, None)
+
+    def recolour_window(self, faction=None):
+        """Recolour (top row, Art tab): the faction's pictures in the Recolour work of the main window."""
+        if not self.mod:
+            messagebox.showinfo(APP, "Load a mod first.")
+            return None
+        want = self.recolour_wish(faction)
+        page = self.editors.get("recolour")
         try:
-            if held is not None and held.winfo_exists():     # its picks still wait for Apply: the same window again
-                held.deiconify()
-                held.lift()
-                return
+            alive = page is not None and page.winfo_exists() and hasattr(page, "faction")
         except tk.TclError:
-            pass
-        if self.editor() is None and self.v_mode.get() == "new" and new and new not in names and template in names:
-            # a faction not created yet (#224): its template's pictures shown, recoloured on its own copies when
-            # Apply creates it - no 'create it first'
+            alive = False
+        if alive and not isinstance(want, str) and (page.faction, page.pending) != want[:2] and page.mod is self.mod:
+            page._page_gone = True                   # another faction asked for: made again on it
+            page.ak_close()
+            page.destroy()
+            from .gui_recolour import make_page
+            from .gui_util import PageNote
             try:
-                RecolourWindow(self, template, pending=new, to=(self.colours.get("primary"),
-                                                                 self.colours.get("secondary")))
+                got = make_page(self, want)
             except Exception as e:
                 log.error("Recolour: %s" % e)
-                messagebox.showerror(APP, "Could not read the pictures: %s" % e)
-            return
-        try:
-            RecolourWindow(self, faction)
-        except Exception as e:
-            log.error("Recolour: %s" % e)
-            messagebox.showerror(APP, "Could not read the pictures: %s" % e)
+                got = "Could not read the pictures: %s" % e
+            self.editors["recolour"] = PageNote(self, self, got) if isinstance(got, str) else got
+            if self.v_work.get() == "recolour":
+                self.work_changed()
+        return self.show_page("recolour")
 
     def pick_menu(self, picked, region):
         """The Map's right-click menu while 'Select' is on: for the selected towns, characters, resources and forts."""

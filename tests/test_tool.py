@@ -942,7 +942,7 @@ building smith
         from campaign_editor import gui_util as GU
         try:
             names = {"rules": "RulesWindow", "events": "EventsWindow", "traits": "TraitsWindow",
-                     "mercs": "MercWindow", "rebels": "RebelsWindow"}
+                     "mercs": "MercWindow", "rebels": "RebelsWindow", "recolour": "RecolourPage"}
             self.assertEqual(set(App.PAGE_WORKS), set(names))
             for key, mod in App.PAGE_WORKS.items():
                 m = import_module("campaign_editor." + mod)
@@ -12819,8 +12819,8 @@ building smith
         labels += _re.findall(r'^TEST_MOD_LABEL = "([^"]+)"', src, _re.M)
         works = src[src.index("WORK_TITLES = {"):]
         labels += _re.findall(r'"\w+": "([^"]+)"', works[:works.index("}")])
-        buttons = src[src.index("WINDOW_BUTTONS = ["):]                  # the work bar's window buttons
-        labels += _re.findall(r'\("\w+", "([^"]+)"', buttons[:buttons.index("\n    ]")])
+        buttons = _re.search(r"WINDOW_BUTTONS = \[(.*?)\s*\]\n", src, _re.S).group(1)   # the bar's window buttons
+        labels += _re.findall(r'\("\w+", "([^"]+)"', buttons)
         labels += [t.strip() for t in _re.findall(r'self\.nb\.add\(\w+, text="([^"]+)"\)', src)]
         self.assertGreater(len(labels), 30)
         self.assertEqual([t for t in labels if ST.ui_entry(t) is None], [])
