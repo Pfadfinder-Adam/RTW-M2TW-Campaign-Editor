@@ -81,6 +81,26 @@ def _pic(img):
     return got[1]
 
 
+_ALPHA = {}
+CUT = 128                   # a texture point below this alpha is not drawn: the games' alpha test (round shields)
+
+
+def _see_through(img):
+    """The picture's alpha as an (h, w) array when some of it is cut out (below CUT), else None - kept while the
+    picture lives. Both games cut shields, fur and feathers out of square texture pieces so (Rome's unit textures,
+    Medieval II's .texture): drawn whole, a round shield showed as a square with its picture (a tester's card)."""
+    got = _ALPHA.get(id(img))
+    if got is None or got[0] is not img:
+        a = None
+        if img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info:
+            arr = np.asarray(img.convert("RGBA"), dtype=np.uint8)[:, :, 3]
+            a = arr if (arr < CUT).any() else None
+        got = _ALPHA[id(img)] = (img, a)
+        while len(_ALPHA) > 16:
+            _ALPHA.pop(next(iter(_ALPHA)))
+    return got[1]
+
+
 _UVS = {}
 
 
@@ -177,12 +197,16 @@ def draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, 
     keep = keep[np.argsort(sz[A[keep]] + sz[B[keep]] + sz[C[keep]], kind="stable")]     # far first
     X = np.stack([sx[A], sx[B], sx[C]], axis=1)
     Y = np.stack([sy_[A], sy_[B], sy_[C]], axis=1)
-    seen = Image.new("I", (W, H), 0)
-    dr = ImageDraw.Draw(seen)
-    corners = np.stack([X[keep], Y[keep]], axis=2).tolist()
-    for t, pts in zip((keep + 1).tolist(), corners):
-        dr.polygon([tuple(p) for p in pts], fill=t, outline=t)
-    ids = np.asarray(seen, dtype=np.int64)
+
+    def seen_map(drawn):
+        """Which triangle is seen at each pixel (its number + 1, 0 = none), the triangles filled far to near."""
+        seen = Image.new("I", (W, H), 0)
+        dr = ImageDraw.Draw(seen)
+        corners = np.stack([X[drawn], Y[drawn]], axis=2).tolist()
+        for t, pts in zip((drawn + 1).tolist(), corners):
+            dr.polygon([tuple(p) for p in pts], fill=t, outline=t)
+        return np.asarray(seen, dtype=np.int64)
+    ids = seen_map(keep)
     py, px = np.nonzero(ids)
     if not len(px):
         return out
@@ -190,14 +214,21 @@ def draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, 
     # which picture and u v: two textures side by side unless the group has one
     uvs = _uv(mesh.uvs)
     arrays = {k: (_pic(im) if im is not None else None) for k, im in pics.items()}
-    col = np.empty((len(t), 3), dtype=np.float64)
-    col[:] = plain
+    cuts = {k: (_see_through(im) if im is not None else None) for k, im in pics.items()}
     if uvs is not None:
         U = uvs[T][:, :, 0]
         V = uvs[T][:, :, 1]
         half = np.where(one, 0, (U.mean(axis=1) >= 0.5).astype(np.int64))
         U = np.where(one[:, None], U, U * 2 - half[:, None])
         pic = base + half
+
+    def colours(py, px, t):
+        """(colour of each pixel, which of them are cut out of their texture or None)."""
+        col = np.empty((len(t), 3), dtype=np.float64)
+        col[:] = plain
+        cut = None
+        if uvs is None:
+            return col, cut
         if textured:
             # the pixel's place inside its triangle (its three weights), held inside it at the outlined edges
             cx, cy_ = px + 0.5, py + 0.5
@@ -219,6 +250,10 @@ def draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, 
                 s_ = pw == k
                 if arr is not None and s_.any():
                     col[s_] = _sample(arr, u[s_], v[s_])
+                    if cuts.get(k) is not None:
+                        if cut is None:
+                            cut = np.zeros(len(t), dtype=bool)
+                        cut[s_] = _sample(cuts[k], u[s_], v[s_]) < CUT
         else:                                            # one colour per triangle
             colour = np.empty((len(T), 3), dtype=np.float64)
             colour[:] = plain
@@ -232,7 +267,26 @@ def draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, 
                     acc += _sample(arr, (mu * 2 + U[sel, j]) / 3, (mv * 2 + V[sel, j]) / 3)
                 colour[sel] = acc / 4
             col = colour[t]
+        return col, cut
+    col, cut = colours(py, px, t)
     out[py, px] = np.clip(col * shade[t][:, None], 0, 255).astype(np.uint8)
+    # the alpha test: where the seen triangle's texture is cut out, the triangle behind it shows (drawn again without
+    # the cut triangles - three layers deep is enough for a shield before a man before his own cloak)
+    gone = np.zeros(len(T), dtype=bool)
+    for _ in range(3):
+        if cut is None or not cut.any():
+            break
+        py, px, t = py[cut], px[cut], t[cut]
+        out[py, px] = background
+        gone[np.unique(t)] = True
+        ids = seen_map(keep[~gone[keep]])
+        t = ids[py, px] - 1
+        has = t >= 0
+        py, px, t = py[has], px[has], t[has]
+        if not len(t):
+            break
+        col, cut = colours(py, px, t)
+        out[py, px] = np.clip(col * shade[t][:, None], 0, 255).astype(np.uint8)
     return out
 
 

@@ -36,6 +36,7 @@ POS, UV, NORMAL, BONES, WEIGHTS = 0, 4, 3, 2, 1
 LIGHT = (-0.35, 0.55, 0.76)
 BACK = (46, 48, 54)
 PLAIN = (150, 144, 132)                             # a part with no texture: dull steel / leather
+CUT = 128                                            # a texture point below this alpha is not drawn (fastmesh.CUT)
 # part names that are weapons, shields and gear (every vanilla M2TW mesh read): the "Weapons and shield" box hides them
 WEAPON_PARTS = ("primary", "secondary", "shield", "equipment", "ramrod", "cannon ball", "ballista arrow", "sword")
 
@@ -1162,6 +1163,16 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
     else:
         light = Image.new("L", (W, H), 255)
         ldraw = ImageDraw.Draw(light)
+        cover = Image.new("L", (W, H), 0)
+        cdraw = ImageDraw.Draw(cover)
+        # the alpha test (as fastmesh): a texture point below CUT is not drawn - round shields cut out of squares
+        alphas = {}
+        for k, im in pics.items():
+            src_im = texture if k == 0 else attach if k == 1 else (more or {}).get(k)
+            if im is not None and src_im is not None and (src_im.mode in ("RGBA", "LA", "PA")):
+                a = src_im.getchannel("A") if src_im.mode != "PA" else src_im.convert("RGBA").getchannel("A")
+                if a.getextrema()[0] < CUT:
+                    alphas[k] = a.resize(im.size) if a.size != im.size else a
         for _, pts, shade, half, src, _at in tris:
             pic = pics.get(half)
             x0, y0 = int(min(p[0] for p in pts)), int(min(p[1] for p in pts))
@@ -1177,16 +1188,19 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
                 patch = pic.transform((x1 - x0, y1 - y0), Image.AFFINE, data, resample=Image.BILINEAR)
                 mask = Image.new("L", (x1 - x0, y1 - y0), 0)
                 ImageDraw.Draw(mask).polygon([(p[0] - x0, p[1] - y0) for p in pts], fill=255, outline=255)
+                if half in alphas:
+                    held = alphas[half].transform((x1 - x0, y1 - y0), Image.AFFINE, data, resample=Image.NEAREST)
+                    mask = ImageChops.multiply(mask, held.point(lambda v: 255 if v >= CUT else 0))
+                    img.paste(patch, (x0, y0), mask)
+                    light.paste(int(255 * shade), (x0, y0, x1, y1), mask)
+                    cover.paste(255, (x0, y0, x1, y1), mask)
+                    continue
                 img.paste(patch, (x0, y0), mask)
             ldraw.polygon(pts, fill=int(255 * shade), outline=int(255 * shade))
+            cdraw.polygon(pts, fill=255, outline=255)
         img = ImageChops.multiply(img, Image.merge("RGB", (light,) * 3))
-        if background != (0, 0, 0):
-            bg = Image.new("RGB", (W, H), background)
-            cover = Image.new("L", (W, H), 0)
-            cdraw = ImageDraw.Draw(cover)
-            for _, pts, *_ in tris:
-                cdraw.polygon(pts, fill=255, outline=255)
-            img = Image.composite(img, bg, cover)
+        bg = Image.new("RGB", (W, H), background)
+        img = Image.composite(img, bg, cover)
     if quality > 1:
         img = img.resize(size, Image.LANCZOS)
     return img

@@ -203,6 +203,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- 3D view and Make a card: round shields, fur and feathers showed as squares with their picture -> the see-through parts of a texture are left out, as in the game.
 - 3D view of a Barbarian Invasion campaign-map figure (a special place's model): its parts fell together into one heap -> the figure stands whole.
 - Interface: Quit, Continue and the other buttons without 'BUTTON' in their kind did not light up under the mouse; dragging or sizing a piece lagged (the screen was drawn again for every mouse move - now once the mouse is quiet).
 - Medieval II: a unit with card_pic_dir / info_pic_dir showed as having no card in the editor (and was named in Check mod files) - its card is looked for in that folder first, as the game does.

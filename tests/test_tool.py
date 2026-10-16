@@ -12131,6 +12131,39 @@ building smith
         self.assertEqual(img.getpixel((0, 25)), colours["MID_LEFT"])
         self.assertEqual(img.getpixel((44, 25)), colours["MID_RIGHT"])
 
+    def test_cut_out_texture_points_are_not_drawn(self):
+        """The games' alpha test (a tester's card: a round shield showed as a square with its picture): a texture
+        point below alpha 128 is not drawn - the part behind it shows, in the NumPy drawing and the plain one."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import meshview as MV
+
+        def quad(z, r, first):
+            pts = [(-r, -r, z), (r, -r, z), (r, r, z), (-r, r, z)]
+            tris = tuple(first + k for k in (0, 1, 2, 0, 2, 3, 0, 2, 1, 0, 3, 2))     # both sides
+            return pts, tris
+        front, ft = quad(0.5, 0.5, 0)
+        back, bt = quad(-0.5, 1.0, 4)
+        uvs = [(0, 1), (1, 1), (1, 0), (0, 0)] * 2
+        tex = Image.new("RGBA", (8, 8), (255, 0, 0, 255))
+        tex.paste((255, 0, 0, 0), (0, 0, 4, 8))                     # the left half cut out
+        back_tex = Image.new("RGBA", (8, 8), (0, 255, 0, 255))
+        m = MV.Mesh([MV.Group("front", "", ft, False), MV.Group("back", "", bt, False)], front + back, uvs)
+        m.one_texture = True
+        m.groups[1].pic = 2
+        fast = MV._fast
+        try:
+            for way in ([fast] if fast is not None else []) + [None]:
+                MV._fast = way
+                img = MV.render(m, (100, 100), yaw=0, pitch=0, texture=tex, more={2: back_tex}, quality=1,
+                                fit=m.groups)
+                seen = {max(range(3), key=lambda k: img.getpixel(xy)[k]) for xy in ((38, 50), (62, 50))}
+                self.assertEqual(seen, {0, 1}, "numpy" if way else "plain")   # red on one side, green through the cut
+        finally:
+            MV._fast = fast
+
     def test_read_and_draw_a_rome_cas(self):
         """A Rome .cas laid out as the vanilla ones (3.05): header with the bone count and parents, frame times, bone
         records, rest places, a shield hanging on a bone and a body whose points hang on a bone. Read back, put
