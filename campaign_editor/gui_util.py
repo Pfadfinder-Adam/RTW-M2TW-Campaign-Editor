@@ -2000,7 +2000,13 @@ class DropPanel:
 
     def __init__(self, button, build):
         self.button, self.build, self.top = button, build, None
+        self._was_open = False
         button.configure(command=self.toggle)
+        # what the panel was at the PRESS (this widget's own binding runs before the click-anywhere one): a press on
+        # the button while it is open - or closed by something else a moment before (the window taking focus on
+        # Windows) - only closes it; the command at the release must not open it again (the user, 2026-10-16: 'a
+        # second click blinks: it opens again; only a press dragged off the button closes it')
+        button.bind("<ButtonPress-1>", self._pressed, add="+")
         root = button.winfo_toplevel()
         root.bind_all("<ButtonPress>", self._press_anywhere, add="+")
         root.bind("<Configure>", lambda e: self.hide() if e.widget is root else None, add="+")
@@ -2019,12 +2025,17 @@ class DropPanel:
 
     _closed_at = 0.0
 
+    def _pressed(self, e=None):
+        import time
+        self._was_open = self.shown() or time.monotonic() - self._closed_at < 0.4
+
     def toggle(self):
         import time
+        was, self._was_open = self._was_open, False
         if self.shown():
             self.hide()
-        elif time.monotonic() - self._closed_at > 0.3:   # closed by this very press (a tester on Windows: a second
-            self.show()                                  # press opened it again instead of closing, R-20261014-5B69BC)
+        elif not was and time.monotonic() - self._closed_at > 0.3:   # closed by this very press (a tester on
+            self.show()                                  # Windows: a second press opened it again, R-20261014-5B69BC)
 
     def show(self):
         if self.top is None:
@@ -2043,6 +2054,9 @@ class DropPanel:
         self._open = True
 
     def hide(self):
+        import time
+        if self._open:                       # whatever closed it (a press, Esc, the window moving, focus): when
+            self._closed_at = time.monotonic()   # - so the button's own release does not open it again
         self._open = False
         if self.top is not None:
             try:
@@ -2072,6 +2086,43 @@ class DropPanel:
             import time
             self.hide()
             self._closed_at = time.monotonic()
+
+
+def menu_button(button, menu):
+    """A ttk.Menubutton (Tools, Support me on...) whose menu a second press CLOSES: Tk's own press posts it again -
+    on Windows the press that dismisses the open menu reached the button and opened it once more (the user,
+    2026-10-16: it blinks). The press here posts it only when it was not open a moment ago."""
+    import time
+    state = {"open": False, "closed": 0.0}
+    win = button.tk.call("tk", "windowingsystem") == "win32"
+
+    def closed(e=None):
+        state["open"], state["closed"] = False, time.monotonic()
+
+    def press(e):
+        if state["open"] or time.monotonic() - state["closed"] < 0.4:
+            if state["open"]:
+                try:
+                    menu.unpost()
+                except tk.TclError:
+                    pass
+                closed()
+            return "break"
+        state["open"] = True
+        try:
+            menu.tk_popup(button.winfo_rootx(), button.winfo_rooty() + button.winfo_height())
+        finally:
+            try:
+                menu.grab_release()
+            except tk.TclError:
+                pass
+        if win:                                      # Windows: tk_popup waits until the menu is gone
+            closed()
+        return "break"
+    menu.bind("<Unmap>", closed, add="+")
+    button.bind("<ButtonPress-1>", press)
+    button["menu"] = menu
+    return button
 
 
 def split_list(text):

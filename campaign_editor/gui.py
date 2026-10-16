@@ -972,7 +972,8 @@ class App(tk.Tk):
                 ("\u2665 GitHub Sponsors", theme.COLOURED["Sponsor.TButton"], lambda: self.open_link(SPONSORS))):
             smenu.add_command(label=label, command=command, background=colour, foreground="#ffffff",
                               activebackground=deep, activeforeground="#ffffff")
-        support["menu"] = smenu
+        from .gui_util import menu_button
+        menu_button(support, smenu)
         support.pack(side="right", padx=(theme.BUTTON_GAP, 0))
         links = [(support, "The places where you can support the work on the editor: Ko-fi (donations), GitHub "
                            "Sponsors (monthly or one-time).")]
@@ -1015,7 +1016,8 @@ class App(tk.Tk):
                          foreground=theme.ink("#c00000"))       # red: it deletes for good (asked twice)
         # a menu entry has no hover box: the status line says what it is while the mouse is on it
         menu.bind("<<MenuSelect>>", lambda e, m=menu: self._menu_hint(m))
-        tools["menu"] = menu
+        from .gui_util import menu_button
+        menu_button(tools, menu)
         tools.pack(side="right", padx=(theme.BUTTON_GAP, 0))
         # the game with the loaded mod, one press away - in sight beside Tools, green, a button like the others
         play = ttk.Button(bar, text="\u25b6 Start the game", command=self.start_game, style="Play.TButton",

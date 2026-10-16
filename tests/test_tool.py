@@ -12905,7 +12905,7 @@ building smith
         self.assertEqual(ST.coverage_problems(), [])
         with open(os.path.join(os.path.dirname(campaign_editor.__file__), "gui.py"), encoding="utf-8") as fh:
             src = fh.read()                                   # read as text: the test job has no tkinter
-        tools = src[src.index('tools = ttk.Menubutton'):src.index('tools["menu"] = menu')]
+        tools = src[src.index('tools = ttk.Menubutton'):src.index('menu_button(tools, menu)')]
         labels = _re.findall(r'add_command\(label="([^"]+)"', tools)
         labels += _re.findall(r'^TEST_MOD_LABEL = "([^"]+)"', src, _re.M)
         works = src[src.index("WORK_TITLES = {"):]
@@ -15494,6 +15494,32 @@ building smith
             root.update()
             self.assertFalse(p.shown())               # report #288: it opened again instead of closing
             self.assertEqual(len(got), 1)             # built once
+            # the user, 2026-10-16 (Windows): closed by something else just before the press (the window taking
+            # focus) - the release opened it again (a blink); the press says it was open, the release leaves it shut
+            p._closed_at = 0.0
+            b.invoke()
+            root.update()
+            p.hide()                                  # what the focus change did
+            b.event_generate("<ButtonPress-1>", x=3, y=3)
+            b.invoke()
+            root.update()
+            self.assertFalse(p.shown())
+            # Tools / Support me on...: the menu a second press closes, never posts again
+            from campaign_editor.gui_util import menu_button
+            mb = ttk.Menubutton(root, text="Tools")
+            mb.pack()
+            m = tk.Menu(mb, tearoff=False)
+            m.add_command(label="Help")
+            menu_button(mb, m)
+            root.update()
+            posted = []
+            m.tk_popup = lambda x, y: posted.append((x, y))
+            self.assertEqual(mb.event_generate("<ButtonPress-1>", x=3, y=3), None)
+            self.assertEqual(len(posted), 1)
+            mb.event_generate("<ButtonPress-1>", x=3, y=3)          # open: this press only closes it
+            self.assertEqual(len(posted), 1)
+            mb.event_generate("<ButtonPress-1>", x=3, y=3)          # a moment later: still no new post
+            self.assertEqual(len(posted), 1)
         finally:
             root.destroy()
 
