@@ -272,6 +272,8 @@ def apply_regions(plan, campaign, painted, new_regions):
         plan.delete(os.path.join(folder, "map.rwm"), "the game rebuilds it from the changed map on the next start")
     for w in warns:
         plan.warnings.append((mod.rel(path), w))
+    from .forts import follow_repaint                  # forts / watchtowers go along with their land (#181)
+    follow_repaint(plan, campaign, painted)
     if not new_regions:
         _slave_resources(plan, campaign, painted, colours)
         return

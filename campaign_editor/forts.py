@@ -211,6 +211,58 @@ def apply(plan, campaign, changes):
             f.raw[line + 1:line + 1] = [f.make(t) for t in text.split("\n")]
 
 
+def follow_repaint(plan, campaign, painted):
+    """Report #181 (the web): a fort / watchtower in the regions section whose tile a repaint gives another region
+    goes into that region's block (the game skips a line under the wrong region: 'does not match up to region
+    name'); painted into the sea, it is said (the game skips it there too). painted {(x, y): region or the sea}."""
+    from .regionedit import SEA
+    from .textio import strip_comment
+    mod = plan.mod
+    path = mod.campaign_file(campaign, "descr_strat.txt")
+    if not path or not painted:
+        return
+    f = plan.edit(path)
+    moves = []
+    for fo in Strat(f).forts:
+        if fo.kind not in KINDS:
+            continue
+        new = painted.get(tuple(fo.xy))
+        block = _block_region(f, fo.line)
+        if new is None or block is None or new == block:
+            continue
+        if new == SEA:
+            plan.warn(f, "the %s at %d, %d stands on sea now - the game skips it; move or remove it on the Map" % (
+                fo.kind, fo.xy[0], fo.xy[1]))
+            continue
+        moves.append((fo, new))
+    for fo, new in sorted(moves, key=lambda m: -m[0].line):
+        text = f.text(fo.line)
+        del f.raw[fo.line]
+        n = len(f.raw)
+        lines = [strip_comment(f.text(i)).split() for i in range(n)]
+        keys = ("road_level", "farming_level", "famine_threat", "fort", "watchtower")
+        start = Strat(f).diplomacy_start or 0
+        at = None
+        for i, t in enumerate(lines):
+            if i >= start and t[:2] == ["region", new] and f.text(i)[:1] not in (" ", "\t"):
+                at, j = i, i + 1
+                while j < n and (not lines[j] or lines[j][0] in keys):
+                    if lines[j]:
+                        at = j
+                    j += 1
+                break
+        if at is not None:
+            f.raw[at + 1:at + 1] = [f.make(text.strip())]
+        else:
+            end = n - 1
+            while end >= 0 and not f.text(end).strip():
+                end -= 1
+            f.raw[end + 1:end + 1] = [f.make(t) for t in ("", "region %s" % new, "road_level 0", "farming_level 0",
+                                                           "famine_threat 0", text.strip())]
+        plan.note(f, "%s at %d, %d: its land is %s now - its line moved into %s's block" % (
+            fo.kind, fo.xy[0], fo.xy[1], new, new))
+
+
 def _block_region(f, line):
     """The region whose block in the regions section (after the diplomacy) holds line, else None."""
     from .textio import strip_comment

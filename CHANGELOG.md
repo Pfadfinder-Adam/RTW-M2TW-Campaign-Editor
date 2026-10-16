@@ -214,6 +214,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- A repaint that put a watchtower's or fort's tile into another region left its line under the old region, and the game skipped it -> the line moves into the new region's block; one painted into the sea is named in a warning.
 - Bring units: of two units sharing one card and text in their mod (HLR's war dogs, light cavalry), the one given another name here went without card, picture and name in the game -> each gets them.
 - Barbarian Invasion: the buttons of the cut White Huns were shown (and dyed by Emblem everywhere) as the Huns' own -> a faction named only in the texts keeps its files apart.
 - On the map only towns, ports and characters grew under the mouse -> resources, wonders, forts, watchtowers and special places grow too.

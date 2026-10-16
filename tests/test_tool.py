@@ -989,6 +989,28 @@ building smith
             GE.ask_choice = old
             settings.put("card_scale", was if was is not None else 1)
 
+    def test_watchtower_follows_its_repainted_land(self):
+        """Report #181 (the web): a repaint giving a watchtower's tile to another region left its line under the old
+        region's block - the game skips it ('does not match up to region name'). It moves into the new region's
+        block (made when missing); painted into the sea, it is said."""
+        from campaign_editor import forts as FO
+        from campaign_editor.regionedit import SEA
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "descr_strat.txt"), STRAT +
+              "\n; >>>> start of regions section <<<<\n\nregion A_R\nroad_level 0\nfarming_level 0\nfamine_threat 0\n"
+              "watchtower \t5 5\nwatchtower \t1 6\n\nregion B_R\nroad_level 0\nfarming_level 0\nfamine_threat 0\n"
+              "watchtower \t6 1\n")
+        mod = ModData(self.root)
+        plan = Plan(mod, "map", "map", {})
+        FO.follow_repaint(plan, "test", {(5, 5): "B_R", (1, 6): SEA, (2, 2): "B_R"})
+        f = plan.edit(mod.campaign_file("test", "descr_strat.txt"))
+        text = "\n".join(f.texts())
+        tail = text[text.index("start of regions section"):]
+        self.assertNotIn("5 5", tail[:tail.index("region B_R")])
+        self.assertIn("watchtower \t5 5", tail[tail.index("region B_R"):])
+        self.assertIn("1 6", tail[:tail.index("region B_R")])                 # in the sea: left, said
+        self.assertTrue(any("sea" in w for _, w in plan.warnings), plan.warnings)
+
     def test_last_town_given_away_its_general_steps_out(self):
         """Report #306: giving a faction's last town away with its general inside was refused ('has no other town to
         go to' - give it another town first, Apply, then again). He steps out onto a free tile beside the town, as
